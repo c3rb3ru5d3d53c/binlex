@@ -7,7 +7,7 @@ Most projects attempting this use Python to generate traits but it's slow. When 
 This project is intended to help allow data scientists and other researchers to collect meaningful traits when developing their detection solutions.
 
 # Installing
-```
+```bash
 sudo apt install -y git libcapstone-dev cmake make
 git clone https://github.com/c3rb3ru5d3d53c/binlex.git
 cd binlex/
