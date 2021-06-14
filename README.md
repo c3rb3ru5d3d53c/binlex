@@ -18,7 +18,7 @@ Trait files will contain a list of traits ordered by size and use the sha256 of 
 # ... More traits to follow
 ```
 
-# Fitness Model
+# Example Fitness Model
 Traits will be compared amongst their common malware family, any traits not common to all samples will be discarded.
 
 Once completed, all remaining traits will be compared to traits from a goodware set, any traits that match the goodware set will be discarded.
