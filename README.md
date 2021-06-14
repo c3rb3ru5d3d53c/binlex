@@ -6,6 +6,17 @@ Most projects attempting this use Python to generate traits but it's slow. When 
 
 This project is intended to help allow data scientists and other researchers to collect meaningful traits when developing their detection solutions.
 
+# Installing
+```
+sudo apt install -y git libcapstone-dev cmake make
+git clone https://github.com/c3rb3ru5d3d53c/binlex.git
+cd binlex/
+mkdir -p build/
+cd build/ && cmake -S ../ -B . && make -j 4
+sudo make install
+binlex --help
+```
+
 # Trait Format
 Traits will contain binary code represented in hexadecimal form and will use `??` as wild cards for memory operands or other operands subject to change.
 
