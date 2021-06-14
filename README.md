@@ -2,9 +2,9 @@
 
 The purpose of BinLex is to extract basic blocks and functions as traits from binaries then compare these traits amonst other trait sets using genetic programming.
 
-Most projects attempting this use Python to generate traits but it's slow. When working with a lot of malware binaries, it is much better to use a faster compiled language like C++.
+Most projects attempting this use Python to generate traits, but it's slow. When working with a lot of malware binaries, it is much better to use a faster compiled language like C++.
 
-This project is intended to help allow data scientists and other researchers to collect meaningful traits when developing their detection solutions.
+This project is intended to help data scientists and other researchers to collect meaningful traits when developing their detection solutions.
 
 # Installing
 ```bash
