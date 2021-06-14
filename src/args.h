@@ -73,7 +73,7 @@ class Args{
         }
         void print_help(){
             printf(
-                "binlex %s - A Binary Genetic Traits Parser\n"
+                "binlex %s - A Binary Genetic Traits Lexer\n"
                 "  -i  --input\t\tinput file or directory\t\t(required)\n"
                 "  -m  --mode\t\tset mode\t\t\t(required)\n"
                 "  -lm --list-modes\tlist modes\n"
