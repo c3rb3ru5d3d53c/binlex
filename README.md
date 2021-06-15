@@ -16,7 +16,8 @@ cd binlex/
 mkdir -p build/
 cd build/ && cmake -S ../ -B . && make -j 4
 sudo make install
-binlex --help
+cd ../
+binlex -m elf:x86 -i tests/elf/elf.x86
 ```
 
 # Trait Format
