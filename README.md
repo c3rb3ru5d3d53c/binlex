@@ -6,6 +6,8 @@ Most projects attempting this use Python to generate traits, but it's slow. When
 
 This project is intended to help data scientists and other researchers to collect meaningful traits when developing their detection solutions.
 
+NOTE: This project is a WIP right now, so pull requests are encouraged no matter how small.
+
 # Installing
 ```bash
 sudo apt install -y git libcapstone-dev cmake make
