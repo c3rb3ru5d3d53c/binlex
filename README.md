@@ -32,6 +32,9 @@ Trait files will contain a list of traits ordered by size and use the sha256 of 
 # ... More traits to follow
 ```
 
+# Tips
+- Don't mix packed and unpacked malware
+
 # Example Fitness Model
 Traits will be compared amongst their common malware family, any traits not common to all samples will be discarded.
 
