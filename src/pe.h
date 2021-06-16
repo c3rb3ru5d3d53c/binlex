@@ -10,7 +10,7 @@ typedef uint32_t  DWORD;
 typedef uint16_t  WORD;
 typedef uint8_t   BYTE;
 typedef long      LONG;
-typedef CHAR     *LPSTR;
+typedef char     *LPSTR;
 
 typedef struct _IMAGE_DATA_DIRECTORY {
     DWORD VirtualAddress;
@@ -117,10 +117,33 @@ typedef struct _IMAGE_OPTIONAL_HEADER64 {
     IMAGE_DATA_DIRECTORY DataDirectory[IMAGE_NUMBEROF_DIRECTORY_ENTRIES];
 } IMAGE_OPTIONAL_HEADER64, *PIMAGE_OPTIONAL_HEADER64;
 
-class Pe{
+class Pe {
+    private:
+        FILE *fd = NULL;
+        PIMAGE_DOS_HEADER pImageDosHeader = NULL;
+        PIMAGE_FILE_HEADER pImageFileHeader = NULL;
+        PIMAGE_OPTIONAL_HEADER32 pImageOptionalHeader32 = NULL;
+        PIMAGE_OPTIONAL_HEADER64 pImageOptionalHeader64 = NULL;
     public:
+        Pe(){
+            pImageDosHeader = (IMAGE_DOS_HEADER *)malloc(sizeof(IMAGE_DOS_HEADER));
+            pImageFileHeader = (IMAGE_FILE_HEADER *)malloc(sizeof(IMAGE_FILE_HEADER));
+        }
         int read_file(char *file_path){
-            return 0;
+            fd = fopen(file_path, "rb");
+            if (fd == NULL){
+                return 0;
+            }
+            int result = fread(pImageDosHeader, sizeof(IMAGE_DOS_HEADER), 1, fp);
+            if (result <= 0){
+                return result
+            }
+            return result;
+        }
+        ~Pe(){
+            free(pImageDosHeader);
+            free(pImageFileHeader);
+
         }
 };
 
