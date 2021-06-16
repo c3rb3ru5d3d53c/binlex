@@ -20,6 +20,20 @@ cd ../
 binlex -m elf:x86 -i tests/elf/elf.x86
 ```
 
+# Usage
+
+```text
+binlex v1.0.0 - A Binary Genetic Traits Lexer
+  -i  --input           input file or directory         (required)
+  -m  --mode            set mode                        (required)
+  -lm --list-modes      list modes
+  -h  --help            display help
+  -t  --threads         threads
+  -o  --output          output file or directory        (optional)
+  -v  --version         display version
+Author: @c3rb3ru5d3d53c
+```
+
 # Trait Format
 Traits will contain binary code represented in hexadecimal form and will use `??` as wild cards for memory operands or other operands subject to change.
 

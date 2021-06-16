@@ -79,7 +79,7 @@ class Args{
                 "  -lm --list-modes\tlist modes\n"
                 "  -h  --help\t\tdisplay help\n"
                 "  -t  --threads\t\tthreads\n"
-                "  -o  --output\t\toutput file or directory\t(required)\n"
+                "  -o  --output\t\toutput file or directory\t(optional)\n"
                 "  -v  --version\t\tdisplay version\n"
                 "Author: @c3rb3ru5d3d53c\n",
                 version
