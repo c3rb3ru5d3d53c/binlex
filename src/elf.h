@@ -16,41 +16,6 @@
 
 extern int errno;
 
-// class Elf32 {
-//     public:
-//         char magic[4] = {0x7F, 0x45, 0x4C, 0x46};
-//         Elf32_Ehdr *header;
-//         Elf32() {
-//             header = (Elf32_Ehdr *)malloc(sizeof(Elf32_Ehdr));
-//         };
-//         int ReadFileHeader(const char * file_path){
-//             FILE *file = fopen(file_path, "rb");
-//             if (file != NULL){
-//                 fread(header, sizeof(header), 1, file);
-//                 fclose(file);
-//             } else {
-//                 return errno;
-//             }
-//             return 0;
-//         }
-//         bool CheckFileType(){
-//             int result = memcmp(header->e_ident, magic, sizeof(magic));
-//             if (result == 0){
-//                 return true;
-//             }
-//             return false;
-//         }
-//         unsigned int GetArchitecture(){
-//             return header->e_machine;
-//         }
-//         int GetType(){
-//             return header->e_type;
-//         }
-//         ~Elf32() {
-//             free(header);
-//         }
-// };
-
 class Elf32{
     private:
         bool ReadElfHeader(){
