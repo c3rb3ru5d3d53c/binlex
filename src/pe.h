@@ -2,148 +2,387 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <stdint.h>
 
 #ifndef PE_H
 #define PE_H
 
-typedef uint32_t  DWORD;
-typedef uint16_t  WORD;
-typedef uint8_t   BYTE;
-typedef long      LONG;
-typedef char     *LPSTR;
+#define PE_MAGIC_PE          0x4550
+#define PE_MAGIC_MZ          0x4d5a
+#define PE_MAX_DLL_NAME      256
+#define PE_MAX_FUNCTION_NAME 512
+#define PE_MODE_UNSET        0
+#define PE_MODE_X86          1
+#define PE_MODE_x86_64       2
+#define PE_MAX_SECTIONS      32
 
-typedef struct _IMAGE_DATA_DIRECTORY {
-    DWORD VirtualAddress;
-    DWORD Size;
-} IMAGE_DATA_DIRECTORY, *PIMAGE_DATA_DIRECTORY;
+typedef enum {
+	IMAGE_FILE_MACHINE_UNKNOWN		= 0x0,
+	IMAGE_FILE_MACHINE_AM33			= 0x1d3,
+	IMAGE_FILE_MACHINE_AMD64		= 0x8664,
+	IMAGE_FILE_MACHINE_ARM			= 0x1c0,
+	IMAGE_FILE_MACHINE_ARMV7		= 0x1c4,
+	IMAGE_FILE_MACHINE_CEE			= 0xc0ee,
+	IMAGE_FILE_MACHINE_EBC			= 0xebc,
+	IMAGE_FILE_MACHINE_I386			= 0x14c,
+	IMAGE_FILE_MACHINE_IA64			= 0x200,
+	IMAGE_FILE_MACHINE_M32R			= 0x9041,
+	IMAGE_FILE_MACHINE_MIPS16		= 0x266,
+	IMAGE_FILE_MACHINE_MIPSFPU		= 0x366,
+	IMAGE_FILE_MACHINE_MIPSFPU16	= 0x466,
+	IMAGE_FILE_MACHINE_POWERPC		= 0x1f0,
+	IMAGE_FILE_MACHINE_POWERPCFP	= 0x1f1,
+	IMAGE_FILE_MACHINE_R4000		= 0x166,
+	IMAGE_FILE_MACHINE_SH3			= 0x1a2,
+	IMAGE_FILE_MACHINE_SH3DSP		= 0x1a3,
+	IMAGE_FILE_MACHINE_SH4			= 0x1a6,
+	IMAGE_FILE_MACHINE_SH5			= 0x1a8,
+	IMAGE_FILE_MACHINE_THUMB		= 0x1c2,
+	IMAGE_FILE_MACHINE_WCEMIPSV2	= 0x169
+} MachineType;
 
-typedef struct _IMAGE_FILE_HEADER {
-    DWORD Signature;
-    WORD  Machine;
-    WORD  NumberOfSections;
-    DWORD TimeDateStamp;
-    DWORD PointerToSymbolTable;
-    DWORD NumberOfSymbols;
-    WORD  SizeOfOptionalHeader;
-    WORD  Characteristics;
-} IMAGE_FILE_HEADER, *PIMAGE_FILE_HEADER;
+typedef enum {
+	// Image only, Windows CE, Windows NT and above. Indicates that the
+	// file does not contain base relocations and must therefore be
+	// loaded at its preferred base address. If the base address is not
+	// available, the loader reports an error. The default behavior of
+	// the linker is to strip base relocations from EXEs.
+	IMAGE_FILE_RELOCS_STRIPPED			= 0x0001,
 
-typedef struct _IMAGE_DOS_HEADER {
-    WORD e_magic;
-    WORD e_cblp;
-    WORD e_cp;
-    WORD e_crlc;
-    WORD e_cparhdr;
-    WORD e_minalloc;
-    WORD e_maxalloc;
-    WORD e_ss;
-    WORD e_sp;
-    WORD e_csum;
-    WORD e_ip;
-    WORD e_cs;
-    WORD e_lfarlc;
-    WORD e_ovno;
-    WORD e_res[4];
-    WORD e_oemid;
-    WORD e_oeminfo;
-    WORD e_res2[10];
-    LONG e_lfanew;
+	// Image only. Indicates that the image file is valid and can be run.
+	// If this flag is not set, it indicates a linker error.
+	IMAGE_FILE_EXECUTABLE_IMAGE			= 0x0002,
+
+	// COFF line numbers have been removed.
+	// Deprecated and should be zero.
+	IMAGE_FILE_LINE_NUMS_STRIPPED		= 0x0004,
+
+	// COFF symbol table entries for local symbols have been removed.
+	// Deprecated and should be zero.
+	IMAGE_FILE_LOCAL_SYMS_STRIPPED		= 0x0008,
+
+	// Obsolete. Aggressively trim working set.
+	// Deprecated in Windows 2000 and later. Must be zero.
+	IMAGE_FILE_AGGRESSIVE_WS_TRIM		= 0x0010,
+
+	// App can handle > 2gb addresses.
+	IMAGE_FILE_LARGE_ADDRESS_AWARE		= 0x0020,
+
+	// Reserved for future use.
+	IMAGE_FILE_RESERVED					= 0x0040,
+
+	// Little endian: LSB precedes MSB in memory.
+	// Deprecated and should be zero.
+	IMAGE_FILE_BYTES_REVERSED_LO		= 0x0080,
+
+	// Machine based on 32-bit-word architecture.
+	IMAGE_FILE_32BIT_MACHINE			= 0x0100,
+
+	// Debugging information removed from image file.
+	IMAGE_FILE_DEBUG_STRIPPED			= 0x0200,
+
+	// If image is on removable media, fully load it and copy it to the
+	// swap file.
+	IMAGE_FILE_REMOVABLE_RUN_FROM_SWAP	= 0x0400,
+
+	// If image is on network media, fully load it and copy it to the
+	// swap file.
+	IMAGE_FILE_NET_RUN_FROM_SWAP		= 0x0800,
+
+	// The image file is a system file, not a user program.
+	IMAGE_FILE_SYSTEM					= 0x1000,
+
+	// The image file is a dynamic-link library (DLL). Such files are
+	// considered executable files for almost all purposes, although
+	// they cannot be directly run.
+	IMAGE_FILE_DLL						= 0x2000,
+
+	// File should be run only on a UP machine.
+	IMAGE_FILE_UP_SYSTEM_ONLY			= 0x4000,
+
+	// Big endian: MSB precedes LSB in memory.
+	// Deprecated and should be zero.
+	IMAGE_FILE_BYTES_REVERSED_HI		= 0x8000
+} ImageCharacteristics;
+
+typedef struct {
+    uint32_t Signature;
+	uint16_t Machine; // MachineType
+	uint16_t NumberOfSections;
+	uint32_t TimeDateStamp;
+	uint32_t PointerToSymbolTable;
+	uint32_t NumberOfSymbols;
+	uint16_t SizeOfOptionalHeader;
+	uint16_t Characteristics; // ImageCharacteristics
+} IMAGE_FILE_HEADER, IMAGE_COFF_HEADER, *PIMAGE_FILE_HEADER, *PIMAGE_COFF_HEADER;
+
+typedef struct {
+	uint16_t e_magic;
+	uint16_t e_cblp;
+	uint16_t e_cp;
+	uint16_t e_crlc;
+	uint16_t e_cparhdr;
+	uint16_t e_minalloc;
+	uint16_t e_maxalloc;
+	uint16_t e_ss;
+	uint16_t e_sp;
+	uint16_t e_csum;
+	uint16_t e_ip;
+	uint16_t e_cs;
+	uint16_t e_lfarlc;
+	uint16_t e_ovno;
+	uint16_t e_res[4];
+	uint16_t e_oemid;
+	uint16_t e_oeminfo;
+	uint16_t e_res2[10];
+	uint32_t e_lfanew; // sizeof(IMAGE_DOS_HEADER) + size of MS-DOS stub
 } IMAGE_DOS_HEADER, *PIMAGE_DOS_HEADER;
 
-typedef struct _IMAGE_OPTIONAL_HEADER {
-    WORD                 Magic;
-    BYTE                 MajorLinkerVersion;
-    BYTE                 MinorLinkerVersion;
-    DWORD                SizeOfCode;
-    DWORD                SizeOfInitializedData;
-    DWORD                SizeOfUninitializedData;
-    DWORD                AddressOfEntryPoint;
-    DWORD                BaseOfCode;
-    DWORD                BaseOfData;
-    DWORD                ImageBase;
-    DWORD                SectionAlignment;
-    DWORD                FileAlignment;
-    WORD                 MajorOperatingSystemVersion;
-    WORD                 MinorOperatingSystemVersion;
-    WORD                 MajorImageVersion;
-    WORD                 MinorImageVersion;
-    WORD                 MajorSubsystemVersion;
-    WORD                 MinorSubsystemVersion;
-    DWORD                Win32VersionValue;
-    DWORD                SizeOfImage;
-    DWORD                SizeOfHeaders;
-    DWORD                CheckSum;
-    WORD                 Subsystem;
-    WORD                 DllCharacteristics;
-    DWORD                SizeOfStackReserve;
-    DWORD                SizeOfStackCommit;
-    DWORD                SizeOfHeapReserve;
-    DWORD                SizeOfHeapCommit;
-    DWORD                LoaderFlags;
-    DWORD                NumberOfRvaAndSizes;
-    IMAGE_DATA_DIRECTORY DataDirectory[IMAGE_NUMBEROF_DIRECTORY_ENTRIES];
-} IMAGE_OPTIONAL_HEADER32, *PIMAGE_OPTIONAL_HEADER32;
+// REFERENCE: http://msdn.microsoft.com/en-us/library/windows/desktop/ms680339(v=vs.85).aspx
+typedef enum {
+	// Unknown subsystem
+	IMAGE_SUBSYSTEM_UNKNOWN						= 0,
+	// No subsystem required (device drivers and native system processes)
+	IMAGE_SUBSYSTEM_NATIVE						= 1,
+	// Windows graphical user interface (GUI) subsystem
+	IMAGE_SUBSYSTEM_WINDOWS_GUI					= 2,
+	// Windows character-mode user interface (CUI) subsystem
+	IMAGE_SUBSYSTEM_WINDOWS_CUI					= 3,
+	// OS/2 CUI subsystem
+	IMAGE_SUBSYSTEM_OS2_CUI						= 5,
+	// POSIX CUI subsystem
+	IMAGE_SUBSYSTEM_POSIX_CUI					= 7,
+	// Windows CE system
+	IMAGE_SUBSYSTEM_WINDOWS_CE_GUI				= 9,
+	// Extensible Firmware Interface (EFI) application
+	IMAGE_SUBSYSTEM_EFI_APPLICATION				= 10,
+	// EFI driver with boot services
+	IMAGE_SUBSYSTEM_EFI_BOOT_SERVICE_DRIVER 	= 11,
+	// EFI driver with run-time services
+	IMAGE_SUBSYSTEM_EFI_RUNTIME_DRIVER			= 12,
+	// EFI ROM image
+	IMAGE_SUBSYSTEM_EFI_ROM						= 13,
+	// Xbox system
+	IMAGE_SUBSYSTEM_XBOX						= 14,
+	// Boot application.
+	IMAGE_SUBSYSTEM_WINDOWS_BOOT_APPLICATION	= 16
+} WindowsSubsystem;
 
-typedef struct _IMAGE_OPTIONAL_HEADER64 {
-    WORD                 Magic;
-    BYTE                 MajorLinkerVersion;
-    BYTE                 MinorLinkerVersion;
-    DWORD                SizeOfCode;
-    DWORD                SizeOfInitializedData;
-    DWORD                SizeOfUninitializedData;
-    DWORD                AddressOfEntryPoint;
-    DWORD                BaseOfCode;
-    ULONGLONG            ImageBase;
-    DWORD                SectionAlignment;
-    DWORD                FileAlignment;
-    WORD                 MajorOperatingSystemVersion;
-    WORD                 MinorOperatingSystemVersion;
-    WORD                 MajorImageVersion;
-    WORD                 MinorImageVersion;
-    WORD                 MajorSubsystemVersion;
-    WORD                 MinorSubsystemVersion;
-    DWORD                Win32VersionValue;
-    DWORD                SizeOfImage;
-    DWORD                SizeOfHeaders;
-    DWORD                CheckSum;
-    WORD                 Subsystem;
-    WORD                 DllCharacteristics;
-    ULONGLONG            SizeOfStackReserve;
-    ULONGLONG            SizeOfStackCommit;
-    ULONGLONG            SizeOfHeapReserve;
-    ULONGLONG            SizeOfHeapCommit;
-    DWORD                LoaderFlags;
-    DWORD                NumberOfRvaAndSizes;
-    IMAGE_DATA_DIRECTORY DataDirectory[IMAGE_NUMBEROF_DIRECTORY_ENTRIES];
-} IMAGE_OPTIONAL_HEADER64, *PIMAGE_OPTIONAL_HEADER64;
+// REFERENCE: http://msdn.microsoft.com/en-us/library/windows/desktop/ms680339(v=vs.85).aspx
+typedef enum {
+	// IMAGE_DLLCHARACTERISTICS_RESERVED_1			= 0x0001,
+	// IMAGE_DLLCHARACTERISTICS_RESERVED_2			= 0x0002,
+	// IMAGE_DLLCHARACTERISTICS_RESERVED_4			= 0x0004,
+	// IMAGE_DLLCHARACTERISTICS_RESERVED_8			= 0x0008,
+	// The DLL can be relocated at load time.
+	IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE			= 0x0040,
+	// Code integrity checks are forced.
+	IMAGE_DLLCHARACTERISTICS_FORCE_INTEGRITY		= 0x0080,
+	// The image is compatible with data execution prevention (DEP).
+	IMAGE_DLLCHARACTERISTICS_NX_COMPAT				= 0x0100,
+	// The image is isolation aware, but should not be isolated.
+	IMAGE_DLLCHARACTERISTICS_NO_ISOLATION			= 0x0200,
+	// The image does not use structured exception handling (SEH).
+	// No handlers can be called in this image.
+	IMAGE_DLLCHARACTERISTICS_NO_SEH					= 0x0400,
+	// Do not bind the image.
+	IMAGE_DLLCHARACTERISTICS_NO_BIND				= 0x0800,
+	// IMAGE_DLLCHARACTERISTICS_RESERVED_1000		= 0x1000,
+	// A WDM driver.
+	IMAGE_DLLCHARACTERISTICS_WDM_DRIVER				= 0x2000,
+	// IMAGE_DLLCHARACTERISTICS_RESERVED_4000		= 0x4000,
+	// The image is terminal server aware.
+	IMAGE_DLLCHARACTERISTICS_TERMINAL_SERVER_AWARE	= 0x8000
+} ImageDllCharacteristics;
+
+typedef enum {
+	MAGIC_ROM	= 0x107,
+	MAGIC_PE32	= 0x10b,
+	MAGIC_PE64	= 0x20b // PE32+
+} opt_type_e;
+
+typedef struct {
+	uint16_t Magic;
+	uint8_t MajorLinkerVersion;
+	uint8_t MinorLinkerVersion;
+	uint32_t SizeOfCode;
+	uint32_t SizeOfInitializedData;
+	uint32_t SizeOfUninitializedData;
+	uint32_t AddressOfEntryPoint;
+	uint32_t BaseOfCode;
+	uint32_t BaseOfData;
+	uint32_t BaseOfBss;
+	uint32_t GprMask;
+	uint32_t CprMask[4];
+	uint32_t GpValue;
+} IMAGE_ROM_OPTIONAL_HEADER, *PIMAGE_ROM_OPTIONAL_HEADER;
+
+// REFERENCE: http://msdn.microsoft.com/en-us/library/windows/desktop/ms680339(v=vs.85).aspx
+typedef struct {
+	uint16_t Magic;
+	uint8_t MajorLinkerVersion;
+	uint8_t MinorLinkerVersion;
+	uint32_t SizeOfCode;
+	uint32_t SizeOfInitializedData;
+	uint32_t SizeOfUninitializedData;
+	uint32_t AddressOfEntryPoint;
+	uint32_t BaseOfCode;
+	uint32_t BaseOfData; // only in PE32
+	uint32_t ImageBase;
+	uint32_t SectionAlignment;
+	uint32_t FileAlignment;
+	uint16_t MajorOperatingSystemVersion;
+	uint16_t MinorOperatingSystemVersion;
+	uint16_t MajorImageVersion;
+	uint16_t MinorImageVersion;
+	uint16_t MajorSubsystemVersion;
+	uint16_t MinorSubsystemVersion;
+	uint32_t Reserved1;
+	uint32_t SizeOfImage;
+	uint32_t SizeOfHeaders;
+	uint32_t CheckSum;
+	uint16_t Subsystem; // WindowsSubsystem
+	uint16_t DllCharacteristics;
+	uint32_t SizeOfStackReserve;
+	uint32_t SizeOfStackCommit;
+	uint32_t SizeOfHeapReserve;
+	uint32_t SizeOfHeapCommit;
+	uint32_t LoaderFlags;
+	uint32_t NumberOfRvaAndSizes;
+	// IMAGE_DATA_DIRECTORY DataDirectory[MAX_DIRECTORIES];
+} IMAGE_OPTIONAL_HEADER_32, *PIMAGE_OPTIONAL_HEADER_32;
+
+// REFERENCE: http://msdn.microsoft.com/en-us/library/windows/desktop/ms680339(v=vs.85).aspx
+typedef struct {
+	uint16_t Magic;
+	uint8_t MajorLinkerVersion;
+	uint8_t MinorLinkerVersion;
+	uint32_t SizeOfCode;
+	uint32_t SizeOfInitializedData;
+	uint32_t SizeOfUninitializedData;
+	uint32_t AddressOfEntryPoint;
+	uint32_t BaseOfCode;
+	uint64_t ImageBase;
+	uint32_t SectionAlignment;
+	uint32_t FileAlignment;
+	uint16_t MajorOperatingSystemVersion;
+	uint16_t MinorOperatingSystemVersion;
+	uint16_t MajorImageVersion;
+	uint16_t MinorImageVersion;
+	uint16_t MajorSubsystemVersion;
+	uint16_t MinorSubsystemVersion;
+	uint32_t Reserved1;
+	uint32_t SizeOfImage;
+	uint32_t SizeOfHeaders;
+	uint32_t CheckSum;
+	uint16_t Subsystem; // WindowsSubsystem
+	uint16_t DllCharacteristics;
+	uint64_t SizeOfStackReserve;
+	uint64_t SizeOfStackCommit;
+	uint64_t SizeOfHeapReserve;
+	uint64_t SizeOfHeapCommit;
+	uint32_t LoaderFlags; /* must be zero */
+	uint32_t NumberOfRvaAndSizes;
+	// IMAGE_DATA_DIRECTORY DataDirectory[MAX_DIRECTORIES];
+} IMAGE_OPTIONAL_HEADER_64, *PIMAGE_OPTIONAL_HEADER_64;
+
+typedef struct {
+	uint16_t type; // opt_type_e
+	size_t length;
+	IMAGE_OPTIONAL_HEADER_32 *_32;
+	IMAGE_OPTIONAL_HEADER_64 *_64;
+} IMAGE_OPTIONAL_HEADER, *PIMAGE_OPTIONAL_HEADER;
+
+// typedef struct {
+// 	IMAGE_DOS_HEADER dos_hdr;
+// 	uint32_t signature;
+// 	IMAGE_COFF_HEADER coff_hdr;
+// 	void *optional_hdr_ptr;
+// 	IMAGE_OPTIONAL_HEADER optional_hdr;
+// 	uint32_t num_directories;
+// 	void *directories_ptr;
+// 	IMAGE_DATA_DIRECTORY **directories;
+// 	uint16_t num_sections;
+// 	void *sections_ptr;
+// 	IMAGE_SECTION_HEADER **sections;
+// 	uint64_t entrypoint;
+// 	uint64_t imagebase;
+// } PE_HEADER, *PPE_HEADER;
 
 class Pe {
     private:
-        FILE *fd = NULL;
-        PIMAGE_DOS_HEADER pImageDosHeader = NULL;
-        PIMAGE_FILE_HEADER pImageFileHeader = NULL;
-        PIMAGE_OPTIONAL_HEADER32 pImageOptionalHeader32 = NULL;
-        PIMAGE_OPTIONAL_HEADER64 pImageOptionalHeader64 = NULL;
-    public:
-        Pe(){
-            pImageDosHeader = (IMAGE_DOS_HEADER *)malloc(sizeof(IMAGE_DOS_HEADER));
-            pImageFileHeader = (IMAGE_FILE_HEADER *)malloc(sizeof(IMAGE_FILE_HEADER));
+        struct Section {
+            int offset;
+            int size;
+            void *data;
+        };
+        bool is_pe(){
+            if (dos_header->e_magic != 23117 ||
+                coff_header->Signature != 17744){
+                return false;
+            }
+            return true;
         }
-        int read_file(char *file_path){
+    public:
+        char magic_mz[2]               = {0x5a, 0x4d};
+        char magic_pe[4]               = {0x00, 0x00, 0x45, 0x50};
+        FILE *fd                       = NULL;
+        PIMAGE_DOS_HEADER dos_header   = NULL;
+        PIMAGE_COFF_HEADER coff_header = NULL;
+        uint32_t pe_header_ptr         = 0;
+        void *optional_header          = NULL;
+        int mode                       = PE_MODE_UNSET;
+        struct Section sections[PE_MAX_SECTIONS];
+        bool Setup(int input_mode){
+            dos_header = (PIMAGE_DOS_HEADER)malloc(sizeof(IMAGE_DOS_HEADER));
+            coff_header = (PIMAGE_COFF_HEADER)malloc(sizeof(IMAGE_COFF_HEADER));
+            switch(input_mode){
+                case PE_MODE_X86:
+                    mode = PE_MODE_X86;
+                    break;
+                case PE_MODE_x86_64:
+                    mode = PE_MODE_x86_64;
+                    break;
+                default:
+                    fprintf(stderr, "[x] unsupported elf executable mode\n");
+                    mode = PE_MODE_UNSET;
+                    return false;
+            }
+            return true;
+        }
+        bool ReadFile(char *file_path){
             fd = fopen(file_path, "rb");
             if (fd == NULL){
-                return 0;
+                fprintf(stderr, "[x] failed to open %s\n", file_path);
+                return false;
             }
-            int result = fread(pImageDosHeader, sizeof(IMAGE_DOS_HEADER), 1, fp);
-            if (result <= 0){
-                return result
+            fread(dos_header, sizeof(IMAGE_DOS_HEADER), 1, fd);
+            fseek(fd, dos_header->e_lfanew, SEEK_SET);
+            fread(coff_header, sizeof(IMAGE_COFF_HEADER), 1, fd);
+            if (is_pe() == false){
+                fprintf(stderr, "[x] %s is not a valid pe file\n", file_path);
+                return false;
             }
-            return result;
+            if (mode == PE_MODE_X86 && coff_header->Machine != IMAGE_FILE_MACHINE_I386){
+                fprintf(stderr, "[x] %s is not a valid x86 pe file\n", file_path);
+                return false;
+            }
+            if (mode == PE_MODE_x86_64 && coff_header->Machine != IMAGE_FILE_MACHINE_AMD64){
+                fprintf(stderr, "[x] %s is not a valid x86_64 pe file\n", file_path);
+                return false;
+            }
+            printf("%x\n", coff_header->Machine);
+            return true;
         }
         ~Pe(){
-            free(pImageDosHeader);
-            free(pImageFileHeader);
-
+            if (dos_header != NULL){
+                free(dos_header);
+                dos_header = NULL;
+            }
+            if (coff_header != NULL){
+                free(coff_header);
+                coff_header = NULL;
+            }
         }
 };
 
