@@ -451,11 +451,9 @@ class Pe {
         struct Section sections[PE_MAX_SECTIONS];
         Pe(){
             for (int i = 0; i < PE_MAX_SECTIONS; i++){
-                if (sections[i].data != NULL){
-                    sections[i].size = 0;
-                    sections[i].offset = 0;
-                    sections[i].data = NULL;
-                }
+                sections[i].size = 0;
+                sections[i].offset = 0;
+                sections[i].data = NULL;
             }
         }
         bool Setup(int input_mode){
