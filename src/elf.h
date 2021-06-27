@@ -167,7 +167,7 @@ class Elf {
                 Elf64_Ehdr *header_local = (Elf64_Ehdr *)header;
                 fread(header_local, sizeof(Elf64_Ehdr), 1, fd);
                 if (is_arch(EM_X86_64) == false){
-                    fprintf(stderr, "[x] the file %s is not an x86 binary\n", file_path);
+                    fprintf(stderr, "[x] the file %s is not an x86_64 binary\n", file_path);
                     return false;
                 }
                 sh_table = (Elf64_Shdr *)malloc(GetSectionTableSize());
