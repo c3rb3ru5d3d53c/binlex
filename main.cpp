@@ -10,37 +10,57 @@ int main(int argc, char **argv){
     args.parse(argc, argv);
     if (strcmp(args.options.mode, (char *)"elf:x86_64") == 0 &&
         args.options.io_type == ARGS_IO_TYPE_FILE){
-        Elf64 elf64;
-        elf64.ReadFile(args.options.input);
-        elf64.GetSection((char *)".text");
+        Elf elf64;
+
+        if (elf64.Setup(ELF_MODE_X86_64) == false){
+            return 1;
+        }
+        if (elf64.ReadFile(args.options.input) == false){
+            return 1;
+        }
+        if (elf64.GetExecutableData() == false){
+            return 1;
+        }
         Decompiler decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_64);
-        decompiler.decompiler_type = DECOMPILER_TYPE_FUNCS;
-        decompiler.x86_64(elf64.s_data, elf64.s_size);
-        decompiler.decompiler_type = DECOMPILER_TYPE_BLCKS;
-        decompiler.x86_64(elf64.s_data, elf64.s_size);
+        for (int i = 0; i < ELF_MAX_SECTIONS; i++){
+            if (elf64.sections[i].data != NULL){
+                decompiler.x86_64(DECOMPILER_TYPE_FUNCS, elf64.sections[i].data, elf64.sections[i].size, i);
+                decompiler.x86_64(DECOMPILER_TYPE_BLCKS, elf64.sections[i].data, elf64.sections[i].size, i);
+            }
+        }
         if (args.options.output == NULL){
-            printf("%s", decompiler.traits);
+            decompiler.PrintTraits(DECOMPILER_TYPE_ALL);
         } else {
-            decompiler.write_traits(args.options.output);
+            decompiler.WriteTraits(DECOMPILER_TYPE_ALL, args.options.output);
         }
         return 0;
     }
     if (strcmp(args.options.mode, (char *)"elf:x86") == 0 &&
         args.options.io_type == ARGS_IO_TYPE_FILE){
-        Elf32 elf32;
-        elf32.ReadFile(args.options.input);
-        elf32.GetSection((char *)".text");
+        int result = false;
+        Elf elf32;
+        if (elf32.Setup(ELF_MODE_X86) == false){
+            return 1;
+        }
+        if (elf32.ReadFile(args.options.input) == false){
+            return 1;
+        }
+        if (elf32.GetExecutableData() == false){
+            return 1;
+        }
         Decompiler decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
-        decompiler.decompiler_type = DECOMPILER_TYPE_FUNCS;
-        decompiler.x86_64(elf32.s_data, elf32.s_size);
-        decompiler.decompiler_type = DECOMPILER_TYPE_BLCKS;
-        decompiler.x86_64(elf32.s_data, elf32.s_size);
+        for (int i = 0; i < ELF_MAX_SECTIONS; i++){
+            if (elf32.sections[i].data != NULL){
+                decompiler.x86_64(DECOMPILER_TYPE_FUNCS, elf32.sections[i].data, elf32.sections[i].size, i);
+                decompiler.x86_64(DECOMPILER_TYPE_BLCKS, elf32.sections[i].data, elf32.sections[i].size, i);
+            }
+        }
         if (args.options.output == NULL){
-            printf("%s", decompiler.traits);
+            decompiler.PrintTraits(DECOMPILER_TYPE_ALL);
         } else {
-            decompiler.write_traits(args.options.output);
+            decompiler.WriteTraits(DECOMPILER_TYPE_ALL, args.options.output);
         }
         return 0;
     }

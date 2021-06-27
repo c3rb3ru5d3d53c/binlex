@@ -10,11 +10,20 @@
 
 #define DECOMPILER_TYPE_FUNCS 0
 #define DECOMPILER_TYPE_BLCKS 1
+#define DECOMPILER_TYPE_UNSET 2
+#define DECOMPILER_TYPE_ALL   3
+
+#define DECOMPILER_MAX_SECTIONS 256
 
 class Decompiler{
     private:
         csh cs_handle;
         char *temp = NULL;
+        struct Section {
+            char *traits;
+            int size;
+            int type;
+        };
         char * hexdump_le(const void *data, int size){
             int buffer_size = size * 2 + size;
             char *buffer0 = (char *)malloc(buffer_size);
@@ -94,32 +103,24 @@ class Decompiler{
             }
             return buffer0;
         }
+        void SetSectionsDefault(){
+            for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
+                sections[i].traits = NULL;
+                sections[i].size = 0;
+                sections[i].type = DECOMPILER_TYPE_UNSET;
+            }
+        }
     public:
-        char *traits = NULL;
-        int decompiler_type = DECOMPILE_MODE_FUNCS;
+        struct Section sections[DECOMPILER_MAX_SECTIONS];
+        Decompiler(){
+            SetSectionsDefault();
+        }
         void Setup(cs_arch arch, cs_mode mode){
             assert(cs_open(arch, mode, &cs_handle) == CS_ERR_OK);
             cs_option(cs_handle, CS_OPT_DETAIL, CS_OPT_ON);
             cs_option(cs_handle, CS_OPT_SKIPDATA, CS_OPT_ON);
         }
-        void FreeTraits(){
-            if (traits != NULL){
-                free(traits);
-            }
-        }
-        int write_traits(char *output){
-            FILE *fd = fopen(output, "w");
-            if (fd == NULL){
-                fprintf(stderr, "failed to open file %s\n", output);
-            }
-            int result = fwrite(traits, sizeof(char), strlen(traits), fd);
-            if (result <= 0){
-                fprintf(stderr, "failed to write file %s\n", output);
-            }
-            fclose(fd);
-            return result;
-        }
-        void x86_64(void *data, int data_size){
+        void x86_64(int decompiler_type, void *data, int data_size, int section_index){
             cs_insn *insn;
             char *disp = NULL;
             char *bytes = NULL;
@@ -184,18 +185,67 @@ class Decompiler{
                 }
                 cs_free(insn, count);
             }
-            if (traits == NULL){
-                traits = (char *)malloc(strlen(temp)+1);
-                sprintf(traits, "%s", temp);
-            } else {
-                traits = (char *)realloc(traits, strlen(traits) + strlen(temp) + 1);
-                sprintf(traits, "%s", temp);
-            }
+            sections[section_index].traits = (char *)malloc(strlen(temp)+1);
+            sprintf(sections[section_index].traits, "%s", temp);
+            sections[section_index].type = decompiler_type;
             free(temp);
+        }
+        void PrintTraits(int type){
+            for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
+                switch(type){
+                    case DECOMPILER_TYPE_FUNCS:
+                        if (sections[i].traits != NULL && sections[i].type == DECOMPILER_TYPE_FUNCS){
+                            printf("%s", sections[i].traits);
+                        }
+                        break;
+                    case DECOMPILER_TYPE_BLCKS:
+                        if (sections[i].traits != NULL && sections[i].type == DECOMPILER_TYPE_BLCKS){
+                            printf("%s", sections[i].traits);
+                        }
+                        break;
+                    case DECOMPILER_TYPE_ALL:
+                        if (sections[i].traits != NULL){
+                            printf("%s", sections[i].traits);
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+        void WriteTraits(int type, char *file_path){
+            FILE *fd = fopen(file_path, "w");
+            for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
+                switch(type){
+                    case DECOMPILER_TYPE_FUNCS:
+                        if (sections[i].traits != NULL && sections[i].type == DECOMPILER_TYPE_FUNCS){
+                            fwrite(sections[i].traits, sizeof(char), strlen(sections[i].traits), fd);
+                        }
+                        break;
+                    case DECOMPILER_TYPE_BLCKS:
+                        if (sections[i].traits != NULL && sections[i].type == DECOMPILER_TYPE_BLCKS){
+                            fwrite(sections[i].traits, sizeof(char), strlen(sections[i].traits), fd);
+                        }
+                        break;
+                    case DECOMPILER_TYPE_ALL:
+                        if (sections[i].traits != NULL){
+                            fwrite(sections[i].traits, sizeof(char), strlen(sections[i].traits), fd);
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+            fclose(fd);
         }
         ~Decompiler(){
             cs_close(&cs_handle);
-            FreeTraits();
+            for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
+                if (sections[i].traits != NULL){
+                    free(sections[i].traits);
+                }
+            }
+            SetSectionsDefault();
         }
 };
 
