@@ -20,9 +20,8 @@ class Decompiler{
         csh cs_handle;
         char *temp = NULL;
         struct Section {
-            char *traits;
-            int size;
-            int type;
+            char *function_traits;
+            char *block_traits;
         };
         char * hexdump_le(const void *data, int size){
             int buffer_size = size * 2 + size;
@@ -105,9 +104,8 @@ class Decompiler{
         }
         void SetSectionsDefault(){
             for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
-                sections[i].traits = NULL;
-                sections[i].size = 0;
-                sections[i].type = DECOMPILER_TYPE_UNSET;
+                sections[i].function_traits = NULL;
+                sections[i].block_traits = NULL;
             }
         }
     public:
@@ -132,13 +130,16 @@ class Decompiler{
                 size_t j;
                 for (j = 0; j < count; j++) {
                     bytes = hexdump_be(insn[j].bytes, insn[j].size);
+                    //printf("%s\n", bytes);
                     for (int k = 0; k < insn[j].detail->x86.op_count; k++) {
                         cs_x86_op *op = &(insn[j].detail->x86.operands[k]);
                         switch((int)op->type) {
                             case X86_OP_MEM:
                                 if (op->mem.disp != 0)
+                                    printf("");
                                     disp = hexdump_mem_disp(op->mem.disp);
                                     wildcard_bytes(bytes, disp);
+                                    //free(disp);
                                 break;
                             default:
                                 break;
@@ -185,27 +186,35 @@ class Decompiler{
                 }
                 cs_free(insn, count);
             }
-            sections[section_index].traits = (char *)malloc(strlen(temp)+1);
-            sprintf(sections[section_index].traits, "%s", temp);
-            sections[section_index].type = decompiler_type;
+            if (decompiler_type == DECOMPILER_TYPE_FUNCS){
+                sections[section_index].function_traits = (char *)malloc(strlen(temp)+1);
+                sprintf(sections[section_index].function_traits, "%s", temp);
+                //sections[section_index].type = decompiler_type;
+            }
+            if (decompiler_type == DECOMPILER_TYPE_BLCKS){
+                sections[section_index].block_traits = (char *)malloc(strlen(temp)+1);
+                sprintf(sections[section_index].block_traits, "%s", temp);
+                //sections[section_index].type = decompiler_type;
+            }
             free(temp);
         }
         void PrintTraits(int type){
             for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
                 switch(type){
                     case DECOMPILER_TYPE_FUNCS:
-                        if (sections[i].traits != NULL && sections[i].type == DECOMPILER_TYPE_FUNCS){
-                            printf("%s", sections[i].traits);
+                        if (sections[i].function_traits != NULL){
+                            printf("%s", sections[i].function_traits);
                         }
                         break;
                     case DECOMPILER_TYPE_BLCKS:
-                        if (sections[i].traits != NULL && sections[i].type == DECOMPILER_TYPE_BLCKS){
-                            printf("%s", sections[i].traits);
+                        if (sections[i].block_traits != NULL){
+                            printf("%s", sections[i].block_traits);
                         }
                         break;
                     case DECOMPILER_TYPE_ALL:
-                        if (sections[i].traits != NULL){
-                            printf("%s", sections[i].traits);
+                        if (sections[i].function_traits != NULL && sections[i].block_traits != NULL){
+                            printf("%s", sections[i].function_traits);
+                            printf("%s", sections[i].block_traits);
                         }
                         break;
                     default:
@@ -218,18 +227,19 @@ class Decompiler{
             for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
                 switch(type){
                     case DECOMPILER_TYPE_FUNCS:
-                        if (sections[i].traits != NULL && sections[i].type == DECOMPILER_TYPE_FUNCS){
-                            fwrite(sections[i].traits, sizeof(char), strlen(sections[i].traits), fd);
+                        if (sections[i].function_traits != NULL){
+                            fwrite(sections[i].function_traits, sizeof(char), strlen(sections[i].function_traits), fd);
                         }
                         break;
                     case DECOMPILER_TYPE_BLCKS:
-                        if (sections[i].traits != NULL && sections[i].type == DECOMPILER_TYPE_BLCKS){
-                            fwrite(sections[i].traits, sizeof(char), strlen(sections[i].traits), fd);
+                        if (sections[i].block_traits != NULL){
+                            fwrite(sections[i].block_traits, sizeof(char), strlen(sections[i].block_traits), fd);
                         }
                         break;
                     case DECOMPILER_TYPE_ALL:
-                        if (sections[i].traits != NULL){
-                            fwrite(sections[i].traits, sizeof(char), strlen(sections[i].traits), fd);
+                        if (sections[i].function_traits != NULL && sections[i].block_traits != NULL){
+                            fwrite(sections[i].function_traits, sizeof(char), strlen(sections[i].function_traits), fd);
+                            fwrite(sections[i].block_traits, sizeof(char), strlen(sections[i].block_traits), fd);
                         }
                         break;
                     default:
@@ -241,8 +251,11 @@ class Decompiler{
         ~Decompiler(){
             cs_close(&cs_handle);
             for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
-                if (sections[i].traits != NULL){
-                    free(sections[i].traits);
+                if (sections[i].function_traits != NULL){
+                    free(sections[i].function_traits);
+                }
+                if (sections[i].block_traits != NULL){
+                    free(sections[i].block_traits);
                 }
             }
             SetSectionsDefault();
