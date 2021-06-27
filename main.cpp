@@ -105,9 +105,9 @@ int main(int argc, char **argv){
         decompiler.Setup(CS_ARCH_X86, CS_MODE_64);
         for (int i = 0; i < PE_MAX_SECTIONS; i++){
             if (pe64.sections[i].data != NULL){
-                //common_hex_dump((char *)"section", pe32.sections[i].data, pe32.sections[i].size);
-                decompiler.x86_64(DECOMPILER_TYPE_FUNCS, pe64.sections[i].data, pe64.sections[i].size, i);
-                decompiler.x86_64(DECOMPILER_TYPE_BLCKS, pe64.sections[i].data, pe64.sections[i].size, i);
+                common_hex_dump((char *)"section", pe64.sections[i].data, pe64.sections[i].size);
+                //decompiler.x86_64(DECOMPILER_TYPE_FUNCS, pe64.sections[i].data, pe64.sections[i].size, i);
+                //decompiler.x86_64(DECOMPILER_TYPE_BLCKS, pe64.sections[i].data, pe64.sections[i].size, i);
             }
         }
         if (args.options.output == NULL){
