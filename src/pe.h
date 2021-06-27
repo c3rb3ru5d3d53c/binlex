@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <stdint.h>
+#include "common.h"
 
 #ifndef PE_H
 #define PE_H
@@ -13,8 +14,67 @@
 #define PE_MAX_FUNCTION_NAME 512
 #define PE_MODE_UNSET        0
 #define PE_MODE_X86          1
-#define PE_MODE_x86_64       2
+#define PE_MODE_X86_64       2
 #define PE_MAX_SECTIONS      32
+#define PE_SECTION_NAME_SIZE 8
+#define PE_MAX_DIRECTORIES   16
+
+typedef enum {
+	IMAGE_DIRECTORY_ENTRY_EXPORT			= 0, // Export Table
+	IMAGE_DIRECTORY_ENTRY_IMPORT			= 1, // Import Table
+	IMAGE_DIRECTORY_ENTRY_RESOURCE			= 2, // Resource Table
+	IMAGE_DIRECTORY_ENTRY_EXCEPTION			= 3, // Exception Table
+	IMAGE_DIRECTORY_ENTRY_SECURITY			= 4, // Certificate Table
+	IMAGE_DIRECTORY_ENTRY_BASERELOC			= 5, // Base Relocation Table
+	IMAGE_DIRECTORY_ENTRY_DEBUG				= 6, // Debug
+	//IMAGE_DIRECTORY_ENTRY_COPYRIGHT			= 7, // (X86 usage)
+	IMAGE_DIRECTORY_ENTRY_ARCHITECTURE		= 7, // Architecture
+	IMAGE_DIRECTORY_ENTRY_GLOBALPTR			= 8, // Global Ptr
+	IMAGE_DIRECTORY_ENTRY_TLS				= 9, // TLS Table
+	IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG		= 10, // Load Config Table
+	IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT		= 11, // Bound Import
+	IMAGE_DIRECTORY_ENTRY_IAT				= 12, // IAT
+	IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT		= 13, // Delay Import Descriptor
+	IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR	= 14, // CLR Runtime Header
+	IMAGE_DIRECTORY_RESERVED				= 15  // Reserved, must be zero
+} ImageDirectoryEntry;
+
+typedef struct {
+	uint32_t Characteristics;
+	uint32_t TimeDateStamp;
+	uint16_t MajorVersion;
+	uint16_t MinorVersion;
+	uint32_t Name;
+	uint32_t Base;
+	uint32_t NumberOfFunctions;
+	uint32_t NumberOfNames;
+	uint32_t AddressOfFunctions;
+	uint32_t AddressOfNames;
+	uint32_t AddressOfNameOrdinals;
+} IMAGE_EXPORT_DIRECTORY, *PIMAGE_EXPORT_DIRECTORY;
+
+typedef struct {
+	uint32_t StartAddressOfRawData;
+	uint32_t EndAddressOfRawData;
+	uint32_t AddressOfIndex;
+	uint32_t AddressOfCallBacks; // PIMAGE_TLS_CALLBACK
+	uint32_t SizeOfZeroFill;
+	uint32_t Characteristics; // reserved for future use
+} IMAGE_TLS_DIRECTORY32, *PIMAGE_TLS_DIRECTORY32;
+
+typedef struct {
+	uint64_t StartAddressOfRawData;
+	uint64_t EndAddressOfRawData;
+	uint64_t AddressOfIndex;
+	uint64_t AddressOfCallBacks;
+	uint32_t SizeOfZeroFill;
+	uint32_t Characteristics;
+} IMAGE_TLS_DIRECTORY64, *PIMAGE_TLS_DIRECTORY64;
+
+typedef struct {
+	uint32_t VirtualAddress;
+	uint32_t Size;
+} IMAGE_DATA_DIRECTORY, *PIMAGE_DATA_DIRECTORY;
 
 typedef enum {
 	IMAGE_FILE_MACHINE_UNKNOWN		= 0x0,
@@ -249,7 +309,7 @@ typedef struct {
 	uint32_t SizeOfHeapCommit;
 	uint32_t LoaderFlags;
 	uint32_t NumberOfRvaAndSizes;
-	// IMAGE_DATA_DIRECTORY DataDirectory[MAX_DIRECTORIES];
+	IMAGE_DATA_DIRECTORY DataDirectory[PE_MAX_DIRECTORIES];
 } IMAGE_OPTIONAL_HEADER_32, *PIMAGE_OPTIONAL_HEADER_32;
 
 // REFERENCE: http://msdn.microsoft.com/en-us/library/windows/desktop/ms680339(v=vs.85).aspx
@@ -283,7 +343,7 @@ typedef struct {
 	uint64_t SizeOfHeapCommit;
 	uint32_t LoaderFlags; /* must be zero */
 	uint32_t NumberOfRvaAndSizes;
-	// IMAGE_DATA_DIRECTORY DataDirectory[MAX_DIRECTORIES];
+	IMAGE_DATA_DIRECTORY DataDirectory[PE_MAX_DIRECTORIES];
 } IMAGE_OPTIONAL_HEADER_64, *PIMAGE_OPTIONAL_HEADER_64;
 
 typedef struct {
@@ -292,6 +352,60 @@ typedef struct {
 	IMAGE_OPTIONAL_HEADER_32 *_32;
 	IMAGE_OPTIONAL_HEADER_64 *_64;
 } IMAGE_OPTIONAL_HEADER, *PIMAGE_OPTIONAL_HEADER;
+
+typedef enum {
+	IMAGE_SCN_TYPE_NO_PAD				= 0x00000008, // Obsolete. Replaced by IMAGE_SCN_ALIGN_1BYTES
+	IMAGE_SCN_CNT_CODE					= 0x00000020,
+	IMAGE_SCN_CNT_INITIALIZED_DATA		= 0x00000040,
+	IMAGE_SCN_CNT_UNINITIALIZED_DATA	= 0x00000080,
+	IMAGE_SCN_LNK_OTHER					= 0x00000100, // Reserved.
+	IMAGE_SCN_LNK_INFO					= 0x00000200, // Valid only for object files.
+	IMAGE_SCN_LNK_REMOVE				= 0x00000800, // Valid only for object files.
+	IMAGE_SCN_LNK_COMDAT				= 0x00001000, // Valid only for object files.
+	IMAGE_SCN_NO_DEFER_SPEC_EXC			= 0x00004000,
+	IMAGE_SCN_GPREL						= 0x00008000,
+	IMAGE_SCN_MEM_PURGEABLE				= 0x00020000, // Reserved.
+	IMAGE_SCN_MEM_LOCKED				= 0x00040000, // Reserved.
+	IMAGE_SCN_MEM_PRELOAD				= 0x00080000, // Reserved.
+	IMAGE_SCN_ALIGN_1BYTES				= 0x00100000, // Valid only for object files.
+	IMAGE_SCN_ALIGN_2BYTES				= 0x00200000, // Valid only for object files.
+	IMAGE_SCN_ALIGN_4BYTES				= 0x00300000, // Valid only for object files.
+	IMAGE_SCN_ALIGN_8BYTES				= 0x00400000, // Valid only for object files.
+	IMAGE_SCN_ALIGN_16BYTES				= 0x00500000, // Valid only for object files.
+	IMAGE_SCN_ALIGN_32BYTES				= 0x00600000, // Valid only for object files.
+	IMAGE_SCN_ALIGN_64BYTES				= 0x00700000, // Valid only for object files.
+	IMAGE_SCN_ALIGN_128BYTES			= 0x00800000, // Valid only for object files.
+	IMAGE_SCN_ALIGN_256BYTES			= 0x00900000, // Valid only for object files.
+	IMAGE_SCN_ALIGN_512BYTES			= 0x00A00000, // Valid only for object files.
+	IMAGE_SCN_ALIGN_1024BYTES			= 0x00B00000, // Valid only for object files.
+	IMAGE_SCN_ALIGN_2048BYTES			= 0x00C00000, // Valid only for object files.
+	IMAGE_SCN_ALIGN_4096BYTES			= 0x00D00000, // Valid only for object files.
+	IMAGE_SCN_ALIGN_8192BYTES			= 0x00E00000, // Valid only for object files.
+	IMAGE_SCN_LNK_NRELOC_OVFL			= 0x01000000,
+	IMAGE_SCN_MEM_DISCARDABLE			= 0x02000000,
+	IMAGE_SCN_MEM_NOT_CACHED			= 0x04000000,
+	IMAGE_SCN_MEM_NOT_PAGED				= 0x08000000,
+	IMAGE_SCN_MEM_SHARED				= 0x10000000,
+	IMAGE_SCN_MEM_EXECUTE				= 0x20000000,
+	IMAGE_SCN_MEM_READ					= 0x40000000,
+	IMAGE_SCN_MEM_WRITE					= -2147483648 // Same as 0x80000000
+} SectionCharacteristics;
+
+typedef struct {
+	uint8_t Name[PE_SECTION_NAME_SIZE]; // TODO: Should we use char instead?
+	union {
+		uint32_t PhysicalAddress; // same value as next field
+		uint32_t VirtualSize;
+	} Misc;
+	uint32_t VirtualAddress;
+	uint32_t SizeOfRawData;
+	uint32_t PointerToRawData;
+	uint32_t PointerToRelocations; // always zero in executables
+	uint32_t PointerToLinenumbers; // deprecated
+	uint16_t NumberOfRelocations;
+	uint16_t NumberOfLinenumbers; // deprecated
+	uint32_t Characteristics; // SectionCharacteristics
+} IMAGE_SECTION_HEADER, *PIMAGE_SECTION_HEADER;
 
 // typedef struct {
 // 	IMAGE_DOS_HEADER dos_hdr;
@@ -330,18 +444,30 @@ class Pe {
         PIMAGE_DOS_HEADER dos_header   = NULL;
         PIMAGE_COFF_HEADER coff_header = NULL;
         uint32_t pe_header_ptr         = 0;
-        void *optional_header          = NULL;
+        PIMAGE_OPTIONAL_HEADER_32 optional_header_32 = NULL;
+        PIMAGE_OPTIONAL_HEADER_64 optional_header_64 = NULL;
+        PIMAGE_SECTION_HEADER section_header = NULL;
         int mode                       = PE_MODE_UNSET;
         struct Section sections[PE_MAX_SECTIONS];
+        Pe(){
+            for (int i = 0; i < PE_MAX_SECTIONS; i++){
+                if (sections[i].data != NULL){
+                    sections[i].size = 0;
+                    sections[i].offset = 0;
+                    sections[i].data = NULL;
+                }
+            }
+        }
         bool Setup(int input_mode){
             dos_header = (PIMAGE_DOS_HEADER)malloc(sizeof(IMAGE_DOS_HEADER));
             coff_header = (PIMAGE_COFF_HEADER)malloc(sizeof(IMAGE_COFF_HEADER));
+            section_header = (PIMAGE_SECTION_HEADER)malloc(sizeof(IMAGE_SECTION_HEADER));
             switch(input_mode){
                 case PE_MODE_X86:
                     mode = PE_MODE_X86;
                     break;
-                case PE_MODE_x86_64:
-                    mode = PE_MODE_x86_64;
+                case PE_MODE_X86_64:
+                    mode = PE_MODE_X86_64;
                     break;
                 default:
                     fprintf(stderr, "[x] unsupported elf executable mode\n");
@@ -367,11 +493,51 @@ class Pe {
                 fprintf(stderr, "[x] %s is not a valid x86 pe file\n", file_path);
                 return false;
             }
-            if (mode == PE_MODE_x86_64 && coff_header->Machine != IMAGE_FILE_MACHINE_AMD64){
+            if (mode == PE_MODE_X86_64 && coff_header->Machine != IMAGE_FILE_MACHINE_AMD64){
                 fprintf(stderr, "[x] %s is not a valid x86_64 pe file\n", file_path);
                 return false;
             }
-            printf("%x\n", coff_header->Machine);
+            if (mode == PE_MODE_X86 && coff_header->Machine == IMAGE_FILE_MACHINE_I386){
+                optional_header_32 = (PIMAGE_OPTIONAL_HEADER_32)malloc(sizeof(IMAGE_OPTIONAL_HEADER_32));
+                if (fread(optional_header_32, sizeof(IMAGE_OPTIONAL_HEADER_32), 1, fd) <= 0){
+                    fprintf(stderr, "[x] failed to read %s optional_header_64\n", file_path);
+                    return false;
+                }
+            }
+            if (mode == PE_MODE_X86_64 && coff_header->Machine == IMAGE_FILE_MACHINE_AMD64){
+                optional_header_64 = (PIMAGE_OPTIONAL_HEADER_64)malloc(sizeof(IMAGE_OPTIONAL_HEADER_64));
+                if (fread(optional_header_64, sizeof(IMAGE_OPTIONAL_HEADER_64), 1, fd) <= 0){
+                    fprintf(stderr, "[x] failed to read %s optional_header_64\n", file_path);
+                    return false;
+                }
+            }
+            for (int i = 0; i < coff_header->NumberOfSections; i++){
+                if (fread(section_header, sizeof(IMAGE_SECTION_HEADER), 1, fd) <= 0){
+                    fprintf(stderr, "[x] failed to read %s section_header\n", file_path);
+                    return false;
+                }
+                if (section_header->Characteristics & IMAGE_SCN_MEM_EXECUTE){
+                    int set = ftell(fd);
+                    fseek(fd, section_header->PointerToRawData, SEEK_SET);
+                    sections[i].offset = section_header->PointerToRawData;
+                    sections[i].size = section_header->SizeOfRawData;
+                    sections[i].data = malloc(section_header->SizeOfRawData);
+                    if (sections[i].data == NULL){
+                        fprintf(stderr, "[x] failed to allocate section memory\n");
+                        return false;
+                    }
+                    memset(sections[i].data, 0, sections[i].size);
+                    if (fread(sections[i].data, sections[i].size, 1, fd) <= 0){
+                        fprintf(stderr, "[x] failed to read %s executable section\n", file_path);
+                        return false;
+                    }
+                    //printf("PointerToRawData: %x\n", section_header->PointerToRawData);
+                    //printf("SizeofRawData   : %d\n", section_header->SizeOfRawData);
+                    //common_hex_dump((char *)"section", sections[i].data, sections[i].size);
+                    fseek(fd, set, SEEK_SET);
+                }
+
+            }
             return true;
         }
         ~Pe(){
@@ -382,6 +548,26 @@ class Pe {
             if (coff_header != NULL){
                 free(coff_header);
                 coff_header = NULL;
+            }
+            if (optional_header_32 != NULL){
+                free(optional_header_32);
+                optional_header_32 = NULL;
+            }
+            if (optional_header_64 != NULL){
+                free(optional_header_64);
+                optional_header_64 = NULL;
+            }
+            if (section_header != NULL){
+                free(section_header);
+                section_header = NULL;
+            }
+            for (int i = 0; i < PE_MAX_SECTIONS; i++){
+                if (sections[i].data != NULL){
+                    free(sections[i].data);
+                    sections[i].size = 0;
+                    sections[i].offset = 0;
+                    sections[i].data = NULL;
+                }
             }
         }
 };

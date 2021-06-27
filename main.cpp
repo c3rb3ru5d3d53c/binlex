@@ -75,6 +75,20 @@ int main(int argc, char **argv){
         if (pe32.ReadFile(args.options.input) == false){
             return 1;
         }
+        Decompiler decompiler;
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
+        for (int i = 0; i < PE_MAX_SECTIONS; i++){
+            if (pe32.sections[i].data != NULL){
+                common_hex_dump((char *)"section", pe32.sections[i].data, pe32.sections[i].size);
+                //decompiler.x86_64(DECOMPILER_TYPE_FUNCS, pe32.sections[i].data + 630, pe32.sections[i].size, i);
+                //decompiler.x86_64(DECOMPILER_TYPE_BLCKS, pe32.sections[i].data, pe32.sections[i].size, i);
+            }
+        }
+        // if (args.options.output == NULL){
+        //     decompiler.PrintTraits(DECOMPILER_TYPE_ALL);
+        // } else {
+        //     decompiler.WriteTraits(DECOMPILER_TYPE_ALL, args.options.output);
+        // }
         return 0;
     }
     args.print_help();
