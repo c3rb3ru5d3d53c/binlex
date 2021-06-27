@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <elf.h>
 #include "src/elf.h"
+#include "src/pe.h"
 #include "src/decompiler.h"
 #include "src/args.h"
 
@@ -61,6 +62,18 @@ int main(int argc, char **argv){
             decompiler.PrintTraits(DECOMPILER_TYPE_ALL);
         } else {
             decompiler.WriteTraits(DECOMPILER_TYPE_ALL, args.options.output);
+        }
+        return 0;
+    }
+    if (strcmp(args.options.mode, (char *)"pe:x86") == 0 &&
+        args.options.io_type == ARGS_IO_TYPE_FILE){
+        int result = false;
+        Pe pe32;
+        if (pe32.Setup(PE_MODE_X86) == false){
+            return 1;
+        }
+        if (pe32.ReadFile(args.options.input) == false){
+            return 1;
         }
         return 0;
     }
