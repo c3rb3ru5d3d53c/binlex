@@ -102,6 +102,24 @@ class Decompiler{
             }
             return buffer0;
         }
+        char * hexdump_mem_disp_rev(void *disp, int size){
+            //int size = sizeof(disp) * 2 + sizeof(disp);
+            char *buffer0 = (char *)malloc(size);
+            memset((void *)buffer0, 0, size);
+            const unsigned char * pc = (const unsigned char *)&disp;
+            int count = 0;
+            for (int i = 0; i < size -1 ; i++){
+                if (pc[i] != 0 && pc[i] != 255){
+                    if (count == 0){
+                        sprintf(buffer0, "%s%02x", buffer0, pc[i]);
+                    } else {
+                        sprintf(buffer0, "%s %02x", buffer0, pc[i]);
+                    }
+                    count++;
+                }
+            }
+            return buffer0;
+        }
         void SetSectionsDefault(){
             for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
                 sections[i].function_traits = NULL;
@@ -123,6 +141,11 @@ class Decompiler{
             char *disp = NULL;
             char *bytes = NULL;
             size_t count;
+            int op_mem_disp_size;
+            char *buffer0;
+            int count_rev;
+            const unsigned char * pc;
+            void *op_disp = NULL;
             temp = (char *)malloc(data_size * 2 + data_size + 1);
             memset((void *)temp, 0, data_size * 2 + data_size);
             count = cs_disasm(cs_handle, (const uint8_t *)data, data_size, 0x0, 0, &insn);
@@ -130,17 +153,29 @@ class Decompiler{
                 size_t j;
                 for (j = 0; j < count; j++) {
                     bytes = hexdump_be(insn[j].bytes, insn[j].size);
-                    //char *disp = NULL;
-                    //printf("%s\n", bytes);
                     for (int k = 0; k < insn[j].detail->x86.op_count; k++) {
                         cs_x86_op *op = &(insn[j].detail->x86.operands[k]);
                         switch((int)op->type) {
                             case X86_OP_MEM:
                                 if (op->mem.disp != 0)
                                     disp = hexdump_mem_disp(op->mem.disp);
-                                    if (disp != NULL){
-                                        wildcard_bytes(bytes, disp);
+                                    op_mem_disp_size = sizeof(op->mem.disp) * 2 + sizeof(op->mem.disp);
+                                    buffer0 = (char *)malloc(op_mem_disp_size);
+                                    memset((void *)buffer0, 0, op_mem_disp_size);
+                                    pc = (const unsigned char *)&op->mem.disp;
+                                    count_rev = 0;
+                                    for (int i = 0; i < sizeof(disp) -1 ; i++){
+                                        if (pc[i] != 0 && pc[i] != 255){
+                                            if (count_rev == 0){
+                                                sprintf(buffer0, "%s%02x", buffer0, pc[i]);
+                                            } else {
+                                                sprintf(buffer0, "%s %02x", buffer0, pc[i]);
+                                            }
+                                            count_rev++;
+                                        }
                                     }
+                                    wildcard_bytes(bytes, buffer0);
+                                    free(buffer0);
                                 break;
                             default:
                                 break;
