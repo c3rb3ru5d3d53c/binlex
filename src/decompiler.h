@@ -131,20 +131,20 @@ class Decompiler{
                 for (j = 0; j < count; j++) {
                     bytes = hexdump_be(insn[j].bytes, insn[j].size);
                     //printf("%s\n", bytes);
-                    for (int k = 0; k < insn[j].detail->x86.op_count; k++) {
-                        cs_x86_op *op = &(insn[j].detail->x86.operands[k]);
-                        switch((int)op->type) {
-                            case X86_OP_MEM:
-                                if (op->mem.disp != 0)
-                                    printf("");
-                                    disp = hexdump_mem_disp(op->mem.disp);
-                                    wildcard_bytes(bytes, disp);
-                                    //free(disp);
-                                break;
-                            default:
-                                break;
-                        }
-                    }
+                    // for (int k = 0; k < insn[j].detail->x86.op_count; k++) {
+                    //     cs_x86_op *op = &(insn[j].detail->x86.operands[k]);
+                    //     switch((int)op->type) {
+                    //         case X86_OP_MEM:
+                    //             if (op->mem.disp != 0)
+                    //                 printf("");
+                    //                 disp = hexdump_mem_disp(op->mem.disp);
+                    //                 wildcard_bytes(bytes, disp);
+                    //                 free(disp);
+                    //             break;
+                    //         default:
+                    //             break;
+                    //     }
+                    // }
                     wildcard_null(bytes);
                     if (decompiler_type == DECOMPILER_TYPE_FUNCS &&
                         insn[j].id == X86_INS_RET){
