@@ -46,15 +46,7 @@ __NOTE:__ The `raw` formats can be used on shellcode
 
 **General Usage Information**
 
-Binlex is designed to do one thing and one thing only, extract genetic traits from executable code in files.
-
-This means it is up to you "the researcher" / "the data scientist" to determine which traits are good and which traits are bad.
-
-To accomplish this, you need to use your own [fitness function](https://en.wikipedia.org/wiki/Fitness_function).
-
-I encourage you to read about [genetic programming](https://en.wikipedia.org/wiki/Genetic_programming) to gain a better understanding of this in practice.
-
-Perhaps watching [this](https://www.youtube.com/watch?v=qiKW1qX97qA) introductory video will help your understanding.
+Binlex is designed to do one thing and one thing only, extract genetic traits from executable code in files. This means it is up to you "the researcher" / "the data scientist" to determine which traits are good and which traits are bad. To accomplish this, you need to use your own [fitness function](https://en.wikipedia.org/wiki/Fitness_function). I encourage you to read about [genetic programming](https://en.wikipedia.org/wiki/Genetic_programming) to gain a better understanding of this in practice. Perhaps watching [this](https://www.youtube.com/watch?v=qiKW1qX97qA) introductory video will help your understanding.
 
 Again, **it's up to you to implement your own algorithms for detection based on the genetic traits you extract**.
 
