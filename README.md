@@ -33,6 +33,14 @@ binlex v1.0.0 - A Binary Genetic Traits Lexer
 Author: @c3rb3ru5d3d53c
 ```
 
+**Currently Supported Modes**
+- elf:x86
+- elf:x86_64
+- pe:x86
+- pe:x86_64
+- raw:x8
+- raw:x86_64
+
 Binlex is designed to do one thing and one thing only, extract genetic traits from executable code in files.
 
 This means it is up to you "the researcher" / "the data scientist" to determine which traits are good and which traits are bad.
