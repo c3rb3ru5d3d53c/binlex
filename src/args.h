@@ -24,7 +24,7 @@ class Args{
             options.io_type = ARGS_IO_TYPE_UNKNOWN;
         }
         bool check_mode(char *mode){
-            for (int i = 0; i < 4; i++){
+            for (int i = 0; i < 6; i++){
                 if (strcmp(modes[i], mode) == 0){
                     return true;
                 }
@@ -58,7 +58,7 @@ class Args{
         }
     public:
         char version[7]      = "v1.0.0";
-        const char *modes[4] = {"elf:x86", "elf:x86_64", "pe:x86", "pe:x86_64"};
+        const char *modes[6] = {"elf:x86", "elf:x86_64", "pe:x86", "pe:x86_64", "raw:x86", "raw:x86_64"};
         struct{
             char *input;
             int io_type;
@@ -107,7 +107,7 @@ class Args{
                 if (strcmp(argv[i], (char *)"-lm") == 0 ||
                     strcmp(argv[i], (char *)"--list-modes") == 0){
                     options.list_modes = true;
-                    for (int j = 0; j < 4; j++){
+                    for (int j = 0; j < 6; j++){
                         printf("%s\n", modes[j]);
                     }
                     exit(0);
