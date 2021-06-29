@@ -20,6 +20,9 @@ cd ../
 binlex -m elf:x86 -i tests/elf/elf.x86
 ```
 
+**NOTE:**
+- ZIP files in the `tests/` directory can be extracted using the password `infected`
+
 # Usage
 
 ```text
@@ -52,6 +55,7 @@ Trait files will contain a list of traits ordered by size and use the sha256 of 
 - These traits are best used with a hybrid approach (supervised)
 
 # Example Fitness Model
+
 Traits will be compared amongst their common malware family, any traits not common to all samples will be discarded.
 
 Once completed, all remaining traits will be compared to traits from a goodware set, any traits that match the goodware set will be discarded.
