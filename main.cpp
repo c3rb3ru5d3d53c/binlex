@@ -3,6 +3,7 @@
 #include <elf.h>
 #include "src/elf.h"
 #include "src/pe.h"
+#include "src/raw.h"
 #include "src/decompiler.h"
 #include "src/args.h"
 
@@ -110,6 +111,36 @@ int main(int argc, char **argv){
                 decompiler.x86_64(DECOMPILER_TYPE_BLCKS, pe64.sections[i].data, pe64.sections[i].size, i);
             }
         }
+        if (args.options.output == NULL){
+            decompiler.PrintTraits(DECOMPILER_TYPE_ALL);
+        } else {
+            decompiler.WriteTraits(DECOMPILER_TYPE_ALL, args.options.output);
+        }
+        return 0;
+    }
+    if (strcmp(args.options.mode, (char *)"raw:x86") == 0 &&
+        args.options.io_type == ARGS_IO_TYPE_FILE){
+        Raw rawx86;
+        rawx86.ReadFile(args.options.input, 0);
+        Decompiler decompiler;
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
+        decompiler.x86_64(DECOMPILER_TYPE_FUNCS, rawx86.sections[0].data, rawx86.sections[0].size, 0);
+        decompiler.x86_64(DECOMPILER_TYPE_BLCKS, rawx86.sections[0].data, rawx86.sections[0].size, 0);
+        if (args.options.output == NULL){
+            decompiler.PrintTraits(DECOMPILER_TYPE_ALL);
+        } else {
+            decompiler.WriteTraits(DECOMPILER_TYPE_ALL, args.options.output);
+        }
+        return 0;
+    }
+    if (strcmp(args.options.mode, (char *)"raw:x86_64") == 0 &&
+        args.options.io_type == ARGS_IO_TYPE_FILE){
+        Raw rawx86_64;
+        rawx86_64.ReadFile(args.options.input, 0);
+        Decompiler decompiler;
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_64);
+        decompiler.x86_64(DECOMPILER_TYPE_FUNCS, rawx86_64.sections[0].data, rawx86_64.sections[0].size, 0);
+        decompiler.x86_64(DECOMPILER_TYPE_BLCKS, rawx86_64.sections[0].data, rawx86_64.sections[0].size, 0);
         if (args.options.output == NULL){
             decompiler.PrintTraits(DECOMPILER_TYPE_ALL);
         } else {
