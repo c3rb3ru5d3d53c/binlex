@@ -1,12 +1,8 @@
 # BinLex a Genetic Binary Trait Lexer Library and Utility
 
-The purpose of BinLex is to extract basic blocks and functions as traits from binaries then compare these traits amonst other trait sets using genetic programming.
+The purpose of BinLex is to extract basic blocks and functions as traits from binaries.
 
 Most projects attempting this use Python to generate traits, but it's slow. When working with a lot of malware binaries, it is much better to use a faster compiled language like C++.
-
-This project is intended to help data scientists and other researchers to collect meaningful traits when developing their detection solutions.
-
-NOTE: This project is a WIP right now, so pull requests are encouraged no matter how small.
 
 # Installing
 ```bash
@@ -36,6 +32,18 @@ binlex v1.0.0 - A Binary Genetic Traits Lexer
   -v  --version         display version
 Author: @c3rb3ru5d3d53c
 ```
+
+Binlex is designed to do one thing and one thing only, extract genetic traits from executable code in files.
+
+This means it is up to you "the researcher" / "the data scientist" to determine which traits are good and which traits are bad.
+
+To accomplish this, you need to use your own [fitness function](https://en.wikipedia.org/wiki/Fitness_function).
+
+I encourage you to read about [genetic programming](https://en.wikipedia.org/wiki/Genetic_programming) to gain a better understanding of this in practice.
+
+Perhaps watching [this](https://www.youtube.com/watch?v=qiKW1qX97qA) introductory video will help your understanding.
+
+Again, **it's up to you to implement your own algorithms for detection based on the genetic traits you extract**.
 
 # Trait Format
 Traits will contain binary code represented in hexadecimal form and will use `??` as wild cards for memory operands or other operands subject to change.
