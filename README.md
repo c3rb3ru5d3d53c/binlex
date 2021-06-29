@@ -44,6 +44,7 @@ Author: @c3rb3ru5d3d53c
 
 __NOTE:__ The `raw` formats can be used on shellcode
 
+**General Usage Information**
 
 Binlex is designed to do one thing and one thing only, extract genetic traits from executable code in files.
 
