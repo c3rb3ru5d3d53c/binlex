@@ -38,8 +38,8 @@ Author: @c3rb3ru5d3d53c
 - elf:x86_64
 - pe:x86
 - pe:x86_64
-- raw:x8
-- raw:x86_64
+- raw:x86     (useful for shellcode)
+- raw:x86_64  (useful for shellcode)
 
 Binlex is designed to do one thing and one thing only, extract genetic traits from executable code in files.
 
