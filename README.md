@@ -1,4 +1,4 @@
-# BinLex a Genetic Binary Trait Lexer Library and Tool
+# BinLex a Genetic Binary Trait Lexer Library and Utility
 
 The purpose of BinLex is to extract basic blocks and functions as traits from binaries then compare these traits amonst other trait sets using genetic programming.
 
