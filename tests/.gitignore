@@ -1,3 +1,4 @@
 elf/**
 pe/**
 raw/**
+macho/**
