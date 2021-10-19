@@ -4,6 +4,7 @@
 #include "src/elf.h"
 #include "src/pe.h"
 #include "src/raw.h"
+#include "src/macho.h"
 #include "src/decompiler.h"
 #include "src/args.h"
 
@@ -147,6 +148,12 @@ int main(int argc, char **argv){
             decompiler.WriteTraits(DECOMPILER_TYPE_ALL, args.options.output);
         }
         return 0;
+    }
+    if (strcmp(args.options.mode, (char *)"macho:x86_64") == 0 &&
+        args.options.io_type == ARGS_IO_TYPE_FILE){
+        Macho machox86_64;
+        machox86_64.Setup(MACHO_MODE_X86_64);
+        machox86_64.ReadFile(args.options.input, 0);
     }
     args.print_help();
     return 0;
