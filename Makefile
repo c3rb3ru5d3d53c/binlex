@@ -12,7 +12,7 @@ traits: check-parameter-source check-parameter-dest check-parameter-type check-p
 		mkdir -p ${dest}/${type}/${format}/${arch}/; \
 		filename=`basename $${i}`; \
 		echo "build/binlex -m ${format}:${arch} --input $${i} --output ${dest}/${type}/${format}/${arch}/$${filename}.traits"; \
-	done | parallel --halt 1 -u --progress -j ${threads} {}
+	done | parallel -u --progress -j ${threads} {}
 	@echo "[*] trait build complete"
 
 traits-combine: check-parameter-source check-parameter-dest check-parameter-type check-parameter-format check-parameter-arch
