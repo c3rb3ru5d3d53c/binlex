@@ -53,7 +53,7 @@ make traits source=samples/malware/pe/x32/ dest=dist/ type=malware format=pe arc
 make traits-combine source=dist/ dest=dist/ type=malware format=pe arch=x86 threads=4
 ```
 
-This capability allows you to collect traits very quickly in an automated fashion by leveraging the power of `parallel`.
+It also allows you to name your type of dataset, i.e. goodware/malware/riskware/pua etc...
 
 **General Usage Information:**
 
