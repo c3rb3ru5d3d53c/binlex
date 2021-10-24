@@ -44,7 +44,7 @@ Author: @c3rb3ru5d3d53c
 
 __NOTE:__ The `raw` formats can be used on shellcode
 
-**Advanced Usage**
+**Advanced Usage:**
 
 If you have terabytes of executable files, we can leverage the power of `parallel` to generate traits for us.
 
@@ -55,7 +55,7 @@ make traits-combine source=dist/ dest=dist/ type=malware format=pe arch=x86 thre
 
 This capability allows you to collect traits very quickly in an automated fashion by leveraging the power of `parallel`.
 
-**General Usage Information**
+**General Usage Information:**
 
 Binlex is designed to do one thing and one thing only, extract genetic traits from executable code in files. This means it is up to you "the researcher" / "the data scientist" to determine which traits are good and which traits are bad. To accomplish this, you need to use your own [fitness function](https://en.wikipedia.org/wiki/Fitness_function). I encourage you to read about [genetic programming](https://en.wikipedia.org/wiki/Genetic_programming) to gain a better understanding of this in practice. Perhaps watching [this](https://www.youtube.com/watch?v=qiKW1qX97qA) introductory video will help your understanding.
 
