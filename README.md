@@ -6,7 +6,7 @@ Most projects attempting this use Python to generate traits, but it's slow. When
 
 # Installing
 ```bash
-sudo apt install -y git libcapstone-dev cmake make
+sudo apt install -y git libcapstone-dev cmake make parallel
 git clone https://github.com/c3rb3ru5d3d53c/binlex.git
 cd binlex/
 mkdir -p build/
@@ -43,6 +43,17 @@ Author: @c3rb3ru5d3d53c
 - `raw:x86_64`
 
 __NOTE:__ The `raw` formats can be used on shellcode
+
+**Advanced Usage**
+
+If you have terabytes of executable files, we can leverage the power of `parallel` to generate traits for us.
+
+```bash
+make traits source=samples/malware/pe/x32/ dest=dist/ type=malware format=pe arch=x86 threads=4
+make traits-combine source=dist/ dest=dist/ type=malware format=pe arch=x86 threads=4
+```
+
+This capability allows you to collect traits very quickly in an automated fashion by leveraging the power of `parallel`.
 
 **General Usage Information**
 
