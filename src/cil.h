@@ -876,49 +876,64 @@ class CILDecompiler {
                         //     printf("ldind.u8\n");
                         //     break;
                         case CIL_INS_LDLEN:
-                            printf("ldlen\n");
+                            printf("0x%x\t\t%02x\t\tldlen\n", i, pc[i]);
                             break;
                         case CIL_INS_LDLOC_0:
-                            printf("ldloc\n");
+                            printf("0x%x\t\t%02x\t\tldloc.0\n", i, pc[i]);
                             break;
                         case CIL_INS_LDLOC_1:
-                            printf("ldloc.1\n");
+                            printf("0x%x\t\t%02x\t\tldloc.1\n", i, pc[i]);
                             break;
                         case CIL_INS_LDLOC_2:
-                            printf("ldloc.2\n");
+                            printf("0x%x\t\t%02x\t\tldloc.2\n", i, pc[i]);
                             break;
                         case CIL_INS_LDLOC_3:
-                            printf("ldloc.3\n");
+                            printf("0x%x\t\t%02x\t\tldloc.3\n", i, pc[i]);
                             break;
                         case CIL_INS_LDLOC_S:
-                            printf("ldloc.s ");
                             operand_size = 8;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
+                            printf("0x%x\t\t%s\t\tldloc.s \t", i, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_LDLOCA_S:
-                            printf("ldloca.s ");
                             operand_size = 8;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
+                            printf("0x%x\t\t%s\t\tldloca.s \t", i, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_LDNULL:
-                            printf("ldnull\n");
+                            printf("0x%x\t\t%02x\t\tldnull\n", i, pc[i]);
                             break;
                         case CIL_INS_LDOBJ:
-                            printf("ldobj ");
                             operand_size = 32;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
+                            printf("0x%x\t\t%s\tldobj \t\t", i, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_LDSFLD:
-                            printf("ldsfld ");
                             operand_size = 32;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
+                            printf("0x%x\t\t%s\tldsfld \t\t", i, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_LDSFLDA:
-                            printf("ldsflda\n");
+                            operand_size = 32;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
+                            printf("0x%x\t\t%s\tldsflda \t", i, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_LDSTR:
-                            printf("ldstr ");
                             operand_size = 32;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
+                            printf("0x%x\t\t%s\tldstr \t\t", i, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_LDTOKEN:
-                            printf("ldtoken ");
                             operand_size = 32;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
+                            printf("0x%x\t\t%s\tldtoken \t", i, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_LEAVE:
                             bytes = hexdump_be(&pc[i], 5);
@@ -1020,46 +1035,46 @@ class CILDecompiler {
                             printf("0x%x\t\t%02x\t\tstelm.i2\n", i, pc[i]);
                             break;
                         case CIL_INS_STELEM_I4:
-                            printf("stelm.i4\n");
+                            printf("0x%x\t\t%02x\t\tstelm.i4\n", i, pc[i]);
                             break;
                         case CIL_INS_STELEM_I8:
-                            printf("stelm.i8\n");
+                            printf("0x%x\t\t%02x\t\tstelm.i8\n", i, pc[i]);
                             break;
                         case CIL_INS_STELEM_R4:
-                            printf("stelm.r4\n");
+                            printf("0x%x\t\t%02x\t\tstelm.r4\n", i, pc[i]);
                             break;
                         case CIL_INS_STELEM_R8:
-                            printf("stelm.r8\n");
+                            printf("0x%x\t\t%02x\t\tstelm.r8\n", i, pc[i]);
                             break;
                         case CIL_INS_STELEM_REF:
-                            printf("stelm.ref\n");
+                            printf("0x%x\t\t%02x\t\tstelm.ref\n", i, pc[i]);
                             break;
                         case CIL_INS_STFLD:
-                            printf("stfld\n");
+                            printf("0x%x\t\t%02x\t\tstfld\n", i, pc[i]);
                             break;
                         case CIL_INS_STIND_I:
-                            printf("stind.i\n");
+                            printf("0x%x\t\t%02x\t\tstind.i\n", i, pc[i]);
                             break;
                         case CIL_INS_STIND_I1:
-                            printf("stind.i1\n");
+                            printf("0x%x\t\t%02x\t\tstind.i1\n", i, pc[i]);
                             break;
                         case CIL_INS_STIND_I2:
-                            printf("stind.i2\n");
+                            printf("0x%x\t\t%02x\t\tstind.i2\n", i, pc[i]);
                             break;
                         case CIL_INS_STIND_I4:
-                            printf("stind.i4\n");
+                            printf("0x%x\t\t%02x\t\tstind.i4\n", i, pc[i]);
                             break;
                         case CIL_INS_STIND_I8:
-                            printf("stind.i8\n");
+                            printf("0x%x\t\t%02x\t\tstind.i8\n", i, pc[i]);
                             break;
                         case CIL_INS_STIND_R4:
-                            printf("stind.r4\n");
+                            printf("0x%x\t\t%02x\t\tstind.r4\n", i, pc[i]);
                             break;
                         case CIL_INS_STIND_R8:
-                            printf("stind.r8\n");
+                            printf("0x%x\t\t%02x\t\tstind.r8\n", i, pc[i]);
                             break;
                         case CIL_INS_STIND_REF:
-                            printf("stind.ref\n");
+                            printf("0x%x\t\t%02x\t\tstind.ref\n", i, pc[i]);
                             break;
                         case CIL_INS_STLOC_S:
                             bytes = hexdump_be(&pc[i], 2);
@@ -1068,51 +1083,61 @@ class CILDecompiler {
                             operand_size = 8;
                             break;
                         case CIL_INS_STLOC_0:
-                            printf("stloc.0\n");
+                            printf("0x%x\t\t%02x\t\tstloc.0\n", i, pc[i]);
                             break;
                         case CIL_INS_STLOC_1:
                             printf("0x%x\t\t%02x\t\tstloc.1\n", i, pc[i]);
                             break;
                         case CIL_INS_STLOC_2:
-                            printf("stloc.2\n");
+                            printf("0x%x\t\t%02x\t\tstloc.2\n", i, pc[i]);
                             break;
                         case CIL_INS_STLOC_3:
-                            printf("stloc.3\n");
+                            printf("0x%x\t\t%02x\t\tstloc.3\n", i, pc[i]);
                             break;
                         case CIL_INS_STOBJ:
-                            printf("stobj ");
                             operand_size = 32;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
+                            printf("0x%x\t\t%s\tstobj \t\t", i, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_STSFLD:
-                            printf("stsfld ");
                             operand_size = 32;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
+                            printf("0x%x\t\t%s\tstsfld \t\t", i, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_SUB:
-                            printf("sub\n");
+                            printf("0x%x\t\t%02x\t\tsub\n", i, pc[i]);
                             break;
                         case CIL_INS_SUB_OVF:
-                            printf("sub.ovf\n");
+                            printf("0x%x\t\t%02x\t\tsub.ovf\n", i, pc[i]);
                             break;
                         case CIL_INS_SUB_OVF_UN:
-                            printf("sub.ovf.un\n");
+                            printf("0x%x\t\t%02x\t\tsub.ovf.un\n", i, pc[i]);
                             break;
                         case CIL_INS_SWITCH:
-                            printf("switch ");
                             operand_size = 32;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
+                            printf("0x%x\t\t%s\tswitch \t\t", i, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_THROW:
-                            printf("throw\n");
+                            printf("0x%x\t\t%02x\t\tthrow\n", i, pc[i]);
                             break;
                         case CIL_INS_UNBOX:
-                            printf("unbox ");
                             operand_size = 32;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
+                            printf("0x%x\t\t%s\tunbox \t\t", i, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_UNBOX_ANY:
-                            printf("unbox.any ");
                             operand_size = 32;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
+                            printf("0x%x\t\t%s\tunbox.any \t", i, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_XOR:
-                            printf("xor\n");
+                            printf("0x%x\t\t%02x\t\txor\n", i, pc[i]);
                             break;
                         default:
                             fprintf(stderr, "[x] unknown opcode 0x%02x at offset %d\n", pc[i], i);
