@@ -8,7 +8,7 @@
 #ifndef ARGS_H
 #define ARGS_H
 
-#define ARGS_MODE_COUNT 7
+#define ARGS_MODE_COUNT 8
 
 #define ARGS_IO_TYPE_UNKNOWN 0
 #define ARGS_IO_TYPE_FILE    1
@@ -60,7 +60,7 @@ class Args{
         }
     public:
         char version[7]      = "v1.0.0";
-        const char *modes[ARGS_MODE_COUNT] = {"elf:x86", "elf:x86_64", "pe:x86", "pe:x86_64", "raw:x86", "raw:x86_64", "macho:x86_64"};
+        const char *modes[ARGS_MODE_COUNT] = {"elf:x86", "elf:x86_64", "pe:x86", "pe:x86_64", "raw:x86", "raw:x86_64", "raw:cil_x86", "macho:x86_64"};
         struct{
             char *input;
             int io_type;

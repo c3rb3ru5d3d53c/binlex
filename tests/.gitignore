@@ -2,3 +2,4 @@ elf/**
 pe/**
 raw/**
 macho/**
+cil/**
