@@ -4,7 +4,13 @@ all:
 	mkdir -p build/
 	cd build/ && \
 		cmake -S ../ -B . && \
-		make
+		make -j ${threads}
+
+install:
+	cp build/binlex /usr/bin/
+
+uninstall:
+	rm -f /usr/bin/binlex
 
 traits: check-parameter-source check-parameter-dest check-parameter-type check-parameter-format check-parameter-arch
 	@echo "[-] building traits..."
