@@ -9,10 +9,8 @@ Most projects attempting this use Python to generate traits, but it's slow. When
 sudo apt install -y git libcapstone-dev cmake make parallel
 git clone https://github.com/c3rb3ru5d3d53c/binlex.git
 cd binlex/
-mkdir -p build/
-cd build/ && cmake -S ../ -B . && make -j 4
+make threads=4
 sudo make install
-cd ../
 binlex -m elf:x86 -i tests/elf/elf.x86
 ```
 
