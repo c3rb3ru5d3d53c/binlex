@@ -17,11 +17,6 @@
 #define CIL_DECOMPILER_TYPE_UNSET 2
 #define CIL_DECOMPILER_TYPE_ALL   3
 
-// CIL Decompiler Modes
-#define CIL_DECOMPILER_MODE_X86    0
-#define CIL_DECOMPILER_MODE_X86_64 1
-#define CIL_DECOMPILER_MODE_UNSET  2
-
 #define CIL_DECOMPILER_MAX_TRAITS 256
 #define CIL_DECOMPILER_MAX_INSN   16384
 
@@ -227,6 +222,7 @@
 #define CIL_INS_XOR            0x61
 #define CIL_INS_STLOC_S        0x13
 
+// CIL Prefix Instructions
 #define CIL_INS_PREFIX         0xFE
 #define CIL_INS_ARGLIST        0x00
 #define CIL_INS_CEQ            0x01
@@ -263,7 +259,6 @@ class CILDecompiler {
             char *functions;
             char *blocks;
         };
-        int mode = CIL_DECOMPILER_MODE_UNSET;
         int type = CIL_DECOMPILER_TYPE_UNSET;
         struct Instruction {
             uint16_t opcode;
@@ -287,19 +282,7 @@ class CILDecompiler {
                 traits[i].blocks = NULL;
             }
         }
-        bool Setup(cs_mode input_mode, int input_type){
-            switch(input_mode){
-                case CS_MODE_32:
-                    mode = CIL_DECOMPILER_MODE_X86;
-                    break;
-                case CS_MODE_64:
-                    mode = mode = CIL_DECOMPILER_MODE_X86_64;
-                    break;
-                default:
-                    fprintf(stderr, "[x] unsupported CIL decompiler mode\n");
-                    mode = CIL_DECOMPILER_MODE_UNSET;
-                    return false;
-            }
+        bool Setup(int input_type){
             switch(input_type){
                 case CIL_DECOMPILER_TYPE_ALL:
                     type = CIL_DECOMPILER_TYPE_ALL;
@@ -317,110 +300,136 @@ class CILDecompiler {
             }
             return true;
         }
-        bool x86(void *data, int data_size, int index){
+        bool decompile(void *data, int data_size, int index){
             const unsigned char *pc = (const unsigned char *)data;
             char *bytes = NULL;
             for (int i = 0; i < data_size; i++){
                 int operand_size = 0;
+                bool end_block = false;
+                bool end_func = false;
                 //printf("0x%02x\n", pc[i]);
                 if (pc[i] == CIL_INS_PREFIX){
                     i++;
                     switch(pc[i]){
                         case CIL_INS_CEQ:
-                            printf("ceq\n");
+                            printf("0x%x\t\t%02x%02x\t\tceq\n", i-1, pc[i-1], pc[i]);
                             break;
                         case CIL_INS_ARGLIST:
-                            printf("arglist\n");
+                            printf("0x%x\t\t%02x%02x\t\targlist\n", i-1, pc[i-1], pc[i]);
                             break;
                         case CIL_INS_CGT:
-                            printf("cgt\n");
+                            printf("0x%x\t\t%02x%02x\t\tcgt\n", i-1, pc[i-1], pc[i]);
                             break;
                         case CIL_INS_CLT_UN:
-                            printf("clt.un\n");
+                            printf("0x%x\t\t%02x%02x\t\tclt.un\n", i-1, pc[i-1], pc[i]);
                             break;
                         case CIL_INS_CONSTRAINED:
-                            printf("constrained ");
                             operand_size = 32;
+                            bytes = hexdump_be(&pc[i-1], (operand_size/8)+2);
+                            printf("0x%x\t\t%s\t\tconstrained ", i-1, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_CPBLK:
-                            printf("cpblk\n");
+                            printf("0x%x\t\t%02x%02x\t\tcpblk\n", i-1, pc[i-1], pc[i]);
                             break;
                         case CIL_INS_ENDFILTER:
-                            printf("endfilter\n");
+                            printf("0x%x\t\t%02x%02x\t\tendfilter\n", i-1, pc[i-1], pc[i]);
                             break;
                         case CIL_INS_INITBLK:
-                            printf("initblk\n");
+                            printf("0x%x\t\t%02x%02x\t\tinitblk\n", i-1, pc[i-1], pc[i]);
                             break;
                         case CIL_INS_INITOBJ:
-                            printf("initobj ");
                             operand_size = 32;
+                            bytes = hexdump_be(&pc[i-1], (operand_size/8)+2);
+                            printf("0x%x\t\t%s\t\tinitobj ", i-1, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_LDARG:
-                            printf("ldarg ");
                             operand_size = 16;
+                            bytes = hexdump_be(&pc[i-1], (operand_size/8)+2);
+                            printf("0x%x\t\t%s\t\tldarg ", i-1, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_LDARGA:
-                            printf("ldarga ");
                             operand_size = 16;
+                            bytes = hexdump_be(&pc[i-1], (operand_size/8)+2);
+                            printf("0x%x\t\t%s\t\tldarga ", i-1, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_LDFTN:
-                            bytes = hexdump_be(&pc[i-1], 6);
-                            printf("0x%x\t\t%s\tldftn \t\t", i, bytes);
-                            free(bytes);
                             operand_size = 32;
+                            bytes = hexdump_be(&pc[i-1], (operand_size/8)+2);
+                            printf("0x%x\t\t%s\tldftn \t\t", i-1, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_LDLOC:
-                            printf("ldloc ");
                             operand_size = 16;
+                            bytes = hexdump_be(&pc[i-1], (operand_size/8)+2);
+                            printf("0x%x\t\t%s\t\tldloc ", i-1, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_LDLOCA:
-                            printf("ldloca ");
                             operand_size = 16;
+                            bytes = hexdump_be(&pc[i-1], (operand_size/8)+2);
+                            printf("0x%x\t\t%s\t\tldloca ", i-1, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_LDVIRTFTN:
-                            printf("ldvirtftn ");
                             operand_size = 32;
+                            bytes = hexdump_be(&pc[i-1], (operand_size/8)+2);
+                            printf("0x%x\t\t%s\t\tldvirtftn ", i-1, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_LOCALLOC:
-                            printf("localloc\n");
+                            printf("0x%x\t\t%02x%02x\t\tlocalloc\n", i-1, pc[i-1], pc[i]);
                             break;
                         case CIL_INS_NO:
-                            printf("no\n");
+                            printf("0x%x\t\t%02x%02x\t\tno\n", i-1, pc[i-1], pc[i]);
                             break;
                         case CIL_INS_READONLY:
-                            printf("readonly ");
                             operand_size = 32;
+                            bytes = hexdump_be(&pc[i-1], (operand_size/8)+2);
+                            printf("0x%x\t\t%s\t\treadonly ", i-1, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_REFANYTYPE:
-                            printf("refanytype\n");
+                            printf("0x%x\t\t%02x%02x\t\trefanytype\n", i-1, pc[i-1], pc[i]);
                             break;
                         case CIL_INS_RETHROW:
-                            printf("rethrow\n");
+                            printf("0x%x\t\t%02x%02x\t\trethrow\n", i-1, pc[i-1], pc[i]);
                             break;
                         case CIL_INS_SIZEOF:
-                            printf("sizeof ");
                             operand_size = 32;
+                            bytes = hexdump_be(&pc[i-1], (operand_size/8)+2);
+                            printf("0x%x\t\t%s\t\tsizeof ", i-1, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_STARG:
-                            printf("starg ");
                             operand_size = 16;
+                            bytes = hexdump_be(&pc[i-1], (operand_size/8)+2);
+                            printf("0x%x\t\t%s\t\tstarg ", i-1, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_STLOC:
-                            printf("stloc ");
                             operand_size = 16;
+                            bytes = hexdump_be(&pc[i-1], (operand_size/8)+2);
+                            printf("0x%x\t\t%s\t\tstloc ", i-1, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_TAIL:
-                            printf("tail\n");
+                            printf("0x%x\t\t%02x%02x\t\ttail\n", i-1, pc[i-1], pc[i]);
                             break;
                         case CIL_INS_UNALIGNED:
-                            printf("unaligned\n");
+                            printf("0x%x\t\t%02x%02x\t\tunaligned\n", i-1, pc[i-1], pc[i]);
                             break;
                         case CIL_INS_VOLATILE:
-                            printf("volatile ");
                             operand_size = 32;
+                            bytes = hexdump_be(&pc[i-1], (operand_size/8)+2);
+                            printf("0x%x\t\t%s\t\tvolatile ", i-1, bytes);
+                            free(bytes);
                             break;
                         default:
-                            fprintf(stderr, "[x] unknown opcode 0x%02x at offset %d\n", pc[i], i);
+                            fprintf(stderr, "[x] unknown prefix opcode 0x%02x at offset %d\n", pc[i], i);
                             return false;
                     }
                 } else {
@@ -438,112 +447,161 @@ class CILDecompiler {
                             printf("0x%x\t\t%02x\t\tand\n", i, pc[i]);
                             break;
                         case CIL_INS_BEQ:
-                            bytes = hexdump_be(&pc[i], 5);
+                            end_block = true;
+                            operand_size = 32;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
                             printf("0x%x\t\t%s\t\tbeq ", i, bytes);
                             free(bytes);
-                            operand_size = 32;
                             break;
                         case CIL_INS_BEQ_S:
-                            printf("beq.s ");
+                            end_block = true;
                             operand_size = 8;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
+                            printf("0x%x\t\t%s\t\tbeq.s ", i, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_BGE:
-                            printf("bge ");
+                            end_block = true;
                             operand_size = 32;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
+                            printf("0x%x\t\t%s\t\tbge ", i, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_BGE_S:
-                            printf("bge.s ");
+                            end_block = true;
                             operand_size = 8;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
+                            printf("0x%x\t\t%s\t\tbge.s ", i, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_BGE_UN:
-                            bytes = hexdump_be(&pc[i], 5);
+                            end_block = true;
+                            operand_size = 32;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
                             printf("0x%x\t\t%s\tbge.un \t\t", i, bytes);
                             free(bytes);
-                            operand_size = 32;
                             break;
                         case CIL_INS_BGE_UN_S:
-                            bytes = hexdump_be(&pc[i], 2);
+                            end_block = true;
+                            operand_size = 8;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
                             printf("0x%x\t\t%s\t\tbge.un.s \t", i, bytes);
                             free(bytes);
-                            operand_size = 8;
                             break;
                         case CIL_INS_BGT:
-                            printf("bgt ");
+                            end_block = true;
                             operand_size = 32;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
+                            printf("0x%x\t\t%s\t\tbgt ", i, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_BGT_S:
-                            printf("bgt.s ");
+                            end_block = true;
                             operand_size = 8;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
+                            printf("0x%x\t\t%s\t\tbgt.s ", i, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_BGT_UN:
-                            printf("bgt.un ");
+                            end_block = true;
                             operand_size = 32;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
+                            printf("0x%x\t\t%s\t\tbgt.un ", i, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_BGT_UN_S:
-                            printf("bgt.un.s ");
+                            end_block = true;
                             operand_size = 8;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
+                            printf("0x%x\t\t%s\t\tbgt.un.s ", i, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_BLE:
-                            printf("ble ");
+                            end_block = true;
                             operand_size = 32;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
+                            printf("0x%x\t\t%s\t\tble ", i, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_BLE_S:
-                            printf("ble.s ");
+                            end_block = true;
                             operand_size = 8;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
+                            printf("0x%x\t\t%s\t\tble.s ", i, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_BLE_UN:
-                            printf("ble.un ");
+                            end_block = true;
                             operand_size = 32;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
+                            printf("0x%x\t\t%s\t\tble.un ", i, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_BLE_UN_S:
-                            printf("ble.un.s ");
+                            end_block = true;
                             operand_size = 8;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
+                            printf("0x%x\t\t%s\t\tble.un.s ", i, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_BLT:
-                            printf("blt ");
+                            end_block = true;
                             operand_size = 32;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
+                            printf("0x%x\t\t%s\t\tblt ", i, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_BLT_S:
-                            printf("blt.s ");
+                            end_block = true;
                             operand_size = 8;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
+                            printf("0x%x\t\t%s\t\tblt.s ", i, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_BLT_UN:
+                            end_block = true;
                             operand_size = 32;
                             bytes = hexdump_be(&pc[i], (operand_size/8)+1);
                             printf("0x%x\t\t%s\t\tblt.un ", i, bytes);
                             free(bytes);
                             break;
                         case CIL_INS_BLT_UN_S:
+                            end_block = true;
                             operand_size = 8;
                             bytes = hexdump_be(&pc[i], (operand_size/8)+1);
                             printf("0x%x\t\t%s\t\tblt.un.s ", i, bytes);
                             free(bytes);
                             break;
                         case CIL_INS_BNE_UN:
+                            end_block = true;
                             operand_size = 32;
                             bytes = hexdump_be(&pc[i], (operand_size/8)+1);
                             printf("0x%x\t\t%s\t\tbne.un ", i, bytes);
                             free(bytes);
                             break;
                         case CIL_INS_BNE_UN_S:
+                            end_block = true;
                             operand_size = 8;
                             bytes = hexdump_be(&pc[i], (operand_size/8)+1);
                             printf("0x%x\t\t%s\t\tbne.un.s ", i, bytes);
                             free(bytes);
                             break;
                         case CIL_INS_BOX:
+                            end_block = true;
                             operand_size = 32;
                             bytes = hexdump_be(&pc[i], (operand_size/8)+1);
                             printf("0x%x\t\t%s\t\tbox ", i, bytes);
                             free(bytes);
                             break;
                         case CIL_INS_BR:
+                            end_block = true;
                             operand_size = 32;
                             bytes = hexdump_be(&pc[i], (operand_size/8)+1);
                             printf("0x%x\t\t%s\t\tbr ", i, bytes);
                             free(bytes);
                             break;
                         case CIL_INS_BR_S:
+                            end_block = true;
                             operand_size = 8;
                             bytes = hexdump_be(&pc[i], (operand_size/8)+1);
                             printf("0x%x\t\t%s\t\tbr.s ", i, bytes);
@@ -553,12 +611,14 @@ class CILDecompiler {
                             printf("0x%x\t\t%02x\t\tbreak\n", i, pc[i]);
                             break;
                         case CIL_INS_BRFALSE:
+                            end_block = true;
                             operand_size = 32;
                             bytes = hexdump_be(&pc[i], (operand_size/8)+1);
                             printf("0x%x\t\t%s\t\tbrfalse ", i, bytes);
                             free(bytes);
                             break;
                         case CIL_INS_BRFALSE_S:
+                            end_block = true;
                             operand_size = 8;
                             bytes = hexdump_be(&pc[i], (operand_size/8)+1);
                             printf("0x%x\t\t%s\t\tbrfalse.s ", i, bytes);
@@ -577,12 +637,14 @@ class CILDecompiler {
                         //     printf("brnull.s\n");
                         //     break;
                         case CIL_INS_BRTRUE:
+                            end_block = true;
                             operand_size = 32;
                             bytes = hexdump_be(&pc[i], (operand_size/8)+1);
                             printf("0x%x\t\t%s\t\tbrtrue ", i, bytes);
                             free(bytes);
                             break;
                         case CIL_INS_BRTRUE_S:
+                            end_block = true;
                             operand_size = 8;
                             bytes = hexdump_be(&pc[i], (operand_size/8)+1);
                             printf("0x%x\t\t%s\t\tbrtrue.s ", i, bytes);
@@ -1060,6 +1122,7 @@ class CILDecompiler {
                             printf("0x%x\t\t%02x\t\trem.un\n", i, pc[i]);
                             break;
                         case CIL_INS_RET:
+                            end_func = true;
                             printf("0x%x\t\t%02x\t\tret\n", i, pc[i]);
                             break;
                         case CIL_INS_SHL:

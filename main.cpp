@@ -156,13 +156,19 @@ int main(int argc, char **argv){
         machox86_64.Setup(MACHO_MODE_X86_64);
         machox86_64.ReadFile(args.options.input, 0);
     }
-    if (strcmp(args.options.mode, (char *)"raw:cil_x86") == 0 &&
+    if (strcmp(args.options.mode, (char *)"raw:cil") == 0 &&
         args.options.io_type == ARGS_IO_TYPE_FILE){
-        Raw raw_cil_x86;
-        raw_cil_x86.ReadFile(args.options.input, 0);
+        Raw raw_cil;
+        if (raw_cil.ReadFile(args.options.input, 0) == false){
+            return 1;
+        }
         CILDecompiler cil_decompiler;
-        cil_decompiler.Setup(CS_MODE_32, CIL_DECOMPILER_TYPE_ALL);
-        cil_decompiler.x86(raw_cil_x86.sections[0].data, raw_cil_x86.sections[0].size, 0);
+        if (cil_decompiler.Setup(CIL_DECOMPILER_TYPE_ALL) == false){
+            return 1;
+        }
+        if (cil_decompiler.decompile(raw_cil.sections[0].data, raw_cil.sections[0].size, 0) == false){
+            return 1;
+        }
         return 0;
     }
     args.print_help();

@@ -27,13 +27,14 @@ class Raw {
                 sections[i].size = 0;
             }
         }
-        void ReadFile(char *file_path, int section_index){
+        bool ReadFile(char *file_path, int section_index){
             FILE *fd = fopen(file_path, "rb");
             sections[section_index].size = GetFileSize(fd);
             sections[section_index].data = malloc(sections[section_index].size);
             memset(sections[section_index].data, 0, sections[section_index].size);
             fread(sections[section_index].data, sections[section_index].size, 1, fd);
             fclose(fd);
+            return true;
         }
         ~Raw(){
             for (int i = 0; i < RAW_MAX_SECTIONS; i++){
