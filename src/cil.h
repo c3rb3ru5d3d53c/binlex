@@ -836,41 +836,43 @@ class CILDecompiler {
                             operand_size = 32;
                             break;
                         case CIL_INS_LDFLDA:
-                            printf("ldflda ");
                             operand_size = 32;
+                            bytes = hexdump_be(&pc[i], (operand_size/8)+1);
+                            printf("0x%x\t\t%s\tldflda ", i, bytes);
+                            free(bytes);
                             break;
                         case CIL_INS_LDIND_I:
-                            printf("ldind.i\n");
+                            printf("0x%x\t\t%02x\t\tldind.i\n", i, pc[i]);
                             break;
                         case CIL_INS_LDIND_I1:
-                            printf("ldind.i1\n");
+                            printf("0x%x\t\t%02x\t\tldind.i1\n", i, pc[i]);
                             break;
                         case CIL_INS_LDIND_I2:
-                            printf("ldind.i2\n");
+                            printf("0x%x\t\t%02x\t\tldind.i2\n", i, pc[i]);
                             break;
                         case CIL_INS_LDIND_I4:
-                            printf("ldind.i4\n");
+                            printf("0x%x\t\t%02x\t\tldind.i4\n", i, pc[i]);
                             break;
                         case CIL_INS_LDIND_I8:
-                            printf("ldind.i8\n");
+                            printf("0x%x\t\t%02x\t\tldind.i8\n", i, pc[i]);
                             break;
                         case CIL_INS_LDIND_R4:
-                            printf("ldind.r4\n");
+                            printf("0x%x\t\t%02x\t\tldind.r4\n", i, pc[i]);
                             break;
                         case CIL_INS_LDIND_R8:
-                            printf("ldind.r8\n");
+                            printf("0x%x\t\t%02x\t\tldind.r8\n", i, pc[i]);
                             break;
                         case CIL_INS_LDIND_REF:
-                            printf("ldind.ref\n");
+                            printf("0x%x\t\t%02x\t\tldind.ref\n", i, pc[i]);
                             break;
                         case CIL_INS_LDIND_U1:
-                            printf("ldind.u1\n");
+                            printf("0x%x\t\t%02x\t\tldind.u1\n", i, pc[i]);
                             break;
                         case CIL_INS_LDIND_U2:
-                            printf("ldind.u2\n");
+                            printf("0x%x\t\t%02x\t\tldind.u2\n", i, pc[i]);
                             break;
                         case CIL_INS_LDIND_U4:
-                            printf("ldind.u4\n");
+                            printf("0x%x\t\t%02x\t\tldind.u4\n", i, pc[i]);
                             break;
                         // case CIL_INS_LDIND_U8:
                         //     printf("ldind.u8\n");
