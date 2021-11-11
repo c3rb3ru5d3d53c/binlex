@@ -5,6 +5,7 @@
 #include <inttypes.h>
 #include <assert.h>
 #include <byteswap.h>
+#include <ctype.h>
 #include <capstone/capstone.h>
 #include "common.h"
 
@@ -17,8 +18,8 @@
 #define CIL_DECOMPILER_TYPE_UNSET 2
 #define CIL_DECOMPILER_TYPE_ALL   3
 
-#define CIL_DECOMPILER_MAX_TRAITS 256
-#define CIL_DECOMPILER_MAX_INSN   16384
+#define CIL_DECOMPILER_MAX_SECTIONS 256
+#define CIL_DECOMPILER_MAX_INSN     16384
 
 // CIL Instructions
 #define CIL_INS_ADD            0x58
@@ -255,15 +256,12 @@
 
 class CILDecompiler {
     private:
-        struct Traits {
-            char *functions;
-            char *blocks;
+        struct Section {
+            char *function_traits;
+            char *block_traits;
         };
+        char *temp = NULL;
         int type = CIL_DECOMPILER_TYPE_UNSET;
-        struct Instruction {
-            uint16_t opcode;
-            uint32_t operand;
-        };
         char * hexdump_be(const void *data, int size){
             int buffer_size = size * 2 + size;
             char *buffer0 = (char *)malloc(buffer_size);
@@ -274,12 +272,63 @@ class CILDecompiler {
             }
             return buffer0;
         }
+        // char * hexdump_be(const void *data, int size){
+        //     int buffer_size = size * 2 + size;
+        //     char *buffer0 = (char *)malloc(buffer_size);
+        //     memset((void *)buffer0, 0, buffer_size);
+        //     const unsigned char * pc = (const unsigned char *)data;
+        //     int count = 0;
+        //     for (int i = 0; i < size; i++){
+        //         if (count == 0){
+        //             sprintf(buffer0, "%s%02x", buffer0, pc[i]);
+        //         } else {
+        //             sprintf(buffer0, "%s %02x", buffer0, pc[i]);
+        //         }
+        //         count++;
+        //     }
+        //     return buffer0;
+        // }
+        char *trim(char *str){
+            size_t len = 0;
+            char *frontp = str;
+            char *endp = NULL;
+            if( str == NULL ) { return NULL; }
+            if( str[0] == '\0' ) { return str; }
+            len = strlen(str);
+            endp = str + len;
+            while( isspace((unsigned char) *frontp) ) { ++frontp; }
+            if (endp != frontp){
+                while(isspace((unsigned char) *(--endp)) && endp != frontp ) {}
+            }
+
+            if( frontp != str && endp == frontp )
+                    *str = '\0';
+            else if( str + len - 1 != endp )
+                    *(endp + 1) = '\0';
+            endp = str;
+            if( frontp != str ){
+                while( *frontp ) { *endp++ = *frontp++; }
+                *endp = '\0';
+            }
+            return str;
+        }
+        char * hexdump_traits(char *buffer0, const void *data, int size, int operand_size){
+            const unsigned char *pc = (const unsigned char *)data;
+            for (int i = 0; i < size; i++){
+                if (i >= size - (operand_size/8)){
+                    sprintf(buffer0, "%s ??", buffer0);
+                } else {
+                    sprintf(buffer0, "%s %02x", buffer0, pc[i]);
+                }
+            }
+            return buffer0;
+        }
     public:
-        struct Traits traits[CIL_DECOMPILER_MAX_TRAITS];
+        struct Section sections[CIL_DECOMPILER_MAX_SECTIONS];
         CILDecompiler(){
-            for (int i = 0; i < CIL_DECOMPILER_MAX_TRAITS; i++){
-                traits[i].functions = NULL;
-                traits[i].blocks = NULL;
+            for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
+                sections[i].function_traits = NULL;
+                sections[i].block_traits = NULL;
             }
         }
         bool Setup(int input_type){
@@ -303,6 +352,8 @@ class CILDecompiler {
         bool decompile(void *data, int data_size, int index){
             const unsigned char *pc = (const unsigned char *)data;
             char *bytes = NULL;
+            temp = (char *)malloc(data_size * 2 + data_size + 1);
+            memset((void *)temp, 0, data_size * 2 + data_size);
             for (int i = 0; i < data_size; i++){
                 int operand_size = 0;
                 bool end_block = false;
@@ -359,6 +410,8 @@ class CILDecompiler {
                         case CIL_INS_LDFTN:
                             operand_size = 32;
                             bytes = hexdump_be(&pc[i-1], (operand_size/8)+2);
+                            hexdump_traits(temp, &pc[i-1], (operand_size/8)+2, operand_size);
+                            //traits_break(temp);
                             printf("0x%x\t\t%s\tldftn \t\t", i-1, bytes);
                             free(bytes);
                             break;
@@ -430,6 +483,7 @@ class CILDecompiler {
                             break;
                         default:
                             fprintf(stderr, "[x] unknown prefix opcode 0x%02x at offset %d\n", pc[i], i);
+                            free(temp);
                             return false;
                     }
                 } else {
@@ -1262,6 +1316,7 @@ class CILDecompiler {
                             break;
                         default:
                             fprintf(stderr, "[x] unknown opcode 0x%02x at offset %d\n", pc[i], i);
+                            free(temp);
                             return false;
                     }
                 }
@@ -1290,17 +1345,22 @@ class CILDecompiler {
                         break;
                     default:
                         fprintf(stderr, "[x] unknown operand size %d\n", operand_size);
+                        free(temp);
+                        return false;
                 }
             }
+            trim(temp);
+            printf("%s\n", temp);
+            free(temp);
             return true;
         }
         ~CILDecompiler(){
-            for (int i = 0; i < CIL_DECOMPILER_MAX_TRAITS; i++){
-                if (traits[i].functions != NULL){
-                    free(traits[i].functions);
+            for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
+                if (sections[i].function_traits != NULL){
+                    free(sections[i].function_traits);
                 }
-                if (traits[i].blocks != NULL){
-                    free(traits[i].blocks);
+                if (sections[i].block_traits != NULL){
+                    free(sections[i].block_traits);
                 }
             }
         }
