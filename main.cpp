@@ -36,7 +36,7 @@ int main(int argc, char **argv){
         if (args.options.output == NULL){
             decompiler.PrintTraits(DECOMPILER_TYPE_ALL);
         } else {
-            decompiler.WriteTraits(DECOMPILER_TYPE_ALL, args.options.output);
+            decompiler.WriteTraits(args.options.output);
         }
         return 0;
     }
@@ -64,7 +64,7 @@ int main(int argc, char **argv){
         if (args.options.output == NULL){
             decompiler.PrintTraits(DECOMPILER_TYPE_ALL);
         } else {
-            decompiler.WriteTraits(DECOMPILER_TYPE_ALL, args.options.output);
+            decompiler.WriteTraits(args.options.output);
         }
         return 0;
     }
@@ -90,7 +90,7 @@ int main(int argc, char **argv){
         if (args.options.output == NULL){
             decompiler.PrintTraits(DECOMPILER_TYPE_ALL);
         } else {
-            decompiler.WriteTraits(DECOMPILER_TYPE_ALL, args.options.output);
+            decompiler.WriteTraits(args.options.output);
         }
         return 0;
     }
@@ -116,7 +116,7 @@ int main(int argc, char **argv){
         if (args.options.output == NULL){
             decompiler.PrintTraits(DECOMPILER_TYPE_ALL);
         } else {
-            decompiler.WriteTraits(DECOMPILER_TYPE_ALL, args.options.output);
+            decompiler.WriteTraits(args.options.output);
         }
         return 0;
     }
@@ -131,7 +131,7 @@ int main(int argc, char **argv){
         if (args.options.output == NULL){
             decompiler.PrintTraits(DECOMPILER_TYPE_ALL);
         } else {
-            decompiler.WriteTraits(DECOMPILER_TYPE_ALL, args.options.output);
+            decompiler.WriteTraits(args.options.output);
         }
         return 0;
     }
@@ -146,7 +146,7 @@ int main(int argc, char **argv){
         if (args.options.output == NULL){
             decompiler.PrintTraits(DECOMPILER_TYPE_ALL);
         } else {
-            decompiler.WriteTraits(DECOMPILER_TYPE_ALL, args.options.output);
+            decompiler.WriteTraits(args.options.output);
         }
         return 0;
     }
@@ -176,11 +176,11 @@ int main(int argc, char **argv){
             return 1;
         }
         if (args.options.output == NULL){
-            printf("%s\n", cil_decompiler.sections[0].block_traits);
-            printf("%s\n", cil_decompiler.sections[0].function_traits);
-            //decompiler.PrintTraits(DECOMPILER_TYPE_ALL);
+            cil_decompiler.PrintTraits();
+            // printf("%s", cil_decompiler.sections[0].block_traits);
+            // printf("%s", cil_decompiler.sections[0].function_traits);
         } else {
-            cil_decompiler.WriteTraits(CIL_DECOMPILER_TYPE_ALL, args.options.output);
+            cil_decompiler.WriteTraits(args.options.output);
         }
         return 0;
     }

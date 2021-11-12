@@ -932,6 +932,9 @@ class CILDecompiler {
                     i < data_size - 1){
                     traits_nl(traits);
                 }
+                if (end_block == false && end_func == false && i == data_size -1){
+                    traits_nl(traits);
+                }
             }
             if (type == CIL_DECOMPILER_TYPE_BLCKS){
                 sections[index].block_traits = (char *)malloc(strlen(traits)+1);
@@ -946,33 +949,27 @@ class CILDecompiler {
             free(traits);
             return true;
         }
-        void WriteTraits(int input_type, char *file_path){
+        void WriteTraits(char *file_path){
             FILE *fd = fopen(file_path, "w");
             for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
-                switch(input_type){
-                    case CIL_DECOMPILER_TYPE_FUNCS:
-                        if (sections[i].function_traits != NULL){
-                            fwrite(sections[i].function_traits, sizeof(char), strlen(sections[i].function_traits), fd);
-                        }
-                        break;
-                    case CIL_DECOMPILER_TYPE_BLCKS:
-                        if (sections[i].block_traits != NULL){
-                            fwrite(sections[i].block_traits, sizeof(char), strlen(sections[i].block_traits), fd);
-                        }
-                        break;
-                    case CIL_DECOMPILER_TYPE_ALL:
-                        if (sections[i].function_traits != NULL && sections[i].block_traits != NULL){
-                            fwrite(sections[i].function_traits, sizeof(char), strlen(sections[i].function_traits), fd);
-                            fwrite("\n", sizeof(char), sizeof(char), fd);
-                            fwrite(sections[i].block_traits, sizeof(char), strlen(sections[i].block_traits), fd);
-                            fwrite("\n", sizeof(char), sizeof(char), fd);
-                        }
-                        break;
-                    default:
-                        break;
+                if (sections[i].function_traits != NULL){
+                    fwrite(sections[i].function_traits, sizeof(char), strlen(sections[i].function_traits), fd);
+                }
+                if (sections[i].block_traits != NULL){
+                    fwrite(sections[i].block_traits, sizeof(char), strlen(sections[i].block_traits), fd);
                 }
             }
             fclose(fd);
+        }
+        void PrintTraits(){
+            for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
+                if (sections[i].function_traits != NULL){
+                    printf("%s", sections[i].function_traits);
+                }
+                if (sections[i].block_traits != NULL){
+                    printf("%s", sections[i].block_traits);
+                }
+            }
         }
         ~CILDecompiler(){
             for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){

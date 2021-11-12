@@ -258,28 +258,14 @@ class Decompiler{
                 }
             }
         }
-        void WriteTraits(int type, char *file_path){
+        void WriteTraits(char *file_path){
             FILE *fd = fopen(file_path, "w");
             for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
-                switch(type){
-                    case DECOMPILER_TYPE_FUNCS:
-                        if (sections[i].function_traits != NULL){
-                            fwrite(sections[i].function_traits, sizeof(char), strlen(sections[i].function_traits), fd);
-                        }
-                        break;
-                    case DECOMPILER_TYPE_BLCKS:
-                        if (sections[i].block_traits != NULL){
-                            fwrite(sections[i].block_traits, sizeof(char), strlen(sections[i].block_traits), fd);
-                        }
-                        break;
-                    case DECOMPILER_TYPE_ALL:
-                        if (sections[i].function_traits != NULL && sections[i].block_traits != NULL){
-                            fwrite(sections[i].function_traits, sizeof(char), strlen(sections[i].function_traits), fd);
-                            fwrite(sections[i].block_traits, sizeof(char), strlen(sections[i].block_traits), fd);
-                        }
-                        break;
-                    default:
-                        break;
+                if (sections[i].function_traits != NULL){
+                    fwrite(sections[i].function_traits, sizeof(char), strlen(sections[i].function_traits), fd);
+                }
+                if (sections[i].block_traits != NULL){
+                    fwrite(sections[i].block_traits, sizeof(char), strlen(sections[i].block_traits), fd);
                 }
             }
             fclose(fd);
