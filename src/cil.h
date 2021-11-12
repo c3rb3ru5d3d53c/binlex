@@ -317,6 +317,8 @@ class CILDecompiler {
                             break;
                         case CIL_INS_CGT:
                             break;
+                        case CIL_INS_CLT:
+                            break;
                         case CIL_INS_CLT_UN:
                             break;
                         case CIL_INS_CONSTRAINED:
@@ -932,7 +934,7 @@ class CILDecompiler {
                     i < data_size - 1){
                     traits_nl(traits);
                 }
-                if (end_block == false && end_func == false && i == data_size -1){
+                if ((end_block == false || end_func == false) && i == data_size -1){
                     traits_nl(traits);
                 }
             }
