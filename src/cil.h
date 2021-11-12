@@ -16,6 +16,7 @@
 #define CIL_DECOMPILER_TYPE_FUNCS 0
 #define CIL_DECOMPILER_TYPE_BLCKS 1
 #define CIL_DECOMPILER_TYPE_UNSET 2
+#define CIL_DECOMPILER_TYPE_ALL   3
 
 #define CIL_DECOMPILER_MAX_SECTIONS 256
 #define CIL_DECOMPILER_MAX_INSN     16384
@@ -298,7 +299,7 @@ class CILDecompiler {
             }
             return true;
         }
-        bool decompile(void *data, int data_size, int index){
+        bool Decompile(void *data, int data_size, int index){
             const unsigned char *pc = (const unsigned char *)data;
             char *bytes = NULL;
             char *traits = (char *)malloc(data_size * 2 + data_size + 1);
@@ -944,6 +945,34 @@ class CILDecompiler {
             }
             free(traits);
             return true;
+        }
+        void WriteTraits(int input_type, char *file_path){
+            FILE *fd = fopen(file_path, "w");
+            for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
+                switch(input_type){
+                    case CIL_DECOMPILER_TYPE_FUNCS:
+                        if (sections[i].function_traits != NULL){
+                            fwrite(sections[i].function_traits, sizeof(char), strlen(sections[i].function_traits), fd);
+                        }
+                        break;
+                    case CIL_DECOMPILER_TYPE_BLCKS:
+                        if (sections[i].block_traits != NULL){
+                            fwrite(sections[i].block_traits, sizeof(char), strlen(sections[i].block_traits), fd);
+                        }
+                        break;
+                    case CIL_DECOMPILER_TYPE_ALL:
+                        if (sections[i].function_traits != NULL && sections[i].block_traits != NULL){
+                            fwrite(sections[i].function_traits, sizeof(char), strlen(sections[i].function_traits), fd);
+                            fwrite("\n", sizeof(char), sizeof(char), fd);
+                            fwrite(sections[i].block_traits, sizeof(char), strlen(sections[i].block_traits), fd);
+                            fwrite("\n", sizeof(char), sizeof(char), fd);
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+            fclose(fd);
         }
         ~CILDecompiler(){
             for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
