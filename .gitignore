@@ -2,3 +2,4 @@ build/**
 dist/**
 samples/**
 dump.bin
+*.yara
