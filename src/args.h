@@ -8,7 +8,7 @@
 #ifndef ARGS_H
 #define ARGS_H
 
-#define ARGS_MODE_COUNT 8
+#define ARGS_MODE_COUNT 7
 
 #define ARGS_IO_TYPE_UNKNOWN 0
 #define ARGS_IO_TYPE_FILE    1
@@ -60,7 +60,7 @@ class Args{
         }
     public:
         char version[7]      = "v1.0.0";
-        const char *modes[ARGS_MODE_COUNT] = {"elf:x86", "elf:x86_64", "pe:x86", "pe:x86_64", "raw:x86", "raw:x86_64", "raw:cil", "macho:x86_64"};
+        const char *modes[ARGS_MODE_COUNT] = {"elf:x86", "elf:x86_64", "pe:x86", "pe:x86_64", "raw:x86", "raw:x86_64", "raw:cil"};
         struct{
             char *input;
             int io_type;
@@ -76,12 +76,11 @@ class Args{
         void print_help(){
             printf(
                 "binlex %s - A Binary Genetic Traits Lexer\n"
-                "  -i  --input\t\tinput file or directory\t\t(required)\n"
-                "  -m  --mode\t\tset mode\t\t\t(required)\n"
+                "  -i  --input\t\tinput file\t\t(required)\n"
+                "  -m  --mode\t\tset mode\t\t(required)\n"
                 "  -lm --list-modes\tlist modes\n"
                 "  -h  --help\t\tdisplay help\n"
-                "  -t  --threads\t\tthreads\n"
-                "  -o  --output\t\toutput file or directory\t(optional)\n"
+                "  -o  --output\t\toutput file\t\t(optional)\n"
                 "  -v  --version\t\tdisplay version\n"
                 "Author: @c3rb3ru5d3d53c\n",
                 version

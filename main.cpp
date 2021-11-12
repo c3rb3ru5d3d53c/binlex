@@ -150,12 +150,12 @@ int main(int argc, char **argv){
         }
         return 0;
     }
-    if (strcmp(args.options.mode, (char *)"macho:x86_64") == 0 &&
-        args.options.io_type == ARGS_IO_TYPE_FILE){
-        Macho machox86_64;
-        machox86_64.Setup(MACHO_MODE_X86_64);
-        machox86_64.ReadFile(args.options.input, 0);
-    }
+    // if (strcmp(args.options.mode, (char *)"macho:x86_64") == 0 &&
+    //     args.options.io_type == ARGS_IO_TYPE_FILE){
+    //     Macho machox86_64;
+    //     machox86_64.Setup(MACHO_MODE_X86_64);
+    //     machox86_64.ReadFile(args.options.input, 0);
+    // }
     if (strcmp(args.options.mode, (char *)"raw:cil") == 0 &&
         args.options.io_type == ARGS_IO_TYPE_FILE){
         Raw raw_cil;
