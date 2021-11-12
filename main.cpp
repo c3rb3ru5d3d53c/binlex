@@ -177,8 +177,6 @@ int main(int argc, char **argv){
         }
         if (args.options.output == NULL){
             cil_decompiler.PrintTraits();
-            // printf("%s", cil_decompiler.sections[0].block_traits);
-            // printf("%s", cil_decompiler.sections[0].function_traits);
         } else {
             cil_decompiler.WriteTraits(args.options.output);
         }
