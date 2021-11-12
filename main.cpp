@@ -166,17 +166,22 @@ int main(int argc, char **argv){
         if (cil_decompiler.Setup(CIL_DECOMPILER_TYPE_BLCKS) == false){
             return 1;
         }
-        if (cil_decompiler.decompile(raw_cil.sections[0].data, raw_cil.sections[0].size, 0) == false){
+        if (cil_decompiler.Decompile(raw_cil.sections[0].data, raw_cil.sections[0].size, 0) == false){
             return 1;
         }
         if (cil_decompiler.Setup(CIL_DECOMPILER_TYPE_FUNCS) == false){
             return 1;
         }
-        if (cil_decompiler.decompile(raw_cil.sections[0].data, raw_cil.sections[0].size, 0) == false){
+        if (cil_decompiler.Decompile(raw_cil.sections[0].data, raw_cil.sections[0].size, 0) == false){
             return 1;
         }
-        printf("%s\n", cil_decompiler.sections[0].block_traits);
-        printf("%s\n", cil_decompiler.sections[0].function_traits);
+        if (args.options.output == NULL){
+            printf("%s\n", cil_decompiler.sections[0].block_traits);
+            printf("%s\n", cil_decompiler.sections[0].function_traits);
+            //decompiler.PrintTraits(DECOMPILER_TYPE_ALL);
+        } else {
+            cil_decompiler.WriteTraits(CIL_DECOMPILER_TYPE_ALL, args.options.output);
+        }
         return 0;
     }
     args.print_help();
