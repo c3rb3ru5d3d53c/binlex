@@ -57,6 +57,14 @@ make traits-combine source=dist/ dest=dist/ type=malware format=pe arch=x86 thre
 
 It also allows you to name your type of dataset, i.e. goodware/malware/riskware/pua etc...
 
+**Plugins:**
+
+There has been some interest in making IDA, Ghidra and Cutter plugins for `binlex`.
+
+This is something that will be started soon.
+
+This `README.md` will be updated when they are ready to use.
+
 **General Usage Information:**
 
 Binlex is designed to do one thing and one thing only, extract genetic traits from executable code in files. This means it is up to you "the researcher" / "the data scientist" to determine which traits are good and which traits are bad. To accomplish this, you need to use your own [fitness function](https://en.wikipedia.org/wiki/Fitness_function). I encourage you to read about [genetic programming](https://en.wikipedia.org/wiki/Genetic_programming) to gain a better understanding of this in practice. Perhaps watching [this](https://www.youtube.com/watch?v=qiKW1qX97qA) introductory video will help your understanding.
