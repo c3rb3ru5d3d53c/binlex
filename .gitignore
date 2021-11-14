@@ -3,3 +3,4 @@ dist/**
 samples/**
 dump.bin
 *.yara
+*.traits
