@@ -28,7 +28,7 @@ traits-combine: check-parameter-source check-parameter-dest check-parameter-type
 	@rm -rf dist/${type}/
 
 traits-clean: check-parameter-remove check-parameter-source check-parameter-dest
-	awk 'NR==FNR{a[$$0];next} !($$0 in a)' ${remove} ${source} | sort | uniq | grep -Pv '^(\?\?\s?)+$$' > out.traits
+	awk 'NR==FNR{a[$$0];next} !($$0 in a)' ${remove} ${source} | sort | uniq | grep -Pv '^(\?\?\s?)+$$' > ${dest}
 
 check-parameter-remove:
 	@if [ -z ${remove} ]; then \
