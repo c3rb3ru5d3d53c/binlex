@@ -5,22 +5,35 @@ from pathlib import Path
 from functools import partial
 from multiprocessing import Pool
 from PySide2.QtCore import QObject, SIGNAL, Qt
-from PySide2.QtWidgets import QAction, QVBoxLayout, QLabel, QWidget, QSizePolicy, QPushButton, QComboBox, QLineEdit, QFileDialog
+from PySide2.QtWidgets import QAction, QVBoxLayout, QLabel, QWidget, QSizePolicy, QPushButton, QComboBox, QLineEdit, QFileDialog, QTableView, QHeaderView, QTableWidget, QAbstractItemView, QLineEdit, QTableWidgetItem, QComboBox
 from glob import glob
 
 def load_traits_worker(file_path):
 
     """
-    Binlex Trait Loader Thread
+    Binlex Load Traits Thread
     """
 
     f = open(file_path, 'r')
-    traits = {
-        'name': Path(file_path).stem,
-        'traits': list(set([line.strip() for line in f]))
-    }
+    traits = list(set([line.strip() for line in f]))
     f.close()
-    return traits
+    data = []
+    for trait in traits:
+        data.append(
+            {
+                'name': Path(file_path).stem,
+                'trait': trait
+            }
+        )
+    return data
+
+def scan_traits_workder(trait):
+
+    """
+    Binlex Scan Trait
+    """
+
+    pass
 
 class Binlex(cutter.CutterDockWidget):
 
@@ -53,6 +66,36 @@ class Binlex(cutter.CutterDockWidget):
         layout.addWidget(label_title)
         layout.setAlignment(label_title, Qt.AlignHCenter | Qt.AlignTop)
 
+        # Traits Table
+        self.table_traits = QTableWidget()
+        self.table_traits.setShowGrid(False)
+        self.table_traits.verticalHeader().hide()
+        self.table_traits.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table_traits.setColumnCount(4)
+        self.table_traits.setRowCount(1)
+        self.table_traits.setHorizontalHeaderLabels(['Name', 'Match', 'Address', 'Trait'])
+        self.table_traits.setSortingEnabled(True)
+        self.table_traits.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
+        self.table_traits.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
+        self.table_traits.setContentsMargins(0,0,0,0)
+        self.table_traits.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        layout.addWidget(self.table_traits)
+        layout.setAlignment(self.table_traits, Qt.AlignLeft)
+
+        # Search Type
+        search_type = QComboBox()
+        search_type.addItems(["Name", "Match", "Address", "Trait"])
+        layout.addWidget(search_type)
+        layout.setAlignment(search_type, Qt.AlignRight | Qt.AlignBottom)
+
+        # Search Traits
+        search_traits = QLineEdit()
+        search_traits.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        search_traits.setContentsMargins(0,0,0,0)
+        search_traits.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Fixed)
+        search_traits.setPlaceholderText("Quick Filter")
+        layout.addWidget(search_traits)
+
         # Load Traits Button
         btn_load = QPushButton(content)
         btn_load.setText("Load Traits")
@@ -63,7 +106,7 @@ class Binlex(cutter.CutterDockWidget):
         self.show()
 
     def load_traits(self):
-        directory = folderpath = QFileDialog.getExistingDirectory(self, 'Select Folder')
+        directory = QFileDialog.getExistingDirectory(self, 'Select Folder')
         cutter.message("[-] binlex loading traits...")
         files = glob('{directory}**/*.traits'.format(directory=directory), recursive=True)
         files = [f for f in files if os.path.isfile(f)]
@@ -71,8 +114,14 @@ class Binlex(cutter.CutterDockWidget):
             cutter.message("[x] no binlex traits files found!")
             return None
         pool = Pool(processes=self.threads)
-        results = pool.map(partial(load_traits_worker,), files)
-        cutter.message(str(results))
+        traits = pool.map(partial(load_traits_worker,), files)
+        traits = [item for sublist in traits for item in sublist]
+        self.table_traits.setRowCount(len(traits))
+        for i in range(0, len(traits)):
+            self.table_traits.setItem(i, 0, QTableWidgetItem(traits[i]['name']))
+            self.table_traits.setItem(i, 1, QTableWidgetItem('no')
+            self.table_traits.setItem(i, 3, QTableWidgetItem(traits[i]['trait']))
+        self.show()
         cutter.message("[*] binlex finished loading traits")
 
 class BinlexPlugin(cutter.CutterPlugin):
