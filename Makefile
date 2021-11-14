@@ -27,6 +27,15 @@ traits-combine: check-parameter-source check-parameter-dest check-parameter-type
 	done | parallel --halt 1 -u -j ${threads} {} | sort | uniq > ${dest}/${type}.${format}.${arch}.traits
 	@rm -rf dist/${type}/
 
+traits-clean: check-parameter-remove check-parameter-source check-parameter-dest
+	awk 'NR==FNR{a[$$0];next} !($$0 in a)' ${remove} ${source} | sort | uniq | grep -Pv '^(\?\?\s?)+$$' > out.traits
+
+check-parameter-remove:
+	@if [ -z ${remove} ]; then \
+		echo "[x] missing remove parameter"; \
+		exit 1; \
+	fi
+
 check-parameter-source:
 	@if [ -z ${source} ]; then \
 		echo "[x] missing source parameter"; \
