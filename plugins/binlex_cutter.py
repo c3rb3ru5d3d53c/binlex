@@ -119,7 +119,7 @@ class Binlex(cutter.CutterDockWidget):
         self.table_traits.setRowCount(len(traits))
         for i in range(0, len(traits)):
             self.table_traits.setItem(i, 0, QTableWidgetItem(traits[i]['name']))
-            self.table_traits.setItem(i, 1, QTableWidgetItem('no')
+            self.table_traits.setItem(i, 1, QTableWidgetItem('no'))
             self.table_traits.setItem(i, 3, QTableWidgetItem(traits[i]['trait']))
         self.show()
         cutter.message("[*] binlex finished loading traits")
