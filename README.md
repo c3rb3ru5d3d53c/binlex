@@ -57,6 +57,12 @@ make traits-combine source=dist/ dest=dist/ type=malware format=pe arch=x86 thre
 
 It also allows you to name your type of dataset, i.e. goodware/malware/riskware/pua etc...
 
+Removing goodware traits:
+
+```bash
+make traits-clean remove=goodware.traits source=sample.traits dest=malware.traits
+```
+
 **Plugins:**
 
 There has been some interest in making IDA, Ghidra and Cutter plugins for `binlex`.
