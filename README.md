@@ -25,12 +25,11 @@ binlex -m elf:x86 -i tests/elf/elf.x86
 
 ```text
 binlex v1.0.0 - A Binary Genetic Traits Lexer
-  -i  --input           input file or directory         (required)
-  -m  --mode            set mode                        (required)
+  -i  --input           input file              (required)
+  -m  --mode            set mode                (required)
   -lm --list-modes      list modes
   -h  --help            display help
-  -t  --threads         threads
-  -o  --output          output file or directory        (optional)
+  -o  --output          output file             (optional)
   -v  --version         display version
 Author: @c3rb3ru5d3d53c
 ```
@@ -43,6 +42,7 @@ Author: @c3rb3ru5d3d53c
 - `pe:x86_64`
 - `raw:x86`
 - `raw:x86_64`
+- `raw:cil`
 
 __NOTE:__ The `raw` formats can be used on shellcode
 
@@ -105,3 +105,17 @@ To further differ the traits from other malware families, the remaining populati
 The remaining population of traits will be unique to the malware family tested and not legitimate binaries or other malware families.
 
 This fitness model allows for accurate classification of the tested malware family.
+
+# Future Work
+- Java Bytecode Support `raw:jvm`, `java:jvm`
+- Cutter, Ghidra and IDA Plugins
+- .NET PE support `pe:cil`
+- Mac-O Support `macho:x86_64`, `macho:x86`
+
+# Contributing
+
+If you wish to contribute to Binlex DM me on Twitter https://twitter.com/c3rb3ru5d3d53c.
+
+Currently looking for help on:
+- MacOS Developer (Parse Mach-O)
+- Plugin Developers (Python)
