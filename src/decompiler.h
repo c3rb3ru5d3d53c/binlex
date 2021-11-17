@@ -136,10 +136,11 @@ class Decompiler{
             cs_option(cs_handle, CS_OPT_DETAIL, CS_OPT_ON);
             //cs_option(cs_handle, CS_OPT_SKIPDATA, CS_OPT_ON);
         }
-        void x86_64(int decompiler_type, void *data, int data_size, int section_index){
+        int x86_64_0(int decompiler_type, void *data, int data_size, int section_index){
             cs_insn *insn;
             char *disp = NULL;
             char *bytes = NULL;
+            int offset;
             size_t count;
             int op_mem_disp_size;
             char *buffer0;
@@ -219,20 +220,48 @@ class Decompiler{
                         }
                     }
                     free(bytes);
+                    if (j == count - 1){
+                        offset = insn[j].address + insn[j].size;
+                    }
                 }
                 cs_free(insn, count);
             }
             if (decompiler_type == DECOMPILER_TYPE_FUNCS){
-                sections[section_index].function_traits = (char *)malloc(strlen(temp)+1);
-                sprintf(sections[section_index].function_traits, "%s", temp);
-                //sections[section_index].type = decompiler_type;
+                if (sections[section_index].function_traits == NULL){
+                    sections[section_index].function_traits = (char *)malloc(data_size * 2 + data_size + 1);
+                    memset((void *)sections[section_index].function_traits, 0, data_size * 2 + data_size + 1);
+                }
+                if (strlen(sections[section_index].function_traits) == 0){
+                    sprintf(sections[section_index].function_traits, "%s", temp);
+                } else {
+                    sprintf(sections[section_index].function_traits, "%s%s", sections[section_index].function_traits, temp);
+                }
             }
             if (decompiler_type == DECOMPILER_TYPE_BLCKS){
-                sections[section_index].block_traits = (char *)malloc(strlen(temp)+1);
-                sprintf(sections[section_index].block_traits, "%s", temp);
-                //sections[section_index].type = decompiler_type;
+                if (sections[section_index].block_traits == NULL){
+                    sections[section_index].block_traits = (char *)malloc(data_size * 2 + data_size + 1);
+                    memset((void *)sections[section_index].block_traits, 0, data_size * 2 + data_size + 1);
+                }
+
+                if (strlen(sections[section_index].block_traits) == 0){
+                    sprintf(sections[section_index].block_traits, "%s", temp);
+                } else {
+                    sprintf(sections[section_index].block_traits, "%s%s", sections[section_index].block_traits, temp);
+                }
             }
             free(temp);
+            return offset;
+        }
+        void x86_64(int decompiler_type, void *data, int data_size, int section_index){
+            // This is a hack should be in the x86_64_0 function as recursion, this fix works for now on emotet sample
+            int offset = x86_64_0(decompiler_type, data, data_size, section_index);
+            for(;;) {
+                if (offset < data_size){
+                    offset = offset + x86_64_0(decompiler_type, data + offset, data_size - offset, section_index);
+                } else {
+                    break;
+                }
+            }
         }
         void PrintTraits(int type){
             for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
@@ -248,8 +277,10 @@ class Decompiler{
                         }
                         break;
                     case DECOMPILER_TYPE_ALL:
-                        if (sections[i].function_traits != NULL && sections[i].block_traits != NULL){
+                        if (sections[i].function_traits != NULL){
                             printf("%s", sections[i].function_traits);
+                        }
+                        if (sections[i].block_traits != NULL){
                             printf("%s", sections[i].block_traits);
                         }
                         break;
