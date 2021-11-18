@@ -57,11 +57,15 @@ make traits-combine source=dist/ dest=dist/ type=malware format=pe arch=x86 thre
 
 It also allows you to name your type of dataset, i.e. goodware/malware/riskware/pua etc...
 
-Removing goodware traits:
+With `binlex` it is up to you to remove goodware traits from your extracted traits.
+
+There have been many questions about removing "library code", there is a make target shown below to help you with this.
 
 ```bash
 make traits-clean remove=goodware.traits source=sample.traits dest=malware.traits
 ```
+
+With `binlex` the power is in your hands, "With great power comes great responsibility", it is up to you!
 
 **Plugins:**
 
