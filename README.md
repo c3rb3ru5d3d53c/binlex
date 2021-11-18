@@ -5,8 +5,10 @@ The purpose of BinLex is to extract basic blocks and functions as traits from bi
 Most projects attempting this use Python to generate traits, but it's slow. When working with a lot of malware binaries, it is much better to use a faster compiled language like C++.
 
 # Use Cases
-- YARA Signature Creation/Automation (single sample or many)
-- Machine Learning
+- YARA Signature Creation/Automation
+- Identifying Code-Reuse
+- Threat Hunting
+- Machine Learning Malware Detection
 
 # Installing
 
