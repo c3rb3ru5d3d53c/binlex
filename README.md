@@ -9,6 +9,9 @@ Most projects attempting this use Python to generate traits, but it's slow. When
 - Machine Learning
 
 # Installing
+
+**From Source:**
+
 ```bash
 sudo apt install -y git libcapstone-dev cmake make parallel
 git clone https://github.com/c3rb3ru5d3d53c/binlex.git
@@ -17,6 +20,8 @@ make threads=4
 sudo make install
 binlex -m elf:x86 -i tests/elf/elf.x86
 ```
+
+*Binary Release:** See the [`releases`](https://github.com/c3rb3ru5d3d53c/binlex/releases) page.
 
 **NOTE:**
 - ZIP files in the `tests/` directory can be extracted using the password `infected`
