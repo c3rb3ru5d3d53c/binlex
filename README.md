@@ -31,7 +31,7 @@ binlex -m elf:x86 -i tests/elf/elf.x86
 # Usage
 
 ```text
-binlex v1.0.0 - A Binary Genetic Traits Lexer
+binlex v1.0.1 - A Binary Genetic Traits Lexer
   -i  --input           input file              (required)
   -m  --mode            set mode                (required)
   -lm --list-modes      list modes
