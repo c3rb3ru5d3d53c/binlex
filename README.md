@@ -1,6 +1,6 @@
 # binlex
 
-<h2>A Genetic Binary Trait Lexer Library and Utility</h2>
+<h3>A Genetic Binary Trait Lexer Library and Utility</h3>
 
 The purpose of `binlex` is to extract basic blocks and functions as traits from binaries.
 
