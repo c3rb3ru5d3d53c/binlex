@@ -1,6 +1,8 @@
-# BinLex a Genetic Binary Trait Lexer Library and Utility
+# binlex
 
-The purpose of BinLex is to extract basic blocks and functions as traits from binaries.
+## A Genetic Binary Trait Lexer Library and Utility
+
+The purpose of `binlex` is to extract basic blocks and functions as traits from binaries.
 
 Most projects attempting this use Python to generate traits, but it's slow. When working with a lot of malware binaries, it is much better to use a faster compiled language like C++.
 
