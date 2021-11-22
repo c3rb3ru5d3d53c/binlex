@@ -8,6 +8,7 @@
 #include "src/decompiler.h"
 #include "src/args.h"
 #include "src/cil.h"
+#include "src/json.h"
 
 int main(int argc, char **argv){
     Args args;
