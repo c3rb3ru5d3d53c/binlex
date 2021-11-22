@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <elf.h>
+#include <iostream>
+#include <string>
+#include <algorithm>
 #include "src/elf.h"
 #include "src/pe.h"
 #include "src/raw.h"
@@ -9,6 +12,9 @@
 #include "src/args.h"
 #include "src/cil.h"
 #include "src/json.h"
+
+using json = nlohmann::json;
+using namespace std;
 
 int main(int argc, char **argv){
     Args args;
