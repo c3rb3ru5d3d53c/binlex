@@ -11,6 +11,7 @@ class Raw {
         struct Section {
             void *data;
             int size;
+            uint offset;
         };
         int GetFileSize(FILE *fd){
             int start = ftell(fd);
@@ -29,6 +30,7 @@ class Raw {
         }
         bool ReadFile(char *file_path, int section_index){
             FILE *fd = fopen(file_path, "rb");
+            sections[section_index].offset = ftell(fd);
             sections[section_index].size = GetFileSize(fd);
             sections[section_index].data = malloc(sections[section_index].size);
             memset(sections[section_index].data, 0, sections[section_index].size);
