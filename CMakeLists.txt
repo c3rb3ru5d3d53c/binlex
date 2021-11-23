@@ -4,4 +4,7 @@ project(binlex)
 
 add_executable(${PROJECT_NAME} main.cpp)
 
+# This is a hack (remove this later)
+#set(CMAKE_CXX_FLAGS "-fpermissive")
+
 target_link_libraries(${PROJECT_NAME} -lcapstone)
