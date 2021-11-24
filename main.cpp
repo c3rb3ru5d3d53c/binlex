@@ -135,7 +135,8 @@ int main(int argc, char **argv){
         DecompilerREV decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
         decompiler.x86_64(rawx86.sections[0].data, rawx86.sections[0].size, 0, 0);
-        decompiler.PrintTraits();
+        decompiler.PrintTraits(false);
+        //decompiler.PrintTraits();
         // Decompiler decompiler;
         // decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
         // decompiler.x86_64(DECOMPILER_TYPE_FUNCS, rawx86.sections[0].data, rawx86.sections[0].size, 0);

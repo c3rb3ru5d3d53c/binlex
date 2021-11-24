@@ -44,30 +44,38 @@ class DecompilerREV{
             string bytes = hexdump_be(&hash, SHA256_DIGEST_LENGTH);
             return rs(bytes);
         }
-        int entropy(void *data, size_t size){
-            float entropy;
-            float count;
-            const unsigned char *pc = (const unsigned char *)data;
-            for (int i = 0; i < size; i++){
-                if (pc[i] != 0){
-                    count = (float) pc[i] / (float) size;
-                    entropy += -count * log2f(count);
-                }
+        float entropy(string trait){
+            vector<char> bytes = t2c(trait);
+            float result = 0;
+            map<char,int> frequencies;
+            for (char c : bytes){
+                frequencies[c]++;
             }
-            return entropy;
+            for (pair<char,int> p : frequencies) {
+                float freq = static_cast<float>( p.second ) / bytes.size();
+                result -= freq * log2(freq) ;
+            }
+            return result;
         }
-        vector<char> h2b(string& s) {
-            s = rs(s);
+        vector<char> t2c(string trait){
+            trait = rs(rwc(trait));
             vector<char> bytes;
-            for (unsigned int i = 0; i < s.length(); i += 2) {
-                string byteString = s.substr(i, 2);
-                char byte = (char)strtol(byteString.c_str(), NULL, 16);
+            for (int i = 0; i < trait.length(); i = i + 2){
+                const char *s_byte = trait.substr(i, 2).c_str();
+                unsigned char byte = (char)strtol(s_byte, NULL, 16);
                 bytes.push_back(byte);
             }
             return bytes;
         }
         string rs(string s){
+            // remove space
             string::iterator end_pos = remove(s.begin(), s.end(), ' ');
+            s.erase(end_pos, s.end());
+            return s;
+        }
+        string rwc(string s){
+            // Remove Wildcard
+            string::iterator end_pos = remove(s.begin(), s.end(), '?');
             s.erase(end_pos, s.end());
             return s;
         }
@@ -89,31 +97,29 @@ class DecompilerREV{
             return bytes.str();
         }
         bool CheckError(){
-            if (engine.error != CS_ERR_OK){
+            if (engine_error != CS_ERR_OK){
                 return false;
             }
             return true;
         }
     public:
-        struct {
-            cs_err error;
-            csh cs;
-            uint64_t pc;
-        } engine;
+        csh engine_cs;
+        cs_err engine_error;
+        uint64_t engine_pc;
         struct Section sections[DECOMPILER_REV_MAX_SECTIONS];
         DecompilerREV(){
-            engine.pc = 0;
+            engine_pc = 0;
         }
         bool Setup(cs_arch arch, cs_mode mode){
-            engine.error = cs_open(arch, mode, &engine.cs);
-            DECOMPILER_REV_ERROR_CHECK
-            engine.error = cs_option(engine.cs, CS_OPT_DETAIL, CS_OPT_ON);
-            DECOMPILER_REV_ERROR_CHECK
+            engine_error = cs_open(arch, mode, &engine_cs);
+            //DECOMPILER_REV_ERROR_CHECK
+            engine_error = cs_option(engine_cs, CS_OPT_DETAIL, CS_OPT_ON);
+            //DECOMPILER_REV_ERROR_CHECK
+            return true;
         }
         bool x86_64(void *data, size_t data_size, size_t data_offset, uint index){
             const uint8_t *code = (uint8_t *)data;
             size_t code_size = data_size;
-            cs_insn *insn = cs_malloc(engine.cs);
             uint f_edges = 0;
             uint b_edges = 0;
             uint insn_size = 0;
@@ -127,17 +133,18 @@ class DecompilerREV{
             string b_bytes;
             bool disasm = false;
             json trait;
+            cs_insn *insn = cs_malloc(engine_cs);
             while (true){
-                disasm = cs_disasm_iter(engine.cs, &code, &code_size, &engine.pc, insn);
-                if (disasm == false && engine.pc == data_size){
+                disasm = cs_disasm_iter(engine_cs, &code, &code_size, &engine_pc, insn);
+                if (disasm == false && engine_pc == data_size){
                     break;
                 }
-                if (disasm == false && engine.pc < data_size){
-                    fprintf(stderr, "[x] decompile error at offset 0x%x", (uint)data_offset + (uint)engine.pc);
+                if (disasm == false && engine_pc < data_size){
+                    fprintf(stderr, "[x] decompile error at offset 0x%x", (uint)data_offset + (uint)engine_pc);
                     if (insn_size == 0){
-                        engine.pc++;
+                        engine_pc++;
                     } else {
-                        engine.pc = engine.pc + insn_size;
+                        engine_pc = engine_pc + insn_size;
                     }
                 }
                 switch(insn->id){
@@ -289,26 +296,31 @@ class DecompilerREV{
                         f_end = true;
                         break;
                 }
+                // Parse Operands
+                // for (int j = 0; j < insn->detail->x86.op_count; j++){
+                //     cs_x86 *op = &insn->detail->x86.operands[j];
+                // }
                 b_bytes = b_bytes + hexdump_be(insn->bytes, insn->size);
                 b_insn_count++;
                 if (b_end == true && b_bytes.length() > 0){
                     trait["type"] = "block";
                     trait["bytes_sha256"] = sha256(rtrim(b_bytes).c_str());
                     trait["bytes"] = rtrim(b_bytes);
-                    trait["bytes_entropy"] = 0;
                     trait["size"] = trait_size(trait["bytes"]);
                     trait["instructions"] = b_insn_count;
                     trait["blocks"] = 1;
-                    trait["offset"] = data_offset + engine.pc - (uint)trait["size"];
+                    trait["offset"] = data_offset + engine_pc - (uint)trait["size"];
                     trait["average_instructions_per_block"] = b_insn_count / 1;
                     trait["edges"] = b_edges;
                     trait["cyclomatic_complexity"] = b_edges - 1 + 2;
+                    trait["bytes_entropy"] = entropy(trait["bytes"].get<string>());
                     b_bytes.clear();
                     b_end = false;
                     b_insn_count = 0;
                     b_edges = 0;
                     sections[index].traits.push_back(trait);
                     trait.clear();
+
                 }
                 f_bytes = f_bytes + hexdump_be(insn->bytes, insn->size);
                 f_insn_count++;
@@ -316,7 +328,7 @@ class DecompilerREV{
                     trait["type"] = "function";
                     trait["bytes_sha256"] = sha256(rtrim(f_bytes).c_str());
                     trait["bytes"] = rtrim(f_bytes);
-                    trait["bytes_entropy"] = 0;
+                    trait["bytes_entropy"] = entropy(trait["bytes"].get<string>());
                     trait["size"] = trait_size(trait["bytes"]);
                     trait["instructions"] = f_insn_count;
                     if (b_count == 0){
@@ -328,9 +340,8 @@ class DecompilerREV{
                         trait["average_instructions_per_block"] = f_insn_count / b_count;
                         trait["cyclomatic_complexity"] = f_edges - b_count + 2;
                     }
-                    trait["offset"] = data_offset + engine.pc - (uint)trait["size"];
+                    trait["offset"] = data_offset + engine_pc - (uint)trait["size"];
                     trait["edges"] = f_edges;
-
                     f_bytes.clear();
                     f_end = true;
                     f_edges = 0;
@@ -344,16 +355,21 @@ class DecompilerREV{
             cs_free(insn, 1);
             return true;
         }
-        void PrintTraits(){
+        void PrintTraits(bool pretty){
             for (int i = 0; i < DECOMPILER_REV_MAX_SECTIONS; i++){
                 if (sections[i].traits.is_null() == false){
-                    cout << sections[0].traits.dump() << endl;
+                    if (pretty == false){
+                        cout << sections[0].traits.dump() << endl;
+                    } else {
+                        cout << sections[0].traits.dump(4) << endl;
+                    }
+
                 }
             }
         }
         ~DecompilerREV(){
-            cs_close(&engine.cs);
-            engine.pc = 0;
+            cs_close(&engine_cs);
+            engine_pc = 0;
         }
 };
 
