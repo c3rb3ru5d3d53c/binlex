@@ -1,5 +1,4 @@
 import cutter
-
 import re
 import os
 import tempfile
@@ -8,7 +7,7 @@ from pathlib import Path
 from functools import partial
 from multiprocessing import Pool
 from PySide2.QtCore import QObject, SIGNAL, Qt
-from PySide2.QtWidgets import QAction, QVBoxLayout, QLabel, QWidget, QSizePolicy, QPushButton, QComboBox, QLineEdit, QFileDialog, QTableView, QHeaderView, QTableWidget, QAbstractItemView, QLineEdit, QTableWidgetItem, QComboBox
+from PySide2.QtWidgets import *
 from glob import glob
 
 def load_traits_worker(file_path):
@@ -69,6 +68,28 @@ class Binlex(cutter.CutterDockWidget):
         layout.addWidget(label_title)
         layout.setAlignment(label_title, Qt.AlignHCenter | Qt.AlignTop)
 
+        menu = QWidget(content)
+        menu_layout = QHBoxLayout(menu)
+
+        traits_library_btn = QPushButton(menu)
+        traits_library_btn.setText('Traits Library')
+        QObject.connect(traits_library_btn, SIGNAL("clicked()"), self.traits_library)
+
+        matches_btn = QPushButton(menu)
+        matches_btn.setText('Matches')
+        QObject.connect(matches_btn, SIGNAL("clicked()"), self.matches)
+
+        similarities_btn = QPushButton(menu)
+        similarities_btn.setText('Similarities')
+        QObject.connect(similarities_btn, SIGNAL("clicked()"), self.similarities)
+        
+        menu_layout.addWidget(traits_library_btn)
+        menu_layout.addWidget(matches_btn)
+        menu_layout.addWidget(similarities_btn)
+        menu.setLayout(menu_layout)
+
+        layout.addWidget(menu)
+
         # Traits Table
         self.table_traits = QTableWidget()
         self.table_traits.setShowGrid(False)
@@ -82,6 +103,15 @@ class Binlex(cutter.CutterDockWidget):
         self.table_traits.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
         self.table_traits.setContentsMargins(0,0,0,0)
         self.table_traits.setEditTriggers(QAbstractItemView.NoEditTriggers)
+
+        header = self.table_traits.horizontalHeader()
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        
+        self.table_traits.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContents)
+        self.table_traits.setAlternatingRowColors(True)
+        self.table_traits.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch) 
+
+
         layout.addWidget(self.table_traits)
         layout.setAlignment(self.table_traits, Qt.AlignLeft)
 
@@ -145,8 +175,20 @@ class Binlex(cutter.CutterDockWidget):
         for i in range(0, len(traits)):
             self.table_traits.setItem(i, 0, QTableWidgetItem(traits[i]['name']))
             self.table_traits.setItem(i, 1, QTableWidgetItem(traits[i]['trait']))
+        self.table_traits.resizeColumnsToContents()
+        self.table_traits.resizeRowsToContents()  
         self.show()
         cutter.message("[*] binlex finished loading traits")
+    
+    def traits_library():
+        pass
+
+    def matches():
+        pass
+
+    def similarities():
+        pass
+
 
 class BinlexPlugin(cutter.CutterPlugin):
 
