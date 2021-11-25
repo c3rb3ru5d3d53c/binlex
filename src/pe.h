@@ -426,7 +426,7 @@ typedef struct {
 class Pe {
     private:
         struct Section {
-            int offset;
+            uint offset;
             int size;
             void *data;
         };

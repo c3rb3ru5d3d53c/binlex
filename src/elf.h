@@ -22,7 +22,7 @@ extern int errno;
 class Elf {
     private:
         struct Section {
-            int offset;
+            uint offset;
             int size;
             void *data;
         };
