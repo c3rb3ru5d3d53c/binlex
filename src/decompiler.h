@@ -12,24 +12,24 @@
 #include <capstone/capstone.h>
 #include "json.h"
 
-#ifndef DECOMPILER_REV_H
-#define DECOMPILER_REV_H
+#ifndef DECOMPILER_H
+#define DECOMPILER_H
 
-#define DECOMPILER_REV_TYPE_FUNCS 0
-#define DECOMPILER_REV_TYPE_BLCKS 1
-#define DECOMPILER_REV_TYPE_UNSET 2
-#define DECOMPILER_REV_TYPE_ALL   3
+#define DECOMPILER_TYPE_FUNCS 0
+#define DECOMPILER_TYPE_BLCKS 1
+#define DECOMPILER_TYPE_UNSET 2
+#define DECOMPILER_TYPE_ALL   3
 
-#define DECOMPILER_REV_MAX_INSN 0xfff
+#define DECOMPILER_MAX_INSN 0xfff
 
-#define DECOMPILER_REV_MAX_SECTIONS 256
+#define DECOMPILER_MAX_SECTIONS 256
 
 using namespace std;
 using json = nlohmann::json;
 
 // Needs Refactoring
 
-class DecompilerREV{
+class Decompiler{
     private:
         struct Section {
             json traits;
@@ -125,7 +125,7 @@ class DecompilerREV{
         }
         json GetTraits(){
             json result;
-            for (int i = 0; i < DECOMPILER_REV_MAX_SECTIONS; i++){
+            for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
                 if (sections[i].traits.is_null() == false){
                     if (sections[i].traits.is_null() == false){
                         for (int j = 0; j < sections[i].traits.size(); j++){
@@ -140,8 +140,8 @@ class DecompilerREV{
         csh handle;
         cs_err status;
         uint64_t pc;
-        struct Section sections[DECOMPILER_REV_MAX_SECTIONS];
-        DecompilerREV(){
+        struct Section sections[DECOMPILER_MAX_SECTIONS];
+        Decompiler(){
             pc = 0;
         }
         bool Setup(cs_arch arch, cs_mode mode){
@@ -476,7 +476,7 @@ class DecompilerREV{
             fwrite(traits.c_str(), sizeof(char), traits.length(), fd);
             fclose(fd);
         }
-        ~DecompilerREV(){
+        ~Decompiler(){
             cs_close(&handle);
             pc = 0;
         }

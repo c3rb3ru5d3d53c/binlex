@@ -8,8 +8,7 @@
 #include "src/pe.h"
 #include "src/raw.h"
 #include "src/macho.h"
-//#include "src/decompiler.h"
-#include "src/decompiler_rev.h"
+#include "src/decompiler.h"
 #include "src/args.h"
 #include "src/cil.h"
 #include "src/json.h"
@@ -33,7 +32,7 @@ int main(int argc, char **argv){
         if (elf64.GetExecutableData() == false){
             return 1;
         }
-        DecompilerREV decompiler;
+        Decompiler decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_64);
         for (int i = 0; i < ELF_MAX_SECTIONS; i++){
             if (elf64.sections[i].data != NULL){
@@ -60,7 +59,7 @@ int main(int argc, char **argv){
         if (elf32.GetExecutableData() == false){
             return 1;
         }
-        DecompilerREV decompiler;
+        Decompiler decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
         for (int i = 0; i < ELF_MAX_SECTIONS; i++){
             if (elf32.sections[i].data != NULL){
@@ -84,7 +83,7 @@ int main(int argc, char **argv){
         if (pe32.ReadFile(args.options.input) == false){
             return 1;
         }
-        DecompilerREV decompiler;
+        Decompiler decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
         for (int i = 0; i < PE_MAX_SECTIONS; i++){
             if (pe32.sections[i].data != NULL){
@@ -108,7 +107,7 @@ int main(int argc, char **argv){
         if (pe64.ReadFile(args.options.input) == false){
             return 1;
         }
-        DecompilerREV decompiler;
+        Decompiler decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_64);
         for (int i = 0; i < PE_MAX_SECTIONS; i++){
             if (pe64.sections[i].data != NULL){
@@ -126,7 +125,7 @@ int main(int argc, char **argv){
         args.options.io_type == ARGS_IO_TYPE_FILE){
         Raw rawx86;
         rawx86.ReadFile(args.options.input, 0);
-        DecompilerREV decompiler;
+        Decompiler decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
         decompiler.x86_64(rawx86.sections[0].data, rawx86.sections[0].size, rawx86.sections[0].offset, 0);
         if (args.options.output == NULL){
@@ -140,7 +139,7 @@ int main(int argc, char **argv){
         args.options.io_type == ARGS_IO_TYPE_FILE){
         Raw rawx86_64;
         rawx86_64.ReadFile(args.options.input, 0);
-        DecompilerREV decompiler;
+        Decompiler decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_64);
         decompiler.x86_64(rawx86_64.sections[0].data, rawx86_64.sections[0].size, rawx86_64.sections[0].offset, 0);
         if (args.options.output == NULL){
