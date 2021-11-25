@@ -8,7 +8,7 @@
 #include "src/pe.h"
 #include "src/raw.h"
 #include "src/macho.h"
-#include "src/decompiler.h"
+//#include "src/decompiler.h"
 #include "src/decompiler_rev.h"
 #include "src/args.h"
 #include "src/cil.h"
@@ -33,18 +33,17 @@ int main(int argc, char **argv){
         if (elf64.GetExecutableData() == false){
             return 1;
         }
-        Decompiler decompiler;
+        DecompilerREV decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_64);
         for (int i = 0; i < ELF_MAX_SECTIONS; i++){
             if (elf64.sections[i].data != NULL){
-                decompiler.x86_64(DECOMPILER_TYPE_FUNCS, elf64.sections[i].data, elf64.sections[i].size, i);
-                decompiler.x86_64(DECOMPILER_TYPE_BLCKS, elf64.sections[i].data, elf64.sections[i].size, i);
+                decompiler.x86_64(elf64.sections[i].data, elf64.sections[i].size, elf64.sections[i].offset, i);
             }
         }
         if (args.options.output == NULL){
-            decompiler.PrintTraits(DECOMPILER_TYPE_ALL);
+            decompiler.PrintTraits(args.options.pretty);
         } else {
-            decompiler.WriteTraits(args.options.output);
+            decompiler.WriteTraits(args.options.output, args.options.pretty);
         }
         return 0;
     }
@@ -61,18 +60,17 @@ int main(int argc, char **argv){
         if (elf32.GetExecutableData() == false){
             return 1;
         }
-        Decompiler decompiler;
+        DecompilerREV decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
         for (int i = 0; i < ELF_MAX_SECTIONS; i++){
             if (elf32.sections[i].data != NULL){
-                decompiler.x86_64(DECOMPILER_TYPE_FUNCS, elf32.sections[i].data, elf32.sections[i].size, i);
-                decompiler.x86_64(DECOMPILER_TYPE_BLCKS, elf32.sections[i].data, elf32.sections[i].size, i);
+                decompiler.x86_64(elf32.sections[i].data, elf32.sections[i].size, elf32.sections[i].offset, i);
             }
         }
         if (args.options.output == NULL){
-            decompiler.PrintTraits(DECOMPILER_TYPE_ALL);
+            decompiler.PrintTraits(args.options.pretty);
         } else {
-            decompiler.WriteTraits(args.options.output);
+            decompiler.WriteTraits(args.options.output, args.options.pretty);
         }
         return 0;
     }
@@ -86,19 +84,17 @@ int main(int argc, char **argv){
         if (pe32.ReadFile(args.options.input) == false){
             return 1;
         }
-        Decompiler decompiler;
+        DecompilerREV decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
         for (int i = 0; i < PE_MAX_SECTIONS; i++){
             if (pe32.sections[i].data != NULL){
-                //common_hex_dump((char *)"section", pe32.sections[i].data, pe32.sections[i].size);
-                decompiler.x86_64(DECOMPILER_TYPE_FUNCS, pe32.sections[i].data, pe32.sections[i].size, i);
-                decompiler.x86_64(DECOMPILER_TYPE_BLCKS, pe32.sections[i].data, pe32.sections[i].size, i);
+                decompiler.x86_64(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, i);
             }
         }
         if (args.options.output == NULL){
-            decompiler.PrintTraits(DECOMPILER_TYPE_ALL);
+            decompiler.PrintTraits(args.options.pretty);
         } else {
-            decompiler.WriteTraits(args.options.output);
+            decompiler.WriteTraits(args.options.output, args.options.pretty);
         }
         return 0;
     }
@@ -112,19 +108,17 @@ int main(int argc, char **argv){
         if (pe64.ReadFile(args.options.input) == false){
             return 1;
         }
-        Decompiler decompiler;
+        DecompilerREV decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_64);
         for (int i = 0; i < PE_MAX_SECTIONS; i++){
             if (pe64.sections[i].data != NULL){
-                //common_hex_dump((char *)"section", pe64.sections[i].data, pe64.sections[i].size);
-                decompiler.x86_64(DECOMPILER_TYPE_FUNCS, pe64.sections[i].data, pe64.sections[i].size, i);
-                decompiler.x86_64(DECOMPILER_TYPE_BLCKS, pe64.sections[i].data, pe64.sections[i].size, i);
+                decompiler.x86_64(pe64.sections[i].data, pe64.sections[i].size, pe64.sections[i].offset, i);
             }
         }
         if (args.options.output == NULL){
-            decompiler.PrintTraits(DECOMPILER_TYPE_ALL);
+            decompiler.PrintTraits(args.options.pretty);
         } else {
-            decompiler.WriteTraits(args.options.output);
+            decompiler.WriteTraits(args.options.output, args.options.pretty);
         }
         return 0;
     }
@@ -134,41 +128,28 @@ int main(int argc, char **argv){
         rawx86.ReadFile(args.options.input, 0);
         DecompilerREV decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
-        decompiler.x86_64(rawx86.sections[0].data, rawx86.sections[0].size, 0, 0);
-        decompiler.PrintTraits(false);
-        //decompiler.PrintTraits();
-        // Decompiler decompiler;
-        // decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
-        // decompiler.x86_64(DECOMPILER_TYPE_FUNCS, rawx86.sections[0].data, rawx86.sections[0].size, 0);
-        // decompiler.x86_64(DECOMPILER_TYPE_BLCKS, rawx86.sections[0].data, rawx86.sections[0].size, 0);
-        // if (args.options.output == NULL){
-        //     decompiler.PrintTraits(DECOMPILER_TYPE_ALL);
-        // } else {
-        //     decompiler.WriteTraits(args.options.output);
-        // }
+        decompiler.x86_64(rawx86.sections[0].data, rawx86.sections[0].size, rawx86.sections[0].offset, 0);
+        if (args.options.output == NULL){
+            decompiler.PrintTraits(args.options.pretty);
+        } else {
+            decompiler.WriteTraits(args.options.output, args.options.pretty);
+        }
         return 0;
     }
     if (strcmp(args.options.mode, (char *)"raw:x86_64") == 0 &&
         args.options.io_type == ARGS_IO_TYPE_FILE){
         Raw rawx86_64;
         rawx86_64.ReadFile(args.options.input, 0);
-        Decompiler decompiler;
+        DecompilerREV decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_64);
-        decompiler.x86_64(DECOMPILER_TYPE_FUNCS, rawx86_64.sections[0].data, rawx86_64.sections[0].size, 0);
-        decompiler.x86_64(DECOMPILER_TYPE_BLCKS, rawx86_64.sections[0].data, rawx86_64.sections[0].size, 0);
+        decompiler.x86_64(rawx86_64.sections[0].data, rawx86_64.sections[0].size, rawx86_64.sections[0].offset, 0);
         if (args.options.output == NULL){
-            decompiler.PrintTraits(DECOMPILER_TYPE_ALL);
+            decompiler.PrintTraits(args.options.pretty);
         } else {
-            decompiler.WriteTraits(args.options.output);
+            decompiler.WriteTraits(args.options.output, args.options.pretty);
         }
         return 0;
     }
-    // if (strcmp(args.options.mode, (char *)"macho:x86_64") == 0 &&
-    //     args.options.io_type == ARGS_IO_TYPE_FILE){
-    //     Macho machox86_64;
-    //     machox86_64.Setup(MACHO_MODE_X86_64);
-    //     machox86_64.ReadFile(args.options.input, 0);
-    // }
     if (strcmp(args.options.mode, (char *)"raw:cil") == 0 &&
         args.options.io_type == ARGS_IO_TYPE_FILE){
         Raw raw_cil;

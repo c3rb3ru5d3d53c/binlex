@@ -24,6 +24,7 @@ class Args{
             options.list_modes = false;
             options.mode = NULL;
             options.io_type = ARGS_IO_TYPE_UNKNOWN;
+            options.pretty = false;
         }
         bool check_mode(char *mode){
             for (int i = 0; i < ARGS_MODE_COUNT; i++){
@@ -69,6 +70,7 @@ class Args{
             bool help;
             bool list_modes;
             char *mode;
+            bool pretty;
         } options;
         Args(){
            SetDefault();
@@ -81,6 +83,7 @@ class Args{
                 "  -lm --list-modes\tlist modes\n"
                 "  -h  --help\t\tdisplay help\n"
                 "  -o  --output\t\toutput file\t\t(optional)\n"
+                "  -p  --pretty\t\tpretty output\t\t(optional)\n"
                 "  -v  --version\t\tdisplay version\n"
                 "Author: @c3rb3ru5d3d53c\n",
                 version
@@ -121,6 +124,10 @@ class Args{
                 if (strcmp(argv[i], (char *)"-t") == 0 ||
                     strcmp(argv[i], (char *)"--threads") == 0){
                     options.threads = atoi(argv[i+1]);
+                }
+                if (strcmp(argv[i], (char *)"-p") == 0 ||
+                    strcmp(argv[i], (char *)"--pretty") == 0){
+                    options.pretty = true;
                 }
                 if (strcmp(argv[i], (char *)"-o") == 0 ||
                     strcmp(argv[i], (char *)"--output") == 0){

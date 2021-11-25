@@ -15,8 +15,6 @@
 #ifndef DECOMPILER_REV_H
 #define DECOMPILER_REV_H
 
-#define DECOMPILER_REV_ERROR_CHECK if(CheckError() == false){return false;}else{return true;}
-
 #define DECOMPILER_REV_TYPE_FUNCS 0
 #define DECOMPILER_REV_TYPE_BLCKS 1
 #define DECOMPILER_REV_TYPE_UNSET 2
@@ -29,11 +27,13 @@
 using namespace std;
 using json = nlohmann::json;
 
+// Needs Refactoring
+
 class DecompilerREV{
     private:
         struct Section {
             json traits;
-            vector<int> visited;
+            vector<uint64_t> visited;
         };
         string sha256(const char *trait){
             unsigned char hash[SHA256_DIGEST_LENGTH];
@@ -41,7 +41,7 @@ class DecompilerREV{
             SHA256_Init(&ctx);
             SHA256_Update(&ctx, trait, strlen(trait));
             SHA256_Final(hash, &ctx);
-            string bytes = hexdump_be(&hash, SHA256_DIGEST_LENGTH);
+            string bytes = hexdump_be(&hash, SHA256_DIGEST_LENGTH, false);
             return rs(bytes);
         }
         float entropy(string trait){
@@ -87,38 +87,77 @@ class DecompilerREV{
             size_t end = s.find_last_not_of(whitespace);
             return (end == std::string::npos) ? "" : s.substr(0, end + 1);
         }
-        string hexdump_be(const void *data, size_t size){
+        string hexdump_be(const void *data, size_t size, bool cont){
             stringstream bytes;
             bytes << "";
-            const unsigned char *pc = (const unsigned char *)data;
+            const unsigned char *local_pc = (const unsigned char *)data;
             for (int i = 0; i < size; i++){
-                bytes << hex << setfill('0') << setw(2) << (unsigned uint32_t)pc[i] << " ";
+                bytes << hex << setfill('0') << setw(2) << (unsigned uint32_t)local_pc[i] << " ";
+            }
+            if (cont == true){
+                bytes << " ";
             }
             return bytes.str();
         }
-        bool CheckError(){
-            if (engine_error != CS_ERR_OK){
+        string hexdump_mem_disp(uint64_t disp){
+            stringstream bytes;
+            const unsigned char *local_pc = (const unsigned char *)&disp;
+            for (int i = 0; i < sizeof(disp) -1 ; i++){
+                if (local_pc[i] != 0 && local_pc[i] != 255){
+                    bytes << hex << setfill('0') << setw(2) << (unsigned uint32_t)local_pc[i] << " ";
+                }
+            }
+            return rtrim(bytes.str());
+        }
+        string wildcard_bytes(string bytes, string sub_bytes){
+            bytes = rtrim(bytes);
+            size_t index = bytes.find(sub_bytes, 0);
+            if (index == string::npos){
+                return bytes;
+            }
+            for (int i = index; i < bytes.length(); i = i + 3){
+                bytes.replace(i, 2, "??");
+            }
+            // if (cont == true){
+            //     bytes = bytes + " ";
+            // }
+            return bytes;
+        }
+        json GetTraits(){
+            json result;
+            for (int i = 0; i < DECOMPILER_REV_MAX_SECTIONS; i++){
+                if (sections[i].traits.is_null() == false){
+                    if (sections[i].traits.is_null() == false){
+                        for (int j = 0; j < sections[i].traits.size(); j++){
+                            result.push_back(sections[i].traits[j]);
+                        }
+                    }
+                }
+            }
+            return result;
+        }
+    public:
+        csh handle;
+        cs_err status;
+        uint64_t pc;
+        struct Section sections[DECOMPILER_REV_MAX_SECTIONS];
+        DecompilerREV(){
+            pc = 0;
+        }
+        bool Setup(cs_arch arch, cs_mode mode){
+            status = cs_open(arch, mode, &handle);
+            if (status != CS_ERR_OK){
+                return false;
+            }
+            status = cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);
+            if (status != CS_ERR_OK){
                 return false;
             }
             return true;
         }
-    public:
-        csh engine_cs;
-        cs_err engine_error;
-        uint64_t engine_pc;
-        struct Section sections[DECOMPILER_REV_MAX_SECTIONS];
-        DecompilerREV(){
-            engine_pc = 0;
-        }
-        bool Setup(cs_arch arch, cs_mode mode){
-            engine_error = cs_open(arch, mode, &engine_cs);
-            //DECOMPILER_REV_ERROR_CHECK
-            engine_error = cs_option(engine_cs, CS_OPT_DETAIL, CS_OPT_ON);
-            //DECOMPILER_REV_ERROR_CHECK
-            return true;
-        }
-        bool x86_64(void *data, size_t data_size, size_t data_offset, uint index){
+        int x86_64(void *data, size_t data_size, size_t data_offset, uint index){
             const uint8_t *code = (uint8_t *)data;
+            json trait;
             size_t code_size = data_size;
             uint f_edges = 0;
             uint b_edges = 0;
@@ -127,25 +166,42 @@ class DecompilerREV{
             uint f_count = 0;
             uint f_insn_count = 0;
             string f_bytes;
+            string f_trait;
             bool b_end = false;
             uint b_count = 0;
             uint b_insn_count = 0;
             string b_bytes;
+            string b_trait;
             bool disasm = false;
-            json trait;
-            cs_insn *insn = cs_malloc(engine_cs);
+            cs_insn *insn = cs_malloc(handle);
             while (true){
-                disasm = cs_disasm_iter(engine_cs, &code, &code_size, &engine_pc, insn);
-                if (disasm == false && engine_pc == data_size){
+                bool append_trait = false;
+                bool wildcard_insn = false;
+                disasm = cs_disasm_iter(handle, &code, &code_size, &pc, insn);
+                if (disasm == false && pc >= data_size){
                     break;
                 }
-                if (disasm == false && engine_pc < data_size){
-                    fprintf(stderr, "[x] decompile error at offset 0x%x", (uint)data_offset + (uint)engine_pc);
-                    if (insn_size == 0){
-                        engine_pc++;
-                    } else {
-                        engine_pc = engine_pc + insn_size;
+                if (disasm == false && pc < data_size){
+                    // realign code and data for decompiler
+                    pc++;
+                    code_size = data_size - pc + 1;
+                    memmove(data, code+1, code_size);
+                    code = (uint8_t *)data;
+                    f_trait.clear();
+                    f_bytes.clear();
+                    f_end = false;
+                    f_edges = 0;
+                    f_insn_count = 0;
+                    b_count = 0;
+                    if (b_bytes.length() > 0){
+                        goto collect_block;
                     }
+                    b_trait.clear();
+                    b_bytes.clear();
+                    b_end = false;
+                    b_insn_count = 0;
+                    b_edges = 0;
+                    continue;
                 }
                 switch(insn->id){
                     case X86_INS_JMP:
@@ -170,24 +226,28 @@ class DecompilerREV{
                         b_end = true;
                         break;
                     case X86_INS_JNP:
+                        // conditional
                         f_edges = f_edges + 2;
                         b_edges = b_edges + 2;
                         b_count++;
                         b_end = true;
                         break;
                     case X86_INS_JL:
+                        // conditional
                         f_edges = f_edges + 2;
                         b_edges = b_edges + 2;
                         b_count++;
                         b_end = true;
                         break;
                     case X86_INS_JLE:
+                        // conditional
                         f_edges = f_edges + 2;
                         b_edges = b_edges + 2;
                         b_count++;
                         b_end = true;
                         break;
                     case X86_INS_JG:
+                        // conditional
                         f_edges = f_edges + 2;
                         b_edges = b_edges + 2;
                         b_count++;
@@ -274,56 +334,90 @@ class DecompilerREV{
                     case X86_INS_RET:
                         f_count++;
                         f_end = true;
+                        b_end = true;
                         break;
                     case X86_INS_RETF:
                         f_count++;
                         f_end = true;
+                        b_end = true;
                         break;
                     case X86_INS_RETFQ:
                         f_count++;
                         f_end = true;
+                        b_end = true;
                         break;
                     case X86_INS_IRET:
                         f_count++;
                         f_end = true;
+                        b_end = true;
                         break;
                     case X86_INS_IRETD:
                         f_count++;
                         f_end = true;
+                        b_end = true;
                         break;
                     case X86_INS_IRETQ:
                         f_count++;
                         f_end = true;
+                        b_end = true;
+                        break;
+                    case X86_INS_NOP:
+                        wildcard_insn = true;
                         break;
                 }
-                // Parse Operands
-                // for (int j = 0; j < insn->detail->x86.op_count; j++){
-                //     cs_x86 *op = &insn->detail->x86.operands[j];
-                // }
-                b_bytes = b_bytes + hexdump_be(insn->bytes, insn->size);
+                //Parse Operands
+                for (int j = 0; j < insn->detail->x86.op_count; j++){
+                    cs_x86_op operand = insn->detail->x86.operands[j];
+                    switch(operand.type){
+                        case X86_OP_MEM:
+                            if (operand.mem.disp != 0){
+                                b_trait = b_trait + wildcard_bytes(hexdump_be(insn->bytes, insn->size, false), hexdump_mem_disp(operand.mem.disp)) + " ";
+                                f_trait = f_trait + wildcard_bytes(hexdump_be(insn->bytes, insn->size, false), hexdump_mem_disp(operand.mem.disp)) + " ";
+                                append_trait = true;
+                            }
+                            break;
+                        default:
+                            break;
+                    }
+                }
+                if (append_trait == false){
+                    b_trait = b_trait + hexdump_be(insn->bytes, insn->size, false);
+                    f_trait = f_trait + hexdump_be(insn->bytes, insn->size, false);
+                }
+                b_bytes = b_bytes + hexdump_be(insn->bytes, insn->size, false);
                 b_insn_count++;
+                f_bytes = f_bytes + hexdump_be(insn->bytes, insn->size, false);
+                f_insn_count++;
+                insn_size = insn->size;
                 if (b_end == true && b_bytes.length() > 0){
+                    collect_block:
                     trait["type"] = "block";
                     trait["bytes_sha256"] = sha256(rtrim(b_bytes).c_str());
                     trait["bytes"] = rtrim(b_bytes);
                     trait["size"] = trait_size(trait["bytes"]);
                     trait["instructions"] = b_insn_count;
                     trait["blocks"] = 1;
-                    trait["offset"] = data_offset + engine_pc - (uint)trait["size"];
+                    if (disasm == false){
+                        trait["offset"] = data_offset + pc - (uint)trait["size"] - 1;
+                    } else {
+                        trait["offset"] = data_offset + pc - (uint)trait["size"];
+                    }
                     trait["average_instructions_per_block"] = b_insn_count / 1;
                     trait["edges"] = b_edges;
                     trait["cyclomatic_complexity"] = b_edges - 1 + 2;
                     trait["bytes_entropy"] = entropy(trait["bytes"].get<string>());
+                    trait["trait"] = rtrim(b_trait);
+                    trait["trait_entropy"] = entropy(trait["trait"].get<string>());
+                    trait["trait_sha256"] = sha256(rtrim(b_trait).c_str());
+                    b_trait.clear();
                     b_bytes.clear();
                     b_end = false;
                     b_insn_count = 0;
                     b_edges = 0;
                     sections[index].traits.push_back(trait);
+                    sections[index].visited.push_back(trait["offset"].get<uint64_t>());
                     trait.clear();
-
                 }
-                f_bytes = f_bytes + hexdump_be(insn->bytes, insn->size);
-                f_insn_count++;
                 if (f_end == true && f_bytes.length() > 0){
                     trait["type"] = "function";
                     trait["bytes_sha256"] = sha256(rtrim(f_bytes).c_str());
@@ -340,44 +434,52 @@ class DecompilerREV{
                         trait["average_instructions_per_block"] = f_insn_count / b_count;
                         trait["cyclomatic_complexity"] = f_edges - b_count + 2;
                     }
-                    trait["offset"] = data_offset + engine_pc - (uint)trait["size"];
+                    trait["offset"] = data_offset + pc - (uint)trait["size"];
                     trait["edges"] = f_edges;
+                    trait["trait"] = rtrim(f_trait);
+                    trait["trait_entropy"] = entropy(trait["trait"].get<string>());
+                    trait["trait_sha256"] = sha256(rtrim(f_trait).c_str());
+                    f_trait.clear();
+                    sections[index].traits.push_back(trait);
+                    sections[index].visited.push_back(trait["offset"].get<uint64_t>());
                     f_bytes.clear();
-                    f_end = true;
+                    f_end = false;
                     f_edges = 0;
                     f_insn_count = 0;
                     b_count = 0;
-                    sections[index].traits.push_back(trait);
                     trait.clear();
                 }
-                insn_size = insn->size;
+                //printf("pos: %ld,%ld\n", pc, data_size);
             }
             cs_free(insn, 1);
-            return true;
+            return pc;
         }
         void PrintTraits(bool pretty){
-            for (int i = 0; i < DECOMPILER_REV_MAX_SECTIONS; i++){
-                if (sections[i].traits.is_null() == false){
-                    if (pretty == false){
-                        cout << sections[0].traits.dump() << endl;
-                    } else {
-                        cout << sections[0].traits.dump(4) << endl;
-                    }
-
-                }
+            json traits = GetTraits();
+            if (pretty == false){
+                cout << traits.dump() << endl;
+            } else {
+                cout << traits.dump(4) << endl;
             }
         }
+        void WriteTraits(char *file_path, bool pretty){
+            FILE *fd = fopen(file_path, "w");
+            string traits;
+            if (pretty == false){
+                traits = GetTraits().dump();
+            } else {
+                traits = GetTraits().dump(4);
+            }
+            if (traits.length() > 0){
+                traits = traits + '\n';
+            }
+            fwrite(traits.c_str(), sizeof(char), traits.length(), fd);
+            fclose(fd);
+        }
         ~DecompilerREV(){
-            cs_close(&engine_cs);
-            engine_pc = 0;
+            cs_close(&handle);
+            pc = 0;
         }
 };
-
-// while (true){
-//     cs_disasm_iter(data, data_size, 0, insn);
-//     if (sections[index].visited.size() > DECOMPILER_REV_MAX_INSN){
-//          break;
-//     }
-// }
 
 #endif

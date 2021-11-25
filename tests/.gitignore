@@ -3,3 +3,4 @@ pe/**
 raw/**
 macho/**
 cil/**
+venv/**
