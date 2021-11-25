@@ -17,7 +17,7 @@ traits: check-parameter-source check-parameter-dest check-parameter-type check-p
 	@find ${source} -type f | while read i; do \
 		mkdir -p ${dest}/${type}/${format}/${arch}/; \
 		filename=`basename $${i}`; \
-		echo "binlex -m ${format}:${arch} --input $${i} --output ${dest}/${type}/${format}/${arch}/$${filename}.traits"; \
+		echo "binlex -m ${format}:${arch} -i $${i} | jq '.[] | .trait' > ${dest}/${type}/${format}/${arch}/$${filename}.traits"; \
 	done | parallel -u --progress -j ${threads} {}
 	@echo "[*] trait build complete"
 

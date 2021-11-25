@@ -57,6 +57,58 @@ __NOTE:__ The `raw` formats can be used on shellcode
 
 **Advanced Usage:**
 
+If you are hunting using `binlex` you can use `jq` to your advantage for advanced searches.
+
+```bash
+build/binlex -m raw:x86 -i tests/raw/raw.x86 | jq -r '.[] | select(.type == "block" and .size < 32 and .size > 0) | .bytes'
+2c 20 c1 cf 0d 01 c7 49 75 ef
+52 57 8b 52 10 8b 42 3c 01 d0 8b 40 78 85 c0 74 4c
+01 d0 50 8b 58 20 8b 48 18 01 d3 85 c9 74 3c
+49 8b 34 8b 01 d6 31 ff 31 c0 c1 cf 0d ac 01 c7 38 e0 75 f4
+03 7d f8 3b 7d 24 75 e0
+58 5f 5a 8b 12 e9 80 ff ff ff
+ff 4e 08 75 ec
+e8 67 00 00 00 6a 00 6a 04 56 57 68 02 d9 c8 5f ff d5 83 f8 00 7e 36
+e9 9b ff ff ff
+01 c3 29 c6 75 c1
+```
+
+Other queries you can do:
+```bash
+# Block traits with a size between 0 and 32 bytes
+jq -r '[.[] | select(.type == "block" and .size < 32 and .size > 0)]'
+# Function traits with a cyclomatic complexity greater than 32 (maybe obfuscation)
+jq -r '[.[] | select(.type == "function" and .cyclomatic_complexity > 32)]'
+# Traits where bytes have high entropy
+jq -r '[.[] | select(.bytes_entropy > 7)]'
+# Output all trait strings only
+js -r '.[] | .trait'
+```
+
+You can also use the switch `--pretty` to output `json` to identify more properies to query.
+
+```bash
+binlex -m pe:x86 -i tests/pe/pe.trickbot.x86 --pretty
+[
+  {
+    "average_instructions_per_block": 29,
+    "blocks": 1,
+    "bytes": "ae 32 c3 32 1a 33 25 34 85 39 ae 3b b4 3b c8 3b 35 3c 3a 3c 6b 3c 71 3c 85 3c aa 3d b0 3d 6a 3e a5 3e b8 3e fd 3e 38 3f 4b 3f 87 3f 00 20 00 00 58 00 00 00 4f 30 aa 30 01 31 1d 31 ac 31 d6 31 e5 31 f5 31 1c 32 31 32 75 34",
+    "bytes_entropy": 5.070523738861084,
+    "bytes_sha256": "67a966fe573ef678feaea6229271bb374304b418fe63f464b71af1fbe2a87f37",
+    "cyclomatic_complexity": 3,
+    "edges": 2,
+    "instructions": 29,
+    "offset": 11589,
+    "size": 74,
+    "trait": "ae 32 c3 32 1a 33 25 ?? ?? ?? ?? 3b b4 3b ?? ?? ?? ?? 3a 3c 6b 3c 71 3c 85 3c aa 3d b0 3d 6a 3e a5 3e b8 3e fd 3e 38 3f 4b 3f 87 3f 00 20 00 00 58 00 00 00 4f ?? aa 30 01 31 1d ?? ?? ?? ?? 31 e5 31 f5 31 1c 32 31 32 75 34",
+    "trait_entropy": 4.9164042472839355,
+    "trait_sha256": "a00fcb2b23a916192990665d8a5f53b2adfa74ec98991277e571542aee94c3a5",
+    "type": "block"
+  }
+]
+```
+
 If you have terabytes of executable files, we can leverage the power of `parallel` to generate traits for us.
 
 ```bash
