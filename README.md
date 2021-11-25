@@ -60,7 +60,7 @@ __NOTE:__ The `raw` formats can be used on shellcode
 If you are hunting using `binlex` you can use `jq` to your advantage for advanced searches.
 
 ```bash
-build/binlex -m raw:x86 -i tests/raw/raw.x86 | jq -r '.[] | select(.type == "block" and .size < 32 and .size > 0) | .bytes'
+binlex -m raw:x86 -i tests/raw/raw.x86 | jq -r '.[] | select(.type == "block" and .size < 32 and .size > 0) | .bytes'
 2c 20 c1 cf 0d 01 c7 49 75 ef
 52 57 8b 52 10 8b 42 3c 01 d0 8b 40 78 85 c0 74 4c
 01 d0 50 8b 58 20 8b 48 18 01 d3 85 c9 74 3c
@@ -83,6 +83,8 @@ jq -r '[.[] | select(.type == "function" and .cyclomatic_complexity > 32)]'
 jq -r '[.[] | select(.bytes_entropy > 7)]'
 # Output all trait strings only
 js -r '.[] | .trait'
+# Output only trait hashes
+js -r '.[] | .trait_sha256'
 ```
 
 You can also use the switch `--pretty` to output `json` to identify more properies to query.
