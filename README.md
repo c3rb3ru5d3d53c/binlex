@@ -157,6 +157,7 @@ Trait files will contain a list of traits ordered by size and use the sha256 of 
 ```
 
 # Tips
+- Does not support PE files that are VB6 or .NET if you run against these you will get errors
 - Don't mix packed and unpacked malware or you will taint your dataset (seen this in academics all the time)
 - Verify the samples you are collecting into a group using skilled analysts
 - These traits are best used with a hybrid approach (supervised)
