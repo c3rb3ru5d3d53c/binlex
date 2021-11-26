@@ -99,9 +99,9 @@ jq -r '[.[] | select(.type == "function" and .cyclomatic_complexity > 32)]'
 # Traits where bytes have high entropy
 jq -r '[.[] | select(.bytes_entropy > 7)]'
 # Output all trait strings only
-js -r '.[] | .trait'
+jq -r '.[] | .trait'
 # Output only trait hashes
-js -r '.[] | .trait_sha256'
+jq -r '.[] | .trait_sha256'
 ```
 
 You can also use the switch `--pretty` to output `json` to identify more properies to query.
