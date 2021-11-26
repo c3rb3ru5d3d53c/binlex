@@ -118,11 +118,17 @@ class Decompiler{
             for (int i = index; i < bytes.length(); i = i + 3){
                 bytes.replace(i, 2, "??");
             }
-            // if (cont == true){
-            //     bytes = bytes + " ";
-            // }
             return bytes;
         }
+
+        string wildcard_all(string bytes){
+            bytes = rtrim(bytes);
+            for (int i = 0; i < bytes.length(); i = i + 3){
+                bytes.replace(i, 2, "??");
+            }
+            return bytes + " ";
+        }
+
         json GetTraits(){
             json result;
             for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
@@ -366,6 +372,7 @@ class Decompiler{
                         wildcard_insn = true;
                         break;
                 }
+
                 // Parse Operands
                 for (int j = 0; j < insn->detail->x86.op_count; j++){
                     cs_x86_op operand = insn->detail->x86.operands[j];
@@ -394,7 +401,11 @@ class Decompiler{
                             break;
                     }
                 }
-                if (o_trait.length() > 0){
+                if (wildcard_insn == true){
+                    b_trait = b_trait + wildcard_all(hexdump_be(insn->bytes, insn->size, false));
+                    f_trait = f_trait + wildcard_all(hexdump_be(insn->bytes, insn->size, false));
+                    wildcard_insn = false;
+                } else if (o_trait.length() > 0){
                     o_trait = rtrim(o_trait);
                     b_trait = b_trait + o_trait + " ";
                     f_trait = f_trait + o_trait + " ";
