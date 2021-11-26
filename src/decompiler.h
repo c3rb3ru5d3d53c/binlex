@@ -173,9 +173,9 @@ class Decompiler{
             string b_bytes;
             string b_trait;
             bool disasm = false;
+            string o_trait;
             cs_insn *insn = cs_malloc(handle);
             while (true){
-                bool append_trait = false;
                 bool wildcard_insn = false;
                 disasm = cs_disasm_iter(handle, &code, &code_size, &pc, insn);
                 if (disasm == false && pc >= data_size){
@@ -193,6 +193,7 @@ class Decompiler{
                     f_edges = 0;
                     f_insn_count = 0;
                     b_count = 0;
+                    o_trait.clear();
                     if (b_bytes.length() > 0){
                         goto collect_block;
                     }
@@ -365,22 +366,40 @@ class Decompiler{
                         wildcard_insn = true;
                         break;
                 }
-                //Parse Operands
+                // Parse Operands
                 for (int j = 0; j < insn->detail->x86.op_count; j++){
                     cs_x86_op operand = insn->detail->x86.operands[j];
                     switch(operand.type){
                         case X86_OP_MEM:
-                            if (operand.mem.disp != 0){
-                                b_trait = b_trait + wildcard_bytes(hexdump_be(insn->bytes, insn->size, false), hexdump_mem_disp(operand.mem.disp)) + " ";
-                                f_trait = f_trait + wildcard_bytes(hexdump_be(insn->bytes, insn->size, false), hexdump_mem_disp(operand.mem.disp)) + " ";
-                                append_trait = true;
+                            // Wildcard Memory Operands
+                            {
+                                if (operand.mem.disp != 0){
+                                    o_trait = wildcard_bytes(hexdump_be(insn->bytes, insn->size, false),
+                                    hexdump_mem_disp(operand.mem.disp));
+                                }
+                                break;
                             }
-                            break;
+
+                        case X86_OP_IMM:
+                            // Wildcard Immutable Operands / Scalars
+                            {
+                                string imm = hexdump_mem_disp(operand.imm);
+                                string instr = hexdump_be(insn->bytes, insn->size, false);
+                                if (imm.length() > 0){
+                                    o_trait = wildcard_bytes(instr, imm);
+                                }
+                                break;
+                            }
                         default:
                             break;
                     }
                 }
-                if (append_trait == false){
+                if (o_trait.length() > 0){
+                    o_trait = rtrim(o_trait);
+                    b_trait = b_trait + o_trait + " ";
+                    f_trait = f_trait + o_trait + " ";
+                    o_trait.clear();
+                } else {
                     b_trait = b_trait + hexdump_be(insn->bytes, insn->size, false);
                     f_trait = f_trait + hexdump_be(insn->bytes, insn->size, false);
                 }
