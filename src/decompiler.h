@@ -371,6 +371,13 @@ class Decompiler{
                     case X86_INS_NOP:
                         wildcard_insn = true;
                         break;
+                    case X86_INS_INVALID:
+                        b_end = true;
+                        f_end = true;
+                        wildcard_insn = true;
+                        break;
+                    default:
+                        break;
                 }
 
                 // Parse Operands
