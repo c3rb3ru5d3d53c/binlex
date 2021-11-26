@@ -10,7 +10,7 @@ Most projects attempting this use Python to generate traits, but it's slow. When
 
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=hgz5gZB3DxE">
+  <a href="https://www.youtube.com/watch?v=hgz5gZB3DxE" target="_blank">
     <img src="https://img.youtube.com/vi/hgz5gZB3DxE/0.jpg" alt="Introduction Video">
   </a>
 </p>
