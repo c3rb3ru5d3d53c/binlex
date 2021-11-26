@@ -8,7 +8,13 @@ Most projects attempting this use Python to generate traits, but it's slow. When
 
 # Introduction Video
 
-[![Introduction Video](https://img.youtube.com/vi/hgz5gZB3DxE/0.jpg)](https://www.youtube.com/watch?v=hgz5gZB3DxE)
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=hgz5gZB3DxE">
+    <img src="https://img.youtube.com/vi/hgz5gZB3DxE/0.jpg" alt="Introduction Video">
+  </a>
+</p>
+
 
 Get slides [here](docs/oalabs.pdf).
 
