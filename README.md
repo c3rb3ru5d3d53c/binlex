@@ -6,6 +6,12 @@ The purpose of `binlex` is to extract basic blocks and functions as traits from 
 
 Most projects attempting this use Python to generate traits, but it's slow. When working with a lot of malware binaries, it is much better to use a faster compiled language like C++.
 
+# Introduction Video
+
+[![Introduction Video](https://img.youtube.com/vi/hgz5gZB3DxE/0.jpg)](https://www.youtube.com/watch?v=hgz5gZB3DxE)
+
+Get slides [here](docs/oalabs.pdf).
+
 # Use Cases
 - YARA Signature Creation/Automation
 - Identifying Code-Reuse
