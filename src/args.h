@@ -60,7 +60,7 @@ class Args{
             }
         }
     public:
-        char version[7]      = "v1.1.0";
+        char version[7] = "v1.1.0";
         const char *modes[ARGS_MODE_COUNT] = {"elf:x86", "elf:x86_64", "pe:x86", "pe:x86_64", "raw:x86", "raw:x86_64", "raw:cil"};
         struct{
             char *input;
@@ -120,10 +120,6 @@ class Args{
                     strcmp(argv[i], (char *)"--input") == 0){
                     options.input = argv[i+1];
                     set_io_type(options.input);
-                }
-                if (strcmp(argv[i], (char *)"-t") == 0 ||
-                    strcmp(argv[i], (char *)"--threads") == 0){
-                    options.threads = atoi(argv[i+1]);
                 }
                 if (strcmp(argv[i], (char *)"-p") == 0 ||
                     strcmp(argv[i], (char *)"--pretty") == 0){
