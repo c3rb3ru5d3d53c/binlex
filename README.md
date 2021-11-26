@@ -46,7 +46,7 @@ binlex -m elf:x86 -i tests/elf/elf.x86
 **NOTE:**
 - ZIP files in the `tests/` directory can be extracted using the password `infected`
 
-# Usage
+# Basic Usage
 
 ```text
 binlex v1.1.0 - A Binary Genetic Traits Lexer
@@ -72,7 +72,7 @@ Author: @c3rb3ru5d3d53c
 
 __NOTE:__ The `raw` formats can be used on shellcode
 
-**Advanced Usage:**
+# Advanced Usage
 
 If you are hunting using `binlex` you can use `jq` to your advantage for advanced searches.
 
@@ -162,18 +162,34 @@ Binlex is designed to do one thing and one thing only, extract genetic traits fr
 Again, **it's up to you to implement your own algorithms for detection based on the genetic traits you extract**.
 
 # Trait Format
+
 Traits will contain binary code represented in hexadecimal form and will use `??` as wild cards for memory operands or other operands subject to change.
 
-Trait files will contain a list of traits ordered by size and use the sha256 of the sample as the file name.
+They will also contain additional properties about the trait including its `offset`, `edges`, `blocks`, `cyclomatic_complexity`, `average_instruction_per_block`, `bytes`, `trait`, `trait_sha256`, `bytes_sha256`, `trait_entropy`, `bytes_entropy`, `type`, `size`, and `instructions`.
 
 ```
-# Example Trait File
-12 34 56 ?? ?? 11 12 13
-14 15 16 17 18 ?? ?? 21 22 23
-# ... More traits to follow
+[
+  {
+    "average_instructions_per_block": 29,
+    "blocks": 1,
+    "bytes": "ae 32 c3 32 1a 33 25 34 85 39 ae 3b b4 3b c8 3b 35 3c 3a 3c 6b 3c 71 3c 85 3c aa 3d b0 3d 6a 3e a5 3e b8 3e fd 3e 38 3f 4b 3f 87 3f 00 20 00 00 58 00 00 00 4f 30 aa 30 01 31 1d 31 ac 31 d6 31 e5 31 f5 31 1c 32 31 32 75 34",
+    "bytes_entropy": 5.070523738861084,
+    "bytes_sha256": "67a966fe573ef678feaea6229271bb374304b418fe63f464b71af1fbe2a87f37",
+    "cyclomatic_complexity": 3,
+    "edges": 2,
+    "instructions": 29,
+    "offset": 11589,
+    "size": 74,
+    "trait": "ae 32 c3 32 1a 33 25 ?? ?? ?? ?? 3b b4 3b ?? ?? ?? ?? 3a 3c 6b 3c 71 3c 85 3c aa 3d b0 3d 6a 3e a5 3e b8 3e fd 3e 38 3f 4b 3f 87 3f 00 20 00 00 58 00 00 00 4f ?? aa 30 01 31 1d ?? ?? ?? ?? 31 e5 31 f5 31 1c 32 31 32 75 34",
+    "trait_entropy": 4.9164042472839355,
+    "trait_sha256": "a00fcb2b23a916192990665d8a5f53b2adfa74ec98991277e571542aee94c3a5",
+    "type": "block"
+  }
+]
 ```
 
 # Tips
+- If you are hunting be sure to use `jq` to improve your searches
 - Does not support PE files that are VB6 or .NET if you run against these you will get errors
 - Don't mix packed and unpacked malware or you will taint your dataset (seen this in academics all the time)
 - Verify the samples you are collecting into a group using skilled analysts
