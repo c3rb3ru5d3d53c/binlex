@@ -1,20 +1,24 @@
 # binlex
 
-<h3>A Genetic Binary Trait Lexer Library and Utility</h3>
+<h2>A Genetic Binary Trait Lexer Library and Utility</h2>
 
-The purpose of `binlex` is to extract basic blocks and functions as traits from binaries.
+The purpose of `binlex` is to extract basic blocks and functions as traits from binaries for malware research, hunting and detection.
 
-Most projects attempting this use Python to generate traits, but it's slow. When working with a lot of malware binaries, it is much better to use a faster compiled language like C++.
+Most projects attempting this use Python to generate traits, but it is very slow.
+
+The design philophy behind `binlex` is it to keep it simple and extensable.
+
+The simple command-line interface allows malware researchers and analysts to hunt traits across hundreds or thousands of potentially similar malware saving time and money in production environments.
+
+While the C++ API allows developers to get creative with their own detection solutions.
 
 # Introduction Video
-
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=hgz5gZB3DxE" target="_blank">
     <img src="https://img.youtube.com/vi/hgz5gZB3DxE/0.jpg" alt="Introduction Video">
   </a>
 </p>
-
 
 Get slides [here](docs/oalabs.pdf).
 
