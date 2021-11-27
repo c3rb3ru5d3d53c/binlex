@@ -26,6 +26,7 @@ using namespace std;
 using json = nlohmann::json;
 
 // Refactored Decompiler C++
+// Should be more arch agnostic
 
 class DecompilerREV{
     private:
@@ -288,7 +289,6 @@ class DecompilerREV{
             AppendBytes(insn->bytes, insn->size, index);
             o_trait.clear();
         }
-
         uint Decompile(void *data, size_t data_size, size_t data_offset, uint index){
             sections[index].pc = 0;
             sections[index].data = data;
