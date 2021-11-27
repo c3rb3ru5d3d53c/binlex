@@ -72,8 +72,32 @@ class DecompilerREV{
         cs_err status;
         struct Section sections[DECOMPILER_REV_MAX_SECTIONS];
         DecompilerREV(){
+            Cleanup();
+        }
+        void Cleanup(){
             for (int i = 0; i < DECOMPILER_REV_MAX_SECTIONS; i++){
+                sections[i].traits.clear();
+                sections[i].offset = 0;
                 sections[i].pc = 0;
+                sections[i].code_size = 0;
+                sections[i].data_size = 0;
+                sections[i].data_offset = 0;
+                sections[i].data = NULL;
+                sections[i].code = NULL;
+                sections[i].b_edges = 0;
+                sections[i].f_edges = 0;
+                sections[i].b_end = false;
+                sections[i].f_end = false;
+                sections[i].b_count = 0;
+                sections[i].b_insn_count = 0;
+                sections[i].f_insn_count = 0;
+                sections[i].b_trait.clear();
+                sections[i].b_bytes.clear();
+                sections[i].f_trait.clear();
+                sections[i].f_bytes.clear();
+                sections[i].blocks.clear();
+                sections[i].functions.clear();
+                sections[i].visited.clear();
             }
         }
         bool Setup(cs_arch arch, cs_mode mode){
@@ -138,6 +162,7 @@ class DecompilerREV{
         }
         void AppendBytes(void *data, size_t data_size, uint index){
             sections[index].b_bytes = sections[index].b_bytes + HexdumpBE(data, data_size) + " ";
+            sections[index].f_bytes = sections[index].f_bytes + HexdumpBE(data, data_size) + " ";
         }
         void AppendTrait(string trait, uint index){
             sections[index].b_trait = sections[index].b_trait + trait + " ";
@@ -172,7 +197,7 @@ class DecompilerREV{
             for (int i = 0; i < size; i++){
                 bytes << hex << setfill('0') << setw(2) << (unsigned uint32_t)local_pc[i] << " ";
             }
-            return bytes.str();
+            return TrimRight(bytes.str());
         }
         string HexdumpMemDisp(uint64_t disp){
             stringstream bytes;
@@ -285,7 +310,7 @@ class DecompilerREV{
                         break;
                 }
             }
-            AppendTrait(o_trait, index);
+            AppendTrait(TrimRight(o_trait), index);
             AppendBytes(insn->bytes, insn->size, index);
             o_trait.clear();
         }
@@ -306,165 +331,195 @@ class DecompilerREV{
                     AppendBytes(sections[index].data, 1, index);
                     continue;
                 }
-                switch(insn->id){
-                    case X86_INS_JMP:
-                        AddEdges(1, index);
-                        CountBlock(index);
-                        AppendOperandsTraitBytes(insn, true, index);
-                        CountAllInsn(index);
-                        continue;
-                    case X86_INS_JNE:
-                        AddEdges(2, index);
-                        CountBlock(index);
-                        AppendOperandsTraitBytes(insn, true, index);
-                        CountAllInsn(index);
-                        continue;
-                    case X86_INS_JNO:
-                        AddEdges(2, index);
-                        CountBlock(index);
-                        AppendOperandsTraitBytes(insn, true, index);\
-                        CountAllInsn(index);
-                        continue;
-                    case X86_INS_JNP:
-                        AddEdges(2, index);
-                        CountBlock(index);
-                        AppendOperandsTraitBytes(insn, true, index);
-                        CountAllInsn(index);
-                        continue;
-                    case X86_INS_JL:
-                        AddEdges(2, index);
-                        CountBlock(index);
-                        AppendOperandsTraitBytes(insn, true, index);
-                        CountAllInsn(index);
-                        continue;
-                    case X86_INS_JLE:
-                        AddEdges(2, index);
-                        CountBlock(index);
-                        AppendOperandsTraitBytes(insn, true, index);
-                        CountAllInsn(index);
-                        continue;
-                    case X86_INS_JG:
-                        AddEdges(2, index);
-                        CountBlock(index);
-                        AppendOperandsTraitBytes(insn, true, index);
-                        CountAllInsn(index);
-                        continue;
-                    case X86_INS_JGE:
-                        AddEdges(2, index);
-                        CountBlock(index);
-                        AppendOperandsTraitBytes(insn, true, index);
-                        CountAllInsn(index);
-                        continue;
-                    case X86_INS_JE:
-                        AddEdges(2, index);
-                        CountBlock(index);
-                        AppendOperandsTraitBytes(insn, true, index);
-                        CountAllInsn(index);
-                        continue;
-                    case X86_INS_JECXZ:
-                        AddEdges(2, index);
-                        CountBlock(index);
-                        AppendOperandsTraitBytes(insn, true, index);
-                        CountAllInsn(index);
-                        continue;
-                    case X86_INS_JCXZ:
-                        AddEdges(2, index);
-                        CountBlock(index);
-                        AppendOperandsTraitBytes(insn, true, index);
-                        CountAllInsn(index);
-                        continue;
-                    case X86_INS_JB:
-                        AddEdges(2, index);
-                        CountBlock(index);
-                        AppendOperandsTraitBytes(insn, true, index);
-                        CountAllInsn(index);
-                        continue;
-                    case X86_INS_JBE:
-                        AddEdges(2, index);
-                        CountBlock(index);
-                        AppendOperandsTraitBytes(insn, true, index);
-                        CountAllInsn(index);
-                        continue;
-                    case X86_INS_JA:
-                        AddEdges(2, index);
-                        CountBlock(index);
-                        AppendOperandsTraitBytes(insn, true, index);
-                        CountAllInsn(index);
-                        continue;
-                    case X86_INS_JAE:
-                        AddEdges(2, index);
-                        CountBlock(index);
-                        AppendOperandsTraitBytes(insn, true, index);
-                        CountAllInsn(index);
-                        continue;
-                    case X86_INS_JNS:
-                        AddEdges(2, index);
-                        CountBlock(index);
-                        AppendOperandsTraitBytes(insn, true, index);
-                        CountAllInsn(index);
-                        continue;
-                    case X86_INS_JO:
-                        AddEdges(2, index);
-                        CountBlock(index);
-                        AppendOperandsTraitBytes(insn, true, index);
-                        CountAllInsn(index);
-                        continue;
-                    case X86_INS_JP:
-                        AddEdges(2, index);
-                        CountBlock(index);
-                        AppendOperandsTraitBytes(insn, true, index);
-                        CountAllInsn(index);
-                        continue;
-                    case X86_INS_JRCXZ:
-                        AddEdges(2, index);
-                        CountBlock(index);
-                        AppendOperandsTraitBytes(insn, true, index);
-                        CountAllInsn(index);
-                        continue;
-                    case X86_INS_JS:
-                        AddEdges(2, index);
-                        CountBlock(index);
-                        AppendOperandsTraitBytes(insn, true, index);
-                        CountAllInsn(index);
-                        continue;
-                    case X86_INS_RET:
-                        AppendAllBytes(insn->bytes, insn->size, index);
-                        CountAllInsn(index);
-                        continue;
-                    case X86_INS_RETF:
-                        AppendAllBytes(insn->bytes, insn->size, index);
-                        CountAllInsn(index);
-                        continue;
-                    case X86_INS_RETFQ:
-                        AppendAllBytes(insn->bytes, insn->size, index);
-                        CountAllInsn(index);
-                        continue;
-                    case X86_INS_IRET:
-                        AppendAllBytes(insn->bytes, insn->size, index);
-                        CountAllInsn(index);
-                        continue;
-                    case X86_INS_IRETD:
-                       AppendAllBytes(insn->bytes, insn->size, index);
-                       CountAllInsn(index);
-                        continue;
-                    case X86_INS_IRETQ:
-                        AppendAllBytes(insn->bytes, insn->size, index);
-                        CountAllInsn(index);
-                        continue;
-                    case X86_INS_NOP:
-                        AppendWildcards(insn->size, index);
-                        CountAllInsn(index);
-                        continue;
-                    default:
-                        break;
-                }
-                if (insn->detail->x86.op_count > 0){
-                    AppendOperandsTraitBytes(insn, true, index);
-                } else {
-                    AppendAllBytes(insn->bytes, insn->size, index);
-                }
-                CountAllInsn(index);
+                AppendBytes(insn->bytes, insn->size, index);
+                // switch(insn->id){
+                //     case X86_INS_JMP:
+                //         AddEdges(1, index);
+                //         CountBlock(index);
+                //         AppendOperandsTraitBytes(insn, true, index);
+                //         CountAllInsn(index);
+                //         CollectBlockTrait(index);
+                //         continue;
+                //     case X86_INS_JNE:
+                //         AddEdges(2, index);
+                //         CountBlock(index);
+                //         AppendOperandsTraitBytes(insn, true, index);
+                //         CountAllInsn(index);
+                //         CollectBlockTrait(index);
+                //         continue;
+                //     case X86_INS_JNO:
+                //         AddEdges(2, index);
+                //         CountBlock(index);
+                //         AppendOperandsTraitBytes(insn, true, index);\
+                //         CountAllInsn(index);
+                //         CollectBlockTrait(index);
+                //         continue;
+                //     case X86_INS_JNP:
+                //         AddEdges(2, index);
+                //         CountBlock(index);
+                //         AppendOperandsTraitBytes(insn, true, index);
+                //         CountAllInsn(index);
+                //         CollectBlockTrait(index);
+                //         continue;
+                //     case X86_INS_JL:
+                //         AddEdges(2, index);
+                //         CountBlock(index);
+                //         AppendOperandsTraitBytes(insn, true, index);
+                //         CountAllInsn(index);
+                //         CollectBlockTrait(index);
+                //         continue;
+                //     case X86_INS_JLE:
+                //         AddEdges(2, index);
+                //         CountBlock(index);
+                //         AppendOperandsTraitBytes(insn, true, index);
+                //         CountAllInsn(index);
+                //         CollectBlockTrait(index);
+                //         continue;
+                //     case X86_INS_JG:
+                //         AddEdges(2, index);
+                //         CountBlock(index);
+                //         AppendOperandsTraitBytes(insn, true, index);
+                //         CountAllInsn(index);
+                //         CollectBlockTrait(index);
+                //         continue;
+                //     case X86_INS_JGE:
+                //         AddEdges(2, index);
+                //         CountBlock(index);
+                //         AppendOperandsTraitBytes(insn, true, index);
+                //         CountAllInsn(index);
+                //         CollectBlockTrait(index);
+                //         continue;
+                //     case X86_INS_JE:
+                //         AddEdges(2, index);
+                //         CountBlock(index);
+                //         AppendOperandsTraitBytes(insn, true, index);
+                //         CountAllInsn(index);
+                //         CollectBlockTrait(index);
+                //         continue;
+                //     case X86_INS_JECXZ:
+                //         AddEdges(2, index);
+                //         CountBlock(index);
+                //         AppendOperandsTraitBytes(insn, true, index);
+                //         CountAllInsn(index);
+                //         CollectBlockTrait(index);
+                //         continue;
+                //     case X86_INS_JCXZ:
+                //         AddEdges(2, index);
+                //         CountBlock(index);
+                //         AppendOperandsTraitBytes(insn, true, index);
+                //         CountAllInsn(index);
+                //         CollectBlockTrait(index);
+                //         continue;
+                //     case X86_INS_JB:
+                //         AddEdges(2, index);
+                //         CountBlock(index);
+                //         AppendOperandsTraitBytes(insn, true, index);
+                //         CountAllInsn(index);
+                //         CollectBlockTrait(index);
+                //         continue;
+                //     case X86_INS_JBE:
+                //         AddEdges(2, index);
+                //         CountBlock(index);
+                //         AppendOperandsTraitBytes(insn, true, index);
+                //         CountAllInsn(index);
+                //         CollectBlockTrait(index);
+                //         continue;
+                //     case X86_INS_JA:
+                //         AddEdges(2, index);
+                //         CountBlock(index);
+                //         AppendOperandsTraitBytes(insn, true, index);
+                //         CountAllInsn(index);
+                //         CollectBlockTrait(index);
+                //         continue;
+                //     case X86_INS_JAE:
+                //         AddEdges(2, index);
+                //         CountBlock(index);
+                //         AppendOperandsTraitBytes(insn, true, index);
+                //         CountAllInsn(index);
+                //         CollectBlockTrait(index);
+                //         continue;
+                //     case X86_INS_JNS:
+                //         AddEdges(2, index);
+                //         CountBlock(index);
+                //         AppendOperandsTraitBytes(insn, true, index);
+                //         CountAllInsn(index);
+                //         CollectBlockTrait(index);
+                //         continue;
+                //     case X86_INS_JO:
+                //         AddEdges(2, index);
+                //         CountBlock(index);
+                //         AppendOperandsTraitBytes(insn, true, index);
+                //         CountAllInsn(index);
+                //         CollectBlockTrait(index);
+                //         continue;
+                //     case X86_INS_JP:
+                //         AddEdges(2, index);
+                //         CountBlock(index);
+                //         AppendOperandsTraitBytes(insn, true, index);
+                //         CountAllInsn(index);
+                //         CollectBlockTrait(index);
+                //         continue;
+                //     case X86_INS_JRCXZ:
+                //         AddEdges(2, index);
+                //         CountBlock(index);
+                //         AppendOperandsTraitBytes(insn, true, index);
+                //         CountAllInsn(index);
+                //         CollectBlockTrait(index);
+                //         continue;
+                //     case X86_INS_JS:
+                //         AddEdges(2, index);
+                //         CountBlock(index);
+                //         AppendOperandsTraitBytes(insn, true, index);
+                //         CountAllInsn(index);
+                //         CollectBlockTrait(index);
+                //         continue;
+                //     case X86_INS_RET:
+                //         AppendAllBytes(insn->bytes, insn->size, index);
+                //         CountAllInsn(index);
+                //         CollectFunctionTrait(index);
+                //         continue;
+                //     case X86_INS_RETF:
+                //         AppendAllBytes(insn->bytes, insn->size, index);
+                //         CountAllInsn(index);
+                //         CollectFunctionTrait(index);
+                //         continue;
+                //     case X86_INS_RETFQ:
+                //         AppendAllBytes(insn->bytes, insn->size, index);
+                //         CountAllInsn(index);
+                //         CollectFunctionTrait(index);
+                //         continue;
+                //     case X86_INS_IRET:
+                //         AppendAllBytes(insn->bytes, insn->size, index);
+                //         CountAllInsn(index);
+                //         CollectFunctionTrait(index);
+                //         continue;
+                //     case X86_INS_IRETD:
+                //        AppendAllBytes(insn->bytes, insn->size, index);
+                //        CountAllInsn(index);
+                //        CollectFunctionTrait(index);
+                //         continue;
+                //     case X86_INS_IRETQ:
+                //         AppendAllBytes(insn->bytes, insn->size, index);
+                //         CountAllInsn(index);
+                //         CollectFunctionTrait(index);
+                //         continue;
+                //     case X86_INS_NOP:
+                //         AppendWildcards(insn->size, index);
+                //         CountAllInsn(index);
+                //         CollectFunctionTrait(index);
+                //         continue;
+                //     default:
+                //         break;
+                // }
+                // if (insn->detail->x86.op_count > 0){
+                //     AppendOperandsTraitBytes(insn, true, index);
+                // } else {
+                //     AppendAllBytes(insn->bytes, insn->size, index);
+                // }
+                // CountAllInsn(index);
+                // printf("pc: %ld, %ld\n", sections[index].pc, sections[index].data_size);
             }
+            cout << sections[index].b_bytes << endl;
             cs_free(insn, 1);
             return sections[index].pc;
         }
@@ -491,9 +546,7 @@ class DecompilerREV{
             fclose(fd);
         }
         ~DecompilerREV(){
-            for (int i = 0; i < DECOMPILER_REV_MAX_SECTIONS; i++){
-                sections[i].pc = 0;
-            }
+            //Cleanup();
             cs_close(&handle);
         }
 };

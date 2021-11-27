@@ -126,14 +126,14 @@ int main(int argc, char **argv){
         args.options.io_type == ARGS_IO_TYPE_FILE){
         Raw rawx86;
         rawx86.ReadFile(args.options.input, 0);
-        Decompiler decompiler;
+        DecompilerREV decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
-        decompiler.x86_64(rawx86.sections[0].data, rawx86.sections[0].size, rawx86.sections[0].offset, 0);
-        if (args.options.output == NULL){
-            decompiler.PrintTraits(args.options.pretty);
-        } else {
-            decompiler.WriteTraits(args.options.output, args.options.pretty);
-        }
+        decompiler.Decompile(rawx86.sections[0].data, rawx86.sections[0].size, rawx86.sections[0].offset, 0);
+        // if (args.options.output == NULL){
+        //     decompiler.PrintTraits(args.options.pretty);
+        // } else {
+        //     decompiler.WriteTraits(args.options.output, args.options.pretty);
+        // }
         return 0;
     }
     if (strcmp(args.options.mode, (char *)"raw:x86_64") == 0 &&
