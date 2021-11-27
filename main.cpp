@@ -9,6 +9,7 @@
 #include "src/raw.h"
 #include "src/macho.h"
 #include "src/decompiler.h"
+#include "src/decompiler_rev.h"
 #include "src/args.h"
 #include "src/cil.h"
 #include "src/json.h"

@@ -12,24 +12,22 @@
 #include <capstone/capstone.h>
 #include "json.h"
 
-#ifndef DECOMPILER_H
-#define DECOMPILER_H
+#ifndef DECOMPILER_REV_H
+#define DECOMPILER_REV_H
 
-#define DECOMPILER_TYPE_FUNCS 0
-#define DECOMPILER_TYPE_BLCKS 1
-#define DECOMPILER_TYPE_UNSET 2
-#define DECOMPILER_TYPE_ALL   3
+#define DECOMPILER_REV_TYPE_FUNCS 0
+#define DECOMPILER_REV_TYPE_BLCKS 1
+#define DECOMPILER_REV_TYPE_UNSET 2
+#define DECOMPILER_REV_TYPE_ALL   3
 
-#define DECOMPILER_MAX_INSN 0xfff
-
-#define DECOMPILER_MAX_SECTIONS 256
+#define DECOMPILER_REV_MAX_SECTIONS 256
 
 using namespace std;
 using json = nlohmann::json;
 
-// Needs Refactoring
+// Refactored Decompiler C++
 
-class Decompiler{
+class DecompilerREV{
     private:
         struct Section {
             json traits;
@@ -37,24 +35,27 @@ class Decompiler{
             uint64_t pc;
             size_t code_size;
             size_t data_size;
+            size_t data_offset;
             void *data;
             const uint8_t *code;
             uint b_edges;
             uint f_edges;
             bool b_end;
             bool f_end;
+            uint b_count;
             uint b_insn_count;
             uint f_insn_count;
             string b_trait;
             string b_bytes;
             string f_trait;
             string f_bytes;
-            vector<uint64_t> b_visited;
-            vector<uint64_t> f_visited;
+            vector<uint64_t> blocks;
+            vector<uint64_t> functions;
+            vector<uint64_t> visited;
         };
         json GetTraits(){
             json result;
-            for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
+            for (int i = 0; i < DECOMPILER_REV_MAX_SECTIONS; i++){
                 if (sections[i].traits.is_null() == false){
                     if (sections[i].traits.is_null() == false){
                         for (int j = 0; j < sections[i].traits.size(); j++){
@@ -68,9 +69,9 @@ class Decompiler{
     public:
         csh handle;
         cs_err status;
-        struct Section sections[DECOMPILER_MAX_SECTIONS];
-        Decompiler(){
-            for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
+        struct Section sections[DECOMPILER_REV_MAX_SECTIONS];
+        DecompilerREV(){
+            for (int i = 0; i < DECOMPILER_REV_MAX_SECTIONS; i++){
                 sections[i].pc = 0;
             }
         }
@@ -92,20 +93,41 @@ class Decompiler{
             sections[index].code = (uint8_t *)sections[index].data;
         }
         void ClearBlock(uint index){
-            sections[index].b_edges = 0;
-            sections[index].b_count = 0;
-            sections[index].b_end = false;
-            sections[index].b_insn_count = 0;
             sections[index].b_trait.clear();
             sections[index].b_bytes.clear();
+            sections[index].b_edges = 0;
+            sections[index].b_insn_count = 0;
+            sections[index].b_end = false;
+        }
+        void CollectBlockTrait(uint index){
+            json trait;
+            trait["type"] = "block";
+            trait["trait"] = TrimRight(sections[index].b_trait);
+            trait["edges"] = sections[index].b_edges;
+            trait["bytes"] = TrimRight(sections[index].b_bytes);
+            trait["size"] = GetByteSize(sections[index].b_bytes);
+            trait["instructions"] = sections[index].b_insn_count;
+            trait["bytes_entropy"] = Entropy(sections[index].b_bytes);
+            sections[index].traits.push_back(trait);
+            ClearBlock(index);
+        }
+        void CollectFunctionTrait(uint index){
+            json trait;
+            trait["type"] = "function";
+            trait["trait"] = TrimRight(sections[index].f_trait);
+            trait["edges"] = sections[index].f_edges;
+            trait["bytes"] = TrimRight(sections[index].f_bytes);
+            trait["size"] = GetByteSize(sections[index].f_bytes);
+            trait["instructions"] = sections[index].f_insn_count;
+            sections[index].traits.push_back(trait);
+            ClearTrait(index);
         }
         void ClearTrait(uint index){
-            sections[index].f_edges = 0;
-            sections[index].f_count = 0;
-            sections[index].f_end = false;
-            sections[index].f_insn_count = 0;
             sections[index].f_trait.clear();
             sections[index].f_bytes.clear();
+            sections[index].f_edges = 0;
+            sections[index].f_insn_count = 0;
+            sections[index].f_end = false;
         }
         void AppendWildcards(uint index, uint count){
             for (int i = 0; i < count; i++){
@@ -114,20 +136,33 @@ class Decompiler{
             }
         }
         void AppendBytes(void *data, size_t data_size, uint index){
-            sections[index].b_bytes = sections[index].b_bytes + HexdumpBE(data, data_size, index) + " ";
+            sections[index].b_bytes = sections[index].b_bytes + HexdumpBE(data, data_size) + " ";
         }
-        void AppendTrait(string trait){
-            sections[index].b_trait = b_trait + trait + " ";
-            sections[index].f_trait = f_trait + trait + " ";
+        void AppendTrait(string trait, uint index){
+            sections[index].b_trait = sections[index].b_trait + trait + " ";
+            sections[index].f_trait = sections[index].f_trait + trait + " ";
+        }
+        void AppendTraitBytes(void *data, size_t data_size, uint index){
+            sections[index].b_trait = sections[index].b_trait + HexdumpBE(data, data_size) + " ";
+            sections[index].f_trait = sections[index].f_trait + HexdumpBE(data, data_size) + " ";
+        }
+        void AppendAllBytes(void *data, size_t data_size, uint index){
+            AppendTraitBytes(data, data_size, index);
+            AppendBytes(data, data_size, index);
         }
         void CountBlock(uint index){
             sections[index].b_count++;
             sections[index].b_end = true;
         }
-        void CountFunction(uint index){
-            sections[index].f_count++;
-            sections[index].f_end = true;
-            CountBlock(index);
+        void CountBlockInsn(uint index){
+            sections[index].b_insn_count++;
+        }
+        void CountFunctionInsn(uint index){
+            sections[index].f_insn_count++;
+        }
+        void CountAllInsn(uint index){
+            CountBlockInsn(index);
+            CountFunctionInsn(index);
         }
         string HexdumpBE(const void *data, size_t size){
             stringstream bytes;
@@ -149,8 +184,8 @@ class Decompiler{
             return TrimRight(bytes.str());
         }
         void AddEdges(uint count, uint index){
-            sections[i].b_edges = sections[i].b_edges + count;
-            sections[i].f_edges = sections[i].f_edges + count;
+            sections[index].b_edges = sections[index].b_edges + count;
+            sections[index].f_edges = sections[index].f_edges + count;
         }
         string AppendWildcardBytes(string bytes, string sub_bytes){
             return WildcardBytes(bytes, sub_bytes) + " ";
@@ -181,10 +216,47 @@ class Decompiler{
             s.erase(end_pos, s.end());
             return s;
         }
+        string RemoveWildcards(string s){
+            string::iterator end_pos = remove(s.begin(), s.end(), '?');
+            s.erase(end_pos, s.end());
+            return s;
+        }
         uint GetByteSize(string s){
             return RemoveSpaces(s).length() / 2;
         }
-        void AppendWildcardOperands(cs_insn insn, bool conditional, uint index){
+        string GetTraitSHA256(const char *trait){
+            unsigned char hash[SHA256_DIGEST_LENGTH];
+            SHA256_CTX ctx;
+            SHA256_Init(&ctx);
+            SHA256_Update(&ctx, trait, strlen(trait));
+            SHA256_Final(hash, &ctx);
+            string bytes = HexdumpBE(&hash, SHA256_DIGEST_LENGTH);
+            return RemoveSpaces(bytes);
+        }
+        float Entropy(string trait){
+            vector<char> bytes = TraitToChar(trait);
+            float result = 0;
+            map<char,int> frequencies;
+            for (char c : bytes){
+                frequencies[c]++;
+            }
+            for (pair<char,int> p : frequencies) {
+                float freq = static_cast<float>( p.second ) / bytes.size();
+                result -= freq * log2(freq) ;
+            }
+            return result;
+        }
+        vector<char> TraitToChar(string trait){
+            trait = RemoveSpaces(RemoveWildcards(trait));
+            vector<char> bytes;
+            for (int i = 0; i < trait.length(); i = i + 2){
+                const char *s_byte = trait.substr(i, 2).c_str();
+                unsigned char byte = (char)strtol(s_byte, NULL, 16);
+                bytes.push_back(byte);
+            }
+            return bytes;
+        }
+        void AppendOperandsTraitBytes(cs_insn *insn, bool conditional, uint index){
             string o_trait;
             for (int j = 0; j < insn->detail->x86.op_count; j++){
                 cs_x86_op operand = insn->detail->x86.operands[j];
@@ -201,8 +273,8 @@ class Decompiler{
                     case X86_OP_IMM:
                         // Wildcard Immutable Operands / Scalars
                         {
-                            string imm = hexdump_mem_disp(operand.imm);
-                            string instr = hexdump_be(insn->bytes, insn->size, false);
+                            string imm = HexdumpMemDisp(operand.imm);
+                            string instr = HexdumpBE(insn->bytes, insn->size);
                             if (imm.length() > 0){
                                 o_trait = WildcardBytes(instr, imm);
                             }
@@ -212,11 +284,13 @@ class Decompiler{
                         break;
                 }
             }
-            AppendTrait(o_trait);
+            AppendTrait(o_trait, index);
+            AppendBytes(insn->bytes, insn->size, index);
             o_trait.clear();
         }
 
-        int Decompile(void *data, size_t data_size, size_t data_offset, uint index){
+        uint Decompile(void *data, size_t data_size, size_t data_offset, uint index){
+            sections[index].pc = 0;
             sections[index].data = data;
             sections[index].data_size = data_size;
             sections[index].data_offset = data_offset;
@@ -226,7 +300,7 @@ class Decompiler{
                 if (sections[index].pc >= data_size){
                     break;
                 }
-                if (cs_disasm_iter(handle, &code, &code_size, &properties[index].pc, insn) == false){
+                if (cs_disasm_iter(handle, &sections[index].code, &sections[index].code_size, &sections[index].pc, insn) == false){
                     Seek(sections[index].pc + 1, index);
                     AppendWildcards(index, 1);
                     AppendBytes(sections[index].data, 1, index);
@@ -235,441 +309,164 @@ class Decompiler{
                 switch(insn->id){
                     case X86_INS_JMP:
                         AddEdges(1, index);
-                        CountBlock();
-                        break;
+                        CountBlock(index);
+                        AppendOperandsTraitBytes(insn, true, index);
+                        CountAllInsn(index);
+                        continue;
                     case X86_INS_JNE:
                         AddEdges(2, index);
-                        CountBlock();
-                        break;
+                        CountBlock(index);
+                        AppendOperandsTraitBytes(insn, true, index);
+                        CountAllInsn(index);
+                        continue;
                     case X86_INS_JNO:
                         AddEdges(2, index);
-                        CountBlock();
-                        break;
+                        CountBlock(index);
+                        AppendOperandsTraitBytes(insn, true, index);\
+                        CountAllInsn(index);
+                        continue;
                     case X86_INS_JNP:
                         AddEdges(2, index);
-                        CountBlock();
-                        break;
+                        CountBlock(index);
+                        AppendOperandsTraitBytes(insn, true, index);
+                        CountAllInsn(index);
+                        continue;
                     case X86_INS_JL:
                         AddEdges(2, index);
-                        CountBlock();
-                        break;
+                        CountBlock(index);
+                        AppendOperandsTraitBytes(insn, true, index);
+                        CountAllInsn(index);
+                        continue;
                     case X86_INS_JLE:
                         AddEdges(2, index);
-                        CountBlock();
-                        break;
+                        CountBlock(index);
+                        AppendOperandsTraitBytes(insn, true, index);
+                        CountAllInsn(index);
+                        continue;
                     case X86_INS_JG:
                         AddEdges(2, index);
-                        CountBlock();
-                        break;
+                        CountBlock(index);
+                        AppendOperandsTraitBytes(insn, true, index);
+                        CountAllInsn(index);
+                        continue;
                     case X86_INS_JGE:
                         AddEdges(2, index);
-                        CountBlock();
-                        break;
+                        CountBlock(index);
+                        AppendOperandsTraitBytes(insn, true, index);
+                        CountAllInsn(index);
+                        continue;
                     case X86_INS_JE:
                         AddEdges(2, index);
-                        CountBlock();
-                        break;
+                        CountBlock(index);
+                        AppendOperandsTraitBytes(insn, true, index);
+                        CountAllInsn(index);
+                        continue;
                     case X86_INS_JECXZ:
                         AddEdges(2, index);
-                        CountBlock();
-                        break;
+                        CountBlock(index);
+                        AppendOperandsTraitBytes(insn, true, index);
+                        CountAllInsn(index);
+                        continue;
                     case X86_INS_JCXZ:
                         AddEdges(2, index);
-                        CountBlock();
-                        break;
+                        CountBlock(index);
+                        AppendOperandsTraitBytes(insn, true, index);
+                        CountAllInsn(index);
+                        continue;
                     case X86_INS_JB:
                         AddEdges(2, index);
-                        CountBlock();
-                        break;
+                        CountBlock(index);
+                        AppendOperandsTraitBytes(insn, true, index);
+                        CountAllInsn(index);
+                        continue;
                     case X86_INS_JBE:
                         AddEdges(2, index);
-                        CountBlock();
-                        break;
+                        CountBlock(index);
+                        AppendOperandsTraitBytes(insn, true, index);
+                        CountAllInsn(index);
+                        continue;
                     case X86_INS_JA:
                         AddEdges(2, index);
-                        CountBlock();
-                        break;
+                        CountBlock(index);
+                        AppendOperandsTraitBytes(insn, true, index);
+                        CountAllInsn(index);
+                        continue;
                     case X86_INS_JAE:
                         AddEdges(2, index);
-                        CountBlock();
-                        break;
+                        CountBlock(index);
+                        AppendOperandsTraitBytes(insn, true, index);
+                        CountAllInsn(index);
+                        continue;
                     case X86_INS_JNS:
                         AddEdges(2, index);
-                        CountBlock();
-                        break;
+                        CountBlock(index);
+                        AppendOperandsTraitBytes(insn, true, index);
+                        CountAllInsn(index);
+                        continue;
                     case X86_INS_JO:
                         AddEdges(2, index);
-                        CountBlock();
-                        break;
+                        CountBlock(index);
+                        AppendOperandsTraitBytes(insn, true, index);
+                        CountAllInsn(index);
+                        continue;
                     case X86_INS_JP:
                         AddEdges(2, index);
-                        CountBlock();
-                        break;
+                        CountBlock(index);
+                        AppendOperandsTraitBytes(insn, true, index);
+                        CountAllInsn(index);
+                        continue;
                     case X86_INS_JRCXZ:
                         AddEdges(2, index);
-                        CountBlock();
-                        break;
+                        CountBlock(index);
+                        AppendOperandsTraitBytes(insn, true, index);
+                        CountAllInsn(index);
+                        continue;
                     case X86_INS_JS:
                         AddEdges(2, index);
-                        CountBlock();
-                        break;
+                        CountBlock(index);
+                        AppendOperandsTraitBytes(insn, true, index);
+                        CountAllInsn(index);
+                        continue;
                     case X86_INS_RET:
-                        CountFunction(index);
-                        break;
+                        AppendAllBytes(insn->bytes, insn->size, index);
+                        CountAllInsn(index);
+                        continue;
                     case X86_INS_RETF:
-                        CountFunction(index);
-                        break;
+                        AppendAllBytes(insn->bytes, insn->size, index);
+                        CountAllInsn(index);
+                        continue;
                     case X86_INS_RETFQ:
-                        CountFunction(index);
-                        break;
+                        AppendAllBytes(insn->bytes, insn->size, index);
+                        CountAllInsn(index);
+                        continue;
                     case X86_INS_IRET:
-                        CountFunction(index);
-                        break;
+                        AppendAllBytes(insn->bytes, insn->size, index);
+                        CountAllInsn(index);
+                        continue;
                     case X86_INS_IRETD:
-                       CountFunction(index);
-                        break;
+                       AppendAllBytes(insn->bytes, insn->size, index);
+                       CountAllInsn(index);
+                        continue;
                     case X86_INS_IRETQ:
-                        CountFunction(index);
-                        break;
+                        AppendAllBytes(insn->bytes, insn->size, index);
+                        CountAllInsn(index);
+                        continue;
                     case X86_INS_NOP:
-                        AppendWildcards(1, index);
+                        AppendWildcards(insn->size, index);
+                        CountAllInsn(index);
                         continue;
                     default:
                         break;
                 }
-            }
-            cs_free(insn, 1);
-            return pc;
-        }
-        int x86_64(void *data, size_t data_size, size_t data_offset, uint index){
-            const uint8_t *code = (uint8_t *)data;
-            json trait;
-            size_t code_size = data_size;
-            uint f_edges = 0;
-            uint b_edges = 0;
-            uint insn_size = 0;
-            bool f_end = false;
-            uint f_count = 0;
-            uint f_insn_count = 0;
-            string f_bytes;
-            string f_trait;
-            bool b_end = false;
-            uint b_count = 0;
-            uint b_insn_count = 0;
-            string b_bytes;
-            string b_trait;
-            bool disasm = false;
-            string o_trait;
-            cs_insn *insn = cs_malloc(handle);
-            while (true){
-                bool wildcard_insn = false;
-                disasm = cs_disasm_iter(handle, &code, &code_size, &pc, insn);
-                if (disasm == false && pc >= data_size){
-                    break;
-                }
-                if (disasm == false && pc < data_size){
-                    // realign code and data for decompiler
-                    pc++;
-                    code_size = data_size - pc + 1;
-                    memmove(data, code+1, code_size);
-                    code = (uint8_t *)data;
-                    f_trait.clear();
-                    f_bytes.clear();
-                    f_end = false;
-                    f_edges = 0;
-                    f_insn_count = 0;
-                    b_count = 0;
-                    o_trait.clear();
-                    if (b_bytes.length() > 0){
-                        goto collect_block;
-                    }
-                    b_trait.clear();
-                    b_bytes.clear();
-                    b_end = false;
-                    b_insn_count = 0;
-                    b_edges = 0;
-                    continue;
-                }
-                switch(insn->id){
-                    case X86_INS_JMP:
-                        // non-conditional
-                        f_edges++;
-                        b_edges++;
-                        b_count++;
-                        b_end = true;
-                        break;
-                    case X86_INS_JNE:
-                        // conditional
-                        f_edges = f_edges + 2;
-                        b_edges = b_edges + 2;
-                        b_count++;
-                        b_end = true;
-                        break;
-                    case X86_INS_JNO:
-                        // conditional
-                        f_edges = f_edges + 2;
-                        b_edges = b_edges + 2;
-                        b_count++;
-                        b_end = true;
-                        break;
-                    case X86_INS_JNP:
-                        // conditional
-                        f_edges = f_edges + 2;
-                        b_edges = b_edges + 2;
-                        b_count++;
-                        b_end = true;
-                        break;
-                    case X86_INS_JL:
-                        // conditional
-                        f_edges = f_edges + 2;
-                        b_edges = b_edges + 2;
-                        b_count++;
-                        b_end = true;
-                        break;
-                    case X86_INS_JLE:
-                        // conditional
-                        f_edges = f_edges + 2;
-                        b_edges = b_edges + 2;
-                        b_count++;
-                        b_end = true;
-                        break;
-                    case X86_INS_JG:
-                        // conditional
-                        f_edges = f_edges + 2;
-                        b_edges = b_edges + 2;
-                        b_count++;
-                        b_end = true;
-                        break;
-                    case X86_INS_JGE:
-                        f_edges = f_edges + 2;
-                        b_edges = b_edges + 2;
-                        b_count++;
-                        b_end = true;
-                        break;
-                    case X86_INS_JE:
-                        f_edges = f_edges + 2;
-                        b_edges = b_edges + 2;
-                        b_count++;
-                        b_end = true;
-                        break;
-                    case X86_INS_JECXZ:
-                        f_edges = f_edges + 2;
-                        b_edges = b_edges + 2;
-                        b_count++;
-                        b_end = true;
-                        break;
-                    case X86_INS_JCXZ:
-                        f_edges = f_edges + 2;
-                        b_edges = b_edges + 2;
-                        b_count++;
-                        b_end = true;
-                        break;
-                    case X86_INS_JB:
-                        f_edges = f_edges + 2;
-                        b_edges = b_edges + 2;
-                        b_count++;
-                        b_end = true;
-                        break;
-                    case X86_INS_JBE:
-                        f_edges = f_edges + 2;
-                        b_edges = b_edges + 2;
-                        b_count++;
-                        b_end = true;
-                        break;
-                    case X86_INS_JA:
-                        f_edges = f_edges + 2;
-                        b_edges = b_edges + 2;
-                        b_count++;
-                        b_end = true;
-                        break;
-                    case X86_INS_JAE:
-                        f_edges = f_edges + 2;
-                        b_edges = b_edges + 2;
-                        b_count++;
-                        b_end = true;
-                        break;
-                    case X86_INS_JNS:
-                        f_edges = f_edges + 2;
-                        b_edges = b_edges + 2;
-                        b_count++;
-                        b_end = true;
-                        break;
-                    case X86_INS_JO:
-                        f_edges = f_edges + 2;
-                        b_edges = b_edges + 2;
-                        b_count++;
-                        b_end = true;
-                        break;
-                    case X86_INS_JP:
-                        f_edges = f_edges + 2;
-                        b_edges = b_edges + 2;
-                        b_count++;
-                        b_end = true;
-                        break;
-                    case X86_INS_JRCXZ:
-                        f_edges = f_edges + 2;
-                        b_edges = b_edges + 2;
-                        b_count++;
-                        b_end = true;
-                        break;
-                    case X86_INS_JS:
-                        f_edges = f_edges + 2;
-                        b_edges = b_edges + 2;
-                        b_count++;
-                        b_end = true;
-                        break;
-                    case X86_INS_RET:
-                        f_count++;
-                        f_end = true;
-                        b_end = true;
-                        break;
-                    case X86_INS_RETF:
-                        f_count++;
-                        f_end = true;
-                        b_end = true;
-                        break;
-                    case X86_INS_RETFQ:
-                        f_count++;
-                        f_end = true;
-                        b_end = true;
-                        break;
-                    case X86_INS_IRET:
-                        f_count++;
-                        f_end = true;
-                        b_end = true;
-                        break;
-                    case X86_INS_IRETD:
-                        f_count++;
-                        f_end = true;
-                        b_end = true;
-                        break;
-                    case X86_INS_IRETQ:
-                        f_count++;
-                        f_end = true;
-                        b_end = true;
-                        break;
-                    case X86_INS_NOP:
-                        wildcard_insn = true;
-                        break;
-                    case X86_INS_INVALID:
-                        b_end = true;
-                        f_end = true;
-                        wildcard_insn = true;
-                        break;
-                    default:
-                        break;
-                }
-
-                // Parse Operands
-                for (int j = 0; j < insn->detail->x86.op_count; j++){
-                    cs_x86_op operand = insn->detail->x86.operands[j];
-                    switch(operand.type){
-                        case X86_OP_MEM:
-                            // Wildcard Memory Operands
-                            {
-                                if (operand.mem.disp != 0){
-                                    o_trait = wildcard_bytes(hexdump_be(insn->bytes, insn->size, false),
-                                    hexdump_mem_disp(operand.mem.disp));
-                                }
-                                break;
-                            }
-
-                        case X86_OP_IMM:
-                            // Wildcard Immutable Operands / Scalars
-                            {
-                                string imm = hexdump_mem_disp(operand.imm);
-                                string instr = hexdump_be(insn->bytes, insn->size, false);
-                                if (imm.length() > 0){
-                                    o_trait = wildcard_bytes(instr, imm);
-                                }
-                                break;
-                            }
-                        default:
-                            break;
-                    }
-                }
-                if (wildcard_insn == true){
-                    b_trait = b_trait + wildcard_all(hexdump_be(insn->bytes, insn->size, false));
-                    f_trait = f_trait + wildcard_all(hexdump_be(insn->bytes, insn->size, false));
-                    wildcard_insn = false;
-                } else if (o_trait.length() > 0){
-                    o_trait = rtrim(o_trait);
-                    b_trait = b_trait + o_trait + " ";
-                    f_trait = f_trait + o_trait + " ";
-                    o_trait.clear();
+                if (insn->detail->x86.op_count > 0){
+                    AppendOperandsTraitBytes(insn, true, index);
                 } else {
-                    b_trait = b_trait + hexdump_be(insn->bytes, insn->size, false);
-                    f_trait = f_trait + hexdump_be(insn->bytes, insn->size, false);
+                    AppendAllBytes(insn->bytes, insn->size, index);
                 }
-                b_bytes = b_bytes + hexdump_be(insn->bytes, insn->size, false);
-                b_insn_count++;
-                f_bytes = f_bytes + hexdump_be(insn->bytes, insn->size, false);
-                f_insn_count++;
-                insn_size = insn->size;
-                if (b_end == true && b_bytes.length() > 0){
-                    collect_block:
-                    trait["type"] = "block";
-                    trait["bytes_sha256"] = sha256(rtrim(b_bytes).c_str());
-                    trait["bytes"] = rtrim(b_bytes);
-                    trait["size"] = trait_size(trait["bytes"]);
-                    trait["instructions"] = b_insn_count;
-                    trait["blocks"] = 1;
-                    if (disasm == false){
-                        trait["offset"] = data_offset + pc - (uint)trait["size"] - 1;
-                    } else {
-                        trait["offset"] = data_offset + pc - (uint)trait["size"];
-                    }
-                    trait["average_instructions_per_block"] = b_insn_count / 1;
-                    trait["edges"] = b_edges;
-                    trait["cyclomatic_complexity"] = b_edges - 1 + 2;
-                    trait["bytes_entropy"] = entropy(trait["bytes"].get<string>());
-                    trait["trait"] = rtrim(b_trait);
-                    trait["trait_entropy"] = entropy(trait["trait"].get<string>());
-                    trait["trait_sha256"] = sha256(rtrim(b_trait).c_str());
-                    b_trait.clear();
-                    b_bytes.clear();
-                    b_end = false;
-                    b_insn_count = 0;
-                    b_edges = 0;
-                    sections[index].traits.push_back(trait);
-                    sections[index].visited.push_back(trait["offset"].get<uint64_t>());
-                    trait.clear();
-                }
-                if (f_end == true && f_bytes.length() > 0){
-                    trait["type"] = "function";
-                    trait["bytes_sha256"] = sha256(rtrim(f_bytes).c_str());
-                    trait["bytes"] = rtrim(f_bytes);
-                    trait["bytes_entropy"] = entropy(trait["bytes"].get<string>());
-                    trait["size"] = trait_size(trait["bytes"]);
-                    trait["instructions"] = f_insn_count;
-                    if (b_count == 0){
-                        trait["blocks"] = 1;
-                        trait["average_instructions_per_block"] = f_insn_count / 1;
-                        trait["cyclomatic_complexity"] = f_edges - 1 + 2;
-                    } else {
-                        trait["blocks"] = b_count;
-                        trait["average_instructions_per_block"] = f_insn_count / b_count;
-                        trait["cyclomatic_complexity"] = f_edges - b_count + 2;
-                    }
-                    trait["offset"] = data_offset + pc - (uint)trait["size"];
-                    trait["edges"] = f_edges;
-                    trait["trait"] = rtrim(f_trait);
-                    trait["trait_entropy"] = entropy(trait["trait"].get<string>());
-                    trait["trait_sha256"] = sha256(rtrim(f_trait).c_str());
-                    f_trait.clear();
-                    sections[index].traits.push_back(trait);
-                    sections[index].visited.push_back(trait["offset"].get<uint64_t>());
-                    f_bytes.clear();
-                    f_end = false;
-                    f_edges = 0;
-                    f_insn_count = 0;
-                    b_count = 0;
-                    trait.clear();
-                }
-                //printf("pos: %ld,%ld\n", pc, data_size);
+                CountAllInsn(index);
             }
             cs_free(insn, 1);
-            return pc;
+            return sections[index].pc;
         }
         void PrintTraits(bool pretty){
             json traits = GetTraits();
@@ -693,8 +490,8 @@ class Decompiler{
             fwrite(traits.c_str(), sizeof(char), traits.length(), fd);
             fclose(fd);
         }
-        ~Decompiler(){
-            for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
+        ~DecompilerREV(){
+            for (int i = 0; i < DECOMPILER_REV_MAX_SECTIONS; i++){
                 sections[i].pc = 0;
             }
             cs_close(&handle);
