@@ -8,9 +8,11 @@ all:
 
 install:
 	cp build/binlex /usr/bin/
+	cp build/blyara /usr/bin/
 
 uninstall:
 	rm -f /usr/bin/binlex
+	rm -f /usr/bin/blyara
 
 traits: check-parameter-source check-parameter-dest check-parameter-type check-parameter-format check-parameter-arch
 	@echo "[-] building traits..."
