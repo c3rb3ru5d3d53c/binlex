@@ -1,9 +1,6 @@
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
-#include <errno.h>
 #include <stdint.h>
-#include "common.h"
 
 #ifndef PE_H
 #define PE_H
@@ -407,167 +404,30 @@ typedef struct {
 	uint32_t Characteristics; // SectionCharacteristics
 } IMAGE_SECTION_HEADER, *PIMAGE_SECTION_HEADER;
 
-// typedef struct {
-// 	IMAGE_DOS_HEADER dos_hdr;
-// 	uint32_t signature;
-// 	IMAGE_COFF_HEADER coff_hdr;
-// 	void *optional_hdr_ptr;
-// 	IMAGE_OPTIONAL_HEADER optional_hdr;
-// 	uint32_t num_directories;
-// 	void *directories_ptr;
-// 	IMAGE_DATA_DIRECTORY **directories;
-// 	uint16_t num_sections;
-// 	void *sections_ptr;
-// 	IMAGE_SECTION_HEADER **sections;
-// 	uint64_t entrypoint;
-// 	uint64_t imagebase;
-// } PE_HEADER, *PPE_HEADER;
-
-class Pe {
+class Pe{
     private:
         struct Section {
             uint offset;
             int size;
             void *data;
         };
-        bool is_pe(){
-            if (dos_header->e_magic != 23117 ||
-                coff_header->Signature != 17744){
-                return false;
-            }
-            return true;
-        }
+        bool is_pe();
     public:
-        char magic_mz[2]               = {0x5a, 0x4d};
-        char magic_pe[4]               = {0x00, 0x00, 0x45, 0x50};
-        FILE *fd                       = NULL;
-        PIMAGE_DOS_HEADER dos_header   = NULL;
+        char magic_mz[2] = {0x5a, 0x4d};
+        char magic_pe[4] = {0x00, 0x00, 0x45, 0x50};
+        FILE *fd = NULL;
+        PIMAGE_DOS_HEADER dos_header = NULL;
         PIMAGE_COFF_HEADER coff_header = NULL;
-        uint32_t pe_header_ptr         = 0;
+        uint32_t pe_header_ptr = 0;
         PIMAGE_OPTIONAL_HEADER_32 optional_header_32 = NULL;
         PIMAGE_OPTIONAL_HEADER_64 optional_header_64 = NULL;
         PIMAGE_SECTION_HEADER section_header = NULL;
-        int mode                       = PE_MODE_UNSET;
+        int mode = PE_MODE_UNSET;
         struct Section sections[PE_MAX_SECTIONS];
-        Pe(){
-            for (int i = 0; i < PE_MAX_SECTIONS; i++){
-                sections[i].size = 0;
-                sections[i].offset = 0;
-                sections[i].data = NULL;
-            }
-        }
-        bool Setup(int input_mode){
-            dos_header = (PIMAGE_DOS_HEADER)malloc(sizeof(IMAGE_DOS_HEADER));
-            coff_header = (PIMAGE_COFF_HEADER)malloc(sizeof(IMAGE_COFF_HEADER));
-            section_header = (PIMAGE_SECTION_HEADER)malloc(sizeof(IMAGE_SECTION_HEADER));
-            switch(input_mode){
-                case PE_MODE_X86:
-                    mode = PE_MODE_X86;
-                    break;
-                case PE_MODE_X86_64:
-                    mode = PE_MODE_X86_64;
-                    break;
-                default:
-                    fprintf(stderr, "[x] unsupported elf executable mode\n");
-                    mode = PE_MODE_UNSET;
-                    return false;
-            }
-            return true;
-        }
-        bool ReadFile(char *file_path){
-            fd = fopen(file_path, "rb");
-            if (fd == NULL){
-                fprintf(stderr, "[x] failed to open %s\n", file_path);
-                return false;
-            }
-            fread(dos_header, sizeof(IMAGE_DOS_HEADER), 1, fd);
-            fseek(fd, dos_header->e_lfanew, SEEK_SET);
-            fread(coff_header, sizeof(IMAGE_COFF_HEADER), 1, fd);
-            if (is_pe() == false){
-                fprintf(stderr, "[x] %s is not a valid pe file\n", file_path);
-                return false;
-            }
-            if (mode == PE_MODE_X86 && coff_header->Machine != IMAGE_FILE_MACHINE_I386){
-                fprintf(stderr, "[x] %s is not a valid x86 pe file\n", file_path);
-                return false;
-            }
-            if (mode == PE_MODE_X86_64 && coff_header->Machine != IMAGE_FILE_MACHINE_AMD64){
-                fprintf(stderr, "[x] %s is not a valid x86_64 pe file\n", file_path);
-                return false;
-            }
-            if (mode == PE_MODE_X86 && coff_header->Machine == IMAGE_FILE_MACHINE_I386){
-                optional_header_32 = (PIMAGE_OPTIONAL_HEADER_32)malloc(sizeof(IMAGE_OPTIONAL_HEADER_32));
-                if (fread(optional_header_32, sizeof(IMAGE_OPTIONAL_HEADER_32), 1, fd) <= 0){
-                    fprintf(stderr, "[x] failed to read %s optional_header_64\n", file_path);
-                    return false;
-                }
-            }
-            if (mode == PE_MODE_X86_64 && coff_header->Machine == IMAGE_FILE_MACHINE_AMD64){
-                optional_header_64 = (PIMAGE_OPTIONAL_HEADER_64)malloc(sizeof(IMAGE_OPTIONAL_HEADER_64));
-                if (fread(optional_header_64, sizeof(IMAGE_OPTIONAL_HEADER_64), 1, fd) <= 0){
-                    fprintf(stderr, "[x] failed to read %s optional_header_64\n", file_path);
-                    return false;
-                }
-            }
-            for (int i = 0; i < coff_header->NumberOfSections; i++){
-                if (fread(section_header, sizeof(IMAGE_SECTION_HEADER), 1, fd) <= 0){
-                    fprintf(stderr, "[x] failed to read %s section_header\n", file_path);
-                    return false;
-                }
-                if (section_header->Characteristics & IMAGE_SCN_MEM_EXECUTE){
-                    int set = ftell(fd);
-                    fseek(fd, section_header->PointerToRawData, SEEK_SET);
-                    sections[i].offset = section_header->PointerToRawData;
-                    sections[i].size = section_header->SizeOfRawData;
-                    sections[i].data = malloc(section_header->SizeOfRawData);
-                    if (sections[i].data == NULL){
-                        fprintf(stderr, "[x] failed to allocate section memory\n");
-                        return false;
-                    }
-                    memset(sections[i].data, 0, sections[i].size);
-                    if (fread(sections[i].data, sections[i].size, 1, fd) <= 0){
-                        fprintf(stderr, "[x] failed to read %s executable section\n", file_path);
-                        return false;
-                    }
-                    //printf("PointerToRawData: %x\n", section_header->PointerToRawData);
-                    //printf("SizeofRawData   : %d\n", section_header->SizeOfRawData);
-                    //common_hex_dump((char *)"section", sections[i].data, sections[i].size);
-                    fseek(fd, set, SEEK_SET);
-                }
-
-            }
-            return true;
-        }
-        ~Pe(){
-            if (dos_header != NULL){
-                free(dos_header);
-                dos_header = NULL;
-            }
-            if (coff_header != NULL){
-                free(coff_header);
-                coff_header = NULL;
-            }
-            if (optional_header_32 != NULL){
-                free(optional_header_32);
-                optional_header_32 = NULL;
-            }
-            if (optional_header_64 != NULL){
-                free(optional_header_64);
-                optional_header_64 = NULL;
-            }
-            if (section_header != NULL){
-                free(section_header);
-                section_header = NULL;
-            }
-            for (int i = 0; i < PE_MAX_SECTIONS; i++){
-                if (sections[i].data != NULL){
-                    free(sections[i].data);
-                    sections[i].size = 0;
-                    sections[i].offset = 0;
-                    sections[i].data = NULL;
-                }
-            }
-        }
+        Pe();
+        bool Setup(int input_mode);
+        bool ReadFile(char *file_path);
+        ~Pe();
 };
 
 #endif
