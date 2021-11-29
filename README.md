@@ -208,6 +208,10 @@ They will also contain additional properties about the trait including its `offs
 ]
 ```
 
+# Documentation
+
+Public documentation on `binlex` can be viewed [here](https://c3rb3ru5d3d53c.github.io/binlex/html/index.html).
+
 # Building Docs
 
 You can access the C++ API Documentation and everything else by building the documents using `doxygen`.

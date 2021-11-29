@@ -237,11 +237,14 @@ Trait Format</h1>
 <div class="line">  }</div>
 <div class="line">]</div>
 </div><!-- fragment --><h1><a class="anchor" id="autotoc_md7"></a>
+Documentation</h1>
+<p>Public documentation on <code>binlex</code> can be viewed <a href="https://c3rb3ru5d3d53c.github.io/binlex/html/index.html">here</a>.</p>
+<h1><a class="anchor" id="autotoc_md8"></a>
 Building Docs</h1>
 <p>You can access the C++ API Documentation and everything else by building the documents using <code>doxygen</code>.</p>
 <div class="fragment"><div class="line">make docs threads=4</div>
 </div><!-- fragment --><p>The documents will be available at <code>build/docs/html/index.html</code>.</p>
-<h1><a class="anchor" id="autotoc_md8"></a>
+<h1><a class="anchor" id="autotoc_md9"></a>
 C++ API Example Code</h1>
 <p>It couldn't be any easier to leverage <code>binlex</code> and its C++ API to build your own applications.</p>
 <p>See example code below:</p>
@@ -268,7 +271,7 @@ C++ API Example Code</h1>
 <div class="line">  decompiler.PrintTraits(args.options.pretty);</div>
 <div class="line">}</div>
 </div><!-- fragment --><p>We hope this encourages people to build their own detection solutions based on binary genetic traits.</p>
-<h1><a class="anchor" id="autotoc_md9"></a>
+<h1><a class="anchor" id="autotoc_md10"></a>
 Tips</h1>
 <ul>
 <li>If you are hunting be sure to use <code>jq</code> to improve your searches</li>
@@ -277,14 +280,14 @@ Tips</h1>
 <li>Verify the samples you are collecting into a group using skilled analysts</li>
 <li>These traits are best used with a hybrid approach (supervised)</li>
 </ul>
-<h1><a class="anchor" id="autotoc_md10"></a>
+<h1><a class="anchor" id="autotoc_md11"></a>
 Example Fitness Model</h1>
 <p>Traits will be compared amongst their common malware family, any traits not common to all samples will be discarded.</p>
 <p>Once completed, all remaining traits will be compared to traits from a goodware set, any traits that match the goodware set will be discarded.</p>
 <p>To further differ the traits from other malware families, the remaining population will be compared to other malware families, any that match will be discarded.</p>
 <p>The remaining population of traits will be unique to the malware family tested and not legitimate binaries or other malware families.</p>
 <p>This fitness model allows for accurate classification of the tested malware family.</p>
-<h1><a class="anchor" id="autotoc_md11"></a>
+<h1><a class="anchor" id="autotoc_md12"></a>
 Future Work</h1>
 <ul>
 <li>Recursive Decompiler</li>
@@ -293,7 +296,7 @@ Future Work</h1>
 <li>.NET support <code>pe:cil</code> and <code>raw:cil</code></li>
 <li>Mac-O Support <code>macho:x86_64</code>, <code>macho:x86</code></li>
 </ul>
-<h1><a class="anchor" id="autotoc_md12"></a>
+<h1><a class="anchor" id="autotoc_md13"></a>
 Contributing</h1>
 <p>If you wish to contribute to Binlex DM me on Twitter <a href="https://twitter.com/c3rb3ru5d3d53c">https://twitter.com/c3rb3ru5d3d53c</a>.</p>
 <p>Currently looking for help on:</p><ul>
