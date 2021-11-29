@@ -139,6 +139,7 @@ int main(int argc, char **argv){
     }
     if (strcmp(args.options.mode, (char *)"raw:cil") == 0 &&
         args.options.io_type == ARGS_IO_TYPE_FILE){
+        printf("comming soon...\n");
         return 0;
     }
     args.print_help();
