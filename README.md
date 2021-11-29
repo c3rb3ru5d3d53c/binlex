@@ -1,15 +1,34 @@
 # binlex
 
-<h3>A Genetic Binary Trait Lexer Library and Utility</h3>
+<h2>A Genetic Binary Trait Lexer Library and Utility</h2>
 
-The purpose of `binlex` is to extract basic blocks and functions as traits from binaries.
+The purpose of `binlex` is to extract basic blocks and functions as traits from binaries for malware research, hunting and detection.
 
-Most projects attempting this use Python to generate traits, but it's slow. When working with a lot of malware binaries, it is much better to use a faster compiled language like C++.
+Most projects attempting this use Python to generate traits, but it is very slow.
+
+The design philophy behind `binlex` is it to keep it simple and extensable.
+
+The simple command-line interface allows malware researchers and analysts to hunt traits across hundreds or thousands of potentially similar malware saving time and money in production environments.
+
+While the C++ API allows developers to get creative with their own detection solutions.
+
+# Introduction Video
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=hgz5gZB3DxE" target="_blank">
+    <img src="https://img.youtube.com/vi/hgz5gZB3DxE/0.jpg" alt="Introduction Video">
+  </a>
+</p>
+
+Get slides [here](docs/oalabs.pdf).
 
 # Use Cases
 - YARA Signature Creation/Automation
 - Identifying Code-Reuse
 - Threat Hunting
+- Building Goodware Trait Corpus
+- Building Malware Trait Corpus
+- Genetic Programming
 - Machine Learning Malware Detection
 
 # Installing
@@ -17,8 +36,8 @@ Most projects attempting this use Python to generate traits, but it's slow. When
 **From Source:**
 
 ```bash
-sudo apt install -y git libcapstone-dev cmake make parallel
-git clone https://github.com/c3rb3ru5d3d53c/binlex.git
+sudo apt install -y git build-essential libcapstone-dev cmake make parallel doxygen git-lfs
+git clone --recursive https://github.com/c3rb3ru5d3d53c/binlex.git
 cd binlex/
 make threads=4
 sudo make install
@@ -30,15 +49,16 @@ binlex -m elf:x86 -i tests/elf/elf.x86
 **NOTE:**
 - ZIP files in the `tests/` directory can be extracted using the password `infected`
 
-# Usage
+# Basic Usage
 
 ```text
-binlex v1.0.1 - A Binary Genetic Traits Lexer
+binlex v1.1.0 - A Binary Genetic Traits Lexer
   -i  --input           input file              (required)
   -m  --mode            set mode                (required)
   -lm --list-modes      list modes
   -h  --help            display help
   -o  --output          output file             (optional)
+  -p  --pretty          pretty output           (optional)
   -v  --version         display version
 Author: @c3rb3ru5d3d53c
 ```
@@ -51,11 +71,82 @@ Author: @c3rb3ru5d3d53c
 - `pe:x86_64`
 - `raw:x86`
 - `raw:x86_64`
-- `raw:cil`
+- `raw:cil` (experimental)
 
 __NOTE:__ The `raw` formats can be used on shellcode
 
-**Advanced Usage:**
+# Advanced Usage
+
+If you are hunting using `binlex` you can use `jq` to your advantage for advanced searches.
+
+```bash
+binlex -m raw:x86 -i tests/raw/raw.x86 | jq -r '.[] | select(.type == "block" and .size < 32 and .size > 0) | .bytes'
+2c 20 c1 cf 0d 01 c7 49 75 ef
+52 57 8b 52 10 8b 42 3c 01 d0 8b 40 78 85 c0 74 4c
+01 d0 50 8b 58 20 8b 48 18 01 d3 85 c9 74 3c
+49 8b 34 8b 01 d6 31 ff 31 c0 c1 cf 0d ac 01 c7 38 e0 75 f4
+03 7d f8 3b 7d 24 75 e0
+58 5f 5a 8b 12 e9 80 ff ff ff
+ff 4e 08 75 ec
+e8 67 00 00 00 6a 00 6a 04 56 57 68 02 d9 c8 5f ff d5 83 f8 00 7e 36
+e9 9b ff ff ff
+01 c3 29 c6 75 c1
+```
+
+Other queries you can do:
+```bash
+# Block traits with a size between 0 and 32 bytes
+jq -r '[.[] | select(.type == "block" and .size < 32 and .size > 0)]'
+# Function traits with a cyclomatic complexity greater than 32 (maybe obfuscation)
+jq -r '[.[] | select(.type == "function" and .cyclomatic_complexity > 32)]'
+# Traits where bytes have high entropy
+jq -r '[.[] | select(.bytes_entropy > 7)]'
+# Output all trait strings only
+jq -r '.[] | .trait'
+# Output only trait hashes
+jq -r '.[] | .trait_sha256'
+```
+
+If you output just traits you want to `stdout` you can do build a `yara` signature on the fly with the included tool `blyara`:
+
+```bash
+build/binlex -m raw:x86 -i tests/raw/raw.x86 | jq -r '.[] | select(.size > 16 and .size < 32) | .trait' | build/blyara --name example_0 -m author example -m tlp white -c 1
+rule example_0 {
+    metadata:
+        author = "example"
+        tlp = "white"
+    strings:
+        trait_0 = {52 57 8b 52 ?? 8b 42 ?? 01 d0 8b 40 ?? 85 c0 74 4c}
+        trait_1 = {49 8b 34 8b 01 d6 31 ff 31 c0 c1 cf ?? ac 01 c7 38 e0 75 f4}
+        trait_2 = {e8 67 00 00 00 6a 00 6a ?? 56 57 68 ?? ?? ?? ?? ff d5 83 f8 00 7e 36}
+    condition:
+        1 of them
+}
+```
+
+You can also use the switch `--pretty` to output `json` to identify more properies to query.
+
+```bash
+binlex -m pe:x86 -i tests/pe/pe.trickbot.x86 --pretty
+[
+  {
+    "average_instructions_per_block": 29,
+    "blocks": 1,
+    "bytes": "ae 32 c3 32 1a 33 25 34 85 39 ae 3b b4 3b c8 3b 35 3c 3a 3c 6b 3c 71 3c 85 3c aa 3d b0 3d 6a 3e a5 3e b8 3e fd 3e 38 3f 4b 3f 87 3f 00 20 00 00 58 00 00 00 4f 30 aa 30 01 31 1d 31 ac 31 d6 31 e5 31 f5 31 1c 32 31 32 75 34",
+    "bytes_entropy": 5.070523738861084,
+    "bytes_sha256": "67a966fe573ef678feaea6229271bb374304b418fe63f464b71af1fbe2a87f37",
+    "cyclomatic_complexity": 3,
+    "edges": 2,
+    "instructions": 29,
+    "offset": 11589,
+    "size": 74,
+    "trait": "ae 32 c3 32 1a 33 25 ?? ?? ?? ?? 3b b4 3b ?? ?? ?? ?? 3a 3c 6b 3c 71 3c 85 3c aa 3d b0 3d 6a 3e a5 3e b8 3e fd 3e 38 3f 4b 3f 87 3f 00 20 00 00 58 00 00 00 4f ?? aa 30 01 31 1d ?? ?? ?? ?? 31 e5 31 f5 31 1c 32 31 32 75 34",
+    "trait_entropy": 4.9164042472839355,
+    "trait_sha256": "a00fcb2b23a916192990665d8a5f53b2adfa74ec98991277e571542aee94c3a5",
+    "type": "block"
+  }
+]
+```
 
 If you have terabytes of executable files, we can leverage the power of `parallel` to generate traits for us.
 
@@ -91,18 +182,78 @@ Binlex is designed to do one thing and one thing only, extract genetic traits fr
 Again, **it's up to you to implement your own algorithms for detection based on the genetic traits you extract**.
 
 # Trait Format
+
 Traits will contain binary code represented in hexadecimal form and will use `??` as wild cards for memory operands or other operands subject to change.
 
-Trait files will contain a list of traits ordered by size and use the sha256 of the sample as the file name.
+They will also contain additional properties about the trait including its `offset`, `edges`, `blocks`, `cyclomatic_complexity`, `average_instruction_per_block`, `bytes`, `trait`, `trait_sha256`, `bytes_sha256`, `trait_entropy`, `bytes_entropy`, `type`, `size`, and `instructions`.
 
 ```
-# Example Trait File
-12 34 56 ?? ?? 11 12 13
-14 15 16 17 18 ?? ?? 21 22 23
-# ... More traits to follow
+[
+  {
+    "average_instructions_per_block": 29,
+    "blocks": 1,
+    "bytes": "ae 32 c3 32 1a 33 25 34 85 39 ae 3b b4 3b c8 3b 35 3c 3a 3c 6b 3c 71 3c 85 3c aa 3d b0 3d 6a 3e a5 3e b8 3e fd 3e 38 3f 4b 3f 87 3f 00 20 00 00 58 00 00 00 4f 30 aa 30 01 31 1d 31 ac 31 d6 31 e5 31 f5 31 1c 32 31 32 75 34",
+    "bytes_entropy": 5.070523738861084,
+    "bytes_sha256": "67a966fe573ef678feaea6229271bb374304b418fe63f464b71af1fbe2a87f37",
+    "cyclomatic_complexity": 3,
+    "edges": 2,
+    "instructions": 29,
+    "offset": 11589,
+    "size": 74,
+    "trait": "ae 32 c3 32 1a 33 25 ?? ?? ?? ?? 3b b4 3b ?? ?? ?? ?? 3a 3c 6b 3c 71 3c 85 3c aa 3d b0 3d 6a 3e a5 3e b8 3e fd 3e 38 3f 4b 3f 87 3f 00 20 00 00 58 00 00 00 4f ?? aa 30 01 31 1d ?? ?? ?? ?? 31 e5 31 f5 31 1c 32 31 32 75 34",
+    "trait_entropy": 4.9164042472839355,
+    "trait_sha256": "a00fcb2b23a916192990665d8a5f53b2adfa74ec98991277e571542aee94c3a5",
+    "type": "block"
+  }
+]
 ```
+
+# Building Docs
+
+You can access the C++ API Documentation and everything else by building the documents using `doxygen`.
+
+```bash
+make docs threads=4
+```
+
+The documents will be available at `build/docs/html/index.html`.
+
+# C++ API Example Code
+
+It couldn't be any easier to leverage `binlex` and its C++ API to build your own applications.
+
+See example code below:
+
+```cpp
+#include <binlex/pe.h>
+#include <binlex/decompiler.h>
+
+using namespace binlex;
+
+int main(int argc, char **argv){
+  Pe pe32;
+  if (pe32.Setup(PE_MODE_X86) == false){
+      return 1;
+  }
+  if (pe32.ReadFile(argv[1]) == false){
+      return 1;
+  }
+  Decompiler decompiler;
+  decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
+  for (int i = 0; i < PE_MAX_SECTIONS; i++){
+      if (pe32.sections[i].data != NULL){
+          decompiler.x86_64(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, i);
+      }
+  }
+  decompiler.PrintTraits(args.options.pretty);
+}
+```
+
+We hope this encourages people to build their own detection solutions based on binary genetic traits.
 
 # Tips
+- If you are hunting be sure to use `jq` to improve your searches
+- Does not support PE files that are VB6 or .NET if you run against these you will get errors
 - Don't mix packed and unpacked malware or you will taint your dataset (seen this in academics all the time)
 - Verify the samples you are collecting into a group using skilled analysts
 - These traits are best used with a hybrid approach (supervised)
@@ -120,9 +271,10 @@ The remaining population of traits will be unique to the malware family tested a
 This fitness model allows for accurate classification of the tested malware family.
 
 # Future Work
+- Recursive Decompiler
 - Java Bytecode Support `raw:jvm`, `java:jvm`
 - Cutter, Ghidra and IDA Plugins
-- .NET PE support `pe:cil`
+- .NET support `pe:cil` and `raw:cil`
 - Mac-O Support `macho:x86_64`, `macho:x86`
 
 # Contributing

@@ -1,0 +1,27 @@
+var structbinlex_1_1DecompilerREV_1_1Section =
+[
+    [ "b_bytes", "structbinlex_1_1DecompilerREV_1_1Section.html#a9b0ed89828942c93968920cad9d2b7c6", null ],
+    [ "b_count", "structbinlex_1_1DecompilerREV_1_1Section.html#a17976d5c66a4ec7b22c0d191023042ae", null ],
+    [ "b_edges", "structbinlex_1_1DecompilerREV_1_1Section.html#a5834f578b2bfcbb0ec29d5e93bcfc076", null ],
+    [ "b_end", "structbinlex_1_1DecompilerREV_1_1Section.html#a2271bfd8f569ff0b4d73ccb05b2b356c", null ],
+    [ "b_insn_count", "structbinlex_1_1DecompilerREV_1_1Section.html#aa7439943ed740c911f94db7d9f49e36a", null ],
+    [ "b_trait", "structbinlex_1_1DecompilerREV_1_1Section.html#ac87a38b4e7e4cee3347b136734403a0f", null ],
+    [ "blocks", "structbinlex_1_1DecompilerREV_1_1Section.html#ab66e164df30f6a66997ce34394833097", null ],
+    [ "code", "structbinlex_1_1DecompilerREV_1_1Section.html#a37a88d3eb5aae5cb1653ac7f215213ff", null ],
+    [ "code_size", "structbinlex_1_1DecompilerREV_1_1Section.html#a7f640db8252ff8d49c4fc686c6b8f8ce", null ],
+    [ "data", "structbinlex_1_1DecompilerREV_1_1Section.html#a4a293561474052c8720e8ab0f70652be", null ],
+    [ "data_offset", "structbinlex_1_1DecompilerREV_1_1Section.html#a3bab8c9dde308ade5e58a9f97bba9f49", null ],
+    [ "data_size", "structbinlex_1_1DecompilerREV_1_1Section.html#a68d60b9035b2798e010e2caec0d22b89", null ],
+    [ "f_bytes", "structbinlex_1_1DecompilerREV_1_1Section.html#a567f8fb3ed670e934c45183bb61e2334", null ],
+    [ "f_edges", "structbinlex_1_1DecompilerREV_1_1Section.html#a536360179b680888b13be22977ba10d7", null ],
+    [ "f_end", "structbinlex_1_1DecompilerREV_1_1Section.html#a3f3f180e7e240408791980e42d46b854", null ],
+    [ "f_insn_count", "structbinlex_1_1DecompilerREV_1_1Section.html#a0730d6a718261b51724f8859b0485cc5", null ],
+    [ "f_trait", "structbinlex_1_1DecompilerREV_1_1Section.html#a8b1eb086206f3fb87b55cc7b1e3c9116", null ],
+    [ "functions", "structbinlex_1_1DecompilerREV_1_1Section.html#a35e3346a1001a2a5a9a7d1f32f6bdc19", null ],
+    [ "handle", "structbinlex_1_1DecompilerREV_1_1Section.html#ad9be6b342d9ef10cd2e518a0b2632d74", null ],
+    [ "offset", "structbinlex_1_1DecompilerREV_1_1Section.html#a896445f54882ead388364f768b5ac69c", null ],
+    [ "pc", "structbinlex_1_1DecompilerREV_1_1Section.html#ae200e886d7213486a50577455ebb5339", null ],
+    [ "status", "structbinlex_1_1DecompilerREV_1_1Section.html#a006ac296317d866b41ef82df46e2a680", null ],
+    [ "traits", "structbinlex_1_1DecompilerREV_1_1Section.html#a3ddd9f277b8ca71c969e9b263b347f49", null ],
+    [ "visited", "structbinlex_1_1DecompilerREV_1_1Section.html#af12445db66a7ddbaae0cd52636596599", null ]
+];
