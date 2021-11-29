@@ -1,3 +1,5 @@
+.PHONY: docs
+
 threads=1
 
 all:
@@ -6,18 +8,28 @@ all:
 		cmake -S ../ -B . && \
 		make -j ${threads}
 
+docs:
+	mkdir -p build/docs/
+	(cat Doxyfile; echo "NUM_PROC_THREADS=${threads}") | doxygen -
+
+docs-update:
+	rm -rf docs/html/
+	cp -r build/docs/html/ docs/
+
 install:
 	cp build/binlex /usr/bin/
+	cp build/blyara /usr/bin/
 
 uninstall:
 	rm -f /usr/bin/binlex
+	rm -f /usr/bin/blyara
 
 traits: check-parameter-source check-parameter-dest check-parameter-type check-parameter-format check-parameter-arch
 	@echo "[-] building traits..."
 	@find ${source} -type f | while read i; do \
 		mkdir -p ${dest}/${type}/${format}/${arch}/; \
 		filename=`basename $${i}`; \
-		echo "binlex -m ${format}:${arch} --input $${i} --output ${dest}/${type}/${format}/${arch}/$${filename}.traits"; \
+		echo "binlex -m ${format}:${arch} -i $${i} | jq '.[] | .trait' > ${dest}/${type}/${format}/${arch}/$${filename}.traits"; \
 	done | parallel -u --progress -j ${threads} {}
 	@echo "[*] trait build complete"
 

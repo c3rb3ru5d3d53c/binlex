@@ -4,3 +4,4 @@ samples/**
 dump.bin
 *.yara
 *.traits
+dump.json
