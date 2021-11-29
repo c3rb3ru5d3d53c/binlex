@@ -1,17 +1,22 @@
+#include <vector>
+#include <capstone/capstone.h>
+#include "common.h"
+
 #ifndef DECOMPILER_REV_H
 #define DECOMPILER_REV_H
 
-#define DECOMPILER_REV_TYPE_FUNCS 0
-#define DECOMPILER_REV_TYPE_BLCKS 1
-#define DECOMPILER_REV_TYPE_UNSET 2
-#define DECOMPILER_REV_TYPE_ALL   3
-
 #define DECOMPILER_REV_MAX_SECTIONS 256
 
+using namespace std;
+using json = nlohmann::json;
+
 class DecompilerREV{
+    private:
+        json GetTraits();
     public:
-        DecompilerREV();
         struct Section {
+            csh handle;
+            cs_err status;
             json traits;
             uint offset;
             uint64_t pc;
@@ -35,6 +40,21 @@ class DecompilerREV{
             vector<uint64_t> functions;
             vector<uint64_t> visited;
         };
+        struct Section sections[DECOMPILER_REV_MAX_SECTIONS];
+        Common common;
+        DecompilerREV();
+        bool Setup(cs_arch arch, cs_mode mode, uint index);
+        void ClearBlock(uint index);
+        void ClearTrait(uint index);
+        void AddEdges(uint count, uint index);
+        void CollectBlockTrait(uint index);
+        void CollectFunctionTrait(uint index);
+        void PrintTraits(bool pretty);
+        void WriteTraits(char *file_path, bool pretty);
+        uint Decompile(void *data, size_t data_size, size_t data_offset, uint index);
+        void Seek(uint offset, uint index);
+        ~DecompilerREV();
+
 };
 
 #endif
