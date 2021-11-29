@@ -15,6 +15,7 @@
 
 using namespace std;
 using json = nlohmann::json;
+using namespace binlex;
 
 Decompiler::Decompiler(){
     pc = 0;

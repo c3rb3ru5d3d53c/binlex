@@ -26,6 +26,9 @@ Get slides [here](docs/oalabs.pdf).
 - YARA Signature Creation/Automation
 - Identifying Code-Reuse
 - Threat Hunting
+- Building Goodware Trait Corpus
+- Building Malware Trait Corpus
+- Genetic Programming
 - Machine Learning Malware Detection
 
 # Installing
@@ -33,8 +36,8 @@ Get slides [here](docs/oalabs.pdf).
 **From Source:**
 
 ```bash
-sudo apt install -y git libcapstone-dev cmake make parallel
-git clone https://github.com/c3rb3ru5d3d53c/binlex.git
+sudo apt install -y git build-essential libcapstone-dev cmake make parallel doxygen git-lfs
+git clone --recursive https://github.com/c3rb3ru5d3d53c/binlex.git
 cd binlex/
 make threads=4
 sudo make install
@@ -68,7 +71,7 @@ Author: @c3rb3ru5d3d53c
 - `pe:x86_64`
 - `raw:x86`
 - `raw:x86_64`
-- `raw:cil`
+- `raw:cil` (experimental)
 
 __NOTE:__ The `raw` formats can be used on shellcode
 
@@ -102,6 +105,23 @@ jq -r '[.[] | select(.bytes_entropy > 7)]'
 jq -r '.[] | .trait'
 # Output only trait hashes
 jq -r '.[] | .trait_sha256'
+```
+
+If you output just traits you want to `stdout` you can do build a `yara` signature on the fly with the included tool `blyara`:
+
+```bash
+build/binlex -m raw:x86 -i tests/raw/raw.x86 | jq -r '.[] | select(.size > 16 and .size < 32) | .trait' | build/blyara --name example_0 -m author example -m tlp white -c 1
+rule example_0 {
+    metadata:
+        author = "example"
+        tlp = "white"
+    strings:
+        trait_0 = {52 57 8b 52 ?? 8b 42 ?? 01 d0 8b 40 ?? 85 c0 74 4c}
+        trait_1 = {49 8b 34 8b 01 d6 31 ff 31 c0 c1 cf ?? ac 01 c7 38 e0 75 f4}
+        trait_2 = {e8 67 00 00 00 6a 00 6a ?? 56 57 68 ?? ?? ?? ?? ff d5 83 f8 00 7e 36}
+    condition:
+        1 of them
+}
 ```
 
 You can also use the switch `--pretty` to output `json` to identify more properies to query.
@@ -188,6 +208,49 @@ They will also contain additional properties about the trait including its `offs
 ]
 ```
 
+# Building Docs
+
+You can access the C++ API Documentation and everything else by building the documents using `doxygen`.
+
+```bash
+make docs threads=4
+```
+
+The documents will be available at `build/docs/html/index.html`.
+
+# C++ API Example Code
+
+It couldn't be any easier to leverage `binlex` and its C++ API to build your own applications.
+
+See example code below:
+
+```cpp
+#include <binlex/pe.h>
+#include <binlex/decompiler.h>
+
+using namespace binlex;
+
+int main(int argc, char **argv){
+  Pe pe32;
+  if (pe32.Setup(PE_MODE_X86) == false){
+      return 1;
+  }
+  if (pe32.ReadFile(argv[1]) == false){
+      return 1;
+  }
+  Decompiler decompiler;
+  decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
+  for (int i = 0; i < PE_MAX_SECTIONS; i++){
+      if (pe32.sections[i].data != NULL){
+          decompiler.x86_64(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, i);
+      }
+  }
+  decompiler.PrintTraits(args.options.pretty);
+}
+```
+
+We hope this encourages people to build their own detection solutions based on binary genetic traits.
+
 # Tips
 - If you are hunting be sure to use `jq` to improve your searches
 - Does not support PE files that are VB6 or .NET if you run against these you will get errors
@@ -208,9 +271,10 @@ The remaining population of traits will be unique to the malware family tested a
 This fitness model allows for accurate classification of the tested malware family.
 
 # Future Work
+- Recursive Decompiler
 - Java Bytecode Support `raw:jvm`, `java:jvm`
 - Cutter, Ghidra and IDA Plugins
-- .NET PE support `pe:cil`
+- .NET support `pe:cil` and `raw:cil`
 - Mac-O Support `macho:x86_64`, `macho:x86`
 
 # Contributing

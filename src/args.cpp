@@ -6,6 +6,8 @@
 #include <unistd.h>
 #include "args.h"
 
+using namespace binlex;
+
 Args::Args(){
     SetDefault();
 }

@@ -6,19 +6,21 @@
 
 #define RAW_MAX_SECTIONS 128
 
-class Raw{
-    private:
-        struct Section {
-            void *data;
-            int size;
-            uint offset;
-        };
-        int GetFileSize(FILE *fd);
-    public:
-        struct Section sections[RAW_MAX_SECTIONS];
-        Raw();
-        bool ReadFile(char *file_path, int section_index);
-        ~Raw();
-};
+namespace binlex{
+    class Raw{
+        private:
+            struct Section {
+                void *data;
+                int size;
+                uint offset;
+            };
+            int GetFileSize(FILE *fd);
+        public:
+            struct Section sections[RAW_MAX_SECTIONS];
+            Raw();
+            bool ReadFile(char *file_path, int section_index);
+            ~Raw();
+    };
+}
 
 #endif

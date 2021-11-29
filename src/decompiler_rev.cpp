@@ -15,6 +15,7 @@
 
 using namespace std;
 using json = nlohmann::json;
+using namespace binlex;
 
 DecompilerREV::DecompilerREV(){
     for (int i = 0; i < DECOMPILER_REV_MAX_SECTIONS; i++){
