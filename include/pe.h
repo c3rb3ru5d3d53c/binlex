@@ -16,6 +16,8 @@
 #define PE_SECTION_NAME_SIZE 8
 #define PE_MAX_DIRECTORIES   16
 
+namespace binlex{
+
 typedef enum {
 	IMAGE_DIRECTORY_ENTRY_EXPORT			= 0, // Export Table
 	IMAGE_DIRECTORY_ENTRY_IMPORT			= 1, // Import Table
@@ -430,4 +432,5 @@ class Pe{
         ~Pe();
 };
 
+}
 #endif

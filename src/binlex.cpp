@@ -7,6 +7,8 @@
 #include "blelf.h"
 #include "common.h"
 
+using namespace binlex;
+
 int main(int argc, char **argv){
     Args args;
     Common common;

@@ -7,6 +7,8 @@
 #include <elf.h>
 #include "blelf.h"
 
+using namespace binlex;
+
 Elf::Elf(){
     SetSectionsDefault();
 }

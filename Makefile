@@ -1,3 +1,5 @@
+.PHONY: docs
+
 threads=1
 
 all:
@@ -5,6 +7,14 @@ all:
 	cd build/ && \
 		cmake -S ../ -B . && \
 		make -j ${threads}
+
+docs:
+	mkdir -p build/docs/
+	(cat Doxyfile; echo "NUM_PROC_THREADS=${threads}") | doxygen -
+
+docs-update:
+	rm -rf docs/html/
+	cp -r build/docs/html/ docs/
 
 install:
 	cp build/binlex /usr/bin/

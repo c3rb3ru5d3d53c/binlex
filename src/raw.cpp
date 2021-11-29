@@ -3,6 +3,8 @@
 #include <string.h>
 #include "raw.h"
 
+using namespace binlex;
+
 Raw::Raw(){
     for (int i = 0; i < RAW_MAX_SECTIONS; i++){
         sections[i].data = NULL;

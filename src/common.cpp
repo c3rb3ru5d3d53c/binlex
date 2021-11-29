@@ -13,6 +13,7 @@
 #include "common.h"
 
 using namespace std;
+using namespace binlex;
 
 string Common::SHA256(const char *trait){
     unsigned char hash[SHA256_DIGEST_LENGTH];

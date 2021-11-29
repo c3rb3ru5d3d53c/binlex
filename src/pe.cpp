@@ -3,6 +3,8 @@
 #include <string.h>
 #include "pe.h"
 
+using namespace binlex;
+
 Pe::Pe(){
 	for (int i = 0; i < PE_MAX_SECTIONS; i++){
 		sections[i].size = 0;
