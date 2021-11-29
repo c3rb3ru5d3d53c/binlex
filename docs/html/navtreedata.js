@@ -29,12 +29,13 @@ var NAVTREE =
     [ "Basic Usage", "index.html#autotoc_md4", null ],
     [ "Advanced Usage", "index.html#autotoc_md5", null ],
     [ "Trait Format", "index.html#autotoc_md6", null ],
-    [ "Building Docs", "index.html#autotoc_md7", null ],
-    [ "C++ API Example Code", "index.html#autotoc_md8", null ],
-    [ "Tips", "index.html#autotoc_md9", null ],
-    [ "Example Fitness Model", "index.html#autotoc_md10", null ],
-    [ "Future Work", "index.html#autotoc_md11", null ],
-    [ "Contributing", "index.html#autotoc_md12", null ],
+    [ "Documentation", "index.html#autotoc_md7", null ],
+    [ "Building Docs", "index.html#autotoc_md8", null ],
+    [ "C++ API Example Code", "index.html#autotoc_md9", null ],
+    [ "Tips", "index.html#autotoc_md10", null ],
+    [ "Example Fitness Model", "index.html#autotoc_md11", null ],
+    [ "Future Work", "index.html#autotoc_md12", null ],
+    [ "Contributing", "index.html#autotoc_md13", null ],
     [ "Namespaces", "namespaces.html", [
       [ "Namespace List", "namespaces.html", "namespaces_dup" ]
     ] ],
@@ -55,7 +56,7 @@ var NAVTREE =
 var NAVTREEINDEX =
 [
 "annotated.html",
-"structbinlex_1_1IMAGE__OPTIONAL__HEADER__64.html#ab344c503ca8c6a26d7a4dc68fe0f18f5"
+"structbinlex_1_1IMAGE__OPTIONAL__HEADER__64.html#ab31e872dfe1ef138c5528a7fd12d0658"
 ];
 
 var SYNCONMSG = 'click to disable panel synchronisation';
