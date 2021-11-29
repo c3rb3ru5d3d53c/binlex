@@ -10,6 +10,7 @@ set(SOURCES_BINLEX
     src/blelf.cpp
     src/pe.cpp
     src/decompiler.cpp
+    src/decompiler_rev.cpp
 )
 
 add_executable(binlex ${SOURCES_BINLEX})
