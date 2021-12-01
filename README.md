@@ -283,7 +283,9 @@ This fitness model allows for accurate classification of the tested malware fami
 
 # Contributing
 
-If you wish to contribute to Binlex DM me on Twitter https://twitter.com/c3rb3ru5d3d53c.
+If you wish to contribute to Binlex DM me on Twitter [here](https://twitter.com/c3rb3ru5d3d53c).
+
+You can also join our Discord [here](https://discord.gg/QEMy4pas).
 
 Currently looking for help on:
 - MacOS Developer (Parse Mach-O)
