@@ -15,6 +15,8 @@
 using namespace std;
 using namespace binlex;
 
+// WIP
+
 DecompilerREV::DecompilerREV(){
     for (int i = 0; i < DECOMPILER_REV_MAX_SECTIONS; i++){
         sections[i].offset = 0;
