@@ -15,21 +15,21 @@ using namespace std;
 namespace binlex {
     class DecompilerREV: public Common {
         private:
-            struct traits_t {
+            typedef struct{
                 string type;
                 string bytes;
                 string trait;
                 uint edges;
                 uint blocks;
                 uint insns;
-            };
+            } trait;
         public:
             struct Section {
                 csh handle;
                 cs_err status;
                 uint offset;
                 uint64_t pc;
-                traits_t *traits;
+                trait *traits;
                 uint traits_count;
                 void *data;
                 size_t data_size;

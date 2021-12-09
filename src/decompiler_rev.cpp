@@ -31,7 +31,7 @@ DecompilerREV::DecompilerREV(){
 
 bool DecompilerREV::AllocTraits(uint count, uint index){
     sections[index].traits_count = sections[index].traits_count + count;
-    if (realloc(sections[index].traits, sizeof(traits_t) * sections[index].traits_count) == NULL){
+    if (realloc(sections[index].traits, sizeof(trait) * sections[index].traits_count) == NULL){
         return false;
     }
     return true;
