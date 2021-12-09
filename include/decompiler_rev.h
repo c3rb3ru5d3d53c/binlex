@@ -38,7 +38,6 @@ namespace binlex {
                 vector<uint64_t> visited;
             };
             struct Section sections[DECOMPILER_REV_MAX_SECTIONS];
-            Common common;
             DecompilerREV();
             /**
             Set up Capstone Decompiler Architecure and Mode
