@@ -9,6 +9,7 @@
 
 #define DECOMPILER_REV_OPERAND_TYPE_BLOCK    0
 #define DECOMPILER_REV_OPERAND_TYPE_FUNCTION 1
+#define DECOMPILER_REV_OPERAND_TYPE_UNSET    2
 
 using namespace std;
 
@@ -33,6 +34,8 @@ namespace binlex {
                 uint traits_count;
                 void *data;
                 size_t data_size;
+                const uint8_t *code;
+                size_t code_size;
                 vector<uint64_t> blocks;
                 vector<uint64_t> functions;
                 vector<uint64_t> visited;
@@ -58,9 +61,9 @@ namespace binlex {
             Collect Instructions for Processing
             @param insn the instruction
             @param index the section index
-            @returns bool
+            @returns operand type
             */
-            bool CollectInsn(cs_insn *insn, uint index);
+            uint CollectInsn(cs_insn *insn, uint index);
             /**
             Collect Immutable Operands
             @param imm immutable value
@@ -77,6 +80,7 @@ namespace binlex {
             @returns program counter position
             */
             uint Decompile(void *data, size_t data_size, size_t data_offset, uint index);
+            void Seek(uint64_t address, size_t data_size, uint index);
             /**
             Allocate Additional Traits
             @param count number of additional traits to allocate
@@ -89,7 +93,31 @@ namespace binlex {
             @return bool
             */
             bool IsEndInsn(cs_insn *insn);
+            /**
+            Allocate Traits
+            @param count number of traits to allocate
+            @param index the section index
+            @return bool
+            */
             bool AllocTraits(uint count, uint index);
+            /**
+            Checks if Address was Already Visited
+            @param address address to check
+            @return bool
+            */
+            bool IsVisited(uint64_t address, uint index);
+            /**
+            Pushes Block Address to the Blocks Vector Stack
+            @param address block address
+            @return address
+            */
+            uint64_t PushBlock(uint64_t address, uint index);
+            /**
+            Pushes Function Address to the Functions Vector Stack
+            @param address function address
+            @return address
+            */
+            uint64_t PushFunction(uint64_t address, uint index);
             //void Seek(uint offset, uint index);
             ~DecompilerREV();
 

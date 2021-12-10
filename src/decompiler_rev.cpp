@@ -25,6 +25,8 @@ DecompilerREV::DecompilerREV(){
         sections[i].traits = NULL;
         sections[i].traits_count = 0;
         sections[i].data = NULL;
+        sections[i].code = NULL;
+        sections[i].code_size = 0;
         sections[i].data_size = 0;
     }
 }
@@ -49,36 +51,50 @@ bool DecompilerREV::Setup(cs_arch arch, cs_mode mode, uint index){
     return true;
 }
 
-// void DecompilerREV::Seek(uint offset, uint index){
-//     sections[index].pc = offset;
-//     sections[index].code_size = sections[index].data_size - offset;
-//     memmove(sections[index].data, sections[index].code + sections[index].pc, sections[index].code_size);
-//     sections[index].code = (uint8_t *)sections[index].data;
-// }
+void DecompilerREV::Seek(uint64_t address, size_t data_size, uint index){
+    sections[index].pc = address;
+    sections[index].code_size = data_size - address;
+    sections[index].code = (uint8_t *)sections[index].data;
+    sections[index].code = (uint8_t *)(sections[index].code + address);
+}
 
 uint DecompilerREV::Decompile(void *data, size_t data_size, size_t data_offset, uint index){
     sections[index].pc = 0;
     sections[index].data = data;
     sections[index].data_size = data_size;
-    const uint8_t *code = (uint8_t *)data;
+    sections[index].code_size = data_size;
+    sections[index].code = (uint8_t *)data;
     cs_insn *insn = cs_malloc(sections[index].handle);
     while (true){
         if (sections[index].pc >= data_size){
             break;
         }
-        bool result = cs_disasm_iter(sections[index].handle, &code, &sections[index].data_size, &sections[index].pc, insn);
-        CollectInsn(insn, index);
+        bool result = cs_disasm_iter(sections[index].handle, &sections[index].code, &sections[index].code_size, &sections[index].pc, insn);
+        uint operand_type = CollectInsn(insn, index);
+        // if (operand_type == DECOMPILER_REV_OPERAND_TYPE_BLOCK &&
+        //     IsEndInsn(insn) == true &&
+        //     sections[index].blocks.size() > 0){
+        //     Seek(sections[index].blocks.back(), data_size, index);
+        // }
         printf("0x%" PRIx64 ":\t%s\t\t%s\n", insn->address, insn->mnemonic,insn->op_str);
-        //printf("pc: %ld, %ld\n", sections[index].pc, sections[index].data_size);
-    }
-    for (auto i: sections[index].blocks){
-        cout << "block: " << i << endl;
-    }
-    for (auto i: sections[index].functions){
-        cout << "funct: " << i << endl;
     }
     cs_free(insn, 1);
     return sections[index].pc;
+}
+
+uint64_t DecompilerREV::PushBlock(uint64_t address, uint index){
+    sections[index].blocks.push_back(address);
+    return address;
+}
+
+uint64_t DecompilerREV::PushFunction(uint64_t address, uint index){
+    sections[index].functions.push_back(address);
+    return address;
+}
+
+bool DecompilerREV::IsVisited(uint64_t address, uint index){
+    // TODO
+    return true;
 }
 
 bool DecompilerREV::IsEndInsn(cs_insn *insn){
@@ -101,75 +117,97 @@ bool DecompilerREV::IsEndInsn(cs_insn *insn){
     return false;
 }
 
-bool DecompilerREV::CollectInsn(cs_insn *insn, uint index){
+uint DecompilerREV::CollectInsn(cs_insn *insn, uint index){
+    uint result = DECOMPILER_REV_OPERAND_TYPE_UNSET;
     switch(insn->id){
             case X86_INS_JMP:
                 CollectOperands(insn, DECOMPILER_REV_OPERAND_TYPE_BLOCK, index);
+                result = DECOMPILER_REV_OPERAND_TYPE_BLOCK;
                 break;
             case X86_INS_JNE:
                 CollectOperands(insn, DECOMPILER_REV_OPERAND_TYPE_BLOCK, index);
+                result = DECOMPILER_REV_OPERAND_TYPE_BLOCK;
                 break;
             case X86_INS_JNO:
                 CollectOperands(insn, DECOMPILER_REV_OPERAND_TYPE_BLOCK, index);
+                result = DECOMPILER_REV_OPERAND_TYPE_BLOCK;
                 break;
             case X86_INS_JNP:
                 CollectOperands(insn, DECOMPILER_REV_OPERAND_TYPE_BLOCK, index);
+                result = DECOMPILER_REV_OPERAND_TYPE_BLOCK;
                 break;
             case X86_INS_JL:
                 CollectOperands(insn, DECOMPILER_REV_OPERAND_TYPE_BLOCK, index);
+                result = DECOMPILER_REV_OPERAND_TYPE_BLOCK;
                 break;
             case X86_INS_JLE:
                 CollectOperands(insn, DECOMPILER_REV_OPERAND_TYPE_BLOCK, index);
+                result = DECOMPILER_REV_OPERAND_TYPE_BLOCK;
                 break;
             case X86_INS_JG:
                 CollectOperands(insn, DECOMPILER_REV_OPERAND_TYPE_BLOCK, index);
+                result = DECOMPILER_REV_OPERAND_TYPE_BLOCK;
                 break;
             case X86_INS_JGE:
                 CollectOperands(insn, DECOMPILER_REV_OPERAND_TYPE_BLOCK, index);
+                result = DECOMPILER_REV_OPERAND_TYPE_BLOCK;
                 break;
             case X86_INS_JE:
                 CollectOperands(insn, DECOMPILER_REV_OPERAND_TYPE_BLOCK, index);
+                result = DECOMPILER_REV_OPERAND_TYPE_BLOCK;
                 break;
             case X86_INS_JECXZ:
                 CollectOperands(insn, DECOMPILER_REV_OPERAND_TYPE_BLOCK, index);
+                result = DECOMPILER_REV_OPERAND_TYPE_BLOCK;
                 break;
             case X86_INS_JCXZ:
                 CollectOperands(insn, DECOMPILER_REV_OPERAND_TYPE_BLOCK, index);
+                result = DECOMPILER_REV_OPERAND_TYPE_BLOCK;
                 break;
             case X86_INS_JB:
                 CollectOperands(insn, DECOMPILER_REV_OPERAND_TYPE_BLOCK, index);
+                result = DECOMPILER_REV_OPERAND_TYPE_BLOCK;
                 break;
             case X86_INS_JBE:
                 CollectOperands(insn, DECOMPILER_REV_OPERAND_TYPE_BLOCK, index);
+                result = DECOMPILER_REV_OPERAND_TYPE_BLOCK;
                 break;
             case X86_INS_JA:
                 CollectOperands(insn, DECOMPILER_REV_OPERAND_TYPE_BLOCK, index);
+                result = DECOMPILER_REV_OPERAND_TYPE_BLOCK;
                 break;
             case X86_INS_JAE:
                 CollectOperands(insn, DECOMPILER_REV_OPERAND_TYPE_BLOCK, index);
+                result = DECOMPILER_REV_OPERAND_TYPE_BLOCK;
                 break;
             case X86_INS_JNS:
                 CollectOperands(insn, DECOMPILER_REV_OPERAND_TYPE_BLOCK, index);
+                result = DECOMPILER_REV_OPERAND_TYPE_BLOCK;
                 break;
             case X86_INS_JO:
                 CollectOperands(insn, DECOMPILER_REV_OPERAND_TYPE_BLOCK, index);
+                result = DECOMPILER_REV_OPERAND_TYPE_BLOCK;
                 break;
             case X86_INS_JP:
                 CollectOperands(insn, DECOMPILER_REV_OPERAND_TYPE_BLOCK, index);
+                result = DECOMPILER_REV_OPERAND_TYPE_BLOCK;
                 break;
             case X86_INS_JRCXZ:
                 CollectOperands(insn, DECOMPILER_REV_OPERAND_TYPE_BLOCK, index);
+                result = DECOMPILER_REV_OPERAND_TYPE_BLOCK;
                 break;
             case X86_INS_JS:
                 CollectOperands(insn, DECOMPILER_REV_OPERAND_TYPE_BLOCK, index);
+                result = DECOMPILER_REV_OPERAND_TYPE_BLOCK;
                 break;
             case X86_INS_CALL:
                 CollectOperands(insn, DECOMPILER_REV_OPERAND_TYPE_FUNCTION, index);
+                result = DECOMPILER_REV_OPERAND_TYPE_FUNCTION;
                 break;
             default:
-                return false;
+                return result;
     }
-    return true;
+    return result;
 }
 
 bool DecompilerREV::CollectOperands(cs_insn *insn, int operand_type, uint index){
