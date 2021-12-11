@@ -36,3 +36,19 @@ target_include_directories(blyara
     PRIVATE
         ${PROJECT_SOURCE_DIR}/include
 )
+
+project(blhash)
+
+set(SOURCES_HASH
+    src/blhash.cpp
+)
+
+add_executable(blhash ${SOURCES_HASH})
+
+target_link_libraries(blhash -lcapstone -lcrypto -lm)
+
+target_include_directories(blhash
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/include
+)
+

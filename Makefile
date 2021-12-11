@@ -19,10 +19,12 @@ docs-update:
 install:
 	cp build/binlex /usr/bin/
 	cp build/blyara /usr/bin/
+	cp build/blhash /usr/bin/
 
 uninstall:
 	rm -f /usr/bin/binlex
 	rm -f /usr/bin/blyara
+	rm -f /usr/bin/blhash
 
 traits: check-parameter-source check-parameter-dest check-parameter-type check-parameter-format check-parameter-arch
 	@echo "[-] building traits..."
