@@ -35,6 +35,8 @@ Get slides [here](docs/oalabs.pdf).
 
 **From Source:**
 
+Please note that `binlex` requires `cmake` >= 3.5 and `make` >= 4.2.1.
+
 ```bash
 sudo apt install -y git build-essential libcapstone-dev cmake make parallel doxygen git-lfs
 git clone --recursive https://github.com/c3rb3ru5d3d53c/binlex.git
