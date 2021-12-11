@@ -77,12 +77,27 @@ uint DecompilerREV::Decompile(void* data, size_t data_size, size_t data_offset, 
     sections[index].code = (uint8_t*)data;
     cs_insn* insn = cs_malloc(sections[index].handle);
     uint64_t tmp_addr = 0;
-
     while (true) {
-        if (sections[index].pc >= data_size) {
+        if (sections[index].pc >= data_size && sections[index].discovered.empty()) {
             break;
         }
+        if (sections[index].pc >= data_size && !sections[index].discovered.empty()){
+            tmp_addr = sections[index].discovered.front();
+            sections[index].discovered.pop();
+            Seek(tmp_addr, data_size, index);
+            continue;
+        }
         bool result = cs_disasm_iter(sections[index].handle, &sections[index].code, &sections[index].code_size, &sections[index].pc, insn);
+        if (result == false){
+            // Handle Invalid Instructions
+            Seek(sections[index].pc+1, data_size, index);
+            continue;
+        }
+        if (result == true && IsEndInsn(insn) == true && sections[index].pc < data_size){
+            // If More Executable Data Available Continue
+            Seek(sections[index].pc+sizeof(insn->bytes), data_size, index);
+            continue;
+        }
         uint operand_type = CollectInsn(insn, index);
         if (IsEndInsn(insn) == true) {
             if (!sections[index].discovered.empty()) {
