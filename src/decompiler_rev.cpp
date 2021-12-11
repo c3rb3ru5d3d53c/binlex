@@ -84,14 +84,14 @@ uint DecompilerREV::Decompile(void* data, size_t data_size, size_t data_offset, 
         }
         bool result = cs_disasm_iter(sections[index].handle, &sections[index].code, &sections[index].code_size, &sections[index].pc, insn);
         uint operand_type = CollectInsn(insn, index);
-        if ((operand_type == DECOMPILER_REV_OPERAND_TYPE_BLOCK || operand_type == DECOMPILER_REV_OPERAND_TYPE_FUNCTION) && IsEndInsn(insn) == true) {
+        if (IsEndInsn(insn) == true) {
             if (!sections[index].discovered.empty()) {
                 tmp_addr = sections[index].discovered.front();
                 sections[index].discovered.pop();
                 Seek(tmp_addr, data_size, index);
             }
         }
-        //printf("0x%" PRIx64 ":\t%s\t\t%s\n", insn->address, insn->mnemonic, insn->op_str);
+        printf("qsize: %ld, 0x%" PRIx64 ":\t%s\t\t%s\n", sections[index].discovered.size(), insn->address, insn->mnemonic, insn->op_str);
     }
     cs_free(insn, 1);
     return sections[index].pc;
