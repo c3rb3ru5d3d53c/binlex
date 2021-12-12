@@ -1,6 +1,5 @@
 #include <vector>
 #include <queue>
-
 #include <capstone/capstone.h>
 #include "common.h"
 
@@ -25,6 +24,7 @@ namespace binlex {
             uint edges;
             uint blocks;
             uint insns;
+            uint size;
         } trait;
     public:
         struct Section {
@@ -114,6 +114,11 @@ namespace binlex {
         @return bool
         */
         bool IsVisited(uint64_t address, uint index);
+        /**
+        Check if Function or Block Address Collected
+        @param address the address to check
+        @return bool
+        */
         bool IsAddress(uint64_t address, uint index);
         //void Seek(uint offset, uint index);
         ~DecompilerREV();

@@ -79,7 +79,6 @@ uint DecompilerREV::Decompile(void* data, size_t data_size, size_t data_offset, 
     uint64_t tmp_addr = 0;
     // Set First Instruction as Function which is also start of a block
     sections[index].addresses[0] = DECOMPILER_REV_OPERAND_TYPE_FUNCTION;
-    sections[index].discovered.push(0);
     while (true) {
         if (sections[index].pc >= data_size && sections[index].discovered.empty()) {
             break;
@@ -97,9 +96,11 @@ uint DecompilerREV::Decompile(void* data, size_t data_size, size_t data_offset, 
             continue;
         }
         if (result == true && IsEndInsn(insn) == true && sections[index].pc < data_size){
-            // If More Executable Data Available Continue
-            Seek(sections[index].pc+sizeof(insn->bytes), data_size, index);
-            continue;
+            // If More Executable Data Add to Queue
+            if (IsVisited(sections[index].pc+sizeof(insn->bytes), index) == false){
+                sections[index].visited[sections[index].pc+sizeof(insn->bytes)] = 0;
+                sections[index].discovered.push(sections[index].pc+sizeof(insn->bytes));
+            }
         }
         uint operand_type = CollectInsn(insn, index);
         if (IsEndInsn(insn) == true) {
