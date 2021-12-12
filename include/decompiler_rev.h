@@ -53,13 +53,13 @@ namespace binlex {
         */
         bool Setup(cs_arch arch, cs_mode mode, uint index);
         /**
-        Collect Operands for Processing
+        Collect Function and Conditional Operands for Processing
         @param insn the instruction
         @param operand_type the operand type
         @param index the section index
         @returns bool
         */
-        bool CollectOperands(cs_insn* insn, int operand_type, uint index);
+        void CollectOperands(cs_insn* insn, int operand_type, uint index);
         /**
         Collect Instructions for Processing
         @param insn the instruction
