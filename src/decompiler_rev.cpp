@@ -77,6 +77,9 @@ uint DecompilerREV::Decompile(void* data, size_t data_size, size_t data_offset, 
     sections[index].code = (uint8_t*)data;
     cs_insn* insn = cs_malloc(sections[index].handle);
     uint64_t tmp_addr = 0;
+    // Set First Instruction as Function which is also start of a block
+    sections[index].addresses[0] = DECOMPILER_REV_OPERAND_TYPE_FUNCTION;
+    sections[index].discovered.push(0);
     while (true) {
         if (sections[index].pc >= data_size && sections[index].discovered.empty()) {
             break;
@@ -235,11 +238,11 @@ void DecompilerREV::CollectOperands(cs_insn* insn, int operand_type, uint index)
         sections[index].visited[address] = 0;
         switch(operand_type){
             case DECOMPILER_REV_OPERAND_TYPE_BLOCK:
-                sections[index].addresses[address] = operand_type;
+                sections[index].addresses[address] = DECOMPILER_REV_OPERAND_TYPE_BLOCK;
                 sections[index].discovered.push(address);
                 break;
             case DECOMPILER_REV_OPERAND_TYPE_FUNCTION:
-                sections[index].addresses[address] = operand_type;
+                sections[index].addresses[address] = DECOMPILER_REV_OPERAND_TYPE_FUNCTION;
                 sections[index].discovered.push(address);
                 break;
             default:
@@ -248,7 +251,17 @@ void DecompilerREV::CollectOperands(cs_insn* insn, int operand_type, uint index)
     }
 }
 
+bool DecompilerREV::IsAddress(uint64_t address, uint index){
+    if (sections[index].addresses.find(address) == sections[index].addresses.end()){
+        return false;
+    }
+    return true;
+}
+
 bool DecompilerREV::IsFunction(uint64_t address, uint index){
+    if (IsAddress(address, index) == false){
+        return false;
+    }
     if (sections[index].addresses.find(address)->second != DECOMPILER_REV_OPERAND_TYPE_FUNCTION){
         return false;
     }
@@ -256,10 +269,14 @@ bool DecompilerREV::IsFunction(uint64_t address, uint index){
 }
 
 bool DecompilerREV::IsBlock(uint64_t address, uint index){
-    if (sections[index].addresses.find(address)->second != DECOMPILER_REV_OPERAND_TYPE_BLOCK){
+    if (IsAddress(address, index) == false){
         return false;
     }
-    return true;
+    if (sections[index].addresses.find(address)->second == DECOMPILER_REV_OPERAND_TYPE_BLOCK ||
+        sections[index].addresses.find(address)->second == DECOMPILER_REV_OPERAND_TYPE_FUNCTION){
+        return true;
+    }
+    return false;
 }
 
 DecompilerREV::~DecompilerREV() {
