@@ -239,31 +239,23 @@ uint DecompilerREV::CollectInsn(cs_insn* insn, uint index) {
     return result;
 }
 
-bool DecompilerREV::CollectOperands(cs_insn* insn, int operand_type, uint index) {
-/*
-    for (int i = 0; i < insn->detail->x86.op_count; i++) {
-        cs_x86_op operand = insn->detail->x86.operands[i];
-        switch (operand.type) {
-        case X86_OP_IMM:
-            CollectImm(operand.imm, operand_type, index);
-        default:
-            break;
-        }
-    }
-*/
+void DecompilerREV::CollectOperands(cs_insn* insn, int operand_type, uint index) {
     uint64_t address = X86_REL_ADDR(*insn);
     if (!IsVisited(address, index)) {
         sections[index].visited[address] = 0;
-        if (operand_type == DECOMPILER_REV_OPERAND_TYPE_BLOCK) {
-            sections[index].blocks.push_back(address);
-            sections[index].discovered.push(address);
-        }
-        else {
-            sections[index].functions.push_back(address);
-            sections[index].discovered.push(address);
+        switch(operand_type){
+            case DECOMPILER_REV_OPERAND_TYPE_BLOCK:
+                sections[index].blocks.push_back(address);
+                sections[index].discovered.push(address);
+                break;
+            case DECOMPILER_REV_OPERAND_TYPE_FUNCTION:
+                sections[index].functions.push_back(address);
+                sections[index].discovered.push(address);
+                break;
+            default:
+                break;
         }
     }
-    return true;
 }
 
 void DecompilerREV::CollectImm(int64_t imm, int operand_type, uint index) {
