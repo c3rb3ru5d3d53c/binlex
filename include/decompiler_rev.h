@@ -30,6 +30,8 @@ namespace binlex {
         struct Section {
             csh handle;
             cs_err status;
+            cs_arch arch;
+            cs_mode mode;
             uint offset;
             uint64_t pc;
             trait* traits;
@@ -38,7 +40,6 @@ namespace binlex {
             size_t data_size;
             const uint8_t* code;
             size_t code_size;
-            // address, block, function
             map<uint64_t, uint> addresses;
             map<uint64_t, int> visited;
             queue<uint64_t> discovered;
@@ -51,7 +52,7 @@ namespace binlex {
         @param cs_mode Capstone Mode
         @param index section index
         */
-        void Worker(cs_arch arch, cs_mode mode, int index);
+        bool Worker(int index);
         bool Setup(cs_arch arch, cs_mode mode, uint index);
         /**
         Collect Function and Conditional Operands for Processing
@@ -89,7 +90,8 @@ namespace binlex {
         @param insn the instruction
         @return bool
         */
-        bool IsEndInsn(cs_insn* insn);
+        bool IsEndInsn(cs_insn *insn);
+        bool IsConditionalInsn(cs_insn *insn);
         /**
         Allocate Traits
         @param count number of traits to allocate
