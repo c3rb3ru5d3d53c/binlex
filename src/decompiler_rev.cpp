@@ -8,6 +8,7 @@
 #include <vector>
 #include <iomanip>
 #ifndef _WIN32
+#include <pthread.h>
 #include <openssl/sha.h>
 #else
 #include <windows.h>
@@ -22,6 +23,15 @@ using namespace binlex;
 
 // Very WIP Recursive Decompiler
 
+typedef struct worker
+{
+    csh handle;
+    cs_err error;
+    uint64_t pc;
+    const uint8_t *code;
+    size_t code_size;
+
+} worker;
 //from https://github.com/capstone-engine/capstone/blob/master/include/capstone/x86.h
 
 #define X86_REL_ADDR(insn) (((insn).detail->x86.operands[0].type == X86_OP_IMM) \
@@ -69,12 +79,50 @@ void DecompilerREV::Seek(uint64_t address, size_t data_size, uint index) {
     sections[index].code = (uint8_t*)(sections[index].code + address);
 }
 
+/*
+int pthread_create(pthread_t *restrict thread,
+                          const pthread_attr_t *restrict attr,
+                          void *(*start_routine)(void *),
+                          void *restrict arg);
+*/
+                         
+void DecompilerREV::Worker(cs_arch arch, cs_mode mode, int index) {
+    worker myself;
+    bool exit = false;
+    cs_insn* insn = cs_malloc(sections[index].handle);
+    while(true) {
+        //pthread_mutex_lock(&NET_PTHREAD_MUTEX_UPDATE_VICTIMS);
+        if(!sections[index].discovered.empty()) {
+            uint64_t address = sections[index].discovered.front();
+            sections[index].discovered.pop();
+            //pthread_mutex_unlock(&NET_PTHREAD_MUTEX_UPDATE_VICTIMS);
+
+            // Seek()
+            myself.pc = address;
+            myself.code = (uint8_t *)(sections[index].data + address);
+            myself.code_size = sections[index].data_size + address;
+
+            //Decompile Logic
+
+
+        }else {
+            //pthread_mutex_unlock(&NET_PTHREAD_MUTEX_UPDATE_VICTIMS);
+            //Sleep? WaitForSingleObject windows
+        }
+    }
+    
+}
 uint DecompilerREV::Decompile(void* data, size_t data_size, size_t data_offset, uint index) {
+    // struct * number of workers
+
     sections[index].pc = 0;
+    sections[index].code = (uint8_t*)data;
+
+    // shared
     sections[index].data = data;
     sections[index].data_size = data_size;
     sections[index].code_size = data_size;
-    sections[index].code = (uint8_t*)data;
+   
     cs_insn* insn = cs_malloc(sections[index].handle);
     uint64_t tmp_addr = 0;
     // Set First Instruction as Function which is also start of a block
