@@ -51,6 +51,7 @@ namespace binlex {
         @param cs_mode Capstone Mode
         @param index section index
         */
+        void Worker(cs_arch arch, cs_mode mode, int index);
         bool Setup(cs_arch arch, cs_mode mode, uint index);
         /**
         Collect Function and Conditional Operands for Processing
