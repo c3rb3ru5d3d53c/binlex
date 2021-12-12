@@ -38,8 +38,8 @@ namespace binlex {
             size_t data_size;
             const uint8_t* code;
             size_t code_size;
-            vector<uint64_t> blocks;
-            vector<uint64_t> functions;
+            map<uint64_t, uint> addresses;
+            //vector<uint64_t> functions;
             map<uint64_t, int> visited;
             queue<uint64_t> discovered;
         };
@@ -67,13 +67,6 @@ namespace binlex {
         @returns operand type
         */
         uint CollectInsn(cs_insn* insn, uint index);
-        /**
-        Collect Immutable Operands
-        @param imm immutable value
-        @param operand_type the operand type
-        @param index the section index
-        */
-        void CollectImm(int64_t imm, int operand_type, uint index);
         /**
         Decompiles Target Data
         @param data pointer to data
@@ -104,23 +97,23 @@ namespace binlex {
         */
         bool AllocTraits(uint count, uint index);
         /**
+        Checks if Address if Function
+        @param address address to check
+        @return bool
+        */
+        bool IsFunction(uint64_t address, uint index);
+        /**
+        Checks if Address if Function
+        @param address address to check
+        @return bool
+        */
+        bool IsBlock(uint64_t address, uint index);
+        /**
         Checks if Address was Already Visited
         @param address address to check
         @return bool
         */
         bool IsVisited(uint64_t address, uint index);
-        /**
-        Pushes Block Address to the Blocks Vector Stack
-        @param address block address
-        @return address
-        */
-        uint64_t PushBlock(uint64_t address, uint index);
-        /**
-        Pushes Function Address to the Functions Vector Stack
-        @param address function address
-        @return address
-        */
-        uint64_t PushFunction(uint64_t address, uint index);
         //void Seek(uint offset, uint index);
         ~DecompilerREV();
 
