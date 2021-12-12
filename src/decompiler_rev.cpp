@@ -106,20 +106,10 @@ uint DecompilerREV::Decompile(void* data, size_t data_size, size_t data_offset, 
                 Seek(tmp_addr, data_size, index);
             }
         }
-        printf("qsize: %ld, 0x%" PRIx64 ":\t%s\t\t%s\n", sections[index].discovered.size(), insn->address, insn->mnemonic, insn->op_str);
+        printf("address=0x%" PRIx64 ",block=%d,function=%d,queue=%ld,instruction=%s\t%s\n", insn->address,IsBlock(insn->address, index), IsFunction(insn->address, index), sections[index].discovered.size(), insn->mnemonic, insn->op_str);
     }
     cs_free(insn, 1);
     return sections[index].pc;
-}
-
-uint64_t DecompilerREV::PushBlock(uint64_t address, uint index) {
-    sections[index].blocks.push_back(address);
-    return address;
-}
-
-uint64_t DecompilerREV::PushFunction(uint64_t address, uint index) {
-    sections[index].functions.push_back(address);
-    return address;
 }
 
 bool DecompilerREV::IsVisited(uint64_t address, uint index) {
@@ -245,11 +235,11 @@ void DecompilerREV::CollectOperands(cs_insn* insn, int operand_type, uint index)
         sections[index].visited[address] = 0;
         switch(operand_type){
             case DECOMPILER_REV_OPERAND_TYPE_BLOCK:
-                sections[index].blocks.push_back(address);
+                sections[index].addresses[address] = operand_type;
                 sections[index].discovered.push(address);
                 break;
             case DECOMPILER_REV_OPERAND_TYPE_FUNCTION:
-                sections[index].functions.push_back(address);
+                sections[index].addresses[address] = operand_type;
                 sections[index].discovered.push(address);
                 break;
             default:
@@ -258,17 +248,18 @@ void DecompilerREV::CollectOperands(cs_insn* insn, int operand_type, uint index)
     }
 }
 
-void DecompilerREV::CollectImm(int64_t imm, int operand_type, uint index) {
-    switch (operand_type) {
-    case DECOMPILER_REV_OPERAND_TYPE_BLOCK:
-        sections[index].blocks.push_back(imm);
-        break;
-    case DECOMPILER_REV_OPERAND_TYPE_FUNCTION:
-        sections[index].functions.push_back(imm);
-        break;
-    default:
-        break;
+bool DecompilerREV::IsFunction(uint64_t address, uint index){
+    if (sections[index].addresses.find(address)->second != DECOMPILER_REV_OPERAND_TYPE_FUNCTION){
+        return false;
     }
+    return true;
+}
+
+bool DecompilerREV::IsBlock(uint64_t address, uint index){
+    if (sections[index].addresses.find(address)->second != DECOMPILER_REV_OPERAND_TYPE_BLOCK){
+        return false;
+    }
+    return true;
 }
 
 DecompilerREV::~DecompilerREV() {
