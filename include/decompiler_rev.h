@@ -38,8 +38,8 @@ namespace binlex {
             size_t data_size;
             const uint8_t* code;
             size_t code_size;
+            // address, block, function
             map<uint64_t, uint> addresses;
-            //vector<uint64_t> functions;
             map<uint64_t, int> visited;
             queue<uint64_t> discovered;
         };
@@ -114,6 +114,7 @@ namespace binlex {
         @return bool
         */
         bool IsVisited(uint64_t address, uint index);
+        bool IsAddress(uint64_t address, uint index);
         //void Seek(uint offset, uint index);
         ~DecompilerREV();
 
