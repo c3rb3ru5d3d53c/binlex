@@ -12,6 +12,8 @@
 #define DECOMPILER_REV_OPERAND_TYPE_FUNCTION 1
 #define DECOMPILER_REV_OPERAND_TYPE_UNSET    2
 
+#define DECOMPILER_REV_THREADS 1
+
 using namespace std;
 
 namespace binlex {
@@ -28,18 +30,14 @@ namespace binlex {
         } trait;
     public:
         struct Section {
-            csh handle;
-            cs_err status;
             cs_arch arch;
             cs_mode mode;
+            uint threads;
             uint offset;
-            uint64_t pc;
-            trait* traits;
+            trait *traits;
             uint traits_count;
-            void* data;
+            void *data;
             size_t data_size;
-            const uint8_t* code;
-            size_t code_size;
             map<uint64_t, uint> addresses;
             map<uint64_t, int> visited;
             queue<uint64_t> discovered;
@@ -52,8 +50,8 @@ namespace binlex {
         @param cs_mode Capstone Mode
         @param index section index
         */
-        bool Worker(int index);
-        bool Setup(cs_arch arch, cs_mode mode, uint index);
+        bool Worker(void *args);
+        bool Setup(cs_arch arch, cs_mode mode, uint index, uint threads);
         /**
         Collect Function and Conditional Operands for Processing
         @param insn the instruction
@@ -73,12 +71,11 @@ namespace binlex {
         Decompiles Target Data
         @param data pointer to data
         @param data_size size of data
-        @param data_offset include section offset
+        @param offset include section offset
         @param index the section index
-        @returns program counter position
         */
-        uint Decompile(void* data, size_t data_size, size_t data_offset, uint index);
-        void Seek(uint64_t address, size_t data_size, uint index);
+        void Decompile(void* data, size_t data_size, size_t offset, uint index);
+        //void Seek(uint64_t address, size_t data_size, uint index);
         /**
         Allocate Additional Traits
         @param count number of additional traits to allocate
@@ -104,25 +101,25 @@ namespace binlex {
         @param address address to check
         @return bool
         */
-        bool IsFunction(uint64_t address, uint index);
+        bool IsFunction(map<uint64_t, uint> &addresses, uint64_t address, uint index);
         /**
         Checks if Address if Function
         @param address address to check
         @return bool
         */
-        bool IsBlock(uint64_t address, uint index);
+        bool IsBlock(map<uint64_t, uint> &addresses, uint64_t address, uint index);
         /**
         Checks if Address was Already Visited
         @param address address to check
         @return bool
         */
-        bool IsVisited(uint64_t address, uint index);
+        bool IsVisited(map<uint64_t, int> &visited, uint64_t address, uint index);
         /**
         Check if Function or Block Address Collected
         @param address the address to check
         @return bool
         */
-        bool IsAddress(uint64_t address, uint index);
+        bool IsAddress(map<uint64_t, uint> &addresses, uint64_t address, uint index);
         //void Seek(uint offset, uint index);
         ~DecompilerREV();
 

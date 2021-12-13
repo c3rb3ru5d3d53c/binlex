@@ -115,7 +115,7 @@ int main(int argc, char **argv){
         Raw rawx86;
         rawx86.ReadFile(args.options.input, 0);
         DecompilerREV decompiler;
-        decompiler.Setup(CS_ARCH_X86, CS_MODE_32, 0);
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_32, 0, 1);
         decompiler.Decompile(rawx86.sections[0].data, rawx86.sections[0].size, rawx86.sections[0].offset, 0);
         // if (args.options.output == NULL){
         //     decompiler.PrintTraits(args.options.pretty);
