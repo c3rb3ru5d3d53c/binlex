@@ -50,7 +50,7 @@ namespace binlex {
         @param cs_mode Capstone Mode
         @param index section index
         */
-        bool Worker(void *args);
+        static void * Worker(void *args);
         bool Setup(cs_arch arch, cs_mode mode, uint index, uint threads);
         /**
         Collect Function and Conditional Operands for Processing
@@ -59,14 +59,14 @@ namespace binlex {
         @param index the section index
         @returns bool
         */
-        void CollectOperands(cs_insn* insn, int operand_type, uint index);
+        static void CollectOperands(cs_insn* insn, int operand_type, struct Section *sections, uint index);
         /**
         Collect Instructions for Processing
         @param insn the instruction
         @param index the section index
         @returns operand type
         */
-        uint CollectInsn(cs_insn* insn, uint index);
+        static uint CollectInsn(cs_insn* insn, struct Section *sections, uint index);
         /**
         Decompiles Target Data
         @param data pointer to data
@@ -87,8 +87,8 @@ namespace binlex {
         @param insn the instruction
         @return bool
         */
-        bool IsEndInsn(cs_insn *insn);
-        bool IsConditionalInsn(cs_insn *insn);
+        static bool IsEndInsn(cs_insn *insn);
+        static bool IsConditionalInsn(cs_insn *insn);
         /**
         Allocate Traits
         @param count number of traits to allocate
@@ -101,19 +101,19 @@ namespace binlex {
         @param address address to check
         @return bool
         */
-        bool IsFunction(map<uint64_t, uint> &addresses, uint64_t address, uint index);
+        static bool IsFunction(map<uint64_t, uint> &addresses, uint64_t address);
         /**
         Checks if Address if Function
         @param address address to check
         @return bool
         */
-        bool IsBlock(map<uint64_t, uint> &addresses, uint64_t address, uint index);
+        static bool IsBlock(map<uint64_t, uint> &addresses, uint64_t address);
         /**
         Checks if Address was Already Visited
         @param address address to check
         @return bool
         */
-        bool IsVisited(map<uint64_t, int> &visited, uint64_t address, uint index);
+        static bool IsVisited(map<uint64_t, int> &visited, uint64_t address);
         /**
         Check if Function or Block Address Collected
         @param address the address to check
