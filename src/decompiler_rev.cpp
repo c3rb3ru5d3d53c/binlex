@@ -91,12 +91,19 @@ void * DecompilerREV::Worker(void *args) {
 
     cs_insn *insn = cs_malloc(myself.handle);
     uint64_t tmp_addr = 0;
+    uint64_t address = 0;
 
     pthread_mutex_lock(&DECOMPILER_REV_MUTEX);
-    uint64_t address = sections[index].discovered.front();
-    sections[index].discovered.pop();
-    sections[index].visited[address] = 0;
+    if (!sections[index].discovered.empty()){
+        address = sections[index].discovered.front();
+        sections[index].discovered.pop();
+        sections[index].visited[address] = 0;
+    } else {
+         pthread_mutex_unlock(&DECOMPILER_REV_MUTEX);
+        return NULL;
+    }
     pthread_mutex_unlock(&DECOMPILER_REV_MUTEX);
+
 
     myself.pc = address;
     myself.code = (uint8_t *)((uint8_t *)sections[index].data + address);
@@ -134,17 +141,17 @@ void * DecompilerREV::Worker(void *args) {
         if (function == true && IsEndInsn(insn) == true){
             if (block == true && IsConditionalInsn(insn) == true){
                 // END Block Data
-                printf("END\n");
+                printf("END 0\n");
                 break;
             }
             // END Function Data
-            printf("END\n");
+            printf("END 1\n");
             break;
         }
         // If Block and End of Block Break
         if (block == true && (IsConditionalInsn(insn) == true || IsEndInsn(insn) == true) && function == false){
             // END Block Data
-            printf("END\n");
+            printf("END 2\n");
             break;
         }
     }
@@ -154,8 +161,6 @@ void * DecompilerREV::Worker(void *args) {
 }
 
 void DecompilerREV::Decompile(void* data, size_t data_size, size_t offset, uint index) {
-
-    pthread_t tid;
 
     sections[index].data = data;
     sections[index].data_size = data_size;
@@ -168,9 +173,24 @@ void DecompilerREV::Decompile(void* data, size_t data_size, size_t offset, uint 
     args->sections = &sections;
     args->offset = offset;
 
-    while(!sections[index].discovered.empty()){
-        pthread_create(&tid, NULL, Worker, args);
-        pthread_join(tid, NULL);
+    pthread_t threads[DECOMPILER_REV_THREADS];
+
+    pthread_attr_t thread_attribs;
+    pthread_attr_init(&thread_attribs);
+    pthread_attr_setdetachstate(&thread_attribs, PTHREAD_CREATE_JOINABLE);
+
+    Worker(args);
+
+    while(true){
+        if (sections[index].discovered.size() <= 0){
+            break;
+        }
+        for (int i = 0; i < DECOMPILER_REV_THREADS; i++){
+            pthread_create(&threads[i], &thread_attribs, Worker, args);
+        }
+        for (int i = 0; i < DECOMPILER_REV_THREADS; i++){
+            pthread_join(threads[i], NULL);
+        }
     }
     free(args);
     printf("END PROGRAM\n");
