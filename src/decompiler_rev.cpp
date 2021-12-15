@@ -70,14 +70,6 @@ bool DecompilerREV::AppendTrait(struct Trait trait, struct Section *sections, ui
     return true;
 }
 
-// bool DecompilerREV::AllocTraits(uint count, uint index) {
-//     sections[index].traits_count = sections[index].traits_count + count;
-//     if (realloc(sections[index].traits, sizeof(trait) * sections[index].traits_count) == NULL) {
-//         return false;
-//     }
-//     return true;
-// }
-
 bool DecompilerREV::Setup(cs_arch arch, cs_mode mode, uint index, uint threads) {
     sections[index].arch = arch;
     sections[index].mode = mode;
