@@ -66,6 +66,7 @@ void Args::print_help(){
         "  -i  --input\t\tinput file\t\t(required)\n"
         "  -m  --mode\t\tset mode\t\t(required)\n"
         "  -lm --list-modes\tlist modes\n"
+        "  -t  --threads\t\tnumber of threads\t(optional)\n"
         "  -h  --help\t\tdisplay help\n"
         "  -o  --output\t\toutput file\t\t(optional)\n"
         "  -p  --pretty\t\tpretty output\t\t(optional)\n"
@@ -110,6 +111,18 @@ void Args::parse(int argc, char **argv){
             strcmp(argv[i], (char *)"--pretty") == 0){
             options.pretty = true;
         }
+        if (strcmp(argv[i], (char *)"-t") == 0 ||
+            strcmp(argv[i], (char *)"--threads") == 0){
+            if (argc < i+2){
+                fprintf(stderr, "[x] invalid thread count\n");
+                exit(1);
+            }
+            options.threads = atoi(argv[i+1]);
+            if (options.threads <= 0){
+                fprintf(stderr, "[x] invalid number of threads\n");
+                exit(1);
+            }
+        }
         if (strcmp(argv[i], (char *)"-o") == 0 ||
             strcmp(argv[i], (char *)"--output") == 0){
             options.output = argv[i+1];
@@ -117,6 +130,10 @@ void Args::parse(int argc, char **argv){
         if (strcmp(argv[i], (char *)"-m") == 0 ||
             strcmp(argv[i], (char *)"--mode") == 0){
             options.mode = argv[i+1];
+            if (argc < i+2){
+                fprintf(stderr, "[x] invalid mode\n");
+                exit(1);
+            }
             if (check_mode(options.mode) == false){
                 fprintf(stderr, "%s is an invalid mode\n", options.mode);
                 exit(1);

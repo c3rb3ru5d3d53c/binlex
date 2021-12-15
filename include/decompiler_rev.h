@@ -12,14 +12,15 @@
 #define DECOMPILER_REV_OPERAND_TYPE_FUNCTION 1
 #define DECOMPILER_REV_OPERAND_TYPE_UNSET    2
 
-#define DECOMPILER_REV_THREADS 4
+#define DECOMPILER_REV_VISITED_TRUE  0
+#define DECOMPILER_REV_VISITED_FALSE 1
 
 using namespace std;
 
 namespace binlex {
     class DecompilerREV : public Common {
     private:
-        typedef struct {
+        struct Trait {
             string type;
             string bytes;
             string trait;
@@ -27,15 +28,15 @@ namespace binlex {
             uint blocks;
             uint insns;
             uint size;
-        } trait;
+        };
     public:
         struct Section {
             cs_arch arch;
             cs_mode mode;
             uint threads;
             uint offset;
-            trait *traits;
-            uint traits_count;
+            struct Trait *traits;
+            uint ntraits;
             void *data;
             size_t data_size;
             map<uint64_t, uint> addresses;
@@ -77,11 +78,13 @@ namespace binlex {
         void Decompile(void* data, size_t data_size, size_t offset, uint index);
         //void Seek(uint64_t address, size_t data_size, uint index);
         /**
-        Allocate Additional Traits
-        @param count number of additional traits to allocate
+        Append Additional Traits
+        @param trait trait to append
+        @param sections sections pointer
         @param index the section index
         @return bool
         */
+        static bool AppendTrait(struct Trait trait, struct Section *sections, uint index);
         /**
         Checks if the Instruction is an Ending Instruction
         @param insn the instruction
@@ -95,7 +98,7 @@ namespace binlex {
         @param index the section index
         @return bool
         */
-        bool AllocTraits(uint count, uint index);
+        //bool AllocTraits(uint count, uint index);
         /**
         Checks if Address if Function
         @param address address to check

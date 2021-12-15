@@ -7,10 +7,10 @@
 #include <algorithm>
 #include <vector>
 #include <iomanip>
-#ifndef _WIN32
+#if defined(__linux__) || defined(__APPLE__)
 #include <pthread.h>
 #include <openssl/sha.h>
-#else
+#elif _WIN32
 #include <windows.h>
 #include <wincrypt.h>
 #endif
@@ -52,20 +52,31 @@ DecompilerREV::DecompilerREV() {
     for (int i = 0; i < DECOMPILER_REV_MAX_SECTIONS; i++) {
         sections[i].offset = 0;
         sections[i].traits = NULL;
-        sections[i].traits_count = 0;
+        sections[i].ntraits = 0;
         sections[i].data = NULL;
         sections[i].data_size = 0;
         sections[i].threads = 1;
     }
 }
 
-bool DecompilerREV::AllocTraits(uint count, uint index) {
-    sections[index].traits_count = sections[index].traits_count + count;
-    if (realloc(sections[index].traits, sizeof(trait) * sections[index].traits_count) == NULL) {
+bool DecompilerREV::AppendTrait(struct Trait trait, struct Section *sections, uint index){
+    sections[index].ntraits++;
+    if (realloc(sections[index].traits, sizeof(trait) * sections[index].ntraits) == NULL) {
+        return false;
+    }
+    if (memcpy(sections[index].traits+(sections[index].ntraits*sizeof(trait)), &trait, sizeof(trait)) == NULL){
         return false;
     }
     return true;
 }
+
+// bool DecompilerREV::AllocTraits(uint count, uint index) {
+//     sections[index].traits_count = sections[index].traits_count + count;
+//     if (realloc(sections[index].traits, sizeof(trait) * sections[index].traits_count) == NULL) {
+//         return false;
+//     }
+//     return true;
+// }
 
 bool DecompilerREV::Setup(cs_arch arch, cs_mode mode, uint index, uint threads) {
     sections[index].arch = arch;
@@ -80,6 +91,12 @@ void * DecompilerREV::Worker(void *args) {
     uint index = pArgs->index;
     struct Section *sections = (struct Section *)pArgs->sections;
 
+    struct Trait b_trait;
+    struct Trait f_trait;
+
+    b_trait.type = "block";
+    f_trait.type = "function";
+
     myself.error = cs_open(sections[index].arch, sections[index].mode, &myself.handle);
     if (myself.error != CS_ERR_OK) {
         return NULL;
@@ -93,17 +110,22 @@ void * DecompilerREV::Worker(void *args) {
     uint64_t tmp_addr = 0;
     uint64_t address = 0;
 
+    #if defined(__linux__) || defined(__APPLE__)
     pthread_mutex_lock(&DECOMPILER_REV_MUTEX);
+    #endif
     if (!sections[index].discovered.empty()){
         address = sections[index].discovered.front();
         sections[index].discovered.pop();
-        sections[index].visited[address] = 0;
+        sections[index].visited[address] = DECOMPILER_REV_VISITED_TRUE;
     } else {
-         pthread_mutex_unlock(&DECOMPILER_REV_MUTEX);
+        #if defined(__linux__) || defined(__APPLE__)
+        pthread_mutex_unlock(&DECOMPILER_REV_MUTEX);
+        #endif
         return NULL;
     }
+    #if defined(__linux__) || defined(__APPLE__)
     pthread_mutex_unlock(&DECOMPILER_REV_MUTEX);
-
+    #endif
 
     myself.pc = address;
     myself.code = (uint8_t *)((uint8_t *)sections[index].data + address);
@@ -125,7 +147,9 @@ void * DecompilerREV::Worker(void *args) {
             continue;
         }
 
+        #if defined(__linux__) || defined(__APPLE__)
         pthread_mutex_lock(&DECOMPILER_REV_MUTEX);
+        #endif
         if (result == true && IsEndInsn(insn) == true && myself.pc < sections[index].data_size){
             tmp_addr = myself.pc+sizeof(insn->bytes);
             if (IsVisited(sections[index].visited, tmp_addr) == false && tmp_addr < sections[index].data_size){
@@ -134,24 +158,44 @@ void * DecompilerREV::Worker(void *args) {
             }
         }
         CollectInsn(insn, sections, index);
+
         // Collect Traits Here
+        b_trait.bytes = b_trait.bytes + HexdumpBE(insn->bytes, insn->size) + " ";
+        f_trait.bytes = b_trait.bytes + HexdumpBE(insn->bytes, insn->size) + " ";
+
         printf("address=0x%" PRIx64 ",block=%d,function=%d,queue=%ld,instruction=%s\t%s\n", insn->address,IsBlock(sections[index].addresses, insn->address), IsFunction(sections[index].addresses, insn->address), sections[index].discovered.size(), insn->mnemonic, insn->op_str);
+        #if defined(__linux__) || defined(__APPLE__)
         pthread_mutex_unlock(&DECOMPILER_REV_MUTEX);
+        #endif
 
         if (function == true && IsEndInsn(insn) == true){
             if (block == true && IsConditionalInsn(insn) == true){
                 // END Block Data
-                printf("END 0\n");
+                pthread_mutex_lock(&DECOMPILER_REV_MUTEX);
+                b_trait.bytes = TrimRight(b_trait.bytes);
+                cout << b_trait.bytes << endl;
+                //AppendTrait(b_trait, sections, index);
+                pthread_mutex_unlock(&DECOMPILER_REV_MUTEX);
+                printf("END\n");
                 break;
             }
             // END Function Data
-            printf("END 1\n");
+            pthread_mutex_lock(&DECOMPILER_REV_MUTEX);
+            f_trait.bytes = TrimRight(f_trait.bytes);
+            cout << b_trait.bytes << endl;
+            pthread_mutex_unlock(&DECOMPILER_REV_MUTEX);
+            printf("END\n");
             break;
         }
         // If Block and End of Block Break
         if (block == true && (IsConditionalInsn(insn) == true || IsEndInsn(insn) == true) && function == false){
             // END Block Data
-            printf("END 2\n");
+            pthread_mutex_lock(&DECOMPILER_REV_MUTEX);
+            b_trait.bytes = TrimRight(b_trait.bytes);
+            cout << b_trait.bytes << endl;
+            //AppendTrait(b_trait, sections, index);
+            pthread_mutex_unlock(&DECOMPILER_REV_MUTEX);
+            printf("END\n");
             break;
         }
     }
@@ -173,11 +217,12 @@ void DecompilerREV::Decompile(void* data, size_t data_size, size_t offset, uint 
     args->sections = &sections;
     args->offset = offset;
 
-    pthread_t threads[DECOMPILER_REV_THREADS];
-
+    #if defined(__linux__) || defined(__APPLE__)
+    pthread_t threads[sections[index].threads];
     pthread_attr_t thread_attribs;
     pthread_attr_init(&thread_attribs);
     pthread_attr_setdetachstate(&thread_attribs, PTHREAD_CREATE_JOINABLE);
+    #endif
 
     Worker(args);
 
@@ -185,11 +230,15 @@ void DecompilerREV::Decompile(void* data, size_t data_size, size_t offset, uint 
         if (sections[index].discovered.size() <= 0){
             break;
         }
-        for (int i = 0; i < DECOMPILER_REV_THREADS; i++){
+        for (int i = 0; i < sections[index].threads; i++){
+            #if defined(__linux__) || defined(__APPLE__)
             pthread_create(&threads[i], &thread_attribs, Worker, args);
+            #endif
         }
-        for (int i = 0; i < DECOMPILER_REV_THREADS; i++){
+        for (int i = 0; i < sections[index].threads; i++){
+            #if defined(__linux__) || defined(__APPLE__)
             pthread_join(threads[i], NULL);
+            #endif
         }
     }
     free(args);
@@ -364,7 +413,7 @@ uint DecompilerREV::CollectInsn(cs_insn* insn, struct Section *sections, uint in
 void DecompilerREV::CollectOperands(cs_insn* insn, int operand_type, struct Section *sections, uint index) {
     uint64_t address = X86_REL_ADDR(*insn);
     if (IsVisited(sections[index].visited, address) == false && address < sections[index].data_size) {
-        sections[index].visited[address] = 0;
+        sections[index].visited[address] = DECOMPILER_REV_VISITED_TRUE;
         switch(operand_type){
             case DECOMPILER_REV_OPERAND_TYPE_BLOCK:
                 sections[index].addresses[address] = DECOMPILER_REV_OPERAND_TYPE_BLOCK;
@@ -412,7 +461,7 @@ DecompilerREV::~DecompilerREV() {
     for (int i = 0; i < DECOMPILER_REV_MAX_SECTIONS; i++) {
         if (sections[i].traits != NULL) {
             free(sections[i].traits);
-            sections[i].traits_count = 0;
+            sections[i].ntraits = 0;
         }
     }
 }
