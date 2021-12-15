@@ -15,7 +15,7 @@ set(SOURCES_BINLEX
 
 add_executable(binlex ${SOURCES_BINLEX})
 
-target_link_libraries(binlex -lcapstone -lcrypto -lm)
+target_link_libraries(binlex -lcapstone -lcrypto -lm -lpthread)
 
 target_include_directories(binlex
     PRIVATE
