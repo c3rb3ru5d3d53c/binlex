@@ -24,6 +24,7 @@
 
 using namespace std;
 using namespace binlex;
+using json = nlohmann::json;
 
 static pthread_mutex_t DECOMPILER_REV_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 
@@ -66,6 +67,23 @@ bool DecompilerREV::Setup(cs_arch arch, cs_mode mode, uint threads, uint thread_
     return true;
 }
 
+void DecompilerREV::PrintTrait(struct Trait trait, bool pretty){
+    json data;
+    data["type"] = trait.type;
+    data["bytes"] = trait.bytes;
+    data["trait"] = trait.trait;
+    data["edges"] = trait.edges;
+    data["blocks"] = trait.blocks;
+    data["instructions"] = trait.instructions;
+    data["size"] = trait.size;
+    data["offset"] = trait.offset;
+    if (pretty == false){
+        cout << data.dump() << endl;
+    } else {
+        cout << data.dump(4) << endl;
+    }
+}
+
 void * DecompilerREV::Worker(void *args) {
 
     worker myself;
@@ -78,8 +96,16 @@ void * DecompilerREV::Worker(void *args) {
 
     b_trait.type = "block";
     b_trait.instructions = 0;
+    b_trait.edges = 0;
+    b_trait.blocks = 0;
+    b_trait.offset = 0;
+    b_trait.size = 0;
     f_trait.type = "function";
     f_trait.instructions = 0;
+    f_trait.edges = 0;
+    f_trait.blocks = 0;
+    f_trait.offset = 0;
+    f_trait.size = 0;
 
     myself.error = cs_open(sections[index].arch, sections[index].mode, &myself.handle);
     if (myself.error != CS_ERR_OK) {
@@ -127,6 +153,7 @@ void * DecompilerREV::Worker(void *args) {
         bool function = IsFunction(sections[index].addresses, address);
 
         while(true) {
+            uint edges = 0;
 
             if (myself.pc >= sections[index].data_size) {
                 break;
@@ -140,6 +167,13 @@ void * DecompilerREV::Worker(void *args) {
             if (result == true){
                 b_trait.bytes = b_trait.bytes + HexdumpBE(insn->bytes, insn->size) + " ";
                 f_trait.bytes = f_trait.bytes + HexdumpBE(insn->bytes, insn->size) + " ";
+                edges = IsConditionalInsn(insn);
+                b_trait.edges = b_trait.edges + edges;
+                f_trait.edges = f_trait.edges + edges;
+                if (edges > 0){
+                    b_trait.blocks++;
+                    f_trait.blocks++;
+                }
             }
 
             if (result == false){
@@ -165,31 +199,73 @@ void * DecompilerREV::Worker(void *args) {
                 }
             }
             CollectInsn(insn, sections, index);
-            printf("address=0x%" PRIx64 ",block=%d,function=%d,queue=%ld,instruction=%s\t%s\n", insn->address,IsBlock(sections[index].addresses, insn->address), IsFunction(sections[index].addresses, insn->address), sections[index].discovered.size(), insn->mnemonic, insn->op_str);
+            //printf("address=0x%" PRIx64 ",block=%d,function=%d,queue=%ld,instruction=%s\t%s\n", insn->address,IsBlock(sections[index].addresses, insn->address), IsFunction(sections[index].addresses, insn->address), sections[index].discovered.size(), insn->mnemonic, insn->op_str);
 
             #if defined(__linux__) || defined(__APPLE__)
             pthread_mutex_unlock(&DECOMPILER_REV_MUTEX);
             #endif
 
-            if (block == true && IsConditionalInsn(insn) == true){
+            if (block == true && IsConditionalInsn(insn) > 0){
                 b_trait.bytes = TrimRight(b_trait.bytes);
-                cout << "b: " << b_trait.bytes << endl;
+                b_trait.size = GetByteSize(b_trait.bytes);
+                b_trait.offset = sections[index].offset + myself.pc - b_trait.size;
+                if (b_trait.blocks == 0){
+                    b_trait.blocks++;
+                }
+                PrintTrait(b_trait, false);
+                //cout << "b: " << b_trait.bytes << endl;
                 b_trait.bytes.clear();
+                b_trait.edges = 0;
+                b_trait.instructions = 0;
+                b_trait.blocks = 0;
+                b_trait.size = 0;
+                b_trait.offset = 0;
+                b_trait.trait.clear();
                 if (function == false){
                     f_trait.bytes.clear();
+                    f_trait.edges = 0;
+                    f_trait.instructions = 0;
+                    f_trait.blocks = 0;
+                    f_trait.size = 0;
+                    f_trait.offset = 0;
+                    f_trait.trait.clear();
                     break;
                 }
             }
             if (block == true && IsEndInsn(insn) == true){
                 b_trait.bytes = TrimRight(b_trait.bytes);
-                cout << "b: " << b_trait.bytes << endl;
+                b_trait.size = GetByteSize(b_trait.bytes);
+                b_trait.offset = sections[index].offset + myself.pc - b_trait.size;
+                if (b_trait.blocks == 0){
+                    b_trait.blocks++;
+                }
+                PrintTrait(b_trait, false);
+                //cout << "b: " << b_trait.bytes << endl;
                 b_trait.bytes.clear();
+                b_trait.edges = 0;
+                b_trait.instructions = 0;
+                b_trait.blocks = 0;
+                b_trait.size = 0;
+                b_trait.offset = 0;
+                b_trait.trait.clear();
             }
 
             if (function == true && IsEndInsn(insn) == true){
                 f_trait.bytes = TrimRight(f_trait.bytes);
-                cout << "f: " << f_trait.bytes << endl;
+                f_trait.size = GetByteSize(f_trait.bytes);
+                f_trait.offset = sections[index].offset + myself.pc - f_trait.size;
+                if (f_trait.blocks == 0){
+                    f_trait.blocks++;
+                }
+                PrintTrait(f_trait, false);
+                //cout << "f: " << f_trait.bytes << endl;
                 f_trait.bytes.clear();
+                f_trait.edges = 0;
+                f_trait.instructions = 0;
+                f_trait.blocks = 0;
+                f_trait.size = 0;
+                f_trait.offset = 0;
+                f_trait.trait.clear();
                 break;
             }
         }
@@ -260,52 +336,52 @@ bool DecompilerREV::IsEndInsn(cs_insn *insn) {
     return false;
 }
 
-bool DecompilerREV::IsConditionalInsn(cs_insn* insn) {
+uint DecompilerREV::IsConditionalInsn(cs_insn* insn) {
     switch (insn->id) {
     case X86_INS_JMP:
-        return true;
+        return 1;
     case X86_INS_JNE:
-        return true;
+        return 2;
     case X86_INS_JNO:
-        return true;
+        return 2;
     case X86_INS_JNP:
-        return true;
+        return 2;
     case X86_INS_JL:
-        return true;
+        return 2;
     case X86_INS_JLE:
-        return true;
+        return 2;
     case X86_INS_JG:
-        return true;
+        return 2;
     case X86_INS_JGE:
-        return true;
+        return 2;
     case X86_INS_JE:
-        return true;
+        return 2;
     case X86_INS_JECXZ:
-        return true;
+        return 2;
     case X86_INS_JCXZ:
-        return true;
+        return 2;
     case X86_INS_JB:
-        return true;
+        return 2;
     case X86_INS_JBE:
-        return true;
+        return 2;
     case X86_INS_JA:
-        return true;
+        return 2;
     case X86_INS_JAE:
-        return true;
+        return 2;
     case X86_INS_JNS:
-        return true;
+        return 2;
     case X86_INS_JO:
-        return true;
+        return 2;
     case X86_INS_JP:
-        return true;
+        return 2;
     case X86_INS_JRCXZ:
-        return true;
+        return 2;
     case X86_INS_JS:
-        return true;
+        return 2;
     default:
         break;
     }
-    return false;
+    return 0;
 }
 
 uint DecompilerREV::CollectInsn(cs_insn* insn, struct Section *sections, uint index) {
