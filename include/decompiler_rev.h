@@ -2,6 +2,7 @@
 #include <queue>
 #include <capstone/capstone.h>
 #include "common.h"
+#include "json.h"
 
 #ifndef DECOMPILER_REV_H
 #define DECOMPILER_REV_H
@@ -16,6 +17,7 @@
 #define DECOMPILER_REV_VISITED_ANALYZED 1
 
 using namespace std;
+using json = nlohmann::json;
 
 namespace binlex {
     class DecompilerREV : public Common {
@@ -39,6 +41,7 @@ namespace binlex {
             uint blocks;
             uint instructions;
             uint size;
+            uint offset;
         };
     public:
         struct Section {
@@ -113,7 +116,12 @@ namespace binlex {
         @return bool
         */
         static bool IsEndInsn(cs_insn *insn);
-        static bool IsConditionalInsn(cs_insn *insn);
+        /**
+        Checks if Instruction is Conditional
+        @param insn the instruction
+        @return edges if > 0; then is conditional
+        */
+        static uint IsConditionalInsn(cs_insn *insn);
         /**
         Allocate Traits
         @param count number of traits to allocate
@@ -145,6 +153,12 @@ namespace binlex {
         @return bool
         */
         bool IsAddress(map<uint64_t, uint> &addresses, uint64_t address, uint index);
+        /**
+        Prints Traits as JSON
+        @param trait the trait to print
+        @param pretty pretty print
+        */
+        static void PrintTrait(struct Trait trait, bool pretty);
         //void Seek(uint offset, uint index);
         ~DecompilerREV();
 
