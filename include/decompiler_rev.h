@@ -12,21 +12,32 @@
 #define DECOMPILER_REV_OPERAND_TYPE_FUNCTION 1
 #define DECOMPILER_REV_OPERAND_TYPE_UNSET    2
 
-#define DECOMPILER_REV_VISITED_TRUE  0
-#define DECOMPILER_REV_VISITED_FALSE 1
+#define DECOMPILER_REV_VISITED_QUEUED   0
+#define DECOMPILER_REV_VISITED_ANALYZED 1
 
 using namespace std;
 
 namespace binlex {
     class DecompilerREV : public Common {
     private:
+        typedef struct worker {
+            csh handle;
+            cs_err error;
+            uint64_t pc;
+            const uint8_t *code;
+            size_t code_size;
+        } worker;
+        typedef struct{
+            uint index;
+            void *sections;
+        } worker_args;
         struct Trait {
             string type;
             string bytes;
             string trait;
             uint edges;
             uint blocks;
-            uint insns;
+            uint instructions;
             uint size;
         };
     public:
@@ -34,6 +45,8 @@ namespace binlex {
             cs_arch arch;
             cs_mode mode;
             uint threads;
+            uint thread_cycles;
+            useconds_t thread_sleep;
             uint offset;
             struct Trait *traits;
             uint ntraits;
@@ -49,23 +62,32 @@ namespace binlex {
         Set up Capstone Decompiler Architecure and Mode
         @param arch Capstone Decompiler Architecure
         @param cs_mode Capstone Mode
+        @param threads Number of Threads
+        @param thread_cycles Thread Retry Cycle Cound
+        @param thread_sleep Thread Sleep Wait for Queue in Microseconds
         @param index section index
+        @return bool
+        */
+        bool Setup(cs_arch arch, cs_mode mode, uint threads, uint thread_cycles, useconds_t thread_sleep, uint index);
+        /**
+        Decompiler Thread Worker
+        @param args pointer to worker arguments
+        @returns NULL
         */
         static void * Worker(void *args);
-        bool Setup(cs_arch arch, cs_mode mode, uint index, uint threads);
         /**
         Collect Function and Conditional Operands for Processing
         @param insn the instruction
         @param operand_type the operand type
         @param index the section index
-        @returns bool
+        @return bool
         */
         static void CollectOperands(cs_insn* insn, int operand_type, struct Section *sections, uint index);
         /**
         Collect Instructions for Processing
         @param insn the instruction
         @param index the section index
-        @returns operand type
+        @return operand type
         */
         static uint CollectInsn(cs_insn* insn, struct Section *sections, uint index);
         /**
