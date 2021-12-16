@@ -42,6 +42,7 @@ namespace binlex {
             uint instructions;
             uint size;
             uint offset;
+            bool invalid_instructions;
         };
     public:
         struct Section {
