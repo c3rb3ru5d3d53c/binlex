@@ -73,18 +73,18 @@ int main(int argc, char **argv){
         if (pe32.ReadFile(args.options.input) == false){
             return 1;
         }
-        Decompiler decompiler;
-        decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
+        DecompilerREV decompiler;
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_32, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
         for (int i = 0; i < PE_MAX_SECTIONS; i++){
             if (pe32.sections[i].data != NULL){
-                decompiler.x86_64(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, i);
+                decompiler.Decompile(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, i);
             }
         }
-        if (args.options.output == NULL){
-            decompiler.PrintTraits(args.options.pretty);
-        } else {
-            decompiler.WriteTraits(args.options.output, args.options.pretty);
-        }
+        // if (args.options.output == NULL){
+        //     decompiler.PrintTraits(args.options.pretty);
+        // } else {
+        //     decompiler.WriteTraits(args.options.output, args.options.pretty);
+        // }
         return 0;
     }
     if (strcmp(args.options.mode, (char *)"pe:x86_64") == 0 &&
