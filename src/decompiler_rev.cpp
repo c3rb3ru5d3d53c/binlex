@@ -96,19 +96,9 @@ void * DecompilerREV::Worker(void *args) {
     struct Trait f_trait;
 
     b_trait.type = "block";
-    b_trait.instructions = 0;
-    b_trait.edges = 0;
-    b_trait.blocks = 0;
-    b_trait.offset = 0;
-    b_trait.size = 0;
-    b_trait.invalid_instructions = 0;
+    ClearTrait(&b_trait);
     f_trait.type = "function";
-    f_trait.instructions = 0;
-    f_trait.edges = 0;
-    f_trait.blocks = 0;
-    f_trait.offset = 0;
-    f_trait.size = 0;
-    f_trait.invalid_instructions = 0;
+    ClearTrait(&f_trait);
 
     myself.error = cs_open(sections[index].arch, sections[index].mode, &myself.handle);
     if (myself.error != CS_ERR_OK) {
