@@ -101,14 +101,14 @@ void * DecompilerREV::Worker(void *args) {
     b_trait.blocks = 0;
     b_trait.offset = 0;
     b_trait.size = 0;
-    b_trait.invalid_instructions = false;
+    b_trait.invalid_instructions = 0;
     f_trait.type = "function";
     f_trait.instructions = 0;
     f_trait.edges = 0;
     f_trait.blocks = 0;
     f_trait.offset = 0;
     f_trait.size = 0;
-    f_trait.invalid_instructions = false;
+    f_trait.invalid_instructions = 0;
 
     myself.error = cs_open(sections[index].arch, sections[index].mode, &myself.handle);
     if (myself.error != CS_ERR_OK) {
@@ -168,6 +168,9 @@ void * DecompilerREV::Worker(void *args) {
             f_trait.instructions++;
 
             if (result == true){
+                f_trait.trait = f_trait.trait + HexdumpBE(insn->bytes, insn->size) + " ";
+                b_trait.trait = b_trait.trait + HexdumpBE(insn->bytes, insn->size) + " ";
+
                 b_trait.bytes = b_trait.bytes + HexdumpBE(insn->bytes, insn->size) + " ";
                 f_trait.bytes = f_trait.bytes + HexdumpBE(insn->bytes, insn->size) + " ";
                 edges = IsConditionalInsn(insn);
@@ -180,14 +183,15 @@ void * DecompilerREV::Worker(void *args) {
             }
 
             if (result == false){
-                b_trait.invalid_instructions = true;
-                f_trait.invalid_instructions = true;
+                b_trait.invalid_instructions++;
+                f_trait.invalid_instructions++;
                 b_trait.bytes = b_trait.bytes + HexdumpBE(myself.code, 1) + " ";
                 f_trait.bytes = f_trait.bytes + HexdumpBE(myself.code, 1) + " ";
+                b_trait.trait = b_trait.trait + Wildcards(1) + " ";
+                f_trait.trait = f_trait.trait + Wildcards(1) + " ";
                 myself.pc++;
                 myself.code = (uint8_t *)((uint8_t *)sections[index].data + myself.pc);
                 myself.code_size = sections[index].data_size + myself.pc;
-                // Append Wildcard Bytes to Both Block and Function Trait
                 continue;
             }
 
@@ -210,7 +214,19 @@ void * DecompilerREV::Worker(void *args) {
             pthread_mutex_unlock(&DECOMPILER_REV_MUTEX);
             #endif
 
+            // if (result == true && IsWildcardInsn(insn) == true){
+            //     f_trait.trait = f_trait.trait + Wildcards(insn->size) + " ";
+            //     b_trait.trait = b_trait.trait + Wildcards(insn->size) + " ";
+            // } else if (result == true) {
+            //     f_trait.trait = f_trait.trait + WildcardInsn(insn);
+            //     b_trait.trait = b_trait.trait + WildcardInsn(insn);
+            // } else {
+            //     f_trait.trait = f_trait.trait + HexdumpBE(myself.code, 1) + " ";
+            //     b_trait.trait = b_trait.trait + HexdumpBE(myself.code, 1) + " ";
+            // }
+
             if (block == true && IsConditionalInsn(insn) > 0){
+                b_trait.trait = TrimRight(b_trait.trait);
                 b_trait.bytes = TrimRight(b_trait.bytes);
                 b_trait.size = GetByteSize(b_trait.bytes);
                 b_trait.offset = sections[index].offset + myself.pc - b_trait.size;
@@ -226,7 +242,7 @@ void * DecompilerREV::Worker(void *args) {
                 b_trait.size = 0;
                 b_trait.offset = 0;
                 b_trait.trait.clear();
-                b_trait.invalid_instructions = false;
+                b_trait.invalid_instructions = 0;
                 if (function == false){
                     f_trait.bytes.clear();
                     f_trait.edges = 0;
@@ -234,12 +250,13 @@ void * DecompilerREV::Worker(void *args) {
                     f_trait.blocks = 0;
                     f_trait.size = 0;
                     f_trait.offset = 0;
-                    f_trait.invalid_instructions = false;
+                    f_trait.invalid_instructions = 0;
                     f_trait.trait.clear();
                     break;
                 }
             }
             if (block == true && IsEndInsn(insn) == true){
+                b_trait.trait = TrimRight(b_trait.trait);
                 b_trait.bytes = TrimRight(b_trait.bytes);
                 b_trait.size = GetByteSize(b_trait.bytes);
                 b_trait.offset = sections[index].offset + myself.pc - b_trait.size;
@@ -254,11 +271,12 @@ void * DecompilerREV::Worker(void *args) {
                 b_trait.blocks = 0;
                 b_trait.size = 0;
                 b_trait.offset = 0;
-                b_trait.invalid_instructions = false;
+                b_trait.invalid_instructions = 0;
                 b_trait.trait.clear();
             }
 
             if (function == true && IsEndInsn(insn) == true){
+                f_trait.trait = TrimRight(f_trait.trait);
                 f_trait.bytes = TrimRight(f_trait.bytes);
                 f_trait.size = GetByteSize(f_trait.bytes);
                 f_trait.offset = sections[index].offset + myself.pc - f_trait.size;
@@ -273,7 +291,7 @@ void * DecompilerREV::Worker(void *args) {
                 f_trait.blocks = 0;
                 f_trait.size = 0;
                 f_trait.offset = 0;
-                f_trait.invalid_instructions = false;
+                f_trait.invalid_instructions = 0;
                 f_trait.trait.clear();
                 break;
             }
@@ -321,26 +339,68 @@ void DecompilerREV::Decompile(void* data, size_t data_size, size_t offset, uint 
     free(args);
 }
 
+string DecompilerREV::WildcardInsn(cs_insn *insn){
+    string trait;
+    for (int j = 0; j < insn->detail->x86.op_count; j++){
+        cs_x86_op operand = insn->detail->x86.operands[j];
+        switch(operand.type){
+            case X86_OP_MEM:
+                // Wildcard Memory Operands
+                {
+                    if (operand.mem.disp != 0){
+                        trait = WildcardTrait(HexdumpBE(insn->bytes, insn->size),
+                        HexdumpMemDisp(operand.mem.disp));
+                    }
+                    break;
+                }
+
+            case X86_OP_IMM:
+                // Wildcard Immutable Operands / Scalars
+                {
+                    string imm = HexdumpMemDisp(operand.imm);
+                    string instr = HexdumpBE(insn->bytes, insn->size);
+                    if (imm.length() > 0){
+                        trait = WildcardTrait(instr, imm);
+                    }
+                    break;
+                }
+            default:
+                break;
+        }
+    }
+    return TrimRight(trait);
+}
+
 bool DecompilerREV::IsVisited(map<uint64_t, int> &visited, uint64_t address) {
     return visited.find(address) != visited.end();
 }
 
+bool DecompilerREV::IsWildcardInsn(cs_insn *insn){
+    switch (insn->id) {
+        case X86_INS_NOP:
+            return true;
+        default:
+            break;
+    }
+    return false;
+}
+
 bool DecompilerREV::IsEndInsn(cs_insn *insn) {
     switch (insn->id) {
-    case X86_INS_RET:
-        return true;
-    case X86_INS_RETF:
-        return true;
-    case X86_INS_RETFQ:
-        return true;
-    case X86_INS_IRET:
-        return true;
-    case X86_INS_IRETD:
-        return true;
-    case X86_INS_IRETQ:
-        return true;
-    default:
-        break;
+        case X86_INS_RET:
+            return true;
+        case X86_INS_RETF:
+            return true;
+        case X86_INS_RETFQ:
+            return true;
+        case X86_INS_IRET:
+            return true;
+        case X86_INS_IRETD:
+            return true;
+        case X86_INS_IRETQ:
+            return true;
+        default:
+            break;
     }
     return false;
 }
