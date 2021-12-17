@@ -63,6 +63,13 @@ namespace binlex {
             */
             static string HexdumpBE(const void *data, size_t size);
             /**
+            Generate Number of Wildcards
+            @param count number of wildcard bytes to create
+            @return string
+            */
+            static string Wildcards(uint count);
+            static string HexdumpMemDisp(uint64_t disp);
+            /**
             This method prints hexdump to stdout.
             @param desc A description of the data.
             @param data A pointer to the data

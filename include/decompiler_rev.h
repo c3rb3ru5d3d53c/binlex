@@ -42,7 +42,7 @@ namespace binlex {
             uint instructions;
             uint size;
             uint offset;
-            bool invalid_instructions;
+            uint invalid_instructions;
         };
     public:
         struct Section {
@@ -154,6 +154,13 @@ namespace binlex {
         @return bool
         */
         bool IsAddress(map<uint64_t, uint> &addresses, uint64_t address, uint index);
+        /**
+        Checks if Instruction is Wildcard Instruction
+        @param insn the instruction
+        @return bool
+        */
+        static bool IsWildcardInsn(cs_insn *insn);
+        static string WildcardInsn(cs_insn *insn);
         /**
         Prints Traits as JSON
         @param trait the trait to print
