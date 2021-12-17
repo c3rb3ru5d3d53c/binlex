@@ -160,7 +160,16 @@ namespace binlex {
         @return bool
         */
         static bool IsWildcardInsn(cs_insn *insn);
+        /**
+        Wildcard Instruction
+        @param insn the instruction
+        @return trait wildcard byte string
+        */
         static string WildcardInsn(cs_insn *insn);
+        /**
+        Clear Trait Values Except Type
+        @param trait the trait struct address
+        */
         static void ClearTrait(struct Trait *trait);
         /**
         Prints Traits as JSON
