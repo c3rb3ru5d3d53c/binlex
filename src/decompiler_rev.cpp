@@ -168,9 +168,14 @@ void * DecompilerREV::Worker(void *args) {
             f_trait.instructions++;
 
             if (result == true){
-                f_trait.trait = f_trait.trait + HexdumpBE(insn->bytes, insn->size) + " ";
-                b_trait.trait = b_trait.trait + HexdumpBE(insn->bytes, insn->size) + " ";
-
+                // Need to Wildcard Traits Here
+                if (IsWildcardInsn(insn) == true){
+                    b_trait.trait = b_trait.trait + Wildcards(insn->size) + " ";
+                    f_trait.trait = f_trait.trait + Wildcards(insn->size) + " ";
+                } else {
+                    b_trait.trait = b_trait.trait + WildcardInsn(insn) + " ";
+                    f_trait.trait = f_trait.trait + WildcardInsn(insn) + " ";
+                }
                 b_trait.bytes = b_trait.bytes + HexdumpBE(insn->bytes, insn->size) + " ";
                 f_trait.bytes = f_trait.bytes + HexdumpBE(insn->bytes, insn->size) + " ";
                 edges = IsConditionalInsn(insn);
@@ -213,17 +218,6 @@ void * DecompilerREV::Worker(void *args) {
             #if defined(__linux__) || defined(__APPLE__)
             pthread_mutex_unlock(&DECOMPILER_REV_MUTEX);
             #endif
-
-            // if (result == true && IsWildcardInsn(insn) == true){
-            //     f_trait.trait = f_trait.trait + Wildcards(insn->size) + " ";
-            //     b_trait.trait = b_trait.trait + Wildcards(insn->size) + " ";
-            // } else if (result == true) {
-            //     f_trait.trait = f_trait.trait + WildcardInsn(insn);
-            //     b_trait.trait = b_trait.trait + WildcardInsn(insn);
-            // } else {
-            //     f_trait.trait = f_trait.trait + HexdumpBE(myself.code, 1) + " ";
-            //     b_trait.trait = b_trait.trait + HexdumpBE(myself.code, 1) + " ";
-            // }
 
             if (block == true && IsConditionalInsn(insn) > 0){
                 b_trait.trait = TrimRight(b_trait.trait);
@@ -340,7 +334,8 @@ void DecompilerREV::Decompile(void* data, size_t data_size, size_t offset, uint 
 }
 
 string DecompilerREV::WildcardInsn(cs_insn *insn){
-    string trait;
+    string bytes = HexdumpBE(insn->bytes, insn->size);
+    string trait = bytes;
     for (int j = 0; j < insn->detail->x86.op_count; j++){
         cs_x86_op operand = insn->detail->x86.operands[j];
         switch(operand.type){
@@ -348,22 +343,20 @@ string DecompilerREV::WildcardInsn(cs_insn *insn){
                 // Wildcard Memory Operands
                 {
                     if (operand.mem.disp != 0){
-                        trait = WildcardTrait(HexdumpBE(insn->bytes, insn->size),
-                        HexdumpMemDisp(operand.mem.disp));
+                        trait = WildcardTrait(HexdumpBE(insn->bytes, insn->size), HexdumpMemDisp(operand.mem.disp));
                     }
                     break;
                 }
-
-            case X86_OP_IMM:
-                // Wildcard Immutable Operands / Scalars
-                {
-                    string imm = HexdumpMemDisp(operand.imm);
-                    string instr = HexdumpBE(insn->bytes, insn->size);
-                    if (imm.length() > 0){
-                        trait = WildcardTrait(instr, imm);
-                    }
-                    break;
-                }
+            // Immutables case Strange Lenth Issue
+            // case X86_OP_IMM:
+            //     // Wildcard Immutable Operands / Scalars
+            //     {
+            //         string imm = HexdumpMemDisp(operand.imm);
+            //         if (imm.length() > 0){
+            //             trait = WildcardTrait(HexdumpBE(insn->bytes, insn->size), imm);
+            //         }
+            //         break;
+            //     }
             default:
                 break;
         }

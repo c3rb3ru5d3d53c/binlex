@@ -69,7 +69,7 @@ string Common::WildcardTrait(string trait, string bytes){
     for (int i = index; i < trait.length(); i = i + 3){
         trait.replace(i, 2, "??");
     }
-    return bytes;
+    return TrimRight(trait);
 }
 
 string Common::HexdumpBE(const void *data, size_t size){
