@@ -161,6 +161,7 @@ namespace binlex {
         */
         static bool IsWildcardInsn(cs_insn *insn);
         static string WildcardInsn(cs_insn *insn);
+        static void ClearTrait(struct Trait *trait);
         /**
         Prints Traits as JSON
         @param trait the trait to print

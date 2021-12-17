@@ -228,24 +228,9 @@ void * DecompilerREV::Worker(void *args) {
                     b_trait.blocks++;
                 }
                 PrintTrait(b_trait, false);
-                //cout << "b: " << b_trait.bytes << endl;
-                b_trait.bytes.clear();
-                b_trait.edges = 0;
-                b_trait.instructions = 0;
-                b_trait.blocks = 0;
-                b_trait.size = 0;
-                b_trait.offset = 0;
-                b_trait.trait.clear();
-                b_trait.invalid_instructions = 0;
+                ClearTrait(&b_trait);
                 if (function == false){
-                    f_trait.bytes.clear();
-                    f_trait.edges = 0;
-                    f_trait.instructions = 0;
-                    f_trait.blocks = 0;
-                    f_trait.size = 0;
-                    f_trait.offset = 0;
-                    f_trait.invalid_instructions = 0;
-                    f_trait.trait.clear();
+                    ClearTrait(&f_trait);
                     break;
                 }
             }
@@ -258,15 +243,7 @@ void * DecompilerREV::Worker(void *args) {
                     b_trait.blocks++;
                 }
                 PrintTrait(b_trait, false);
-                //cout << "b: " << b_trait.bytes << endl;
-                b_trait.bytes.clear();
-                b_trait.edges = 0;
-                b_trait.instructions = 0;
-                b_trait.blocks = 0;
-                b_trait.size = 0;
-                b_trait.offset = 0;
-                b_trait.invalid_instructions = 0;
-                b_trait.trait.clear();
+                ClearTrait(&b_trait);
             }
 
             if (function == true && IsEndInsn(insn) == true){
@@ -278,15 +255,7 @@ void * DecompilerREV::Worker(void *args) {
                     f_trait.blocks++;
                 }
                 PrintTrait(f_trait, false);
-                //cout << "f: " << f_trait.bytes << endl;
-                f_trait.bytes.clear();
-                f_trait.edges = 0;
-                f_trait.instructions = 0;
-                f_trait.blocks = 0;
-                f_trait.size = 0;
-                f_trait.offset = 0;
-                f_trait.invalid_instructions = 0;
-                f_trait.trait.clear();
+                ClearTrait(&f_trait);
                 break;
             }
         }
@@ -294,6 +263,17 @@ void * DecompilerREV::Worker(void *args) {
     cs_free(insn, 1);
     cs_close(&myself.handle);
     return NULL;
+}
+
+void DecompilerREV::ClearTrait(struct Trait *trait){
+    trait->bytes.clear();
+    trait->edges = 0;
+    trait->instructions = 0;
+    trait->blocks = 0;
+    trait->offset = 0;
+    trait->size = 0;
+    trait->invalid_instructions = 0;
+    trait->trait.clear();
 }
 
 void DecompilerREV::Decompile(void* data, size_t data_size, size_t offset, uint index) {
