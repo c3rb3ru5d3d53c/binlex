@@ -47,7 +47,10 @@ DecompilerREV::DecompilerREV() {
     }
 }
 
-void * DecompilerREV::AppendTrait(struct Trait *trait, struct Section *sections, uint index){
+void DecompilerREV::AppendTrait(struct Trait *trait, struct Section *sections, uint index){
+    #if defined(__linux__) || defined(__APPLE__)
+    pthread_mutex_lock(&DECOMPILER_REV_MUTEX);
+    #endif
     sections[index].traits = (struct Trait **)realloc(sections[index].traits, sizeof(struct Trait *) * sections[index].ntraits + 1);
     if (sections[index].traits == NULL){
         fprintf(stderr, "[x] trait realloc failed\n");
@@ -83,7 +86,10 @@ void * DecompilerREV::AppendTrait(struct Trait *trait, struct Section *sections,
     }
     sections[index].ntraits++;
     trait->trait = (char *)trait->tmp_trait.c_str();
-    return (void *)sections[index].traits[sections[index].ntraits];
+    trait->bytes = (char *)trait->tmp_bytes.c_str();
+    #if defined(__linux__) || defined(__APPLE__)
+    pthread_mutex_unlock(&DECOMPILER_REV_MUTEX);
+    #endif
 }
 
 bool DecompilerREV::Setup(cs_arch arch, cs_mode mode, uint threads, uint thread_cycles, useconds_t thread_sleep, uint index){
@@ -247,14 +253,7 @@ void * DecompilerREV::Worker(void *args) {
                 if (b_trait.blocks == 0){
                     b_trait.blocks++;
                 }
-                #if defined(__linux__) || defined(__APPLE__)
-                pthread_mutex_lock(&DECOMPILER_REV_MUTEX);
-                #endif
                 AppendTrait(&b_trait, sections, index);
-                #if defined(__linux__) || defined(__APPLE__)
-                pthread_mutex_unlock(&DECOMPILER_REV_MUTEX);
-                #endif
-                //PrintTrait(&b_trait, false);
                 ClearTrait(&b_trait);
                 if (function == false){
                     ClearTrait(&f_trait);
@@ -269,14 +268,7 @@ void * DecompilerREV::Worker(void *args) {
                 if (b_trait.blocks == 0){
                     b_trait.blocks++;
                 }
-                #if defined(__linux__) || defined(__APPLE__)
-                pthread_mutex_lock(&DECOMPILER_REV_MUTEX);
-                #endif
                 AppendTrait(&b_trait, sections, index);
-                #if defined(__linux__) || defined(__APPLE__)
-                pthread_mutex_unlock(&DECOMPILER_REV_MUTEX);
-                #endif
-                //PrintTrait(&b_trait, false);
                 ClearTrait(&b_trait);
             }
 
@@ -288,14 +280,7 @@ void * DecompilerREV::Worker(void *args) {
                 if (f_trait.blocks == 0){
                     f_trait.blocks++;
                 }
-                #if defined(__linux__) || defined(__APPLE__)
-                pthread_mutex_lock(&DECOMPILER_REV_MUTEX);
-                #endif
                 AppendTrait(&f_trait, sections, index);
-                //PrintTrait(&f_trait, false);
-                #if defined(__linux__) || defined(__APPLE__)
-                pthread_mutex_unlock(&DECOMPILER_REV_MUTEX);
-                #endif
                 ClearTrait(&f_trait);
                 break;
             }
