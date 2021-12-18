@@ -47,10 +47,7 @@ DecompilerREV::DecompilerREV() {
     }
 }
 
-void DecompilerREV::AppendTrait(struct Trait trait, struct Section *sections, uint index){
-    #if defined(__linux__) || defined(__APPLE__)
-    pthread_mutex_lock(&DECOMPILER_REV_MUTEX);
-    #endif
+void * DecompilerREV::AppendTrait(struct Trait *trait, struct Section *sections, uint index){
     sections[index].traits = (struct Trait **)realloc(sections[index].traits, sizeof(struct Trait *) * sections[index].ntraits + 1);
     if (sections[index].traits == NULL){
         fprintf(stderr, "[x] trait realloc failed\n");
@@ -61,14 +58,32 @@ void DecompilerREV::AppendTrait(struct Trait trait, struct Section *sections, ui
         fprintf(stderr, "[x] trait malloc failed\n");
         exit(1);
     }
-    if (memcpy(sections[index].traits[sections[index].ntraits], &trait, sizeof(struct Trait)) == NULL){
+    // Append Trait
+    trait->trait = (char *)malloc(strlen(trait->tmp_trait.c_str())+1);
+    if (trait->trait == NULL){
+        fprintf(stderr, "[x] trait malloc failed\n");
+    }
+    memset(trait->trait, 0, strlen(trait->tmp_trait.c_str())+1);
+    if (memcpy(trait->trait, trait->tmp_trait.c_str(), strlen(trait->tmp_trait.c_str())) == NULL){
+        fprintf(stderr, "[x] trait memcpy failed\n");
+    }
+    // Append Bytes
+    trait->bytes = (char *)malloc(strlen(trait->tmp_bytes.c_str())+1);
+    if (trait->bytes == NULL){
+        fprintf(stderr, "[x] trait malloc failed\n");
+    }
+    memset(trait->bytes, 0, strlen(trait->tmp_bytes.c_str())+1);
+    if (memcpy(trait->bytes, trait->tmp_bytes.c_str(), strlen(trait->tmp_bytes.c_str())) == NULL){
+        fprintf(stderr, "[x] trait memcpy failed\n");
+    }
+    // asdf
+    if (memcpy(sections[index].traits[sections[index].ntraits], trait, sizeof(struct Trait)) == NULL){
         fprintf(stderr, "[x] trait memcpy failed\n");
         exit(1);
     }
     sections[index].ntraits++;
-    #if defined(__linux__) || defined(__APPLE__)
-    pthread_mutex_unlock(&DECOMPILER_REV_MUTEX);
-    #endif
+    trait->trait = (char *)trait->tmp_trait.c_str();
+    return (void *)sections[index].traits[sections[index].ntraits];
 }
 
 bool DecompilerREV::Setup(cs_arch arch, cs_mode mode, uint threads, uint thread_cycles, useconds_t thread_sleep, uint index){
@@ -80,17 +95,17 @@ bool DecompilerREV::Setup(cs_arch arch, cs_mode mode, uint threads, uint thread_
     return true;
 }
 
-void DecompilerREV::PrintTrait(struct Trait trait, bool pretty){
+void DecompilerREV::PrintTrait(struct Trait *trait, bool pretty){
     json data;
-    data["type"] = trait.type;
-    data["bytes"] = trait.bytes;
-    data["trait"] = trait.trait;
-    data["edges"] = trait.edges;
-    data["blocks"] = trait.blocks;
-    data["instructions"] = trait.instructions;
-    data["size"] = trait.size;
-    data["offset"] = trait.offset;
-    data["invalid_instructions"] = trait.invalid_instructions;
+    data["type"] = trait->type;
+    data["bytes"] = trait->bytes;
+    data["trait"] = trait->trait;
+    data["edges"] = trait->edges;
+    data["blocks"] = trait->blocks;
+    data["instructions"] = trait->instructions;
+    data["size"] = trait->size;
+    data["offset"] = trait->offset;
+    data["invalid_instructions"] = trait->invalid_instructions;
     if (pretty == false){
         cout << data.dump() << endl;
     } else {
@@ -111,9 +126,9 @@ void * DecompilerREV::Worker(void *args) {
     // struct Trait *b_trait;
     // b_trait = new Trait;
 
-    b_trait.type = "block";
+    b_trait.type = (char *)"block";
     ClearTrait(&b_trait);
-    f_trait.type = "function";
+    f_trait.type = (char *)"function";
     ClearTrait(&f_trait);
 
     myself.error = cs_open(sections[index].arch, sections[index].mode, &myself.handle);
@@ -176,14 +191,14 @@ void * DecompilerREV::Worker(void *args) {
             if (result == true){
                 // Need to Wildcard Traits Here
                 if (IsWildcardInsn(insn) == true){
-                    b_trait.trait = b_trait.trait + Wildcards(insn->size) + " ";
-                    f_trait.trait = f_trait.trait + Wildcards(insn->size) + " ";
+                    b_trait.tmp_trait = b_trait.tmp_trait + Wildcards(insn->size) + " ";
+                    f_trait.tmp_trait = f_trait.tmp_trait + Wildcards(insn->size) + " ";
                 } else {
-                    b_trait.trait = b_trait.trait + WildcardInsn(insn) + " ";
-                    f_trait.trait = f_trait.trait + WildcardInsn(insn) + " ";
+                    b_trait.tmp_trait = b_trait.tmp_trait + WildcardInsn(insn) + " ";
+                    f_trait.tmp_trait = f_trait.tmp_trait + WildcardInsn(insn) + " ";
                 }
-                b_trait.bytes = b_trait.bytes + HexdumpBE(insn->bytes, insn->size) + " ";
-                f_trait.bytes = f_trait.bytes + HexdumpBE(insn->bytes, insn->size) + " ";
+                b_trait.tmp_bytes = b_trait.tmp_bytes + HexdumpBE(insn->bytes, insn->size) + " ";
+                f_trait.tmp_bytes = f_trait.tmp_bytes + HexdumpBE(insn->bytes, insn->size) + " ";
                 edges = IsConditionalInsn(insn);
                 b_trait.edges = b_trait.edges + edges;
                 f_trait.edges = f_trait.edges + edges;
@@ -196,10 +211,10 @@ void * DecompilerREV::Worker(void *args) {
             if (result == false){
                 b_trait.invalid_instructions++;
                 f_trait.invalid_instructions++;
-                b_trait.bytes = b_trait.bytes + HexdumpBE(myself.code, 1) + " ";
-                f_trait.bytes = f_trait.bytes + HexdumpBE(myself.code, 1) + " ";
-                b_trait.trait = b_trait.trait + Wildcards(1) + " ";
-                f_trait.trait = f_trait.trait + Wildcards(1) + " ";
+                b_trait.tmp_bytes = b_trait.tmp_bytes + HexdumpBE(myself.code, 1) + " ";
+                f_trait.tmp_bytes = f_trait.tmp_bytes + HexdumpBE(myself.code, 1) + " ";
+                b_trait.tmp_trait = b_trait.tmp_trait + Wildcards(1) + " ";
+                f_trait.tmp_trait = f_trait.tmp_trait + Wildcards(1) + " ";
                 myself.pc++;
                 myself.code = (uint8_t *)((uint8_t *)sections[index].data + myself.pc);
                 myself.code_size = sections[index].data_size + myself.pc;
@@ -225,15 +240,21 @@ void * DecompilerREV::Worker(void *args) {
             pthread_mutex_unlock(&DECOMPILER_REV_MUTEX);
             #endif
             if (block == true && IsConditionalInsn(insn) > 0){
-                b_trait.trait = TrimRight(b_trait.trait);
-                b_trait.bytes = TrimRight(b_trait.bytes);
-                b_trait.size = GetByteSize(b_trait.bytes);
+                b_trait.tmp_trait = TrimRight(b_trait.tmp_trait);
+                b_trait.tmp_bytes = TrimRight(b_trait.tmp_bytes);
+                b_trait.size = GetByteSize(b_trait.tmp_bytes);
                 b_trait.offset = sections[index].offset + myself.pc - b_trait.size;
                 if (b_trait.blocks == 0){
                     b_trait.blocks++;
                 }
-                AppendTrait(b_trait, sections, index);
-                PrintTrait(b_trait, false);
+                #if defined(__linux__) || defined(__APPLE__)
+                pthread_mutex_lock(&DECOMPILER_REV_MUTEX);
+                #endif
+                AppendTrait(&b_trait, sections, index);
+                #if defined(__linux__) || defined(__APPLE__)
+                pthread_mutex_unlock(&DECOMPILER_REV_MUTEX);
+                #endif
+                //PrintTrait(&b_trait, false);
                 ClearTrait(&b_trait);
                 if (function == false){
                     ClearTrait(&f_trait);
@@ -241,28 +262,40 @@ void * DecompilerREV::Worker(void *args) {
                 }
             }
             if (block == true && IsEndInsn(insn) == true){
-                b_trait.trait = TrimRight(b_trait.trait);
-                b_trait.bytes = TrimRight(b_trait.bytes);
-                b_trait.size = GetByteSize(b_trait.bytes);
+                b_trait.tmp_trait = TrimRight(b_trait.tmp_trait);
+                b_trait.tmp_bytes = TrimRight(b_trait.tmp_bytes);
+                b_trait.size = GetByteSize(b_trait.tmp_bytes);
                 b_trait.offset = sections[index].offset + myself.pc - b_trait.size;
                 if (b_trait.blocks == 0){
                     b_trait.blocks++;
                 }
-                AppendTrait(b_trait, sections, index);
-                PrintTrait(b_trait, false);
+                #if defined(__linux__) || defined(__APPLE__)
+                pthread_mutex_lock(&DECOMPILER_REV_MUTEX);
+                #endif
+                AppendTrait(&b_trait, sections, index);
+                #if defined(__linux__) || defined(__APPLE__)
+                pthread_mutex_unlock(&DECOMPILER_REV_MUTEX);
+                #endif
+                //PrintTrait(&b_trait, false);
                 ClearTrait(&b_trait);
             }
 
             if (function == true && IsEndInsn(insn) == true){
-                f_trait.trait = TrimRight(f_trait.trait);
-                f_trait.bytes = TrimRight(f_trait.bytes);
-                f_trait.size = GetByteSize(f_trait.bytes);
+                f_trait.tmp_trait = TrimRight(f_trait.tmp_trait);
+                f_trait.tmp_bytes = TrimRight(f_trait.tmp_bytes);
+                f_trait.size = GetByteSize(f_trait.tmp_bytes);
                 f_trait.offset = sections[index].offset + myself.pc - f_trait.size;
                 if (f_trait.blocks == 0){
                     f_trait.blocks++;
                 }
-                AppendTrait(f_trait, sections, index);
-                PrintTrait(f_trait, false);
+                #if defined(__linux__) || defined(__APPLE__)
+                pthread_mutex_lock(&DECOMPILER_REV_MUTEX);
+                #endif
+                AppendTrait(&f_trait, sections, index);
+                //PrintTrait(&f_trait, false);
+                #if defined(__linux__) || defined(__APPLE__)
+                pthread_mutex_unlock(&DECOMPILER_REV_MUTEX);
+                #endif
                 ClearTrait(&f_trait);
                 break;
             }
@@ -274,14 +307,15 @@ void * DecompilerREV::Worker(void *args) {
 }
 
 void DecompilerREV::ClearTrait(struct Trait *trait){
-    trait->bytes.clear();
+    trait->tmp_bytes.clear();
     trait->edges = 0;
     trait->instructions = 0;
     trait->blocks = 0;
     trait->offset = 0;
     trait->size = 0;
     trait->invalid_instructions = 0;
-    trait->trait.clear();
+    trait->tmp_trait.clear();
+    trait->trait = NULL;
 }
 
 void DecompilerREV::Decompile(void* data, size_t data_size, size_t offset, uint index) {
@@ -577,6 +611,12 @@ bool DecompilerREV::IsBlock(map<uint64_t, uint> &addresses, uint64_t address){
 void DecompilerREV::FreeTraits(uint index){
     if (sections[index].traits != NULL){
         for (int i = 0; i < sections[index].ntraits; i++){
+            if (sections[index].traits[i]->bytes != NULL){
+                free(sections[index].traits[i]->bytes);
+            }
+            if (sections[index].traits[i]->trait != NULL){
+                free(sections[index].traits[i]->trait);
+            }
             if (sections[index].traits[i] != NULL){
                 free(sections[index].traits[i]);
             }

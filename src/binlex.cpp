@@ -117,7 +117,12 @@ int main(int argc, char **argv){
         DecompilerREV decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_32, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
         decompiler.Decompile(rawx86.sections[0].data, rawx86.sections[0].size, rawx86.sections[0].offset, 0);
-        cout << "test: " << decompiler.sections[0].traits[0]->bytes << endl;
+        for (int i = 0; i < decompiler.sections[0].ntraits; i++){
+            decompiler.PrintTrait(decompiler.sections[0].traits[i], args.options.pretty);
+        }
+        // for (int i = 0; i < decompiler.sections[0].ntraits; i++){
+        //     cout << "test: " << decompiler.sections[0].traits[i]->trait << endl;
+        // }
         // if (args.options.output == NULL){
         //     decompiler.PrintTraits(args.options.pretty);
         // } else {
