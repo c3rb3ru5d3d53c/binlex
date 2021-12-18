@@ -35,6 +35,7 @@ namespace binlex {
         } worker_args;
     public:
         struct Trait {
+            char *corpus;
             char *type;
             string tmp_bytes;
             char *bytes;
@@ -50,6 +51,7 @@ namespace binlex {
         struct Section {
             cs_arch arch;
             cs_mode mode;
+            char *corpus;
             uint threads;
             uint thread_cycles;
             useconds_t thread_sleep;
@@ -103,7 +105,7 @@ namespace binlex {
         @param offset include section offset
         @param index the section index
         */
-        void Decompile(void* data, size_t data_size, size_t offset, uint index);
+        void Decompile(void* data, size_t data_size, size_t offset, char *corpus, uint index);
         //void Seek(uint64_t address, size_t data_size, uint index);
         /**
         Append Additional Traits
@@ -172,7 +174,9 @@ namespace binlex {
         @param trait the trait to print
         @param pretty pretty print
         */
-        static void PrintTrait(struct Trait *trait, bool pretty);
+        static string GetTrait(struct Trait *trait, bool pretty);
+        void PrintTraits(bool pretty);
+        void WriteTraits(char *file_path, bool pretty);
         //void Seek(uint offset, uint index);
         ~DecompilerREV();
 

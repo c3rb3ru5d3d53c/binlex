@@ -26,6 +26,7 @@ namespace binlex{
                 bool help;
                 bool list_modes;
                 char *mode;
+                char *corpus;
                 bool pretty;
             } options;
             Args();

@@ -44,6 +44,7 @@ DecompilerREV::DecompilerREV() {
         sections[i].threads = 1;
         sections[i].thread_cycles = 1;
         sections[i].thread_sleep = 500;
+        sections[i].corpus = NULL;
     }
 }
 
@@ -101,9 +102,10 @@ bool DecompilerREV::Setup(cs_arch arch, cs_mode mode, uint threads, uint thread_
     return true;
 }
 
-void DecompilerREV::PrintTrait(struct Trait *trait, bool pretty){
+string DecompilerREV::GetTrait(struct Trait *trait, bool pretty){
     json data;
     data["type"] = trait->type;
+    data["corpus"] = trait->corpus;
     data["bytes"] = trait->bytes;
     data["trait"] = trait->trait;
     data["edges"] = trait->edges;
@@ -112,11 +114,34 @@ void DecompilerREV::PrintTrait(struct Trait *trait, bool pretty){
     data["size"] = trait->size;
     data["offset"] = trait->offset;
     data["invalid_instructions"] = trait->invalid_instructions;
-    if (pretty == false){
-        cout << data.dump() << endl;
-    } else {
-        cout << data.dump(4) << endl;
+    if (pretty == true){
+        return data.dump(4);
     }
+    return data.dump();
+}
+
+void DecompilerREV::PrintTraits(bool pretty){
+    for (int i = 0; i < DECOMPILER_REV_MAX_SECTIONS; i++){
+        if (sections[i].traits != NULL){
+            for (int j = 0; j < sections[i].ntraits; j++){
+                cout << GetTrait(sections[i].traits[j], pretty) << endl;
+            }
+        }
+    }
+}
+
+void DecompilerREV::WriteTraits(char *file_path, bool pretty){
+    FILE *fd = fopen(file_path, "w");
+    stringstream traits;
+    for (int i = 0; i < DECOMPILER_REV_MAX_SECTIONS; i++){
+        if (sections[i].traits != NULL){
+            for (int j = 0; j < sections[i].ntraits; j++){
+                traits << GetTrait(sections[i].traits[j], pretty) << endl;
+            }
+        }
+    }
+    fwrite(traits.str().c_str(), sizeof(char), traits.str().length(), fd);
+    fclose(fd);
 }
 
 void * DecompilerREV::Worker(void *args) {
@@ -129,12 +154,11 @@ void * DecompilerREV::Worker(void *args) {
     struct Trait b_trait;
     struct Trait f_trait;
 
-    // struct Trait *b_trait;
-    // b_trait = new Trait;
-
     b_trait.type = (char *)"block";
+    b_trait.corpus = (char *)sections[index].corpus;
     ClearTrait(&b_trait);
     f_trait.type = (char *)"function";
+    f_trait.corpus = (char *)sections[index].corpus;
     ClearTrait(&f_trait);
 
     myself.error = cs_open(sections[index].arch, sections[index].mode, &myself.handle);
@@ -303,7 +327,8 @@ void DecompilerREV::ClearTrait(struct Trait *trait){
     trait->trait = NULL;
 }
 
-void DecompilerREV::Decompile(void* data, size_t data_size, size_t offset, uint index) {
+void DecompilerREV::Decompile(void* data, size_t data_size, size_t offset, char *corpus, uint index) {
+    sections[index].corpus = corpus;
     sections[index].data = data;
     sections[index].data_size = data_size;
 

@@ -19,6 +19,7 @@ void Args::SetDefault(){
     options.thread_sleep = 500;
     options.help = false;
     options.output = NULL;
+    options.corpus = (char *)"default";
     options.list_modes = false;
     options.mode = NULL;
     options.io_type = ARGS_IO_TYPE_UNKNOWN;
@@ -139,6 +140,14 @@ void Args::parse(int argc, char **argv){
                 fprintf(stderr, "[x] invalid number of threads\n");
                 exit(1);
             }
+        }
+        if (strcmp(argv[i], (char *)"-c") == 0 ||
+            strcmp(argv[i], (char *)"--corpus") == 0){
+            if (argc < i+2){
+                fprintf(stderr, "[x] corpus requres 1 parameter\n");
+                exit(1);
+            }
+            options.corpus = argv[i+1];
         }
         if (strcmp(argv[i], (char *)"-ts") == 0 ||
             strcmp(argv[i], (char *)"--thread-sleep") == 0){
