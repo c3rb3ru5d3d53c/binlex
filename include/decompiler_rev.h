@@ -112,7 +112,7 @@ namespace binlex {
         @param index the section index
         @return bool
         */
-        static void * AppendTrait(struct Trait *trait, struct Section *sections, uint index);
+        static void AppendTrait(struct Trait *trait, struct Section *sections, uint index);
         void FreeTraits(uint index);
         /**
         Checks if the Instruction is an Ending Instruction
