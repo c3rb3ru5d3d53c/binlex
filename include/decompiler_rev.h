@@ -35,9 +35,11 @@ namespace binlex {
         } worker_args;
     public:
         struct Trait {
-            string type;
-            string bytes;
-            string trait;
+            char *type;
+            string tmp_bytes;
+            char *bytes;
+            string tmp_trait;
+            char *trait;
             uint edges;
             uint blocks;
             uint instructions;
@@ -110,7 +112,7 @@ namespace binlex {
         @param index the section index
         @return bool
         */
-        static void AppendTrait(struct Trait trait, struct Section *sections, uint index);
+        static void * AppendTrait(struct Trait *trait, struct Section *sections, uint index);
         void FreeTraits(uint index);
         /**
         Checks if the Instruction is an Ending Instruction
@@ -170,7 +172,7 @@ namespace binlex {
         @param trait the trait to print
         @param pretty pretty print
         */
-        static void PrintTrait(struct Trait trait, bool pretty);
+        static void PrintTrait(struct Trait *trait, bool pretty);
         //void Seek(uint offset, uint index);
         ~DecompilerREV();
 
