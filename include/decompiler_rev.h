@@ -170,12 +170,21 @@ namespace binlex {
         */
         static void ClearTrait(struct Trait *trait);
         /**
-        Prints Traits as JSON
-        @param trait the trait to print
+        Gets Trait as JSON
+        @param trait pointer to trait structure
         @param pretty pretty print
+        @return json string
         */
         static string GetTrait(struct Trait *trait, bool pretty);
+        /**
+        @param pretty pretty print traits
+        */
         void PrintTraits(bool pretty);
+        /**
+        Write Traits to File
+        @param file_path path to the file
+        @param pretty pretty print traits
+        */
         void WriteTraits(char *file_path, bool pretty);
         //void Seek(uint offset, uint index);
         ~DecompilerREV();
