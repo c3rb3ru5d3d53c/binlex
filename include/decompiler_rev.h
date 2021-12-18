@@ -33,6 +33,7 @@ namespace binlex {
             uint index;
             void *sections;
         } worker_args;
+    public:
         struct Trait {
             string type;
             string bytes;
@@ -44,7 +45,6 @@ namespace binlex {
             uint offset;
             uint invalid_instructions;
         };
-    public:
         struct Section {
             cs_arch arch;
             cs_mode mode;
@@ -52,7 +52,7 @@ namespace binlex {
             uint thread_cycles;
             useconds_t thread_sleep;
             uint offset;
-            struct Trait *traits;
+            struct Trait **traits;
             uint ntraits;
             void *data;
             size_t data_size;
@@ -110,7 +110,8 @@ namespace binlex {
         @param index the section index
         @return bool
         */
-        static bool AppendTrait(struct Trait trait, struct Section *sections, uint index);
+        static void AppendTrait(struct Trait trait, struct Section *sections, uint index);
+        void FreeTraits(uint index);
         /**
         Checks if the Instruction is an Ending Instruction
         @param insn the instruction
@@ -123,13 +124,6 @@ namespace binlex {
         @return edges if > 0; then is conditional
         */
         static uint IsConditionalInsn(cs_insn *insn);
-        /**
-        Allocate Traits
-        @param count number of traits to allocate
-        @param index the section index
-        @return bool
-        */
-        //bool AllocTraits(uint count, uint index);
         /**
         Checks if Address if Function
         @param address address to check

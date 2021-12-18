@@ -47,15 +47,28 @@ DecompilerREV::DecompilerREV() {
     }
 }
 
-bool DecompilerREV::AppendTrait(struct Trait trait, struct Section *sections, uint index){
+void DecompilerREV::AppendTrait(struct Trait trait, struct Section *sections, uint index){
+    #if defined(__linux__) || defined(__APPLE__)
+    pthread_mutex_lock(&DECOMPILER_REV_MUTEX);
+    #endif
+    sections[index].traits = (struct Trait **)realloc(sections[index].traits, sizeof(struct Trait *) * sections[index].ntraits + 1);
+    if (sections[index].traits == NULL){
+        fprintf(stderr, "[x] trait realloc failed\n");
+        exit(1);
+    }
+    sections[index].traits[sections[index].ntraits] = (struct Trait *)malloc(sizeof(struct Trait));
+    if (sections[index].traits[sections[index].ntraits] == NULL){
+        fprintf(stderr, "[x] trait malloc failed\n");
+        exit(1);
+    }
+    if (memcpy(sections[index].traits[sections[index].ntraits], &trait, sizeof(struct Trait)) == NULL){
+        fprintf(stderr, "[x] trait memcpy failed\n");
+        exit(1);
+    }
     sections[index].ntraits++;
-    if (realloc(sections[index].traits, sizeof(trait) * sections[index].ntraits) == NULL) {
-        return false;
-    }
-    if (memcpy(sections[index].traits+(sections[index].ntraits*sizeof(trait)), &trait, sizeof(trait)) == NULL){
-        return false;
-    }
-    return true;
+    #if defined(__linux__) || defined(__APPLE__)
+    pthread_mutex_unlock(&DECOMPILER_REV_MUTEX);
+    #endif
 }
 
 bool DecompilerREV::Setup(cs_arch arch, cs_mode mode, uint threads, uint thread_cycles, useconds_t thread_sleep, uint index){
@@ -94,6 +107,9 @@ void * DecompilerREV::Worker(void *args) {
 
     struct Trait b_trait;
     struct Trait f_trait;
+
+    // struct Trait *b_trait;
+    // b_trait = new Trait;
 
     b_trait.type = "block";
     ClearTrait(&b_trait);
@@ -208,7 +224,6 @@ void * DecompilerREV::Worker(void *args) {
             #if defined(__linux__) || defined(__APPLE__)
             pthread_mutex_unlock(&DECOMPILER_REV_MUTEX);
             #endif
-
             if (block == true && IsConditionalInsn(insn) > 0){
                 b_trait.trait = TrimRight(b_trait.trait);
                 b_trait.bytes = TrimRight(b_trait.bytes);
@@ -217,6 +232,7 @@ void * DecompilerREV::Worker(void *args) {
                 if (b_trait.blocks == 0){
                     b_trait.blocks++;
                 }
+                AppendTrait(b_trait, sections, index);
                 PrintTrait(b_trait, false);
                 ClearTrait(&b_trait);
                 if (function == false){
@@ -232,6 +248,7 @@ void * DecompilerREV::Worker(void *args) {
                 if (b_trait.blocks == 0){
                     b_trait.blocks++;
                 }
+                AppendTrait(b_trait, sections, index);
                 PrintTrait(b_trait, false);
                 ClearTrait(&b_trait);
             }
@@ -244,6 +261,7 @@ void * DecompilerREV::Worker(void *args) {
                 if (f_trait.blocks == 0){
                     f_trait.blocks++;
                 }
+                AppendTrait(f_trait, sections, index);
                 PrintTrait(f_trait, false);
                 ClearTrait(&f_trait);
                 break;
@@ -556,11 +574,20 @@ bool DecompilerREV::IsBlock(map<uint64_t, uint> &addresses, uint64_t address){
     return false;
 }
 
+void DecompilerREV::FreeTraits(uint index){
+    if (sections[index].traits != NULL){
+        for (int i = 0; i < sections[index].ntraits; i++){
+            if (sections[index].traits[i] != NULL){
+                free(sections[index].traits[i]);
+            }
+        }
+        free(sections[index].traits);
+    }
+    sections[index].ntraits = 0;
+}
+
 DecompilerREV::~DecompilerREV() {
     for (int i = 0; i < DECOMPILER_REV_MAX_SECTIONS; i++) {
-        if (sections[i].traits != NULL) {
-            free(sections[i].traits);
-            sections[i].ntraits = 0;
-        }
+        FreeTraits(i);
     }
 }
