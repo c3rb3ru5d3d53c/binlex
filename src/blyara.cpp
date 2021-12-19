@@ -29,7 +29,7 @@ class Args{
         }
         void PrintHelp(){
             printf(
-                "blyara %s - Binlex Yara Generator Utility\n"
+                "blyara %s - A Binlex Yara Generation Utility\n"
                 "  -i  --input\t\tinput file\t\t(optional)\n"
                 "  -m  --metadata\tset metadata\t\t(optional)\n"
                 "  -n  --name\t\tsignature name\n"

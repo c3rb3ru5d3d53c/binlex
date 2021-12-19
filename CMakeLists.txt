@@ -1,9 +1,13 @@
 cmake_minimum_required(VERSION 3.5)
 
-project(binlex)
+set(GLOBAL_VERSION 1.1.0)
 
-set(SOURCES_BINLEX
-    src/binlex.cpp
+project(binlex
+    VERSION ${GLOBAL_VERSION}
+    DESCRIPTION "A Binary Genetic Traits Lexer and C++ Library"
+)
+
+add_library(binlex SHARED
     src/args.cpp
     src/raw.cpp
     src/common.cpp
@@ -13,16 +17,36 @@ set(SOURCES_BINLEX
     src/sha256.c
 )
 
-add_executable(binlex ${SOURCES_BINLEX})
+set_target_properties(binlex PROPERTIES SOVERSION ${GLOBAL_VERSION})
 
-target_link_libraries(binlex -lcapstone -lm -lpthread)
+add_library(binlex::library ALIAS binlex)
 
 target_include_directories(binlex
-    PRIVATE
+    PUBLIC
         ${PROJECT_SOURCE_DIR}/include
 )
 
-project(blyara)
+add_executable(binlex-bin
+    src/binlex.cpp
+)
+
+target_link_libraries(binlex-bin
+    PRIVATE
+        binlex::library
+    PUBLIC
+        -lcapstone
+        -lm
+        -lpthread
+)
+
+set_target_properties(binlex-bin
+    PROPERTIES OUTPUT_NAME binlex
+)
+
+project(blyara
+    VERSION ${GLOBAL_VERSION}
+    DESCRIPTION "A Binlex Yara Generation Utility"
+)
 
 set(SOURCES_BLYARA
     src/blyara.cpp
