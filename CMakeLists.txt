@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 
-set(GLOBAL_VERSION 1.1.0)
+set(GLOBAL_VERSION 1.1.1)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 

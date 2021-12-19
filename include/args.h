@@ -14,7 +14,7 @@
 namespace binlex{
     class Args {
         public:
-            char version[7] = "v1.1.0";
+            char version[7] = "v1.1.1";
             const char *modes[ARGS_MODE_COUNT] = {"elf:x86", "elf:x86_64", "pe:x86", "pe:x86_64", "raw:x86", "raw:x86_64", "raw:cil"};
             struct{
                 char *input;
