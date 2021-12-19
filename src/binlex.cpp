@@ -6,13 +6,11 @@
 #include "pe.h"
 #include "decompiler_rev.h"
 #include "blelf.h"
-#include "common.h"
 
 using namespace binlex;
 
 int main(int argc, char **argv){
     Args args;
-    Common common;
     args.parse(argc, argv);
     if (args.options.mode == NULL){
         args.print_help();
@@ -27,11 +25,11 @@ int main(int argc, char **argv){
         if (elfx86_64.ReadFile(args.options.input) == false){
             return 1;
         }
-        Decompiler decompiler;
-        decompiler.Setup(CS_ARCH_X86, CS_MODE_64);
+        DecompilerREV decompiler;
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_64, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
         for (int i = 0; i < ELF_MAX_SECTIONS; i++){
             if (elfx86_64.sections[i].data != NULL){
-                decompiler.x86_64(elfx86_64.sections[i].data, elfx86_64.sections[i].size, elfx86_64.sections[i].offset, i);
+                decompiler.Decompile(elfx86_64.sections[i].data, elfx86_64.sections[i].size, elfx86_64.sections[i].offset, i);
             }
         }
         if (args.options.output == NULL){
@@ -50,11 +48,11 @@ int main(int argc, char **argv){
         if (elfx86.ReadFile(args.options.input) == false){
             return 1;
         }
-        Decompiler decompiler;
-        decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
+        DecompilerREV decompiler;
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_32, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
         for (int i = 0; i < ELF_MAX_SECTIONS; i++){
             if (elfx86.sections[i].data != NULL){
-                decompiler.x86_64(elfx86.sections[i].data, elfx86.sections[i].size, elfx86.sections[i].offset, i);
+                decompiler.Decompile(elfx86.sections[i].data, elfx86.sections[i].size, elfx86.sections[i].offset, i);
             }
         }
         if (args.options.output == NULL){
@@ -74,20 +72,17 @@ int main(int argc, char **argv){
             return 1;
         }
         DecompilerREV decompiler;
-        decompiler.Setup(CS_ARCH_X86, CS_MODE_32, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_32, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
         for (int i = 0; i < PE_MAX_SECTIONS; i++){
             if (pe32.sections[i].data != NULL){
-                decompiler.Decompile(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, args.options.corpus, i);
+                decompiler.Decompile(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, i);
             }
         }
         if (args.options.output == NULL){
             decompiler.PrintTraits(args.options.pretty);
+        } else {
+            decompiler.WriteTraits(args.options.output, args.options.pretty);
         }
-        // if (args.options.output == NULL){
-        //     decompiler.PrintTraits(args.options.pretty);
-        // } else {
-        //     decompiler.WriteTraits(args.options.output, args.options.pretty);
-        // }
         return 0;
     }
     if (strcmp(args.options.mode, (char *)"pe:x86_64") == 0 &&
@@ -99,11 +94,11 @@ int main(int argc, char **argv){
         if (pe64.ReadFile(args.options.input) == false){
             return 1;
         }
-        Decompiler decompiler;
-        decompiler.Setup(CS_ARCH_X86, CS_MODE_64);
+        DecompilerREV decompiler;
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_64, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
         for (int i = 0; i < PE_MAX_SECTIONS; i++){
             if (pe64.sections[i].data != NULL){
-                decompiler.x86_64(pe64.sections[i].data, pe64.sections[i].size, pe64.sections[i].offset, i);
+                decompiler.Decompile(pe64.sections[i].data, pe64.sections[i].size, pe64.sections[i].offset, i);
             }
         }
         if (args.options.output == NULL){
@@ -118,31 +113,22 @@ int main(int argc, char **argv){
         Raw rawx86;
         rawx86.ReadFile(args.options.input, 0);
         DecompilerREV decompiler;
-        decompiler.Setup(CS_ARCH_X86, CS_MODE_32, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
-        decompiler.Decompile(rawx86.sections[0].data, rawx86.sections[0].size, rawx86.sections[0].offset, args.options.corpus, 0);
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_32, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
+        decompiler.Decompile(rawx86.sections[0].data, rawx86.sections[0].size, rawx86.sections[0].offset, 0);
         if (args.options.output == NULL){
             decompiler.PrintTraits(args.options.pretty);
         } else {
             decompiler.WriteTraits(args.options.output, args.options.pretty);
         }
-
-        // for (int i = 0; i < decompiler.sections[0].ntraits; i++){
-        //     cout << "test: " << decompiler.sections[0].traits[i]->trait << endl;
-        // }
-        // if (args.options.output == NULL){
-        //     decompiler.PrintTraits(args.options.pretty);
-        // } else {
-        //     decompiler.WriteTraits(args.options.output, args.options.pretty);
-        // }
         return 0;
     }
     if (strcmp(args.options.mode, (char *)"raw:x86_64") == 0 &&
         args.options.io_type == ARGS_IO_TYPE_FILE){
         Raw rawx86_64;
         rawx86_64.ReadFile(args.options.input, 0);
-        Decompiler decompiler;
-        decompiler.Setup(CS_ARCH_X86, CS_MODE_64);
-        decompiler.x86_64(rawx86_64.sections[0].data, rawx86_64.sections[0].size, rawx86_64.sections[0].offset, 0);
+        DecompilerREV decompiler;
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_64, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
+        decompiler.Decompile(rawx86_64.sections[0].data, rawx86_64.sections[0].size, rawx86_64.sections[0].offset, 0);
         if (args.options.output == NULL){
             decompiler.PrintTraits(args.options.pretty);
         } else {

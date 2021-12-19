@@ -16,6 +16,9 @@
 #define DECOMPILER_REV_VISITED_QUEUED   0
 #define DECOMPILER_REV_VISITED_ANALYZED 1
 
+#define DECOMPILER_REV_GPU_MODE_CUDA   0
+#define DECOMPILER_REV_GPU_MODE_OPENCL 1
+
 using namespace std;
 using json = nlohmann::json;
 
@@ -47,6 +50,12 @@ namespace binlex {
             uint size;
             uint offset;
             uint invalid_instructions;
+            uint cyclomatic_complexity;
+            uint average_instructions_per_block;
+            float bytes_entropy;
+            float trait_entropy;
+            char *trait_sha256;
+            char *bytes_sha256;
         };
         struct Section {
             cs_arch arch;
@@ -76,13 +85,13 @@ namespace binlex {
         @param index section index
         @return bool
         */
-        bool Setup(cs_arch arch, cs_mode mode, uint threads, uint thread_cycles, useconds_t thread_sleep, uint index);
+        bool Setup(cs_arch arch, cs_mode mode, char *corpus, uint threads, uint thread_cycles, useconds_t thread_sleep, uint index);
         /**
         Decompiler Thread Worker
         @param args pointer to worker arguments
         @returns NULL
         */
-        static void * Worker(void *args);
+        static void * DecompileWorker(void *args);
         /**
         Collect Function and Conditional Operands for Processing
         @param insn the instruction
@@ -105,7 +114,7 @@ namespace binlex {
         @param offset include section offset
         @param index the section index
         */
-        void Decompile(void* data, size_t data_size, size_t offset, char *corpus, uint index);
+        void Decompile(void* data, size_t data_size, size_t offset, uint index);
         //void Seek(uint64_t address, size_t data_size, uint index);
         /**
         Append Additional Traits
@@ -186,6 +195,7 @@ namespace binlex {
         @param pretty pretty print traits
         */
         void WriteTraits(char *file_path, bool pretty);
+        static void * TraitWorker(void *args);
         //void Seek(uint offset, uint index);
         ~DecompilerREV();
 

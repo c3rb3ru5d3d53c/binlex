@@ -15,7 +15,7 @@ Args::Args(){
 void Args::SetDefault(){
     options.input = NULL;
     options.threads = 1;
-    options.thread_cycles = 1;
+    options.thread_cycles = 32;
     options.thread_sleep = 500;
     options.help = false;
     options.output = NULL;

@@ -69,6 +69,7 @@ namespace binlex {
             */
             static string Wildcards(uint count);
             static string HexdumpMemDisp(uint64_t disp);
+            static float Entropy(string trait);
             /**
             This method prints hexdump to stdout.
             @param desc A description of the data.

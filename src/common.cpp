@@ -9,6 +9,7 @@
 #include <iomanip>
 #include <openssl/sha.h>
 #include <math.h>
+#include <map>
 #include <capstone/capstone.h>
 #include "common.h"
 
@@ -31,7 +32,7 @@ string Common::SHA256(const char *trait){
     SHA256_Update(&ctx, trait, strlen(trait));
     SHA256_Final(hash, &ctx);
     string bytes = HexdumpBE(&hash, SHA256_DIGEST_LENGTH);
-    return TrimRight(bytes);
+    return RemoveSpaces(bytes);
 }
 
 vector<char> Common::TraitToChar(string trait){
@@ -43,6 +44,20 @@ vector<char> Common::TraitToChar(string trait){
         bytes.push_back(byte);
     }
     return bytes;
+}
+
+float Common::Entropy(string trait){
+    vector<char> bytes = TraitToChar(trait);
+    float result = 0;
+    map<char,int> frequencies;
+    for (char c : bytes){
+        frequencies[c]++;
+    }
+    for (pair<char,int> p : frequencies) {
+        float freq = static_cast<float>( p.second ) / bytes.size();
+        result -= freq * log2(freq) ;
+    }
+    return result;
 }
 
 string Common::RemoveWildcards(string trait){
