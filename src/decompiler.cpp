@@ -62,21 +62,36 @@ void Decompiler::AppendTrait(struct Trait *trait, struct Section *sections, uint
         fprintf(stderr, "[x] trait malloc failed\n");
         exit(1);
     }
+
+    char *type = (char *)malloc(strlen(trait->type)+1);
+    memset(type, 0, strlen(trait->type)+1);
+    memcpy(type, trait->type, strlen(trait->type));
+    trait->type = type;
+
+    // char *corpus = (char *)malloc(strlen(trait->corpus)+1);
+    // memset(corpus, 0, strlen(trait->corpus)+1);
+    // memcpy(corpus, trait->corpus, strlen(trait->corpus));
+    // trait->corpus = corpus;
+
     trait->trait = (char *)malloc(strlen(trait->tmp_trait.c_str())+1);
     if (trait->trait == NULL){
         fprintf(stderr, "[x] trait malloc failed\n");
+        exit(1);
     }
     memset(trait->trait, 0, strlen(trait->tmp_trait.c_str())+1);
     if (memcpy(trait->trait, trait->tmp_trait.c_str(), strlen(trait->tmp_trait.c_str())) == NULL){
         fprintf(stderr, "[x] trait memcpy failed\n");
+        exit(1);
     }
     trait->bytes = (char *)malloc(strlen(trait->tmp_bytes.c_str())+1);
     if (trait->bytes == NULL){
         fprintf(stderr, "[x] trait malloc failed\n");
+        exit(1);
     }
     memset(trait->bytes, 0, strlen(trait->tmp_bytes.c_str())+1);
     if (memcpy(trait->bytes, trait->tmp_bytes.c_str(), strlen(trait->tmp_bytes.c_str())) == NULL){
         fprintf(stderr, "[x] trait memcpy failed\n");
+        exit(1);
     }
     if (memcpy(sections[index].traits[sections[index].ntraits], trait, sizeof(struct Trait)) == NULL){
         fprintf(stderr, "[x] trait memcpy failed\n");
@@ -103,7 +118,7 @@ bool Decompiler::Setup(cs_arch arch, cs_mode mode, char *corpus, uint threads, u
 string Decompiler::GetTrait(struct Trait *trait, bool pretty){
     json data;
     data["type"] = trait->type;
-    data["corpus"] = trait->corpus;
+    //data["corpus"] = trait->corpus;
     data["bytes"] = trait->bytes;
     data["trait"] = trait->trait;
     data["edges"] = trait->edges;
@@ -128,7 +143,6 @@ void Decompiler::PrintTraits(bool pretty){
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
         if (sections[i].traits != NULL){
             for (int j = 0; j < sections[i].ntraits; j++){
-                //cout << sections[i].traits[j]->bytes_sha256 << endl;
                 cout << GetTrait(sections[i].traits[j], pretty) << endl;
             }
         }
@@ -160,10 +174,10 @@ void * Decompiler::DecompileWorker(void *args) {
     struct Trait f_trait;
 
     b_trait.type = (char *)"block";
-    b_trait.corpus = (char *)sections[index].corpus;
+    b_trait.corpus = sections[index].corpus;
     ClearTrait(&b_trait);
     f_trait.type = (char *)"function";
-    f_trait.corpus = (char *)sections[index].corpus;
+    f_trait.corpus = sections[index].corpus;
     ClearTrait(&f_trait);
 
     myself.error = cs_open(sections[index].arch, sections[index].mode, &myself.handle);
@@ -648,7 +662,13 @@ bool Decompiler::IsBlock(map<uint64_t, uint> &addresses, uint64_t address){
 void Decompiler::FreeTraits(uint index){
     if (sections[index].traits != NULL){
         for (int i = 0; i < sections[index].ntraits; i++){
-             if (sections[index].traits[i]->trait_sha256 != NULL){
+            // if (sections[index].traits[i]->corpus != NULL){
+            //     free(sections[index].traits[i]->corpus);
+            // }
+            if (sections[index].traits[i]->type != NULL){
+                free(sections[index].traits[i]->type);
+            }
+            if (sections[index].traits[i]->trait_sha256 != NULL){
                 free(sections[index].traits[i]->trait_sha256);
             }
             if (sections[index].traits[i]->bytes_sha256 != NULL){
