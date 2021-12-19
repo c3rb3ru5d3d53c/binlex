@@ -17,12 +17,13 @@ docs-update:
 	cp -r build/docs/html/ docs/
 
 install:
-	cp build/binlex /usr/bin/
-	cp build/blyara /usr/bin/
+	cd build/ && \
+		make install && \
+		ldconfig
 
 uninstall:
-	rm -f /usr/bin/binlex
-	rm -f /usr/bin/blyara
+	cd build/ && \
+		make uninstall
 
 traits: check-parameter-source check-parameter-dest check-parameter-type check-parameter-format check-parameter-arch
 	@echo "[-] building traits..."
