@@ -12,6 +12,12 @@ The simple command-line interface allows malware researchers and analysts to hun
 
 While the C++ API allows developers to get creative with their own detection solutions.
 
+# Demos
+
+<p align="center">
+  <img src="docs/img/demo_0.gif" alt="animated" />
+</p>
+
 # Introduction Video
 
 <p align="center">
