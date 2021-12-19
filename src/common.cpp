@@ -7,22 +7,33 @@
 #include <algorithm>
 #include <vector>
 #include <iomanip>
-#include <openssl/sha.h>
 #include <math.h>
+#include <map>
 #include <capstone/capstone.h>
+extern "C" {
+    #include "sha256.h"
+}
 #include "common.h"
 
 using namespace std;
 using namespace binlex;
 
-string Common::SHA256(const char *trait){
-    unsigned char hash[SHA256_DIGEST_LENGTH];
+string Common::Wildcards(uint count){
+    stringstream s;
+    s << "";
+    for (int i = 0; i < count; i++){
+        s << "?? ";
+    }
+    return TrimRight(s.str());
+}
+
+string Common::SHA256(char *trait){
+    BYTE hash[SHA256_BLOCK_SIZE];
     SHA256_CTX ctx;
-    SHA256_Init(&ctx);
-    SHA256_Update(&ctx, trait, strlen(trait));
-    SHA256_Final(hash, &ctx);
-    string bytes = HexdumpBE(&hash, SHA256_DIGEST_LENGTH);
-    return TrimRight(bytes);
+    sha256_init(&ctx);
+    sha256_update(&ctx, (BYTE *)trait, strlen(trait));
+    sha256_final(&ctx, hash);
+    return RemoveSpaces(HexdumpBE(&hash, SHA256_BLOCK_SIZE));
 }
 
 vector<char> Common::TraitToChar(string trait){
@@ -34,6 +45,20 @@ vector<char> Common::TraitToChar(string trait){
         bytes.push_back(byte);
     }
     return bytes;
+}
+
+float Common::Entropy(string trait){
+    vector<char> bytes = TraitToChar(trait);
+    float result = 0;
+    map<char,int> frequencies;
+    for (char c : bytes){
+        frequencies[c]++;
+    }
+    for (pair<char,int> p : frequencies) {
+        float freq = static_cast<float>( p.second ) / bytes.size();
+        result -= freq * log2(freq) ;
+    }
+    return result;
 }
 
 string Common::RemoveWildcards(string trait){
@@ -60,7 +85,7 @@ string Common::WildcardTrait(string trait, string bytes){
     for (int i = index; i < trait.length(); i = i + 3){
         trait.replace(i, 2, "??");
     }
-    return bytes;
+    return TrimRight(trait);
 }
 
 string Common::HexdumpBE(const void *data, size_t size){
@@ -69,6 +94,17 @@ string Common::HexdumpBE(const void *data, size_t size){
     const unsigned char *local_pc = (const unsigned char *)data;
     for (int i = 0; i < size; i++){
         bytes << hex << setfill('0') << setw(2) << (unsigned uint32_t)local_pc[i] << " ";
+    }
+    return TrimRight(bytes.str());
+}
+
+string Common::HexdumpMemDisp(uint64_t disp){
+    stringstream bytes;
+    const unsigned char *local_pc = (const unsigned char *)&disp;
+    for (int i = 0; i < sizeof(disp) -1 ; i++){
+        if (local_pc[i] != 0 && local_pc[i] != 255){
+            bytes << hex << setfill('0') << setw(2) << (unsigned uint32_t)local_pc[i] << " ";
+        }
     }
     return TrimRight(bytes.str());
 }

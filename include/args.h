@@ -14,16 +14,19 @@
 namespace binlex{
     class Args {
         public:
-            char version[7] = "v1.1.0";
+            char version[7] = "v1.1.1";
             const char *modes[ARGS_MODE_COUNT] = {"elf:x86", "elf:x86_64", "pe:x86", "pe:x86_64", "raw:x86", "raw:x86_64", "raw:cil"};
             struct{
                 char *input;
                 int io_type;
                 char *output;
-                unsigned int threads;
+                uint threads;
+                uint thread_cycles;
+                useconds_t thread_sleep;
                 bool help;
                 bool list_modes;
                 char *mode;
+                char *corpus;
                 bool pretty;
             } options;
             Args();
