@@ -64,14 +64,16 @@ void Decompiler::AppendTrait(struct Trait *trait, struct Section *sections, uint
     }
 
     char *type = (char *)malloc(strlen(trait->type)+1);
+    if (type == NULL){
+        fprintf(stderr, "[x] trait malloc failed\n");
+        exit(1);
+    }
     memset(type, 0, strlen(trait->type)+1);
-    memcpy(type, trait->type, strlen(trait->type));
+    if (memcpy(type, trait->type, strlen(trait->type)) == NULL){
+        fprintf(stderr, "[x] trait memcpy failed\n");
+        exit(1);
+    }
     trait->type = type;
-
-    // char *corpus = (char *)malloc(strlen(trait->corpus)+1);
-    // memset(corpus, 0, strlen(trait->corpus)+1);
-    // memcpy(corpus, trait->corpus, strlen(trait->corpus));
-    // trait->corpus = corpus;
 
     trait->trait = (char *)malloc(strlen(trait->tmp_trait.c_str())+1);
     if (trait->trait == NULL){
@@ -118,7 +120,7 @@ bool Decompiler::Setup(cs_arch arch, cs_mode mode, char *corpus, uint threads, u
 string Decompiler::GetTrait(struct Trait *trait, bool pretty){
     json data;
     data["type"] = trait->type;
-    //data["corpus"] = trait->corpus;
+    data["corpus"] = trait->corpus;
     data["bytes"] = trait->bytes;
     data["trait"] = trait->trait;
     data["edges"] = trait->edges;
@@ -143,6 +145,7 @@ void Decompiler::PrintTraits(bool pretty){
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
         if (sections[i].traits != NULL){
             for (int j = 0; j < sections[i].ntraits; j++){
+                sections[i].traits[j]->corpus = sections[i].corpus;
                 cout << GetTrait(sections[i].traits[j], pretty) << endl;
             }
         }
@@ -155,6 +158,7 @@ void Decompiler::WriteTraits(char *file_path, bool pretty){
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
         if (sections[i].traits != NULL){
             for (int j = 0; j < sections[i].ntraits; j++){
+                sections[i].traits[j]->corpus = sections[i].corpus;
                 traits << GetTrait(sections[i].traits[j], pretty) << endl;
             }
         }
@@ -174,10 +178,10 @@ void * Decompiler::DecompileWorker(void *args) {
     struct Trait f_trait;
 
     b_trait.type = (char *)"block";
-    b_trait.corpus = sections[index].corpus;
+    //b_trait.corpus = sections[index].corpus;
     ClearTrait(&b_trait);
     f_trait.type = (char *)"function";
-    f_trait.corpus = sections[index].corpus;
+    //f_trait.corpus = sections[index].corpus;
     ClearTrait(&f_trait);
 
     myself.error = cs_open(sections[index].arch, sections[index].mode, &myself.handle);
@@ -662,9 +666,6 @@ bool Decompiler::IsBlock(map<uint64_t, uint> &addresses, uint64_t address){
 void Decompiler::FreeTraits(uint index){
     if (sections[index].traits != NULL){
         for (int i = 0; i < sections[index].ntraits; i++){
-            // if (sections[index].traits[i]->corpus != NULL){
-            //     free(sections[index].traits[i]->corpus);
-            // }
             if (sections[index].traits[i]->type != NULL){
                 free(sections[index].traits[i]->type);
             }
