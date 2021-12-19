@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.5)
 
 set(GLOBAL_VERSION 1.1.0)
 
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
+
 project(binlex
     VERSION ${GLOBAL_VERSION}
     DESCRIPTION "A Binary Genetic Traits Lexer and C++ Library"
@@ -43,6 +45,12 @@ set_target_properties(binlex-bin
     PROPERTIES OUTPUT_NAME binlex
 )
 
+install(TARGETS binlex-bin DESTINATION bin)
+
+install(TARGETS binlex
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
 project(blyara
     VERSION ${GLOBAL_VERSION}
     DESCRIPTION "A Binlex Yara Generation Utility"
@@ -59,4 +67,10 @@ target_link_libraries(blyara -lcapstone -lm)
 target_include_directories(blyara
     PRIVATE
         ${PROJECT_SOURCE_DIR}/include
+)
+
+install(TARGETS blyara DESTINATION bin)
+
+add_custom_target(uninstall
+    "${CMAKE_COMMAND}" -P "${CMAKE_MODULE_PATH}/uninstall.cmake"
 )
