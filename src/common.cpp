@@ -11,6 +11,9 @@
 #include <math.h>
 #include <map>
 #include <capstone/capstone.h>
+// extern "C" {
+//     #include "sha256.h"
+// }
 #include "common.h"
 
 using namespace std;
