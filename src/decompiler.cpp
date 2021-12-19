@@ -7,505 +7,670 @@
 #include <algorithm>
 #include <vector>
 #include <iomanip>
+#if defined(__linux__) || defined(__APPLE__)
+#include <pthread.h>
 #include <openssl/sha.h>
+#elif _WIN32
+#include <windows.h>
+#include <wincrypt.h>
+#endif
+#include <unistd.h>
 #include <math.h>
 #include <capstone/capstone.h>
 #include "json.h"
 #include "decompiler.h"
 
+// Very WIP Multi-Threaded Recursive Decompiler
+
 using namespace std;
-using json = nlohmann::json;
 using namespace binlex;
+using json = nlohmann::json;
 
-Decompiler::Decompiler(){
-    pc = 0;
-}
+static pthread_mutex_t DECOMPILER_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 
-string Decompiler::sha256(const char *trait){
-    unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256_CTX ctx;
-    SHA256_Init(&ctx);
-    SHA256_Update(&ctx, trait, strlen(trait));
-    SHA256_Final(hash, &ctx);
-    string bytes = hexdump_be(&hash, SHA256_DIGEST_LENGTH, false);
-    return rs(bytes);
-}
+//from https://github.com/capstone-engine/capstone/blob/master/include/capstone/x86.h
 
-float Decompiler::entropy(string trait){
-    vector<char> bytes = t2c(trait);
-    float result = 0;
-    map<char,int> frequencies;
-    for (char c : bytes){
-        frequencies[c]++;
+#define X86_REL_ADDR(insn) (((insn).detail->x86.operands[0].type == X86_OP_IMM) \
+	? (uint64_t)((insn).detail->x86.operands[0].imm) \
+	: (((insn).address + (insn).size) + (uint64_t)(insn).detail->x86.disp))
+
+Decompiler::Decompiler() {
+    for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++) {
+        sections[i].offset = 0;
+        sections[i].traits = NULL;
+        sections[i].ntraits = 0;
+        sections[i].data = NULL;
+        sections[i].data_size = 0;
+        sections[i].threads = 1;
+        sections[i].thread_cycles = 1;
+        sections[i].thread_sleep = 500;
+        sections[i].corpus = NULL;
     }
-    for (pair<char,int> p : frequencies) {
-        float freq = static_cast<float>( p.second ) / bytes.size();
-        result -= freq * log2(freq) ;
-    }
-    return result;
 }
 
-vector<char> Decompiler::t2c(string trait){
-    trait = rs(rwc(trait));
-    vector<char> bytes;
-    for (int i = 0; i < trait.length(); i = i + 2){
-        const char *s_byte = trait.substr(i, 2).c_str();
-        unsigned char byte = (char)strtol(s_byte, NULL, 16);
-        bytes.push_back(byte);
+void Decompiler::AppendTrait(struct Trait *trait, struct Section *sections, uint index){
+    #if defined(__linux__) || defined(__APPLE__)
+    pthread_mutex_lock(&DECOMPILER_MUTEX);
+    #endif
+    sections[index].traits = (struct Trait **)realloc(sections[index].traits, sizeof(struct Trait *) * sections[index].ntraits + 1);
+    if (sections[index].traits == NULL){
+        fprintf(stderr, "[x] trait realloc failed\n");
+        exit(1);
     }
-    return bytes;
+    sections[index].traits[sections[index].ntraits] = (struct Trait *)malloc(sizeof(struct Trait));
+    if (sections[index].traits[sections[index].ntraits] == NULL){
+        fprintf(stderr, "[x] trait malloc failed\n");
+        exit(1);
+    }
+    trait->trait = (char *)malloc(strlen(trait->tmp_trait.c_str())+1);
+    if (trait->trait == NULL){
+        fprintf(stderr, "[x] trait malloc failed\n");
+    }
+    memset(trait->trait, 0, strlen(trait->tmp_trait.c_str())+1);
+    if (memcpy(trait->trait, trait->tmp_trait.c_str(), strlen(trait->tmp_trait.c_str())) == NULL){
+        fprintf(stderr, "[x] trait memcpy failed\n");
+    }
+    trait->bytes = (char *)malloc(strlen(trait->tmp_bytes.c_str())+1);
+    if (trait->bytes == NULL){
+        fprintf(stderr, "[x] trait malloc failed\n");
+    }
+    memset(trait->bytes, 0, strlen(trait->tmp_bytes.c_str())+1);
+    if (memcpy(trait->bytes, trait->tmp_bytes.c_str(), strlen(trait->tmp_bytes.c_str())) == NULL){
+        fprintf(stderr, "[x] trait memcpy failed\n");
+    }
+    if (memcpy(sections[index].traits[sections[index].ntraits], trait, sizeof(struct Trait)) == NULL){
+        fprintf(stderr, "[x] trait memcpy failed\n");
+        exit(1);
+    }
+    sections[index].ntraits++;
+    trait->trait = (char *)trait->tmp_trait.c_str();
+    trait->bytes = (char *)trait->tmp_bytes.c_str();
+    #if defined(__linux__) || defined(__APPLE__)
+    pthread_mutex_unlock(&DECOMPILER_MUTEX);
+    #endif
 }
 
-string Decompiler::rs(string s){
-    // remove space
-    string::iterator end_pos = remove(s.begin(), s.end(), ' ');
-    s.erase(end_pos, s.end());
-    return s;
-}
-
-string Decompiler::rwc(string s){
-    // Remove Wildcard
-    string::iterator end_pos = remove(s.begin(), s.end(), '?');
-    s.erase(end_pos, s.end());
-    return s;
-}
-
-uint Decompiler::trait_size(string s){
-    return rs(s).length() / 2;
-}
-
-string Decompiler::rtrim(const std::string &s){
-    const string whitespace = " \n\r\t\f\v";
-    size_t end = s.find_last_not_of(whitespace);
-    return (end == std::string::npos) ? "" : s.substr(0, end + 1);
-}
-
-string Decompiler::hexdump_be(const void *data, size_t size, bool cont){
-    stringstream bytes;
-    bytes << "";
-    const unsigned char *local_pc = (const unsigned char *)data;
-    for (int i = 0; i < size; i++){
-        bytes << hex << setfill('0') << setw(2) << (unsigned uint32_t)local_pc[i] << " ";
-    }
-    if (cont == true){
-        bytes << " ";
-    }
-    return bytes.str();
-}
-
-string Decompiler::hexdump_mem_disp(uint64_t disp){
-    stringstream bytes;
-    const unsigned char *local_pc = (const unsigned char *)&disp;
-    for (int i = 0; i < sizeof(disp) -1 ; i++){
-        if (local_pc[i] != 0 && local_pc[i] != 255){
-            bytes << hex << setfill('0') << setw(2) << (unsigned uint32_t)local_pc[i] << " ";
-        }
-    }
-    return rtrim(bytes.str());
-}
-
-string Decompiler::wildcard_bytes(string bytes, string sub_bytes){
-    bytes = rtrim(bytes);
-    size_t index = bytes.find(sub_bytes, 0);
-    if (index == string::npos){
-        return bytes;
-    }
-    for (int i = index; i < bytes.length(); i = i + 3){
-        bytes.replace(i, 2, "??");
-    }
-    return bytes;
-}
-
-string Decompiler::wildcard_all(string bytes){
-    bytes = rtrim(bytes);
-    for (int i = 0; i < bytes.length(); i = i + 3){
-        bytes.replace(i, 2, "??");
-    }
-    return bytes + " ";
-}
-
-json Decompiler::GetTraits(){
-    json result;
-    for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
-        if (sections[i].traits.is_null() == false){
-            if (sections[i].traits.is_null() == false){
-                for (int j = 0; j < sections[i].traits.size(); j++){
-                    result.push_back(sections[i].traits[j]);
-                }
-            }
-        }
-    }
-    return result;
-}
-
-bool Decompiler::Setup(cs_arch arch, cs_mode mode){
-    status = cs_open(arch, mode, &handle);
-    if (status != CS_ERR_OK){
-        return false;
-    }
-    status = cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);
-    if (status != CS_ERR_OK){
-        return false;
-    }
+bool Decompiler::Setup(cs_arch arch, cs_mode mode, char *corpus, uint threads, uint thread_cycles, useconds_t thread_sleep, uint index){
+    sections[index].arch = arch;
+    sections[index].mode = mode;
+    sections[index].threads = threads;
+    sections[index].thread_cycles = thread_cycles;
+    sections[index].thread_sleep = thread_sleep;
+    sections[index].corpus = corpus;
     return true;
 }
 
-int Decompiler::x86_64(void *data, size_t data_size, size_t data_offset, uint index){
-    const uint8_t *code = (uint8_t *)data;
-    json trait;
-    size_t code_size = data_size;
-    uint f_edges = 0;
-    uint b_edges = 0;
-    uint insn_size = 0;
-    bool f_end = false;
-    uint f_count = 0;
-    uint f_insn_count = 0;
-    string f_bytes;
-    string f_trait;
-    bool b_end = false;
-    uint b_count = 0;
-    uint b_insn_count = 0;
-    string b_bytes;
-    string b_trait;
-    bool disasm = false;
-    string o_trait;
-    cs_insn *insn = cs_malloc(handle);
-    while (true){
-        bool wildcard_insn = false;
-        disasm = cs_disasm_iter(handle, &code, &code_size, &pc, insn);
-        if (disasm == false && pc >= data_size){
-            break;
-        }
-        if (disasm == false && pc < data_size){
-            // realign code and data for decompiler
-            pc++;
-            code_size = data_size - pc + 1;
-            memmove(data, code+1, code_size);
-            code = (uint8_t *)data;
-            f_trait.clear();
-            f_bytes.clear();
-            f_end = false;
-            f_edges = 0;
-            f_insn_count = 0;
-            b_count = 0;
-            o_trait.clear();
-            if (b_bytes.length() > 0){
-                goto collect_block;
-            }
-            b_trait.clear();
-            b_bytes.clear();
-            b_end = false;
-            b_insn_count = 0;
-            b_edges = 0;
-            continue;
-        }
-        switch(insn->id){
-            case X86_INS_JMP:
-                // non-conditional
-                f_edges++;
-                b_edges++;
-                b_count++;
-                b_end = true;
-                break;
-            case X86_INS_JNE:
-                // conditional
-                f_edges = f_edges + 2;
-                b_edges = b_edges + 2;
-                b_count++;
-                b_end = true;
-                break;
-            case X86_INS_JNO:
-                // conditional
-                f_edges = f_edges + 2;
-                b_edges = b_edges + 2;
-                b_count++;
-                b_end = true;
-                break;
-            case X86_INS_JNP:
-                // conditional
-                f_edges = f_edges + 2;
-                b_edges = b_edges + 2;
-                b_count++;
-                b_end = true;
-                break;
-            case X86_INS_JL:
-                // conditional
-                f_edges = f_edges + 2;
-                b_edges = b_edges + 2;
-                b_count++;
-                b_end = true;
-                break;
-            case X86_INS_JLE:
-                // conditional
-                f_edges = f_edges + 2;
-                b_edges = b_edges + 2;
-                b_count++;
-                b_end = true;
-                break;
-            case X86_INS_JG:
-                // conditional
-                f_edges = f_edges + 2;
-                b_edges = b_edges + 2;
-                b_count++;
-                b_end = true;
-                break;
-            case X86_INS_JGE:
-                f_edges = f_edges + 2;
-                b_edges = b_edges + 2;
-                b_count++;
-                b_end = true;
-                break;
-            case X86_INS_JE:
-                f_edges = f_edges + 2;
-                b_edges = b_edges + 2;
-                b_count++;
-                b_end = true;
-                break;
-            case X86_INS_JECXZ:
-                f_edges = f_edges + 2;
-                b_edges = b_edges + 2;
-                b_count++;
-                b_end = true;
-                break;
-            case X86_INS_JCXZ:
-                f_edges = f_edges + 2;
-                b_edges = b_edges + 2;
-                b_count++;
-                b_end = true;
-                break;
-            case X86_INS_JB:
-                f_edges = f_edges + 2;
-                b_edges = b_edges + 2;
-                b_count++;
-                b_end = true;
-                break;
-            case X86_INS_JBE:
-                f_edges = f_edges + 2;
-                b_edges = b_edges + 2;
-                b_count++;
-                b_end = true;
-                break;
-            case X86_INS_JA:
-                f_edges = f_edges + 2;
-                b_edges = b_edges + 2;
-                b_count++;
-                b_end = true;
-                break;
-            case X86_INS_JAE:
-                f_edges = f_edges + 2;
-                b_edges = b_edges + 2;
-                b_count++;
-                b_end = true;
-                break;
-            case X86_INS_JNS:
-                f_edges = f_edges + 2;
-                b_edges = b_edges + 2;
-                b_count++;
-                b_end = true;
-                break;
-            case X86_INS_JO:
-                f_edges = f_edges + 2;
-                b_edges = b_edges + 2;
-                b_count++;
-                b_end = true;
-                break;
-            case X86_INS_JP:
-                f_edges = f_edges + 2;
-                b_edges = b_edges + 2;
-                b_count++;
-                b_end = true;
-                break;
-            case X86_INS_JRCXZ:
-                f_edges = f_edges + 2;
-                b_edges = b_edges + 2;
-                b_count++;
-                b_end = true;
-                break;
-            case X86_INS_JS:
-                f_edges = f_edges + 2;
-                b_edges = b_edges + 2;
-                b_count++;
-                b_end = true;
-                break;
-            case X86_INS_RET:
-                f_count++;
-                f_end = true;
-                b_end = true;
-                break;
-            case X86_INS_RETF:
-                f_count++;
-                f_end = true;
-                b_end = true;
-                break;
-            case X86_INS_RETFQ:
-                f_count++;
-                f_end = true;
-                b_end = true;
-                break;
-            case X86_INS_IRET:
-                f_count++;
-                f_end = true;
-                b_end = true;
-                break;
-            case X86_INS_IRETD:
-                f_count++;
-                f_end = true;
-                b_end = true;
-                break;
-            case X86_INS_IRETQ:
-                f_count++;
-                f_end = true;
-                b_end = true;
-                break;
-            case X86_INS_NOP:
-                wildcard_insn = true;
-                break;
-            case X86_INS_INVALID:
-                b_end = true;
-                f_end = true;
-                wildcard_insn = true;
-                break;
-            default:
-                break;
-        }
-
-        // Parse Operands
-        for (int j = 0; j < insn->detail->x86.op_count; j++){
-            cs_x86_op operand = insn->detail->x86.operands[j];
-            switch(operand.type){
-                case X86_OP_MEM:
-                    // Wildcard Memory Operands
-                    {
-                        if (operand.mem.disp != 0){
-                            o_trait = wildcard_bytes(hexdump_be(insn->bytes, insn->size, false),
-                            hexdump_mem_disp(operand.mem.disp));
-                        }
-                        break;
-                    }
-
-                case X86_OP_IMM:
-                    // Wildcard Immutable Operands / Scalars
-                    {
-                        string imm = hexdump_mem_disp(operand.imm);
-                        string instr = hexdump_be(insn->bytes, insn->size, false);
-                        if (imm.length() > 0){
-                            o_trait = wildcard_bytes(instr, imm);
-                        }
-                        break;
-                    }
-                default:
-                    break;
-            }
-        }
-        if (wildcard_insn == true){
-            b_trait = b_trait + wildcard_all(hexdump_be(insn->bytes, insn->size, false));
-            f_trait = f_trait + wildcard_all(hexdump_be(insn->bytes, insn->size, false));
-            wildcard_insn = false;
-        } else if (o_trait.length() > 0){
-            o_trait = rtrim(o_trait);
-            b_trait = b_trait + o_trait + " ";
-            f_trait = f_trait + o_trait + " ";
-            o_trait.clear();
-        } else {
-            b_trait = b_trait + hexdump_be(insn->bytes, insn->size, false);
-            f_trait = f_trait + hexdump_be(insn->bytes, insn->size, false);
-        }
-        b_bytes = b_bytes + hexdump_be(insn->bytes, insn->size, false);
-        b_insn_count++;
-        f_bytes = f_bytes + hexdump_be(insn->bytes, insn->size, false);
-        f_insn_count++;
-        insn_size = insn->size;
-        if (b_end == true && b_bytes.length() > 0){
-            collect_block:
-            trait["type"] = "block";
-            trait["bytes_sha256"] = sha256(rtrim(b_bytes).c_str());
-            trait["bytes"] = rtrim(b_bytes);
-            trait["size"] = trait_size(trait["bytes"]);
-            trait["instructions"] = b_insn_count;
-            trait["blocks"] = 1;
-            if (disasm == false){
-                trait["offset"] = data_offset + pc - (uint)trait["size"] - 1;
-            } else {
-                trait["offset"] = data_offset + pc - (uint)trait["size"];
-            }
-            trait["average_instructions_per_block"] = b_insn_count / 1;
-            trait["edges"] = b_edges;
-            trait["cyclomatic_complexity"] = b_edges - 1 + 2;
-            trait["bytes_entropy"] = entropy(trait["bytes"].get<string>());
-            trait["trait"] = rtrim(b_trait);
-            trait["trait_entropy"] = entropy(trait["trait"].get<string>());
-            trait["trait_sha256"] = sha256(rtrim(b_trait).c_str());
-            b_trait.clear();
-            b_bytes.clear();
-            b_end = false;
-            b_insn_count = 0;
-            b_edges = 0;
-            sections[index].traits.push_back(trait);
-            sections[index].visited.push_back(trait["offset"].get<uint64_t>());
-            trait.clear();
-        }
-        if (f_end == true && f_bytes.length() > 0){
-            trait["type"] = "function";
-            trait["bytes_sha256"] = sha256(rtrim(f_bytes).c_str());
-            trait["bytes"] = rtrim(f_bytes);
-            trait["bytes_entropy"] = entropy(trait["bytes"].get<string>());
-            trait["size"] = trait_size(trait["bytes"]);
-            trait["instructions"] = f_insn_count;
-            if (b_count == 0){
-                trait["blocks"] = 1;
-                trait["average_instructions_per_block"] = f_insn_count / 1;
-                trait["cyclomatic_complexity"] = f_edges - 1 + 2;
-            } else {
-                trait["blocks"] = b_count;
-                trait["average_instructions_per_block"] = f_insn_count / b_count;
-                trait["cyclomatic_complexity"] = f_edges - b_count + 2;
-            }
-            trait["offset"] = data_offset + pc - (uint)trait["size"];
-            trait["edges"] = f_edges;
-            trait["trait"] = rtrim(f_trait);
-            trait["trait_entropy"] = entropy(trait["trait"].get<string>());
-            trait["trait_sha256"] = sha256(rtrim(f_trait).c_str());
-            f_trait.clear();
-            sections[index].traits.push_back(trait);
-            sections[index].visited.push_back(trait["offset"].get<uint64_t>());
-            f_bytes.clear();
-            f_end = false;
-            f_edges = 0;
-            f_insn_count = 0;
-            b_count = 0;
-            trait.clear();
-        }
-        //printf("pos: %ld,%ld\n", pc, data_size);
+string Decompiler::GetTrait(struct Trait *trait, bool pretty){
+    json data;
+    data["type"] = trait->type;
+    data["corpus"] = trait->corpus;
+    data["bytes"] = trait->bytes;
+    data["trait"] = trait->trait;
+    data["edges"] = trait->edges;
+    data["blocks"] = trait->blocks;
+    data["instructions"] = trait->instructions;
+    data["size"] = trait->size;
+    data["offset"] = trait->offset;
+    data["bytes_entropy"] = trait->bytes_entropy;
+    data["bytes_sha256"] = trait->bytes_sha256;
+    data["trait_sha256"] = trait->trait_sha256;
+    data["trait_entropy"] = trait->trait_entropy;
+    data["invalid_instructions"] = trait->invalid_instructions;
+    data["cyclomatic_complexity"] = trait->cyclomatic_complexity;
+    data["average_instructions_per_block"] = trait->average_instructions_per_block;
+    if (pretty == true){
+        return data.dump(4);
     }
-    cs_free(insn, 1);
-    return pc;
+    return data.dump();
 }
 
 void Decompiler::PrintTraits(bool pretty){
-    json traits = GetTraits();
-    if (pretty == false){
-        cout << traits.dump() << endl;
-    } else {
-        cout << traits.dump(4) << endl;
+    for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
+        if (sections[i].traits != NULL){
+            for (int j = 0; j < sections[i].ntraits; j++){
+                //cout << sections[i].traits[j]->bytes_sha256 << endl;
+                cout << GetTrait(sections[i].traits[j], pretty) << endl;
+            }
+        }
     }
 }
 
 void Decompiler::WriteTraits(char *file_path, bool pretty){
     FILE *fd = fopen(file_path, "w");
-    string traits;
-    if (pretty == false){
-        traits = GetTraits().dump();
-    } else {
-        traits = GetTraits().dump(4);
+    stringstream traits;
+    for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
+        if (sections[i].traits != NULL){
+            for (int j = 0; j < sections[i].ntraits; j++){
+                traits << GetTrait(sections[i].traits[j], pretty) << endl;
+            }
+        }
     }
-    if (traits.length() > 0){
-        traits = traits + '\n';
-    }
-    fwrite(traits.c_str(), sizeof(char), traits.length(), fd);
+    fwrite(traits.str().c_str(), sizeof(char), traits.str().length(), fd);
     fclose(fd);
 }
 
-Decompiler::~Decompiler(){
-    cs_close(&handle);
-    pc = 0;
+void * Decompiler::DecompileWorker(void *args) {
+
+    worker myself;
+    worker_args *pArgs = (worker_args *)args;
+    uint index = pArgs->index;
+    struct Section *sections = (struct Section *)pArgs->sections;
+
+    struct Trait b_trait;
+    struct Trait f_trait;
+
+    b_trait.type = (char *)"block";
+    b_trait.corpus = (char *)sections[index].corpus;
+    ClearTrait(&b_trait);
+    f_trait.type = (char *)"function";
+    f_trait.corpus = (char *)sections[index].corpus;
+    ClearTrait(&f_trait);
+
+    myself.error = cs_open(sections[index].arch, sections[index].mode, &myself.handle);
+    if (myself.error != CS_ERR_OK) {
+        return NULL;
+    }
+    myself.error = cs_option(myself.handle, CS_OPT_DETAIL, CS_OPT_ON);
+    if (myself.error != CS_ERR_OK) {
+        return NULL;
+    }
+
+    int thread_cycles = 0;
+    cs_insn *insn = cs_malloc(myself.handle);
+    while (true){
+
+        uint64_t tmp_addr = 0;
+        uint64_t address = 0;
+
+        #if defined(__linux__) || defined(__APPLE__)
+        pthread_mutex_lock(&DECOMPILER_MUTEX);
+        #endif
+        if (!sections[index].discovered.empty()){
+            address = sections[index].discovered.front();
+            sections[index].discovered.pop();
+            sections[index].visited[address] = DECOMPILER_VISITED_ANALYZED;
+        } else {
+            #if defined(__linux__) || defined(__APPLE__)
+            pthread_mutex_unlock(&DECOMPILER_MUTEX);
+            #endif
+            thread_cycles++;
+            if (thread_cycles == sections[index].thread_cycles){
+                break;
+            }
+            usleep(sections[index].thread_sleep);
+            continue;
+        }
+        #if defined(__linux__) || defined(__APPLE__)
+        pthread_mutex_unlock(&DECOMPILER_MUTEX);
+        #endif
+
+        myself.pc = address;
+        myself.code = (uint8_t *)((uint8_t *)sections[index].data + address);
+        myself.code_size = sections[index].data_size + address;
+
+        bool block = IsBlock(sections[index].addresses, address);
+        bool function = IsFunction(sections[index].addresses, address);
+
+        while(true) {
+            uint edges = 0;
+
+            if (myself.pc >= sections[index].data_size) {
+                break;
+            }
+
+            bool result = cs_disasm_iter(myself.handle, &myself.code, &myself.code_size, &myself.pc, insn);
+
+            b_trait.instructions++;
+            f_trait.instructions++;
+
+            if (result == true){
+                // Need to Wildcard Traits Here
+                if (IsWildcardInsn(insn) == true){
+                    b_trait.tmp_trait = b_trait.tmp_trait + Wildcards(insn->size) + " ";
+                    f_trait.tmp_trait = f_trait.tmp_trait + Wildcards(insn->size) + " ";
+                } else {
+                    b_trait.tmp_trait = b_trait.tmp_trait + WildcardInsn(insn) + " ";
+                    f_trait.tmp_trait = f_trait.tmp_trait + WildcardInsn(insn) + " ";
+                }
+                b_trait.tmp_bytes = b_trait.tmp_bytes + HexdumpBE(insn->bytes, insn->size) + " ";
+                f_trait.tmp_bytes = f_trait.tmp_bytes + HexdumpBE(insn->bytes, insn->size) + " ";
+                edges = IsConditionalInsn(insn);
+                b_trait.edges = b_trait.edges + edges;
+                f_trait.edges = f_trait.edges + edges;
+                if (edges > 0){
+                    b_trait.blocks++;
+                    f_trait.blocks++;
+                }
+            }
+
+            if (result == false){
+                b_trait.invalid_instructions++;
+                f_trait.invalid_instructions++;
+                b_trait.tmp_bytes = b_trait.tmp_bytes + HexdumpBE(myself.code, 1) + " ";
+                f_trait.tmp_bytes = f_trait.tmp_bytes + HexdumpBE(myself.code, 1) + " ";
+                b_trait.tmp_trait = b_trait.tmp_trait + Wildcards(1) + " ";
+                f_trait.tmp_trait = f_trait.tmp_trait + Wildcards(1) + " ";
+                myself.pc++;
+                myself.code = (uint8_t *)((uint8_t *)sections[index].data + myself.pc);
+                myself.code_size = sections[index].data_size + myself.pc;
+                continue;
+            }
+
+            #if defined(__linux__) || defined(__APPLE__)
+            pthread_mutex_lock(&DECOMPILER_MUTEX);
+            #endif
+            if (result == true && IsEndInsn(insn) == true && myself.pc < sections[index].data_size) {
+                tmp_addr = myself.pc+sizeof(insn->bytes);
+                if (IsVisited(sections[index].visited, tmp_addr) == false &&
+                    tmp_addr < sections[index].data_size) {
+                    sections[index].discovered.push(tmp_addr);
+                    sections[index].addresses[tmp_addr] = DECOMPILER_OPERAND_TYPE_FUNCTION;
+                    sections[index].visited[tmp_addr] = DECOMPILER_VISITED_QUEUED;
+                }
+            }
+            CollectInsn(insn, sections, index);
+
+            //printf("address=0x%" PRIx64 ",block=%d,function=%d,queue=%ld,instruction=%s\t%s\n", insn->address,IsBlock(sections[index].addresses, insn->address), IsFunction(sections[index].addresses, insn->address), sections[index].discovered.size(), insn->mnemonic, insn->op_str);
+
+            #if defined(__linux__) || defined(__APPLE__)
+            pthread_mutex_unlock(&DECOMPILER_MUTEX);
+            #endif
+            if (block == true && IsConditionalInsn(insn) > 0){
+                b_trait.tmp_trait = TrimRight(b_trait.tmp_trait);
+                b_trait.tmp_bytes = TrimRight(b_trait.tmp_bytes);
+                b_trait.size = GetByteSize(b_trait.tmp_bytes);
+                b_trait.offset = sections[index].offset + myself.pc - b_trait.size;
+                AppendTrait(&b_trait, sections, index);
+                ClearTrait(&b_trait);
+                if (function == false){
+                    ClearTrait(&f_trait);
+                    break;
+                }
+            }
+            if (block == true && IsEndInsn(insn) == true){
+                b_trait.tmp_trait = TrimRight(b_trait.tmp_trait);
+                b_trait.tmp_bytes = TrimRight(b_trait.tmp_bytes);
+                b_trait.size = GetByteSize(b_trait.tmp_bytes);
+                b_trait.offset = sections[index].offset + myself.pc - b_trait.size;
+                AppendTrait(&b_trait, sections, index);
+                ClearTrait(&b_trait);
+            }
+
+            if (function == true && IsEndInsn(insn) == true){
+                f_trait.tmp_trait = TrimRight(f_trait.tmp_trait);
+                f_trait.tmp_bytes = TrimRight(f_trait.tmp_bytes);
+                f_trait.size = GetByteSize(f_trait.tmp_bytes);
+                f_trait.offset = sections[index].offset + myself.pc - f_trait.size;
+                AppendTrait(&f_trait, sections, index);
+                ClearTrait(&f_trait);
+                break;
+            }
+        }
+    }
+    cs_free(insn, 1);
+    cs_close(&myself.handle);
+    return NULL;
+}
+
+void * Decompiler::TraitWorker(void *args){
+    struct Trait *trait = (struct Trait *)args;
+    if (trait->blocks == 0){
+        trait->blocks++;
+    }
+    trait->bytes_entropy = Entropy(string(trait->bytes));
+    trait->trait_entropy = Entropy(string(trait->trait));
+    string bytes_sha256 = SHA256(trait->bytes);
+    trait->bytes_sha256 = (char *)malloc(bytes_sha256.length()+1);
+    memset(trait->bytes_sha256, 0, bytes_sha256.length()+1);
+    memcpy(trait->bytes_sha256, bytes_sha256.c_str(), bytes_sha256.length());
+    string trait_sha256 = SHA256(trait->trait);
+    trait->trait_sha256 = (char *)malloc(trait_sha256.length()+1);
+    memset(trait->trait_sha256, 0, trait_sha256.length()+1);
+    memcpy(trait->trait_sha256, trait_sha256.c_str(), trait_sha256.length());
+    if (strcmp(trait->type, (char *)"block") == 0){
+        trait->cyclomatic_complexity = trait->edges - 1 + 2;
+        trait->average_instructions_per_block = trait->instructions / 1;
+    }
+    if (strcmp(trait->type, (char *)"function") == 0){
+        trait->cyclomatic_complexity = trait->edges - trait->blocks + 2;
+        trait->average_instructions_per_block = trait->instructions / trait->blocks;
+    }
+    return NULL;
+
+}
+
+void Decompiler::ClearTrait(struct Trait *trait){
+    trait->tmp_bytes.clear();
+    trait->edges = 0;
+    trait->instructions = 0;
+    trait->blocks = 0;
+    trait->offset = 0;
+    trait->size = 0;
+    trait->invalid_instructions = 0;
+    trait->tmp_trait.clear();
+    trait->trait = NULL;
+    trait->bytes_sha256 = NULL;
+}
+
+void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint index) {
+    sections[index].data = data;
+    sections[index].data_size = data_size;
+
+    sections[index].discovered.push(0);
+    sections[index].addresses[0] = DECOMPILER_OPERAND_TYPE_FUNCTION;
+    sections[index].visited[0] = DECOMPILER_VISITED_QUEUED;
+
+    worker_args *args = (worker_args *)malloc(sizeof(worker_args));
+    args->index = index;
+    args->sections = &sections;
+
+    #if defined(__linux__) || defined(__APPLE__)
+    pthread_t threads[sections[index].threads];
+    pthread_attr_t thread_attribs[sections[index].threads];
+    #endif
+
+    while (true){
+        for (int i = 0; i < sections[index].threads; i++){
+            #if defined(__linux__) || defined(__APPLE__)
+            pthread_attr_init(&thread_attribs[i]);
+            pthread_attr_setdetachstate(&thread_attribs[i], PTHREAD_CREATE_JOINABLE);
+            pthread_create(&threads[i], NULL, DecompileWorker, args);
+            #endif
+        }
+        for (int i = 0; i < sections[index].threads; i++){
+            #if defined(__linux__) || defined(__APPLE__)
+            pthread_join(threads[i], NULL);
+            #endif
+        }
+        if (sections[index].discovered.empty()){
+            break;
+        }
+    }
+    for (int i = 0; i < sections[index].ntraits; i++){
+        for (int j = 0; j < sections[index].threads; j++){
+            #if defined(__linux__) || defined(__APPLE__)
+            pthread_attr_init(&thread_attribs[j]);
+            pthread_attr_setdetachstate(&thread_attribs[j], PTHREAD_CREATE_JOINABLE);
+            pthread_create(&threads[j], NULL, TraitWorker, (void *)sections[index].traits[i]);
+            #endif
+        }
+        for (int j = 0; j < sections[index].threads; j++){
+            #if defined(__linux__) || defined(__APPLE__)
+            pthread_join(threads[j], NULL);
+            #endif
+        }
+    }
+    free(args);
+}
+
+string Decompiler::WildcardInsn(cs_insn *insn){
+    string bytes = HexdumpBE(insn->bytes, insn->size);
+    string trait = bytes;
+    for (int j = 0; j < insn->detail->x86.op_count; j++){
+        cs_x86_op operand = insn->detail->x86.operands[j];
+        switch(operand.type){
+            case X86_OP_MEM:
+                {
+                    if (operand.mem.disp != 0){
+                        trait = WildcardTrait(HexdumpBE(insn->bytes, insn->size), HexdumpMemDisp(operand.mem.disp));
+                    }
+                    break;
+                }
+            default:
+                break;
+        }
+    }
+    return TrimRight(trait);
+}
+
+bool Decompiler::IsVisited(map<uint64_t, int> &visited, uint64_t address) {
+    return visited.find(address) != visited.end();
+}
+
+bool Decompiler::IsWildcardInsn(cs_insn *insn){
+    switch (insn->id) {
+        case X86_INS_NOP:
+            return true;
+        default:
+            break;
+    }
+    return false;
+}
+
+bool Decompiler::IsEndInsn(cs_insn *insn) {
+    switch (insn->id) {
+        case X86_INS_RET:
+            return true;
+        case X86_INS_RETF:
+            return true;
+        case X86_INS_RETFQ:
+            return true;
+        case X86_INS_IRET:
+            return true;
+        case X86_INS_IRETD:
+            return true;
+        case X86_INS_IRETQ:
+            return true;
+        default:
+            break;
+    }
+    return false;
+}
+
+uint Decompiler::IsConditionalInsn(cs_insn* insn) {
+    switch (insn->id) {
+    case X86_INS_JMP:
+        return 1;
+    case X86_INS_JNE:
+        return 2;
+    case X86_INS_JNO:
+        return 2;
+    case X86_INS_JNP:
+        return 2;
+    case X86_INS_JL:
+        return 2;
+    case X86_INS_JLE:
+        return 2;
+    case X86_INS_JG:
+        return 2;
+    case X86_INS_JGE:
+        return 2;
+    case X86_INS_JE:
+        return 2;
+    case X86_INS_JECXZ:
+        return 2;
+    case X86_INS_JCXZ:
+        return 2;
+    case X86_INS_JB:
+        return 2;
+    case X86_INS_JBE:
+        return 2;
+    case X86_INS_JA:
+        return 2;
+    case X86_INS_JAE:
+        return 2;
+    case X86_INS_JNS:
+        return 2;
+    case X86_INS_JO:
+        return 2;
+    case X86_INS_JP:
+        return 2;
+    case X86_INS_JRCXZ:
+        return 2;
+    case X86_INS_JS:
+        return 2;
+    default:
+        break;
+    }
+    return 0;
+}
+
+uint Decompiler::CollectInsn(cs_insn* insn, struct Section *sections, uint index) {
+    uint result = DECOMPILER_OPERAND_TYPE_UNSET;
+    switch (insn->id) {
+    case X86_INS_JMP:
+        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
+        result = DECOMPILER_OPERAND_TYPE_BLOCK;
+        break;
+    case X86_INS_JNE:
+        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
+        result = DECOMPILER_OPERAND_TYPE_BLOCK;
+        break;
+    case X86_INS_JNO:
+        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
+        result = DECOMPILER_OPERAND_TYPE_BLOCK;
+        break;
+    case X86_INS_JNP:
+        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
+        result = DECOMPILER_OPERAND_TYPE_BLOCK;
+        break;
+    case X86_INS_JL:
+        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
+        result = DECOMPILER_OPERAND_TYPE_BLOCK;
+        break;
+    case X86_INS_JLE:
+        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
+        result = DECOMPILER_OPERAND_TYPE_BLOCK;
+        break;
+    case X86_INS_JG:
+        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
+        result = DECOMPILER_OPERAND_TYPE_BLOCK;
+        break;
+    case X86_INS_JGE:
+        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
+        result = DECOMPILER_OPERAND_TYPE_BLOCK;
+        break;
+    case X86_INS_JE:
+        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
+        result = DECOMPILER_OPERAND_TYPE_BLOCK;
+        break;
+    case X86_INS_JECXZ:
+        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
+        result = DECOMPILER_OPERAND_TYPE_BLOCK;
+        break;
+    case X86_INS_JCXZ:
+        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
+        result = DECOMPILER_OPERAND_TYPE_BLOCK;
+        break;
+    case X86_INS_JB:
+        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
+        result = DECOMPILER_OPERAND_TYPE_BLOCK;
+        break;
+    case X86_INS_JBE:
+        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
+        result = DECOMPILER_OPERAND_TYPE_BLOCK;
+        break;
+    case X86_INS_JA:
+        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
+        result = DECOMPILER_OPERAND_TYPE_BLOCK;
+        break;
+    case X86_INS_JAE:
+        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
+        result = DECOMPILER_OPERAND_TYPE_BLOCK;
+        break;
+    case X86_INS_JNS:
+        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
+        result = DECOMPILER_OPERAND_TYPE_BLOCK;
+        break;
+    case X86_INS_JO:
+        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
+        result = DECOMPILER_OPERAND_TYPE_BLOCK;
+        break;
+    case X86_INS_JP:
+        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
+        result = DECOMPILER_OPERAND_TYPE_BLOCK;
+        break;
+    case X86_INS_JRCXZ:
+        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
+        result = DECOMPILER_OPERAND_TYPE_BLOCK;
+        break;
+    case X86_INS_JS:
+        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
+        result = DECOMPILER_OPERAND_TYPE_BLOCK;
+        break;
+    case X86_INS_CALL:
+        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
+        result = DECOMPILER_OPERAND_TYPE_FUNCTION;
+        break;
+    default:
+        return result;
+    }
+    return result;
+}
+
+void Decompiler::CollectOperands(cs_insn* insn, int operand_type, struct Section *sections, uint index) {
+    uint64_t address = X86_REL_ADDR(*insn);
+    if (IsVisited(sections[index].visited, address) == false && address < sections[index].data_size) {
+        sections[index].visited[address] = DECOMPILER_VISITED_QUEUED;
+        switch(operand_type){
+            case DECOMPILER_OPERAND_TYPE_BLOCK:
+                sections[index].addresses[address] = DECOMPILER_OPERAND_TYPE_BLOCK;
+                sections[index].discovered.push(address);
+                break;
+            case DECOMPILER_OPERAND_TYPE_FUNCTION:
+                sections[index].addresses[address] = DECOMPILER_OPERAND_TYPE_FUNCTION;
+                sections[index].discovered.push(address);
+                break;
+            default:
+                break;
+        }
+    }
+}
+
+bool Decompiler::IsAddress(map<uint64_t, uint> &addresses, uint64_t address, uint index){
+    if (addresses.find(address) == addresses.end()){
+        return false;
+    }
+    return true;
+}
+
+bool Decompiler::IsFunction(map<uint64_t, uint> &addresses, uint64_t address){
+    if (addresses.find(address) == addresses.end()){
+        return false;
+    }
+    if (addresses.find(address)->second != DECOMPILER_OPERAND_TYPE_FUNCTION){
+        return false;
+    }
+    return true;
+}
+
+bool Decompiler::IsBlock(map<uint64_t, uint> &addresses, uint64_t address){
+    if (addresses.find(address) == addresses.end()){
+        return false;
+    }
+    if (addresses.find(address)->second == DECOMPILER_OPERAND_TYPE_BLOCK ||
+        addresses.find(address)->second == DECOMPILER_OPERAND_TYPE_FUNCTION){
+        return true;
+    }
+    return false;
+}
+
+void Decompiler::FreeTraits(uint index){
+    if (sections[index].traits != NULL){
+        for (int i = 0; i < sections[index].ntraits; i++){
+             if (sections[index].traits[i]->trait_sha256 != NULL){
+                free(sections[index].traits[i]->trait_sha256);
+            }
+            if (sections[index].traits[i]->bytes_sha256 != NULL){
+                free(sections[index].traits[i]->bytes_sha256);
+            }
+            if (sections[index].traits[i]->bytes != NULL){
+                free(sections[index].traits[i]->bytes);
+            }
+            if (sections[index].traits[i]->trait != NULL){
+                free(sections[index].traits[i]->trait);
+            }
+            if (sections[index].traits[i] != NULL){
+                free(sections[index].traits[i]);
+            }
+        }
+        free(sections[index].traits);
+    }
+    sections[index].ntraits = 0;
+}
+
+Decompiler::~Decompiler() {
+    for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++) {
+        FreeTraits(i);
+    }
 }
