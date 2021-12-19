@@ -10,13 +10,12 @@ set(SOURCES_BINLEX
     src/blelf.cpp
     src/pe.cpp
     src/decompiler.cpp
-    src/decompiler_rev.cpp
     src/sha256.c
 )
 
 add_executable(binlex ${SOURCES_BINLEX})
 
-target_link_libraries(binlex -lcapstone -lcrypto -lm -lpthread)
+target_link_libraries(binlex -lcapstone -lm -lpthread)
 
 target_include_directories(binlex
     PRIVATE
@@ -31,7 +30,7 @@ set(SOURCES_BLYARA
 
 add_executable(blyara ${SOURCES_BLYARA})
 
-target_link_libraries(blyara -lcapstone -lcrypto -lm)
+target_link_libraries(blyara -lcapstone -lm)
 
 target_include_directories(blyara
     PRIVATE

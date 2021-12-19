@@ -1,10 +1,9 @@
 #include <string.h>
 #include <capstone/capstone.h>
 #include "args.h"
-#include "decompiler.h"
 #include "raw.h"
 #include "pe.h"
-#include "decompiler_rev.h"
+#include "decompiler.h"
 #include "blelf.h"
 
 using namespace binlex;
@@ -25,7 +24,7 @@ int main(int argc, char **argv){
         if (elfx86_64.ReadFile(args.options.input) == false){
             return 1;
         }
-        DecompilerREV decompiler;
+        Decompiler decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_64, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
         for (int i = 0; i < ELF_MAX_SECTIONS; i++){
             if (elfx86_64.sections[i].data != NULL){
@@ -48,7 +47,7 @@ int main(int argc, char **argv){
         if (elfx86.ReadFile(args.options.input) == false){
             return 1;
         }
-        DecompilerREV decompiler;
+        Decompiler decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_32, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
         for (int i = 0; i < ELF_MAX_SECTIONS; i++){
             if (elfx86.sections[i].data != NULL){
@@ -71,7 +70,7 @@ int main(int argc, char **argv){
         if (pe32.ReadFile(args.options.input) == false){
             return 1;
         }
-        DecompilerREV decompiler;
+        Decompiler decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_32, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
         for (int i = 0; i < PE_MAX_SECTIONS; i++){
             if (pe32.sections[i].data != NULL){
@@ -94,7 +93,7 @@ int main(int argc, char **argv){
         if (pe64.ReadFile(args.options.input) == false){
             return 1;
         }
-        DecompilerREV decompiler;
+        Decompiler decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_64, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
         for (int i = 0; i < PE_MAX_SECTIONS; i++){
             if (pe64.sections[i].data != NULL){
@@ -112,7 +111,7 @@ int main(int argc, char **argv){
         args.options.io_type == ARGS_IO_TYPE_FILE){
         Raw rawx86;
         rawx86.ReadFile(args.options.input, 0);
-        DecompilerREV decompiler;
+        Decompiler decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_32, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
         decompiler.Decompile(rawx86.sections[0].data, rawx86.sections[0].size, rawx86.sections[0].offset, 0);
         if (args.options.output == NULL){
@@ -126,7 +125,7 @@ int main(int argc, char **argv){
         args.options.io_type == ARGS_IO_TYPE_FILE){
         Raw rawx86_64;
         rawx86_64.ReadFile(args.options.input, 0);
-        DecompilerREV decompiler;
+        Decompiler decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_64, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
         decompiler.Decompile(rawx86_64.sections[0].data, rawx86_64.sections[0].size, rawx86_64.sections[0].offset, 0);
         if (args.options.output == NULL){
