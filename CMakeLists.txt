@@ -11,6 +11,7 @@ set(SOURCES_BINLEX
     src/pe.cpp
     src/decompiler.cpp
     src/decompiler_rev.cpp
+    src/sha256.c
 )
 
 add_executable(binlex ${SOURCES_BINLEX})
