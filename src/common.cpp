@@ -7,13 +7,12 @@
 #include <algorithm>
 #include <vector>
 #include <iomanip>
-#include <openssl/sha.h>
 #include <math.h>
 #include <map>
 #include <capstone/capstone.h>
-// extern "C" {
-//     #include "sha256.h"
-// }
+extern "C" {
+    #include "sha256.h"
+}
 #include "common.h"
 
 using namespace std;
@@ -28,14 +27,13 @@ string Common::Wildcards(uint count){
     return TrimRight(s.str());
 }
 
-string Common::SHA256(const char *trait){
-    unsigned char hash[SHA256_DIGEST_LENGTH];
+string Common::SHA256(char *trait){
+    BYTE hash[SHA256_BLOCK_SIZE];
     SHA256_CTX ctx;
-    SHA256_Init(&ctx);
-    SHA256_Update(&ctx, trait, strlen(trait));
-    SHA256_Final(hash, &ctx);
-    string bytes = HexdumpBE(&hash, SHA256_DIGEST_LENGTH);
-    return RemoveSpaces(bytes);
+    sha256_init(&ctx);
+    sha256_update(&ctx, (BYTE *)trait, strlen(trait));
+    sha256_final(&ctx, hash);
+    return RemoveSpaces(HexdumpBE(&hash, SHA256_BLOCK_SIZE));
 }
 
 vector<char> Common::TraitToChar(string trait){

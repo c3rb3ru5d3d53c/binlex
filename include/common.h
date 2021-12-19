@@ -17,7 +17,7 @@ namespace binlex {
             @param trait input string.
             @return Returns the sha256 hash of the trait string
             */
-            static string SHA256(const char *trait);
+            static string SHA256(char *trait);
             /**
             This method takes an input trait string and returns a char vector of bytes (ignores wildcards).
             @param trait input string.
