@@ -1,5 +1,12 @@
+#include <stdio.h>
 #include <string.h>
 #include <capstone/capstone.h>
+#if defined(__linux__) || defined(__APPLE__)
+#include <sys/time.h>
+#include <signal.h>
+#elif _WIN32
+#include <windows.h>
+#endif
 #include "args.h"
 #include "raw.h"
 #include "pe.h"
@@ -8,9 +15,34 @@
 
 using namespace binlex;
 
+void timeout_handler(int signum) {
+    fprintf(stderr, "[x] execution timeout\n");
+    exit(0);
+}
+
+#if defined(__linux__) || defined(__APPLE__)
+void start_timeout(time_t seconds){
+    struct itimerval timer;
+    timer.it_value.tv_sec = seconds;
+    timer.it_value.tv_usec = 0;
+    timer.it_interval.tv_sec = 0;
+    timer.it_interval.tv_usec = 0;
+    setitimer (ITIMER_VIRTUAL, &timer, 0);
+    struct sigaction sa;
+    memset(&sa, 0, sizeof (sa));
+    sa.sa_handler = &timeout_handler;
+    sigaction(SIGVTALRM, &sa, 0);
+}
+#endif
+
 int main(int argc, char **argv){
     Args args;
     args.parse(argc, argv);
+    if (args.options.timeout > 0){
+        #if defined(__linux__) || defined(__APPLE__)
+        start_timeout(args.options.timeout);
+        #endif
+    }
     if (args.options.mode == NULL){
         args.print_help();
         return 1;
