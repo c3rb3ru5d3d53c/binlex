@@ -20,6 +20,7 @@ namespace binlex{
                 char *input;
                 int io_type;
                 char *output;
+                uint timeout;
                 uint threads;
                 uint thread_cycles;
                 useconds_t thread_sleep;

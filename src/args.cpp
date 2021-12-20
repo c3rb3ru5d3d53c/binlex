@@ -13,6 +13,7 @@ Args::Args(){
 }
 
 void Args::SetDefault(){
+    options.timeout = 0;
     options.input = NULL;
     options.threads = 1;
     options.thread_cycles = 32;
@@ -73,6 +74,7 @@ void Args::print_help(){
         "  -t  --threads\t\tnumber of threads\t(optional)\n"
         "  -tc --thread-cycles\tthread wait cycles\t(optional)\n"
         "  -ts --thread-sleep\tthread sleep in ms\t(optional)\n"
+        "  -to --timeout\t\texecution timeout in s\t(optional)\n"
         "  -h  --help\t\tdisplay help\n"
         "  -o  --output\t\toutput file\t\t(optional)\n"
         "  -p  --pretty\t\tpretty output\t\t(optional)\n"
@@ -126,6 +128,18 @@ void Args::parse(int argc, char **argv){
             options.threads = atoi(argv[i+1]);
             if (options.threads <= 0){
                 fprintf(stderr, "[x] invalid number of threads\n");
+                exit(1);
+            }
+        }
+        if (strcmp(argv[i], (char *)"-to") == 0 ||
+            strcmp(argv[i], (char *)"--timeout") == 0){
+            if (argc < i+2){
+                fprintf(stderr, "[x] timeout requires a parameter\n");
+                exit(1);
+            }
+            options.timeout = atoi(argv[i+1]);
+            if (options.timeout <= 0){
+                fprintf(stderr, "[x] invalid timeout value\n");
                 exit(1);
             }
         }
