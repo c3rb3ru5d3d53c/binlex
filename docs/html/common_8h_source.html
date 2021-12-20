@@ -97,19 +97,22 @@ $(document).ready(function(){initNavTree('common_8h_source.html',''); initResiza
 <div class="line"><a name="l00009"></a><span class="lineno">    9</span>&#160;<span class="keyword">namespace </span><a class="code" href="namespacebinlex.html">binlex</a> {</div>
 <div class="line"><a name="l00010"></a><span class="lineno"><a class="line" href="classbinlex_1_1Common.html">   10</a></span>&#160;    <span class="keyword">class </span><a class="code" href="classbinlex_1_1Common.html">Common</a>{</div>
 <div class="line"><a name="l00014"></a><span class="lineno">   14</span>&#160;        <span class="keyword">public</span>:</div>
-<div class="line"><a name="l00020"></a><span class="lineno">   20</span>&#160;            <span class="keywordtype">string</span> SHA256(<span class="keyword">const</span> <span class="keywordtype">char</span> *trait);</div>
-<div class="line"><a name="l00026"></a><span class="lineno">   26</span>&#160;            vector&lt;char&gt; TraitToChar(<span class="keywordtype">string</span> trait);</div>
-<div class="line"><a name="l00032"></a><span class="lineno">   32</span>&#160;            <span class="keywordtype">string</span> RemoveWildcards(<span class="keywordtype">string</span> trait);</div>
-<div class="line"><a name="l00038"></a><span class="lineno">   38</span>&#160;            uint GetByteSize(<span class="keywordtype">string</span> s);</div>
-<div class="line"><a name="l00044"></a><span class="lineno">   44</span>&#160;            <span class="keywordtype">string</span> RemoveSpaces(<span class="keywordtype">string</span> s);</div>
-<div class="line"><a name="l00051"></a><span class="lineno">   51</span>&#160;            <span class="keywordtype">string</span> WildcardTrait(<span class="keywordtype">string</span> trait, <span class="keywordtype">string</span> bytes);</div>
-<div class="line"><a name="l00057"></a><span class="lineno">   57</span>&#160;            <span class="keywordtype">string</span> TrimRight(<span class="keyword">const</span> std::string &amp;s);</div>
-<div class="line"><a name="l00064"></a><span class="lineno">   64</span>&#160;            <span class="keywordtype">string</span> HexdumpBE(<span class="keyword">const</span> <span class="keywordtype">void</span> *data, <span class="keywordtype">size_t</span> size);</div>
-<div class="line"><a name="l00071"></a><span class="lineno">   71</span>&#160;            <span class="keywordtype">void</span> Hexdump(<span class="keyword">const</span> <span class="keywordtype">char</span> * desc, <span class="keyword">const</span> <span class="keywordtype">void</span> * addr, <span class="keyword">const</span> <span class="keywordtype">int</span> len);</div>
-<div class="line"><a name="l00072"></a><span class="lineno">   72</span>&#160;    };</div>
-<div class="line"><a name="l00073"></a><span class="lineno">   73</span>&#160;}</div>
-<div class="line"><a name="l00074"></a><span class="lineno">   74</span>&#160; </div>
-<div class="line"><a name="l00075"></a><span class="lineno">   75</span>&#160;<span class="preprocessor">#endif</span></div>
+<div class="line"><a name="l00020"></a><span class="lineno">   20</span>&#160;            <span class="keyword">static</span> <span class="keywordtype">string</span> SHA256(<span class="keywordtype">char</span> *trait);</div>
+<div class="line"><a name="l00026"></a><span class="lineno">   26</span>&#160;            <span class="keyword">static</span> vector&lt;char&gt; TraitToChar(<span class="keywordtype">string</span> trait);</div>
+<div class="line"><a name="l00032"></a><span class="lineno">   32</span>&#160;            <span class="keyword">static</span> <span class="keywordtype">string</span> RemoveWildcards(<span class="keywordtype">string</span> trait);</div>
+<div class="line"><a name="l00038"></a><span class="lineno">   38</span>&#160;            <span class="keyword">static</span> uint GetByteSize(<span class="keywordtype">string</span> s);</div>
+<div class="line"><a name="l00044"></a><span class="lineno">   44</span>&#160;            <span class="keyword">static</span> <span class="keywordtype">string</span> RemoveSpaces(<span class="keywordtype">string</span> s);</div>
+<div class="line"><a name="l00051"></a><span class="lineno">   51</span>&#160;            <span class="keyword">static</span> <span class="keywordtype">string</span> WildcardTrait(<span class="keywordtype">string</span> trait, <span class="keywordtype">string</span> bytes);</div>
+<div class="line"><a name="l00057"></a><span class="lineno">   57</span>&#160;            <span class="keyword">static</span> <span class="keywordtype">string</span> TrimRight(<span class="keyword">const</span> std::string &amp;s);</div>
+<div class="line"><a name="l00064"></a><span class="lineno">   64</span>&#160;            <span class="keyword">static</span> <span class="keywordtype">string</span> HexdumpBE(<span class="keyword">const</span> <span class="keywordtype">void</span> *data, <span class="keywordtype">size_t</span> size);</div>
+<div class="line"><a name="l00070"></a><span class="lineno">   70</span>&#160;            <span class="keyword">static</span> <span class="keywordtype">string</span> Wildcards(uint count);</div>
+<div class="line"><a name="l00071"></a><span class="lineno">   71</span>&#160;            <span class="keyword">static</span> <span class="keywordtype">string</span> HexdumpMemDisp(uint64_t disp);</div>
+<div class="line"><a name="l00072"></a><span class="lineno">   72</span>&#160;            <span class="keyword">static</span> <span class="keywordtype">float</span> Entropy(<span class="keywordtype">string</span> trait);</div>
+<div class="line"><a name="l00079"></a><span class="lineno">   79</span>&#160;            <span class="keyword">static</span> <span class="keywordtype">void</span> Hexdump(<span class="keyword">const</span> <span class="keywordtype">char</span> * desc, <span class="keyword">const</span> <span class="keywordtype">void</span> * addr, <span class="keyword">const</span> <span class="keywordtype">int</span> len);</div>
+<div class="line"><a name="l00080"></a><span class="lineno">   80</span>&#160;    };</div>
+<div class="line"><a name="l00081"></a><span class="lineno">   81</span>&#160;}</div>
+<div class="line"><a name="l00082"></a><span class="lineno">   82</span>&#160; </div>
+<div class="line"><a name="l00083"></a><span class="lineno">   83</span>&#160;<span class="preprocessor">#endif</span></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 <div class="ttc" id="aclassbinlex_1_1Common_html"><div class="ttname"><a href="classbinlex_1_1Common.html">binlex::Common</a></div><div class="ttdef"><b>Definition:</b> common.h:10</div></div>

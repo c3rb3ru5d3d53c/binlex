@@ -85,43 +85,859 @@ $(document).ready(function(){initNavTree('classbinlex_1_1Decompiler.html',''); i
   <div class="summary">
 <a href="#nested-classes">Classes</a> &#124;
 <a href="#pub-methods">Public Member Functions</a> &#124;
+<a href="#pub-static-methods">Static Public Member Functions</a> &#124;
 <a href="#pub-attribs">Public Attributes</a> &#124;
 <a href="classbinlex_1_1Decompiler-members.html">List of all members</a>  </div>
   <div class="headertitle">
 <div class="title">binlex::Decompiler Class Reference</div>  </div>
 </div><!--header-->
 <div class="contents">
+<div class="dynheader">
+Inheritance diagram for binlex::Decompiler:</div>
+<div class="dyncontent">
+ <div class="center">
+  <img src="classbinlex_1_1Decompiler.png" usemap="#binlex::Decompiler_map" alt=""/>
+  <map id="binlex::Decompiler_map" name="binlex::Decompiler_map">
+<area href="classbinlex_1_1Common.html" alt="binlex::Common" shape="rect" coords="0,0,115,24"/>
+  </map>
+</div></div>
 <table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="nested-classes"></a>
+Classes</h2></td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structbinlex_1_1Decompiler_1_1Section.html">Section</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structbinlex_1_1Decompiler_1_1Trait.html">Trait</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
-<tr class="memitem:a5a43ceb4ff01dfb4c4718a5f72b70052"><td class="memItemLeft" align="right" valign="top"><a id="a5a43ceb4ff01dfb4c4718a5f72b70052"></a>
-bool&#160;</td><td class="memItemRight" valign="bottom"><b>Setup</b> (cs_arch arch, cs_mode mode)</td></tr>
-<tr class="separator:a5a43ceb4ff01dfb4c4718a5f72b70052"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a41ce03b9678a55d88cffafe72f8c114c"><td class="memItemLeft" align="right" valign="top"><a id="a41ce03b9678a55d88cffafe72f8c114c"></a>
-int&#160;</td><td class="memItemRight" valign="bottom"><b>x86_64</b> (void *data, size_t data_size, size_t data_offset, uint index)</td></tr>
-<tr class="separator:a41ce03b9678a55d88cffafe72f8c114c"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a788f80fd44f34f00084375d4669bd443"><td class="memItemLeft" align="right" valign="top"><a id="a788f80fd44f34f00084375d4669bd443"></a>
-void&#160;</td><td class="memItemRight" valign="bottom"><b>PrintTraits</b> (bool pretty)</td></tr>
+<tr class="memitem:addb97b20de09a26c2f16281f60818fad"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#addb97b20de09a26c2f16281f60818fad">Setup</a> (cs_arch arch, cs_mode mode, char *corpus, uint threads, uint thread_cycles, useconds_t thread_sleep, uint index)</td></tr>
+<tr class="separator:addb97b20de09a26c2f16281f60818fad"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a089dca4d2fa49177e1992a490825dd3e"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#a089dca4d2fa49177e1992a490825dd3e">Decompile</a> (void *data, size_t data_size, size_t offset, uint index)</td></tr>
+<tr class="separator:a089dca4d2fa49177e1992a490825dd3e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8d62e986cf4c4d4604b0ec6650bb5735"><td class="memItemLeft" align="right" valign="top"><a id="a8d62e986cf4c4d4604b0ec6650bb5735"></a>
+void&#160;</td><td class="memItemRight" valign="bottom"><b>FreeTraits</b> (uint index)</td></tr>
+<tr class="separator:a8d62e986cf4c4d4604b0ec6650bb5735"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7165e80d5392769bdc08e02151fe7381"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#a7165e80d5392769bdc08e02151fe7381">IsAddress</a> (map&lt; uint64_t, uint &gt; &amp;addresses, uint64_t address, uint index)</td></tr>
+<tr class="separator:a7165e80d5392769bdc08e02151fe7381"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a788f80fd44f34f00084375d4669bd443"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#a788f80fd44f34f00084375d4669bd443">PrintTraits</a> (bool pretty)</td></tr>
 <tr class="separator:a788f80fd44f34f00084375d4669bd443"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ac50cdc13964e9a1a40a6d09fd838fde7"><td class="memItemLeft" align="right" valign="top"><a id="ac50cdc13964e9a1a40a6d09fd838fde7"></a>
-void&#160;</td><td class="memItemRight" valign="bottom"><b>WriteTraits</b> (char *file_path, bool pretty)</td></tr>
+<tr class="memitem:ac50cdc13964e9a1a40a6d09fd838fde7"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#ac50cdc13964e9a1a40a6d09fd838fde7">WriteTraits</a> (char *file_path, bool pretty)</td></tr>
 <tr class="separator:ac50cdc13964e9a1a40a6d09fd838fde7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-static-methods"></a>
+Static Public Member Functions</h2></td></tr>
+<tr class="memitem:a8d8603316d046aecd912659d92ceb4cd"><td class="memItemLeft" align="right" valign="top">static void *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#a8d8603316d046aecd912659d92ceb4cd">DecompileWorker</a> (void *args)</td></tr>
+<tr class="separator:a8d8603316d046aecd912659d92ceb4cd"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7d00feffb171c385b384f28fcf80567d"><td class="memItemLeft" align="right" valign="top">static void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#a7d00feffb171c385b384f28fcf80567d">CollectOperands</a> (cs_insn *insn, int operand_type, struct <a class="el" href="structbinlex_1_1Decompiler_1_1Section.html">Section</a> *sections, uint index)</td></tr>
+<tr class="separator:a7d00feffb171c385b384f28fcf80567d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3c630a3ae0ae8e4a2fcf45c7bf192519"><td class="memItemLeft" align="right" valign="top">static uint&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#a3c630a3ae0ae8e4a2fcf45c7bf192519">CollectInsn</a> (cs_insn *insn, struct <a class="el" href="structbinlex_1_1Decompiler_1_1Section.html">Section</a> *sections, uint index)</td></tr>
+<tr class="separator:a3c630a3ae0ae8e4a2fcf45c7bf192519"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0af06e57918013d21358ec5ea0f1ad6c"><td class="memItemLeft" align="right" valign="top">static void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#a0af06e57918013d21358ec5ea0f1ad6c">AppendTrait</a> (struct <a class="el" href="structbinlex_1_1Decompiler_1_1Trait.html">Trait</a> *trait, struct <a class="el" href="structbinlex_1_1Decompiler_1_1Section.html">Section</a> *sections, uint index)</td></tr>
+<tr class="separator:a0af06e57918013d21358ec5ea0f1ad6c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af1da3d5f168cac9a72f788e97cb2df3e"><td class="memItemLeft" align="right" valign="top">static bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#af1da3d5f168cac9a72f788e97cb2df3e">IsEndInsn</a> (cs_insn *insn)</td></tr>
+<tr class="separator:af1da3d5f168cac9a72f788e97cb2df3e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a86c8baf434ef89278ad2b6a67af641b1"><td class="memItemLeft" align="right" valign="top">static uint&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#a86c8baf434ef89278ad2b6a67af641b1">IsConditionalInsn</a> (cs_insn *insn)</td></tr>
+<tr class="separator:a86c8baf434ef89278ad2b6a67af641b1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7e041678de44b686a7752179ec9767ef"><td class="memItemLeft" align="right" valign="top">static bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#a7e041678de44b686a7752179ec9767ef">IsFunction</a> (map&lt; uint64_t, uint &gt; &amp;addresses, uint64_t address)</td></tr>
+<tr class="separator:a7e041678de44b686a7752179ec9767ef"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a36065e7e64a758008669a7525435d688"><td class="memItemLeft" align="right" valign="top">static bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#a36065e7e64a758008669a7525435d688">IsBlock</a> (map&lt; uint64_t, uint &gt; &amp;addresses, uint64_t address)</td></tr>
+<tr class="separator:a36065e7e64a758008669a7525435d688"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2d8490caf699443577d4de6dba902f8f"><td class="memItemLeft" align="right" valign="top">static bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#a2d8490caf699443577d4de6dba902f8f">IsVisited</a> (map&lt; uint64_t, int &gt; &amp;visited, uint64_t address)</td></tr>
+<tr class="separator:a2d8490caf699443577d4de6dba902f8f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4ee6db12422f725ea1985ad23127197b"><td class="memItemLeft" align="right" valign="top">static bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#a4ee6db12422f725ea1985ad23127197b">IsWildcardInsn</a> (cs_insn *insn)</td></tr>
+<tr class="separator:a4ee6db12422f725ea1985ad23127197b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac34cfaf7065e2e529e206b7a28eb37c5"><td class="memItemLeft" align="right" valign="top">static string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#ac34cfaf7065e2e529e206b7a28eb37c5">WildcardInsn</a> (cs_insn *insn)</td></tr>
+<tr class="separator:ac34cfaf7065e2e529e206b7a28eb37c5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a68e8a399a53c2430480fd207a4498ea4"><td class="memItemLeft" align="right" valign="top">static void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#a68e8a399a53c2430480fd207a4498ea4">ClearTrait</a> (struct <a class="el" href="structbinlex_1_1Decompiler_1_1Trait.html">Trait</a> *trait)</td></tr>
+<tr class="separator:a68e8a399a53c2430480fd207a4498ea4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad216907aeecb073317410dab93b80375"><td class="memItemLeft" align="right" valign="top">static string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#ad216907aeecb073317410dab93b80375">GetTrait</a> (struct <a class="el" href="structbinlex_1_1Decompiler_1_1Trait.html">Trait</a> *trait, bool pretty)</td></tr>
+<tr class="separator:ad216907aeecb073317410dab93b80375"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0a619174e4c0e85fb266662c4ae0216e"><td class="memItemLeft" align="right" valign="top"><a id="a0a619174e4c0e85fb266662c4ae0216e"></a>
+static void *&#160;</td><td class="memItemRight" valign="bottom"><b>TraitWorker</b> (void *args)</td></tr>
+<tr class="separator:a0a619174e4c0e85fb266662c4ae0216e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="inherit_header pub_static_methods_classbinlex_1_1Common"><td colspan="2" onclick="javascript:toggleInherit('pub_static_methods_classbinlex_1_1Common')"><img src="closed.png" alt="-"/>&#160;Static Public Member Functions inherited from <a class="el" href="classbinlex_1_1Common.html">binlex::Common</a></td></tr>
+<tr class="memitem:a4b3b0495c70e06ead0cb067cd9e912d4 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a4b3b0495c70e06ead0cb067cd9e912d4">SHA256</a> (char *trait)</td></tr>
+<tr class="separator:a4b3b0495c70e06ead0cb067cd9e912d4 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a81073029ea6d68a11b8222a899bc6c49 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static vector&lt; char &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a81073029ea6d68a11b8222a899bc6c49">TraitToChar</a> (string trait)</td></tr>
+<tr class="separator:a81073029ea6d68a11b8222a899bc6c49 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a52a0d5df20a6123bd9d69faea24b05a0 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a52a0d5df20a6123bd9d69faea24b05a0">RemoveWildcards</a> (string trait)</td></tr>
+<tr class="separator:a52a0d5df20a6123bd9d69faea24b05a0 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a593bba469d727c0d4469555a058b13e7 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static uint&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a593bba469d727c0d4469555a058b13e7">GetByteSize</a> (string s)</td></tr>
+<tr class="separator:a593bba469d727c0d4469555a058b13e7 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af1e434357de3e8b01bd34a17cc645c16 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#af1e434357de3e8b01bd34a17cc645c16">RemoveSpaces</a> (string s)</td></tr>
+<tr class="separator:af1e434357de3e8b01bd34a17cc645c16 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a40376f43f29528869d74d7c29c0117ba inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a40376f43f29528869d74d7c29c0117ba">WildcardTrait</a> (string trait, string bytes)</td></tr>
+<tr class="separator:a40376f43f29528869d74d7c29c0117ba inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4eab8b52c93ff30879c1908abda8b6ce inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a4eab8b52c93ff30879c1908abda8b6ce">TrimRight</a> (const std::string &amp;s)</td></tr>
+<tr class="separator:a4eab8b52c93ff30879c1908abda8b6ce inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a608294ca038bd76ea61dca83f9931755 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a608294ca038bd76ea61dca83f9931755">HexdumpBE</a> (const void *data, size_t size)</td></tr>
+<tr class="separator:a608294ca038bd76ea61dca83f9931755 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3904881c98c33ae3db55534e809d4510 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a3904881c98c33ae3db55534e809d4510">Wildcards</a> (uint count)</td></tr>
+<tr class="separator:a3904881c98c33ae3db55534e809d4510 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:afca7660efce7304365e7a15ba5fe6718 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top"><a id="afca7660efce7304365e7a15ba5fe6718"></a>
+static string&#160;</td><td class="memItemRight" valign="bottom"><b>HexdumpMemDisp</b> (uint64_t disp)</td></tr>
+<tr class="separator:afca7660efce7304365e7a15ba5fe6718 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1b59439fa3781e6209ce55aca7fc02c1 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top"><a id="a1b59439fa3781e6209ce55aca7fc02c1"></a>
+static float&#160;</td><td class="memItemRight" valign="bottom"><b>Entropy</b> (string trait)</td></tr>
+<tr class="separator:a1b59439fa3781e6209ce55aca7fc02c1 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab88e80c931e79518eb6457f9f2c8e1f2 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#ab88e80c931e79518eb6457f9f2c8e1f2">Hexdump</a> (const char *desc, const void *addr, const int len)</td></tr>
+<tr class="separator:ab88e80c931e79518eb6457f9f2c8e1f2 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-attribs"></a>
 Public Attributes</h2></td></tr>
-<tr class="memitem:ad198fb48689d88b3ad6cfb850bcc0cf7"><td class="memItemLeft" align="right" valign="top"><a id="ad198fb48689d88b3ad6cfb850bcc0cf7"></a>
-csh&#160;</td><td class="memItemRight" valign="bottom"><b>handle</b></td></tr>
-<tr class="separator:ad198fb48689d88b3ad6cfb850bcc0cf7"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a002652497ee69348093d12967d042104"><td class="memItemLeft" align="right" valign="top"><a id="a002652497ee69348093d12967d042104"></a>
-cs_err&#160;</td><td class="memItemRight" valign="bottom"><b>status</b></td></tr>
-<tr class="separator:a002652497ee69348093d12967d042104"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:aaf6ea37aab0f3dde8d49eed2bdc03007"><td class="memItemLeft" align="right" valign="top"><a id="aaf6ea37aab0f3dde8d49eed2bdc03007"></a>
-uint64_t&#160;</td><td class="memItemRight" valign="bottom"><b>pc</b></td></tr>
-<tr class="separator:aaf6ea37aab0f3dde8d49eed2bdc03007"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:afcba0f93a71ab4ce1237bac70a4b43d9"><td class="memItemLeft" align="right" valign="top"><a id="afcba0f93a71ab4ce1237bac70a4b43d9"></a>
-struct Section&#160;</td><td class="memItemRight" valign="bottom"><b>sections</b> [DECOMPILER_MAX_SECTIONS]</td></tr>
+struct <a class="el" href="structbinlex_1_1Decompiler_1_1Section.html">Section</a>&#160;</td><td class="memItemRight" valign="bottom"><b>sections</b> [DECOMPILER_MAX_SECTIONS]</td></tr>
 <tr class="separator:afcba0f93a71ab4ce1237bac70a4b43d9"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
+<h2 class="groupheader">Member Function Documentation</h2>
+<a id="a0af06e57918013d21358ec5ea0f1ad6c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0af06e57918013d21358ec5ea0f1ad6c">&#9670;&nbsp;</a></span>AppendTrait()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static void binlex::Decompiler::AppendTrait </td>
+          <td>(</td>
+          <td class="paramtype">struct <a class="el" href="structbinlex_1_1Decompiler_1_1Trait.html">Trait</a> *&#160;</td>
+          <td class="paramname"><em>trait</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">struct <a class="el" href="structbinlex_1_1Decompiler_1_1Section.html">Section</a> *&#160;</td>
+          <td class="paramname"><em>sections</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint&#160;</td>
+          <td class="paramname"><em>index</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>Append Additional Traits </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">trait</td><td>trait to append </td></tr>
+    <tr><td class="paramname">sections</td><td>sections pointer </td></tr>
+    <tr><td class="paramname">index</td><td>the section index </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>bool </dd></dl>
+
+</div>
+</div>
+<a id="a68e8a399a53c2430480fd207a4498ea4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a68e8a399a53c2430480fd207a4498ea4">&#9670;&nbsp;</a></span>ClearTrait()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static void binlex::Decompiler::ClearTrait </td>
+          <td>(</td>
+          <td class="paramtype">struct <a class="el" href="structbinlex_1_1Decompiler_1_1Trait.html">Trait</a> *&#160;</td>
+          <td class="paramname"><em>trait</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>Clear <a class="el" href="structbinlex_1_1Decompiler_1_1Trait.html">Trait</a> Values Except Type </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">trait</td><td>the trait struct address </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a3c630a3ae0ae8e4a2fcf45c7bf192519"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3c630a3ae0ae8e4a2fcf45c7bf192519">&#9670;&nbsp;</a></span>CollectInsn()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static uint binlex::Decompiler::CollectInsn </td>
+          <td>(</td>
+          <td class="paramtype">cs_insn *&#160;</td>
+          <td class="paramname"><em>insn</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">struct <a class="el" href="structbinlex_1_1Decompiler_1_1Section.html">Section</a> *&#160;</td>
+          <td class="paramname"><em>sections</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint&#160;</td>
+          <td class="paramname"><em>index</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>Collect Instructions for Processing </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">insn</td><td>the instruction </td></tr>
+    <tr><td class="paramname">index</td><td>the section index </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>operand type </dd></dl>
+
+</div>
+</div>
+<a id="a7d00feffb171c385b384f28fcf80567d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7d00feffb171c385b384f28fcf80567d">&#9670;&nbsp;</a></span>CollectOperands()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static void binlex::Decompiler::CollectOperands </td>
+          <td>(</td>
+          <td class="paramtype">cs_insn *&#160;</td>
+          <td class="paramname"><em>insn</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>operand_type</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">struct <a class="el" href="structbinlex_1_1Decompiler_1_1Section.html">Section</a> *&#160;</td>
+          <td class="paramname"><em>sections</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint&#160;</td>
+          <td class="paramname"><em>index</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>Collect Function and Conditional Operands for Processing </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">insn</td><td>the instruction </td></tr>
+    <tr><td class="paramname">operand_type</td><td>the operand type </td></tr>
+    <tr><td class="paramname">index</td><td>the section index </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>bool </dd></dl>
+
+</div>
+</div>
+<a id="a089dca4d2fa49177e1992a490825dd3e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a089dca4d2fa49177e1992a490825dd3e">&#9670;&nbsp;</a></span>Decompile()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void binlex::Decompiler::Decompile </td>
+          <td>(</td>
+          <td class="paramtype">void *&#160;</td>
+          <td class="paramname"><em>data</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t&#160;</td>
+          <td class="paramname"><em>data_size</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t&#160;</td>
+          <td class="paramname"><em>offset</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint&#160;</td>
+          <td class="paramname"><em>index</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Decompiles Target Data </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">data</td><td>pointer to data </td></tr>
+    <tr><td class="paramname">data_size</td><td>size of data </td></tr>
+    <tr><td class="paramname">offset</td><td>include section offset </td></tr>
+    <tr><td class="paramname">index</td><td>the section index </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a8d8603316d046aecd912659d92ceb4cd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8d8603316d046aecd912659d92ceb4cd">&#9670;&nbsp;</a></span>DecompileWorker()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static void* binlex::Decompiler::DecompileWorker </td>
+          <td>(</td>
+          <td class="paramtype">void *&#160;</td>
+          <td class="paramname"><em>args</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p><a class="el" href="classbinlex_1_1Decompiler.html">Decompiler</a> Thread Worker </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">args</td><td>pointer to worker arguments </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>NULL </dd></dl>
+
+</div>
+</div>
+<a id="ad216907aeecb073317410dab93b80375"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad216907aeecb073317410dab93b80375">&#9670;&nbsp;</a></span>GetTrait()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static string binlex::Decompiler::GetTrait </td>
+          <td>(</td>
+          <td class="paramtype">struct <a class="el" href="structbinlex_1_1Decompiler_1_1Trait.html">Trait</a> *&#160;</td>
+          <td class="paramname"><em>trait</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool&#160;</td>
+          <td class="paramname"><em>pretty</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>Gets <a class="el" href="structbinlex_1_1Decompiler_1_1Trait.html">Trait</a> as JSON </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">trait</td><td>pointer to trait structure </td></tr>
+    <tr><td class="paramname">pretty</td><td>pretty print </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>json string </dd></dl>
+
+</div>
+</div>
+<a id="a7165e80d5392769bdc08e02151fe7381"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7165e80d5392769bdc08e02151fe7381">&#9670;&nbsp;</a></span>IsAddress()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool binlex::Decompiler::IsAddress </td>
+          <td>(</td>
+          <td class="paramtype">map&lt; uint64_t, uint &gt; &amp;&#160;</td>
+          <td class="paramname"><em>addresses</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t&#160;</td>
+          <td class="paramname"><em>address</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint&#160;</td>
+          <td class="paramname"><em>index</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Check if Function or Block Address Collected </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">address</td><td>the address to check </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>bool </dd></dl>
+
+</div>
+</div>
+<a id="a36065e7e64a758008669a7525435d688"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a36065e7e64a758008669a7525435d688">&#9670;&nbsp;</a></span>IsBlock()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static bool binlex::Decompiler::IsBlock </td>
+          <td>(</td>
+          <td class="paramtype">map&lt; uint64_t, uint &gt; &amp;&#160;</td>
+          <td class="paramname"><em>addresses</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t&#160;</td>
+          <td class="paramname"><em>address</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>Checks if Address if Function </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">address</td><td>address to check </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>bool </dd></dl>
+
+</div>
+</div>
+<a id="a86c8baf434ef89278ad2b6a67af641b1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a86c8baf434ef89278ad2b6a67af641b1">&#9670;&nbsp;</a></span>IsConditionalInsn()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static uint binlex::Decompiler::IsConditionalInsn </td>
+          <td>(</td>
+          <td class="paramtype">cs_insn *&#160;</td>
+          <td class="paramname"><em>insn</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>Checks if Instruction is Conditional </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">insn</td><td>the instruction </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>edges if &gt; 0; then is conditional </dd></dl>
+
+</div>
+</div>
+<a id="af1da3d5f168cac9a72f788e97cb2df3e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af1da3d5f168cac9a72f788e97cb2df3e">&#9670;&nbsp;</a></span>IsEndInsn()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static bool binlex::Decompiler::IsEndInsn </td>
+          <td>(</td>
+          <td class="paramtype">cs_insn *&#160;</td>
+          <td class="paramname"><em>insn</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>Checks if the Instruction is an Ending Instruction </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">insn</td><td>the instruction </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>bool </dd></dl>
+
+</div>
+</div>
+<a id="a7e041678de44b686a7752179ec9767ef"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7e041678de44b686a7752179ec9767ef">&#9670;&nbsp;</a></span>IsFunction()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static bool binlex::Decompiler::IsFunction </td>
+          <td>(</td>
+          <td class="paramtype">map&lt; uint64_t, uint &gt; &amp;&#160;</td>
+          <td class="paramname"><em>addresses</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t&#160;</td>
+          <td class="paramname"><em>address</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>Checks if Address if Function </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">address</td><td>address to check </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>bool </dd></dl>
+
+</div>
+</div>
+<a id="a2d8490caf699443577d4de6dba902f8f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2d8490caf699443577d4de6dba902f8f">&#9670;&nbsp;</a></span>IsVisited()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static bool binlex::Decompiler::IsVisited </td>
+          <td>(</td>
+          <td class="paramtype">map&lt; uint64_t, int &gt; &amp;&#160;</td>
+          <td class="paramname"><em>visited</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t&#160;</td>
+          <td class="paramname"><em>address</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>Checks if Address was Already Visited </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">address</td><td>address to check </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>bool </dd></dl>
+
+</div>
+</div>
+<a id="a4ee6db12422f725ea1985ad23127197b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4ee6db12422f725ea1985ad23127197b">&#9670;&nbsp;</a></span>IsWildcardInsn()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static bool binlex::Decompiler::IsWildcardInsn </td>
+          <td>(</td>
+          <td class="paramtype">cs_insn *&#160;</td>
+          <td class="paramname"><em>insn</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>Checks if Instruction is Wildcard Instruction </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">insn</td><td>the instruction </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>bool </dd></dl>
+
+</div>
+</div>
+<a id="a788f80fd44f34f00084375d4669bd443"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a788f80fd44f34f00084375d4669bd443">&#9670;&nbsp;</a></span>PrintTraits()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void binlex::Decompiler::PrintTraits </td>
+          <td>(</td>
+          <td class="paramtype">bool&#160;</td>
+          <td class="paramname"><em>pretty</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">pretty</td><td>pretty print traits </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="addb97b20de09a26c2f16281f60818fad"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#addb97b20de09a26c2f16281f60818fad">&#9670;&nbsp;</a></span>Setup()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool binlex::Decompiler::Setup </td>
+          <td>(</td>
+          <td class="paramtype">cs_arch&#160;</td>
+          <td class="paramname"><em>arch</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">cs_mode&#160;</td>
+          <td class="paramname"><em>mode</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">char *&#160;</td>
+          <td class="paramname"><em>corpus</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint&#160;</td>
+          <td class="paramname"><em>threads</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint&#160;</td>
+          <td class="paramname"><em>thread_cycles</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">useconds_t&#160;</td>
+          <td class="paramname"><em>thread_sleep</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint&#160;</td>
+          <td class="paramname"><em>index</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Set up Capstone <a class="el" href="classbinlex_1_1Decompiler.html">Decompiler</a> Architecure and Mode </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">arch</td><td>Capstone <a class="el" href="classbinlex_1_1Decompiler.html">Decompiler</a> Architecure </td></tr>
+    <tr><td class="paramname">cs_mode</td><td>Capstone Mode </td></tr>
+    <tr><td class="paramname">threads</td><td>Number of Threads </td></tr>
+    <tr><td class="paramname">thread_cycles</td><td>Thread Retry Cycle Cound </td></tr>
+    <tr><td class="paramname">thread_sleep</td><td>Thread Sleep Wait for Queue in Microseconds </td></tr>
+    <tr><td class="paramname">index</td><td>section index </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>bool </dd></dl>
+
+</div>
+</div>
+<a id="ac34cfaf7065e2e529e206b7a28eb37c5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac34cfaf7065e2e529e206b7a28eb37c5">&#9670;&nbsp;</a></span>WildcardInsn()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static string binlex::Decompiler::WildcardInsn </td>
+          <td>(</td>
+          <td class="paramtype">cs_insn *&#160;</td>
+          <td class="paramname"><em>insn</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>Wildcard Instruction </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">insn</td><td>the instruction </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>trait wildcard byte string </dd></dl>
+
+</div>
+</div>
+<a id="ac50cdc13964e9a1a40a6d09fd838fde7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac50cdc13964e9a1a40a6d09fd838fde7">&#9670;&nbsp;</a></span>WriteTraits()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void binlex::Decompiler::WriteTraits </td>
+          <td>(</td>
+          <td class="paramtype">char *&#160;</td>
+          <td class="paramname"><em>file_path</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool&#160;</td>
+          <td class="paramname"><em>pretty</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Write Traits to File </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">file_path</td><td>path to the file </td></tr>
+    <tr><td class="paramname">pretty</td><td>pretty print traits </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
 <hr/>The documentation for this class was generated from the following file:<ul>
 <li>include/<a class="el" href="decompiler_8h_source.html">decompiler.h</a></li>
 </ul>

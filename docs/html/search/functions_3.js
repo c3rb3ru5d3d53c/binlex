@@ -1,4 +1,5 @@
 var searchData=
 [
-  ['sha256_55',['SHA256',['../classbinlex_1_1Common.html#ad8e308be16a7d66383c5ed66deb88329',1,'binlex::Common']]]
+  ['getbytesize_77',['GetByteSize',['../classbinlex_1_1Common.html#a593bba469d727c0d4469555a058b13e7',1,'binlex::Common']]],
+  ['gettrait_78',['GetTrait',['../classbinlex_1_1Decompiler.html#ad216907aeecb073317410dab93b80375',1,'binlex::Decompiler']]]
 ];

@@ -118,7 +118,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>parse</b> (int argc, 
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-attribs"></a>
 Public Attributes</h2></td></tr>
 <tr class="memitem:ac612b207d3378af1b0a30d701091bc8a"><td class="memItemLeft" align="right" valign="top"><a id="ac612b207d3378af1b0a30d701091bc8a"></a>
-char&#160;</td><td class="memItemRight" valign="bottom"><b>version</b> [7] = &quot;v1.1.0&quot;</td></tr>
+char&#160;</td><td class="memItemRight" valign="bottom"><b>version</b> [7] = &quot;v1.1.1&quot;</td></tr>
 <tr class="separator:ac612b207d3378af1b0a30d701091bc8a"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a68075815fcdbf18dcbf8ab2060bc14cb"><td class="memItemLeft" align="right" valign="top"><a id="a68075815fcdbf18dcbf8ab2060bc14cb"></a>
 const char *&#160;</td><td class="memItemRight" valign="bottom"><b>modes</b> [ARGS_MODE_COUNT] = {&quot;elf:x86&quot;, &quot;elf:x86_64&quot;, &quot;pe:x86&quot;, &quot;pe:x86_64&quot;, &quot;raw:x86&quot;, &quot;raw:x86_64&quot;, &quot;raw:cil&quot;}</td></tr>
@@ -134,9 +134,15 @@ struct {</td></tr>
 <tr class="memitem:a222a56fbac6bfaf50b1be6f4133f954b"><td class="memItemLeft" >
 &#160;&#160;&#160;char *&#160;&#160;&#160;<b>output</b></td></tr>
 <tr class="separator:a222a56fbac6bfaf50b1be6f4133f954b"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a0d08d06205376551689eadb07d6093f8"><td class="memItemLeft" >
-&#160;&#160;&#160;unsigned int&#160;&#160;&#160;<b>threads</b></td></tr>
-<tr class="separator:a0d08d06205376551689eadb07d6093f8"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:abd8d537f4d252ea2cb39f8b7cd4f25ab"><td class="memItemLeft" >
+&#160;&#160;&#160;uint&#160;&#160;&#160;<b>threads</b></td></tr>
+<tr class="separator:abd8d537f4d252ea2cb39f8b7cd4f25ab"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a20e055d8ca5ad62a9d4e2e591843afc3"><td class="memItemLeft" >
+&#160;&#160;&#160;uint&#160;&#160;&#160;<b>thread_cycles</b></td></tr>
+<tr class="separator:a20e055d8ca5ad62a9d4e2e591843afc3"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0f7ba844feedcf60a492d50d8c93ef35"><td class="memItemLeft" >
+&#160;&#160;&#160;useconds_t&#160;&#160;&#160;<b>thread_sleep</b></td></tr>
+<tr class="separator:a0f7ba844feedcf60a492d50d8c93ef35"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:afda98b89ac9b98c56c452ba8e9686c46"><td class="memItemLeft" >
 &#160;&#160;&#160;bool&#160;&#160;&#160;<b>help</b></td></tr>
 <tr class="separator:afda98b89ac9b98c56c452ba8e9686c46"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -146,6 +152,9 @@ struct {</td></tr>
 <tr class="memitem:a65e60a01f9491f7124786481415c9c93"><td class="memItemLeft" >
 &#160;&#160;&#160;char *&#160;&#160;&#160;<b>mode</b></td></tr>
 <tr class="separator:a65e60a01f9491f7124786481415c9c93"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a769d3956cb979c578b6e440e1ecd2f9a"><td class="memItemLeft" >
+&#160;&#160;&#160;char *&#160;&#160;&#160;<b>corpus</b></td></tr>
+<tr class="separator:a769d3956cb979c578b6e440e1ecd2f9a"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a983fb63dcff29f161d8cb4b973651953"><td class="memItemLeft" >
 &#160;&#160;&#160;bool&#160;&#160;&#160;<b>pretty</b></td></tr>
 <tr class="separator:a983fb63dcff29f161d8cb4b973651953"><td class="memSeparator" colspan="2">&#160;</td></tr>

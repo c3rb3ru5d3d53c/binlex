@@ -1,5 +1,6 @@
 var searchData=
 [
-  ['hexdump_51',['Hexdump',['../classbinlex_1_1Common.html#a8b07ec710b5a4f3c1d83084aec16b9f3',1,'binlex::Common']]],
-  ['hexdumpbe_52',['HexdumpBE',['../classbinlex_1_1Common.html#a94c338b55668ea0ebc430b9047fd3742',1,'binlex::Common']]]
+  ['cleartrait_72',['ClearTrait',['../classbinlex_1_1Decompiler.html#a68e8a399a53c2430480fd207a4498ea4',1,'binlex::Decompiler']]],
+  ['collectinsn_73',['CollectInsn',['../classbinlex_1_1Decompiler.html#a3c630a3ae0ae8e4a2fcf45c7bf192519',1,'binlex::Decompiler']]],
+  ['collectoperands_74',['CollectOperands',['../classbinlex_1_1Decompiler.html#a7d00feffb171c385b384f28fcf80567d',1,'binlex::Decompiler']]]
 ];

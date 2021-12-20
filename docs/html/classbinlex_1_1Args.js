@@ -9,6 +9,7 @@ var classbinlex_1_1Args =
     [ "print_help", "classbinlex_1_1Args.html#ab5010e9c2bbdc522a628de3f389c9ecc", null ],
     [ "set_io_type", "classbinlex_1_1Args.html#a46e29ccab7e771d0df504bd73d07acdc", null ],
     [ "SetDefault", "classbinlex_1_1Args.html#ac11a1822921a1f258fe5c3ce56545aad", null ],
+    [ "corpus", "classbinlex_1_1Args.html#a4f92767e75f118eeb46a5a94155613f7", null ],
     [ "help", "classbinlex_1_1Args.html#a2491b08ed8671ee298f81a4bb8a55edc", null ],
     [ "input", "classbinlex_1_1Args.html#a58f6c480ae8b6252daa8ab5d9b6424a9", null ],
     [ "io_type", "classbinlex_1_1Args.html#a1081246280cb0c7db1996e7ec8ad1a4f", null ],
@@ -18,6 +19,8 @@ var classbinlex_1_1Args =
     [ "options", "classbinlex_1_1Args.html#ad7903e030130436a79d5e47dbac90a95", null ],
     [ "output", "classbinlex_1_1Args.html#a7e087780eeeda9b14de02c0e271b92af", null ],
     [ "pretty", "classbinlex_1_1Args.html#ae3622028422ff83cece80da50842ea14", null ],
-    [ "threads", "classbinlex_1_1Args.html#a7c7b63377352c20b9badb2fc83014d1e", null ],
+    [ "thread_cycles", "classbinlex_1_1Args.html#aaf8810b7aaa68162201ff53f239521cc", null ],
+    [ "thread_sleep", "classbinlex_1_1Args.html#a1f0dc547c7a744875288103bd6bb691e", null ],
+    [ "threads", "classbinlex_1_1Args.html#af852011c5cdef9d5503970276552d659", null ],
     [ "version", "classbinlex_1_1Args.html#ac612b207d3378af1b0a30d701091bc8a", null ]
 ];
