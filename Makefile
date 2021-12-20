@@ -9,7 +9,8 @@ all:
 		make -j ${threads}
 
 docs:
-	mkdir -p build/docs/
+	mkdir -p build/docs/html/docs/
+	cp -r docs/img/ build/docs/html/docs/
 	(cat Doxyfile; echo "NUM_PROC_THREADS=${threads}") | doxygen -
 
 docs-update:

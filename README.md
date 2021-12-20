@@ -15,7 +15,7 @@ While the C++ API allows developers to get creative with their own detection sol
 # Demos
 
 <p align="center">
-  <img src="docs/html/demo_0.gif" alt="animated" />
+  <img src="docs/img/demo_0.gif" alt="animated" />
 </p>
 
 # Introduction Video
