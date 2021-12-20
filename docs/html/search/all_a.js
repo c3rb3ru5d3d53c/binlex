@@ -1,5 +1,7 @@
 var searchData=
 [
-  ['section_25',['Section',['../structbinlex_1_1DecompilerREV_1_1Section.html',1,'binlex::DecompilerREV']]],
-  ['sha256_26',['SHA256',['../classbinlex_1_1Common.html#ad8e308be16a7d66383c5ed66deb88329',1,'binlex::Common']]]
+  ['section_39',['Section',['../structbinlex_1_1Decompiler_1_1Section.html',1,'binlex::Decompiler']]],
+  ['setup_40',['Setup',['../classbinlex_1_1Decompiler.html#addb97b20de09a26c2f16281f60818fad',1,'binlex::Decompiler']]],
+  ['sha256_41',['SHA256',['../classbinlex_1_1Common.html#a4b3b0495c70e06ead0cb067cd9e912d4',1,'binlex::Common']]],
+  ['sha256_5fctx_42',['SHA256_CTX',['../structSHA256__CTX.html',1,'']]]
 ];

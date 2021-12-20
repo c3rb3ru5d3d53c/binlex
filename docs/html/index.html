@@ -93,10 +93,13 @@ $(document).ready(function(){initNavTree('index.html',''); initResizable(); });
 <p>The simple command-line interface allows malware researchers and analysts to hunt traits across hundreds or thousands of potentially similar malware saving time and money in production environments.</p>
 <p>While the C++ API allows developers to get creative with their own detection solutions.</p>
 <h1><a class="anchor" id="autotoc_md1"></a>
+Demos</h1>
+<p><img src="docs/img/demo_0.gif" alt="animated" class="inline"/> </p>
+<h1><a class="anchor" id="autotoc_md2"></a>
 Introduction Video</h1>
 <p><a href="https://www.youtube.com/watch?v=hgz5gZB3DxE" target="_blank"><img src="https://img.youtube.com/vi/hgz5gZB3DxE/0.jpg" alt="Introduction Video" class="inline"/> </a> </p>
 <p>Get slides <a href="docs/oalabs.pdf">here</a>.</p>
-<h1><a class="anchor" id="autotoc_md2"></a>
+<h1><a class="anchor" id="autotoc_md3"></a>
 Use Cases</h1>
 <ul>
 <li>YARA Signature Creation/Automation</li>
@@ -107,7 +110,7 @@ Use Cases</h1>
 <li>Genetic Programming</li>
 <li>Machine Learning Malware Detection</li>
 </ul>
-<h1><a class="anchor" id="autotoc_md3"></a>
+<h1><a class="anchor" id="autotoc_md4"></a>
 Installing</h1>
 <p><b>From Source:</b></p>
 <p>Please note that <code>binlex</code> requires <code>cmake</code> &gt;= 3.5 and <code>make</code> &gt;= 4.2.1.</p>
@@ -121,7 +124,7 @@ Installing</h1>
 <p><b>NOTE:</b></p><ul>
 <li>ZIP files in the <code>tests/</code> directory can be extracted using the password <code>infected</code></li>
 </ul>
-<h1><a class="anchor" id="autotoc_md4"></a>
+<h1><a class="anchor" id="autotoc_md5"></a>
 Basic Usage</h1>
 <div class="fragment"><div class="line">binlex v1.1.0 - A Binary Genetic Traits Lexer</div>
 <div class="line">  -i  --input           input file              (required)</div>
@@ -143,7 +146,7 @@ Basic Usage</h1>
 <li><code>raw:cil</code> (experimental)</li>
 </ul>
 <p><b>NOTE:</b> The <code>raw</code> formats can be used on shellcode</p>
-<h1><a class="anchor" id="autotoc_md5"></a>
+<h1><a class="anchor" id="autotoc_md6"></a>
 Advanced Usage</h1>
 <p>If you are hunting using <code>binlex</code> you can use <code>jq</code> to your advantage for advanced searches.</p>
 <div class="fragment"><div class="line">binlex -m raw:x86 -i tests/raw/raw.x86 | jq -r &#39;.[] | select(.type == &quot;block&quot; and .size &lt; 32 and .size &gt; 0) | .bytes&#39;</div>
@@ -215,7 +218,7 @@ Advanced Usage</h1>
 <p><b>General Usage Information:</b></p>
 <p>Binlex is designed to do one thing and one thing only, extract genetic traits from executable code in files. This means it is up to you "the researcher" / "the data scientist" to determine which traits are good and which traits are bad. To accomplish this, you need to use your own <a href="https://en.wikipedia.org/wiki/Fitness_function">fitness function</a>. I encourage you to read about <a href="https://en.wikipedia.org/wiki/Genetic_programming">genetic programming</a> to gain a better understanding of this in practice. Perhaps watching <a href="https://www.youtube.com/watch?v=qiKW1qX97qA">this</a> introductory video will help your understanding.</p>
 <p>Again, <b>it's up to you to implement your own algorithms for detection based on the genetic traits you extract</b>.</p>
-<h1><a class="anchor" id="autotoc_md6"></a>
+<h1><a class="anchor" id="autotoc_md7"></a>
 Trait Format</h1>
 <p>Traits will contain binary code represented in hexadecimal form and will use <code>??</code> as wild cards for memory operands or other operands subject to change.</p>
 <p>They will also contain additional properties about the trait including its <code>offset</code>, <code>edges</code>, <code>blocks</code>, <code>cyclomatic_complexity</code>, <code>average_instruction_per_block</code>, <code>bytes</code>, <code>trait</code>, <code>trait_sha256</code>, <code>bytes_sha256</code>, <code>trait_entropy</code>, <code>bytes_entropy</code>, <code>type</code>, <code>size</code>, and <code>instructions</code>.</p>
@@ -237,15 +240,15 @@ Trait Format</h1>
 <div class="line">    &quot;type&quot;: &quot;block&quot;</div>
 <div class="line">  }</div>
 <div class="line">]</div>
-</div><!-- fragment --><h1><a class="anchor" id="autotoc_md7"></a>
+</div><!-- fragment --><h1><a class="anchor" id="autotoc_md8"></a>
 Documentation</h1>
 <p>Public documentation on <code>binlex</code> can be viewed <a href="https://c3rb3ru5d3d53c.github.io/binlex/html/index.html">here</a>.</p>
-<h1><a class="anchor" id="autotoc_md8"></a>
+<h1><a class="anchor" id="autotoc_md9"></a>
 Building Docs</h1>
 <p>You can access the C++ API Documentation and everything else by building the documents using <code>doxygen</code>.</p>
 <div class="fragment"><div class="line">make docs threads=4</div>
 </div><!-- fragment --><p>The documents will be available at <code>build/docs/html/index.html</code>.</p>
-<h1><a class="anchor" id="autotoc_md9"></a>
+<h1><a class="anchor" id="autotoc_md10"></a>
 C++ API Example Code</h1>
 <p>It couldn't be any easier to leverage <code>binlex</code> and its C++ API to build your own applications.</p>
 <p>See example code below:</p>
@@ -263,16 +266,16 @@ C++ API Example Code</h1>
 <div class="line">      <span class="keywordflow">return</span> 1;</div>
 <div class="line">  }</div>
 <div class="line">  <a class="code" href="classbinlex_1_1Decompiler.html">Decompiler</a> decompiler;</div>
-<div class="line">  decompiler.Setup(CS_ARCH_X86, CS_MODE_32);</div>
+<div class="line">  decompiler.<a class="code" href="classbinlex_1_1Decompiler.html#addb97b20de09a26c2f16281f60818fad">Setup</a>(CS_ARCH_X86, CS_MODE_32);</div>
 <div class="line">  <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; PE_MAX_SECTIONS; i++){</div>
 <div class="line">      <span class="keywordflow">if</span> (pe32.sections[i].data != NULL){</div>
 <div class="line">          decompiler.x86_64(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, i);</div>
 <div class="line">      }</div>
 <div class="line">  }</div>
-<div class="line">  decompiler.PrintTraits(args.options.pretty);</div>
+<div class="line">  decompiler.<a class="code" href="classbinlex_1_1Decompiler.html#a788f80fd44f34f00084375d4669bd443">PrintTraits</a>(args.options.pretty);</div>
 <div class="line">}</div>
 </div><!-- fragment --><p>We hope this encourages people to build their own detection solutions based on binary genetic traits.</p>
-<h1><a class="anchor" id="autotoc_md10"></a>
+<h1><a class="anchor" id="autotoc_md11"></a>
 Tips</h1>
 <ul>
 <li>If you are hunting be sure to use <code>jq</code> to improve your searches</li>
@@ -281,14 +284,14 @@ Tips</h1>
 <li>Verify the samples you are collecting into a group using skilled analysts</li>
 <li>These traits are best used with a hybrid approach (supervised)</li>
 </ul>
-<h1><a class="anchor" id="autotoc_md11"></a>
+<h1><a class="anchor" id="autotoc_md12"></a>
 Example Fitness Model</h1>
 <p>Traits will be compared amongst their common malware family, any traits not common to all samples will be discarded.</p>
 <p>Once completed, all remaining traits will be compared to traits from a goodware set, any traits that match the goodware set will be discarded.</p>
 <p>To further differ the traits from other malware families, the remaining population will be compared to other malware families, any that match will be discarded.</p>
 <p>The remaining population of traits will be unique to the malware family tested and not legitimate binaries or other malware families.</p>
 <p>This fitness model allows for accurate classification of the tested malware family.</p>
-<h1><a class="anchor" id="autotoc_md12"></a>
+<h1><a class="anchor" id="autotoc_md13"></a>
 Future Work</h1>
 <ul>
 <li>Recursive Decompiler</li>
@@ -297,7 +300,7 @@ Future Work</h1>
 <li>.NET support <code>pe:cil</code> and <code>raw:cil</code></li>
 <li>Mac-O Support <code>macho:x86_64</code>, <code>macho:x86</code></li>
 </ul>
-<h1><a class="anchor" id="autotoc_md13"></a>
+<h1><a class="anchor" id="autotoc_md14"></a>
 Contributing</h1>
 <p>If you wish to contribute to Binlex DM me on Twitter <a href="https://twitter.com/c3rb3ru5d3d53c">here</a>.</p>
 <p>You can also join our Discord <a href="https://discord.gg/UDBfRpxV3B">here</a>.</p>
@@ -308,7 +311,9 @@ Contributing</h1>
 </div></div><!-- PageDoc -->
 </div><!-- contents -->
 </div><!-- doc-content -->
-<div class="ttc" id="aclassbinlex_1_1Decompiler_html"><div class="ttname"><a href="classbinlex_1_1Decompiler.html">binlex::Decompiler</a></div><div class="ttdef"><b>Definition:</b> decompiler.h:18</div></div>
+<div class="ttc" id="aclassbinlex_1_1Decompiler_html_addb97b20de09a26c2f16281f60818fad"><div class="ttname"><a href="classbinlex_1_1Decompiler.html#addb97b20de09a26c2f16281f60818fad">binlex::Decompiler::Setup</a></div><div class="ttdeci">bool Setup(cs_arch arch, cs_mode mode, char *corpus, uint threads, uint thread_cycles, useconds_t thread_sleep, uint index)</div></div>
+<div class="ttc" id="aclassbinlex_1_1Decompiler_html_a788f80fd44f34f00084375d4669bd443"><div class="ttname"><a href="classbinlex_1_1Decompiler.html#a788f80fd44f34f00084375d4669bd443">binlex::Decompiler::PrintTraits</a></div><div class="ttdeci">void PrintTraits(bool pretty)</div></div>
+<div class="ttc" id="aclassbinlex_1_1Decompiler_html"><div class="ttname"><a href="classbinlex_1_1Decompiler.html">binlex::Decompiler</a></div><div class="ttdef"><b>Definition:</b> decompiler.h:26</div></div>
 <div class="ttc" id="aclassbinlex_1_1Pe_html"><div class="ttname"><a href="classbinlex_1_1Pe.html">binlex::Pe</a></div><div class="ttdef"><b>Definition:</b> pe.h:409</div></div>
 <div class="ttc" id="anamespacebinlex_html"><div class="ttname"><a href="namespacebinlex.html">binlex</a></div><div class="ttdoc">the binlex namespace</div></div>
 <!-- start footer part -->

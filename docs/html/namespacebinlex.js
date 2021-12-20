@@ -1,9 +1,8 @@
 var namespacebinlex =
 [
     [ "Args", "classbinlex_1_1Args.html", "classbinlex_1_1Args" ],
-    [ "Common", "classbinlex_1_1Common.html", "classbinlex_1_1Common" ],
+    [ "Common", "classbinlex_1_1Common.html", null ],
     [ "Decompiler", "classbinlex_1_1Decompiler.html", "classbinlex_1_1Decompiler" ],
-    [ "DecompilerREV", "classbinlex_1_1DecompilerREV.html", "classbinlex_1_1DecompilerREV" ],
     [ "Elf", "classbinlex_1_1Elf.html", "classbinlex_1_1Elf" ],
     [ "IMAGE_DATA_DIRECTORY", "structbinlex_1_1IMAGE__DATA__DIRECTORY.html", "structbinlex_1_1IMAGE__DATA__DIRECTORY" ],
     [ "IMAGE_DOS_HEADER", "structbinlex_1_1IMAGE__DOS__HEADER.html", "structbinlex_1_1IMAGE__DOS__HEADER" ],

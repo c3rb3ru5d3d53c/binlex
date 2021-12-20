@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['getbytesize_50',['GetByteSize',['../classbinlex_1_1Common.html#a537f95841cada660f148930c2d4e4f8d',1,'binlex::Common']]]
+  ['appendtrait_71',['AppendTrait',['../classbinlex_1_1Decompiler.html#a0af06e57918013d21358ec5ea0f1ad6c',1,'binlex::Decompiler']]]
 ];
