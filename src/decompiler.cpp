@@ -215,7 +215,7 @@ void * Decompiler::DecompileWorker(void *args) {
             if (thread_cycles == sections[index].thread_cycles){
                 break;
             }
-            usleep(sections[index].thread_sleep);
+            usleep(sections[index].thread_sleep * 1000);
             continue;
         }
         #if defined(__linux__) || defined(__APPLE__)
