@@ -607,7 +607,7 @@ uint Decompiler::CollectInsn(cs_insn* insn, struct Section *sections, uint index
         result = DECOMPILER_OPERAND_TYPE_BLOCK;
         break;
     case X86_INS_CALL:
-        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
+        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_FUNCTION, sections, index);
         result = DECOMPILER_OPERAND_TYPE_FUNCTION;
         break;
     default:
