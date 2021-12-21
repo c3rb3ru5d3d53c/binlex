@@ -16,8 +16,8 @@ void Args::SetDefault(){
     options.timeout = 0;
     options.input = NULL;
     options.threads = 1;
-    options.thread_cycles = 32;
-    options.thread_sleep = 500;
+    options.thread_cycles = 4;
+    options.thread_sleep = 5 * 1000;
     options.help = false;
     options.output = NULL;
     options.corpus = (char *)"default";
@@ -169,7 +169,7 @@ void Args::parse(int argc, char **argv){
                 fprintf(stderr, "[x] invalid thread count\n");
                 exit(1);
             }
-            options.thread_sleep = atoi(argv[i+1]);
+            options.thread_sleep = atoi(argv[i+1]) * 1000;
             if (options.thread_cycles <= 0){
                 fprintf(stderr, "[x] invalid number of threads\n");
                 exit(1);
