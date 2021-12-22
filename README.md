@@ -61,10 +61,15 @@ binlex -m elf:x86 -i tests/elf/elf.x86
 # Basic Usage
 
 ```text
-binlex v1.1.0 - A Binary Genetic Traits Lexer
+binlex v1.1.1 - A Binary Genetic Traits Lexer
   -i  --input           input file              (required)
   -m  --mode            set mode                (required)
   -lm --list-modes      list modes
+  -c  --corpus          corpus name             (optional)
+  -t  --threads         number of threads       (optional)
+  -tc --thread-cycles   thread wait cycles      (optional)
+  -ts --thread-sleep    thread sleep in ms      (optional)
+  -to --timeout         execution timeout in s  (optional)
   -h  --help            display help
   -o  --output          output file             (optional)
   -p  --pretty          pretty output           (optional)
