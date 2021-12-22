@@ -1,6 +1,5 @@
 var searchData=
 [
-  ['raw_36',['Raw',['../classbinlex_1_1Raw.html',1,'binlex']]],
-  ['removespaces_37',['RemoveSpaces',['../classbinlex_1_1Common.html#af1e434357de3e8b01bd34a17cc645c16',1,'binlex::Common']]],
-  ['removewildcards_38',['RemoveWildcards',['../classbinlex_1_1Common.html#a52a0d5df20a6123bd9d69faea24b05a0',1,'binlex::Common']]]
+  ['pe_35',['Pe',['../classbinlex_1_1Pe.html',1,'binlex']]],
+  ['printtraits_36',['PrintTraits',['../classbinlex_1_1Decompiler.html#a788f80fd44f34f00084375d4669bd443',1,'binlex::Decompiler']]]
 ];

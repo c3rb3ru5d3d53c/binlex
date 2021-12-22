@@ -139,6 +139,8 @@ Static Public Member Functions</h2></td></tr>
 <tr class="separator:af1da3d5f168cac9a72f788e97cb2df3e"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a86c8baf434ef89278ad2b6a67af641b1"><td class="memItemLeft" align="right" valign="top">static uint&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#a86c8baf434ef89278ad2b6a67af641b1">IsConditionalInsn</a> (cs_insn *insn)</td></tr>
 <tr class="separator:a86c8baf434ef89278ad2b6a67af641b1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa83d88e28945d04d3e0e3b8fdc05814d"><td class="memItemLeft" align="right" valign="top">static uint64_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#aa83d88e28945d04d3e0e3b8fdc05814d">MaxAddress</a> (set&lt; uint64_t &gt; coverage)</td></tr>
+<tr class="separator:aa83d88e28945d04d3e0e3b8fdc05814d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a7e041678de44b686a7752179ec9767ef"><td class="memItemLeft" align="right" valign="top">static bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#a7e041678de44b686a7752179ec9767ef">IsFunction</a> (map&lt; uint64_t, uint &gt; &amp;addresses, uint64_t address)</td></tr>
 <tr class="separator:a7e041678de44b686a7752179ec9767ef"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a36065e7e64a758008669a7525435d688"><td class="memItemLeft" align="right" valign="top">static bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#a36065e7e64a758008669a7525435d688">IsBlock</a> (map&lt; uint64_t, uint &gt; &amp;addresses, uint64_t address)</td></tr>
@@ -773,6 +775,39 @@ struct <a class="el" href="structbinlex_1_1Decompiler_1_1Section.html">Section</
   </dd>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>bool </dd></dl>
+
+</div>
+</div>
+<a id="aa83d88e28945d04d3e0e3b8fdc05814d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa83d88e28945d04d3e0e3b8fdc05814d">&#9670;&nbsp;</a></span>MaxAddress()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static uint64_t binlex::Decompiler::MaxAddress </td>
+          <td>(</td>
+          <td class="paramtype">set&lt; uint64_t &gt;&#160;</td>
+          <td class="paramname"><em>coverage</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>Checks Code Coverage for Max Address </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">coverage</td><td>set of addresses decompiled </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>the maximum address from the set </dd></dl>
 
 </div>
 </div>
