@@ -155,7 +155,7 @@ Basic Usage</h1>
 <h1><a class="anchor" id="autotoc_md6"></a>
 Advanced Usage</h1>
 <p>If you are hunting using <code>binlex</code> you can use <code>jq</code> to your advantage for advanced searches.</p>
-<div class="fragment"><div class="line">binlex -m raw:x86 -i tests/raw/raw.x86 | jq -r &#39;.[] | select(.type == &quot;block&quot; and .size &lt; 32 and .size &gt; 0) | .bytes&#39;</div>
+<div class="fragment"><div class="line">binlex -m raw:x86 -i tests/raw/raw.x86 | jq -r &#39;select(.type == &quot;block&quot; and .size &lt; 32 and .size &gt; 0) | .bytes&#39;</div>
 <div class="line">2c 20 c1 cf 0d 01 c7 49 75 ef</div>
 <div class="line">52 57 8b 52 10 8b 42 3c 01 d0 8b 40 78 85 c0 74 4c</div>
 <div class="line">01 d0 50 8b 58 20 8b 48 18 01 d3 85 c9 74 3c</div>
@@ -167,17 +167,17 @@ Advanced Usage</h1>
 <div class="line">e9 9b ff ff ff</div>
 <div class="line">01 c3 29 c6 75 c1</div>
 </div><!-- fragment --><p>Other queries you can do: </p><div class="fragment"><div class="line"># Block traits with a size between 0 and 32 bytes</div>
-<div class="line">jq -r &#39;[.[] | select(.type == &quot;block&quot; and .size &lt; 32 and .size &gt; 0)]&#39;</div>
+<div class="line">jq -r &#39;select(.type == &quot;block&quot; and .size &lt; 32 and .size &gt; 0)&#39;</div>
 <div class="line"># Function traits with a cyclomatic complexity greater than 32 (maybe obfuscation)</div>
-<div class="line">jq -r &#39;[.[] | select(.type == &quot;function&quot; and .cyclomatic_complexity &gt; 32)]&#39;</div>
+<div class="line">jq -r &#39;select(.type == &quot;function&quot; and .cyclomatic_complexity &gt; 32)&#39;</div>
 <div class="line"># Traits where bytes have high entropy</div>
-<div class="line">jq -r &#39;[.[] | select(.bytes_entropy &gt; 7)]&#39;</div>
+<div class="line">jq -r &#39;select(.bytes_entropy &gt; 7)&#39;</div>
 <div class="line"># Output all trait strings only</div>
-<div class="line">jq -r &#39;.[] | .trait&#39;</div>
+<div class="line">jq -r &#39;.trait&#39;</div>
 <div class="line"># Output only trait hashes</div>
-<div class="line">jq -r &#39;.[] | .trait_sha256&#39;</div>
+<div class="line">jq -r &#39;.trait_sha256&#39;</div>
 </div><!-- fragment --><p>If you output just traits you want to <code>stdout</code> you can do build a <code>yara</code> signature on the fly with the included tool <code>blyara</code>:</p>
-<div class="fragment"><div class="line">build/binlex -m raw:x86 -i tests/raw/raw.x86 | jq -r &#39;.[] | select(.size &gt; 16 and .size &lt; 32) | .trait&#39; | build/blyara --name example_0 -m author example -m tlp white -c 1</div>
+<div class="fragment"><div class="line">build/binlex -m raw:x86 -i tests/raw/raw.x86 | jq -r &#39;select(.size &gt; 16 and .size &lt; 32) | .trait&#39; | build/blyara --name example_0 -m author example -m tlp white -c 1</div>
 <div class="line">rule example_0 {</div>
 <div class="line">    metadata:</div>
 <div class="line">        author = &quot;example&quot;</div>
@@ -227,7 +227,7 @@ Advanced Usage</h1>
 <h1><a class="anchor" id="autotoc_md7"></a>
 Trait Format</h1>
 <p>Traits will contain binary code represented in hexadecimal form and will use <code>??</code> as wild cards for memory operands or other operands subject to change.</p>
-<p>They will also contain additional properties about the trait including its <code>offset</code>, <code>edges</code>, <code>blocks</code>, <code>cyclomatic_complexity</code>, <code>average_instruction_per_block</code>, <code>bytes</code>, <code>trait</code>, <code>trait_sha256</code>, <code>bytes_sha256</code>, <code>trait_entropy</code>, <code>bytes_entropy</code>, <code>type</code>, <code>size</code>, and <code>instructions</code>.</p>
+<p>They will also contain additional properties about the trait including its <code>offset</code>, <code>edges</code>, <code>blocks</code>, <code>cyclomatic_complexity</code>, <code>average_instruction_per_block</code>, <code>bytes</code>, <code>trait</code>, <code>trait_sha256</code>, <code>bytes_sha256</code>, <code>trait_entropy</code>, <code>bytes_entropy</code>, <code>type</code>, <code>size</code>, <code>invalid_instructions</code> and <code>instructions</code>.</p>
 <div class="fragment"><div class="line">[</div>
 <div class="line">  {</div>
 <div class="line">    &quot;average_instructions_per_block&quot;: 29,</div>

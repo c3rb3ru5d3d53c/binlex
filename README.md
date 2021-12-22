@@ -94,7 +94,7 @@ __NOTE:__ The `raw` formats can be used on shellcode
 If you are hunting using `binlex` you can use `jq` to your advantage for advanced searches.
 
 ```bash
-binlex -m raw:x86 -i tests/raw/raw.x86 | jq -r '.[] | select(.type == "block" and .size < 32 and .size > 0) | .bytes'
+binlex -m raw:x86 -i tests/raw/raw.x86 | jq -r 'select(.type == "block" and .size < 32 and .size > 0) | .bytes'
 2c 20 c1 cf 0d 01 c7 49 75 ef
 52 57 8b 52 10 8b 42 3c 01 d0 8b 40 78 85 c0 74 4c
 01 d0 50 8b 58 20 8b 48 18 01 d3 85 c9 74 3c
@@ -110,21 +110,21 @@ e9 9b ff ff ff
 Other queries you can do:
 ```bash
 # Block traits with a size between 0 and 32 bytes
-jq -r '[.[] | select(.type == "block" and .size < 32 and .size > 0)]'
+jq -r 'select(.type == "block" and .size < 32 and .size > 0)'
 # Function traits with a cyclomatic complexity greater than 32 (maybe obfuscation)
-jq -r '[.[] | select(.type == "function" and .cyclomatic_complexity > 32)]'
+jq -r 'select(.type == "function" and .cyclomatic_complexity > 32)'
 # Traits where bytes have high entropy
-jq -r '[.[] | select(.bytes_entropy > 7)]'
+jq -r 'select(.bytes_entropy > 7)'
 # Output all trait strings only
-jq -r '.[] | .trait'
+jq -r '.trait'
 # Output only trait hashes
-jq -r '.[] | .trait_sha256'
+jq -r '.trait_sha256'
 ```
 
 If you output just traits you want to `stdout` you can do build a `yara` signature on the fly with the included tool `blyara`:
 
 ```bash
-build/binlex -m raw:x86 -i tests/raw/raw.x86 | jq -r '.[] | select(.size > 16 and .size < 32) | .trait' | build/blyara --name example_0 -m author example -m tlp white -c 1
+build/binlex -m raw:x86 -i tests/raw/raw.x86 | jq -r 'select(.size > 16 and .size < 32) | .trait' | build/blyara --name example_0 -m author example -m tlp white -c 1
 rule example_0 {
     metadata:
         author = "example"
@@ -199,7 +199,7 @@ Again, **it's up to you to implement your own algorithms for detection based on 
 
 Traits will contain binary code represented in hexadecimal form and will use `??` as wild cards for memory operands or other operands subject to change.
 
-They will also contain additional properties about the trait including its `offset`, `edges`, `blocks`, `cyclomatic_complexity`, `average_instruction_per_block`, `bytes`, `trait`, `trait_sha256`, `bytes_sha256`, `trait_entropy`, `bytes_entropy`, `type`, `size`, and `instructions`.
+They will also contain additional properties about the trait including its `offset`, `edges`, `blocks`, `cyclomatic_complexity`, `average_instruction_per_block`, `bytes`, `trait`, `trait_sha256`, `bytes_sha256`, `trait_entropy`, `bytes_entropy`, `type`, `size`, `invalid_instructions` and `instructions`.
 
 ```
 [
