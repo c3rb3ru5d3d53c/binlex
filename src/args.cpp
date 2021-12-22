@@ -170,8 +170,8 @@ void Args::parse(int argc, char **argv){
                 exit(1);
             }
             options.thread_sleep = atoi(argv[i+1]);
-            if (options.thread_cycles <= 0){
-                fprintf(stderr, "[x] invalid number of threads\n");
+            if (options.thread_sleep <= 0){
+                fprintf(stderr, "[x] invalid thread sleep value\n");
                 exit(1);
             }
         }
