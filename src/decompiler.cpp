@@ -178,10 +178,8 @@ void * Decompiler::DecompileWorker(void *args) {
     struct Trait f_trait;
 
     b_trait.type = (char *)"block";
-    //b_trait.corpus = sections[index].corpus;
     ClearTrait(&b_trait);
     f_trait.type = (char *)"function";
-    //f_trait.corpus = sections[index].corpus;
     ClearTrait(&f_trait);
 
     myself.error = cs_open(sections[index].arch, sections[index].mode, &myself.handle);
@@ -218,6 +216,7 @@ void * Decompiler::DecompileWorker(void *args) {
             usleep(sections[index].thread_sleep * 1000);
             continue;
         }
+        sections[index].coverage.insert(address);
         #if defined(__linux__) || defined(__APPLE__)
         pthread_mutex_unlock(&DECOMPILER_MUTEX);
         #endif
@@ -277,14 +276,11 @@ void * Decompiler::DecompileWorker(void *args) {
             #if defined(__linux__) || defined(__APPLE__)
             pthread_mutex_lock(&DECOMPILER_MUTEX);
             #endif
-            if (result == true && IsEndInsn(insn) == true && myself.pc < sections[index].data_size) {
-                tmp_addr = myself.pc+sizeof(insn->bytes);
-                if (IsVisited(sections[index].visited, tmp_addr) == false &&
-                    tmp_addr < sections[index].data_size) {
-                    sections[index].discovered.push(tmp_addr);
-                    sections[index].addresses[tmp_addr] = DECOMPILER_OPERAND_TYPE_FUNCTION;
-                    sections[index].visited[tmp_addr] = DECOMPILER_VISITED_QUEUED;
-                }
+
+            if (result == true){
+                sections[index].coverage.insert(myself.pc);
+            } else {
+                sections[index].coverage.insert(myself.pc+1);
             }
             CollectInsn(insn, sections, index);
 
@@ -401,6 +397,13 @@ void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint ind
             #endif
         }
         if (sections[index].discovered.empty()){
+            uint64_t tmp_addr = MaxAddress(sections[index].coverage);
+            if (tmp_addr < sections[index].data_size){
+                sections[index].discovered.push(tmp_addr);
+                sections[index].addresses[tmp_addr] = DECOMPILER_OPERAND_TYPE_FUNCTION;
+                sections[index].visited[tmp_addr] = DECOMPILER_VISITED_QUEUED;
+                continue;
+            }
             break;
         }
     }
@@ -633,6 +636,14 @@ void Decompiler::CollectOperands(cs_insn* insn, int operand_type, struct Section
                 break;
         }
     }
+}
+
+uint64_t Decompiler::MaxAddress(set<uint64_t> coverage){
+    uint64_t max_element;
+    if (!coverage.empty()){
+        max_element = *(coverage.rbegin());
+    }
+    return max_element;
 }
 
 bool Decompiler::IsAddress(map<uint64_t, uint> &addresses, uint64_t address, uint index){

@@ -1,5 +1,6 @@
 #include <vector>
 #include <queue>
+#include <set>
 #include <capstone/capstone.h>
 #include "common.h"
 #include "json.h"
@@ -69,6 +70,7 @@ namespace binlex {
             uint ntraits;
             void *data;
             size_t data_size;
+            set<uint64_t> coverage;
             map<uint64_t, uint> addresses;
             map<uint64_t, int> visited;
             queue<uint64_t> discovered;
@@ -137,6 +139,7 @@ namespace binlex {
         @return edges if > 0; then is conditional
         */
         static uint IsConditionalInsn(cs_insn *insn);
+        static uint64_t MaxAddress(set<uint64_t> coverage);
         /**
         Checks if Address if Function
         @param address address to check
