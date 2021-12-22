@@ -45,6 +45,7 @@ Decompiler::Decompiler() {
         sections[i].thread_cycles = 1;
         sections[i].thread_sleep = 500;
         sections[i].corpus = NULL;
+        sections[i].instructions = false;
     }
 }
 
@@ -107,13 +108,14 @@ void Decompiler::AppendTrait(struct Trait *trait, struct Section *sections, uint
     #endif
 }
 
-bool Decompiler::Setup(cs_arch arch, cs_mode mode, char *corpus, uint threads, uint thread_cycles, useconds_t thread_sleep, uint index){
+bool Decompiler::Setup(cs_arch arch, cs_mode mode, bool instructions, char *corpus, uint threads, uint thread_cycles, useconds_t thread_sleep, uint index){
     sections[index].arch = arch;
     sections[index].mode = mode;
     sections[index].threads = threads;
     sections[index].thread_cycles = thread_cycles;
     sections[index].thread_sleep = thread_sleep;
     sections[index].corpus = corpus;
+    sections[index].instructions = instructions;
     return true;
 }
 
@@ -176,7 +178,10 @@ void * Decompiler::DecompileWorker(void *args) {
 
     struct Trait b_trait;
     struct Trait f_trait;
+    struct Trait i_trait;
 
+    i_trait.type = (char *)"instruction";
+    ClearTrait(&i_trait);
     b_trait.type = (char *)"block";
     ClearTrait(&b_trait);
     f_trait.type = (char *)"function";
@@ -240,8 +245,29 @@ void * Decompiler::DecompileWorker(void *args) {
             b_trait.instructions++;
             f_trait.instructions++;
 
+            if (sections[index].instructions == true){
+                if (result == true){
+                    i_trait.tmp_bytes = HexdumpBE(insn->bytes, insn->size);
+                    i_trait.size = GetByteSize(i_trait.tmp_bytes);
+                    i_trait.offset = sections[index].offset + myself.pc - i_trait.size;
+                    i_trait.tmp_trait = WildcardInsn(insn);
+                    i_trait.instructions = 1;
+                    i_trait.edges = IsConditionalInsn(insn);
+                    AppendTrait(&i_trait, sections, index);
+                    ClearTrait(&i_trait);
+                } else {
+                    i_trait.instructions = 1;
+                    i_trait.invalid_instructions = 1;
+                    i_trait.tmp_bytes = i_trait.tmp_bytes + HexdumpBE(myself.code, 1) + " ";
+                    i_trait.tmp_trait = i_trait.tmp_trait + Wildcards(1) + " ";
+                    AppendTrait(&i_trait, sections, index);
+                    ClearTrait(&i_trait);
+                }
+            }
+
             if (result == true){
                 // Need to Wildcard Traits Here
+
                 if (IsWildcardInsn(insn) == true){
                     b_trait.tmp_trait = b_trait.tmp_trait + Wildcards(insn->size) + " ";
                     f_trait.tmp_trait = f_trait.tmp_trait + Wildcards(insn->size) + " ";
@@ -328,7 +354,9 @@ void * Decompiler::DecompileWorker(void *args) {
 
 void * Decompiler::TraitWorker(void *args){
     struct Trait *trait = (struct Trait *)args;
-    if (trait->blocks == 0){
+    if (trait->blocks == 0 &&
+        (strcmp(trait->type, "function") == 0 ||
+        strcmp(trait->type, "block") == 0)){
         trait->blocks++;
     }
     trait->bytes_entropy = Entropy(string(trait->bytes));

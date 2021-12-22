@@ -63,6 +63,7 @@ namespace binlex {
             cs_mode mode;
             char *corpus;
             uint threads;
+            bool instructions;
             uint thread_cycles;
             useconds_t thread_sleep;
             uint offset;
@@ -87,7 +88,7 @@ namespace binlex {
         @param index section index
         @return bool
         */
-        bool Setup(cs_arch arch, cs_mode mode, char *corpus, uint threads, uint thread_cycles, useconds_t thread_sleep, uint index);
+        bool Setup(cs_arch arch, cs_mode mode, bool instructions, char *corpus, uint threads, uint thread_cycles, useconds_t thread_sleep, uint index);
         /**
         Decompiler Thread Worker
         @param args pointer to worker arguments
