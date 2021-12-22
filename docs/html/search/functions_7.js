@@ -1,5 +1,4 @@
 var searchData=
 [
-  ['removespaces_89',['RemoveSpaces',['../classbinlex_1_1Common.html#af1e434357de3e8b01bd34a17cc645c16',1,'binlex::Common']]],
-  ['removewildcards_90',['RemoveWildcards',['../classbinlex_1_1Common.html#a52a0d5df20a6123bd9d69faea24b05a0',1,'binlex::Common']]]
+  ['printtraits_90',['PrintTraits',['../classbinlex_1_1Decompiler.html#a788f80fd44f34f00084375d4669bd443',1,'binlex::Decompiler']]]
 ];

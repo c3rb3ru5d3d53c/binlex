@@ -1,5 +1,7 @@
 var NAVTREEINDEX1 =
 {
+"structbinlex_1_1IMAGE__OPTIONAL__HEADER__64.html#ac89f65e610fbca1a9f7305335e95e219":[15,0,0,10,12],
+"structbinlex_1_1IMAGE__OPTIONAL__HEADER__64.html#aca48ab3ee68a7a9ad763ba0ab40754ac":[15,0,0,10,25],
 "structbinlex_1_1IMAGE__OPTIONAL__HEADER__64.html#ad62e0ac6b0e8891be7611ff362ea6d50":[15,0,0,10,11],
 "structbinlex_1_1IMAGE__OPTIONAL__HEADER__64.html#adcc2d19d025718f030828832a0fb3bd3":[15,0,0,10,1],
 "structbinlex_1_1IMAGE__OPTIONAL__HEADER__64.html#ae4d98b972ab16bb8255f7a69cd142144":[15,0,0,10,15],

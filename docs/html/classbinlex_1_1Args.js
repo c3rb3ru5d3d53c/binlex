@@ -22,5 +22,6 @@ var classbinlex_1_1Args =
     [ "thread_cycles", "classbinlex_1_1Args.html#aaf8810b7aaa68162201ff53f239521cc", null ],
     [ "thread_sleep", "classbinlex_1_1Args.html#a1f0dc547c7a744875288103bd6bb691e", null ],
     [ "threads", "classbinlex_1_1Args.html#af852011c5cdef9d5503970276552d659", null ],
+    [ "timeout", "classbinlex_1_1Args.html#a6a683acd46aa88bd1d62ed7f74c460f7", null ],
     [ "version", "classbinlex_1_1Args.html#ac612b207d3378af1b0a30d701091bc8a", null ]
 ];

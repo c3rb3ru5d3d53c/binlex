@@ -3,6 +3,7 @@ var structbinlex_1_1Decompiler_1_1Section =
     [ "addresses", "structbinlex_1_1Decompiler_1_1Section.html#a806c48881ca4ca0a601d65d43a7ac016", null ],
     [ "arch", "structbinlex_1_1Decompiler_1_1Section.html#a668e6f96289ebae44e6a0cc6f06e1b46", null ],
     [ "corpus", "structbinlex_1_1Decompiler_1_1Section.html#ad72f94a2f517b0fa6e9ab03229bced2a", null ],
+    [ "coverage", "structbinlex_1_1Decompiler_1_1Section.html#add47fadfaeaa63a7ac733a1a4ca9e142", null ],
     [ "data", "structbinlex_1_1Decompiler_1_1Section.html#a2bf16240eede8bd9fe0a3ac3a398c9d1", null ],
     [ "data_size", "structbinlex_1_1Decompiler_1_1Section.html#a1bd97ab7f60be6348fdfc7c9226c287e", null ],
     [ "discovered", "structbinlex_1_1Decompiler_1_1Section.html#a42c1f940ded2047679bfed897c85bbe2", null ],
