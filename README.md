@@ -55,7 +55,8 @@ binlex -m elf:x86 -i tests/elf/elf.x86
 **Binary Release:** See the [`releases`](https://github.com/c3rb3ru5d3d53c/binlex/releases) page.
 
 **NOTE:**
-- ZIP files in the `tests/` directory can be extracted using the password `infected`
+- To download all the test samples do the command `git lfs fetch`
+- ZIP files in the `tests/` directory can then be extracted using the password `infected`
 
 # Basic Usage
 
