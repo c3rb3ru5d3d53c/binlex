@@ -139,6 +139,11 @@ namespace binlex {
         @return edges if > 0; then is conditional
         */
         static uint IsConditionalInsn(cs_insn *insn);
+        /**
+        Checks Code Coverage for Max Address
+        @param coverage set of addresses decompiled
+        @return the maximum address from the set
+        */
         static uint64_t MaxAddress(set<uint64_t> coverage);
         /**
         Checks if Address if Function
