@@ -57,7 +57,7 @@ int main(int argc, char **argv){
             return 1;
         }
         Decompiler decompiler;
-        decompiler.Setup(CS_ARCH_X86, CS_MODE_64, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_64, args.options.instructions, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
         for (int i = 0; i < ELF_MAX_SECTIONS; i++){
             if (elfx86_64.sections[i].data != NULL){
                 decompiler.Decompile(elfx86_64.sections[i].data, elfx86_64.sections[i].size, elfx86_64.sections[i].offset, i);
@@ -80,7 +80,7 @@ int main(int argc, char **argv){
             return 1;
         }
         Decompiler decompiler;
-        decompiler.Setup(CS_ARCH_X86, CS_MODE_32, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_32, args.options.instructions, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
         for (int i = 0; i < ELF_MAX_SECTIONS; i++){
             if (elfx86.sections[i].data != NULL){
                 decompiler.Decompile(elfx86.sections[i].data, elfx86.sections[i].size, elfx86.sections[i].offset, i);
@@ -103,7 +103,7 @@ int main(int argc, char **argv){
             return 1;
         }
         Decompiler decompiler;
-        decompiler.Setup(CS_ARCH_X86, CS_MODE_32, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_32, args.options.instructions, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
         for (int i = 0; i < PE_MAX_SECTIONS; i++){
             if (pe32.sections[i].data != NULL){
                 decompiler.Decompile(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, i);
@@ -126,7 +126,7 @@ int main(int argc, char **argv){
             return 1;
         }
         Decompiler decompiler;
-        decompiler.Setup(CS_ARCH_X86, CS_MODE_64, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_64, args.options.instructions, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
         for (int i = 0; i < PE_MAX_SECTIONS; i++){
             if (pe64.sections[i].data != NULL){
                 decompiler.Decompile(pe64.sections[i].data, pe64.sections[i].size, pe64.sections[i].offset, i);
@@ -144,7 +144,7 @@ int main(int argc, char **argv){
         Raw rawx86;
         rawx86.ReadFile(args.options.input, 0);
         Decompiler decompiler;
-        decompiler.Setup(CS_ARCH_X86, CS_MODE_32, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_32, args.options.instructions, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
         decompiler.Decompile(rawx86.sections[0].data, rawx86.sections[0].size, rawx86.sections[0].offset, 0);
         if (args.options.output == NULL){
             decompiler.PrintTraits(args.options.pretty);
@@ -158,7 +158,7 @@ int main(int argc, char **argv){
         Raw rawx86_64;
         rawx86_64.ReadFile(args.options.input, 0);
         Decompiler decompiler;
-        decompiler.Setup(CS_ARCH_X86, CS_MODE_64, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_64, args.options.instructions, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
         decompiler.Decompile(rawx86_64.sections[0].data, rawx86_64.sections[0].size, rawx86_64.sections[0].offset, 0);
         if (args.options.output == NULL){
             decompiler.PrintTraits(args.options.pretty);

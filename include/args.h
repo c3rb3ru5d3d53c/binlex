@@ -26,6 +26,7 @@ namespace binlex{
                 useconds_t thread_sleep;
                 bool help;
                 bool list_modes;
+                bool instructions;
                 char *mode;
                 char *corpus;
                 bool pretty;

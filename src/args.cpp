@@ -14,6 +14,7 @@ Args::Args(){
 
 void Args::SetDefault(){
     options.timeout = 0;
+    options.instructions = false;
     options.input = NULL;
     options.threads = 1;
     options.thread_cycles = 4;
@@ -69,16 +70,17 @@ void Args::print_help(){
         "binlex %s - A Binary Genetic Traits Lexer\n"
         "  -i  --input\t\tinput file\t\t(required)\n"
         "  -m  --mode\t\tset mode\t\t(required)\n"
-        "  -lm --list-modes\tlist modes\n"
+        "  -lm --list-modes\tlist modes\t\t(optional)\n"
+        "      --instructions\tinclude insn traits\t(optional)\n"
         "  -c  --corpus\t\tcorpus name\t\t(optional)\n"
         "  -t  --threads\t\tnumber of threads\t(optional)\n"
         "  -tc --thread-cycles\tthread wait cycles\t(optional)\n"
         "  -ts --thread-sleep\tthread sleep in ms\t(optional)\n"
         "  -to --timeout\t\texecution timeout in s\t(optional)\n"
-        "  -h  --help\t\tdisplay help\n"
+        "  -h  --help\t\tdisplay help\t\t(optional)\n"
         "  -o  --output\t\toutput file\t\t(optional)\n"
         "  -p  --pretty\t\tpretty output\t\t(optional)\n"
-        "  -v  --version\t\tdisplay version\n"
+        "  -v  --version\t\tdisplay version\t\t(optional)\n"
         "Author: @c3rb3ru5d3d53c\n",
         version
     );
@@ -118,6 +120,9 @@ void Args::parse(int argc, char **argv){
         if (strcmp(argv[i], (char *)"-p") == 0 ||
             strcmp(argv[i], (char *)"--pretty") == 0){
             options.pretty = true;
+        }
+        if (strcmp(argv[i], (char *)"--instructions") == 0){
+            options.instructions = true;
         }
         if (strcmp(argv[i], (char *)"-t") == 0 ||
             strcmp(argv[i], (char *)"--threads") == 0){
