@@ -1,0 +1,17 @@
+image: Ubuntu2004
+
+environment:
+  APPVEYOR_YML_DISABLE_PS_LINUX: true
+
+install:
+- sudo apt install -y git build-essential libcapstone-dev libssl-dev cmake make parallel doxygen git-lfs
+
+test_script:
+- make threads=4
+
+artifacts:
+  - path: build/*.deb
+  - path: build/*.rpm
+  - path: build/*.tar.gz
+
+build: off
