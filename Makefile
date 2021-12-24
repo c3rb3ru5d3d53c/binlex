@@ -18,8 +18,8 @@ docs-update:
 	cp -r build/docs/html/ docs/
 
 deb:
-	dpkg-buildpackage --build=binary --root-command=fakeroot --no-sign --post-clean && \
-	make clean
+	cd build/
+		cpack
 
 install:
 	cd build/ && \
