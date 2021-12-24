@@ -17,6 +17,10 @@ docs-update:
 	rm -rf docs/html/
 	cp -r build/docs/html/ docs/
 
+deb:
+	dpkg-buildpackage --build=binary --root-command=fakeroot --no-sign --post-clean && \
+	make clean
+
 install:
 	cd build/ && \
 		make install && \
