@@ -131,21 +131,61 @@ Installing</h1>
 <li>To download all the test samples do the command <code>git lfs fetch</code></li>
 <li>ZIP files in the <code>tests/</code> directory can then be extracted using the password <code>infected</code></li>
 </ul>
-<p><b>Building DEB Packages:</b></p>
+<p><b>Building Packages:</b></p>
 <p>Additionally, another option is to build Debian binary packages for and install those.</p>
-<p>For a more modern build of <code>deb</code> packages use <code>cpack</code>, which comes with <code>cmake</code>.</p>
+<p>To build packages use <code>cpack</code>, which comes with <code>cmake</code>.</p>
 <div class="fragment"><div class="line">sudo apt install -y git build-essential \</div>
 <div class="line">                    libcapstone-dev libssl-dev \</div>
 <div class="line">                    cmake make parallel \</div>
-<div class="line">                    doxygen git-lfs</div>
+<div class="line">                    doxygen git-lfs rpm</div>
 <div class="line">git clone --recursive https://github.com/c3rb3ru5d3d53c/binlex.git</div>
 <div class="line">cd binlex/</div>
 <div class="line">make threads=4</div>
-<div class="line">make deb</div>
+<div class="line">make pkg</div>
 <div class="line">sudo apt install ./build/binlex_1.1.1_amd64.deb</div>
 <div class="line"># Test your installation</div>
 <div class="line">binlex -m elf:x86 -i tests/elf/elf.x86</div>
-</div><!-- fragment --><h1><a class="anchor" id="autotoc_md5"></a>
+</div><!-- fragment --><p>You will then be provided with a <code>.deb</code>, <code>.rpm</code> and <code>.tar.gz</code> packages for <code>binlex</code>.</p>
+<p><b>Building the Database:</b></p>
+<p>You can create a <code>mongodb</code> database for <code>binlex</code> very easily.</p>
+<p>When your <code>binlex</code> database is created it will add the default collections <code>default</code>, <code>malware</code> and <code>goodware</code>.</p>
+<div class="fragment"><div class="line"># Install Docker Dependencies</div>
+<div class="line">sudo apt install -y docker.io docker-compose</div>
+<div class="line"> </div>
+<div class="line"># Install MongoDB CLI Tools</div>
+<div class="line">wget https://fastdl.mongodb.org/tools/db/mongodb-database-tools-ubuntu2004-x86_64-100.5.1.deb</div>
+<div class="line">sudo apt install ./mongodb-database-tools-ubuntu2004-x86_64-100.5.1.deb</div>
+<div class="line"> </div>
+<div class="line"># Install MongoDB Compass</div>
+<div class="line">wget https://downloads.mongodb.com/compass/mongodb-compass_1.29.6_amd64.deb</div>
+<div class="line">sudo apt install ./mongodb-compass_1.29.6_amd64.deb</div>
+<div class="line"> </div>
+<div class="line"># Add user to docker group for non-root docker (requires login/logout)</div>
+<div class="line">sudo usermod -a -G docker $USER</div>
+<div class="line">sudo systemctl enable docker</div>
+<div class="line"> </div>
+<div class="line"># Build the Database</div>
+<div class="line">make database admin_user=admin admin_pass=changeme user=binlex pass=changeme</div>
+<div class="line"> </div>
+<div class="line"># Start the Database</div>
+<div class="line">make database-start</div>
+<div class="line"> </div>
+<div class="line"># Stop the Database</div>
+<div class="line">make database-stop</div>
+</div><!-- fragment --><p>Your connection string per user in this case would be:</p><ul>
+<li>binlex - <code>mongodb://binlex:changeme@127.0.0.1/?authSource=binlex</code> (for trait collection)</li>
+<li>admin - <code>mongodb://admin:changeme@127.0.0.1</code> (for administration)</li>
+</ul>
+<p>To administrate the database connect to <code>mongo-express</code> at <code><a href="http://127.0.0.1:8081">http://127.0.0.1:8081</a></code>, with the username <code>admin</code> and the password you setup.</p>
+<p>Adding traits into your database is just as simple as piping your <code>binlex</code> output to the utility <code>mongoimport</code>.</p>
+<div class="fragment"><div class="line"># Example Trait Collection into Database</div>
+<div class="line">binlex -m pe:x86 -i tests/pe/pe.emotet.x86 -t 4 --corpus malware.emotet | mongoimport --db binlex -c malware -u binlex -p changeme --authenticationDatabase binlex</div>
+</div><!-- fragment --><p>We recommend using <code>collections</code> as your main corpus name, so for example the corpus <code>malware.emotet</code> would go in the <code>malware</code> collection.</p>
+<p>By default, <code>binlex</code> will use the corpus name <code>default</code>, which means you will in this case use the collection <code>default</code>.</p>
+<p>Using the <code>default</code> corpus and collection is a great playground to store traits for initial analysis, while the <code>malware</code> and <code>goodware</code> corpus a great for long-term and confident storage of traits.</p>
+<p>If you have a team of malware analysts you may need to add additional databases and users.</p>
+<p>For that purpose you will need to create new users with the <code>admin</code> account and read MongoDB's user and roles management docs <a href="https://docs.mongodb.com/manual/tutorial/manage-users-and-roles/">here</a>.</p>
+<h1><a class="anchor" id="autotoc_md5"></a>
 Basic Usage</h1>
 <div class="fragment"><div class="line">binlex v1.1.1 - A Binary Genetic Traits Lexer</div>
 <div class="line">  -i  --input           input file              (required)</div>
