@@ -39,24 +39,61 @@ Get slides [here](docs/oalabs.pdf).
 
 # Installing
 
-**From Source:**
+## From Source:
 
 Please note that `binlex` requires `cmake` >= 3.5 and `make` >= 4.2.1.
 
-```bash
-sudo apt install -y git build-essential libcapstone-dev cmake make parallel doxygen git-lfs
+### Via `make install`
+If you want to compile and install via `make install` run the following commands:
+
+```bash'
+sudo apt install -y git build-essential \
+                    libcapstone-dev libssl-dev \
+                    cmake make parallel \
+                    doxygen git-lfs 
 git clone --recursive https://github.com/c3rb3ru5d3d53c/binlex.git
 cd binlex/
 make threads=4
 sudo make install
+
+# Test your installation
 binlex -m elf:x86 -i tests/elf/elf.x86
 ```
 
 **Binary Release:** See the [`releases`](https://github.com/c3rb3ru5d3d53c/binlex/releases) page.
-
+ 
 **NOTE:**
 - To download all the test samples do the command `git lfs fetch`
 - ZIP files in the `tests/` directory can then be extracted using the password `infected`
+
+### Via `.deb`-files:
+Additionally, another option is to build Debian binary packages for and install those. 
+In order to do so, run `make deb`, which runs all necessary configuration and compilation steps (utilizing `dpkg-buildpackage`). 
+
+```bash
+# Install general dependencies
+sudo apt install -y git build-essential \
+                    make cmake \
+                    libcapstone-dev libssl-dev \
+
+# Install packaging-specific dependency
+sudo apt install packaging-dev 
+
+# Build the .deb-files (placed in ..)
+make deb 
+
+# Install the newly created .deb-files
+sudo apt install ../libbinlex_1.1.0-1_amd64.deb \
+                 ../binlex_1.1.0-1_amd64.deb \
+                 ../blyara_1.1.0-1_amd64.deb
+
+# Clean up
+rm ../*{binlex,blyara}**_amd64.deb
+
+# Test your installation
+binlex -m elf:x86 -i tests/elf/elf.x86
+```
+
 
 # Basic Usage
 
