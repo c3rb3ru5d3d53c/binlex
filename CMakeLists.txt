@@ -78,7 +78,7 @@ add_custom_target(uninstall
     "${CMAKE_COMMAND}" -P "${CMAKE_MODULE_PATH}/uninstall.cmake"
 )
 
-SET(CPACK_GENERATOR "DEB")
+SET(CPACK_GENERATOR DEB RPM TGZ)
 set(CPACK_PACKAGE_NAME binlex)
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Binary Genetic Traits Lexer Utilities and C++ Library"
     CACHE STRING "Binary Genetic Traits Lexer Utilities and C++ Library"
