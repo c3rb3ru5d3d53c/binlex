@@ -69,36 +69,21 @@ binlex -m elf:x86 -i tests/elf/elf.x86
 
 Additionally, another option is to build Debian binary packages for and install those.
 
-For a more modern build of `deb` packages use `cpack`, which comes with `cmake`:
+For a more modern build of `deb` packages use `cpack`, which comes with `cmake`.
+
 ```bash
+sudo apt install -y git build-essential \
+                    libcapstone-dev libssl-dev \
+                    cmake make parallel \
+                    doxygen git-lfs
+git clone --recursive https://github.com/c3rb3ru5d3d53c/binlex.git
+cd binlex/
 make threads=4
 make deb
 sudo apt install ./build/binlex_1.1.1_amd64.deb
 # Test your installation
 binlex -m elf:x86 -i tests/elf/elf.x86
 ```
-
-For the official `debian` supported method use `dpkg-buildpackage`:
-
-```bash
-# Install packaging-specific dependency
-sudo apt install packaging-dev
-
-# Build the .deb-files (placed in ..)
-dpkg-buildpackage --build=binary --root-command=fakeroot --no-sign --post-clean
-
-# Install the newly created .deb-files
-sudo apt install ../libbinlex_1.1.0-1_amd64.deb \
-                 ../binlex_1.1.0-1_amd64.deb \
-                 ../blyara_1.1.0-1_amd64.deb
-
-# Clean up
-rm ../*{binlex,blyara}**_amd64.deb
-
-# Test your installation
-binlex -m elf:x86 -i tests/elf/elf.x86
-```
-
 
 # Basic Usage
 
