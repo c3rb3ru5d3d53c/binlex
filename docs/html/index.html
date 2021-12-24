@@ -114,18 +114,38 @@ Use Cases</h1>
 Installing</h1>
 <p><b>From Source:</b></p>
 <p>Please note that <code>binlex</code> requires <code>cmake</code> &gt;= 3.5 and <code>make</code> &gt;= 4.2.1.</p>
-<div class="fragment"><div class="line">sudo apt install -y git build-essential libcapstone-dev cmake make parallel doxygen git-lfs</div>
+<p>If you want to compile and install via <code>make install</code> run the following commands:</p>
+<div class="fragment"><div class="line">sudo apt install -y git build-essential \</div>
+<div class="line">                    libcapstone-dev libssl-dev \</div>
+<div class="line">                    cmake make parallel \</div>
+<div class="line">                    doxygen git-lfs</div>
 <div class="line">git clone --recursive https://github.com/c3rb3ru5d3d53c/binlex.git</div>
 <div class="line">cd binlex/</div>
 <div class="line">make threads=4</div>
 <div class="line">sudo make install</div>
+<div class="line"> </div>
+<div class="line"># Test your installation</div>
 <div class="line">binlex -m elf:x86 -i tests/elf/elf.x86</div>
 </div><!-- fragment --><p><b>Binary Release:</b> See the <a href="https://github.com/c3rb3ru5d3d53c/binlex/releases"><code>releases</code></a> page.</p>
 <p><b>NOTE:</b></p><ul>
 <li>To download all the test samples do the command <code>git lfs fetch</code></li>
 <li>ZIP files in the <code>tests/</code> directory can then be extracted using the password <code>infected</code></li>
 </ul>
-<h1><a class="anchor" id="autotoc_md5"></a>
+<p><b>Building DEB Packages:</b></p>
+<p>Additionally, another option is to build Debian binary packages for and install those.</p>
+<p>For a more modern build of <code>deb</code> packages use <code>cpack</code>, which comes with <code>cmake</code>.</p>
+<div class="fragment"><div class="line">sudo apt install -y git build-essential \</div>
+<div class="line">                    libcapstone-dev libssl-dev \</div>
+<div class="line">                    cmake make parallel \</div>
+<div class="line">                    doxygen git-lfs</div>
+<div class="line">git clone --recursive https://github.com/c3rb3ru5d3d53c/binlex.git</div>
+<div class="line">cd binlex/</div>
+<div class="line">make threads=4</div>
+<div class="line">make deb</div>
+<div class="line">sudo apt install ./build/binlex_1.1.1_amd64.deb</div>
+<div class="line"># Test your installation</div>
+<div class="line">binlex -m elf:x86 -i tests/elf/elf.x86</div>
+</div><!-- fragment --><h1><a class="anchor" id="autotoc_md5"></a>
 Basic Usage</h1>
 <div class="fragment"><div class="line">binlex v1.1.1 - A Binary Genetic Traits Lexer</div>
 <div class="line">  -i  --input           input file              (required)</div>
@@ -272,7 +292,7 @@ C++ API Example Code</h1>
 <div class="line">      <span class="keywordflow">return</span> 1;</div>
 <div class="line">  }</div>
 <div class="line">  <a class="code" href="classbinlex_1_1Decompiler.html">Decompiler</a> decompiler;</div>
-<div class="line">  decompiler.<a class="code" href="classbinlex_1_1Decompiler.html#addb97b20de09a26c2f16281f60818fad">Setup</a>(CS_ARCH_X86, CS_MODE_32);</div>
+<div class="line">  decompiler.<a class="code" href="classbinlex_1_1Decompiler.html#af3d036bd78c7bf378bb6319a9527416d">Setup</a>(CS_ARCH_X86, CS_MODE_32);</div>
 <div class="line">  <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; PE_MAX_SECTIONS; i++){</div>
 <div class="line">      <span class="keywordflow">if</span> (pe32.sections[i].data != NULL){</div>
 <div class="line">          decompiler.x86_64(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, i);</div>
@@ -317,10 +337,10 @@ Contributing</h1>
 </div></div><!-- PageDoc -->
 </div><!-- contents -->
 </div><!-- doc-content -->
-<div class="ttc" id="aclassbinlex_1_1Decompiler_html_addb97b20de09a26c2f16281f60818fad"><div class="ttname"><a href="classbinlex_1_1Decompiler.html#addb97b20de09a26c2f16281f60818fad">binlex::Decompiler::Setup</a></div><div class="ttdeci">bool Setup(cs_arch arch, cs_mode mode, char *corpus, uint threads, uint thread_cycles, useconds_t thread_sleep, uint index)</div></div>
 <div class="ttc" id="aclassbinlex_1_1Decompiler_html_a788f80fd44f34f00084375d4669bd443"><div class="ttname"><a href="classbinlex_1_1Decompiler.html#a788f80fd44f34f00084375d4669bd443">binlex::Decompiler::PrintTraits</a></div><div class="ttdeci">void PrintTraits(bool pretty)</div></div>
 <div class="ttc" id="aclassbinlex_1_1Decompiler_html"><div class="ttname"><a href="classbinlex_1_1Decompiler.html">binlex::Decompiler</a></div><div class="ttdef"><b>Definition:</b> decompiler.h:27</div></div>
 <div class="ttc" id="aclassbinlex_1_1Pe_html"><div class="ttname"><a href="classbinlex_1_1Pe.html">binlex::Pe</a></div><div class="ttdef"><b>Definition:</b> pe.h:409</div></div>
+<div class="ttc" id="aclassbinlex_1_1Decompiler_html_af3d036bd78c7bf378bb6319a9527416d"><div class="ttname"><a href="classbinlex_1_1Decompiler.html#af3d036bd78c7bf378bb6319a9527416d">binlex::Decompiler::Setup</a></div><div class="ttdeci">bool Setup(cs_arch arch, cs_mode mode, bool instructions, char *corpus, uint threads, uint thread_cycles, useconds_t thread_sleep, uint index)</div></div>
 <div class="ttc" id="anamespacebinlex_html"><div class="ttname"><a href="namespacebinlex.html">binlex</a></div><div class="ttdoc">the binlex namespace</div></div>
 <!-- start footer part -->
 <div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
