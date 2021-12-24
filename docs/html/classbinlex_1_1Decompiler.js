@@ -8,7 +8,7 @@ var classbinlex_1_1Decompiler =
     [ "FreeTraits", "classbinlex_1_1Decompiler.html#a8d62e986cf4c4d4604b0ec6650bb5735", null ],
     [ "IsAddress", "classbinlex_1_1Decompiler.html#a7165e80d5392769bdc08e02151fe7381", null ],
     [ "PrintTraits", "classbinlex_1_1Decompiler.html#a788f80fd44f34f00084375d4669bd443", null ],
-    [ "Setup", "classbinlex_1_1Decompiler.html#addb97b20de09a26c2f16281f60818fad", null ],
+    [ "Setup", "classbinlex_1_1Decompiler.html#af3d036bd78c7bf378bb6319a9527416d", null ],
     [ "WriteTraits", "classbinlex_1_1Decompiler.html#ac50cdc13964e9a1a40a6d09fd838fde7", null ],
     [ "sections", "classbinlex_1_1Decompiler.html#afcba0f93a71ab4ce1237bac70a4b43d9", null ]
 ];

@@ -12,6 +12,7 @@ var classbinlex_1_1Args =
     [ "corpus", "classbinlex_1_1Args.html#a4f92767e75f118eeb46a5a94155613f7", null ],
     [ "help", "classbinlex_1_1Args.html#a2491b08ed8671ee298f81a4bb8a55edc", null ],
     [ "input", "classbinlex_1_1Args.html#a58f6c480ae8b6252daa8ab5d9b6424a9", null ],
+    [ "instructions", "classbinlex_1_1Args.html#a3df7beb1118fb21b054ec86ef5314b34", null ],
     [ "io_type", "classbinlex_1_1Args.html#a1081246280cb0c7db1996e7ec8ad1a4f", null ],
     [ "list_modes", "classbinlex_1_1Args.html#a43a0dfcdb95d728359660a3fc2511bf9", null ],
     [ "mode", "classbinlex_1_1Args.html#a27df5d13ba0e523d6fe7c9e7cd3846ae", null ],
