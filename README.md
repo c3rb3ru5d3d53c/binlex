@@ -12,6 +12,10 @@ The simple command-line interface allows malware researchers and analysts to hun
 
 While the C++ API allows developers to get creative with their own detection solutions.
 
+[![GitHub stars](https://img.shields.io/github/stars/c3rb3ru5d3d53c/binlex)](https://github.com/c3rb3ru5d3d53c/binlex/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/c3rb3ru5d3d53c/binlex)](https://github.com/c3rb3ru5d3d53c/binlex/network)
+[![GitHub license](https://img.shields.io/github/license/c3rb3ru5d3d53c/binlex)](https://github.com/c3rb3ru5d3d53c/binlex/blob/master/LICENSE)
+
 # Demos
 
 <p align="center">
