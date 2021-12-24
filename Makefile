@@ -18,7 +18,7 @@ docs-update:
 	cp -r build/docs/html/ docs/
 
 deb:
-	cd build/
+	cd build/ && \
 		cpack
 
 install:
