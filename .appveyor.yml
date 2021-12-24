@@ -8,6 +8,7 @@ install:
 
 test_script:
 - make threads=4
+- make pkg
 
 artifacts:
   - path: build/*.deb
