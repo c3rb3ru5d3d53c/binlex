@@ -80,7 +80,9 @@ add_custom_target(uninstall
 
 SET(CPACK_GENERATOR "DEB")
 set(CPACK_PACKAGE_NAME binlex)
-set(CPACK_PACKAGE_DESCRIPTION "A Binary Genetic Traits Lexer and C++ Library")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Binary Genetic Traits Lexer Utilities and C++ Library"
+    CACHE STRING "Binary Genetic Traits Lexer Utilities and C++ Library"
+)
 set(CPACK_RESOURCE_FILE_LICENSE "")
 set(CPACK_PACKAGE_VERSION_MAJOR ${VERSION_MAJOR})
 set(CPACK_PACKAGE_VERSION_MINOR ${VERSION_MINOR})
