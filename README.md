@@ -45,7 +45,7 @@ Please note that `binlex` requires `cmake` >= 3.5 and `make` >= 4.2.1.
 
 If you want to compile and install via `make install` run the following commands:
 
-```bash'
+```bash
 sudo apt install -y git build-essential \
                     libcapstone-dev libssl-dev \
                     cmake make parallel \
