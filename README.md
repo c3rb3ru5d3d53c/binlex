@@ -65,25 +65,27 @@ binlex -m elf:x86 -i tests/elf/elf.x86
 - To download all the test samples do the command `git lfs fetch`
 - ZIP files in the `tests/` directory can then be extracted using the password `infected`
 
-**Building DEB Packages:**
+**Building Packages:**
 
 Additionally, another option is to build Debian binary packages for and install those.
 
-For a more modern build of `deb` packages use `cpack`, which comes with `cmake`.
+To build packages use `cpack`, which comes with `cmake`.
 
 ```bash
 sudo apt install -y git build-essential \
                     libcapstone-dev libssl-dev \
                     cmake make parallel \
-                    doxygen git-lfs
+                    doxygen git-lfs rpm
 git clone --recursive https://github.com/c3rb3ru5d3d53c/binlex.git
 cd binlex/
 make threads=4
-make deb
+make pkg
 sudo apt install ./build/binlex_1.1.1_amd64.deb
 # Test your installation
 binlex -m elf:x86 -i tests/elf/elf.x86
 ```
+
+You will then be provided with a `.deb`, `.rpm` and `.tar.gz` packages for `binlex`.
 
 # Basic Usage
 

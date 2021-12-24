@@ -17,7 +17,7 @@ docs-update:
 	rm -rf docs/html/
 	cp -r build/docs/html/ docs/
 
-deb:
+pkg:
 	cd build/ && \
 		cpack
 
