@@ -87,6 +87,61 @@ binlex -m elf:x86 -i tests/elf/elf.x86
 
 You will then be provided with a `.deb`, `.rpm` and `.tar.gz` packages for `binlex`.
 
+**Building the Database:**
+
+You can create a `mongodb` database for `binlex` very easily.
+
+When your `binlex` database is created it will add the default collections `default`, `malware` and `goodware`.
+
+```bash
+# Install Docker Dependencies
+sudo apt install -y docker.io docker-compose
+
+# Install MongoDB CLI Tools
+wget https://fastdl.mongodb.org/tools/db/mongodb-database-tools-ubuntu2004-x86_64-100.5.1.deb
+sudo apt install ./mongodb-database-tools-ubuntu2004-x86_64-100.5.1.deb
+
+# Install MongoDB Compass
+wget https://downloads.mongodb.com/compass/mongodb-compass_1.29.6_amd64.deb
+sudo apt install ./mongodb-compass_1.29.6_amd64.deb
+
+# Add user to docker group for non-root docker (requires login/logout)
+sudo usermod -a -G docker $USER
+sudo systemctl enable docker
+
+# Build the Database
+make database admin_user=admin admin_pass=changeme user=binlex pass=changeme
+
+# Start the Database
+make database-start
+
+# Stop the Database
+make database-stop
+```
+
+Your connection string per user in this case would be:
+- binlex - `mongodb://binlex:changeme@127.0.0.1/?authSource=binlex` (for trait collection)
+- admin - `mongodb://admin:changeme@127.0.0.1` (for administration)
+
+To administrate the database connect to `mongo-express` at `http://127.0.0.1:8081`, with the username `admin` and the password you setup.
+
+Adding traits into your database is just as simple as piping your `binlex` output to the utility `mongoimport`.
+
+```bash
+# Example Trait Collection into Database
+binlex -m pe:x86 -i tests/pe/pe.emotet.x86 -t 4 --corpus malware.emotet | mongoimport --db binlex -c malware -u binlex -p changeme --authenticationDatabase binlex
+```
+
+We recommend using `collections` as your main corpus name, so for example the corpus `malware.emotet` would go in the `malware` collection.
+
+By default, `binlex` will use the corpus name `default`, which means you will in this case use the collection `default`.
+
+Using the `default` corpus and collection is a great playground to store traits for initial analysis, while the `malware` and `goodware` corpus a great for long-term and confident storage of traits.
+
+If you have a team of malware analysts you may need to add additional databases and users.
+
+For that purpose you will need to create new users with the `admin` account and read MongoDB's user and roles management docs [here](https://docs.mongodb.com/manual/tutorial/manage-users-and-roles/).
+
 # Basic Usage
 
 ```text

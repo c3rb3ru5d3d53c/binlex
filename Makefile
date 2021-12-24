@@ -17,6 +17,27 @@ docs-update:
 	rm -rf docs/html/
 	cp -r build/docs/html/ docs/
 
+database:
+	@cd docker/ && \
+		echo "MONGO_ROOT_USER=${admin_user}" > .env && \
+		echo "MONGO_ROOT_PASSWORD=${admin_pass}" >> .env && \
+		echo "MONGOEXPRESS_LOGIN=${admin_user}" >> .env && \
+		echo "MONGOEXPRESS_PASSWORD=${admin_pass}" >> .env && \
+		echo "REDIS_PASSWORD=${admin_pass}" >> .env && \
+		echo "db.createCollection(\"default\");" > .init.js && \
+		echo "db.createCollection(\"malware\");" >> .init.js && \
+		echo "db.createCollection(\"goodware\");" >> .init.js && \
+		echo "db.createUser({user:\"${user}\",pwd:\"${pass}\",roles:[{role:\"readWrite\",db:\"binlex\"}],mechanisms:[\"SCRAM-SHA-1\"]});" >> .init.js && \
+		docker-compose up --no-start
+
+database-start:
+	cd docker/ && \
+		docker-compose up -d
+
+database-stop:
+	cd docker && \
+		docker-compose down
+
 pkg:
 	cd build/ && \
 		cpack
