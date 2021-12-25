@@ -46,6 +46,7 @@ Decompiler::Decompiler() {
         sections[i].thread_sleep = 500;
         sections[i].corpus = NULL;
         sections[i].instructions = false;
+        sections[i].arch_str = NULL;
     }
 }
 
@@ -111,6 +112,12 @@ void Decompiler::AppendTrait(struct Trait *trait, struct Section *sections, uint
 bool Decompiler::Setup(cs_arch arch, cs_mode mode, bool instructions, char *corpus, uint threads, uint thread_cycles, useconds_t thread_sleep, uint index){
     sections[index].arch = arch;
     sections[index].mode = mode;
+    if (arch == CS_ARCH_X86 && mode == CS_MODE_32){
+        sections[index].arch_str = (char *)"x86";
+    }
+    if (arch == CS_ARCH_X86 && mode == CS_MODE_64){
+        sections[index].arch_str = (char *)"x86_64";
+    }
     sections[index].threads = threads;
     sections[index].thread_cycles = thread_cycles;
     sections[index].thread_sleep = thread_sleep;
@@ -123,6 +130,7 @@ string Decompiler::GetTrait(struct Trait *trait, bool pretty){
     json data;
     data["type"] = trait->type;
     data["corpus"] = trait->corpus;
+    data["architecture"] = trait->architecture;
     data["bytes"] = trait->bytes;
     data["trait"] = trait->trait;
     data["edges"] = trait->edges;
@@ -181,10 +189,13 @@ void * Decompiler::DecompileWorker(void *args) {
     struct Trait i_trait;
 
     i_trait.type = (char *)"instruction";
+    i_trait.architecture = sections[index].arch_str;
     ClearTrait(&i_trait);
     b_trait.type = (char *)"block";
+    b_trait.architecture = sections[index].arch_str;
     ClearTrait(&b_trait);
     f_trait.type = (char *)"function";
+    f_trait.architecture = sections[index].arch_str;
     ClearTrait(&f_trait);
 
     myself.error = cs_open(sections[index].arch, sections[index].mode, &myself.handle);
