@@ -41,6 +41,7 @@ namespace binlex {
         struct Trait {
             char *corpus;
             char *type;
+            char *architecture;
             string tmp_bytes;
             char *bytes;
             string tmp_trait;
@@ -61,6 +62,8 @@ namespace binlex {
         struct Section {
             cs_arch arch;
             cs_mode mode;
+            char *arch_str;
+            char *cpu;
             char *corpus;
             uint threads;
             bool instructions;
