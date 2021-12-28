@@ -405,6 +405,15 @@ void Decompiler::ClearTrait(struct Trait *trait){
     trait->bytes_sha256 = NULL;
 }
 
+void Decompiler::AppendQueue(set<uint64_t> &addresses, uint operand_type, uint index){
+    for (auto it = addresses.begin(); it != addresses.end(); ++it){
+        uint64_t tmp_addr = *it;
+        sections[index].discovered.push(tmp_addr);
+        sections[index].visited[tmp_addr] = DECOMPILER_VISITED_QUEUED;
+        sections[index].addresses[tmp_addr] = operand_type;
+    }
+}
+
 void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint index) {
     sections[index].data = data;
     sections[index].data_size = data_size;

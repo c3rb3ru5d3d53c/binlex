@@ -97,6 +97,7 @@ int main(int argc, char **argv){
     if (strcmp(args.options.mode, (char *)"pe:x86") == 0 &&
         args.options.io_type == ARGS_IO_TYPE_FILE){
         PEREV pe32;
+        pe32.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_I386);
         pe32.ReadFile(args.options.input);
         // Pe pe32;
         // if (pe32.Setup(PE_MODE_X86) == false){
@@ -121,17 +122,14 @@ int main(int argc, char **argv){
     }
     if (strcmp(args.options.mode, (char *)"pe:x86_64") == 0 &&
         args.options.io_type == ARGS_IO_TYPE_FILE){
-        Pe pe64;
-        if (pe64.Setup(PE_MODE_X86_64) == false){
-            return 1;
-        }
-        if (pe64.ReadFile(args.options.input) == false){
-            return 1;
-        }
+        PEREV pe64;
+        pe64.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_AMD64);
+        pe64.ReadFile(args.options.input);
         Decompiler decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_64, args.options.instructions, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
-        for (int i = 0; i < PE_MAX_SECTIONS; i++){
+        for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
             if (pe64.sections[i].data != NULL){
+                decompiler.AppendQueue(pe64.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
                 decompiler.Decompile(pe64.sections[i].data, pe64.sections[i].size, pe64.sections[i].offset, i);
             }
         }
