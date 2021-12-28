@@ -208,6 +208,7 @@ namespace binlex {
         */
         void WriteTraits(char *file_path, bool pretty);
         static void * TraitWorker(void *args);
+        void AppendQueue(set<uint64_t> &addresses, uint operand_type, uint index);
         //void Seek(uint offset, uint index);
         ~Decompiler();
 
