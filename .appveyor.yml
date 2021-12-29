@@ -5,6 +5,7 @@ environment:
 
 install:
 - sudo apt install -y git build-essential libcapstone-dev libssl-dev cmake make parallel doxygen git-lfs rpm liblief-dev flex
+- git submodule update --init --recursive
 
 test_script:
 - make threads=4
