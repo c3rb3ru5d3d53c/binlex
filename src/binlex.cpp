@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include "sleigh.hh"
 #include <capstone/capstone.h>
 #if defined(__linux__) || defined(__APPLE__)
 #include <sys/time.h>
@@ -10,7 +11,7 @@
 #include "args.h"
 #include "raw.h"
 #include "pe.h"
-#include "pe_rev.h"
+//#include "pe_rev.h"
 #include "decompiler.h"
 #include "blelf.h"
 
@@ -96,9 +97,9 @@ int main(int argc, char **argv){
     }
     if (strcmp(args.options.mode, (char *)"pe:x86") == 0 &&
         args.options.io_type == ARGS_IO_TYPE_FILE){
-        PEREV pe32;
-        pe32.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_I386);
-        pe32.ReadFile(args.options.input);
+        //PEREV pe32;
+        //pe32.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_I386);
+        //pe32.ReadFile(args.options.input);
         // Pe pe32;
         // if (pe32.Setup(PE_MODE_X86) == false){
         //     return 1;
@@ -122,22 +123,22 @@ int main(int argc, char **argv){
     }
     if (strcmp(args.options.mode, (char *)"pe:x86_64") == 0 &&
         args.options.io_type == ARGS_IO_TYPE_FILE){
-        PEREV pe64;
-        pe64.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_AMD64);
-        pe64.ReadFile(args.options.input);
-        Decompiler decompiler;
-        decompiler.Setup(CS_ARCH_X86, CS_MODE_64, args.options.instructions, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
-        for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
-            if (pe64.sections[i].data != NULL){
-                decompiler.AppendQueue(pe64.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
-                decompiler.Decompile(pe64.sections[i].data, pe64.sections[i].size, pe64.sections[i].offset, i);
-            }
-        }
-        if (args.options.output == NULL){
-            decompiler.PrintTraits(args.options.pretty);
-        } else {
-            decompiler.WriteTraits(args.options.output, args.options.pretty);
-        }
+        // PEREV pe64;
+        // pe64.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_AMD64);
+        // pe64.ReadFile(args.options.input);
+        // Decompiler decompiler;
+        // decompiler.Setup(CS_ARCH_X86, CS_MODE_64, args.options.instructions, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
+        // for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
+        //     if (pe64.sections[i].data != NULL){
+        //         decompiler.AppendQueue(pe64.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
+        //         decompiler.Decompile(pe64.sections[i].data, pe64.sections[i].size, pe64.sections[i].offset, i);
+        //     }
+        // }
+        // if (args.options.output == NULL){
+        //     decompiler.PrintTraits(args.options.pretty);
+        // } else {
+        //     decompiler.WriteTraits(args.options.output, args.options.pretty);
+        // }
         return 0;
     }
     if (strcmp(args.options.mode, (char *)"raw:x86") == 0 &&

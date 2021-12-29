@@ -136,7 +136,7 @@ set(SLEIGH_COMPILER_SOURCE_YACC
 set(SLEIGH_COMPILER_SOURCE_FLEX
 		slghscan.l)
 
-set(DECOMPILER_SOURCE_DIR decompiler/Ghidra/Features/Decompiler/src/decompile/cpp)
+set(DECOMPILER_SOURCE_DIR decompiler/Ghidra/Features/Decompiler/src/decompile/cpp/)
 
 function(prepend_src_dir list_name)
 	set(tmp)
@@ -207,21 +207,17 @@ add_library(ghidra_libdecomp STATIC ${SOURCE_LIBDECOMP_CXX})
 target_link_libraries(ghidra_libdecomp PUBLIC ghidra_decompiler ghidra_sleigh)
 set_target_properties(ghidra_libdecomp PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-if(BUILD_DECOMPILE_EXECUTABLE)
-	add_executable(ghidra_decompiler_exec ${SOURCE_GHIDRA_CXX})
-	target_link_libraries(ghidra_decompiler_exec ghidra_decompiler)
-	set_target_properties(ghidra_decompiler_exec PROPERTIES OUTPUT_NAME decompile)
-endif()
+add_executable(ghidra_decompiler_exec ${SOURCE_GHIDRA_CXX})
+target_link_libraries(ghidra_decompiler_exec ghidra_decompiler)
+set_target_properties(ghidra_decompiler_exec PROPERTIES OUTPUT_NAME decompile)
 
-if(BUILD_DECOMPILE_CLI_EXECUTABLE)
-	project(bldec
-		VERSION ${GLOBAL_VERSION}
-		DESCRIPTION "Binlex Sleigh Decompiler"
-	)
-	add_executable(bldec ${SOURCE_CONSOLE_CXX})
-	target_link_libraries(bldec ghidra_libdecomp)
-	set_target_properties(bldec PROPERTIES OUTPUT_NAME bldec)
-endif()
+project(bldec
+	VERSION ${GLOBAL_VERSION}
+	DESCRIPTION "Binlex Sleigh Decompiler"
+)
+add_executable(bldec ${SOURCE_CONSOLE_CXX})
+target_link_libraries(bldec ghidra_libdecomp)
+set_target_properties(bldec PROPERTIES OUTPUT_NAME bldec)
 
 add_executable(sleighc ${SLEIGH_COMPILER_SOURCE_CXX})
 
@@ -256,7 +252,7 @@ add_library(binlex SHARED
     src/blelf.cpp
     src/pe.cpp
     src/decompiler.cpp
-    src/pe_rev.cpp
+    #src/pe_rev.cpp
     src/sha256.c
 )
 
@@ -266,7 +262,8 @@ add_library(binlex::library ALIAS binlex)
 
 target_include_directories(binlex
     PUBLIC
-        ${PROJECT_SOURCE_DIR}/include
+        ${PROJECT_SOURCE_DIR}/include/
+		${PROJECT_SOURCE_DIR}/decompiler/Ghidra/Features/Decompiler/src/decompile/cpp/
 )
 
 add_executable(binlex-bin
@@ -280,7 +277,8 @@ target_link_libraries(binlex-bin
         -lcapstone
         -lm
         -lpthread
-        -lLIEF
+		ghidra_decompiler
+		ghidra_sleigh
 )
 
 set_target_properties(binlex-bin
@@ -308,7 +306,8 @@ target_link_libraries(blyara -lm)
 
 target_include_directories(blyara
     PRIVATE
-        ${PROJECT_SOURCE_DIR}/include
+        ${PROJECT_SOURCE_DIR}/include/
+		${PROJECT_SOURCE_DIR}//decompiler/Ghidra/Features/Decompiler/src/decompile/cpp/
 )
 
 install(TARGETS blyara DESTINATION bin)
