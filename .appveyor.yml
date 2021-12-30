@@ -4,7 +4,7 @@ environment:
   APPVEYOR_YML_DISABLE_PS_LINUX: true
 
 install:
-- sudo apt install -y git build-essential libcapstone-dev libssl-dev cmake make parallel doxygen git-lfs rpm liblief-dev flex
+- sudo apt install -y git build-essential libcapstone-dev libssl-dev cmake make parallel doxygen git-lfs rpm liblief-dev flex binutils-dev
 - git submodule update --init --recursive
 
 test_script:
