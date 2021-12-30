@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <string.h>
-#include "sleigh.hh"
+#include <loadimage.hh>
+#include <loadimage_bfd.hh>
+#include <sleigh.hh>
 #include <capstone/capstone.h>
 #if defined(__linux__) || defined(__APPLE__)
 #include <sys/time.h>
@@ -38,6 +40,8 @@ void start_timeout(time_t seconds){
 #endif
 
 int main(int argc, char **argv){
+
+
     Args args;
     args.parse(argc, argv);
     if (args.options.timeout > 0){
@@ -145,14 +149,27 @@ int main(int argc, char **argv){
         args.options.io_type == ARGS_IO_TYPE_FILE){
         Raw rawx86;
         rawx86.ReadFile(args.options.input, 0);
-        Decompiler decompiler;
-        decompiler.Setup(CS_ARCH_X86, CS_MODE_32, args.options.instructions, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
-        decompiler.Decompile(rawx86.sections[0].data, rawx86.sections[0].size, rawx86.sections[0].offset, 0);
-        if (args.options.output == NULL){
-            decompiler.PrintTraits(args.options.pretty);
-        } else {
-            decompiler.WriteTraits(args.options.output, args.options.pretty);
-        }
+        const Address addr;
+
+        LoadImageBfd *loader;
+        loader = new LoadImageBfd(string(args.options.input), "default");
+        ContextDatabase *context;
+        Translate *trans;
+        context = new ContextInternal();
+        trans = new Sleigh(loader, context);
+        string sleighfilename = "sleigh/x86.sla";
+        DocumentStorage docstorage;
+        Element *sleighroot = docstorage.openDocument(sleighfilename)->getRoot();
+        docstorage.registerTag(sleighroot);
+        trans->initialize(docstorage);
+        // Decompiler decompiler;
+        // decompiler.Setup(CS_ARCH_X86, CS_MODE_32, args.options.instructions, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
+        // decompiler.Decompile(rawx86.sections[0].data, rawx86.sections[0].size, rawx86.sections[0].offset, 0);
+        // if (args.options.output == NULL){
+        //     decompiler.PrintTraits(args.options.pretty);
+        // } else {
+        //     decompiler.WriteTraits(args.options.output, args.options.pretty);
+        // }
         return 0;
     }
     if (strcmp(args.options.mode, (char *)"raw:x86_64") == 0 &&

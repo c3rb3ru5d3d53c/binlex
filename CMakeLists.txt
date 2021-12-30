@@ -45,6 +45,7 @@ set(SOURCE_DECOMPILER_CXX
 	fspec.cc
 	action.cc
 	loadimage.cc
+	loadimage_bfd.cc
 	varnode.cc
 	op.cc
 	type.cc
@@ -194,7 +195,7 @@ target_include_directories(ghidra_base PUBLIC "${DECOMPILER_SOURCE_DIR}")
 set_target_properties(ghidra_base PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 add_library(ghidra_decompiler STATIC ${SOURCE_DECOMPILER_CXX})
-target_link_libraries(ghidra_decompiler PUBLIC ghidra_base)
+target_link_libraries(ghidra_decompiler PUBLIC -lbfd ghidra_base)
 target_include_directories(ghidra_decompiler PUBLIC "${DECOMPILER_SOURCE_DIR}")
 set_target_properties(ghidra_decompiler PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
@@ -277,6 +278,9 @@ target_link_libraries(binlex-bin
         -lcapstone
         -lm
         -lpthread
+		-lbfd
+		ghidra_base
+		ghidra_libdecomp
 		ghidra_decompiler
 		ghidra_sleigh
 )
