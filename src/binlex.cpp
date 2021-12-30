@@ -150,7 +150,6 @@ int main(int argc, char **argv){
         Raw rawx86;
         rawx86.ReadFile(args.options.input, 0);
         const Address addr;
-
         LoadImageBfd *loader;
         loader = new LoadImageBfd(string(args.options.input), "default");
         ContextDatabase *context;
