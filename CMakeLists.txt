@@ -16,10 +16,9 @@ add_library(binlex SHARED
     src/args.cpp
     src/raw.cpp
     src/common.cpp
-    src/elf_rev.cpp
-    src/pe.cpp
+    src/blelf.cpp
     src/decompiler.cpp
-    src/pe_rev.cpp
+    src/pe.cpp
     src/sha256.c
 )
 

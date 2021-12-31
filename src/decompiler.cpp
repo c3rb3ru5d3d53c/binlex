@@ -278,8 +278,8 @@ void * Decompiler::DecompileWorker(void *args) {
                 } else {
                     i_trait.instructions = 1;
                     i_trait.invalid_instructions = 1;
-                    i_trait.tmp_bytes = i_trait.tmp_bytes + HexdumpBE(myself.code, 1) + " ";
-                    i_trait.tmp_trait = i_trait.tmp_trait + Wildcards(1) + " ";
+                    i_trait.tmp_bytes = i_trait.tmp_bytes + HexdumpBE(myself.code, 1);
+                    i_trait.tmp_trait = i_trait.tmp_trait + Wildcards(1) ;
                     AppendTrait(&i_trait, sections, index);
                     ClearTrait(&i_trait);
                 }
