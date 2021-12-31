@@ -91,7 +91,25 @@ namespace binlex {
         @param index section index
         @return bool
         */
-        bool Setup(cs_arch arch, cs_mode mode, bool instructions, char *corpus, uint threads, uint thread_cycles, useconds_t thread_sleep, uint index);
+        bool Setup(cs_arch arch, cs_mode mode, uint index);
+        /**
+        Set Threads and Thread Cycles
+        @param threads number of threads
+        @param thread_cycles thread cycles
+        @param index the section index
+        */
+        void SetThreads(uint threads, uint thread_cycles, uint thread_sleep, uint index);
+        /**
+        Sets The Corpus Name
+        @param corpus pointer to corpus name
+        @param index the section index
+        */
+        void SetCorpus(char *corpus, uint index);
+        /**
+        @param instructions bool to collect instructions traits or not
+        @param index the section index
+        */
+        void SetInstructions(bool instructions, uint index);
         /**
         Decompiler Thread Worker
         @param args pointer to worker arguments
@@ -208,6 +226,7 @@ namespace binlex {
         */
         void WriteTraits(char *file_path, bool pretty);
         static void * TraitWorker(void *args);
+        void AppendQueue(set<uint64_t> &addresses, uint operand_type, uint index);
         //void Seek(uint offset, uint index);
         ~Decompiler();
 
