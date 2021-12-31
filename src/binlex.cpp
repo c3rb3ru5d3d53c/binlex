@@ -1,8 +1,5 @@
 #include <stdio.h>
 #include <string.h>
-#include <loadimage.hh>
-#include <loadimage_bfd.hh>
-#include <sleigh.hh>
 #include <capstone/capstone.h>
 #if defined(__linux__) || defined(__APPLE__)
 #include <sys/time.h>
@@ -13,7 +10,7 @@
 #include "args.h"
 #include "raw.h"
 #include "pe.h"
-//#include "pe_rev.h"
+#include "pe_rev.h"
 #include "decompiler.h"
 #include "blelf.h"
 
@@ -40,8 +37,6 @@ void start_timeout(time_t seconds){
 #endif
 
 int main(int argc, char **argv){
-
-
     Args args;
     args.parse(argc, argv);
     if (args.options.timeout > 0){
@@ -101,9 +96,9 @@ int main(int argc, char **argv){
     }
     if (strcmp(args.options.mode, (char *)"pe:x86") == 0 &&
         args.options.io_type == ARGS_IO_TYPE_FILE){
-        //PEREV pe32;
-        //pe32.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_I386);
-        //pe32.ReadFile(args.options.input);
+        PEREV pe32;
+        pe32.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_I386);
+        pe32.ReadFile(args.options.input);
         // Pe pe32;
         // if (pe32.Setup(PE_MODE_X86) == false){
         //     return 1;
@@ -127,48 +122,36 @@ int main(int argc, char **argv){
     }
     if (strcmp(args.options.mode, (char *)"pe:x86_64") == 0 &&
         args.options.io_type == ARGS_IO_TYPE_FILE){
-        // PEREV pe64;
-        // pe64.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_AMD64);
-        // pe64.ReadFile(args.options.input);
-        // Decompiler decompiler;
-        // decompiler.Setup(CS_ARCH_X86, CS_MODE_64, args.options.instructions, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
-        // for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
-        //     if (pe64.sections[i].data != NULL){
-        //         decompiler.AppendQueue(pe64.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
-        //         decompiler.Decompile(pe64.sections[i].data, pe64.sections[i].size, pe64.sections[i].offset, i);
-        //     }
-        // }
-        // if (args.options.output == NULL){
-        //     decompiler.PrintTraits(args.options.pretty);
-        // } else {
-        //     decompiler.WriteTraits(args.options.output, args.options.pretty);
-        // }
+        PEREV pe64;
+        pe64.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_AMD64);
+        pe64.ReadFile(args.options.input);
+        Decompiler decompiler;
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_64, args.options.instructions, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
+        for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
+            if (pe64.sections[i].data != NULL){
+                decompiler.AppendQueue(pe64.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
+                decompiler.Decompile(pe64.sections[i].data, pe64.sections[i].size, pe64.sections[i].offset, i);
+            }
+        }
+        if (args.options.output == NULL){
+            decompiler.PrintTraits(args.options.pretty);
+        } else {
+            decompiler.WriteTraits(args.options.output, args.options.pretty);
+        }
         return 0;
     }
     if (strcmp(args.options.mode, (char *)"raw:x86") == 0 &&
         args.options.io_type == ARGS_IO_TYPE_FILE){
         Raw rawx86;
         rawx86.ReadFile(args.options.input, 0);
-        const Address addr;
-        LoadImageBfd *loader;
-        loader = new LoadImageBfd(string(args.options.input), "default");
-        ContextDatabase *context;
-        Translate *trans;
-        context = new ContextInternal();
-        trans = new Sleigh(loader, context);
-        string sleighfilename = "sleigh/x86.sla";
-        DocumentStorage docstorage;
-        Element *sleighroot = docstorage.openDocument(sleighfilename)->getRoot();
-        docstorage.registerTag(sleighroot);
-        trans->initialize(docstorage);
-        // Decompiler decompiler;
-        // decompiler.Setup(CS_ARCH_X86, CS_MODE_32, args.options.instructions, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
-        // decompiler.Decompile(rawx86.sections[0].data, rawx86.sections[0].size, rawx86.sections[0].offset, 0);
-        // if (args.options.output == NULL){
-        //     decompiler.PrintTraits(args.options.pretty);
-        // } else {
-        //     decompiler.WriteTraits(args.options.output, args.options.pretty);
-        // }
+        Decompiler decompiler;
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_32, args.options.instructions, args.options.corpus, args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
+        decompiler.Decompile(rawx86.sections[0].data, rawx86.sections[0].size, rawx86.sections[0].offset, 0);
+        if (args.options.output == NULL){
+            decompiler.PrintTraits(args.options.pretty);
+        } else {
+            decompiler.WriteTraits(args.options.output, args.options.pretty);
+        }
         return 0;
     }
     if (strcmp(args.options.mode, (char *)"raw:x86_64") == 0 &&

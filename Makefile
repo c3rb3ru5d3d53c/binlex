@@ -64,6 +64,7 @@ traits-combine: check-parameter-source check-parameter-dest check-parameter-type
 	@find ${source}/${type}/${format}/${arch}/ -type f -name "*.traits" | while read i; do \
 		echo "cat $${i} && rm -f $${i}"; \
 	done | parallel --halt 1 -u -j ${threads} {} | sort | uniq > ${dest}/${type}.${format}.${arch}.traits
+	@rm -rf dist/${type}/
 
 traits-clean: check-parameter-remove check-parameter-source check-parameter-dest
 	awk 'NR==FNR{a[$$0];next} !($$0 in a)' ${remove} ${source} | sort | uniq | grep -Pv '^(\?\?\s?)+$$' > ${dest}
@@ -104,5 +105,8 @@ check-parameter-format:
 		exit 1; \
 	fi
 
-clean:
+clean: clean-dist
 	rm -rf build/
+
+clean-dist:
+	rm -rf dist/
