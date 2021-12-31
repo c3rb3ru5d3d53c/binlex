@@ -54,7 +54,7 @@ If you want to compile and install via `make install` run the following commands
 sudo apt install -y git build-essential \
                     libcapstone-dev libssl-dev \
                     cmake make parallel \
-                    doxygen git-lfs
+                    doxygen git-lfs rpm liblief-dev
 git clone --recursive https://github.com/c3rb3ru5d3d53c/binlex.git
 cd binlex/
 make threads=4
@@ -80,7 +80,7 @@ To build packages use `cpack`, which comes with `cmake`.
 sudo apt install -y git build-essential \
                     libcapstone-dev libssl-dev \
                     cmake make parallel \
-                    doxygen git-lfs rpm
+                    doxygen git-lfs rpm liblief-dev
 git clone --recursive https://github.com/c3rb3ru5d3d53c/binlex.git
 cd binlex/
 make threads=4
