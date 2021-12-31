@@ -16,7 +16,7 @@ add_library(binlex SHARED
     src/args.cpp
     src/raw.cpp
     src/common.cpp
-    src/blelf.cpp
+    src/elf_rev.cpp
     src/pe.cpp
     src/decompiler.cpp
     src/pe_rev.cpp
