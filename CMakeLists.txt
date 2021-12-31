@@ -17,8 +17,8 @@ add_library(binlex SHARED
     src/raw.cpp
     src/common.cpp
     src/blelf.cpp
-    src/pe.cpp
     src/decompiler.cpp
+    src/pe.cpp
     src/sha256.c
 )
 
@@ -42,6 +42,7 @@ target_link_libraries(binlex-bin
         -lcapstone
         -lm
         -lpthread
+        -lLIEF
 )
 
 set_target_properties(binlex-bin
