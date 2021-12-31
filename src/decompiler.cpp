@@ -44,7 +44,7 @@ Decompiler::Decompiler() {
         sections[i].threads = 1;
         sections[i].thread_cycles = 1;
         sections[i].thread_sleep = 500;
-        sections[i].corpus = NULL;
+        sections[i].corpus = (char *)"default";
         sections[i].instructions = false;
         sections[i].arch_str = NULL;
     }
@@ -109,7 +109,7 @@ void Decompiler::AppendTrait(struct Trait *trait, struct Section *sections, uint
     #endif
 }
 
-bool Decompiler::Setup(cs_arch arch, cs_mode mode, bool instructions, char *corpus, uint threads, uint thread_cycles, useconds_t thread_sleep, uint index){
+bool Decompiler::Setup(cs_arch arch, cs_mode mode, uint index){
     sections[index].arch = arch;
     sections[index].mode = mode;
     if (arch == CS_ARCH_X86 && mode == CS_MODE_32){
@@ -118,12 +118,21 @@ bool Decompiler::Setup(cs_arch arch, cs_mode mode, bool instructions, char *corp
     if (arch == CS_ARCH_X86 && mode == CS_MODE_64){
         sections[index].arch_str = (char *)"x86_64";
     }
+    return true;
+}
+
+void Decompiler::SetThreads(uint threads, uint thread_cycles, uint thread_sleep, uint index){
     sections[index].threads = threads;
     sections[index].thread_cycles = thread_cycles;
     sections[index].thread_sleep = thread_sleep;
+}
+
+void Decompiler::SetCorpus(char *corpus, uint index){
     sections[index].corpus = corpus;
+}
+
+void Decompiler::SetInstructions(bool instructions, uint index){
     sections[index].instructions = instructions;
-    return true;
 }
 
 string Decompiler::GetTrait(struct Trait *trait, bool pretty){
