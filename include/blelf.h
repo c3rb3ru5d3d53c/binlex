@@ -1,42 +1,38 @@
-#include <stdio.h>
-#include <stdlib.h>
+#include <iostream>
+#include <memory>
+#include <vector>
+#include <set>
+#include <LIEF/ELF.hpp>
+#include "common.h"
 
 #ifndef ELF_H
 #define ELF_H
 
-#define ELF_MAX_SECTIONS 32
+#define ELF_MAX_SECTIONS 256
 
-#define ELF_MODE_UNSET  0
-#define ELF_MODE_X86    1
-#define ELF_MODE_X86_64 2
+using namespace std;
+using namespace LIEF::ELF;
 
 namespace binlex{
-    class Elf{
+    class ELF : public Common{
         private:
+            void ParseSections();
+        public:
+            ARCH mode = ARCH::EM_NONE;
+            unique_ptr<LIEF::ELF::Binary> binary;
             struct Section {
                 uint offset;
                 int size;
                 void *data;
+                set<uint64_t> functions;
             };
-            bool is_arch(int arch);
-            bool is_elf();
-            void SetSectionsDefault();
-            unsigned int GetSectionTableSize();
-            bool ReadSectionHeaders();
-            bool GetExecutableData();
-        public:
-            char magic[4]  = {0x7F, 0x45, 0x4C, 0x46};
-            FILE *fd       = NULL;
-            void *header   = NULL;
-            void *sh_table = NULL;
-            char *sh_str   = NULL;
-            int mode       = ELF_MODE_UNSET;
             struct Section sections[ELF_MAX_SECTIONS];
-            Elf();
-            bool Setup(int input_mode);
+            ELF();
+            bool Setup(ARCH input_mode);
             bool ReadFile(char *file_path);
-            ~Elf();
+            bool ReadBuffer(void *data, size_t size);
+            ~ELF();
     };
-    /*! @} End of Doxygen Groups*/
-}
+};
+
 #endif
