@@ -15,6 +15,7 @@ While the C++ API allows developers to get creative with their own detection sol
 [![Build status](https://ci.appveyor.com/api/projects/status/wa423scoigl7xh7x/branch/master?svg=true)](https://ci.appveyor.com/project/c3rb3ru5d3d53c/binlex)
 [![GitHub stars](https://img.shields.io/github/stars/c3rb3ru5d3d53c/binlex)](https://github.com/c3rb3ru5d3d53c/binlex/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/c3rb3ru5d3d53c/binlex)](https://github.com/c3rb3ru5d3d53c/binlex/network)
+[![Discord Status](https://img.shields.io/discord/915569998469144636?logo=discord)](https://discord.gg/UDBfRpxV3B)
 [![GitHub license](https://img.shields.io/github/license/c3rb3ru5d3d53c/binlex)](https://github.com/c3rb3ru5d3d53c/binlex/blob/master/LICENSE)
 
 # Demos
