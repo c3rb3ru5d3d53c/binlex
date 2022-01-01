@@ -15,8 +15,10 @@ project(binlex
 )
 
 if (BUILD_PYTHON_BINDINGS)
-    add_subdirectory(modules/pybind11/)
-    pybind11_add_module(PE bindings/python/_pe.cpp)
+    include_directories(include/)
+    link_directories(src/)
+    add_subdirectory(bindings/python/pybind11/)
+    pybind11_add_module(pybinlex SHARED bindings/python/pybinlex.cpp)
 endif()
 
 add_library(binlex SHARED
