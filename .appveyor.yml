@@ -9,6 +9,7 @@ install:
 test_script:
 - make threads=4
 - make pkg
+- make dist
 
 artifacts:
   - path: build/*.deb
