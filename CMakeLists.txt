@@ -105,7 +105,6 @@ set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 set(CPACK_PACKAGE_FILE_NAME "${PKG_NAME}")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libcapstone-dev")
-
 # Generates release tarball
 set(CPACK_SOURCE_GENERATOR "TGZ" "ZIP")
 set(CPACK_SOURCE_PACKAGE_FILE_NAME "${PKG_NAME}")
@@ -115,6 +114,8 @@ set(CPACK_SOURCE_IGNORE_FILES
     "\.gitmodules"
     "\.gitattributes"
     "\.appveyor.yml"
+    "docker/data/"
+    "samples/"
     "tests/"
     "${CMAKE_CURRENT_BINARY_DIR}"
     "${CPACK_SOURCE_IGNORE_FILES}"
