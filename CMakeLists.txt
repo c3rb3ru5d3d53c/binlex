@@ -7,10 +7,17 @@ set(GLOBAL_VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 
+option(BUILD_PYTHON_BINDINGS "Build Binlex Python Bindings" ON)
+
 project(binlex
     VERSION ${GLOBAL_VERSION}
     DESCRIPTION "A Binary Genetic Traits Lexer and C++ Library"
 )
+
+if (BUILD_PYTHON_BINDINGS)
+    add_subdirectory(modules/pybind11/)
+    pybind11_add_module(PE bindings/python/_pe.cpp)
+endif()
 
 add_library(binlex SHARED
     src/args.cpp
