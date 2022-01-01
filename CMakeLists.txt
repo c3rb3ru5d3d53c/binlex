@@ -90,7 +90,7 @@ string(CONCAT PKG_NAME "${CPACK_PACKAGE_NAME}"
                        "${VERSION_PATCH}"
 )
 # Generates Debian Binary Package
-SET(CPACK_GENERATOR DEB RPM TGZ)
+SET(CPACK_GENERATOR DEB RPM)
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Binary Genetic Traits Lexer Utilities and C++ Library"
     CACHE STRING "Binary Genetic Traits Lexer Utilities and C++ Library"
 )
@@ -106,7 +106,7 @@ set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 set(CPACK_PACKAGE_FILE_NAME "${PKG_NAME}")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libcapstone-dev")
 # Generates release tarball
-set(CPACK_SOURCE_GENERATOR "TGZ" "ZIP")
+set(CPACK_SOURCE_GENERATOR TGZ ZIP)
 set(CPACK_SOURCE_PACKAGE_FILE_NAME "${PKG_NAME}")
 set(CPACK_SOURCE_IGNORE_FILES
     "\.git/"
