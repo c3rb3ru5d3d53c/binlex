@@ -81,6 +81,15 @@ add_custom_target(uninstall
 
 
 set(CPACK_PACKAGE_NAME binlex)
+string(CONCAT PKG_NAME "${CPACK_PACKAGE_NAME}"
+                       "-"
+                       "${VERSION_MAJOR}"
+                       "."
+                       "${VERSION_MINOR}"
+                       "."
+                       "${VERSION_PATCH}"
+)
+# Generates Debian Binary Package
 SET(CPACK_GENERATOR DEB RPM TGZ)
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Binary Genetic Traits Lexer Utilities and C++ Library"
     CACHE STRING "Binary Genetic Traits Lexer Utilities and C++ Library"
@@ -94,6 +103,21 @@ set(CPACK_PACKAGE_CONTACT "c3rb3ru5d3d53c@protonmail.com")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
 set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
-set(CPACK_PACKAGE_FILE_NAME "binlex-${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
+set(CPACK_PACKAGE_FILE_NAME "${PKG_NAME}")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libcapstone-dev")
+
+# Generates release tarball
+set(CPACK_SOURCE_GENERATOR "TGZ" "ZIP")
+set(CPACK_SOURCE_PACKAGE_FILE_NAME "${PKG_NAME}")
+set(CPACK_SOURCE_IGNORE_FILES
+    "\.git/"
+    ".*~$"
+    "\.gitmodules"
+    "\.gitattributes"
+    "\.appveyor.yml"
+    "tests/"
+    "${CMAKE_CURRENT_BINARY_DIR}"
+    "${CPACK_SOURCE_IGNORE_FILES}"
+)
+
 include (CPack)
