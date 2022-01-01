@@ -42,6 +42,10 @@ pkg:
 	cd build/ && \
 		cpack
 
+dist:
+	cd build/ && \
+		make package_source
+
 install:
 	cd build/ && \
 		make install && \
