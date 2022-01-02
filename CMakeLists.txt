@@ -91,7 +91,7 @@ if (BUILD_PYTHON_BINDINGS)
     pybind11_add_module(pybinlex SHARED bindings/python/pybinlex.cpp)
     target_link_libraries(pybinlex
         PRIVATE
-            pybind11::embed
+            pybind11::module
             binlex::library
         PUBLIC
             -lcapstone
