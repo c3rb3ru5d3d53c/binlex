@@ -14,13 +14,6 @@ project(binlex
     DESCRIPTION "A Binary Genetic Traits Lexer and C++ Library"
 )
 
-if (BUILD_PYTHON_BINDINGS)
-    include_directories(include/)
-    link_directories(src/)
-    add_subdirectory(bindings/python/pybind11/)
-    pybind11_add_module(pybinlex SHARED bindings/python/pybinlex.cpp)
-endif()
-
 add_library(binlex SHARED
     src/args.cpp
     src/raw.cpp
@@ -88,6 +81,21 @@ add_custom_target(uninstall
     "${CMAKE_COMMAND}" -P "${CMAKE_MODULE_PATH}/uninstall.cmake"
 )
 
+if (BUILD_PYTHON_BINDINGS)
+    include_directories(include/)
+    link_directories(src/)
+    add_subdirectory(bindings/python/pybind11/)
+    pybind11_add_module(pybinlex SHARED bindings/python/pybinlex.cpp)
+    target_link_libraries(pybinlex
+        PRIVATE
+            binlex::library
+        PUBLIC
+            -lcapstone
+            -lm
+            -lpthread
+            -lLIEF
+    )
+endif()
 
 set(CPACK_PACKAGE_NAME binlex)
 SET(CPACK_GENERATOR DEB RPM TGZ)
