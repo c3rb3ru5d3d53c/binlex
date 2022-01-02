@@ -82,18 +82,23 @@ add_custom_target(uninstall
 )
 
 if (BUILD_PYTHON_BINDINGS)
-    include_directories(include/)
+    include_directories(
+        include/
+        ${pybind11_INCLUDE_DIRS}
+    )
     link_directories(src/)
     add_subdirectory(bindings/python/pybind11/)
     pybind11_add_module(pybinlex SHARED bindings/python/pybinlex.cpp)
     target_link_libraries(pybinlex
         PRIVATE
+            pybind11::embed
             binlex::library
         PUBLIC
             -lcapstone
             -lm
             -lpthread
             -lLIEF
+            ${pybind11_LIBRARIES}
     )
 endif()
 
