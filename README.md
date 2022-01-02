@@ -6,11 +6,13 @@ The purpose of `binlex` is to extract basic blocks and functions as traits from 
 
 Most projects attempting this use Python to generate traits, but it is very slow.
 
-The design philophy behind `binlex` is it to keep it simple and extensable.
+The design philosophy behind `binlex` is it to keep it simple and extendable.
 
 The simple command-line interface allows malware researchers and analysts to hunt traits across hundreds or thousands of potentially similar malware saving time and money in production environments.
 
-While the C++ API allows developers to get creative with their own detection solutions.
+While the C++ API allows developers to get creative with their own detection solutions, completely unencumbered by license limitations.
+
+To help combat malware, we firmly commit our work to the public domain for the greater good of the world.
 
 [![Build status](https://ci.appveyor.com/api/projects/status/wa423scoigl7xh7x/branch/master?svg=true)](https://ci.appveyor.com/project/c3rb3ru5d3d53c/binlex)
 [![GitHub stars](https://img.shields.io/github/stars/c3rb3ru5d3d53c/binlex)](https://github.com/c3rb3ru5d3d53c/binlex/stargazers)
