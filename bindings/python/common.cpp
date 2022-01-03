@@ -8,15 +8,15 @@ namespace py = pybind11;
 void init_common(py::module &handle){
     py::class_<binlex::Common>(handle, "Common")
     .def(py::init<>())
-    .def_static("SHA256", &binlex::Common::SHA256)
-    .def_static("RemoveWildcards", &binlex::Common::RemoveWildcards)
-    .def_static("GetByteSize", &binlex::Common::GetByteSize)
-    .def_static("RemoveSpaces", &binlex::Common::RemoveSpaces)
-    .def_static("WildcardTrait", &binlex::Common::WildcardTrait)
-    .def_static("TrimRight", &binlex::Common::TrimRight)
-    .def_static("Wildcards", &binlex::Common::Wildcards)
-    .def_static("Entropy", &binlex::Common::Entropy)
-    .def_static("HexdumpMemDisp", &binlex::Common::HexdumpMemDisp)
-    .def_static("Hexdump", &binlex::Common::Hexdump)
-    .def_static("HexdumpBE", &binlex::Common::HexdumpBE);
+    .def_static("sha256", &binlex::Common::SHA256)
+    .def_static("remove_wildcards", &binlex::Common::RemoveWildcards)
+    .def_static("get_byte_size", &binlex::Common::GetByteSize)
+    .def_static("remove_spaces", &binlex::Common::RemoveSpaces)
+    .def_static("wildcard_trait", &binlex::Common::WildcardTrait)
+    .def_static("trim_right", &binlex::Common::TrimRight)
+    .def_static("wildcards", &binlex::Common::Wildcards)
+    .def_static("entropy", &binlex::Common::Entropy)
+    .def_static("hexdump_mem_disp", &binlex::Common::HexdumpMemDisp)
+    .def_static("hexdump", &binlex::Common::Hexdump)
+    .def_static("hexdump_be", &binlex::Common::HexdumpBE);
 }
