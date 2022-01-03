@@ -88,7 +88,13 @@ if (BUILD_PYTHON_BINDINGS)
     )
     link_directories(src/)
     add_subdirectory(bindings/python/pybind11/)
-    pybind11_add_module(pybinlex SHARED bindings/python/pybinlex.cpp)
+    pybind11_add_module(pybinlex
+        SHARED
+        bindings/python/blelf.cpp
+        bindings/python/common.cpp
+        bindings/python/pe.cpp
+        bindings/python/pybinlex.cpp
+    )
     target_link_libraries(pybinlex
         PRIVATE
             pybind11::module
