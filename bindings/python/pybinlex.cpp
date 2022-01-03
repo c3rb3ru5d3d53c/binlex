@@ -3,6 +3,7 @@
 #include "pe.h"
 #include "blelf.h"
 #include "common.h"
+#include <LIEF/PE.hpp>
 #include <vector>
 
 namespace py = pybind11;
@@ -12,8 +13,11 @@ void init_pe(py::module &handle){
   .def(py::init<>())
   .def("Setup", &binlex::PE::Setup)
   .def("ReadFile", &binlex::PE::ReadFile)
-  .def("ReadBuffer", &binlex::PE::ReadBuffer)
-  ;
+  .def("ReadBuffer", &binlex::PE::ReadBuffer);
+  py::enum_<LIEF::PE::MACHINE_TYPES>(handle, "MACHINE_TYPES")
+  .value("IMAGE_FILE_MACHINE_I386", LIEF::PE::MACHINE_TYPES::IMAGE_FILE_MACHINE_I386)
+  .value("IMAGE_FILE_MACHINE_AMD64", LIEF::PE::MACHINE_TYPES::IMAGE_FILE_MACHINE_AMD64)
+  .value("IMAGE_FILE_MACHINE_UNKNOWN", LIEF::PE::MACHINE_TYPES::IMAGE_FILE_MACHINE_UNKNOWN);
 }
 
 void init_elf(py::module &handle){
@@ -21,8 +25,11 @@ void init_elf(py::module &handle){
   .def(py::init<>())
   .def("Setup", &binlex::ELF::Setup)
   .def("ReadFile", &binlex::ELF::ReadFile)
-  .def("ReadBuffer", &binlex::ELF::ReadBuffer)
-  ;
+  .def("ReadBuffer", &binlex::ELF::ReadBuffer);
+  py::enum_<LIEF::ELF::ARCH>(handle, "ARCH")
+  .value("EM_386", LIEF::ELF::ARCH::EM_386)
+  .value("EM_X86_64", LIEF::ELF::ARCH::EM_X86_64)
+  .value("EM_NONE", LIEF::ELF::ARCH::EM_NONE);
 }
 
 void init_common(py::module &handle){
@@ -38,8 +45,7 @@ void init_common(py::module &handle){
     .def_static("Entropy", &binlex::Common::Entropy)
     .def_static("HexdumpMemDisp", &binlex::Common::HexdumpMemDisp)
     .def_static("Hexdump", &binlex::Common::Hexdump)
-    .def_static("HexdumpBE", &binlex::Common::HexdumpBE)
-    ;
+    .def_static("HexdumpBE", &binlex::Common::HexdumpBE);
 }
 
 PYBIND11_MODULE(pybinlex, handle){
