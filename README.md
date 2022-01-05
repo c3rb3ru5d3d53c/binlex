@@ -6,16 +6,20 @@ The purpose of `binlex` is to extract basic blocks and functions as traits from 
 
 Most projects attempting this use Python to generate traits, but it is very slow.
 
-The design philophy behind `binlex` is it to keep it simple and extensable.
+The design philosophy behind `binlex` is it to keep it simple and extendable.
 
 The simple command-line interface allows malware researchers and analysts to hunt traits across hundreds or thousands of potentially similar malware saving time and money in production environments.
 
-While the C++ API allows developers to get creative with their own detection solutions.
+While the C++ API allows developers to get creative with their own detection solutions, completely unencumbered by license limitations.
 
-[![Build status](https://ci.appveyor.com/api/projects/status/wa423scoigl7xh7x?svg=true)](https://ci.appveyor.com/project/c3rb3ru5d3d53c/binlex)
+To help combat malware, we firmly commit our work to the public domain for the greater good of the world.
+
+[![Build status](https://ci.appveyor.com/api/projects/status/wa423scoigl7xh7x/branch/master?svg=true)](https://ci.appveyor.com/project/c3rb3ru5d3d53c/binlex)
 [![GitHub stars](https://img.shields.io/github/stars/c3rb3ru5d3d53c/binlex)](https://github.com/c3rb3ru5d3d53c/binlex/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/c3rb3ru5d3d53c/binlex)](https://github.com/c3rb3ru5d3d53c/binlex/network)
+[![Discord Status](https://img.shields.io/discord/915569998469144636?logo=discord)](https://discord.gg/UDBfRpxV3B)
 [![GitHub license](https://img.shields.io/github/license/c3rb3ru5d3d53c/binlex)](https://github.com/c3rb3ru5d3d53c/binlex/blob/master/LICENSE)
+![GitHub all releases](https://img.shields.io/github/downloads/c3rb3ru5d3d53c/binlex/total)
 
 # Demos
 
@@ -44,19 +48,29 @@ Get slides [here](docs/oalabs.pdf).
 
 # Installing
 
-**From Source:**
+**Dependencies:**
 
-Please note that `binlex` requires `cmake` >= 3.5 and `make` >= 4.2.1.
-
-If you want to compile and install via `make install` run the following commands:
+To get started you will need the following dependencies for `binlex`.
 
 ```bash
 sudo apt install -y git build-essential \
                     libcapstone-dev libssl-dev \
                     cmake make parallel \
                     doxygen git-lfs rpm liblief-dev
+                    python3 python3-dev
 git clone --recursive https://github.com/c3rb3ru5d3d53c/binlex.git
 cd binlex/
+```
+
+Please note that `binlex` requires `cmake` >= 3.5 and `make` >= 4.2.1.
+
+Once you have installed, cloned and changed your directory to the project directory, we can continue with installation.
+
+**From Source:**
+
+If you want to compile and install via `make install` run the following commands:
+
+```bash
 make threads=4
 sudo make install
 
@@ -64,9 +78,11 @@ sudo make install
 binlex -m elf:x86 -i tests/elf/elf.x86
 ```
 
-**Binary Release:** See the [`releases`](https://github.com/c3rb3ru5d3d53c/binlex/releases) page.
+**Binary Releases:**
 
-**NOTE:**
+See the [`releases`](https://github.com/c3rb3ru5d3d53c/binlex/releases) page.
+
+**Test Files:**
 - To download all the test samples do the command `git lfs fetch`
 - ZIP files in the `tests/` directory can then be extracted using the password `infected`
 
@@ -77,20 +93,32 @@ Additionally, another option is to build Debian binary packages for and install 
 To build packages use `cpack`, which comes with `cmake`.
 
 ```bash
-sudo apt install -y git build-essential \
-                    libcapstone-dev libssl-dev \
-                    cmake make parallel \
-                    doxygen git-lfs rpm liblief-dev
-git clone --recursive https://github.com/c3rb3ru5d3d53c/binlex.git
-cd binlex/
 make threads=4
-make pkg
+make pkg  # builds binary packages
+make dist # builds source packages
 sudo apt install ./build/binlex_1.1.1_amd64.deb
-# Test your installation
 binlex -m elf:x86 -i tests/elf/elf.x86
 ```
 
-You will then be provided with a `.deb`, `.rpm` and `.tar.gz` packages for `binlex`.
+You will then be provided with `.deb`, `.rpm` and `.tar.gz` packages for `binlex`.
+
+**Building Python Bindings:**
+
+To get started using `pybinlex`:
+```bash
+virtualenv -p python3 venv
+source venv/bin/activate
+python3 -m pip install -v -e .
+python3
+>>> import pybinlex
+```
+
+If you wish to compile the bindings with `cmake`:
+```bash
+make threads=4 args="-DBUILD_PYTHON_BINDINGS=true"
+```
+
+Examples of how to use `pybinlex` can be found in `tests.py`.
 
 **Building the Database:**
 
