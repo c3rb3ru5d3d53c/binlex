@@ -20,5 +20,6 @@ artifacts:
   - path: build/*.deb
   - path: build/*.rpm
   - path: build/*.tar.gz
+  - path: build/*.zip
 
 build: off
