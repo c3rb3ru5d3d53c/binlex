@@ -4,17 +4,16 @@
 #ifndef RAW_H
 #define RAW_H
 
-#define RAW_MAX_SECTIONS 128
+#define RAW_MAX_SECTIONS 256
 
 namespace binlex{
     class Raw{
-        private:
+            int GetFileSize(FILE *fd);
             struct Section {
                 void *data;
                 int size;
                 uint offset;
             };
-            int GetFileSize(FILE *fd);
         public:
             struct Section sections[RAW_MAX_SECTIONS];
             Raw();

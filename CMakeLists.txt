@@ -7,6 +7,8 @@ set(GLOBAL_VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 
+set(PYBIND11_PYTHON_VERSION 3.8)
+
 option(BUILD_PYTHON_BINDINGS "Build Binlex Python Bindings" ON)
 
 project(binlex
@@ -93,6 +95,8 @@ if (BUILD_PYTHON_BINDINGS)
         bindings/python/blelf.cpp
         bindings/python/common.cpp
         bindings/python/pe.cpp
+        bindings/python/raw.cpp
+        bindings/python/decompiler.cpp
         bindings/python/pybinlex.cpp
     )
     target_link_libraries(pybinlex

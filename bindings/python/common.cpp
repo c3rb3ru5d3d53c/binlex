@@ -6,7 +6,7 @@
 namespace py = pybind11;
 
 void init_common(py::module &handle){
-    py::class_<binlex::Common>(handle, "Common")
+    py::class_<binlex::Common>(handle, "Common", "Binlex Common Module")
     .def(py::init<>())
     .def_static("sha256", &binlex::Common::SHA256)
     .def_static("remove_wildcards", &binlex::Common::RemoveWildcards)
