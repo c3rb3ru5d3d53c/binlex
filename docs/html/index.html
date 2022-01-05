@@ -89,10 +89,11 @@ $(document).ready(function(){initNavTree('index.html',''); initResizable(); });
 <div class="textblock"><h2>A Genetic Binary Trait Lexer Library and Utility</h2>
 <p>The purpose of <code>binlex</code> is to extract basic blocks and functions as traits from binaries for malware research, hunting and detection.</p>
 <p>Most projects attempting this use Python to generate traits, but it is very slow.</p>
-<p>The design philophy behind <code>binlex</code> is it to keep it simple and extensable.</p>
+<p>The design philosophy behind <code>binlex</code> is it to keep it simple and extendable.</p>
 <p>The simple command-line interface allows malware researchers and analysts to hunt traits across hundreds or thousands of potentially similar malware saving time and money in production environments.</p>
-<p>While the C++ API allows developers to get creative with their own detection solutions.</p>
-<p><a href="https://github.com/c3rb3ru5d3d53c/binlex/stargazers"><img src="https://img.shields.io/github/stars/c3rb3ru5d3d53c/binlex" alt="GitHub stars" class="inline"/></a> <a href="https://github.com/c3rb3ru5d3d53c/binlex/network"><img src="https://img.shields.io/github/forks/c3rb3ru5d3d53c/binlex" alt="GitHub forks" class="inline"/></a> <a href="https://github.com/c3rb3ru5d3d53c/binlex/blob/master/LICENSE"><img src="https://img.shields.io/github/license/c3rb3ru5d3d53c/binlex" alt="GitHub license" class="inline"/></a></p>
+<p>While the C++ API allows developers to get creative with their own detection solutions, completely unencumbered by license limitations.</p>
+<p>To help combat malware, we firmly commit our work to the public domain for the greater good of the world.</p>
+<p><a href="https://ci.appveyor.com/project/c3rb3ru5d3d53c/binlex"><img src="https://ci.appveyor.com/api/projects/status/wa423scoigl7xh7x/branch/master?svg=true" alt="Build status" class="inline"/></a> <a href="https://github.com/c3rb3ru5d3d53c/binlex/stargazers"><img src="https://img.shields.io/github/stars/c3rb3ru5d3d53c/binlex" alt="GitHub stars" class="inline"/></a> <a href="https://github.com/c3rb3ru5d3d53c/binlex/network"><img src="https://img.shields.io/github/forks/c3rb3ru5d3d53c/binlex" alt="GitHub forks" class="inline"/></a> <a href="https://discord.gg/UDBfRpxV3B"><img src="https://img.shields.io/discord/915569998469144636?logo=discord" alt="Discord Status" class="inline"/></a> <a href="https://github.com/c3rb3ru5d3d53c/binlex/blob/master/LICENSE"><img src="https://img.shields.io/github/license/c3rb3ru5d3d53c/binlex" alt="GitHub license" class="inline"/></a> <img src="https://img.shields.io/github/downloads/c3rb3ru5d3d53c/binlex/total" alt="GitHub all releases" class="inline"/></p>
 <h1><a class="anchor" id="autotoc_md1"></a>
 Demos</h1>
 <p><img src="docs/img/demo_0.gif" alt="animated" class="inline"/> </p>
@@ -113,40 +114,51 @@ Use Cases</h1>
 </ul>
 <h1><a class="anchor" id="autotoc_md4"></a>
 Installing</h1>
-<p><b>From Source:</b></p>
-<p>Please note that <code>binlex</code> requires <code>cmake</code> &gt;= 3.5 and <code>make</code> &gt;= 4.2.1.</p>
-<p>If you want to compile and install via <code>make install</code> run the following commands:</p>
+<p><b>Dependencies:</b></p>
+<p>To get started you will need the following dependencies for <code>binlex</code>.</p>
 <div class="fragment"><div class="line">sudo apt install -y git build-essential \</div>
 <div class="line">                    libcapstone-dev libssl-dev \</div>
 <div class="line">                    cmake make parallel \</div>
-<div class="line">                    doxygen git-lfs</div>
+<div class="line">                    doxygen git-lfs rpm liblief-dev</div>
+<div class="line">                    python3 python3-dev</div>
 <div class="line">git clone --recursive https://github.com/c3rb3ru5d3d53c/binlex.git</div>
 <div class="line">cd binlex/</div>
-<div class="line">make threads=4</div>
+</div><!-- fragment --><p>Please note that <code>binlex</code> requires <code>cmake</code> &gt;= 3.5 and <code>make</code> &gt;= 4.2.1.</p>
+<p>Once you have installed, cloned and changed your directory to the project directory, we can continue with installation.</p>
+<p><b>From Source:</b></p>
+<p>If you want to compile and install via <code>make install</code> run the following commands:</p>
+<div class="fragment"><div class="line">make threads=4</div>
 <div class="line">sudo make install</div>
 <div class="line"> </div>
 <div class="line"># Test your installation</div>
 <div class="line">binlex -m elf:x86 -i tests/elf/elf.x86</div>
-</div><!-- fragment --><p><b>Binary Release:</b> See the <a href="https://github.com/c3rb3ru5d3d53c/binlex/releases"><code>releases</code></a> page.</p>
-<p><b>NOTE:</b></p><ul>
+</div><!-- fragment --><p><b>Binary Releases:</b></p>
+<p>See the <a href="https://github.com/c3rb3ru5d3d53c/binlex/releases"><code>releases</code></a> page.</p>
+<p>If you need the bleeding edge binaries you can download them from our AppVeyor CI/CD <a href="https://ci.appveyor.com/project/c3rb3ru5d3d53c/binlex/build/artifacts"><code>here</code></a>.</p>
+<p>Please note, edge binaries are subject to bugs, if you encounter one, please let us know!</p>
+<p><b>Test Files:</b></p><ul>
 <li>To download all the test samples do the command <code>git lfs fetch</code></li>
 <li>ZIP files in the <code>tests/</code> directory can then be extracted using the password <code>infected</code></li>
 </ul>
 <p><b>Building Packages:</b></p>
 <p>Additionally, another option is to build Debian binary packages for and install those.</p>
 <p>To build packages use <code>cpack</code>, which comes with <code>cmake</code>.</p>
-<div class="fragment"><div class="line">sudo apt install -y git build-essential \</div>
-<div class="line">                    libcapstone-dev libssl-dev \</div>
-<div class="line">                    cmake make parallel \</div>
-<div class="line">                    doxygen git-lfs rpm</div>
-<div class="line">git clone --recursive https://github.com/c3rb3ru5d3d53c/binlex.git</div>
-<div class="line">cd binlex/</div>
-<div class="line">make threads=4</div>
-<div class="line">make pkg</div>
+<div class="fragment"><div class="line">make threads=4</div>
+<div class="line">make pkg  # builds binary packages</div>
+<div class="line">make dist # builds source packages</div>
 <div class="line">sudo apt install ./build/binlex_1.1.1_amd64.deb</div>
-<div class="line"># Test your installation</div>
 <div class="line">binlex -m elf:x86 -i tests/elf/elf.x86</div>
-</div><!-- fragment --><p>You will then be provided with a <code>.deb</code>, <code>.rpm</code> and <code>.tar.gz</code> packages for <code>binlex</code>.</p>
+</div><!-- fragment --><p>You will then be provided with <code>.deb</code>, <code>.rpm</code> and <code>.tar.gz</code> packages for <code>binlex</code>.</p>
+<p><b>Building Python Bindings:</b></p>
+<p>To get started using <code>pybinlex</code>: </p><div class="fragment"><div class="line">virtualenv -p python3 venv</div>
+<div class="line">source venv/bin/activate</div>
+<div class="line">python3 -m pip install -v -e .</div>
+<div class="line">python3</div>
+<div class="line">&gt;&gt;&gt; import pybinlex</div>
+</div><!-- fragment --><p>If you wish to compile the bindings with <code>cmake</code>: </p><div class="fragment"><div class="line">make threads=4 args=&quot;-DBUILD_PYTHON_BINDINGS=true&quot;</div>
+</div><!-- fragment --><p>For building with <code>cmake</code>, some installations may require you to override the <code>python</code> version: </p><div class="fragment"><div class="line">make threads=4 args=&quot;-DBUILD_PYTHON_BINDINGS=true -DPYBIND11_PYTHON_VERSION=3.8&quot;</div>
+</div><!-- fragment --><p>Please note, we use <code>pybind11</code> and support for <code>python3.9</code> is experimental.</p>
+<p>Examples of how to use <code>pybinlex</code> can be found in <code>tests.py</code>.</p>
 <p><b>Building the Database:</b></p>
 <p>You can create a <code>mongodb</code> database for <code>binlex</code> very easily.</p>
 <p>When your <code>binlex</code> database is created it will add the default collections <code>default</code>, <code>malware</code> and <code>goodware</code>.</p>
@@ -325,7 +337,7 @@ C++ API Example Code</h1>
 <div class="line"><span class="keyword">using namespace </span><a class="code" href="namespacebinlex.html">binlex</a>;</div>
 <div class="line"> </div>
 <div class="line"><span class="keywordtype">int</span> main(<span class="keywordtype">int</span> argc, <span class="keywordtype">char</span> **argv){</div>
-<div class="line">  <a class="code" href="classbinlex_1_1Pe.html">Pe</a> pe32;</div>
+<div class="line">  Pe pe32;</div>
 <div class="line">  <span class="keywordflow">if</span> (pe32.Setup(PE_MODE_X86) == <span class="keyword">false</span>){</div>
 <div class="line">      <span class="keywordflow">return</span> 1;</div>
 <div class="line">  }</div>
@@ -333,7 +345,7 @@ C++ API Example Code</h1>
 <div class="line">      <span class="keywordflow">return</span> 1;</div>
 <div class="line">  }</div>
 <div class="line">  <a class="code" href="classbinlex_1_1Decompiler.html">Decompiler</a> decompiler;</div>
-<div class="line">  decompiler.<a class="code" href="classbinlex_1_1Decompiler.html#af3d036bd78c7bf378bb6319a9527416d">Setup</a>(CS_ARCH_X86, CS_MODE_32);</div>
+<div class="line">  decompiler.<a class="code" href="classbinlex_1_1Decompiler.html#a06e1364161c87831a2c36482a9b08093">Setup</a>(CS_ARCH_X86, CS_MODE_32);</div>
 <div class="line">  <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; PE_MAX_SECTIONS; i++){</div>
 <div class="line">      <span class="keywordflow">if</span> (pe32.sections[i].data != NULL){</div>
 <div class="line">          decompiler.x86_64(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, i);</div>
@@ -379,9 +391,8 @@ Contributing</h1>
 </div><!-- contents -->
 </div><!-- doc-content -->
 <div class="ttc" id="aclassbinlex_1_1Decompiler_html_a788f80fd44f34f00084375d4669bd443"><div class="ttname"><a href="classbinlex_1_1Decompiler.html#a788f80fd44f34f00084375d4669bd443">binlex::Decompiler::PrintTraits</a></div><div class="ttdeci">void PrintTraits(bool pretty)</div></div>
+<div class="ttc" id="aclassbinlex_1_1Decompiler_html_a06e1364161c87831a2c36482a9b08093"><div class="ttname"><a href="classbinlex_1_1Decompiler.html#a06e1364161c87831a2c36482a9b08093">binlex::Decompiler::Setup</a></div><div class="ttdeci">bool Setup(cs_arch arch, cs_mode mode, uint index)</div></div>
 <div class="ttc" id="aclassbinlex_1_1Decompiler_html"><div class="ttname"><a href="classbinlex_1_1Decompiler.html">binlex::Decompiler</a></div><div class="ttdef"><b>Definition:</b> decompiler.h:27</div></div>
-<div class="ttc" id="aclassbinlex_1_1Pe_html"><div class="ttname"><a href="classbinlex_1_1Pe.html">binlex::Pe</a></div><div class="ttdef"><b>Definition:</b> pe.h:409</div></div>
-<div class="ttc" id="aclassbinlex_1_1Decompiler_html_af3d036bd78c7bf378bb6319a9527416d"><div class="ttname"><a href="classbinlex_1_1Decompiler.html#af3d036bd78c7bf378bb6319a9527416d">binlex::Decompiler::Setup</a></div><div class="ttdeci">bool Setup(cs_arch arch, cs_mode mode, bool instructions, char *corpus, uint threads, uint thread_cycles, useconds_t thread_sleep, uint index)</div></div>
 <div class="ttc" id="anamespacebinlex_html"><div class="ttname"><a href="namespacebinlex.html">binlex</a></div><div class="ttdoc">the binlex namespace</div></div>
 <!-- start footer part -->
 <div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->

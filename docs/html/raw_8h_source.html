@@ -92,26 +92,25 @@ $(document).ready(function(){initNavTree('raw_8h_source.html',''); initResizable
 <div class="line"><a name="l00004"></a><span class="lineno">    4</span>&#160;<span class="preprocessor">#ifndef RAW_H</span></div>
 <div class="line"><a name="l00005"></a><span class="lineno">    5</span>&#160;<span class="preprocessor">#define RAW_H</span></div>
 <div class="line"><a name="l00006"></a><span class="lineno">    6</span>&#160; </div>
-<div class="line"><a name="l00007"></a><span class="lineno">    7</span>&#160;<span class="preprocessor">#define RAW_MAX_SECTIONS 128</span></div>
+<div class="line"><a name="l00007"></a><span class="lineno">    7</span>&#160;<span class="preprocessor">#define RAW_MAX_SECTIONS 256</span></div>
 <div class="line"><a name="l00008"></a><span class="lineno">    8</span>&#160; </div>
 <div class="line"><a name="l00009"></a><span class="lineno">    9</span>&#160;<span class="keyword">namespace </span><a class="code" href="namespacebinlex.html">binlex</a>{</div>
 <div class="line"><a name="l00010"></a><span class="lineno"><a class="line" href="classbinlex_1_1Raw.html">   10</a></span>&#160;    <span class="keyword">class </span><a class="code" href="classbinlex_1_1Raw.html">Raw</a>{</div>
-<div class="line"><a name="l00011"></a><span class="lineno">   11</span>&#160;        <span class="keyword">private</span>:</div>
+<div class="line"><a name="l00011"></a><span class="lineno">   11</span>&#160;            <span class="keywordtype">int</span> GetFileSize(FILE *fd);</div>
 <div class="line"><a name="l00012"></a><span class="lineno">   12</span>&#160;            <span class="keyword">struct </span>Section {</div>
 <div class="line"><a name="l00013"></a><span class="lineno">   13</span>&#160;                <span class="keywordtype">void</span> *data;</div>
 <div class="line"><a name="l00014"></a><span class="lineno">   14</span>&#160;                <span class="keywordtype">int</span> size;</div>
 <div class="line"><a name="l00015"></a><span class="lineno">   15</span>&#160;                uint offset;</div>
 <div class="line"><a name="l00016"></a><span class="lineno">   16</span>&#160;            };</div>
-<div class="line"><a name="l00017"></a><span class="lineno">   17</span>&#160;            <span class="keywordtype">int</span> GetFileSize(FILE *fd);</div>
-<div class="line"><a name="l00018"></a><span class="lineno">   18</span>&#160;        <span class="keyword">public</span>:</div>
-<div class="line"><a name="l00019"></a><span class="lineno">   19</span>&#160;            <span class="keyword">struct </span>Section sections[RAW_MAX_SECTIONS];</div>
-<div class="line"><a name="l00020"></a><span class="lineno">   20</span>&#160;            <a class="code" href="classbinlex_1_1Raw.html">Raw</a>();</div>
-<div class="line"><a name="l00021"></a><span class="lineno">   21</span>&#160;            <span class="keywordtype">bool</span> ReadFile(<span class="keywordtype">char</span> *file_path, <span class="keywordtype">int</span> section_index);</div>
-<div class="line"><a name="l00022"></a><span class="lineno">   22</span>&#160;            ~<a class="code" href="classbinlex_1_1Raw.html">Raw</a>();</div>
-<div class="line"><a name="l00023"></a><span class="lineno">   23</span>&#160;    };</div>
-<div class="line"><a name="l00024"></a><span class="lineno">   24</span>&#160;}</div>
-<div class="line"><a name="l00025"></a><span class="lineno">   25</span>&#160; </div>
-<div class="line"><a name="l00026"></a><span class="lineno">   26</span>&#160;<span class="preprocessor">#endif</span></div>
+<div class="line"><a name="l00017"></a><span class="lineno">   17</span>&#160;        <span class="keyword">public</span>:</div>
+<div class="line"><a name="l00018"></a><span class="lineno">   18</span>&#160;            <span class="keyword">struct </span>Section sections[RAW_MAX_SECTIONS];</div>
+<div class="line"><a name="l00019"></a><span class="lineno">   19</span>&#160;            <a class="code" href="classbinlex_1_1Raw.html">Raw</a>();</div>
+<div class="line"><a name="l00020"></a><span class="lineno">   20</span>&#160;            <span class="keywordtype">bool</span> ReadFile(<span class="keywordtype">char</span> *file_path, <span class="keywordtype">int</span> section_index);</div>
+<div class="line"><a name="l00021"></a><span class="lineno">   21</span>&#160;            ~<a class="code" href="classbinlex_1_1Raw.html">Raw</a>();</div>
+<div class="line"><a name="l00022"></a><span class="lineno">   22</span>&#160;    };</div>
+<div class="line"><a name="l00023"></a><span class="lineno">   23</span>&#160;}</div>
+<div class="line"><a name="l00024"></a><span class="lineno">   24</span>&#160; </div>
+<div class="line"><a name="l00025"></a><span class="lineno">   25</span>&#160;<span class="preprocessor">#endif</span></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 <div class="ttc" id="aclassbinlex_1_1Raw_html"><div class="ttname"><a href="classbinlex_1_1Raw.html">binlex::Raw</a></div><div class="ttdef"><b>Definition:</b> raw.h:10</div></div>

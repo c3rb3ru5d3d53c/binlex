@@ -1,5 +1,6 @@
 var structbinlex_1_1Decompiler_1_1Trait =
 [
+    [ "architecture", "structbinlex_1_1Decompiler_1_1Trait.html#a0399786799dfc5881faf40cef04539d6", null ],
     [ "average_instructions_per_block", "structbinlex_1_1Decompiler_1_1Trait.html#a14633d33e290465f61101e6ad46c7e03", null ],
     [ "blocks", "structbinlex_1_1Decompiler_1_1Trait.html#a4f00fdeeaedb1fc3f487d0a8344ca25d", null ],
     [ "bytes", "structbinlex_1_1Decompiler_1_1Trait.html#a3e212435296e899674bed20e940de8e6", null ],
