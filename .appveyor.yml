@@ -9,11 +9,9 @@ install:
 - git submodule update --init --recursive
 
 test_script:
-- make threads=4
+- make threads=4 args="-DBUILD_PYTHON_BINDINGS=true"
 - python3 -m pip wheel -v -e .
 - mv *.whl build/
-- python3 -m pip install -v -e .
-- mv *.so build/
 - make pkg
 - make dist
 
