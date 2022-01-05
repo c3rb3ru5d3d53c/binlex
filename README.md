@@ -118,6 +118,13 @@ If you wish to compile the bindings with `cmake`:
 make threads=4 args="-DBUILD_PYTHON_BINDINGS=true"
 ```
 
+For building with `cmake`, some installations may require you to override the `python` version:
+```bash
+make threads=4 args="-DBUILD_PYTHON_BINDINGS=true -DPYBIND11_PYTHON_VERSION=3.8"
+```
+
+Please note, we use `pybind11` and support for `python3.9` is experimental.
+
 Examples of how to use `pybinlex` can be found in `tests.py`.
 
 **Building the Database:**
