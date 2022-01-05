@@ -20,5 +20,7 @@ artifacts:
   - path: build/*.rpm
   - path: build/*.tar.gz
   - path: build/*.zip
+  - path: build/*.whl
+  - path: build/pybinlex*.so
 
 build: off
