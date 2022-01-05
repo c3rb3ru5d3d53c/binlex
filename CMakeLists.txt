@@ -145,6 +145,10 @@ set(CPACK_SOURCE_IGNORE_FILES
     "docker/data/"
     "samples/"
     "tests/"
+    "pybinlex.egg-info/"
+    "*.whl"
+    "*.so"
+    "venv/"
     "${CMAKE_CURRENT_BINARY_DIR}"
     "${CPACK_SOURCE_IGNORE_FILES}"
 )
