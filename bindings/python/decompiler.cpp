@@ -13,7 +13,10 @@ void init_decompiler(py::module &handle){
     .def("set_threads", &binlex::Decompiler::SetThreads)
     .def("set_corpus", &binlex::Decompiler::SetCorpus)
     .def("set_instructions", &binlex::Decompiler::SetInstructions)
-    .def("decompile", &binlex::Decompiler::Decompile)
+    .def("decompile", [](binlex::Decompiler &module, py::bytes data){
+        size_t size = py::len(data);
+        return data;
+    })
     .def("append_queue", &binlex::Decompiler::AppendQueue)
     .def("print_traits", &binlex::Decompiler::PrintTraits)
     .def("write_traits", &binlex::Decompiler::WriteTraits);
