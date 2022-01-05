@@ -10,7 +10,7 @@ install:
 
 test_script:
 - make threads=4 args="-DBUILD_PYTHON_BINDINGS=true"
-- python3 -m pip wheel -v -e .
+- python3 -m pip wheel -e .
 - mv *.whl build/
 - make pkg
 - make dist
