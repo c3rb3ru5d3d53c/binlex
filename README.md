@@ -48,19 +48,29 @@ Get slides [here](docs/oalabs.pdf).
 
 # Installing
 
-**From Source:**
+**Dependencies:**
 
-Please note that `binlex` requires `cmake` >= 3.5 and `make` >= 4.2.1.
-
-If you want to compile and install via `make install` run the following commands:
+To get started you will need the following dependencies for `binlex`.
 
 ```bash
 sudo apt install -y git build-essential \
                     libcapstone-dev libssl-dev \
                     cmake make parallel \
                     doxygen git-lfs rpm liblief-dev
+                    python3 python3-dev
 git clone --recursive https://github.com/c3rb3ru5d3d53c/binlex.git
 cd binlex/
+```
+
+Please note that `binlex` requires `cmake` >= 3.5 and `make` >= 4.2.1.
+
+Once you have installed, cloned and changed your directory to the project directory, we can continue with installation.
+
+**From Source:**
+
+If you want to compile and install via `make install` run the following commands:
+
+```bash
 make threads=4
 sudo make install
 
@@ -68,9 +78,11 @@ sudo make install
 binlex -m elf:x86 -i tests/elf/elf.x86
 ```
 
-**Binary Release:** See the [`releases`](https://github.com/c3rb3ru5d3d53c/binlex/releases) page.
+**Binary Releases:**
 
-**NOTE:**
+See the [`releases`](https://github.com/c3rb3ru5d3d53c/binlex/releases) page.
+
+**Test Files:**
 - To download all the test samples do the command `git lfs fetch`
 - ZIP files in the `tests/` directory can then be extracted using the password `infected`
 
@@ -81,20 +93,39 @@ Additionally, another option is to build Debian binary packages for and install 
 To build packages use `cpack`, which comes with `cmake`.
 
 ```bash
-sudo apt install -y git build-essential \
-                    libcapstone-dev libssl-dev \
-                    cmake make parallel \
-                    doxygen git-lfs rpm liblief-dev
-git clone --recursive https://github.com/c3rb3ru5d3d53c/binlex.git
-cd binlex/
 make threads=4
-make pkg
+make pkg  # builds binary packages
+make dist # builds source packages
 sudo apt install ./build/binlex_1.1.1_amd64.deb
-# Test your installation
 binlex -m elf:x86 -i tests/elf/elf.x86
 ```
 
-You will then be provided with a `.deb`, `.rpm` and `.tar.gz` packages for `binlex`.
+You will then be provided with `.deb`, `.rpm` and `.tar.gz` packages for `binlex`.
+
+**Building Python Bindings:**
+
+To get started using `pybinlex`:
+```bash
+virtualenv -p python3 venv
+source venv/bin/activate
+python3 -m pip install -v -e .
+python3
+>>> import pybinlex
+```
+
+If you wish to compile the bindings with `cmake`:
+```bash
+make threads=4 args="-DBUILD_PYTHON_BINDINGS=true"
+```
+
+For building with `cmake`, some installations may require you to override the `python` version:
+```bash
+make threads=4 args="-DBUILD_PYTHON_BINDINGS=true -DPYBIND11_PYTHON_VERSION=3.8"
+```
+
+Please note, we use `pybind11` and support for `python3.9` is experimental.
+
+Examples of how to use `pybinlex` can be found in `tests.py`.
 
 **Building the Database:**
 

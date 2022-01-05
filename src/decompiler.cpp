@@ -171,6 +171,23 @@ void Decompiler::PrintTraits(bool pretty){
     }
 }
 
+string Decompiler::GetTraits(bool pretty){
+    stringstream ss;
+    string sep = "";
+    ss << '[';
+    for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
+        if (sections[i].traits != NULL){
+            for (int j = 0; j < sections[i].ntraits; j++){
+                sections[i].traits[j]->corpus = sections[i].corpus;
+                ss << sep << GetTrait(sections[i].traits[j], pretty);
+                sep = ",";
+            }
+        }
+    }
+    ss << ']';
+    return ss.str();
+}
+
 void Decompiler::WriteTraits(char *file_path, bool pretty){
     FILE *fd = fopen(file_path, "w");
     stringstream traits;
