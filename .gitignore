@@ -9,3 +9,4 @@ dump.json
 venv/**
 pybinlex.egg-info/**
 *.so
+*.whl
