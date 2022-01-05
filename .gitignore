@@ -6,3 +6,7 @@ dump.bin
 *.traits
 dump.json
 .vscode/**
+venv/**
+pybinlex.egg-info/**
+*.so
+*.whl

@@ -5,7 +5,7 @@ threads=1
 all:
 	mkdir -p build/
 	cd build/ && \
-		cmake -S ../ -B . && \
+		cmake -S ../ -B . ${args} && \
 		make -j ${threads}
 
 docs:
@@ -110,3 +110,7 @@ check-parameter-format:
 
 clean:
 	rm -rf build/
+	rm -rf dist/
+	rm -rf pybinlex.egg-info/
+	rm -f *.so
+	rm -f *.whl

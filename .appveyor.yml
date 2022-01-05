@@ -4,10 +4,15 @@ environment:
   APPVEYOR_YML_DISABLE_PS_LINUX: true
 
 install:
-- sudo apt install -y git build-essential libcapstone-dev libssl-dev cmake make parallel doxygen git-lfs rpm liblief-dev
+- sudo apt install -y git build-essential libcapstone-dev libssl-dev cmake make parallel doxygen git-lfs rpm liblief-dev python3-dev python3
+- git submodule update --init --recursive
 
 test_script:
 - make threads=4
+- python3 -m pip wheel -v -e .
+- mv *.whl build/
+- python3 -m pip install -v -e .
+- mv *.so build/
 - make pkg
 - make dist
 

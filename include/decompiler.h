@@ -216,6 +216,12 @@ namespace binlex {
         */
         static string GetTrait(struct Trait *trait, bool pretty);
         /**
+        Get Traits as JSON
+        @param pretty pretty print json
+        @return json strings one per line
+        */
+        string GetTraits(bool pretty);
+        /**
         @param pretty pretty print traits
         */
         void PrintTraits(bool pretty);

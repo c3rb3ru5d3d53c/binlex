@@ -75,10 +75,38 @@ target_include_directories(blyara
 
 install(TARGETS blyara DESTINATION bin)
 
+if (BUILD_PYTHON_BINDINGS)
+    include_directories(
+        include/
+        ${pybind11_INCLUDE_DIRS}
+    )
+    link_directories(src/)
+    add_subdirectory(bindings/python/pybind11/)
+    pybind11_add_module(pybinlex
+        SHARED
+        bindings/python/blelf.cpp
+        bindings/python/common.cpp
+        bindings/python/pe.cpp
+        bindings/python/raw.cpp
+        bindings/python/decompiler.cpp
+        bindings/python/pybinlex.cpp
+    )
+    target_link_libraries(pybinlex
+        PRIVATE
+            pybind11::module
+            binlex::library
+        PUBLIC
+            -lcapstone
+            -lm
+            -lpthread
+            -lLIEF
+            ${pybind11_LIBRARIES}
+    )
+endif()
+
 add_custom_target(uninstall
     "${CMAKE_COMMAND}" -P "${CMAKE_MODULE_PATH}/uninstall.cmake"
 )
-
 
 set(CPACK_PACKAGE_NAME binlex)
 string(CONCAT PKG_NAME "${CPACK_PACKAGE_NAME}"
@@ -117,6 +145,10 @@ set(CPACK_SOURCE_IGNORE_FILES
     "docker/data/"
     "samples/"
     "tests/"
+    "pybinlex.egg-info/"
+    "*.whl"
+    "*.so"
+    "venv/"
     "${CMAKE_CURRENT_BINARY_DIR}"
     "${CPACK_SOURCE_IGNORE_FILES}"
 )
