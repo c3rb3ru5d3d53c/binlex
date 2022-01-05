@@ -82,6 +82,10 @@ binlex -m elf:x86 -i tests/elf/elf.x86
 
 See the [`releases`](https://github.com/c3rb3ru5d3d53c/binlex/releases) page.
 
+If you need the bleeding edge binaries you can download them from our AppVeyor CI/CD [`here`](https://ci.appveyor.com/project/c3rb3ru5d3d53c/binlex/build/artifacts).
+
+Please note, edge binaries are subject to bugs, if you encounter one, please let us know!
+
 **Test Files:**
 - To download all the test samples do the command `git lfs fetch`
 - ZIP files in the `tests/` directory can then be extracted using the password `infected`
