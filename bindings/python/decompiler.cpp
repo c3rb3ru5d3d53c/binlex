@@ -1,9 +1,13 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/pytypes.h>
+#include <pybind11/eval.h>
 #include "decompiler.h"
 #include <vector>
+#include <sstream>
+#include <string>
 
+using namespace std;
 namespace py = pybind11;
 
 void init_decompiler(py::module &handle){
@@ -13,9 +17,14 @@ void init_decompiler(py::module &handle){
     .def("set_threads", &binlex::Decompiler::SetThreads)
     .def("set_corpus", &binlex::Decompiler::SetCorpus)
     .def("set_instructions", &binlex::Decompiler::SetInstructions)
-    .def("decompile", [](binlex::Decompiler &module, py::bytes data){
-        size_t size = py::len(data);
-        return data;
+    .def("decompile", [](binlex::Decompiler &module, py::buffer data, uint offset, uint index){
+        py::buffer_info info = data.request();
+        module.Decompile(info.ptr, info.size, offset, index);
+    })
+    .def("get_traits", [](binlex::Decompiler &module){
+        py::module_ json = py::module_::import("json");
+        string traits = module.GetTraits(false);
+        return json.attr("loads")(traits);
     })
     .def("append_queue", &binlex::Decompiler::AppendQueue)
     .def("print_traits", &binlex::Decompiler::PrintTraits)
