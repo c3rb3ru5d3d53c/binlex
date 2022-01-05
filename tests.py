@@ -3,7 +3,7 @@
 import json
 from pprint import pprint
 from hashlib import sha256
-import build.pybinlex as pybinlex
+import pybinlex
 
 raw = pybinlex.Raw()
 raw.read_file('tests/raw/raw.x86', 0)
