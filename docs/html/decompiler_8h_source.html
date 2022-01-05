@@ -129,74 +129,82 @@ $(document).ready(function(){initNavTree('decompiler_8h_source.html',''); initRe
 <div class="line"><a name="l00041"></a><span class="lineno"><a class="line" href="structbinlex_1_1Decompiler_1_1Trait.html">   41</a></span>&#160;        <span class="keyword">struct </span><a class="code" href="structbinlex_1_1Decompiler_1_1Trait.html">Trait</a> {</div>
 <div class="line"><a name="l00042"></a><span class="lineno">   42</span>&#160;            <span class="keywordtype">char</span> *corpus;</div>
 <div class="line"><a name="l00043"></a><span class="lineno">   43</span>&#160;            <span class="keywordtype">char</span> *type;</div>
-<div class="line"><a name="l00044"></a><span class="lineno">   44</span>&#160;            <span class="keywordtype">string</span> tmp_bytes;</div>
-<div class="line"><a name="l00045"></a><span class="lineno">   45</span>&#160;            <span class="keywordtype">char</span> *bytes;</div>
-<div class="line"><a name="l00046"></a><span class="lineno">   46</span>&#160;            <span class="keywordtype">string</span> tmp_trait;</div>
-<div class="line"><a name="l00047"></a><span class="lineno">   47</span>&#160;            <span class="keywordtype">char</span> *trait;</div>
-<div class="line"><a name="l00048"></a><span class="lineno">   48</span>&#160;            uint edges;</div>
-<div class="line"><a name="l00049"></a><span class="lineno">   49</span>&#160;            uint blocks;</div>
-<div class="line"><a name="l00050"></a><span class="lineno">   50</span>&#160;            uint instructions;</div>
-<div class="line"><a name="l00051"></a><span class="lineno">   51</span>&#160;            uint size;</div>
-<div class="line"><a name="l00052"></a><span class="lineno">   52</span>&#160;            uint offset;</div>
-<div class="line"><a name="l00053"></a><span class="lineno">   53</span>&#160;            uint invalid_instructions;</div>
-<div class="line"><a name="l00054"></a><span class="lineno">   54</span>&#160;            uint cyclomatic_complexity;</div>
-<div class="line"><a name="l00055"></a><span class="lineno">   55</span>&#160;            uint average_instructions_per_block;</div>
-<div class="line"><a name="l00056"></a><span class="lineno">   56</span>&#160;            <span class="keywordtype">float</span> bytes_entropy;</div>
-<div class="line"><a name="l00057"></a><span class="lineno">   57</span>&#160;            <span class="keywordtype">float</span> trait_entropy;</div>
-<div class="line"><a name="l00058"></a><span class="lineno">   58</span>&#160;            <span class="keywordtype">char</span> *trait_sha256;</div>
-<div class="line"><a name="l00059"></a><span class="lineno">   59</span>&#160;            <span class="keywordtype">char</span> *bytes_sha256;</div>
-<div class="line"><a name="l00060"></a><span class="lineno">   60</span>&#160;        };</div>
-<div class="line"><a name="l00061"></a><span class="lineno"><a class="line" href="structbinlex_1_1Decompiler_1_1Section.html">   61</a></span>&#160;        <span class="keyword">struct </span><a class="code" href="structbinlex_1_1Decompiler_1_1Section.html">Section</a> {</div>
-<div class="line"><a name="l00062"></a><span class="lineno">   62</span>&#160;            cs_arch arch;</div>
-<div class="line"><a name="l00063"></a><span class="lineno">   63</span>&#160;            cs_mode mode;</div>
-<div class="line"><a name="l00064"></a><span class="lineno">   64</span>&#160;            <span class="keywordtype">char</span> *corpus;</div>
-<div class="line"><a name="l00065"></a><span class="lineno">   65</span>&#160;            uint threads;</div>
-<div class="line"><a name="l00066"></a><span class="lineno">   66</span>&#160;            <span class="keywordtype">bool</span> instructions;</div>
-<div class="line"><a name="l00067"></a><span class="lineno">   67</span>&#160;            uint thread_cycles;</div>
-<div class="line"><a name="l00068"></a><span class="lineno">   68</span>&#160;            useconds_t thread_sleep;</div>
-<div class="line"><a name="l00069"></a><span class="lineno">   69</span>&#160;            uint offset;</div>
-<div class="line"><a name="l00070"></a><span class="lineno">   70</span>&#160;            <span class="keyword">struct </span><a class="code" href="structbinlex_1_1Decompiler_1_1Trait.html">Trait</a> **traits;</div>
-<div class="line"><a name="l00071"></a><span class="lineno">   71</span>&#160;            uint ntraits;</div>
-<div class="line"><a name="l00072"></a><span class="lineno">   72</span>&#160;            <span class="keywordtype">void</span> *data;</div>
-<div class="line"><a name="l00073"></a><span class="lineno">   73</span>&#160;            <span class="keywordtype">size_t</span> data_size;</div>
-<div class="line"><a name="l00074"></a><span class="lineno">   74</span>&#160;            set&lt;uint64_t&gt; coverage;</div>
-<div class="line"><a name="l00075"></a><span class="lineno">   75</span>&#160;            map&lt;uint64_t, uint&gt; addresses;</div>
-<div class="line"><a name="l00076"></a><span class="lineno">   76</span>&#160;            map&lt;uint64_t, int&gt; visited;</div>
-<div class="line"><a name="l00077"></a><span class="lineno">   77</span>&#160;            queue&lt;uint64_t&gt; discovered;</div>
-<div class="line"><a name="l00078"></a><span class="lineno">   78</span>&#160;        };</div>
-<div class="line"><a name="l00079"></a><span class="lineno">   79</span>&#160;        <span class="keyword">struct </span><a class="code" href="structbinlex_1_1Decompiler_1_1Section.html">Section</a> sections[DECOMPILER_MAX_SECTIONS];</div>
-<div class="line"><a name="l00080"></a><span class="lineno">   80</span>&#160;        <a class="code" href="classbinlex_1_1Decompiler.html">Decompiler</a>();</div>
-<div class="line"><a name="l00091"></a><span class="lineno">   91</span>&#160;        <span class="keywordtype">bool</span> Setup(cs_arch arch, cs_mode mode, <span class="keywordtype">bool</span> instructions, <span class="keywordtype">char</span> *corpus, uint threads, uint thread_cycles, useconds_t thread_sleep, uint index);</div>
-<div class="line"><a name="l00097"></a><span class="lineno">   97</span>&#160;        <span class="keyword">static</span> <span class="keywordtype">void</span> * DecompileWorker(<span class="keywordtype">void</span> *args);</div>
-<div class="line"><a name="l00105"></a><span class="lineno">  105</span>&#160;        <span class="keyword">static</span> <span class="keywordtype">void</span> CollectOperands(cs_insn* insn, <span class="keywordtype">int</span> operand_type, <span class="keyword">struct</span> <a class="code" href="structbinlex_1_1Decompiler_1_1Section.html">Section</a> *sections, uint index);</div>
-<div class="line"><a name="l00112"></a><span class="lineno">  112</span>&#160;        <span class="keyword">static</span> uint CollectInsn(cs_insn* insn, <span class="keyword">struct</span> <a class="code" href="structbinlex_1_1Decompiler_1_1Section.html">Section</a> *sections, uint index);</div>
-<div class="line"><a name="l00120"></a><span class="lineno">  120</span>&#160;        <span class="keywordtype">void</span> Decompile(<span class="keywordtype">void</span>* data, <span class="keywordtype">size_t</span> data_size, <span class="keywordtype">size_t</span> offset, uint index);</div>
-<div class="line"><a name="l00121"></a><span class="lineno">  121</span>&#160;        <span class="comment">//void Seek(uint64_t address, size_t data_size, uint index);</span></div>
-<div class="line"><a name="l00129"></a><span class="lineno">  129</span>&#160;<span class="comment"></span>        <span class="keyword">static</span> <span class="keywordtype">void</span> AppendTrait(<span class="keyword">struct</span> <a class="code" href="structbinlex_1_1Decompiler_1_1Trait.html">Trait</a> *trait, <span class="keyword">struct</span> <a class="code" href="structbinlex_1_1Decompiler_1_1Section.html">Section</a> *sections, uint index);</div>
-<div class="line"><a name="l00130"></a><span class="lineno">  130</span>&#160;        <span class="keywordtype">void</span> FreeTraits(uint index);</div>
-<div class="line"><a name="l00136"></a><span class="lineno">  136</span>&#160;        <span class="keyword">static</span> <span class="keywordtype">bool</span> IsEndInsn(cs_insn *insn);</div>
-<div class="line"><a name="l00142"></a><span class="lineno">  142</span>&#160;        <span class="keyword">static</span> uint IsConditionalInsn(cs_insn *insn);</div>
-<div class="line"><a name="l00148"></a><span class="lineno">  148</span>&#160;        <span class="keyword">static</span> uint64_t MaxAddress(set&lt;uint64_t&gt; coverage);</div>
-<div class="line"><a name="l00154"></a><span class="lineno">  154</span>&#160;        <span class="keyword">static</span> <span class="keywordtype">bool</span> IsFunction(map&lt;uint64_t, uint&gt; &amp;addresses, uint64_t address);</div>
-<div class="line"><a name="l00160"></a><span class="lineno">  160</span>&#160;        <span class="keyword">static</span> <span class="keywordtype">bool</span> IsBlock(map&lt;uint64_t, uint&gt; &amp;addresses, uint64_t address);</div>
-<div class="line"><a name="l00166"></a><span class="lineno">  166</span>&#160;        <span class="keyword">static</span> <span class="keywordtype">bool</span> IsVisited(map&lt;uint64_t, int&gt; &amp;visited, uint64_t address);</div>
-<div class="line"><a name="l00172"></a><span class="lineno">  172</span>&#160;        <span class="keywordtype">bool</span> IsAddress(map&lt;uint64_t, uint&gt; &amp;addresses, uint64_t address, uint index);</div>
-<div class="line"><a name="l00178"></a><span class="lineno">  178</span>&#160;        <span class="keyword">static</span> <span class="keywordtype">bool</span> IsWildcardInsn(cs_insn *insn);</div>
-<div class="line"><a name="l00184"></a><span class="lineno">  184</span>&#160;        <span class="keyword">static</span> <span class="keywordtype">string</span> WildcardInsn(cs_insn *insn);</div>
-<div class="line"><a name="l00189"></a><span class="lineno">  189</span>&#160;        <span class="keyword">static</span> <span class="keywordtype">void</span> ClearTrait(<span class="keyword">struct</span> <a class="code" href="structbinlex_1_1Decompiler_1_1Trait.html">Trait</a> *trait);</div>
-<div class="line"><a name="l00196"></a><span class="lineno">  196</span>&#160;        <span class="keyword">static</span> <span class="keywordtype">string</span> GetTrait(<span class="keyword">struct</span> <a class="code" href="structbinlex_1_1Decompiler_1_1Trait.html">Trait</a> *trait, <span class="keywordtype">bool</span> pretty);</div>
-<div class="line"><a name="l00200"></a><span class="lineno">  200</span>&#160;        <span class="keywordtype">void</span> PrintTraits(<span class="keywordtype">bool</span> pretty);</div>
-<div class="line"><a name="l00206"></a><span class="lineno">  206</span>&#160;        <span class="keywordtype">void</span> WriteTraits(<span class="keywordtype">char</span> *file_path, <span class="keywordtype">bool</span> pretty);</div>
-<div class="line"><a name="l00207"></a><span class="lineno">  207</span>&#160;        <span class="keyword">static</span> <span class="keywordtype">void</span> * TraitWorker(<span class="keywordtype">void</span> *args);</div>
-<div class="line"><a name="l00208"></a><span class="lineno">  208</span>&#160;        <span class="comment">//void Seek(uint offset, uint index);</span></div>
-<div class="line"><a name="l00209"></a><span class="lineno">  209</span>&#160;        ~<a class="code" href="classbinlex_1_1Decompiler.html">Decompiler</a>();</div>
-<div class="line"><a name="l00210"></a><span class="lineno">  210</span>&#160; </div>
-<div class="line"><a name="l00211"></a><span class="lineno">  211</span>&#160;    };</div>
-<div class="line"><a name="l00212"></a><span class="lineno">  212</span>&#160;}</div>
-<div class="line"><a name="l00213"></a><span class="lineno">  213</span>&#160;<span class="preprocessor">#endif</span></div>
+<div class="line"><a name="l00044"></a><span class="lineno">   44</span>&#160;            <span class="keywordtype">char</span> *architecture;</div>
+<div class="line"><a name="l00045"></a><span class="lineno">   45</span>&#160;            <span class="keywordtype">string</span> tmp_bytes;</div>
+<div class="line"><a name="l00046"></a><span class="lineno">   46</span>&#160;            <span class="keywordtype">char</span> *bytes;</div>
+<div class="line"><a name="l00047"></a><span class="lineno">   47</span>&#160;            <span class="keywordtype">string</span> tmp_trait;</div>
+<div class="line"><a name="l00048"></a><span class="lineno">   48</span>&#160;            <span class="keywordtype">char</span> *trait;</div>
+<div class="line"><a name="l00049"></a><span class="lineno">   49</span>&#160;            uint edges;</div>
+<div class="line"><a name="l00050"></a><span class="lineno">   50</span>&#160;            uint blocks;</div>
+<div class="line"><a name="l00051"></a><span class="lineno">   51</span>&#160;            uint instructions;</div>
+<div class="line"><a name="l00052"></a><span class="lineno">   52</span>&#160;            uint size;</div>
+<div class="line"><a name="l00053"></a><span class="lineno">   53</span>&#160;            uint offset;</div>
+<div class="line"><a name="l00054"></a><span class="lineno">   54</span>&#160;            uint invalid_instructions;</div>
+<div class="line"><a name="l00055"></a><span class="lineno">   55</span>&#160;            uint cyclomatic_complexity;</div>
+<div class="line"><a name="l00056"></a><span class="lineno">   56</span>&#160;            uint average_instructions_per_block;</div>
+<div class="line"><a name="l00057"></a><span class="lineno">   57</span>&#160;            <span class="keywordtype">float</span> bytes_entropy;</div>
+<div class="line"><a name="l00058"></a><span class="lineno">   58</span>&#160;            <span class="keywordtype">float</span> trait_entropy;</div>
+<div class="line"><a name="l00059"></a><span class="lineno">   59</span>&#160;            <span class="keywordtype">char</span> *trait_sha256;</div>
+<div class="line"><a name="l00060"></a><span class="lineno">   60</span>&#160;            <span class="keywordtype">char</span> *bytes_sha256;</div>
+<div class="line"><a name="l00061"></a><span class="lineno">   61</span>&#160;        };</div>
+<div class="line"><a name="l00062"></a><span class="lineno"><a class="line" href="structbinlex_1_1Decompiler_1_1Section.html">   62</a></span>&#160;        <span class="keyword">struct </span><a class="code" href="structbinlex_1_1Decompiler_1_1Section.html">Section</a> {</div>
+<div class="line"><a name="l00063"></a><span class="lineno">   63</span>&#160;            cs_arch arch;</div>
+<div class="line"><a name="l00064"></a><span class="lineno">   64</span>&#160;            cs_mode mode;</div>
+<div class="line"><a name="l00065"></a><span class="lineno">   65</span>&#160;            <span class="keywordtype">char</span> *arch_str;</div>
+<div class="line"><a name="l00066"></a><span class="lineno">   66</span>&#160;            <span class="keywordtype">char</span> *cpu;</div>
+<div class="line"><a name="l00067"></a><span class="lineno">   67</span>&#160;            <span class="keywordtype">char</span> *corpus;</div>
+<div class="line"><a name="l00068"></a><span class="lineno">   68</span>&#160;            uint threads;</div>
+<div class="line"><a name="l00069"></a><span class="lineno">   69</span>&#160;            <span class="keywordtype">bool</span> instructions;</div>
+<div class="line"><a name="l00070"></a><span class="lineno">   70</span>&#160;            uint thread_cycles;</div>
+<div class="line"><a name="l00071"></a><span class="lineno">   71</span>&#160;            useconds_t thread_sleep;</div>
+<div class="line"><a name="l00072"></a><span class="lineno">   72</span>&#160;            uint offset;</div>
+<div class="line"><a name="l00073"></a><span class="lineno">   73</span>&#160;            <span class="keyword">struct </span><a class="code" href="structbinlex_1_1Decompiler_1_1Trait.html">Trait</a> **traits;</div>
+<div class="line"><a name="l00074"></a><span class="lineno">   74</span>&#160;            uint ntraits;</div>
+<div class="line"><a name="l00075"></a><span class="lineno">   75</span>&#160;            <span class="keywordtype">void</span> *data;</div>
+<div class="line"><a name="l00076"></a><span class="lineno">   76</span>&#160;            <span class="keywordtype">size_t</span> data_size;</div>
+<div class="line"><a name="l00077"></a><span class="lineno">   77</span>&#160;            set&lt;uint64_t&gt; coverage;</div>
+<div class="line"><a name="l00078"></a><span class="lineno">   78</span>&#160;            map&lt;uint64_t, uint&gt; addresses;</div>
+<div class="line"><a name="l00079"></a><span class="lineno">   79</span>&#160;            map&lt;uint64_t, int&gt; visited;</div>
+<div class="line"><a name="l00080"></a><span class="lineno">   80</span>&#160;            queue&lt;uint64_t&gt; discovered;</div>
+<div class="line"><a name="l00081"></a><span class="lineno">   81</span>&#160;        };</div>
+<div class="line"><a name="l00082"></a><span class="lineno">   82</span>&#160;        <span class="keyword">struct </span><a class="code" href="structbinlex_1_1Decompiler_1_1Section.html">Section</a> sections[DECOMPILER_MAX_SECTIONS];</div>
+<div class="line"><a name="l00083"></a><span class="lineno">   83</span>&#160;        <a class="code" href="classbinlex_1_1Decompiler.html">Decompiler</a>();</div>
+<div class="line"><a name="l00094"></a><span class="lineno">   94</span>&#160;        <span class="keywordtype">bool</span> Setup(cs_arch arch, cs_mode mode, uint index);</div>
+<div class="line"><a name="l00101"></a><span class="lineno">  101</span>&#160;        <span class="keywordtype">void</span> SetThreads(uint threads, uint thread_cycles, uint thread_sleep, uint index);</div>
+<div class="line"><a name="l00107"></a><span class="lineno">  107</span>&#160;        <span class="keywordtype">void</span> SetCorpus(<span class="keywordtype">char</span> *corpus, uint index);</div>
+<div class="line"><a name="l00112"></a><span class="lineno">  112</span>&#160;        <span class="keywordtype">void</span> SetInstructions(<span class="keywordtype">bool</span> instructions, uint index);</div>
+<div class="line"><a name="l00118"></a><span class="lineno">  118</span>&#160;        <span class="keyword">static</span> <span class="keywordtype">void</span> * DecompileWorker(<span class="keywordtype">void</span> *args);</div>
+<div class="line"><a name="l00126"></a><span class="lineno">  126</span>&#160;        <span class="keyword">static</span> <span class="keywordtype">void</span> CollectOperands(cs_insn* insn, <span class="keywordtype">int</span> operand_type, <span class="keyword">struct</span> <a class="code" href="structbinlex_1_1Decompiler_1_1Section.html">Section</a> *sections, uint index);</div>
+<div class="line"><a name="l00133"></a><span class="lineno">  133</span>&#160;        <span class="keyword">static</span> uint CollectInsn(cs_insn* insn, <span class="keyword">struct</span> <a class="code" href="structbinlex_1_1Decompiler_1_1Section.html">Section</a> *sections, uint index);</div>
+<div class="line"><a name="l00141"></a><span class="lineno">  141</span>&#160;        <span class="keywordtype">void</span> Decompile(<span class="keywordtype">void</span>* data, <span class="keywordtype">size_t</span> data_size, <span class="keywordtype">size_t</span> offset, uint index);</div>
+<div class="line"><a name="l00142"></a><span class="lineno">  142</span>&#160;        <span class="comment">//void Seek(uint64_t address, size_t data_size, uint index);</span></div>
+<div class="line"><a name="l00150"></a><span class="lineno">  150</span>&#160;<span class="comment"></span>        <span class="keyword">static</span> <span class="keywordtype">void</span> AppendTrait(<span class="keyword">struct</span> <a class="code" href="structbinlex_1_1Decompiler_1_1Trait.html">Trait</a> *trait, <span class="keyword">struct</span> <a class="code" href="structbinlex_1_1Decompiler_1_1Section.html">Section</a> *sections, uint index);</div>
+<div class="line"><a name="l00151"></a><span class="lineno">  151</span>&#160;        <span class="keywordtype">void</span> FreeTraits(uint index);</div>
+<div class="line"><a name="l00157"></a><span class="lineno">  157</span>&#160;        <span class="keyword">static</span> <span class="keywordtype">bool</span> IsEndInsn(cs_insn *insn);</div>
+<div class="line"><a name="l00163"></a><span class="lineno">  163</span>&#160;        <span class="keyword">static</span> uint IsConditionalInsn(cs_insn *insn);</div>
+<div class="line"><a name="l00169"></a><span class="lineno">  169</span>&#160;        <span class="keyword">static</span> uint64_t MaxAddress(set&lt;uint64_t&gt; coverage);</div>
+<div class="line"><a name="l00175"></a><span class="lineno">  175</span>&#160;        <span class="keyword">static</span> <span class="keywordtype">bool</span> IsFunction(map&lt;uint64_t, uint&gt; &amp;addresses, uint64_t address);</div>
+<div class="line"><a name="l00181"></a><span class="lineno">  181</span>&#160;        <span class="keyword">static</span> <span class="keywordtype">bool</span> IsBlock(map&lt;uint64_t, uint&gt; &amp;addresses, uint64_t address);</div>
+<div class="line"><a name="l00187"></a><span class="lineno">  187</span>&#160;        <span class="keyword">static</span> <span class="keywordtype">bool</span> IsVisited(map&lt;uint64_t, int&gt; &amp;visited, uint64_t address);</div>
+<div class="line"><a name="l00193"></a><span class="lineno">  193</span>&#160;        <span class="keywordtype">bool</span> IsAddress(map&lt;uint64_t, uint&gt; &amp;addresses, uint64_t address, uint index);</div>
+<div class="line"><a name="l00199"></a><span class="lineno">  199</span>&#160;        <span class="keyword">static</span> <span class="keywordtype">bool</span> IsWildcardInsn(cs_insn *insn);</div>
+<div class="line"><a name="l00205"></a><span class="lineno">  205</span>&#160;        <span class="keyword">static</span> <span class="keywordtype">string</span> WildcardInsn(cs_insn *insn);</div>
+<div class="line"><a name="l00210"></a><span class="lineno">  210</span>&#160;        <span class="keyword">static</span> <span class="keywordtype">void</span> ClearTrait(<span class="keyword">struct</span> <a class="code" href="structbinlex_1_1Decompiler_1_1Trait.html">Trait</a> *trait);</div>
+<div class="line"><a name="l00217"></a><span class="lineno">  217</span>&#160;        <span class="keyword">static</span> <span class="keywordtype">string</span> GetTrait(<span class="keyword">struct</span> <a class="code" href="structbinlex_1_1Decompiler_1_1Trait.html">Trait</a> *trait, <span class="keywordtype">bool</span> pretty);</div>
+<div class="line"><a name="l00223"></a><span class="lineno">  223</span>&#160;        <span class="keywordtype">string</span> GetTraits(<span class="keywordtype">bool</span> pretty);</div>
+<div class="line"><a name="l00227"></a><span class="lineno">  227</span>&#160;        <span class="keywordtype">void</span> PrintTraits(<span class="keywordtype">bool</span> pretty);</div>
+<div class="line"><a name="l00233"></a><span class="lineno">  233</span>&#160;        <span class="keywordtype">void</span> WriteTraits(<span class="keywordtype">char</span> *file_path, <span class="keywordtype">bool</span> pretty);</div>
+<div class="line"><a name="l00234"></a><span class="lineno">  234</span>&#160;        <span class="keyword">static</span> <span class="keywordtype">void</span> * TraitWorker(<span class="keywordtype">void</span> *args);</div>
+<div class="line"><a name="l00235"></a><span class="lineno">  235</span>&#160;        <span class="keywordtype">void</span> AppendQueue(set&lt;uint64_t&gt; &amp;addresses, uint operand_type, uint index);</div>
+<div class="line"><a name="l00236"></a><span class="lineno">  236</span>&#160;        <span class="comment">//void Seek(uint offset, uint index);</span></div>
+<div class="line"><a name="l00237"></a><span class="lineno">  237</span>&#160;        ~<a class="code" href="classbinlex_1_1Decompiler.html">Decompiler</a>();</div>
+<div class="line"><a name="l00238"></a><span class="lineno">  238</span>&#160; </div>
+<div class="line"><a name="l00239"></a><span class="lineno">  239</span>&#160;    };</div>
+<div class="line"><a name="l00240"></a><span class="lineno">  240</span>&#160;}</div>
+<div class="line"><a name="l00241"></a><span class="lineno">  241</span>&#160;<span class="preprocessor">#endif</span></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
-<div class="ttc" id="astructbinlex_1_1Decompiler_1_1Section_html"><div class="ttname"><a href="structbinlex_1_1Decompiler_1_1Section.html">binlex::Decompiler::Section</a></div><div class="ttdef"><b>Definition:</b> decompiler.h:61</div></div>
+<div class="ttc" id="astructbinlex_1_1Decompiler_1_1Section_html"><div class="ttname"><a href="structbinlex_1_1Decompiler_1_1Section.html">binlex::Decompiler::Section</a></div><div class="ttdef"><b>Definition:</b> decompiler.h:62</div></div>
 <div class="ttc" id="aclassbinlex_1_1Decompiler_html"><div class="ttname"><a href="classbinlex_1_1Decompiler.html">binlex::Decompiler</a></div><div class="ttdef"><b>Definition:</b> decompiler.h:27</div></div>
 <div class="ttc" id="astructbinlex_1_1Decompiler_1_1Trait_html"><div class="ttname"><a href="structbinlex_1_1Decompiler_1_1Trait.html">binlex::Decompiler::Trait</a></div><div class="ttdef"><b>Definition:</b> decompiler.h:41</div></div>
 <div class="ttc" id="aclassbinlex_1_1Common_html"><div class="ttname"><a href="classbinlex_1_1Common.html">binlex::Common</a></div><div class="ttdef"><b>Definition:</b> common.h:10</div></div>
