@@ -13,6 +13,10 @@
 #include "decompiler.h"
 #include "blelf.h"
 
+#ifdef _WIN32
+#pragma comment(lib, "capstone")
+#pragma comment(lib, "binlex")
+#endif
 using namespace binlex;
 
 void timeout_handler(int signum) {
