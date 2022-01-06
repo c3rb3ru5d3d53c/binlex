@@ -34,8 +34,17 @@ for:
     matrix:
       only:
         - image: Visual Studio 2017
+    configuration:
+      - Release
     platform: Any CPU
+    install:
+      - git submodule update --init --recursive
+      - set PATH=C:\Program Files\CMake\bin;%PATH%
     test_script:
-      - ps: Write-Host "Windows Build Test"
+      - ps: mkdir build
+      - ps: cd build/
+      - ps: cmake ..
+      - ps: cmake --build .
+      - ps: Write-Host "Windows Build Test Completed"
 
 build: off
