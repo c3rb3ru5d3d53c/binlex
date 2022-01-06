@@ -1,6 +1,7 @@
 build/**
 dist/**
 samples/**
+windows/**
 dump.bin
 *.yara
 *.traits

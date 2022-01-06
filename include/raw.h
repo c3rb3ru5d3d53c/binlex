@@ -4,7 +4,21 @@
 #ifndef RAW_H
 #define RAW_H
 
+#ifdef _WIN32
+#define BINLEX_EXPORT __declspec(dllexport)
+#else
+#define BINLEX_EXPORT 
+#endif
+
 #define RAW_MAX_SECTIONS 256
+
+#ifdef _WIN32
+typedef unsigned int uint;
+#endif
+
+#ifdef _WIN32
+typedef unsigned int uint;
+#endif
 
 namespace binlex{
     class Raw{
@@ -16,9 +30,9 @@ namespace binlex{
             };
         public:
             struct Section sections[RAW_MAX_SECTIONS];
-            Raw();
-            bool ReadFile(char *file_path, int section_index);
-            ~Raw();
+            BINLEX_EXPORT Raw();
+            BINLEX_EXPORT bool ReadFile(char *file_path, int section_index);
+            BINLEX_EXPORT ~Raw();
     };
 }
 
