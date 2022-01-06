@@ -14,7 +14,11 @@
 #include <windows.h>
 #include <wincrypt.h>
 #endif
+#ifndef _WIN32
 #include <unistd.h>
+#else
+#include <windows.h>
+#endif
 #include <math.h>
 #include <capstone/capstone.h>
 #include "json.h"
@@ -25,8 +29,11 @@
 using namespace std;
 using namespace binlex;
 using json = nlohmann::json;
-
+#ifndef _WIN32
 static pthread_mutex_t DECOMPILER_MUTEX = PTHREAD_MUTEX_INITIALIZER;
+#else
+CRITICAL_SECTION csDecompiler;
+#endif
 
 //from https://github.com/capstone-engine/capstone/blob/master/include/capstone/x86.h
 
@@ -53,8 +60,21 @@ Decompiler::Decompiler() {
 void Decompiler::AppendTrait(struct Trait *trait, struct Section *sections, uint index){
     #if defined(__linux__) || defined(__APPLE__)
     pthread_mutex_lock(&DECOMPILER_MUTEX);
+    #else
+    EnterCriticalSection(&csDecompiler);
     #endif
+    #if defined(__linux__) || defined(__APPLE__)
     sections[index].traits = (struct Trait **)realloc(sections[index].traits, sizeof(struct Trait *) * sections[index].ntraits + 1);
+    #else
+    if (sections[index].ntraits % 1024 == 0) {
+        if (sections[index].ntraits == 0) {
+            sections[index].traits = (struct Trait**)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(void*) * 1024);
+        }
+        else {
+            sections[index].traits = (struct Trait**)HeapReAlloc(GetProcessHeap(), NULL, sections[index].traits, sizeof(void*) * (sections[index].ntraits + 1024));
+        }
+    }
+    #endif
     if (sections[index].traits == NULL){
         fprintf(stderr, "[x] trait realloc failed\n");
         exit(1);
@@ -106,6 +126,8 @@ void Decompiler::AppendTrait(struct Trait *trait, struct Section *sections, uint
     trait->bytes = (char *)trait->tmp_bytes.c_str();
     #if defined(__linux__) || defined(__APPLE__)
     pthread_mutex_unlock(&DECOMPILER_MUTEX);
+    #else
+    LeaveCriticalSection(&csDecompiler);
     #endif
 }
 
@@ -225,6 +247,8 @@ void * Decompiler::DecompileWorker(void *args) {
 
         #if defined(__linux__) || defined(__APPLE__)
         pthread_mutex_lock(&DECOMPILER_MUTEX);
+        #else
+        EnterCriticalSection(&csDecompiler);
         #endif
         if (!sections[index].discovered.empty()){
             address = sections[index].discovered.front();
@@ -233,17 +257,25 @@ void * Decompiler::DecompileWorker(void *args) {
         } else {
             #if defined(__linux__) || defined(__APPLE__)
             pthread_mutex_unlock(&DECOMPILER_MUTEX);
+            #else
+            LeaveCriticalSection(&csDecompiler);
             #endif
             thread_cycles++;
             if (thread_cycles == sections[index].thread_cycles){
                 break;
             }
+            #ifndef _WIN32
             usleep(sections[index].thread_sleep * 1000);
+            #else
+            Sleep(sections[index].thread_sleep);
+            #endif
             continue;
         }
         sections[index].coverage.insert(address);
         #if defined(__linux__) || defined(__APPLE__)
         pthread_mutex_unlock(&DECOMPILER_MUTEX);
+        #else
+        LeaveCriticalSection(&csDecompiler);
         #endif
 
         myself.pc = address;
@@ -321,6 +353,8 @@ void * Decompiler::DecompileWorker(void *args) {
 
             #if defined(__linux__) || defined(__APPLE__)
             pthread_mutex_lock(&DECOMPILER_MUTEX);
+            #else
+            EnterCriticalSection(&csDecompiler);
             #endif
 
             if (result == true){
@@ -334,6 +368,8 @@ void * Decompiler::DecompileWorker(void *args) {
 
             #if defined(__linux__) || defined(__APPLE__)
             pthread_mutex_unlock(&DECOMPILER_MUTEX);
+            #else
+            LeaveCriticalSection(&csDecompiler);
             #endif
             if (block == true && IsConditionalInsn(insn) > 0){
                 b_trait.tmp_trait = TrimRight(b_trait.tmp_trait);
@@ -438,6 +474,11 @@ void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint ind
     #if defined(__linux__) || defined(__APPLE__)
     pthread_t threads[sections[index].threads];
     pthread_attr_t thread_attribs[sections[index].threads];
+    #else
+    InitializeCriticalSection(&csDecompiler);
+    DWORD dwThreads = sections[index].threads;
+    HANDLE* hThreads = (HANDLE*)malloc(sizeof(HANDLE) * dwThreads);
+    DWORD dwThreadId;
     #endif
 
     while (true){
@@ -446,11 +487,15 @@ void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint ind
             pthread_attr_init(&thread_attribs[i]);
             pthread_attr_setdetachstate(&thread_attribs[i], PTHREAD_CREATE_JOINABLE);
             pthread_create(&threads[i], NULL, DecompileWorker, args);
+            #else
+            hThreads[i] = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)DecompileWorker, args, 0, &dwThreadId);
             #endif
         }
         for (int i = 0; i < sections[index].threads; i++){
             #if defined(__linux__) || defined(__APPLE__)
             pthread_join(threads[i], NULL);
+            #else
+            WaitForMultipleObjects(sections[index].threads, hThreads, TRUE, INFINITE);
             #endif
         }
         if (sections[index].discovered.empty()){
@@ -464,20 +509,39 @@ void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint ind
             break;
         }
     }
-    for (int i = 0; i < sections[index].ntraits; i++){
-        for (int j = 0; j < sections[index].threads; j++){
+    for (int i = 0; i < sections[index].ntraits; i += sections[index].threads) {
+        for (int j = 0; j < sections[index].threads; j++) {
             #if defined(__linux__) || defined(__APPLE__)
-            pthread_attr_init(&thread_attribs[j]);
-            pthread_attr_setdetachstate(&thread_attribs[j], PTHREAD_CREATE_JOINABLE);
-            pthread_create(&threads[j], NULL, TraitWorker, (void *)sections[index].traits[i]);
+            if (i + j < sections[index].ntraits) {
+                pthread_attr_init(&thread_attribs[j]);
+                pthread_attr_setdetachstate(&thread_attribs[j], PTHREAD_CREATE_JOINABLE);
+                pthread_create(&threads[j], NULL, TraitWorker, (void*)sections[index].traits[i + j]);
+            }
+            else {
+                threads[j] = NULL;
+            }
+            #else
+            if (i + j < sections[index].ntraits) {
+                hThreads[j] = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)TraitWorker, (void*)sections[index].traits[i + j], 0, &dwThreadId);
+            }
+            else {
+                hThreads[j] = INVALID_HANDLE_VALUE;
+            }
             #endif
+            }
+        #if defined(__linux__) || defined(__APPLE__)
+        for (int j = 0; j < sections[index].threads; j++) {
+            if (threads[j] != NULL) {
+                pthread_join(threads[j], NULL);
+            }
         }
-        for (int j = 0; j < sections[index].threads; j++){
-            #if defined(__linux__) || defined(__APPLE__)
-            pthread_join(threads[j], NULL);
-            #endif
-        }
+        #else
+        WaitForMultipleObjects(sections[index].threads, hThreads, TRUE, INFINITE);
+        #endif
     }
+    #ifdef _WIN32
+    free(hThreads);
+    #endif
     free(args);
 }
 
