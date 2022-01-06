@@ -16,6 +16,10 @@
 typedef unsigned int uint;
 #endif
 
+#ifdef _WIN32
+typedef unsigned int uint;
+#endif
+
 namespace binlex{
     class Raw{
             int GetFileSize(FILE *fd);
