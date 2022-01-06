@@ -29,6 +29,7 @@ add_library(binlex::library ALIAS binlex)
 target_include_directories(binlex
     PUBLIC
         ${PROJECT_SOURCE_DIR}/include
+        ${PROJECT_SOURCE_DIR}/build/sdks/
 )
 
 add_executable(binlex-bin
@@ -71,6 +72,7 @@ target_link_libraries(blyara -lm)
 target_include_directories(blyara
     PRIVATE
         ${PROJECT_SOURCE_DIR}/include
+        ${PROJECT_SOURCE_DIR}/build/sdks/
 )
 
 install(TARGETS blyara DESTINATION bin)
