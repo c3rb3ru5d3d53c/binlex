@@ -10,7 +10,6 @@ for:
     matrix:
       only:
         - image: Ubuntu2004
-      platform: Any CPU
       environment:
         APPVEYOR_YML_DISABLE_PS_LINUX: true
       install:
@@ -34,7 +33,6 @@ for:
     matrix:
       only:
         - image: Visual Studio 2017
-      platform: Any CPU
       test_script:
         - ps: Write-Host "Windows Build Test"
 
