@@ -7,7 +7,7 @@
 #ifdef _WIN32
 #define BINLEX_EXPORT __declspec(dllexport)
 #else
-#define BINELEX_EXPORT 
+#define BINLEX_EXPORT 
 #endif
 
 #define RAW_MAX_SECTIONS 256

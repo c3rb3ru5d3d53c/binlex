@@ -5,16 +5,16 @@
 #include <iostream>
 #include <memory>
 #include <set>
-#include "common.h"
 #include <LIEF/PE.hpp>
 
+#include "common.h"
 #ifndef PE_H
 #define PE_H
 
 #ifdef _WIN32
 #define BINLEX_EXPORT __declspec(dllexport)
 #else
-#define BINELEX_EXPORT 
+#define BINLEX_EXPORT 
 #endif
 
 #define PE_MAX_SECTIONS 256
