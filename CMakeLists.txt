@@ -63,7 +63,7 @@ add_dependencies(capstone_static capstone)
 
 set(LIEF_PREFIX       "${CMAKE_BINARY_DIR}/LIEF/")
 set(LIEF_INSTALL_DIR  "${LIEF_PREFIX}")
-set(LIEF_INCLUDE_DIRS "${LIEF_PREFIX}/include")
+set(LIEF_INCLUDE_DIRS "${LIEF_PREFIX}/include/")
 
 set(LIB_LIEF
   "${LIEF_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}LIEF${CMAKE_STATIC_LIBRARY_SUFFIX}")
@@ -125,6 +125,9 @@ add_library(binlex SHARED
     src/sha256.c
 )
 
+add_dependencies(binlex LIEF)
+add_dependencies(binlex capstone)
+
 set_target_properties(binlex PROPERTIES SOVERSION ${GLOBAL_VERSION})
 
 add_library(binlex::library ALIAS binlex)
@@ -132,12 +135,15 @@ add_library(binlex::library ALIAS binlex)
 target_include_directories(binlex
     PUBLIC
         ${PROJECT_SOURCE_DIR}/include
-        ${PROJECT_SOURCE_DIR}/build/sdks/
+        ${LIEF_INCLUDE_DIRS}
 )
 
 add_executable(binlex-bin
     src/binlex.cpp
 )
+
+add_dependencies(binlex-bin LIEF)
+add_dependencies(binlex-bin capstone)
 
 target_link_libraries(binlex-bin
     PRIVATE
@@ -175,7 +181,7 @@ target_link_libraries(blyara -lm)
 target_include_directories(blyara
     PRIVATE
         ${PROJECT_SOURCE_DIR}/include
-        ${PROJECT_SOURCE_DIR}/build/sdks/
+        ${LIEF_INCLUDE_DIRS}
 )
 
 install(TARGETS blyara DESTINATION bin)
