@@ -44,6 +44,6 @@ for:
       - ps: mkdir build
       - ps: cd build/
       - ps: cmake ..
-      - ps: cmake --build .
+      - ps: cmake --verbose --build .
 
 build: off
