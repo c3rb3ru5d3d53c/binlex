@@ -12,6 +12,109 @@ project(binlex
     DESCRIPTION "A Binary Genetic Traits Lexer and C++ Library"
 )
 
+# capstone
+
+include(ExternalProject)
+
+set(CAPSTONE_ROOT    "${CMAKE_BINARY_DIR}/capstone/")
+set(CAPSTONE_GIT_URL "https://github.com/capstone-engine/capstone.git")
+set(CAPSTONE_GIT_TAG 4.0.2)
+
+ExternalProject_Add(
+    capstone
+    PREFIX              "${CAPSTONE_ROOT}"
+    INSTALL_DIR         "${CAPSTONE_ROOT}"
+    GIT_REPOSITORY      "${CAPSTONE_GIT_URL}"
+    GIT_TAG             "${CAPSTONE_GIT_TAG}"
+    GIT_SHALLOW         ON
+    CMAKE_ARGS          -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+                        -DCAPSTONE_BUILD_SHARED=OFF
+                        -DCAPSTONE_BUILD_TESTS=OFF
+                        -DCAPSTONE_MIPS_SUPPORT=OFF
+                        -DCAPSTONE_PPC_SUPPORT=OFF
+                        -DCAPSTONE_SPARC_SUPPORT=OFF
+                        -DCAPSTONE_SYSZ_SUPPORT=OFF
+                        -DCAPSTONE_XCORE_SUPPORT=OFF
+                        -DCAPSTONE_X86_SUPPORT=ON
+                        -DCMAKE_OSX_SYSROOT:STRING=${CMAKE_OSX_SYSROOT}
+                        -DCMAKE_OSX_ARCHITECTURES:STRING=${CMAKE_OSX_ARCHITECTURES}
+                        -DCMAKE_C_FLAGS:STRING=${CMAKE_C_FLAGS}
+                        -DCMAKE_C_FLAGS_DEBUG:STRING=${CMAKE_C_FLAGS_DEBUG}
+                        -DCMAKE_C_FLAGS_RELEASE:STRING=${CMAKE_C_FLAGS_RELEASE}
+                        -DCMAKE_C_FLAGS_MINSIZEREL:STRING=${CMAKE_C_FLAGS_MINSIZEREL}
+                        -DCMAKE_C_FLAGS_RELWITHDEBINFO:STRING=${CMAKE_C_FLAGS_RELWITHDEBINFO}
+                        -DCMAKE_CXX_FLAGS:STRING=${CMAKE_CXX_FLAGS}
+                        -DCMAKE_CXX_FLAGS_DEBUG:STRING=${DCMAKE_CXX_FLAGS_DEBUG}
+                        -DCMAKE_CXX_FLAGS_RELEASE:STRING=${DCMAKE_CXX_FLAGS_RELEASE}
+                        -DCMAKE_CXX_FLAGS_MINSIZEREL:STRING=${DCMAKE_CXX_FLAGS_MINSIZEREL}
+                        -DCMAKE_CXX_FLAGS_RELWITHDEBINFO:STRING=${DCMAKE_CXX_FLAGS_RELWITHDEBINFO}
+                        -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON
+)
+
+add_library(capstone_static STATIC IMPORTED)
+set_target_properties(
+    capstone_static PROPERTIES IMPORTED_LOCATION
+    ${CAPSTONE_ROOT}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}capstone${CMAKE_STATIC_LIBRARY_SUFFIX}
+)
+add_dependencies(capstone_static capstone)
+# end
+
+# lief
+
+set(LIEF_PREFIX       "${CMAKE_BINARY_DIR}/LIEF/")
+set(LIEF_INSTALL_DIR  "${LIEF_PREFIX}")
+set(LIEF_INCLUDE_DIRS "${LIEF_PREFIX}/include")
+
+set(LIB_LIEF
+  "${LIEF_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}LIEF${CMAKE_STATIC_LIBRARY_SUFFIX}")
+
+set(LIEF_GIT_URL "https://github.com/lief-project/LIEF.git")
+
+set(LIEF_VERSION 0.11.0)
+
+set(LIEF_CMAKE_ARGS
+    -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+    -DLIEF_DOC=off
+    -DLIEF_PYTHON_API=off
+    -DLIEF_EXAMPLES=off
+    -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+    -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+    -DCMAKE_C_FLAGS:STRING=${CMAKE_C_FLAGS}
+    -DCMAKE_C_FLAGS_DEBUG:STRING=${CMAKE_C_FLAGS_DEBUG}
+    -DCMAKE_C_FLAGS_RELEASE:STRING=${CMAKE_C_FLAGS_RELEASE}
+    -DCMAKE_C_FLAGS_MINSIZEREL:STRING=${CMAKE_C_FLAGS_MINSIZEREL}
+    -DCMAKE_C_FLAGS_RELWITHDEBINFO:STRING=${CMAKE_C_FLAGS_RELWITHDEBINFO}
+    -DCMAKE_CXX_FLAGS:STRING=${CMAKE_CXX_FLAGS}
+    -DCMAKE_CXX_FLAGS_DEBUG:STRING=${DCMAKE_CXX_FLAGS_DEBUG}
+    -DCMAKE_CXX_FLAGS_RELEASE:STRING=${DCMAKE_CXX_FLAGS_RELEASE}
+    -DCMAKE_CXX_FLAGS_MINSIZEREL:STRING=${DCMAKE_CXX_FLAGS_MINSIZEREL}
+    -DCMAKE_CXX_FLAGS_RELWITHDEBINFO:STRING=${DCMAKE_CXX_FLAGS_RELWITHDEBINFO}
+    -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON
+)
+
+if(MSVC)
+  list(APPEND ${LIEF_CMAKE_ARGS} -DLIEF_USE_CRT_RELEASE=MT)
+endif()
+
+
+ExternalProject_Add(LIEF
+  PREFIX           ${LIEF_PREFIX}
+  GIT_REPOSITORY   ${LIEF_GIT_URL}
+  GIT_TAG          ${LIEF_VERSION}
+  INSTALL_DIR      ${LIEF_INSTALL_DIR}
+  CMAKE_ARGS       ${LIEF_CMAKE_ARGS}
+)
+
+add_library(lief_static STATIC IMPORTED)
+set_target_properties(
+    lief_static PROPERTIES IMPORTED_LOCATION
+    ${LIB_LIEF}
+)
+add_dependencies(lief_static LIEF)
+
+# end
+
 add_library(binlex SHARED
     src/args.cpp
     src/raw.cpp
@@ -40,10 +143,10 @@ target_link_libraries(binlex-bin
     PRIVATE
         binlex::library
     PUBLIC
-        -lcapstone
+        capstone_static
+        lief_static
         -lm
         -lpthread
-        -lLIEF
 )
 
 set_target_properties(binlex-bin
@@ -98,10 +201,10 @@ if (BUILD_PYTHON_BINDINGS)
             pybind11::module
             binlex::library
         PUBLIC
-            -lcapstone
+            capstone_static
             -lm
             -lpthread
-            -lLIEF
+            lief_static
             ${pybind11_LIBRARIES}
     )
 endif()
