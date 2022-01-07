@@ -42,10 +42,8 @@ for:
       - set PATH=C:\Program Files\CMake\bin;%PATH%
     test_script:
       - ps: mkdir build
-      - ps: ./scripts/build.ps1
       - ps: cd build/
       - ps: cmake ..
       - ps: cmake --build .
-      - ps: Write-Host "Windows Build Test Completed"
 
 build: off
