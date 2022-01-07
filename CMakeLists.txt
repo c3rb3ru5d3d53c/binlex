@@ -145,6 +145,11 @@ target_link_libraries(binlex
 
 add_library(binlex::library ALIAS binlex)
 
+if(MSVC)
+  target_compile_options(binlex PUBLIC /FIiso646.h)
+  set_property(TARGET binlex PROPERTY LINK_FLAGS /NODEFAULTLIB:MSVCRT)
+endif()
+
 target_include_directories(binlex
     PUBLIC
         ${PROJECT_SOURCE_DIR}/include
