@@ -1,9 +1,13 @@
-platform:
-  - x64
-
 image:
   - Visual Studio 2017
   - Ubuntu2004
+
+platform:
+  - x64
+
+configuration:
+- Release
+- Debug
 
 for:
   -
