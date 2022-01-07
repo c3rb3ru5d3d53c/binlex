@@ -132,9 +132,6 @@ add_library(binlex SHARED
 
 add_dependencies(binlex lief_static)
 add_dependencies(binlex capstone)
-set_property(TARGET binlex
-             PROPERTY CXX_STANDARD  11
-             CXX_STANDARD_REQUIRED  ON)
 
 set_target_properties(binlex PROPERTIES SOVERSION ${GLOBAL_VERSION})
 
@@ -161,9 +158,6 @@ add_executable(binlex-bin
 
 add_dependencies(binlex-bin lief_static)
 add_dependencies(binlex-bin capstone)
-set_property(TARGET binlex-bin
-             PROPERTY CXX_STANDARD  11
-             CXX_STANDARD_REQUIRED  ON)
 
 target_link_libraries(binlex-bin
     PRIVATE
