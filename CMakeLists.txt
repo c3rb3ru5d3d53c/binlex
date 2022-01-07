@@ -17,6 +17,7 @@ project(binlex
 include(ExternalProject)
 
 set(CAPSTONE_ROOT    "${CMAKE_BINARY_DIR}/capstone/")
+set(CAPSTONE_INCLUDE_DIRS "${CAPSTONE_ROOT}/include/")
 set(CAPSTONE_GIT_URL "https://github.com/capstone-engine/capstone.git")
 set(CAPSTONE_GIT_TAG 4.0.2)
 
@@ -74,10 +75,14 @@ set(LIEF_VERSION 0.11.0)
 
 set(LIEF_CMAKE_ARGS
     -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
-    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-    -DLIEF_DOC=off
-    -DLIEF_PYTHON_API=off
-    -DLIEF_EXAMPLES=off
+    -DLIEF_DOC=OFF
+    -DLIEF_PYTHON_API=OFF
+    -DLIEF_EXAMPLES=OFF
+    -DLIEF_MACHO=OFF
+    -DLIEF_OAT=OFF
+    -DLIEF_DEX=OFF
+    -DLIEF_VDEX=OFF
+    -DLIEF_ART=OFF
     -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
     -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
     -DCMAKE_C_FLAGS:STRING=${CMAKE_C_FLAGS}
@@ -125,10 +130,21 @@ add_library(binlex SHARED
     src/sha256.c
 )
 
-add_dependencies(binlex LIEF)
+add_dependencies(binlex lief_static)
 add_dependencies(binlex capstone)
+set_property(TARGET binlex
+             PROPERTY CXX_STANDARD  11
+             CXX_STANDARD_REQUIRED  ON)
 
 set_target_properties(binlex PROPERTIES SOVERSION ${GLOBAL_VERSION})
+
+target_link_libraries(binlex
+    PUBLIC
+        lief_static
+        capstone_static
+        -lm
+        -lpthread
+)
 
 add_library(binlex::library ALIAS binlex)
 
@@ -136,23 +152,22 @@ target_include_directories(binlex
     PUBLIC
         ${PROJECT_SOURCE_DIR}/include
         ${LIEF_INCLUDE_DIRS}
+        ${CAPSTONE_INCLUDE_DIRS}
 )
 
 add_executable(binlex-bin
     src/binlex.cpp
 )
 
-add_dependencies(binlex-bin LIEF)
+add_dependencies(binlex-bin lief_static)
 add_dependencies(binlex-bin capstone)
+set_property(TARGET binlex-bin
+             PROPERTY CXX_STANDARD  11
+             CXX_STANDARD_REQUIRED  ON)
 
 target_link_libraries(binlex-bin
     PRIVATE
         binlex::library
-    PUBLIC
-        capstone_static
-        lief_static
-        -lm
-        -lpthread
 )
 
 set_target_properties(binlex-bin
@@ -182,6 +197,7 @@ target_include_directories(blyara
     PRIVATE
         ${PROJECT_SOURCE_DIR}/include
         ${LIEF_INCLUDE_DIRS}
+        ${CAPSTONE_INCLUDE_DIRS}
 )
 
 install(TARGETS blyara DESTINATION bin)
