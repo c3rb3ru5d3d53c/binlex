@@ -3,7 +3,11 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#ifndef _WIN32
 #include <unistd.h>
+#else
+#include <windows.h>
+#endif
 #include "args.h"
 
 using namespace binlex;
@@ -37,20 +41,30 @@ bool Args::check_mode(char *mode){
     return false;
 }
 
-int Args::is_file(const char *path){
+int Args::is_file(const char* path) {
+#ifndef _WIN32
     struct stat path_stat;
-    if (stat(path, &path_stat) != 0){
+    if (stat(path, &path_stat) != 0) {
         return 0;
     }
     return S_ISREG(path_stat.st_mode);
+#else
+    DWORD dwFileAttributes = GetFileAttributesA(path);
+    return !(dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
+#endif
 }
 
-int Args::is_dir(const char *path) {
+int Args::is_dir(const char* path) {
+#ifndef _WIN32
     struct stat statbuf;
-    if (stat(path, &statbuf) != 0){
+    if (stat(path, &statbuf) != 0) {
         return 0;
     }
     return S_ISDIR(statbuf.st_mode);
+#else
+    DWORD dwFileAttributes = GetFileAttributesA(path);
+    return dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
+#endif
 }
 
 void Args::set_io_type(char *input){
