@@ -195,7 +195,7 @@ set(SOURCES_BLYARA
 
 add_executable(blyara ${SOURCES_BLYARA})
 
-target_link_libraries(blyara -lm)
+#target_link_libraries(blyara -lm)
 
 target_include_directories(blyara
     PRIVATE
