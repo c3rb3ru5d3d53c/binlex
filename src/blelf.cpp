@@ -1,10 +1,15 @@
+#ifdef _WIN32
+#include <Windows.h>
+#endif
 #include <iostream>
 #include <memory>
 #include <vector>
 #include <set>
-#include <LIEF/ELF.hpp>
+#include <iostream>
+#include <exception>
+#include <stdexcept>
 #include "blelf.h"
-
+#include <LIEF/ELF.hpp>
 using namespace std;
 using namespace binlex;
 using namespace LIEF::ELF;

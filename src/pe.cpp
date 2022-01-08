@@ -2,9 +2,10 @@
 #include <memory>
 #include <vector>
 #include <set>
-#include <LIEF/PE.hpp>
 #include "pe.h"
 #include "common.h"
+#include <iostream>
+#include <LIEF/PE.hpp>
 
 using namespace std;
 using namespace binlex;

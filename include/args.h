@@ -1,11 +1,22 @@
 #ifndef ARGS_H
 #define ARGS_H
 
+#ifdef _WIN32
+#define BINLEX_EXPORT __declspec(dllexport)
+#else
+#define BINLEX_EXPORT 
+#endif
+
 #define ARGS_MODE_COUNT 7
 
 #define ARGS_IO_TYPE_UNKNOWN 0
 #define ARGS_IO_TYPE_FILE    1
 #define ARGS_IO_TYPE_DIR     2
+
+#ifdef _WIN32
+typedef unsigned int uint;
+typedef uint useconds_t;
+#endif
 
 /**
 * @namespace binlex
@@ -31,15 +42,15 @@ namespace binlex{
                 char *corpus;
                 bool pretty;
             } options;
-            Args();
-            void SetDefault();
-            bool check_mode(char *mode);
-            int is_file(const char *path);
-            int is_dir(const char *path);
-            void set_io_type(char *input);
-            void print_help();
-            void parse(int argc, char **argv);
-            ~Args();
+            BINLEX_EXPORT Args();
+            BINLEX_EXPORT void SetDefault();
+            BINLEX_EXPORT bool check_mode(char *mode);
+            BINLEX_EXPORT int is_file(const char *path);
+            BINLEX_EXPORT int is_dir(const char *path);
+            BINLEX_EXPORT void set_io_type(char *input);
+            BINLEX_EXPORT void print_help();
+            BINLEX_EXPORT void parse(int argc, char **argv);
+            BINLEX_EXPORT ~Args();
     };
 }
 #endif
