@@ -12,6 +12,10 @@ project(binlex
     DESCRIPTION "A Binary Genetic Traits Lexer and C++ Library"
 )
 
+if(MSVC)
+	add_definitions(-D_WIN32=1)
+endif()
+
 # capstone
 
 include(ExternalProject)
@@ -101,6 +105,7 @@ set(LIEF_CMAKE_ARGS
 
 if(MSVC)
   list(APPEND ${LIEF_CMAKE_ARGS} -DLIEF_USE_CRT_RELEASE=MT)
+  list(APPEND ${LIEF_CMAKE_ARGS} -DCMAKE_BUILD_TYPE=Release)
 endif()
 
 
