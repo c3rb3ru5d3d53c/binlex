@@ -6,7 +6,7 @@ platform:
   - x64
 
 configuration:
-- Release
+  - Release
 
 for:
   -
@@ -47,6 +47,6 @@ for:
       - ps: mkdir build
       - ps: cd build/
       - ps: cmake ..
-      - ps: cmake --build .
+      - ps: cmake --build . --config %CONFIGURATION%
 
 build: off
