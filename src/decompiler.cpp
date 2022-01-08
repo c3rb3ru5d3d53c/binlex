@@ -8,13 +8,13 @@
 #include <vector>
 #include <iomanip>
 #if defined(__linux__) || defined(__APPLE__)
+#include <unistd.h>
 #include <pthread.h>
 #include <openssl/sha.h>
 #elif _WIN32
 #include <windows.h>
 #include <wincrypt.h>
 #endif
-#include <unistd.h>
 #include <math.h>
 #include <capstone/capstone.h>
 #include "json.h"

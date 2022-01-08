@@ -13,7 +13,7 @@ project(binlex
 )
 
 if(MSVC)
-	add_definitions(-D_WIN32=1)
+    add_definitions(-D_WIN32=1)
 endif()
 
 # capstone
