@@ -145,7 +145,6 @@ target_link_libraries(binlex
     PUBLIC
         lief_static
         capstone_static
-        -lm
         -lpthread
 )
 
@@ -229,7 +228,6 @@ if (BUILD_PYTHON_BINDINGS)
             binlex::library
         PUBLIC
             capstone_static
-            -lm
             -lpthread
             lief_static
             ${pybind11_LIBRARIES}
