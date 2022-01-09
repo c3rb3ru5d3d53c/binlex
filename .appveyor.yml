@@ -47,6 +47,10 @@ for:
       - ps: mkdir build
       - ps: cd build/
       - ps: cmake ..
-      - ps: cmake --build .
+      # Build only works on Debug, no clue why, damn you Microsoft!
+      - ps: cmake --build . --config Debug
+    artifacts:
+      - path: build/Debug/*.exe
+      - path: build/Debug/*.dll
 
 build: off
