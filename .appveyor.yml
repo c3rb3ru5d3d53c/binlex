@@ -47,6 +47,6 @@ for:
       - ps: mkdir build
       - ps: cd build/
       - ps: cmake ..
-      - ps: cmake --build . --config Release
+      - ps: cmake --build .
 
 build: off
