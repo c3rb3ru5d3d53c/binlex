@@ -14,6 +14,8 @@ project(binlex
 
 if(MSVC)
     add_definitions(-D_WIN32=1)
+	#add_definitions(-DBUILDER_STATIC_DEFINE)
+	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
 endif()
 
 # capstone
@@ -80,17 +82,17 @@ set(LIEF_VERSION 0.11.0)
 set(LIEF_CMAKE_ARGS
   -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
   -DCMAKE_BUILD_TYPE=Release
-  -DLIEF_USE_CRT_RELEASE=MT
   -DLIEF_DOC=off
   -DLIEF_PYTHON_API=off
   -DLIEF_EXAMPLES=off
+  -DCMAKE_CXX_FLAGS_RELEASE:STRING=${DCMAKE_CXX_FLAGS_RELEASE}
   -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
   -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
 )
 
-# if(MSVC)
-#   list(APPEND ${LIEF_CMAKE_ARGS} -DLIEF_USE_CRT_RELEASE=MT)
-# endif()
+if(MSVC)
+  list(APPEND ${LIEF_CMAKE_ARGS} -DLIEF_USE_CRT_RELEASE=MT)
+endif()
 
 # -DCMAKE_BUILD_TYPE=Release
 
@@ -131,6 +133,13 @@ target_link_libraries(binlex
         lief_static
         capstone_static
         -lpthread
+)
+
+set_target_properties(binlex
+	PROPERTIES COMPILE_FLAGS
+	-DCMAKE_CXX_FLAGS_RELEASE:STRING=${DCMAKE_CXX_FLAGS_RELEASE}
+	-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+	-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
 )
 
 add_library(binlex::library ALIAS binlex)
