@@ -1,6 +1,7 @@
 #include <vector>
 #include <queue>
 #include <set>
+#include <stdint.h>
 #include <capstone/capstone.h>
 #include "common.h"
 #include "json.h"
