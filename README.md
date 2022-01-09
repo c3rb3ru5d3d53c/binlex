@@ -15,11 +15,14 @@ While the C++ API allows developers to get creative with their own detection sol
 To help combat malware, we firmly commit our work to the public domain for the greater good of the world.
 
 [![Build status](https://ci.appveyor.com/api/projects/status/wa423scoigl7xh7x/branch/master?svg=true)](https://ci.appveyor.com/project/c3rb3ru5d3d53c/binlex)
+![OS Linux](https://img.shields.io/badge/os-linux-brightgreen)
+![OS Windows](https://img.shields.io/badge/os-windows-brightgreen)
 [![GitHub stars](https://img.shields.io/github/stars/c3rb3ru5d3d53c/binlex)](https://github.com/c3rb3ru5d3d53c/binlex/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/c3rb3ru5d3d53c/binlex)](https://github.com/c3rb3ru5d3d53c/binlex/network)
 [![Discord Status](https://img.shields.io/discord/915569998469144636?logo=discord)](https://discord.gg/UDBfRpxV3B)
 [![GitHub license](https://img.shields.io/github/license/c3rb3ru5d3d53c/binlex)](https://github.com/c3rb3ru5d3d53c/binlex/blob/master/LICENSE)
 ![GitHub all releases](https://img.shields.io/github/downloads/c3rb3ru5d3d53c/binlex/total)
+
 
 # Demos
 
@@ -82,7 +85,7 @@ binlex -m elf:x86 -i tests/elf/elf.x86
 
 See the [`releases`](https://github.com/c3rb3ru5d3d53c/binlex/releases) page.
 
-If you need the bleeding edge binaries you can download them from our AppVeyor CI/CD [`here`](https://ci.appveyor.com/project/c3rb3ru5d3d53c/binlex/build/artifacts).
+If you need the bleeding edge binaries you can download them from our AppVeyor CI/CD [`here`](https://ci.appveyor.com/project/c3rb3ru5d3d53c/binlex/branch/master).
 
 Please note, edge binaries are subject to bugs, if you encounter one, please let us know!
 

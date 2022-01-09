@@ -14,6 +14,10 @@ extern "C" {
     #include "sha256.h"
 }
 #include "common.h"
+#ifdef _WIN32
+#pragma comment(lib, "capstone")
+#pragma comment(lib, "LIEF")
+#endif
 
 using namespace std;
 using namespace binlex;
@@ -93,7 +97,7 @@ string Common::HexdumpBE(const void *data, size_t size){
     bytes << "";
     const unsigned char *local_pc = (const unsigned char *)data;
     for (int i = 0; i < size; i++){
-        bytes << hex << setfill('0') << setw(2) << (unsigned uint32_t)local_pc[i] << " ";
+        bytes << hex << setfill('0') << setw(2) << (uint32_t)local_pc[i] << " ";
     }
     return TrimRight(bytes.str());
 }
@@ -103,7 +107,7 @@ string Common::HexdumpMemDisp(uint64_t disp){
     const unsigned char *local_pc = (const unsigned char *)&disp;
     for (int i = 0; i < sizeof(disp) -1 ; i++){
         if (local_pc[i] != 0 && local_pc[i] != 255){
-            bytes << hex << setfill('0') << setw(2) << (unsigned uint32_t)local_pc[i] << " ";
+            bytes << hex << setfill('0') << setw(2) << (uint32_t)local_pc[i] << " ";
         }
     }
     return TrimRight(bytes.str());
