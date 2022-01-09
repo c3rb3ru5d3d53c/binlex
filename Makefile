@@ -1,6 +1,10 @@
 .PHONY: docs
 
 threads=1
+admin_user=admin
+admin_pass=changeme
+user=binlex
+pass=changeme
 
 all:
 	mkdir -p build/
@@ -24,10 +28,8 @@ database:
 		echo "MONGOEXPRESS_LOGIN=${admin_user}" >> .env && \
 		echo "MONGOEXPRESS_PASSWORD=${admin_pass}" >> .env && \
 		echo "REDIS_PASSWORD=${admin_pass}" >> .env && \
-		echo "db.createCollection(\"default\");" > .init.js && \
-		echo "db.createCollection(\"malware\");" >> .init.js && \
-		echo "db.createCollection(\"goodware\");" >> .init.js && \
-		echo "db.createUser({user:\"${user}\",pwd:\"${pass}\",roles:[{role:\"readWrite\",db:\"binlex\"}],mechanisms:[\"SCRAM-SHA-1\"]});" >> .init.js && \
+		echo "db.createUser({user:\"${user}\",pwd:\"${pass}\",roles:[{role:\"readWrite\",db:\"binlex\"}],mechanisms:[\"SCRAM-SHA-1\"]});" > .init.js && \
+		cat schema.js >> .init.js && \
 		docker-compose up --no-start
 
 database-start:
