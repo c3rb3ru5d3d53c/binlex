@@ -53,7 +53,9 @@ var trait_schema = {
             description: "File Offset"
         },
         bytes: {
-            bsonType: "string",
+            //bsonType: "string",
+            bsonType: "ObjectId",
+            ref: "bytes",
             description: "Hexadecimal Byte String"
         },
         bytes_sha256: {
@@ -65,7 +67,8 @@ var trait_schema = {
             description: "Byte String Entropy"
         },
         trait: {
-            bsonType: "string",
+            bsonType: "ObjectId",
+            ref: "traits",
             description: "Wildcarded Trait String"
         },
         trait_sha256: {
@@ -91,11 +94,83 @@ var trait_schema = {
     }
 };
 
+var hash_schema = {
+    bsonType: "object",
+    required: [
+        "sha256"
+    ],
+    properties: {
+        sha256: {
+            bsonType: "string",
+            description: "SHA256 Hash"
+        }
+    }
+};
+
+var fuzzies_schema = {
+    bsonType: "object",
+    required: [
+        "tlsh"
+    ],
+    properties: {
+        tlsh: {
+            bsonType: "string",
+            description: "TLSH Hash"
+        }
+    }
+};
+
+var traits_schema = {
+    bsonType: "object",
+    required: [
+        "trait"
+    ],
+    properties: {
+        trait: {
+            bsonType: "string",
+            description: "Trait String"
+        }
+    }
+};
+
+var bytes_schema = {
+    bsonType: "object",
+    required: [
+        "bytes"
+    ],
+    properties: {
+        trait: {
+            bsonType: "string",
+            description: "Bytes String"
+        }
+    }
+};
+
+db.createCollection("bytes", {
+    validator: {
+        $jsonSchema: bytes_schema
+    }
+});
+
+db.bytes.createIndex({bytes: 1}, {unique: true});
+
+
+db.createCollection("traits", {
+    validator: {
+        $jsonSchema: traits_schema
+    }
+});
+
+db.traits.createIndex({trait: 1}, {unique: true});
+
 db.createCollection('default', {
     validator: {
         $jsonSchema: trait_schema
     }
 });
+
+db.default.createIndex({bytes_sha256: 1}, {unique: true});
+db.default.createIndex({trait_sha256: 1}, {unique: true});
 
 db.createCollection('malware', {
     validator: {
@@ -103,8 +178,14 @@ db.createCollection('malware', {
     }
 });
 
+db.malware.createIndex({bytes_sha256: 1}, {unique: true});
+db.malware.createIndex({trait_sha256: 1}, {unique: true});
+
 db.createCollection('goodware', {
     validator: {
         $jsonSchema: trait_schema
     }
 });
+
+db.goodware.createIndex({bytes_sha256: 1}, {unique: true});
+db.goodware.createIndex({trait_sha256: 1}, {unique: true});
