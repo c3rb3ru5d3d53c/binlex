@@ -126,6 +126,73 @@ while test $# -gt 0; do
     shift
 done
 
+function generate_certificates(){
+    mkdir -p ssl/
+    admin_pass=${admin_pass} openssl req -nodes \
+        -passout env:admin_pass \
+        -subj "/OU=mongodb" \
+        -out ssl/mongodb-ca.pem \
+        -new -x509 \
+        -keyout ssl/mongodb-ca.key;
+
+    # Generate Certificates for Shards
+    for i in $(seq 1 $shards); do
+        for j in $(seq 1 $replicas); do
+            openssl req -nodes \
+                -newkey rsa:4096 \
+                -subj "/CN=mongodb-shard${i}-rep${j}" \
+                -sha256 \
+                -keyout ssl/mongodb-shard${i}-rep${j}.key \
+                -out ssl/mongodb-shard${i}-rep${j}.csr;
+            openssl x509 -req \
+                -in ssl/mongodb-shard${i}-rep${j}.csr \
+                -CA ssl/mongodb-ca.pem \
+                -CAkey ssl/mongodb-ca.key \
+                -set_serial 00 \
+                -out ssl/mongodb-shard${i}-rep${j}.crt;
+            cat ssl/mongodb-shard${i}-rep${j}.key ssl/mongodb-shard${i}-rep${j}.crt > ssl/mongodb-shard${i}-rep${j}.pem;
+        done
+    done
+
+    # Generate Certificates for Config Servers
+    for i in $(seq 1 $replicas); do
+        openssl req -nodes \
+            -newkey rsa:4096 \
+            -subj "/CN=mongodb-config-rep${i}" \
+            -sha256 \
+            -keyout ssl/mongodb-config-rep${i}.key \
+            -out ssl/mongodb-config-rep${i}.csr;
+        openssl x509 -req \
+                -in ssl/mongodb-config-rep${i}.csr \
+                -CA ssl/mongodb-ca.pem \
+                -CAkey ssl/mongodb-ca.key \
+                -set_serial 00 \
+                -out ssl/mongodb-config-rep${i}.crt;
+        cat ssl/mongodb-config-rep${i}.key ssl/mongodb-config-rep${i}.crt > ssl/mongodb-config-rep${i}.pem;
+    done
+
+    for i in $(seq 1 $routers); do
+        openssl req -nodes \
+            -newkey rsa:4096 \
+            -subj "/CN=mongodb-config-rep${i}" \
+            -sha256 \
+            -keyout ssl/mongodb-router${i}.key \
+            -out ssl/mongodb-router${i}.csr;
+        openssl x509 -req \
+                -in ssl/mongodb-router${i}.csr \
+                -CA ssl/mongodb-ca.pem \
+                -CAkey ssl/mongodb-ca.key \
+                -set_serial 00 \
+                -out ssl/mongodb-router${i}.crt;
+        cat ssl/mongodb-router${i}.key ssl/mongodb-router${i}.crt > ssl/mongodb-router${i}.pem;
+    done
+
+    sudo chown 999:999 ssl/*;
+    sudo chmod 600 ssl/*;
+}
+
+generate_certificates
+
 rm -rf scripts/
 mkdir -p scripts/
 
