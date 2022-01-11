@@ -51,7 +51,7 @@ configdb=configdb
 initdb=binlex
 rs=blrs
 rscfg=blcfgrs
-replicas=2
+replicas=3
 shards=2
 routers=2
 
@@ -84,9 +84,14 @@ password=changeme
 #   }
 # )
 
+rm -rf scripts/
 mkdir -p scripts/
 
-openssl rand -base64 346 > scripts/keyfile
+if [ ! -f replica.key ]; then
+    openssl rand -base64 346 > replica.key;
+    sudo chown 999:999 replica.key;
+    sudo chmod 600 replica.key;
+fi
 
 function compose() {
     echo "version: '${compose_version}'"
@@ -98,12 +103,9 @@ function compose() {
             echo "      hostname: mongodb-shard${j}-rep${i}";
             echo "      container_name: mongodb-shard${j}-rep${i}";
             echo "      image: mongo:${mongodb_version}";
-            echo "      command: mongod --shardsvr --bind_ip_all --replSet shard${j} --port ${mongodb_shard_port} --dbpath /data/db/";
-            # echo "      environment:";
-            # echo "          - MONGO_INITDB_ROOT_USERNAME=${admin_user}";
-            # echo "          - MONGO_INITDB_ROOT_PASSWORD=${admin_pass}";
-            # echo "          - MONGO_INITDB_DATABASE=${initdb}";
+            echo "      command: mongod --shardsvr --bind_ip_all --replSet shard${j} --port ${mongodb_shard_port} --dbpath /data/db/ --keyFile /data/replica.key";
             echo "      volumes:";
+            echo "          - ./replica.key:/data/replica.key";
             echo "          - ./data/mongodb-shard${j}-rep${i}/:/data/db/";
             #echo "          - ./scripts/initrep${j}.js:/docker-entrypoint-initdb.d/init-mongo.js";
         done
@@ -113,8 +115,9 @@ function compose() {
         echo "      hostname: mongodb-config-rep${i}";
         echo "      container_name: mongodb-config-rep${i}";
         echo "      image: mongo:${mongodb_version}";
-        echo "      command: mongod --configsvr --bind_ip_all --replSet ${configdb} --port ${mongodb_config_port} --dbpath /data/db/";
+        echo "      command: mongod --configsvr --bind_ip_all --replSet ${configdb} --port ${mongodb_config_port} --dbpath /data/db/ --keyFile /data/replica.key";
         echo "      volumes:";
+        echo "          - ./replica.key:/data/replica.key";
         echo "          - ./data/mongodb-config-rep${i}/:/data/db/";
         #echo "          - ./scripts/initconfig.js:/docker-entrypoint-initdb.d/init-mongo.js";
     done
@@ -123,17 +126,14 @@ function compose() {
         echo "      hostname: mongodb-router${i}";
         echo "      container_name: mongodb-router${i}";
         echo "      image: mongo:${mongodb_version}";
-        echo -n "      command: mongos --bind_ip_all --port ${mongodb_router_port} --configdb ";
+        echo -n "      command: mongos --keyFile /data/replica.key --bind_ip_all --port ${mongodb_router_port} --configdb ";
         echo -n "\"${configdb}/";
         for j in $(seq 1 $replicas); do
             echo -n "mongodb-config-rep${j}:${mongodb_config_port},";
         done | sed 's/,$//'
         echo "\"";
-        echo "      environment:";
-        echo "          - MONGO_INITDB_ROOT_USERNAME=${admin_user}";
-        echo "          - MONGO_INITDB_ROOT_PASSWORD=${admin_pass}";
-        echo "          - MONGO_INITDB_DATABASE=${initdb}";
         echo "      volumes:";
+        echo "          - ./replica.key:/data/replica.key";
         echo "          - ./data/mongodb-router${i}/:/data/db/";
         echo "      ports:";
         echo "          - `expr ${mongodb_port} + ${i} - 1`:${mongodb_router_port}"
@@ -175,50 +175,138 @@ function compose() {
 
 compose > docker-compose.yml
 
+function admin_init(){
+    echo "use admin;";
+    echo "db.createUser({"
+    echo "  user: \"${admin_user}\",";
+    echo "  pwd: \"${admin_pass}\",";
+    echo "  roles: [";
+    echo "      {role: \"clusterAdmin\", db: \"admin\"},";
+    echo "      \"userAdminAnyDatabase\","
+    echo "      \"readWriteAnyDatabase\"";
+    echo "  ],";
+    echo "  mechanisms:[\"SCRAM-SHA-1\"]";
+    echo "});"
+}
+
 function db_init(){
+    echo "use ${initdb};";
     echo "db.createUser({user:\"${username}\",pwd:\"${password}\",roles:[{role:\"readWrite\",db:\"binlex\"}],mechanisms:[\"SCRAM-SHA-1\"]});"
     cat schema.js
 }
 
-db_init > scripts/initdb.js
-
-function shard_init(){
+function router_init(){
     echo "#!/usr/bin/env bash";
     for i in $(seq 1 $shards); do
         for j in $(seq 1 $replicas); do
-            echo "docker exec -it mongodb-router1 bash -c \"echo 'sh.addShard(\\\"shard${i}/mongodb-shard${i}-rep${j}:${mongodb_shard_port}\\\");' | mongo\"";
+            echo "sh.addShard(\"shard${i}/mongodb-shard${i}-rep${j}:${mongodb_shard_port}\");";
         done
     done
 }
 
-shard_init > scripts/initshards.sh
-
-chmod +x scripts/initshards.sh
-
-function replica_init(){
-    echo -n "rs.initiate({_id: \\\"shard$1\\\", members: [";
+function shard_init(){
+    echo "rs.initiate({_id: \"shard$1\", members: [";
     for i in $(seq 1 $replicas); do
-        echo -n "{_id: `expr ${i} - 1`, host: \\\"mongodb-shard$1-rep${i}:${mongodb_shard_port}\\\"},";
-    done | sed 's/,$//'
-    echo -n "]});";
+        echo "  {_id: `expr ${i} - 1`, host: \"mongodb-shard$1-rep${i}:${mongodb_shard_port}\"},";
+    done
+    echo "]});";
 }
 
 function cfg_init(){
-    echo -n "rs.initiate({_id: \\\"${configdb}\\\", configsvr: true, members: [";
+    echo "rs.initiate({_id: \"${configdb}\", configsvr: true, members: [";
     for i in $(seq 1 $replicas); do
-        echo -n "{_id: `expr ${i} - 1`, host: \\\"mongodb-config-rep${i}:${mongodb_config_port}\\\"},";
-    done | sed 's/,$//'
-    echo -n "]});";
+        echo "  {_id: `expr ${i} - 1`, host: \"mongodb-config-rep${i}:${mongodb_config_port}\"},";
+    done
+    echo "]});";
 }
 
-function docker_replica_init(){
+function docker_cfg_init(){
     echo "#!/usr/bin/env bash";
-    echo "docker exec -it mongodb-router1 bash -c \"echo '`cfg_init`' | mongo --host mongodb-config-rep1:${mongodb_config_port}\"";
+    echo "docker cp init-cfgs.js mongodb-config-rep1:/tmp/init-cfgs.js"
+    echo "docker exec -it mongodb-config-rep1 bash -c \"cat /tmp/init-cfgs.js | mongosh 127.0.0.1:${mongodb_config_port}\"";
+}
+
+# function docker_shard1_init(){
+#     echo "#!/usr/bin/env bash";
+#     echo "docker cp init-shard1.js mongodb-shard1-rep1:/tmp/init-shard1.js";
+#     echo "docker exec -it mongodb-shard1-rep1 bash -c \"cat /tmp/init-shard1.js | mongosh 127.0.0.1:${mongodb_shard_port}\"";
+# }
+
+function docker_admin_init(){
+    echo "#!/usr/bin/env bash";
+    echo "docker cp init-admin.js mongodb-router1:/tmp/init-admin.js";
+    echo "docker exec -it mongodb-router1 bash -c \"cat /tmp/init-admin.js | mongosh 127.0.0.1:${mongodb_router_port}\"";
+}
+
+function docker_shard_init(){
+    echo "#!/usr/bin/env bash";
+    echo "docker cp init-shard$1.js mongodb-shard$1-rep1:/tmp/init-shard$1.js";
+    echo "docker exec -it mongodb-shard$1-rep1 bash -c \"cat /tmp/init-shard$1.js | mongosh 127.0.0.1:${mongodb_shard_port}\"";
+}
+
+function docker_router_init(){
+    echo "#!/usr/bin/env bash";
+    echo "docker cp init-router.js mongodb-router1:/tmp/init-router.js";
+    echo "docker exec -it mongodb-router1 bash -c \"cat /tmp/init-router.js | mongosh 127.0.0.1:${mongodb_router_port} -u \\\"${admin_user}\\\" -p \\\"${admin_pass}\\\" --authenticationDatabase admin\""
+}
+
+function docker_db_init(){
+    echo "#!/usr/bin/env bash";
+    echo "docker cp init-db.js mongodb-router1:/tmp/init-db.js";
+    echo "docker exec -it mongodb-router1 bash -c \"cat /tmp/init-db.js | mongosh 127.0.0.1:${mongodb_router_port} -u \\\"${admin_user}\\\" -p \\\"${admin_pass}\\\" --authenticationDatabase admin\""
+}
+
+function docker_shards_init(){
+    echo "#!/usr/bin/env bash";
     for i in $(seq 1 $shards); do
-        echo "docker exec -it mongodb-router1 bash -c \"echo '`replica_init ${i}`' | mongo --host mongodb-shard${i}-rep1:${mongodb_shard_port}\"";
+        echo "./init-shard${i}.sh";
     done
 }
 
-docker_replica_init > scripts/initrep.sh
+function docker_all_init(){
+    echo "#!/usr/bin/env bash";
+    echo "until ./init-cfgs.sh; do";
+    echo "  sleep 10;";
+    echo "done";
+    echo "until ./init-shards.sh; do";
+    echo "  sleep 10;";
+    echo "done";
+    echo "until ./init-admin.sh; do";
+    echo "  sleep 10;";
+    echo "done";
+    echo "until ./init-router.sh; do";
+    echo "  sleep 10;";
+    echo "done";
+    echo "until ./init-db.sh; do";
+    echo "  sleep 10;";
+    echo "done";
+}
 
-chmod +x scripts/initrep.sh
+cfg_init > scripts/init-cfgs.js
+docker_cfg_init > scripts/init-cfgs.sh
+chmod +x scripts/init-cfgs.sh
+for i in $(seq 1 $shards); do
+    shard_init ${i} > scripts/init-shard${i}.js;
+done
+router_init > scripts/init-router.js
+db_init > scripts/init-db.js
+admin_init > scripts/init-admin.js
+docker_admin_init > scripts/init-admin.sh
+chmod +x scripts/init-admin.sh
+
+for i in $(seq 1 $shards); do
+    docker_shard_init ${i} > scripts/init-shard${i}.sh;
+    chmod +x scripts/init-shard${i}.sh;
+done
+
+docker_shards_init > scripts/init-shards.sh
+chmod +x scripts/init-shards.sh
+
+docker_router_init > scripts/init-router.sh
+chmod +x scripts/init-router.sh
+
+docker_db_init > scripts/init-db.sh
+chmod +x scripts/init-db.sh
+
+docker_all_init > scripts/init-all.sh
+chmod +x scripts/init-all.sh

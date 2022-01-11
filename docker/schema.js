@@ -53,9 +53,7 @@ var trait_schema = {
             description: "File Offset"
         },
         bytes: {
-            //bsonType: "string",
-            bsonType: "ObjectId",
-            ref: "bytes",
+            bsonType: "objectId",
             description: "Hexadecimal Byte String"
         },
         bytes_sha256: {
@@ -67,8 +65,7 @@ var trait_schema = {
             description: "Byte String Entropy"
         },
         trait: {
-            bsonType: "ObjectId",
-            ref: "traits",
+            bsonType: "objectId",
             description: "Wildcarded Trait String"
         },
         trait_sha256: {
@@ -90,32 +87,6 @@ var trait_schema = {
         cyclomatic_complexity: {
             bsonType: "int",
             description: "Cyclomatic Complexity"
-        }
-    }
-};
-
-var hash_schema = {
-    bsonType: "object",
-    required: [
-        "sha256"
-    ],
-    properties: {
-        sha256: {
-            bsonType: "string",
-            description: "SHA256 Hash"
-        }
-    }
-};
-
-var fuzzies_schema = {
-    bsonType: "object",
-    required: [
-        "tlsh"
-    ],
-    properties: {
-        tlsh: {
-            bsonType: "string",
-            description: "TLSH Hash"
         }
     }
 };
