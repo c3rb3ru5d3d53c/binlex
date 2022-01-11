@@ -1,3 +1,4 @@
 data/**
 docker-compose.yml
 scripts/**
+*.key
