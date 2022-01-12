@@ -5,3 +5,4 @@ rm -f docker-compose.yml
 sudo rm -f replica.key
 rm -rf scripts/
 rm -rf ssl/
+rm -rf config/

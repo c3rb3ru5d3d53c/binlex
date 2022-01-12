@@ -6,6 +6,7 @@
 compose_version=3.3
 mongo_express_version=0.54.0
 mongodb_version=5.0.5
+mongodb_sh_version=1.1.8
 mongodb_port=27017
 mongo_express_port=8081
 configdb=configdb
@@ -19,8 +20,8 @@ username=binlex
 password=changeme
 
 # RabbitMQ
-brokers=1
-rabbitmq_version=3.9.12-management
+brokers=4
+rabbitmq_version=3.9.12
 rabbitmq_cookie=$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 32 | head -n 1)
 rabbitmq_port=5672
 rabbitmq_http_port=15672
@@ -324,26 +325,51 @@ function compose() {
         echo "  rabbitmq-broker${i}:";
         echo "      hostname: rabbitmq-broker${i}";
         echo "      container_name: rabbitmq-broker${i}";
-        echo "      image: rabbitmq:${rabbitmq_version}";
+        echo "      image: rabbitmq:${rabbitmq_version}-management";
         echo "      environment:";
         echo "          RABBITMQ_ERLANG_COOKIE: \"${rabbitmq_cookie}\"";
         echo "          RABBITMQ_DEFAULT_USER: \"${admin_user}\"";
         echo "          RABBITMQ_DEFAULT_PASS: \"${admin_pass}\"";
+        echo "          RABBITMQ_CONFIG_FILE: \"/config/rabbitmq-broker${i}.conf\"";
         echo "      ports:";
-        echo "          - ${rabbitmq_port}:5672";
-        echo "          - ${rabbitmq_http_port}:15672";
+        echo "          - `expr ${rabbitmq_port} + ${i} - 1`:5672";
+        echo "          - `expr ${rabbitmq_http_port} + ${i} - 1`:15672";
         echo "      volumes:";
         echo "          - ./data/rabbitmq-broker${i}:/var/lib/rabbitmq/mnesia/";
+        echo "          - ./config/rabbitmq-broker${i}.conf:/config/rabbitmq-broker${i}.conf";
     done
 }
 
 compose > docker-compose.yml
 
-function docker_rabbitmq_init(){
+function docker_rabbitmq_policy_init(){
     echo "#!/usr/bin/env bash";
-    echo "docker exec -it rabbitmq-broker1 bash -c \"rabbitmqadmin --username '${admin_user}' --password '${admin_pass}' declare queue --vhost / name=${initdb} durable=true\"";
-    echo "docker exec -it rabbitmq-broker1 bash -c \"rabbitmqctl add_user '${username}' '${password}'\"";
-    echo "docker exec -it rabbitmq-broker1 bash -c \"rabbitmqctl set_permissions -p / ${username} '' '${initdb}' '${initdb}'\"";
+    echo -n "docker exec -it rabbitmq-broker1 rabbitmqctl set_policy ha-fed '.*' '{\"federation-upstream-set\":\"all\", \"ha-sync-mode\":\"automatic\", \"ha-mode\":\"nodes\", \"ha-params\":[";
+    for i in $(seq 1 $brokers); do
+        echo -n "\"rabbit@rabbitmq-broker${i}\",";
+    done | sed 's/,$//'
+    echo "]}' --priority 1 --apply-to queues";
+}
+
+function docker_rabbitmq_plugin_init(){
+    echo "#!/usr/bin/env bash";
+    echo "docker exec -it $1 rabbitmq-plugins enable rabbitmq_federation";
+}
+
+function docker_rabbitmq_plugins_init(){
+    echo "#!/usr/bin/env bash";
+    for i in $(seq 1 $brokers); do
+        echo "./rabbitmq-init-plugin-broker${i}.sh";
+    done
+}
+
+function rabbitmq_config_init(){
+    echo "loopback_users.guest = false";
+    echo "listeners.tcp.default = 5672";
+    echo "cluster_formation.peer_discovery_backend = rabbit_peer_discovery_classic_config";
+    for i in $(seq 1 $brokers); do
+        echo "cluster_formation.classic_config.nodes.${i} = rabbit@rabbitmq-broker${i}";
+    done
 }
 
 function admin_init(){
@@ -484,5 +510,26 @@ chmod +x scripts/init-all.sh
 docker_admin_shell > scripts/mongodb-shell.sh
 chmod +x scripts/mongodb-shell.sh
 
-docker_rabbitmq_init > scripts/rabbitmq-init.sh
-chmod +x scripts/rabbitmq-init.sh
+mkdir -p config/
+
+for i in $(seq 1 $brokers); do
+    rabbitmq_config_init > config/rabbitmq-broker${i}.conf;
+done
+
+for i in $(seq 1 $brokers); do
+    docker_rabbitmq_plugin_init rabbitmq-broker${i} > scripts/rabbitmq-init-plugin-broker${i}.sh;
+    chmod +x scripts/rabbitmq-init-plugin-broker${i}.sh;
+done
+
+docker_rabbitmq_plugins_init > scripts/rabbitmq-init-plugins.sh;
+chmod +x scripts/rabbitmq-init-plugins.sh;
+
+docker_rabbitmq_policy_init > scripts/rabbitmq-init-policy.sh
+chmod +x scripts/rabbitmq-init-policy.sh
+
+wget "https://raw.githubusercontent.com/rabbitmq/rabbitmq-server/v${rabbitmq_version}/deps/rabbitmq_management/bin/rabbitmqadmin" -O scripts/rabbitmqadmin
+chmod +x scripts/rabbitmqadmin
+
+wget "https://downloads.mongodb.com/compass/mongodb-mongosh_${mongodb_sh_version}_amd64.deb" -O scripts/mongosh.deb
+dpkg --fsys-tarfile scripts/mongosh.deb | tar xOf - ./usr/bin/mongosh > scripts/mongosh
+chmod +x scripts/mongosh

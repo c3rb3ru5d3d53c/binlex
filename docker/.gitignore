@@ -3,3 +3,4 @@ docker-compose.yml
 scripts/**
 ssl/**
 *.key
+config/**

@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "mongodb": "^4.3.0"
+    "mongodb": "^4.3.0",
+    "rabbitmq": "^0.0.2"
   }
 }
