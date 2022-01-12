@@ -18,8 +18,15 @@ admin_pass=changeme
 username=binlex
 password=changeme
 
+# RabbitMQ
+brokers=1
+rabbitmq_version=3.9.12-management
+rabbitmq_cookie=$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 32 | head -n 1)
+rabbitmq_port=5672
+rabbitmq_http_port=15672
+
 function help_menu(){
-    printf "generator.sh - MongoDB Docker Shard Generator\n";
+    printf "generator.sh - Binlex Production Docker Generator\n";
     printf "  -h\t\t--help\t\t\tHelp Menu\n";
     printf "  -mp\t\t--mongodb-port\t\tMongoDB Port\n";
     printf "  -mep\t\t--mongo-express-port\tMongo Express Port\n";
@@ -313,9 +320,31 @@ function compose() {
             echo "          - mongodb-config-rep${j}";
         done
     done
+    for i in $(seq 1 $brokers); do
+        echo "  rabbitmq-broker${i}:";
+        echo "      hostname: rabbitmq-broker${i}";
+        echo "      container_name: rabbitmq-broker${i}";
+        echo "      image: rabbitmq:${rabbitmq_version}";
+        echo "      environment:";
+        echo "          RABBITMQ_ERLANG_COOKIE: \"${rabbitmq_cookie}\"";
+        echo "          RABBITMQ_DEFAULT_USER: \"${admin_user}\"";
+        echo "          RABBITMQ_DEFAULT_PASS: \"${admin_pass}\"";
+        echo "      ports:";
+        echo "          - ${rabbitmq_port}:5672";
+        echo "          - ${rabbitmq_http_port}:15672";
+        echo "      volumes:";
+        echo "          - ./data/rabbitmq-broker${i}:/var/lib/rabbitmq/mnesia/";
+    done
 }
 
 compose > docker-compose.yml
+
+function docker_rabbitmq_init(){
+    echo "#!/usr/bin/env bash";
+    echo "docker exec -it rabbitmq-broker1 bash -c \"rabbitmqadmin --username '${admin_user}' --password '${admin_pass}' declare queue --vhost / name=${initdb} durable=true\"";
+    echo "docker exec -it rabbitmq-broker1 bash -c \"rabbitmqctl add_user '${username}' '${password}'\"";
+    echo "docker exec -it rabbitmq-broker1 bash -c \"rabbitmqctl set_permissions -p / ${username} '' '${initdb}' '${initdb}'\"";
+}
 
 function admin_init(){
     echo "use admin;";
@@ -452,5 +481,8 @@ chmod +x scripts/init-db.sh
 docker_all_init > scripts/init-all.sh
 chmod +x scripts/init-all.sh
 
-docker_admin_shell > scripts/shell.sh
-chmod +x scripts/shell.sh
+docker_admin_shell > scripts/mongodb-shell.sh
+chmod +x scripts/mongodb-shell.sh
+
+docker_rabbitmq_init > scripts/rabbitmq-init.sh
+chmod +x scripts/rabbitmq-init.sh
