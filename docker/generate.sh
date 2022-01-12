@@ -139,7 +139,7 @@ function generate_certificates(){
     mkdir -p ssl/
     # Create CA
     openssl req \
-        -passout pass:password \
+        -passout pass:${admin_pass} \
         -new -x509 \
         -days 3650 \
         -extensions v3_ca \
@@ -157,7 +157,7 @@ function generate_certificates(){
 
     # Sign Client Certificate
     openssl x509 \
-        -passin pass:password \
+        -passin pass:${admin_pass} \
         -sha256 -req \
         -days 365 \
         -in ssl/mongodb-client-${admin_user}.csr \
@@ -179,7 +179,7 @@ function generate_certificates(){
                 -keyout ssl/mongodb-shard${i}-rep${j}.key \
                 -subj "/CN=mongodb-shard${i}-rep${j}/OU=mongodb";
             openssl x509 \
-                -passin pass:password \
+                -passin pass:${admin_pass} \
                 -sha256 \
                 -req \
                 -days 365 \
@@ -203,7 +203,7 @@ function generate_certificates(){
             -keyout ssl/mongodb-config-rep${i}.key \
             -subj "/CN=mongodb-config-rep${i}/OU=mongodb";
         openssl x509 \
-            -passin pass:password \
+            -passin pass:${admin_pass} \
             -sha256 \
             -req \
             -days 365 \
@@ -226,7 +226,7 @@ function generate_certificates(){
             -keyout ssl/mongodb-router${i}.key \
             -subj "/CN=mongodb-router${i}/OU=mongodb";
         openssl x509 \
-            -passin pass:password \
+            -passin pass:${admin_pass} \
             -sha256 \
             -req \
             -days 365 \
@@ -313,35 +313,6 @@ function compose() {
             echo "          - mongodb-config-rep${j}";
         done
     done
-    # echo "  mongo-express:";
-    # echo "      image: mongo-express:${mongo_express_version}";
-    # echo "      ports:";
-    # echo "          - 8081:8081";
-    # echo "      environment:";
-    # echo "          - ME_CONFIG_MONGODB_SERVER=mongodb-router1";
-    # echo "          - ME_CONFIG_MONGODB_PORT=${mongodb_port}";
-    # echo "          - ME_CONFIG_MONGODB_ENABLE_ADMIN=true";
-    # echo "          - ME_CONFIG_MONGODB_ADMINUSERNAME=${admin_user}";
-    # echo "          - ME_CONFIG_MONGODB_ADMINPASSWORD=${admin_pass}";
-    # echo "          - ME_CONFIG_MONGODB_AUTH_DATABASE=admin";
-    # echo "          - ME_CONFIG_MONGODB_AUTH_USERNAME=${admin_user}";
-    # echo "          - ME_CONFIG_MONGODB_AUTH_PASSWORD=${admin_pass}";
-    # echo "          - ME_CONFIG_BASICAUTH_USERNAME=${admin_user}";
-    # echo "          - ME_CONFIG_BASICAUTH_PASSWORD=${admin_pass}";
-    # echo "      volumes:";
-    # echo "          - ./data/mongo-express:/data/db/";
-    # echo "      depends_on:";
-    # for j in $(seq 1 $shards); do
-    #     for k in $(seq 1 $replicas); do
-    #         echo "          - mongodb-shard${j}-rep${k}";
-    #     done
-    # done
-    # for i in $(seq 1 $routers); do
-    #     echo "          - mongodb-router${i}";
-    # done
-    # for i in $(seq 1 $replicas); do
-    #     echo "          - mongodb-config-rep${i}";
-    # done
 }
 
 compose > docker-compose.yml
