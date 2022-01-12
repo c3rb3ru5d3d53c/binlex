@@ -126,72 +126,127 @@ while test $# -gt 0; do
     shift
 done
 
+function generate_alt_dns(){
+    echo "[ v3_req ]";
+    echo "subjectAltName = @alt_names";
+    echo "[ alt_names ]";
+    echo "DNS.1 = 127.0.0.1";
+    echo "DNS.2 = localhost";
+    echo "DNS.3 = $1";
+}
+
 function generate_certificates(){
     mkdir -p ssl/
-    admin_pass=${admin_pass} openssl req -nodes \
-        -passout env:admin_pass \
-        -subj "/OU=mongodb" \
-        -out ssl/mongodb-ca.pem \
+    # Create CA
+    openssl req \
+        -passout pass:password \
         -new -x509 \
-        -keyout ssl/mongodb-ca.key;
+        -days 3650 \
+        -extensions v3_ca \
+        -keyout ssl/mongodb-private-ca.pem \
+        -out ssl/mongodb-public-ca.pem \
+        -subj "/CN=CA/OU=mongodb";
+
+    # Create Client Certificate
+    openssl req \
+        -newkey rsa:4096 \
+        -nodes \
+        -out ssl/mongodb-client-${admin_user}.csr \
+        -keyout ssl/mongodb-client-${admin_user}.key \
+        -subj "/CN=${admin_user}/OU=mongodb-clients";
+
+    # Sign Client Certificate
+    openssl x509 \
+        -passin pass:password \
+        -sha256 -req \
+        -days 365 \
+        -in ssl/mongodb-client-${admin_user}.csr \
+        -CA ssl/mongodb-public-ca.pem \
+        -CAkey ssl/mongodb-private-ca.pem \
+        -CAcreateserial \
+        -out ssl/mongodb-client-${admin_user}.crt;
+
+    cat ssl/mongodb-client-${admin_user}.crt ssl/mongodb-client-${admin_user}.key > ssl/mongodb-client-${admin_user}.pem;
 
     # Generate Certificates for Shards
     for i in $(seq 1 $shards); do
         for j in $(seq 1 $replicas); do
-            openssl req -nodes \
+            generate_alt_dns mongodb-shard${i}-rep${j} > ssl/mongodb-shard${i}-rep${j}.ext;
+            openssl req \
                 -newkey rsa:4096 \
-                -subj "/CN=mongodb-shard${i}-rep${j}" \
-                -sha256 \
+                -nodes \
+                -out ssl/mongodb-shard${i}-rep${j}.csr \
                 -keyout ssl/mongodb-shard${i}-rep${j}.key \
-                -out ssl/mongodb-shard${i}-rep${j}.csr;
-            openssl x509 -req \
+                -subj "/CN=mongodb-shard${i}-rep${j}/OU=mongodb";
+            openssl x509 \
+                -passin pass:password \
+                -sha256 \
+                -req \
+                -days 365 \
                 -in ssl/mongodb-shard${i}-rep${j}.csr \
-                -CA ssl/mongodb-ca.pem \
-                -CAkey ssl/mongodb-ca.key \
-                -set_serial 00 \
-                -out ssl/mongodb-shard${i}-rep${j}.crt;
-            cat ssl/mongodb-shard${i}-rep${j}.key ssl/mongodb-shard${i}-rep${j}.crt > ssl/mongodb-shard${i}-rep${j}.pem;
+                -CA ssl/mongodb-public-ca.pem \
+                -CAkey ssl/mongodb-private-ca.pem \
+                -CAcreateserial \
+                -out ssl/mongodb-shard${i}-rep${j}.crt \
+                -extensions v3_req \
+                -extfile ssl/mongodb-shard${i}-rep${j}.ext;
+            cat ssl/mongodb-shard${i}-rep${j}.crt ssl/mongodb-shard${i}-rep${j}.key > ssl/mongodb-shard${i}-rep${j}.pem;
         done
     done
 
-    # Generate Certificates for Config Servers
     for i in $(seq 1 $replicas); do
-        openssl req -nodes \
+        generate_alt_dns mongodb-config-rep${i} > ssl/mongodb-config-rep${i}.ext;
+        openssl req \
             -newkey rsa:4096 \
-            -subj "/CN=mongodb-config-rep${i}" \
-            -sha256 \
+            -nodes \
+            -out ssl/mongodb-config-rep${i}.csr \
             -keyout ssl/mongodb-config-rep${i}.key \
-            -out ssl/mongodb-config-rep${i}.csr;
-        openssl x509 -req \
-                -in ssl/mongodb-config-rep${i}.csr \
-                -CA ssl/mongodb-ca.pem \
-                -CAkey ssl/mongodb-ca.key \
-                -set_serial 00 \
-                -out ssl/mongodb-config-rep${i}.crt;
-        cat ssl/mongodb-config-rep${i}.key ssl/mongodb-config-rep${i}.crt > ssl/mongodb-config-rep${i}.pem;
+            -subj "/CN=mongodb-config-rep${i}/OU=mongodb";
+        openssl x509 \
+            -passin pass:password \
+            -sha256 \
+            -req \
+            -days 365 \
+            -in ssl/mongodb-config-rep${i}.csr \
+            -CA ssl/mongodb-public-ca.pem \
+            -CAkey ssl/mongodb-private-ca.pem \
+            -CAcreateserial \
+            -out ssl/mongodb-config-rep${i}.crt \
+            -extensions v3_req \
+            -extfile ssl/mongodb-config-rep${i}.ext;
+        cat ssl/mongodb-config-rep${i}.crt ssl/mongodb-config-rep${i}.key > ssl/mongodb-config-rep${i}.pem;
     done
 
     for i in $(seq 1 $routers); do
-        openssl req -nodes \
+        generate_alt_dns mongodb-router${i} > ssl/mongodb-router${i}.ext;
+        openssl req \
             -newkey rsa:4096 \
-            -subj "/CN=mongodb-config-rep${i}" \
-            -sha256 \
+            -nodes \
+            -out ssl/mongodb-router${i}.csr \
             -keyout ssl/mongodb-router${i}.key \
-            -out ssl/mongodb-router${i}.csr;
-        openssl x509 -req \
-                -in ssl/mongodb-router${i}.csr \
-                -CA ssl/mongodb-ca.pem \
-                -CAkey ssl/mongodb-ca.key \
-                -set_serial 00 \
-                -out ssl/mongodb-router${i}.crt;
-        cat ssl/mongodb-router${i}.key ssl/mongodb-router${i}.crt > ssl/mongodb-router${i}.pem;
+            -subj "/CN=mongodb-router${i}/OU=mongodb";
+        openssl x509 \
+            -passin pass:password \
+            -sha256 \
+            -req \
+            -days 365 \
+            -in ssl/mongodb-router${i}.csr \
+            -CA ssl/mongodb-public-ca.pem \
+            -CAkey ssl/mongodb-private-ca.pem \
+            -CAcreateserial \
+            -out ssl/mongodb-router${i}.crt \
+            -extensions v3_req \
+            -extfile ssl/mongodb-router${i}.ext;
+        cat ssl/mongodb-router${i}.crt ssl/mongodb-router${i}.key > ssl/mongodb-router${i}.pem;
     done
 
     sudo chown 999:999 ssl/*;
     sudo chmod 600 ssl/*;
 }
 
-generate_certificates
+if [ ! -d ssl/ ]; then
+    generate_certificates
+fi
 
 rm -rf scripts/
 mkdir -p scripts/
@@ -212,11 +267,13 @@ function compose() {
             echo "      hostname: mongodb-shard${j}-rep${i}";
             echo "      container_name: mongodb-shard${j}-rep${i}";
             echo "      image: mongo:${mongodb_version}";
-            echo "      command: mongod --shardsvr --bind_ip_all --replSet shard${j} --port ${mongodb_port} --dbpath /data/db/ --keyFile /data/replica.key";
+            echo "      command: mongod --shardsvr --bind_ip_all --replSet shard${j} --port ${mongodb_port} --dbpath /data/db/ --keyFile /data/replica.key --tlsMode requireTLS --tlsCertificateKeyFile /data/mongodb-shard${j}-rep${i}.pem --tlsCAFile /data/mongodb-public-ca.pem";
             echo "      volumes:";
+            echo "          - ./ssl/mongodb-client-${admin_user}.pem:/data/mongodb-client-${admin_user}.pem";
+            echo "          - ./ssl/mongodb-public-ca.pem:/data/mongodb-public-ca.pem";
+            echo "          - ./ssl/mongodb-shard${j}-rep${i}.pem:/data/mongodb-shard${j}-rep${i}.pem";
             echo "          - ./replica.key:/data/replica.key";
             echo "          - ./data/mongodb-shard${j}-rep${i}/:/data/db/";
-            #echo "          - ./scripts/initrep${j}.js:/docker-entrypoint-initdb.d/init-mongo.js";
         done
     done
     for i in $(seq 1 $replicas); do
@@ -224,24 +281,29 @@ function compose() {
         echo "      hostname: mongodb-config-rep${i}";
         echo "      container_name: mongodb-config-rep${i}";
         echo "      image: mongo:${mongodb_version}";
-        echo "      command: mongod --configsvr --bind_ip_all --replSet ${configdb} --port ${mongodb_port} --dbpath /data/db/ --keyFile /data/replica.key";
+        echo "      command: mongod --configsvr --bind_ip_all --replSet ${configdb} --port ${mongodb_port} --dbpath /data/db/ --keyFile /data/replica.key --tlsMode requireTLS --tlsCertificateKeyFile /data/mongodb-config-rep${i}.pem --tlsCAFile /data/mongodb-public-ca.pem";
         echo "      volumes:";
+        echo "          - ./ssl/mongodb-client-${admin_user}.pem:/data/mongodb-client-${admin_user}.pem"
+        echo "          - ./ssl/mongodb-public-ca.pem:/data/mongodb-public-ca.pem";
+        echo "          - ./ssl/mongodb-config-rep${i}.pem:/data/mongodb-config-rep${i}.pem";
         echo "          - ./replica.key:/data/replica.key";
         echo "          - ./data/mongodb-config-rep${i}/:/data/db/";
-        #echo "          - ./scripts/initconfig.js:/docker-entrypoint-initdb.d/init-mongo.js";
     done
     for i in $(seq 1 $routers); do
         echo "  mongodb-router${i}:";
         echo "      hostname: mongodb-router${i}";
         echo "      container_name: mongodb-router${i}";
         echo "      image: mongo:${mongodb_version}";
-        echo -n "      command: mongos --keyFile /data/replica.key --bind_ip_all --port ${mongodb_port} --configdb ";
+        echo -n "      command: mongos --keyFile /data/replica.key --bind_ip_all --port ${mongodb_port} --tlsMode requireTLS --tlsCertificateKeyFile /data/mongodb-router${i}.pem --tlsCAFile /data/mongodb-public-ca.pem --configdb ";
         echo -n "\"${configdb}/";
         for j in $(seq 1 $replicas); do
             echo -n "mongodb-config-rep${j}:${mongodb_port},";
         done | sed 's/,$//'
         echo "\"";
         echo "      volumes:";
+        echo "          - ./ssl/mongodb-client-${admin_user}.pem:/data/mongodb-client-${admin_user}.pem"
+        echo "          - ./ssl/mongodb-public-ca.pem:/data/mongodb-public-ca.pem";
+        echo "          - ./ssl/mongodb-router${i}.pem:/data/mongodb-router${i}.pem";
         echo "          - ./replica.key:/data/replica.key";
         echo "          - ./data/mongodb-router${i}/:/data/db/";
         echo "      ports:";
@@ -251,35 +313,35 @@ function compose() {
             echo "          - mongodb-config-rep${j}";
         done
     done
-    echo "  mongo-express:";
-    echo "      image: mongo-express:${mongo_express_version}";
-    echo "      ports:";
-    echo "          - 8081:8081";
-    echo "      environment:";
-    echo "          - ME_CONFIG_MONGODB_SERVER=mongodb-router1";
-    echo "          - ME_CONFIG_MONGODB_PORT=${mongodb_port}";
-    echo "          - ME_CONFIG_MONGODB_ENABLE_ADMIN=true";
-    echo "          - ME_CONFIG_MONGODB_ADMINUSERNAME=${admin_user}";
-    echo "          - ME_CONFIG_MONGODB_ADMINPASSWORD=${admin_pass}";
-    echo "          - ME_CONFIG_MONGODB_AUTH_DATABASE=admin";
-    echo "          - ME_CONFIG_MONGODB_AUTH_USERNAME=${admin_user}";
-    echo "          - ME_CONFIG_MONGODB_AUTH_PASSWORD=${admin_pass}";
-    echo "          - ME_CONFIG_BASICAUTH_USERNAME=${admin_user}";
-    echo "          - ME_CONFIG_BASICAUTH_PASSWORD=${admin_pass}";
-    echo "      volumes:";
-    echo "          - ./data/mongo-express:/data/db/";
-    echo "      depends_on:";
-    for j in $(seq 1 $shards); do
-        for k in $(seq 1 $replicas); do
-            echo "          - mongodb-shard${j}-rep${k}";
-        done
-    done
-    for i in $(seq 1 $routers); do
-        echo "          - mongodb-router${i}";
-    done
-    for i in $(seq 1 $replicas); do
-        echo "          - mongodb-config-rep${i}";
-    done
+    # echo "  mongo-express:";
+    # echo "      image: mongo-express:${mongo_express_version}";
+    # echo "      ports:";
+    # echo "          - 8081:8081";
+    # echo "      environment:";
+    # echo "          - ME_CONFIG_MONGODB_SERVER=mongodb-router1";
+    # echo "          - ME_CONFIG_MONGODB_PORT=${mongodb_port}";
+    # echo "          - ME_CONFIG_MONGODB_ENABLE_ADMIN=true";
+    # echo "          - ME_CONFIG_MONGODB_ADMINUSERNAME=${admin_user}";
+    # echo "          - ME_CONFIG_MONGODB_ADMINPASSWORD=${admin_pass}";
+    # echo "          - ME_CONFIG_MONGODB_AUTH_DATABASE=admin";
+    # echo "          - ME_CONFIG_MONGODB_AUTH_USERNAME=${admin_user}";
+    # echo "          - ME_CONFIG_MONGODB_AUTH_PASSWORD=${admin_pass}";
+    # echo "          - ME_CONFIG_BASICAUTH_USERNAME=${admin_user}";
+    # echo "          - ME_CONFIG_BASICAUTH_PASSWORD=${admin_pass}";
+    # echo "      volumes:";
+    # echo "          - ./data/mongo-express:/data/db/";
+    # echo "      depends_on:";
+    # for j in $(seq 1 $shards); do
+    #     for k in $(seq 1 $replicas); do
+    #         echo "          - mongodb-shard${j}-rep${k}";
+    #     done
+    # done
+    # for i in $(seq 1 $routers); do
+    #     echo "          - mongodb-router${i}";
+    # done
+    # for i in $(seq 1 $replicas); do
+    #     echo "          - mongodb-config-rep${i}";
+    # done
 }
 
 compose > docker-compose.yml
@@ -332,31 +394,31 @@ function cfg_init(){
 function docker_cfg_init(){
     echo "#!/usr/bin/env bash";
     echo "docker cp init-cfgs.js mongodb-config-rep1:/tmp/init-cfgs.js"
-    echo "docker exec -it mongodb-config-rep1 bash -c \"cat /tmp/init-cfgs.js | mongosh 127.0.0.1:${mongodb_port}\"";
+    echo "docker exec -it mongodb-config-rep1 bash -c \"cat /tmp/init-cfgs.js | mongosh 127.0.0.1:27017 --tls --tlsCertificateKeyFile /data/mongodb-client-${admin_user}.pem --tlsCAFile /data/mongodb-public-ca.pem --tlsAllowInvalidHostnames\"";
 }
 
 function docker_admin_init(){
     echo "#!/usr/bin/env bash";
     echo "docker cp init-admin.js mongodb-router1:/tmp/init-admin.js";
-    echo "docker exec -it mongodb-router1 bash -c \"cat /tmp/init-admin.js | mongosh 127.0.0.1:${mongodb_port}\"";
+    echo "docker exec -it mongodb-router1 bash -c \"cat /tmp/init-admin.js | mongosh 127.0.0.1:${mongodb_port} --tls --tlsCertificateKeyFile /data/mongodb-client-${admin_user}.pem --tlsCAFile /data/mongodb-public-ca.pem --tlsAllowInvalidHostnames\"";
 }
 
 function docker_shard_init(){
     echo "#!/usr/bin/env bash";
     echo "docker cp init-shard$1.js mongodb-shard$1-rep1:/tmp/init-shard$1.js";
-    echo "docker exec -it mongodb-shard$1-rep1 bash -c \"cat /tmp/init-shard$1.js | mongosh 127.0.0.1:${mongodb_port}\"";
+    echo "docker exec -it mongodb-shard$1-rep1 bash -c \"cat /tmp/init-shard$1.js | mongosh 127.0.0.1:${mongodb_port} --tls --tlsCertificateKeyFile /data/mongodb-client-${admin_user}.pem --tlsCAFile /data/mongodb-public-ca.pem --tlsAllowInvalidHostnames\"";
 }
 
 function docker_router_init(){
     echo "#!/usr/bin/env bash";
     echo "docker cp init-router.js mongodb-router1:/tmp/init-router.js";
-    echo "docker exec -it mongodb-router1 bash -c \"cat /tmp/init-router.js | mongosh 127.0.0.1:${mongodb_port} -u \\\"${admin_user}\\\" -p \\\"${admin_pass}\\\" --authenticationDatabase admin\""
+    echo "docker exec -it mongodb-router1 bash -c \"cat /tmp/init-router.js | mongosh 127.0.0.1:${mongodb_port} --tls --tlsCertificateKeyFile /data/mongodb-client-${admin_user}.pem --tlsCAFile /data/mongodb-public-ca.pem --tlsAllowInvalidHostnames -u \\\"${admin_user}\\\" -p \\\"${admin_pass}\\\" --authenticationDatabase admin\""
 }
 
 function docker_db_init(){
     echo "#!/usr/bin/env bash";
     echo "docker cp init-db.js mongodb-router1:/tmp/init-db.js";
-    echo "docker exec -it mongodb-router1 bash -c \"cat /tmp/init-db.js | mongosh 127.0.0.1:${mongodb_port} -u \\\"${admin_user}\\\" -p \\\"${admin_pass}\\\" --authenticationDatabase admin\""
+    echo "docker exec -it mongodb-router1 bash -c \"cat /tmp/init-db.js | mongosh 127.0.0.1:${mongodb_port} --tls --tlsCertificateKeyFile /data/mongodb-client-${admin_user}.pem --tlsCAFile /data/mongodb-public-ca.pem --tlsAllowInvalidHostnames -u \\\"${admin_user}\\\" -p \\\"${admin_pass}\\\" --authenticationDatabase admin\""
 }
 
 function docker_shards_init(){
@@ -387,7 +449,7 @@ function docker_all_init(){
 
 function docker_admin_shell(){
     echo "#!/usr/bin/env bash";
-    echo "docker exec -it \$1 mongosh 127.0.0.1:${mongodb_port} -u \\\"${admin_user}\\\" -p \\\"${admin_pass}\\\" --authenticationDatabase admin"
+    echo "docker exec -it \$1 mongosh 127.0.0.1:${mongodb_port} --tls --tlsCertificateKeyFile /data/mongodb-client-${admin_user}.pem --tlsCAFile /data/mongodb-public-ca.pem --tlsAllowInvalidHostnames -u \\\"${admin_user}\\\" -p \\\"${admin_pass}\\\" --authenticationDatabase admin"
 }
 
 cfg_init > scripts/init-cfgs.js
