@@ -49,6 +49,39 @@ Get slides [here](docs/oalabs.pdf).
 - Genetic Programming
 - Machine Learning Malware Detection
 
+# Differences from Other Tools
+
+These are the points that lead us to building `binlex`:
+- `yarGen`
+  - all goodware traits are static bytes
+  - downloads goodware each run
+  - takes very long to process
+  - completely written in Python (slow)
+  - memory intensive
+- `yara-signator`
+  - requires a massive amount of memory to process sometimes ~32GB
+  - written in Java and Python (slow)
+  - does not solve issue with code-reuse for simple tasks
+- `Intezer`
+  - cannot generate genetic traits for shellcode
+  - expensive
+  - little control over detection logic
+
+With `binlex`, we differ by empowering the user to make decisions about their detection logic.
+
+We simplify this process in these ways:
+- trait extraction using C++ because its fast
+- trait extraction for shellcode
+- generated traits are flat JSON objects
+- get quick results in CLI without needing the whole process
+- outputs can be piped into other tools like `jq` and `blyara` for quick tasks
+- push mass processing and queries to a MongoDB Cluster where it makes sense to have ~32GB of RAM
+- provide trait extraction library for other spin off tools
+
+These other tools that compete in the same space as `binlex` are great.
+
+However, we believe `binlex` operates better in production environments for malware analysts and reverse engineers.
+
 # Installing
 
 **Dependencies:**
