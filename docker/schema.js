@@ -8,7 +8,6 @@ var trait_schema = {
         "edges",
         "instructions",
         "invalid_instructions",
-        "offset",
         "bytes",
         "bytes_sha256",
         "bytes_entropy",
@@ -48,12 +47,8 @@ var trait_schema = {
             bsonType: "int",
             description: "Number of Invalid Instructions"
         },
-        offset: {
-            bsonType: "int",
-            description: "File Offset"
-        },
         bytes: {
-            bsonType: "objectId",
+            bsonType: "string",
             description: "Hexadecimal Byte String"
         },
         bytes_sha256: {
@@ -65,7 +60,7 @@ var trait_schema = {
             description: "Byte String Entropy"
         },
         trait: {
-            bsonType: "objectId",
+            bsonType: "string",
             description: "Wildcarded Trait String"
         },
         trait_sha256: {
@@ -91,48 +86,46 @@ var trait_schema = {
     }
 };
 
-var traits_schema = {
+var files_schema = {
     bsonType: "object",
     required: [
-        "trait"
+        "collection",
+        "architecture",
+        "sha256",
+        "trait_id",
+        "offset",
     ],
     properties: {
-        trait: {
+        collection: {
             bsonType: "string",
-            description: "Trait String"
+            description: "Collection Name"
+        },
+        architecture: {
+            bsonType: "string",
+            description: "File Architecture"
+        },
+        sha256: {
+            bsonType: "string",
+            description: "SHA256 Hash of File"
+        },
+        trait_id: {
+            bsonType: "objectId",
+            description: "Trait ID"
+        },
+        offset: {
+            bsonType: "int",
+            description: "Trait File Offset"
         }
     }
 };
 
-var bytes_schema = {
-    bsonType: "object",
-    required: [
-        "bytes"
-    ],
-    properties: {
-        trait: {
-            bsonType: "string",
-            description: "Bytes String"
-        }
-    }
-};
-
-db.createCollection("bytes", {
+db.createCollection('files', {
     validator: {
-        $jsonSchema: bytes_schema
+        $jsonSchema: files_schema
     }
 });
 
-db.bytes.createIndex({bytes: 1}, {unique: true});
-
-
-db.createCollection("traits", {
-    validator: {
-        $jsonSchema: traits_schema
-    }
-});
-
-db.traits.createIndex({trait: 1}, {unique: true});
+db.files.createIndex({collection: 1, architecture: 1, sha256: 1, trait_id: 1}, {unique: true});
 
 db.createCollection('default', {
     validator: {
