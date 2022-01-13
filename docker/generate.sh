@@ -151,30 +151,30 @@ function generate_certificates(){
         -new -x509 \
         -days 3650 \
         -extensions v3_ca \
-        -keyout ssl/mongodb-private-ca.pem \
-        -out ssl/mongodb-public-ca.pem \
-        -subj "/CN=CA/OU=mongodb";
+        -keyout ssl/binlex-private-ca.pem \
+        -out ssl/binlex-public-ca.pem \
+        -subj "/CN=CA/OU=binlex";
 
     # Create Client Certificate
     openssl req \
         -newkey rsa:4096 \
         -nodes \
-        -out ssl/mongodb-client-${admin_user}.csr \
-        -keyout ssl/mongodb-client-${admin_user}.key \
-        -subj "/CN=${admin_user}/OU=mongodb-clients";
+        -out ssl/binlex-client.csr \
+        -keyout ssl/binlex-client.key \
+        -subj "/CN=binlex-client/OU=binlex-clients";
 
     # Sign Client Certificate
     openssl x509 \
         -passin pass:${admin_pass} \
         -sha256 -req \
         -days 365 \
-        -in ssl/mongodb-client-${admin_user}.csr \
-        -CA ssl/mongodb-public-ca.pem \
-        -CAkey ssl/mongodb-private-ca.pem \
+        -in ssl/binlex-client.csr \
+        -CA ssl/binlex-public-ca.pem \
+        -CAkey ssl/binlex-private-ca.pem \
         -CAcreateserial \
-        -out ssl/mongodb-client-${admin_user}.crt;
+        -out ssl/binlex-client.crt;
 
-    cat ssl/mongodb-client-${admin_user}.crt ssl/mongodb-client-${admin_user}.key > ssl/mongodb-client-${admin_user}.pem;
+    cat ssl/binlex-client.crt ssl/binlex-client.key > ssl/binlex-client.pem;
 
     # Generate Certificates for Shards
     for i in $(seq 1 $shards); do
@@ -185,15 +185,15 @@ function generate_certificates(){
                 -nodes \
                 -out ssl/mongodb-shard${i}-rep${j}.csr \
                 -keyout ssl/mongodb-shard${i}-rep${j}.key \
-                -subj "/CN=mongodb-shard${i}-rep${j}/OU=mongodb";
+                -subj "/CN=mongodb-shard${i}-rep${j}/OU=binlex-mongodb";
             openssl x509 \
                 -passin pass:${admin_pass} \
                 -sha256 \
                 -req \
                 -days 365 \
                 -in ssl/mongodb-shard${i}-rep${j}.csr \
-                -CA ssl/mongodb-public-ca.pem \
-                -CAkey ssl/mongodb-private-ca.pem \
+                -CA ssl/binlex-public-ca.pem \
+                -CAkey ssl/binlex-private-ca.pem \
                 -CAcreateserial \
                 -out ssl/mongodb-shard${i}-rep${j}.crt \
                 -extensions v3_req \
@@ -209,15 +209,15 @@ function generate_certificates(){
             -nodes \
             -out ssl/mongodb-config-rep${i}.csr \
             -keyout ssl/mongodb-config-rep${i}.key \
-            -subj "/CN=mongodb-config-rep${i}/OU=mongodb";
+            -subj "/CN=mongodb-config-rep${i}/OU=binlex-mongodb";
         openssl x509 \
             -passin pass:${admin_pass} \
             -sha256 \
             -req \
             -days 365 \
             -in ssl/mongodb-config-rep${i}.csr \
-            -CA ssl/mongodb-public-ca.pem \
-            -CAkey ssl/mongodb-private-ca.pem \
+            -CA ssl/binlex-public-ca.pem \
+            -CAkey ssl/binlex-private-ca.pem \
             -CAcreateserial \
             -out ssl/mongodb-config-rep${i}.crt \
             -extensions v3_req \
@@ -232,20 +232,43 @@ function generate_certificates(){
             -nodes \
             -out ssl/mongodb-router${i}.csr \
             -keyout ssl/mongodb-router${i}.key \
-            -subj "/CN=mongodb-router${i}/OU=mongodb";
+            -subj "/CN=mongodb-router${i}/OU=binlex-mongodb";
         openssl x509 \
             -passin pass:${admin_pass} \
             -sha256 \
             -req \
             -days 365 \
             -in ssl/mongodb-router${i}.csr \
-            -CA ssl/mongodb-public-ca.pem \
-            -CAkey ssl/mongodb-private-ca.pem \
+            -CA ssl/binlex-public-ca.pem \
+            -CAkey ssl/binlex-private-ca.pem \
             -CAcreateserial \
             -out ssl/mongodb-router${i}.crt \
             -extensions v3_req \
             -extfile ssl/mongodb-router${i}.ext;
         cat ssl/mongodb-router${i}.crt ssl/mongodb-router${i}.key > ssl/mongodb-router${i}.pem;
+    done
+
+    for i in $(seq 1 $brokers); do
+        generate_alt_dns rabbitmq-broker${i} > ssl/rabbitmq-broker${i}.ext;
+        openssl req \
+            -newkey rsa:4096 \
+            -nodes \
+            -out ssl/rabbitmq-broker${i}.csr \
+            -keyout ssl/rabbitmq-broker${i}.key \
+            -subj "/CN=rabbitmq-broker${i}/OU=binlex-rabbitmq";
+        openssl x509 \
+            -passin pass:${admin_pass} \
+            -sha256 \
+            -req \
+            -days 365 \
+            -in ssl/rabbitmq-broker${i}.csr \
+            -CA ssl/binlex-public-ca.pem \
+            -CAkey ssl/binlex-private-ca.pem \
+            -CAcreateserial \
+            -out ssl/rabbitmq-broker${i}.crt \
+            -extensions v3_req \
+            -extfile ssl/rabbitmq-broker${i}.ext;
+        cat ssl/rabbitmq-broker${i}.crt ssl/rabbitmq-broker${i}.key > ssl/rabbitmq-broker${i}.pem;
     done
 
     sudo chown 999:999 ssl/*;
@@ -275,10 +298,10 @@ function compose() {
             echo "      hostname: mongodb-shard${j}-rep${i}";
             echo "      container_name: mongodb-shard${j}-rep${i}";
             echo "      image: mongo:${mongodb_version}";
-            echo "      command: mongod --shardsvr --bind_ip_all --replSet shard${j} --port ${mongodb_port} --dbpath /data/db/ --keyFile /data/replica.key --tlsMode requireTLS --tlsCertificateKeyFile /data/mongodb-shard${j}-rep${i}.pem --tlsCAFile /data/mongodb-public-ca.pem";
+            echo "      command: mongod --shardsvr --bind_ip_all --replSet shard${j} --port ${mongodb_port} --dbpath /data/db/ --keyFile /data/replica.key --tlsMode requireTLS --tlsCertificateKeyFile /data/mongodb-shard${j}-rep${i}.pem --tlsCAFile /data/binlex-public-ca.pem";
             echo "      volumes:";
-            echo "          - ./ssl/mongodb-client-${admin_user}.pem:/data/mongodb-client-${admin_user}.pem";
-            echo "          - ./ssl/mongodb-public-ca.pem:/data/mongodb-public-ca.pem";
+            echo "          - ./ssl/binlex-client.pem:/data/binlex-client.pem";
+            echo "          - ./ssl/binlex-public-ca.pem:/data/binlex-public-ca.pem";
             echo "          - ./ssl/mongodb-shard${j}-rep${i}.pem:/data/mongodb-shard${j}-rep${i}.pem";
             echo "          - ./replica.key:/data/replica.key";
             echo "          - ./data/mongodb-shard${j}-rep${i}/:/data/db/";
@@ -289,10 +312,10 @@ function compose() {
         echo "      hostname: mongodb-config-rep${i}";
         echo "      container_name: mongodb-config-rep${i}";
         echo "      image: mongo:${mongodb_version}";
-        echo "      command: mongod --configsvr --bind_ip_all --replSet ${configdb} --port ${mongodb_port} --dbpath /data/db/ --keyFile /data/replica.key --tlsMode requireTLS --tlsCertificateKeyFile /data/mongodb-config-rep${i}.pem --tlsCAFile /data/mongodb-public-ca.pem";
+        echo "      command: mongod --configsvr --bind_ip_all --replSet ${configdb} --port ${mongodb_port} --dbpath /data/db/ --keyFile /data/replica.key --tlsMode requireTLS --tlsCertificateKeyFile /data/mongodb-config-rep${i}.pem --tlsCAFile /data/binlex-public-ca.pem";
         echo "      volumes:";
-        echo "          - ./ssl/mongodb-client-${admin_user}.pem:/data/mongodb-client-${admin_user}.pem"
-        echo "          - ./ssl/mongodb-public-ca.pem:/data/mongodb-public-ca.pem";
+        echo "          - ./ssl/binlex-client.pem:/data/binlex-client.pem"
+        echo "          - ./ssl/binlex-public-ca.pem:/data/binlex-public-ca.pem";
         echo "          - ./ssl/mongodb-config-rep${i}.pem:/data/mongodb-config-rep${i}.pem";
         echo "          - ./replica.key:/data/replica.key";
         echo "          - ./data/mongodb-config-rep${i}/:/data/db/";
@@ -302,15 +325,15 @@ function compose() {
         echo "      hostname: mongodb-router${i}";
         echo "      container_name: mongodb-router${i}";
         echo "      image: mongo:${mongodb_version}";
-        echo -n "      command: mongos --keyFile /data/replica.key --bind_ip_all --port ${mongodb_port} --tlsMode requireTLS --tlsCertificateKeyFile /data/mongodb-router${i}.pem --tlsCAFile /data/mongodb-public-ca.pem --configdb ";
+        echo -n "      command: mongos --keyFile /data/replica.key --bind_ip_all --port ${mongodb_port} --tlsMode requireTLS --tlsCertificateKeyFile /data/mongodb-router${i}.pem --tlsCAFile /data/binlex-public-ca.pem --configdb ";
         echo -n "\"${configdb}/";
         for j in $(seq 1 $replicas); do
             echo -n "mongodb-config-rep${j}:${mongodb_port},";
         done | sed 's/,$//'
         echo "\"";
         echo "      volumes:";
-        echo "          - ./ssl/mongodb-client-${admin_user}.pem:/data/mongodb-client-${admin_user}.pem"
-        echo "          - ./ssl/mongodb-public-ca.pem:/data/mongodb-public-ca.pem";
+        echo "          - ./ssl/binlex-client.pem:/data/binlex-client.pem"
+        echo "          - ./ssl/binlex-public-ca.pem:/data/binlex-public-ca.pem";
         echo "          - ./ssl/mongodb-router${i}.pem:/data/mongodb-router${i}.pem";
         echo "          - ./replica.key:/data/replica.key";
         echo "          - ./data/mongodb-router${i}/:/data/db/";
@@ -420,31 +443,31 @@ function cfg_init(){
 function docker_cfg_init(){
     echo "#!/usr/bin/env bash";
     echo "docker cp init-cfgs.js mongodb-config-rep1:/tmp/init-cfgs.js"
-    echo "docker exec -it mongodb-config-rep1 bash -c \"cat /tmp/init-cfgs.js | mongosh 127.0.0.1:27017 --tls --tlsCertificateKeyFile /data/mongodb-client-${admin_user}.pem --tlsCAFile /data/mongodb-public-ca.pem --tlsAllowInvalidHostnames\"";
+    echo "docker exec -it mongodb-config-rep1 bash -c \"cat /tmp/init-cfgs.js | mongosh 127.0.0.1:27017 --tls --tlsCertificateKeyFile /data/binlex-client.pem --tlsCAFile /data/binlex-public-ca.pem --tlsAllowInvalidHostnames\"";
 }
 
 function docker_admin_init(){
     echo "#!/usr/bin/env bash";
     echo "docker cp init-admin.js mongodb-router1:/tmp/init-admin.js";
-    echo "docker exec -it mongodb-router1 bash -c \"cat /tmp/init-admin.js | mongosh 127.0.0.1:${mongodb_port} --tls --tlsCertificateKeyFile /data/mongodb-client-${admin_user}.pem --tlsCAFile /data/mongodb-public-ca.pem --tlsAllowInvalidHostnames\"";
+    echo "docker exec -it mongodb-router1 bash -c \"cat /tmp/init-admin.js | mongosh 127.0.0.1:${mongodb_port} --tls --tlsCertificateKeyFile /data/binlex-client.pem --tlsCAFile /data/binlex-public-ca.pem --tlsAllowInvalidHostnames\"";
 }
 
 function docker_shard_init(){
     echo "#!/usr/bin/env bash";
     echo "docker cp init-shard$1.js mongodb-shard$1-rep1:/tmp/init-shard$1.js";
-    echo "docker exec -it mongodb-shard$1-rep1 bash -c \"cat /tmp/init-shard$1.js | mongosh 127.0.0.1:${mongodb_port} --tls --tlsCertificateKeyFile /data/mongodb-client-${admin_user}.pem --tlsCAFile /data/mongodb-public-ca.pem --tlsAllowInvalidHostnames\"";
+    echo "docker exec -it mongodb-shard$1-rep1 bash -c \"cat /tmp/init-shard$1.js | mongosh 127.0.0.1:${mongodb_port} --tls --tlsCertificateKeyFile /data/binlex-client.pem --tlsCAFile /data/binlex-public-ca.pem --tlsAllowInvalidHostnames\"";
 }
 
 function docker_router_init(){
     echo "#!/usr/bin/env bash";
     echo "docker cp init-router.js mongodb-router1:/tmp/init-router.js";
-    echo "docker exec -it mongodb-router1 bash -c \"cat /tmp/init-router.js | mongosh 127.0.0.1:${mongodb_port} --tls --tlsCertificateKeyFile /data/mongodb-client-${admin_user}.pem --tlsCAFile /data/mongodb-public-ca.pem --tlsAllowInvalidHostnames -u \\\"${admin_user}\\\" -p \\\"${admin_pass}\\\" --authenticationDatabase admin\""
+    echo "docker exec -it mongodb-router1 bash -c \"cat /tmp/init-router.js | mongosh 127.0.0.1:${mongodb_port} --tls --tlsCertificateKeyFile /data/binlex-client.pem --tlsCAFile /data/binlex-public-ca.pem --tlsAllowInvalidHostnames -u \\\"${admin_user}\\\" -p \\\"${admin_pass}\\\" --authenticationDatabase admin\""
 }
 
 function docker_db_init(){
     echo "#!/usr/bin/env bash";
     echo "docker cp init-db.js mongodb-router1:/tmp/init-db.js";
-    echo "docker exec -it mongodb-router1 bash -c \"cat /tmp/init-db.js | mongosh 127.0.0.1:${mongodb_port} --tls --tlsCertificateKeyFile /data/mongodb-client-${admin_user}.pem --tlsCAFile /data/mongodb-public-ca.pem --tlsAllowInvalidHostnames -u \\\"${admin_user}\\\" -p \\\"${admin_pass}\\\" --authenticationDatabase admin\""
+    echo "docker exec -it mongodb-router1 bash -c \"cat /tmp/init-db.js | mongosh 127.0.0.1:${mongodb_port} --tls --tlsCertificateKeyFile /data/binlex-client.pem --tlsCAFile /data/binlex-public-ca.pem --tlsAllowInvalidHostnames -u \\\"${admin_user}\\\" -p \\\"${admin_pass}\\\" --authenticationDatabase admin\""
 }
 
 function docker_shards_init(){
@@ -475,7 +498,7 @@ function docker_all_init(){
 
 function docker_admin_shell(){
     echo "#!/usr/bin/env bash";
-    echo "docker exec -it \$1 mongosh 127.0.0.1:${mongodb_port} --tls --tlsCertificateKeyFile /data/mongodb-client-${admin_user}.pem --tlsCAFile /data/mongodb-public-ca.pem --tlsAllowInvalidHostnames -u \\\"${admin_user}\\\" -p \\\"${admin_pass}\\\" --authenticationDatabase admin"
+    echo "docker exec -it \$1 mongosh 127.0.0.1:${mongodb_port} --tls --tlsCertificateKeyFile /data/binlex-client.pem --tlsCAFile /data/binlex-public-ca.pem --tlsAllowInvalidHostnames -u \\\"${admin_user}\\\" -p \\\"${admin_pass}\\\" --authenticationDatabase admin"
 }
 
 cfg_init > scripts/init-cfgs.js

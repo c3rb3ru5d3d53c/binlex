@@ -169,12 +169,19 @@ Examples of how to use `pybinlex` can be found in `tests.py`.
 
 **Building the Database:**
 
+To get data into the database for `binlex` it uses the following pipeline:
+- `blapi` - HTTP API Interface to MongoDB and `pybinlex` for Uploading Data
+- `rabbitmq` - A messaging queue cluster
+- `blworker` - A cluster of workers to insert data into MongoDB
+- `mongodb` - A cluster of shards, replicas configs and routers to hold Data
+
+This ensures the data has correct relationships and your complex queries can be completed across many servers distributing the load for some insane production environment level work.
+
 Storing your traits from `binlex` could never be easier.
 
-With `dockers/generate.sh`, it will create all MongoDB shards, replicas, config servers, RabbitMQ messaging cluster nodes and consumer workers.
+With `dockers/generate.sh`, it will create all MongoDB shards, replicas, config servers, RabbitMQ messaging cluster nodes, `blapi` and `blworker` containers for you including their tls/ssl certificates.
 
-This is done by dynamically generating all required files including certificates.
-
+This is as simple as running the following commands:
 ```bash
 cd docker/
 ./generate.sh
