@@ -149,11 +149,13 @@ function generate_certificates(){
     openssl req \
         -passout pass:${admin_pass} \
         -new -x509 \
-        -days 3650 \
+        -days 365 \
         -extensions v3_ca \
         -keyout ssl/binlex-private-ca.pem \
         -out ssl/binlex-public-ca.pem \
         -subj "/CN=CA/OU=binlex";
+
+    openssl x509 -outform der -in ssl/binlex-public-ca.pem -out ssl/binlex-public-ca.crt;
 
     # Create Client Certificate
     openssl req \
@@ -354,16 +356,44 @@ function compose() {
         echo "          RABBITMQ_DEFAULT_USER: \"${admin_user}\"";
         echo "          RABBITMQ_DEFAULT_PASS: \"${admin_pass}\"";
         echo "          RABBITMQ_CONFIG_FILE: \"/config/rabbitmq-broker${i}.conf\"";
+        # echo "          RABBITMQ_MANAGEMENT_SSL_CACERTFILE: \"/config/binlex-public-ca.pem\"";
+        # echo "          RABBITMQ_MANAGEMENT_SSL_KEYFILE: \"/config/rabbitmq-broker${i}.pem\"";
+        # echo "          RABBITMQ_MANAGEMENT_SSL_CERTFILE: \"/config/binlex-client.pem\"";
         echo "      ports:";
         echo "          - `expr ${rabbitmq_port} + ${i} - 1`:5672";
         echo "          - `expr ${rabbitmq_http_port} + ${i} - 1`:15672";
         echo "      volumes:";
-        echo "          - ./data/rabbitmq-broker${i}:/var/lib/rabbitmq/mnesia/";
+        echo "          - ./data/rabbitmq-broker${i}/:/var/lib/rabbitmq/mnesia/";
         echo "          - ./config/rabbitmq-broker${i}.conf:/config/rabbitmq-broker${i}.conf";
+        echo "          - ./ssl/rabbitmq-broker${i}.pem:/config/rabbitmq-broker${i}.pem";
+        echo "          - ./ssl/rabbitmq-broker${i}.crt:/config/rabbitmq-broker${i}.crt";
+        echo "          - ./ssl/rabbitmq-broker${i}.key:/config/rabbitmq-broker${i}.key";
+        echo "          - ./ssl/binlex-client.pem:/config/binlex-client.pem";
+        echo "          - ./ssl/binlex-public-ca.pem:/config/binlex-public-ca.pem";
+        echo "          - ./ssl/binlex-public-ca.crt:/config/binlex-public-ca.crt";
     done
 }
 
 compose > docker-compose.yml
+
+function rabbitmq_config_init(){
+    echo "listeners.tcp = none";
+    echo "loopback_users.guest = false";
+    echo "listeners.ssl.default = 5672";
+    echo "cluster_formation.peer_discovery_backend = rabbit_peer_discovery_classic_config";
+    for i in $(seq 1 $brokers); do
+        echo "cluster_formation.classic_config.nodes.${i} = rabbit@rabbitmq-broker${i}";
+    done
+    echo "ssl_options.cacertfile = /config/binlex-public-ca.crt";
+    echo "ssl_options.certfile = /config/$1.crt";
+    echo "ssl_options.keyfile = /config/$1.key";
+    echo "ssl_options.verify = verify_peer";
+    echo "ssl_options.fail_if_no_peer_cert = true";
+    echo "management.ssl.port = 15672";
+    echo "management.ssl.cacertfile = /config/binlex-public-ca.crt";
+    echo "management.ssl.certfile = /config/$1.crt";
+    echo "management.ssl.keyfile = /config/$1.key";
+}
 
 function docker_rabbitmq_policy_init(){
     echo "#!/usr/bin/env bash";
@@ -383,15 +413,6 @@ function docker_rabbitmq_plugins_init(){
     echo "#!/usr/bin/env bash";
     for i in $(seq 1 $brokers); do
         echo "./rabbitmq-init-plugin-broker${i}.sh";
-    done
-}
-
-function rabbitmq_config_init(){
-    echo "loopback_users.guest = false";
-    echo "listeners.tcp.default = 5672";
-    echo "cluster_formation.peer_discovery_backend = rabbit_peer_discovery_classic_config";
-    for i in $(seq 1 $brokers); do
-        echo "cluster_formation.classic_config.nodes.${i} = rabbit@rabbitmq-broker${i}";
     done
 }
 
@@ -494,6 +515,12 @@ function docker_all_init(){
     echo "until ./init-db.sh; do";
     echo "  sleep 10;";
     echo "done";
+    echo "until ./rabbitmq-init-plugins.sh; do";
+    echo "  sleep 10;";
+    echo "done";
+    echo "until ./rabbitmq-init-policy.sh; do";
+    echo "  sleep 10;";
+    echo "done";
 }
 
 function docker_admin_shell(){
@@ -536,7 +563,7 @@ chmod +x scripts/mongodb-shell.sh
 mkdir -p config/
 
 for i in $(seq 1 $brokers); do
-    rabbitmq_config_init > config/rabbitmq-broker${i}.conf;
+    rabbitmq_config_init rabbitmq-broker${i} > config/rabbitmq-broker${i}.conf;
 done
 
 for i in $(seq 1 $brokers); do
@@ -550,9 +577,13 @@ chmod +x scripts/rabbitmq-init-plugins.sh;
 docker_rabbitmq_policy_init > scripts/rabbitmq-init-policy.sh
 chmod +x scripts/rabbitmq-init-policy.sh
 
-wget "https://raw.githubusercontent.com/rabbitmq/rabbitmq-server/v${rabbitmq_version}/deps/rabbitmq_management/bin/rabbitmqadmin" -O scripts/rabbitmqadmin
-chmod +x scripts/rabbitmqadmin
+# if [ ! -f scripts/rabbitmqadmin ]; then
+#     wget "https://raw.githubusercontent.com/rabbitmq/rabbitmq-server/v${rabbitmq_version}/deps/rabbitmq_management/bin/rabbitmqadmin" -O scripts/rabbitmqadmin;
+#     chmod +x scripts/rabbitmqadmin;
+# fi
 
-wget "https://downloads.mongodb.com/compass/mongodb-mongosh_${mongodb_sh_version}_amd64.deb" -O scripts/mongosh.deb
-dpkg --fsys-tarfile scripts/mongosh.deb | tar xOf - ./usr/bin/mongosh > scripts/mongosh
-chmod +x scripts/mongosh
+# if [ ! -f scripts/mongosh ]; then
+#     wget "https://downloads.mongodb.com/compass/mongodb-mongosh_${mongodb_sh_version}_amd64.deb" -O scripts/mongosh.deb;
+#     dpkg --fsys-tarfile scripts/mongosh.deb | tar xOf - ./usr/bin/mongosh > scripts/mongosh;
+#     chmod +x scripts/mongosh;
+# fi
