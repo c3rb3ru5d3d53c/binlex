@@ -4,6 +4,7 @@
 
 # Default Options
 compose_version=3.3
+node_version=latest
 mongo_express_version=0.54.0
 mongodb_version=5.0.5
 mongodb_sh_version=1.1.8
@@ -25,6 +26,9 @@ rabbitmq_version=3.9.12
 rabbitmq_cookie=$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 32 | head -n 1)
 rabbitmq_port=5672
 rabbitmq_http_port=15672
+
+blworkers=2
+blworker_version=1.1.1
 
 function help_menu(){
     printf "generator.sh - Binlex Production Docker Generator\n";
@@ -369,6 +373,21 @@ function compose() {
         echo "          - ./ssl/rabbitmq-broker${i}.crt:/config/rabbitmq-broker${i}.crt";
         echo "          - ./ssl/rabbitmq-broker${i}.key:/config/rabbitmq-broker${i}.key";
         echo "          - ./ssl/binlex-client.pem:/config/binlex-client.pem";
+        echo "          - ./ssl/binlex-public-ca.pem:/config/binlex-public-ca.pem";
+        echo "          - ./ssl/binlex-public-ca.crt:/config/binlex-public-ca.crt";
+    done
+    for i in $(seq 1 $blworkers); do
+        echo "  blworker${i}:";
+        echo "      hostname: blworker${i}";
+        echo "      container_name: blworker${i}";
+        echo "      image: blworker:${blworker_version}";
+        echo "      build:";
+        echo "          context: blworker/";
+        echo "          dockerfile: Dockerfile";
+        echo "      volumes:";
+        echo "          - ./ssl/rabbitmq-broker1.pem:/config/rabbitmq-broker1.pem";
+        echo "          - ./ssl/rabbitmq-broker1.crt:/config/rabbitmq-broker1.crt";
+        echo "          - ./ssl/rabbitmq-broker1.key:/config/rabbitmq-broker1.key";
         echo "          - ./ssl/binlex-public-ca.pem:/config/binlex-public-ca.pem";
         echo "          - ./ssl/binlex-public-ca.crt:/config/binlex-public-ca.crt";
     done
