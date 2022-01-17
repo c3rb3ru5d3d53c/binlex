@@ -27,7 +27,7 @@ rabbitmq_cookie=$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 32 | head -n 1)
 rabbitmq_port=5672
 rabbitmq_http_port=15672
 
-blworkers=2
+blworkers=8
 blworker_version=1.1.1
 
 function help_menu(){
@@ -142,7 +142,7 @@ function generate_alt_dns(){
     echo "[ v3_req ]";
     echo "subjectAltName = @alt_names";
     echo "[ alt_names ]";
-    echo "DNS.1 = 127.0.0.1";
+    echo "IP.1 = 127.0.0.1";
     echo "DNS.2 = localhost";
     echo "DNS.3 = $1";
 }
@@ -360,9 +360,6 @@ function compose() {
         echo "          RABBITMQ_DEFAULT_USER: \"${admin_user}\"";
         echo "          RABBITMQ_DEFAULT_PASS: \"${admin_pass}\"";
         echo "          RABBITMQ_CONFIG_FILE: \"/config/rabbitmq-broker${i}.conf\"";
-        # echo "          RABBITMQ_MANAGEMENT_SSL_CACERTFILE: \"/config/binlex-public-ca.pem\"";
-        # echo "          RABBITMQ_MANAGEMENT_SSL_KEYFILE: \"/config/rabbitmq-broker${i}.pem\"";
-        # echo "          RABBITMQ_MANAGEMENT_SSL_CERTFILE: \"/config/binlex-client.pem\"";
         echo "      ports:";
         echo "          - `expr ${rabbitmq_port} + ${i} - 1`:5672";
         echo "          - `expr ${rabbitmq_http_port} + ${i} - 1`:15672";
@@ -376,6 +373,7 @@ function compose() {
         echo "          - ./ssl/binlex-public-ca.pem:/config/binlex-public-ca.pem";
         echo "          - ./ssl/binlex-public-ca.crt:/config/binlex-public-ca.crt";
     done
+    rabbitmq_iter=1;
     for i in $(seq 1 $blworkers); do
         echo "  blworker${i}:";
         echo "      hostname: blworker${i}";
@@ -384,12 +382,20 @@ function compose() {
         echo "      build:";
         echo "          context: blworker/";
         echo "          dockerfile: Dockerfile";
+        echo "      command: blworker --debug --amqp-ssl --amqp-queue binlex --amqp-user ${admin_user} --amqp-pass ${admin_pass} --amqp-ca /config/binlex-public-ca.pem --amqp-cert /config/binlex-client.crt --amqp-key /config/binlex-client.key --amqp-port ${rabbitmq_port} --amqp-host rabbitmq-broker${rabbitmq_iter} --log /var/log/blworker.log"
         echo "      volumes:";
-        echo "          - ./ssl/rabbitmq-broker1.pem:/config/rabbitmq-broker1.pem";
-        echo "          - ./ssl/rabbitmq-broker1.crt:/config/rabbitmq-broker1.crt";
-        echo "          - ./ssl/rabbitmq-broker1.key:/config/rabbitmq-broker1.key";
+        echo "          - ./ssl/binlex-client.crt:/config/binlex-client.crt";
+        echo "          - ./ssl/binlex-client.key:/config/binlex-client.key";
         echo "          - ./ssl/binlex-public-ca.pem:/config/binlex-public-ca.pem";
-        echo "          - ./ssl/binlex-public-ca.crt:/config/binlex-public-ca.crt";
+        echo "      depends_on:";
+        for j in $(seq 1 $brokers); do
+            echo "          - rabbitmq-broker${j}";
+        done
+        if [ ${rabbitmq_iter} -eq $brokers ]; then
+            rabbitmq_iter=1
+        else
+            rabbitmq_iter=$((rabbitmq_iter+1));
+        fi
     done
 }
 
@@ -398,18 +404,18 @@ compose > docker-compose.yml
 function rabbitmq_config_init(){
     echo "listeners.tcp = none";
     echo "loopback_users.guest = false";
-    echo "listeners.ssl.default = 5672";
+    echo "listeners.ssl.default = 0.0.0.0:5672";
     echo "cluster_formation.peer_discovery_backend = rabbit_peer_discovery_classic_config";
     for i in $(seq 1 $brokers); do
         echo "cluster_formation.classic_config.nodes.${i} = rabbit@rabbitmq-broker${i}";
     done
-    echo "ssl_options.cacertfile = /config/binlex-public-ca.crt";
+    echo "ssl_options.cacertfile = /config/binlex-public-ca.pem";
     echo "ssl_options.certfile = /config/$1.crt";
     echo "ssl_options.keyfile = /config/$1.key";
     echo "ssl_options.verify = verify_peer";
     echo "ssl_options.fail_if_no_peer_cert = true";
     echo "management.ssl.port = 15672";
-    echo "management.ssl.cacertfile = /config/binlex-public-ca.crt";
+    echo "management.ssl.cacertfile = /config/binlex-public-ca.pem";
     echo "management.ssl.certfile = /config/$1.crt";
     echo "management.ssl.keyfile = /config/$1.key";
 }
