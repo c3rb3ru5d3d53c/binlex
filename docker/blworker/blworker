@@ -1,0 +1,189 @@
+#!/usr/bin/env python
+
+import ssl
+import pika
+import time
+import json
+import argparse
+import logging
+
+log = logging.getLogger(__name__)
+
+# amqp://admin:changeme@rabbitmq-broker1/web_messages
+# command: blworker --amqp-url amqp://${admin_user}:${admin_pass}@rabbitmq-broker/web_messages?ssl_options=%7B'keyfile':%20'/config/rabbitmq-broker$%7Bi%7D.key',%20'certfile':%20'/config/rabbitmq-broker$%7Bi%7D.crt'%7D
+
+# ./blworker.py --amqp-ssl --amqp-queue binlex --amqp-user admin --amqp-pass changeme --amqp-ca ../test/binlex-public-ca.pem --amqp-cert ../test/binlex-client.crt --amqp-key ../test/binlex-client.key --amqp-port 5672 --amqp-host localhost
+
+__version__ = '1.1.1'
+__author__ = '@c3rb3ru5d3d53c'
+
+class BLWorker():
+
+    """
+    A Binlex MongoDB Database Worker
+    """
+
+    def __init__(self):
+        pass
+
+    def arguments(self):
+        self.parser = argparse.ArgumentParser(
+            prog=f'blworker v{__version__}',
+            description='A Binlex MongoDB Database Worker',
+            epilog=f'Author: {__author__}'
+        )
+        self.parser.add_argument(
+            '--version',
+            action='version',
+            version=f'v{__version__}'
+        )
+        self.parser.add_argument(
+            '--mongodb-url',
+            type=str,
+            default='mongodb://127.0.0.1:27017',
+            help='MongoDB URL',
+            required=False
+        )
+        self.parser.add_argument(
+            '--amqp-host',
+            type=str,
+            default='127.0.0.1',
+            required=False,
+            help='RabbitMQ AMQP URL'
+        )
+        self.parser.add_argument(
+            '--amqp-port',
+            type=int,
+            default=5672,
+            required=False,
+            help='RabbitMQ AMQP Port'
+        )
+        self.parser.add_argument(
+            '--amqp-user',
+            type=str,
+            default='admin',
+            required=False,
+            help='RabbitMQ AMQP Username'
+        )
+        self.parser.add_argument(
+            '--amqp-pass',
+            type=str,
+            default='changeme',
+            required=False,
+            help='RabbitMQ AMQP Password'
+        )
+        self.parser.add_argument(
+            '--amqp-ssl',
+            action='store_true',
+            default=False,
+            required=False,
+            help='RabitMQ AMQP Enable SSL'
+        )
+        self.parser.add_argument(
+            '--amqp-queue',
+            type=str,
+            default='binlex',
+            required=False,
+            help='RabbitMQ AMQP Queue Name'
+        )
+        self.parser.add_argument(
+            '--amqp-ca',
+            type=str,
+            default=None,
+            required=False,
+            help='RabbitMQ AMQP CAFile'
+        )
+        self.parser.add_argument(
+            '--amqp-cert',
+            type=str,
+            default=None,
+            required=False,
+            help='RabbitMQ AMQP Cert'
+        )
+        self.parser.add_argument(
+            '--amqp-key',
+            type=str,
+            default=None,
+            required=False,
+            help='RabbitMQ AMQP Key'
+        )
+        self.parser.add_argument(
+            '-d',
+            '--debug',
+            action='store_true',
+            required=False,
+            default=False,
+            help='Debug'
+        )
+        self.parser.add_argument(
+            '-l',
+            '--log',
+            type=str,
+            default=None,
+            required=False,
+            help='Log to File'
+        )
+        self.args = self.parser.parse_args()
+
+    def mongodb_connect(self):
+        pass
+
+    def amqp_connect(self):
+        if self.args.amqp_ssl is True:
+            context = ssl.create_default_context(
+                cafile=self.args.amqp_ca)
+            context.load_cert_chain(self.args.amqp_cert, self.args.amqp_key)
+            ssl_options = pika.SSLOptions(context, self.args.amqp_host)
+            conn_params = pika.ConnectionParameters(port=self.args.amqp_port,
+                                                    host=self.args.amqp_host,
+                                                    ssl_options=ssl_options,
+                                                    credentials=pika.credentials.PlainCredentials(
+                                                        username=self.args.amqp_user,
+                                                        password=self.args.amqp_pass))
+        else:
+            conn_params = pika.ConnectionParameters(port=self.args.amqp_port,
+                                                    host=self.args.amqp_host,
+                                                    credentials=pika.credentials.PlainCredentials(
+                                                        username=self.args.amqp_user,
+                                                        password=self.args.amqp_pass))
+        self.amqp = pika.BlockingConnection(conn_params)
+
+    def consume(self):
+        self.amqp_channel = self.amqp.channel()
+        self.amqp_channel.queue_declare(queue=self.args.amqp_queue)
+        #self.amqp_channel.basic_publish(exchange='', routing_key=self.args.amqp_queue, body='Hello World!')
+        self.amqp_channel.basic_consume(queue=self.args.amqp_queue, on_message_callback=self.process)
+        self.amqp_channel.start_consuming()
+
+
+    def process(self, ch, method, properties, body):
+        log.debug(body)
+        self.amqp_channel.basic_ack(method.delivery_tag)
+
+    def setup_logging(self):
+        if self.args.debug is True:
+            level = logging.DEBUG
+        else:
+            level = logging.INFO
+        logging.basicConfig(
+            filename=self.args.log,
+            filemode='a',
+            format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
+            datefmt='%Y-%m-%dT%H:%M:%S%z',
+            level=level)
+
+    def main(self):
+        self.arguments()
+        self.setup_logging()
+        while True:
+            try:
+                self.amqp_connect()
+                self.consume()
+            except Exception as error:
+                log.error('[x] ' + str(error))
+                time.sleep(10)
+
+
+if __name__ in '__main__':
+    blworker = BLWorker()
+    blworker.main()
