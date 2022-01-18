@@ -20,6 +20,7 @@ ELF::ELF(){
         sections[i].size = 0;
         sections[i].data = NULL;
     }
+    hashes.sha256 = NULL;
 }
 
 bool ELF::Setup(ARCH input_mode){
@@ -39,6 +40,7 @@ bool ELF::Setup(ARCH input_mode){
 }
 
 bool ELF::ReadFile(char *file_path){
+    hashes.sha256 = StringAllocCharPtr(GetFileSHA256(file_path));
     binary = Parser::parse(file_path);
     if (mode != binary->header().machine_type()){
         fprintf(stderr, "[x] incorrect mode for binary architecture\n");
@@ -49,6 +51,7 @@ bool ELF::ReadFile(char *file_path){
 }
 
 bool ELF::ReadBuffer(void *data, size_t size){
+    hashes.sha256 = StringAllocCharPtr(SHA256((char *)data, size));
     vector<uint8_t> data_v((uint8_t *)data, (uint8_t *)data + size);
     binary = Parser::parse(data_v);
     if (mode != binary->header().machine_type()){
@@ -90,5 +93,8 @@ ELF::~ELF(){
         if (sections[i].data != NULL){
             free(sections[i].data);
         }
+    }
+    if (hashes.sha256 != NULL){
+        free(hashes.sha256);
     }
 }

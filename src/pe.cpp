@@ -17,6 +17,7 @@ PE::PE(){
         sections[i].size = 0;
         sections[i].data = NULL;
     }
+    hashes.sha256 = NULL;
 }
 
 bool PE::Setup(MACHINE_TYPES input_mode){
@@ -36,6 +37,7 @@ bool PE::Setup(MACHINE_TYPES input_mode){
 }
 
 bool PE::ReadFile(char *file_path){
+    hashes.sha256 = StringAllocCharPtr(GetFileSHA256(file_path));
     binary = Parser::parse(file_path);
     if (mode != binary->header().machine()){
         fprintf(stderr, "[x] incorrect mode for binary architecture\n");
@@ -46,6 +48,7 @@ bool PE::ReadFile(char *file_path){
 }
 
 bool PE::ReadBuffer(void *data, size_t size){
+    hashes.sha256 = StringAllocCharPtr(SHA256((char *)data, size));
     vector<uint8_t> data_v((uint8_t *)data, (uint8_t *)data + size);
     binary = Parser::parse(data_v);
     if (mode != binary->header().machine()){
@@ -91,5 +94,8 @@ PE::~PE(){
             free(sections[i].data);
         }
         sections[i].functions.clear();
+    }
+    if (hashes.sha256 != NULL){
+        free(hashes.sha256);
     }
 }
