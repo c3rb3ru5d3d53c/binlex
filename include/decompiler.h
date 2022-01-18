@@ -12,7 +12,7 @@
 #ifdef _WIN32
 #define BINLEX_EXPORT __declspec(dllexport)
 #else
-#define BINLEX_EXPORT 
+#define BINLEX_EXPORT
 #endif
 
 #define DECOMPILER_MAX_SECTIONS 256
@@ -44,6 +44,9 @@ namespace binlex {
             uint index;
             void *sections;
         } worker_args;
+        typedef struct Hash {
+            string sha256;
+        } Hash;
     public:
         struct Trait {
             char *corpus;
@@ -65,6 +68,7 @@ namespace binlex {
             float trait_entropy;
             char *trait_sha256;
             char *bytes_sha256;
+            char *file_sha256;
         };
         struct Section {
             cs_arch arch;
@@ -85,6 +89,7 @@ namespace binlex {
             map<uint64_t, uint> addresses;
             map<uint64_t, int> visited;
             queue<uint64_t> discovered;
+            char *file_sha256;
         };
         struct Section sections[DECOMPILER_MAX_SECTIONS];
         BINLEX_EXPORT Decompiler();
@@ -99,6 +104,7 @@ namespace binlex {
         @return bool
         */
         BINLEX_EXPORT bool Setup(cs_arch arch, cs_mode mode, uint index);
+        BINLEX_EXPORT void SetFileSHA256(char *sha256, uint index);
         /**
         Set Threads and Thread Cycles
         @param threads number of threads

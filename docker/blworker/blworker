@@ -205,8 +205,16 @@ class BLWorker():
             data = json.loads(body)
             corpus = data['corpus']
             offset = data['offset']
+            file_data = {
+                'corpus': data['corpus'],
+                'offset': data['offset'],
+                'sha256': data['file_sha256'],
+                'mode': data['mode']
+            }
             del data['corpus']
             del data['offset']
+            del data['file_sha256']
+            del data['mode']
             if corpus.startswith('default') is True:
                 collection = self.mongodb_db['default']
                 trait_id = collection.insert_one(data).inserted_id
