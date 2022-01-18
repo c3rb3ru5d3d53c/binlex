@@ -1,7 +1,7 @@
 var trait_schema = {
     bsonType: "object",
     required: [
-        "corpus",
+        "_id",
         "type",
         "architecture",
         "blocks",
@@ -19,9 +19,8 @@ var trait_schema = {
         "cyclomatic_complexity",
     ],
     properties: {
-        corpus: {
-            bsonType: "string",
-            description: "The Corpus Name"
+        _id: {
+            bsonType: "objectId",
         },
         type: {
             bsonType: "string",
@@ -83,26 +82,31 @@ var trait_schema = {
             bsonType: "int",
             description: "Cyclomatic Complexity"
         }
-    }
+    },
+    additionalProperties: false
 };
 
 var files_schema = {
     bsonType: "object",
     required: [
-        "collection",
-        "architecture",
+        "_id",
+        "corpus",
+        "mode",
         "sha256",
         "trait_id",
         "offset",
     ],
     properties: {
-        collection: {
-            bsonType: "string",
-            description: "Collection Name"
+        _id: {
+            bsonType: "objectId",
         },
-        architecture: {
+        corpus: {
             bsonType: "string",
-            description: "File Architecture"
+            description: "Corpus Name"
+        },
+        mode: {
+            bsonType: "string",
+            description: "Mode <file-type>:<architecture>"
         },
         sha256: {
             bsonType: "string",
@@ -116,7 +120,8 @@ var files_schema = {
             bsonType: "int",
             description: "Trait File Offset"
         }
-    }
+    },
+    additionalProperties: false
 };
 
 db.createCollection('files', {

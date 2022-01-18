@@ -374,6 +374,7 @@ function compose() {
         echo "          - ./ssl/binlex-public-ca.crt:/config/binlex-public-ca.crt";
     done
     rabbitmq_iter=1;
+    mongodb_iter=1;
     for i in $(seq 1 $blworkers); do
         echo "  blworker${i}:";
         echo "      hostname: blworker${i}";
@@ -382,19 +383,25 @@ function compose() {
         echo "      build:";
         echo "          context: blworker/";
         echo "          dockerfile: Dockerfile";
-        echo "      command: blworker --debug --amqp-ssl --amqp-queue binlex --amqp-user ${admin_user} --amqp-pass ${admin_pass} --amqp-ca /config/binlex-public-ca.pem --amqp-cert /config/binlex-client.crt --amqp-key /config/binlex-client.key --amqp-port ${rabbitmq_port} --amqp-host rabbitmq-broker${rabbitmq_iter} --log /var/log/blworker.log"
+        echo "      command: blworker --debug --amqp-tls --amqp-queue binlex --amqp-user \"${admin_user}\" --amqp-pass \"${admin_pass}\" --amqp-ca /config/binlex-public-ca.pem --amqp-cert /config/binlex-client.crt --amqp-key /config/binlex-client.key --amqp-port ${rabbitmq_port} --amqp-host rabbitmq-broker${rabbitmq_iter} --mongodb-tls --mongodb-ca /config/binlex-public-ca.pem --mongodb-key /config/binlex-client.pem  --mongodb-url \"mongodb://${admin_user}:${admin_pass}@mongodb-router${mongodb_iter}:${mongodb_port}\"";
         echo "      volumes:";
         echo "          - ./ssl/binlex-client.crt:/config/binlex-client.crt";
         echo "          - ./ssl/binlex-client.key:/config/binlex-client.key";
+        echo "          - ./ssl/binlex-client.pem:/config/binlex-client.pem";
         echo "          - ./ssl/binlex-public-ca.pem:/config/binlex-public-ca.pem";
         echo "      depends_on:";
         for j in $(seq 1 $brokers); do
             echo "          - rabbitmq-broker${j}";
         done
         if [ ${rabbitmq_iter} -eq $brokers ]; then
-            rabbitmq_iter=1
+            rabbitmq_iter=1;
         else
             rabbitmq_iter=$((rabbitmq_iter+1));
+        fi
+        if [ ${mongodb_iter} -eq $routers ]; then
+            mongodb_iter=1;
+        else
+            mongodb_iter=$((mongodb_iter+1));
         fi
     done
 }

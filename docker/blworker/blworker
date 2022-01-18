@@ -4,15 +4,11 @@ import ssl
 import pika
 import time
 import json
-import argparse
+import pymongo
 import logging
+import argparse
 
 log = logging.getLogger(__name__)
-
-# amqp://admin:changeme@rabbitmq-broker1/web_messages
-# command: blworker --amqp-url amqp://${admin_user}:${admin_pass}@rabbitmq-broker/web_messages?ssl_options=%7B'keyfile':%20'/config/rabbitmq-broker$%7Bi%7D.key',%20'certfile':%20'/config/rabbitmq-broker$%7Bi%7D.crt'%7D
-
-# ./blworker.py --amqp-ssl --amqp-queue binlex --amqp-user admin --amqp-pass changeme --amqp-ca ../test/binlex-public-ca.pem --amqp-cert ../test/binlex-client.crt --amqp-key ../test/binlex-client.key --amqp-port 5672 --amqp-host localhost
 
 __version__ = '1.1.1'
 __author__ = '@c3rb3ru5d3d53c'
@@ -45,6 +41,42 @@ class BLWorker():
             required=False
         )
         self.parser.add_argument(
+            '--mongodb-db',
+            type=str,
+            default='binlex',
+            help='MongoDB Database'
+        )
+        self.parser.add_argument(
+            '--mongodb-tls',
+            action='store_true',
+            default=False,
+            help='MongoDB Enable TLS'
+        )
+        self.parser.add_argument(
+            '--mongodb-tlsallowinvalidcertificates',
+            action='store_true',
+            default=False,
+            help='MongoDB Allow Invalid Certificates'
+        )
+        self.parser.add_argument(
+            '--mongodb-ca',
+            type=str,
+            default=None,
+            help='MongoDB TLS Certificate Authority File'
+        )
+        self.parser.add_argument(
+            '--mongodb-tlsallowinvalidhostnames',
+            action='store_true',
+            default=False,
+            help='MongoDB TLS Allow Invalid Hostnames'
+        )
+        self.parser.add_argument(
+            '--mongodb-key',
+            type=str,
+            default=None,
+            help='MongoDB TLS Client Certificate Key File'
+        )
+        self.parser.add_argument(
             '--amqp-host',
             type=str,
             default='127.0.0.1',
@@ -73,7 +105,7 @@ class BLWorker():
             help='RabbitMQ AMQP Password'
         )
         self.parser.add_argument(
-            '--amqp-ssl',
+            '--amqp-tls',
             action='store_true',
             default=False,
             required=False,
@@ -126,10 +158,20 @@ class BLWorker():
         self.args = self.parser.parse_args()
 
     def mongodb_connect(self):
-        pass
+        if self.args.mongodb_tls is True:
+            self.mongodb = pymongo.MongoClient(
+                self.args.mongodb_url,
+                tls=self.args.mongodb_tls,
+                tlsCAFile=self.args.mongodb_ca,
+                tlsCertificateKeyFile=self.args.mongodb_key,
+                tlsallowinvalidcertificates=self.args.mongodb_tlsallowinvalidcertificates,
+                tlsallowinvalidhostnames=self.args.mongodb_tlsallowinvalidhostnames)
+        else:
+            self.mongodb = pymongo.MongoClient(self.args.mongodb_url)
+        self.mongodb_db = self.mongodb[self.args.mongodb_db]
 
     def amqp_connect(self):
-        if self.args.amqp_ssl is True:
+        if self.args.amqp_tls is True:
             context = ssl.create_default_context(
                 cafile=self.args.amqp_ca)
             context.load_cert_chain(self.args.amqp_cert, self.args.amqp_key)
@@ -149,15 +191,39 @@ class BLWorker():
         self.amqp = pika.BlockingConnection(conn_params)
 
     def consume(self):
-        self.amqp_channel = self.amqp.channel()
-        self.amqp_channel.queue_declare(queue=self.args.amqp_queue)
-        #self.amqp_channel.basic_publish(exchange='', routing_key=self.args.amqp_queue, body='Hello World!')
-        self.amqp_channel.basic_consume(queue=self.args.amqp_queue, on_message_callback=self.process)
-        self.amqp_channel.start_consuming()
+        try:
+            self.amqp_channel = self.amqp.channel()
+            self.amqp_channel.queue_declare(queue=self.args.amqp_queue)
+            self.amqp_channel.basic_consume(queue=self.args.amqp_queue, on_message_callback=self.process)
+            self.amqp_channel.start_consuming()
+        except Exception as error:
+                log.error('[x] ' + str(error))
 
 
     def process(self, ch, method, properties, body):
-        log.debug(body)
+        try:
+            data = json.loads(body)
+            corpus = data['corpus']
+            offset = data['offset']
+            del data['corpus']
+            del data['offset']
+            if corpus.startswith('default') is True:
+                collection = self.mongodb_db['default']
+                trait_id = collection.insert_one(data).inserted_id
+                log.debug('[*] default collection inserted trait_id ' + str(trait_id))
+            elif corpus.startswith('malware') is True:
+                collection = self.mongodb_db['malware']
+                trait_id = collection.insert_one(data).inserted_id
+                log.debug('[*] malware collection inserted trait_id ' + str(trait_id))
+            elif corpus.startswith('goodware') is True:
+                collection = self.mongodb_db['goodware']
+                trait_id = collection.insert_one(data).inserted_id
+                log.debug('[*] goodware collection inserted trait_id ' + str(trait_id))
+            else:
+                log.error('[x] message contained invalid corpus')
+            log.debug(body)
+        except Exception as error:
+            log.error('[x] ' + str(error))
         self.amqp_channel.basic_ack(method.delivery_tag)
 
     def setup_logging(self):
@@ -177,6 +243,7 @@ class BLWorker():
         self.setup_logging()
         while True:
             try:
+                self.mongodb_connect()
                 self.amqp_connect()
                 self.consume()
             except Exception as error:
@@ -185,5 +252,8 @@ class BLWorker():
 
 
 if __name__ in '__main__':
-    blworker = BLWorker()
-    blworker.main()
+    try:
+        blworker = BLWorker()
+        blworker.main()
+    except KeyboardInterrupt:
+        print('[x] keyboard interrupt, exiting...')
