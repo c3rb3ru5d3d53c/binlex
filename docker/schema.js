@@ -90,6 +90,7 @@ var files_schema = {
     bsonType: "object",
     required: [
         "_id",
+        "collection",
         "corpus",
         "mode",
         "sha256",
@@ -99,6 +100,10 @@ var files_schema = {
     properties: {
         _id: {
             bsonType: "objectId",
+        },
+        collection: {
+            bsonType: "string",
+            description: "Collection Trait is Stored"
         },
         corpus: {
             bsonType: "string",
@@ -130,7 +135,7 @@ db.createCollection('files', {
     }
 });
 
-db.files.createIndex({collection: 1, architecture: 1, sha256: 1, trait_id: 1}, {unique: true});
+db.files.createIndex({collection: 1, mode: 1, sha256: 1, trait_id: 1}, {unique: true});
 
 db.createCollection('default', {
     validator: {
@@ -138,8 +143,7 @@ db.createCollection('default', {
     }
 });
 
-db.default.createIndex({bytes_sha256: 1}, {unique: true});
-db.default.createIndex({trait_sha256: 1}, {unique: true});
+db.default.createIndex({bytes_sha256: 1, architecture: 1}, {unique: true});
 
 db.createCollection('malware', {
     validator: {
@@ -147,8 +151,7 @@ db.createCollection('malware', {
     }
 });
 
-db.malware.createIndex({bytes_sha256: 1}, {unique: true});
-db.malware.createIndex({trait_sha256: 1}, {unique: true});
+db.malware.createIndex({bytes_sha256: 1, architecture: 1}, {unique: true});
 
 db.createCollection('goodware', {
     validator: {
@@ -156,5 +159,4 @@ db.createCollection('goodware', {
     }
 });
 
-db.goodware.createIndex({bytes_sha256: 1}, {unique: true});
-db.goodware.createIndex({trait_sha256: 1}, {unique: true});
+db.goodware.createIndex({bytes_sha256: 1, architecture: 1}, {unique: true});

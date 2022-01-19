@@ -69,6 +69,7 @@ namespace binlex {
             char *trait_sha256;
             char *bytes_sha256;
             char *file_sha256;
+            char *blmode;
         };
         struct Section {
             cs_arch arch;
@@ -90,6 +91,7 @@ namespace binlex {
             map<uint64_t, int> visited;
             queue<uint64_t> discovered;
             char *file_sha256;
+            char *blmode;
         };
         struct Section sections[DECOMPILER_MAX_SECTIONS];
         BINLEX_EXPORT Decompiler();
@@ -105,6 +107,7 @@ namespace binlex {
         */
         BINLEX_EXPORT bool Setup(cs_arch arch, cs_mode mode, uint index);
         BINLEX_EXPORT void SetFileSHA256(char *sha256, uint index);
+        BINLEX_EXPORT void SetBLMode(char *mode, uint index);
         /**
         Set Threads and Thread Cycles
         @param threads number of threads

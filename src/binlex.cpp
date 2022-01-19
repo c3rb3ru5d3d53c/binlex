@@ -64,6 +64,7 @@ int main(int argc, char **argv){
         for (int i = 0; i < ELF_MAX_SECTIONS; i++){
             if (elf64.sections[i].data != NULL){
                 decompiler.Setup(CS_ARCH_X86, CS_MODE_64, i);
+                decompiler.SetBLMode(args.options.mode, i);
                 decompiler.SetFileSHA256(elf64.hashes.sha256, i);
                 decompiler.SetThreads(args.options.threads, args.options.thread_cycles, args.options.thread_sleep, i);
                 decompiler.SetCorpus(args.options.corpus, i);
@@ -92,6 +93,7 @@ int main(int argc, char **argv){
         for (int i = 0; i < ELF_MAX_SECTIONS; i++){
             if (elf32.sections[i].data != NULL){
                 decompiler.Setup(CS_ARCH_X86, CS_MODE_32, i);
+                decompiler.SetBLMode(args.options.mode, i);
                 decompiler.SetFileSHA256(elf32.hashes.sha256, i);
                 decompiler.SetThreads(args.options.threads, args.options.thread_cycles, args.options.thread_sleep, i);
                 decompiler.SetCorpus(args.options.corpus, i);
@@ -120,6 +122,7 @@ int main(int argc, char **argv){
         for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
             if (pe32.sections[i].data != NULL){
                 decompiler.Setup(CS_ARCH_X86, CS_MODE_32, i);
+                decompiler.SetBLMode(args.options.mode, i);
                 decompiler.SetFileSHA256(pe32.hashes.sha256, i);
                 decompiler.SetThreads(args.options.threads, args.options.thread_cycles, args.options.thread_sleep, i);
                 decompiler.SetCorpus(args.options.corpus, i);
@@ -148,6 +151,7 @@ int main(int argc, char **argv){
         for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
             if (pe64.sections[i].data != NULL){
                 decompiler.Setup(CS_ARCH_X86, CS_MODE_64, i);
+                decompiler.SetBLMode(args.options.mode, i);
                 decompiler.SetFileSHA256(pe64.hashes.sha256, i);
                 decompiler.SetThreads(args.options.threads, args.options.thread_cycles, args.options.thread_sleep, i);
                 decompiler.SetCorpus(args.options.corpus, i);
@@ -169,6 +173,7 @@ int main(int argc, char **argv){
         rawx86.ReadFile(args.options.input, 0);
         Decompiler decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_32, 0);
+        decompiler.SetBLMode(args.options.mode, 0);
         decompiler.SetFileSHA256(rawx86.sections[0].hashes.sha256, 0);
         decompiler.SetThreads(args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
         decompiler.SetCorpus(args.options.corpus, 0);
@@ -187,6 +192,7 @@ int main(int argc, char **argv){
         rawx86_64.ReadFile(args.options.input, 0);
         Decompiler decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_64, 0);
+        decompiler.SetBLMode(args.options.mode, 0);
         decompiler.SetFileSHA256(rawx86_64.sections[0].hashes.sha256, 0);
         decompiler.SetThreads(args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
         decompiler.SetCorpus(args.options.corpus, 0);
