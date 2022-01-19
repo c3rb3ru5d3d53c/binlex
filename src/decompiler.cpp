@@ -61,6 +61,10 @@ void Decompiler::SetFileSHA256(char *sha256, uint index){
     sections[index].file_sha256 = sha256;
 }
 
+void Decompiler::SetBLMode(char *mode, uint index){
+    sections[index].blmode = mode;
+}
+
 void Decompiler::AppendTrait(struct Trait *trait, struct Section *sections, uint index){
     #if defined(__linux__) || defined(__APPLE__)
     pthread_mutex_lock(&DECOMPILER_MUTEX);
@@ -166,6 +170,7 @@ string Decompiler::GetTrait(struct Trait *trait, bool pretty){
     data["type"] = trait->type;
     data["corpus"] = trait->corpus;
     data["file_sha256"] = trait->file_sha256;
+    data["mode"] = trait->blmode;
     data["architecture"] = trait->architecture;
     data["bytes"] = trait->bytes;
     data["trait"] = trait->trait;
@@ -193,6 +198,7 @@ void Decompiler::PrintTraits(bool pretty){
             for (int j = 0; j < sections[i].ntraits; j++){
                 sections[i].traits[j]->corpus = sections[i].corpus;
                 sections[i].traits[j]->file_sha256 = sections[i].file_sha256;
+                sections[i].traits[j]->blmode = sections[i].blmode;
                 cout << GetTrait(sections[i].traits[j], pretty) << endl;
             }
         }
@@ -208,6 +214,7 @@ string Decompiler::GetTraits(bool pretty){
             for (int j = 0; j < sections[i].ntraits; j++){
                 sections[i].traits[j]->corpus = sections[i].corpus;
                 sections[i].traits[j]->file_sha256 = sections[i].file_sha256;
+                sections[i].traits[j]->blmode = sections[i].blmode;
                 ss << sep << GetTrait(sections[i].traits[j], pretty);
                 sep = ",";
             }

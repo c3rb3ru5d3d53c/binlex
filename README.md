@@ -170,16 +170,15 @@ Examples of how to use `pybinlex` can be found in `tests.py`.
 **Building the Database:**
 
 To get data into the database for `binlex` it uses the following pipeline:
-- `blapi` - HTTP API Interface to MongoDB and `pybinlex` for Uploading Data
 - `rabbitmq` - A messaging queue cluster
 - `blworker` - A cluster of workers to insert data into MongoDB
-- `mongodb` - A cluster of shards, replicas configs and routers to hold Data
+- `mongodb` - A cluster of shards, replicas configs and routers to store and Query Data
 
 This ensures the data has correct relationships and your complex queries can be completed across many servers distributing the load for some insane production environment level work.
 
 Storing your traits from `binlex` could never be easier.
 
-With `dockers/generate.sh`, it will create all MongoDB shards, replicas, config servers, RabbitMQ messaging cluster nodes, `blapi` and `blworker` containers for you including their tls/ssl certificates.
+With `dockers/generate.sh`, it will create all MongoDB shards, replicas, config servers, RabbitMQ messaging cluster nodes, and `blworker` containers for you including their tls/ssl certificates.
 
 This is as simple as running the following commands:
 ```bash
@@ -201,9 +200,16 @@ Your connection string per user in this case would be:
 Adding traits into your database is just as simple as piping your `binlex` output to the utility `rabbitmqadmin`.
 
 ```bash
-# Generate Traits with 4 Threads and Publish to Messaging Queue with 4 Threads
-binlex -m pe:x86 -i tests/pe/pe.emotet.x86 -t 4 --corpus malware.emotet | parallel -j 4 rabbitmqadmin --username admin --password changeme --host 127.0.0.1 --port 15672 publish routing_key=binlex payload="{}"
+build/binlex -m pe:x86 -c malware.emotet -i tests/pe/pe.emotet.x86 --threads 4 | while read i; echo $i | rabbitmqadmin -q --ssl --ssl-insecure --username admin --password changeme --host 127.0.0.1 --port 15672 publish routing_key=binlex; end
 ```
+
+To play around with the mongodb shell for advanced queries on your data you do this by running the following command:
+```bash
+cd docker/scripts/
+./mongodb-shell.sh mongodb-router1
+```
+
+This will provide you a MongoDB administrator shell, the data you will be looking for will be in the `binlex` database.
 
 We recommend using `collections` as your main corpus name, so for example the corpus `malware.emotet` would go in the `malware` collection.
 

@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+import os
+import sys
 import ssl
 import pika
 import time
@@ -7,6 +9,7 @@ import json
 import pymongo
 import logging
 import argparse
+from pprint import pprint
 
 log = logging.getLogger(__name__)
 
@@ -204,7 +207,6 @@ class BLWorker():
         try:
             data = json.loads(body)
             corpus = data['corpus']
-            offset = data['offset']
             file_data = {
                 'corpus': data['corpus'],
                 'offset': data['offset'],
@@ -216,23 +218,77 @@ class BLWorker():
             del data['file_sha256']
             del data['mode']
             if corpus.startswith('default') is True:
-                collection = self.mongodb_db['default']
-                trait_id = collection.insert_one(data).inserted_id
-                log.debug('[*] default collection inserted trait_id ' + str(trait_id))
+                trait_id = self.update_traits(data, 'default')
+                log.debug('[*] default collection trait_id ' + str(trait_id))
+                file_data['trait_id'] = trait_id
+                file_data['collection'] = 'default'
+                files_id = self.update_files(file_data, trait_id)
+                if files_id is None:
+                    log.debug('default files trait already exists')
+                else:
+                    log.debug('default collection inserted files_id ' + str(files_id))
             elif corpus.startswith('malware') is True:
-                collection = self.mongodb_db['malware']
-                trait_id = collection.insert_one(data).inserted_id
-                log.debug('[*] malware collection inserted trait_id ' + str(trait_id))
+                trait_id = self.update_traits(data, 'malware')
+                log.debug('[*] malware collection trait_id ' + str(trait_id))
+                file_data['trait_id'] = trait_id
+                file_data['collection'] = 'malware'
+                files_id = self.update_files(file_data, trait_id)
+                if files_id is None:
+                    log.debug('malware files trait already exists')
+                else:
+                    log.debug('malware collection inserted files_id ' + str(files_id))
             elif corpus.startswith('goodware') is True:
-                collection = self.mongodb_db['goodware']
-                trait_id = collection.insert_one(data).inserted_id
-                log.debug('[*] goodware collection inserted trait_id ' + str(trait_id))
+                trait_id = self.update_traits(data, 'goodware')
+                log.debug('[*] goodware collection trait_id ' + str(trait_id))
+                file_data['trait_id'] = trait_id
+                file_data['collection'] = 'goodware'
+                files_id = self.update_files(file_data, trait_id)
+                if files_id is None:
+                    log.debug('goodware files trait already exists')
+                else:
+                    log.debug('goodware collection inserted files_id ' + str(files_id))
             else:
-                log.error('[x] message contained invalid corpus')
-            log.debug(body)
-        except Exception as error:
-            log.error('[x] ' + str(error))
+                log.error('message contained invalid corpus')
+        except Exception as e:
+            exc_type, exc_obj, exc_tb = sys.exc_info()
+            fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+            print(exc_type, fname, exc_tb.tb_lineno)
         self.amqp_channel.basic_ack(method.delivery_tag)
+
+    def update_traits(self, data, collection_name):
+        collection = self.mongodb_db[collection_name]
+        trait_id = collection.update_one(
+            filter={
+                'architecture': data['architecture'],
+                'bytes_sha256': data['bytes_sha256']
+            },
+            update={
+                "$set": data
+            },
+            upsert=True
+        ).upserted_id
+        if trait_id is None:
+            trait_id = collection.find_one({
+                'architecture': data['architecture'],
+                'bytes_sha256': data['bytes_sha256']
+            })['_id']
+        return trait_id
+
+    def update_files(self, data, trait_id):
+        collection = self.mongodb_db['files']
+        files_id = collection.update_one(
+            filter={
+                'collection': data['collection'],
+                'sha256': data['sha256'],
+                'mode': data['mode'],
+                'trait_id': trait_id
+            },
+            update={
+                "$set": data
+            },
+            upsert=True
+        ).upserted_id
+        return files_id
 
     def setup_logging(self):
         if self.args.debug is True:
