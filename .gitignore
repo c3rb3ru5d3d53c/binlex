@@ -11,3 +11,10 @@ venv/**
 pybinlex.egg-info/**
 *.so
 *.whl
+data/**
+docker-compose.yml
+scripts/**
+ssl/**
+*.key
+config/**
+docker-compose.yml

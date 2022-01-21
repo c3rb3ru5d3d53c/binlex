@@ -95,10 +95,14 @@ class BLAPI():
             api.add_namespace(api_binlex)
             api.add_namespace(api_mongodb)
 
-    def main(self):
+    def app_init(self):
         self.arguments()
         self.config_init()
         self.api_init()
+        return self.app
+
+    def main(self):
+        self.app_init()
         self.app.run(
             host=self.args.listen,
             port=self.args.port,

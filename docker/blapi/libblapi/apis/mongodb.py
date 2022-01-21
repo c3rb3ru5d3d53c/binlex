@@ -24,8 +24,14 @@ class mongodb_collection_find(Resource):
         """Find Documents in a Collection"""
         return 'Placeholder'
 
-@api.route('/<collection_name>/find_one')
-class mongodb_collection_find_one(Resource):
+@api.route('/<collection_name>/findOne')
+class mongodb_collection_findOne(Resource):
     def post(self):
         """Find Single Document in Collection"""
+        return 'Placeholder'
+
+@api.route('/<collection_name>/aggregate')
+class mongodb_collection_aggregate(Resource):
+    def post(self):
+        """Find Aggregate Data"""
         return 'Placeholder'

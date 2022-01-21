@@ -116,3 +116,9 @@ clean:
 	rm -rf pybinlex.egg-info/
 	rm -f *.so
 	rm -f *.whl
+	rm -rf data/
+	rm -f docker-compose.yml
+	rm -f replica.key
+	rm -rf scripts/
+	rm -rf ssl/
+	rm -rf config/

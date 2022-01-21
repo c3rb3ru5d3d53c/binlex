@@ -49,39 +49,6 @@ Get slides [here](docs/oalabs.pdf).
 - Genetic Programming
 - Machine Learning Malware Detection
 
-# Differences from Other Tools
-
-These are the points that lead us to building `binlex`:
-- `yarGen`
-  - all goodware traits are static bytes
-  - downloads goodware each run
-  - takes very long to process
-  - completely written in Python (slow)
-  - memory intensive
-- `yara-signator`
-  - requires a massive amount of memory to process sometimes ~32GB
-  - written in Java and Python (slow)
-  - does not solve issue with code-reuse for simple tasks
-- `Intezer`
-  - cannot generate genetic traits for shellcode
-  - expensive
-  - little control over detection logic
-
-With `binlex`, we differ by empowering the user to make decisions about their detection logic.
-
-We simplify this process in these ways:
-- trait extraction using C++ because its fast
-- trait extraction for shellcode
-- generated traits are flat JSON objects
-- get quick results in CLI without needing the whole process
-- outputs can be piped into other tools like `jq` and `blyara` for quick tasks
-- push mass processing and queries to a MongoDB Cluster where it makes sense to have ~32GB of RAM
-- provide trait extraction library for other spin off tools
-
-These other tools that compete in the same space as `binlex` are great.
-
-However, we believe `binlex` operates better in production environments for malware analysts and reverse engineers.
-
 # Installing
 
 **Dependencies:**
@@ -178,20 +145,18 @@ This ensures the data has correct relationships and your complex queries can be 
 
 Storing your traits from `binlex` could never be easier.
 
-With `dockers/generate.sh`, it will create all MongoDB shards, replicas, config servers, RabbitMQ messaging cluster nodes, and `blworker` containers for you including their tls/ssl certificates.
+With `./docker.sh`, it will create all MongoDB shards, replicas, config servers, RabbitMQ messaging cluster nodes, and `blworker` containers for you including their tls/ssl certificates.
 
-This is as simple as running the following commands:
+This is as simple as running three commands:
 ```bash
-cd docker/
-./generate.sh
+./docker.sh
 docker-compose up -d
-cd scripts/
-./init-all.sh
+cd scripts/ && ./init-all.sh
 ```
 
-If you wish to change the default username and passwords, you can run `docker/generate.sh` with additional parameters.
+If you wish to change the default username and passwords, you can run `docker.sh` with additional parameters.
 
-To see what parameters are available to you, run `./generate.sh --help`.
+To see what parameters are available to you, run `./docker.sh --help`.
 
 Your connection string per user in this case would be:
 - binlex - `mongodb://binlex:changeme@127.0.0.1/?authSource=binlex` (for trait collection)
@@ -203,7 +168,7 @@ Adding traits into your database is just as simple as piping your `binlex` outpu
 build/binlex -m pe:x86 -c malware.emotet -i tests/pe/pe.emotet.x86 --threads 4 | while read i; echo $i | rabbitmqadmin -q --ssl --ssl-insecure --username admin --password changeme --host 127.0.0.1 --port 15672 publish routing_key=binlex; end
 ```
 
-To play around with the mongodb shell for advanced queries on your data you do this by running the following command:
+To play around with the MongoDB shell for advanced queries on your data you do this by running the following command:
 ```bash
 cd docker/scripts/
 ./mongodb-shell.sh mongodb-router1
