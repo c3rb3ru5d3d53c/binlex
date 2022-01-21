@@ -20,6 +20,8 @@ admin_pass=changeme
 username=binlex
 password=changeme
 
+threads=4
+
 # RabbitMQ
 brokers=4
 rabbitmq_version=3.9.12
@@ -30,8 +32,11 @@ rabbitmq_http_port=15672
 blworkers=8
 blworker_version=1.1.1
 
+blapis=1
+blapi_version=1.1.1
+
 function help_menu(){
-    printf "generator.sh - Binlex Production Docker Generator\n";
+    printf "docker.sh - Binlex Production Docker Generator\n";
     printf "  -h\t\t--help\t\t\tHelp Menu\n";
     printf "  -mp\t\t--mongodb-port\t\tMongoDB Port\n";
     printf "  -mep\t\t--mongo-express-port\tMongo Express Port\n";
@@ -277,6 +282,29 @@ function generate_certificates(){
         cat ssl/rabbitmq-broker${i}.crt ssl/rabbitmq-broker${i}.key > ssl/rabbitmq-broker${i}.pem;
     done
 
+    for i in $(seq 1 $blapis); do
+        generate_alt_dns blapi${i} > ssl/blapi${i}.ext;
+        openssl req \
+            -newkey rsa:4096 \
+            -nodes \
+            -out ssl/blapi${i}.csr \
+            -keyout ssl/blapi${i}.key \
+            -subj "/CN=blapi${i}/OU=binlex-rabbitmq";
+        openssl x509 \
+            -passin pass:${admin_pass} \
+            -sha256 \
+            -req \
+            -days 365 \
+            -in ssl/blapi${i}.csr \
+            -CA ssl/binlex-public-ca.pem \
+            -CAkey ssl/binlex-private-ca.pem \
+            -CAcreateserial \
+            -out ssl/blapi${i}.crt \
+            -extensions v3_req \
+            -extfile ssl/blapi${i}.ext;
+        cat ssl/blapi${i}.crt ssl/blapi${i}.key > ssl/blapi${i}.pem;
+    done
+
     sudo chown 999:999 ssl/*;
     sudo chmod 600 ssl/*;
 }
@@ -381,7 +409,7 @@ function compose() {
         echo "      container_name: blworker${i}";
         echo "      image: blworker:${blworker_version}";
         echo "      build:";
-        echo "          context: blworker/";
+        echo "          context: docker/blworker/";
         echo "          dockerfile: Dockerfile";
         echo "      command: blworker --debug --amqp-tls --amqp-queue binlex --amqp-user \"${admin_user}\" --amqp-pass \"${admin_pass}\" --amqp-ca /config/binlex-public-ca.pem --amqp-cert /config/binlex-client.crt --amqp-key /config/binlex-client.key --amqp-port ${rabbitmq_port} --amqp-host rabbitmq-broker${rabbitmq_iter} --mongodb-tls --mongodb-ca /config/binlex-public-ca.pem --mongodb-key /config/binlex-client.pem  --mongodb-url \"mongodb://${admin_user}:${admin_pass}@mongodb-router${mongodb_iter}:${mongodb_port}\"";
         echo "      volumes:";
@@ -403,6 +431,33 @@ function compose() {
         else
             mongodb_iter=$((mongodb_iter+1));
         fi
+    done
+    for i in $(seq 1 $blapis); do
+        echo "  blapi${i}:";
+        echo "      hostname: blapi${i}";
+        echo "      container_name: blapi${i}";
+        echo "      image: blapi:${blapi_version}";
+        echo "      build:";
+        echo "          context: .";
+        echo "          dockerfile: docker/blapi/Dockerfile";
+        echo "      command: blapi -l 0.0.0.0 -p 8080 --debug"
+        echo "      ports:";
+        echo "          - 8080:8080";
+        echo "      volumes:";
+        echo "          - ./ssl/binlex-client.crt:/config/binlex-client.crt";
+        echo "          - ./ssl/binlex-client.key:/config/binlex-client.key";
+        echo "          - ./ssl/binlex-client.pem:/config/binlex-client.pem";
+        echo "          - ./ssl/binlex-public-ca.pem:/config/binlex-public-ca.pem";
+        # echo "      depends_on:";
+        # for j in $(seq 1 $brokers); do
+        #     echo "          - rabbitmq-broker${j}";
+        # done
+        # for j in $(seq 1 $routers); do
+        #     echo "          - mongodb-router${j}";
+        # done
+        # for j in $(seq 1 $blworkers); do
+        #     echo "          - blworker${j}";
+        # done
     done
 }
 
