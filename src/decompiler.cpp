@@ -231,6 +231,8 @@ void Decompiler::WriteTraits(char *file_path, bool pretty){
         if (sections[i].traits != NULL){
             for (int j = 0; j < sections[i].ntraits; j++){
                 sections[i].traits[j]->corpus = sections[i].corpus;
+                sections[i].traits[j]->file_sha256 = sections[i].file_sha256;
+                sections[i].traits[j]->blmode = sections[i].blmode;
                 traits << GetTrait(sections[i].traits[j], pretty) << endl;
             }
         }

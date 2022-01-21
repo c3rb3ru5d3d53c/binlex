@@ -1,0 +1,110 @@
+#!/usr/bin/env python
+
+import os
+import sys
+import json
+import datetime
+import argparse
+from flask import Flask
+from flask_restx import Api
+from libblapi.apis.binlex import api as api_binlex
+from libblapi.apis.mongodb import api as api_mongodb
+
+__version__ = '1.1.1'
+__author__ = '@c3rb3ru5d3d53c'
+
+class BLAPI():
+
+    """
+    Binlex and MongoDB HTTP API Server
+    """
+
+    def __init__(self):
+        self.title = "Binlex HTTP API"
+        self.description = "Binlex and MongoDB HTTP API Server"
+        self.app = Flask(__name__)
+
+    def arguments(self):
+        self.parser = argparse.ArgumentParser(
+            prog=f'blapi v{__version__}',
+            description=self.description,
+            epilog=f'Author: {__author__}'
+        )
+        self.parser.add_argument(
+            '--version',
+            action='version',
+            version=f'v{__version__}'
+        )
+        self.parser.add_argument(
+            '-l',
+            '--listen',
+            type=str,
+            default='127.0.0.1',
+            help='Server Listen Address',
+            required=False
+        )
+        self.parser.add_argument(
+            '-c',
+            '--connection',
+            type=str,
+            default='mongodb://127.0.0.1',
+            help='MongoDB Connection String',
+            required=False
+        )
+        self.parser.add_argument(
+            '-p',
+            '--port',
+            type=int,
+            default=8080,
+            required=False,
+            help='Server Port'
+        )
+        self.parser.add_argument(
+            '-k',
+            '--api-key',
+            type=str,
+            default='changeme',
+            required=False,
+            help='API Key for Authentication'
+        )
+        self.parser.add_argument(
+            '-d',
+            '--debug',
+            action='store_true',
+            required=False,
+            default=False,
+            help='Debug'
+        )
+        self.args = self.parser.parse_args()
+
+    def config_init(self):
+        self.app.config['host'] = self.args.listen
+        self.app.config['version'] = __version__
+        self.app.config['debug'] = self.args.debug
+        self.app.config['port'] = self.args.port
+        self.app.config['api_key'] = self.args.api_key
+
+    def api_init(self):
+        with self.app.app_context():
+            api = Api(
+                self.app,
+                version=__version__,
+                title=self.title,
+                description=self.description
+            )
+            api.add_namespace(api_binlex)
+            api.add_namespace(api_mongodb)
+
+    def main(self):
+        self.arguments()
+        self.config_init()
+        self.api_init()
+        self.app.run(
+            host=self.args.listen,
+            port=self.args.port,
+            debug=self.args.debug
+        )
+
+if __name__ in '__main__':
+    blapi = BLAPI()
+    blapi.main()
