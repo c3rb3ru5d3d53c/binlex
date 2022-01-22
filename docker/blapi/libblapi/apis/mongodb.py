@@ -1,10 +1,19 @@
 #!/usr/bin/env python
 
+import pymongo
 from flask import Blueprint
 from flask import current_app as app
 from flask_restx import Namespace, Resource, fields
 
 api = Namespace('mongodb', description='Binlex MongoDB API')
+
+@api.route('/version')
+class mongodb_collection_count(Resource):
+    def get(self):
+        """Get MongoDB Version"""
+        return {
+            'version': pymongo.__version__
+        }
 
 @api.route('/<collection_name>/count')
 class mongodb_collection_count(Resource):

@@ -1,11 +1,14 @@
 #!/usr/bin/env python
 
+import logging
 import pybinlex
 from hashlib import sha256
 from flask import Blueprint
 from flask import current_app as app
 from flask import request
 from flask_restx import Namespace, Resource, fields
+
+logger = logging.getLogger(__name__)
 
 api = Namespace('binlex', description='Binlex Upload API')
 
@@ -59,6 +62,26 @@ def validate_raw(method, corpus, architecture):
         }
     return True
 
+def decompile_raw(data, architecture):
+    decompiler = pybinlex.Decompiler()
+    if architecture == 'x86':
+        decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_32, 0)
+    if architecture == 'x86_64':
+        decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_64, 0)
+    decompiler.set_threads(app.config['threads'], 1, 500, 0)
+    decompiler.set_blmode("raw:x86", 0)
+    decompiler.set_file_sha256(sha256(data).hexdigest(), 0)
+    decompiler.decompile(data, 0, 0)
+    traits = decompiler.get_traits()
+    return traits
+
+@api.route('/version')
+class binlex_version(Resource):
+    def get(self):
+        return {
+            'version': pybinlex.__version__
+        }
+
 @api.route('/methods')
 class binlex_methods(Resource):
     def get(self):
@@ -84,39 +107,50 @@ class binlex_corpra(Resource):
     def get(self):
         return corpra
 
-@api.route('/<string:method>/<string:corpus>/pe/<string:architecture>/')
+@api.route('/pe/<string:architecture>/<string:method>/<string:corpus>')
 class binlex_pe(Resource):
     def post(self, method, corpus, architecture):
-        """Process PE"""
+        """Get PE Traits"""
         return 'Placeholder'
 
-@api.route('/<string:method>/<string:corpus>/elf/<string:architecture>')
+@api.route('/pe/<string:architecture>/<string:method>/<string:corpus>/yara')
+class binlex_PE_yara(Resource):
+    def post(self, method, corpus, architecture):
+        """Get PE Traits and YARA Matches"""
+        return 'Placeholder'
+
+@api.route('/elf/<string:architecture>/<string:method>/<string:corpus>')
 class binlex_elf(Resource):
     def post(self, method, corpus, architecture):
-        """Process ELF"""
+        """Get ELF Traits"""
         return 'Placeholder'
 
-@api.route('/<string:method>/<string:corpus>/raw/<string:architecture>')
+@api.route('/elf/<string:architecture>/<string:method>/<string:corpus>/yara')
+class binlex_elf_yara(Resource):
+    def post(self, method, corpus, architecture):
+        """Get ELF Traits and YARA Matches"""
+        return 'Placeholder'
+
+@api.route('/raw/<string:architecture>/<string:method>/<string:corpus>')
 class binlex_raw(Resource):
     def post(self, method, corpus, architecture):
-        """Process Shellcode"""
-        validate = validate_raw(method, corpus, architecture)
-        if validate is not True:
-            return validate
-        data = request.data
-        decompiler = pybinlex.Decompiler()
-        if architecture == 'x86':
-            decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_32, 0)
-        if architecture == 'x86_64':
-            decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_64, 0)
-        decompiler.set_threads(app.config['threads'], 1, 500, 0)
-        decompiler.set_blmode("raw:x86", 0)
-        decompiler.set_file_sha256(sha256(data).hexdigest(), 0)
-        decompiler.decompile(data, 0, 0)
-        if method == 'lex':
-            traits = decompiler.get_traits()
-            return traits, 200
-        if method == 'store':
-            return {
-                'error': 'not implemented'
-            }, 404
+        """Get RAW Traits"""
+        try:
+            validate = validate_raw(method, corpus, architecture)
+            if validate is not True:
+                return validate
+            traits = decompile_raw(request.data, architecture)
+            if method == 'lex':
+                return traits, 200
+            if method == 'store':
+                return {
+                    'error': 'not implemented'
+                }, 404
+        except Exception as error:
+            logger.error(error)
+
+@api.route('/raw/<string:architecture>/<string:method>/<string:corpus>/yara')
+class binlex_raw_yara(Resource):
+    def post(self, method, corpus, architecture):
+        """Get RAW Traits and YARA Matches"""
+        return 'Placeholder'

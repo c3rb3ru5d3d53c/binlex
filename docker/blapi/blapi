@@ -9,6 +9,7 @@ from flask import Flask
 from flask_restx import Api
 from libblapi.apis.binlex import api as api_binlex
 from libblapi.apis.mongodb import api as api_mongodb
+from libblapi.apis.yara import api as api_yara
 
 __version__ = '1.1.1'
 __author__ = '@c3rb3ru5d3d53c'
@@ -21,7 +22,7 @@ class BLAPI():
 
     def __init__(self):
         self.title = "Binlex HTTP API"
-        self.description = "Binlex and MongoDB HTTP API Server"
+        self.description = "A Binlex HTTP API Server"
         self.app = Flask(__name__)
 
     def arguments(self):
@@ -106,6 +107,7 @@ class BLAPI():
             )
             api.add_namespace(api_binlex)
             api.add_namespace(api_mongodb)
+            api.add_namespace(api_yara)
 
     def app_init(self):
         self.arguments()
