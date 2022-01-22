@@ -5,12 +5,25 @@ admin_user=admin
 admin_pass=changeme
 user=binlex
 pass=changeme
+config=Release
 
 all:
 	mkdir -p build/
 	cd build/ && \
-		cmake -S ../ -B . ${args} && \
-		make -j ${threads}
+		cmake -S ../ \
+			-B . \
+			${args} && \
+		cmake --build . --config ${config} -- -j ${threads}
+
+python:
+	mkdir -p build/
+	cd build/ && \
+		cmake -S ../ \
+			-B . \
+			-DBUILD_PYTHON_BINDINGS=true \
+			-DPYBIND11_PYTHON_VERSION=`python -c "import platform; print(platform.python_version())"` \
+			${args} && \
+		cmake --build . --config ${config} -- -j ${threads}
 
 docs:
 	mkdir -p build/docs/html/docs/

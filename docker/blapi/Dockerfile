@@ -10,9 +10,7 @@ WORKDIR $HOME/binlex/
 RUN apt -qq -y update && \
     apt install -qq -y build-essential make cmake git
 
-RUN make threads=4 args="-DBUILD_PYTHON_BINDINGS=true -DPYBIND11_PYTHON_VERSION=3.8"
-
-RUN make install
+RUN pip install -v -e .
 
 WORKDIR $HOME/binlex/docker/blapi/
 

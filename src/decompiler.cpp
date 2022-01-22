@@ -54,6 +54,8 @@ Decompiler::Decompiler() {
         sections[i].corpus = (char *)"default";
         sections[i].instructions = false;
         sections[i].arch_str = NULL;
+        sections[i].file_sha256 = (char *)"";
+        sections[i].blmode = (char *)"";
     }
 }
 

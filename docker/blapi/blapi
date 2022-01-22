@@ -68,6 +68,14 @@ class BLAPI():
             help='API Key for Authentication'
         )
         self.parser.add_argument(
+            '-t',
+            '--threads',
+            type=int,
+            default=1,
+            required=False,
+            help='Threads'
+        )
+        self.parser.add_argument(
             '-d',
             '--debug',
             action='store_true',
@@ -83,9 +91,13 @@ class BLAPI():
         self.app.config['debug'] = self.args.debug
         self.app.config['port'] = self.args.port
         self.app.config['api_key'] = self.args.api_key
+        self.app.config['threads'] = self.args.threads
 
     def api_init(self):
         with self.app.app_context():
+            @self.app.errorhandler(404)
+            def page_not_found(e):
+                return {'error': 'not found'}, 404
             api = Api(
                 self.app,
                 version=__version__,

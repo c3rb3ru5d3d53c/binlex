@@ -57,9 +57,8 @@ To get started you will need the following dependencies for `binlex`.
 
 ```bash
 sudo apt install -y git build-essential \
-                    libcapstone-dev libssl-dev \
                     cmake make parallel \
-                    doxygen git-lfs rpm liblief-dev
+                    doxygen git-lfs rpm \
                     python3 python3-dev
 git clone --recursive https://github.com/c3rb3ru5d3d53c/binlex.git
 cd binlex/
