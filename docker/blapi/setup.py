@@ -25,7 +25,8 @@ setup(
         'Flask==2.0.2',
         'pymongo==4.0.1',
         'pika==1.2.0',
-        'flask-restx==0.5.1'
+        'flask-restx==0.5.1',
+        'yara-python==4.1.3'
     ],
     scripts=['blapi'],
     packages=find_packages(),
