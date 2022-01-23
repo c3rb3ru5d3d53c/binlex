@@ -106,8 +106,8 @@ namespace binlex {
         @return bool
         */
         BINLEX_EXPORT bool Setup(cs_arch arch, cs_mode mode, uint index);
-        BINLEX_EXPORT void SetFileSHA256(char *sha256, uint index);
-        BINLEX_EXPORT void SetBLMode(char *mode, uint index);
+        BINLEX_EXPORT void SetFileSHA256(string sha256, uint index);
+        BINLEX_EXPORT void SetMode(string mode, uint index);
         /**
         Set Threads and Thread Cycles
         @param threads number of threads
@@ -120,7 +120,7 @@ namespace binlex {
         @param corpus pointer to corpus name
         @param index the section index
         */
-        BINLEX_EXPORT void SetCorpus(char *corpus, uint index);
+        BINLEX_EXPORT void SetCorpus(string corpus, uint index);
         /**
         @param instructions bool to collect instructions traits or not
         @param index the section index

@@ -58,16 +58,17 @@ int main(int argc, char **argv){
             return false;
         }
         if (elf64.ReadFile(args.options.input) == false){
+            fprintf(stderr, "[x] faile dto read file\n");
             return false;
         }
         Decompiler decompiler;
         for (int i = 0; i < ELF_MAX_SECTIONS; i++){
             if (elf64.sections[i].data != NULL){
                 decompiler.Setup(CS_ARCH_X86, CS_MODE_64, i);
-                decompiler.SetBLMode(args.options.mode, i);
+                decompiler.SetMode(string(args.options.mode), i);
                 decompiler.SetFileSHA256(elf64.hashes.sha256, i);
                 decompiler.SetThreads(args.options.threads, args.options.thread_cycles, args.options.thread_sleep, i);
-                decompiler.SetCorpus(args.options.corpus, i);
+                decompiler.SetCorpus(string(args.options.corpus), i);
                 decompiler.SetInstructions(args.options.instructions, i);
                 decompiler.AppendQueue(elf64.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
                 decompiler.Decompile(elf64.sections[i].data, elf64.sections[i].size, elf64.sections[i].offset, i);
@@ -87,16 +88,17 @@ int main(int argc, char **argv){
             return false;
         }
         if (elf32.ReadFile(args.options.input) == false){
+            fprintf(stderr, "[x] faile dto read file\n");
             return false;
         }
         Decompiler decompiler;
         for (int i = 0; i < ELF_MAX_SECTIONS; i++){
             if (elf32.sections[i].data != NULL){
                 decompiler.Setup(CS_ARCH_X86, CS_MODE_32, i);
-                decompiler.SetBLMode(args.options.mode, i);
+                decompiler.SetMode(string(args.options.mode), i);
                 decompiler.SetFileSHA256(elf32.hashes.sha256, i);
                 decompiler.SetThreads(args.options.threads, args.options.thread_cycles, args.options.thread_sleep, i);
-                decompiler.SetCorpus(args.options.corpus, i);
+                decompiler.SetCorpus(string(args.options.corpus), i);
                 decompiler.SetInstructions(args.options.instructions, i);
                 decompiler.AppendQueue(elf32.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
                 decompiler.Decompile(elf32.sections[i].data, elf32.sections[i].size, elf32.sections[i].offset, i);
@@ -116,16 +118,17 @@ int main(int argc, char **argv){
             return 1;
         }
         if (pe32.ReadFile(args.options.input) == false){
+            fprintf(stderr, "[x] faile dto read file\n");
             return 1;
         }
         Decompiler decompiler;
         for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
             if (pe32.sections[i].data != NULL){
                 decompiler.Setup(CS_ARCH_X86, CS_MODE_32, i);
-                decompiler.SetBLMode(args.options.mode, i);
+                decompiler.SetMode(string(args.options.mode), i);
                 decompiler.SetFileSHA256(pe32.hashes.sha256, i);
                 decompiler.SetThreads(args.options.threads, args.options.thread_cycles, args.options.thread_sleep, i);
-                decompiler.SetCorpus(args.options.corpus, i);
+                decompiler.SetCorpus(string(args.options.corpus), i);
                 decompiler.SetInstructions(args.options.instructions, i);
                 decompiler.AppendQueue(pe32.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
                 decompiler.Decompile(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, i);
@@ -145,16 +148,17 @@ int main(int argc, char **argv){
             return 1;
         }
         if (pe64.ReadFile(args.options.input) == false){
+            fprintf(stderr, "[x] faile dto read file\n");
             return 1;
         }
         Decompiler decompiler;
         for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
             if (pe64.sections[i].data != NULL){
                 decompiler.Setup(CS_ARCH_X86, CS_MODE_64, i);
-                decompiler.SetBLMode(args.options.mode, i);
+                decompiler.SetMode(string(args.options.mode), i);
                 decompiler.SetFileSHA256(pe64.hashes.sha256, i);
                 decompiler.SetThreads(args.options.threads, args.options.thread_cycles, args.options.thread_sleep, i);
-                decompiler.SetCorpus(args.options.corpus, i);
+                decompiler.SetCorpus(string(args.options.corpus), i);
                 decompiler.SetInstructions(args.options.instructions, i);
                 decompiler.AppendQueue(pe64.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
                 decompiler.Decompile(pe64.sections[i].data, pe64.sections[i].size, pe64.sections[i].offset, i);
@@ -170,13 +174,16 @@ int main(int argc, char **argv){
     if (strcmp(args.options.mode, (char *)"raw:x86") == 0 &&
         args.options.io_type == ARGS_IO_TYPE_FILE){
         Raw rawx86;
-        rawx86.ReadFile(args.options.input, 0);
+        if (rawx86.ReadFile(args.options.input, 0) == false){
+            fprintf(stderr, "[x] faile dto read file\n");
+            return 1;
+        }
         Decompiler decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_32, 0);
-        decompiler.SetBLMode(args.options.mode, 0);
+        decompiler.SetMode(string(args.options.mode), 0);
         decompiler.SetFileSHA256(rawx86.sections[0].hashes.sha256, 0);
         decompiler.SetThreads(args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
-        decompiler.SetCorpus(args.options.corpus, 0);
+        decompiler.SetCorpus(string(args.options.corpus), 0);
         decompiler.SetInstructions(args.options.instructions, 0);
         decompiler.Decompile(rawx86.sections[0].data, rawx86.sections[0].size, rawx86.sections[0].offset, 0);
         if (args.options.output == NULL){
@@ -189,13 +196,16 @@ int main(int argc, char **argv){
     if (strcmp(args.options.mode, (char *)"raw:x86_64") == 0 &&
         args.options.io_type == ARGS_IO_TYPE_FILE){
         Raw rawx86_64;
-        rawx86_64.ReadFile(args.options.input, 0);
+        if (rawx86_64.ReadFile(args.options.input, 0) == false){
+            fprintf(stderr, "[x] faile dto read file\n");
+            return 1;
+        }
         Decompiler decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_64, 0);
-        decompiler.SetBLMode(args.options.mode, 0);
+        decompiler.SetMode(string(args.options.mode), 0);
         decompiler.SetFileSHA256(rawx86_64.sections[0].hashes.sha256, 0);
         decompiler.SetThreads(args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
-        decompiler.SetCorpus(args.options.corpus, 0);
+        decompiler.SetCorpus(string(args.options.corpus), 0);
         decompiler.SetInstructions(args.options.instructions, 0);
         decompiler.Decompile(rawx86_64.sections[0].data, rawx86_64.sections[0].size, rawx86_64.sections[0].offset, 0);
         if (args.options.output == NULL){

@@ -33,7 +33,7 @@ namespace binlex {
         #endif
             unique_ptr<LIEF::PE::Binary> binary;
             struct Hash {
-                char *sha256;
+                string sha256;
             };
             struct Section {
                 uint offset;

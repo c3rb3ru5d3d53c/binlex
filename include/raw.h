@@ -29,7 +29,7 @@ namespace binlex{
     class Raw : public Common {
             //int GetFileSize(FILE *fd);
             typedef struct Hash {
-                char *sha256;
+                string sha256;
             } Hash;
             struct Section {
                 void *data;
