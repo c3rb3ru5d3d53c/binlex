@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 
+import json
+import yara
+import base64
 import logging
 import pybinlex
 from hashlib import sha256
@@ -210,12 +213,6 @@ class binlex_pe(Resource):
                 'error': 'not implemented'
             }, 404
 
-@api.route('/pe/<string:architecture>/<string:method>/<string:corpus>/yara')
-class binlex_PE_yara(Resource):
-    def post(self, method, corpus, architecture):
-        """Get PE Traits and YARA Matches"""
-        return 'Placeholder'
-
 @api.route('/elf/<string:architecture>/<string:method>/<string:corpus>')
 class binlex_elf(Resource):
     def post(self, method, corpus, architecture):
@@ -241,12 +238,6 @@ class binlex_elf(Resource):
                 'error': str(error)
             }, 500
 
-@api.route('/elf/<string:architecture>/<string:method>/<string:corpus>/yara')
-class binlex_elf_yara(Resource):
-    def post(self, method, corpus, architecture):
-        """Get ELF Traits and YARA Matches"""
-        return 'Placeholder'
-
 @api.route('/raw/<string:architecture>/<string:method>/<string:corpus>')
 class binlex_raw(Resource):
     def post(self, method, corpus, architecture):
@@ -267,6 +258,34 @@ class binlex_raw(Resource):
             return {
                 'error': str(error)
             }, 500
+
+@api.route('/pe/<string:architecture>/<string:method>/<string:corpus>/yara')
+class binlex_pe_yara(Resource):
+    def post(self, method, corpus, architecture):
+        """Get PE Traits and YARA Matches"""
+        try:
+            data = json.loads(request.data.decode('utf-8'))
+            if 'yara' not in data or 'data' not in data:
+                return {
+                    'error': 'failed to decode json data'
+                }, 400
+        except Exception as error:
+            return {
+                'error': 'failed to decode json data'
+            }, 400
+        try:
+            rule = yara.compile(source=base64.b64decode(data['yara']).decode('utf-8'))
+        except Exception as error:
+            return {
+                'error': 'failed to compile yara signature'
+            }, 400
+        return data, 200
+
+@api.route('/elf/<string:architecture>/<string:method>/<string:corpus>/yara')
+class binlex_elf_yara(Resource):
+    def post(self, method, corpus, architecture):
+        """Get ELF Traits and YARA Matches"""
+        return 'Placeholder'
 
 @api.route('/raw/<string:architecture>/<string:method>/<string:corpus>/yara')
 class binlex_raw_yara(Resource):
