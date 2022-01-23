@@ -26,7 +26,7 @@ namespace binlex{
             ARCH mode = ARCH::EM_NONE;
             unique_ptr<LIEF::ELF::Binary> binary;
             struct Hash {
-                char *sha256;
+                string sha256;
             };
             struct Section {
                 uint offset;

@@ -7,6 +7,7 @@ from flask import Blueprint
 from flask import current_app as app
 from flask import request
 from flask_restx import Namespace, Resource, fields
+from pprint import pprint
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,8 @@ corpra = ['default', 'malware', 'goodware']
 
 def is_corpus(corpus):
     if corpus in corpra:
+        return True
+    if corpus.startswith(tuple([value + '.' for value in corpra])):
         return True
     return False
 
@@ -62,17 +65,105 @@ def validate_raw(method, corpus, architecture):
         }
     return True
 
-def decompile_raw(data, architecture):
+def validate_pe(method, corpus, architecture):
+    if is_method(method) is False:
+        return {
+            'error': method + ' is a valid method, GET /binlex/methods to show valid methods'
+        }
+    if is_corpus(corpus) is False:
+        return {
+            'error': corpus + ' is not a valid corpus, GET /binlex/corpra to show valid corpra'
+        }
+    if is_pe_arch(architecture) is False:
+        return {
+            'error': architecture + ' is not a valid architecture, GET /binlex/<format>/architectures to show valid architectures'
+        }
+    return True
+
+def validate_elf(method, corpus, architecture):
+    if is_method(method) is False:
+        return {
+            'error': method + ' is a valid method, GET /binlex/methods to show valid methods'
+        }
+    if is_corpus(corpus) is False:
+        return {
+            'error': corpus + ' is not a valid corpus, GET /binlex/corpra to show valid corpra'
+        }
+    if is_elf_arch(architecture) is False:
+        return {
+            'error': architecture + ' is not a valid architecture, GET /binlex/<format>/architectures to show valid architectures'
+        }
+    return True
+
+def decompile_raw(data, architecture, corpus):
     decompiler = pybinlex.Decompiler()
     if architecture == 'x86':
         decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_32, 0)
     if architecture == 'x86_64':
         decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_64, 0)
     decompiler.set_threads(app.config['threads'], 1, 500, 0)
-    decompiler.set_blmode("raw:x86", 0)
+    decompiler.set_mode("raw:x86", 0)
     decompiler.set_file_sha256(sha256(data).hexdigest(), 0)
+    decompiler.set_corpus(corpus, 0)
     decompiler.decompile(data, 0, 0)
     traits = decompiler.get_traits()
+    del data
+    return traits
+
+def decompile_pe(data, architecture, corpus):
+    file_hash = sha256(data).hexdigest()
+    pe = pybinlex.PE()
+    decompiler = pybinlex.Decompiler()
+    if architecture == 'x86':
+        pe.setup(pybinlex.MACHINE_TYPES.IMAGE_FILE_MACHINE_I386)
+    if architecture == 'x86_64':
+        pe.setup(pybinlex.MACHINE_TYPES.IMAGE_FILE_MACHINE_AMD64)
+    # Something Strange Here
+    result = pe.read_buffer(data)
+    if result is False:
+        return False
+    sections = pe.get_sections()
+    for i in range(0, len(sections)):
+        if architecture == 'x86':
+            decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_32, i)
+            decompiler.set_mode("pe:x86", 0)
+        if architecture == 'x86_64':
+            decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_64, i)
+            decompiler.set_mode("pe:x86_64", i)
+        decompiler.set_threads(app.config['threads'], 1, 500, i)
+        decompiler.set_corpus(corpus, i)
+        decompiler.set_file_sha256(file_hash, i)
+        data = sections[i]['data']
+        offset = sections[i]['offset']
+        decompiler.decompile(data, offset, i)
+    traits = decompiler.get_traits()
+    return traits
+
+def decompile_elf(data, architecture, corpus):
+    file_hash = sha256(data).hexdigest()
+    elf = pybinlex.ELF()
+    decompiler = pybinlex.Decompiler()
+    if architecture == 'x86':
+        elf.setup(pybinlex.ARCH.EM_386)
+    if architecture == 'x86_64':
+        elf.setup(pybinlex.ARCH.EM_X86_64)
+    result = elf.read_buffer(data)
+    if result is False:
+        return result
+    sections = elf.get_sections()
+    for i in range(0, len(sections)):
+        if architecture == 'x86':
+            decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_32, i)
+            decompiler.set_mode("elf:x86", i)
+        if architecture == 'x86_64':
+            decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_64, i)
+            decompiler.set_mode("elf:x86_64", i)
+        decompiler.set_corpus(corpus, i)
+        decompiler.set_file_sha256(file_hash, i)
+        decompiler.set_threads(app.config['threads'], 1, 500, i)
+        decompiler.decompile(sections[i]['data'], sections[i]['offset'], i)
+    traits = decompiler.get_traits()
+    del data
     return traits
 
 @api.route('/version')
@@ -111,7 +202,20 @@ class binlex_corpra(Resource):
 class binlex_pe(Resource):
     def post(self, method, corpus, architecture):
         """Get PE Traits"""
-        return 'Placeholder'
+        validate = validate_pe(method, corpus, architecture)
+        if validate is not True:
+            return validate
+        traits = decompile_pe(request.data, architecture, corpus)
+        if traits is False:
+            return {
+                'error': 'decompilation failed'
+            }, 400
+        if method == 'lex':
+            return traits
+        if method == 'store':
+            return {
+                'error': 'not implemented'
+            }, 404
 
 @api.route('/pe/<string:architecture>/<string:method>/<string:corpus>/yara')
 class binlex_PE_yara(Resource):
@@ -123,7 +227,26 @@ class binlex_PE_yara(Resource):
 class binlex_elf(Resource):
     def post(self, method, corpus, architecture):
         """Get ELF Traits"""
-        return 'Placeholder'
+        try:
+            validate = validate_elf(method, corpus, architecture)
+            if validate is not True:
+                return validate
+            traits = decompile_elf(request.data, architecture, corpus)
+            if traits is False:
+                return {
+                    'error': 'decompilation failed'
+                }, 400
+            if method == 'lex':
+                return traits
+            if method == 'store':
+                return {
+                    'error': 'not implemented'
+                }, 404
+        except Exception as error:
+            api.logger.error(error)
+            return {
+                'error': str(error)
+            }, 500
 
 @api.route('/elf/<string:architecture>/<string:method>/<string:corpus>/yara')
 class binlex_elf_yara(Resource):
@@ -139,7 +262,7 @@ class binlex_raw(Resource):
             validate = validate_raw(method, corpus, architecture)
             if validate is not True:
                 return validate
-            traits = decompile_raw(request.data, architecture)
+            traits = decompile_raw(request.data, architecture, corpus)
             if method == 'lex':
                 return traits, 200
             if method == 'store':
@@ -147,7 +270,10 @@ class binlex_raw(Resource):
                     'error': 'not implemented'
                 }, 404
         except Exception as error:
-            logger.error(error)
+            api.logger.error(error)
+            return {
+                'error': str(error)
+            }, 500
 
 @api.route('/raw/<string:architecture>/<string:method>/<string:corpus>/yara')
 class binlex_raw_yara(Resource):

@@ -51,20 +51,20 @@ Decompiler::Decompiler() {
         sections[i].threads = 1;
         sections[i].thread_cycles = 1;
         sections[i].thread_sleep = 500;
-        sections[i].corpus = (char *)"default";
+        sections[i].corpus = NULL;
         sections[i].instructions = false;
         sections[i].arch_str = NULL;
-        sections[i].file_sha256 = (char *)"";
-        sections[i].blmode = (char *)"";
+        sections[i].file_sha256 = NULL;
+        sections[i].blmode = NULL;
     }
 }
 
-void Decompiler::SetFileSHA256(char *sha256, uint index){
-    sections[index].file_sha256 = sha256;
+void Decompiler::SetFileSHA256(string sha256, uint index){
+    sections[index].file_sha256 = StringAllocCharPtr(sha256);
 }
 
-void Decompiler::SetBLMode(char *mode, uint index){
-    sections[index].blmode = mode;
+void Decompiler::SetMode(string mode, uint index){
+    sections[index].blmode = StringAllocCharPtr(mode);
 }
 
 void Decompiler::AppendTrait(struct Trait *trait, struct Section *sections, uint index){
@@ -159,8 +159,8 @@ void Decompiler::SetThreads(uint threads, uint thread_cycles, uint thread_sleep,
     sections[index].thread_sleep = thread_sleep;
 }
 
-void Decompiler::SetCorpus(char *corpus, uint index){
-    sections[index].corpus = corpus;
+void Decompiler::SetCorpus(string corpus, uint index){
+    sections[index].corpus = StringAllocCharPtr(corpus);
 }
 
 void Decompiler::SetInstructions(bool instructions, uint index){
@@ -170,9 +170,15 @@ void Decompiler::SetInstructions(bool instructions, uint index){
 string Decompiler::GetTrait(struct Trait *trait, bool pretty){
     json data;
     data["type"] = trait->type;
-    data["corpus"] = trait->corpus;
-    data["file_sha256"] = trait->file_sha256;
-    data["mode"] = trait->blmode;
+    if (trait->corpus != NULL){
+        data["corpus"] = trait->corpus;
+    }
+    if (trait->file_sha256 != NULL){
+        data["file_sha256"] = trait->file_sha256;
+    }
+    if (trait->blmode != NULL){
+        data["mode"] = trait->blmode;
+    }
     data["architecture"] = trait->architecture;
     data["bytes"] = trait->bytes;
     data["trait"] = trait->trait;
@@ -860,5 +866,14 @@ void Decompiler::FreeTraits(uint index){
 Decompiler::~Decompiler() {
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++) {
         FreeTraits(i);
+        if (sections[i].file_sha256 != NULL){
+            free(sections[i].file_sha256);
+        }
+        if (sections[i].blmode != NULL){
+            free(sections[i].blmode);
+        }
+        if (sections[i].corpus != NULL){
+            free(sections[i].corpus);
+        }
     }
 }

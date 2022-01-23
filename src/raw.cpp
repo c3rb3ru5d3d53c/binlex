@@ -12,7 +12,6 @@ Raw::Raw(){
     for (int i = 0; i < RAW_MAX_SECTIONS; i++){
         sections[i].data = NULL;
         sections[i].size = 0;
-        sections[i].hashes.sha256 = NULL;
     }
 }
 
@@ -24,7 +23,7 @@ bool Raw::ReadFile(char *file_path, int section_index){
     memset(sections[section_index].data, 0, sections[section_index].size);
     fread(sections[section_index].data, sections[section_index].size, 1, fd);
     fclose(fd);
-    sections[section_index].hashes.sha256 = StringAllocCharPtr(SHA256((char *)sections[section_index].data, sections[section_index].size));
+    sections[section_index].hashes.sha256 = SHA256((char *)sections[section_index].data, sections[section_index].size);
     return true;
 }
 
@@ -33,9 +32,6 @@ Raw::~Raw(){
         if (sections[i].data != NULL){
             free(sections[i].data);
             sections[i].size = 0;
-        }
-        if (sections[i].hashes.sha256 != NULL){
-            free(sections[i].hashes.sha256);
         }
     }
 }

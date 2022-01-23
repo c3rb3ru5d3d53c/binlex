@@ -10,8 +10,6 @@
 using namespace std;
 namespace py = pybind11;
 
-//char *blmode = NULL;
-
 void init_decompiler(py::module &handle){
     py::class_<binlex::Decompiler>(handle, "Decompiler", "Binlex Decompiler Module")
     .def(py::init<>())
@@ -19,14 +17,8 @@ void init_decompiler(py::module &handle){
     .def("set_threads", &binlex::Decompiler::SetThreads)
     .def("set_corpus", &binlex::Decompiler::SetCorpus)
     .def("set_instructions", &binlex::Decompiler::SetInstructions)
-    .def("set_file_sha256", [](binlex::Decompiler &module, string sha256, uint index){
-        char *file_sha256 = module.StringAllocCharPtr(sha256);
-        module.SetFileSHA256(file_sha256, index);
-    })
-    .def("set_blmode", [](binlex::Decompiler &module, string mode, uint index){
-        char *blmode = module.StringAllocCharPtr(mode);
-        module.SetBLMode(blmode, index);
-    })
+    .def("set_file_sha256", &binlex::Decompiler::SetFileSHA256)
+    .def("set_mode", &binlex::Decompiler::SetMode)
     .def("decompile", [](binlex::Decompiler &module, py::buffer data, uint offset, uint index){
         py::buffer_info info = data.request();
         module.Decompile(info.ptr, info.size, offset, index);
