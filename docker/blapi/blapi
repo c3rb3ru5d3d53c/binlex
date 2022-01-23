@@ -77,6 +77,22 @@ class BLAPI():
             help='Threads'
         )
         self.parser.add_argument(
+            '-tc',
+            '--thread-cycles',
+            type=int,
+            default=10,
+            required=False,
+            help='Thread Cycles'
+        )
+        self.parser.add_argument(
+            '-ts',
+            '--thread-sleep',
+            type=int,
+            default=500,
+            required=False,
+            help='Thread Sleep'
+        )
+        self.parser.add_argument(
             '-d',
             '--debug',
             action='store_true',
@@ -93,6 +109,8 @@ class BLAPI():
         self.app.config['port'] = self.args.port
         self.app.config['api_key'] = self.args.api_key
         self.app.config['threads'] = self.args.threads
+        self.app.config['thread_cycles'] = self.args.thread_cycles
+        self.app.config['thread_sleep'] = self.args.thread_sleep
 
     def api_init(self):
         with self.app.app_context():

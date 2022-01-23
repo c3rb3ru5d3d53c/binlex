@@ -35,6 +35,12 @@ ExternalProject_Add(
                         -DCAPSTONE_BUILD_SHARED=OFF
                         -DCAPSTONE_BUILD_TESTS=OFF
                         -DCAPSTONE_MIPS_SUPPORT=OFF
+                        -DCAPSTONE_ARM_SUPPORT=OFF
+                        -DCAPSTONE_ARM64_SUPPORT=OFF
+                        -DCAPSTONE_M68K_SUPPORT=OFF
+                        -DCAPSTONE_TMS320C64X_SUPPORT=OFF
+                        -DCAPSTONE_M680X_SUPPORT=OFF
+                        -DCAPSTONE_EVM_SUPPORT=OFF
                         -DCAPSTONE_PPC_SUPPORT=OFF
                         -DCAPSTONE_SPARC_SUPPORT=OFF
                         -DCAPSTONE_SYSZ_SUPPORT=OFF

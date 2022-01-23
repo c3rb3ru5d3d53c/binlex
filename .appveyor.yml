@@ -22,8 +22,7 @@ for:
       - git submodule update --init --recursive
     test_script:
       - make threads=4
-      - python3 -m pip wheel -v .
-      - mv *.whl build/
+      - python3 -m pip wheel -v -w build/ .
       - make pkg
       - make dist
     artifacts:
@@ -32,7 +31,8 @@ for:
       - path: build/*.tar.gz
       - path: build/*.zip
       - path: build/*.whl
-      - path: build/*.so
+      - path: build/pybinlex*.so
+      - path: build/*.so.*
   -
     matrix:
       only:

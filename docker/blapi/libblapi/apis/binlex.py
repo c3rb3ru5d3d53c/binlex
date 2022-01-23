@@ -101,13 +101,12 @@ def decompile_raw(data, architecture, corpus):
         decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_32, 0)
     if architecture == 'x86_64':
         decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_64, 0)
-    decompiler.set_threads(app.config['threads'], 1, 500, 0)
+    decompiler.set_threads(app.config['threads'], app.config['thread_cycles'], app.config['thread_sleep'], 0)
     decompiler.set_mode("raw:x86", 0)
     decompiler.set_file_sha256(sha256(data).hexdigest(), 0)
     decompiler.set_corpus(corpus, 0)
     decompiler.decompile(data, 0, 0)
     traits = decompiler.get_traits()
-    del data
     return traits
 
 def decompile_pe(data, architecture, corpus):
@@ -118,10 +117,7 @@ def decompile_pe(data, architecture, corpus):
         pe.setup(pybinlex.MACHINE_TYPES.IMAGE_FILE_MACHINE_I386)
     if architecture == 'x86_64':
         pe.setup(pybinlex.MACHINE_TYPES.IMAGE_FILE_MACHINE_AMD64)
-    # Something Strange Here
-    result = pe.read_buffer(data)
-    if result is False:
-        return False
+    pe.read_buffer(data)
     sections = pe.get_sections()
     for i in range(0, len(sections)):
         if architecture == 'x86':
@@ -130,12 +126,10 @@ def decompile_pe(data, architecture, corpus):
         if architecture == 'x86_64':
             decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_64, i)
             decompiler.set_mode("pe:x86_64", i)
-        decompiler.set_threads(app.config['threads'], 1, 500, i)
+        decompiler.set_threads(app.config['threads'], app.config['thread_cycles'], app.config['thread_sleep'], 0)
         decompiler.set_corpus(corpus, i)
         decompiler.set_file_sha256(file_hash, i)
-        data = sections[i]['data']
-        offset = sections[i]['offset']
-        decompiler.decompile(data, offset, i)
+        decompiler.decompile(sections[i]['data'], sections[i]['offset'], i)
     traits = decompiler.get_traits()
     return traits
 
@@ -160,10 +154,9 @@ def decompile_elf(data, architecture, corpus):
             decompiler.set_mode("elf:x86_64", i)
         decompiler.set_corpus(corpus, i)
         decompiler.set_file_sha256(file_hash, i)
-        decompiler.set_threads(app.config['threads'], 1, 500, i)
+        decompiler.set_threads(app.config['threads'], app.config['thread_cycles'], app.config['thread_sleep'], i)
         decompiler.decompile(sections[i]['data'], sections[i]['offset'], i)
     traits = decompiler.get_traits()
-    del data
     return traits
 
 @api.route('/version')
@@ -211,7 +204,7 @@ class binlex_pe(Resource):
                 'error': 'decompilation failed'
             }, 400
         if method == 'lex':
-            return traits
+            return traits, 200
         if method == 'store':
             return {
                 'error': 'not implemented'
