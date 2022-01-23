@@ -51,7 +51,9 @@ setup(
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
     ext_modules=[CMakeExtension("pybinlex")],
-    cmdclass={"build_ext": CMakeBuild},
+    cmdclass={
+        "build_ext": CMakeBuild
+    },
     zip_safe=False,
     python_requires=">=3.6",
 )

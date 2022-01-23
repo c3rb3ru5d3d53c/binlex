@@ -365,10 +365,6 @@ The documents will be available at `build/docs/html/index.html`.
 
 # C++ API Example Code
 
-It couldn't be any easier to leverage `binlex` and its C++ API to build your own applications.
-
-See example code below:
-
 ```cpp
 #include <binlex/pe.h>
 #include <binlex/decompiler.h>
@@ -376,22 +372,52 @@ See example code below:
 using namespace binlex;
 
 int main(int argc, char **argv){
-  Pe pe32;
-  if (pe32.Setup(PE_MODE_X86) == false){
+  PE pe32;
+  if (pe32.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_I386) == false){
       return 1;
   }
-  if (pe32.ReadFile(argv[1]) == false){
+  if (pe32.ReadFile("tests/pe/pe.x86") == false){
       return 1;
   }
   Decompiler decompiler;
-  decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
-  for (int i = 0; i < PE_MAX_SECTIONS; i++){
+  for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
       if (pe32.sections[i].data != NULL){
-          decompiler.x86_64(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, i);
+          decompiler.Setup(CS_ARCH_X86, CS_MODE_32, i);
+          decompiler.SetMode("pe:x86", i);
+          decompiler.SetFileSHA256(pe32.hashes.sha256, i);
+          decompiler.SetCorpus("default", i);
+          decompiler.AppendQueue(pe32.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
+          decompiler.Decompile(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, i);
       }
   }
-  decompiler.PrintTraits(args.options.pretty);
+  decompiler.PrintTraits(true);
+  return 0;
 }
+```
+
+# Python API Example Code
+
+```python
+#!/usr/bin/env python
+
+import pybinlex
+from hashlib import sha256
+
+data = open('tests/pe/pe.x86', 'rb').read()
+file_hash = sha256(data).hexdigest()
+pe = pybinlex.PE()
+decompiler = pybinlex.Decompiler()
+pe.setup(pybinlex.MACHINE_TYPES.IMAGE_FILE_MACHINE_I386)
+pe.read_buffer(data)
+sections = pe.get_sections()
+for i in range(0, len(sections)):
+    decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_32, i)
+    decompiler.set_mode("pe:x86", i)
+    decompiler.set_corpus("default", i)
+    decompiler.set_file_sha256(file_hash, i)
+    decompiler.decompile(sections[i]['data'], sections[i]['offset'], i)
+traits = decompiler.get_traits()
+print(json.dumps(traits, indent=4))
 ```
 
 We hope this encourages people to build their own detection solutions based on binary genetic traits.

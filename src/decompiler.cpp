@@ -49,7 +49,7 @@ Decompiler::Decompiler() {
         sections[i].data = NULL;
         sections[i].data_size = 0;
         sections[i].threads = 1;
-        sections[i].thread_cycles = 1;
+        sections[i].thread_cycles = 10;
         sections[i].thread_sleep = 500;
         sections[i].corpus = NULL;
         sections[i].instructions = false;
