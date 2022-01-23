@@ -126,7 +126,7 @@ def decompile_pe(data, architecture, corpus):
     for i in range(0, len(sections)):
         if architecture == 'x86':
             decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_32, i)
-            decompiler.set_mode("pe:x86", 0)
+            decompiler.set_mode("pe:x86", i)
         if architecture == 'x86_64':
             decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_64, i)
             decompiler.set_mode("pe:x86_64", i)
