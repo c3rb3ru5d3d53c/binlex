@@ -3,8 +3,11 @@
 import os
 import sys
 import json
+import pika
+import pymongo
 import datetime
 import argparse
+from pprint import pprint
 from flask import Flask
 from flask_restx import Api
 from libblapi.apis.binlex import api as api_binlex
@@ -42,14 +45,6 @@ class BLAPI():
             type=str,
             default='127.0.0.1',
             help='Server Listen Address',
-            required=False
-        )
-        self.parser.add_argument(
-            '-c',
-            '--connection',
-            type=str,
-            default='mongodb://127.0.0.1',
-            help='MongoDB Connection String',
             required=False
         )
         self.parser.add_argument(
@@ -93,6 +88,112 @@ class BLAPI():
             help='Thread Sleep'
         )
         self.parser.add_argument(
+            '--mongodb-url',
+            type=str,
+            default='mongodb://127.0.0.1:27017',
+            help='MongoDB URL',
+            required=False
+        )
+        self.parser.add_argument(
+            '--mongodb-db',
+            type=str,
+            default='binlex',
+            help='MongoDB Database'
+        )
+        self.parser.add_argument(
+            '--mongodb-tls',
+            action='store_true',
+            default=False,
+            help='MongoDB Enable TLS'
+        )
+        self.parser.add_argument(
+            '--mongodb-tlsallowinvalidcertificates',
+            action='store_true',
+            default=False,
+            help='MongoDB Allow Invalid Certificates'
+        )
+        self.parser.add_argument(
+            '--mongodb-ca',
+            type=str,
+            default=None,
+            help='MongoDB TLS Certificate Authority File'
+        )
+        self.parser.add_argument(
+            '--mongodb-tlsallowinvalidhostnames',
+            action='store_true',
+            default=False,
+            help='MongoDB TLS Allow Invalid Hostnames'
+        )
+        self.parser.add_argument(
+            '--mongodb-key',
+            type=str,
+            default=None,
+            help='MongoDB TLS Client Certificate Key File'
+        )
+        self.parser.add_argument(
+            '--amqp-host',
+            type=str,
+            default='127.0.0.1',
+            required=False,
+            help='RabbitMQ AMQP URL'
+        )
+        self.parser.add_argument(
+            '--amqp-port',
+            type=int,
+            default=5672,
+            required=False,
+            help='RabbitMQ AMQP Port'
+        )
+        self.parser.add_argument(
+            '--amqp-user',
+            type=str,
+            default='admin',
+            required=False,
+            help='RabbitMQ AMQP Username'
+        )
+        self.parser.add_argument(
+            '--amqp-pass',
+            type=str,
+            default='changeme',
+            required=False,
+            help='RabbitMQ AMQP Password'
+        )
+        self.parser.add_argument(
+            '--amqp-tls',
+            action='store_true',
+            default=False,
+            required=False,
+            help='RabitMQ AMQP Enable SSL'
+        )
+        self.parser.add_argument(
+            '--amqp-queue',
+            type=str,
+            default='binlex',
+            required=False,
+            help='RabbitMQ AMQP Queue Name'
+        )
+        self.parser.add_argument(
+            '--amqp-ca',
+            type=str,
+            default=None,
+            required=False,
+            help='RabbitMQ AMQP CAFile'
+        )
+        self.parser.add_argument(
+            '--amqp-cert',
+            type=str,
+            default=None,
+            required=False,
+            help='RabbitMQ AMQP Cert'
+        )
+        self.parser.add_argument(
+            '--amqp-key',
+            type=str,
+            default=None,
+            required=False,
+            help='RabbitMQ AMQP Key'
+        )
+        self.parser.add_argument(
             '-d',
             '--debug',
             action='store_true',
@@ -101,6 +202,39 @@ class BLAPI():
             help='Debug'
         )
         self.args = self.parser.parse_args()
+
+    def mongodb_connect(self):
+        if self.args.mongodb_tls is True:
+            self.mongodb = pymongo.MongoClient(
+                self.args.mongodb_url,
+                tls=self.args.mongodb_tls,
+                tlsCAFile=self.args.mongodb_ca,
+                tlsCertificateKeyFile=self.args.mongodb_key,
+                tlsallowinvalidcertificates=self.args.mongodb_tlsallowinvalidcertificates,
+                tlsallowinvalidhostnames=self.args.mongodb_tlsallowinvalidhostnames)
+        else:
+            self.mongodb = pymongo.MongoClient(self.args.mongodb_url)
+        self.mongodb_db = self.mongodb[self.args.mongodb_db]
+
+    def amqp_connect(self):
+        if self.args.amqp_tls is True:
+            context = ssl.create_default_context(
+                cafile=self.args.amqp_ca)
+            context.load_cert_chain(self.args.amqp_cert, self.args.amqp_key)
+            ssl_options = pika.SSLOptions(context, self.args.amqp_host)
+            conn_params = pika.ConnectionParameters(port=self.args.amqp_port,
+                                                    host=self.args.amqp_host,
+                                                    ssl_options=ssl_options,
+                                                    credentials=pika.credentials.PlainCredentials(
+                                                        username=self.args.amqp_user,
+                                                        password=self.args.amqp_pass))
+        else:
+            conn_params = pika.ConnectionParameters(port=self.args.amqp_port,
+                                                    host=self.args.amqp_host,
+                                                    credentials=pika.credentials.PlainCredentials(
+                                                        username=self.args.amqp_user,
+                                                        password=self.args.amqp_pass))
+        self.amqp = pika.BlockingConnection(conn_params)
 
     def config_init(self):
         self.app.config['host'] = self.args.listen
@@ -111,6 +245,8 @@ class BLAPI():
         self.app.config['threads'] = self.args.threads
         self.app.config['thread_cycles'] = self.args.thread_cycles
         self.app.config['thread_sleep'] = self.args.thread_sleep
+        self.app.config['mongodb_db'] = self.mongodb_db
+        self.app.config['amqp_queue'] = self.args.amqp_queue
 
     def api_init(self):
         with self.app.app_context():
@@ -129,6 +265,7 @@ class BLAPI():
 
     def app_init(self):
         self.arguments()
+        self.mongodb_connect()
         self.config_init()
         self.api_init()
         return self.app
