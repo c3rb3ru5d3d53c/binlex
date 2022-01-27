@@ -24,7 +24,7 @@ threads=4
 
 # RabbitMQ
 brokers=4
-rabbitmq_version=3.9.12
+rabbitmq_version=3.9
 rabbitmq_cookie=$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 32 | head -n 1)
 rabbitmq_port=5672
 rabbitmq_http_port=15672
@@ -34,6 +34,13 @@ blworker_version=1.1.1
 
 blapis=1
 blapi_version=1.1.1
+
+bljupyters=1
+bljupyter_port=8888
+bljupyter_version=1.1.1
+
+DOCKER_UID=$(id -u):$(id -g)
+CWD=$(pwd)
 
 function help_menu(){
     printf "docker.sh - Binlex Production Docker Generator\n";
@@ -305,8 +312,29 @@ function generate_certificates(){
         cat ssl/blapi${i}.crt ssl/blapi${i}.key > ssl/blapi${i}.pem;
     done
 
-    sudo chown 999:999 ssl/*;
-    sudo chmod 600 ssl/*;
+    for i in $(seq 1 $bljupyters); do
+        generate_alt_dns bljupyter${i} > ssl/bljupyter${i}.ext;
+        openssl req \
+            -newkey rsa:4096 \
+            -nodes \
+            -out ssl/bljupyter${i}.csr \
+            -keyout ssl/bljupyter${i}.key \
+            -subj "/CN=bljupyter${i}/OU=binlex-rabbitmq";
+        openssl x509 \
+            -passin pass:${admin_pass} \
+            -sha256 \
+            -req \
+            -days 365 \
+            -in ssl/bljupyter${i}.csr \
+            -CA ssl/binlex-public-ca.pem \
+            -CAkey ssl/binlex-private-ca.pem \
+            -CAcreateserial \
+            -out ssl/bljupyter${i}.crt \
+            -extensions v3_req \
+            -extfile ssl/bljupyter${i}.ext;
+        cat ssl/bljupyter${i}.crt ssl/bljupyter${i}.key > ssl/bljupyter${i}.pem;
+    done
+
 }
 
 if [ ! -d ssl/ ]; then
@@ -318,8 +346,7 @@ mkdir -p scripts/
 
 if [ ! -f replica.key ]; then
     openssl rand -base64 346 > replica.key;
-    sudo chown 999:999 replica.key;
-    sudo chmod 600 replica.key;
+    chmod 600 replica.key
 fi
 
 function compose() {
@@ -332,12 +359,18 @@ function compose() {
             echo "      hostname: mongodb-shard${j}-rep${i}";
             echo "      container_name: mongodb-shard${j}-rep${i}";
             echo "      image: mongo:${mongodb_version}";
+            echo "      build:";
+            echo "          context: docker/mongodb/";
+            echo "          dockerfile: Dockerfile";
+            echo "          args:";
+            echo "              UID: `id -u`";
+            echo "              GID: `id -g`";
             echo "      command: mongod --shardsvr --bind_ip_all --replSet shard${j} --port ${mongodb_port} --dbpath /data/db/ --keyFile /data/replica.key --tlsMode requireTLS --tlsCertificateKeyFile /data/mongodb-shard${j}-rep${i}.pem --tlsCAFile /data/binlex-public-ca.pem";
             echo "      volumes:";
-            echo "          - ./ssl/binlex-client.pem:/data/binlex-client.pem";
-            echo "          - ./ssl/binlex-public-ca.pem:/data/binlex-public-ca.pem";
-            echo "          - ./ssl/mongodb-shard${j}-rep${i}.pem:/data/mongodb-shard${j}-rep${i}.pem";
-            echo "          - ./replica.key:/data/replica.key";
+            echo "          - ./ssl/binlex-client.pem:/data/binlex-client.pem:ro";
+            echo "          - ./ssl/binlex-public-ca.pem:/data/binlex-public-ca.pem:ro";
+            echo "          - ./ssl/mongodb-shard${j}-rep${i}.pem:/data/mongodb-shard${j}-rep${i}.pem:ro";
+            echo "          - ./replica.key:/data/replica.key:ro";
             echo "          - ./data/mongodb-shard${j}-rep${i}/:/data/db/";
         done
     done
@@ -346,12 +379,18 @@ function compose() {
         echo "      hostname: mongodb-config-rep${i}";
         echo "      container_name: mongodb-config-rep${i}";
         echo "      image: mongo:${mongodb_version}";
+        echo "      build:";
+        echo "          context: docker/mongodb/";
+        echo "          dockerfile: Dockerfile";
+        echo "          args:";
+        echo "              UID: `id -u`";
+        echo "              GID: `id -g`";
         echo "      command: mongod --configsvr --bind_ip_all --replSet ${configdb} --port ${mongodb_port} --dbpath /data/db/ --keyFile /data/replica.key --tlsMode requireTLS --tlsCertificateKeyFile /data/mongodb-config-rep${i}.pem --tlsCAFile /data/binlex-public-ca.pem";
         echo "      volumes:";
-        echo "          - ./ssl/binlex-client.pem:/data/binlex-client.pem"
-        echo "          - ./ssl/binlex-public-ca.pem:/data/binlex-public-ca.pem";
-        echo "          - ./ssl/mongodb-config-rep${i}.pem:/data/mongodb-config-rep${i}.pem";
-        echo "          - ./replica.key:/data/replica.key";
+        echo "          - ./ssl/binlex-client.pem:/data/binlex-client.pem:ro"
+        echo "          - ./ssl/binlex-public-ca.pem:/data/binlex-public-ca.pem:ro";
+        echo "          - ./ssl/mongodb-config-rep${i}.pem:/data/mongodb-config-rep${i}.pem:ro";
+        echo "          - ./replica.key:/data/replica.key:ro";
         echo "          - ./data/mongodb-config-rep${i}/:/data/db/";
     done
     for i in $(seq 1 $routers); do
@@ -359,6 +398,12 @@ function compose() {
         echo "      hostname: mongodb-router${i}";
         echo "      container_name: mongodb-router${i}";
         echo "      image: mongo:${mongodb_version}";
+        echo "      build:";
+        echo "          context: docker/mongodb/";
+        echo "          dockerfile: Dockerfile";
+        echo "          args:";
+        echo "              UID: `id -u`";
+        echo "              GID: `id -g`";
         echo -n "      command: mongos --keyFile /data/replica.key --bind_ip_all --port ${mongodb_port} --tlsMode requireTLS --tlsCertificateKeyFile /data/mongodb-router${i}.pem --tlsCAFile /data/binlex-public-ca.pem --configdb ";
         echo -n "\"${configdb}/";
         for j in $(seq 1 $replicas); do
@@ -378,11 +423,18 @@ function compose() {
             echo "          - mongodb-config-rep${j}";
         done
     done
+
     for i in $(seq 1 $brokers); do
         echo "  rabbitmq-broker${i}:";
         echo "      hostname: rabbitmq-broker${i}";
         echo "      container_name: rabbitmq-broker${i}";
         echo "      image: rabbitmq:${rabbitmq_version}-management";
+        echo "      build:";
+        echo "          context: docker/rabbitmq/";
+        echo "          dockerfile: Dockerfile";
+        echo "          args:";
+        echo "              UID: `id -u`";
+        echo "              GID: `id -g`";
         echo "      environment:";
         echo "          RABBITMQ_ERLANG_COOKIE: \"${rabbitmq_cookie}\"";
         echo "          RABBITMQ_DEFAULT_USER: \"${admin_user}\"";
@@ -401,6 +453,7 @@ function compose() {
         echo "          - ./ssl/binlex-public-ca.pem:/config/binlex-public-ca.pem";
         echo "          - ./ssl/binlex-public-ca.crt:/config/binlex-public-ca.crt";
     done
+
     rabbitmq_iter=1;
     mongodb_iter=1;
     for i in $(seq 1 $blworkers); do
@@ -413,10 +466,11 @@ function compose() {
         echo "          dockerfile: Dockerfile";
         echo "      command: blworker --debug --amqp-tls --amqp-queue binlex --amqp-user \"${admin_user}\" --amqp-pass \"${admin_pass}\" --amqp-ca /config/binlex-public-ca.pem --amqp-cert /config/binlex-client.crt --amqp-key /config/binlex-client.key --amqp-port ${rabbitmq_port} --amqp-host rabbitmq-broker${rabbitmq_iter} --mongodb-tls --mongodb-ca /config/binlex-public-ca.pem --mongodb-key /config/binlex-client.pem  --mongodb-url \"mongodb://${admin_user}:${admin_pass}@mongodb-router${mongodb_iter}:${mongodb_port}\"";
         echo "      volumes:";
-        echo "          - ./ssl/binlex-client.crt:/config/binlex-client.crt";
-        echo "          - ./ssl/binlex-client.key:/config/binlex-client.key";
-        echo "          - ./ssl/binlex-client.pem:/config/binlex-client.pem";
-        echo "          - ./ssl/binlex-public-ca.pem:/config/binlex-public-ca.pem";
+        echo "          - ./ssl/:/config/";
+        #echo "          - ./ssl/binlex-client.crt:/config/binlex-client.crt";
+        #echo "          - ./ssl/binlex-client.key:/config/binlex-client.key";
+        #echo "          - ./ssl/binlex-client.pem:/config/binlex-client.pem";
+        #echo "          - ./ssl/binlex-public-ca.pem:/config/binlex-public-ca.pem";
         echo "      depends_on:";
         for j in $(seq 1 $brokers); do
             echo "          - rabbitmq-broker${j}";
@@ -458,6 +512,21 @@ function compose() {
         # for j in $(seq 1 $blworkers); do
         #     echo "          - blworker${j}";
         # done
+    done
+    for i in $(seq 1 $bljupyters); do
+        echo "  bljupyter${i}:";
+        echo "      hostname: bljupyter${i}";
+        echo "      container_name: bljupyter${i}";
+        echo "      image: bljupyter:${bljupyter_version}";
+        echo "      user: ${DOCKER_UID}";
+        echo "      build:";
+        echo "          context: .";
+        echo "          dockerfile: docker/bljupyter/Dockerfile";
+        echo "      ports:";
+        echo "          - `expr ${bljupyter_port} + ${i} - 1`:8888";
+        echo "      volumes:";
+        echo "          - ./ssl/:/ssl/";
+        echo "          - ./:/tf/notebooks";
     done
 }
 

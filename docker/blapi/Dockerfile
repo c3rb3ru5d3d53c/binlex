@@ -7,10 +7,10 @@ COPY . $HOME/binlex/
 
 WORKDIR $HOME/binlex/
 
-RUN apt -qq -y update && \
-    apt install -qq -y build-essential make cmake git
+RUN apt-get -qq -y update && \
+    apt-get install -qq -y build-essential make cmake git
 
-RUN pip install -v -e .
+RUN pip install -v .
 
 WORKDIR $HOME/binlex/docker/blapi/
 

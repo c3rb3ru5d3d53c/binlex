@@ -6,19 +6,19 @@ from hashlib import sha256
 import pybinlex
 
 raw = pybinlex.Raw()
-raw.read_file('tests/raw/raw.x86', 0)
+raw.read_file('raw/raw.x86', 0)
 raw_sections = raw.get_sections()
 pprint(raw_sections)
 
 pe = pybinlex.PE()
 pe.setup(pybinlex.MACHINE_TYPES.IMAGE_FILE_MACHINE_I386)
-pe.read_file('tests/pe/pe.x86')
+pe.read_file('pe/pe.x86')
 pe_sections = pe.get_sections()
 pprint(pe_sections)
 
 elf = pybinlex.ELF()
 elf.setup(pybinlex.ARCH.EM_386)
-elf.read_file('tests/elf/elf.x86')
+elf.read_file('elf/elf.x86')
 elf_sections = elf.get_sections()
 pprint(elf_sections)
 

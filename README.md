@@ -114,19 +114,17 @@ To get started using `pybinlex`:
 ```bash
 virtualenv -p python3 venv
 source venv/bin/activate
-python3 -m pip install -v -e .
+# Install Library
+pip install -v .
+# Build Wheel Package
+pip wheel -v -w build/ .
 python3
 >>> import pybinlex
 ```
 
 If you wish to compile the bindings with `cmake`:
 ```bash
-make threads=4 args="-DBUILD_PYTHON_BINDINGS=true"
-```
-
-For building with `cmake`, some installations may require you to override the `python` version:
-```bash
-make threads=4 args="-DBUILD_PYTHON_BINDINGS=true -DPYBIND11_PYTHON_VERSION=3.8"
+make python
 ```
 
 Please note, we use `pybind11` and support for `python3.9` is experimental.

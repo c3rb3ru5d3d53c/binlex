@@ -3,6 +3,8 @@
 import os
 import re
 import sys
+from shutil import move
+from glob import glob
 import subprocess
 import platform
 from setuptools import Extension, setup
@@ -41,6 +43,13 @@ class CMakeBuild(build_ext):
         subprocess.check_call(
             ["cmake", "--build", "."], cwd=self.build_temp
         )
+        if platform.system() == 'Linux':
+            subprocess.check_call(
+                ["make", "install"], cwd=self.build_temp
+            )
+            subprocess.check_call(
+                ["ldconfig"], cwd=self.build_temp
+            )
 
 setup(
     name="pybinlex",
