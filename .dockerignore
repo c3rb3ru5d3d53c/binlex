@@ -4,3 +4,4 @@ config/**
 data/**
 build/**
 samples/**
+venv/**

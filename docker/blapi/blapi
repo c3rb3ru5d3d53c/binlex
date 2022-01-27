@@ -13,6 +13,7 @@ from flask_restx import Api
 from libblapi.apis.binlex import api as api_binlex
 from libblapi.apis.mongodb import api as api_mongodb
 from libblapi.apis.yara import api as api_yara
+from bson.raw_bson import RawBSONDocument
 
 __version__ = '1.1.1'
 __author__ = '@c3rb3ru5d3d53c'

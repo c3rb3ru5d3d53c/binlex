@@ -134,4 +134,5 @@ clean:
 	rm -f replica.key
 	rm -rf scripts/
 	rm -rf ssl/
+	rm -rf sslusr/
 	rm -rf config/
