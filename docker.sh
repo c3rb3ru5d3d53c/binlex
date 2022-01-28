@@ -564,6 +564,11 @@ function admin_init(){
     echo "});"
 }
 
+function mongodb_createuser(){
+    echo "#!/usr/bin/env bash";
+    echo "docker exec -it mongodb-router1 bash -c \"echo -e 'use binlex;\\ndb.createUser({user:\\\"\$1\\\",pwd:\\\"\$2\\\",roles:[{role:\\\"read\\\",db:\\\"binlex\\\"}],mechanisms:[\\\"SCRAM-SHA-1\\\"]});' | mongosh 127.0.0.1:27017 --tls --tlsCertificateKeyFile /config/binlex-client.pem --tlsCAFile /config/binlex-public-ca.pem --tlsAllowInvalidHostnames -u \\\"${admin_user}\\\" -p \\\"${admin_pass}\\\" --authenticationDatabase admin\""
+}
+
 function db_init(){
     echo "use ${initdb};";
     echo "db.createUser({user:\"${username}\",pwd:\"${password}\",roles:[{role:\"readWrite\",db:\"binlex\"}],mechanisms:[\"SCRAM-SHA-1\"]});"
@@ -693,6 +698,9 @@ chmod +x scripts/init-all.sh
 
 docker_admin_shell > scripts/mongodb-shell.sh
 chmod +x scripts/mongodb-shell.sh
+
+mongodb_createuser > scripts/mongodb-createuser.sh
+chmod +x scripts/mongodb-createuser.sh
 
 mkdir -p config/
 

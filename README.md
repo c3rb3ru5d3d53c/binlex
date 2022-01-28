@@ -141,12 +141,13 @@ sudo systemctl enable docker
 reboot # ensures your user is added to the docker group
 ```
 
+Building:
 ```bash
 make docker        # generate docker-compose.yml and config files
 # NOTE: your generated usernames, passwords and API key will be printed to the screen, SAVE THEM!
 make docker-build  # build the images (can take a long time, go get a coffee!)
 make docker-start  # start the containers
-make docker-init   # all databases and configurations
+make docker-init   # initialize all databases and generated configurations
 make docker-logs   # tail all logs
 ```
 
@@ -161,7 +162,7 @@ Architecture (High Level):
 │ └┬───────┘
 │  │
 │ ┌▼───────┐
-│ │blworker│ (Queue Worker)
+│ │blworker│ (Queue Worker Cluster)
 │ └┬───────┘
 │  │
 │ ┌▼──────┐
@@ -169,7 +170,7 @@ Architecture (High Level):
   └───────┘
 ```
 
-If you wish to change the auto-generated username and passwords, you can run `./docker.sh` with additional parameters.
+If you wish to change the auto-generated initial username and passwords, you can run `./docker.sh` with additional parameters.
 
 To see what parameters are available to you, run `./docker.sh --help`.
 
@@ -183,6 +184,18 @@ To make requests to the API do the following:
 ```bash
 curl --insecure -H "X-API-Key: <your-api-key-here>" https://127.0.0.1/binlex/version
 ```
+
+If you work with a team of malware analysts or malware researchers, you create read-only accounts for them.
+
+This will ensure they can do advanced queries to hunt and write detection signatures.
+
+Adding New Read-Only Users to MongoDB:
+```bash
+cd scripts/
+./mongodb-createuser.sh mongodb-router1 <username> <password>
+```
+
+If you have a VERY large team, you can script creation of these accounts.
 
 # Basic Usage
 
