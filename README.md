@@ -131,57 +131,58 @@ Please note, we use `pybind11` and support for `python3.9` is experimental.
 
 Examples of how to use `pybinlex` can be found in `tests.py`.
 
-**Building the Database:**
+**Building Binlex Servers:**
 
-To get data into the database for `binlex` it uses the following pipeline:
-- `rabbitmq` - A messaging queue cluster
-- `blworker` - A cluster of workers to insert data into MongoDB
-- `mongodb` - A cluster of shards, replicas configs and routers to store and Query Data
-
-This ensures the data has correct relationships and your complex queries can be completed across many servers distributing the load for some insane production environment level work.
-
-Storing your traits from `binlex` could never be easier.
-
-With `./docker.sh`, it will create all MongoDB shards, replicas, config servers, RabbitMQ messaging cluster nodes, and `blworker` containers for you including their tls/ssl certificates.
-
-This is as simple as running three commands:
+Dependencies:
 ```bash
-./docker.sh
-docker-compose up -d
-cd scripts/ && ./init-all.sh
+sudo apt install docker.io make
+sudo usermod -a -G docker $USER
+sudo systemctl enable docker
+reboot # ensures your user is added to the docker group
 ```
 
-If you wish to change the default username and passwords, you can run `docker.sh` with additional parameters.
+```bash
+make docker        # generate docker-compose.yml and config files
+# NOTE: your generated usernames, passwords and API key will be printed to the screen, SAVE THEM!
+make docker-build  # build the images (can take a long time, go get a coffee!)
+make docker-start  # start the containers
+make docker-init   # all databases and configurations
+make docker-logs   # tail all logs
+```
+
+Architecture (High Level):
+```text
+  ┌─────┐
+┌─┤blapi│ (HTTP API)
+│ └┬────┘
+│  │
+│ ┌▼───────┐
+│ │rabbitmq│ (Messaging Queue Cluster)
+│ └┬───────┘
+│  │
+│ ┌▼───────┐
+│ │blworker│ (Queue Worker)
+│ └┬───────┘
+│  │
+│ ┌▼──────┐
+└─►mongodb│ (Traits Database Cluster)
+  └───────┘
+```
+
+If you wish to change the auto-generated username and passwords, you can run `./docker.sh` with additional parameters.
 
 To see what parameters are available to you, run `./docker.sh --help`.
 
-Your connection string per user in this case would be:
-- binlex - `mongodb://binlex:changeme@127.0.0.1/?authSource=binlex` (for trait collection)
-- admin - `mongodb://admin:changeme@127.0.0.1` (for administration)
+Your connection strings for MongoDB per user in this case would be:
+- binlex - `mongodb://binlex:<generated-password>@127.0.0.1/?authSource=binlex` (for trait collection)
+- admin - `mongodb://admin:<generated-password>@127.0.0.1` (for administration)
 
-Adding traits into your database is just as simple as piping your `binlex` output to the utility `rabbitmqadmin`.
+The HTTP API documentation is generated automatically, visit `https://127.0.0.1" in your browser to read.
 
+To make requests to the API do the following:
 ```bash
-build/binlex -m pe:x86 -c malware.emotet -i tests/pe/pe.emotet.x86 --threads 4 | while read i; echo $i | rabbitmqadmin -q --ssl --ssl-insecure --username admin --password changeme --host 127.0.0.1 --port 15672 publish routing_key=binlex; end
+curl --insecure -H "X-API-Key: <your-api-key-here>" https://127.0.0.1/binlex/version
 ```
-
-To play around with the MongoDB shell for advanced queries on your data you do this by running the following command:
-```bash
-cd docker/scripts/
-./mongodb-shell.sh mongodb-router1
-```
-
-This will provide you a MongoDB administrator shell, the data you will be looking for will be in the `binlex` database.
-
-We recommend using `collections` as your main corpus name, so for example the corpus `malware.emotet` would go in the `malware` collection.
-
-By default, `binlex` will use the corpus name `default`, which means you will in this case use the collection `default`.
-
-Using the `default` corpus and collection is a great playground to store traits for initial analysis, while the `malware` and `goodware` corpus a great for long-term and confident storage of traits.
-
-If you have a team of malware analysts you may need to add additional MongoDB and RabbitMQ users.
-
-For that purpose you will need to create new users with the `admin` account and read MongoDB's user and roles management docs [here](https://docs.mongodb.com/manual/tutorial/manage-users-and-roles/).
 
 # Basic Usage
 

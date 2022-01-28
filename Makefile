@@ -1,4 +1,5 @@
 .PHONY: docs
+.PHONY: docker
 
 threads=1
 admin_user=admin
@@ -34,24 +35,28 @@ docs-update:
 	rm -rf docs/html/
 	cp -r build/docs/html/ docs/
 
-database:
-	@cd docker/ && \
-		echo "MONGO_ROOT_USER=${admin_user}" > .env && \
-		echo "MONGO_ROOT_PASSWORD=${admin_pass}" >> .env && \
-		echo "MONGOEXPRESS_LOGIN=${admin_user}" >> .env && \
-		echo "MONGOEXPRESS_PASSWORD=${admin_pass}" >> .env && \
-		echo "REDIS_PASSWORD=${admin_pass}" >> .env && \
-		echo "db.createUser({user:\"${user}\",pwd:\"${pass}\",roles:[{role:\"readWrite\",db:\"binlex\"}],mechanisms:[\"SCRAM-SHA-1\"]});" > .init.js && \
-		cat schema.js >> .init.js && \
-		docker-compose up --no-start
+docker:
+	@./docker.sh
 
-database-start:
-	cd docker/ && \
-		docker-compose up -d
+docker-build:
+	@docker-compose build
 
-database-stop:
-	cd docker && \
-		docker-compose down
+docker-start:
+	@docker-compose up -d
+
+docker-logs:
+	@docker-compose logs -f -t --tail 32
+
+docker-stop:
+	@docker-compose stop
+
+docker-init:
+	@cd scripts/ && \
+		./init-all.sh
+
+mongodb-shell:
+	@cd scripts/ && \
+		./mongodb-shell.sh mongodb-router1
 
 pkg:
 	cd build/ && \
@@ -129,10 +134,9 @@ clean:
 	rm -rf pybinlex.egg-info/
 	rm -f *.so
 	rm -f *.whl
-	rm -rf data/
 	rm -f docker-compose.yml
-	rm -f replica.key
 	rm -rf scripts/
-	rm -rf ssl/
-	rm -rf sslusr/
 	rm -rf config/
+
+clean-data:
+	rm -rf data/
