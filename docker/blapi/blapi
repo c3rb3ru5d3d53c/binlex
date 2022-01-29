@@ -4,16 +4,21 @@ import os
 import sys
 import json
 import pika
+import ssl
+import time
 import pymongo
 import datetime
 import argparse
+import logging
+import configparser
 from pprint import pprint
 from flask import Flask
 from flask_restx import Api
 from libblapi.apis.binlex import api as api_binlex
 from libblapi.apis.mongodb import api as api_mongodb
-from libblapi.apis.yara import api as api_yara
 from bson.raw_bson import RawBSONDocument
+
+logger = logging.getLogger(__name__)
 
 __version__ = '1.1.1'
 __author__ = '@c3rb3ru5d3d53c'
@@ -41,213 +46,67 @@ class BLAPI():
             version=f'v{__version__}'
         )
         self.parser.add_argument(
-            '-l',
-            '--listen',
-            type=str,
-            default='127.0.0.1',
-            help='Server Listen Address',
-            required=False
-        )
-        self.parser.add_argument(
-            '-p',
-            '--port',
-            type=int,
-            default=8080,
-            required=False,
-            help='Server Port'
-        )
-        self.parser.add_argument(
-            '-k',
-            '--api-key',
-            type=str,
-            default='changeme',
-            required=False,
-            help='API Key for Authentication'
-        )
-        self.parser.add_argument(
-            '-t',
-            '--threads',
-            type=int,
-            default=1,
-            required=False,
-            help='Threads'
-        )
-        self.parser.add_argument(
-            '-tc',
-            '--thread-cycles',
-            type=int,
-            default=10,
-            required=False,
-            help='Thread Cycles'
-        )
-        self.parser.add_argument(
-            '-ts',
-            '--thread-sleep',
-            type=int,
-            default=500,
-            required=False,
-            help='Thread Sleep'
-        )
-        self.parser.add_argument(
-            '--mongodb-url',
-            type=str,
-            default='mongodb://127.0.0.1:27017',
-            help='MongoDB URL',
-            required=False
-        )
-        self.parser.add_argument(
-            '--mongodb-db',
-            type=str,
-            default='binlex',
-            help='MongoDB Database'
-        )
-        self.parser.add_argument(
-            '--mongodb-tls',
-            action='store_true',
-            default=False,
-            help='MongoDB Enable TLS'
-        )
-        self.parser.add_argument(
-            '--mongodb-tlsallowinvalidcertificates',
-            action='store_true',
-            default=False,
-            help='MongoDB Allow Invalid Certificates'
-        )
-        self.parser.add_argument(
-            '--mongodb-ca',
-            type=str,
+            '-c',
+            '--config',
             default=None,
-            help='MongoDB TLS Certificate Authority File'
-        )
-        self.parser.add_argument(
-            '--mongodb-tlsallowinvalidhostnames',
-            action='store_true',
-            default=False,
-            help='MongoDB TLS Allow Invalid Hostnames'
-        )
-        self.parser.add_argument(
-            '--mongodb-key',
-            type=str,
-            default=None,
-            help='MongoDB TLS Client Certificate Key File'
-        )
-        self.parser.add_argument(
-            '--amqp-host',
-            type=str,
-            default='127.0.0.1',
-            required=False,
-            help='RabbitMQ AMQP URL'
-        )
-        self.parser.add_argument(
-            '--amqp-port',
-            type=int,
-            default=5672,
-            required=False,
-            help='RabbitMQ AMQP Port'
-        )
-        self.parser.add_argument(
-            '--amqp-user',
-            type=str,
-            default='admin',
-            required=False,
-            help='RabbitMQ AMQP Username'
-        )
-        self.parser.add_argument(
-            '--amqp-pass',
-            type=str,
-            default='changeme',
-            required=False,
-            help='RabbitMQ AMQP Password'
-        )
-        self.parser.add_argument(
-            '--amqp-tls',
-            action='store_true',
-            default=False,
-            required=False,
-            help='RabitMQ AMQP Enable SSL'
-        )
-        self.parser.add_argument(
-            '--amqp-queue',
-            type=str,
-            default='binlex',
-            required=False,
-            help='RabbitMQ AMQP Queue Name'
-        )
-        self.parser.add_argument(
-            '--amqp-ca',
-            type=str,
-            default=None,
-            required=False,
-            help='RabbitMQ AMQP CAFile'
-        )
-        self.parser.add_argument(
-            '--amqp-cert',
-            type=str,
-            default=None,
-            required=False,
-            help='RabbitMQ AMQP Cert'
-        )
-        self.parser.add_argument(
-            '--amqp-key',
-            type=str,
-            default=None,
-            required=False,
-            help='RabbitMQ AMQP Key'
-        )
-        self.parser.add_argument(
-            '-d',
-            '--debug',
-            action='store_true',
-            required=False,
-            default=False,
-            help='Debug'
+            required=True,
+            help='Configuration File'
         )
         self.args = self.parser.parse_args()
 
+    def read_keys(self):
+        self.user_keys = open(self.config['blapi'].get('user_keys'), 'r').read().splitlines()
+        self.admin_keys = open(self.config['blapi'].get('admin_keys'), 'r').read().splitlines()
+
+    def read_config(self, file_path):
+        self.config = configparser.ConfigParser()
+        self.config.read(file_path)
+        self.read_keys()
+
     def mongodb_connect(self):
-        if self.args.mongodb_tls is True:
+        if self.config['mongodb'].getboolean('tls') is True:
             self.mongodb = pymongo.MongoClient(
-                self.args.mongodb_url,
-                tls=self.args.mongodb_tls,
-                tlsCAFile=self.args.mongodb_ca,
-                tlsCertificateKeyFile=self.args.mongodb_key,
-                tlsallowinvalidcertificates=self.args.mongodb_tlsallowinvalidcertificates,
-                tlsallowinvalidhostnames=self.args.mongodb_tlsallowinvalidhostnames)
+                self.config['mongodb'].get('url'),
+                tls=self.config['mongodb'].getboolean('tls'),
+                tlsCAFile=self.config['mongodb'].get('ca'),
+                tlsCertificateKeyFile=self.config['mongodb'].get('key'))
         else:
-            self.mongodb = pymongo.MongoClient(self.args.mongodb_url)
-        self.mongodb_db = self.mongodb[self.args.mongodb_db]
+            self.mongodb = pymongo.MongoClient(self.config['mongodb'].get('url'))
+        self.mongodb_db = self.mongodb[self.config['mongodb'].get('db')]
 
     def amqp_connect(self):
-        if self.args.amqp_tls is True:
+        if self.config['amqp'].getboolean('tls') is True:
             context = ssl.create_default_context(
-                cafile=self.args.amqp_ca)
-            context.load_cert_chain(self.args.amqp_cert, self.args.amqp_key)
-            ssl_options = pika.SSLOptions(context, self.args.amqp_host)
-            conn_params = pika.ConnectionParameters(port=self.args.amqp_port,
-                                                    host=self.args.amqp_host,
+                cafile=self.config['amqp'].get('ca'))
+            context.load_cert_chain(self.config['amqp'].get('cert'), self.config['amqp'].get('key'))
+            ssl_options = pika.SSLOptions(context, self.config['amqp'].get('host'))
+            conn_params = pika.ConnectionParameters(port=self.config['amqp'].getint('port'),
+                                                    host=self.config['amqp'].get('host'),
                                                     ssl_options=ssl_options,
                                                     credentials=pika.credentials.PlainCredentials(
-                                                        username=self.args.amqp_user,
-                                                        password=self.args.amqp_pass))
+                                                        username=self.config['amqp'].get('user'),
+                                                        password=self.config['amqp'].get('pass')))
         else:
-            conn_params = pika.ConnectionParameters(port=self.args.amqp_port,
-                                                    host=self.args.amqp_host,
+            conn_params = pika.ConnectionParameters(port=self.config['amqp'].getint('port'),
+                                                    host=self.config['amqp'].get('host'),
                                                     credentials=pika.credentials.PlainCredentials(
-                                                        username=self.args.amqp_user,
-                                                        password=self.args.amqp_pass))
+                                                        username=self.config['amqp'].get('user'),
+                                                        password=self.config['amqp'].get('pass')))
         self.amqp = pika.BlockingConnection(conn_params)
 
     def config_init(self):
-        self.app.config['host'] = self.args.listen
+        self.app.config['host'] = self.config['blapi'].get('host')
         self.app.config['version'] = __version__
-        self.app.config['debug'] = self.args.debug
-        self.app.config['port'] = self.args.port
-        self.app.config['api_key'] = self.args.api_key
-        self.app.config['threads'] = self.args.threads
-        self.app.config['thread_cycles'] = self.args.thread_cycles
-        self.app.config['thread_sleep'] = self.args.thread_sleep
+        self.app.config['debug'] = self.config['blapi'].getboolean('debug')
+        self.app.config['port'] = self.config['blapi'].getint('port')
+        self.app.config['threads'] = self.config['blapi'].getint('threads')
+        self.app.config['thread_cycles'] = self.config['blapi'].getint('thread_cycles')
+        self.app.config['thread_sleep'] = self.config['blapi'].getint('thread_sleep')
         self.app.config['mongodb_db'] = self.mongodb_db
-        self.app.config['amqp_queue'] = self.args.amqp_queue
+        self.app.config['amqp'] = self.amqp
+        self.app.config['amqp_queue'] = self.config['amqp'].get('queue')
+        self.app.config['user_keys'] = self.user_keys
+        self.app.config['admin_keys'] = self.admin_keys
 
     def api_init(self):
         with self.app.app_context():
@@ -262,22 +121,28 @@ class BLAPI():
             )
             api.add_namespace(api_binlex)
             api.add_namespace(api_mongodb)
-            api.add_namespace(api_yara)
 
     def app_init(self):
         self.arguments()
+        self.read_config(self.args.config)
         self.mongodb_connect()
+        self.amqp_connect()
         self.config_init()
         self.api_init()
         return self.app
 
     def main(self):
-        self.app_init()
-        self.app.run(
-            host=self.args.listen,
-            port=self.args.port,
-            debug=self.args.debug
-        )
+        while True:
+            try:
+                self.app_init()
+                self.app.run(
+                    host=self.config['blapi'].get('host'),
+                    port=self.config['blapi'].getint('port'),
+                    debug=self.config['blapi'].getboolean('debug')
+                )
+            except Exception as error:
+                logger.error(error)
+                time.sleep(10)
 
 if __name__ in '__main__':
     blapi = BLAPI()

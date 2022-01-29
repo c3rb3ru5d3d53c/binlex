@@ -13,11 +13,11 @@ from setuptools.command.build_ext import build_ext
 __version__ = "1.1.1"
 __author__ = "@c3rb3ru5d3d53c"
 
-CMAKE_BUILD_ARGS = [
-    '-DBUILD_PYTHON_BINDINGS=true',
-    '-DPYBIND11_PYTHON_VERSION={version}'.format(
-        version=platform.python_version())
-]
+def get_base_prefix_compat():
+    return getattr(sys, "base_prefix", None) or getattr(sys, "real_prefix", None) or sys.prefix
+
+def in_virtualenv():
+    return get_base_prefix_compat() != sys.prefix
 
 class CMakeExtension(Extension):
     def __init__(self, name, sources=[]):
@@ -43,7 +43,7 @@ class CMakeBuild(build_ext):
         subprocess.check_call(
             ["cmake", "--build", "."], cwd=self.build_temp
         )
-        if platform.system() == 'Linux':
+        if platform.system() == 'Linux' and in_virtualenv() is False:
             subprocess.check_call(
                 ["make", "install"], cwd=self.build_temp
             )

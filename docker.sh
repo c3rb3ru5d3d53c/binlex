@@ -21,6 +21,8 @@ username=binlex
 password=$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 32 | head -n 1)
 
 threads=4
+thread_cycles=10
+thread_sleep=500
 
 # RabbitMQ
 brokers=4
@@ -29,15 +31,19 @@ rabbitmq_cookie=$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 32 | head -n 1)
 rabbitmq_port=5672
 rabbitmq_http_port=15672
 
-blworkers=8
+blworkers=1
 blworker_version=1.1.1
 
 blapis=1
 blapi_version=1.1.1
+blapi_users=1
+blapi_admins=1
+blapi_port=8080
 
 bljupyters=1
 bljupyter_port=8888
 bljupyter_version=1.1.1
+bljupyter_token=$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 32 | head -n 1)
 
 DOCKER_UID=$(id -u):$(id -g)
 CWD=$(pwd)
@@ -467,6 +473,7 @@ function compose() {
             mongodb_iter=$((mongodb_iter+1));
         fi
     done
+
     for i in $(seq 1 $blapis); do
         echo "  blapi${i}:";
         echo "      hostname: blapi${i}";
@@ -475,9 +482,9 @@ function compose() {
         echo "      build:";
         echo "          context: .";
         echo "          dockerfile: docker/blapi/Dockerfile";
-        echo "      command: blapi -l 0.0.0.0 -p 8080 --debug"
+        echo "      command: blapi --config /config/blapi${i}.conf"
         echo "      ports:";
-        echo "          - 8080:8080";
+        echo "          - `expr ${blapi_port} + ${i} - 1`:8080";
         echo "      volumes:";
         echo "          - ./config/:/config/";
         echo "      depends_on:";
@@ -500,6 +507,8 @@ function compose() {
         echo "      build:";
         echo "          context: .";
         echo "          dockerfile: docker/bljupyter/Dockerfile";
+        echo "      environment:";
+        echo "          - JUPYTER_TOKEN=${bljupyter_token}";
         echo "      ports:";
         echo "          - `expr ${bljupyter_port} + ${i} - 1`:8888";
         echo "      volumes:";
@@ -509,6 +518,33 @@ function compose() {
 }
 
 compose > docker-compose.yml
+
+function blapi_config_init(){
+    echo "[blapi]";
+    echo "threads = ${threads}";
+    echo "thread_cycles = ${thread_cycles}";
+    echo "thread_sleep = ${thread_sleep}";
+    echo "debug = no";
+    echo "port = ${blapi_port}";
+    echo "host = 0.0.0.0";
+    echo "user_keys = /config/blapi_user.keys";
+    echo "admin_keys = /config/blapi_admin.keys";
+    echo "[mongodb]";
+    echo "db = binlex";
+    echo "tls = yes";
+    echo "ca = /config/binlex-public-ca.pem";
+    echo "key = /config/binlex-client.pem";
+    echo "url = mongodb://${admin_user}:${admin_pass}@$1:${mongodb_port}";
+    echo "[amqp]";
+    echo "tls = yes";
+    echo "user = ${admin_user}";
+    echo "pass = ${admin_pass}";
+    echo "ca = /config/binlex-public-ca.pem";
+    echo "cert = /config/binlex-client.crt";
+    echo "key = /config/binlex-client.key";
+    echo "port = ${rabbitmq_port}";
+    echo "host = $2";
+}
 
 function rabbitmq_config_init(){
     echo "listeners.tcp = none";
@@ -719,9 +755,38 @@ chmod +x scripts/rabbitmq-init-plugins.sh;
 docker_rabbitmq_policy_init > scripts/rabbitmq-init-policy.sh
 chmod +x scripts/rabbitmq-init-policy.sh
 
+for i in $(seq 1 $blapi_users); do
+    cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 32 | head -n 1 >> config/blapi_user.keys
+done
+
+for i in $(seq 1 $blapi_admins); do
+    cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 32 | head -n 1 >> config/blapi_admin.keys
+done
+
+rabbitmq_iter=1
+mongodb_iter=1
+for i in $(seq 1 $blapis); do
+    blapi_config_init mongodb-router${mongodb_iter} rabbitmq-broker${rabbitmq_iter} > config/blapi${i}.conf
+    if [ ${rabbitmq_iter} -eq $brokers ]; then
+        rabbitmq_iter=1;
+    else
+        rabbitmq_iter=$((rabbitmq_iter+1));
+    fi
+    if [ ${mongodb_iter} -eq $routers ]; then
+        mongodb_iter=1;
+    else
+        mongodb_iter=$((mongodb_iter+1));
+    fi
+done
+
 echo "---BEGIN CREDENTIALS--";
 echo "${admin_user}:${admin_pass}"
 echo "${username}:${password}"
+echo "bljupyter_token:${bljupyter_token}";
+echo "blapi admin keys:";
+cat config/blapi_admin.keys;
+echo "blapi user keys:";
+cat config/blapi_user.keys
 echo "---END CREDENTIALS---";
 
 # if [ ! -f scripts/rabbitmqadmin ]; then
