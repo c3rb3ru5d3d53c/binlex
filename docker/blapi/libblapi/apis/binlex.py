@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import json
-import yara
 import base64
 import logging
 import pybinlex
@@ -11,6 +10,12 @@ from flask import current_app as app
 from flask import request
 from flask_restx import Namespace, Resource, fields
 from pprint import pprint
+from bson import json_util
+from bson.json_util import loads, dumps
+from bson.raw_bson import RawBSONDocument
+from bson.objectid import ObjectId
+import bsonjs
+from libblapi.auth import require_user, require_admin
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +30,9 @@ elf_architectures = ['x86', 'x86_64']
 raw_architectures = ['x86', 'x86_64']
 
 corpra = ['default', 'malware', 'goodware']
+
+def jsonify(data):
+    return json.loads(json.dumps(data, default=json_util.default))
 
 def is_corpus(corpus):
     if corpus in corpra:
@@ -162,59 +170,85 @@ def decompile_elf(data, architecture, corpus):
     traits = decompiler.get_traits()
     return traits
 
+def publish_traits(traits):
+    amqp_channel = app.config['amqp'].channel()
+    amqp_channel.queue_declare(queue=app.config['amqp_queue'])
+    for trait in traits:
+        amqp_channel.basic_publish(exchange='', routing_key=app.config['amqp_queue'], body=json.dumps(trait))
+
 @api.route('/version')
 class binlex_version(Resource):
+    @require_user
     def get(self):
+        """Get the Current Version of Binlex"""
         return {
             'version': pybinlex.__version__
         }
 
 @api.route('/methods')
 class binlex_methods(Resource):
+    @require_user
     def get(self):
+        """Get the List of Supported Methods"""
         return methods
 
 @api.route('/pe/architectures')
 class binlex_pe_architectures(Resource):
+    @require_user
     def get(self):
+        """Get the List of Supported PE Format Architectures"""
         return pe_architectures
 
 @api.route('/elf/architectures')
 class binlex_elf_architectures(Resource):
+    @require_user
     def get(self):
+        """Get the List of Supported ELF Format Architectures"""
         return elf_architectures
 
 @api.route('/raw/architectures')
 class binlex_raw_architectures(Resource):
+    @require_user
     def get(self):
+        """Get the List of Supported RAW Format Architectures"""
         return raw_architectures
 
 @api.route('/corpra')
 class binlex_corpra(Resource):
+    @require_user
     def get(self):
         return corpra
 
 @api.route('/pe/<string:architecture>/<string:method>/<string:corpus>')
 class binlex_pe(Resource):
+    @require_user
     def post(self, method, corpus, architecture):
         """Get PE Traits"""
-        validate = validate_pe(method, corpus, architecture)
-        if validate is not True:
-            return validate
-        traits = decompile_pe(request.data, architecture, corpus)
-        if traits is False:
+        try:
+            validate = validate_pe(method, corpus, architecture)
+            if validate is not True:
+                return validate
+            traits = decompile_pe(request.data, architecture, corpus)
+            if traits is False:
+                return {
+                    'error': 'decompilation failed'
+                }, 400
+            if method == 'lex':
+                return traits, 200
+            if method == 'store':
+                publish_traits(traits)
+                return {
+                    'success': 'traits added to database queue'
+                }, 200
+        except Exception as error:
+            api.logger.error(error)
             return {
-                'error': 'decompilation failed'
-            }, 400
-        if method == 'lex':
-            return traits, 200
-        if method == 'store':
-            return {
-                'error': 'not implemented'
-            }, 404
+                'error': str(error)
+            }, 500
 
 @api.route('/elf/<string:architecture>/<string:method>/<string:corpus>')
 class binlex_elf(Resource):
+    @require_user
     def post(self, method, corpus, architecture):
         """Get ELF Traits"""
         try:
@@ -229,9 +263,10 @@ class binlex_elf(Resource):
             if method == 'lex':
                 return traits
             if method == 'store':
+                publish_traits(traits)
                 return {
-                    'error': 'not implemented'
-                }, 404
+                    'success': 'traits added to database queue'
+                }, 200
         except Exception as error:
             api.logger.error(error)
             return {
@@ -240,6 +275,7 @@ class binlex_elf(Resource):
 
 @api.route('/raw/<string:architecture>/<string:method>/<string:corpus>')
 class binlex_raw(Resource):
+    @require_user
     def post(self, method, corpus, architecture):
         """Get RAW Traits"""
         try:
@@ -250,45 +286,105 @@ class binlex_raw(Resource):
             if method == 'lex':
                 return traits, 200
             if method == 'store':
+                publish_traits(traits)
                 return {
-                    'error': 'not implemented'
-                }, 404
+                    'success': 'traits added to database queue'
+                }, 200
         except Exception as error:
             api.logger.error(error)
             return {
                 'error': str(error)
             }, 500
 
-@api.route('/pe/<string:architecture>/<string:method>/<string:corpus>/yara')
-class binlex_pe_yara(Resource):
-    def post(self, method, corpus, architecture):
-        """Get PE Traits and YARA Matches"""
-        try:
-            data = json.loads(request.data.decode('utf-8'))
-            if 'yara' not in data or 'data' not in data:
+@api.route('/traits/from_files/<string:collection>/<int:limit>/<int:page>')
+class binlex_traits_file(Resource):
+    @require_user
+    def post(self, collection, limit, page):
+        """Get Traits via Files Query"""
+        if collection not in ['default', 'malware', 'goodware']:
                 return {
-                    'error': 'failed to decode json data'
+                    'error': 'collection not supported'
                 }, 400
-        except Exception as error:
+        page = page - 1
+        if page < 0:
             return {
-                'error': 'failed to decode json data'
+                'error': 'page must be greater than 0'
             }, 400
+        if limit <= 0:
+            return {
+                'error': 'limit must be greater than 0'
+            }, 400
+        data = json.loads(request.data)
+        cursor = app.config['mongodb_db']['files']
+        docs = cursor.aggregate(
+           [
+               {
+                    "$match": data
+                },
+                {
+                    "$lookup": {
+                        "from": collection,
+                        "localField": "trait_id",
+                        "foreignField": "_id",
+                        "as": "trait"
+                    }
+                },
+                {
+                    "$unwind": "$trait"
+                },
+                {
+                    "$unset": ["_id", "trait._id", "trait_id"]
+                },
+                {
+                    "$sort": {
+                        "sha256" : 1
+                    }
+                },
+                {
+                    "$skip": page
+                },
+                {
+                    "$limit": limit
+                }
+            ]
+        )
+        results = []
+        for doc in docs:
+            results.append(jsonify(doc))
+        return results
+
+@api.route('/traits/<collection>/<limit>/<page>')
+class binlex_traits(Resource):
+    @require_user
+    def post(self, collection, limit, page):
+        """Get Traits by Trait String"""
         try:
-            rule = yara.compile(source=base64.b64decode(data['yara']).decode('utf-8'))
+            if collection not in ['default', 'malware', 'goodware']:
+                return {
+                    'error': 'collection not supported'
+                }, 400
+            data = json.loads(request.data)
+            cursor = app.config['mongodb_db'][collection]
+            docs = cursor.aggregate(
+            [
+                {
+                        "$match": data
+                    },
+                    {
+                        "$lookup": {
+                            "from": 'files',
+                            "localField": "_id",
+                            "foreignField": "trait_id",
+                            "as": "files"
+                        }
+                    }
+                ]
+            )
+            results = []
+            for doc in docs:
+                results.append(jsonify(doc))
+            return results
         except Exception as error:
             return {
-                'error': 'failed to compile yara signature'
+                'error': str(error)
             }, 400
-        return data, 200
-
-@api.route('/elf/<string:architecture>/<string:method>/<string:corpus>/yara')
-class binlex_elf_yara(Resource):
-    def post(self, method, corpus, architecture):
-        """Get ELF Traits and YARA Matches"""
-        return 'Placeholder'
-
-@api.route('/raw/<string:architecture>/<string:method>/<string:corpus>/yara')
-class binlex_raw_yara(Resource):
-    def post(self, method, corpus, architecture):
-        """Get RAW Traits and YARA Matches"""
-        return 'Placeholder'
