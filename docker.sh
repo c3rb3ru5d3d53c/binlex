@@ -5,6 +5,7 @@
 # Default Options
 compose_version=3.3
 node_version=latest
+
 mongo_express_version=0.54.0
 mongodb_version=5.0.5
 mongodb_sh_version=1.1.8
@@ -24,7 +25,6 @@ threads=4
 thread_cycles=10
 thread_sleep=500
 
-# RabbitMQ
 brokers=4
 rabbitmq_version=3.9
 rabbitmq_cookie=$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 32 | head -n 1)
@@ -44,6 +44,17 @@ bljupyters=1
 bljupyter_port=8888
 bljupyter_version=1.1.1
 bljupyter_token=$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 32 | head -n 1)
+
+minios=4
+minio_version=RELEASE.2022-01-28T02-28-16Z
+minio_api_port=9000
+minio_console_port=9001
+minio_root_user=admin
+minio_root_password=$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 32 | head -n 1)
+
+# prom/prometheus
+prometheus_version=v2.33.0
+prometheus_port=9090
 
 DOCKER_UID=$(id -u):$(id -g)
 CWD=$(pwd)
@@ -341,6 +352,29 @@ function generate_certificates(){
         cat config/bljupyter${i}.crt config/bljupyter${i}.key > config/bljupyter${i}.pem;
     done
 
+    for i in $(seq 1 $minios); do
+        generate_alt_dns minio${i} > config/minio${i}.ext;
+        openssl req \
+            -newkey rsa:4096 \
+            -nodes \
+            -out config/minio${i}.csr \
+            -keyout config/minio${i}.key \
+            -subj "/CN=minio${i}/OU=binlex-minio";
+        openssl x509 \
+            -passin pass:${admin_pass} \
+            -sha256 \
+            -req \
+            -days 365 \
+            -in config/minio${i}.csr \
+            -CA config/binlex-public-ca.pem \
+            -CAkey config/binlex-private-ca.pem \
+            -CAcreateserial \
+            -out config/minio${i}.crt \
+            -extensions v3_req \
+            -extfile config/minio${i}.ext;
+        cat config/minio${i}.crt config/minio${i}.key > config/minio${i}.pem;
+    done
+
 }
 
 if [ ! -d config/ ]; then
@@ -515,9 +549,58 @@ function compose() {
         echo "          - ./config/:/config/";
         echo "          - ./:/tf/notebooks";
     done
+    minio_port_iter=1
+    for i in $(seq 1 $minios); do
+        echo "  minio${i}:";
+        echo "      hostname: minio${i}";
+        echo "      container_name: minio${i}";
+        echo "      image: minio/minio:${minio_version}";
+        echo "      environment:";
+        echo "          - MINIO_ROOT_USER=${minio_root_user}";
+        echo "          - MINIO_ROOT_PASSWORD=${minio_root_password}";
+        echo "          - MINIO_SERVER_URL=https://minio1:${minio_api_port}";
+        echo "          - MINIO_PROMETHEUS_AUTH_TYPE=public";
+        echo "          - MINIO_PROMETHEUS_URL=http://prometheus:${prometheus_port}";
+        echo "      command: server https://minio{1...$minios}/data --address :${minio_api_port} --console-address :${minio_console_port}";
+        echo "      ports:";
+        echo "          - `expr ${minio_api_port} + ${minio_port_iter} - 1`:${minio_api_port}";
+        echo "          - `expr ${minio_console_port} + ${minio_port_iter} - 1`:${minio_console_port}";
+        echo "      volumes:";
+        echo "      - ./config/binlex-public-ca.pem:/root/.minio/certs/CAs/public.crt";
+        echo "      - ./config/minio${i}.crt:/root/.minio/certs/public.crt";
+        echo "      - ./config/minio${i}.key:/root/.minio/certs/private.key";
+        echo "      - ./config/:/config/";
+        echo "      - ./data/minio${i}:/data/";
+        minio_port_iter=$((minio_port_iter+2));
+    done
+
+    echo "  prometheus:";
+    echo "      hostname: prometheus";
+    echo "      container_name: prometheus";
+    echo "      image: prom/prometheus:${prometheus_version}";
+    echo "      ports:";
+    echo "          - ${prometheus_port}:${prometheus_port}";
+    echo "      volumes:";
+    echo "          - ./config/prometheus.yml:/etc/prometheus/prometheus.yml";
+    echo "          - ./config/:/config/";
 }
 
 compose > docker-compose.yml
+
+function prometheus_config_init(){
+    echo "scrape_configs:";
+    echo "  - job_name: minio";
+    echo "    scheme: https";
+    echo "    metrics_path: /minio/prometheus/metrics";
+    echo "    static_configs:";
+    echo -n "      - targets: ["
+    for i in $(seq 1 $minios); do
+        echo -n "'minio${i}:${minio_api_port}',";
+    done | sed 's/\,$//'
+    echo "]";
+    echo "    tls_config:";
+    echo "      ca_file: /config/binlex-public-ca.pem";
+}
 
 function blapi_config_init(){
     echo "[blapi]";
@@ -779,9 +862,13 @@ for i in $(seq 1 $blapis); do
     fi
 done
 
+prometheus_config_init > config/prometheus.yml
+
 echo "---BEGIN CREDENTIALS--";
-echo "${admin_user}:${admin_pass}"
-echo "${username}:${password}"
+echo "${admin_user}:${admin_pass}";
+echo "${username}:${password}";
+echo "minio_root_user:${minio_root_user}";
+echo "minio_root_password:${minio_root_password}";
 echo "bljupyter_token:${bljupyter_token}";
 echo "blapi admin keys:";
 cat config/blapi_admin.keys;
