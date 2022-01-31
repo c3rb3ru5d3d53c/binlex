@@ -6,6 +6,7 @@ import json
 import pika
 import ssl
 import time
+import urllib3
 import pymongo
 import datetime
 import argparse
@@ -17,6 +18,7 @@ from flask_restx import Api
 from libblapi.apis.binlex import api as api_binlex
 from libblapi.apis.mongodb import api as api_mongodb
 from bson.raw_bson import RawBSONDocument
+from libblapi.minio import MinIOHandler
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +96,9 @@ class BLAPI():
                                                         password=self.config['amqp'].get('pass')))
         self.amqp = pika.BlockingConnection(conn_params)
 
+    def minio_connect(self):
+        self.minio = MinIOHandler(self.config)
+
     def config_init(self):
         self.app.config['host'] = self.config['blapi'].get('host')
         self.app.config['version'] = __version__
@@ -107,6 +112,7 @@ class BLAPI():
         self.app.config['amqp_queue'] = self.config['amqp'].get('queue')
         self.app.config['user_keys'] = self.user_keys
         self.app.config['admin_keys'] = self.admin_keys
+        self.app.config['minio'] = self.minio
 
     def api_init(self):
         with self.app.app_context():
@@ -127,6 +133,7 @@ class BLAPI():
         self.read_config(self.args.config)
         self.mongodb_connect()
         self.amqp_connect()
+        self.minio_connect()
         self.config_init()
         self.api_init()
         return self.app

@@ -7,7 +7,7 @@ import pybinlex
 from hashlib import sha256
 from flask import Blueprint
 from flask import current_app as app
-from flask import request
+from flask import request, make_response
 from flask_restx import Namespace, Resource, fields
 from pprint import pprint
 from bson import json_util
@@ -219,6 +219,35 @@ class binlex_corpra(Resource):
     def get(self):
         return corpra
 
+@api.route('/samples/<string:corpus>/<string:sha256>')
+class binlex_samples(Resource):
+    @require_user
+    def get(self, corpus, sha256):
+        """Download Sample from Corpus"""
+        try:
+            response = app.config['minio'].download(
+                bucket_name=corpus,
+                object_name=sha256)
+            response = make_response(response.data)
+            response.headers['Content-Type'] = 'application/octet-stream'
+            return response
+        except Exception as error:
+            return '', 204
+    @require_admin
+    def delete(self, corpus, sha256):
+        """Delete Sample from Corpus"""
+        try:
+            response = app.config['minio'].delete(
+                bucket_name=corpus,
+                object_name=sha256)
+            return {
+                'success': 'sample deleted'
+            }
+        except Exception as error:
+            return {
+                'error': 'file does not exist'
+            }, 404
+
 @api.route('/pe/<string:architecture>/<string:method>/<string:corpus>')
 class binlex_pe(Resource):
     @require_user
@@ -237,6 +266,9 @@ class binlex_pe(Resource):
                 return traits, 200
             if method == 'store':
                 publish_traits(traits)
+                app.config['minio'].upload(
+                    bucket_name=corpus,
+                    data=request.data)
                 return {
                     'success': 'traits added to database queue'
                 }, 200
@@ -264,6 +296,9 @@ class binlex_elf(Resource):
                 return traits
             if method == 'store':
                 publish_traits(traits)
+                app.config['minio'].upload(
+                    bucket_name=corpus,
+                    data=request.data)
                 return {
                     'success': 'traits added to database queue'
                 }, 200
@@ -287,6 +322,9 @@ class binlex_raw(Resource):
                 return traits, 200
             if method == 'store':
                 publish_traits(traits)
+                app.config['minio'].upload(
+                    bucket_name=corpus,
+                    data=request.data)
                 return {
                     'success': 'traits added to database queue'
                 }, 200

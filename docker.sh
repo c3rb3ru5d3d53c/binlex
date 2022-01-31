@@ -556,8 +556,8 @@ function compose() {
         echo "      container_name: minio${i}";
         echo "      image: minio/minio:${minio_version}";
         echo "      environment:";
-        echo "          - MINIO_ROOT_USER=${minio_root_user}";
-        echo "          - MINIO_ROOT_PASSWORD=${minio_root_password}";
+        echo "          - MINIO_ROOT_USER=${admin_user}";
+        echo "          - MINIO_ROOT_PASSWORD=${admin_pass}";
         echo "          - MINIO_SERVER_URL=https://minio1:${minio_api_port}";
         echo "          - MINIO_PROMETHEUS_AUTH_TYPE=public";
         echo "          - MINIO_PROMETHEUS_URL=http://prometheus:${prometheus_port}";
@@ -627,6 +627,13 @@ function blapi_config_init(){
     echo "key = /config/binlex-client.key";
     echo "port = ${rabbitmq_port}";
     echo "host = $2";
+    echo "[minio]";
+    echo "tls = yes";
+    echo "host = $3";
+    echo "port = ${minio_api_port}";
+    echo "user = ${admin_user}";
+    echo "pass = ${admin_pass}";
+    echo "ca = /config/binlex-public-ca.pem";
 }
 
 function rabbitmq_config_init(){
@@ -846,10 +853,11 @@ for i in $(seq 1 $blapi_admins); do
     cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 32 | head -n 1 >> config/blapi_admin.keys
 done
 
+minio_iter=1
 rabbitmq_iter=1
 mongodb_iter=1
 for i in $(seq 1 $blapis); do
-    blapi_config_init mongodb-router${mongodb_iter} rabbitmq-broker${rabbitmq_iter} > config/blapi${i}.conf
+    blapi_config_init mongodb-router${mongodb_iter} rabbitmq-broker${rabbitmq_iter} minio${minio_iter}> config/blapi${i}.conf
     if [ ${rabbitmq_iter} -eq $brokers ]; then
         rabbitmq_iter=1;
     else
@@ -860,6 +868,11 @@ for i in $(seq 1 $blapis); do
     else
         mongodb_iter=$((mongodb_iter+1));
     fi
+    if [ ${minio_iter} -eq $minios ]; then
+        minio_iter=1;
+    else
+        minio_iter=$((minio_iter+1));
+    fi
 done
 
 prometheus_config_init > config/prometheus.yml
@@ -867,8 +880,6 @@ prometheus_config_init > config/prometheus.yml
 echo "---BEGIN CREDENTIALS--";
 echo "${admin_user}:${admin_pass}";
 echo "${username}:${password}";
-echo "minio_root_user:${minio_root_user}";
-echo "minio_root_password:${minio_root_password}";
 echo "bljupyter_token:${bljupyter_token}";
 echo "blapi admin keys:";
 cat config/blapi_admin.keys;
