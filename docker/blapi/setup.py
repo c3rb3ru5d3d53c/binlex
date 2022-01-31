@@ -27,7 +27,8 @@ setup(
         'pika==1.2.0',
         'flask-restx==0.5.1',
         'yara-python==4.1.3',
-        'python-bsonjs==0.3.0'
+        'python-bsonjs==0.3.0',
+        'minio==7.1.2'
     ],
     scripts=['blapi'],
     packages=find_packages(),
