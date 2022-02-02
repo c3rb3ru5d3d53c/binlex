@@ -257,6 +257,7 @@ class binlex_pe(Resource):
             validate = validate_pe(method, corpus, architecture)
             if validate is not True:
                 return validate
+            print('decompile')
             traits = decompile_pe(request.data, architecture, corpus)
             if traits is False:
                 return {
@@ -265,7 +266,9 @@ class binlex_pe(Resource):
             if method == 'lex':
                 return traits, 200
             if method == 'store':
+                print('publish')
                 publish_traits(traits)
+                print('upload')
                 app.config['minio'].upload(
                     bucket_name=corpus,
                     data=request.data)
