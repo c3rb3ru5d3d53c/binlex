@@ -12,6 +12,6 @@ RUN apt-get -qq -y update && \
 
 RUN python -m pip install -v .
 
-RUN pip install jupyterthemes && jt -t monokai
+RUN pip install pymongo==4.0.1 pika==1.2.0 minio==7.1.2
 
 CMD jupyter notebook --ip 0.0.0.0 --port 8888 --no-browser --notebook-dir=/tf/notebooks/
