@@ -54,6 +54,11 @@ docker-init:
 	@cd scripts/ && \
 		./init-all.sh
 
+docker-clean:
+	@docker stop $(shell docker ps -a -q) 2>/dev/null || echo > /dev/null
+	@docker rm $(shell docker ps -a -q) 2>/dev/null || echo > /dev/null
+	@docker rmi $(shell docker images -a -q) 2>/dev/null || echo > /dev/null
+
 mongodb-shell:
 	@cd scripts/ && \
 		./mongodb-shell.sh mongodb-router1

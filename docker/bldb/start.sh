@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
 while true; do
-    bldec --config /startup/bldec.conf;
+    bldb --config /startup/bldb.conf;
     sleep 10;
 done

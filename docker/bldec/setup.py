@@ -21,13 +21,8 @@ setup(
     description='A Binlex Decompile Worker',
     long_description=long_description,
     long_description_content_type='text/markdown',
-    install_requires=[
-        'libblapi==1.1.1',
-        'pybinlex==1.1.1'
-    ],
+    install_requires=[],
     scripts=['bldec'],
-    packages=find_packages(),
-    include_package_data=True,
     classifiers=[
         "Programming Language :: Python",
         "Operating System :: OS Independent",

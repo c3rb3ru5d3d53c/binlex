@@ -20,10 +20,8 @@ setup(
     description='A Binlex MongoDB Database Worker',
     long_description=long_description,
     long_description_content_type='text/markdown',
-    install_requires=[
-        'pika==1.2.0',
-        'pymongo==4.0.1'
-    ],
+    install_requires=[],
+    zip_safe=False,
     scripts=['bldb'],
     include_package_data=True,
     classifiers=[
