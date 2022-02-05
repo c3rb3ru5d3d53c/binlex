@@ -144,7 +144,7 @@ reboot # ensures your user is added to the docker group
 Building:
 ```bash
 make docker        # generate docker-compose.yml and config files
-# NOTE: your generated usernames, passwords and API key will be printed to the screen, SAVE THEM!
+# Your generated credentials will be printed to the screen and saved in config/credentials.txt
 make docker-build  # build the images (can take a long time, go get a coffee!)
 make docker-start  # start the containers
 make docker-init   # initialize all databases and generated configurations
@@ -153,21 +153,29 @@ make docker-logs   # tail all logs
 
 Architecture (High Level):
 ```text
-  ┌─────┐
-┌─┤blapi│ (HTTP API)
-│ └┬────┘
-│  │
-│ ┌▼───────┐
-│ │rabbitmq│ (Messaging Queue Cluster)
-│ └┬───────┘
-│  │
-│ ┌▼───────┐
-│ │blworker│ (Queue Worker Cluster)
-│ └┬───────┘
-│  │
-│ ┌▼──────┐
-└─►mongodb│ (Traits Database Cluster)
-  └───────┘
+    ┌─────┐
+┌─┬─►blapi│        (HTTP API)
+│ │ └─────┘
+│ │
+│ │ ┌─────┐
+│ ├─►bldec│        (decompile cluster)
+│ │ └─────┘
+│ │
+│ │ ┌────┐
+│ │ │bldb◄─────┬─┐ (database insert cluster)
+│ │ └────┘     │ │
+│ │            │ │
+│ │ ┌─────┐    │ │
+│ ├─►minio◄────┼─┤ (object store cluster)
+│ │ └─────┘    │ │
+│ │            │ │
+│ │ ┌────────┐ │ │
+│ └─►rabbitmq◄─┘ │ (messaging queue cluster)
+│   └────────┘   │
+│                │
+│   ┌───────┐    │
+└───►mongodb◄────┘ (document database cluster)
+    └───────┘
 ```
 
 If you wish to change the auto-generated initial username and passwords, you can run `./docker.sh` with additional parameters.

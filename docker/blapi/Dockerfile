@@ -3,18 +3,19 @@ FROM python:3.8
 ENV LC_ALL=C
 ENV DEBIAN_FRONTEND=noninteractive
 
-COPY . $HOME/binlex/
+COPY . /opt/binlex/
 
-WORKDIR $HOME/binlex/
+WORKDIR /opt/binlex/
 
 RUN apt-get -qq -y update && \
-    apt-get install -qq -y build-essential make cmake git
+    apt-get install -qq -y build-essential make cmake git uwsgi uwsgi-plugin-python3
 
-RUN pip install -v .
-
-WORKDIR $HOME/binlex/docker/blapi/
+WORKDIR /opt/binlex/lib/python/libblapi/
 
 RUN ./setup.py install
 
-CMD touch /var/log/blapi.log && \
-    tail -f /var/log/blapi.log
+WORKDIR /opt/binlex/docker/blapi/
+
+RUN ./setup.py install
+
+CMD ["./start.sh"]

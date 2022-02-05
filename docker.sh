@@ -647,7 +647,8 @@ function bldec_config_init(){
     echo "thread_sleep = ${thread_sleep}";
     echo "[amqp]";
     echo "tls = yes";
-    echo "traits_queue = binlex_traits";
+    echo "traits_queue = bltraits";
+    echo "decomp_queue = bldecomp";
     echo "user = ${admin_user}";
     echo "pass = ${admin_pass}";
     echo "ca = /config/binlex-public-ca.pem";
@@ -673,7 +674,7 @@ function bldb_config_init(){
     echo "url = mongodb://${admin_user}:${admin_pass}@$1:${mongodb_port}";
     echo "[amqp]";
     echo "tls = yes";
-    echo "traits_queue = binlex_traits";
+    echo "traits_queue = bltraits";
     echo "user = ${admin_user}";
     echo "pass = ${admin_pass}";
     echo "ca = /config/binlex-public-ca.pem";
@@ -685,9 +686,6 @@ function bldb_config_init(){
 
 function blapi_config_init(){
     echo "[blapi]";
-    echo "threads = ${threads}";
-    echo "thread_cycles = ${thread_cycles}";
-    echo "thread_sleep = ${thread_sleep}";
     echo "debug = no";
     echo "port = ${blapi_port}";
     echo "host = 0.0.0.0";
@@ -703,6 +701,8 @@ function blapi_config_init(){
     echo "tls = yes";
     echo "user = ${admin_user}";
     echo "pass = ${admin_pass}";
+    echo "traits_queue = bltraits";
+    echo "decomp_queue = bldecomp";
     echo "ca = /config/binlex-public-ca.pem";
     echo "cert = /config/binlex-client.crt";
     echo "key = /config/binlex-client.key";
@@ -715,6 +715,22 @@ function blapi_config_init(){
     echo "user = ${admin_user}";
     echo "pass = ${admin_pass}";
     echo "ca = /config/binlex-public-ca.pem";
+}
+
+function blapi_uwsgi_config_init(){
+    echo "[uwsgi]";
+    echo "uwsgi-file = blapi";
+    echo "plugins = python3";
+    echo "pyargv=--config /startup/blapi.conf";
+    echo "callable = app";
+    echo "protocol = http";
+    echo "socket = 0.0.0.0:${blapi_port}";
+    echo "processes = 8";
+    echo "threads = ${threads}";
+    echo "master = true";
+    echo "chmod-socket = 660";
+    echo "vacuum = true";
+    echo "die-on-term = true";
 }
 
 function rabbitmq_config_init(){
@@ -955,6 +971,8 @@ for i in $(seq 1 $blapis); do
         minio_iter=$((minio_iter+1));
     fi
 done
+
+blapi_uwsgi_config_init > config/blapi_uwsgi.conf
 
 rabbitmq_iter=1
 mongodb_iter=1

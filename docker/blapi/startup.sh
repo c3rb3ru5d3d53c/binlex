@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
 while true; do
-    blapi --config /startup/blapi.conf;
+    uwsgi --ini /config/blapi_uwsgi.ini
     sleep 10;
 done
