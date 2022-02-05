@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os
+from glob import glob
 try:
     from setuptools import setup, find_packages
 except ImportError:
@@ -14,18 +15,18 @@ with open(os.path.join(this_directory, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
-    name='blworker',
+    name='libblapi',
     version=__version__,
     maintainer=__author__,
-    description='A Binlex MongoDB Database Worker',
+    description='A Binlex API Python Library',
     long_description=long_description,
     long_description_content_type='text/markdown',
     install_requires=[
         'pika==1.2.0',
+        'minio==7.1.2',
         'pymongo==4.0.1'
     ],
-    scripts=['blworker'],
-    include_package_data=True,
+    packages=find_packages(),
     classifiers=[
         "Programming Language :: Python",
         "Operating System :: OS Independent",
