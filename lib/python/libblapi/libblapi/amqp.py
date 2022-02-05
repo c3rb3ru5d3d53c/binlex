@@ -32,7 +32,7 @@ class AMQPHandler():
 
     def publish(self, queue, body):
         amqp_channel = self.amqp.channel()
-        amqp_channel.queue_declare(queue=self.traits_queue)
+        amqp_channel.queue_declare(queue=queue)
         amqp_channel.basic_publish(exchange='', routing_key=queue, body=body)
 
     def consume(self, queue, callback):

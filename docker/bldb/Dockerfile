@@ -1,10 +1,13 @@
-from python:3.8
+FROM python:3.8
 
-ADD ./* $HOME/blworker/
+COPY . /opt/binlex/
 
-WORKDIR $HOME/blworker/
+WORKDIR /opt/binlex/lib/python/libblapi/
 
 RUN ./setup.py install
 
-CMD touch /var/log/blworker.log && \
-    tail -f /var/log/blworker.log
+WORKDIR /opt/binlex/docker/bldb/
+
+RUN ./setup.py install
+
+CMD ["./start.sh"]

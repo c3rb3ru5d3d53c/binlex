@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
 while true; do
-    bldec --config /startup/bldec.conf;
+    blapi --config /startup/blapi.conf;
     sleep 10;
 done

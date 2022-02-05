@@ -63,15 +63,15 @@ class MongoDBHandler():
         )
         results = []
         for doc in docs:
-            results.append(jsonify(doc))
+            results.append(self.jsonify(doc))
         return results
 
     def query_doc_id(self, collection, id):
         cursor = self.cursor[collection]
-        result = collection.find_one({'_id': ObjectId(id)})
-        return jsonify(result)
+        result = cursor.find_one({'_id': ObjectId(id)})
+        return self.jsonify(result)
 
-    def collection_count(self, collection):
+    def stats_collection_count(self, collection):
         cursor = self.cursor[collection]
         count = cursor.count_documents({})
         return count

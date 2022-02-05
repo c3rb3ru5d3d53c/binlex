@@ -2,28 +2,27 @@
 
 import os
 import sys
-import ssl
-import pika
 import time
 import json
-import pymongo
 import logging
 import argparse
-from pprint import pprint
+from libblapi.mongodb import MongoDBHandler
+from libblapi.amqp import AMQPHandler
+import configparser
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 __version__ = '1.1.1'
 __author__ = '@c3rb3ru5d3d53c'
 
-class BLWorker():
+class BLDB():
 
     """
     A Binlex Database Worker
     """
 
     def __init__(self):
-        pass
+        self.config = configparser.ConfigParser()
 
     def arguments(self):
         self.parser = argparse.ArgumentParser(
@@ -37,171 +36,17 @@ class BLWorker():
             version=f'v{__version__}'
         )
         self.parser.add_argument(
-            '--mongodb-url',
-            type=str,
-            default='mongodb://127.0.0.1:27017',
-            help='MongoDB URL',
-            required=False
-        )
-        self.parser.add_argument(
-            '--mongodb-db',
-            type=str,
-            default='binlex',
-            help='MongoDB Database'
-        )
-        self.parser.add_argument(
-            '--mongodb-tls',
-            action='store_true',
-            default=False,
-            help='MongoDB Enable TLS'
-        )
-        self.parser.add_argument(
-            '--mongodb-tlsallowinvalidcertificates',
-            action='store_true',
-            default=False,
-            help='MongoDB Allow Invalid Certificates'
-        )
-        self.parser.add_argument(
-            '--mongodb-ca',
+            '-c',
+            '--config',
             type=str,
             default=None,
-            help='MongoDB TLS Certificate Authority File'
-        )
-        self.parser.add_argument(
-            '--mongodb-tlsallowinvalidhostnames',
-            action='store_true',
-            default=False,
-            help='MongoDB TLS Allow Invalid Hostnames'
-        )
-        self.parser.add_argument(
-            '--mongodb-key',
-            type=str,
-            default=None,
-            help='MongoDB TLS Client Certificate Key File'
-        )
-        self.parser.add_argument(
-            '--amqp-host',
-            type=str,
-            default='127.0.0.1',
-            required=False,
-            help='RabbitMQ AMQP URL'
-        )
-        self.parser.add_argument(
-            '--amqp-port',
-            type=int,
-            default=5672,
-            required=False,
-            help='RabbitMQ AMQP Port'
-        )
-        self.parser.add_argument(
-            '--amqp-user',
-            type=str,
-            default='admin',
-            required=False,
-            help='RabbitMQ AMQP Username'
-        )
-        self.parser.add_argument(
-            '--amqp-pass',
-            type=str,
-            default='changeme',
-            required=False,
-            help='RabbitMQ AMQP Password'
-        )
-        self.parser.add_argument(
-            '--amqp-tls',
-            action='store_true',
-            default=False,
-            required=False,
-            help='RabitMQ AMQP Enable SSL'
-        )
-        self.parser.add_argument(
-            '--amqp-queue',
-            type=str,
-            default='binlex',
-            required=False,
-            help='RabbitMQ AMQP Queue Name'
-        )
-        self.parser.add_argument(
-            '--amqp-ca',
-            type=str,
-            default=None,
-            required=False,
-            help='RabbitMQ AMQP CAFile'
-        )
-        self.parser.add_argument(
-            '--amqp-cert',
-            type=str,
-            default=None,
-            required=False,
-            help='RabbitMQ AMQP Cert'
-        )
-        self.parser.add_argument(
-            '--amqp-key',
-            type=str,
-            default=None,
-            required=False,
-            help='RabbitMQ AMQP Key'
-        )
-        self.parser.add_argument(
-            '-d',
-            '--debug',
-            action='store_true',
-            required=False,
-            default=False,
-            help='Debug'
-        )
-        self.parser.add_argument(
-            '-l',
-            '--log',
-            type=str,
-            default=None,
-            required=False,
-            help='Log to File'
+            help='Configuration File',
+            required=True
         )
         self.args = self.parser.parse_args()
-
-    def mongodb_connect(self):
-        if self.args.mongodb_tls is True:
-            self.mongodb = pymongo.MongoClient(
-                self.args.mongodb_url,
-                tls=self.args.mongodb_tls,
-                tlsCAFile=self.args.mongodb_ca,
-                tlsCertificateKeyFile=self.args.mongodb_key,
-                tlsallowinvalidcertificates=self.args.mongodb_tlsallowinvalidcertificates,
-                tlsallowinvalidhostnames=self.args.mongodb_tlsallowinvalidhostnames)
-        else:
-            self.mongodb = pymongo.MongoClient(self.args.mongodb_url)
-        self.mongodb_db = self.mongodb[self.args.mongodb_db]
-
-    def amqp_connect(self):
-        if self.args.amqp_tls is True:
-            context = ssl.create_default_context(
-                cafile=self.args.amqp_ca)
-            context.load_cert_chain(self.args.amqp_cert, self.args.amqp_key)
-            ssl_options = pika.SSLOptions(context, self.args.amqp_host)
-            conn_params = pika.ConnectionParameters(port=self.args.amqp_port,
-                                                    host=self.args.amqp_host,
-                                                    ssl_options=ssl_options,
-                                                    credentials=pika.credentials.PlainCredentials(
-                                                        username=self.args.amqp_user,
-                                                        password=self.args.amqp_pass))
-        else:
-            conn_params = pika.ConnectionParameters(port=self.args.amqp_port,
-                                                    host=self.args.amqp_host,
-                                                    credentials=pika.credentials.PlainCredentials(
-                                                        username=self.args.amqp_user,
-                                                        password=self.args.amqp_pass))
-        self.amqp = pika.BlockingConnection(conn_params)
-
-    def consume(self):
-        try:
-            self.amqp_channel = self.amqp.channel()
-            self.amqp_channel.queue_declare(queue=self.args.amqp_queue)
-            self.amqp_channel.basic_consume(queue=self.args.amqp_queue, on_message_callback=self.process)
-            self.amqp_channel.start_consuming()
-        except Exception as error:
-                log.error('[x] ' + str(error))
-
+        self.config.read(self.args.config)
+        self.amqp = AMQPHandler(self.config)
+        self.mongodb = MongoDBHandler(self.config)
 
     def process(self, ch, method, properties, body):
         try:
@@ -218,31 +63,31 @@ class BLWorker():
             del data['file_sha256']
             del data['mode']
             if corpus.startswith('default') is True:
-                trait_id = self.update_traits(data, 'default')
+                trait_id = self.mongodb.upsert_trait(data, 'default')
                 log.debug('[*] default collection trait_id ' + str(trait_id))
                 file_data['trait_id'] = trait_id
                 file_data['collection'] = 'default'
-                files_id = self.update_files(file_data, trait_id)
+                files_id = self.mongodb.upsert_file_trait(file_data, trait_id)
                 if files_id is None:
                     log.debug('default files trait already exists')
                 else:
                     log.debug('default collection inserted files_id ' + str(files_id))
             elif corpus.startswith('malware') is True:
-                trait_id = self.update_traits(data, 'malware')
+                trait_id = self.mongodb.upsert_trait(data, 'malware')
                 log.debug('[*] malware collection trait_id ' + str(trait_id))
                 file_data['trait_id'] = trait_id
                 file_data['collection'] = 'malware'
-                files_id = self.update_files(file_data, trait_id)
+                files_id = self.mongodb.upsert_file_trait(file_data, trait_id)
                 if files_id is None:
                     log.debug('malware files trait already exists')
                 else:
                     log.debug('malware collection inserted files_id ' + str(files_id))
             elif corpus.startswith('goodware') is True:
-                trait_id = self.update_traits(data, 'goodware')
+                trait_id = self.mongodb.upsert_trait(data, 'goodware')
                 log.debug('[*] goodware collection trait_id ' + str(trait_id))
                 file_data['trait_id'] = trait_id
                 file_data['collection'] = 'goodware'
-                files_id = self.update_files(file_data, trait_id)
+                files_id = self.mongodb.upsert_file_trait(file_data, trait_id)
                 if files_id is None:
                     log.debug('goodware files trait already exists')
                 else:
@@ -253,71 +98,18 @@ class BLWorker():
             exc_type, exc_obj, exc_tb = sys.exc_info()
             fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
             print(exc_type, fname, exc_tb.tb_lineno)
-        self.amqp_channel.basic_ack(method.delivery_tag)
+        ch.basic_ack(method.delivery_tag)
 
-    def update_traits(self, data, collection_name):
-        collection = self.mongodb_db[collection_name]
-        trait_id = collection.update_one(
-            filter={
-                'architecture': data['architecture'],
-                'bytes_sha256': data['bytes_sha256']
-            },
-            update={
-                "$set": data
-            },
-            upsert=True
-        ).upserted_id
-        if trait_id is None:
-            trait_id = collection.find_one({
-                'architecture': data['architecture'],
-                'bytes_sha256': data['bytes_sha256']
-            })['_id']
-        return trait_id
-
-    def update_files(self, data, trait_id):
-        collection = self.mongodb_db['files']
-        files_id = collection.update_one(
-            filter={
-                'collection': data['collection'],
-                'sha256': data['sha256'],
-                'mode': data['mode'],
-                'trait_id': trait_id
-            },
-            update={
-                "$set": data
-            },
-            upsert=True
-        ).upserted_id
-        return files_id
-
-    def setup_logging(self):
-        if self.args.debug is True:
-            level = logging.DEBUG
-        else:
-            level = logging.INFO
-        logging.basicConfig(
-            filename=self.args.log,
-            filemode='a',
-            format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
-            datefmt='%Y-%m-%dT%H:%M:%S%z',
-            level=level)
+    def consume(self):
+        self.amqp.consume(self.config['amqp'].get('traits_queue'), self.process)
 
     def main(self):
         self.arguments()
-        self.setup_logging()
-        while True:
-            try:
-                self.mongodb_connect()
-                self.amqp_connect()
-                self.consume()
-            except Exception as error:
-                log.error('[x] ' + str(error))
-                time.sleep(10)
-
+        self.consume()
 
 if __name__ in '__main__':
     try:
-        blworker = BLWorker()
-        blworker.main()
+        asdf = BLDB()
+        asdf.main()
     except KeyboardInterrupt:
         print('[x] keyboard interrupt, exiting...')

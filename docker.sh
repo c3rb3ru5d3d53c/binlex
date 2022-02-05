@@ -34,6 +34,9 @@ rabbitmq_http_port=15672
 bldbs=1
 bldb_version=1.1.1
 
+bldecs=1
+bldec_version=1.1.1
+
 blapis=1
 blapi_version=1.1.1
 blapi_users=1
@@ -487,10 +490,10 @@ function compose() {
         echo "      container_name: bldb${i}";
         echo "      image: bldb:${bldb_version}";
         echo "      build:";
-        echo "          context: docker/bldb/";
-        echo "          dockerfile: Dockerfile";
-        echo "      command: bldb --debug --amqp-tls --amqp-queue binlex --amqp-user \"${admin_user}\" --amqp-pass \"${admin_pass}\" --amqp-ca /config/binlex-public-ca.pem --amqp-cert /config/binlex-client.crt --amqp-key /config/binlex-client.key --amqp-port ${rabbitmq_port} --amqp-host rabbitmq-broker${rabbitmq_iter} --mongodb-tls --mongodb-ca /config/binlex-public-ca.pem --mongodb-key /config/binlex-client.pem  --mongodb-url \"mongodb://${admin_user}:${admin_pass}@mongodb-router${mongodb_iter}:${mongodb_port}\"";
+        echo "          context: .";
+        echo "          dockerfile: docker/bldb/Dockerfile";
         echo "      volumes:";
+        echo "          - ./config/bldb${i}.conf:/startup/bldb.conf";
         echo "          - ./config/:/config/";
         echo "      depends_on:";
         for j in $(seq 1 $brokers); do
@@ -508,6 +511,41 @@ function compose() {
         fi
     done
 
+    rabbitmq_iter=1;
+    mongodb_iter=1;
+    minio_iter=1
+    for i in $(seq 1 $bldecs); do
+        echo "  bldec${i}:";
+        echo "      hostname: bldec${i}";
+        echo "      container_name: bldec${i}";
+        echo "      image: bldec:${bldec_version}";
+        echo "      build:";
+        echo "          context: .";
+        echo "          dockerfile: docker/bldec/Dockerfile";
+        echo "      volumes:";
+        echo "          - ./config/bldec${i}.conf:/startup/bldec.conf";
+        echo "          - ./config/:/config/";
+        echo "      depends_on:";
+        for j in $(seq 1 $brokers); do
+            echo "          - rabbitmq-broker${j}";
+        done
+        if [ ${rabbitmq_iter} -eq $brokers ]; then
+            rabbitmq_iter=1;
+        else
+            rabbitmq_iter=$((rabbitmq_iter+1));
+        fi
+        if [ ${mongodb_iter} -eq $routers ]; then
+            mongodb_iter=1;
+        else
+            mongodb_iter=$((mongodb_iter+1));
+        fi
+        if [ ${minio_iter} -eq $minios ]; then
+            minio_iter=1;
+        else
+            minio_iter=$((minio_iter+1));
+        fi
+    done
+
     for i in $(seq 1 $blapis); do
         echo "  blapi${i}:";
         echo "      hostname: blapi${i}";
@@ -516,10 +554,10 @@ function compose() {
         echo "      build:";
         echo "          context: .";
         echo "          dockerfile: docker/blapi/Dockerfile";
-        echo "      command: blapi --config /config/blapi${i}.conf"
         echo "      ports:";
         echo "          - `expr ${blapi_port} + ${i} - 1`:8080";
         echo "      volumes:";
+        echo "          - ./config/blapi${i}.conf:/startup/blapi.conf";
         echo "          - ./config/:/config/";
         echo "      depends_on:";
         for j in $(seq 1 $brokers); do
@@ -600,6 +638,49 @@ function prometheus_config_init(){
     echo "]";
     echo "    tls_config:";
     echo "      ca_file: /config/binlex-public-ca.pem";
+}
+
+function bldec_config_init(){
+    echo "[bldec]";
+    echo "threads = ${threads}";
+    echo "thread_cycles = ${thread_cycles}";
+    echo "thread_sleep = ${thread_sleep}";
+    echo "[amqp]";
+    echo "tls = yes";
+    echo "traits_queue = binlex_traits";
+    echo "user = ${admin_user}";
+    echo "pass = ${admin_pass}";
+    echo "ca = /config/binlex-public-ca.pem";
+    echo "cert = /config/binlex-client.crt";
+    echo "key = /config/binlex-client.key";
+    echo "port = ${rabbitmq_port}";
+    echo "host = $1";
+    echo "[minio]";
+    echo "tls = yes";
+    echo "host = $2";
+    echo "port = ${minio_api_port}";
+    echo "user = ${admin_user}";
+    echo "pass = ${admin_pass}";
+    echo "ca = /config/binlex-public-ca.pem";
+}
+
+function bldb_config_init(){
+    echo "[mongodb]";
+    echo "db = binlex";
+    echo "tls = yes";
+    echo "ca = /config/binlex-public-ca.pem";
+    echo "key = /config/binlex-client.pem";
+    echo "url = mongodb://${admin_user}:${admin_pass}@$1:${mongodb_port}";
+    echo "[amqp]";
+    echo "tls = yes";
+    echo "traits_queue = binlex_traits";
+    echo "user = ${admin_user}";
+    echo "pass = ${admin_pass}";
+    echo "ca = /config/binlex-public-ca.pem";
+    echo "cert = /config/binlex-client.crt";
+    echo "key = /config/binlex-client.key";
+    echo "port = ${rabbitmq_port}";
+    echo "host = $2";
 }
 
 function blapi_config_init(){
@@ -875,17 +956,53 @@ for i in $(seq 1 $blapis); do
     fi
 done
 
+rabbitmq_iter=1
+mongodb_iter=1
+for i in $(seq 1 $bldbs); do
+    bldb_config_init mongodb-router${mongodb_iter} rabbitmq-broker${rabbitmq_iter} > config/bldb${i}.conf
+    if [ ${rabbitmq_iter} -eq $brokers ]; then
+        rabbitmq_iter=1;
+    else
+        rabbitmq_iter=$((rabbitmq_iter+1));
+    fi
+    if [ ${mongodb_iter} -eq $routers ]; then
+        mongodb_iter=1;
+    else
+        mongodb_iter=$((mongodb_iter+1));
+    fi
+done
+
+rabbitmq_iter=1
+minio_iter=1
+for i in $(seq 1 $bldbs); do
+    bldec_config_init rabbitmq-broker${rabbitmq_iter} minio${minio_iter}> config/bldec${i}.conf
+    if [ ${rabbitmq_iter} -eq $brokers ]; then
+        rabbitmq_iter=1;
+    else
+        rabbitmq_iter=$((rabbitmq_iter+1));
+    fi
+    if [ ${minio_iter} -eq $minios ]; then
+        minio_iter=1;
+    else
+        minio_iter=$((minio_iter+1));
+    fi
+done
+
 prometheus_config_init > config/prometheus.yml
 
-echo "---BEGIN CREDENTIALS--";
-echo "${admin_user}:${admin_pass}";
-echo "${username}:${password}";
-echo "bljupyter_token:${bljupyter_token}";
-echo "blapi admin keys:";
-cat config/blapi_admin.keys;
-echo "blapi user keys:";
-cat config/blapi_user.keys
-echo "---END CREDENTIALS---";
+function generate_creds(){
+    echo "---BEGIN CREDENTIALS--";
+    echo "${admin_user}:${admin_pass}";
+    echo "${username}:${password}";
+    echo "bljupyter_token:${bljupyter_token}";
+    echo "blapi admin keys:";
+    cat config/blapi_admin.keys;
+    echo "blapi user keys:";
+    cat config/blapi_user.keys
+    echo "---END CREDENTIALS---";
+}
+
+generate_creds | tee config/credentials.txt
 
 # if [ ! -f scripts/rabbitmqadmin ]; then
 #     wget "https://raw.githubusercontent.com/rabbitmq/rabbitmq-server/v${rabbitmq_version}/deps/rabbitmq_management/bin/rabbitmqadmin" -O scripts/rabbitmqadmin;
