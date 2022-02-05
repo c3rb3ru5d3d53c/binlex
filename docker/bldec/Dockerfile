@@ -9,6 +9,12 @@ RUN apt-get -qq -y update && \
 
 RUN pip install -v .
 
+WORKDIR /opt/binlex/lib/python/libblapi/
+
+RUN ./setup.py install
+
 WORKDIR /opt/binlex/docker/bldec/
 
 RUN ./setup.py install
+
+CMD ["./start.sh"]

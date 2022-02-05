@@ -15,8 +15,8 @@ import configparser
 from pprint import pprint
 from flask import Flask
 from flask_restx import Api
-from libblapi.apis.binlex import api as api_binlex
-from libblapi.apis.mongodb import api as api_mongodb
+from libblapiserver.apis.binlex import api as api_binlex
+from libblapiserver.apis.mongodb import api as api_mongodb
 from bson.raw_bson import RawBSONDocument
 from libblapi.minio import MinIOHandler
 

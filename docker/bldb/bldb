@@ -19,7 +19,7 @@ __author__ = '@c3rb3ru5d3d53c'
 class BLWorker():
 
     """
-    A Binlex MongoDB Database Worker
+    A Binlex Database Worker
     """
 
     def __init__(self):
@@ -27,8 +27,8 @@ class BLWorker():
 
     def arguments(self):
         self.parser = argparse.ArgumentParser(
-            prog=f'blworker v{__version__}',
-            description='A Binlex MongoDB Database Worker',
+            prog=f'bldb v{__version__}',
+            description='A Binlex Database Worker',
             epilog=f'Author: {__author__}'
         )
         self.parser.add_argument(

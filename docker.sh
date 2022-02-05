@@ -31,8 +31,8 @@ rabbitmq_cookie=$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 32 | head -n 1)
 rabbitmq_port=5672
 rabbitmq_http_port=15672
 
-blworkers=1
-blworker_version=1.1.1
+bldbs=1
+bldb_version=1.1.1
 
 blapis=1
 blapi_version=1.1.1
@@ -481,15 +481,15 @@ function compose() {
 
     rabbitmq_iter=1;
     mongodb_iter=1;
-    for i in $(seq 1 $blworkers); do
-        echo "  blworker${i}:";
-        echo "      hostname: blworker${i}";
-        echo "      container_name: blworker${i}";
-        echo "      image: blworker:${blworker_version}";
+    for i in $(seq 1 $bldbs); do
+        echo "  bldb${i}:";
+        echo "      hostname: bldb${i}";
+        echo "      container_name: bldb${i}";
+        echo "      image: bldb:${bldb_version}";
         echo "      build:";
-        echo "          context: docker/blworker/";
+        echo "          context: docker/bldb/";
         echo "          dockerfile: Dockerfile";
-        echo "      command: blworker --debug --amqp-tls --amqp-queue binlex --amqp-user \"${admin_user}\" --amqp-pass \"${admin_pass}\" --amqp-ca /config/binlex-public-ca.pem --amqp-cert /config/binlex-client.crt --amqp-key /config/binlex-client.key --amqp-port ${rabbitmq_port} --amqp-host rabbitmq-broker${rabbitmq_iter} --mongodb-tls --mongodb-ca /config/binlex-public-ca.pem --mongodb-key /config/binlex-client.pem  --mongodb-url \"mongodb://${admin_user}:${admin_pass}@mongodb-router${mongodb_iter}:${mongodb_port}\"";
+        echo "      command: bldb --debug --amqp-tls --amqp-queue binlex --amqp-user \"${admin_user}\" --amqp-pass \"${admin_pass}\" --amqp-ca /config/binlex-public-ca.pem --amqp-cert /config/binlex-client.crt --amqp-key /config/binlex-client.key --amqp-port ${rabbitmq_port} --amqp-host rabbitmq-broker${rabbitmq_iter} --mongodb-tls --mongodb-ca /config/binlex-public-ca.pem --mongodb-key /config/binlex-client.pem  --mongodb-url \"mongodb://${admin_user}:${admin_pass}@mongodb-router${mongodb_iter}:${mongodb_port}\"";
         echo "      volumes:";
         echo "          - ./config/:/config/";
         echo "      depends_on:";
@@ -528,8 +528,8 @@ function compose() {
         for j in $(seq 1 $routers); do
             echo "          - mongodb-router${j}";
         done
-        for j in $(seq 1 $blworkers); do
-            echo "          - blworker${j}";
+        for j in $(seq 1 $bldbs); do
+            echo "          - bldb${j}";
         done
     done
     for i in $(seq 1 $bljupyters); do
