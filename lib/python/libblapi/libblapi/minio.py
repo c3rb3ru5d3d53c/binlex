@@ -5,8 +5,6 @@ import urllib3
 from minio import Minio
 from hashlib import sha256
 
-buckets = ['default', 'malware', 'goodware']
-
 class MinIOHandler():
 
     """
@@ -14,7 +12,7 @@ class MinIOHandler():
     """
 
     def __init__(self, config):
-        self.buckets = ['default', 'malware', 'goodware']
+        self.buckets = ['default', 'malware', 'goodware', 'bldecomp']
         if config['minio'].getboolean('tls') is True:
             http_client = urllib3.PoolManager(
                     cert_reqs='CERT_REQUIRED',
@@ -35,7 +33,7 @@ class MinIOHandler():
                 self.cursor.make_bucket(bucket_name=bucket)
 
     def validate_bucket(self, bucket_name):
-        if bucket_name not in buckets:
+        if bucket_name not in self.buckets:
             return False
         if self.cursor.bucket_exists(bucket_name=bucket_name) is False:
             return False

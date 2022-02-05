@@ -109,7 +109,7 @@ class BLDB():
 
 if __name__ in '__main__':
     try:
-        asdf = BLDB()
-        asdf.main()
+        bldb = BLDB()
+        bldb.main()
     except KeyboardInterrupt:
         print('[x] keyboard interrupt, exiting...')

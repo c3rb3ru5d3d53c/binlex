@@ -3,154 +3,77 @@
 import os
 import sys
 import json
-import pika
-import ssl
-import time
-import urllib3
-import pymongo
-import datetime
 import argparse
 import logging
 import configparser
-from pprint import pprint
 from flask import Flask
 from flask_restx import Api
 from libblapiserver.apis.binlex import api as api_binlex
 from libblapiserver.apis.mongodb import api as api_mongodb
-from bson.raw_bson import RawBSONDocument
 from libblapi.minio import MinIOHandler
+from libblapi.mongodb import MongoDBHandler
+from libblapi.amqp import AMQPHandler
 
 logger = logging.getLogger(__name__)
 
 __version__ = '1.1.1'
 __author__ = '@c3rb3ru5d3d53c'
 
-class BLAPI():
+title = "Binlex HTTP API"
+description = "A Binlex HTTP API Server"
+app = Flask(__name__)
 
-    """
-    Binlex and MongoDB HTTP API Server
-    """
+parser = argparse.ArgumentParser(
+    prog=f'blapi v{__version__}',
+    description=description,
+    epilog=f'Author: {__author__}'
+)
+parser.add_argument(
+    '--version',
+    action='version',
+    version=f'v{__version__}'
+)
+parser.add_argument(
+    '-c',
+    '--config',
+    default=None,
+    required=True,
+    help='Configuration File'
+)
+args = parser.parse_args()
+config = configparser.ConfigParser()
+config.read(args.config)
 
-    def __init__(self):
-        self.title = "Binlex HTTP API"
-        self.description = "A Binlex HTTP API Server"
-        self.app = Flask(__name__)
+user_keys = open(config['blapi'].get('user_keys'), 'r').read().splitlines()
+admin_keys = open(config['blapi'].get('admin_keys'), 'r').read().splitlines()
 
-    def arguments(self):
-        self.parser = argparse.ArgumentParser(
-            prog=f'blapi v{__version__}',
-            description=self.description,
-            epilog=f'Author: {__author__}'
-        )
-        self.parser.add_argument(
-            '--version',
-            action='version',
-            version=f'v{__version__}'
-        )
-        self.parser.add_argument(
-            '-c',
-            '--config',
-            default=None,
-            required=True,
-            help='Configuration File'
-        )
-        self.args = self.parser.parse_args()
+app.config['config'] = config['blapi'].get('host')
+app.config['version'] = __version__
+app.config['debug'] = config['blapi'].getboolean('debug')
+app.config['port'] = config['blapi'].getint('port')
+app.config['amqp_queue_traits'] = config['amqp'].get('traits_queue')
+app.config['amqp_queue_decomp'] = config['amqp'].get('decomp_queue')
+app.config['user_keys'] = user_keys
+app.config['admin_keys'] = admin_keys
+app.config['mongodb'] = MongoDBHandler(config)
+app.config['amqp'] = AMQPHandler(config)
+app.config['minio'] = MinIOHandler(config)
 
-    def read_keys(self):
-        self.user_keys = open(self.config['blapi'].get('user_keys'), 'r').read().splitlines()
-        self.admin_keys = open(self.config['blapi'].get('admin_keys'), 'r').read().splitlines()
-
-    def read_config(self, file_path):
-        self.config = configparser.ConfigParser()
-        self.config.read(file_path)
-        self.read_keys()
-
-    def mongodb_connect(self):
-        if self.config['mongodb'].getboolean('tls') is True:
-            self.mongodb = pymongo.MongoClient(
-                self.config['mongodb'].get('url'),
-                tls=self.config['mongodb'].getboolean('tls'),
-                tlsCAFile=self.config['mongodb'].get('ca'),
-                tlsCertificateKeyFile=self.config['mongodb'].get('key'))
-        else:
-            self.mongodb = pymongo.MongoClient(self.config['mongodb'].get('url'))
-        self.mongodb_db = self.mongodb[self.config['mongodb'].get('db')]
-
-    def amqp_connect(self):
-        if self.config['amqp'].getboolean('tls') is True:
-            context = ssl.create_default_context(
-                cafile=self.config['amqp'].get('ca'))
-            context.load_cert_chain(self.config['amqp'].get('cert'), self.config['amqp'].get('key'))
-            ssl_options = pika.SSLOptions(context, self.config['amqp'].get('host'))
-            conn_params = pika.ConnectionParameters(port=self.config['amqp'].getint('port'),
-                                                    host=self.config['amqp'].get('host'),
-                                                    ssl_options=ssl_options,
-                                                    credentials=pika.credentials.PlainCredentials(
-                                                        username=self.config['amqp'].get('user'),
-                                                        password=self.config['amqp'].get('pass')))
-        else:
-            conn_params = pika.ConnectionParameters(port=self.config['amqp'].getint('port'),
-                                                    host=self.config['amqp'].get('host'),
-                                                    credentials=pika.credentials.PlainCredentials(
-                                                        username=self.config['amqp'].get('user'),
-                                                        password=self.config['amqp'].get('pass')))
-        self.amqp = pika.BlockingConnection(conn_params)
-
-    def minio_connect(self):
-        self.minio = MinIOHandler(self.config)
-
-    def config_init(self):
-        self.app.config['host'] = self.config['blapi'].get('host')
-        self.app.config['version'] = __version__
-        self.app.config['debug'] = self.config['blapi'].getboolean('debug')
-        self.app.config['port'] = self.config['blapi'].getint('port')
-        self.app.config['threads'] = self.config['blapi'].getint('threads')
-        self.app.config['thread_cycles'] = self.config['blapi'].getint('thread_cycles')
-        self.app.config['thread_sleep'] = self.config['blapi'].getint('thread_sleep')
-        self.app.config['mongodb_db'] = self.mongodb_db
-        self.app.config['amqp'] = self.amqp
-        self.app.config['amqp_queue'] = self.config['amqp'].get('queue')
-        self.app.config['user_keys'] = self.user_keys
-        self.app.config['admin_keys'] = self.admin_keys
-        self.app.config['minio'] = self.minio
-
-    def api_init(self):
-        with self.app.app_context():
-            @self.app.errorhandler(404)
-            def page_not_found(e):
-                return {'error': 'not found'}, 404
-            api = Api(
-                self.app,
-                version=__version__,
-                title=self.title,
-                description=self.description
-            )
-            api.add_namespace(api_binlex)
-            api.add_namespace(api_mongodb)
-
-    def app_init(self):
-        self.arguments()
-        self.read_config(self.args.config)
-        self.mongodb_connect()
-        self.amqp_connect()
-        self.minio_connect()
-        self.config_init()
-        self.api_init()
-        return self.app
-
-    def main(self):
-        while True:
-            try:
-                self.app_init()
-                self.app.run(
-                    host=self.config['blapi'].get('host'),
-                    port=self.config['blapi'].getint('port'),
-                    debug=self.config['blapi'].getboolean('debug')
-                )
-            except Exception as error:
-                logger.error(error)
-                time.sleep(10)
+with app.app_context():
+    @app.errorhandler(404)
+    def page_not_found(e):
+        return {'error': 'not found'}, 404
+    api = Api(
+        app,
+        version=__version__,
+        title=title,
+        description=description
+    )
+    api.add_namespace(api_binlex)
+    api.add_namespace(api_mongodb)
 
 if __name__ in '__main__':
-    blapi = BLAPI()
-    blapi.main()
+    app.run(
+        host=config['blapi'].get('host'),
+        port=config['blapi'].getint('port'),
+        debug=config['blapi'].getboolean('debug'))
