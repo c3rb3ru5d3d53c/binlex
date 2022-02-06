@@ -72,6 +72,12 @@ with app.app_context():
     api.add_namespace(api_binlex)
     api.add_namespace(api_mongodb)
 
+def run():
+    app.run(
+        host=config['blapi'].get('host'),
+        port=config['blapi'].getint('port'),
+        debug=config['blapi'].getboolean('debug'))
+
 if __name__ in '__main__':
     app.run(
         host=config['blapi'].get('host'),
