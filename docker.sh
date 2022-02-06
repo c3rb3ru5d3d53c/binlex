@@ -720,7 +720,7 @@ function blapi_config_init(){
 function blapi_uwsgi_config_init(){
     echo "[uwsgi]";
     echo "uwsgi-file = blapi";
-    echo "plugins = python3";
+    echo "plugins = python39";
     echo "pyargv=--config /startup/blapi.conf";
     echo "callable = app";
     echo "protocol = http";
@@ -972,7 +972,7 @@ for i in $(seq 1 $blapis); do
     fi
 done
 
-blapi_uwsgi_config_init > config/blapi_uwsgi.conf
+blapi_uwsgi_config_init > config/blapi_uwsgi.ini
 
 rabbitmq_iter=1
 mongodb_iter=1
