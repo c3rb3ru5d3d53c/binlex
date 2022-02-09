@@ -13,19 +13,16 @@ from libblapiserver.apis.mongodb import api as api_mongodb
 from libblapi.minio import MinIOHandler
 from libblapi.mongodb import MongoDBHandler
 from libblapi.amqp import AMQPHandler
+from libblapiserver.main import create_app
 
 logger = logging.getLogger(__name__)
 
 __version__ = '1.1.1'
 __author__ = '@c3rb3ru5d3d53c'
 
-title = "Binlex HTTP API"
-description = "A Binlex HTTP API Server"
-app = Flask(__name__)
-
 parser = argparse.ArgumentParser(
     prog=f'blapi v{__version__}',
-    description=description,
+    description="A Binlex HTTP API Server",
     epilog=f'Author: {__author__}'
 )
 parser.add_argument(
@@ -41,44 +38,11 @@ parser.add_argument(
     help='Configuration File'
 )
 args = parser.parse_args()
-config = configparser.ConfigParser()
-config.read(args.config)
-
-user_keys = open(config['blapi'].get('user_keys'), 'r').read().splitlines()
-admin_keys = open(config['blapi'].get('admin_keys'), 'r').read().splitlines()
-
-app.config['config'] = config['blapi'].get('host')
-app.config['version'] = __version__
-app.config['debug'] = config['blapi'].getboolean('debug')
-app.config['port'] = config['blapi'].getint('port')
-app.config['amqp_queue_traits'] = config['amqp'].get('traits_queue')
-app.config['amqp_queue_decomp'] = config['amqp'].get('decomp_queue')
-app.config['user_keys'] = user_keys
-app.config['admin_keys'] = admin_keys
-app.config['mongodb'] = MongoDBHandler(config)
-app.config['amqp'] = AMQPHandler(config)
-app.config['minio'] = MinIOHandler(config)
-
-with app.app_context():
-    @app.errorhandler(404)
-    def page_not_found(e):
-        return {'error': 'not found'}, 404
-    api = Api(
-        app,
-        version=__version__,
-        title=title,
-        description=description
-    )
-    api.add_namespace(api_binlex)
-    api.add_namespace(api_mongodb)
-
-def run():
-    app.run(
-        host=config['blapi'].get('host'),
-        port=config['blapi'].getint('port'),
-        debug=config['blapi'].getboolean('debug'))
 
 if __name__ in '__main__':
+    config = configparser.ConfigParser()
+    config.read(args.config)
+    app = create_app(args.config)
     app.run(
         host=config['blapi'].get('host'),
         port=config['blapi'].getint('port'),
