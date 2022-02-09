@@ -721,10 +721,8 @@ function blapi_config_init(){
 }
 
 function blapi_nginx_config_init(){
-    echo "limit_req_zone \$binary_remote_addr zone=mylimit:10m rate=5r/s;"
     echo "server {";
     echo "  listen 8080 default_server;";
-    echo "  limit_req zone=mylimit;";
     echo "  server_name _;";
     echo "  return 301 https://\$host:${blapi_https_port}\$request_uri;";
     echo "}";
@@ -733,9 +731,6 @@ function blapi_nginx_config_init(){
     echo "  server_name _;";
     echo "  ssl_certificate /config/$1;";
 	echo "  ssl_certificate_key /config/$2;";
-	echo "  if (\$request_method !~ ^(POST|GET)$){"
-    echo "      return 405;";
-	echo "  }";
 	echo "  sendfile on;";
 	echo "  client_max_body_size 24M;";
 	echo "  server_tokens off;";
@@ -746,24 +741,12 @@ function blapi_nginx_config_init(){
     echo "  proxy_buffering off;";
     echo "  client_header_buffer_size 8k;";
     echo "  location / {";
-    echo "      limit_req zone=mylimit;";
     echo "      add_header  Strict-Transport-Security \"max-age=31536000; includeSubDomains\";";
     echo "      proxy_pass  http://127.0.0.1:5000/;";
     echo "      proxy_http_version 1.1;";
     echo "      proxy_set_header Connection \"\";";
     echo "  }";
     echo "}";
-}
-
-function blapi_uwsgi_config_init(){
-    echo "[uwsgi]";
-    echo "uwsgi-file = /opt/binlex/docker/blapi/blapi";
-    echo "pyargv=--config /startup/blapi.conf";
-    echo "callable = app";
-    echo "protocol = http";
-    echo "socket = 0.0.0.0:5000";
-    echo "processes = 8";
-    echo "threads = ${threads}";
 }
 
 function rabbitmq_config_init(){
@@ -1005,8 +988,6 @@ for i in $(seq 1 $blapis); do
         minio_iter=$((minio_iter+1));
     fi
 done
-
-blapi_uwsgi_config_init > config/blapi_uwsgi.ini
 
 rabbitmq_iter=1
 mongodb_iter=1
