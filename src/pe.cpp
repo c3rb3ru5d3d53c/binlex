@@ -56,6 +56,10 @@ bool PE::ReadBuffer(void *data, size_t size){
     return true;
 }
 
+bool PE::IsDotNet(){
+    return binary->has(DATA_DIRECTORY::CLR_RUNTIME_HEADER);
+}
+
 void PE::ParseSections(){
     uint index = 0;
     it_sections local_sections = binary->sections();
