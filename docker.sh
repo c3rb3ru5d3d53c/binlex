@@ -317,7 +317,7 @@ function generate_certificates(){
             -nodes \
             -out config/blapi${i}.csr \
             -keyout config/blapi${i}.key \
-            -subj "/CN=blapi${i}/OU=binlex-rabbitmq";
+            -subj "/CN=blapi${i}/OU=binlex-blapi";
         openssl x509 \
             -passin pass:${admin_pass} \
             -sha256 \
@@ -340,7 +340,7 @@ function generate_certificates(){
             -nodes \
             -out config/bljupyter${i}.csr \
             -keyout config/bljupyter${i}.key \
-            -subj "/CN=bljupyter${i}/OU=binlex-rabbitmq";
+            -subj "/CN=bljupyter${i}/OU=binlex-bljupyter";
         openssl x509 \
             -passin pass:${admin_pass} \
             -sha256 \

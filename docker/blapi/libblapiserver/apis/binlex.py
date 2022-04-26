@@ -87,6 +87,9 @@ class binlex_decompile(Resource):
                 return {
                     'error': 'invalid corpus value'
                 }, 401
+            app.config['minio'].upload(
+                bucket_name=app.config['amqp_queue_decomp'],
+                data=request.data)
             app.config['amqp'].publish(
                 queue=app.config['amqp_queue_decomp'],
                 body=json.dumps({
@@ -94,9 +97,6 @@ class binlex_decompile(Resource):
                     'mode': mode,
                     'object_name': hashlib.sha256(request.data).hexdigest()
                 }))
-            app.config['minio'].upload(
-                bucket_name=app.config['amqp_queue_decomp'],
-                data=request.data)
             return {
                 'status': 'processing'
             }
@@ -105,7 +105,7 @@ class binlex_decompile(Resource):
                 'error': 'failed to add to decompiler queue'
             }, 500
 
-@api.route('/status/<string:sha256>')
+@api.route('/decompile/status/<string:sha256>')
 class binlex_decompile_status(Resource):
     @require_user
     def get(self, sha256):

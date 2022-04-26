@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+import os
+import sys
 import configparser
 import argparse
 import time
@@ -122,36 +124,40 @@ class BLDEC():
         self.amqp = AMQPHandler(self.config)
 
     def process(self, ch, method, properties, body):
-        data = json.loads(body)
-        file_type = data['mode'].split(':')[0]
-        response = self.minio.download(
-            bucket_name=self.config['amqp'].get('decomp_queue'),
-            object_name=data['object_name'])
-        data = response.data
-        if file_type == 'pe':
-            traits = self.decompile_pe(
-                data,
-                data['mode'].split(':')[1],
-                data['corpus'])
-        elif file_type == 'elf':
-            traits = self.decompile_elf(
-                data,
-                data['mode'].split(':')[1],
-                data['corpus'])
-        elif file_type == 'raw':
-            traits = self.decompile_raw(
-                data,
-                data['mode'].split(':')[1],
-                data['corpus'])
-        else:
-            logger.error('unknown format')
-        for trait in traits:
-            amqp.publish(
-                self.config['amqp'].get('traits_queue'),
-                json.dumps(trait))
-        self.minio.delete(
-            bucket_name=self.config['amqp'].get('decomp_queue'),
-            object_name=data['object_name'])
+        try:
+            data = json.loads(body)
+            file_type = data['mode'].split(':')[0]
+            binary_data = self.minio.download(
+                bucket_name=self.config['amqp'].get('decomp_queue'),
+                object_name=data['object_name'])
+            if file_type == 'pe':
+                traits = self.decompile_pe(
+                    binary_data,
+                    data['mode'].split(':')[1],
+                    data['corpus'])
+            elif file_type == 'elf':
+                traits = self.decompile_elf(
+                    binary_data,
+                    data['mode'].split(':')[1],
+                    data['corpus'])
+            elif file_type == 'raw':
+                traits = self.decompile_raw(
+                    binary_data,
+                    data['mode'].split(':')[1],
+                    data['corpus'])
+            else:
+                raise Exception('unknown file format')
+            for trait in traits:
+                amqp.publish(
+                    self.config['amqp'].get('traits_queue'),
+                    json.dumps(trait))
+            self.minio.delete(
+                bucket_name=self.config['amqp'].get('decomp_queue'),
+                object_name=data['object_name'])
+        except Exception as e:
+            exc_type, exc_obj, exc_tb = sys.exc_info()
+            fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+            logger.error(exc_type, fname, exc_tb.tb_lineno)
         ch.basic_ack(method.delivery_tag)
 
     def main(self):
