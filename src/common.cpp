@@ -40,7 +40,7 @@ string Common::GetFileTLSH(const char *file_path){
     Tlsh tlsh;
     size_t bread;
 
-    inp = fopen(argv[1], "rb");
+    inp = fopen(file_path, "rb");
     if(!inp){
 	throw std::runtime_error(strerror(errno));
     }
