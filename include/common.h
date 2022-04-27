@@ -33,6 +33,7 @@ namespace binlex {
 	    This method reads a file returns its tlsh hash.
 	    @param file_path path to the file to read
 	    @return Returns the tlsh hash of the file
+	    @throw std::runtime_error if file operation fail
 	    */
             BINLEX_EXPORT static string GetFileTLSH(const char *file_path);
             /**
