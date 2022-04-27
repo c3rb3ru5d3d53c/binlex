@@ -18,9 +18,44 @@ extern "C" {
 #pragma comment(lib, "capstone")
 #pragma comment(lib, "LIEF")
 #endif
+#include <tlsh.h>
+#include <stdexcept>
 
 using namespace std;
 using namespace binlex;
+
+
+string Common::GetTLSH(const uint8_t *data, size_t len){
+    Tlsh tlsh;
+
+    tlsh.update(data, len);
+    tlsh.final();
+    return tlsh.getHash();
+}
+
+
+string Common::GetFileTLSH(const char *file_path){
+    FILE *inp;
+    uint8_t buf[8192];
+    Tlsh tlsh;
+    size_t bread;
+
+    inp = fopen(argv[1], "rb");
+    if(!inp){
+	throw std::runtime_error(strerror(errno));
+    }
+    while((bread = fread(buf, 1, sizeof(buf), inp)) > 0){
+	tlsh.update(buf, bread);
+    }
+    if(errno != 0) {
+	throw std::runtime_error(strerror(errno));
+    }
+    tlsh.final();
+    fclose(inp);
+    puts( tlsh.getHash() );
+    return 0;
+}
+
 
 string Common::Wildcards(uint count){
     stringstream s;

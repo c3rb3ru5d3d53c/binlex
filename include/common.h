@@ -24,6 +24,18 @@ namespace binlex {
         */
         public:
             /**
+	    This method takes a (binary) input string and returns its tlsh hash.
+	    @param datat input string
+	    @return Returns the tlsh hash of the trait string
+	    */
+	    BINLEX_EXPORT static string GetTLSH(const uint8_t *data, size_t len);
+            /**
+	    This method reads a file returns its tlsh hash.
+	    @param file_path path to the file to read
+	    @return Returns the tlsh hash of the file
+	    */
+            BINLEX_EXPORT static string GetFileTLSH(const char *file_path);
+            /**
             This method takes an input string and returns its sha256 hash.
             @param trait input string.
             @return Returns the sha256 hash of the trait string
