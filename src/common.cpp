@@ -56,7 +56,7 @@ float Common::Entropy(string trait){
     float result = 0;
     vector<unsigned long> frequencies(256);
     for (char c : bytes){
-      frequencies[static_cast<unsigned char>(c)]++;
+	frequencies[static_cast<unsigned char>(c)]++;
     }
     for (auto count : frequencies){
 	if(count > 0){
