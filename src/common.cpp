@@ -39,6 +39,7 @@ string Common::GetFileTLSH(const char *file_path){
     uint8_t buf[8192];
     Tlsh tlsh;
     size_t bread;
+    string ret;
 
     inp = fopen(file_path, "rb");
     if(!inp){
@@ -52,8 +53,32 @@ string Common::GetFileTLSH(const char *file_path){
     }
     tlsh.final();
     fclose(inp);
-    puts( tlsh.getHash() );
-    return 0;
+    ret = tlsh.getHash();
+    return ret;
+}
+
+
+string Common::GetFileSHA256(char *file_path){
+    FILE *inp;
+    SHA256_CTX ctx;
+    uint8_t buf[8192];
+    size_t bread;
+    BYTE hash[SHA256_BLOCK_SIZE];
+
+    inp = fopen(file_path, "rb");
+    if(!inp){
+	throw std::runtime_error(strerror(errno));
+    }
+    sha256_init(&ctx);
+    while((bread = fread(buf, 1, sizeof(buf), inp)) > 0){
+	sha256_update(&ctx, buf, bread);
+    }
+    if(errno != 0) {
+	throw std::runtime_error(strerror(errno));
+    }
+    sha256_final(&ctx, hash);
+    fclose(inp);
+    return RemoveSpaces(HexdumpBE(&hash, SHA256_BLOCK_SIZE));
 }
 
 
