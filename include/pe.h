@@ -8,6 +8,7 @@
 #include <LIEF/PE.hpp>
 
 #include "common.h"
+#include "file.h"
 #ifndef PE_H
 #define PE_H
 
@@ -23,7 +24,7 @@ using namespace std;
 using namespace LIEF::PE;
 
 namespace binlex {
-    class PE {
+  class PE : public File{
         private:
             void ParseSections();
         public: 
