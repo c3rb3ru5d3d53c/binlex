@@ -11,3 +11,7 @@ venv/**
 pybinlex.egg-info/**
 *.so
 *.whl
+# Apple crap
+.DS_Store
+.AppleDouble
+.LSOverride
