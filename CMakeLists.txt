@@ -120,7 +120,9 @@ add_library(binlex SHARED
     src/blelf.cpp
     src/decompiler.cpp
     src/pe.cpp
+    src/pe-dotnet.cpp
     src/sha256.c
+    src/cil.cpp
 )
 
 add_dependencies(binlex LIEF)
