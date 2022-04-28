@@ -36,6 +36,9 @@ bool PE::Setup(MACHINE_TYPES input_mode){
 }
 
 bool PE::ReadFile(char *file_path){
+    CalculateFileHashes(file_path);
+    assert(!tlsh.empty());
+    assert(!sha256.empty());
     binary = Parser::parse(file_path);
     if (mode != binary->header().machine()){
         fprintf(stderr, "[x] incorrect mode for binary architecture\n");
