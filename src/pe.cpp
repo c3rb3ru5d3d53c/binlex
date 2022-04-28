@@ -6,6 +6,7 @@
 #include "common.h"
 #include <iostream>
 #include <LIEF/PE.hpp>
+#include <cassert>
 
 using namespace std;
 using namespace binlex;
