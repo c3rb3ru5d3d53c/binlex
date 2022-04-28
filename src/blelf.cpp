@@ -8,6 +8,7 @@
 #include <iostream>
 #include <exception>
 #include <stdexcept>
+#include <cassert>
 #include "blelf.h"
 #include <LIEF/ELF.hpp>
 using namespace std;
