@@ -33,7 +33,7 @@ namespace binlex {
 	    This method reads a file returns its tlsh hash.
 	    @param file_path path to the file to read
 	    @return Returns the tlsh hash of the file
-	    @throw std::runtime_error if file operation fail
+	    @throw std::runtime_error if file operation fails
 	    */
             BINLEX_EXPORT static string GetFileTLSH(const char *file_path);
             /**
@@ -42,6 +42,13 @@ namespace binlex {
             @return Returns the sha256 hash of the trait string
             */
             BINLEX_EXPORT static string SHA256(char *trait);
+            /**
+	    This method reads a file returns its sha256 hash.
+	    @param file_path path to the file to read
+	    @return Returns the sha256 hash of the file
+	    @throw std::runtime_error if file operation fails
+	    */
+	    BINLEX_EXPORT static string GetFileSHA256(char *file_path);
             /**
             This method takes an input trait string and returns a char vector of bytes (ignores wildcards).
             @param trait input string.
