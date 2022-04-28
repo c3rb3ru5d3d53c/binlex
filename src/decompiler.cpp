@@ -477,6 +477,7 @@ void Decompiler::AppendQueue(set<uint64_t> &addresses, uint operand_type, uint i
 }
 
 void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint index) {
+    sections[index].offset  = offset;
     sections[index].data = data;
     sections[index].data_size = data_size;
 
