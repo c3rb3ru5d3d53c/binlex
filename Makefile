@@ -47,6 +47,8 @@ dist:
 		make package_source
 
 install:
+	git config --global --add safe.directory `pwd`/build/capstone/src/capstone
+	git config --global --add safe.directory `pwd`/build/LIEF/src/LIEF
 	cd build/ && \
 		make install && \
 		ldconfig
