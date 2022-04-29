@@ -1,4 +1,4 @@
-dbuild/**
+build/**
 dist/**
 samples/**
 windows/**
