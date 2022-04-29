@@ -22,7 +22,7 @@ void Args::SetDefault(){
     options.input = NULL;
     options.threads = 1;
     options.thread_cycles = 10;
-    options.thread_sleep = 500;
+    options.thread_sleep = 0;
     options.help = false;
     options.output = NULL;
     options.corpus = (char *)"default";
