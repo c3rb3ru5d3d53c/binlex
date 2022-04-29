@@ -1,6 +1,3 @@
-//
-// Created by idiom on 2022-04-28.
-//
 #ifdef _WIN32
 #include <Windows.h>
 #endif
