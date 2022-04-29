@@ -23,10 +23,7 @@ void init_pe(py::module &handle){
         }
         return result;
     })
-  .def("read_buffer", [](binlex::PE &module, py::buffer data){
-        py::buffer_info info = data.request();
-        return module.ReadBuffer(info.ptr, info.size);
-    });
+  .def("read_buffer", &binlex::PE::ReadBuffer);
   py::enum_<LIEF::PE::MACHINE_TYPES>(handle, "MACHINE_TYPES")
   .value("IMAGE_FILE_MACHINE_I386", LIEF::PE::MACHINE_TYPES::IMAGE_FILE_MACHINE_I386)
   .value("IMAGE_FILE_MACHINE_AMD64", LIEF::PE::MACHINE_TYPES::IMAGE_FILE_MACHINE_AMD64)

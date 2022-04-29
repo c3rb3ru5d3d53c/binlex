@@ -23,10 +23,7 @@ void init_elf(py::module &handle){
         }
         return result;
     })
-  .def("read_buffer", [](binlex::ELF &module, py::buffer data){
-        py::buffer_info info = data.request();
-        return module.ReadBuffer(info.ptr, info.size);
-    });
+  .def("read_buffer", &binlex::ELF::ReadBuffer);
   py::enum_<LIEF::ELF::ARCH>(handle, "ARCH")
   .value("EM_386", LIEF::ELF::ARCH::EM_386)
   .value("EM_X86_64", LIEF::ELF::ARCH::EM_X86_64)
