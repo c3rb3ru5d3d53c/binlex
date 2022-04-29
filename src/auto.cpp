@@ -28,7 +28,12 @@ AutoLex::AutoLex(){
 }
 
 bool AutoLex::HasLimitations(char *file_path){
-    GetFileCharacteristics(file_path);
+    if (GetFileCharacteristics(file_path) != true){
+        // Something went wrong getting the characteristics
+        // So return that the file has limitations
+        return true;
+    }
+
     return false;
 }
 
