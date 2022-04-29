@@ -31,6 +31,7 @@ namespace binlex{
     public:
         BINLEX_EXPORT AutoLex();
         BINLEX_EXPORT bool HasLimitations(char *file_path);
+        BINLEX_EXPORT bool IsDotNet(char *file_path);
         BINLEX_EXPORT Decompiler ProcessFile(char *file_path, uint threads, uint timeout, uint thread_cycles, useconds_t thread_sleep, bool instructions, char *corpus);
     };
 };
