@@ -6,7 +6,6 @@
 #include <memory>
 #include <set>
 #include <LIEF/PE.hpp>
-
 #include "common.h"
 #ifndef PE_H
 #define PE_H
@@ -14,7 +13,7 @@
 #ifdef _WIN32
 #define BINLEX_EXPORT __declspec(dllexport)
 #else
-#define BINLEX_EXPORT 
+#define BINLEX_EXPORT
 #endif
 
 #define PE_MAX_SECTIONS 256
@@ -23,22 +22,27 @@ using namespace std;
 using namespace LIEF::PE;
 
 namespace binlex {
-    class PE {
+    class PE : public Common {
         private:
             void ParseSections();
-        public: 
+        public:
         #ifndef _WIN32
             MACHINE_TYPES mode = MACHINE_TYPES::IMAGE_FILE_MACHINE_UNKNOWN;
         #else
             MACHINE_TYPES mode = MACHINE_TYPES::IMAGE_FILE_MACHINE_UNKNOWN;
         #endif
             unique_ptr<LIEF::PE::Binary> binary;
+            struct Hash {
+                string sha256;
+            };
             struct Section {
                 uint offset;
                 int size;
                 void *data;
                 set<uint64_t> functions;
+
             };
+            struct Hash hashes;
             BINLEX_EXPORT PE();
             struct Section sections[PE_MAX_SECTIONS];
             /**

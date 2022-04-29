@@ -49,12 +49,22 @@ Decompiler::Decompiler() {
         sections[i].data = NULL;
         sections[i].data_size = 0;
         sections[i].threads = 1;
-        sections[i].thread_cycles = 1;
+        sections[i].thread_cycles = 10;
         sections[i].thread_sleep = 500;
-        sections[i].corpus = (char *)"default";
+        sections[i].corpus = NULL;
         sections[i].instructions = false;
         sections[i].arch_str = NULL;
+        sections[i].file_sha256 = NULL;
+        sections[i].blmode = NULL;
     }
+}
+
+void Decompiler::SetFileSHA256(string sha256, uint index){
+    sections[index].file_sha256 = StringAllocCharPtr(sha256);
+}
+
+void Decompiler::SetMode(string mode, uint index){
+    sections[index].blmode = StringAllocCharPtr(mode);
 }
 
 void Decompiler::AppendTrait(struct Trait *trait, struct Section *sections, uint index){
@@ -149,8 +159,8 @@ void Decompiler::SetThreads(uint threads, uint thread_cycles, uint thread_sleep,
     sections[index].thread_sleep = thread_sleep;
 }
 
-void Decompiler::SetCorpus(char *corpus, uint index){
-    sections[index].corpus = corpus;
+void Decompiler::SetCorpus(string corpus, uint index){
+    sections[index].corpus = StringAllocCharPtr(corpus);
 }
 
 void Decompiler::SetInstructions(bool instructions, uint index){
@@ -160,7 +170,15 @@ void Decompiler::SetInstructions(bool instructions, uint index){
 string Decompiler::GetTrait(struct Trait *trait, bool pretty){
     json data;
     data["type"] = trait->type;
-    data["corpus"] = trait->corpus;
+    if (trait->corpus != NULL){
+        data["corpus"] = trait->corpus;
+    }
+    if (trait->file_sha256 != NULL){
+        data["file_sha256"] = trait->file_sha256;
+    }
+    if (trait->blmode != NULL){
+        data["mode"] = trait->blmode;
+    }
     data["architecture"] = trait->architecture;
     data["bytes"] = trait->bytes;
     data["trait"] = trait->trait;
@@ -187,6 +205,8 @@ void Decompiler::PrintTraits(bool pretty){
         if (sections[i].traits != NULL){
             for (int j = 0; j < sections[i].ntraits; j++){
                 sections[i].traits[j]->corpus = sections[i].corpus;
+                sections[i].traits[j]->file_sha256 = sections[i].file_sha256;
+                sections[i].traits[j]->blmode = sections[i].blmode;
                 cout << GetTrait(sections[i].traits[j], pretty) << endl;
             }
         }
@@ -201,6 +221,8 @@ string Decompiler::GetTraits(bool pretty){
         if (sections[i].traits != NULL){
             for (int j = 0; j < sections[i].ntraits; j++){
                 sections[i].traits[j]->corpus = sections[i].corpus;
+                sections[i].traits[j]->file_sha256 = sections[i].file_sha256;
+                sections[i].traits[j]->blmode = sections[i].blmode;
                 ss << sep << GetTrait(sections[i].traits[j], pretty);
                 sep = ",";
             }
@@ -217,6 +239,8 @@ void Decompiler::WriteTraits(char *file_path, bool pretty){
         if (sections[i].traits != NULL){
             for (int j = 0; j < sections[i].ntraits; j++){
                 sections[i].traits[j]->corpus = sections[i].corpus;
+                sections[i].traits[j]->file_sha256 = sections[i].file_sha256;
+                sections[i].traits[j]->blmode = sections[i].blmode;
                 traits << GetTrait(sections[i].traits[j], pretty) << endl;
             }
         }
@@ -434,11 +458,11 @@ void * Decompiler::TraitWorker(void *args){
     }
     trait->bytes_entropy = Entropy(string(trait->bytes));
     trait->trait_entropy = Entropy(string(trait->trait));
-    string bytes_sha256 = SHA256(trait->bytes);
+    string bytes_sha256 = SHA256(trait->bytes, strlen(trait->bytes));
     trait->bytes_sha256 = (char *)malloc(bytes_sha256.length()+1);
     memset(trait->bytes_sha256, 0, bytes_sha256.length()+1);
     memcpy(trait->bytes_sha256, bytes_sha256.c_str(), bytes_sha256.length());
-    string trait_sha256 = SHA256(trait->trait);
+    string trait_sha256 = SHA256(trait->trait, strlen(trait->trait));
     trait->trait_sha256 = (char *)malloc(trait_sha256.length()+1);
     memset(trait->trait_sha256, 0, trait_sha256.length()+1);
     memcpy(trait->trait_sha256, trait_sha256.c_str(), trait_sha256.length());
@@ -842,5 +866,14 @@ void Decompiler::FreeTraits(uint index){
 Decompiler::~Decompiler() {
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++) {
         FreeTraits(i);
+        if (sections[i].file_sha256 != NULL){
+            free(sections[i].file_sha256);
+        }
+        if (sections[i].blmode != NULL){
+            free(sections[i].blmode);
+        }
+        if (sections[i].corpus != NULL){
+            free(sections[i].corpus);
+        }
     }
 }

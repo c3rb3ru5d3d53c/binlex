@@ -8,4 +8,8 @@ RUN groupmod -g $GID mongodb
 
 EXPOSE 27017
 
+<<<<<<< HEAD
 CMD ["mongod"] 
+=======
+CMD ["mongod"]
+>>>>>>> blserver

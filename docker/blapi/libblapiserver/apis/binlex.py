@@ -123,4 +123,8 @@ class binlex_decompile_status(Resource):
         except Exception:
             return {
                 'status': 'completed'
+<<<<<<< HEAD
             }
+=======
+            }
+>>>>>>> blserver

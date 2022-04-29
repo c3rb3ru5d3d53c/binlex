@@ -3,4 +3,8 @@ requires = [
     "setuptools==60.5.0",
     "wheel==0.37.1",
     "pybind11==2.9.0"
+<<<<<<< HEAD
 ]
+=======
+]
+>>>>>>> blserver

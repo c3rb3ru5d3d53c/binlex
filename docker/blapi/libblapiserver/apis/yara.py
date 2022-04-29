@@ -20,4 +20,8 @@ class binlex_methods(Resource):
 class binlex_pe(Resource):
     def post(self):
         """Scan File"""
+<<<<<<< HEAD
         return 'Placeholder' 
+=======
+        return 'Placeholder'
+>>>>>>> blserver

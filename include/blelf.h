@@ -11,7 +11,7 @@
 #ifdef _WIN32
 #define BINLEX_EXPORT __declspec(dllexport)
 #else
-#define BINLEX_EXPORT 
+#define BINLEX_EXPORT
 #endif
 #define ELF_MAX_SECTIONS 256
 
@@ -25,12 +25,17 @@ namespace binlex{
         public:
             ARCH mode = ARCH::EM_NONE;
             unique_ptr<LIEF::ELF::Binary> binary;
+            struct Hash {
+                string sha256;
+            };
             struct Section {
                 uint offset;
                 int size;
                 void *data;
                 set<uint64_t> functions;
+
             };
+            struct Hash hashes;
             struct Section sections[ELF_MAX_SECTIONS];
             BINLEX_EXPORT ELF();
             BINLEX_EXPORT bool Setup(ARCH input_mode);

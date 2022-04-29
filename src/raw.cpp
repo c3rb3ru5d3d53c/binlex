@@ -1,8 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <iostream>
+#include <string>
 #include "raw.h"
 
+using namespace std;
 using namespace binlex;
 
 Raw::Raw(){
@@ -10,14 +13,6 @@ Raw::Raw(){
         sections[i].data = NULL;
         sections[i].size = 0;
     }
-}
-
-int Raw::GetFileSize(FILE *fd){
-    int start = ftell(fd);
-    fseek(fd, 0, SEEK_END);
-    int size = ftell(fd);
-    fseek(fd, start, SEEK_SET);
-    return size;
 }
 
 bool Raw::ReadFile(char *file_path, int section_index){
@@ -28,6 +23,7 @@ bool Raw::ReadFile(char *file_path, int section_index){
     memset(sections[section_index].data, 0, sections[section_index].size);
     fread(sections[section_index].data, sections[section_index].size, 1, fd);
     fclose(fd);
+    sections[section_index].hashes.sha256 = SHA256((char *)sections[section_index].data, sections[section_index].size);
     return true;
 }
 
