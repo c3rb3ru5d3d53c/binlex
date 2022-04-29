@@ -32,8 +32,4 @@ setup(
         "Programming Language :: Python",
         "Operating System :: OS Independent",
     ],
-<<<<<<< HEAD
-) 
-=======
 )
->>>>>>> blserver

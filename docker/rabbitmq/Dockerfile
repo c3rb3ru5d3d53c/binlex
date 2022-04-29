@@ -8,8 +8,4 @@ RUN groupmod -g $GID rabbitmq
 
 EXPOSE 15691 15692 25672
 
-<<<<<<< HEAD
-CMD ["rabbitmq-server"] 
-=======
 CMD ["rabbitmq-server"]
->>>>>>> blserver

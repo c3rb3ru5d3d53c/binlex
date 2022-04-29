@@ -25,8 +25,4 @@ def require_admin(f):
         return {
             'error': 'user or admin api key incorrect or not provided'
         }, 401
-<<<<<<< HEAD
     return decorated_function
-=======
-    return decorated_function
->>>>>>> blserver

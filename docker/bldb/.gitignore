@@ -3,8 +3,4 @@ package-lock.json
 venv/**
 bldb.egg-info/**
 build/**
-<<<<<<< HEAD
 dist/**
-=======
-dist/**
->>>>>>> blserver

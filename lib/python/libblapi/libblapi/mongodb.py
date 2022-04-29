@@ -109,8 +109,4 @@ class MongoDBHandler():
             },
             upsert=True
         ).upserted_id
-<<<<<<< HEAD
         return files_id
-=======
-        return files_id
->>>>>>> blserver
