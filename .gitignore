@@ -12,3 +12,7 @@ pybinlex.egg-info/**
 *.so
 *.whl
 .idea/
+# Apple crap
+.DS_Store
+.AppleDouble
+.LSOverride
