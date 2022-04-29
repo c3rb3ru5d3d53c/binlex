@@ -18,6 +18,8 @@ from libblapiserver.auth import require_user, require_admin
 
 __version__ = '1.1.1'
 
+__pybinversion__ = '2.2.2'
+
 logger = logging.getLogger(__name__)
 
 api = Namespace('binlex', description='Binlex Upload API')
@@ -124,3 +126,75 @@ class binlex_decompile_status(Resource):
             return {
                 'status': 'completed'
             }
+
+#Download sample
+@api.route('/api/v1/samples/<str:sha256>')
+class binlex_v1_samples_download(Resource):
+    @require_user
+    def get(self, sha256):
+        try:
+            data = app.config['minio'].download
+                bucket_name=app.config['amqp_queue_decomp'],
+                object_name=sha256)
+            if data in [None, False]:
+                return {
+                    print "error: no data"
+                }
+            return {
+                print "return object"
+            }
+        except Exception:
+            return {
+                print "return exception?"
+            }
+
+#Upload sample to sample queue
+@api.route('/api/v1/samples/<str:sha256>/<str:mode>')
+class binlex_v1_samples_upload(Resource):
+    @require_user
+    def get(self, sha256):
+        try:
+
+#Get version of pybinlex
+@api.route('/api/v1/version')
+class binlex_v1_version(Resource):
+    @require_user
+    def get(self):
+        """Get the Current Version of Binlex"""
+        return {
+            'version 1': __pybinversion__
+        }
+
+#Check if sample exists
+@api.route('/api/v1/samples/<str:corpus>/<str:sha256>')
+class binlex_v1_samples(Resource):
+    @require_user
+    def head(self, corpus, sha256):
+        try:
+            data = app.config['minio'].download(
+                bucket_name=app.config['amqp_queue_decomp'],
+                object_name=sha256)
+            if data in [None, False]:
+                return {
+                    'exists': 'false'
+                }
+            return {
+                'exists': 'true'
+            }
+        except Exception:
+            return {
+                'status': 'completed'
+            }
+
+#Body contains raw mongodb query
+@api.route('/api/v1/traits')
+class binlex_v1_traits(Resource):
+    @require_user
+    def post(self)
+        try:
+            #if body does not contain mongodb
+            #body=json.dumps(
+                return{
+                    'mongodb': 'does not exist'
+                }
+
