@@ -28,7 +28,7 @@ AutoLex::AutoLex(){
 }
 
 bool AutoLex::HasLimitations(char *file_path){
-    // for now just return false
+    GetFileCharacteristics(file_path);
     return false;
 }
 
@@ -64,7 +64,6 @@ Decompiler AutoLex::ProcessFile(char *file_path, uint threads, uint timeout, uin
 
     Decompiler decompiler;
     if (GetFileCharacteristics(file_path) != true){
-        fprintf(stderr, "[x] error extracting binary characteristics\n");
         return decompiler;
     }
 
