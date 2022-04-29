@@ -12,7 +12,7 @@ void init_elf(py::module &handle){
   .def("read_file", &binlex::ELF::ReadFile)
   .def("get_sections", [](binlex::ELF &module){
         auto result = py::list();
-        for (int i = 0; i < ELF_MAX_SECTIONS; i++){
+        for (int i = 0; i < BINARY_MAX_SECTIONS; i++){
             if (module.sections[i].data != NULL){
                 auto dict = py::dict();
                 dict["size"] = module.sections[i].size;

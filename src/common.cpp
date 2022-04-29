@@ -56,13 +56,15 @@ vector<char> Common::TraitToChar(string trait){
 float Common::Entropy(string trait){
     vector<char> bytes = TraitToChar(trait);
     float result = 0;
-    map<char,int> frequencies;
+    vector<unsigned long> frequencies(256);
     for (char c : bytes){
-        frequencies[c]++;
+	frequencies[static_cast<unsigned char>(c)]++;
     }
-    for (pair<char,int> p : frequencies) {
-        float freq = static_cast<float>( p.second ) / bytes.size();
-        result -= freq * log2(freq) ;
+    for (auto count : frequencies){
+	if(count > 0){
+	    float freq = static_cast<float>( count ) / bytes.size();
+	    result -= freq * log2(freq);
+	}
     }
     return result;
 }
