@@ -27,7 +27,7 @@ AutoLex::AutoLex(){
 bool AutoLex::HasLimitations(char *file_path){
 
     //Check that we can pull the file characteristics
-    if (GetFileCharacteristics(file_path) != true){
+    if (!GetFileCharacteristics(file_path)){
         return true;
     }
 
@@ -100,7 +100,7 @@ bool AutoLex::GetFileCharacteristics(char * file_path){
 
     characteristics.format = bin->format();
 
-    if(bin->header().is_32() == true){
+    if(bin->header().is_32()){
         characteristics.mode = CS_MODE_32;
         if(bin->format() == LIEF::FORMAT_PE) {
             characteristics.machineType = (int) MACHINE_TYPES::IMAGE_FILE_MACHINE_I386;
@@ -109,7 +109,7 @@ bool AutoLex::GetFileCharacteristics(char * file_path){
             characteristics.machineType = (int) ARCH::EM_386;
         }
     }
-    else if(bin->header().is_64() == true){
+    else if(bin->header().is_64()){
         characteristics.mode = CS_MODE_64;
         if(bin->format() == LIEF::FORMAT_PE) {
             characteristics.machineType = (int) MACHINE_TYPES::IMAGE_FILE_MACHINE_AMD64;
@@ -128,24 +128,24 @@ Decompiler AutoLex::ProcessFile(char *file_path, uint threads, uint timeout, uin
 
     Decompiler decompiler;
 
-    if (GetFileCharacteristics(file_path) != true){
+    if (!GetFileCharacteristics(file_path)){
         fprintf(stderr, "Unable to get file characteristics.\n");
         return decompiler;
     }
 
     if(characteristics.format == LIEF::FORMAT_PE){
 
-        if(IsDotNet(file_path) == true){
+        if(IsDotNet(file_path)){
             fprintf(stderr, "CIL Decompiler not implemented.\n");
             return decompiler;
         }
 
         PE pe32;
-        if (pe32.Setup((MACHINE_TYPES)characteristics.machineType) == false){
+        if (!pe32.Setup((MACHINE_TYPES)characteristics.machineType)){
             return decompiler;
         }
 
-        if (pe32.ReadFile(file_path) == false){
+        if (!pe32.ReadFile(file_path)){
             return decompiler;
         }
 
@@ -166,7 +166,7 @@ Decompiler AutoLex::ProcessFile(char *file_path, uint threads, uint timeout, uin
         if (elf.Setup((ARCH)characteristics.machineType) == false){
             return decompiler;
         }
-        if (elf.ReadFile(file_path) == false){
+        if (!elf.ReadFile(file_path)){
             return decompiler;
         }
 
