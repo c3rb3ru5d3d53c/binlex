@@ -4,8 +4,4 @@ config/**
 data/**
 build/**
 samples/**
-<<<<<<< HEAD
 venv/**
-=======
-venv/**
->>>>>>> blserver

@@ -5,8 +5,4 @@ while true; do
         /etc/init.d/nginx start && \
         tail -f /var/log/nginx/access.log /var/log/nginx/error.log;
     sleep 10;
-<<<<<<< HEAD
 done
-=======
-done
->>>>>>> blserver

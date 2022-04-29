@@ -39,8 +39,4 @@ class AMQPHandler():
         amqp_channel = self.amqp.channel()
         amqp_channel.queue_declare(queue=queue)
         amqp_channel.basic_consume(queue=queue, on_message_callback=callback)
-<<<<<<< HEAD
         amqp_channel.start_consuming()
-=======
-        amqp_channel.start_consuming()
->>>>>>> blserver

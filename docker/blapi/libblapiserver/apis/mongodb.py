@@ -17,8 +17,4 @@ class mongodb_collection_count(Resource):
         """Get MongoDB Version"""
         return {
             'version': pymongo.__version__
-<<<<<<< HEAD
         }
-=======
-        }
->>>>>>> blserver

@@ -65,8 +65,4 @@ class MinIOHandler():
         self.cursor.remove_object(
             bucket_name=bucket_name,
             object_name=object_name)
-<<<<<<< HEAD
         return True
-=======
-        return True
->>>>>>> blserver

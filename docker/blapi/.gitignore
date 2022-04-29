@@ -4,8 +4,4 @@ build/**
 dist/**
 __pycache__/
 *.conf
-<<<<<<< HEAD
 *.ini
-=======
-*.ini
->>>>>>> blserver

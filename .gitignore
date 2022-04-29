@@ -19,8 +19,4 @@ ssl/**
 config/**
 docker-compose.yml
 test/**
-<<<<<<< HEAD
 .ipynb_checkpoints/**
-=======
-.ipynb_checkpoints/**
->>>>>>> blserver
