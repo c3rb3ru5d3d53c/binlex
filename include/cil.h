@@ -16,6 +16,8 @@
 #ifndef CIL_H
 #define CIL_H
 
+#define INVALID_OP 0xFFFFFFFF
+
 // CIL Decompiler Types
 #define CIL_DECOMPILER_TYPE_FUNCS 0
 #define CIL_DECOMPILER_TYPE_BLCKS 1
@@ -264,11 +266,49 @@ namespace binlex {
             int type = CIL_DECOMPILER_TYPE_UNSET;
             char * hexdump_traits(char *buffer0, const void *data, int size, int operand_size);
             char * traits_nl(char *traits);
+            typedef struct worker {
+                csh handle;
+                cs_err error;
+                uint64_t pc;
+                const uint8_t *code;
+                size_t code_size;
+            } worker;
+            typedef struct{
+                uint index;
+                void *sections;
+            } worker_args;
         public:
             CILDecompiler();
+            struct Trait {
+                char *corpus;
+                char *type;
+                char *architecture;
+                string tmp_bytes;
+                char *bytes;
+                string tmp_trait;
+                char *trait;
+                uint edges;
+                uint blocks;
+                uint instructions;
+                uint size;
+                uint operand_size;
+                uint offset;
+                uint invalid_instructions;
+                uint cyclomatic_complexity;
+                uint average_instructions_per_block;
+                float bytes_entropy;
+                float trait_entropy;
+                char *trait_sha256;
+                char *bytes_sha256;
+            };
+            struct Instruction {
+                uint instruction;
+                uint operand_size;
+            };
             struct Section {
                 char *function_traits;
                 char *block_traits;
+                char *trait;
                 cs_arch arch;
                 cs_mode mode;
                 char *arch_str;
@@ -280,6 +320,7 @@ namespace binlex {
                 useconds_t thread_sleep;
                 uint offset;
                 uint ntraits;
+                struct Trait **traits;
                 void *data;
                 size_t data_size;
                 set<uint64_t> coverage;
@@ -288,10 +329,42 @@ namespace binlex {
                 queue<uint64_t> discovered;
             };
             struct Section sections[CIL_DECOMPILER_MAX_SECTIONS];
+            //Map containing prefix instructions and their operand sizes
+            map<int, int> prefixInstrMap;
+            //Map containing conditional instructions and their operand sizes
+            map<int, int> condInstrMap;
+            //Map for all remaining instruction types that don't need special
+            //treatment
+            map<int, int> miscInstrMap;
             bool Setup(int input_type);
             bool Decompile(void *data, int data_size, int index);
             void WriteTraits(char *file_path);
             void PrintTraits();
+            void AppendTrait(struct Trait *trait, struct Section *sections, uint index);
+            void SetThreads(uint threads, uint thread_cycles, uint thread_sleep, uint index);
+            void SetCorpus(char *corpus, uint index);
+            void SetInstructions(bool instructions, uint index);
+            string GetTrait(struct Trait *trait, bool pretty);
+            /**
+            Checks if CIL instruction is conditional for stats
+            @param insn Source instruction to check and resulting operand size
+            */
+            bool IsConditionalInsn(Instruction *insn);
+            /**
+            Checks if CIL instruction a prefix instruction
+            @param insn Source instruction to check and resulting operand size
+            */
+            bool IsPrefixInstr(Instruction *insn);
+            void IsWildcardInsn(Trait *trait);
+            void IsEndInsn(Trait *trait);
+
+            void * DecompileWorker(void *args);
+            void * TraitWorker(void *args);
+            bool IsVisited(map<uint64_t, int> &visited, uint64_t address);
+            bool IsWildcardInsn(cs_insn *insn);
+            void ClearTrait(struct Trait *trait);
+            void AppendQueue(set<uint64_t> &addresses, uint operand_type, uint index);
+            void FreeTraits(uint index);
             ~CILDecompiler();
     };
 };
