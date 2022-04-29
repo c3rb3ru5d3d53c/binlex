@@ -1,8 +1,8 @@
-#include <iostream>
-#include <vector>
-
 #ifndef COMMON_H
 #define COMMON_H
+
+#include <iostream>
+#include <vector>
 
 #ifdef _WIN32
 #define BINLEX_EXPORT __declspec(dllexport)
@@ -10,7 +10,10 @@
 #define BINLEX_EXPORT 
 #endif
 
-using namespace std;
+using std::string;
+using std::vector;
+
+#define BINARY_MAX_SECTIONS 256
 
 #ifdef _WIN32
 typedef unsigned int uint;
