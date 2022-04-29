@@ -46,7 +46,7 @@ namespace binlex {
             @param file_path path to the executable
             @return bool
             */
-            BINLEX_EXPORT bool ReadFile(char *file_path);
+            virtual BINLEX_EXPORT bool ReadFile(char *file_path);
             /**
             @param data pointer to executable in memory
             @param size size of the data
@@ -59,6 +59,11 @@ namespace binlex {
             @return bool
             */
             BINLEX_EXPORT bool Setup(MACHINE_TYPES input_mode);
+	    /*
+	    Check if the PE file is a .NET file
+	    @return bool
+	    */
+	    BINLEX_EXPORT bool IsDotNet();
             BINLEX_EXPORT ~PE();
     };
 };
