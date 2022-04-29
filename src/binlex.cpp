@@ -42,163 +42,154 @@ void start_timeout(time_t seconds){
 #endif
 
 int main(int argc, char **argv){
-    Args args;
-    args.parse(argc, argv);
-    if (args.options.timeout > 0){
+    g_args.parse(argc, argv);
+    if (g_args.options.timeout > 0){
         #if defined(__linux__) || defined(__APPLE__)
-        start_timeout(args.options.timeout);
+        start_timeout(g_args.options.timeout);
         #endif
     }
-    if (args.options.mode == NULL){
-        args.print_help();
+    if (g_args.options.mode == NULL){
+        g_args.print_help();
         return EXIT_FAILURE;
     }
-    if (strcmp(args.options.mode, (char *)"elf:x86_64") == 0 &&
-        args.options.io_type == ARGS_IO_TYPE_FILE){
+    if (strcmp(g_args.options.mode, (char *)"elf:x86_64") == 0 &&
+        g_args.options.io_type == ARGS_IO_TYPE_FILE){
         ELF elf64;
         if (elf64.Setup(ARCH::EM_X86_64) == false){
             return EXIT_FAILURE;
         }
-        if (elf64.ReadFile(args.options.input) == false){
+        if (elf64.ReadFile(g_args.options.input) == false){
             return EXIT_FAILURE;
         }
+        DEBUG_PRINT("Number of total sections = %u\n", elf64.total_exec_sections);
+
         Decompiler decompiler;
         for (int i = 0; i < elf64.total_exec_sections; i++){
             decompiler.Setup(CS_ARCH_X86, CS_MODE_64, i);
-            decompiler.SetThreads(args.options.threads, args.options.thread_cycles, args.options.thread_sleep, i);
-            decompiler.SetCorpus(args.options.corpus, i);
-            decompiler.SetInstructions(args.options.instructions, i);
             decompiler.AppendQueue(elf64.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
             decompiler.Decompile(elf64.sections[i].data, elf64.sections[i].size, elf64.sections[i].offset, i);
         }
-        if (args.options.output == NULL){
-            decompiler.PrintTraits(args.options.pretty);
+        if (g_args.options.output == NULL){
+            decompiler.PrintTraits(g_args.options.pretty);
         } else {
-            decompiler.WriteTraits(args.options.output, args.options.pretty);
+            decompiler.WriteTraits(g_args.options.output, g_args.options.pretty);
         }
         return EXIT_SUCCESS;
     }
-    if (strcmp(args.options.mode, (char *)"elf:x86") == 0 &&
-        args.options.io_type == ARGS_IO_TYPE_FILE){
+    if (strcmp(g_args.options.mode, (char *)"elf:x86") == 0 &&
+        g_args.options.io_type == ARGS_IO_TYPE_FILE){
         ELF elf32;
         if (elf32.Setup(ARCH::EM_386) == false){
             return EXIT_FAILURE;
         }
-        if (elf32.ReadFile(args.options.input) == false){
+        if (elf32.ReadFile(g_args.options.input) == false){
             return EXIT_FAILURE;
         }
+        DEBUG_PRINT("Number of total sections = %u\n", elf32.total_exec_sections);
+
         Decompiler decompiler;
         for (int i = 0; i < elf32.total_exec_sections; i++){
             decompiler.Setup(CS_ARCH_X86, CS_MODE_32, i);
-            decompiler.SetThreads(args.options.threads, args.options.thread_cycles, args.options.thread_sleep, i);
-            decompiler.SetCorpus(args.options.corpus, i);
-            decompiler.SetInstructions(args.options.instructions, i);
             decompiler.AppendQueue(elf32.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
             decompiler.Decompile(elf32.sections[i].data, elf32.sections[i].size, elf32.sections[i].offset, i);
         }
-        if (args.options.output == NULL){
-            decompiler.PrintTraits(args.options.pretty);
+        if (g_args.options.output == NULL){
+            decompiler.PrintTraits(g_args.options.pretty);
         } else {
-            decompiler.WriteTraits(args.options.output, args.options.pretty);
+            decompiler.WriteTraits(g_args.options.output, g_args.options.pretty);
         }
         return EXIT_SUCCESS;
     }
-    if (strcmp(args.options.mode, (char *)"pe:x86") == 0 &&
-        args.options.io_type == ARGS_IO_TYPE_FILE){
+    if (strcmp(g_args.options.mode, (char *)"pe:x86") == 0 &&
+        g_args.options.io_type == ARGS_IO_TYPE_FILE){
         PE pe32;
         if (pe32.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_I386) == false){
             return EXIT_FAILURE;
         }
-        if (pe32.ReadFile(args.options.input) == false){
+        if (pe32.ReadFile(g_args.options.input) == false){
             return EXIT_FAILURE;
         }
+        DEBUG_PRINT("Number of total sections = %u\n", pe32.total_exec_sections);
+
         Decompiler decompiler;
         for (int i = 0; i < pe32.total_exec_sections; i++){
             decompiler.Setup(CS_ARCH_X86, CS_MODE_32, i);
-            decompiler.SetThreads(args.options.threads, args.options.thread_cycles, args.options.thread_sleep, i);
-            decompiler.SetCorpus(args.options.corpus, i);
-            decompiler.SetInstructions(args.options.instructions, i);
             decompiler.AppendQueue(pe32.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
             decompiler.Decompile(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, i);
         }
-        if (args.options.output == NULL){
-            decompiler.PrintTraits(args.options.pretty);
+        if (g_args.options.output == NULL){
+            decompiler.PrintTraits(g_args.options.pretty);
         } else {
-            decompiler.WriteTraits(args.options.output, args.options.pretty);
+            decompiler.WriteTraits(g_args.options.output, g_args.options.pretty);
         }
         return EXIT_SUCCESS;
     }
-    if (strcmp(args.options.mode, (char *)"pe:x86_64") == 0 &&
-        args.options.io_type == ARGS_IO_TYPE_FILE){
+    if (strcmp(g_args.options.mode, (char *)"pe:x86_64") == 0 &&
+        g_args.options.io_type == ARGS_IO_TYPE_FILE){
         PE pe64;
         if (pe64.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_AMD64) == false){
             return EXIT_FAILURE;
         }
-        if (pe64.ReadFile(args.options.input) == false){
+        if (pe64.ReadFile(g_args.options.input) == false){
             return EXIT_FAILURE;
         }
+        DEBUG_PRINT("Number of total sections = %u\n", pe64.total_exec_sections);
+
         Decompiler decompiler;
         for (int i = 0; i < pe64.total_exec_sections; i++){
             decompiler.Setup(CS_ARCH_X86, CS_MODE_64, i);
-            decompiler.SetThreads(args.options.threads, args.options.thread_cycles, args.options.thread_sleep, i);
-            decompiler.SetCorpus(args.options.corpus, i);
-            decompiler.SetInstructions(args.options.instructions, i);
             decompiler.AppendQueue(pe64.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
             decompiler.Decompile(pe64.sections[i].data, pe64.sections[i].size, pe64.sections[i].offset, i);
         }
-        if (args.options.output == NULL){
-            decompiler.PrintTraits(args.options.pretty);
+        if (g_args.options.output == NULL){
+            decompiler.PrintTraits(g_args.options.pretty);
         } else {
-            decompiler.WriteTraits(args.options.output, args.options.pretty);
+            decompiler.WriteTraits(g_args.options.output, g_args.options.pretty);
         }
         return EXIT_SUCCESS;
     }
-    if (strcmp(args.options.mode, (char *)"raw:x86") == 0 &&
-        args.options.io_type == ARGS_IO_TYPE_FILE){
+    if (strcmp(g_args.options.mode, (char *)"raw:x86") == 0 &&
+        g_args.options.io_type == ARGS_IO_TYPE_FILE){
         Raw rawx86;
-        if (rawx86.ReadFile(args.options.input, 0) == false)
+        if (rawx86.ReadFile(g_args.options.input, 0) == false)
         {
             return EXIT_FAILURE;
         }
+
         Decompiler decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_32, 0);
-        decompiler.SetThreads(args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
-        decompiler.SetCorpus(args.options.corpus, 0);
-        decompiler.SetInstructions(args.options.instructions, 0);
         decompiler.Decompile(rawx86.sections[0].data, rawx86.sections[0].size, rawx86.sections[0].offset, 0);
-        if (args.options.output == NULL){
-            decompiler.PrintTraits(args.options.pretty);
+        if (g_args.options.output == NULL){
+            decompiler.PrintTraits(g_args.options.pretty);
         } else {
-            decompiler.WriteTraits(args.options.output, args.options.pretty);
+            decompiler.WriteTraits(g_args.options.output, g_args.options.pretty);
         }
         return EXIT_SUCCESS;
     }
-    if (strcmp(args.options.mode, (char *)"raw:x86_64") == 0 &&
-        args.options.io_type == ARGS_IO_TYPE_FILE){
+    if (strcmp(g_args.options.mode, (char *)"raw:x86_64") == 0 &&
+        g_args.options.io_type == ARGS_IO_TYPE_FILE){
         Raw rawx86_64;
-        if (rawx86_64.ReadFile(args.options.input, 0) == false)
+        if (rawx86_64.ReadFile(g_args.options.input, 0) == false)
         {
             return EXIT_FAILURE;
         }
+
         Decompiler decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_64, 0);
-        decompiler.SetThreads(args.options.threads, args.options.thread_cycles, args.options.thread_sleep, 0);
-        decompiler.SetCorpus(args.options.corpus, 0);
-        decompiler.SetInstructions(args.options.instructions, 0);
         decompiler.Decompile(rawx86_64.sections[0].data, rawx86_64.sections[0].size, rawx86_64.sections[0].offset, 0);
-        if (args.options.output == NULL){
-            decompiler.PrintTraits(args.options.pretty);
+        if (g_args.options.output == NULL){
+            decompiler.PrintTraits(g_args.options.pretty);
         } else {
-            decompiler.WriteTraits(args.options.output, args.options.pretty);
+            decompiler.WriteTraits(g_args.options.output, g_args.options.pretty);
         }
         return EXIT_SUCCESS;
     }
-    if (strcmp(args.options.mode, (char *)"raw:cil") == 0 &&
-        args.options.io_type == ARGS_IO_TYPE_FILE){
+    if (strcmp(g_args.options.mode, (char *)"raw:cil") == 0 &&
+        g_args.options.io_type == ARGS_IO_TYPE_FILE){
         printf("comming soon...\n");
         return EXIT_FAILURE;
     }
 
-    args.print_help();
+    g_args.print_help();
     return EXIT_FAILURE;
 }
