@@ -1,3 +1,6 @@
+#ifndef DECOMPILER_H
+#define DECOMPILER_H
+
 #include <vector>
 #include <queue>
 #include <set>
@@ -5,9 +8,6 @@
 #include <capstone/capstone.h>
 #include "common.h"
 #include "json.h"
-
-#ifndef DECOMPILER_H
-#define DECOMPILER_H
 
 #ifdef _WIN32
 #define BINLEX_EXPORT __declspec(dllexport)
