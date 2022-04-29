@@ -126,6 +126,7 @@ add_library(binlex SHARED
     src/pe-dotnet.cpp
     src/cil.cpp
     src/pe.cpp
+    src/file.cpp
     src/sha256.c
 )
 
@@ -139,6 +140,7 @@ target_link_libraries(binlex
         lief_static
         capstone_static
         -lpthread
+	-ltlsh
 )
 
 set_target_properties(binlex
