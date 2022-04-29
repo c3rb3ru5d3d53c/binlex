@@ -22,7 +22,7 @@
 #define CIL_DECOMPILER_TYPE_UNSET 2
 #define CIL_DECOMPILER_TYPE_ALL   3
 
-#define CIL_DECOMPILER_MAX_SECTIONS 256 
+#define CIL_DECOMPILER_MAX_SECTIONS 256
 #define CIL_DECOMPILER_MAX_INSN     16384
 
 // CIL Instructions
@@ -257,6 +257,8 @@
 #define CIL_INS_TAIL           0x14
 #define CIL_INS_UNALIGNED      0x12
 #define CIL_INS_VOLATILE       0x13
+
+using namespace std;
 
 namespace binlex {
     class CILDecompiler : public Common {
