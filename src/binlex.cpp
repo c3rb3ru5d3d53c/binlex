@@ -56,6 +56,13 @@ int main(int argc, char **argv){
         args.options.io_type == ARGS_IO_TYPE_FILE){
 
         AutoLex autolex;
+
+        // check for limitations
+        if(autolex.HasLimitations(args.options.input) == true){
+            printf("[x] File has limitations and can't be processed. Select a mode to force analysis.\n");
+            return 1;
+        }
+
         Decompiler decompiler {autolex.ProcessFile(args.options.input, \
         args.options.threads, \
         args.options.timeout, \
