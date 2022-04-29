@@ -1,3 +1,6 @@
-.env
-.init.js
 data/**
+docker-compose.yml
+scripts/**
+ssl/**
+*.key
+config/**
