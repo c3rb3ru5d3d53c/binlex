@@ -123,6 +123,8 @@ add_library(binlex SHARED
     src/common.cpp
     src/blelf.cpp
     src/decompiler.cpp
+    src/pe-dotnet.cpp
+    src/cil.cpp
     src/pe.cpp
     src/sha256.c
 )
