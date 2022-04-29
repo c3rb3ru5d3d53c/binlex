@@ -14,10 +14,6 @@ extern "C" {
     #include "sha256.h"
 }
 #include "common.h"
-#ifdef _WIN32
-#pragma comment(lib, "capstone")
-#pragma comment(lib, "LIEF")
-#endif
 
 using namespace std;
 using namespace binlex;
@@ -31,40 +27,13 @@ string Common::Wildcards(uint count){
     return TrimRight(s.str());
 }
 
-string Common::SHA256(char *data, size_t size){
+string Common::SHA256(char *trait){
     BYTE hash[SHA256_BLOCK_SIZE];
     SHA256_CTX ctx;
     sha256_init(&ctx);
-    sha256_update(&ctx, (BYTE *)data, size);
+    sha256_update(&ctx, (BYTE *)trait, strlen(trait));
     sha256_final(&ctx, hash);
     return RemoveSpaces(HexdumpBE(&hash, SHA256_BLOCK_SIZE));
-}
-
-int Common::GetFileSize(FILE *fd){
-    int start = ftell(fd);
-    fseek(fd, 0, SEEK_END);
-    int size = ftell(fd);
-    fseek(fd, start, SEEK_SET);
-    return size;
-}
-
-string Common::GetFileSHA256(char *file_path){
-    FILE *fd = fopen(file_path, "rb");
-    int size = GetFileSize(fd);
-    void *data = malloc(size);
-    memset(data, 0, size);
-    fread(data, size, 1, fd);
-    fclose(fd);
-    string hash = SHA256((char *)data, size);
-    free(data);
-    return hash;
-}
-
-char * Common::StringAllocCharPtr(string input_string){
-    char *output = (char *)malloc(strlen(input_string.c_str()) + 1);
-    memset(output, 0, strlen(input_string.c_str()) + 1);
-    memcpy(output, input_string.c_str(), strlen(input_string.c_str()));
-    return output;
 }
 
 vector<char> Common::TraitToChar(string trait){
@@ -81,15 +50,13 @@ vector<char> Common::TraitToChar(string trait){
 float Common::Entropy(string trait){
     vector<char> bytes = TraitToChar(trait);
     float result = 0;
-    vector<unsigned long> frequencies(256);
+    map<char,int> frequencies;
     for (char c : bytes){
-	frequencies[static_cast<unsigned char>(c)]++;
+        frequencies[c]++;
     }
-    for (auto count : frequencies){
-	if(count > 0){
-	    float freq = static_cast<float>( count ) / bytes.size();
-	    result -= freq * log2(freq);
-	}
+    for (pair<char,int> p : frequencies) {
+        float freq = static_cast<float>( p.second ) / bytes.size();
+        result -= freq * log2(freq) ;
     }
     return result;
 }
@@ -126,7 +93,7 @@ string Common::HexdumpBE(const void *data, size_t size){
     bytes << "";
     const unsigned char *local_pc = (const unsigned char *)data;
     for (int i = 0; i < size; i++){
-        bytes << hex << setfill('0') << setw(2) << (uint32_t)local_pc[i] << " ";
+        bytes << hex << setfill('0') << setw(2) << (unsigned uint32_t)local_pc[i] << " ";
     }
     return TrimRight(bytes.str());
 }
@@ -136,7 +103,7 @@ string Common::HexdumpMemDisp(uint64_t disp){
     const unsigned char *local_pc = (const unsigned char *)&disp;
     for (int i = 0; i < sizeof(disp) -1 ; i++){
         if (local_pc[i] != 0 && local_pc[i] != 255){
-            bytes << hex << setfill('0') << setw(2) << (uint32_t)local_pc[i] << " ";
+            bytes << hex << setfill('0') << setw(2) << (unsigned uint32_t)local_pc[i] << " ";
         }
     }
     return TrimRight(bytes.str());

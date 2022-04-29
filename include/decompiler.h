@@ -1,19 +1,12 @@
 #include <vector>
 #include <queue>
 #include <set>
-#include <stdint.h>
 #include <capstone/capstone.h>
 #include "common.h"
 #include "json.h"
 
 #ifndef DECOMPILER_H
 #define DECOMPILER_H
-
-#ifdef _WIN32
-#define BINLEX_EXPORT __declspec(dllexport)
-#else
-#define BINLEX_EXPORT
-#endif
 
 #define DECOMPILER_MAX_SECTIONS 256
 
@@ -44,9 +37,6 @@ namespace binlex {
             uint index;
             void *sections;
         } worker_args;
-        typedef struct Hash {
-            string sha256;
-        } Hash;
     public:
         struct Trait {
             char *corpus;
@@ -68,8 +58,6 @@ namespace binlex {
             float trait_entropy;
             char *trait_sha256;
             char *bytes_sha256;
-            char *file_sha256;
-            char *blmode;
         };
         struct Section {
             cs_arch arch;
@@ -90,11 +78,9 @@ namespace binlex {
             map<uint64_t, uint> addresses;
             map<uint64_t, int> visited;
             queue<uint64_t> discovered;
-            char *file_sha256;
-            char *blmode;
         };
         struct Section sections[DECOMPILER_MAX_SECTIONS];
-        BINLEX_EXPORT Decompiler();
+        Decompiler();
         /**
         Set up Capstone Decompiler Architecure and Mode
         @param arch Capstone Decompiler Architecure
@@ -105,33 +91,31 @@ namespace binlex {
         @param index section index
         @return bool
         */
-        BINLEX_EXPORT bool Setup(cs_arch arch, cs_mode mode, uint index);
-        BINLEX_EXPORT void SetFileSHA256(string sha256, uint index);
-        BINLEX_EXPORT void SetMode(string mode, uint index);
+        bool Setup(cs_arch arch, cs_mode mode, uint index);
         /**
         Set Threads and Thread Cycles
         @param threads number of threads
         @param thread_cycles thread cycles
         @param index the section index
         */
-        BINLEX_EXPORT void SetThreads(uint threads, uint thread_cycles, uint thread_sleep, uint index);
+        void SetThreads(uint threads, uint thread_cycles, uint thread_sleep, uint index);
         /**
         Sets The Corpus Name
         @param corpus pointer to corpus name
         @param index the section index
         */
-        BINLEX_EXPORT void SetCorpus(string corpus, uint index);
+        void SetCorpus(char *corpus, uint index);
         /**
         @param instructions bool to collect instructions traits or not
         @param index the section index
         */
-        BINLEX_EXPORT void SetInstructions(bool instructions, uint index);
+        void SetInstructions(bool instructions, uint index);
         /**
         Decompiler Thread Worker
         @param args pointer to worker arguments
         @returns NULL
         */
-        BINLEX_EXPORT static void * DecompileWorker(void *args);
+        static void * DecompileWorker(void *args);
         /**
         Collect Function and Conditional Operands for Processing
         @param insn the instruction
@@ -139,14 +123,14 @@ namespace binlex {
         @param index the section index
         @return bool
         */
-        BINLEX_EXPORT static void CollectOperands(cs_insn* insn, int operand_type, struct Section *sections, uint index);
+        static void CollectOperands(cs_insn* insn, int operand_type, struct Section *sections, uint index);
         /**
         Collect Instructions for Processing
         @param insn the instruction
         @param index the section index
         @return operand type
         */
-        BINLEX_EXPORT static uint CollectInsn(cs_insn* insn, struct Section *sections, uint index);
+        static uint CollectInsn(cs_insn* insn, struct Section *sections, uint index);
         /**
         Decompiles Target Data
         @param data pointer to data
@@ -154,7 +138,7 @@ namespace binlex {
         @param offset include section offset
         @param index the section index
         */
-        BINLEX_EXPORT void Decompile(void* data, size_t data_size, size_t offset, uint index);
+        void Decompile(void* data, size_t data_size, size_t offset, uint index);
         //void Seek(uint64_t address, size_t data_size, uint index);
         /**
         Append Additional Traits
@@ -163,74 +147,74 @@ namespace binlex {
         @param index the section index
         @return bool
         */
-        BINLEX_EXPORT static void AppendTrait(struct Trait *trait, struct Section *sections, uint index);
-        BINLEX_EXPORT void FreeTraits(uint index);
+        static void AppendTrait(struct Trait *trait, struct Section *sections, uint index);
+        void FreeTraits(uint index);
         /**
         Checks if the Instruction is an Ending Instruction
         @param insn the instruction
         @return bool
         */
-        BINLEX_EXPORT static bool IsEndInsn(cs_insn *insn);
+        static bool IsEndInsn(cs_insn *insn);
         /**
         Checks if Instruction is Conditional
         @param insn the instruction
         @return edges if > 0; then is conditional
         */
-        BINLEX_EXPORT static uint IsConditionalInsn(cs_insn *insn);
+        static uint IsConditionalInsn(cs_insn *insn);
         /**
         Checks Code Coverage for Max Address
         @param coverage set of addresses decompiled
         @return the maximum address from the set
         */
-        BINLEX_EXPORT static uint64_t MaxAddress(set<uint64_t> coverage);
+        static uint64_t MaxAddress(set<uint64_t> coverage);
         /**
         Checks if Address if Function
         @param address address to check
         @return bool
         */
-        BINLEX_EXPORT static bool IsFunction(map<uint64_t, uint> &addresses, uint64_t address);
+        static bool IsFunction(map<uint64_t, uint> &addresses, uint64_t address);
         /**
         Checks if Address if Function
         @param address address to check
         @return bool
         */
-        BINLEX_EXPORT static bool IsBlock(map<uint64_t, uint> &addresses, uint64_t address);
+        static bool IsBlock(map<uint64_t, uint> &addresses, uint64_t address);
         /**
         Checks if Address was Already Visited
         @param address address to check
         @return bool
         */
-        BINLEX_EXPORT static bool IsVisited(map<uint64_t, int> &visited, uint64_t address);
+        static bool IsVisited(map<uint64_t, int> &visited, uint64_t address);
         /**
         Check if Function or Block Address Collected
         @param address the address to check
         @return bool
         */
-        BINLEX_EXPORT bool IsAddress(map<uint64_t, uint> &addresses, uint64_t address, uint index);
+        bool IsAddress(map<uint64_t, uint> &addresses, uint64_t address, uint index);
         /**
         Checks if Instruction is Wildcard Instruction
         @param insn the instruction
         @return bool
         */
-        BINLEX_EXPORT static bool IsWildcardInsn(cs_insn *insn);
+        static bool IsWildcardInsn(cs_insn *insn);
         /**
         Wildcard Instruction
         @param insn the instruction
         @return trait wildcard byte string
         */
-        BINLEX_EXPORT static string WildcardInsn(cs_insn *insn);
+        static string WildcardInsn(cs_insn *insn);
         /**
         Clear Trait Values Except Type
         @param trait the trait struct address
         */
-        BINLEX_EXPORT static void ClearTrait(struct Trait *trait);
+        static void ClearTrait(struct Trait *trait);
         /**
         Gets Trait as JSON
         @param trait pointer to trait structure
         @param pretty pretty print
         @return json string
         */
-        BINLEX_EXPORT static string GetTrait(struct Trait *trait, bool pretty);
+        static string GetTrait(struct Trait *trait, bool pretty);
         /**
         Get Traits as JSON
         @param pretty pretty print json
@@ -240,17 +224,17 @@ namespace binlex {
         /**
         @param pretty pretty print traits
         */
-        BINLEX_EXPORT void PrintTraits(bool pretty);
+        void PrintTraits(bool pretty);
         /**
         Write Traits to File
         @param file_path path to the file
         @param pretty pretty print traits
         */
-        BINLEX_EXPORT void WriteTraits(char *file_path, bool pretty);
-        BINLEX_EXPORT static void * TraitWorker(void *args);
-        BINLEX_EXPORT void AppendQueue(set<uint64_t> &addresses, uint operand_type, uint index);
+        void WriteTraits(char *file_path, bool pretty);
+        static void * TraitWorker(void *args);
+        void AppendQueue(set<uint64_t> &addresses, uint operand_type, uint index);
         //void Seek(uint offset, uint index);
-        BINLEX_EXPORT ~Decompiler();
+        ~Decompiler();
 
     };
 }

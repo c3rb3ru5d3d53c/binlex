@@ -2,10 +2,9 @@
 #include <memory>
 #include <vector>
 #include <set>
+#include <LIEF/PE.hpp>
 #include "pe.h"
 #include "common.h"
-#include <iostream>
-#include <LIEF/PE.hpp>
 
 using namespace std;
 using namespace binlex;
@@ -29,15 +28,16 @@ bool PE::Setup(MACHINE_TYPES input_mode){
             break;
         default:
             mode = MACHINE_TYPES::IMAGE_FILE_MACHINE_UNKNOWN;
+            fprintf(stderr, "[x] unsupported mode.\n");
             return false;
     }
     return true;
 }
 
 bool PE::ReadFile(char *file_path){
-    hashes.sha256 = GetFileSHA256(file_path);
     binary = Parser::parse(file_path);
     if (mode != binary->header().machine()){
+        fprintf(stderr, "[x] incorrect mode for binary architecture\n");
         return false;
     }
     ParseSections();
@@ -45,10 +45,10 @@ bool PE::ReadFile(char *file_path){
 }
 
 bool PE::ReadBuffer(void *data, size_t size){
-    hashes.sha256 = SHA256((char *)data, size);
     vector<uint8_t> data_v((uint8_t *)data, (uint8_t *)data + size);
     binary = Parser::parse(data_v);
     if (mode != binary->header().machine()){
+        fprintf(stderr, "[x] incorrect mode for binary architecture\n");
         return false;
     }
     ParseSections();
