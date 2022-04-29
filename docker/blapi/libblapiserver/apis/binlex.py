@@ -193,8 +193,34 @@ class binlex_v1_traits(Resource):
     def post(self)
         try:
             #if body does not contain mongodb
-            #body=json.dumps(
+            if body=json.dump != true:
                 return{
                     'mongodb': 'does not exist'
                 }
+            return {
+                'mongodb': 'exists'
+            }
+            
+#List supported Corpra
+@api.route('/api/v1/samples/corpra')
+class binlex_v1_samples_list_corpra(Resource):
+    @require_user
+    def get(self)
+        return corpra
+
+#List supported modes
+@api.route('/api/v1/samples/modes')
+class binlex_v1_samples_list_modes(Resource):
+    @require_user
+    def get(self)
+        return modes
+
+#List of sha256 samples with the same trait
+@api.route('/api/v1/traits/<str:corpus>/<str:sha256>')
+class binlex_v1_same_traits(Resource):
+    @require_user
+    def get(self, corpus, sha256)
+        return traits
+
+        
 
