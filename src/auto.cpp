@@ -1,3 +1,123 @@
 //
 // Created by idiom on 2022-04-28.
 //
+#ifdef _WIN32
+#include <Windows.h>
+#endif
+#include <iostream>
+#include <fstream>
+#include <memory>
+#include <iostream>
+#include <exception>
+#include <stdexcept>
+#include "auto.h"
+#include "pe.h"
+#include "blelf.h"
+#include "decompiler.h"
+#include <LIEF/LIEF.hpp>
+#include <LIEF/PE.hpp>
+
+using namespace std;
+using namespace binlex;
+
+AutoLex::AutoLex(){
+    characteristics.mode = CS_MODE_32;
+    characteristics.format = LIEF::FORMAT_PE;
+    characteristics.arch = CS_ARCH_X86;
+    characteristics.machineType = (int) MACHINE_TYPES::IMAGE_FILE_MACHINE_I386;
+}
+
+bool AutoLex::HasLimitations(char *file_path){
+    // for now just return false
+    return false;
+}
+
+bool AutoLex::GetFileCharacteristics(char * file_path){
+
+    auto bin = LIEF::Parser::parse(file_path);
+
+    characteristics.format = bin->format();
+
+    if(bin->header().is_32() == true){
+        characteristics.mode = CS_MODE_32;
+        if(bin->format() == LIEF::FORMAT_PE) {
+            characteristics.machineType = (int) MACHINE_TYPES::IMAGE_FILE_MACHINE_I386;
+        }
+        else if(bin->format() == LIEF::FORMAT_ELF) {
+            characteristics.machineType = (int) ARCH::EM_386;
+        }
+    }
+    else if(bin->header().is_64() == true){
+        characteristics.mode = CS_MODE_64;
+        if(bin->format() == LIEF::FORMAT_PE) {
+            characteristics.machineType = (int) MACHINE_TYPES::IMAGE_FILE_MACHINE_AMD64;
+        }
+        else if(bin->format() == LIEF::FORMAT_ELF) {
+            characteristics.machineType = (int) ARCH::EM_X86_64;
+        }
+    }
+
+    return true;
+}
+
+Decompiler AutoLex::ProcessFile(char *file_path, uint threads, uint timeout, uint thread_cycles, useconds_t thread_sleep, bool instructions, char *corpus){
+
+    Decompiler decompiler;
+    if (GetFileCharacteristics(file_path) != true){
+        fprintf(stderr, "[x] error extracting binary characteristics\n");
+        return decompiler;
+    }
+
+    if(characteristics.format == LIEF::FORMAT_PE){
+
+        // Todo:
+        // 1) Check if the file has any limitations and shouldn't be processed.
+        // 2) check if the file is a .net/cil excutable and route to the CIL decompiler
+        // 3) raise exceptions instead of returning a null decompiler  to better handle being called as a lib
+        PE pe32;
+        if (pe32.Setup((MACHINE_TYPES)characteristics.machineType) == false){
+
+            return decompiler;
+        }
+
+        if (pe32.ReadFile(file_path) == false){
+
+            return decompiler;
+        }
+
+        for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++) {
+            if (pe32.sections[i].data != NULL) {
+                decompiler.Setup(characteristics.arch, characteristics.mode, i);
+                decompiler.SetThreads(threads, thread_cycles, thread_sleep, i);
+                decompiler.SetCorpus(corpus, i);
+                decompiler.SetInstructions(instructions, i);
+                decompiler.AppendQueue(pe32.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
+                decompiler.Decompile(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, i);
+            }
+        }
+
+    }
+    else if(characteristics.format == LIEF::FORMAT_ELF){
+        ELF elf;
+
+        if (elf.Setup((ARCH)characteristics.machineType) == false){
+            return decompiler;
+        }
+        if (elf.ReadFile(file_path) == false){
+            return decompiler;
+        }
+
+        for (int i = 0; i < ELF_MAX_SECTIONS; i++){
+            if (elf.sections[i].data != NULL){
+                decompiler.Setup(characteristics.arch, characteristics.mode, i);
+                decompiler.SetThreads(threads, thread_cycles, thread_sleep, i);
+                decompiler.SetCorpus(corpus, i);
+                decompiler.SetInstructions(instructions, i);
+                decompiler.AppendQueue(elf.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
+                decompiler.Decompile(elf.sections[i].data, elf.sections[i].size, elf.sections[i].offset, i);
+            }
+        }
+    }
+
+    return decompiler;
+}
