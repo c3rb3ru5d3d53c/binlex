@@ -10,4 +10,8 @@ WORKDIR /opt/binlex/docker/bldb/
 
 RUN ./setup.py install
 
+<<<<<<< HEAD
 CMD ["./start.sh"]
+=======
+CMD ["./start.sh"]
+>>>>>>> blserver

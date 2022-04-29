@@ -7,7 +7,7 @@
 #ifdef _WIN32
 #define BINLEX_EXPORT __declspec(dllexport)
 #else
-#define BINLEX_EXPORT 
+#define BINLEX_EXPORT
 #endif
 
 using namespace std;
@@ -28,7 +28,10 @@ namespace binlex {
             @param trait input string.
             @return Returns the sha256 hash of the trait string
             */
-            BINLEX_EXPORT static string SHA256(char *trait);
+            BINLEX_EXPORT static string SHA256(char *data, size_t size);
+            BINLEX_EXPORT static string GetFileSHA256(char *file_path);
+            BINLEX_EXPORT static int GetFileSize(FILE *fd);
+            BINLEX_EXPORT static char * StringAllocCharPtr(string input_string);
             /**
             This method takes an input trait string and returns a char vector of bytes (ignores wildcards).
             @param trait input string.

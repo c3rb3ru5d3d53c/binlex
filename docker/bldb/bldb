@@ -112,4 +112,8 @@ if __name__ in '__main__':
         bldb = BLDB()
         bldb.main()
     except KeyboardInterrupt:
+<<<<<<< HEAD
         print('[x] keyboard interrupt, exiting...') 
+=======
+        print('[x] keyboard interrupt, exiting...')
+>>>>>>> blserver

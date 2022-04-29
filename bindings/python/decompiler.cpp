@@ -17,6 +17,8 @@ void init_decompiler(py::module &handle){
     .def("set_threads", &binlex::Decompiler::SetThreads)
     .def("set_corpus", &binlex::Decompiler::SetCorpus)
     .def("set_instructions", &binlex::Decompiler::SetInstructions)
+    .def("set_file_sha256", &binlex::Decompiler::SetFileSHA256)
+    .def("set_mode", &binlex::Decompiler::SetMode)
     .def("decompile", [](binlex::Decompiler &module, py::buffer data, uint offset, uint index){
         py::buffer_info info = data.request();
         module.Decompile(info.ptr, info.size, offset, index);

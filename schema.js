@@ -159,4 +159,8 @@ db.createCollection('goodware', {
     }
 });
 
+<<<<<<< HEAD
 db.goodware.createIndex({bytes_sha256: 1, architecture: 1}, {unique: true});
+=======
+db.goodware.createIndex({bytes_sha256: 1, architecture: 1}, {unique: true});
+>>>>>>> blserver

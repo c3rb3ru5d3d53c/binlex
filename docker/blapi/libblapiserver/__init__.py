@@ -18,4 +18,8 @@ def init_app():
         )
         api.add_namespace(api_binlex)
         api.add_namespace(api_mongodb)
+<<<<<<< HEAD
         return app 
+=======
+        return app
+>>>>>>> blserver

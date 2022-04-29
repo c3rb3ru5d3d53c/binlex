@@ -20,4 +20,8 @@ WORKDIR /opt/binlex/docker/blapi/
 
 RUN ./setup.py install
 
+<<<<<<< HEAD
 CMD ["./start.sh"]
+=======
+CMD ["./start.sh"]
+>>>>>>> blserver

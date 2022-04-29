@@ -46,4 +46,8 @@ if __name__ in '__main__':
     app.run(
         host=config['blapi'].get('host'),
         port=config['blapi'].getint('port'),
+<<<<<<< HEAD
         debug=config['blapi'].getboolean('debug'))
+=======
+        debug=config['blapi'].getboolean('debug'))
+>>>>>>> blserver
