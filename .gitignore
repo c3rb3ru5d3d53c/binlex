@@ -1,4 +1,4 @@
-build/**
+dbuild/**
 dist/**
 samples/**
 windows/**
@@ -11,6 +11,15 @@ venv/**
 pybinlex.egg-info/**
 *.so
 *.whl
+data/**
+docker-compose.yml
+scripts/**
+ssl/**
+*.key
+config/**
+docker-compose.yml
+test/**
+.ipynb_checkpoints/**
 # Apple crap
 .DS_Store
 .AppleDouble
