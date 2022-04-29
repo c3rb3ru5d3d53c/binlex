@@ -1,6 +1,6 @@
 image:
-  - Visual Studio 2019
   - Ubuntu2004
+  # - Visual Studio 2019
 
 platform:
   - x64
@@ -33,24 +33,24 @@ for:
       - path: build/*.whl
       - path: build/pybinlex*.so
       - path: build/*.so.*
-  -
-    matrix:
-      only:
-        - image: Visual Studio 2019
-    configuration:
-      - Release
-    platform: Any CPU
-    install:
-      - git submodule update --init --recursive
-      - set PATH=C:\Program Files\CMake\bin;%PATH%
-    test_script:
-      - ps: mkdir build
-      - ps: cd build/
-      - ps: cmake ..
-      # Build only works on Debug, no clue why, damn you Microsoft!
-      - ps: cmake --build . --config Debug
-    artifacts:
-      - path: build/Debug/*.exe
-      - path: build/Debug/*.dll
+  # Removing Windows Testing For GeekWeek
+  # -
+  #   matrix:
+  #     only:
+  #       - image: Visual Studio 2019
+  #   configuration:
+  #     - Release
+  #   platform: Any CPU
+  #   install:
+  #     - git submodule update --init --recursive
+  #     - set PATH=C:\Program Files\CMake\bin;%PATH%
+  #   test_script:
+  #     - ps: mkdir build
+  #     - ps: cd build/
+  #     - ps: cmake ..
+  #     - ps: cmake --build . --config Debug
+  #   artifacts:
+  #     - path: build/Debug/*.exe
+  #     - path: build/Debug/*.dll
 
 build: off
