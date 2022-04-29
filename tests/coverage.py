@@ -3,67 +3,69 @@
 import json
 import sys
 import os
+from tkinter.tix import Tree
 
 
-def calculate_coverage(ida_json_file, binlex_flat_file):
-    ida_data = json.loads(open(ida_json_file,'r').read())
-
-    binlex_data = []
-
+def noramilize_binlex_data(binlex_flat_file):
+    # Parse binlex data into three sets
+    # function_set - set of function addresses
+    # bb_set - set of bb addresses
+    # bb_code_map - dict of basic block bytes
+    function_set = set()
+    bb_set = set()
+    bb_code_map = {}
     with open(binlex_flat_file,'r') as fp:
         for line in fp.read().split('\n'):
             if line != '':
-                binlex_data.append(json.loads(line))
+                trait_data = json.loads(line)
+                trait_type = trait_data.get('type')
+                trait_offset = trait_data.get('offset')
+                if trait_type == "function":
+                    function_set.add(trait_offset)
+                elif trait_type == "block":
+                    bb_set.add(trait_offset)
+                    bb_code_map[trait_offset] = trait_data.get('bytes')
+    return function_set, bb_set, bb_code_map
 
 
-    missing_functions = []
-    total_functions = []
-    missing_bb = []
-    total_bb = []
-    missmatch_bb = []
+def normalize_ida_data(ida_json_file):
+    # Parse ida data into three sets
+    # function_set - set of function addresses
+    # bb_set - set of bb addresses
+    # bb_code_map - dict of basic block bytes
+    function_set = set()
+    bb_set = set()
+    bb_code_map = {}
+    ida_data = json.loads(open(ida_json_file,'r').read())
+    for trait_data in ida_data:
+        trait_type = trait_data.get('type')
+        trait_offset = trait_data.get('offset')
+        if trait_type == "function":
+            function_set.add(trait_offset)
+        elif trait_type == "block":
+            bb_set.add(trait_offset)
+            bb_code_map[trait_offset] = trait_data.get('bytes')
+    return function_set, bb_set, bb_code_map
 
 
-    for ida_trait in ida_data:
-        ida_trait_offset = ida_trait.get('offset')
-        ida_trait_type = ida_trait.get('type')
-        matched = False
+def calculate_coverage(ida_json_file, binlex_flat_file):
+    binlex_function_set, binlex_bb_set, binlex_bb_code_map = noramilize_binlex_data(binlex_flat_file)
+    ida_function_set, ida_bb_set, ida_bb_code_map = normalize_ida_data(ida_json_file)
 
-
-        for binlex_trait in binlex_data:
-            binlex_trait_offset = binlex_trait.get('offset')
-            binlex_trait_type = binlex_trait.get('type')
-
-            if ida_trait_offset == binlex_trait_offset and ida_trait_type == binlex_trait_type:
-                matched = True
-                if ida_trait_type == "function":
-                    continue
-                
-                # Test if the basic block matches 
-                ida_trait_bytes = ida_trait.get('bytes')
-                binlex_trait_bytes = binlex_trait.get('bytes')
-                if ida_trait_bytes != binlex_trait_bytes:
-                    missmatch_bb.append(ida_trait_offset)
-
-        # If there was no match record it
-        if ida_trait_type == "function":
-            total_functions.append(ida_trait_offset)
-            if not matched:
-                missing_functions.append(ida_trait_offset)
-        else:
-            total_bb.append(ida_trait_offset)
-            if not matched:
-                missing_bb.append(ida_trait_offset)
-            
-
-    total_missing_functions = len(missing_functions)
-    total_functions = len(total_functions)
+    total_missing_functions = len(ida_function_set.difference(binlex_function_set))
+    total_functions = len(ida_function_set)
     function_coverage = round((total_functions - total_missing_functions)/total_functions* 100,2)
 
-    total_missing_bb = len(missing_bb)
-    total_bb = len(total_bb)
+    intersection_bb = ida_bb_set.intersection(binlex_bb_set)
+    total_bb = len(ida_bb_set)
+    total_missing_bb = total_bb - len(intersection_bb)
     bb_coverage = round((total_bb - total_missing_bb)/total_bb* 100,2)
 
-    total_missmatch_bb = len(missmatch_bb)
+    total_missmatch_bb = 0
+
+    for bb in intersection_bb:
+        if binlex_bb_code_map[bb] != ida_bb_code_map[bb]:
+            total_missmatch_bb += 1
 
     return {'total_missing_functions':total_missing_functions, 
             'total_functions':total_functions,
@@ -79,9 +81,6 @@ def main():
     if len(sys.argv) != 3:
         print(f"\nArgument Error! - Please feed me exactly: \n\n\t{sys.argv[0]} <path_to_ida_json_file> <path_to_binlex_flat_file>\n")
         sys.exit(1)
-
-    #ida_json_file = '/private/tmp/pe/pe.emotet.x86.ida.json'
-    #binlex_flat_file = '/private/tmp/emotet.binlex.json'
 
     coverage = calculate_coverage(sys.argv[1], sys.argv[2])
 
