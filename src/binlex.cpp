@@ -17,7 +17,6 @@
 #pragma comment(lib, "capstone")
 #pragma comment(lib, "binlex")
 #endif
-
 using namespace binlex;
 
 void timeout_handler(int signum) {
