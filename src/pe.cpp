@@ -13,7 +13,9 @@ using namespace binlex;
 using namespace LIEF::PE;
 
 PE::PE(){
-    for (int i = 0; i < PE_MAX_SECTIONS; i++){
+    total_exec_sections = 0;
+
+    for (int i = 0; i < BINARY_MAX_SECTIONS; i++){
         sections[i].offset = 0;
         sections[i].size = 0;
         sections[i].data = NULL;
@@ -60,8 +62,12 @@ bool PE::ReadBuffer(void *data, size_t size){
     return true;
 }
 
-void PE::ParseSections(){
-    uint index = 0;
+bool PE::IsDotNet(){
+    return binary->has(DATA_DIRECTORY::CLR_RUNTIME_HEADER);
+}
+
+bool PE::ParseSections(){
+    uint32_t index = 0;
     it_sections local_sections = binary->sections();
     for (auto it = local_sections.begin(); it != local_sections.end(); it++){
         if (it->characteristics() & (uint32_t)SECTION_CHARACTERISTICS::IMAGE_SCN_MEM_EXECUTE){
@@ -82,18 +88,24 @@ void PE::ParseSections(){
                     }
                 }
             }
+            index++;
+            if (BINARY_MAX_SECTIONS == index)
+            {
+                fprintf(stderr, "[x] malformed binary, too many executable sections\n");
+                return false;
+            }
         }
-        index++;
     }
+
+    total_exec_sections = index + 1;
+    return true;
 }
 
 PE::~PE(){
-    for (int i = 0; i < PE_MAX_SECTIONS; i++){
+    for (int i = 0; i < total_exec_sections; i++){
         sections[i].offset = 0;
         sections[i].size = 0;
-        if (sections[i].data != NULL){
-            free(sections[i].data);
-        }
+        free(sections[i].data);
         sections[i].functions.clear();
     }
 }
