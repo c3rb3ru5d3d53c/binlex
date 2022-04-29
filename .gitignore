@@ -20,3 +20,7 @@ config/**
 docker-compose.yml
 test/**
 .ipynb_checkpoints/**
+# Apple crap
+.DS_Store
+.AppleDouble
+.LSOverride
