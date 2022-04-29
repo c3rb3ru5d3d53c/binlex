@@ -102,13 +102,13 @@ int main(int argc, char **argv){
         }
         return EXIT_SUCCESS;
     }
-    if (strcmp(args.options.mode, (char *)"pe:cil") == 0 &&
-        args.options.io_type == ARGS_IO_TYPE_FILE){
+    if (strcmp(g_args.options.mode, (char *)"pe:cil") == 0 &&
+        g_args.options.io_type == ARGS_IO_TYPE_FILE){
         // TODO: This should be valid for both x86-86 and x86-64
         // we need to do this more generic
         DOTNET pe;
         if (pe.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_I386) == false) return 1;
-        if (pe.ReadFile(args.options.input) == false) return 1;
+        if (pe.ReadFile(g_args.options.input) == false) return 1;
 
         for (size_t i = 0; i < pe._sections.size(); i++) {
             if (pe._sections[i].offset == 0) continue;
@@ -120,16 +120,16 @@ int main(int argc, char **argv){
 			if (cil_decompiler.Decompile(pe._sections[i].data, pe._sections[i].size, 0) == false){
                 continue;
 			}
-		    if (args.options.output == NULL){
+		    if (g_args.options.output == NULL){
 		    	cil_decompiler.PrintTraits();
 		    } else {
-		    	cil_decompiler.WriteTraits(args.options.output);
+		    	cil_decompiler.WriteTraits(g_args.options.output);
 		    }
         }
         return 0;
     }
-    if (strcmp(args.options.mode, (char *)"pe:x86") == 0 &&
-        args.options.io_type == ARGS_IO_TYPE_FILE){
+    if (strcmp(g_args.options.mode, (char *)"pe:x86") == 0 &&
+        g_args.options.io_type == ARGS_IO_TYPE_FILE){
         PE pe32;
         if (pe32.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_I386) == false){
             return EXIT_FAILURE;
