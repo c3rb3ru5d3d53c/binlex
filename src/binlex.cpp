@@ -12,6 +12,7 @@
 #include "pe.h"
 #include "decompiler.h"
 #include "blelf.h"
+#include "auto.h"
 
 #ifdef _WIN32
 #pragma comment(lib, "capstone")
@@ -50,6 +51,25 @@ int main(int argc, char **argv){
     if (args.options.mode == NULL){
         args.print_help();
         return 1;
+    }
+    if (strcmp(args.options.mode, (char *)"auto") == 0 &&
+        args.options.io_type == ARGS_IO_TYPE_FILE){
+
+        AutoLex autolex;
+        Decompiler decompiler {autolex.ProcessFile(args.options.input, \
+        args.options.threads, \
+        args.options.timeout, \
+        args.options.thread_cycles, args.options.thread_sleep, \
+        args.options.instructions, \
+        args.options.corpus) };
+
+        if (args.options.output == NULL){
+            decompiler.PrintTraits(args.options.pretty);
+        } else {
+            decompiler.WriteTraits(args.options.output, args.options.pretty);
+        }
+
+        return 0;
     }
     if (strcmp(args.options.mode, (char *)"elf:x86_64") == 0 &&
         args.options.io_type == ARGS_IO_TYPE_FILE){
@@ -125,6 +145,7 @@ int main(int argc, char **argv){
                 decompiler.Decompile(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, i);
             }
         }
+
         if (args.options.output == NULL){
             decompiler.PrintTraits(args.options.pretty);
         } else {
