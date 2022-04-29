@@ -22,6 +22,8 @@ extern "C" {
 using namespace std;
 using namespace binlex;
 
+Args g_args;
+
 string Common::Wildcards(uint count){
     stringstream s;
     s << "";

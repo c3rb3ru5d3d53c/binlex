@@ -48,11 +48,6 @@ Decompiler::Decompiler() {
         sections[i].ntraits = 0;
         sections[i].data = NULL;
         sections[i].data_size = 0;
-        sections[i].threads = 1;
-        sections[i].thread_cycles = 1;
-        sections[i].thread_sleep = 500;
-        sections[i].corpus = (char *)"default";
-        sections[i].instructions = false;
         sections[i].arch_str = NULL;
     }
 }
@@ -143,24 +138,10 @@ bool Decompiler::Setup(cs_arch arch, cs_mode mode, uint index){
     return true;
 }
 
-void Decompiler::SetThreads(uint threads, uint thread_cycles, uint thread_sleep, uint index){
-    sections[index].threads = threads;
-    sections[index].thread_cycles = thread_cycles;
-    sections[index].thread_sleep = thread_sleep;
-}
-
-void Decompiler::SetCorpus(char *corpus, uint index){
-    sections[index].corpus = corpus;
-}
-
-void Decompiler::SetInstructions(bool instructions, uint index){
-    sections[index].instructions = instructions;
-}
-
 string Decompiler::GetTrait(struct Trait *trait, bool pretty){
     json data;
     data["type"] = trait->type;
-    data["corpus"] = trait->corpus;
+    data["corpus"] = g_args.options.corpus;
     data["architecture"] = trait->architecture;
     data["bytes"] = trait->bytes;
     data["trait"] = trait->trait;
@@ -186,7 +167,6 @@ void Decompiler::PrintTraits(bool pretty){
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
         if (sections[i].traits != NULL){
             for (int j = 0; j < sections[i].ntraits; j++){
-                sections[i].traits[j]->corpus = sections[i].corpus;
                 cout << GetTrait(sections[i].traits[j], pretty) << endl;
             }
         }
@@ -200,7 +180,6 @@ string Decompiler::GetTraits(bool pretty){
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
         if (sections[i].traits != NULL){
             for (int j = 0; j < sections[i].ntraits; j++){
-                sections[i].traits[j]->corpus = sections[i].corpus;
                 ss << sep << GetTrait(sections[i].traits[j], pretty);
                 sep = ",";
             }
@@ -216,7 +195,6 @@ void Decompiler::WriteTraits(char *file_path, bool pretty){
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
         if (sections[i].traits != NULL){
             for (int j = 0; j < sections[i].ntraits; j++){
-                sections[i].traits[j]->corpus = sections[i].corpus;
                 traits << GetTrait(sections[i].traits[j], pretty) << endl;
             }
         }
@@ -278,13 +256,13 @@ void * Decompiler::DecompileWorker(void *args) {
             LeaveCriticalSection(&csDecompiler);
             #endif
             thread_cycles++;
-            if (thread_cycles == sections[index].thread_cycles){
+            if (thread_cycles == g_args.options.thread_cycles){
                 break;
             }
             #ifndef _WIN32
-            usleep(sections[index].thread_sleep * 1000);
+            usleep(g_args.options.thread_sleep * 1000);
             #else
-            Sleep(sections[index].thread_sleep);
+            Sleep(g_args.options.thread_sleep);
             #endif
             continue;
         }
@@ -314,7 +292,7 @@ void * Decompiler::DecompileWorker(void *args) {
             b_trait.instructions++;
             f_trait.instructions++;
 
-            if (sections[index].instructions == true){
+            if (g_args.options.instructions == true){
                 if (result == true){
                     i_trait.tmp_bytes = HexdumpBE(insn->bytes, insn->size);
                     i_trait.size = GetByteSize(i_trait.tmp_bytes);
@@ -468,12 +446,15 @@ void Decompiler::ClearTrait(struct Trait *trait){
 }
 
 void Decompiler::AppendQueue(set<uint64_t> &addresses, uint operand_type, uint index){
+    DEBUG_PRINT("List of queued addresses for section %u correponding to found functions: ", index);
     for (auto it = addresses.begin(); it != addresses.end(); ++it){
         uint64_t tmp_addr = *it;
         sections[index].discovered.push(tmp_addr);
         sections[index].visited[tmp_addr] = DECOMPILER_VISITED_QUEUED;
         sections[index].addresses[tmp_addr] = operand_type;
+        DEBUG_PRINT("0x%" PRIu64 " ", tmp_addr);
     }
+    DEBUG_PRINT("\n");
 }
 
 void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint index) {
@@ -490,17 +471,17 @@ void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint ind
     args->sections = &sections;
 
     #if defined(__linux__) || defined(__APPLE__)
-    pthread_t threads[sections[index].threads];
-    pthread_attr_t thread_attribs[sections[index].threads];
+    pthread_t threads[g_args.options.threads];
+    pthread_attr_t thread_attribs[g_args.options.threads];
     #else
     InitializeCriticalSection(&csDecompiler);
-    DWORD dwThreads = sections[index].threads;
+    DWORD dwThreads = g_args.options.threads;
     HANDLE* hThreads = (HANDLE*)malloc(sizeof(HANDLE) * dwThreads);
     DWORD dwThreadId;
     #endif
 
     while (true){
-        for (int i = 0; i < sections[index].threads; i++){
+        for (int i = 0; i < g_args.options.threads; i++){
             #if defined(__linux__) || defined(__APPLE__)
             pthread_attr_init(&thread_attribs[i]);
             pthread_attr_setdetachstate(&thread_attribs[i], PTHREAD_CREATE_JOINABLE);
@@ -509,11 +490,11 @@ void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint ind
             hThreads[i] = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)DecompileWorker, args, 0, &dwThreadId);
             #endif
         }
-        for (int i = 0; i < sections[index].threads; i++){
+        for (int i = 0; i < g_args.options.threads; i++){
             #if defined(__linux__) || defined(__APPLE__)
             pthread_join(threads[i], NULL);
             #else
-            WaitForMultipleObjects(sections[index].threads, hThreads, TRUE, INFINITE);
+            WaitForMultipleObjects(g_args.options.threads, hThreads, TRUE, INFINITE);
             #endif
         }
         if (sections[index].discovered.empty()){
@@ -527,8 +508,8 @@ void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint ind
             break;
         }
     }
-    for (int i = 0; i < sections[index].ntraits; i += sections[index].threads) {
-        for (int j = 0; j < sections[index].threads; j++) {
+    for (int i = 0; i < sections[index].ntraits; i += g_args.options.threads) {
+        for (int j = 0; j < g_args.options.threads; j++) {
             #if defined(__linux__) || defined(__APPLE__)
             if (i + j < sections[index].ntraits) {
                 pthread_attr_init(&thread_attribs[j]);
@@ -548,13 +529,13 @@ void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint ind
             #endif
             }
         #if defined(__linux__) || defined(__APPLE__)
-        for (int j = 0; j < sections[index].threads; j++) {
+        for (int j = 0; j < g_args.options.threads; j++) {
             if (threads[j] != NULL) {
                 pthread_join(threads[j], NULL);
             }
         }
         #else
-        WaitForMultipleObjects(sections[index].threads, hThreads, TRUE, INFINITE);
+        WaitForMultipleObjects(g_args.options.threads, hThreads, TRUE, INFINITE);
         #endif
     }
     #ifdef _WIN32
@@ -844,4 +825,24 @@ Decompiler::~Decompiler() {
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++) {
         FreeTraits(i);
     }
+}
+
+
+/*
+ * The following functions are for pybind-only use. They offer a way to pass arguments to
+ * the CPP code, which otherwise if obtained via command-line arguments.
+ */
+
+void Decompiler::py_SetThreads(uint threads, uint thread_cycles, uint thread_sleep) {
+    g_args.options.threads = threads;
+    g_args.options.thread_cycles = thread_cycles;
+    g_args.options.thread_sleep = thread_sleep;
+}
+
+void Decompiler::py_SetCorpus(char *corpus) {
+    g_args.options.corpus = corpus;
+}
+
+void Decompiler::py_SetInstructions(bool instructions) {
+    g_args.options.instructions = instructions;
 }
