@@ -381,9 +381,7 @@ function generate_certificates(){
 
 }
 
-if [ ! -d config/ ]; then
-    generate_certificates
-fi
+generate_certificates
 
 rm -rf scripts/
 mkdir -p scripts/
