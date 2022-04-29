@@ -11,13 +11,11 @@
 #include <LIEF/PE.hpp>
 #include "common.h"
 #include "file.h"
-#ifndef PE_H
-#define PE_H
 
 #ifdef _WIN32
 #define BINLEX_EXPORT __declspec(dllexport)
 #else
-#define BINLEX_EXPORT 
+#define BINLEX_EXPORT
 #endif
 
 using namespace std;
@@ -27,7 +25,7 @@ namespace binlex {
   class PE : public File{
         private:
             bool ParseSections();
-        public: 
+        public:
         #ifndef _WIN32
             MACHINE_TYPES mode = MACHINE_TYPES::IMAGE_FILE_MACHINE_UNKNOWN;
         #else
