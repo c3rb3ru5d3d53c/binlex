@@ -1,5 +1,6 @@
 .PHONY: docs
 .PHONY: docker
+.PHONY: all
 
 threads=1
 admin_user=admin
@@ -8,7 +9,7 @@ user=binlex
 pass=changeme
 config=Release
 
-all:
+cli:
 	mkdir -p build/
 	cd build/ && \
 		cmake -S ../ \
@@ -34,6 +35,8 @@ docs:
 docs-update:
 	rm -rf docs/html/
 	cp -r build/docs/html/ docs/
+
+all: cli python docs docs-update
 
 docker:
 	@./docker.sh
