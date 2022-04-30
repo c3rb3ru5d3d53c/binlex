@@ -18,6 +18,12 @@ if(MSVC)
 endif()
 
 include(ExternalProject)
+include(ProcessorCount)
+
+ProcessorCount(N)
+
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/tests.py
+     DESTINATION ${CMAKE_BINARY_DIR})
 
 set(CAPSTONE_ROOT    "${CMAKE_BINARY_DIR}/capstone/")
 set(CAPSTONE_INCLUDE_DIRS "${CAPSTONE_ROOT}/include/")
@@ -106,6 +112,7 @@ ExternalProject_Add(LIEF
   PREFIX           ${LIEF_PREFIX}
   GIT_REPOSITORY   ${LIEF_GIT_URL}
   GIT_TAG          ${LIEF_VERSION}
+  BUILD_COMMAND make -j${N}
   INSTALL_DIR      ${LIEF_INSTALL_DIR}
   CMAKE_ARGS       ${LIEF_CMAKE_ARGS}
 )
