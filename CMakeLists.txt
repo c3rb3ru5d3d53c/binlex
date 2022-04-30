@@ -37,6 +37,7 @@ ExternalProject_Add(
     GIT_REPOSITORY      "${CAPSTONE_GIT_URL}"
     GIT_TAG             "${CAPSTONE_GIT_TAG}"
     GIT_SHALLOW         ON
+    BUILD_COMMAND make -j${N}
     CMAKE_ARGS          -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
                         -DCAPSTONE_BUILD_SHARED=OFF
                         -DCAPSTONE_BUILD_TESTS=OFF
