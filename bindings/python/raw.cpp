@@ -14,7 +14,7 @@ void init_raw(py::module &handle){
     .def(py::init<>())
     .def("get_sections", [](binlex::Raw &module){
         auto result = py::list();
-        for (int i = 0; i < RAW_MAX_SECTIONS; i++){
+        for (int i = 0; i < BINARY_MAX_SECTIONS; i++){
             if (module.sections[i].data != NULL){
                 auto dict = py::dict();
                 dict["size"] = module.sections[i].size;
