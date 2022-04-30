@@ -149,7 +149,7 @@ Decompiler AutoLex::ProcessFile(char *file_path, uint threads, uint timeout, uin
             return decompiler;
         }
 
-        for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++) {
+        for (int i = 0; i < BINARY_MAX_SECTIONS; i++) {
             if (pe32.sections[i].data != NULL) {
                 decompiler.Setup(characteristics.arch, characteristics.mode, i);
                 decompiler.SetThreads(threads, thread_cycles, thread_sleep, i);
@@ -170,7 +170,7 @@ Decompiler AutoLex::ProcessFile(char *file_path, uint threads, uint timeout, uin
             return decompiler;
         }
 
-        for (int i = 0; i < ELF_MAX_SECTIONS; i++){
+        for (int i = 0; i < BINARY_MAX_SECTIONS; i++){
             if (elf.sections[i].data != NULL){
                 decompiler.Setup(characteristics.arch, characteristics.mode, i);
                 decompiler.SetThreads(threads, thread_cycles, thread_sleep, i);
