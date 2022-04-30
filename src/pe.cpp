@@ -39,6 +39,9 @@ bool PE::Setup(MACHINE_TYPES input_mode){
 }
 
 bool PE::ReadFile(char *file_path){
+    if (FileExists(file_path) == false){
+        return false;
+    }
     CalculateFileHashes(file_path);
     assert(!tlsh.empty());
     assert(!sha256.empty());
