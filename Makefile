@@ -1,3 +1,4 @@
+.PHONY: all
 .PHONY: docs
 .PHONY: docker
 
@@ -8,7 +9,9 @@ user=binlex
 pass=changeme
 config=Release
 
-all:
+all: python docs
+
+cli:
 	mkdir -p build/
 	cd build/ && \
 		cmake -S ../ \
@@ -25,6 +28,9 @@ python:
 			-DPYBIND11_PYTHON_VERSION=`python -c "import platform; print(platform.python_version())"` \
 			${args} && \
 		cmake --build . --config ${config} -- -j ${threads}
+
+python-whl:
+	python3 -m pip wheel -v -w build/ .
 
 docs:
 	mkdir -p build/docs/html/docs/
