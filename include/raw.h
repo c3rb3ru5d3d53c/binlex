@@ -3,12 +3,13 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include "common.h"
 
 #ifdef _WIN32
 #define BINLEX_EXPORT __declspec(dllexport)
 #else
-#define BINLEX_EXPORT 
+#define BINLEX_EXPORT
 #endif
 
 #ifdef _WIN32

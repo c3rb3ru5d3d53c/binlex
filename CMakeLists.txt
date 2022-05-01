@@ -18,6 +18,12 @@ if(MSVC)
 endif()
 
 include(ExternalProject)
+include(ProcessorCount)
+
+ProcessorCount(N)
+
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/tests.py
+     DESTINATION ${CMAKE_BINARY_DIR})
 
 set(CAPSTONE_ROOT    "${CMAKE_BINARY_DIR}/capstone/")
 set(CAPSTONE_INCLUDE_DIRS "${CAPSTONE_ROOT}/include/")
@@ -31,6 +37,7 @@ ExternalProject_Add(
     GIT_REPOSITORY      "${CAPSTONE_GIT_URL}"
     GIT_TAG             "${CAPSTONE_GIT_TAG}"
     GIT_SHALLOW         ON
+    BUILD_COMMAND make -j${N}
     CMAKE_ARGS          -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
                         -DCAPSTONE_BUILD_SHARED=OFF
                         -DCAPSTONE_BUILD_TESTS=OFF
@@ -106,6 +113,7 @@ ExternalProject_Add(LIEF
   PREFIX           ${LIEF_PREFIX}
   GIT_REPOSITORY   ${LIEF_GIT_URL}
   GIT_TAG          ${LIEF_VERSION}
+  BUILD_COMMAND make -j${N}
   INSTALL_DIR      ${LIEF_INSTALL_DIR}
   CMAKE_ARGS       ${LIEF_CMAKE_ARGS}
 )
@@ -122,10 +130,12 @@ add_library(binlex SHARED
     src/raw.cpp
     src/common.cpp
     src/blelf.cpp
+    src/auto.cpp
     src/decompiler.cpp
     src/pe-dotnet.cpp
     src/cil.cpp
     src/pe.cpp
+    src/file.cpp
     src/sha256.c
 )
 
@@ -139,6 +149,7 @@ target_link_libraries(binlex
         lief_static
         capstone_static
         -lpthread
+	-ltlsh
 )
 
 set_target_properties(binlex

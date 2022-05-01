@@ -8,6 +8,7 @@
 #include <iostream>
 #include <exception>
 #include <stdexcept>
+#include <cassert>
 #include "blelf.h"
 #include <LIEF/ELF.hpp>
 using namespace std;
@@ -41,6 +42,12 @@ bool ELF::Setup(ARCH input_mode){
 }
 
 bool ELF::ReadFile(char *file_path){
+    if (FileExists(file_path) == false){
+        return false;
+    }
+    CalculateFileHashes(file_path);
+    assert(!tlsh.empty());
+    assert(!sha256.empty());
     binary = Parser::parse(file_path);
     if (mode != binary->header().machine_type()){
         fprintf(stderr, "[x] incorrect mode for binary architecture\n");
