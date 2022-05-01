@@ -24,6 +24,7 @@ typedef uint useconds_t;
 extern binlex::Args g_args;
 
 #define DEBUG_PRINT(...) {if (g_args.options.debug) fprintf(stderr, __VA_ARGS__); }
+#define ERROR_PRINT_AND_EXIT(...) { fprintf(stderr, __VA_ARGS__); exit(EXIT_FAILURE); }
 
 namespace binlex {
     class Common{
