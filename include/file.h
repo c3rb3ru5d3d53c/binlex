@@ -1,11 +1,11 @@
+#ifndef FILE_H
+#define FILE_H
+
 #include <iostream>
 #include <memory>
 #include <set>
 #include <unistd.h>
 #include "common.h"
-
-#ifndef FILE_H
-#define FILE_H
 
 using namespace std;
 

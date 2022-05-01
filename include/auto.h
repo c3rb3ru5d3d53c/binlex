@@ -1,3 +1,6 @@
+#ifndef AUTO_H
+#define AUTO_H
+
 #include <iostream>
 #include <memory>
 #include <vector>
@@ -5,10 +8,6 @@
 #include <LIEF/LIEF.hpp>
 #include "common.h"
 #include "decompiler.h"
-
-#ifndef AUTO_H
-#define AUTO_H
-
 
 #ifdef _WIN32
 #define BINLEX_EXPORT __declspec(dllexport)
