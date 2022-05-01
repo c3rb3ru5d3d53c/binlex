@@ -2,7 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
-#include <sstream>
+#include <fstream>
 #include <iostream>
 #include <algorithm>
 #include <vector>
@@ -71,50 +71,41 @@ void Decompiler::AppendTrait(struct Trait *trait, struct Section *sections, uint
     }
     #endif
     if (sections[index].traits == NULL){
-        fprintf(stderr, "[x] trait realloc failed\n");
-        exit(1);
+        ERROR_PRINT_AND_EXIT("[x] trait realloc failed\n");
     }
     sections[index].traits[sections[index].ntraits] = (struct Trait *)malloc(sizeof(struct Trait));
     if (sections[index].traits[sections[index].ntraits] == NULL){
-        fprintf(stderr, "[x] trait malloc failed\n");
-        exit(1);
+        ERROR_PRINT_AND_EXIT("[x] trait malloc failed\n");
     }
 
     char *type = (char *)malloc(strlen(trait->type)+1);
     if (type == NULL){
-        fprintf(stderr, "[x] trait malloc failed\n");
-        exit(1);
+        ERROR_PRINT_AND_EXIT("[x] trait malloc failed\n");
     }
     memset(type, 0, strlen(trait->type)+1);
     if (memcpy(type, trait->type, strlen(trait->type)) == NULL){
-        fprintf(stderr, "[x] trait memcpy failed\n");
-        exit(1);
+        ERROR_PRINT_AND_EXIT("[x] trait memcpy failed\n");
     }
     trait->type = type;
 
     trait->trait = (char *)malloc(strlen(trait->tmp_trait.c_str())+1);
     if (trait->trait == NULL){
-        fprintf(stderr, "[x] trait malloc failed\n");
-        exit(1);
+        ERROR_PRINT_AND_EXIT("[x] trait malloc failed\n");
     }
     memset(trait->trait, 0, strlen(trait->tmp_trait.c_str())+1);
     if (memcpy(trait->trait, trait->tmp_trait.c_str(), strlen(trait->tmp_trait.c_str())) == NULL){
-        fprintf(stderr, "[x] trait memcpy failed\n");
-        exit(1);
+        ERROR_PRINT_AND_EXIT("[x] trait memcpy failed\n");
     }
     trait->bytes = (char *)malloc(strlen(trait->tmp_bytes.c_str())+1);
     if (trait->bytes == NULL){
-        fprintf(stderr, "[x] trait malloc failed\n");
-        exit(1);
+        ERROR_PRINT_AND_EXIT("[x] trait malloc failed\n");
     }
     memset(trait->bytes, 0, strlen(trait->tmp_bytes.c_str())+1);
     if (memcpy(trait->bytes, trait->tmp_bytes.c_str(), strlen(trait->tmp_bytes.c_str())) == NULL){
-        fprintf(stderr, "[x] trait memcpy failed\n");
-        exit(1);
+        ERROR_PRINT_AND_EXIT("[x] trait memcpy failed\n");
     }
     if (memcpy(sections[index].traits[sections[index].ntraits], trait, sizeof(struct Trait)) == NULL){
-        fprintf(stderr, "[x] trait memcpy failed\n");
-        exit(1);
+        ERROR_PRINT_AND_EXIT("[x] trait memcpy failed\n");
     }
     sections[index].ntraits++;
     trait->trait = (char *)trait->tmp_trait.c_str();
@@ -138,7 +129,7 @@ bool Decompiler::Setup(cs_arch arch, cs_mode mode, uint index){
     return true;
 }
 
-string Decompiler::GetTrait(struct Trait *trait, bool pretty){
+string Decompiler::GetTrait(struct Trait *trait){
     json data;
     data["type"] = trait->type;
     data["corpus"] = g_args.options.corpus;
@@ -157,30 +148,20 @@ string Decompiler::GetTrait(struct Trait *trait, bool pretty){
     data["invalid_instructions"] = trait->invalid_instructions;
     data["cyclomatic_complexity"] = trait->cyclomatic_complexity;
     data["average_instructions_per_block"] = trait->average_instructions_per_block;
-    if (pretty == true){
+    if (g_args.options.pretty == true){
         return data.dump(4);
     }
     return data.dump();
 }
 
-void Decompiler::PrintTraits(bool pretty){
-    for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
-        if (sections[i].traits != NULL){
-            for (int j = 0; j < sections[i].ntraits; j++){
-                cout << GetTrait(sections[i].traits[j], pretty) << endl;
-            }
-        }
-    }
-}
-
-string Decompiler::GetTraits(bool pretty){
+string Decompiler::GetTraits(void){
     stringstream ss;
     string sep = "";
     ss << '[';
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
         if (sections[i].traits != NULL){
             for (int j = 0; j < sections[i].ntraits; j++){
-                ss << sep << GetTrait(sections[i].traits[j], pretty);
+                ss << sep << GetTrait(sections[i].traits[j]);
                 sep = ",";
             }
         }
@@ -189,18 +170,33 @@ string Decompiler::GetTraits(bool pretty){
     return ss.str();
 }
 
-void Decompiler::WriteTraits(char *file_path, bool pretty){
-    FILE *fd = fopen(file_path, "w");
-    stringstream traits;
+// TODO we know how many exec sections we have, we don't need to go through all slots
+// CV to fix by end of GeekWeek 2022
+void Decompiler::WriteTraits(){
+    // if g_args.options.output defined write to file, otherwise to screen
+    ofstream output_stream;
+    if (g_args.options.output != NULL) {
+        output_stream.open(g_args.options.output);
+        if(!output_stream.is_open()) {
+            ERROR_PRINT_AND_EXIT("Unable to open file %s for writing\n", g_args.options.output);
+        }
+    }
+
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
         if (sections[i].traits != NULL){
             for (int j = 0; j < sections[i].ntraits; j++){
-                traits << GetTrait(sections[i].traits[j], pretty) << endl;
+                if (g_args.options.output != NULL) {
+                    output_stream << GetTrait(sections[i].traits[j]) << endl;
+                } else {
+                    cout << GetTrait(sections[i].traits[j]) << endl;
+                }
             }
         }
     }
-    fwrite(traits.str().c_str(), sizeof(char), traits.str().length(), fd);
-    fclose(fd);
+
+    if (g_args.options.output != NULL) {
+        output_stream.close();
+    }
 }
 
 void * Decompiler::DecompileWorker(void *args) {
@@ -359,7 +355,7 @@ void * Decompiler::DecompileWorker(void *args) {
             }
             CollectInsn(insn, sections, index);
 
-            //printf("address=0x%" PRIx64 ",block=%d,function=%d,queue=%ld,instruction=%s\t%s\n", insn->address,IsBlock(sections[index].addresses, insn->address), IsFunction(sections[index].addresses, insn->address), sections[index].discovered.size(), insn->mnemonic, insn->op_str);
+            DEBUG_PRINT("address=0x%" PRIx64 ",block=%d,function=%d,queue=%ld,instruction=%s\t%s\n", insn->address,IsBlock(sections[index].addresses, insn->address), IsFunction(sections[index].addresses, insn->address), sections[index].discovered.size(), insn->mnemonic, insn->op_str);
 
             #if defined(__linux__) || defined(__APPLE__)
             pthread_mutex_unlock(&DECOMPILER_MUTEX);

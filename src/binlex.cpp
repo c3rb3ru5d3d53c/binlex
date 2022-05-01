@@ -45,6 +45,7 @@ void start_timeout(time_t seconds){
 
 int main(int argc, char **argv){
     g_args.parse(argc, argv);
+
     if (g_args.options.timeout > 0){
         #if defined(__linux__) || defined(__APPLE__)
         start_timeout(g_args.options.timeout);
@@ -71,11 +72,7 @@ int main(int argc, char **argv){
             decompiler.AppendQueue(elf64.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
             decompiler.Decompile(elf64.sections[i].data, elf64.sections[i].size, elf64.sections[i].offset, i);
         }
-        if (g_args.options.output == NULL){
-            decompiler.PrintTraits(g_args.options.pretty);
-        } else {
-            decompiler.WriteTraits(g_args.options.output, g_args.options.pretty);
-        }
+        decompiler.WriteTraits();
         return EXIT_SUCCESS;
     }
     if (strcmp(g_args.options.mode, (char *)"elf:x86") == 0 &&
@@ -95,11 +92,7 @@ int main(int argc, char **argv){
             decompiler.AppendQueue(elf32.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
             decompiler.Decompile(elf32.sections[i].data, elf32.sections[i].size, elf32.sections[i].offset, i);
         }
-        if (g_args.options.output == NULL){
-            decompiler.PrintTraits(g_args.options.pretty);
-        } else {
-            decompiler.WriteTraits(g_args.options.output, g_args.options.pretty);
-        }
+        decompiler.WriteTraits();
         return EXIT_SUCCESS;
     }
     if (strcmp(g_args.options.mode, (char *)"pe:cil") == 0 &&
@@ -145,11 +138,7 @@ int main(int argc, char **argv){
             decompiler.AppendQueue(pe32.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
             decompiler.Decompile(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, i);
         }
-        if (g_args.options.output == NULL){
-            decompiler.PrintTraits(g_args.options.pretty);
-        } else {
-            decompiler.WriteTraits(g_args.options.output, g_args.options.pretty);
-        }
+        decompiler.WriteTraits();
         return EXIT_SUCCESS;
     }
     if (strcmp(g_args.options.mode, (char *)"pe:x86_64") == 0 &&
@@ -169,11 +158,7 @@ int main(int argc, char **argv){
             decompiler.AppendQueue(pe64.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
             decompiler.Decompile(pe64.sections[i].data, pe64.sections[i].size, pe64.sections[i].offset, i);
         }
-        if (g_args.options.output == NULL){
-            decompiler.PrintTraits(g_args.options.pretty);
-        } else {
-            decompiler.WriteTraits(g_args.options.output, g_args.options.pretty);
-        }
+        decompiler.WriteTraits();
         return EXIT_SUCCESS;
     }
     if (strcmp(g_args.options.mode, (char *)"raw:x86") == 0 &&
@@ -187,11 +172,7 @@ int main(int argc, char **argv){
         Decompiler decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_32, 0);
         decompiler.Decompile(rawx86.sections[0].data, rawx86.sections[0].size, rawx86.sections[0].offset, 0);
-        if (g_args.options.output == NULL){
-            decompiler.PrintTraits(g_args.options.pretty);
-        } else {
-            decompiler.WriteTraits(g_args.options.output, g_args.options.pretty);
-        }
+        decompiler.WriteTraits();
         return EXIT_SUCCESS;
     }
     if (strcmp(g_args.options.mode, (char *)"raw:x86_64") == 0 &&
@@ -205,11 +186,7 @@ int main(int argc, char **argv){
         Decompiler decompiler;
         decompiler.Setup(CS_ARCH_X86, CS_MODE_64, 0);
         decompiler.Decompile(rawx86_64.sections[0].data, rawx86_64.sections[0].size, rawx86_64.sections[0].offset, 0);
-        if (g_args.options.output == NULL){
-            decompiler.PrintTraits(g_args.options.pretty);
-        } else {
-            decompiler.WriteTraits(g_args.options.output, g_args.options.pretty);
-        }
+        decompiler.WriteTraits();
         return EXIT_SUCCESS;
     }
     if (strcmp(g_args.options.mode, (char *)"raw:cil") == 0 &&

@@ -23,11 +23,10 @@ void init_decompiler(py::module &handle){
     })
     .def("get_traits", [](binlex::Decompiler &module){
         py::module_ json = py::module_::import("json");
-        string traits = module.GetTraits(false);
+        string traits = module.GetTraits();
         return json.attr("loads")(traits);
     })
     .def("append_queue", &binlex::Decompiler::AppendQueue)
-    .def("print_traits", &binlex::Decompiler::PrintTraits)
     .def("write_traits", &binlex::Decompiler::WriteTraits);
     py::enum_<cs_arch>(handle, "cs_arch")
     .value("CS_ARCH_X86", CS_ARCH_X86);
