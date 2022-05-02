@@ -186,22 +186,15 @@ void Decompiler::WriteTraits(){
         }
     }
     auto traits(GetTraits());
-    for(auto i : traits) {
-	output_stream << (g_args.options.pretty ? i.dump(4) : i.dump()) << endl;
+    if(g_args.options.output != NULL) {
+	for(auto i : traits) {
+	    output_stream << (g_args.options.pretty ? i.dump(4) : i.dump()) << endl;
+	}
+    } else {
+	for(auto i : traits) {
+	    cout << (g_args.options.pretty ? i.dump(4) : i.dump()) << endl;
+	}
     }
-
-    for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
-        if (sections[i].traits != NULL){
-            for (int j = 0; j < sections[i].ntraits; j++){
-                if (g_args.options.output != NULL) {
-                    output_stream << GetTrait(sections[i].traits[j]) << endl;
-                } else {
-                    cout << GetTrait(sections[i].traits[j]) << endl;
-                }
-            }
-        }
-    }
-
     if (g_args.options.output != NULL) {
         output_stream.close();
     }
