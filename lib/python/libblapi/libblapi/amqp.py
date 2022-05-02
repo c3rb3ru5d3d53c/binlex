@@ -3,31 +3,43 @@
 import pika
 import ssl
 
-class AMQPHandler():
+
+class AMQPHandler:
 
     """
     AMQP Handler
     """
 
     def __init__(self, config):
-        if config['amqp'].getboolean('tls') is True:
-            context = ssl.create_default_context(
-                cafile=config['amqp'].get('ca'))
+        self.amqp_channel = None
+        self.amqp = None
+
+        username = config['amqp'].get('user')
+        password = config['amqp'].get('pass')
+        port = config['amqp'].getint('port')
+
+        num_hosts = int(config['amqp'].get('hosts'))
+        self.all_hosts = []
+
+        tls = config['amqp'].getboolean('tls')
+
+        if tls:
+            context = ssl.create_default_context(cafile=config['amqp'].get('ca'))
             context.load_cert_chain(config['amqp'].get('cert'), config['amqp'].get('key'))
             ssl_options = pika.SSLOptions(context, config['amqp'].get('host'))
-            conn_params = pika.ConnectionParameters(port=config['amqp'].getint('port'),
-                                                    host=config['amqp'].get('host'),
-                                                    ssl_options=ssl_options,
+
+        for num in range(1, num_hosts):
+            conn_params = pika.ConnectionParameters(port=port,
+                                                    host="rabbitmq-broker" + str(num),
+                                                    ssl_options=(ssl_options if tls else None),
                                                     credentials=pika.credentials.PlainCredentials(
-                                                        username=config['amqp'].get('user'),
-                                                        password=config['amqp'].get('pass')))
-        else:
-            conn_params = pika.ConnectionParameters(port=config['amqp'].getint('port'),
-                                                    host=config['amqp'].get('host'),
-                                                    credentials=pika.credentials.PlainCredentials(
-                                                        username=config['amqp'].get('user'),
-                                                        password=config['amqp'].get('pass')))
-        self.amqp = pika.BlockingConnection(conn_params)
+                                                        username=username, password=password))
+            self.all_hosts.append(conn_params)
+
+        self.establish_connection()
+
+    def establish_connection(self):
+        self.amqp = pika.BlockingConnection(self.all_hosts)
         self.amqp_channel = self.amqp.channel()
 
     def publish(self, queue, body):
@@ -36,7 +48,13 @@ class AMQPHandler():
         amqp_channel.basic_publish(exchange='', routing_key=queue, body=body)
 
     def consume(self, queue, callback):
-        amqp_channel = self.amqp.channel()
-        amqp_channel.queue_declare(queue=queue)
-        amqp_channel.basic_consume(queue=queue, on_message_callback=callback)
-        amqp_channel.start_consuming()
+        while True:
+            try:
+                amqp_channel = self.amqp.channel()
+                amqp_channel.queue_declare(queue=queue)
+                amqp_channel.basic_consume(queue=queue, on_message_callback=callback)
+                amqp_channel.start_consuming()
+            except pika.exceptions.AMQPConnectionError:
+                print("Connection was closed, retrying...")
+                self.establish_connection()
+                continue
