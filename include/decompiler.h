@@ -222,13 +222,24 @@ namespace binlex {
         BINLEX_EXPORT static json GetTrait(struct Trait *trait);
         /**
         Get Traits as JSON
-        @return json strings one per line
+        @return list of traits json objects
         */
         vector<json> GetTraits();
         /**
-        Write Traits to File or Display
+	Print the traits to standard out
+
+	This function usees GetTraits() to get the traits data as a json.
+        @param pretty pretty print traits
         */
-        BINLEX_EXPORT void WriteTraits(void);
+        BINLEX_EXPORT void PrintTraits(bool pretty);
+        /**
+        Write Traits to File
+
+	This function usees GetTraits() to get the traits data as a json.
+        @param file_path path to the file
+        @param pretty pretty print traits
+        */
+        BINLEX_EXPORT void WriteTraits(const char *file_path, bool pretty);
         BINLEX_EXPORT static void * TraitWorker(void *args);
         BINLEX_EXPORT void AppendQueue(set<uint64_t> &addresses, uint operand_type, uint index);
         //void Seek(uint offset, uint index);
