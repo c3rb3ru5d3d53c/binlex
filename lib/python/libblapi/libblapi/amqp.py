@@ -5,14 +5,14 @@ import ssl
 
 
 class AMQPHandler:
-
     """
     AMQP Handler
     """
 
     def __init__(self, config):
-        self.amqp_channel = None
         self.amqp = None
+        self.consumer_channel = None
+        self.publisher_channel = None
 
         username = config['amqp'].get('user')
         password = config['amqp'].get('pass')
@@ -40,20 +40,20 @@ class AMQPHandler:
 
     def establish_connection(self):
         self.amqp = pika.BlockingConnection(self.all_hosts)
-        self.amqp_channel = self.amqp.channel()
+
+        self.publisher_channel = self.amqp.channel()
+        self.consumer_channel = self.amqp.channel()
 
     def publish(self, queue, body):
-        amqp_channel = self.amqp.channel()
-        amqp_channel.queue_declare(queue=queue)
-        amqp_channel.basic_publish(exchange='', routing_key=queue, body=body)
+        self.publisher_channel.queue_declare(queue=queue)
+        self.publisher_channel.basic_publish(exchange='', routing_key=queue, body=body)
 
     def consume(self, queue, callback):
         while True:
             try:
-                amqp_channel = self.amqp.channel()
-                amqp_channel.queue_declare(queue=queue)
-                amqp_channel.basic_consume(queue=queue, on_message_callback=callback)
-                amqp_channel.start_consuming()
+                self.consumer_channel.queue_declare(queue=queue)
+                self.consumer_channel.basic_consume(queue=queue, on_message_callback=callback)
+                self.consumer_channel.start_consuming()
             except pika.exceptions.AMQPConnectionError:
                 print("Connection was closed, retrying...")
                 self.establish_connection()
