@@ -454,10 +454,6 @@ void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint ind
     PRINT_DEBUG("Decompile: offset = 0x%x data_size = %" PRId64 " bytes\n", sections[index].offset, sections[index].data_size);
     PRINT_DATA("Section Data (up to 32 bytes)", sections[index].data, std::min((size_t)32, sections[index].data_size));
 
-    sections[index].discovered.push(0);
-    sections[index].addresses[0] = DECOMPILER_OPERAND_TYPE_FUNCTION;
-    sections[index].visited[0] = DECOMPILER_VISITED_QUEUED;
-
     worker_args *args = (worker_args *)malloc(sizeof(worker_args));
     args->index = index;
     args->sections = &sections;
