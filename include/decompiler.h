@@ -46,7 +46,6 @@ namespace binlex {
         } worker_args;
     public:
         struct Trait {
-            char *corpus;
             char *type;
             char *architecture;
             string tmp_bytes;
@@ -71,11 +70,7 @@ namespace binlex {
             cs_mode mode;
             char *arch_str;
             char *cpu;
-            char *corpus;
-            uint threads;
             bool instructions;
-            uint thread_cycles;
-            useconds_t thread_sleep;
             uint offset;
             struct Trait **traits;
             uint ntraits;
@@ -92,31 +87,10 @@ namespace binlex {
         Set up Capstone Decompiler Architecure and Mode
         @param arch Capstone Decompiler Architecure
         @param cs_mode Capstone Mode
-        @param threads Number of Threads
-        @param thread_cycles Thread Retry Cycle Cound
-        @param thread_sleep Thread Sleep Wait for Queue in Microseconds
         @param index section index
         @return bool
         */
         BINLEX_EXPORT bool Setup(cs_arch arch, cs_mode mode, uint index);
-        /**
-        Set Threads and Thread Cycles
-        @param threads number of threads
-        @param thread_cycles thread cycles
-        @param index the section index
-        */
-        BINLEX_EXPORT void SetThreads(uint threads, uint thread_cycles, uint thread_sleep, uint index);
-        /**
-        Sets The Corpus Name
-        @param corpus pointer to corpus name
-        @param index the section index
-        */
-        BINLEX_EXPORT void SetCorpus(char *corpus, uint index);
-        /**
-        @param instructions bool to collect instructions traits or not
-        @param index the section index
-        */
-        BINLEX_EXPORT void SetInstructions(bool instructions, uint index);
         /**
         Decompiler Thread Worker
         @param args pointer to worker arguments
@@ -218,31 +192,49 @@ namespace binlex {
         /**
         Gets Trait as JSON
         @param trait pointer to trait structure
-        @param pretty pretty print
         @return json string
         */
-        BINLEX_EXPORT static string GetTrait(struct Trait *trait, bool pretty);
+        BINLEX_EXPORT static string GetTrait(struct Trait *trait);
         /**
         Get Traits as JSON
-        @param pretty pretty print json
         @return json strings one per line
         */
-        string GetTraits(bool pretty);
+        string GetTraits();
         /**
-        @param pretty pretty print traits
+        Write Traits to File or Display
         */
-        BINLEX_EXPORT void PrintTraits(bool pretty);
-        /**
-        Write Traits to File
-        @param file_path path to the file
-        @param pretty pretty print traits
-        */
-        BINLEX_EXPORT void WriteTraits(char *file_path, bool pretty);
+        BINLEX_EXPORT void WriteTraits(void);
         BINLEX_EXPORT static void * TraitWorker(void *args);
         BINLEX_EXPORT void AppendQueue(set<uint64_t> &addresses, uint operand_type, uint index);
         //void Seek(uint offset, uint index);
         BINLEX_EXPORT ~Decompiler();
 
+        /*
+         * The following functions are for pybind-only use. They offer a way to pass arguments to
+         * the CPP code, which otherwise if obtained via command-line arguments.
+         */
+
+        /**
+        Set Threads and Thread Cycles, via pybind11
+        @param threads number of threads
+        @param thread_cycles thread cycles
+        @param index the section index
+        */
+        BINLEX_EXPORT void py_SetThreads(uint threads, uint thread_cycles, uint thread_sleep);
+        
+        /**
+        Sets The Corpus Name, via pybind11
+        @param corpus pointer to corpus name
+        @param index the section index
+        */
+        BINLEX_EXPORT void py_SetCorpus(char *corpus);
+        
+        /**
+        Specify if instruction traits are collected, via pybind11
+        @param instructions bool to collect instructions traits or not
+        @param index the section index
+        */
+        BINLEX_EXPORT void py_SetInstructions(bool instructions);
     };
 }
 #endif
