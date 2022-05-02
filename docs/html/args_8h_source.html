@@ -94,7 +94,7 @@ $(document).ready(function(){initNavTree('args_8h_source.html',''); initResizabl
 <div class="line"><a name="l00006"></a><span class="lineno">    6</span>&#160;<span class="preprocessor">#ifdef _WIN32</span></div>
 <div class="line"><a name="l00007"></a><span class="lineno">    7</span>&#160;<span class="preprocessor">#define BINLEX_EXPORT __declspec(dllexport)</span></div>
 <div class="line"><a name="l00008"></a><span class="lineno">    8</span>&#160;<span class="preprocessor">#else</span></div>
-<div class="line"><a name="l00009"></a><span class="lineno">    9</span>&#160;<span class="preprocessor">#define BINLEX_EXPORT </span></div>
+<div class="line"><a name="l00009"></a><span class="lineno">    9</span>&#160;<span class="preprocessor">#define BINLEX_EXPORT</span></div>
 <div class="line"><a name="l00010"></a><span class="lineno">   10</span>&#160;<span class="preprocessor">#endif</span></div>
 <div class="line"><a name="l00011"></a><span class="lineno">   11</span>&#160; </div>
 <div class="line"><a name="l00012"></a><span class="lineno">   12</span>&#160;<span class="preprocessor">#define ARGS_MODE_COUNT 9</span></div>
@@ -125,10 +125,10 @@ $(document).ready(function(){initNavTree('args_8h_source.html',''); initResizabl
 <div class="line"><a name="l00041"></a><span class="lineno">   41</span>&#160;                <span class="keywordtype">bool</span> list_modes;</div>
 <div class="line"><a name="l00042"></a><span class="lineno">   42</span>&#160;                <span class="keywordtype">bool</span> instructions;</div>
 <div class="line"><a name="l00043"></a><span class="lineno">   43</span>&#160;                <span class="keywordtype">char</span> *mode;</div>
-<div class="line"><a name="l00044"></a><span class="lineno">   44</span>&#160;                <span class="keywordtype">char</span> *corpus;</div>
+<div class="line"><a name="l00044"></a><span class="lineno">   44</span>&#160;                std::string corpus;</div>
 <div class="line"><a name="l00045"></a><span class="lineno">   45</span>&#160;                <span class="keywordtype">bool</span> pretty;</div>
 <div class="line"><a name="l00046"></a><span class="lineno">   46</span>&#160;                <span class="keywordtype">bool</span> debug;</div>
-<div class="line"><a name="l00047"></a><span class="lineno"><a class="line" href="classbinlex_1_1Args.html#a518028a031f2d399dc14c4e280fc14cd">   47</a></span>&#160;        std::set&lt;std::string&gt; <a class="code" href="classbinlex_1_1Args.html#a518028a031f2d399dc14c4e280fc14cd">tags</a>; </div>
+<div class="line"><a name="l00047"></a><span class="lineno"><a class="line" href="classbinlex_1_1Args.html#a518028a031f2d399dc14c4e280fc14cd">   47</a></span>&#160;                std::set&lt;std::string&gt; <a class="code" href="classbinlex_1_1Args.html#a518028a031f2d399dc14c4e280fc14cd">tags</a>; </div>
 <div class="line"><a name="l00048"></a><span class="lineno">   48</span>&#160;            } options;</div>
 <div class="line"><a name="l00049"></a><span class="lineno">   49</span>&#160;            BINLEX_EXPORT <a class="code" href="classbinlex_1_1Args.html">Args</a>();</div>
 <div class="line"><a name="l00050"></a><span class="lineno">   50</span>&#160;            BINLEX_EXPORT <span class="keywordtype">void</span> SetDefault();</div>

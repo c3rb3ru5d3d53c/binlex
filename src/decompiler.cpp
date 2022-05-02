@@ -831,7 +831,7 @@ void Decompiler::py_SetThreads(uint threads, uint thread_cycles, uint thread_sle
     g_args.options.thread_sleep = thread_sleep;
 }
 
-void Decompiler::py_SetCorpus(char *corpus) {
+void Decompiler::py_SetCorpus(const char *corpus) {
     g_args.options.corpus = corpus;
 }
 

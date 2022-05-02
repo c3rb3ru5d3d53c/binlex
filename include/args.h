@@ -41,10 +41,10 @@ namespace binlex{
                 bool list_modes;
                 bool instructions;
                 char *mode;
-                char *corpus;
+                std::string corpus;
                 bool pretty;
                 bool debug;
-		std::set<std::string> tags; //!< Set for storing the tags.
+                std::set<std::string> tags; //!< Set for storing the tags.
             } options;
             BINLEX_EXPORT Args();
             BINLEX_EXPORT void SetDefault();

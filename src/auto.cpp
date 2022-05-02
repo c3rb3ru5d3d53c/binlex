@@ -121,7 +121,7 @@ bool AutoLex::GetFileCharacteristics(char * file_path){
     return true;
 }
 
-Decompiler AutoLex::ProcessFile(char *file_path, uint threads, uint timeout, uint thread_cycles, useconds_t thread_sleep, bool instructions, char *corpus){
+Decompiler AutoLex::ProcessFile(char *file_path, uint threads, uint timeout, uint thread_cycles, useconds_t thread_sleep, bool instructions){
 
     // Todo:
     // - raise exceptions instead of returning a null decompiler  to better handle being called as a lib
