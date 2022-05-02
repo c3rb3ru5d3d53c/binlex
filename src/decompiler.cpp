@@ -149,9 +149,7 @@ void Decompiler::SetInstructions(bool instructions, uint index){
     sections[index].instructions = instructions;
 }
 
-// Second function which returns the json and...
-// Can the json class be used to output directly into a stream?
-string Decompiler::GetTrait(struct Trait *trait, bool pretty){
+json Decompiler::GetTrait(struct Trait *trait){
     json data;
     data["type"] = trait->type;
     data["corpus"] = g_args.options.corpus;
@@ -170,44 +168,32 @@ string Decompiler::GetTrait(struct Trait *trait, bool pretty){
     data["invalid_instructions"] = trait->invalid_instructions;
     data["cyclomatic_complexity"] = trait->cyclomatic_complexity;
     data["average_instructions_per_block"] = trait->average_instructions_per_block;
-    if (g_args.options.pretty == true){
-        return data.dump(4);
-    }
-    return data.dump();
+    return data;
 }
 
 void Decompiler::PrintTraits(bool pretty){
-    for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
-        if (sections[i].traits != NULL){
-            for (int j = 0; j < sections[i].ntraits; j++){
-                sections[i].traits[j]->corpus = sections[i].corpus;
-                cout << GetTrait(sections[i].traits[j], pretty) << endl;
-            }
-        }
+    auto traits(GetTraits());
+    for(auto i : traits) {
+	cout << (pretty ? i.dump(4) : i.dump()) << endl;
     }
 }
 
 
-//Never used???
-string Decompiler::GetTraits(bool pretty){
-    stringstream ss;
-    string sep = "";
-    ss << '[';
+vector<json> Decompiler::GetTraits(){
+    vector<json> traitsjson;
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
         if (sections[i].traits != NULL){
             for (int j = 0; j < sections[i].ntraits; j++){
                 sections[i].traits[j]->corpus = sections[i].corpus;
-		json jdata(GetTrait(sections[i].traits[j], pretty));
+		json jdata(GetTrait(sections[i].traits[j]));
 		if(!tags.empty()){
 		    jdata["tags"] = tags;
 		}
-                ss << sep << jdata;
-                sep = ",";
+		traitsjson.push_back(jdata);
             }
         }
     }
-    ss << ']';
-    return ss.str();
+    return traitsjson;
 }
 
 // TODO we know how many exec sections we have, we don't need to go through all slots
@@ -220,6 +206,10 @@ void Decompiler::WriteTraits(){
         if(!output_stream.is_open()) {
             PRINT_ERROR_AND_EXIT("Unable to open file %s for writing\n", g_args.options.output);
         }
+    }
+    auto traits(GetTraits());
+    for(auto i : traits) {
+	output_stream << (pretty ? i.dump(4) : i.dump()) << endl;
     }
 
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
