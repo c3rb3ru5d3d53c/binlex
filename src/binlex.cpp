@@ -64,7 +64,7 @@ int main(int argc, char **argv){
         if (elf64.ReadFile(g_args.options.input) == false){
             return EXIT_FAILURE;
         }
-        DEBUG_PRINT("Number of total sections = %u\n", elf64.total_exec_sections);
+        PRINT_DEBUG("Number of total executable sections = %u\n", elf64.total_exec_sections);
 
         Decompiler decompiler;
         for (int i = 0; i < elf64.total_exec_sections; i++){
@@ -84,7 +84,7 @@ int main(int argc, char **argv){
         if (elf32.ReadFile(g_args.options.input) == false){
             return EXIT_FAILURE;
         }
-        DEBUG_PRINT("Number of total sections = %u\n", elf32.total_exec_sections);
+        PRINT_DEBUG("Number of total executable sections = %u\n", elf32.total_exec_sections);
 
         Decompiler decompiler;
         for (int i = 0; i < elf32.total_exec_sections; i++){
@@ -130,7 +130,7 @@ int main(int argc, char **argv){
         if (pe32.ReadFile(g_args.options.input) == false){
             return EXIT_FAILURE;
         }
-        DEBUG_PRINT("Number of total sections = %u\n", pe32.total_exec_sections);
+        PRINT_DEBUG("Number of total sections = %u\n", pe32.total_exec_sections);
 
         Decompiler decompiler;
         for (int i = 0; i < pe32.total_exec_sections; i++){
@@ -150,7 +150,7 @@ int main(int argc, char **argv){
         if (pe64.ReadFile(g_args.options.input) == false){
             return EXIT_FAILURE;
         }
-        DEBUG_PRINT("Number of total sections = %u\n", pe64.total_exec_sections);
+        PRINT_DEBUG("Number of total executable sections = %u\n", pe64.total_exec_sections);
 
         Decompiler decompiler;
         for (int i = 0; i < pe64.total_exec_sections; i++){

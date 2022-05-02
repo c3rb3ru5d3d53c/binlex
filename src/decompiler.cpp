@@ -71,41 +71,41 @@ void Decompiler::AppendTrait(struct Trait *trait, struct Section *sections, uint
     }
     #endif
     if (sections[index].traits == NULL){
-        ERROR_PRINT_AND_EXIT("[x] trait realloc failed\n");
+        PRINT_ERROR_AND_EXIT("[x] trait realloc failed\n");
     }
     sections[index].traits[sections[index].ntraits] = (struct Trait *)malloc(sizeof(struct Trait));
     if (sections[index].traits[sections[index].ntraits] == NULL){
-        ERROR_PRINT_AND_EXIT("[x] trait malloc failed\n");
+        PRINT_ERROR_AND_EXIT("[x] trait malloc failed\n");
     }
 
     char *type = (char *)malloc(strlen(trait->type)+1);
     if (type == NULL){
-        ERROR_PRINT_AND_EXIT("[x] trait malloc failed\n");
+        PRINT_ERROR_AND_EXIT("[x] trait malloc failed\n");
     }
     memset(type, 0, strlen(trait->type)+1);
     if (memcpy(type, trait->type, strlen(trait->type)) == NULL){
-        ERROR_PRINT_AND_EXIT("[x] trait memcpy failed\n");
+        PRINT_ERROR_AND_EXIT("[x] trait memcpy failed\n");
     }
     trait->type = type;
 
     trait->trait = (char *)malloc(strlen(trait->tmp_trait.c_str())+1);
     if (trait->trait == NULL){
-        ERROR_PRINT_AND_EXIT("[x] trait malloc failed\n");
+        PRINT_ERROR_AND_EXIT("[x] trait malloc failed\n");
     }
     memset(trait->trait, 0, strlen(trait->tmp_trait.c_str())+1);
     if (memcpy(trait->trait, trait->tmp_trait.c_str(), strlen(trait->tmp_trait.c_str())) == NULL){
-        ERROR_PRINT_AND_EXIT("[x] trait memcpy failed\n");
+        PRINT_ERROR_AND_EXIT("[x] trait memcpy failed\n");
     }
     trait->bytes = (char *)malloc(strlen(trait->tmp_bytes.c_str())+1);
     if (trait->bytes == NULL){
-        ERROR_PRINT_AND_EXIT("[x] trait malloc failed\n");
+        PRINT_ERROR_AND_EXIT("[x] trait malloc failed\n");
     }
     memset(trait->bytes, 0, strlen(trait->tmp_bytes.c_str())+1);
     if (memcpy(trait->bytes, trait->tmp_bytes.c_str(), strlen(trait->tmp_bytes.c_str())) == NULL){
-        ERROR_PRINT_AND_EXIT("[x] trait memcpy failed\n");
+        PRINT_ERROR_AND_EXIT("[x] trait memcpy failed\n");
     }
     if (memcpy(sections[index].traits[sections[index].ntraits], trait, sizeof(struct Trait)) == NULL){
-        ERROR_PRINT_AND_EXIT("[x] trait memcpy failed\n");
+        PRINT_ERROR_AND_EXIT("[x] trait memcpy failed\n");
     }
     sections[index].ntraits++;
     trait->trait = (char *)trait->tmp_trait.c_str();
@@ -178,7 +178,7 @@ void Decompiler::WriteTraits(){
     if (g_args.options.output != NULL) {
         output_stream.open(g_args.options.output);
         if(!output_stream.is_open()) {
-            ERROR_PRINT_AND_EXIT("Unable to open file %s for writing\n", g_args.options.output);
+            PRINT_ERROR_AND_EXIT("Unable to open file %s for writing\n", g_args.options.output);
         }
     }
 
@@ -355,7 +355,7 @@ void * Decompiler::DecompileWorker(void *args) {
             }
             CollectInsn(insn, sections, index);
 
-            DEBUG_PRINT("address=0x%" PRIx64 ",block=%d,function=%d,queue=%ld,instruction=%s\t%s\n", insn->address,IsBlock(sections[index].addresses, insn->address), IsFunction(sections[index].addresses, insn->address), sections[index].discovered.size(), insn->mnemonic, insn->op_str);
+            PRINT_DEBUG("address=0x%" PRIx64 ",block=%d,function=%d,queue=%ld,instruction=%s\t%s\n", insn->address,IsBlock(sections[index].addresses, insn->address), IsFunction(sections[index].addresses, insn->address), sections[index].discovered.size(), insn->mnemonic, insn->op_str);
 
             #if defined(__linux__) || defined(__APPLE__)
             pthread_mutex_unlock(&DECOMPILER_MUTEX);
@@ -442,21 +442,24 @@ void Decompiler::ClearTrait(struct Trait *trait){
 }
 
 void Decompiler::AppendQueue(set<uint64_t> &addresses, uint operand_type, uint index){
-    DEBUG_PRINT("List of queued addresses for section %u correponding to found functions: ", index);
+    PRINT_DEBUG("List of queued addresses for section %u correponding to found functions: ", index);
     for (auto it = addresses.begin(); it != addresses.end(); ++it){
         uint64_t tmp_addr = *it;
         sections[index].discovered.push(tmp_addr);
         sections[index].visited[tmp_addr] = DECOMPILER_VISITED_QUEUED;
         sections[index].addresses[tmp_addr] = operand_type;
-        DEBUG_PRINT("0x%" PRIu64 " ", tmp_addr);
+        PRINT_DEBUG("0x%" PRIu64 " ", tmp_addr);
     }
-    DEBUG_PRINT("\n");
+    PRINT_DEBUG("\n");
 }
 
 void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint index) {
     sections[index].offset  = offset;
     sections[index].data = data;
     sections[index].data_size = data_size;
+
+    PRINT_DEBUG("Decompile: offset = 0x%x data_size = %" PRId64 " bytes\n", sections[index].offset, sections[index].data_size);
+    PRINT_DATA("Section Data (up to 32 bytes)", sections[index].data, std::min((size_t)32, sections[index].data_size));
 
     sections[index].discovered.push(0);
     sections[index].addresses[0] = DECOMPILER_OPERAND_TYPE_FUNCTION;
