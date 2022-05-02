@@ -89,6 +89,20 @@ bool PE::IsDotNet(){
 }
 
 
+bool PE::HasLimitations(){
+
+    if(binary->has_imports()){
+        auto imports = binary->imports();
+        for(Import i : imports){
+            if(i.name() == "MSVBVM60.DLL"){
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+
 bool PE::ParseSections(){
     uint32_t index = 0;
     it_sections local_sections = binary->sections();

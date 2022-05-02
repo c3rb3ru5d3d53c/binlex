@@ -1,11 +1,3 @@
-#include <iostream>
-#include <memory>
-#include <vector>
-#include <set>
-#include <LIEF/LIEF.hpp>
-#include "common.h"
-#include "decompiler.h"
-
 #ifndef AUTO_H
 #define AUTO_H
 
@@ -30,8 +22,7 @@ namespace binlex{
         bool GetFileCharacteristics(char *file_path);
     public:
         BINLEX_EXPORT AutoLex();
-        BINLEX_EXPORT bool HasLimitations(char *file_path);
-        BINLEX_EXPORT Decompiler ProcessFile(char *file_path, uint threads, uint timeout, uint thread_cycles, useconds_t thread_sleep, bool instructions, char *corpus);
+        BINLEX_EXPORT int ProcessFile(char *file_path, uint threads, uint timeout, uint thread_cycles, useconds_t thread_sleep, bool instructions, char *corpus, char *output, bool pretty);
     };
 };
 
