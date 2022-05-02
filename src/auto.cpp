@@ -69,30 +69,7 @@ bool AutoLex::HasLimitations(char *file_path){
     return false;
 }
 
-bool AutoLex::IsDotNet(char *file_path){
-    try {
-        auto bin = LIEF::PE::Parser::parse(file_path);
-        auto imports = bin->imports();
 
-        for(Import i : imports)
-        {
-            if (i.name() == "mscorelib.dll") {
-                if(bin->data_directory(DATA_DIRECTORY::CLR_RUNTIME_HEADER).RVA() > 0) {
-                    return true;
-                }
-            }
-            if (i.name() == "mscoree.dll") {
-                if(bin->data_directory(DATA_DIRECTORY::CLR_RUNTIME_HEADER).RVA() > 0) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-    catch(LIEF::bad_format bf){
-        return false;
-    }
-}
 
 bool AutoLex::GetFileCharacteristics(char * file_path){
 
@@ -135,28 +112,30 @@ Decompiler AutoLex::ProcessFile(char *file_path, uint threads, uint timeout, uin
 
     if(characteristics.format == LIEF::FORMAT_PE){
 
-        if(IsDotNet(file_path)){
+
+        PE pe;
+
+        if (!pe.Setup((MACHINE_TYPES)characteristics.machineType)){
+            return decompiler;
+        }
+
+        if (!pe.ReadFile(file_path)){
+            return decompiler;
+        }
+
+        if(pe.IsDotNet()){
             fprintf(stderr, "CIL Decompiler not implemented.\n");
             return decompiler;
         }
 
-        PE pe32;
-        if (!pe32.Setup((MACHINE_TYPES)characteristics.machineType)){
-            return decompiler;
-        }
-
-        if (!pe32.ReadFile(file_path)){
-            return decompiler;
-        }
-
-        for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++) {
-            if (pe32.sections[i].data != NULL) {
+        for (int i = 0; i < pe.total_exec_sections; i++) {
+            if (pe.sections[i].data != NULL) {
                 decompiler.Setup(characteristics.arch, characteristics.mode, i);
                 decompiler.SetThreads(threads, thread_cycles, thread_sleep, i);
                 decompiler.SetCorpus(corpus, i);
                 decompiler.SetInstructions(instructions, i);
-                decompiler.AppendQueue(pe32.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
-                decompiler.Decompile(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, i);
+                decompiler.AppendQueue(pe.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
+                decompiler.Decompile(pe.sections[i].data, pe.sections[i].size, pe.sections[i].offset, i);
             }
         }
     }
@@ -170,7 +149,7 @@ Decompiler AutoLex::ProcessFile(char *file_path, uint threads, uint timeout, uin
             return decompiler;
         }
 
-        for (int i = 0; i < ELF_MAX_SECTIONS; i++){
+        for (int i = 0; i < elf.total_exec_sections; i++){
             if (elf.sections[i].data != NULL){
                 decompiler.Setup(characteristics.arch, characteristics.mode, i);
                 decompiler.SetThreads(threads, thread_cycles, thread_sleep, i);
