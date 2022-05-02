@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <vector>
 #include <iomanip>
+#include <math.h>
+
 #if defined(__linux__) || defined(__APPLE__)
 #include <pthread.h>
 #include <openssl/sha.h>
@@ -14,19 +16,19 @@
 #include <windows.h>
 #include <wincrypt.h>
 #endif
+
 #ifndef _WIN32
 #include <unistd.h>
 #else
 #include <windows.h>
 #endif
-#include <math.h>
+
 #include <capstone/capstone.h>
 #include "json.h"
 #include "decompiler.h"
 
 // Very WIP Multi-Threaded Recursive Decompiler
 
-using namespace std;
 using namespace binlex;
 using json = nlohmann::json;
 #ifndef _WIN32
@@ -142,8 +144,8 @@ string Decompiler::GetTrait(struct Trait *trait){
     data["size"] = trait->size;
     data["offset"] = trait->offset;
     data["bytes_entropy"] = trait->bytes_entropy;
-    data["bytes_sha256"] = trait->bytes_sha256;
-    data["trait_sha256"] = trait->trait_sha256;
+    data["bytes_sha256"] = &trait->bytes_sha256[0];
+    data["trait_sha256"] = &trait->trait_sha256[0];
     data["trait_entropy"] = trait->trait_entropy;
     data["invalid_instructions"] = trait->invalid_instructions;
     data["cyclomatic_complexity"] = trait->cyclomatic_complexity;
@@ -408,14 +410,8 @@ void * Decompiler::TraitWorker(void *args){
     }
     trait->bytes_entropy = Entropy(string(trait->bytes));
     trait->trait_entropy = Entropy(string(trait->trait));
-    string bytes_sha256 = SHA256(trait->bytes);
-    trait->bytes_sha256 = (char *)malloc(bytes_sha256.length()+1);
-    memset(trait->bytes_sha256, 0, bytes_sha256.length()+1);
-    memcpy(trait->bytes_sha256, bytes_sha256.c_str(), bytes_sha256.length());
-    string trait_sha256 = SHA256(trait->trait);
-    trait->trait_sha256 = (char *)malloc(trait_sha256.length()+1);
-    memset(trait->trait_sha256, 0, trait_sha256.length()+1);
-    memcpy(trait->trait_sha256, trait_sha256.c_str(), trait_sha256.length());
+    memcpy(&trait->bytes_sha256[0], SHA256(trait->bytes).c_str(), SHA256_PRINTABLE_SIZE);
+    memcpy(&trait->trait_sha256[0], SHA256(trait->trait).c_str(), SHA256_PRINTABLE_SIZE);
     if (strcmp(trait->type, (char *)"block") == 0){
         trait->cyclomatic_complexity = trait->edges - 1 + 2;
         trait->average_instructions_per_block = trait->instructions / 1;
@@ -438,7 +434,8 @@ void Decompiler::ClearTrait(struct Trait *trait){
     trait->invalid_instructions = 0;
     trait->tmp_trait.clear();
     trait->trait = NULL;
-    trait->bytes_sha256 = NULL;
+    memset(&trait->bytes_sha256[0], 0, SHA256_PRINTABLE_SIZE);
+    memset(&trait->trait_sha256[0], 0, SHA256_PRINTABLE_SIZE);
 }
 
 void Decompiler::AppendQueue(set<uint64_t> &addresses, uint operand_type, uint index){
@@ -798,12 +795,6 @@ void Decompiler::FreeTraits(uint index){
         for (int i = 0; i < sections[index].ntraits; i++){
             if (sections[index].traits[i]->type != NULL){
                 free(sections[index].traits[i]->type);
-            }
-            if (sections[index].traits[i]->trait_sha256 != NULL){
-                free(sections[index].traits[i]->trait_sha256);
-            }
-            if (sections[index].traits[i]->bytes_sha256 != NULL){
-                free(sections[index].traits[i]->bytes_sha256);
             }
             if (sections[index].traits[i]->bytes != NULL){
                 free(sections[index].traits[i]->bytes);

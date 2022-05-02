@@ -1,9 +1,6 @@
 #ifndef DECOMPILER_H
 #define DECOMPILER_H
 
-#include <vector>
-#include <queue>
-#include <set>
 #include <stdint.h>
 #include <capstone/capstone.h>
 #include "common.h"
@@ -16,6 +13,7 @@
 #endif
 
 #define DECOMPILER_MAX_SECTIONS 256
+#define SHA256_PRINTABLE_SIZE   65 /* including NULL terminator */
 
 #define DECOMPILER_OPERAND_TYPE_BLOCK    0
 #define DECOMPILER_OPERAND_TYPE_FUNCTION 1
@@ -27,7 +25,6 @@
 #define DECOMPILER_GPU_MODE_CUDA   0
 #define DECOMPILER_GPU_MODE_OPENCL 1
 
-using namespace std;
 using json = nlohmann::json;
 
 namespace binlex {
@@ -62,8 +59,8 @@ namespace binlex {
             uint average_instructions_per_block;
             float bytes_entropy;
             float trait_entropy;
-            char *trait_sha256;
-            char *bytes_sha256;
+            char bytes_sha256[SHA256_PRINTABLE_SIZE];
+            char trait_sha256[SHA256_PRINTABLE_SIZE];
         };
         struct Section {
             cs_arch arch;

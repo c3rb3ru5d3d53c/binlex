@@ -19,7 +19,6 @@ extern "C" {
 #pragma comment(lib, "LIEF")
 #endif
 
-using namespace std;
 using namespace binlex;
 
 Args g_args;
