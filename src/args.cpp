@@ -26,7 +26,7 @@ void Args::SetDefault(){
     options.thread_sleep = 0;
     options.help = false;
     options.output = NULL;
-    options.corpus = (char *)"default";
+    options.corpus = "default";
     options.list_modes = false;
     options.mode = (char *)"auto";
     options.io_type = ARGS_IO_TYPE_UNKNOWN;
