@@ -219,12 +219,12 @@ namespace binlex {
         @param trait pointer to trait structure
         @return json string
         */
-        BINLEX_EXPORT static string GetTrait(struct Trait *trait);
+        BINLEX_EXPORT static json GetTrait(struct Trait *trait);
         /**
         Get Traits as JSON
         @return json strings one per line
         */
-        string GetTraits();
+        vector<json> GetTraits();
         /**
         Write Traits to File or Display
         */
