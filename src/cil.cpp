@@ -325,56 +325,89 @@ bool CILDecompiler::Setup(int input_type){
     }
     return true;
 }
+int CILDecompiler::update_offset(int operand_size, int i) {
+    fprintf(stderr, "[+] updating offset using operand size %d\n", operand_size);
+    switch(operand_size){
+        case 0:
+            break;
+        case 8:
+            i++;
+            break;
+        case 16:
+            i = i + 2;
+            break;
+        case 32:
+            i = i + 4;
+            break;
+        case 64:
+            i = i + 8;
+            break;
+        default:
+            fprintf(stderr, "[x] unknown operand size %d\n", operand_size);
+            i = -1;
+    }
+    return i;
+}
+
 bool CILDecompiler::Decompile(void *data, int data_size, int index){
     const unsigned char *pc = (const unsigned char *)data;
     //char *bytes = NULL;
-    char *traits = (char *)malloc(data_size * 2 + data_size + 1);
-    memset((void *)traits, 0, data_size * 2 + data_size);
+    vector<Trait*> traits;
     //Let's use a vector for our instructions because C++ has
     //structures for this stuff.
-    vector< Instruction* > instructions;
+    vector< Instruction* >* instructions = new vector<Instruction *>;
     //We need an iterator for our hashmap searches
-    std::map<int, int>::iterator it;
+    map<int, int>::iterator it;
     for (int i = 0; i < data_size; i++){
         int operand_size = 0;
         bool end_block = false;
         bool end_func = false;
-        Instruction *insn = (Instruction *)malloc(sizeof(Instruction));
-        insn->instruction = pc[i];
+        int num_blocks = 0;
+        Instruction *insn = new Instruction;
+        //fprintf(stderr, "Instruction being decompiled: 0x%x\n", pc[i]);
+        //TODO: need to add all raw bytes, not just masked bytes, to instruction set collected
         if (insn->instruction == CIL_INS_PREFIX){
             //Let's add prefix instruction to our instructions
-            instructions.push_back(insn);
+            insn->instruction = pc[i];
+            insn->operand_size = it->second;
+            insn->offset = i;
+            instructions->push_back(insn);
             //Then let's move on to the next instruction
             i++;
+            //fprintf(stderr, "Instruction being decompiled: 0x%x\n", pc[i]);
             //Then let's create a new instruction for the ... new instruction
-            insn = (Instruction *)malloc(sizeof(Instruction));
+            insn = new Instruction;
             insn->instruction = pc[i];
-            it = prefixInstrMap.find(insn->instruction);
+            it = prefixInstrMap.find(pc[i]);
             if(it != prefixInstrMap.end()) {
+                fprintf(stderr, "[+] found prefix opcode 0x%02x at offset %d with operand size: %d\n", pc[i], i, it->second);
+                insn->instruction = pc[i];
                 insn->operand_size = it->second;
-                instructions.push_back(insn);
-                prefixInstrMap.erase(it);
+                insn->offset = i;
+                instructions->push_back(insn);
             } else {
                 fprintf(stderr, "[x] unknown prefix opcode 0x%02x at offset %d\n", pc[i], i);
-                free(traits);
                 return false;
             }
         } else {
-            it = condInstrMap.find(insn->instruction);
+            it = condInstrMap.find(pc[i]);
             if(it != condInstrMap.end()) {
+                    insn->instruction = pc[i];
                     insn->operand_size = it->second;
-                    instructions.push_back(insn);    
-                    condInstrMap.erase(it);      
-                    end_block = true;     
+                    insn->offset = i;
+                    instructions->push_back(insn);   
+                    end_block = true;
+                    fprintf(stderr, "[+] end block found -> opcode 0x%02x at offset %d\n", pc[i], i);
             } else {
-                it = miscInstrMap.find(insn->instruction);
+                it = miscInstrMap.find(pc[i]);
                 if(it != miscInstrMap.end()) {
+                    fprintf(stderr, "[+] found misc opcode 0x%02x at offset %d with operand size: %d\n", pc[i], i, it->second);
+                    insn->instruction = pc[i];
                     insn->operand_size = it->second;
-                    instructions.push_back(insn);
-                    miscInstrMap.erase(it);
+                    insn->offset = i;
+                    instructions->push_back(insn);
                 } else {
-                    fprintf(stderr, "[x] unknown prefix opcode 0x%02x at offset %d\n", pc[i], i);
-                    free(traits);
+                    fprintf(stderr, "[x] unknown opcode 0x%02x at offset %d\n", pc[i], i);
                     return false;
                 }
             }
@@ -382,107 +415,48 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
         if(insn->instruction == CIL_INS_RET) {
             end_func = true;
         }
-
-        if (end_block == true &&
-            type == CIL_DECOMPILER_TYPE_BLCKS &&
-            i < data_size - 1){
-            traits_nl(traits);
+        
+        int updated = update_offset(insn->operand_size, i);
+        if (updated != -1) {
+            i = updated;
         }
-        if (end_func == true &&
-            type == CIL_DECOMPILER_TYPE_FUNCS &&
-            i < data_size - 1){
-            traits_nl(traits);
-        }
-        if ((end_block == false || end_func == false) && i == data_size -1){
-            traits_nl(traits);
-        }
+        //If we're at the end of a block, at the end of a function, or
+        //at the end of our data then we need to store the trait data
+        if ((end_func || end_block && i < data_size - 1) ||
+            ((end_func == false && end_block == false) && i == data_size -1)) {
+            //So we can actually capture all the bytes within the trait using the recorded
+            //offsets within the first instruction and last instruction without having
+            //to capture them as we go ... so that's nice.
+            Trait *ctrait = new Trait;
+            ctrait->instructions = instructions;
+            ctrait->corpus = sections[index].corpus;
+            //Limiting to x86 for now but this should be set by the PE parsing code
+            //higher up in the call-stack.
+            ctrait->architecture = CS_ARCH_X86;
+            //The first offset of the first instruction will give us the offset
+            //of our trait.
+            ctrait->offset = instructions->front()->offset;
+            ctrait->bytes = ConvBytes(*instructions);
+            traits.push_back(ctrait);
+       }
     }
-    if (type == CIL_DECOMPILER_TYPE_BLCKS){
-        sections[index].block_traits = (char *)malloc(strlen(traits)+1);
-        memset(sections[index].block_traits, 0, strlen(traits)+1);
-        memcpy(sections[index].block_traits, traits, strlen(traits));
-    }
-    if (type == CIL_DECOMPILER_TYPE_FUNCS){
-        sections[index].function_traits = (char *)malloc(strlen(traits)+1);
-        memset(sections[index].function_traits, 0, strlen(traits)+1);
-        memcpy(sections[index].function_traits, traits, strlen(traits));
-    }
-    free(traits);
     return true;
 }
 
-void CILDecompiler::AppendTrait(struct Trait *trait, struct Section *sections, uint index){
-    #if defined(__linux__) || defined(__APPLE__)
-    pthread_mutex_lock(&DECOMPILER_MUTEX);
-    #else
-    EnterCriticalSection(&csDecompiler);
-    #endif
-    #if defined(__linux__) || defined(__APPLE__)
-    sections[index].traits = (struct Trait **)realloc(sections[index].traits, sizeof(struct Trait *) * sections[index].ntraits + 1);
-    #else
-    if (sections[index].ntraits % 1024 == 0) {
-        if (sections[index].ntraits == 0) {
-            sections[index].traits = (struct Trait**)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(void*) * 1024);
-        }
-        else {
-            sections[index].traits = (struct Trait**)HeapReAlloc(GetProcessHeap(), NULL, sections[index].traits, sizeof(void*) * (sections[index].ntraits + 1024));
+string CILDecompiler::ConvBytes(vector< Instruction* > allinst) {
+    string rstr;
+    for(auto inst : allinst) {
+        char hexbytes[5];
+        sprintf(hexbytes, "%02x ", inst->instruction);
+        hexbytes[4] = '\0';
+        cout << hexbytes;
+        for(int i = 0; i < inst->operand_size/4; i++) {
+            cout << "?? ";
         }
     }
-    #endif
-    if (sections[index].traits == NULL){
-        fprintf(stderr, "[x] trait realloc failed\n");
-        exit(1);
-    }
-    sections[index].traits[sections[index].ntraits] = (struct Trait *)malloc(sizeof(struct Trait));
-    if (sections[index].traits[sections[index].ntraits] == NULL){
-        fprintf(stderr, "[x] trait malloc failed\n");
-        exit(1);
-    }
-
-    char *type = (char *)malloc(strlen(trait->type)+1);
-    if (type == NULL){
-        fprintf(stderr, "[x] trait malloc failed\n");
-        exit(1);
-    }
-    memset(type, 0, strlen(trait->type)+1);
-    if (memcpy(type, trait->type, strlen(trait->type)) == NULL){
-        fprintf(stderr, "[x] trait memcpy failed\n");
-        exit(1);
-    }
-    trait->type = type;
-
-    trait->trait = (char *)malloc(strlen(trait->tmp_trait.c_str())+1);
-    if (trait->trait == NULL){
-        fprintf(stderr, "[x] trait malloc failed\n");
-        exit(1);
-    }
-    memset(trait->trait, 0, strlen(trait->tmp_trait.c_str())+1);
-    if (memcpy(trait->trait, trait->tmp_trait.c_str(), strlen(trait->tmp_trait.c_str())) == NULL){
-        fprintf(stderr, "[x] trait memcpy failed\n");
-        exit(1);
-    }
-    trait->bytes = (char *)malloc(strlen(trait->tmp_bytes.c_str())+1);
-    if (trait->bytes == NULL){
-        fprintf(stderr, "[x] trait malloc failed\n");
-        exit(1);
-    }
-    memset(trait->bytes, 0, strlen(trait->tmp_bytes.c_str())+1);
-    if (memcpy(trait->bytes, trait->tmp_bytes.c_str(), strlen(trait->tmp_bytes.c_str())) == NULL){
-        fprintf(stderr, "[x] trait memcpy failed\n");
-        exit(1);
-    }
-    if (memcpy(sections[index].traits[sections[index].ntraits], trait, sizeof(struct Trait)) == NULL){
-        fprintf(stderr, "[x] trait memcpy failed\n");
-        exit(1);
-    }
-    sections[index].ntraits++;
-    trait->trait = (char *)trait->tmp_trait.c_str();
-    trait->bytes = (char *)trait->tmp_bytes.c_str();
-    #if defined(__linux__) || defined(__APPLE__)
-    pthread_mutex_unlock(&DECOMPILER_MUTEX);
-    #else
-    LeaveCriticalSection(&csDecompiler);
-    #endif
+    cout << "\n";
+    string ret = "";
+    return ret;
 }
 
 void CILDecompiler::SetThreads(uint threads, uint thread_cycles, uint thread_sleep, uint index){
@@ -499,6 +473,7 @@ void CILDecompiler::SetInstructions(bool instructions, uint index){
     sections[index].instructions = instructions;
 }
 
+/*
 string CILDecompiler::GetTrait(struct Trait *trait, bool pretty){
     json data;
     data["type"] = trait->type;
@@ -523,6 +498,7 @@ string CILDecompiler::GetTrait(struct Trait *trait, bool pretty){
     }
     return data.dump();
 }
+*/
 
 void CILDecompiler::WriteTraits(char *file_path){
     FILE *fd = fopen(file_path, "w");
@@ -747,7 +723,8 @@ void * CILDecompiler::DecompileWorker(void *args) {
     cs_close(&myself.handle);
     return NULL;
 }
-
+*/
+/*
 void * CILDecompiler::TraitWorker(void *args){
     struct Trait *trait = (struct Trait *)args;
     if (trait->blocks == 0 &&
@@ -777,7 +754,6 @@ void * CILDecompiler::TraitWorker(void *args){
 
 }
 */
-
 bool CILDecompiler::IsVisited(map<uint64_t, int> &visited, uint64_t address) {
     return visited.find(address) != visited.end();
 }
@@ -795,6 +771,7 @@ void CILDecompiler::ClearTrait(struct Trait *trait){
     trait->bytes_sha256 = NULL;
 }
 
+/*
 void CILDecompiler::FreeTraits(uint index){
     if (sections[index].traits != NULL){
         for (int i = 0; i < sections[index].ntraits; i++){
@@ -821,6 +798,7 @@ void CILDecompiler::FreeTraits(uint index){
     }
     sections[index].ntraits = 0;
 }
+*/
 
 CILDecompiler::~CILDecompiler(){
     for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
