@@ -143,6 +143,12 @@ bool Decompiler::Setup(cs_arch arch, cs_mode mode, uint index){
     return true;
 }
 
+
+void Decompiler::SetTags(const set<string> &ntags){
+  tags = ntags;
+}
+
+
 void Decompiler::SetThreads(uint threads, uint thread_cycles, uint thread_sleep, uint index){
     sections[index].threads = threads;
     sections[index].thread_cycles = thread_cycles;
@@ -157,6 +163,8 @@ void Decompiler::SetInstructions(bool instructions, uint index){
     sections[index].instructions = instructions;
 }
 
+// Second function which returns the json and...
+// Can the json class be used to output directly into a stream?
 string Decompiler::GetTrait(struct Trait *trait, bool pretty){
     json data;
     data["type"] = trait->type;
@@ -193,6 +201,8 @@ void Decompiler::PrintTraits(bool pretty){
     }
 }
 
+
+//Never used???
 string Decompiler::GetTraits(bool pretty){
     stringstream ss;
     string sep = "";
@@ -201,7 +211,11 @@ string Decompiler::GetTraits(bool pretty){
         if (sections[i].traits != NULL){
             for (int j = 0; j < sections[i].ntraits; j++){
                 sections[i].traits[j]->corpus = sections[i].corpus;
-                ss << sep << GetTrait(sections[i].traits[j], pretty);
+		json jdata(GetTrait(sections[i].traits[j], pretty));
+		if(!tags.empty()){
+		    jdata["tags"] = tags;
+		}
+                ss << sep << jdata;
                 sep = ",";
             }
         }
