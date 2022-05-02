@@ -6,7 +6,6 @@ var structbinlex_1_1Decompiler_1_1Trait =
     [ "bytes", "structbinlex_1_1Decompiler_1_1Trait.html#a3e212435296e899674bed20e940de8e6", null ],
     [ "bytes_entropy", "structbinlex_1_1Decompiler_1_1Trait.html#a5f21bb73d7832500f31d2e017b34959b", null ],
     [ "bytes_sha256", "structbinlex_1_1Decompiler_1_1Trait.html#a0f17413a487c70c032287450a9466fa0", null ],
-    [ "corpus", "structbinlex_1_1Decompiler_1_1Trait.html#a9f3e20ec942d935ca4ac750342b60c69", null ],
     [ "cyclomatic_complexity", "structbinlex_1_1Decompiler_1_1Trait.html#a6c305a83df4c0d31173e4af6863440ce", null ],
     [ "edges", "structbinlex_1_1Decompiler_1_1Trait.html#a88185c92aa60a59c52485e4a50122216", null ],
     [ "instructions", "structbinlex_1_1Decompiler_1_1Trait.html#a9084e24801a6cacc2047772876a49baa", null ],

@@ -130,29 +130,11 @@ bool Decompiler::Setup(cs_arch arch, cs_mode mode, uint index){
 }
 
 
-void Decompiler::SetTags(const set<string> &ntags){
-  tags = ntags;
-}
-
-
-void Decompiler::SetThreads(uint threads, uint thread_cycles, uint thread_sleep, uint index){
-    sections[index].threads = threads;
-    sections[index].thread_cycles = thread_cycles;
-    sections[index].thread_sleep = thread_sleep;
-}
-
-void Decompiler::SetCorpus(char *corpus, uint index){
-    sections[index].corpus = corpus;
-}
-
-void Decompiler::SetInstructions(bool instructions, uint index){
-    sections[index].instructions = instructions;
-}
-
 json Decompiler::GetTrait(struct Trait *trait){
     json data;
     data["type"] = trait->type;
     data["corpus"] = g_args.options.corpus;
+    data["tags"] = g_args.options.tags;
     data["architecture"] = trait->architecture;
     data["bytes"] = trait->bytes;
     data["trait"] = trait->trait;
@@ -184,11 +166,7 @@ vector<json> Decompiler::GetTraits(){
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
         if (sections[i].traits != NULL){
             for (int j = 0; j < sections[i].ntraits; j++){
-                sections[i].traits[j]->corpus = sections[i].corpus;
 		json jdata(GetTrait(sections[i].traits[j]));
-		if(!tags.empty()){
-		    jdata["tags"] = tags;
-		}
 		traitsjson.push_back(jdata);
             }
         }
@@ -209,7 +187,7 @@ void Decompiler::WriteTraits(){
     }
     auto traits(GetTraits());
     for(auto i : traits) {
-	output_stream << (pretty ? i.dump(4) : i.dump()) << endl;
+	output_stream << (g_args.options.pretty ? i.dump(4) : i.dump()) << endl;
     }
 
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){

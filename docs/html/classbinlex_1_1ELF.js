@@ -1,12 +1,12 @@
 var classbinlex_1_1ELF =
 [
-    [ "Section", "structbinlex_1_1ELF_1_1Section.html", "structbinlex_1_1ELF_1_1Section" ],
-    [ "ELF", "classbinlex_1_1ELF.html#af5ec6e570a8b0df29f2f0ed23e31a9a1", null ],
-    [ "~ELF", "classbinlex_1_1ELF.html#a33368ec1f77195bdac3d54fcbe679655", null ],
-    [ "ReadBuffer", "classbinlex_1_1ELF.html#ada02cb928a7e4a606d5de6398a818150", null ],
-    [ "ReadFile", "classbinlex_1_1ELF.html#a70cf25f905c793e16d229fdd4839db69", null ],
-    [ "Setup", "classbinlex_1_1ELF.html#ac4f160a6135ad5e4d3bfcc84a079ca64", null ],
+    [ "ELF", "classbinlex_1_1ELF.html#a0394eac47e29f35f1c5f0964b6f64617", null ],
+    [ "~ELF", "classbinlex_1_1ELF.html#a814c6a2ae989464ad9a42dec0c8e25df", null ],
+    [ "ReadBuffer", "classbinlex_1_1ELF.html#a15ef484607338757bd758e58231b660b", null ],
+    [ "ReadFile", "classbinlex_1_1ELF.html#a21bac1886e9ebf5dd9cd31e5d8105ec4", null ],
+    [ "Setup", "classbinlex_1_1ELF.html#a1fedaeda9047ad1b92d720d7564d88e1", null ],
     [ "binary", "classbinlex_1_1ELF.html#a222bd1da73be1d76e1edac5046445e23", null ],
     [ "mode", "classbinlex_1_1ELF.html#a3943072eb43b4bdd5f00fd23707cb3ea", null ],
-    [ "sections", "classbinlex_1_1ELF.html#a5208d046ffd2bff568ca8f140d10c5a0", null ]
+    [ "sections", "classbinlex_1_1ELF.html#aa4381fcf4eae5275b684c1a0cbf4a724", null ],
+    [ "total_exec_sections", "classbinlex_1_1ELF.html#ad1a3e3c992bd38474aa0946b3378cb64", null ]
 ];
