@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <vector>
+#include "args.h"
 
 #ifdef _WIN32
 #define BINLEX_EXPORT __declspec(dllexport)
@@ -19,6 +20,16 @@ using std::vector;
 typedef unsigned int uint;
 typedef uint useconds_t;
 #endif
+
+extern binlex::Args g_args;
+
+/*
+ * Debug functionality
+ */
+#define PRINT_DEBUG(...) {if (g_args.options.debug) fprintf(stderr, __VA_ARGS__); }
+#define PRINT_ERROR_AND_EXIT(...) { fprintf(stderr, __VA_ARGS__); exit(EXIT_FAILURE); }
+void print_data(string title, void *data, uint32_t size);
+#define PRINT_DATA(title, data, size) { print_data(title, data, size); }
 
 namespace binlex {
     class Common{

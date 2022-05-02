@@ -2,7 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
-#include <sstream>
+#include <fstream>
 #include <iostream>
 #include <algorithm>
 #include <vector>
@@ -48,11 +48,6 @@ Decompiler::Decompiler() {
         sections[i].ntraits = 0;
         sections[i].data = NULL;
         sections[i].data_size = 0;
-        sections[i].threads = 1;
-        sections[i].thread_cycles = 1;
-        sections[i].thread_sleep = 500;
-        sections[i].corpus = (char *)"default";
-        sections[i].instructions = false;
         sections[i].arch_str = NULL;
     }
 }
@@ -76,50 +71,41 @@ void Decompiler::AppendTrait(struct Trait *trait, struct Section *sections, uint
     }
     #endif
     if (sections[index].traits == NULL){
-        fprintf(stderr, "[x] trait realloc failed\n");
-        exit(1);
+        PRINT_ERROR_AND_EXIT("[x] trait realloc failed\n");
     }
     sections[index].traits[sections[index].ntraits] = (struct Trait *)malloc(sizeof(struct Trait));
     if (sections[index].traits[sections[index].ntraits] == NULL){
-        fprintf(stderr, "[x] trait malloc failed\n");
-        exit(1);
+        PRINT_ERROR_AND_EXIT("[x] trait malloc failed\n");
     }
 
     char *type = (char *)malloc(strlen(trait->type)+1);
     if (type == NULL){
-        fprintf(stderr, "[x] trait malloc failed\n");
-        exit(1);
+        PRINT_ERROR_AND_EXIT("[x] trait malloc failed\n");
     }
     memset(type, 0, strlen(trait->type)+1);
     if (memcpy(type, trait->type, strlen(trait->type)) == NULL){
-        fprintf(stderr, "[x] trait memcpy failed\n");
-        exit(1);
+        PRINT_ERROR_AND_EXIT("[x] trait memcpy failed\n");
     }
     trait->type = type;
 
     trait->trait = (char *)malloc(strlen(trait->tmp_trait.c_str())+1);
     if (trait->trait == NULL){
-        fprintf(stderr, "[x] trait malloc failed\n");
-        exit(1);
+        PRINT_ERROR_AND_EXIT("[x] trait malloc failed\n");
     }
     memset(trait->trait, 0, strlen(trait->tmp_trait.c_str())+1);
     if (memcpy(trait->trait, trait->tmp_trait.c_str(), strlen(trait->tmp_trait.c_str())) == NULL){
-        fprintf(stderr, "[x] trait memcpy failed\n");
-        exit(1);
+        PRINT_ERROR_AND_EXIT("[x] trait memcpy failed\n");
     }
     trait->bytes = (char *)malloc(strlen(trait->tmp_bytes.c_str())+1);
     if (trait->bytes == NULL){
-        fprintf(stderr, "[x] trait malloc failed\n");
-        exit(1);
+        PRINT_ERROR_AND_EXIT("[x] trait malloc failed\n");
     }
     memset(trait->bytes, 0, strlen(trait->tmp_bytes.c_str())+1);
     if (memcpy(trait->bytes, trait->tmp_bytes.c_str(), strlen(trait->tmp_bytes.c_str())) == NULL){
-        fprintf(stderr, "[x] trait memcpy failed\n");
-        exit(1);
+        PRINT_ERROR_AND_EXIT("[x] trait memcpy failed\n");
     }
     if (memcpy(sections[index].traits[sections[index].ntraits], trait, sizeof(struct Trait)) == NULL){
-        fprintf(stderr, "[x] trait memcpy failed\n");
-        exit(1);
+        PRINT_ERROR_AND_EXIT("[x] trait memcpy failed\n");
     }
     sections[index].ntraits++;
     trait->trait = (char *)trait->tmp_trait.c_str();
@@ -143,24 +129,10 @@ bool Decompiler::Setup(cs_arch arch, cs_mode mode, uint index){
     return true;
 }
 
-void Decompiler::SetThreads(uint threads, uint thread_cycles, uint thread_sleep, uint index){
-    sections[index].threads = threads;
-    sections[index].thread_cycles = thread_cycles;
-    sections[index].thread_sleep = thread_sleep;
-}
-
-void Decompiler::SetCorpus(char *corpus, uint index){
-    sections[index].corpus = corpus;
-}
-
-void Decompiler::SetInstructions(bool instructions, uint index){
-    sections[index].instructions = instructions;
-}
-
-string Decompiler::GetTrait(struct Trait *trait, bool pretty){
+string Decompiler::GetTrait(struct Trait *trait){
     json data;
     data["type"] = trait->type;
-    data["corpus"] = trait->corpus;
+    data["corpus"] = g_args.options.corpus;
     data["architecture"] = trait->architecture;
     data["bytes"] = trait->bytes;
     data["trait"] = trait->trait;
@@ -176,32 +148,20 @@ string Decompiler::GetTrait(struct Trait *trait, bool pretty){
     data["invalid_instructions"] = trait->invalid_instructions;
     data["cyclomatic_complexity"] = trait->cyclomatic_complexity;
     data["average_instructions_per_block"] = trait->average_instructions_per_block;
-    if (pretty == true){
+    if (g_args.options.pretty == true){
         return data.dump(4);
     }
     return data.dump();
 }
 
-void Decompiler::PrintTraits(bool pretty){
-    for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
-        if (sections[i].traits != NULL){
-            for (int j = 0; j < sections[i].ntraits; j++){
-                sections[i].traits[j]->corpus = sections[i].corpus;
-                cout << GetTrait(sections[i].traits[j], pretty) << endl;
-            }
-        }
-    }
-}
-
-string Decompiler::GetTraits(bool pretty){
+string Decompiler::GetTraits(void){
     stringstream ss;
     string sep = "";
     ss << '[';
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
         if (sections[i].traits != NULL){
             for (int j = 0; j < sections[i].ntraits; j++){
-                sections[i].traits[j]->corpus = sections[i].corpus;
-                ss << sep << GetTrait(sections[i].traits[j], pretty);
+                ss << sep << GetTrait(sections[i].traits[j]);
                 sep = ",";
             }
         }
@@ -210,19 +170,33 @@ string Decompiler::GetTraits(bool pretty){
     return ss.str();
 }
 
-void Decompiler::WriteTraits(char *file_path, bool pretty){
-    FILE *fd = fopen(file_path, "w");
-    stringstream traits;
+// TODO we know how many exec sections we have, we don't need to go through all slots
+// CV to fix by end of GeekWeek 2022
+void Decompiler::WriteTraits(){
+    // if g_args.options.output defined write to file, otherwise to screen
+    ofstream output_stream;
+    if (g_args.options.output != NULL) {
+        output_stream.open(g_args.options.output);
+        if(!output_stream.is_open()) {
+            PRINT_ERROR_AND_EXIT("Unable to open file %s for writing\n", g_args.options.output);
+        }
+    }
+
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
         if (sections[i].traits != NULL){
             for (int j = 0; j < sections[i].ntraits; j++){
-                sections[i].traits[j]->corpus = sections[i].corpus;
-                traits << GetTrait(sections[i].traits[j], pretty) << endl;
+                if (g_args.options.output != NULL) {
+                    output_stream << GetTrait(sections[i].traits[j]) << endl;
+                } else {
+                    cout << GetTrait(sections[i].traits[j]) << endl;
+                }
             }
         }
     }
-    fwrite(traits.str().c_str(), sizeof(char), traits.str().length(), fd);
-    fclose(fd);
+
+    if (g_args.options.output != NULL) {
+        output_stream.close();
+    }
 }
 
 void * Decompiler::DecompileWorker(void *args) {
@@ -278,13 +252,13 @@ void * Decompiler::DecompileWorker(void *args) {
             LeaveCriticalSection(&csDecompiler);
             #endif
             thread_cycles++;
-            if (thread_cycles == sections[index].thread_cycles){
+            if (thread_cycles == g_args.options.thread_cycles){
                 break;
             }
             #ifndef _WIN32
-            usleep(sections[index].thread_sleep * 1000);
+            usleep(g_args.options.thread_sleep * 1000);
             #else
-            Sleep(sections[index].thread_sleep);
+            Sleep(g_args.options.thread_sleep);
             #endif
             continue;
         }
@@ -314,7 +288,7 @@ void * Decompiler::DecompileWorker(void *args) {
             b_trait.instructions++;
             f_trait.instructions++;
 
-            if (sections[index].instructions == true){
+            if (g_args.options.instructions == true){
                 if (result == true){
                     i_trait.tmp_bytes = HexdumpBE(insn->bytes, insn->size);
                     i_trait.size = GetByteSize(i_trait.tmp_bytes);
@@ -381,7 +355,7 @@ void * Decompiler::DecompileWorker(void *args) {
             }
             CollectInsn(insn, sections, index);
 
-            //printf("address=0x%" PRIx64 ",block=%d,function=%d,queue=%ld,instruction=%s\t%s\n", insn->address,IsBlock(sections[index].addresses, insn->address), IsFunction(sections[index].addresses, insn->address), sections[index].discovered.size(), insn->mnemonic, insn->op_str);
+            PRINT_DEBUG("address=0x%" PRIx64 ",block=%d,function=%d,queue=%ld,instruction=%s\t%s\n", insn->address,IsBlock(sections[index].addresses, insn->address), IsFunction(sections[index].addresses, insn->address), sections[index].discovered.size(), insn->mnemonic, insn->op_str);
 
             #if defined(__linux__) || defined(__APPLE__)
             pthread_mutex_unlock(&DECOMPILER_MUTEX);
@@ -468,18 +442,24 @@ void Decompiler::ClearTrait(struct Trait *trait){
 }
 
 void Decompiler::AppendQueue(set<uint64_t> &addresses, uint operand_type, uint index){
+    PRINT_DEBUG("List of queued addresses for section %u correponding to found functions: ", index);
     for (auto it = addresses.begin(); it != addresses.end(); ++it){
         uint64_t tmp_addr = *it;
         sections[index].discovered.push(tmp_addr);
         sections[index].visited[tmp_addr] = DECOMPILER_VISITED_QUEUED;
         sections[index].addresses[tmp_addr] = operand_type;
+        PRINT_DEBUG("0x%" PRIu64 " ", tmp_addr);
     }
+    PRINT_DEBUG("\n");
 }
 
 void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint index) {
     sections[index].offset  = offset;
     sections[index].data = data;
     sections[index].data_size = data_size;
+
+    PRINT_DEBUG("Decompile: offset = 0x%x data_size = %" PRId64 " bytes\n", sections[index].offset, sections[index].data_size);
+    PRINT_DATA("Section Data (up to 32 bytes)", sections[index].data, std::min((size_t)32, sections[index].data_size));
 
     sections[index].discovered.push(0);
     sections[index].addresses[0] = DECOMPILER_OPERAND_TYPE_FUNCTION;
@@ -490,17 +470,17 @@ void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint ind
     args->sections = &sections;
 
     #if defined(__linux__) || defined(__APPLE__)
-    pthread_t threads[sections[index].threads];
-    pthread_attr_t thread_attribs[sections[index].threads];
+    pthread_t threads[g_args.options.threads];
+    pthread_attr_t thread_attribs[g_args.options.threads];
     #else
     InitializeCriticalSection(&csDecompiler);
-    DWORD dwThreads = sections[index].threads;
+    DWORD dwThreads = g_args.options.threads;
     HANDLE* hThreads = (HANDLE*)malloc(sizeof(HANDLE) * dwThreads);
     DWORD dwThreadId;
     #endif
 
     while (true){
-        for (int i = 0; i < sections[index].threads; i++){
+        for (int i = 0; i < g_args.options.threads; i++){
             #if defined(__linux__) || defined(__APPLE__)
             pthread_attr_init(&thread_attribs[i]);
             pthread_attr_setdetachstate(&thread_attribs[i], PTHREAD_CREATE_JOINABLE);
@@ -509,11 +489,11 @@ void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint ind
             hThreads[i] = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)DecompileWorker, args, 0, &dwThreadId);
             #endif
         }
-        for (int i = 0; i < sections[index].threads; i++){
+        for (int i = 0; i < g_args.options.threads; i++){
             #if defined(__linux__) || defined(__APPLE__)
             pthread_join(threads[i], NULL);
             #else
-            WaitForMultipleObjects(sections[index].threads, hThreads, TRUE, INFINITE);
+            WaitForMultipleObjects(g_args.options.threads, hThreads, TRUE, INFINITE);
             #endif
         }
         if (sections[index].discovered.empty()){
@@ -527,8 +507,8 @@ void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint ind
             break;
         }
     }
-    for (int i = 0; i < sections[index].ntraits; i += sections[index].threads) {
-        for (int j = 0; j < sections[index].threads; j++) {
+    for (int i = 0; i < sections[index].ntraits; i += g_args.options.threads) {
+        for (int j = 0; j < g_args.options.threads; j++) {
             #if defined(__linux__) || defined(__APPLE__)
             if (i + j < sections[index].ntraits) {
                 pthread_attr_init(&thread_attribs[j]);
@@ -548,13 +528,13 @@ void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint ind
             #endif
             }
         #if defined(__linux__) || defined(__APPLE__)
-        for (int j = 0; j < sections[index].threads; j++) {
+        for (int j = 0; j < g_args.options.threads; j++) {
             if (threads[j] != NULL) {
                 pthread_join(threads[j], NULL);
             }
         }
         #else
-        WaitForMultipleObjects(sections[index].threads, hThreads, TRUE, INFINITE);
+        WaitForMultipleObjects(g_args.options.threads, hThreads, TRUE, INFINITE);
         #endif
     }
     #ifdef _WIN32
@@ -844,4 +824,24 @@ Decompiler::~Decompiler() {
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++) {
         FreeTraits(i);
     }
+}
+
+
+/*
+ * The following functions are for pybind-only use. They offer a way to pass arguments to
+ * the CPP code, which otherwise if obtained via command-line arguments.
+ */
+
+void Decompiler::py_SetThreads(uint threads, uint thread_cycles, uint thread_sleep) {
+    g_args.options.threads = threads;
+    g_args.options.thread_cycles = thread_cycles;
+    g_args.options.thread_sleep = thread_sleep;
+}
+
+void Decompiler::py_SetCorpus(char *corpus) {
+    g_args.options.corpus = corpus;
+}
+
+void Decompiler::py_SetInstructions(bool instructions) {
+    g_args.options.instructions = instructions;
 }

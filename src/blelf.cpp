@@ -42,6 +42,9 @@ bool ELF::Setup(ARCH input_mode){
 }
 
 bool ELF::ReadFile(char *file_path){
+    if (FileExists(file_path) == false){
+        return false;
+    }
     CalculateFileHashes(file_path);
     assert(!tlsh.empty());
     assert(!sha256.empty());

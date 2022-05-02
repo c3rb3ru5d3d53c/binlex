@@ -30,6 +30,7 @@ void Args::SetDefault(){
     options.mode = (char *)"auto";
     options.io_type = ARGS_IO_TYPE_UNKNOWN;
     options.pretty = false;
+    options.debug = false;
 }
 
 bool Args::check_mode(char *mode){
@@ -94,6 +95,7 @@ void Args::print_help(){
         "  -h  --help\t\tdisplay help\t\t(optional)\n"
         "  -o  --output\t\toutput file\t\t(optional)\n"
         "  -p  --pretty\t\tpretty output\t\t(optional)\n"
+        "  -d  --debug\t\tprint debug info\t(optional)\n"
         "  -v  --version\t\tdisplay version\t\t(optional)\n"
         "Author: @c3rb3ru5d3d53c\n",
         version
@@ -207,6 +209,11 @@ void Args::parse(int argc, char **argv){
                 fprintf(stderr, "%s is an invalid mode\n", options.mode);
                 exit(1);
             }
+        }
+        if (strcmp(argv[i], (char *)"-d") == 0 ||
+            strcmp(argv[i], (char *)"--debug") == 0){
+            options.debug = true;
+            fprintf(stderr, "DEBUG ENABLED...\n");
         }
     }
 }

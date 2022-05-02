@@ -106,14 +106,10 @@ int AutoLex::ProcessFile(char *file_path, uint threads, uint timeout, uint threa
         for (int i = 0; i < pe.total_exec_sections; i++) {
             if (pe.sections[i].data != NULL) {
                 decompiler.Setup(characteristics.arch, characteristics.mode, i);
-                decompiler.SetThreads(threads, thread_cycles, thread_sleep, i);
-                decompiler.SetCorpus(corpus, i);
-                decompiler.SetInstructions(instructions, i);
                 decompiler.AppendQueue(pe.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
                 decompiler.Decompile(pe.sections[i].data, pe.sections[i].size, pe.sections[i].offset, i);
             }
         }
-
 
     }
     else if(characteristics.format == LIEF::FORMAT_ELF){
@@ -127,22 +123,18 @@ int AutoLex::ProcessFile(char *file_path, uint threads, uint timeout, uint threa
         }
 
         for (int i = 0; i < elf.total_exec_sections; i++){
+
             if (elf.sections[i].data != NULL){
                 decompiler.Setup(characteristics.arch, characteristics.mode, i);
-                decompiler.SetThreads(threads, thread_cycles, thread_sleep, i);
-                decompiler.SetCorpus(corpus, i);
-                decompiler.SetInstructions(instructions, i);
                 decompiler.AppendQueue(elf.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
                 decompiler.Decompile(elf.sections[i].data, elf.sections[i].size, elf.sections[i].offset, i);
             }
+
         }
     }
 
-    if (output == NULL){
-        decompiler.PrintTraits(pretty);
-    } else {
-        decompiler.WriteTraits(output, pretty);
-    }
+
+    decompiler.WriteTraits();
 
     return EXIT_SUCCESS;
 }

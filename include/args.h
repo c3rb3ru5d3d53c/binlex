@@ -41,6 +41,7 @@ namespace binlex{
                 char *mode;
                 char *corpus;
                 bool pretty;
+                bool debug;
             } options;
             BINLEX_EXPORT Args();
             BINLEX_EXPORT void SetDefault();
@@ -53,4 +54,5 @@ namespace binlex{
             BINLEX_EXPORT ~Args();
     };
 }
+
 #endif

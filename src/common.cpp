@@ -24,6 +24,24 @@ extern "C" {
 using namespace std;
 using namespace binlex;
 
+Args g_args;
+
+void print_data(string title, void *data, uint32_t size)
+{
+    if (g_args.options.debug)
+    {
+        uint32_t i;
+        uint32_t counter = 0;
+
+        cerr << "Hexdump: " << title;
+        for (i = 0; i < size; i++) {
+            if (counter % 16 == 0) { cerr << endl; }
+            cerr << hex << setfill('0') << setw(2) << (uint32_t)((uint8_t *)data)[i] << " ";
+            ++counter;
+        }
+        cerr << endl;
+    }
+}
 
 string Common::GetTLSH(const uint8_t *data, size_t len){
     Tlsh tlsh;
@@ -32,7 +50,6 @@ string Common::GetTLSH(const uint8_t *data, size_t len){
     tlsh.final();
     return tlsh.getHash();
 }
-
 
 string Common::GetFileTLSH(const char *file_path){
     FILE *inp;
@@ -57,7 +74,6 @@ string Common::GetFileTLSH(const char *file_path){
     return ret;
 }
 
-
 string Common::GetFileSHA256(char *file_path){
     FILE *inp;
     SHA256_CTX ctx;
@@ -81,7 +97,6 @@ string Common::GetFileSHA256(char *file_path){
     return RemoveSpaces(HexdumpBE(&hash, SHA256_BLOCK_SIZE));
 }
 
-
 string Common::Wildcards(uint count){
     stringstream s;
     s << "";
@@ -103,7 +118,7 @@ string Common::SHA256(char *trait){
 vector<char> Common::TraitToChar(string trait){
     trait = RemoveSpaces(RemoveWildcards(trait));
     vector<char> bytes;
-    for (int i = 0; i < trait.length(); i = i + 2){
+    for (size_t i = 0; i < trait.length(); i = i + 2){
         const char *s_byte = trait.substr(i, 2).c_str();
         unsigned char byte = (char)strtol(s_byte, NULL, 16);
         bytes.push_back(byte);
@@ -116,7 +131,7 @@ float Common::Entropy(string trait){
     float result = 0;
     vector<unsigned long> frequencies(256);
     for (char c : bytes){
-	frequencies[static_cast<unsigned char>(c)]++;
+        frequencies[static_cast<unsigned char>(c)]++;
     }
     for (auto count : frequencies){
 	if(count > 0){
