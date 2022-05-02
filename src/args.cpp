@@ -8,6 +8,7 @@
 #else
 #include <windows.h>
 #endif
+#include <sstream>
 #include "args.h"
 
 using namespace binlex;
@@ -31,6 +32,7 @@ void Args::SetDefault(){
     options.io_type = ARGS_IO_TYPE_UNKNOWN;
     options.pretty = false;
     options.debug = false;
+    options.tags.clear(); // Clear if defaults are needed.
 }
 
 bool Args::check_mode(char *mode){
@@ -80,6 +82,21 @@ void Args::set_io_type(char *input){
     }
 }
 
+std::string Args::get_tags_as_str(){
+    std::ostringstream out;
+
+    if(!options.tags.empty()) {
+	auto tbegin = options.tags.begin();
+	auto tend = options.tags.end();
+	out << *tbegin;
+	while((++tbegin) != tend){
+	    out << ',' << *tbegin;
+	}
+    }
+    return out.str();
+}
+
+
 void Args::print_help(){
     printf(
         "binlex %s - A Binary Genetic Traits Lexer\n"
@@ -88,6 +105,8 @@ void Args::print_help(){
         "  -lm --list-modes\tlist modes\t\t(optional)\n"
         "      --instructions\tinclude insn traits\t(optional)\n"
         "  -c  --corpus\t\tcorpus name\t\t(optional)\n"
+        "  -g  --tag\t\tadd a tag\t\t(optional)\n"
+        "           \t\t(can be specified multiple times)\n"
         "  -t  --threads\t\tnumber of threads\t(optional)\n"
         "  -tc --thread-cycles\tthread wait cycles\t(optional)\n"
         "  -ts --thread-sleep\tthread sleep in ms\t(optional)\n"
@@ -200,7 +219,6 @@ void Args::parse(int argc, char **argv){
             strcmp(argv[i], (char *)"--output") == 0){
             options.output = argv[i+1];
         }
-
         if (strcmp(argv[i], (char *)"-m") == 0 ||
             strcmp(argv[i], (char *)"--mode") == 0){
             options.mode = argv[i+1];
@@ -214,6 +232,14 @@ void Args::parse(int argc, char **argv){
             strcmp(argv[i], (char *)"--debug") == 0){
             options.debug = true;
             fprintf(stderr, "DEBUG ENABLED...\n");
+	}
+        if (strcmp(argv[i], (char *)"-g") == 0 ||
+            strcmp(argv[i], (char *)"--tag") == 0){
+            if (argc < i + 2){
+                fprintf(stderr, "[x] tag requires a parameter\n");
+                exit(1);
+            }
+	    options.tags.insert(argv[i + 1]);
         }
     }
 }
