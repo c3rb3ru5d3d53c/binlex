@@ -18,6 +18,8 @@ extern "C" {
 #pragma comment(lib, "capstone")
 #pragma comment(lib, "LIEF")
 #endif
+#include <tlsh.h>
+#include <stdexcept>
 
 using namespace std;
 using namespace binlex;
@@ -39,6 +41,60 @@ void print_data(string title, void *data, uint32_t size)
         }
         cerr << endl;
     }
+}
+
+string Common::GetTLSH(const uint8_t *data, size_t len){
+    Tlsh tlsh;
+
+    tlsh.update(data, len);
+    tlsh.final();
+    return tlsh.getHash();
+}
+
+string Common::GetFileTLSH(const char *file_path){
+    FILE *inp;
+    uint8_t buf[8192];
+    Tlsh tlsh;
+    size_t bread;
+    string ret;
+
+    inp = fopen(file_path, "rb");
+    if(!inp){
+	throw std::runtime_error(strerror(errno));
+    }
+    while((bread = fread(buf, 1, sizeof(buf), inp)) > 0){
+	tlsh.update(buf, bread);
+    }
+    if(errno != 0) {
+	throw std::runtime_error(strerror(errno));
+    }
+    tlsh.final();
+    fclose(inp);
+    ret = tlsh.getHash();
+    return ret;
+}
+
+string Common::GetFileSHA256(char *file_path){
+    FILE *inp;
+    SHA256_CTX ctx;
+    uint8_t buf[8192];
+    size_t bread;
+    BYTE hash[SHA256_BLOCK_SIZE];
+
+    inp = fopen(file_path, "rb");
+    if(!inp){
+	throw std::runtime_error(strerror(errno));
+    }
+    sha256_init(&ctx);
+    while((bread = fread(buf, 1, sizeof(buf), inp)) > 0){
+	sha256_update(&ctx, buf, bread);
+    }
+    if(errno != 0) {
+	throw std::runtime_error(strerror(errno));
+    }
+    sha256_final(&ctx, hash);
+    fclose(inp);
+    return RemoveSpaces(HexdumpBE(&hash, SHA256_BLOCK_SIZE));
 }
 
 string Common::Wildcards(uint count){
