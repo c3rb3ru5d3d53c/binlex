@@ -1,10 +1,11 @@
+#ifndef FILE_H
+#define FILE_H
+
 #include <iostream>
 #include <memory>
 #include <set>
+#include <unistd.h>
 #include "common.h"
-
-#ifndef FILE_H
-#define FILE_H
 
 using namespace std;
 
@@ -19,6 +20,7 @@ namespace binlex {
 	    void *data;
 	    set<uint64_t> functions;
 	};
+	bool FileExists(char *file_path);
 	/*
 	  Function will calculate all the hashes for the complete file.
 

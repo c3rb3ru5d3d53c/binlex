@@ -1,6 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include "raw.h"
 
 using namespace binlex;
@@ -22,6 +19,9 @@ int Raw::GetFileSize(FILE *fd){
 }
 
 bool Raw::ReadFile(char *file_path, int section_index){
+    if (access(file_path, F_OK ) != 0){
+        return false;
+    }
     FILE *fd = fopen(file_path, "rb");
     sections[section_index].offset = ftell(fd);
     sections[section_index].size = GetFileSize(fd);

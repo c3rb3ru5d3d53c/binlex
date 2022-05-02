@@ -1,3 +1,6 @@
+#ifndef CIL_H
+#define CIL_H
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -12,9 +15,6 @@
 #include <vector>
 #include <set>
 #include <map>
-
-#ifndef CIL_H
-#define CIL_H
 
 // CIL Decompiler Types
 #define CIL_DECOMPILER_TYPE_FUNCS 0

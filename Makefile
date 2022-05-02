@@ -1,5 +1,7 @@
+.PHONY: all
 .PHONY: docs
 .PHONY: docker
+.PHONY: all
 
 threads=1
 admin_user=admin
@@ -8,7 +10,9 @@ user=binlex
 pass=changeme
 config=Release
 
-all:
+all: python docs
+
+cli:
 	mkdir -p build/
 	cd build/ && \
 		cmake -S ../ \
@@ -26,6 +30,9 @@ python:
 			${args} && \
 		cmake --build . --config ${config} -- -j ${threads}
 
+python-whl:
+	python3 -m pip wheel -v -w build/ .
+
 docs:
 	mkdir -p build/docs/html/docs/
 	cp -r docs/img/ build/docs/html/docs/
@@ -34,6 +41,8 @@ docs:
 docs-update:
 	rm -rf docs/html/
 	cp -r build/docs/html/ docs/
+
+all: cli python docs docs-update
 
 docker:
 	@./docker.sh
@@ -58,6 +67,12 @@ docker-clean:
 	@docker stop $(shell docker ps -a -q) 2>/dev/null || echo > /dev/null
 	@docker rm $(shell docker ps -a -q) 2>/dev/null || echo > /dev/null
 	@docker rmi $(shell docker images -a -q) 2>/dev/null || echo > /dev/null
+
+docker-restart-blapi:
+	@docker stop $(shell docker ps -aqf "name=blapi")
+	@docker rm $(shell docker ps -aqf "name=blapi")
+	@docker-compose build blapi1
+	@docker-compose up -d blapi1
 
 mongodb-shell:
 	@cd scripts/ && \
