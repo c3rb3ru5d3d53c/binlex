@@ -260,12 +260,15 @@
 #define CIL_INS_UNALIGNED      0x12
 #define CIL_INS_VOLATILE       0x13
 
+using namespace std;
+
 namespace binlex {
     class CILDecompiler : public Common {
         private:
             int type = CIL_DECOMPILER_TYPE_UNSET;
             char * hexdump_traits(char *buffer0, const void *data, int size, int operand_size);
             char * traits_nl(char *traits);
+            int update_offset(int operand_size, int i);
             typedef struct worker {
                 csh handle;
                 cs_err error;
@@ -279,19 +282,23 @@ namespace binlex {
             } worker_args;
         public:
             CILDecompiler();
+            struct Instruction {
+                char instruction;
+                uint operand_size;
+                uint offset;
+            };
             struct Trait {
                 char *corpus;
                 char *type;
-                char *architecture;
+                uint architecture;
                 string tmp_bytes;
-                char *bytes;
+                string bytes;
                 string tmp_trait;
                 char *trait;
                 uint edges;
                 uint blocks;
-                uint instructions;
+                vector< Instruction* >* instructions;
                 uint size;
-                uint operand_size;
                 uint offset;
                 uint invalid_instructions;
                 uint cyclomatic_complexity;
@@ -300,10 +307,6 @@ namespace binlex {
                 float trait_entropy;
                 char *trait_sha256;
                 char *bytes_sha256;
-            };
-            struct Instruction {
-                uint instruction;
-                uint operand_size;
             };
             struct Section {
                 char *function_traits;
@@ -345,6 +348,11 @@ namespace binlex {
             void SetCorpus(char *corpus, uint index);
             void SetInstructions(bool instructions, uint index);
             string GetTrait(struct Trait *trait, bool pretty);
+            /**
+            Converts instruction objects to raw bytes for output
+            @param insn Source instruction to check and resulting operand size
+            */
+            string ConvBytes(vector< Instruction* > instructions);
             /**
             Checks if CIL instruction is conditional for stats
             @param insn Source instruction to check and resulting operand size
