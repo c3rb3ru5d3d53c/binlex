@@ -89,7 +89,6 @@ int main(int argc, char **argv){
         PRINT_DEBUG("Number of total executable sections = %u\n", elf64.total_exec_sections);
 
         Decompiler decompiler;
-	decompiler.SetTags(args.options.tags);
         for (int i = 0; i < elf64.total_exec_sections; i++){
             decompiler.Setup(CS_ARCH_X86, CS_MODE_64, i);
             decompiler.AppendQueue(elf64.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);

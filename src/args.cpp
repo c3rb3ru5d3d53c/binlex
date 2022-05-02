@@ -228,12 +228,11 @@ void Args::parse(int argc, char **argv){
                 exit(1);
             }
         }
-<<<<<<< HEAD
         if (strcmp(argv[i], (char *)"-d") == 0 ||
             strcmp(argv[i], (char *)"--debug") == 0){
             options.debug = true;
             fprintf(stderr, "DEBUG ENABLED...\n");
-=======
+	}
         if (strcmp(argv[i], (char *)"-g") == 0 ||
             strcmp(argv[i], (char *)"--tag") == 0){
             if (argc < i + 2){
@@ -241,7 +240,6 @@ void Args::parse(int argc, char **argv){
                 exit(1);
             }
 	    options.tags.insert(argv[i + 1]);
->>>>>>> handle "-g" from command line
         }
     }
 }

@@ -44,7 +44,6 @@ namespace binlex {
             uint index;
             void *sections;
         } worker_args;
-	std::set<string> tags; //!< tags for the decompiler.
     public:
         struct Trait {
             char *type;
@@ -92,11 +91,6 @@ namespace binlex {
         @return bool
         */
         BINLEX_EXPORT bool Setup(cs_arch arch, cs_mode mode, uint index);
-        /**
-        Set the Tags for this decompiler
-        @param ntags new tags to store
-        */
-        BINLEX_EXPORT void SetTags(const set<string> &ntags);
         /**
         Set Threads and Thread Cycles
         @param threads number of threads
@@ -236,10 +230,8 @@ namespace binlex {
         Write Traits to File
 
 	This function usees GetTraits() to get the traits data as a json.
-        @param file_path path to the file
-        @param pretty pretty print traits
         */
-        BINLEX_EXPORT void WriteTraits(const char *file_path, bool pretty);
+        BINLEX_EXPORT void WriteTraits();
         BINLEX_EXPORT static void * TraitWorker(void *args);
         BINLEX_EXPORT void AppendQueue(set<uint64_t> &addresses, uint operand_type, uint index);
         //void Seek(uint offset, uint index);

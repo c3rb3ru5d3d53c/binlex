@@ -1,7 +1,12 @@
 var searchData=
 [
-  ['wildcardinsn_42',['WildcardInsn',['../classbinlex_1_1Decompiler.html#ac34cfaf7065e2e529e206b7a28eb37c5',1,'binlex::Decompiler']]],
-  ['wildcards_43',['Wildcards',['../classbinlex_1_1Common.html#a3904881c98c33ae3db55534e809d4510',1,'binlex::Common']]],
-  ['wildcardtrait_44',['WildcardTrait',['../classbinlex_1_1Common.html#a40376f43f29528869d74d7c29c0117ba',1,'binlex::Common']]],
-  ['writetraits_45',['WriteTraits',['../classbinlex_1_1Decompiler.html#ac50cdc13964e9a1a40a6d09fd838fde7',1,'binlex::Decompiler']]]
+  ['tableentry_67',['TableEntry',['../classdotnet_1_1TableEntry.html',1,'dotnet']]],
+  ['tags_68',['tags',['../classbinlex_1_1Args.html#a518028a031f2d399dc14c4e280fc14cd',1,'binlex::Args']]],
+  ['tinyheader_69',['TinyHeader',['../classdotnet_1_1TinyHeader.html',1,'dotnet']]],
+  ['trait_70',['Trait',['../structbinlex_1_1Decompiler_1_1Trait.html',1,'binlex::Decompiler']]],
+  ['traittochar_71',['TraitToChar',['../classbinlex_1_1Common.html#aa341aea214e4eb0121ef7b76f75f2a86',1,'binlex::Common']]],
+  ['trimright_72',['TrimRight',['../classbinlex_1_1Common.html#a0ce1656f5c035e0b600ea136a72cabfa',1,'binlex::Common']]],
+  ['typedefentry_73',['TypeDefEntry',['../classdotnet_1_1TypeDefEntry.html',1,'dotnet']]],
+  ['typedeforrefindex_74',['TypeDefOrRefIndex',['../classdotnet_1_1TypeDefOrRefIndex.html',1,'dotnet']]],
+  ['typerefentry_75',['TypeRefEntry',['../classdotnet_1_1TypeRefEntry.html',1,'dotnet']]]
 ];
