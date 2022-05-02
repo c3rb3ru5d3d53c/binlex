@@ -61,26 +61,15 @@ int main(int argc, char **argv){
 
         AutoLex autolex;
 
-        // check for limitations
-        if(autolex.HasLimitations(args.options.input) == true){
-            printf("[x] File has limitations and can't be processed. Select a mode to force analysis.\n");
-            return 1;
-        }
-
-        Decompiler decompiler {autolex.ProcessFile(args.options.input, \
+        return autolex.ProcessFile(args.options.input, \
         args.options.threads, \
         args.options.timeout, \
         args.options.thread_cycles, args.options.thread_sleep, \
         args.options.instructions, \
-        args.options.corpus) };
+        args.options.corpus, \
+        args.options.output, \
+        args.options.pretty);
 
-        if (args.options.output == NULL){
-            decompiler.PrintTraits(args.options.pretty);
-        } else {
-            decompiler.WriteTraits(args.options.output, args.options.pretty);
-        }
-
-        return 0;
     }
     if (strcmp(args.options.mode, (char *)"elf:x86_64") == 0 &&
         args.options.io_type == ARGS_IO_TYPE_FILE){

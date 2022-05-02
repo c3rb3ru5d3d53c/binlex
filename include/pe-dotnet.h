@@ -68,12 +68,6 @@ using namespace binlex;
 #define	CUSTOMDEBUGINFORMATION 55
 
 
-void pprint(char *buffer, uint8_t size) {
-    char *aux = buffer;
-    for (uint8_t i = 0; i < size; i++) printf("%02X ", aux[i] & 0xFF);
-    printf("\n");
-}
-
 namespace dotnet {
     class MethodHeader {};
 
@@ -330,17 +324,6 @@ namespace dotnet {
                 buff_aux += param_list.Parse(buff_aux);
                 return buff_aux - buff;
             };
-    };
-
-    TableEntry* TableEntry::TableEntryFactory(uint8_t entry_type) {
-        if ( entry_type == MODULE ) return new ModuleEntry();
-        if ( entry_type == TYPE_REF) return new TypeRefEntry();
-        if ( entry_type == TYPE_DEF) return new TypeDefEntry();
-        if ( entry_type == FIELD_PTR) return new FieldPtrEntry();
-        if ( entry_type == FIELD) return new FieldEntry();
-        if ( entry_type == METHOD_PTR) return new MethodPtrEntry();
-        if ( entry_type == METHOD_DEF) return new MethodDefEntry();
-        return NULL;
     };
     
     class Cor20MetadataTable {

@@ -1,18 +1,15 @@
 #ifdef _WIN32
 #include <Windows.h>
 #endif
-#include <iostream>
-#include <fstream>
-#include <memory>
-#include <iostream>
-#include <exception>
-#include <stdexcept>
-#include "auto.h"
+
 #include "pe.h"
+#include "pe-dotnet.h"
 #include "blelf.h"
 #include "decompiler.h"
+#include "cil.h"
 #include <LIEF/LIEF.hpp>
 #include <LIEF/PE.hpp>
+#include "auto.h"
 
 using namespace std;
 using namespace binlex;
@@ -24,50 +21,7 @@ AutoLex::AutoLex(){
     characteristics.machineType = (int) MACHINE_TYPES::IMAGE_FILE_MACHINE_I386;
 }
 
-bool AutoLex::HasLimitations(char *file_path){
 
-    //Check that we can pull the file characteristics
-    if (!GetFileCharacteristics(file_path)){
-        return true;
-    }
-
-    if(characteristics.format == LIEF::FORMAT_ELF) {
-        switch((ARCH)characteristics.machineType) {
-            case ARCH::EM_386:
-                return false;
-            case ARCH::EM_X86_64:
-                return false;
-            default:
-                return true;
-        }
-    }
-
-    if(characteristics.format != LIEF::FORMAT_PE){
-        //unsupported format
-        return true;
-    }
-
-    // If anything other than x64 32/64 return true
-    switch((MACHINE_TYPES)characteristics.machineType){
-        case MACHINE_TYPES::IMAGE_FILE_MACHINE_I386:
-            break;
-        case MACHINE_TYPES::IMAGE_FILE_MACHINE_AMD64:
-            break;
-        default:
-            return true;
-    }
-
-    auto bin = LIEF::PE::Parser::parse(file_path);
-    if(bin->has_imports()){
-        auto imports = bin->imports();
-        for(Import i : imports){
-            if(i.name() == "MSVBVM60.DLL"){
-                return true;
-            }
-        }
-    }
-    return false;
-}
 
 
 
@@ -98,34 +52,55 @@ bool AutoLex::GetFileCharacteristics(char * file_path){
     return true;
 }
 
-Decompiler AutoLex::ProcessFile(char *file_path, uint threads, uint timeout, uint thread_cycles, useconds_t thread_sleep, bool instructions, char *corpus){
-
-    // Todo:
-    // - raise exceptions instead of returning a null decompiler  to better handle being called as a lib
-
-    Decompiler decompiler;
+int AutoLex::ProcessFile(char *file_path, uint threads, uint timeout, uint thread_cycles, useconds_t thread_sleep, bool instructions, char *corpus, char *output, bool pretty){
 
     if (!GetFileCharacteristics(file_path)){
         fprintf(stderr, "Unable to get file characteristics.\n");
-        return decompiler;
+        return -1;
     }
 
+    Decompiler decompiler;
     if(characteristics.format == LIEF::FORMAT_PE){
-
 
         PE pe;
 
         if (!pe.Setup((MACHINE_TYPES)characteristics.machineType)){
-            return decompiler;
+            return EXIT_FAILURE;
         }
 
         if (!pe.ReadFile(file_path)){
-            return decompiler;
+            return EXIT_FAILURE;
+        }
+
+        if(pe.HasLimitations()){
+            fprintf(stderr, "File has limitations.\n");
+            return EXIT_FAILURE;
         }
 
         if(pe.IsDotNet()){
-            fprintf(stderr, "CIL Decompiler not implemented.\n");
-            return decompiler;
+
+            DOTNET pe;
+            if (pe.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_I386) == false) return 1;
+            if (pe.ReadFile(file_path) == false) return 1;
+
+            for (size_t i = 0; i < pe._sections.size(); i++) {
+                if (pe._sections[i].offset == 0) continue;
+                CILDecompiler cil_decompiler;
+
+                if (cil_decompiler.Setup(CIL_DECOMPILER_TYPE_FUNCS) == false){
+                    return 1;
+                }
+                if (cil_decompiler.Decompile(pe._sections[i].data, pe._sections[i].size, 0) == false){
+                    continue;
+                }
+                if (output == NULL){
+                    cil_decompiler.PrintTraits();
+                } else {
+                    cil_decompiler.WriteTraits(output);
+                }
+            }
+
+            return EXIT_SUCCESS;
         }
 
         for (int i = 0; i < pe.total_exec_sections; i++) {
@@ -138,15 +113,17 @@ Decompiler AutoLex::ProcessFile(char *file_path, uint threads, uint timeout, uin
                 decompiler.Decompile(pe.sections[i].data, pe.sections[i].size, pe.sections[i].offset, i);
             }
         }
+
+
     }
     else if(characteristics.format == LIEF::FORMAT_ELF){
         ELF elf;
 
         if (elf.Setup((ARCH)characteristics.machineType) == false){
-            return decompiler;
+            return EXIT_FAILURE;
         }
         if (!elf.ReadFile(file_path)){
-            return decompiler;
+            return EXIT_FAILURE;
         }
 
         for (int i = 0; i < elf.total_exec_sections; i++){
@@ -161,5 +138,11 @@ Decompiler AutoLex::ProcessFile(char *file_path, uint threads, uint timeout, uin
         }
     }
 
-    return decompiler;
+    if (output == NULL){
+        decompiler.PrintTraits(pretty);
+    } else {
+        decompiler.WriteTraits(output, pretty);
+    }
+
+    return EXIT_SUCCESS;
 }
