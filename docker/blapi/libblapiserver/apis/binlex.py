@@ -51,15 +51,16 @@ class binlex_modes(Resource):
     def get(self):
         return modes
 
-@api.route(api_prefix + '/samples/<string:sha256>/<string:mode>')
+@api.route(api_prefix + '/samples/<string:corpus>/<string:mode>')
 class binlex_samples_upload(Resource):
     @require_user
-    def get(self, sha256, mode):
+    def get(self, corpus, mode):
         if mode not in modes :
             return {
                 'error': 'Invalid mode. Mode must be one of the following: ' + ', '.join(modes)
             }, 401
+
         return {
-            'sha256': sha256,
+            'corpus': corpus,
             'mode': mode
         }
