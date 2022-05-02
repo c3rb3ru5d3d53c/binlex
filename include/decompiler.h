@@ -256,6 +256,12 @@ namespace binlex {
         @param index the section index
         */
         BINLEX_EXPORT void py_SetInstructions(bool instructions);
+
+        /**
+         Sets the tags, via pybind11
+         @param tags set of tags
+        */
+        BINLEX_EXPORT void py_SetTags(const vector<string> &tags);
     };
 }
 #endif
