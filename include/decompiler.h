@@ -224,22 +224,25 @@ namespace binlex {
         /**
         Gets Trait as JSON
         @param trait pointer to trait structure
-        @param pretty pretty print
         @return json string
         */
         BINLEX_EXPORT static json GetTrait(struct Trait *trait);
         /**
         Get Traits as JSON
-        @param pretty pretty print json
-        @return json strings one per line
+        @return list of traits json objects
         */
         vector<json> GetTraits();
         /**
+	Print the traits to standard out
+
+	This function usees GetTraits() to get the traits data as a json.
         @param pretty pretty print traits
         */
         BINLEX_EXPORT void PrintTraits(bool pretty);
         /**
         Write Traits to File
+
+	This function usees GetTraits() to get the traits data as a json.
         @param file_path path to the file
         @param pretty pretty print traits
         */
