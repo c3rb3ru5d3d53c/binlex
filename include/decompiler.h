@@ -44,6 +44,7 @@ namespace binlex {
             uint index;
             void *sections;
         } worker_args;
+	std::set<string> tags; //!< tags for the decompiler.
     public:
         struct Trait {
             char *corpus;
@@ -99,6 +100,11 @@ namespace binlex {
         @return bool
         */
         BINLEX_EXPORT bool Setup(cs_arch arch, cs_mode mode, uint index);
+        /**
+        Set the Tags for this decompiler
+        @param ntags new tags to store
+        */
+        BINLEX_EXPORT void SetTags(const set<string> &ntags);
         /**
         Set Threads and Thread Cycles
         @param threads number of threads
