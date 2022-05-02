@@ -129,7 +129,29 @@ bool Decompiler::Setup(cs_arch arch, cs_mode mode, uint index){
     return true;
 }
 
-string Decompiler::GetTrait(struct Trait *trait){
+
+void Decompiler::SetTags(const set<string> &ntags){
+  tags = ntags;
+}
+
+
+void Decompiler::SetThreads(uint threads, uint thread_cycles, uint thread_sleep, uint index){
+    sections[index].threads = threads;
+    sections[index].thread_cycles = thread_cycles;
+    sections[index].thread_sleep = thread_sleep;
+}
+
+void Decompiler::SetCorpus(char *corpus, uint index){
+    sections[index].corpus = corpus;
+}
+
+void Decompiler::SetInstructions(bool instructions, uint index){
+    sections[index].instructions = instructions;
+}
+
+// Second function which returns the json and...
+// Can the json class be used to output directly into a stream?
+string Decompiler::GetTrait(struct Trait *trait, bool pretty){
     json data;
     data["type"] = trait->type;
     data["corpus"] = g_args.options.corpus;
@@ -154,14 +176,32 @@ string Decompiler::GetTrait(struct Trait *trait){
     return data.dump();
 }
 
-string Decompiler::GetTraits(void){
+void Decompiler::PrintTraits(bool pretty){
+    for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
+        if (sections[i].traits != NULL){
+            for (int j = 0; j < sections[i].ntraits; j++){
+                sections[i].traits[j]->corpus = sections[i].corpus;
+                cout << GetTrait(sections[i].traits[j], pretty) << endl;
+            }
+        }
+    }
+}
+
+
+//Never used???
+string Decompiler::GetTraits(bool pretty){
     stringstream ss;
     string sep = "";
     ss << '[';
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
         if (sections[i].traits != NULL){
             for (int j = 0; j < sections[i].ntraits; j++){
-                ss << sep << GetTrait(sections[i].traits[j]);
+                sections[i].traits[j]->corpus = sections[i].corpus;
+		json jdata(GetTrait(sections[i].traits[j], pretty));
+		if(!tags.empty()){
+		    jdata["tags"] = tags;
+		}
+                ss << sep << jdata;
                 sep = ",";
             }
         }
