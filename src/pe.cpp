@@ -62,9 +62,32 @@ bool PE::ReadBuffer(void *data, size_t size){
     return true;
 }
 
+
 bool PE::IsDotNet(){
-    return binary->has(DATA_DIRECTORY::CLR_RUNTIME_HEADER);
+    try {
+
+        auto imports = binary->imports();
+
+        for(Import i : imports)
+        {
+            if (i.name() == "mscorelib.dll") {
+                if(binary->data_directory(DATA_DIRECTORY::CLR_RUNTIME_HEADER).RVA() > 0) {
+                    return true;
+                }
+            }
+            if (i.name() == "mscoree.dll") {
+                if(binary->data_directory(DATA_DIRECTORY::CLR_RUNTIME_HEADER).RVA() > 0) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+    catch(LIEF::bad_format bf){
+        return false;
+    }
 }
+
 
 bool PE::ParseSections(){
     uint32_t index = 0;
