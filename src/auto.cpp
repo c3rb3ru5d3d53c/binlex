@@ -152,9 +152,6 @@ Decompiler AutoLex::ProcessFile(char *file_path, uint threads, uint timeout, uin
         for (int i = 0; i < BINARY_MAX_SECTIONS; i++) {
             if (pe32.sections[i].data != NULL) {
                 decompiler.Setup(characteristics.arch, characteristics.mode, i);
-                decompiler.SetThreads(threads, thread_cycles, thread_sleep, i);
-                decompiler.SetCorpus(corpus, i);
-                decompiler.SetInstructions(instructions, i);
                 decompiler.AppendQueue(pe32.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
                 decompiler.Decompile(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, i);
             }
@@ -173,9 +170,6 @@ Decompiler AutoLex::ProcessFile(char *file_path, uint threads, uint timeout, uin
         for (int i = 0; i < BINARY_MAX_SECTIONS; i++){
             if (elf.sections[i].data != NULL){
                 decompiler.Setup(characteristics.arch, characteristics.mode, i);
-                decompiler.SetThreads(threads, thread_cycles, thread_sleep, i);
-                decompiler.SetCorpus(corpus, i);
-                decompiler.SetInstructions(instructions, i);
                 decompiler.AppendQueue(elf.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
                 decompiler.Decompile(elf.sections[i].data, elf.sections[i].size, elf.sections[i].offset, i);
             }
