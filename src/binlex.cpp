@@ -56,34 +56,28 @@ int main(int argc, char **argv){
         g_args.print_help();
         return EXIT_FAILURE;
     }
-    if (strcmp(args.options.mode, (char *)"auto") == 0 &&
-        args.options.io_type == ARGS_IO_TYPE_FILE){
+    if (strcmp(g_args.options.mode, (char *)"auto") == 0 &&
+        g_args.options.io_type == ARGS_IO_TYPE_FILE){
 
         AutoLex autolex;
 
         // check for limitations
-        if(autolex.HasLimitations(args.options.input) == true){
+        if(autolex.HasLimitations(g_args.options.input) == true){
             printf("[x] File has limitations and can't be processed. Select a mode to force analysis.\n");
             return 1;
         }
 
-        Decompiler decompiler {autolex.ProcessFile(args.options.input, \
-        args.options.threads, \
-        args.options.timeout, \
-        args.options.thread_cycles, args.options.thread_sleep, \
-        args.options.instructions, \
-        args.options.corpus) };
-
-        if (args.options.output == NULL){
-            decompiler.PrintTraits(args.options.pretty);
-        } else {
-            decompiler.WriteTraits(args.options.output, args.options.pretty);
-        }
-
+        Decompiler decompiler {autolex.ProcessFile(g_args.options.input, \
+        g_args.options.threads, \
+        g_args.options.timeout, \
+        g_args.options.thread_cycles, g_args.options.thread_sleep, \
+        g_args.options.instructions, \
+        g_args.options.corpus) };
+        decompiler.WriteTraits();
         return 0;
     }
-    if (strcmp(args.options.mode, (char *)"elf:x86_64") == 0 &&
-        args.options.io_type == ARGS_IO_TYPE_FILE){
+    if (strcmp(g_args.options.mode, (char *)"elf:x86_64") == 0 &&
+        g_args.options.io_type == ARGS_IO_TYPE_FILE){
         ELF elf64;
         if (elf64.Setup(ARCH::EM_X86_64) == false){
             return EXIT_FAILURE;
