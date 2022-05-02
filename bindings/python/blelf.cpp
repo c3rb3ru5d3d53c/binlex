@@ -11,18 +11,18 @@ void init_elf(py::module &handle){
   .def("setup", &binlex::ELF::Setup)
   .def("read_file", &binlex::ELF::ReadFile)
   .def("get_sections", [](binlex::ELF &module){
-        auto result = py::list();
-        for (int i = 0; i < BINARY_MAX_SECTIONS; i++){
-            if (module.sections[i].data != NULL){
-                auto dict = py::dict();
-                dict["size"] = module.sections[i].size;
-                dict["data"] = py::bytes((char *)module.sections[i].data, module.sections[i].size);
-                dict["offset"] = module.sections[i].offset;
-                result.append(dict);
-            }
-        }
-        return result;
-    })
+    auto result = py::list();
+    for (int i = 0; i < BINARY_MAX_SECTIONS; i++){
+      if (module.sections[i].data != NULL){
+        auto dict = py::dict();
+        dict["size"] = module.sections[i].size;
+        dict["data"] = py::bytes((char *)module.sections[i].data, module.sections[i].size);
+        dict["offset"] = module.sections[i].offset;
+        result.append(dict);
+      }
+    }
+    return result;
+  })
   .def("read_buffer", &binlex::ELF::ReadBuffer);
   py::enum_<LIEF::ELF::ARCH>(handle, "ARCH")
   .value("EM_386", LIEF::ELF::ARCH::EM_386)

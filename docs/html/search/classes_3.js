@@ -1,4 +1,5 @@
 var searchData=
 [
-  ['elf_49',['ELF',['../classbinlex_1_1ELF.html',1,'binlex']]]
+  ['decompiler_90',['Decompiler',['../classbinlex_1_1Decompiler.html',1,'binlex']]],
+  ['dotnet_91',['DOTNET',['../classbinlex_1_1DOTNET.html',1,'binlex']]]
 ];

@@ -16,6 +16,7 @@ void init_decompiler(py::module &handle){
     .def("setup", &binlex::Decompiler::Setup)
     .def("set_threads", &binlex::Decompiler::py_SetThreads)
     .def("set_corpus", &binlex::Decompiler::py_SetCorpus)
+    .def("set_tags", &binlex::Decompiler::py_SetTags)
     .def("set_instructions", &binlex::Decompiler::py_SetInstructions)
     .def("decompile", [](binlex::Decompiler &module, py::buffer data, uint offset, uint index){
         py::buffer_info info = data.request();
@@ -23,8 +24,9 @@ void init_decompiler(py::module &handle){
     })
     .def("get_traits", [](binlex::Decompiler &module){
         py::module_ json = py::module_::import("json");
-        string traits = module.GetTraits();
-        return json.attr("loads")(traits);
+        ostringstream jsonstr;
+        jsonstr << module.GetTraits();
+        return json.attr("loads")(jsonstr.str());
     })
     .def("append_queue", &binlex::Decompiler::AppendQueue)
     .def("write_traits", &binlex::Decompiler::WriteTraits);
