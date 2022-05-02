@@ -128,8 +128,6 @@ BINLEX_EXPORT void&#160;</td><td class="memItemRight" valign="bottom"><b>FreeTra
 <tr class="separator:aee8efe58cf2c68b07fe66a9294a5ca5d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:afc5ee0847582e4df55b12bdb36e5ac1b"><td class="memItemLeft" align="right" valign="top">vector&lt; json &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#afc5ee0847582e4df55b12bdb36e5ac1b">GetTraits</a> ()</td></tr>
 <tr class="separator:afc5ee0847582e4df55b12bdb36e5ac1b"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:aeecf0519b93ce6df345c9690f3709a6d"><td class="memItemLeft" align="right" valign="top">BINLEX_EXPORT void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#aeecf0519b93ce6df345c9690f3709a6d">PrintTraits</a> (bool pretty)</td></tr>
-<tr class="separator:aeecf0519b93ce6df345c9690f3709a6d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a58bc917a790e8547811c5d38fd9d4e21"><td class="memItemLeft" align="right" valign="top">BINLEX_EXPORT void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#a58bc917a790e8547811c5d38fd9d4e21">WriteTraits</a> ()</td></tr>
 <tr class="separator:a58bc917a790e8547811c5d38fd9d4e21"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:adf563022c163cdb2afbedca90b38769b"><td class="memItemLeft" align="right" valign="top"><a id="adf563022c163cdb2afbedca90b38769b"></a>
@@ -137,10 +135,12 @@ BINLEX_EXPORT void&#160;</td><td class="memItemRight" valign="bottom"><b>AppendQ
 <tr class="separator:adf563022c163cdb2afbedca90b38769b"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a8d0dcf503ce46dd06e7b82d17ee45294"><td class="memItemLeft" align="right" valign="top">BINLEX_EXPORT void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#a8d0dcf503ce46dd06e7b82d17ee45294">py_SetThreads</a> (uint threads, uint thread_cycles, uint thread_sleep)</td></tr>
 <tr class="separator:a8d0dcf503ce46dd06e7b82d17ee45294"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a4c770c7e2d5210315b959e251af7c402"><td class="memItemLeft" align="right" valign="top">BINLEX_EXPORT void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#a4c770c7e2d5210315b959e251af7c402">py_SetCorpus</a> (char *corpus)</td></tr>
-<tr class="separator:a4c770c7e2d5210315b959e251af7c402"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a132478ba1f917fc8d2f971ad4a8c0e70"><td class="memItemLeft" align="right" valign="top">BINLEX_EXPORT void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#a132478ba1f917fc8d2f971ad4a8c0e70">py_SetCorpus</a> (const char *corpus)</td></tr>
+<tr class="separator:a132478ba1f917fc8d2f971ad4a8c0e70"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a68507158b29a480255049f1b9483cc13"><td class="memItemLeft" align="right" valign="top">BINLEX_EXPORT void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#a68507158b29a480255049f1b9483cc13">py_SetInstructions</a> (bool instructions)</td></tr>
 <tr class="separator:a68507158b29a480255049f1b9483cc13"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a84ee206f44f3f08976235acd794a5881"><td class="memItemLeft" align="right" valign="top">BINLEX_EXPORT void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Decompiler.html#a84ee206f44f3f08976235acd794a5881">py_SetTags</a> (const vector&lt; string &gt; &amp;tags)</td></tr>
+<tr class="separator:a84ee206f44f3f08976235acd794a5881"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
@@ -841,33 +841,8 @@ struct <a class="el" href="structbinlex_1_1Decompiler_1_1Section.html">Section</
 
 </div>
 </div>
-<a id="aeecf0519b93ce6df345c9690f3709a6d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aeecf0519b93ce6df345c9690f3709a6d">&#9670;&nbsp;</a></span>PrintTraits()</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">BINLEX_EXPORT void binlex::Decompiler::PrintTraits </td>
-          <td>(</td>
-          <td class="paramtype">bool&#160;</td>
-          <td class="paramname"><em>pretty</em></td><td>)</td>
-          <td></td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-<p>Print the traits to standard out</p>
-<p>This function usees <a class="el" href="classbinlex_1_1Decompiler.html#afc5ee0847582e4df55b12bdb36e5ac1b">GetTraits()</a> to get the traits data as a json. </p><dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramname">pretty</td><td>pretty print traits </td></tr>
-  </table>
-  </dd>
-</dl>
-
-</div>
-</div>
-<a id="a4c770c7e2d5210315b959e251af7c402"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a4c770c7e2d5210315b959e251af7c402">&#9670;&nbsp;</a></span>py_SetCorpus()</h2>
+<a id="a132478ba1f917fc8d2f971ad4a8c0e70"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a132478ba1f917fc8d2f971ad4a8c0e70">&#9670;&nbsp;</a></span>py_SetCorpus()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -875,7 +850,7 @@ struct <a class="el" href="structbinlex_1_1Decompiler_1_1Section.html">Section</
         <tr>
           <td class="memname">BINLEX_EXPORT void binlex::Decompiler::py_SetCorpus </td>
           <td>(</td>
-          <td class="paramtype">char *&#160;</td>
+          <td class="paramtype">const char *&#160;</td>
           <td class="paramname"><em>corpus</em></td><td>)</td>
           <td></td>
         </tr>
@@ -910,6 +885,30 @@ struct <a class="el" href="structbinlex_1_1Decompiler_1_1Section.html">Section</
   <table class="params">
     <tr><td class="paramname">instructions</td><td>bool to collect instructions traits or not </td></tr>
     <tr><td class="paramname">index</td><td>the section index </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a84ee206f44f3f08976235acd794a5881"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a84ee206f44f3f08976235acd794a5881">&#9670;&nbsp;</a></span>py_SetTags()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">BINLEX_EXPORT void binlex::Decompiler::py_SetTags </td>
+          <td>(</td>
+          <td class="paramtype">const vector&lt; string &gt; &amp;&#160;</td>
+          <td class="paramname"><em>tags</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Sets the tags, via pybind11 </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">tags</td><td>set of tags </td></tr>
   </table>
   </dd>
 </dl>
@@ -1166,8 +1165,8 @@ struct <a class="el" href="structbinlex_1_1Decompiler_1_1Section.html">Section</
         </tr>
       </table>
 </div><div class="memdoc">
-<pre class="fragment">Write Traits to File
-</pre><p> This function usees <a class="el" href="classbinlex_1_1Decompiler.html#afc5ee0847582e4df55b12bdb36e5ac1b">GetTraits()</a> to get the traits data as a json. </p>
+<p>Write Traits to <a class="el" href="classbinlex_1_1File.html">File</a></p>
+<p>This function usees <a class="el" href="classbinlex_1_1Decompiler.html#afc5ee0847582e4df55b12bdb36e5ac1b">GetTraits()</a> to get the traits data as a json. </p>
 
 </div>
 </div>

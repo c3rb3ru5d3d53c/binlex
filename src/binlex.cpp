@@ -72,8 +72,7 @@ int main(int argc, char **argv){
         g_args.options.threads, \
         g_args.options.timeout, \
         g_args.options.thread_cycles, g_args.options.thread_sleep, \
-        g_args.options.instructions, \
-        g_args.options.corpus) };
+        g_args.options.instructions) };
         decompiler.WriteTraits();
         return 0;
     }

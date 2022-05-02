@@ -10,7 +10,7 @@ var classbinlex_1_1Args =
     [ "print_help", "classbinlex_1_1Args.html#abf121fddbd8c005159add8135fc81786", null ],
     [ "set_io_type", "classbinlex_1_1Args.html#a0589f1ceb485b09037e248c5867f0644", null ],
     [ "SetDefault", "classbinlex_1_1Args.html#a315af4879832687b962c26c559d9fb4d", null ],
-    [ "corpus", "classbinlex_1_1Args.html#a4f92767e75f118eeb46a5a94155613f7", null ],
+    [ "corpus", "classbinlex_1_1Args.html#a185913fcf8b3010892df72a5369adf36", null ],
     [ "debug", "classbinlex_1_1Args.html#a219943a7e192e5ed28d49d35d6f9d207", null ],
     [ "help", "classbinlex_1_1Args.html#a2491b08ed8671ee298f81a4bb8a55edc", null ],
     [ "input", "classbinlex_1_1Args.html#a58f6c480ae8b6252daa8ab5d9b6424a9", null ],
