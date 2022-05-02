@@ -835,6 +835,10 @@ void Decompiler::py_SetCorpus(char *corpus) {
     g_args.options.corpus = corpus;
 }
 
+void Decompiler::py_SetTags(const vector<string> &tags){
+    g_args.options.tags = set<string>(tags.begin(), tags.end());
+}
+
 void Decompiler::py_SetInstructions(bool instructions) {
     g_args.options.instructions = instructions;
 }
