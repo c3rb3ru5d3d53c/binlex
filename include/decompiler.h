@@ -248,7 +248,7 @@ namespace binlex {
         @param corpus pointer to corpus name
         @param index the section index
         */
-        BINLEX_EXPORT void py_SetCorpus(char *corpus);
+        BINLEX_EXPORT void py_SetCorpus(const char *corpus);
 
         /**
         Specify if instruction traits are collected, via pybind11
