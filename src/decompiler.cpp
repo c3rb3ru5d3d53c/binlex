@@ -153,14 +153,6 @@ json Decompiler::GetTrait(struct Trait *trait){
     return data;
 }
 
-void Decompiler::PrintTraits(bool pretty){
-    auto traits(GetTraits());
-    for(auto i : traits) {
-	cout << (pretty ? i.dump(4) : i.dump()) << endl;
-    }
-}
-
-
 vector<json> Decompiler::GetTraits(){
     vector<json> traitsjson;
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){

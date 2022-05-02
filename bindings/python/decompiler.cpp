@@ -23,11 +23,11 @@ void init_decompiler(py::module &handle){
     })
     .def("get_traits", [](binlex::Decompiler &module){
         py::module_ json = py::module_::import("json");
-	ostringstream jsonstr;
-	for(auto trait : module.GetTraits()) {
-	  jsonstr << trait;
-	}
-        return json.attr("loads")(jsonstr);
+        ostringstream jsonstr;
+        for(auto trait : module.GetTraits()) {
+            jsonstr << trait;
+        }
+        return json.attr("loads")(jsonstr.str());
     })
     .def("append_queue", &binlex::Decompiler::AppendQueue)
     .def("write_traits", &binlex::Decompiler::WriteTraits);
