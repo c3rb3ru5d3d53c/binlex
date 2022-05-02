@@ -10,7 +10,6 @@
 #include "common.h"
 #include "cil.h"
 
-using namespace std;
 using namespace binlex;
 
 CILDecompiler::CILDecompiler(){

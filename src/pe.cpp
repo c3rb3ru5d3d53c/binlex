@@ -7,7 +7,6 @@
 #include <iostream>
 #include <LIEF/PE.hpp>
 
-using namespace std;
 using namespace binlex;
 using namespace LIEF::PE;
 
