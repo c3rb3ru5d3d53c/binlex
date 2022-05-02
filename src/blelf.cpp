@@ -10,7 +10,6 @@
 #include <stdexcept>
 #include "blelf.h"
 #include <LIEF/ELF.hpp>
-using namespace std;
 using namespace binlex;
 using namespace LIEF::ELF;
 
