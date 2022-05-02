@@ -227,13 +227,13 @@ namespace binlex {
         @param pretty pretty print
         @return json string
         */
-        BINLEX_EXPORT static string GetTrait(struct Trait *trait, bool pretty);
+        BINLEX_EXPORT static json GetTrait(struct Trait *trait);
         /**
         Get Traits as JSON
         @param pretty pretty print json
         @return json strings one per line
         */
-        string GetTraits(bool pretty);
+        vector<json> GetTraits();
         /**
         @param pretty pretty print traits
         */
@@ -243,7 +243,7 @@ namespace binlex {
         @param file_path path to the file
         @param pretty pretty print traits
         */
-        BINLEX_EXPORT void WriteTraits(char *file_path, bool pretty);
+        BINLEX_EXPORT void WriteTraits(const char *file_path, bool pretty);
         BINLEX_EXPORT static void * TraitWorker(void *args);
         BINLEX_EXPORT void AppendQueue(set<uint64_t> &addresses, uint operand_type, uint index);
         //void Seek(uint offset, uint index);

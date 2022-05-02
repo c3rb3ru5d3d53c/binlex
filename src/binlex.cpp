@@ -44,6 +44,7 @@ void start_timeout(time_t seconds){
 }
 #endif
 
+
 int main(int argc, char **argv){
     Args args;
     args.parse(argc, argv);
@@ -92,6 +93,7 @@ int main(int argc, char **argv){
             return EXIT_FAILURE;
         }
         Decompiler decompiler;
+	decompiler.SetTags(args.options.tags);
         for (int i = 0; i < elf64.total_exec_sections; i++){
             decompiler.Setup(CS_ARCH_X86, CS_MODE_64, i);
             decompiler.SetThreads(args.options.threads, args.options.thread_cycles, args.options.thread_sleep, i);
