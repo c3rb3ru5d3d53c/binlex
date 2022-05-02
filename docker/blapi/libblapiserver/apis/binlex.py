@@ -55,9 +55,13 @@ class binlex_modes(Resource):
 class binlex_samples_upload(Resource):
     @require_user
     def get(self, corpus, mode):
+        if corpus not in corpra : 
+            return {
+                'error': 'Invalid corpus value, mode must be one of the following: ' + ', '.join(corpra)
+            }, 401
         if mode not in modes :
             return {
-                'error': 'Invalid mode. Mode must be one of the following: ' + ', '.join(modes)
+                'error': 'Invalid mode value, mode must be one of the following: ' + ', '.join(modes)
             }, 401
 
         return {
