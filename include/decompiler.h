@@ -12,7 +12,7 @@
 #ifdef _WIN32
 #define BINLEX_EXPORT __declspec(dllexport)
 #else
-#define BINLEX_EXPORT 
+#define BINLEX_EXPORT
 #endif
 
 #define DECOMPILER_MAX_SECTIONS 256
@@ -110,7 +110,7 @@ namespace binlex {
         */
         BINLEX_EXPORT void SetInstructions(bool instructions, uint index);
         /**
-	add storage for tags
+	    add storage for tags
         Decompiler Thread Worker
         @param args pointer to worker arguments
         @returns NULL
@@ -220,16 +220,9 @@ namespace binlex {
         */
         vector<json> GetTraits();
         /**
-	Print the traits to standard out
-
-	This function usees GetTraits() to get the traits data as a json.
-        @param pretty pretty print traits
-        */
-        BINLEX_EXPORT void PrintTraits(bool pretty);
-        /**
         Write Traits to File
 
-	This function usees GetTraits() to get the traits data as a json.
+	    This function usees GetTraits() to get the traits data as a json.
         */
         BINLEX_EXPORT void WriteTraits();
         BINLEX_EXPORT static void * TraitWorker(void *args);
@@ -249,14 +242,14 @@ namespace binlex {
         @param index the section index
         */
         BINLEX_EXPORT void py_SetThreads(uint threads, uint thread_cycles, uint thread_sleep);
-        
+
         /**
         Sets The Corpus Name, via pybind11
         @param corpus pointer to corpus name
         @param index the section index
         */
         BINLEX_EXPORT void py_SetCorpus(char *corpus);
-        
+
         /**
         Specify if instruction traits are collected, via pybind11
         @param instructions bool to collect instructions traits or not
