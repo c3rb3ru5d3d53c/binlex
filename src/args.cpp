@@ -27,7 +27,7 @@ void Args::SetDefault(){
     options.output = NULL;
     options.corpus = (char *)"default";
     options.list_modes = false;
-    options.mode = NULL;
+    options.mode = (char *)"auto";
     options.io_type = ARGS_IO_TYPE_UNKNOWN;
     options.pretty = false;
     options.debug = false;
@@ -84,7 +84,7 @@ void Args::print_help(){
     printf(
         "binlex %s - A Binary Genetic Traits Lexer\n"
         "  -i  --input\t\tinput file\t\t(required)\n"
-        "  -m  --mode\t\tset mode\t\t(required)\n"
+        "  -m  --mode\t\tset mode\t\t(optional)\n"
         "  -lm --list-modes\tlist modes\t\t(optional)\n"
         "      --instructions\tinclude insn traits\t(optional)\n"
         "  -c  --corpus\t\tcorpus name\t\t(optional)\n"
@@ -103,7 +103,7 @@ void Args::print_help(){
 }
 
 void Args::parse(int argc, char **argv){
-    if (argc < 2){
+    if (argc < 1){
         print_help();
         exit(0);
     }
@@ -200,13 +200,11 @@ void Args::parse(int argc, char **argv){
             strcmp(argv[i], (char *)"--output") == 0){
             options.output = argv[i+1];
         }
+
         if (strcmp(argv[i], (char *)"-m") == 0 ||
             strcmp(argv[i], (char *)"--mode") == 0){
             options.mode = argv[i+1];
-            if (argc < i+2){
-                fprintf(stderr, "[x] invalid mode\n");
-                exit(1);
-            }
+
             if (check_mode(options.mode) == false){
                 fprintf(stderr, "%s is an invalid mode\n", options.mode);
                 exit(1);
