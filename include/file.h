@@ -42,8 +42,33 @@ namespace binlex {
 	  @throws runtime_error if a read error occurs
 	 */
         std::vector<uint8_t> ReadFileIntoVector(const char *file_path);
+	/*
+	  Read data from file
+
+	  Calls ReadVector
+
+	  @param file_path path to the file to read from
+	  @return true if reading successful
+	 */
 	bool ReadFile(const char *file_path);
+	/*
+	  Read data from a buffer
+
+	  Calls ReadVector
+
+	  @param data pointer to data
+	  @param size size of the buffer
+	  @return true if reading successful
+	 */
 	bool ReadBuffer(void *data, size_t size);
+	/*
+	  Read data from std::vector
+
+	  This function calculates the hashes and parses the file.
+
+	  @param data pointer to data
+	  @return true if reading successful
+	 */
 	virtual bool ReadVector(const std::vector<uint8_t> &data) = 0;
     };
 };
