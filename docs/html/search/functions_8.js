@@ -1,7 +1,7 @@
 var searchData=
 [
-  ['readbuffer_76',['ReadBuffer',['../classbinlex_1_1PE.html#a7e30edaa034bef62d987959ac6c0ecf4',1,'binlex::PE']]],
-  ['readfile_77',['ReadFile',['../classbinlex_1_1PE.html#a7e7d93bcad0287e5b4ec75b3599d54f6',1,'binlex::PE']]],
-  ['removespaces_78',['RemoveSpaces',['../classbinlex_1_1Common.html#af1e434357de3e8b01bd34a17cc645c16',1,'binlex::Common']]],
-  ['removewildcards_79',['RemoveWildcards',['../classbinlex_1_1Common.html#a52a0d5df20a6123bd9d69faea24b05a0',1,'binlex::Common']]]
+  ['readbuffer_144',['ReadBuffer',['../classbinlex_1_1PE.html#a3a0aafcc006710239b53593a91f13401',1,'binlex::PE']]],
+  ['readfile_145',['ReadFile',['../classbinlex_1_1DOTNET.html#ab77711714e0dd6602f25bcde39554039',1,'binlex::DOTNET::ReadFile()'],['../classbinlex_1_1PE.html#adc55b9f922a681d2d5c31d19013bf32c',1,'binlex::PE::ReadFile()']]],
+  ['removespaces_146',['RemoveSpaces',['../classbinlex_1_1Common.html#ad5ca8c8e5a5177c3bab1dafe1e9d17c0',1,'binlex::Common']]],
+  ['removewildcards_147',['RemoveWildcards',['../classbinlex_1_1Common.html#a35dbc25fdb59cf2d65eb35fcb1126c69',1,'binlex::Common']]]
 ];

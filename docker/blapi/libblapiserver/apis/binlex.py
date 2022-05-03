@@ -16,111 +16,73 @@ from bson.objectid import ObjectId
 import bsonjs
 from libblapiserver.auth import require_user, require_admin
 
-__version__ = '1.1.1'
+api_prefix = "/api/v1"
+
+__pybinlex_version__ = '1.1.1'
 
 logger = logging.getLogger(__name__)
 
 api = Namespace('binlex', description='Binlex Upload API')
 
-methods = ['store', 'lex']
-
-pe_architectures = ['x86', 'x86_64']
-
-elf_architectures = ['x86', 'x86_64']
-
-raw_architectures = ['x86', 'x86_64']
-
 corpra = ['default', 'malware', 'goodware']
+
+modes = ['elf:x86', 'elf:x86_64', 'pe:x86', 'pe:x86_64', 'raw:x86', 'raw:x86_64', 'raw:cil', 'pe:cil', 'auto']
 
 def jsonify(data):
     return json.loads(json.dumps(data, default=json_util.default))
 
-@api.route('/version')
-class binlex_version(Resource):
-    @require_user
-    def get(self):
-        """Get the Current Version of Binlex"""
-        return {
-            'version': __version__
-        }
-
-@api.route('/methods')
-class binlex_methods(Resource):
-    @require_user
-    def get(self):
-        """Get the List of Supported Methods"""
-        return methods
-
-@api.route('/pe/architectures')
-class binlex_pe_architectures(Resource):
-    @require_user
-    def get(self):
-        """Get the List of Supported PE Format Architectures"""
-        return pe_architectures
-
-@api.route('/elf/architectures')
-class binlex_elf_architectures(Resource):
-    @require_user
-    def get(self):
-        """Get the List of Supported ELF Format Architectures"""
-        return elf_architectures
-
-@api.route('/raw/architectures')
-class binlex_raw_architectures(Resource):
-    @require_user
-    def get(self):
-        """Get the List of Supported RAW Format Architectures"""
-        return raw_architectures
-
-@api.route('/corpra')
+@api.route(api_prefix + '/corpra')
 class binlex_corpra(Resource):
     @require_user
     def get(self):
         return corpra
 
-@api.route('/decompile/<string:mode>/<string:corpus>')
-class binlex_decompile(Resource):
+@api.route(api_prefix + '/version')
+class binlex_version(Resource):
     @require_user
-    def post(self, mode, corpus):
+    def get(self):
+        return {
+            'version': __pybinlex_version__
+        }
+
+@api.route(api_prefix + '/modes')
+class binlex_modes(Resource):
+    @require_user
+    def get(self):
+        return modes
+
+@api.route(api_prefix + '/samples/<string:corpus>/<string:mode>')
+class binlex_samples_upload(Resource):
+    @require_user
+    def post(self, corpus, mode):
+        if corpus not in corpra : 
+            return {
+                'error': 'Invalid corpus value, mode must be one of the following: ' + ', '.join(corpra)
+            }, 401
+        if mode not in modes :
+            return {
+                'error': 'Invalid mode value, mode must be one of the following: ' + ', '.join(modes)
+            }, 401
+
         try:
-            if corpus not in corpra:
-                return {
-                    'error': 'invalid corpus value'
-                }, 401
+            f = request.files['filedata']
+            data = f.read()
             app.config['minio'].upload(
-                bucket_name=app.config['amqp_queue_decomp'],
-                data=request.data)
+                bucket_name=corpus,
+                data=data
+            )
+
             app.config['amqp'].publish(
                 queue=app.config['amqp_queue_decomp'],
                 body=json.dumps({
                     'corpus': corpus,
                     'mode': mode,
-                    'object_name': hashlib.sha256(request.data).hexdigest()
+                    'object_name': hashlib.sha256(data).hexdigest()
                 }))
             return {
                 'status': 'processing'
             }
         except Exception:
             return {
-                'error': 'failed to add to decompiler queue'
+                'error': 'Failed to add to decompiler queue'
             }, 500
-
-@api.route('/decompile/status/<string:sha256>')
-class binlex_decompile_status(Resource):
-    @require_user
-    def get(self, sha256):
-        try:
-            data = app.config['minio'].download(
-                bucket_name=app.config['amqp_queue_decomp'],
-                object_name=sha256)
-            if data in [None, False]:
-                return {
-                    'status': 'completed'
-                }
-            return {
-                'status': 'processing'
-            }
-        except Exception:
-            return {
-                'status': 'completed'
-            }

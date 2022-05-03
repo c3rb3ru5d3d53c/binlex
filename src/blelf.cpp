@@ -1,17 +1,5 @@
-#ifdef _WIN32
-#include <Windows.h>
-#endif
-#include <iostream>
-#include <memory>
-#include <vector>
-#include <set>
-#include <iostream>
-#include <exception>
-#include <stdexcept>
-#include <cassert>
 #include "blelf.h"
-#include <LIEF/ELF.hpp>
-using namespace std;
+
 using namespace binlex;
 using namespace LIEF::ELF;
 
@@ -78,12 +66,20 @@ bool ELF::ParseSections(){
             vector<uint8_t> data = binary->get_content_from_virtual_address(it->virtual_address(), it->original_size());
             memcpy(sections[index].data, &data[0], sections[index].size);
             it_exported_symbols symbols = binary->exported_symbols();
+            // Add export to function list
             for (auto j = symbols.begin(); j != symbols.end(); j++){
                 uint64_t tmp_offset = binary->virtual_address_to_offset(j->value());
-                 if (tmp_offset > sections[index].offset &&
+                PRINT_DEBUG("Elf Export offset: 0x%x\n", (int)tmp_offset);
+                if (tmp_offset > sections[index].offset &&
                     tmp_offset < sections[index].offset + sections[index].size){
                     sections[index].functions.insert(tmp_offset-sections[index].offset);
                 }
+            }
+            // Add entrypoint to the function list
+            uint64_t entrypoint_offset = binary->virtual_address_to_offset(binary->entrypoint());
+            PRINT_DEBUG("Elf Entrypoint offset: 0x%x\n", (int)entrypoint_offset);
+            if (entrypoint_offset > sections[index].offset && entrypoint_offset < sections[index].offset + sections[index].size){
+                sections[index].functions.insert(entrypoint_offset-sections[index].offset);
             }
             index++;
             if (BINARY_MAX_SECTIONS == index)

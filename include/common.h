@@ -2,7 +2,12 @@
 #define COMMON_H
 
 #include <iostream>
+#include <iomanip>
 #include <vector>
+#include <queue>
+#include <set>
+#include <map>
+#include "args.h"
 
 #ifdef _WIN32
 #define BINLEX_EXPORT __declspec(dllexport)
@@ -10,8 +15,21 @@
 #define BINLEX_EXPORT 
 #endif
 
-using std::string;
+using std::set;
+using std::map;
+using std::queue;
+using std::set;
 using std::vector;
+using std::ofstream;
+using std::stringstream;
+using std::string;
+using std::cin;
+using std::cout;
+using std::cerr;
+using std::endl;
+using std::hex;
+using std::setfill;
+using std::setw;
 
 #define BINARY_MAX_SECTIONS 256
 
@@ -19,6 +37,16 @@ using std::vector;
 typedef unsigned int uint;
 typedef uint useconds_t;
 #endif
+
+extern binlex::Args g_args;
+
+/*
+ * Debug functionality
+ */
+#define PRINT_DEBUG(...) {if (g_args.options.debug) fprintf(stderr, __VA_ARGS__); }
+#define PRINT_ERROR_AND_EXIT(...) { fprintf(stderr, __VA_ARGS__); exit(EXIT_FAILURE); }
+void print_data(string title, void *data, uint32_t size);
+#define PRINT_DATA(title, data, size) { print_data(title, data, size); }
 
 namespace binlex {
     class Common{

@@ -20,11 +20,34 @@ for:
       - sudo apt update -qq
       - sudo apt install -qq -y git build-essential libcapstone-dev libssl-dev cmake make parallel doxygen git-lfs rpm liblief-dev python3-dev python3 python3-pip libtlsh-dev
       - git submodule update --init --recursive
-    test_script:
+    build_script:
       - make threads=4
       - python3 -m pip wheel -v -w build/ .
       - make pkg
       - make dist
+    test_script:
+      - cd ./tests
+      - unzip -P infected pe.zip
+      - unzip -P infected elf.zip
+      - ../build/binlex -m pe:x86     -i ./pe/pe.delphi.projecthook.x86 -o pe.delphi.projecthook.x86.binlex
+      - ../build/binlex -m pe:x86     -i ./pe/pe.emotet.x86             -o pe.emotet.x86.binlex
+      - ../build/binlex -m pe:x86     -i ./pe/pe.trickbot.x86           -o pe.trickbot.x86.binlex
+      - ../build/binlex -m pe:x86     -i ./pe/pe.x86                    -o pe.x86.binlex
+      - ../build/binlex -m pe:x86_64  -i ./pe/pe.trickbot.x86_64        -o pe.trickbot.x86_64.binlex
+      - ../build/binlex -m pe:x86_64  -i ./pe/pe.x86_64                 -o pe.x86_64.binlex
+      - ../build/binlex -m elf:x86    -i ./elf/elf.x86                  -o elf.x86.binlex
+      - ../build/binlex -m elf:x86_64 -i ./elf/elf.x86_64               -o elf.x86_64.binlex
+      - unzip ida_baseline.zip
+      - python3 coverage.py ./ida_baseline/elf.x86.ida.json                     elf.x86.binlex
+      - python3 coverage.py ./ida_baseline/elf.x86_64.ida.json                  elf.x86_64.binlex
+      - python3 coverage.py ./ida_baseline/pe.delphi.projecthook.x86.ida.json   pe.delphi.projecthook.x86.binlex
+      - python3 coverage.py ./ida_baseline/pe.emotet.x86.ida.json               pe.emotet.x86.binlex
+      - python3 coverage.py ./ida_baseline/pe.trickbot.x86.ida.json             pe.trickbot.x86.binlex
+      - python3 coverage.py ./ida_baseline/pe.trickbot.x86_64.ida.json          pe.trickbot.x86_64.binlex
+      - python3 coverage.py ./ida_baseline/pe.x86.ida.json                      pe.x86.binlex
+      - python3 coverage.py ./ida_baseline/pe.x86_64.ida.json                   pe.x86_64.binlex
+      - cd ..
+
     artifacts:
       - path: build/*.deb
       - path: build/*.rpm
