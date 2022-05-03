@@ -1,10 +1,12 @@
 #ifndef ARGS_H
 #define ARGS_H
+#include <set>
+#include <string>
 
 #ifdef _WIN32
 #define BINLEX_EXPORT __declspec(dllexport)
 #else
-#define BINLEX_EXPORT 
+#define BINLEX_EXPORT
 #endif
 
 #define ARGS_MODE_COUNT 9
@@ -39,8 +41,10 @@ namespace binlex{
                 bool list_modes;
                 bool instructions;
                 char *mode;
-                char *corpus;
+                std::string corpus;
                 bool pretty;
+                bool debug;
+                std::set<std::string> tags; //!< Set for storing the tags.
             } options;
             BINLEX_EXPORT Args();
             BINLEX_EXPORT void SetDefault();
@@ -50,7 +54,9 @@ namespace binlex{
             BINLEX_EXPORT void set_io_type(char *input);
             BINLEX_EXPORT void print_help();
             BINLEX_EXPORT void parse(int argc, char **argv);
+	    BINLEX_EXPORT std::string get_tags_as_str();
             BINLEX_EXPORT ~Args();
     };
 }
+
 #endif

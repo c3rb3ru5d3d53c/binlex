@@ -1,14 +1,5 @@
-#include <iostream>
-#include <memory>
-#include <vector>
-#include <set>
 #include "pe.h"
-#include "common.h"
-#include <iostream>
-#include <LIEF/PE.hpp>
-#include <cassert>
 
-using namespace std;
 using namespace binlex;
 using namespace LIEF::PE;
 
@@ -65,9 +56,46 @@ bool PE::ReadBuffer(void *data, size_t size){
     return true;
 }
 
+
 bool PE::IsDotNet(){
-    return binary->has(DATA_DIRECTORY::CLR_RUNTIME_HEADER);
+    try {
+
+        auto imports = binary->imports();
+
+        for(Import i : imports)
+        {
+            if (i.name() == "mscorelib.dll") {
+                if(binary->data_directory(DATA_DIRECTORY::CLR_RUNTIME_HEADER).RVA() > 0) {
+                    return true;
+                }
+            }
+            if (i.name() == "mscoree.dll") {
+                if(binary->data_directory(DATA_DIRECTORY::CLR_RUNTIME_HEADER).RVA() > 0) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+    catch(LIEF::bad_format bf){
+        return false;
+    }
 }
+
+
+bool PE::HasLimitations(){
+
+    if(binary->has_imports()){
+        auto imports = binary->imports();
+        for(Import i : imports){
+            if(i.name() == "MSVBVM60.DLL"){
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 
 bool PE::ParseSections(){
     uint32_t index = 0;
@@ -80,16 +108,24 @@ bool PE::ParseSections(){
             memset(sections[index].data, 0, sections[index].size);
             vector<uint8_t> data = binary->get_content_from_virtual_address(it->virtual_address(), it->sizeof_raw_data());
             memcpy(sections[index].data, &data[0], sections[index].size);
+            // Add exports to the function list
             if (binary->has_exports()){
                 Export exports = binary->get_export();
                 it_export_entries export_entries = exports.entries();
                 for (auto j = export_entries.begin(); j != export_entries.end(); j++){
+                    PRINT_DEBUG("PE Export offset: 0x%x\n", (int)binary->rva_to_offset(j->address()));
                     uint64_t tmp_offset = binary->rva_to_offset(j->address());
                     if (tmp_offset > sections[index].offset &&
                         tmp_offset < sections[index].offset + sections[index].size){
                         sections[index].functions.insert(tmp_offset-sections[index].offset);
                     }
                 }
+            }
+            // Add entrypoint to the function list
+            uint64_t entrypoint_offset = binary->va_to_offset(binary->entrypoint());
+            PRINT_DEBUG("PE Entrypoint offset: 0x%x\n", (int)entrypoint_offset);
+            if (entrypoint_offset > sections[index].offset && entrypoint_offset < sections[index].offset + sections[index].size){
+                sections[index].functions.insert(entrypoint_offset-sections[index].offset);
             }
             index++;
             if (BINARY_MAX_SECTIONS == index)
