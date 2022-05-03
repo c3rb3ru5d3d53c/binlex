@@ -21,7 +21,6 @@ namespace binlex {
 	    void *data;
 	    set<uint64_t> functions;
 	};
-	bool FileExists(char *file_path);
 	/*
 	  Function will calculate all the hashes for the complete file.
 

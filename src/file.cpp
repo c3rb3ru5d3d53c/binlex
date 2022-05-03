@@ -12,13 +12,6 @@ void File::CalculateFileHashes(const vector<uint8_t> &data){
     sha256 = GetSHA256(&data[0], data.size());
 }
 
-bool File::FileExists(char *file_path){
-    if (access(file_path, F_OK ) == 0){
-        return true;
-    }
-    return false;
-}
-
 std::vector<uint8_t> File::ReadFileIntoVector(const char *file_path){
     FILE *inp;
     uint8_t buf[8192];
