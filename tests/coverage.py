@@ -3,7 +3,6 @@
 import json
 import sys
 import os
-from tkinter.tix import Tree
 
 
 def noramilize_binlex_data(binlex_flat_file):

@@ -21,7 +21,6 @@ extern "C" {
 #include <tlsh.h>
 #include <stdexcept>
 
-using namespace std;
 using namespace binlex;
 
 Args g_args;

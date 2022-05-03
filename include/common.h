@@ -2,7 +2,11 @@
 #define COMMON_H
 
 #include <iostream>
+#include <iomanip>
 #include <vector>
+#include <queue>
+#include <set>
+#include <map>
 #include "args.h"
 
 #ifdef _WIN32
@@ -11,8 +15,21 @@
 #define BINLEX_EXPORT 
 #endif
 
-using std::string;
+using std::set;
+using std::map;
+using std::queue;
+using std::set;
 using std::vector;
+using std::ofstream;
+using std::stringstream;
+using std::string;
+using std::cin;
+using std::cout;
+using std::cerr;
+using std::endl;
+using std::hex;
+using std::setfill;
+using std::setw;
 
 #define BINARY_MAX_SECTIONS 256
 
