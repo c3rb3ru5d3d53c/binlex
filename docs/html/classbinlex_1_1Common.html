@@ -98,9 +98,10 @@ Inheritance diagram for binlex::Common:</div>
 <area href="classbinlex_1_1CILDecompiler.html" alt="binlex::CILDecompiler" shape="rect" coords="0,56,134,80"/>
 <area href="classbinlex_1_1Decompiler.html" alt="binlex::Decompiler" shape="rect" coords="144,56,278,80"/>
 <area href="classbinlex_1_1File.html" alt="binlex::File" shape="rect" coords="288,56,422,80"/>
-<area href="classbinlex_1_1ELF.html" alt="binlex::ELF" shape="rect" coords="216,112,350,136"/>
-<area href="classbinlex_1_1PE.html" alt="binlex::PE" shape="rect" coords="360,112,494,136"/>
-<area href="classbinlex_1_1DOTNET.html" alt="binlex::DOTNET" shape="rect" coords="360,168,494,192"/>
+<area href="classbinlex_1_1ELF.html" alt="binlex::ELF" shape="rect" coords="144,112,278,136"/>
+<area href="classbinlex_1_1PE.html" alt="binlex::PE" shape="rect" coords="288,112,422,136"/>
+<area href="classbinlex_1_1Raw.html" alt="binlex::Raw" shape="rect" coords="432,112,566,136"/>
+<area href="classbinlex_1_1DOTNET.html" alt="binlex::DOTNET" shape="rect" coords="288,168,422,192"/>
   </map>
 </div></div>
 <table class="memberdecls">
@@ -114,6 +115,8 @@ Static Public Member Functions</h2></td></tr>
 <tr class="separator:a0c3eb3179bd7d87b3180387be76573e7"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:acaf355a97857c4563c3b8e6162187e90"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#acaf355a97857c4563c3b8e6162187e90">GetFileSHA256</a> (char *file_path)</td></tr>
 <tr class="separator:acaf355a97857c4563c3b8e6162187e90"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a85b33e0d5148b97b1db40d2f59b2679c"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a85b33e0d5148b97b1db40d2f59b2679c">GetSHA256</a> (const uint8_t *data, size_t len)</td></tr>
+<tr class="separator:a85b33e0d5148b97b1db40d2f59b2679c"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aa341aea214e4eb0121ef7b76f75f2a86"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT vector&lt; char &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#aa341aea214e4eb0121ef7b76f75f2a86">TraitToChar</a> (string trait)</td></tr>
 <tr class="separator:aa341aea214e4eb0121ef7b76f75f2a86"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a35dbc25fdb59cf2d65eb35fcb1126c69"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a35dbc25fdb59cf2d65eb35fcb1126c69">RemoveWildcards</a> (string trait)</td></tr>
@@ -251,6 +254,56 @@ static BINLEX_EXPORT float&#160;</td><td class="memItemRight" valign="bottom"><b
 
 </div>
 </div>
+<a id="a85b33e0d5148b97b1db40d2f59b2679c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a85b33e0d5148b97b1db40d2f59b2679c">&#9670;&nbsp;</a></span>GetSHA256()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static BINLEX_EXPORT string binlex::Common::GetSHA256 </td>
+          <td>(</td>
+          <td class="paramtype">const uint8_t *&#160;</td>
+          <td class="paramname"><em>data</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t&#160;</td>
+          <td class="paramname"><em>len</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>This method reads a file returns its sha256 hash. </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">data</td><td>input string </td></tr>
+    <tr><td class="paramname">len</td><td>length of data </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>Returns the sha256 hash of the file </dd></dl>
+<dl class="exception"><dt>Exceptions</dt><dd>
+  <table class="exception">
+    <tr><td class="paramname">std::runtime_error</td><td>if file operation fails </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
 <a id="adf666341ef78e3cba311e576e525fbf4"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#adf666341ef78e3cba311e576e525fbf4">&#9670;&nbsp;</a></span>GetTLSH()</h2>
 
@@ -286,7 +339,8 @@ static BINLEX_EXPORT float&#160;</td><td class="memItemRight" valign="bottom"><b
 </div><div class="memdoc">
 <p>This class contains methods common to binlex. This method takes a (binary) input string and returns its tlsh hash. </p><dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramname">datat</td><td>input string </td></tr>
+    <tr><td class="paramname">data</td><td>input string </td></tr>
+    <tr><td class="paramname">len</td><td>length of data </td></tr>
   </table>
   </dd>
 </dl>

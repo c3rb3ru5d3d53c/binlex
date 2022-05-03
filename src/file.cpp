@@ -7,6 +7,11 @@ void File::CalculateFileHashes(char *file_path){
     sha256 = GetFileSHA256(file_path);
 }
 
+void File::CalculateFileHashes(const vector<uint8_t> &data){
+    tlsh = GetTLSH(&data[0], data.size());
+    sha256 = GetSHA256(&data[0], data.size());
+}
+
 bool File::FileExists(char *file_path){
     if (access(file_path, F_OK ) == 0){
         return true;
@@ -14,7 +19,7 @@ bool File::FileExists(char *file_path){
     return false;
 }
 
-std::vector<uint8_t> FileActionsOnly::ReadFileIntoVector(const char *file_path){
+std::vector<uint8_t> File::ReadFileIntoVector(const char *file_path){
     FILE *inp;
     uint8_t buf[8192];
     size_t bread;

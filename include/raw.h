@@ -22,7 +22,7 @@ typedef unsigned int uint;
 #endif
 
 namespace binlex{
-    class Raw {
+    class Raw : public File{
         public:
             int GetFileSize(FILE *fd);
             struct Section {

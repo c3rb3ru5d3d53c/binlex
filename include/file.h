@@ -11,9 +11,6 @@
 using namespace std;
 
 namespace binlex {
-    class FileActionsOnly{
-        std::vector<uint8_t> ReadFileIntoVector(const char *file_path);
-    };
     class File : public Common{
     public:
         string sha256;
@@ -31,6 +28,13 @@ namespace binlex {
 	  @param file_path: path to the file
 	*/
 	void CalculateFileHashes(char *file_path);
+	/*
+	  Function will calculate all the hashes for the complete file.
+
+	  @param data: file data in a vector
+	*/
+	void CalculateFileHashes(const vector<uint8_t> &data);
+        std::vector<uint8_t> ReadFileIntoVector(const char *file_path);
     };
 };
 
