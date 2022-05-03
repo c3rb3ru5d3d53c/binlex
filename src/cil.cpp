@@ -464,25 +464,19 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
 
 string CILDecompiler::ConvTraitBytes(vector< Instruction* > allinst) {
     string rstr;
+    string fstr;
     for(auto inst : allinst) {
-        char hexbytes[4];
-        sprintf(hexbytes, "%02x", inst->instruction);
-        hexbytes[3] = '\0';
+        char hexbytes[5];
+        sprintf(hexbytes, "%02x ", inst->instruction);
+        hexbytes[4] = '\0';
         rstr.append(string(hexbytes));
-        //cout << hexbytes;
-        if(inst != allinst.back() || (inst == allinst.back() && allinst.size() == 1)) {
-            rstr.append(" ");
-        }
         for(int i = 0; i < inst->operand_size/8; i++) {
             //cout << "?? ";
-            rstr.append("??");
-            if((i < (inst->operand_size/8)-1) || (inst != allinst.back())) {
-                rstr.append(" ");
-            }
+            rstr.append("?? ");
         }
     }
-    //cout << "\n";
-    return rstr;
+    fstr = TrimRight(rstr);
+    return fstr;
 }
 
 uint CILDecompiler::SizeOfTrait(vector< Instruction* > allinst) {
