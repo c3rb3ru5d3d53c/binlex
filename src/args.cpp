@@ -8,6 +8,7 @@
 #else
 #include <windows.h>
 #endif
+#include <sstream>
 #include "args.h"
 
 using namespace binlex;
@@ -25,12 +26,13 @@ void Args::SetDefault(){
     options.thread_sleep = 0;
     options.help = false;
     options.output = NULL;
-    options.corpus = (char *)"default";
+    options.corpus = "default";
     options.list_modes = false;
-    options.mode = NULL;
+    options.mode = (char *)"auto";
     options.io_type = ARGS_IO_TYPE_UNKNOWN;
     options.pretty = false;
     options.debug = false;
+    options.tags.clear(); // Clear if defaults are needed.
 }
 
 bool Args::check_mode(char *mode){
@@ -80,14 +82,31 @@ void Args::set_io_type(char *input){
     }
 }
 
+std::string Args::get_tags_as_str(){
+    std::ostringstream out;
+
+    if(!options.tags.empty()) {
+	auto tbegin = options.tags.begin();
+	auto tend = options.tags.end();
+	out << *tbegin;
+	while((++tbegin) != tend){
+	    out << ',' << *tbegin;
+	}
+    }
+    return out.str();
+}
+
+
 void Args::print_help(){
     printf(
         "binlex %s - A Binary Genetic Traits Lexer\n"
         "  -i  --input\t\tinput file\t\t(required)\n"
-        "  -m  --mode\t\tset mode\t\t(required)\n"
+        "  -m  --mode\t\tset mode\t\t(optional)\n"
         "  -lm --list-modes\tlist modes\t\t(optional)\n"
         "      --instructions\tinclude insn traits\t(optional)\n"
         "  -c  --corpus\t\tcorpus name\t\t(optional)\n"
+        "  -g  --tag\t\tadd a tag\t\t(optional)\n"
+        "           \t\t(can be specified multiple times)\n"
         "  -t  --threads\t\tnumber of threads\t(optional)\n"
         "  -tc --thread-cycles\tthread wait cycles\t(optional)\n"
         "  -ts --thread-sleep\tthread sleep in ms\t(optional)\n"
@@ -103,7 +122,7 @@ void Args::print_help(){
 }
 
 void Args::parse(int argc, char **argv){
-    if (argc < 2){
+    if (argc < 1){
         print_help();
         exit(0);
     }
@@ -203,10 +222,7 @@ void Args::parse(int argc, char **argv){
         if (strcmp(argv[i], (char *)"-m") == 0 ||
             strcmp(argv[i], (char *)"--mode") == 0){
             options.mode = argv[i+1];
-            if (argc < i+2){
-                fprintf(stderr, "[x] invalid mode\n");
-                exit(1);
-            }
+
             if (check_mode(options.mode) == false){
                 fprintf(stderr, "%s is an invalid mode\n", options.mode);
                 exit(1);
@@ -216,6 +232,14 @@ void Args::parse(int argc, char **argv){
             strcmp(argv[i], (char *)"--debug") == 0){
             options.debug = true;
             fprintf(stderr, "DEBUG ENABLED...\n");
+	}
+        if (strcmp(argv[i], (char *)"-g") == 0 ||
+            strcmp(argv[i], (char *)"--tag") == 0){
+            if (argc < i + 2){
+                fprintf(stderr, "[x] tag requires a parameter\n");
+                exit(1);
+            }
+	    options.tags.insert(argv[i + 1]);
         }
     }
 }

@@ -9,7 +9,7 @@
 #ifdef _WIN32
 #define BINLEX_EXPORT __declspec(dllexport)
 #else
-#define BINLEX_EXPORT 
+#define BINLEX_EXPORT
 #endif
 
 #define DECOMPILER_MAX_SECTIONS 256
@@ -88,6 +88,25 @@ namespace binlex {
         */
         BINLEX_EXPORT bool Setup(cs_arch arch, cs_mode mode, uint index);
         /**
+        Set Threads and Thread Cycles
+        @param threads number of threads
+        @param thread_cycles thread cycles
+        @param index the section index
+        */
+        BINLEX_EXPORT void SetThreads(uint threads, uint thread_cycles, uint thread_sleep, uint index);
+        /**
+        Sets The Corpus Name
+        @param corpus pointer to corpus name
+        @param index the section index
+        */
+        BINLEX_EXPORT void SetCorpus(char *corpus, uint index);
+        /**
+        @param instructions bool to collect instructions traits or not
+        @param index the section index
+        */
+        BINLEX_EXPORT void SetInstructions(bool instructions, uint index);
+        /**
+	    add storage for tags
         Decompiler Thread Worker
         @param args pointer to worker arguments
         @returns NULL
@@ -190,16 +209,18 @@ namespace binlex {
         @param trait pointer to trait structure
         @return json string
         */
-        BINLEX_EXPORT static string GetTrait(struct Trait &trait);
+        BINLEX_EXPORT static json GetTrait(struct Trait &trait);
         /**
         Get Traits as JSON
-        @return json strings one per line
+        @return list of traits json objects
         */
-        string GetTraits();
+        vector<json> GetTraits();
         /**
-        Write Traits to File or Display
+        Write Traits to File
+
+	    This function usees GetTraits() to get the traits data as a json.
         */
-        BINLEX_EXPORT void WriteTraits(void);
+        BINLEX_EXPORT void WriteTraits();
         BINLEX_EXPORT static void * TraitWorker(void *args);
         BINLEX_EXPORT void AppendQueue(set<uint64_t> &addresses, uint operand_type, uint index);
         //void Seek(uint offset, uint index);
@@ -217,20 +238,26 @@ namespace binlex {
         @param index the section index
         */
         BINLEX_EXPORT void py_SetThreads(uint threads, uint thread_cycles, uint thread_sleep);
-        
+
         /**
         Sets The Corpus Name, via pybind11
         @param corpus pointer to corpus name
         @param index the section index
         */
-        BINLEX_EXPORT void py_SetCorpus(char *corpus);
-        
+        BINLEX_EXPORT void py_SetCorpus(const char *corpus);
+
         /**
         Specify if instruction traits are collected, via pybind11
         @param instructions bool to collect instructions traits or not
         @param index the section index
         */
         BINLEX_EXPORT void py_SetInstructions(bool instructions);
+
+        /**
+         Sets the tags, via pybind11
+         @param tags set of tags
+        */
+        BINLEX_EXPORT void py_SetTags(const vector<string> &tags);
     };
 }
 #endif

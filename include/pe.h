@@ -10,38 +10,31 @@
 #include <set>
 #include <LIEF/PE.hpp>
 #include "common.h"
-
+#include "file.h"
 
 #ifdef _WIN32
 #define BINLEX_EXPORT __declspec(dllexport)
 #else
-#define BINLEX_EXPORT 
+#define BINLEX_EXPORT
 #endif
 
 using namespace std;
 using namespace LIEF::PE;
 
 namespace binlex {
-    class PE {
+  class PE : public File{
         private:
             bool ParseSections();
-        public: 
+        public:
         #ifndef _WIN32
             MACHINE_TYPES mode = MACHINE_TYPES::IMAGE_FILE_MACHINE_UNKNOWN;
         #else
             MACHINE_TYPES mode = MACHINE_TYPES::IMAGE_FILE_MACHINE_UNKNOWN;
         #endif
             unique_ptr<LIEF::PE::Binary> binary;
-            struct Section {
-                uint offset;
-                int size;
-                void *data;
-                set<uint64_t> functions;
-            };
             BINLEX_EXPORT PE();
             struct Section sections[BINARY_MAX_SECTIONS];
             uint32_t total_exec_sections;
-
             /**
             @param file_path path to the executable
             @return bool
