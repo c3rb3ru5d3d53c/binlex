@@ -52,12 +52,20 @@ namespace binlex {
             @return bool
             */
             BINLEX_EXPORT bool Setup(MACHINE_TYPES input_mode);
-	    /*
-	    Check if the PE file is a .NET file
-	    @return bool
-	    */
-	    BINLEX_EXPORT bool IsDotNet();
-            BINLEX_EXPORT ~PE();
+            /*
+            Check if the PE file is a .NET file
+            @return bool
+            */
+            BINLEX_EXPORT bool IsDotNet();
+                BINLEX_EXPORT ~PE();
+
+            /**
+             * Check if the file has limitations that may result in invalid traits.
+             *
+             * @return bool
+             */
+            BINLEX_EXPORT bool HasLimitations();
+
     };
 };
 
