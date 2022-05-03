@@ -60,8 +60,8 @@ docker-clean:
 	@docker rmi $(shell docker images -a -q) 2>/dev/null || echo > /dev/null
 
 docker-restart-blapi:
-	@docker stop $(shell docker container list --all -aqf name="blapi")
-	@docker rm $(shell docker container list --all -aqf name="blapi")
+	@docker stop $(shell docker container list --all -aqf name="blapi1")
+	@docker rm $(shell docker container list --all -aqf name="blapi1")
 	@docker-compose build blapi1
 	@docker-compose up -d blapi1
 
