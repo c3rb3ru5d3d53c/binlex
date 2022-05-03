@@ -66,11 +66,22 @@ class binlex_samples_upload(Resource):
 
         try:
             f = request.files['filedata']
-            bytes = f.read()
+            data = f.read()
             app.config['minio'].upload(
                 bucket_name=corpus,
-                data=bytes
+                data=data
             )
+
+            app.config['amqp'].publish(
+                queue=app.config['amqp_queue_decomp'],
+                body=json.dumps({
+                    'corpus': corpus,
+                    'mode': mode,
+                    'object_name': hashlib.sha256(data).hexdigest()
+                }))
+            return {
+                'status': 'processing'
+            }
         except Exception:
             return {
                 'error': 'Failed to add to decompiler queue'
