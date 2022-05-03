@@ -14,7 +14,7 @@ bool File::FileExists(char *file_path){
     return false;
 }
 
-std::vector<uint8_t> File::ReadFileIntoVector(const char *file_path){
+std::vector<uint8_t> FileActionsOnly::ReadFileIntoVector(const char *file_path){
     FILE *inp;
     uint8_t buf[8192];
     size_t bread;
