@@ -8,10 +8,9 @@
 #elif _WIN32
 #include <windows.h>
 #endif
-#include "common.h"
 #include "args.h"
-#include "raw.h"
 #include "pe.h"
+#include "raw.h"
 #include "cil.h"
 #include "pe-dotnet.h"
 #include "blelf.h"

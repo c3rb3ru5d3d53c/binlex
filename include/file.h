@@ -5,12 +5,15 @@
 #include <memory>
 #include <set>
 #include <unistd.h>
-#include "common.h"
 #include <string.h>
+#include "common.h"
 
 using namespace std;
 
 namespace binlex {
+    class FileActionsOnly{
+        std::vector<uint8_t> ReadFileIntoVector(const char *file_path);
+    };
     class File : public Common{
     public:
         string sha256;
@@ -21,7 +24,6 @@ namespace binlex {
 	    void *data;
 	    set<uint64_t> functions;
 	};
-        std::vector<uint8_t> ReadFileIntoVector(const char *file_path);
 	bool FileExists(char *file_path);
 	/*
 	  Function will calculate all the hashes for the complete file.

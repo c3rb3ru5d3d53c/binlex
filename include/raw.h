@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include "common.h"
+#include "file.h"
 
 #ifdef _WIN32
 #define BINLEX_EXPORT __declspec(dllexport)
@@ -22,7 +22,7 @@ typedef unsigned int uint;
 #endif
 
 namespace binlex{
-    class Raw{
+    class Raw {
         public:
             int GetFileSize(FILE *fd);
             struct Section {
