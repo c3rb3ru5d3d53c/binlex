@@ -1,12 +1,13 @@
-#include "pe.h"
-#include <math.h>
 #ifndef DOTNET_H
 #define DOTNET_H
+
+#include "pe.h"
+#include <math.h>
 
 #ifdef _WIN32
 #define BINLEX_EXPORT __declspec(dllexport)
 #else
-#define BINLEX_EXPORT 
+#define BINLEX_EXPORT
 #endif
 
 #define PE_DOTNET_MAX_SECTIONS 1000
@@ -67,12 +68,6 @@ using namespace binlex;
 #define	STATEMACHINEMETHOD     54
 #define	CUSTOMDEBUGINFORMATION 55
 
-
-void pprint(char *buffer, uint8_t size) {
-    char *aux = buffer;
-    for (uint8_t i = 0; i < size; i++) printf("%02X ", aux[i] & 0xFF);
-    printf("\n");
-}
 
 namespace dotnet {
     class MethodHeader {};
@@ -282,7 +277,7 @@ namespace dotnet {
         public:
             uint16_t flags;
             StringHeapIndex name = 0;
-            BlobHeapIndex signature = 0; 
+            BlobHeapIndex signature = 0;
             uint32_t Parse(char *buff, uint8_t heap_sizes, uint32_t *table_entries) {
                 char *buff_aux;
                 buff_aux = buff;
@@ -311,8 +306,8 @@ namespace dotnet {
             uint16_t impl_flags;
             uint16_t flags;
             StringHeapIndex name = 0;
-            BlobHeapIndex signature = 0; 
-            SimpleTableIndex param_list; 
+            BlobHeapIndex signature = 0;
+            SimpleTableIndex param_list;
             uint32_t Parse(char *buff, uint8_t heap_sizes, uint32_t *table_entries) {
                 char *buff_aux;
                 buff_aux = buff;
@@ -332,17 +327,7 @@ namespace dotnet {
             };
     };
 
-    TableEntry* TableEntry::TableEntryFactory(uint8_t entry_type) {
-        if ( entry_type == MODULE ) return new ModuleEntry();
-        if ( entry_type == TYPE_REF) return new TypeRefEntry();
-        if ( entry_type == TYPE_DEF) return new TypeDefEntry();
-        if ( entry_type == FIELD_PTR) return new FieldPtrEntry();
-        if ( entry_type == FIELD) return new FieldEntry();
-        if ( entry_type == METHOD_PTR) return new MethodPtrEntry();
-        if ( entry_type == METHOD_DEF) return new MethodDefEntry();
-        return NULL;
-    };
-    
+
     class Cor20MetadataTable {
         public:
             uint32_t reserved;

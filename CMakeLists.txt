@@ -14,13 +14,16 @@ project(binlex
 
 if(MSVC)
     add_definitions(-D_WIN32=1)
-	#add_definitions(-DBUILDER_STATIC_DEFINE)
 	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
 endif()
 
-# capstone
-
 include(ExternalProject)
+include(ProcessorCount)
+
+ProcessorCount(N)
+
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/tests.py
+     DESTINATION ${CMAKE_BINARY_DIR})
 
 set(CAPSTONE_ROOT    "${CMAKE_BINARY_DIR}/capstone/")
 set(CAPSTONE_INCLUDE_DIRS "${CAPSTONE_ROOT}/include/")
@@ -34,27 +37,34 @@ ExternalProject_Add(
     GIT_REPOSITORY      "${CAPSTONE_GIT_URL}"
     GIT_TAG             "${CAPSTONE_GIT_TAG}"
     GIT_SHALLOW         ON
+    BUILD_COMMAND make -j${N}
     CMAKE_ARGS          -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
                         -DCAPSTONE_BUILD_SHARED=OFF
                         -DCAPSTONE_BUILD_TESTS=OFF
                         -DCAPSTONE_MIPS_SUPPORT=OFF
+                        -DCAPSTONE_ARM_SUPPORT=OFF
+                        -DCAPSTONE_ARM64_SUPPORT=OFF
+                        -DCAPSTONE_M68K_SUPPORT=OFF
+                        -DCAPSTONE_TMS320C64X_SUPPORT=OFF
+                        -DCAPSTONE_M680X_SUPPORT=OFF
+                        -DCAPSTONE_EVM_SUPPORT=OFF
                         -DCAPSTONE_PPC_SUPPORT=OFF
                         -DCAPSTONE_SPARC_SUPPORT=OFF
                         -DCAPSTONE_SYSZ_SUPPORT=OFF
                         -DCAPSTONE_XCORE_SUPPORT=OFF
                         -DCAPSTONE_X86_SUPPORT=ON
-                        -DCMAKE_OSX_SYSROOT:STRING=${CMAKE_OSX_SYSROOT}
-                        -DCMAKE_OSX_ARCHITECTURES:STRING=${CMAKE_OSX_ARCHITECTURES}
-                        -DCMAKE_C_FLAGS:STRING=${CMAKE_C_FLAGS}
-                        -DCMAKE_C_FLAGS_DEBUG:STRING=${CMAKE_C_FLAGS_DEBUG}
-                        -DCMAKE_C_FLAGS_RELEASE:STRING=${CMAKE_C_FLAGS_RELEASE}
-                        -DCMAKE_C_FLAGS_MINSIZEREL:STRING=${CMAKE_C_FLAGS_MINSIZEREL}
-                        -DCMAKE_C_FLAGS_RELWITHDEBINFO:STRING=${CMAKE_C_FLAGS_RELWITHDEBINFO}
-                        -DCMAKE_CXX_FLAGS:STRING=${CMAKE_CXX_FLAGS}
-                        -DCMAKE_CXX_FLAGS_DEBUG:STRING=${DCMAKE_CXX_FLAGS_DEBUG}
-                        -DCMAKE_CXX_FLAGS_RELEASE:STRING=${DCMAKE_CXX_FLAGS_RELEASE}
-                        -DCMAKE_CXX_FLAGS_MINSIZEREL:STRING=${DCMAKE_CXX_FLAGS_MINSIZEREL}
-                        -DCMAKE_CXX_FLAGS_RELWITHDEBINFO:STRING=${DCMAKE_CXX_FLAGS_RELWITHDEBINFO}
+                        -DCMAKE_OSX_SYSROOT=${CMAKE_OSX_SYSROOT}
+                        -DCMAKE_OSX_ARCHITECTURES=${CMAKE_OSX_ARCHITECTURES}
+                        -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}
+                        -DCMAKE_C_FLAGS_DEBUG=${CMAKE_C_FLAGS_DEBUG}
+                        -DCMAKE_C_FLAGS_RELEASE=${CMAKE_C_FLAGS_RELEASE}
+                        -DCMAKE_C_FLAGS_MINSIZEREL=${CMAKE_C_FLAGS_MINSIZEREL}
+                        -DCMAKE_C_FLAGS_RELWITHDEBINFO=${CMAKE_C_FLAGS_RELWITHDEBINFO}
+                        -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}
+                        -DCMAKE_CXX_FLAGS_DEBUG=${CMAKE_CXX_FLAGS_DEBUG}
+                        -DCMAKE_CXX_FLAGS_RELEASE=${CMAKE_CXX_FLAGS_RELEASE}
+                        -DCMAKE_CXX_FLAGS_MINSIZEREL=${CMAKE_CXX_FLAGS_MINSIZEREL}
+                        -DCMAKE_CXX_FLAGS_RELWITHDEBINFO=${CMAKE_CXX_FLAGS_RELWITHDEBINFO}
                         -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON
 )
 
@@ -64,20 +74,16 @@ set_target_properties(
     ${CAPSTONE_ROOT}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}capstone${CMAKE_STATIC_LIBRARY_SUFFIX}
 )
 add_dependencies(capstone_static capstone)
-# end
-
-# lief
 
 set(LIEF_PREFIX       "${CMAKE_BINARY_DIR}/LIEF/")
 set(LIEF_INSTALL_DIR  "${LIEF_PREFIX}")
 set(LIEF_INCLUDE_DIRS "${LIEF_PREFIX}/include/")
 
-#set(LIB_LIEF ${CMAKE_BINARY_DIR}/LIEF/lib/LIEFMT${CMAKE_STATIC_LIBRARY_SUFFIX})
 set(LIB_LIEF ${LIEF_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}LIEF${CMAKE_STATIC_LIBRARY_SUFFIX})
 
 set(LIEF_GIT_URL "https://github.com/lief-project/LIEF.git")
 
-set(LIEF_VERSION 0.11.0)
+set(LIEF_VERSION 0.11.5)
 
 set(LIEF_CMAKE_ARGS
   -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
@@ -85,7 +91,14 @@ set(LIEF_CMAKE_ARGS
   -DLIEF_DOC=off
   -DLIEF_PYTHON_API=off
   -DLIEF_EXAMPLES=off
-  -DCMAKE_CXX_FLAGS_RELEASE:STRING=${DCMAKE_CXX_FLAGS_RELEASE}
+  -DLIEF_PE=on
+  -DLIEF_ELF=on
+  -DLIEF_MACHO=off
+  -DLIEF_OAT=off
+  -DLIEF_DEX=off
+  -DLIEF_VDEX=off
+  -DLIEF_ART=off
+  -DCMAKE_CXX_FLAGS_RELEASE=${CMAKE_CXX_FLAGS_RELEASE}
   -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
   -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
 )
@@ -100,6 +113,7 @@ ExternalProject_Add(LIEF
   PREFIX           ${LIEF_PREFIX}
   GIT_REPOSITORY   ${LIEF_GIT_URL}
   GIT_TAG          ${LIEF_VERSION}
+  BUILD_COMMAND make -j${N}
   INSTALL_DIR      ${LIEF_INSTALL_DIR}
   CMAKE_ARGS       ${LIEF_CMAKE_ARGS}
 )
@@ -111,18 +125,18 @@ set_target_properties(
 )
 add_dependencies(lief_static LIEF)
 
-# end
-
 add_library(binlex SHARED
     src/args.cpp
     src/raw.cpp
     src/common.cpp
     src/blelf.cpp
+    src/auto.cpp
     src/decompiler.cpp
-    src/pe.cpp
     src/pe-dotnet.cpp
-    src/sha256.c
     src/cil.cpp
+    src/pe.cpp
+    src/file.cpp
+    src/sha256.c
 )
 
 add_dependencies(binlex LIEF)
@@ -135,11 +149,12 @@ target_link_libraries(binlex
         lief_static
         capstone_static
         -lpthread
+	-ltlsh
 )
 
 set_target_properties(binlex
 	PROPERTIES COMPILE_FLAGS
-	-DCMAKE_CXX_FLAGS_RELEASE:STRING=${DCMAKE_CXX_FLAGS_RELEASE}
+	-DCMAKE_CXX_FLAGS_RELEASE=${CMAKE_CXX_FLAGS_RELEASE}
 	-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
 	-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
 )
@@ -180,18 +195,11 @@ install(TARGETS binlex
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
-project(blyara
-    VERSION ${GLOBAL_VERSION}
-    DESCRIPTION "A Binlex Yara Generation Utility"
-)
-
 set(SOURCES_BLYARA
     src/blyara.cpp
 )
 
 add_executable(blyara ${SOURCES_BLYARA})
-
-#target_link_libraries(blyara -lm)
 
 target_include_directories(blyara
     PRIVATE
@@ -243,7 +251,7 @@ string(CONCAT PKG_NAME "${CPACK_PACKAGE_NAME}"
                        "."
                        "${VERSION_PATCH}"
 )
-# Generates Debian Binary Package
+
 SET(CPACK_GENERATOR DEB RPM)
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Binary Genetic Traits Lexer Utilities and C++ Library"
     CACHE STRING "Binary Genetic Traits Lexer Utilities and C++ Library"
@@ -253,13 +261,13 @@ set(CPACK_PACKAGE_VERSION_MAJOR ${VERSION_MAJOR})
 set(CPACK_PACKAGE_VERSION_MINOR ${VERSION_MINOR})
 set(CPACK_PACKAGE_VERSION_PATCH ${VERSION_PATCH})
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "@c3rb3ru5d3d53c")
-set(CPACK_PACKAGE_CONTACT "c3rb3ru5d3d53c@protonmail.com")
+set(CPACK_PACKAGE_CONTACT "c3rb3ru5d3d53c@gmail.com")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
 set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 set(CPACK_PACKAGE_FILE_NAME "${PKG_NAME}")
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "libcapstone-dev")
-# Generates release tarball
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libtlsh-dev")
+
 set(CPACK_SOURCE_GENERATOR TGZ ZIP)
 set(CPACK_SOURCE_PACKAGE_FILE_NAME "${PKG_NAME}")
 set(CPACK_SOURCE_IGNORE_FILES

@@ -1,6 +1,7 @@
 var searchData=
 [
-  ['decompile_8',['Decompile',['../classbinlex_1_1Decompiler.html#a089dca4d2fa49177e1992a490825dd3e',1,'binlex::Decompiler']]],
-  ['decompiler_9',['Decompiler',['../classbinlex_1_1Decompiler.html',1,'binlex']]],
-  ['decompileworker_10',['DecompileWorker',['../classbinlex_1_1Decompiler.html#a8d8603316d046aecd912659d92ceb4cd',1,'binlex::Decompiler']]]
+  ['decompile_15',['Decompile',['../classbinlex_1_1Decompiler.html#acf647c06620257b5dc942c02c674e54f',1,'binlex::Decompiler']]],
+  ['decompiler_16',['Decompiler',['../classbinlex_1_1Decompiler.html',1,'binlex']]],
+  ['decompileworker_17',['DecompileWorker',['../classbinlex_1_1Decompiler.html#a747c7cad93dc584ee12f3584f54f1e22',1,'binlex::Decompiler']]],
+  ['dotnet_18',['DOTNET',['../classbinlex_1_1DOTNET.html',1,'binlex']]]
 ];

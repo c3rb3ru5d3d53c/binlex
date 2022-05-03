@@ -1,3 +1,6 @@
+#ifndef CIL_H
+#define CIL_H
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -13,9 +16,6 @@
 #include <set>
 #include <map>
 
-#ifndef CIL_H
-#define CIL_H
-
 #define INVALID_OP 0xFFFFFFFF
 
 // CIL Decompiler Types
@@ -24,7 +24,7 @@
 #define CIL_DECOMPILER_TYPE_UNSET 2
 #define CIL_DECOMPILER_TYPE_ALL   3
 
-#define CIL_DECOMPILER_MAX_SECTIONS 256 
+#define CIL_DECOMPILER_MAX_SECTIONS 256
 #define CIL_DECOMPILER_MAX_INSN     16384
 
 // CIL Instructions
