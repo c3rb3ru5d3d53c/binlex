@@ -34,6 +34,7 @@ namespace binlex{
             BINLEX_EXPORT Raw();
             BINLEX_EXPORT bool ReadFile(const char *file_path);
 	    BINLEX_EXPORT bool ReadBuffer(void *data, size_t size);
+	    BINLEX_EXPORT bool ReadVector(const std::vector<uint8_t> &data);
             BINLEX_EXPORT ~Raw();
     };
 }
