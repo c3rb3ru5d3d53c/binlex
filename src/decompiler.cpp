@@ -129,7 +129,7 @@ vector<json> Decompiler::GetTraits(){
         if (sections[i].data != NULL){
             for (int j = 0; j < sections[i].traits.size(); j++){
                 json jdata(GetTrait(sections[i].traits[j]));
-		        traitsjson.push_back(jdata);
+                traitsjson.push_back(jdata);
             }
         }
     }
