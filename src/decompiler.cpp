@@ -107,10 +107,11 @@ bool Decompiler::Setup(cs_arch arch, cs_mode mode, uint index){
     return true;
 }
 
-string Decompiler::GetTrait(struct Trait &trait){
+json Decompiler::GetTrait(struct Trait &trait){
     json data;
     data["type"] = trait.type;
     data["corpus"] = g_args.options.corpus;
+    data["tags"] = g_args.options.tags;
     data["architecture"] = trait.architecture;
     data["bytes"] = trait.bytes;
     data["trait"] = trait.trait;
@@ -126,26 +127,20 @@ string Decompiler::GetTrait(struct Trait &trait){
     data["invalid_instructions"] = trait.invalid_instructions;
     data["cyclomatic_complexity"] = trait.cyclomatic_complexity;
     data["average_instructions_per_block"] = trait.average_instructions_per_block;
-    if (g_args.options.pretty == true){
-        return data.dump(4);
-    }
-    return data.dump();
+    return data;
 }
 
-string Decompiler::GetTraits(void){
-    stringstream ss;
-    string sep = "";
-    ss << '[';
+vector<json> Decompiler::GetTraits(){
+    vector<json> traitsjson;
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
         if (sections[i].data != NULL){
             for (int j = 0; j < sections[i].traits.size(); j++){
-                ss << sep << GetTrait(sections[i].traits[j]);
-                sep = ",";
+                json jdata(GetTrait(sections[i].traits[j]));
+		        traitsjson.push_back(jdata);
             }
         }
     }
-    ss << ']';
-    return ss.str();
+    return traitsjson;
 }
 
 // TODO we know how many exec sections we have, we don't need to go through all slots
@@ -159,20 +154,16 @@ void Decompiler::WriteTraits(){
             PRINT_ERROR_AND_EXIT("Unable to open file %s for writing\n", g_args.options.output);
         }
     }
-
-    // TODO use a vector instead so we don't need DECOMPILER_MAX_SECTIONS
-    for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
-        if (sections[i].data != NULL){
-            for (int j = 0; j < sections[i].traits.size(); j++){
-                if (g_args.options.output != NULL) {
-                    output_stream << GetTrait(sections[i].traits[j]) << endl;
-                } else {
-                    cout << GetTrait(sections[i].traits[j]) << endl;
-                }
-            }
+    auto traits(GetTraits());
+    if(g_args.options.output != NULL) {
+	    for(auto i : traits) {
+	        output_stream << (g_args.options.pretty ? i.dump(4) : i.dump()) << endl;
         }
+    } else {
+	    for(auto i : traits) {
+    	    cout << (g_args.options.pretty ? i.dump(4) : i.dump()) << endl;
+	    }
     }
-
     if (g_args.options.output != NULL) {
         output_stream.close();
     }
@@ -434,10 +425,6 @@ void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint ind
 
     PRINT_DEBUG("Decompile: offset = 0x%x data_size = %" PRId64 " bytes\n", sections[index].offset, sections[index].data_size);
     PRINT_DATA("Section Data (up to 32 bytes)", sections[index].data, std::min((size_t)32, sections[index].data_size));
-
-    sections[index].discovered.push(0);
-    sections[index].addresses[0] = DECOMPILER_OPERAND_TYPE_FUNCTION;
-    sections[index].visited[0] = DECOMPILER_VISITED_QUEUED;
 
     worker_args *args = (worker_args *)malloc(sizeof(worker_args));
     args->index = index;
@@ -802,8 +789,12 @@ void Decompiler::py_SetThreads(uint threads, uint thread_cycles, uint thread_sle
     g_args.options.thread_sleep = thread_sleep;
 }
 
-void Decompiler::py_SetCorpus(char *corpus) {
+void Decompiler::py_SetCorpus(const char *corpus) {
     g_args.options.corpus = corpus;
+}
+
+void Decompiler::py_SetTags(const vector<string> &tags){
+    g_args.options.tags = set<string>(tags.begin(), tags.end());
 }
 
 void Decompiler::py_SetInstructions(bool instructions) {

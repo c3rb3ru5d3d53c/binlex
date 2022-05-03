@@ -6,6 +6,7 @@
 #include "common.h"
 #include <iostream>
 #include <LIEF/PE.hpp>
+#include <cassert>
 
 using namespace binlex;
 using namespace LIEF::PE;
@@ -37,6 +38,12 @@ bool PE::Setup(MACHINE_TYPES input_mode){
 }
 
 bool PE::ReadFile(char *file_path){
+    if (FileExists(file_path) == false){
+        return false;
+    }
+    CalculateFileHashes(file_path);
+    assert(!tlsh.empty());
+    assert(!sha256.empty());
     binary = Parser::parse(file_path);
     if (mode != binary->header().machine()){
         fprintf(stderr, "[x] incorrect mode for binary architecture\n");
@@ -72,16 +79,24 @@ bool PE::ParseSections(){
             memset(sections[index].data, 0, sections[index].size);
             vector<uint8_t> data = binary->get_content_from_virtual_address(it->virtual_address(), it->sizeof_raw_data());
             memcpy(sections[index].data, &data[0], sections[index].size);
+            // Add exports to the function list
             if (binary->has_exports()){
                 Export exports = binary->get_export();
                 it_export_entries export_entries = exports.entries();
                 for (auto j = export_entries.begin(); j != export_entries.end(); j++){
+                    PRINT_DEBUG("PE Export offset: 0x%x\n", binary->rva_to_offset(j->address()));
                     uint64_t tmp_offset = binary->rva_to_offset(j->address());
                     if (tmp_offset > sections[index].offset &&
                         tmp_offset < sections[index].offset + sections[index].size){
                         sections[index].functions.insert(tmp_offset-sections[index].offset);
                     }
                 }
+            }
+            // Add entrypoint to the function list
+            uint64_t entrypoint_offset = binary->va_to_offset(binary->entrypoint());
+            PRINT_DEBUG("PE Entrypoint offset: 0x%x\n", entrypoint_offset);
+            if (entrypoint_offset > sections[index].offset && entrypoint_offset < sections[index].offset + sections[index].size){
+                sections[index].functions.insert(entrypoint_offset-sections[index].offset);
             }
             index++;
             if (BINARY_MAX_SECTIONS == index)

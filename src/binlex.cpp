@@ -15,6 +15,7 @@
 #include "cil.h"
 #include "pe-dotnet.h"
 #include "blelf.h"
+#include "auto.h"
 #include "decompiler.h"
 
 #ifdef _WIN32
@@ -43,6 +44,7 @@ void start_timeout(time_t seconds){
 }
 #endif
 
+
 int main(int argc, char **argv){
     g_args.parse(argc, argv);
 
@@ -54,6 +56,25 @@ int main(int argc, char **argv){
     if (g_args.options.mode == NULL){
         g_args.print_help();
         return EXIT_FAILURE;
+    }
+    if (strcmp(g_args.options.mode, (char *)"auto") == 0 &&
+        g_args.options.io_type == ARGS_IO_TYPE_FILE){
+
+        AutoLex autolex;
+
+        // check for limitations
+        if(autolex.HasLimitations(g_args.options.input) == true){
+            printf("[x] File has limitations and can't be processed. Select a mode to force analysis.\n");
+            return 1;
+        }
+
+        Decompiler decompiler {autolex.ProcessFile(g_args.options.input, \
+        g_args.options.threads, \
+        g_args.options.timeout, \
+        g_args.options.thread_cycles, g_args.options.thread_sleep, \
+        g_args.options.instructions) };
+        decompiler.WriteTraits();
+        return 0;
     }
     if (strcmp(g_args.options.mode, (char *)"elf:x86_64") == 0 &&
         g_args.options.io_type == ARGS_IO_TYPE_FILE){

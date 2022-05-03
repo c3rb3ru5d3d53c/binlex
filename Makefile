@@ -1,3 +1,4 @@
+.PHONY: all
 .PHONY: docs
 .PHONY: docker
 .PHONY: all
@@ -8,6 +9,8 @@ admin_pass=changeme
 user=binlex
 pass=changeme
 config=Release
+
+all: python docs
 
 cli:
 	mkdir -p build/
@@ -26,6 +29,9 @@ python:
 			-DPYBIND11_PYTHON_VERSION=`python -c "import platform; print(platform.python_version())"` \
 			${args} && \
 		cmake --build . --config ${config} -- -j ${threads}
+
+python-whl:
+	python3 -m pip wheel -v -w build/ .
 
 docs:
 	mkdir -p build/docs/html/docs/
@@ -61,6 +67,12 @@ docker-clean:
 	@docker stop $(shell docker ps -a -q) 2>/dev/null || echo > /dev/null
 	@docker rm $(shell docker ps -a -q) 2>/dev/null || echo > /dev/null
 	@docker rmi $(shell docker images -a -q) 2>/dev/null || echo > /dev/null
+
+docker-restart-blapi:
+	@docker stop $(shell docker ps -aqf "name=blapi")
+	@docker rm $(shell docker ps -aqf "name=blapi")
+	@docker-compose build blapi1
+	@docker-compose up -d blapi1
 
 mongodb-shell:
 	@cd scripts/ && \
