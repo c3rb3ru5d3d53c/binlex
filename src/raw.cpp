@@ -18,7 +18,7 @@ int Raw::GetFileSize(FILE *fd){
     return size;
 }
 
-bool Raw::ReadFile(char *file_path){
+bool Raw::ReadFile(const char *file_path){
     const int section_index = 0;
     FILE *fd = fopen(file_path, "rb");
     if(!fd) {
