@@ -32,7 +32,8 @@ namespace binlex{
             };
             struct Section sections[BINARY_MAX_SECTIONS];
             BINLEX_EXPORT Raw();
-            BINLEX_EXPORT bool ReadFile(char *file_path, int section_index);
+            BINLEX_EXPORT bool ReadFile(char *file_path);
+	    BINLEX_EXPORT bool ReadBuffer(void *file_path, size_t size);
             BINLEX_EXPORT ~Raw();
     };
 }

@@ -172,7 +172,7 @@ int main(int argc, char **argv){
     if (strcmp(g_args.options.mode, (char *)"raw:x86") == 0 &&
         g_args.options.io_type == ARGS_IO_TYPE_FILE){
         Raw rawx86;
-        if (rawx86.ReadFile(g_args.options.input, 0) == false)
+        if (rawx86.ReadFile(g_args.options.input) == false)
         {
             return EXIT_FAILURE;
         }
@@ -186,7 +186,7 @@ int main(int argc, char **argv){
     if (strcmp(g_args.options.mode, (char *)"raw:x86_64") == 0 &&
         g_args.options.io_type == ARGS_IO_TYPE_FILE){
         Raw rawx86_64;
-        if (rawx86_64.ReadFile(g_args.options.input, 0) == false)
+        if (rawx86_64.ReadFile(g_args.options.input) == false)
         {
             return EXIT_FAILURE;
         }
