@@ -656,7 +656,7 @@ function bldec_config_init(){
     echo "cert = /config/binlex-client.crt";
     echo "key = /config/binlex-client.key";
     echo "port = ${rabbitmq_port}";
-    echo "host = $1";
+    echo "hosts = $1";
     echo "[minio]";
     echo "tls = yes";
     echo "host = $2";
@@ -682,7 +682,7 @@ function bldb_config_init(){
     echo "cert = /config/binlex-client.crt";
     echo "key = /config/binlex-client.key";
     echo "port = ${rabbitmq_port}";
-    echo "host = $2";
+    echo "hosts = $2";
 }
 
 function blapi_config_init(){
@@ -708,7 +708,7 @@ function blapi_config_init(){
     echo "cert = /config/binlex-client.crt";
     echo "key = /config/binlex-client.key";
     echo "port = ${rabbitmq_port}";
-    echo "host = $2";
+    echo "hosts = $2";
     echo "[minio]";
     echo "tls = yes";
     echo "host = $3";
@@ -968,7 +968,7 @@ minio_iter=1
 rabbitmq_iter=1
 mongodb_iter=1
 for i in $(seq 1 $blapis); do
-    blapi_config_init mongodb-router${mongodb_iter} rabbitmq-broker${rabbitmq_iter} minio${minio_iter}> config/blapi${i}.conf;
+    blapi_config_init mongodb-router${mongodb_iter} $brokers minio${minio_iter}> config/blapi${i}.conf;
     blapi_nginx_config_init blapi${i}.crt blapi${i}.key > config/blapi${i}_nginx.conf;
     if [ ${rabbitmq_iter} -eq $brokers ]; then
         rabbitmq_iter=1;
@@ -990,7 +990,7 @@ done
 rabbitmq_iter=1
 mongodb_iter=1
 for i in $(seq 1 $bldbs); do
-    bldb_config_init mongodb-router${mongodb_iter} rabbitmq-broker${rabbitmq_iter} > config/bldb${i}.conf
+    bldb_config_init mongodb-router${mongodb_iter} $brokers > config/bldb${i}.conf
     if [ ${rabbitmq_iter} -eq $brokers ]; then
         rabbitmq_iter=1;
     else
@@ -1006,7 +1006,7 @@ done
 rabbitmq_iter=1
 minio_iter=1
 for i in $(seq 1 $bldbs); do
-    bldec_config_init rabbitmq-broker${rabbitmq_iter} minio${minio_iter}> config/bldec${i}.conf
+    bldec_config_init $brokers minio${minio_iter}> config/bldec${i}.conf
     if [ ${rabbitmq_iter} -eq $brokers ]; then
         rabbitmq_iter=1;
     else

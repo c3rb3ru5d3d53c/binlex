@@ -2,7 +2,6 @@
 
 import os
 import sys
-import time
 import json
 import logging
 import argparse
@@ -10,18 +9,24 @@ from libblapi.mongodb import MongoDBHandler
 from libblapi.amqp import AMQPHandler
 import configparser
 
-logger = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 __version__ = '1.1.1'
 __author__ = '@c3rb3ru5d3d53c'
 
-class BLDB():
+
+class BLDB:
 
     """
     A Binlex Database Worker
     """
 
     def __init__(self):
+        self.mongodb = None
+        self.amqp = None
+        self.args = None
+        self.parser = None
         self.config = configparser.ConfigParser()
 
     def arguments(self):
@@ -62,42 +67,43 @@ class BLDB():
             del data['offset']
             del data['file_sha256']
             del data['mode']
-            if corpus.startswith('default') is True:
+
+            if corpus.startswith('default'):
                 trait_id = self.mongodb.upsert_trait(data, 'default')
-                log.debug('[*] default collection trait_id ' + str(trait_id))
+                log.info('[*] default collection trait_id ' + str(trait_id))
                 file_data['trait_id'] = trait_id
                 file_data['collection'] = 'default'
                 files_id = self.mongodb.upsert_file_trait(file_data, trait_id)
                 if files_id is None:
-                    log.debug('default files trait already exists')
+                    log.info('default files trait already exists')
                 else:
-                    log.debug('default collection inserted files_id ' + str(files_id))
+                    log.info('default collection inserted files_id ' + str(files_id))
             elif corpus.startswith('malware') is True:
                 trait_id = self.mongodb.upsert_trait(data, 'malware')
-                log.debug('[*] malware collection trait_id ' + str(trait_id))
+                log.info('[*] malware collection trait_id ' + str(trait_id))
                 file_data['trait_id'] = trait_id
                 file_data['collection'] = 'malware'
                 files_id = self.mongodb.upsert_file_trait(file_data, trait_id)
                 if files_id is None:
-                    log.debug('malware files trait already exists')
+                    log.info('malware files trait already exists')
                 else:
-                    log.debug('malware collection inserted files_id ' + str(files_id))
+                    log.info('malware collection inserted files_id ' + str(files_id))
             elif corpus.startswith('goodware') is True:
                 trait_id = self.mongodb.upsert_trait(data, 'goodware')
-                log.debug('[*] goodware collection trait_id ' + str(trait_id))
+                log.info('[*] goodware collection trait_id ' + str(trait_id))
                 file_data['trait_id'] = trait_id
                 file_data['collection'] = 'goodware'
                 files_id = self.mongodb.upsert_file_trait(file_data, trait_id)
                 if files_id is None:
-                    log.debug('goodware files trait already exists')
+                    log.info('goodware files trait already exists')
                 else:
-                    log.debug('goodware collection inserted files_id ' + str(files_id))
+                    log.info('goodware collection inserted files_id ' + str(files_id))
             else:
                 log.error('message contained invalid corpus')
         except Exception as e:
             exc_type, exc_obj, exc_tb = sys.exc_info()
             fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-            print(exc_type, fname, exc_tb.tb_lineno)
+            log.error(exc_type, fname, exc_tb.tb_lineno)
         ch.basic_ack(method.delivery_tag)
 
     def consume(self):
@@ -106,6 +112,7 @@ class BLDB():
     def main(self):
         self.arguments()
         self.consume()
+
 
 if __name__ in '__main__':
     try:
