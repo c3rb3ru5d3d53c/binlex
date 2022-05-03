@@ -50,3 +50,21 @@ class binlex_modes(Resource):
     @require_user
     def get(self):
         return modes
+
+@api.route(api_prefix + '/samples/<string:corpus>/<string:sha256>')
+class binlex_sample_check(Resource):
+    '''Check if sample exists'''
+    @require_user
+    def get(self, corpus, sha256):
+        if corpus not in corpra : 
+            return {
+                'error': 'Invalid corpus value, mode must be one of the following: ' + ', '.join(corpra)
+            }, 401
+
+        try:
+            return app.config['minio'].validate_sample(
+                bucket_name=corpus,
+                object_name=sha256
+            )
+        except Exception:
+            return False

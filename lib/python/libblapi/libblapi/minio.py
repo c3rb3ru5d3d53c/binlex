@@ -39,6 +39,11 @@ class MinIOHandler():
             return False
         return True
 
+    def validate_sample(self, bucket_name, object_name):
+        if self.download(bucket_name=bucket_name, object_name=object_name) is False:
+            return False
+        return True
+
     def upload(self, bucket_name, data):
         if self.validate_bucket(bucket_name) is False:
             return False
