@@ -1,3 +1,4 @@
+*~
 build/**
 dist/**
 samples/**
@@ -11,3 +12,17 @@ venv/**
 pybinlex.egg-info/**
 *.so
 *.whl
+.idea/
+data/**
+docker-compose.yml
+scripts/**
+ssl/**
+*.key
+config/**
+docker-compose.yml
+test/**
+.ipynb_checkpoints/**
+# Apple crap
+.DS_Store
+.AppleDouble
+.LSOverride

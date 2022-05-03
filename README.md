@@ -57,10 +57,10 @@ To get started you will need the following dependencies for `binlex`.
 
 ```bash
 sudo apt install -y git build-essential \
-                    libcapstone-dev libssl-dev \
                     cmake make parallel \
-                    doxygen git-lfs rpm liblief-dev
-                    python3 python3-dev
+                    doxygen git-lfs rpm liblief-dev \
+                    python3 python3-dev \
+                    libtlsh-dev
 git clone --recursive https://github.com/c3rb3ru5d3d53c/binlex.git
 cd binlex/
 ```
@@ -115,79 +115,96 @@ To get started using `pybinlex`:
 ```bash
 virtualenv -p python3 venv
 source venv/bin/activate
-python3 -m pip install -v -e .
+# Install Library
+pip install -v .
+# Build Wheel Package
+pip wheel -v -w build/ .
 python3
 >>> import pybinlex
 ```
 
 If you wish to compile the bindings with `cmake`:
 ```bash
-make threads=4 args="-DBUILD_PYTHON_BINDINGS=true"
-```
-
-For building with `cmake`, some installations may require you to override the `python` version:
-```bash
-make threads=4 args="-DBUILD_PYTHON_BINDINGS=true -DPYBIND11_PYTHON_VERSION=3.8"
+make python
 ```
 
 Please note, we use `pybind11` and support for `python3.9` is experimental.
 
 Examples of how to use `pybinlex` can be found in `tests.py`.
 
-**Building the Database:**
+**Building Binlex Servers:**
 
-You can create a `mongodb` database for `binlex` very easily.
-
-When your `binlex` database is created it will add the default collections `default`, `malware` and `goodware`.
-
+Dependencies:
 ```bash
-# Install Docker Dependencies
-sudo apt install -y docker.io docker-compose
-
-# Install MongoDB CLI Tools
-wget https://fastdl.mongodb.org/tools/db/mongodb-database-tools-ubuntu2004-x86_64-100.5.1.deb
-sudo apt install ./mongodb-database-tools-ubuntu2004-x86_64-100.5.1.deb
-
-# Install MongoDB Compass
-wget https://downloads.mongodb.com/compass/mongodb-compass_1.29.6_amd64.deb
-sudo apt install ./mongodb-compass_1.29.6_amd64.deb
-
-# Add user to docker group for non-root docker (requires login/logout)
+sudo apt install docker.io make
 sudo usermod -a -G docker $USER
 sudo systemctl enable docker
-
-# Build the Database
-make database admin_user=admin admin_pass=changeme user=binlex pass=changeme
-
-# Start the Database
-make database-start
-
-# Stop the Database
-make database-stop
+reboot # ensures your user is added to the docker group
 ```
 
-Your connection string per user in this case would be:
-- binlex - `mongodb://binlex:changeme@127.0.0.1/?authSource=binlex` (for trait collection)
-- admin - `mongodb://admin:changeme@127.0.0.1` (for administration)
-
-To administrate the database connect to `mongo-express` at `http://127.0.0.1:8081`, with the username `admin` and the password you setup.
-
-Adding traits into your database is just as simple as piping your `binlex` output to the utility `mongoimport`.
-
+Building:
 ```bash
-# Example Trait Collection into Database
-binlex -m pe:x86 -i tests/pe/pe.emotet.x86 -t 4 --corpus malware.emotet | mongoimport --db binlex -c malware -u binlex -p changeme --authenticationDatabase binlex
+make docker        # generate docker-compose.yml and config files
+# Your generated credentials will be printed to the screen and saved in config/credentials.txt
+make docker-build  # build the images (can take a long time, go get a coffee!)
+make docker-start  # start the containers
+make docker-init   # initialize all databases and generated configurations
+make docker-logs   # tail all logs
 ```
 
-We recommend using `collections` as your main corpus name, so for example the corpus `malware.emotet` would go in the `malware` collection.
+Architecture (High Level):
+```text
+    ┌─────┐
+┌─┬─►blapi│        (HTTP API)
+│ │ └─────┘
+│ │
+│ │ ┌─────┐
+│ ├─►bldec│        (decompile cluster)
+│ │ └─────┘
+│ │
+│ │ ┌────┐
+│ │ │bldb◄─────┬─┐ (database insert cluster)
+│ │ └────┘     │ │
+│ │            │ │
+│ │ ┌─────┐    │ │
+│ ├─►minio◄────┼─┤ (object store cluster)
+│ │ └─────┘    │ │
+│ │            │ │
+│ │ ┌────────┐ │ │
+│ └─►rabbitmq◄─┘ │ (messaging queue cluster)
+│   └────────┘   │
+│                │
+│   ┌───────┐    │
+└───►mongodb◄────┘ (document database cluster)
+    └───────┘
+```
 
-By default, `binlex` will use the corpus name `default`, which means you will in this case use the collection `default`.
+If you wish to change the auto-generated initial username and passwords, you can run `./docker.sh` with additional parameters.
 
-Using the `default` corpus and collection is a great playground to store traits for initial analysis, while the `malware` and `goodware` corpus a great for long-term and confident storage of traits.
+To see what parameters are available to you, run `./docker.sh --help`.
 
-If you have a team of malware analysts you may need to add additional databases and users.
+Your connection strings for MongoDB per user in this case would be:
+- binlex - `mongodb://binlex:<generated-password>@127.0.0.1/?authSource=binlex` (for trait collection)
+- admin - `mongodb://admin:<generated-password>@127.0.0.1` (for administration)
 
-For that purpose you will need to create new users with the `admin` account and read MongoDB's user and roles management docs [here](https://docs.mongodb.com/manual/tutorial/manage-users-and-roles/).
+The HTTP API documentation is generated automatically, visit `https://127.0.0.1" in your browser to read.
+
+To make requests to the API do the following:
+```bash
+curl --insecure -H "X-API-Key: <your-api-key-here>" https://127.0.0.1/binlex/version
+```
+
+If you work with a team of malware analysts or malware researchers, you create read-only accounts for them.
+
+This will ensure they can do advanced queries to hunt and write detection signatures.
+
+Adding New Read-Only Users to MongoDB:
+```bash
+cd scripts/
+./mongodb-createuser.sh mongodb-router1 <username> <password>
+```
+
+If you have a VERY large team, you can script creation of these accounts.
 
 # Basic Usage
 
@@ -369,10 +386,6 @@ The documents will be available at `build/docs/html/index.html`.
 
 # C++ API Example Code
 
-It couldn't be any easier to leverage `binlex` and its C++ API to build your own applications.
-
-See example code below:
-
 ```cpp
 #include <binlex/pe.h>
 #include <binlex/decompiler.h>
@@ -380,22 +393,52 @@ See example code below:
 using namespace binlex;
 
 int main(int argc, char **argv){
-  Pe pe32;
-  if (pe32.Setup(PE_MODE_X86) == false){
+  PE pe32;
+  if (pe32.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_I386) == false){
       return 1;
   }
-  if (pe32.ReadFile(argv[1]) == false){
+  if (pe32.ReadFile("tests/pe/pe.x86") == false){
       return 1;
   }
   Decompiler decompiler;
-  decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
-  for (int i = 0; i < PE_MAX_SECTIONS; i++){
+  for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
       if (pe32.sections[i].data != NULL){
-          decompiler.x86_64(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, i);
+          decompiler.Setup(CS_ARCH_X86, CS_MODE_32, i);
+          decompiler.SetMode("pe:x86", i);
+          decompiler.SetFileSHA256(pe32.hashes.sha256, i);
+          decompiler.SetCorpus("default", i);
+          decompiler.AppendQueue(pe32.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
+          decompiler.Decompile(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, i);
       }
   }
-  decompiler.PrintTraits(args.options.pretty);
+  decompiler.PrintTraits(true);
+  return 0;
 }
+```
+
+# Python API Example Code
+
+```python
+#!/usr/bin/env python
+
+import pybinlex
+from hashlib import sha256
+
+data = open('tests/pe/pe.x86', 'rb').read()
+file_hash = sha256(data).hexdigest()
+pe = pybinlex.PE()
+decompiler = pybinlex.Decompiler()
+pe.setup(pybinlex.MACHINE_TYPES.IMAGE_FILE_MACHINE_I386)
+pe.read_buffer(data)
+sections = pe.get_sections()
+for i in range(0, len(sections)):
+    decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_32, i)
+    decompiler.set_mode("pe:x86", i)
+    decompiler.set_corpus("default", i)
+    decompiler.set_file_sha256(file_hash, i)
+    decompiler.decompile(sections[i]['data'], sections[i]['offset'], i)
+traits = decompiler.get_traits()
+print(json.dumps(traits, indent=4))
 ```
 
 We hope this encourages people to build their own detection solutions based on binary genetic traits.

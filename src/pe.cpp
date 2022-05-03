@@ -1,18 +1,13 @@
-#include <iostream>
-#include <memory>
-#include <vector>
-#include <set>
 #include "pe.h"
-#include "common.h"
-#include <iostream>
-#include <LIEF/PE.hpp>
 
 using namespace std;
 using namespace binlex;
 using namespace LIEF::PE;
 
 PE::PE(){
-    for (int i = 0; i < PE_MAX_SECTIONS; i++){
+    total_exec_sections = 0;
+
+    for (int i = 0; i < BINARY_MAX_SECTIONS; i++){
         sections[i].offset = 0;
         sections[i].size = 0;
         sections[i].data = NULL;
@@ -36,6 +31,12 @@ bool PE::Setup(MACHINE_TYPES input_mode){
 }
 
 bool PE::ReadFile(char *file_path){
+    if (FileExists(file_path) == false){
+        return false;
+    }
+    CalculateFileHashes(file_path);
+    assert(!tlsh.empty());
+    assert(!sha256.empty());
     binary = Parser::parse(file_path);
     if (mode != binary->header().machine()){
         fprintf(stderr, "[x] incorrect mode for binary architecture\n");
@@ -56,12 +57,49 @@ bool PE::ReadBuffer(void *data, size_t size){
     return true;
 }
 
+
 bool PE::IsDotNet(){
-    return binary->has(DATA_DIRECTORY::CLR_RUNTIME_HEADER);
+    try {
+
+        auto imports = binary->imports();
+
+        for(Import i : imports)
+        {
+            if (i.name() == "mscorelib.dll") {
+                if(binary->data_directory(DATA_DIRECTORY::CLR_RUNTIME_HEADER).RVA() > 0) {
+                    return true;
+                }
+            }
+            if (i.name() == "mscoree.dll") {
+                if(binary->data_directory(DATA_DIRECTORY::CLR_RUNTIME_HEADER).RVA() > 0) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+    catch(LIEF::bad_format bf){
+        return false;
+    }
 }
 
-void PE::ParseSections(){
-    uint index = 0;
+
+bool PE::HasLimitations(){
+
+    if(binary->has_imports()){
+        auto imports = binary->imports();
+        for(Import i : imports){
+            if(i.name() == "MSVBVM60.DLL"){
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+
+bool PE::ParseSections(){
+    uint32_t index = 0;
     it_sections local_sections = binary->sections();
     for (auto it = local_sections.begin(); it != local_sections.end(); it++){
         if (it->characteristics() & (uint32_t)SECTION_CHARACTERISTICS::IMAGE_SCN_MEM_EXECUTE){
@@ -82,18 +120,24 @@ void PE::ParseSections(){
                     }
                 }
             }
+            index++;
+            if (BINARY_MAX_SECTIONS == index)
+            {
+                fprintf(stderr, "[x] malformed binary, too many executable sections\n");
+                return false;
+            }
         }
-        index++;
     }
+
+    total_exec_sections = index + 1;
+    return true;
 }
 
 PE::~PE(){
-    for (int i = 0; i < PE_MAX_SECTIONS; i++){
+    for (int i = 0; i < total_exec_sections; i++){
         sections[i].offset = 0;
         sections[i].size = 0;
-        if (sections[i].data != NULL){
-            free(sections[i].data);
-        }
+        free(sections[i].data);
         sections[i].functions.clear();
     }
 }

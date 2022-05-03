@@ -5,6 +5,25 @@ using namespace std;
 using namespace dotnet;
 
 
+void pprint(char *buffer, uint8_t size) {
+    char *aux = buffer;
+    for (uint8_t i = 0; i < size; i++) printf("%02X ", aux[i] & 0xFF);
+    printf("\n");
+}
+
+
+TableEntry* TableEntry::TableEntryFactory(uint8_t entry_type) {
+    if ( entry_type == MODULE ) return new ModuleEntry();
+    if ( entry_type == TYPE_REF) return new TypeRefEntry();
+    if ( entry_type == TYPE_DEF) return new TypeDefEntry();
+    if ( entry_type == FIELD_PTR) return new FieldPtrEntry();
+    if ( entry_type == FIELD) return new FieldEntry();
+    if ( entry_type == METHOD_PTR) return new MethodPtrEntry();
+    if ( entry_type == METHOD_DEF) return new MethodDefEntry();
+    return NULL;
+};
+
+
 uint32_t Cor20MetadataTable::ParseTablePointers(char *&buffer) {
     uint32_t *buffer_aux;
     uint32_t read_bytes;
