@@ -12,8 +12,8 @@ using namespace std;
 namespace binlex {
     class File : public Common{
     public:
-	string sha256;
-	string tlsh;
+		string sha256;
+		string tlsh;
 	struct Section {
 	    uint offset;
 	    int size;
