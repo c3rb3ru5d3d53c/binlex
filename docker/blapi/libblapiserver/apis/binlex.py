@@ -54,7 +54,7 @@ class binlex_modes(Resource):
 @api.route(api_prefix + '/samples/<string:corpus>/<string:mode>')
 class binlex_samples_upload(Resource):
     @require_user
-    def get(self, corpus, mode):
+    def post(self, corpus, mode):
         if corpus not in corpra : 
             return {
                 'error': 'Invalid corpus value, mode must be one of the following: ' + ', '.join(corpra)
@@ -64,7 +64,14 @@ class binlex_samples_upload(Resource):
                 'error': 'Invalid mode value, mode must be one of the following: ' + ', '.join(modes)
             }, 401
 
-        return {
-            'corpus': corpus,
-            'mode': mode
-        }
+        try:
+            f = request.files['filedata']
+            bytes = f.read()
+            app.config['minio'].upload(
+                bucket_name=corpus,
+                data=bytes
+            )
+        except Exception:
+            return {
+                'error': 'Failed to add to decompiler queue'
+            }, 500
