@@ -13,7 +13,6 @@
 #include <unistd.h>
 #include <vector>
 
-using namespace std;
 using namespace binlex;
 using json = nlohmann::json;
 #ifndef _WIN32

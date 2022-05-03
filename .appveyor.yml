@@ -27,8 +27,8 @@ for:
       - make dist
     test_script:
       - cd ./tests
-      - unzip pe.zip
-      - unzip elf.zip
+      - unzip -P infected pe.zip
+      - unzip -P infected elf.zip
       - ../build/binlex -m pe:x86     -i ./pe/pe.delphi.projecthook.x86 -o pe.delphi.projecthook.x86.binlex
       - ../build/binlex -m pe:x86     -i ./pe/pe.emotet.x86             -o pe.emotet.x86.binlex
       - ../build/binlex -m pe:x86     -i ./pe/pe.trickbot.x86           -o pe.trickbot.x86.binlex
@@ -45,7 +45,7 @@ for:
       - python3 coverage.py ./ida_baseline/pe.trickbot.x86.ida.json             pe.trickbot.x86.binlex
       - python3 coverage.py ./ida_baseline/pe.trickbot.x86_64.ida.json          pe.trickbot.x86_64.binlex
       - python3 coverage.py ./ida_baseline/pe.x86.ida.json                      pe.x86.binlex
-      - python3 coverage.py ./ida_baseline/pe.x86_64.ida.json                   pe.x86_64.binlex  
+      - python3 coverage.py ./ida_baseline/pe.x86_64.ida.json                   pe.x86_64.binlex
       - cd ..
 
     artifacts:
