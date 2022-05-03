@@ -253,19 +253,20 @@ void DOTNET::ParseSections(){
     }
 }
 
-bool DOTNET::ReadFile(char *file_path){
-    this->binary = Parser::parse(file_path);
-    if (mode != this->binary->header().machine())
-    {
+
+bool DOTNET::ReadVector(const std::vector<uint8_t> &data){
+    CalculateFileHashes(data);
+    binary = Parser::parse(data);
+    if (mode != binary->header().machine()){
         fprintf(stderr, "[x] incorrect mode for binary architecture\n");
         return false;
     }
-    if (this->IsDotNet() == false) return false;
-    if (this->Parse() == false) return false;
-
-    this->ParseSections();
+    if (IsDotNet() == false) return false;
+    if (Parse() == false) return false;
+    ParseSections();
     return true;
 }
+
 
 DOTNET::~DOTNET()
 {
