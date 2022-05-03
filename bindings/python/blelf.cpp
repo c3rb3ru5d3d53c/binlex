@@ -12,7 +12,7 @@ void init_elf(py::module &handle){
   .def("read_file", &binlex::ELF::ReadFile)
   .def("get_sections", [](binlex::ELF &module){
         auto result = py::list();
-        for (int i = 0; i < ELF_MAX_SECTIONS; i++){
+        for (int i = 0; i < BINARY_MAX_SECTIONS; i++){
             if (module.sections[i].data != NULL){
                 auto dict = py::dict();
                 dict["size"] = module.sections[i].size;
@@ -23,10 +23,7 @@ void init_elf(py::module &handle){
         }
         return result;
     })
-  .def("read_buffer", [](binlex::ELF &module, py::buffer data){
-        py::buffer_info info = data.request();
-        return module.ReadBuffer(info.ptr, info.size);
-    });
+  .def("read_buffer", &binlex::ELF::ReadBuffer);
   py::enum_<LIEF::ELF::ARCH>(handle, "ARCH")
   .value("EM_386", LIEF::ELF::ARCH::EM_386)
   .value("EM_X86_64", LIEF::ELF::ARCH::EM_X86_64)

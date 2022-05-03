@@ -16,7 +16,9 @@ from bson.objectid import ObjectId
 import bsonjs
 from libblapiserver.auth import require_user, require_admin
 
-__version__ = '1.1.1'
+api_prefix = "/api/v1"
+
+__pybinlex_version__ = '1.1.1'
 
 __pybinversion__ = '2.2.2'
 
@@ -24,91 +26,29 @@ logger = logging.getLogger(__name__)
 
 api = Namespace('binlex', description='Binlex Upload API')
 
-methods = ['store', 'lex']
-
-pe_architectures = ['x86', 'x86_64']
-
-elf_architectures = ['x86', 'x86_64']
-
-raw_architectures = ['x86', 'x86_64']
-
 corpra = ['default', 'malware', 'goodware']
+
+modes = ['elf:x86', 'elf:x86_64', 'pe:x86', 'pe:x86_64', 'raw:x86', 'raw:x86_64', 'raw:cil', 'pe:cil', 'auto']
 
 def jsonify(data):
     return json.loads(json.dumps(data, default=json_util.default))
 
-@api.route('/version')
-class binlex_version(Resource):
-    @require_user
-    def get(self):
-        """Get the Current Version of Binlex"""
-        return {
-            'version': __version__
-        }
-
-@api.route('/methods')
-class binlex_methods(Resource):
-    @require_user
-    def get(self):
-        """Get the List of Supported Methods"""
-        return methods
-
-@api.route('/pe/architectures')
-class binlex_pe_architectures(Resource):
-    @require_user
-    def get(self):
-        """Get the List of Supported PE Format Architectures"""
-        return pe_architectures
-
-@api.route('/elf/architectures')
-class binlex_elf_architectures(Resource):
-    @require_user
-    def get(self):
-        """Get the List of Supported ELF Format Architectures"""
-        return elf_architectures
-
-@api.route('/raw/architectures')
-class binlex_raw_architectures(Resource):
-    @require_user
-    def get(self):
-        """Get the List of Supported RAW Format Architectures"""
-        return raw_architectures
-
-@api.route('/corpra')
+@api.route(api_prefix + '/corpra')
 class binlex_corpra(Resource):
     @require_user
     def get(self):
         return corpra
 
-@api.route('/decompile/<string:mode>/<string:corpus>')
-class binlex_decompile(Resource):
+@api.route(api_prefix + '/version')
+class binlex_version(Resource):
     @require_user
-    def post(self, mode, corpus):
-        try:
-            if corpus not in corpra:
-                return {
-                    'error': 'invalid corpus value'
-                }, 401
-            app.config['minio'].upload(
-                bucket_name=app.config['amqp_queue_decomp'],
-                data=request.data)
-            app.config['amqp'].publish(
-                queue=app.config['amqp_queue_decomp'],
-                body=json.dumps({
-                    'corpus': corpus,
-                    'mode': mode,
-                    'object_name': hashlib.sha256(request.data).hexdigest()
-                }))
-            return {
-                'status': 'processing'
-            }
-        except Exception:
-            return {
-                'error': 'failed to add to decompiler queue'
-            }, 500
+    def get(self):
+        return {
+            'version': __pybinlex_version__
+        }
 
-@api.route('/decompile/status/<string:sha256>')
-class binlex_decompile_status(Resource):
+@api.route(api_prefix + '/modes')
+class binlex_modes(Resource):
     @require_user
     def get(self, sha256):
         try:
@@ -128,45 +68,36 @@ class binlex_decompile_status(Resource):
             }
 
 #Download sample
-@api.route('/api/v1/samples/<str:sha256>')
-class binlex_v1_samples_download(Resource):
+@api.route(api_prefix + '/samples/<string:sha256>')
+class binlex_samples_download(Resource):
     @require_user
     def get(self, sha256):
         try:
-            data = app.config['minio'].download
+            data = app.config['minio'].download(
                 bucket_name=app.config['amqp_queue_decomp'],
                 object_name=sha256)
             if data in [None, False]:
                 return {
-                    print "error: no data"
+                    'error': 'no matching sample to download'
                 }
             return {
-                print "return object"
+                data
+                'return': 'sample has been downloaded'
             }
         except Exception:
             return {
-                print "return exception?"
+                'status': 'download failed'
             }
 
 #Upload sample to sample queue
-@api.route('/api/v1/samples/<str:sha256>/<str:mode>')
+@api.route('/api/v1/samples/<str:sha256>/<string:mode>')
 class binlex_v1_samples_upload(Resource):
     @require_user
     def get(self, sha256):
         try:
 
-#Get version of pybinlex
-@api.route('/api/v1/version')
-class binlex_v1_version(Resource):
-    @require_user
-    def get(self):
-        """Get the Current Version of Binlex"""
-        return {
-            'version 1': __pybinversion__
-        }
-
 #Check if sample exists
-@api.route('/api/v1/samples/<str:corpus>/<str:sha256>')
+@api.route(api_prefix + 'samples/<str:corpus>/<string:sha256>')
 class binlex_v1_samples(Resource):
     @require_user
     def head(self, corpus, sha256):
@@ -187,7 +118,7 @@ class binlex_v1_samples(Resource):
             }
 
 #Body contains raw mongodb query
-@api.route('/api/v1/traits')
+@api.route(api_prefix + '/traits')
 class binlex_v1_traits(Resource):
     @require_user
     def post(self)
@@ -201,26 +132,51 @@ class binlex_v1_traits(Resource):
                 'mongodb': 'exists'
             }
             
-#List supported Corpra
-@api.route('/api/v1/samples/corpra')
-class binlex_v1_samples_list_corpra(Resource):
-    @require_user
-    def get(self)
-        return corpra
-
-#List supported modes
-@api.route('/api/v1/samples/modes')
-class binlex_v1_samples_list_modes(Resource):
-    @require_user
-    def get(self)
-        return modes
-
 #List of sha256 samples with the same trait
-@api.route('/api/v1/traits/<str:corpus>/<str:sha256>')
-class binlex_v1_same_traits(Resource):
+@api.route(api_prefix + '/traits/<string:corpus>/<string:sha256>')
+class binlex_sha256_same_traits(Resource):
     @require_user
     def get(self, corpus, sha256)
         return traits
 
-        
+#List of sha256 samples with similar traits
+@api.route(api_prefix + '/traits/<string:corpus>/<string:tlsh>/<<int:distance>')
+class binlex_sha256_similar_traits(Resource):
+    @require_user
+    def get(self, corpus, tlsh, distance)
+        return traits
 
+#List of similar thraits
+@api.route(api_prefix + '/traits/<string:corpus>/<string:tlsh>/<<int:distance>')
+class binlex_similar_traits(Resource):
+    @require_user
+    def get(self, corpus, tlsh, distance)
+        return traits
+        
+#Searching hexadecimal string by hand (de ad be ef), w/ wildcards
+@api.route(api_prefix + '/traits/<string:hexstr>')
+class binlex_traits_searching_hex_string(Resource):
+    @require_user
+    def get(self, hexstr)
+        return traits
+
+#create tags a sha256 trait in a specific corpus
+@api.route(api_prefix + '/traits/<string:corpus>/<string:sha256>')
+class binlex_traits_searching_hex_string(Resource):
+    @require_user
+    def post(self, corpus, sha256)
+        return traits
+
+#create tags sha256 of the sample in the object store
+@api.route(api_prefix + '/samples/<string:corpus>/<string:sha256>')
+class binlex_traits_searching_hex_string(Resource):
+    @require_user
+    def post(self, corpus, sha256)
+        return traits
+
+#delete tag a sha256 trait in a specific corpus
+@api.route(api_prefix + '/traits/<string:corpus>/<string:sha256>')
+class binlex_traits_searching_hex_string(Resource):
+    @require_user
+    def delete(self, corpus, sha256)
+        return traits

@@ -18,9 +18,69 @@ extern "C" {
 #pragma comment(lib, "capstone")
 #pragma comment(lib, "LIEF")
 #endif
+#include <tlsh.h>
+#include <stdexcept>
 
 using namespace std;
 using namespace binlex;
+
+
+string Common::GetTLSH(const uint8_t *data, size_t len){
+    Tlsh tlsh;
+
+    tlsh.update(data, len);
+    tlsh.final();
+    return tlsh.getHash();
+}
+
+
+string Common::GetFileTLSH(const char *file_path){
+    FILE *inp;
+    uint8_t buf[8192];
+    Tlsh tlsh;
+    size_t bread;
+    string ret;
+
+    inp = fopen(file_path, "rb");
+    if(!inp){
+	throw std::runtime_error(strerror(errno));
+    }
+    while((bread = fread(buf, 1, sizeof(buf), inp)) > 0){
+	tlsh.update(buf, bread);
+    }
+    if(errno != 0) {
+	throw std::runtime_error(strerror(errno));
+    }
+    tlsh.final();
+    fclose(inp);
+    ret = tlsh.getHash();
+    return ret;
+}
+
+
+string Common::GetFileSHA256(char *file_path){
+    FILE *inp;
+    SHA256_CTX ctx;
+    uint8_t buf[8192];
+    size_t bread;
+    BYTE hash[SHA256_BLOCK_SIZE];
+
+    inp = fopen(file_path, "rb");
+    if(!inp){
+	throw std::runtime_error(strerror(errno));
+    }
+    sha256_init(&ctx);
+    while((bread = fread(buf, 1, sizeof(buf), inp)) > 0){
+	sha256_update(&ctx, buf, bread);
+    }
+    if(errno != 0) {
+	throw std::runtime_error(strerror(errno));
+    }
+    sha256_final(&ctx, hash);
+    fclose(inp);
+    return RemoveSpaces(HexdumpBE(&hash, SHA256_BLOCK_SIZE));
+}
+
 
 string Common::Wildcards(uint count){
     stringstream s;
@@ -31,40 +91,13 @@ string Common::Wildcards(uint count){
     return TrimRight(s.str());
 }
 
-string Common::SHA256(char *data, size_t size){
+string Common::SHA256(char *trait){
     BYTE hash[SHA256_BLOCK_SIZE];
     SHA256_CTX ctx;
     sha256_init(&ctx);
-    sha256_update(&ctx, (BYTE *)data, size);
+    sha256_update(&ctx, (BYTE *)trait, strlen(trait));
     sha256_final(&ctx, hash);
     return RemoveSpaces(HexdumpBE(&hash, SHA256_BLOCK_SIZE));
-}
-
-int Common::GetFileSize(FILE *fd){
-    int start = ftell(fd);
-    fseek(fd, 0, SEEK_END);
-    int size = ftell(fd);
-    fseek(fd, start, SEEK_SET);
-    return size;
-}
-
-string Common::GetFileSHA256(char *file_path){
-    FILE *fd = fopen(file_path, "rb");
-    int size = GetFileSize(fd);
-    void *data = malloc(size);
-    memset(data, 0, size);
-    fread(data, size, 1, fd);
-    fclose(fd);
-    string hash = SHA256((char *)data, size);
-    free(data);
-    return hash;
-}
-
-char * Common::StringAllocCharPtr(string input_string){
-    char *output = (char *)malloc(strlen(input_string.c_str()) + 1);
-    memset(output, 0, strlen(input_string.c_str()) + 1);
-    memcpy(output, input_string.c_str(), strlen(input_string.c_str()));
-    return output;
 }
 
 vector<char> Common::TraitToChar(string trait){

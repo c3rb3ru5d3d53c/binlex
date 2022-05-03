@@ -12,7 +12,7 @@ void init_pe(py::module &handle){
   .def("read_file", &binlex::PE::ReadFile)
   .def("get_sections", [](binlex::PE &module){
         auto result = py::list();
-        for (int i = 0; i < PE_MAX_SECTIONS; i++){
+        for (int i = 0; i < BINARY_MAX_SECTIONS; i++){
             if (module.sections[i].data != NULL){
                 auto dict = py::dict();
                 dict["size"] = module.sections[i].size;
@@ -23,10 +23,7 @@ void init_pe(py::module &handle){
         }
         return result;
     })
-  .def("read_buffer", [](binlex::PE &module, py::buffer data){
-        py::buffer_info info = data.request();
-        return module.ReadBuffer(info.ptr, info.size);
-    });
+  .def("read_buffer", &binlex::PE::ReadBuffer);
   py::enum_<LIEF::PE::MACHINE_TYPES>(handle, "MACHINE_TYPES")
   .value("IMAGE_FILE_MACHINE_I386", LIEF::PE::MACHINE_TYPES::IMAGE_FILE_MACHINE_I386)
   .value("IMAGE_FILE_MACHINE_AMD64", LIEF::PE::MACHINE_TYPES::IMAGE_FILE_MACHINE_AMD64)

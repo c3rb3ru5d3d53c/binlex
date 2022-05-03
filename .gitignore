@@ -1,4 +1,4 @@
-dbuild/**
+build/**
 dist/**
 samples/**
 windows/**
@@ -11,6 +11,7 @@ venv/**
 pybinlex.egg-info/**
 *.so
 *.whl
+.idea/
 data/**
 docker-compose.yml
 scripts/**

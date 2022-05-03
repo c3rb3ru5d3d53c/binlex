@@ -59,6 +59,12 @@ docker-clean:
 	@docker rm $(shell docker ps -a -q) 2>/dev/null || echo > /dev/null
 	@docker rmi $(shell docker images -a -q) 2>/dev/null || echo > /dev/null
 
+docker-restart-blapi:
+	@docker stop $(shell docker ps -aqf "name=blapi")
+	@docker rm $(shell docker ps -aqf "name=blapi")
+	@docker-compose build blapi1
+	@docker-compose up -d blapi1
+
 mongodb-shell:
 	@cd scripts/ && \
 		./mongodb-shell.sh mongodb-router1
@@ -72,6 +78,8 @@ dist:
 		make package_source
 
 install:
+	git config --global --add safe.directory `pwd`/build/capstone/src/capstone
+	git config --global --add safe.directory `pwd`/build/LIEF/src/LIEF
 	cd build/ && \
 		make install && \
 		ldconfig
@@ -142,6 +150,7 @@ clean:
 	rm -f docker-compose.yml
 	rm -rf scripts/
 	rm -rf config/
+	rm -rf venv/
 
 clean-data:
 	rm -rf data/

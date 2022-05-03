@@ -8,6 +8,7 @@
 #include <iostream>
 #include <exception>
 #include <stdexcept>
+#include <cassert>
 #include "blelf.h"
 #include <LIEF/ELF.hpp>
 using namespace std;
@@ -15,7 +16,9 @@ using namespace binlex;
 using namespace LIEF::ELF;
 
 ELF::ELF(){
-    for (int i = 0; i < ELF_MAX_SECTIONS; i++){
+    total_exec_sections = 0;
+
+    for (int i = 0; i < BINARY_MAX_SECTIONS; i++){
         sections[i].offset = 0;
         sections[i].size = 0;
         sections[i].data = NULL;
@@ -39,27 +42,31 @@ bool ELF::Setup(ARCH input_mode){
 }
 
 bool ELF::ReadFile(char *file_path){
-    hashes.sha256 = GetFileSHA256(file_path);
-    binary = Parser::parse(file_path);
-    if (mode != binary->header().machine_type()){
+    if (FileExists(file_path) == false){
         return false;
     }
-    ParseSections();
-    return true;
+    CalculateFileHashes(file_path);
+    assert(!tlsh.empty());
+    assert(!sha256.empty());
+    binary = Parser::parse(file_path);
+    if (mode != binary->header().machine_type()){
+        fprintf(stderr, "[x] incorrect mode for binary architecture\n");
+        return false;
+    }
+    return ParseSections();
 }
 
 bool ELF::ReadBuffer(void *data, size_t size){
-    hashes.sha256 = SHA256((char *)data, size);
     vector<uint8_t> data_v((uint8_t *)data, (uint8_t *)data + size);
     binary = Parser::parse(data_v);
     if (mode != binary->header().machine_type()){
+        fprintf(stderr, "[x] incorrect mode for binary architecture\n");
         return false;
     }
-    ParseSections();
-    return true;
+    return ParseSections();
 }
 
-void ELF::ParseSections(){
+bool ELF::ParseSections(){
     uint index = 0;
     it_sections local_sections = binary->sections();
     for (auto it = local_sections.begin(); it != local_sections.end(); it++){
@@ -78,17 +85,23 @@ void ELF::ParseSections(){
                     sections[index].functions.insert(tmp_offset-sections[index].offset);
                 }
             }
+            index++;
+            if (BINARY_MAX_SECTIONS == index)
+            {
+                fprintf(stderr, "[x] malformed binary, too many executable sections\n");
+                return false;
+            }
         }
-        index++;
     }
+    total_exec_sections = index + 1;
+    return true;
 }
 
 ELF::~ELF(){
-    for (int i = 0; i < ELF_MAX_SECTIONS; i++){
+    for (int i = 0; i < total_exec_sections; i++){
         sections[i].offset = 0;
         sections[i].size = 0;
-        if (sections[i].data != NULL){
-            free(sections[i].data);
-        }
+        free(sections[i].data);
+        sections[i].functions.clear();
     }
 }
