@@ -793,3 +793,7 @@ void Decompiler::py_SetTags(const vector<string> &tags){
 void Decompiler::py_SetInstructions(bool instructions) {
     g_args.options.instructions = instructions;
 }
+
+void Decompiler::py_SetMode(string mode){
+    g_args.options.mode = mode;
+}

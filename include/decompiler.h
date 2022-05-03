@@ -262,6 +262,7 @@ namespace binlex {
          @param tags set of tags
         */
         BINLEX_EXPORT void py_SetTags(const vector<string> &tags);
+        BINLEX_EXPORT void py_SetMode(string mode);
     };
 }
 #endif
