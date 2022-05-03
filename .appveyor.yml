@@ -45,7 +45,7 @@ for:
       - python3 coverage.py ./ida_baseline/pe.trickbot.x86.ida.json             pe.trickbot.x86.binlex
       - python3 coverage.py ./ida_baseline/pe.trickbot.x86_64.ida.json          pe.trickbot.x86_64.binlex
       - python3 coverage.py ./ida_baseline/pe.x86.ida.json                      pe.x86.binlex
-      - python3 coverage.py ./ida_baseline/pe.x86_64.ida.json                   pe.x86_64.binlex  
+      - python3 coverage.py ./ida_baseline/pe.x86_64.ida.json                   pe.x86_64.binlex
       - cd ..
 
     artifacts:
