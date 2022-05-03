@@ -13,3 +13,23 @@ bool File::FileExists(char *file_path){
     }
     return false;
 }
+
+std::vector<uint8_t> File::ReadFileIntoVector(const char *file_path){
+    FILE *inp;
+    uint8_t buf[8192];
+    size_t bread;
+    std::vector<uint8_t> data;
+
+    inp = fopen(file_path, "rb");
+    if(!inp){
+	throw std::runtime_error(strerror(errno));
+    }
+    while((bread = fread(buf, 1, sizeof(buf), inp)) > 0){
+	data.insert(data.end(), buf, buf + bread);
+    }
+    if(errno != 0) {
+	throw std::runtime_error(strerror(errno));
+    }
+    fclose(inp);
+    return data;
+}
