@@ -38,3 +38,21 @@ std::vector<uint8_t> File::ReadFileIntoVector(const char *file_path){
     fclose(inp);
     return data;
 }
+
+bool File::ReadFile(const char *file_path){
+    try {
+	std::vector<uint8_t> data_v(ReadFileIntoVector(file_path));
+	ReadVector(data_v);
+    }
+    catch(const std::exception &err) {
+	cerr << "error while reading: " << err.what() << endl;
+	return false;
+    }
+    return true;
+}
+
+bool File::ReadBuffer(void *data, size_t size){
+    vector<uint8_t> data_v((uint8_t *)data, (uint8_t *)data + size);
+    return ReadVector(data_v);
+}
+

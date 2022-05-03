@@ -19,23 +19,6 @@ int Raw::GetFileSize(FILE *fd){
     return size;
 }
 
-bool Raw::ReadFile(const char *file_path){
-    try {
-	std::vector<uint8_t> data_v(ReadFileIntoVector(file_path));
-	ReadVector(data_v);
-    }
-    catch(const std::exception &err) {
-	cerr << "error while reading: " << err.what() << endl;
-	return false;
-    }
-    return true;
-}
-
-bool Raw::ReadBuffer(void *data, size_t size){
-    vector<uint8_t> data_v((uint8_t *)data, (uint8_t *)data + size);
-    return ReadVector(data_v);
-}
-
 bool Raw::ReadVector(const std::vector<uint8_t> &data){
     const int section_index = 0; // The parameter was always zero.
     CalculateFileHashes(data);

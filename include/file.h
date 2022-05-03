@@ -42,6 +42,9 @@ namespace binlex {
 	  @throws runtime_error if a read error occurs
 	 */
         std::vector<uint8_t> ReadFileIntoVector(const char *file_path);
+	bool ReadFile(const char *file_path);
+	bool ReadBuffer(void *data, size_t size);
+	virtual bool ReadVector(const std::vector<uint8_t> &data) = 0;
     };
 };
 
