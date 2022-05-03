@@ -10,7 +10,8 @@ var hierarchy =
         [ "binlex::ELF", "classbinlex_1_1ELF.html", null ],
         [ "binlex::PE", "classbinlex_1_1PE.html", [
           [ "binlex::DOTNET", "classbinlex_1_1DOTNET.html", null ]
-        ] ]
+        ] ],
+        [ "binlex::Raw", "classbinlex_1_1Raw.html", null ]
       ] ]
     ] ],
     [ "dotnet::COR20_HEADER", "structdotnet_1_1COR20__HEADER.html", null ],
@@ -28,7 +29,6 @@ var hierarchy =
       [ "dotnet::ResolutionScopeIndex", "classdotnet_1_1ResolutionScopeIndex.html", null ],
       [ "dotnet::TypeDefOrRefIndex", "classdotnet_1_1TypeDefOrRefIndex.html", null ]
     ] ],
-    [ "binlex::Raw", "classbinlex_1_1Raw.html", null ],
     [ "binlex::CILDecompiler::Section", "structbinlex_1_1CILDecompiler_1_1Section.html", null ],
     [ "binlex::Decompiler::Section", "structbinlex_1_1Decompiler_1_1Section.html", null ],
     [ "binlex::File::Section", "structbinlex_1_1File_1_1Section.html", null ],

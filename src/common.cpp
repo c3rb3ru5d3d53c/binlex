@@ -105,6 +105,19 @@ string Common::Wildcards(uint count){
     return TrimRight(s.str());
 }
 
+
+
+string Common::GetSHA256(const uint8_t *data, size_t len){
+    BYTE hash[SHA256_BLOCK_SIZE];
+    SHA256_CTX ctx;
+    sha256_init(&ctx);
+    sha256_update(&ctx, data, len);
+    sha256_final(&ctx, hash);
+    return RemoveSpaces(HexdumpBE(&hash, SHA256_BLOCK_SIZE));
+}
+
+
+
 string Common::SHA256(char *trait){
     BYTE hash[SHA256_BLOCK_SIZE];
     SHA256_CTX ctx;

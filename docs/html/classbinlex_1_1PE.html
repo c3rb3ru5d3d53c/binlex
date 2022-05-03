@@ -113,6 +113,8 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a7d59d7af11c403d379d4b748065517d6"><td class="memItemLeft" align="right" valign="top"><a id="a7d59d7af11c403d379d4b748065517d6"></a>
 BINLEX_EXPORT bool&#160;</td><td class="memItemRight" valign="bottom"><b>IsDotNet</b> ()</td></tr>
 <tr class="separator:a7d59d7af11c403d379d4b748065517d6"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:afc5cd018a384c015a298fe97d3658a3e"><td class="memItemLeft" align="right" valign="top">BINLEX_EXPORT bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1PE.html#afc5cd018a384c015a298fe97d3658a3e">HasLimitations</a> ()</td></tr>
+<tr class="separator:afc5cd018a384c015a298fe97d3658a3e"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="inherit_header pub_methods_classbinlex_1_1File"><td colspan="2" onclick="javascript:toggleInherit('pub_methods_classbinlex_1_1File')"><img src="closed.png" alt="-"/>&#160;Public Member Functions inherited from <a class="el" href="classbinlex_1_1File.html">binlex::File</a></td></tr>
 <tr class="memitem:a4b3c7ae07f17ebe65dfdb7b0c7bc70c8 inherit pub_methods_classbinlex_1_1File"><td class="memItemLeft" align="right" valign="top"><a id="a4b3c7ae07f17ebe65dfdb7b0c7bc70c8"></a>
 bool&#160;</td><td class="memItemRight" valign="bottom"><b>FileExists</b> (char *file_path)</td></tr>
@@ -120,6 +122,12 @@ bool&#160;</td><td class="memItemRight" valign="bottom"><b>FileExists</b> (char 
 <tr class="memitem:a744ec07afb83c38432ab836cedbfc15b inherit pub_methods_classbinlex_1_1File"><td class="memItemLeft" align="right" valign="top"><a id="a744ec07afb83c38432ab836cedbfc15b"></a>
 void&#160;</td><td class="memItemRight" valign="bottom"><b>CalculateFileHashes</b> (char *file_path)</td></tr>
 <tr class="separator:a744ec07afb83c38432ab836cedbfc15b inherit pub_methods_classbinlex_1_1File"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ada874bdcd50ff6426c1bd479cc2be290 inherit pub_methods_classbinlex_1_1File"><td class="memItemLeft" align="right" valign="top"><a id="ada874bdcd50ff6426c1bd479cc2be290"></a>
+void&#160;</td><td class="memItemRight" valign="bottom"><b>CalculateFileHashes</b> (const vector&lt; uint8_t &gt; &amp;data)</td></tr>
+<tr class="separator:ada874bdcd50ff6426c1bd479cc2be290 inherit pub_methods_classbinlex_1_1File"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae458e8b96b3f7ca03017ff4561525d3d inherit pub_methods_classbinlex_1_1File"><td class="memItemLeft" align="right" valign="top"><a id="ae458e8b96b3f7ca03017ff4561525d3d"></a>
+std::vector&lt; uint8_t &gt;&#160;</td><td class="memItemRight" valign="bottom"><b>ReadFileIntoVector</b> (const char *file_path)</td></tr>
+<tr class="separator:ae458e8b96b3f7ca03017ff4561525d3d inherit pub_methods_classbinlex_1_1File"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-attribs"></a>
 Public Attributes</h2></td></tr>
@@ -154,6 +162,8 @@ Additional Inherited Members</h2></td></tr>
 <tr class="separator:a0c3eb3179bd7d87b3180387be76573e7 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:acaf355a97857c4563c3b8e6162187e90 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#acaf355a97857c4563c3b8e6162187e90">GetFileSHA256</a> (char *file_path)</td></tr>
 <tr class="separator:acaf355a97857c4563c3b8e6162187e90 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a85b33e0d5148b97b1db40d2f59b2679c inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a85b33e0d5148b97b1db40d2f59b2679c">GetSHA256</a> (const uint8_t *data, size_t len)</td></tr>
+<tr class="separator:a85b33e0d5148b97b1db40d2f59b2679c inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aa341aea214e4eb0121ef7b76f75f2a86 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT vector&lt; char &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#aa341aea214e4eb0121ef7b76f75f2a86">TraitToChar</a> (string trait)</td></tr>
 <tr class="separator:aa341aea214e4eb0121ef7b76f75f2a86 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a35dbc25fdb59cf2d65eb35fcb1126c69 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a35dbc25fdb59cf2d65eb35fcb1126c69">RemoveWildcards</a> (string trait)</td></tr>
@@ -180,6 +190,24 @@ static BINLEX_EXPORT float&#160;</td><td class="memItemRight" valign="bottom"><b
 <tr class="separator:a654dea4accfca1f897e7a7bc1587f343 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Member Function Documentation</h2>
+<a id="afc5cd018a384c015a298fe97d3658a3e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afc5cd018a384c015a298fe97d3658a3e">&#9670;&nbsp;</a></span>HasLimitations()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">BINLEX_EXPORT bool binlex::PE::HasLimitations </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Check if the file has limitations that may result in invalid traits. </p><dl class="section return"><dt>Returns</dt><dd>bool </dd></dl>
+
+</div>
+</div>
 <a id="a3a0aafcc006710239b53593a91f13401"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a3a0aafcc006710239b53593a91f13401">&#9670;&nbsp;</a></span>ReadBuffer()</h2>
 

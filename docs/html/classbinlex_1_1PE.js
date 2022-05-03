@@ -2,6 +2,7 @@ var classbinlex_1_1PE =
 [
     [ "PE", "classbinlex_1_1PE.html#a3c55b3f95f760907c695ac4cf5f620d1", null ],
     [ "~PE", "classbinlex_1_1PE.html#a50d93d36adff55df2ee9659f1539b362", null ],
+    [ "HasLimitations", "classbinlex_1_1PE.html#afc5cd018a384c015a298fe97d3658a3e", null ],
     [ "IsDotNet", "classbinlex_1_1PE.html#a7d59d7af11c403d379d4b748065517d6", null ],
     [ "ReadBuffer", "classbinlex_1_1PE.html#a3a0aafcc006710239b53593a91f13401", null ],
     [ "ReadFile", "classbinlex_1_1PE.html#adc55b9f922a681d2d5c31d19013bf32c", null ],
