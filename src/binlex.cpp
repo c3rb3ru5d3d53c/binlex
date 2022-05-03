@@ -59,21 +59,8 @@ int main(int argc, char **argv){
     }
     if (strcmp(g_args.options.mode, (char *)"auto") == 0 &&
         g_args.options.io_type == ARGS_IO_TYPE_FILE){
-
         AutoLex autolex;
-
-        // check for limitations
-        if(autolex.HasLimitations(g_args.options.input) == true){
-            printf("[x] File has limitations and can't be processed. Select a mode to force analysis.\n");
-            return 1;
-        }
-
-        Decompiler decompiler {autolex.ProcessFile(g_args.options.input, \
-        g_args.options.threads, \
-        g_args.options.timeout, \
-        g_args.options.thread_cycles, g_args.options.thread_sleep, \
-        g_args.options.instructions) };
-        decompiler.WriteTraits();
+        return autolex.ProcessFile(g_args.options.input);
         return 0;
     }
     if (strcmp(g_args.options.mode, (char *)"elf:x86_64") == 0 &&
