@@ -1,4 +1,5 @@
 #include "raw.h"
+#include <stdexcept>
 
 using namespace binlex;
 
@@ -19,19 +20,37 @@ int Raw::GetFileSize(FILE *fd){
 }
 
 bool Raw::ReadFile(const char *file_path){
-    const int section_index = 0;
-    FILE *fd = fopen(file_path, "rb");
-    if(!fd) {
-      return false;
+    try {
+	std::vector<uint8_t> data_v(ReadFileIntoVector(file_path));
+	ReadVector(data_v);
     }
-    sections[section_index].offset = ftell(fd);
-    sections[section_index].size = GetFileSize(fd);
-    sections[section_index].data = malloc(sections[section_index].size);
-    memset(sections[section_index].data, 0, sections[section_index].size);
-    fread(sections[section_index].data, sections[section_index].size, 1, fd);
-    fclose(fd);
+    catch(const std::exception &err) {
+	cerr << "error while reading: " << err.what() << endl;
+	return false;
+    }
     return true;
 }
+
+bool Raw::ReadBuffer(void *data, size_t size){
+    vector<uint8_t> data_v((uint8_t *)data, (uint8_t *)data + size);
+    return ReadVector(data_v);
+}
+
+bool Raw::ReadVector(const std::vector<uint8_t> &data){
+    const int section_index = 0; // The parameter was always zero.
+    CalculateFileHashes(data);
+    // The original ftell was always called after opening the file, hence 0.
+    sections[section_index].offset = 0;
+    sections[section_index].size = data.size();
+    sections[section_index].data = malloc(data.size());
+    if(sections[section_index].data == NULL) {
+	// No more memory.
+	return false;
+    }
+    std::copy(data.begin(), data.end(), static_cast<uint8_t*>(sections[section_index].data));
+    return true;
+}
+
 
 Raw::~Raw(){
     for (int i = 0; i < BINARY_MAX_SECTIONS; i++){

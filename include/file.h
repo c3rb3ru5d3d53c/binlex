@@ -34,6 +34,13 @@ namespace binlex {
 	  @param data: file data in a vector
 	*/
 	void CalculateFileHashes(const vector<uint8_t> &data);
+	/*
+	  Read a file into a vector
+
+	  @param file_path path to the file to read
+	  @return vector containing the bytes of the file
+	  @throws runtime_error if a read error occurs
+	 */
         std::vector<uint8_t> ReadFileIntoVector(const char *file_path);
     };
 };

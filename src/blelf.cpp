@@ -46,6 +46,7 @@ bool ELF::ReadFile(char *file_path){
 
 bool ELF::ReadBuffer(void *data, size_t size){
     vector<uint8_t> data_v((uint8_t *)data, (uint8_t *)data + size);
+    CalculateFileHashes(data_v);
     binary = Parser::parse(data_v);
     if (mode != binary->header().machine_type()){
         fprintf(stderr, "[x] incorrect mode for binary architecture\n");
