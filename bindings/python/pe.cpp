@@ -18,6 +18,7 @@ void init_pe(py::module &handle){
         dict["size"] = module.sections[i].size;
         dict["data"] = py::bytes((char *)module.sections[i].data, module.sections[i].size);
         dict["offset"] = module.sections[i].offset;
+        dict["functions"] = module.sections[i].functions;
         result.append(dict);
       }
     }

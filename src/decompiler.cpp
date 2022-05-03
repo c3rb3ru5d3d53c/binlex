@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <vector>
 #include <iomanip>
+#include <math.h>
+
 #if defined(__linux__) || defined(__APPLE__)
 #include <pthread.h>
 #include <openssl/sha.h>
@@ -14,19 +16,19 @@
 #include <windows.h>
 #include <wincrypt.h>
 #endif
+
 #ifndef _WIN32
 #include <unistd.h>
 #else
 #include <windows.h>
 #endif
-#include <math.h>
+
 #include <capstone/capstone.h>
 #include "json.h"
 #include "decompiler.h"
 
 // Very WIP Multi-Threaded Recursive Decompiler
 
-using namespace std;
 using namespace binlex;
 using json = nlohmann::json;
 #ifndef _WIN32
@@ -44,72 +46,47 @@ CRITICAL_SECTION csDecompiler;
 Decompiler::Decompiler() {
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++) {
         sections[i].offset = 0;
-        sections[i].traits = NULL;
-        sections[i].ntraits = 0;
         sections[i].data = NULL;
         sections[i].data_size = 0;
-        sections[i].arch_str = NULL;
     }
 }
 
 void Decompiler::AppendTrait(struct Trait *trait, struct Section *sections, uint index){
+    struct Trait new_elem_trait = *trait; //copy the stuff populated in the caller, TODO: more cleanup required to not copy anything.
+
     #if defined(__linux__) || defined(__APPLE__)
     pthread_mutex_lock(&DECOMPILER_MUTEX);
     #else
     EnterCriticalSection(&csDecompiler);
     #endif
-    #if defined(__linux__) || defined(__APPLE__)
-    sections[index].traits = (struct Trait **)realloc(sections[index].traits, sizeof(struct Trait *) * sections[index].ntraits + 1);
-    #else
-    if (sections[index].ntraits % 1024 == 0) {
-        if (sections[index].ntraits == 0) {
-            sections[index].traits = (struct Trait**)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(void*) * 1024);
-        }
-        else {
-            sections[index].traits = (struct Trait**)HeapReAlloc(GetProcessHeap(), NULL, sections[index].traits, sizeof(void*) * (sections[index].ntraits + 1024));
-        }
-    }
-    #endif
-    if (sections[index].traits == NULL){
-        PRINT_ERROR_AND_EXIT("[x] trait realloc failed\n");
-    }
-    sections[index].traits[sections[index].ntraits] = (struct Trait *)malloc(sizeof(struct Trait));
-    if (sections[index].traits[sections[index].ntraits] == NULL){
+
+    new_elem_trait.type = (char *)malloc(strlen(trait->type) + 1);
+    if (new_elem_trait.type == NULL){
         PRINT_ERROR_AND_EXIT("[x] trait malloc failed\n");
+    }
+    memset(new_elem_trait.type, 0, strlen(trait->type) + 1);
+    if (memcpy(new_elem_trait.type, trait->type, strlen(trait->type)) == NULL){
+        PRINT_ERROR_AND_EXIT("[x] trait memcpy failed\n");
     }
 
-    char *type = (char *)malloc(strlen(trait->type)+1);
-    if (type == NULL){
+    new_elem_trait.trait = (char *)malloc(strlen(trait->tmp_trait.c_str()) + 1);
+    if (new_elem_trait.trait == NULL){
         PRINT_ERROR_AND_EXIT("[x] trait malloc failed\n");
     }
-    memset(type, 0, strlen(trait->type)+1);
-    if (memcpy(type, trait->type, strlen(trait->type)) == NULL){
+    memset(new_elem_trait.trait, 0, strlen(trait->tmp_trait.c_str()) + 1);
+    if (memcpy(new_elem_trait.trait, trait->tmp_trait.c_str(), strlen(trait->tmp_trait.c_str())) == NULL){
         PRINT_ERROR_AND_EXIT("[x] trait memcpy failed\n");
     }
-    trait->type = type;
+    new_elem_trait.bytes = (char *)malloc(strlen(trait->tmp_bytes.c_str()) + 1);
+    if (new_elem_trait.bytes == NULL){
+        PRINT_ERROR_AND_EXIT("[x] trait malloc failed\n");
+    }
+    memset(new_elem_trait.bytes, 0, strlen(trait->tmp_bytes.c_str()) + 1);
+    if (memcpy(new_elem_trait.bytes, trait->tmp_bytes.c_str(), strlen(trait->tmp_bytes.c_str())) == NULL){
+        PRINT_ERROR_AND_EXIT("[x] trait memcpy failed\n");
+    }
+    sections[index].traits.push_back(new_elem_trait);
 
-    trait->trait = (char *)malloc(strlen(trait->tmp_trait.c_str())+1);
-    if (trait->trait == NULL){
-        PRINT_ERROR_AND_EXIT("[x] trait malloc failed\n");
-    }
-    memset(trait->trait, 0, strlen(trait->tmp_trait.c_str())+1);
-    if (memcpy(trait->trait, trait->tmp_trait.c_str(), strlen(trait->tmp_trait.c_str())) == NULL){
-        PRINT_ERROR_AND_EXIT("[x] trait memcpy failed\n");
-    }
-    trait->bytes = (char *)malloc(strlen(trait->tmp_bytes.c_str())+1);
-    if (trait->bytes == NULL){
-        PRINT_ERROR_AND_EXIT("[x] trait malloc failed\n");
-    }
-    memset(trait->bytes, 0, strlen(trait->tmp_bytes.c_str())+1);
-    if (memcpy(trait->bytes, trait->tmp_bytes.c_str(), strlen(trait->tmp_bytes.c_str())) == NULL){
-        PRINT_ERROR_AND_EXIT("[x] trait memcpy failed\n");
-    }
-    if (memcpy(sections[index].traits[sections[index].ntraits], trait, sizeof(struct Trait)) == NULL){
-        PRINT_ERROR_AND_EXIT("[x] trait memcpy failed\n");
-    }
-    sections[index].ntraits++;
-    trait->trait = (char *)trait->tmp_trait.c_str();
-    trait->bytes = (char *)trait->tmp_bytes.c_str();
     #if defined(__linux__) || defined(__APPLE__)
     pthread_mutex_unlock(&DECOMPILER_MUTEX);
     #else
@@ -120,46 +97,39 @@ void Decompiler::AppendTrait(struct Trait *trait, struct Section *sections, uint
 bool Decompiler::Setup(cs_arch arch, cs_mode mode, uint index){
     sections[index].arch = arch;
     sections[index].mode = mode;
-    if (arch == CS_ARCH_X86 && mode == CS_MODE_32){
-        sections[index].arch_str = (char *)"x86";
-    }
-    if (arch == CS_ARCH_X86 && mode == CS_MODE_64){
-        sections[index].arch_str = (char *)"x86_64";
-    }
     return true;
 }
 
-
-json Decompiler::GetTrait(struct Trait *trait){
+json Decompiler::GetTrait(struct Trait &trait){
     json data;
-    data["type"] = trait->type;
+    data["type"] = trait.type;
     data["corpus"] = g_args.options.corpus;
     data["tags"] = g_args.options.tags;
-    data["architecture"] = trait->architecture;
-    data["bytes"] = trait->bytes;
-    data["trait"] = trait->trait;
-    data["edges"] = trait->edges;
-    data["blocks"] = trait->blocks;
-    data["instructions"] = trait->instructions;
-    data["size"] = trait->size;
-    data["offset"] = trait->offset;
-    data["bytes_entropy"] = trait->bytes_entropy;
-    data["bytes_sha256"] = trait->bytes_sha256;
-    data["trait_sha256"] = trait->trait_sha256;
-    data["trait_entropy"] = trait->trait_entropy;
-    data["invalid_instructions"] = trait->invalid_instructions;
-    data["cyclomatic_complexity"] = trait->cyclomatic_complexity;
-    data["average_instructions_per_block"] = trait->average_instructions_per_block;
+    data["mode"] = g_args.options.mode;
+    data["bytes"] = trait.bytes;
+    data["trait"] = trait.trait;
+    data["edges"] = trait.edges;
+    data["blocks"] = trait.blocks;
+    data["instructions"] = trait.instructions;
+    data["size"] = trait.size;
+    data["offset"] = trait.offset;
+    data["bytes_entropy"] = trait.bytes_entropy;
+    data["bytes_sha256"] = &trait.bytes_sha256[0];
+    data["trait_sha256"] = &trait.trait_sha256[0];
+    data["trait_entropy"] = trait.trait_entropy;
+    data["invalid_instructions"] = trait.invalid_instructions;
+    data["cyclomatic_complexity"] = trait.cyclomatic_complexity;
+    data["average_instructions_per_block"] = trait.average_instructions_per_block;
     return data;
 }
 
 vector<json> Decompiler::GetTraits(){
     vector<json> traitsjson;
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
-        if (sections[i].traits != NULL){
-            for (int j = 0; j < sections[i].ntraits; j++){
-		json jdata(GetTrait(sections[i].traits[j]));
-		traitsjson.push_back(jdata);
+        if (sections[i].data != NULL){
+            for (int j = 0; j < sections[i].traits.size(); j++){
+                json jdata(GetTrait(sections[i].traits[j]));
+		        traitsjson.push_back(jdata);
             }
         }
     }
@@ -179,13 +149,13 @@ void Decompiler::WriteTraits(){
     }
     auto traits(GetTraits());
     if(g_args.options.output != NULL) {
-	for(auto i : traits) {
-	    output_stream << (g_args.options.pretty ? i.dump(4) : i.dump()) << endl;
-	}
+	    for(auto i : traits) {
+	        output_stream << (g_args.options.pretty ? i.dump(4) : i.dump()) << endl;
+        }
     } else {
-	for(auto i : traits) {
-	    cout << (g_args.options.pretty ? i.dump(4) : i.dump()) << endl;
-	}
+	    for(auto i : traits) {
+    	    cout << (g_args.options.pretty ? i.dump(4) : i.dump()) << endl;
+	    }
     }
     if (g_args.options.output != NULL) {
         output_stream.close();
@@ -204,13 +174,13 @@ void * Decompiler::DecompileWorker(void *args) {
     struct Trait i_trait;
 
     i_trait.type = (char *)"instruction";
-    i_trait.architecture = sections[index].arch_str;
+    //i_trait.architecture = sections[index].arch_str;
     ClearTrait(&i_trait);
     b_trait.type = (char *)"block";
-    b_trait.architecture = sections[index].arch_str;
+    //b_trait.architecture = sections[index].arch_str;
     ClearTrait(&b_trait);
     f_trait.type = (char *)"function";
-    f_trait.architecture = sections[index].arch_str;
+    //f_trait.architecture = sections[index].arch_str;
     ClearTrait(&f_trait);
 
     myself.error = cs_open(sections[index].arch, sections[index].mode, &myself.handle);
@@ -401,14 +371,8 @@ void * Decompiler::TraitWorker(void *args){
     }
     trait->bytes_entropy = Entropy(string(trait->bytes));
     trait->trait_entropy = Entropy(string(trait->trait));
-    string bytes_sha256 = SHA256(trait->bytes);
-    trait->bytes_sha256 = (char *)malloc(bytes_sha256.length()+1);
-    memset(trait->bytes_sha256, 0, bytes_sha256.length()+1);
-    memcpy(trait->bytes_sha256, bytes_sha256.c_str(), bytes_sha256.length());
-    string trait_sha256 = SHA256(trait->trait);
-    trait->trait_sha256 = (char *)malloc(trait_sha256.length()+1);
-    memset(trait->trait_sha256, 0, trait_sha256.length()+1);
-    memcpy(trait->trait_sha256, trait_sha256.c_str(), trait_sha256.length());
+    memcpy(&trait->bytes_sha256[0], SHA256(trait->bytes).c_str(), SHA256_PRINTABLE_SIZE);
+    memcpy(&trait->trait_sha256[0], SHA256(trait->trait).c_str(), SHA256_PRINTABLE_SIZE);
     if (strcmp(trait->type, (char *)"block") == 0){
         trait->cyclomatic_complexity = trait->edges - 1 + 2;
         trait->average_instructions_per_block = trait->instructions / 1;
@@ -431,7 +395,8 @@ void Decompiler::ClearTrait(struct Trait *trait){
     trait->invalid_instructions = 0;
     trait->tmp_trait.clear();
     trait->trait = NULL;
-    trait->bytes_sha256 = NULL;
+    memset(&trait->bytes_sha256[0], 0, SHA256_PRINTABLE_SIZE);
+    memset(&trait->trait_sha256[0], 0, SHA256_PRINTABLE_SIZE);
 }
 
 void Decompiler::AppendQueue(set<uint64_t> &addresses, uint operand_type, uint index){
@@ -453,10 +418,6 @@ void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint ind
 
     PRINT_DEBUG("Decompile: offset = 0x%x data_size = %" PRId64 " bytes\n", sections[index].offset, sections[index].data_size);
     PRINT_DATA("Section Data (up to 32 bytes)", sections[index].data, std::min((size_t)32, sections[index].data_size));
-
-    sections[index].discovered.push(0);
-    sections[index].addresses[0] = DECOMPILER_OPERAND_TYPE_FUNCTION;
-    sections[index].visited[0] = DECOMPILER_VISITED_QUEUED;
 
     worker_args *args = (worker_args *)malloc(sizeof(worker_args));
     args->index = index;
@@ -500,19 +461,19 @@ void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint ind
             break;
         }
     }
-    for (int i = 0; i < sections[index].ntraits; i += g_args.options.threads) {
+    for (int i = 0; i < sections[index].traits.size(); i += g_args.options.threads) {
         for (int j = 0; j < g_args.options.threads; j++) {
             #if defined(__linux__) || defined(__APPLE__)
-            if (i + j < sections[index].ntraits) {
+            if (i + j < sections[index].traits.size()) {
                 pthread_attr_init(&thread_attribs[j]);
                 pthread_attr_setdetachstate(&thread_attribs[j], PTHREAD_CREATE_JOINABLE);
-                pthread_create(&threads[j], NULL, TraitWorker, (void*)sections[index].traits[i + j]);
+                pthread_create( &threads[j], NULL, TraitWorker, (void*)(&sections[index].traits[i + j]) );
             }
             else {
                 threads[j] = NULL;
             }
             #else
-            if (i + j < sections[index].ntraits) {
+            if (i + j < sections[index].traits.size()) {
                 hThreads[j] = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)TraitWorker, (void*)sections[index].traits[i + j], 0, &dwThreadId);
             }
             else {
@@ -787,30 +748,20 @@ bool Decompiler::IsBlock(map<uint64_t, uint> &addresses, uint64_t address){
 }
 
 void Decompiler::FreeTraits(uint index){
-    if (sections[index].traits != NULL){
-        for (int i = 0; i < sections[index].ntraits; i++){
-            if (sections[index].traits[i]->type != NULL){
-                free(sections[index].traits[i]->type);
+    if (sections[index].data != NULL){
+        for (int i = 0; i < sections[index].traits.size(); i++){
+            if (sections[index].traits[i].type != NULL){
+                free(sections[index].traits[i].type);
             }
-            if (sections[index].traits[i]->trait_sha256 != NULL){
-                free(sections[index].traits[i]->trait_sha256);
+            if (sections[index].traits[i].bytes != NULL){
+                free(sections[index].traits[i].bytes);
             }
-            if (sections[index].traits[i]->bytes_sha256 != NULL){
-                free(sections[index].traits[i]->bytes_sha256);
-            }
-            if (sections[index].traits[i]->bytes != NULL){
-                free(sections[index].traits[i]->bytes);
-            }
-            if (sections[index].traits[i]->trait != NULL){
-                free(sections[index].traits[i]->trait);
-            }
-            if (sections[index].traits[i] != NULL){
-                free(sections[index].traits[i]);
+            if (sections[index].traits[i].trait != NULL){
+                free(sections[index].traits[i].trait);
             }
         }
-        free(sections[index].traits);
     }
-    sections[index].ntraits = 0;
+    sections[index].traits.clear();
 }
 
 Decompiler::~Decompiler() {
