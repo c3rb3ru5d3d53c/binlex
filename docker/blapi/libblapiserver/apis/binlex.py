@@ -74,21 +74,74 @@ class binlex_samples_download(Resource):
     def get(self, sha256):
         try:
             data = app.config['minio'].download(
-                bucket_name=app.config['amqp_queue_decomp'],
+                bucket_name='goodware',
                 object_name=sha256)
             if data in [None, False]:
                 return {
                     'error': 'no matching sample to download'
                 }
-            return {
-                data
-                'return': 'sample has been downloaded'
-            }
+            if data in [True]:
+                jsondata = data.json()
+                return data
+                return {
+                    'return': 'sample has been downloaded'
+                }
+        except:
+            pass
+        try:
+            data = app.config['minio'].download(
+                bucket_name='malware',
+                object_name=sha256)
+            if data in [None, False]:
+                return {
+                    'error': 'no matching sample to download'
+                }
+            if data in [True]:
+                jsondata = data.json()
+                return data
+                return {
+                    'return': 'sample has been downloaded'
+                }
+        except:
+            pass
+        try:
+            data = app.config['minio'].download(
+                bucket_name='default',
+                object_name=sha256)
+            if data in [None, False]:
+                return {
+                    'error': 'no matching sample to download'
+                }
+            if data in [True]:
+                jsondata = data.json()
+                return data
+                return {
+                    'return': 'sample has been downloaded'
+                }
+        except:
+            pass
+        try:
+            data = app.config['minio'].download(
+                bucket_name='bldecomp',
+                object_name=sha256)
+            if data in [None, False]:
+                return {
+                    'error': 'no matching sample to download'
+                }
+            if data in [True]:
+                jsondata = data.json()
+                return data
+                return {
+                    'return': 'sample has been downloaded'
+                }
         except Exception:
             return {
                 'status': 'download failed'
             }
-
+        return {
+            'status': 'could not find requested file to download'
+        }
+"""
 #Upload sample to sample queue
 @api.route('/api/v1/samples/<str:sha256>/<string:mode>')
 class binlex_v1_samples_upload(Resource):
@@ -138,6 +191,11 @@ class binlex_sha256_same_traits(Resource):
     @require_user
     def get(self, corpus, sha256)
         return traits
+        for that trait hash 
+        for any traits for the sha256 hash
+        found in the file schema.js
+        with the corpus of the one we are looking at.
+        That trait is found in all of these files.
 
 #List of sha256 samples with similar traits
 @api.route(api_prefix + '/traits/<string:corpus>/<string:tlsh>/<<int:distance>')
@@ -180,3 +238,12 @@ class binlex_traits_searching_hex_string(Resource):
     @require_user
     def delete(self, corpus, sha256)
         return traits
+
+#delete tags sha256 of the sample in the object store
+@api.route(api_prefix + '/samples/<string:corpus>/<string:sha256>')
+class binlex_samples_delete_hex_string(Resource):
+    @require_user
+    def delete(self, corpus, sha256)
+        return traits
+
+"""
