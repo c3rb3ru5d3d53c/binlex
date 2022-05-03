@@ -290,13 +290,14 @@ namespace binlex {
             struct Trait {
                 string corpus;
                 string type;
-                uint architecture;
+                string architecture;
                 string tmp_bytes;
                 string bytes;
                 string trait;
                 uint edges;
                 uint blocks;
                 vector< Instruction* >* instructions;
+                uint num_instructions;
                 uint size;
                 uint offset;
                 uint invalid_instructions;
@@ -304,8 +305,8 @@ namespace binlex {
                 uint average_instructions_per_block;
                 float bytes_entropy;
                 float trait_entropy;
-                char *trait_sha256;
-                char *bytes_sha256;
+                string trait_sha256;
+                string bytes_sha256;
             };
             struct Section {
                 char *function_traits;

@@ -326,7 +326,7 @@ bool CILDecompiler::Setup(int input_type){
     return true;
 }
 int CILDecompiler::update_offset(int operand_size, int i) {
-    fprintf(stderr, "[+] updating offset using operand size %d\n", operand_size);
+    //fprintf(stderr, "[+] updating offset using operand size %d\n", operand_size);
     switch(operand_size){
         case 0:
             break;
@@ -351,27 +351,25 @@ int CILDecompiler::update_offset(int operand_size, int i) {
 
 bool CILDecompiler::Decompile(void *data, int data_size, int index){
     const unsigned char *pc = (const unsigned char *)data;
-    //char *bytes = NULL;
     vector<Trait*> traits;
-    //Let's use a vector for our instructions because C++ has
-    //structures for this stuff.
     vector< Instruction* >* instructions = new vector<Instruction *>;
     //We need an iterator for our hashmap searches
     map<int, int>::iterator it;
     uint num_edges = 0;
+    uint num_instructions = 0;
     for (int i = 0; i < data_size; i++){
         int operand_size = 0;
         bool end_block = false;
         bool end_func = false;
         Instruction *insn = new Instruction;
         //fprintf(stderr, "Instruction being decompiled: 0x%x\n", pc[i]);
-        //TODO: need to add all raw bytes, not just masked bytes, to instruction set collected
         if (insn->instruction == CIL_INS_PREFIX){
             //Let's add prefix instruction to our instructions
             insn->instruction = pc[i];
             insn->operand_size = it->second;
             insn->offset = i;
             instructions->push_back(insn);
+            num_instructions++;
             //Then let's move on to the next instruction
             i++;
             //fprintf(stderr, "Instruction being decompiled: 0x%x\n", pc[i]);
@@ -380,11 +378,12 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
             insn->instruction = pc[i];
             it = prefixInstrMap.find(pc[i]);
             if(it != prefixInstrMap.end()) {
-                fprintf(stderr, "[+] found prefix opcode 0x%02x at offset %d with operand size: %d\n", pc[i], i, it->second);
+                //fprintf(stderr, "[+] found prefix opcode 0x%02x at offset %d with operand size: %d\n", pc[i], i, it->second);
                 insn->instruction = pc[i];
                 insn->operand_size = it->second;
                 insn->offset = i;
                 instructions->push_back(insn);
+                num_instructions++;
             } else {
                 fprintf(stderr, "[x] unknown prefix opcode 0x%02x at offset %d\n", pc[i], i);
                 return false;
@@ -398,15 +397,17 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
                     insn->offset = i;
                     instructions->push_back(insn);   
                     end_block = true;
-                    fprintf(stderr, "[+] end block found -> opcode 0x%02x at offset %d\n", pc[i], i);
+                    num_instructions++;
+                    //fprintf(stderr, "[+] end block found -> opcode 0x%02x at offset %d\n", pc[i], i);
             } else {
                 it = miscInstrMap.find(pc[i]);
                 if(it != miscInstrMap.end()) {
-                    fprintf(stderr, "[+] found misc opcode 0x%02x at offset %d with operand size: %d\n", pc[i], i, it->second);
+                    //fprintf(stderr, "[+] found misc opcode 0x%02x at offset %d with operand size: %d\n", pc[i], i, it->second);
                     insn->instruction = pc[i];
                     insn->operand_size = it->second;
                     insn->offset = i;
                     instructions->push_back(insn);
+                    num_instructions++;
                 } else {
                     fprintf(stderr, "[x] unknown opcode 0x%02x at offset %d\n", pc[i], i);
                     return false;
@@ -430,14 +431,15 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
             ctrait->corpus = sections[index].corpus;
             //Limiting to x86 for now but this should be set by the PE parsing code
             //higher up in the call-stack.
-            ctrait->architecture = CS_ARCH_X86;
+            ctrait->architecture = "x86";
             //The first offset of the first instruction will give us the offset
             //of our trait.
             ctrait->offset = instructions->front()->offset;
+            ctrait->num_instructions = num_instructions;
             ctrait->trait = ConvTraitBytes(*instructions);
             ctrait->bytes = ConvBytes(*instructions, data, data_size);
             //Since traits are differentiated by blocks then this will always be 1
-            //maybe this should differentiated from in the future?
+            //maybe this should be different in the future?
             ctrait->blocks = 1;
             ctrait->edges = num_edges;
             ctrait->size = SizeOfTrait(*instructions);
@@ -447,14 +449,15 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
             //The cyclomatic complexity differs by type of trait. 
             //Which for now only supports block.
             ctrait->cyclomatic_complexity = num_edges - 1 + 2;
-            ctrait->average_instructions_per_block = 0; //TODO for function traits
+            ctrait->average_instructions_per_block = instructions->size();
             ctrait->bytes_entropy = Entropy(ctrait->bytes);
             ctrait->trait_entropy = Entropy(ctrait->trait);
-            //ctrait->trait_sha256 = SHA256(ctrait->bytes.c_str()); TODO
-            //ctrait->bytes_sha256 = SHA256(ctrait->bytes.c_str()); TODO
+            ctrait->trait_sha256 = SHA256(&ctrait->trait[0]);
+            ctrait->bytes_sha256 = SHA256(&ctrait->bytes[0]);
             traits.push_back(ctrait);
             //The number of edges needs to be reset once the trait is stored.
             num_edges = 0;
+            cout << GetTrait(ctrait, true);
        }
     }
     return true;
@@ -463,17 +466,23 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
 string CILDecompiler::ConvTraitBytes(vector< Instruction* > allinst) {
     string rstr;
     for(auto inst : allinst) {
-        char hexbytes[5];
-        sprintf(hexbytes, "%02x ", inst->instruction);
-        hexbytes[4] = '\0';
+        char hexbytes[4];
+        sprintf(hexbytes, "%02x", inst->instruction);
+        hexbytes[3] = '\0';
         rstr.append(string(hexbytes));
-        cout << hexbytes;
+        //cout << hexbytes;
+        if(inst != allinst.back() || (inst == allinst.back() && allinst.size() == 1)) {
+            rstr.append(" ");
+        }
         for(int i = 0; i < inst->operand_size/8; i++) {
-            cout << "?? ";
-            rstr.append("?? ");
+            //cout << "?? ";
+            rstr.append("??");
+            if((i < (inst->operand_size/8)-1) || (inst != allinst.back())) {
+                rstr.append(" ");
+            }
         }
     }
-    cout << "\n";
+    //cout << "\n";
     return rstr;
 }
 
@@ -491,14 +500,18 @@ string CILDecompiler::ConvBytes(vector< Instruction* > allinst, void *data, int 
     char *cdata = (char *)data;
     //We need to incorporate the operand size into the data collected starting at
     //the last offset.
+    uint trait_size = SizeOfTrait(allinst);
     for(int i = 0; i < SizeOfTrait(allinst); i++) {
-        char hexbytes[5];
-        sprintf(hexbytes, "%02x ", cdata[i]);
-        hexbytes[4] = '\0';
+        char hexbytes[4];
+        sprintf(hexbytes, "%02x", cdata[i]);
+        hexbytes[3] = '\0';
         byte_rep.append(string(hexbytes));
-        cout << hexbytes;
+        if(i != trait_size-1) {
+            byte_rep.append(" ");
+        }
+        //cout << hexbytes;
     }
-    cout << "\n";
+    //cout << "\n";
     return byte_rep;
 }
 
@@ -516,7 +529,6 @@ void CILDecompiler::SetInstructions(bool instructions, uint index){
     sections[index].instructions = instructions;
 }
 
-/*
 string CILDecompiler::GetTrait(struct Trait *trait, bool pretty){
     json data;
     data["type"] = trait->type;
@@ -526,7 +538,7 @@ string CILDecompiler::GetTrait(struct Trait *trait, bool pretty){
     data["trait"] = trait->trait;
     data["edges"] = trait->edges;
     data["blocks"] = trait->blocks;
-    data["instructions"] = trait->instructions;
+    data["instructions"] = trait->num_instructions;
     data["size"] = trait->size;
     data["offset"] = trait->offset;
     data["bytes_entropy"] = trait->bytes_entropy;
@@ -541,7 +553,6 @@ string CILDecompiler::GetTrait(struct Trait *trait, bool pretty){
     }
     return data.dump();
 }
-*/
 
 void CILDecompiler::WriteTraits(char *file_path){
     FILE *fd = fopen(file_path, "w");
@@ -809,7 +820,7 @@ void CILDecompiler::ClearTrait(struct Trait *trait){
     trait->offset = 0;
     trait->size = 0;
     trait->invalid_instructions = 0;
-    trait->bytes_sha256 = NULL;
+    trait->bytes_sha256.clear();
 }
 
 /*
