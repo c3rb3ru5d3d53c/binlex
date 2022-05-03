@@ -288,13 +288,12 @@ namespace binlex {
                 uint offset;
             };
             struct Trait {
-                char *corpus;
-                char *type;
+                string corpus;
+                string type;
                 uint architecture;
                 string tmp_bytes;
                 string bytes;
-                string tmp_trait;
-                char *trait;
+                string trait;
                 uint edges;
                 uint blocks;
                 vector< Instruction* >* instructions;
@@ -349,10 +348,16 @@ namespace binlex {
             void SetInstructions(bool instructions, uint index);
             string GetTrait(struct Trait *trait, bool pretty);
             /**
-            Converts instruction objects to raw bytes for output
+            Converts instruction objects to trait pattern for output
             @param insn Source instruction to check and resulting operand size
             */
-            string ConvBytes(vector< Instruction* > instructions);
+            string ConvTraitBytes(vector< Instruction* > instructions);
+            /**
+            Converts instruction objects to raw bytes for output using offsets
+            and section data.
+            @param insn Source instruction to check and resulting operand size
+            */
+            string ConvBytes(vector< Instruction* > allinst, void *data, int data_size);
             /**
             Checks if CIL instruction is conditional for stats
             @param insn Source instruction to check and resulting operand size
@@ -363,6 +368,11 @@ namespace binlex {
             @param insn Source instruction to check and resulting operand size
             */
             bool IsPrefixInstr(Instruction *insn);
+            /**
+            Gets size of trait using the beginning and ending offsets
+            @param allinst Source instructions
+            */
+            uint SizeOfTrait(vector< Instruction* > allinst);
             void IsWildcardInsn(Trait *trait);
             void IsEndInsn(Trait *trait);
 
