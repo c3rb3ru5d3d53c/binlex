@@ -109,13 +109,16 @@ CILDecompiler::CILDecompiler(){
         //     printf("brnull.s\n");
         //     break;
         {CIL_INS_BRTRUE, 32},
-        {CIL_INS_BRTRUE_S, 8}
+        {CIL_INS_BRTRUE_S, 8},
         // case CIL_INS_BRZERO:
         //     printf("brzero\n");
         //     break;
         // case CIL_INS_BRZERO_S:
         //     printf("brzero.s\n");
         //     break;
+        {CIL_INS_CALL, 32},
+        {CIL_INS_CALLI, 32},
+        {CIL_INS_CALLVIRT, 32}
     };
 
     miscInstrMap = {
@@ -123,9 +126,6 @@ CILDecompiler::CILDecompiler(){
         {CIL_INS_ADD_OVF, 0},
         {CIL_INS_ADD_OVF_UN, 0},
         {CIL_INS_AND, 0},
-        {CIL_INS_CALL, 32},
-        {CIL_INS_CALLI, 32},
-        {CIL_INS_CALLVIRT, 32},
         {CIL_INS_CASTCLASS, 32},
         {CIL_INS_CKINITE, 0},
         {CIL_INS_CONV_I, 0},
@@ -358,11 +358,11 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
     vector< Instruction* >* instructions = new vector<Instruction *>;
     //We need an iterator for our hashmap searches
     map<int, int>::iterator it;
+    uint num_edges = 0;
     for (int i = 0; i < data_size; i++){
         int operand_size = 0;
         bool end_block = false;
         bool end_func = false;
-        int num_blocks = 0;
         Instruction *insn = new Instruction;
         //fprintf(stderr, "Instruction being decompiled: 0x%x\n", pc[i]);
         //TODO: need to add all raw bytes, not just masked bytes, to instruction set collected
@@ -392,6 +392,7 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
         } else {
             it = condInstrMap.find(pc[i]);
             if(it != condInstrMap.end()) {
+                    num_edges++;
                     insn->instruction = pc[i];
                     insn->operand_size = it->second;
                     insn->offset = i;
@@ -421,12 +422,9 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
             i = updated;
         }
         //If we're at the end of a block, at the end of a function, or
-        //at the end of our data then we need to store the trait data
+        //at the end of our data then we need to store the trait data.
         if ((end_func || end_block && i < data_size - 1) ||
             ((end_func == false && end_block == false) && i == data_size -1)) {
-            //So we can actually capture all the bytes within the trait using the recorded
-            //offsets within the first instruction and last instruction without having
-            //to capture them as we go ... so that's nice.
             Trait *ctrait = new Trait;
             ctrait->instructions = instructions;
             ctrait->corpus = sections[index].corpus;
@@ -436,27 +434,72 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
             //The first offset of the first instruction will give us the offset
             //of our trait.
             ctrait->offset = instructions->front()->offset;
-            ctrait->bytes = ConvBytes(*instructions);
+            ctrait->trait = ConvTraitBytes(*instructions);
+            ctrait->bytes = ConvBytes(*instructions, data, data_size);
+            //Since traits are differentiated by blocks then this will always be 1
+            //maybe this should differentiated from in the future?
+            ctrait->blocks = 1;
+            ctrait->edges = num_edges;
+            ctrait->size = SizeOfTrait(*instructions);
+            ctrait->invalid_instructions = 0; //TODO
+            ctrait->type = "block"; //TODO support both types
+            ctrait->corpus = string(sections[index].corpus);
+            //The cyclomatic complexity differs by type of trait. 
+            //Which for now only supports block.
+            ctrait->cyclomatic_complexity = num_edges - 1 + 2;
+            ctrait->average_instructions_per_block = 0; //TODO for function traits
+            ctrait->bytes_entropy = Entropy(ctrait->bytes);
+            ctrait->trait_entropy = Entropy(ctrait->trait);
+            //ctrait->trait_sha256 = SHA256(ctrait->bytes.c_str()); TODO
+            //ctrait->bytes_sha256 = SHA256(ctrait->bytes.c_str()); TODO
             traits.push_back(ctrait);
+            //The number of edges needs to be reset once the trait is stored.
+            num_edges = 0;
        }
     }
     return true;
 }
 
-string CILDecompiler::ConvBytes(vector< Instruction* > allinst) {
+string CILDecompiler::ConvTraitBytes(vector< Instruction* > allinst) {
     string rstr;
     for(auto inst : allinst) {
         char hexbytes[5];
         sprintf(hexbytes, "%02x ", inst->instruction);
         hexbytes[4] = '\0';
+        rstr.append(string(hexbytes));
         cout << hexbytes;
-        for(int i = 0; i < inst->operand_size/4; i++) {
+        for(int i = 0; i < inst->operand_size/8; i++) {
             cout << "?? ";
+            rstr.append("?? ");
         }
     }
     cout << "\n";
-    string ret = "";
-    return ret;
+    return rstr;
+}
+
+uint CILDecompiler::SizeOfTrait(vector< Instruction* > allinst) {
+    int begin_offset = allinst.front()->offset;
+    int end_offset = allinst.back()->offset;
+    uint size = (end_offset-begin_offset)+(allinst.back()->operand_size/8)+1;
+    return size;
+}
+
+string CILDecompiler::ConvBytes(vector< Instruction* > allinst, void *data, int data_size) {
+    string byte_rep;
+    int begin_offset = allinst.front()->offset;
+    int end_offset = allinst.back()->offset;
+    char *cdata = (char *)data;
+    //We need to incorporate the operand size into the data collected starting at
+    //the last offset.
+    for(int i = 0; i < SizeOfTrait(allinst); i++) {
+        char hexbytes[5];
+        sprintf(hexbytes, "%02x ", cdata[i]);
+        hexbytes[4] = '\0';
+        byte_rep.append(string(hexbytes));
+        cout << hexbytes;
+    }
+    cout << "\n";
+    return byte_rep;
 }
 
 void CILDecompiler::SetThreads(uint threads, uint thread_cycles, uint thread_sleep, uint index){
@@ -766,8 +809,6 @@ void CILDecompiler::ClearTrait(struct Trait *trait){
     trait->offset = 0;
     trait->size = 0;
     trait->invalid_instructions = 0;
-    trait->tmp_trait.clear();
-    trait->trait = NULL;
     trait->bytes_sha256 = NULL;
 }
 
