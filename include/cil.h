@@ -343,10 +343,6 @@ namespace binlex {
             bool Decompile(void *data, int data_size, int index);
             void WriteTraits(char *file_path);
             void PrintTraits();
-            void AppendTrait(struct Trait *trait, struct Section *sections, uint index);
-            void SetThreads(uint threads, uint thread_cycles, uint thread_sleep, uint index);
-            void SetCorpus(char *corpus, uint index);
-            void SetInstructions(bool instructions, uint index);
             string GetTrait(struct Trait *trait, bool pretty);
             /**
             Converts instruction objects to trait pattern for output

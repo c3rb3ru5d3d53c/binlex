@@ -512,20 +512,6 @@ string CILDecompiler::ConvBytes(vector< Instruction* > allinst, void *data, int 
     return byte_rep;
 }
 
-void CILDecompiler::SetThreads(uint threads, uint thread_cycles, uint thread_sleep, uint index){
-    sections[index].threads = threads;
-    sections[index].thread_cycles = thread_cycles;
-    sections[index].thread_sleep = thread_sleep;
-}
-
-void CILDecompiler::SetCorpus(char *corpus, uint index){
-    sections[index].corpus = corpus;
-}
-
-void CILDecompiler::SetInstructions(bool instructions, uint index){
-    sections[index].instructions = instructions;
-}
-
 string CILDecompiler::GetTrait(struct Trait *trait, bool pretty){
     json data;
     data["type"] = trait->type;
