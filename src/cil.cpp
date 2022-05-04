@@ -457,7 +457,6 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
             traits.push_back(ctrait);
             //The number of edges needs to be reset once the trait is stored.
             num_edges = 0;
-            //cout << GetTrait(ctrait, true);
             //TODO support both types of traits.
             sections[index].block_traits.push_back(ctrait);
             //Once we're done adding a trait we need to create a new set of instructions
