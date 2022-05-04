@@ -1,7 +1,6 @@
 .PHONY: all
 .PHONY: docs
 .PHONY: docker
-.PHONY: all
 
 threads=1
 admin_user=admin
@@ -41,8 +40,6 @@ docs:
 docs-update:
 	rm -rf docs/html/
 	cp -r build/docs/html/ docs/
-
-all: cli python docs docs-update
 
 docker:
 	@./docker.sh
