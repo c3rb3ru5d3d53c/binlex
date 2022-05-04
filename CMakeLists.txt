@@ -75,6 +75,37 @@ set_target_properties(
 )
 add_dependencies(capstone_static capstone)
 
+set(TLSH_GIT_URL "https://github.com/trendmicro/tlsh.git")
+set(TLSH_ROOT    "${CMAKE_BINARY_DIR}/tlsh/")
+set(TLSH_INCLUDE_DIRS "${TLSH_ROOT}/src/tlsh/include/")
+set(TLSH_GIT_TAG 7c676d32b252c84cf3a540eb5438c315006d68de)
+
+set(TLSH_CMAKE_ARGS
+  -DCMAKE_BUILD_TYPE=Release
+  -DCMAKE_CXX_FLAGS_RELEASE=${CMAKE_CXX_FLAGS_RELEASE}
+  -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+  -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+  -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON
+)
+
+ExternalProject_Add(
+    tlsh
+    PREFIX              "${TLSH_ROOT}"
+    INSTALL_DIR         "${TLSH_ROOT}"
+    GIT_REPOSITORY      "${TLSH_GIT_URL}"
+    GIT_TAG             "${TLSH_GIT_TAG}"
+    BUILD_COMMAND make -j${N}
+    INSTALL_COMMAND ""
+    CMAKE_ARGS ${TLSH_CMAKE_ARGS}
+)
+
+add_library(tlsh_static STATIC IMPORTED)
+set_target_properties(
+    tlsh_static PROPERTIES IMPORTED_LOCATION
+    ${TLSH_ROOT}/src/tlsh/lib/${CMAKE_STATIC_LIBRARY_PREFIX}tlsh${CMAKE_STATIC_LIBRARY_SUFFIX}
+)
+add_dependencies(tlsh_static tlsh)
+
 set(LIEF_PREFIX       "${CMAKE_BINARY_DIR}/LIEF/")
 set(LIEF_INSTALL_DIR  "${LIEF_PREFIX}")
 set(LIEF_INCLUDE_DIRS "${LIEF_PREFIX}/include/")
@@ -148,8 +179,8 @@ target_link_libraries(binlex
     PUBLIC
         lief_static
         capstone_static
+        tlsh_static
         -lpthread
-	-ltlsh
 )
 
 set_target_properties(binlex
@@ -171,6 +202,7 @@ target_include_directories(binlex
         ${PROJECT_SOURCE_DIR}/include
         ${LIEF_INCLUDE_DIRS}
         ${CAPSTONE_INCLUDE_DIRS}
+        ${TLSH_INCLUDE_DIRS}
 )
 
 add_executable(binlex-bin
@@ -206,6 +238,7 @@ target_include_directories(blyara
         ${PROJECT_SOURCE_DIR}/include
         ${LIEF_INCLUDE_DIRS}
         ${CAPSTONE_INCLUDE_DIRS}
+        ${TLSH_INCLUDE_DIRS}
 )
 
 install(TARGETS blyara DESTINATION bin)
@@ -235,6 +268,7 @@ if (BUILD_PYTHON_BINDINGS)
             capstone_static
             -lpthread
             lief_static
+            tlsh_static
             ${pybind11_LIBRARIES}
     )
 endif()

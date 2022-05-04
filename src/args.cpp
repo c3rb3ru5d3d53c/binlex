@@ -28,14 +28,14 @@ void Args::SetDefault(){
     options.output = NULL;
     options.corpus = "default";
     options.list_modes = false;
-    options.mode = (char *)"auto";
+    options.mode = "auto";
     options.io_type = ARGS_IO_TYPE_UNKNOWN;
     options.pretty = false;
     options.debug = false;
     options.tags.clear(); // Clear if defaults are needed.
 }
 
-bool Args::check_mode(char *mode){
+bool Args::check_mode(const char *mode){
     for (int i = 0; i < ARGS_MODE_COUNT; i++){
         if (strcmp(modes[i], mode) == 0){
             return true;
@@ -223,8 +223,8 @@ void Args::parse(int argc, char **argv){
             strcmp(argv[i], (char *)"--mode") == 0){
             options.mode = argv[i+1];
 
-            if (check_mode(options.mode) == false){
-                fprintf(stderr, "%s is an invalid mode\n", options.mode);
+            if (check_mode(options.mode.c_str()) == false){
+                fprintf(stderr, "%s is an invalid mode\n", options.mode.c_str());
                 exit(1);
             }
         }

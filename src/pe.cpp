@@ -32,6 +32,9 @@ bool PE::Setup(MACHINE_TYPES input_mode){
 bool PE::ReadVector(const std::vector<uint8_t> &data){
     CalculateFileHashes(data);
     binary = Parser::parse(data);
+    if (binary == NULL){
+        return false;
+    }
     if (mode != binary->header().machine()){
         fprintf(stderr, "[x] incorrect mode for binary architecture\n");
         return false;
