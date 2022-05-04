@@ -123,12 +123,12 @@ int main(int argc, char **argv){
                 continue;
 			}
             if (g_args.options.output == NULL){
-		        cil_decompiler.PrintTraits();
-		    } else {
-		        cil_decompiler.WriteTraits(g_args.options.output);
-		    }
+                cil_decompiler.PrintTraits();
+            } else {
+                cil_decompiler.WriteTraits(g_args.options.output);
+            }
         }
-        return 0;
+        return EXIT_SUCCESS;
     }
     if (g_args.options.mode == "pe:x86" &&
         g_args.options.io_type == ARGS_IO_TYPE_FILE){
