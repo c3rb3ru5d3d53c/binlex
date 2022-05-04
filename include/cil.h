@@ -374,15 +374,7 @@ namespace binlex {
             @param allinst Source instructions
             */
             uint SizeOfTrait(vector< Instruction* > allinst);
-            void IsWildcardInsn(Trait *trait);
-            void IsEndInsn(Trait *trait);
-
-            void * DecompileWorker(void *args);
-            void * TraitWorker(void *args);
-            bool IsVisited(map<uint64_t, int> &visited, uint64_t address);
-            bool IsWildcardInsn(cs_insn *insn);
             void ClearTrait(struct Trait *trait);
-            void AppendQueue(set<uint64_t> &addresses, uint operand_type, uint index);
             void FreeTraits(uint index);
             ~CILDecompiler();
     };
