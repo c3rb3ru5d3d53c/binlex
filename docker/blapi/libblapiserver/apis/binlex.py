@@ -65,8 +65,7 @@ class binlex_samples_upload(Resource):
             }, 401
 
         try:
-            f = request.files['filedata']
-            data = f.read()
+            data = request.data
             app.config['minio'].upload(
                 bucket_name=corpus,
                 data=data
