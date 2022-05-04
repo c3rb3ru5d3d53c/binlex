@@ -501,8 +501,6 @@ string CILDecompiler::ConvBytes(vector< Instruction* > allinst, void *data, int 
          %d cannot be greater than total data length: %d", begin_offset, data_size);
     }
     char *cdata = (char *)data;
-    //We need to incorporate the operand size into the data collected starting at
-    //the last offset.
     uint trait_size = SizeOfTrait(allinst);
     for(int i = begin_offset; i < begin_offset+trait_size; i++) {
         char hexbytes[4];
@@ -512,9 +510,7 @@ string CILDecompiler::ConvBytes(vector< Instruction* > allinst, void *data, int 
         if(i < (begin_offset+trait_size)-1) {
             byte_rep.append(" ");
         }
-        //cout << hexbytes;
     }
-    //cout << "\n";
     return byte_rep;
 }
 
@@ -590,10 +586,6 @@ void CILDecompiler::PrintTraits(){
     }
 }
 
-bool CILDecompiler::IsVisited(map<uint64_t, int> &visited, uint64_t address) {
-    return visited.find(address) != visited.end();
-}
-
 void CILDecompiler::ClearTrait(struct Trait *trait){
     trait->tmp_bytes.clear();
     trait->edges = 0;
@@ -605,44 +597,17 @@ void CILDecompiler::ClearTrait(struct Trait *trait){
     trait->bytes_sha256.clear();
 }
 
-/*
-void CILDecompiler::FreeTraits(uint index){
-    if (sections[index].traits != NULL){
-        for (int i = 0; i < sections[index].ntraits; i++){
-            if (sections[index].traits[i]->type != NULL){
-                free(sections[index].traits[i]->type);
-            }
-            if (sections[index].traits[i]->trait_sha256 != NULL){
-                free(sections[index].traits[i]->trait_sha256);
-            }
-            if (sections[index].traits[i]->bytes_sha256 != NULL){
-                free(sections[index].traits[i]->bytes_sha256);
-            }
-            if (sections[index].traits[i]->bytes != NULL){
-                free(sections[index].traits[i]->bytes);
-            }
-            if (sections[index].traits[i]->trait != NULL){
-                free(sections[index].traits[i]->trait);
-            }
-            if (sections[index].traits[i] != NULL){
-                free(sections[index].traits[i]);
-            }
-        }
-        free(sections[index].traits);
-    }
-    sections[index].ntraits = 0;
-}
-*/
-
-CILDecompiler::~CILDecompiler(){
-    /*
+CILDecompiler::~CILDecompiler() {
     for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
-        if (sections[i].function_traits != NULL){
-            free(sections[i].function_traits.clear());
+        if (sections[i].function_traits.size() > 0) {
+            for(auto trait : sections[i].function_traits) {
+                delete trait->instructions;
+            }
         }
-        if (sections[i].block_traits != NULL){
-            free(sections[i].block_traits);
+        if (sections[i].block_traits.size() > 0) {
+            for(auto trait : sections[i].block_traits) {
+                delete trait->instructions;
+            }
         }
     }
-    */
 }
