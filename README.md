@@ -58,14 +58,13 @@ To get started you will need the following dependencies for `binlex`.
 ```bash
 sudo apt install -y git build-essential \
                     cmake make parallel \
-                    doxygen git-lfs rpm liblief-dev \
-                    python3 python3-dev \
-                    libtlsh-dev
+                    doxygen git-lfs rpm \
+                    python3 python3-dev
 git clone --recursive https://github.com/c3rb3ru5d3d53c/binlex.git
 cd binlex/
 ```
 
-Please note that `binlex` requires `cmake` >= 3.5 and `make` >= 4.2.1.
+Please note that `binlex` requires `cmake` >= 3.5, `make` >= 4.2.1 and `ubuntu` >= 20.04.
 
 Once you have installed, cloned and changed your directory to the project directory, we can continue with installation.
 
