@@ -283,7 +283,7 @@ namespace binlex {
         public:
             CILDecompiler();
             struct Instruction {
-                char instruction;
+                unsigned char instruction;
                 uint operand_size;
                 uint offset;
             };
