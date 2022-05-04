@@ -3,6 +3,7 @@
 import json
 import base64
 import logging
+import io
 import hashlib
 from flask import Blueprint
 from flask import current_app as app
@@ -72,71 +73,45 @@ class binlex_modes(Resource):
 class binlex_samples_download(Resource):
     @require_user
     def get(self, sha256):
+        samplecontents = -1
+        error = -1
         try:
-            data = app.config['minio'].download(
+            response = app.config['minio'].download(
                 bucket_name='goodware',
                 object_name=sha256)
-            if data in [None, False]:
-                return {
-                    'error': 'no matching sample to download'
-                }
-            if data in [True]:
-                jsondata = data.json()
-                return data
-                return {
-                    'return': 'sample has been downloaded'
-                }
-        except:
-            pass
+            if response not in [None, False]:
+                samplecontents = io.BytesIO(response.data).read().decode("utf-8")
+        except Exception as e:
+            error = e
         try:
-            data = app.config['minio'].download(
+            response = app.config['minio'].download(
                 bucket_name='malware',
                 object_name=sha256)
-            if data in [None, False]:
-                return {
-                    'error': 'no matching sample to download'
-                }
-            if data in [True]:
-                jsondata = data.json()
-                return data
-                return {
-                    'return': 'sample has been downloaded'
-                }
-        except:
-            pass
+            if response not in [None, False]:
+                samplecontents = io.BytesIO(response.data).read().decode("utf-8")
+        except Exception as e:
+            error = e
         try:
-            data = app.config['minio'].download(
+            response = app.config['minio'].download(
                 bucket_name='default',
                 object_name=sha256)
-            if data in [None, False]:
-                return {
-                    'error': 'no matching sample to download'
-                }
-            if data in [True]:
-                jsondata = data.json()
-                return data
-                return {
-                    'return': 'sample has been downloaded'
-                }
-        except:
-            pass
+            if response not in [None, False]:
+                samplecontents = io.BytesIO(response.data).read().decode("utf-8")
+        except Exception as e:
+            error = e
         try:
-            data = app.config['minio'].download(
+            response = app.config['minio'].download(
                 bucket_name='bldecomp',
                 object_name=sha256)
-            if data in [None, False]:
-                return {
-                    'error': 'no matching sample to download'
-                }
-            if data in [True]:
-                jsondata = data.json()
-                return data
-                return {
-                    'return': 'sample has been downloaded'
-                }
-        except Exception:
+            if response not in [None, False]:
+                samplecontents = io.BytesIO(response.data).read().decode("utf-8")   
+        except Exception as e: 
+            error = e
+        if samplecontents != -1:
+            return samplecontents
+        if error != -1:
             return {
-                'status': 'download failed'
+                'error': 'download failed'
             }
         return {
             'status': 'could not find requested file to download'
@@ -246,4 +221,24 @@ class binlex_samples_delete_hex_string(Resource):
     def delete(self, corpus, sha256)
         return traits
 
+#delete sample from a corpus, including all traits
+@api.route(api_prefix + '/samples/<string:corpus>/<string:mode>')
+class binlex_samples_delete_from_corpus(Resource):
+    @require_user
+    def delete(self, corpus, mode)
+         try:
+            data = app.config['minio'].delete(
+                bucket_name=corpus,
+                object_name=mode)
+            if data in [None, False]:
+                return {
+                    'status': 'sample was not found in corpus'
+                }
+            return {
+                'status': 'object deleted'
+            }
+        except Exception:
+            return {
+                'status': 'completed'
+            }
 """
