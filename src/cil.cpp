@@ -570,17 +570,6 @@ void CILDecompiler::PrintTraits(){
     }
 }
 
-void CILDecompiler::ClearTrait(struct Trait *trait){
-    trait->tmp_bytes.clear();
-    trait->edges = 0;
-    trait->instructions = 0;
-    trait->blocks = 0;
-    trait->offset = 0;
-    trait->size = 0;
-    trait->invalid_instructions = 0;
-    trait->bytes_sha256.clear();
-}
-
 CILDecompiler::~CILDecompiler() {
     for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
         if (sections[i].function_traits.size() > 0) {
