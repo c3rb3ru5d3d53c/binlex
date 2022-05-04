@@ -370,8 +370,6 @@ namespace binlex {
             @param allinst Source instructions
             */
             uint SizeOfTrait(vector< Instruction* > allinst);
-            void ClearTrait(struct Trait *trait);
-            void FreeTraits(uint index);
             ~CILDecompiler();
     };
 };
