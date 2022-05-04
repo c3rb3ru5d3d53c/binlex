@@ -5,6 +5,7 @@
 #include "decompiler.h"
 #include <vector>
 #include <sstream>
+#include <set>
 #include <string>
 
 using namespace std;
@@ -17,6 +18,7 @@ void init_decompiler(py::module &handle){
     .def("set_threads", &binlex::Decompiler::py_SetThreads)
     .def("set_corpus", &binlex::Decompiler::py_SetCorpus)
     .def("set_tags", &binlex::Decompiler::py_SetTags)
+    .def("set_mode", &binlex::Decompiler::py_SetMode)
     .def("set_instructions", &binlex::Decompiler::py_SetInstructions)
     .def("decompile", [](binlex::Decompiler &module, py::buffer data, uint offset, uint index){
         py::buffer_info info = data.request();
@@ -32,6 +34,10 @@ void init_decompiler(py::module &handle){
     .def("write_traits", &binlex::Decompiler::WriteTraits);
     py::enum_<cs_arch>(handle, "cs_arch")
     .value("CS_ARCH_X86", CS_ARCH_X86);
+    py::enum_<DECOMPILER_OPERAND_TYPE>(handle, "DECOMPILER_OPERAND_TYPE")
+    .value("DECOMPILER_OPERAND_TYPE_FUNCTION", DECOMPILER_OPERAND_TYPE_FUNCTION)
+    .value("DECOMPILER_OPERAND_TYPE_BLOCK", DECOMPILER_OPERAND_TYPE_BLOCK)
+    .value("DECOMPILER_OPERAND_TYPE_UNSET", DECOMPILER_OPERAND_TYPE_UNSET);
     py::enum_<cs_mode>(handle, "cs_mode")
     .value("CS_MODE_32", CS_MODE_32)
     .value("CS_MODE_64", CS_MODE_64);

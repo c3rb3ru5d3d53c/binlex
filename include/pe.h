@@ -5,12 +5,15 @@
 #include <Windows.h>
 #include <stdexcept>
 #endif
+
 #include <iostream>
 #include <memory>
 #include <set>
 #include <LIEF/PE.hpp>
 #include "common.h"
 #include "file.h"
+#include <vector>
+#include <cassert>
 
 #ifdef _WIN32
 #define BINLEX_EXPORT __declspec(dllexport)
@@ -26,11 +29,11 @@ namespace binlex {
         private:
             bool ParseSections();
         public:
-        #ifndef _WIN32
-            MACHINE_TYPES mode = MACHINE_TYPES::IMAGE_FILE_MACHINE_UNKNOWN;
-        #else
-            MACHINE_TYPES mode = MACHINE_TYPES::IMAGE_FILE_MACHINE_UNKNOWN;
-        #endif
+            #ifndef _WIN32
+                MACHINE_TYPES mode = MACHINE_TYPES::IMAGE_FILE_MACHINE_UNKNOWN;
+            #else
+                MACHINE_TYPES mode = MACHINE_TYPES::IMAGE_FILE_MACHINE_UNKNOWN;
+            #endif
             unique_ptr<LIEF::PE::Binary> binary;
             BINLEX_EXPORT PE();
             struct Section sections[BINARY_MAX_SECTIONS];
@@ -52,11 +55,16 @@ namespace binlex {
             @return bool
             */
             BINLEX_EXPORT bool Setup(MACHINE_TYPES input_mode);
-	    /*
-	    Check if the PE file is a .NET file
-	    @return bool
-	    */
-	    BINLEX_EXPORT bool IsDotNet();
+            /*
+            Check if the PE file is a .NET file
+            @return bool
+            */
+            BINLEX_EXPORT bool IsDotNet();
+            /**
+            Check if the file has limitations that may result in invalid traits.
+            @return bool
+            */
+            BINLEX_EXPORT bool HasLimitations();
             BINLEX_EXPORT ~PE();
     };
 };

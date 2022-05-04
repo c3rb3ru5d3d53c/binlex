@@ -15,15 +15,21 @@
 #define DECOMPILER_MAX_SECTIONS 256
 #define SHA256_PRINTABLE_SIZE   65 /* including NULL terminator */
 
-#define DECOMPILER_OPERAND_TYPE_BLOCK    0
-#define DECOMPILER_OPERAND_TYPE_FUNCTION 1
-#define DECOMPILER_OPERAND_TYPE_UNSET    2
+// #define DECOMPILER_OPERAND_TYPE_BLOCK    0
+// #define DECOMPILER_OPERAND_TYPE_FUNCTION 1
+// #define DECOMPILER_OPERAND_TYPE_UNSET    2
 
 #define DECOMPILER_VISITED_QUEUED   0
 #define DECOMPILER_VISITED_ANALYZED 1
 
 #define DECOMPILER_GPU_MODE_CUDA   0
 #define DECOMPILER_GPU_MODE_OPENCL 1
+
+typedef enum DECOMPILER_OPERAND_TYPE {
+	DECOMPILER_OPERAND_TYPE_BLOCK = 0,
+	DECOMPILER_OPERAND_TYPE_FUNCTION = 1,
+	DECOMPILER_OPERAND_TYPE_UNSET = 2
+} DECOMPILER_OPERAND_TYPE;
 
 using json = nlohmann::json;
 
@@ -44,7 +50,6 @@ namespace binlex {
     public:
         struct Trait {
             char *type;
-            char *architecture;
             string tmp_bytes;
             char *bytes;
             string tmp_trait;
@@ -65,7 +70,6 @@ namespace binlex {
         struct Section {
             cs_arch arch;
             cs_mode mode;
-            char *arch_str;
             char *cpu;
             bool instructions;
             uint offset;
@@ -258,6 +262,7 @@ namespace binlex {
          @param tags set of tags
         */
         BINLEX_EXPORT void py_SetTags(const vector<string> &tags);
+        BINLEX_EXPORT void py_SetMode(string mode);
     };
 }
 #endif
