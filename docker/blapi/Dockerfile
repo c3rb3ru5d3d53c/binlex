@@ -20,4 +20,4 @@ WORKDIR /opt/binlex/docker/blapi/
 
 RUN ./setup.py install
 
-CMD ["./start.sh"]
+CMD ["sh", "start.sh"]
