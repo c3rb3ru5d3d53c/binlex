@@ -104,10 +104,6 @@ Inheritance diagram for binlex::PE:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
-<tr class="memitem:adc55b9f922a681d2d5c31d19013bf32c"><td class="memItemLeft" align="right" valign="top">virtual BINLEX_EXPORT bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1PE.html#adc55b9f922a681d2d5c31d19013bf32c">ReadFile</a> (char *file_path)</td></tr>
-<tr class="separator:adc55b9f922a681d2d5c31d19013bf32c"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a3a0aafcc006710239b53593a91f13401"><td class="memItemLeft" align="right" valign="top">BINLEX_EXPORT bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1PE.html#a3a0aafcc006710239b53593a91f13401">ReadBuffer</a> (void *data, size_t size)</td></tr>
-<tr class="separator:a3a0aafcc006710239b53593a91f13401"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aaf2fa4d79bc0fc9449eadd366b870d6b"><td class="memItemLeft" align="right" valign="top">BINLEX_EXPORT bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1PE.html#aaf2fa4d79bc0fc9449eadd366b870d6b">Setup</a> (MACHINE_TYPES input_mode)</td></tr>
 <tr class="separator:aaf2fa4d79bc0fc9449eadd366b870d6b"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a7d59d7af11c403d379d4b748065517d6"><td class="memItemLeft" align="right" valign="top"><a id="a7d59d7af11c403d379d4b748065517d6"></a>
@@ -115,10 +111,10 @@ BINLEX_EXPORT bool&#160;</td><td class="memItemRight" valign="bottom"><b>IsDotNe
 <tr class="separator:a7d59d7af11c403d379d4b748065517d6"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:afc5cd018a384c015a298fe97d3658a3e"><td class="memItemLeft" align="right" valign="top">BINLEX_EXPORT bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1PE.html#afc5cd018a384c015a298fe97d3658a3e">HasLimitations</a> ()</td></tr>
 <tr class="separator:afc5cd018a384c015a298fe97d3658a3e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4722bee8f84fa658852eb429d7e2399c"><td class="memItemLeft" align="right" valign="top"><a id="a4722bee8f84fa658852eb429d7e2399c"></a>
+virtual bool&#160;</td><td class="memItemRight" valign="bottom"><b>ReadVector</b> (const std::vector&lt; uint8_t &gt; &amp;data)</td></tr>
+<tr class="separator:a4722bee8f84fa658852eb429d7e2399c"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="inherit_header pub_methods_classbinlex_1_1File"><td colspan="2" onclick="javascript:toggleInherit('pub_methods_classbinlex_1_1File')"><img src="closed.png" alt="-"/>&#160;Public Member Functions inherited from <a class="el" href="classbinlex_1_1File.html">binlex::File</a></td></tr>
-<tr class="memitem:a4b3c7ae07f17ebe65dfdb7b0c7bc70c8 inherit pub_methods_classbinlex_1_1File"><td class="memItemLeft" align="right" valign="top"><a id="a4b3c7ae07f17ebe65dfdb7b0c7bc70c8"></a>
-bool&#160;</td><td class="memItemRight" valign="bottom"><b>FileExists</b> (char *file_path)</td></tr>
-<tr class="separator:a4b3c7ae07f17ebe65dfdb7b0c7bc70c8 inherit pub_methods_classbinlex_1_1File"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a744ec07afb83c38432ab836cedbfc15b inherit pub_methods_classbinlex_1_1File"><td class="memItemLeft" align="right" valign="top"><a id="a744ec07afb83c38432ab836cedbfc15b"></a>
 void&#160;</td><td class="memItemRight" valign="bottom"><b>CalculateFileHashes</b> (char *file_path)</td></tr>
 <tr class="separator:a744ec07afb83c38432ab836cedbfc15b inherit pub_methods_classbinlex_1_1File"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -128,6 +124,12 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>CalculateFileHashes</
 <tr class="memitem:ae458e8b96b3f7ca03017ff4561525d3d inherit pub_methods_classbinlex_1_1File"><td class="memItemLeft" align="right" valign="top"><a id="ae458e8b96b3f7ca03017ff4561525d3d"></a>
 std::vector&lt; uint8_t &gt;&#160;</td><td class="memItemRight" valign="bottom"><b>ReadFileIntoVector</b> (const char *file_path)</td></tr>
 <tr class="separator:ae458e8b96b3f7ca03017ff4561525d3d inherit pub_methods_classbinlex_1_1File"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af69581745439422e597e9c8ab2dcb27c inherit pub_methods_classbinlex_1_1File"><td class="memItemLeft" align="right" valign="top"><a id="af69581745439422e597e9c8ab2dcb27c"></a>
+bool&#160;</td><td class="memItemRight" valign="bottom"><b>ReadFile</b> (const char *file_path)</td></tr>
+<tr class="separator:af69581745439422e597e9c8ab2dcb27c inherit pub_methods_classbinlex_1_1File"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7d80d86e8c30d68e11a7f024518c9172 inherit pub_methods_classbinlex_1_1File"><td class="memItemLeft" align="right" valign="top"><a id="a7d80d86e8c30d68e11a7f024518c9172"></a>
+bool&#160;</td><td class="memItemRight" valign="bottom"><b>ReadBuffer</b> (void *data, size_t size)</td></tr>
+<tr class="separator:a7d80d86e8c30d68e11a7f024518c9172 inherit pub_methods_classbinlex_1_1File"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-attribs"></a>
 Public Attributes</h2></td></tr>
@@ -205,77 +207,6 @@ static BINLEX_EXPORT float&#160;</td><td class="memItemRight" valign="bottom"><b
       </table>
 </div><div class="memdoc">
 <p>Check if the file has limitations that may result in invalid traits. </p><dl class="section return"><dt>Returns</dt><dd>bool </dd></dl>
-
-</div>
-</div>
-<a id="a3a0aafcc006710239b53593a91f13401"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a3a0aafcc006710239b53593a91f13401">&#9670;&nbsp;</a></span>ReadBuffer()</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">BINLEX_EXPORT bool binlex::PE::ReadBuffer </td>
-          <td>(</td>
-          <td class="paramtype">void *&#160;</td>
-          <td class="paramname"><em>data</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">size_t&#160;</td>
-          <td class="paramname"><em>size</em>&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td></td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramname">data</td><td>pointer to executable in memory </td></tr>
-    <tr><td class="paramname">size</td><td>size of the data </td></tr>
-  </table>
-  </dd>
-</dl>
-<dl class="section return"><dt>Returns</dt><dd>bool </dd></dl>
-
-</div>
-</div>
-<a id="adc55b9f922a681d2d5c31d19013bf32c"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#adc55b9f922a681d2d5c31d19013bf32c">&#9670;&nbsp;</a></span>ReadFile()</h2>
-
-<div class="memitem">
-<div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname">virtual BINLEX_EXPORT bool binlex::PE::ReadFile </td>
-          <td>(</td>
-          <td class="paramtype">char *&#160;</td>
-          <td class="paramname"><em>file_path</em></td><td>)</td>
-          <td></td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel">virtual</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramname">file_path</td><td>path to the executable </td></tr>
-  </table>
-  </dd>
-</dl>
-<dl class="section return"><dt>Returns</dt><dd>bool </dd></dl>
-
-<p>Reimplemented in <a class="el" href="classbinlex_1_1DOTNET.html#ab77711714e0dd6602f25bcde39554039">binlex::DOTNET</a>.</p>
 
 </div>
 </div>

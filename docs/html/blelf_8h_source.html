@@ -123,20 +123,12 @@ $(document).ready(function(){initNavTree('blelf_8h_source.html',''); initResizab
 <div class="line"><a name="l00035"></a><span class="lineno">   35</span>&#160;      uint32_t total_exec_sections;</div>
 <div class="line"><a name="l00036"></a><span class="lineno">   36</span>&#160;      BINLEX_EXPORT <a class="code" href="classbinlex_1_1ELF.html">ELF</a>();</div>
 <div class="line"><a name="l00037"></a><span class="lineno">   37</span>&#160;      BINLEX_EXPORT <span class="keywordtype">bool</span> Setup(ARCH input_mode);</div>
-<div class="line"><a name="l00038"></a><span class="lineno">   38</span>&#160;      <span class="comment">/*</span></div>
-<div class="line"><a name="l00039"></a><span class="lineno">   39</span>&#160;<span class="comment">        Read a file into the structure.</span></div>
-<div class="line"><a name="l00040"></a><span class="lineno">   40</span>&#160;<span class="comment"></span> </div>
-<div class="line"><a name="l00041"></a><span class="lineno">   41</span>&#160;<span class="comment">        This will calculate the appropriate hashes, too.</span></div>
-<div class="line"><a name="l00042"></a><span class="lineno">   42</span>&#160;<span class="comment">        @param file_path path to file</span></div>
-<div class="line"><a name="l00043"></a><span class="lineno">   43</span>&#160;<span class="comment">        @return true if read was succesful</span></div>
-<div class="line"><a name="l00044"></a><span class="lineno">   44</span>&#160;<span class="comment">      */</span></div>
-<div class="line"><a name="l00045"></a><span class="lineno">   45</span>&#160;      BINLEX_EXPORT <span class="keywordtype">bool</span> ReadFile(<span class="keywordtype">char</span> *file_path);</div>
-<div class="line"><a name="l00046"></a><span class="lineno">   46</span>&#160;      BINLEX_EXPORT <span class="keywordtype">bool</span> ReadBuffer(<span class="keywordtype">void</span> *data, <span class="keywordtype">size_t</span> size);</div>
-<div class="line"><a name="l00047"></a><span class="lineno">   47</span>&#160;      BINLEX_EXPORT ~<a class="code" href="classbinlex_1_1ELF.html">ELF</a>();</div>
-<div class="line"><a name="l00048"></a><span class="lineno">   48</span>&#160;    };</div>
-<div class="line"><a name="l00049"></a><span class="lineno">   49</span>&#160;};</div>
-<div class="line"><a name="l00050"></a><span class="lineno">   50</span>&#160; </div>
-<div class="line"><a name="l00051"></a><span class="lineno">   51</span>&#160;<span class="preprocessor">#endif</span></div>
+<div class="line"><a name="l00038"></a><span class="lineno">   38</span>&#160;      <span class="keyword">virtual</span> <span class="keywordtype">bool</span> ReadVector(<span class="keyword">const</span> std::vector&lt;uint8_t&gt; &amp;data);</div>
+<div class="line"><a name="l00039"></a><span class="lineno">   39</span>&#160;      BINLEX_EXPORT ~<a class="code" href="classbinlex_1_1ELF.html">ELF</a>();</div>
+<div class="line"><a name="l00040"></a><span class="lineno">   40</span>&#160;    };</div>
+<div class="line"><a name="l00041"></a><span class="lineno">   41</span>&#160;};</div>
+<div class="line"><a name="l00042"></a><span class="lineno">   42</span>&#160; </div>
+<div class="line"><a name="l00043"></a><span class="lineno">   43</span>&#160;<span class="preprocessor">#endif</span></div>
 <div class="ttc" id="aclassbinlex_1_1ELF_html"><div class="ttname"><a href="classbinlex_1_1ELF.html">binlex::ELF</a></div><div class="ttdef"><b>Definition:</b> blelf.h:28</div></div>
 <div class="ttc" id="aclassbinlex_1_1File_html"><div class="ttname"><a href="classbinlex_1_1File.html">binlex::File</a></div><div class="ttdef"><b>Definition:</b> file.h:14</div></div>
 <div class="ttc" id="anamespacebinlex_html"><div class="ttname"><a href="namespacebinlex.html">binlex</a></div><div class="ttdoc">the binlex namespace</div></div>

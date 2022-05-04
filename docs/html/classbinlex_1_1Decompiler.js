@@ -2,7 +2,7 @@ var classbinlex_1_1Decompiler =
 [
     [ "Section", "structbinlex_1_1Decompiler_1_1Section.html", "structbinlex_1_1Decompiler_1_1Section" ],
     [ "Trait", "structbinlex_1_1Decompiler_1_1Trait.html", "structbinlex_1_1Decompiler_1_1Trait" ],
-    [ "Decompiler", "classbinlex_1_1Decompiler.html#ae9b52f3264d4cc3dc9825ca35e06bb85", null ],
+    [ "Decompiler", "classbinlex_1_1Decompiler.html#a995fcc2cfec37edbd3f359a849f338ff", null ],
     [ "~Decompiler", "classbinlex_1_1Decompiler.html#a08c4e24059b89499a9926f793c468f22", null ],
     [ "AppendQueue", "classbinlex_1_1Decompiler.html#adf563022c163cdb2afbedca90b38769b", null ],
     [ "Decompile", "classbinlex_1_1Decompiler.html#acf647c06620257b5dc942c02c674e54f", null ],
@@ -18,5 +18,6 @@ var classbinlex_1_1Decompiler =
     [ "SetThreads", "classbinlex_1_1Decompiler.html#a39f7f410dfbf18ebf2f31a8dd7b30337", null ],
     [ "Setup", "classbinlex_1_1Decompiler.html#af9caba586b4ba05875b9a22d3b776bcc", null ],
     [ "WriteTraits", "classbinlex_1_1Decompiler.html#a58bc917a790e8547811c5d38fd9d4e21", null ],
+    [ "file_reference", "classbinlex_1_1Decompiler.html#a764aa99dc98519bcffcc66146fa3d44e", null ],
     [ "sections", "classbinlex_1_1Decompiler.html#afcba0f93a71ab4ce1237bac70a4b43d9", null ]
 ];

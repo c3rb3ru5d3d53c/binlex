@@ -120,13 +120,12 @@ $(document).ready(function(){initNavTree('raw_8h_source.html',''); initResizable
 <div class="line"><a name="l00032"></a><span class="lineno">   32</span>&#160;            };</div>
 <div class="line"><a name="l00033"></a><span class="lineno">   33</span>&#160;            <span class="keyword">struct </span><a class="code" href="structbinlex_1_1Raw_1_1Section.html">Section</a> sections[BINARY_MAX_SECTIONS];</div>
 <div class="line"><a name="l00034"></a><span class="lineno">   34</span>&#160;            BINLEX_EXPORT <a class="code" href="classbinlex_1_1Raw.html">Raw</a>();</div>
-<div class="line"><a name="l00035"></a><span class="lineno">   35</span>&#160;            BINLEX_EXPORT <span class="keywordtype">bool</span> ReadFile(<span class="keyword">const</span> <span class="keywordtype">char</span> *file_path);</div>
-<div class="line"><a name="l00036"></a><span class="lineno">   36</span>&#160;        BINLEX_EXPORT <span class="keywordtype">bool</span> ReadBuffer(<span class="keywordtype">void</span> *data, <span class="keywordtype">size_t</span> size);</div>
-<div class="line"><a name="l00037"></a><span class="lineno">   37</span>&#160;            BINLEX_EXPORT ~<a class="code" href="classbinlex_1_1Raw.html">Raw</a>();</div>
-<div class="line"><a name="l00038"></a><span class="lineno">   38</span>&#160;    };</div>
-<div class="line"><a name="l00039"></a><span class="lineno">   39</span>&#160;}</div>
-<div class="line"><a name="l00040"></a><span class="lineno">   40</span>&#160; </div>
-<div class="line"><a name="l00041"></a><span class="lineno">   41</span>&#160;<span class="preprocessor">#endif</span></div>
+<div class="line"><a name="l00035"></a><span class="lineno">   35</span>&#160;        BINLEX_EXPORT <span class="keyword">virtual</span> <span class="keywordtype">bool</span> ReadVector(<span class="keyword">const</span> std::vector&lt;uint8_t&gt; &amp;data);</div>
+<div class="line"><a name="l00036"></a><span class="lineno">   36</span>&#160;            BINLEX_EXPORT ~<a class="code" href="classbinlex_1_1Raw.html">Raw</a>();</div>
+<div class="line"><a name="l00037"></a><span class="lineno">   37</span>&#160;    };</div>
+<div class="line"><a name="l00038"></a><span class="lineno">   38</span>&#160;}</div>
+<div class="line"><a name="l00039"></a><span class="lineno">   39</span>&#160; </div>
+<div class="line"><a name="l00040"></a><span class="lineno">   40</span>&#160;<span class="preprocessor">#endif</span></div>
 <div class="ttc" id="aclassbinlex_1_1File_html"><div class="ttname"><a href="classbinlex_1_1File.html">binlex::File</a></div><div class="ttdef"><b>Definition:</b> file.h:14</div></div>
 <div class="ttc" id="aclassbinlex_1_1Raw_html"><div class="ttname"><a href="classbinlex_1_1Raw.html">binlex::Raw</a></div><div class="ttdef"><b>Definition:</b> raw.h:25</div></div>
 <div class="ttc" id="anamespacebinlex_html"><div class="ttname"><a href="namespacebinlex.html">binlex</a></div><div class="ttdoc">the binlex namespace</div></div>
