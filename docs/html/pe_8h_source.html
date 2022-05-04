@@ -126,25 +126,22 @@ $(document).ready(function(){initNavTree('pe_8h_source.html',''); initResizable(
 <div class="line"><a name="l00038"></a><span class="lineno">   38</span>&#160;            BINLEX_EXPORT <a class="code" href="classbinlex_1_1PE.html">PE</a>();</div>
 <div class="line"><a name="l00039"></a><span class="lineno">   39</span>&#160;            <span class="keyword">struct </span><a class="code" href="structbinlex_1_1File_1_1Section.html">Section</a> sections[BINARY_MAX_SECTIONS];</div>
 <div class="line"><a name="l00040"></a><span class="lineno">   40</span>&#160;            uint32_t total_exec_sections;</div>
-<div class="line"><a name="l00045"></a><span class="lineno"><a class="line" href="classbinlex_1_1PE.html#adc55b9f922a681d2d5c31d19013bf32c">   45</a></span>&#160;            <span class="keyword">virtual</span> BINLEX_EXPORT <span class="keywordtype">bool</span> <a class="code" href="classbinlex_1_1PE.html#adc55b9f922a681d2d5c31d19013bf32c">ReadFile</a>(<span class="keywordtype">char</span> *file_path);</div>
-<div class="line"><a name="l00051"></a><span class="lineno"><a class="line" href="classbinlex_1_1PE.html#a3a0aafcc006710239b53593a91f13401">   51</a></span>&#160;            BINLEX_EXPORT <span class="keywordtype">bool</span> <a class="code" href="classbinlex_1_1PE.html#a3a0aafcc006710239b53593a91f13401">ReadBuffer</a>(<span class="keywordtype">void</span> *data, <span class="keywordtype">size_t</span> size);</div>
-<div class="line"><a name="l00057"></a><span class="lineno"><a class="line" href="classbinlex_1_1PE.html#aaf2fa4d79bc0fc9449eadd366b870d6b">   57</a></span>&#160;            BINLEX_EXPORT <span class="keywordtype">bool</span> <a class="code" href="classbinlex_1_1PE.html#aaf2fa4d79bc0fc9449eadd366b870d6b">Setup</a>(MACHINE_TYPES input_mode);</div>
-<div class="line"><a name="l00058"></a><span class="lineno">   58</span>&#160;            <span class="comment">/*</span></div>
-<div class="line"><a name="l00059"></a><span class="lineno">   59</span>&#160;<span class="comment">            Check if the PE file is a .NET file</span></div>
-<div class="line"><a name="l00060"></a><span class="lineno">   60</span>&#160;<span class="comment">            @return bool</span></div>
-<div class="line"><a name="l00061"></a><span class="lineno">   61</span>&#160;<span class="comment">            */</span></div>
-<div class="line"><a name="l00062"></a><span class="lineno">   62</span>&#160;            BINLEX_EXPORT <span class="keywordtype">bool</span> IsDotNet();</div>
-<div class="line"><a name="l00067"></a><span class="lineno"><a class="line" href="classbinlex_1_1PE.html#afc5cd018a384c015a298fe97d3658a3e">   67</a></span>&#160;            BINLEX_EXPORT <span class="keywordtype">bool</span> <a class="code" href="classbinlex_1_1PE.html#afc5cd018a384c015a298fe97d3658a3e">HasLimitations</a>();</div>
-<div class="line"><a name="l00068"></a><span class="lineno">   68</span>&#160;            BINLEX_EXPORT ~<a class="code" href="classbinlex_1_1PE.html">PE</a>();</div>
-<div class="line"><a name="l00069"></a><span class="lineno">   69</span>&#160;    };</div>
-<div class="line"><a name="l00070"></a><span class="lineno">   70</span>&#160;};</div>
-<div class="line"><a name="l00071"></a><span class="lineno">   71</span>&#160; </div>
-<div class="line"><a name="l00072"></a><span class="lineno">   72</span>&#160;<span class="preprocessor">#endif</span></div>
+<div class="line"><a name="l00046"></a><span class="lineno"><a class="line" href="classbinlex_1_1PE.html#aaf2fa4d79bc0fc9449eadd366b870d6b">   46</a></span>&#160;            BINLEX_EXPORT <span class="keywordtype">bool</span> <a class="code" href="classbinlex_1_1PE.html#aaf2fa4d79bc0fc9449eadd366b870d6b">Setup</a>(MACHINE_TYPES input_mode);</div>
+<div class="line"><a name="l00047"></a><span class="lineno">   47</span>&#160;            <span class="comment">/*</span></div>
+<div class="line"><a name="l00048"></a><span class="lineno">   48</span>&#160;<span class="comment">            Check if the PE file is a .NET file</span></div>
+<div class="line"><a name="l00049"></a><span class="lineno">   49</span>&#160;<span class="comment">            @return bool</span></div>
+<div class="line"><a name="l00050"></a><span class="lineno">   50</span>&#160;<span class="comment">            */</span></div>
+<div class="line"><a name="l00051"></a><span class="lineno">   51</span>&#160;            BINLEX_EXPORT <span class="keywordtype">bool</span> IsDotNet();</div>
+<div class="line"><a name="l00056"></a><span class="lineno"><a class="line" href="classbinlex_1_1PE.html#afc5cd018a384c015a298fe97d3658a3e">   56</a></span>&#160;            BINLEX_EXPORT <span class="keywordtype">bool</span> <a class="code" href="classbinlex_1_1PE.html#afc5cd018a384c015a298fe97d3658a3e">HasLimitations</a>();</div>
+<div class="line"><a name="l00057"></a><span class="lineno">   57</span>&#160;        <span class="keyword">virtual</span> <span class="keywordtype">bool</span> ReadVector(<span class="keyword">const</span> std::vector&lt;uint8_t&gt; &amp;data);</div>
+<div class="line"><a name="l00058"></a><span class="lineno">   58</span>&#160;            BINLEX_EXPORT ~<a class="code" href="classbinlex_1_1PE.html">PE</a>();</div>
+<div class="line"><a name="l00059"></a><span class="lineno">   59</span>&#160;    };</div>
+<div class="line"><a name="l00060"></a><span class="lineno">   60</span>&#160;};</div>
+<div class="line"><a name="l00061"></a><span class="lineno">   61</span>&#160; </div>
+<div class="line"><a name="l00062"></a><span class="lineno">   62</span>&#160;<span class="preprocessor">#endif</span></div>
 <div class="ttc" id="aclassbinlex_1_1File_html"><div class="ttname"><a href="classbinlex_1_1File.html">binlex::File</a></div><div class="ttdef"><b>Definition:</b> file.h:14</div></div>
 <div class="ttc" id="aclassbinlex_1_1PE_html"><div class="ttname"><a href="classbinlex_1_1PE.html">binlex::PE</a></div><div class="ttdef"><b>Definition:</b> pe.h:28</div></div>
-<div class="ttc" id="aclassbinlex_1_1PE_html_a3a0aafcc006710239b53593a91f13401"><div class="ttname"><a href="classbinlex_1_1PE.html#a3a0aafcc006710239b53593a91f13401">binlex::PE::ReadBuffer</a></div><div class="ttdeci">BINLEX_EXPORT bool ReadBuffer(void *data, size_t size)</div></div>
 <div class="ttc" id="aclassbinlex_1_1PE_html_aaf2fa4d79bc0fc9449eadd366b870d6b"><div class="ttname"><a href="classbinlex_1_1PE.html#aaf2fa4d79bc0fc9449eadd366b870d6b">binlex::PE::Setup</a></div><div class="ttdeci">BINLEX_EXPORT bool Setup(MACHINE_TYPES input_mode)</div></div>
-<div class="ttc" id="aclassbinlex_1_1PE_html_adc55b9f922a681d2d5c31d19013bf32c"><div class="ttname"><a href="classbinlex_1_1PE.html#adc55b9f922a681d2d5c31d19013bf32c">binlex::PE::ReadFile</a></div><div class="ttdeci">virtual BINLEX_EXPORT bool ReadFile(char *file_path)</div></div>
 <div class="ttc" id="aclassbinlex_1_1PE_html_afc5cd018a384c015a298fe97d3658a3e"><div class="ttname"><a href="classbinlex_1_1PE.html#afc5cd018a384c015a298fe97d3658a3e">binlex::PE::HasLimitations</a></div><div class="ttdeci">BINLEX_EXPORT bool HasLimitations()</div></div>
 <div class="ttc" id="anamespacebinlex_html"><div class="ttname"><a href="namespacebinlex.html">binlex</a></div><div class="ttdoc">the binlex namespace</div></div>
 <div class="ttc" id="astructbinlex_1_1File_1_1Section_html"><div class="ttname"><a href="structbinlex_1_1File_1_1Section.html">binlex::File::Section</a></div><div class="ttdef"><b>Definition:</b> file.h:18</div></div>

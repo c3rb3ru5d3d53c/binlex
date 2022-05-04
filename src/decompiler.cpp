@@ -149,16 +149,20 @@ void Decompiler::WriteTraits(){
     }
     auto traits(GetTraits());
     if(g_args.options.output != NULL) {
-	    for(auto i : traits) {
-	        output_stream << (g_args.options.pretty ? i.dump(4) : i.dump()) << endl;
-        }
+	for(auto trait : traits) {
+	    trait["file_sha256"] = file_reference.sha256;
+	    trait["file_tlsh"] = file_reference.tlsh;
+	    output_stream << (g_args.options.pretty ? trait.dump(4) : trait.dump()) << endl;
+	}
     } else {
-	    for(auto i : traits) {
-    	    cout << (g_args.options.pretty ? i.dump(4) : i.dump()) << endl;
-	    }
+	for(auto trait : traits) {
+	    trait["file_sha256"] = file_reference.sha256;
+	    trait["file_tlsh"] = file_reference.tlsh;
+	    cout << (g_args.options.pretty ? trait.dump(4) : trait.dump()) << endl;
+	}
     }
     if (g_args.options.output != NULL) {
-        output_stream.close();
+	output_stream.close();
     }
 }
 

@@ -112,16 +112,10 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a8aacf571ea478ede2feb0dbfbd3e9756"><td class="memItemLeft" align="right" valign="top"><a id="a8aacf571ea478ede2feb0dbfbd3e9756"></a>
 int&#160;</td><td class="memItemRight" valign="bottom"><b>GetFileSize</b> (FILE *fd)</td></tr>
 <tr class="separator:a8aacf571ea478ede2feb0dbfbd3e9756"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:addf688e6d6c748a0cc1296fcca977459"><td class="memItemLeft" align="right" valign="top"><a id="addf688e6d6c748a0cc1296fcca977459"></a>
-BINLEX_EXPORT bool&#160;</td><td class="memItemRight" valign="bottom"><b>ReadFile</b> (const char *file_path)</td></tr>
-<tr class="separator:addf688e6d6c748a0cc1296fcca977459"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a3de77ef22f14f0cc2a58518e92bd44cd"><td class="memItemLeft" align="right" valign="top"><a id="a3de77ef22f14f0cc2a58518e92bd44cd"></a>
-BINLEX_EXPORT bool&#160;</td><td class="memItemRight" valign="bottom"><b>ReadBuffer</b> (void *data, size_t size)</td></tr>
-<tr class="separator:a3de77ef22f14f0cc2a58518e92bd44cd"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8c13d914c33d29f1df3d01e4cdc0273b"><td class="memItemLeft" align="right" valign="top"><a id="a8c13d914c33d29f1df3d01e4cdc0273b"></a>
+virtual BINLEX_EXPORT bool&#160;</td><td class="memItemRight" valign="bottom"><b>ReadVector</b> (const std::vector&lt; uint8_t &gt; &amp;data)</td></tr>
+<tr class="separator:a8c13d914c33d29f1df3d01e4cdc0273b"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="inherit_header pub_methods_classbinlex_1_1File"><td colspan="2" onclick="javascript:toggleInherit('pub_methods_classbinlex_1_1File')"><img src="closed.png" alt="-"/>&#160;Public Member Functions inherited from <a class="el" href="classbinlex_1_1File.html">binlex::File</a></td></tr>
-<tr class="memitem:a4b3c7ae07f17ebe65dfdb7b0c7bc70c8 inherit pub_methods_classbinlex_1_1File"><td class="memItemLeft" align="right" valign="top"><a id="a4b3c7ae07f17ebe65dfdb7b0c7bc70c8"></a>
-bool&#160;</td><td class="memItemRight" valign="bottom"><b>FileExists</b> (char *file_path)</td></tr>
-<tr class="separator:a4b3c7ae07f17ebe65dfdb7b0c7bc70c8 inherit pub_methods_classbinlex_1_1File"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a744ec07afb83c38432ab836cedbfc15b inherit pub_methods_classbinlex_1_1File"><td class="memItemLeft" align="right" valign="top"><a id="a744ec07afb83c38432ab836cedbfc15b"></a>
 void&#160;</td><td class="memItemRight" valign="bottom"><b>CalculateFileHashes</b> (char *file_path)</td></tr>
 <tr class="separator:a744ec07afb83c38432ab836cedbfc15b inherit pub_methods_classbinlex_1_1File"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -131,6 +125,12 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>CalculateFileHashes</
 <tr class="memitem:ae458e8b96b3f7ca03017ff4561525d3d inherit pub_methods_classbinlex_1_1File"><td class="memItemLeft" align="right" valign="top"><a id="ae458e8b96b3f7ca03017ff4561525d3d"></a>
 std::vector&lt; uint8_t &gt;&#160;</td><td class="memItemRight" valign="bottom"><b>ReadFileIntoVector</b> (const char *file_path)</td></tr>
 <tr class="separator:ae458e8b96b3f7ca03017ff4561525d3d inherit pub_methods_classbinlex_1_1File"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af69581745439422e597e9c8ab2dcb27c inherit pub_methods_classbinlex_1_1File"><td class="memItemLeft" align="right" valign="top"><a id="af69581745439422e597e9c8ab2dcb27c"></a>
+bool&#160;</td><td class="memItemRight" valign="bottom"><b>ReadFile</b> (const char *file_path)</td></tr>
+<tr class="separator:af69581745439422e597e9c8ab2dcb27c inherit pub_methods_classbinlex_1_1File"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7d80d86e8c30d68e11a7f024518c9172 inherit pub_methods_classbinlex_1_1File"><td class="memItemLeft" align="right" valign="top"><a id="a7d80d86e8c30d68e11a7f024518c9172"></a>
+bool&#160;</td><td class="memItemRight" valign="bottom"><b>ReadBuffer</b> (void *data, size_t size)</td></tr>
+<tr class="separator:a7d80d86e8c30d68e11a7f024518c9172 inherit pub_methods_classbinlex_1_1File"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-attribs"></a>
 Public Attributes</h2></td></tr>
