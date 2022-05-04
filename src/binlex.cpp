@@ -122,12 +122,12 @@ int main(int argc, char **argv){
 			if (cil_decompiler.Decompile(pe._sections[i].data, pe._sections[i].size, 0) == false){
                 continue;
 			}
+            if (g_args.options.output == NULL){
+		        cil_decompiler.PrintTraits();
+		    } else {
+		        cil_decompiler.WriteTraits(g_args.options.output);
+		    }
         }
-        if (g_args.options.output == NULL){
-		    cil_decompiler.PrintTraits();
-		} else {
-		    cil_decompiler.WriteTraits(g_args.options.output);
-		}
         return 0;
     }
     if (g_args.options.mode == "pe:x86" &&
