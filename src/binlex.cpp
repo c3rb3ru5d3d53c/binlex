@@ -75,8 +75,8 @@ int main(int argc, char **argv){
         PRINT_DEBUG("Number of total executable sections = %u\n", elf64.total_exec_sections);
 
         Decompiler decompiler;
-        for (int i = 0; i < elf64.total_exec_sections; i++){
-            decompiler.Setup(CS_ARCH_X86, CS_MODE_64, i);
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_64);
+        for (uint32_t i = 0; i < elf64.total_exec_sections; i++){
             decompiler.AppendQueue(elf64.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
             decompiler.Decompile(elf64.sections[i].data, elf64.sections[i].size, elf64.sections[i].offset, i);
         }
@@ -95,8 +95,8 @@ int main(int argc, char **argv){
         PRINT_DEBUG("Number of total executable sections = %u\n", elf32.total_exec_sections);
 
         Decompiler decompiler;
-        for (int i = 0; i < elf32.total_exec_sections; i++){
-            decompiler.Setup(CS_ARCH_X86, CS_MODE_32, i);
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
+        for (uint32_t i = 0; i < elf32.total_exec_sections; i++){
             decompiler.AppendQueue(elf32.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
             decompiler.Decompile(elf32.sections[i].data, elf32.sections[i].size, elf32.sections[i].offset, i);
         }
@@ -141,8 +141,8 @@ int main(int argc, char **argv){
         PRINT_DEBUG("Number of total sections = %u\n", pe32.total_exec_sections);
 
         Decompiler decompiler;
-        for (int i = 0; i < pe32.total_exec_sections; i++){
-            decompiler.Setup(CS_ARCH_X86, CS_MODE_32, i);
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
+        for (uint32_t i = 0; i < pe32.total_exec_sections; i++){
             decompiler.AppendQueue(pe32.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
             decompiler.Decompile(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, i);
         }
@@ -161,8 +161,8 @@ int main(int argc, char **argv){
         PRINT_DEBUG("Number of total executable sections = %u\n", pe64.total_exec_sections);
 
         Decompiler decompiler;
-        for (int i = 0; i < pe64.total_exec_sections; i++){
-            decompiler.Setup(CS_ARCH_X86, CS_MODE_64, i);
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_64);
+        for (uint32_t i = 0; i < pe64.total_exec_sections; i++){
             decompiler.AppendQueue(pe64.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
             decompiler.Decompile(pe64.sections[i].data, pe64.sections[i].size, pe64.sections[i].offset, i);
         }
@@ -178,7 +178,7 @@ int main(int argc, char **argv){
         }
 
         Decompiler decompiler;
-        decompiler.Setup(CS_ARCH_X86, CS_MODE_32, 0);
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
         decompiler.Decompile(rawx86.sections[0].data, rawx86.sections[0].size, rawx86.sections[0].offset, 0);
         decompiler.WriteTraits();
         return EXIT_SUCCESS;
@@ -192,7 +192,7 @@ int main(int argc, char **argv){
         }
 
         Decompiler decompiler;
-        decompiler.Setup(CS_ARCH_X86, CS_MODE_64, 0);
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_64);
         decompiler.Decompile(rawx86_64.sections[0].data, rawx86_64.sections[0].size, rawx86_64.sections[0].offset, 0);
         decompiler.WriteTraits();
         return EXIT_SUCCESS;

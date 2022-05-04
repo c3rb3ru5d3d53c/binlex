@@ -90,9 +90,9 @@ int AutoLex::ProcessFile(char *file_path){
             return EXIT_SUCCESS;
         }
 
+        decompiler.Setup(characteristics.arch, characteristics.mode);
         for (int i = 0; i < pe.total_exec_sections; i++) {
             if (pe.sections[i].data != NULL) {
-                decompiler.Setup(characteristics.arch, characteristics.mode, i);
                 decompiler.AppendQueue(pe.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
                 decompiler.Decompile(pe.sections[i].data, pe.sections[i].size, pe.sections[i].offset, i);
             }
@@ -109,10 +109,9 @@ int AutoLex::ProcessFile(char *file_path){
             return EXIT_FAILURE;
         }
 
+        decompiler.Setup(characteristics.arch, characteristics.mode);
         for (int i = 0; i < elf.total_exec_sections; i++){
-
             if (elf.sections[i].data != NULL){
-                decompiler.Setup(characteristics.arch, characteristics.mode, i);
                 decompiler.AppendQueue(elf.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
                 decompiler.Decompile(elf.sections[i].data, elf.sections[i].size, elf.sections[i].offset, i);
             }

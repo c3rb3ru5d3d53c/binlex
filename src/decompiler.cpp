@@ -94,9 +94,9 @@ void Decompiler::AppendTrait(struct Trait *trait, struct Section *sections, uint
     #endif
 }
 
-bool Decompiler::Setup(cs_arch arch, cs_mode mode, uint index){
-    sections[index].arch = arch;
-    sections[index].mode = mode;
+bool Decompiler::Setup(cs_arch architecture, cs_mode mode_type) {
+    arch = architecture;
+    mode = mode_type;
     return true;
 }
 
@@ -165,9 +165,12 @@ void Decompiler::WriteTraits(){
 void * Decompiler::DecompileWorker(void *args) {
 
     worker myself;
-    worker_args *pArgs = (worker_args *)args;
-    uint index = pArgs->index;
-    struct Section *sections = (struct Section *)pArgs->sections;
+
+    worker_args *p_args = (worker_args *)args;
+    uint index = p_args->index;
+    cs_arch arch = p_args->arch;
+    cs_mode mode = p_args->mode;
+    struct Section *sections = (struct Section *)p_args->sections;
 
     struct Trait b_trait;
     struct Trait f_trait;
@@ -183,7 +186,7 @@ void * Decompiler::DecompileWorker(void *args) {
     //f_trait.architecture = sections[index].arch_str;
     ClearTrait(&f_trait);
 
-    myself.error = cs_open(sections[index].arch, sections[index].mode, &myself.handle);
+    myself.error = cs_open(arch, mode, &myself.handle);
     if (myself.error != CS_ERR_OK) {
         return NULL;
     }
@@ -422,6 +425,8 @@ void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint ind
     worker_args *args = (worker_args *)malloc(sizeof(worker_args));
     args->index = index;
     args->sections = &sections;
+    args->arch = arch;
+    args->mode = mode;
 
     #if defined(__linux__) || defined(__APPLE__)
     pthread_t threads[g_args.options.threads];
