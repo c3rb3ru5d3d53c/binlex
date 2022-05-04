@@ -45,6 +45,8 @@ namespace binlex {
         } worker;
         typedef struct{
             uint index;
+            cs_arch arch;
+            cs_mode mode;
             void *sections;
         } worker_args;
     public:
@@ -68,8 +70,6 @@ namespace binlex {
             char trait_sha256[SHA256_PRINTABLE_SIZE];
         };
         struct Section {
-            cs_arch arch;
-            cs_mode mode;
             char *cpu;
             bool instructions;
             uint offset;
@@ -81,16 +81,17 @@ namespace binlex {
             map<uint64_t, int> visited;
             queue<uint64_t> discovered;
         };
+        cs_arch arch;
+        cs_mode mode;
         struct Section sections[DECOMPILER_MAX_SECTIONS];
         BINLEX_EXPORT Decompiler();
         /**
         Set up Capstone Decompiler Architecure and Mode
-        @param arch Capstone Decompiler Architecure
-        @param cs_mode Capstone Mode
-        @param index section index
+        @param architecture Capstone Decompiler Architecure
+        @param mode_type Capstone Mode
         @return bool
         */
-        BINLEX_EXPORT bool Setup(cs_arch arch, cs_mode mode, uint index);
+        BINLEX_EXPORT bool Setup(cs_arch architecture, cs_mode mode_type);
         /**
         Set Threads and Thread Cycles
         @param threads number of threads
