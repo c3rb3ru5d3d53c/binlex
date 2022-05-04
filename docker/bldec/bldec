@@ -128,7 +128,7 @@ class BLDEC():
             data = json.loads(body)
             file_type = data['mode'].split(':')[0]
             binary_data = self.minio.download(
-                bucket_name=self.config['amqp'].get('decomp_queue'),
+                bucket_name=data['corpus'],
                 object_name=data['object_name'])
             if file_type == 'pe':
                 traits = self.decompile_pe(
@@ -148,7 +148,7 @@ class BLDEC():
             else:
                 raise Exception('unknown file format')
             for trait in traits:
-                amqp.publish(
+                self.amqp.publish(
                     self.config['amqp'].get('traits_queue'),
                     json.dumps(trait))
             self.minio.delete(
