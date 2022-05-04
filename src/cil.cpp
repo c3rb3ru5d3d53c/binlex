@@ -356,13 +356,12 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
     map<int, int>::iterator it;
     uint num_edges = 0;
     uint num_instructions = 0;
-    string json_str;
     for (int i = 0; i < data_size; i++){
         int operand_size = 0;
         bool end_block = false;
         bool end_func = false;
         Instruction *insn = new Instruction;
-        //fprintf(stderr, "Instruction being decompiled: 0x%x\n", pc[i]);
+        PRINT_DEBUG("Instruction being decompiled: 0x%x\n", pc[i]);
         if (insn->instruction == CIL_INS_PREFIX){
             //Let's add prefix instruction to our instructions
             insn->instruction = pc[i];
@@ -372,20 +371,20 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
             num_instructions++;
             //Then let's move on to the next instruction
             i++;
-            //fprintf(stderr, "Instruction being decompiled: 0x%x\n", pc[i]);
+            PRINT_DEBUG("Instruction being decompiled: 0x%x\n", pc[i]);
             //Then let's create a new instruction for the ... new instruction
             insn = new Instruction;
             insn->instruction = pc[i];
             it = prefixInstrMap.find(pc[i]);
             if(it != prefixInstrMap.end()) {
-                //fprintf(stderr, "[+] found prefix opcode 0x%02x at offset %d with operand size: %d\n", pc[i], i, it->second);
+                fprintf(stderr, "[+] found prefix opcode 0x%02x at offset %d with operand size: %d\n", pc[i], i, it->second);
                 insn->instruction = pc[i];
                 insn->operand_size = it->second;
                 insn->offset = i;
                 instructions->push_back(insn);
                 num_instructions++;
             } else {
-                fprintf(stderr, "[x] unknown prefix opcode 0x%02x at offset %d\n", pc[i], i);
+                PRINT_ERROR_AND_EXIT( "[x] unknown prefix opcode 0x%02x at offset %d\n", pc[i], i);
                 return false;
             }
         } else {
@@ -398,18 +397,18 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
                     instructions->push_back(insn);   
                     end_block = true;
                     num_instructions++;
-                    //fprintf(stderr, "[+] end block found -> opcode 0x%02x at offset %d\n", pc[i], i);
+                    PRINT_DEBUG("[+] end block found -> opcode 0x%02x at offset %d\n", pc[i], i);
             } else {
                 it = miscInstrMap.find(pc[i]);
                 if(it != miscInstrMap.end()) {
-                    //fprintf(stderr, "[+] found misc opcode 0x%02x at offset %d with operand size: %d\n", pc[i], i, it->second);
+                    PRINT_DEBUG("[+] found misc opcode 0x%02x at offset %d with operand size: %d\n", pc[i], i, it->second);
                     insn->instruction = pc[i];
                     insn->operand_size = it->second;
                     insn->offset = i;
                     instructions->push_back(insn);
                     num_instructions++;
                 } else {
-                    fprintf(stderr, "[x] unknown opcode 0x%02x at offset %d\n", pc[i], i);
+                    PRINT_ERROR_AND_EXIT("[x] unknown opcode 0x%02x at offset %d\n", pc[i], i);
                     return false;
                 }
             }
@@ -434,6 +433,8 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
             ctrait->architecture = "x86";
             //The first offset of the first instruction will give us the offset
             //of our trait.
+            uint trait_offset = instructions->front()->offset;
+            PRINT_DEBUG("Adding offset to trait: %d\n", trait_offset);
             ctrait->offset = instructions->front()->offset;
             ctrait->num_instructions = num_instructions;
             ctrait->trait = ConvTraitBytes(*instructions);
@@ -460,8 +461,6 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
             //cout << GetTrait(ctrait, true);
             //TODO support both types of traits.
             sections[index].block_traits.push_back(ctrait);
-            json_str.append(GetTrait(ctrait, g_args.options.pretty));
-            json_str.append("\n");
        }
     }
     //Cleanup trait pointers and any other data structures before returning.
@@ -586,237 +585,6 @@ void CILDecompiler::PrintTraits(){
     }
 }
 
-/*
-void * CILDecompiler::DecompileWorker(void *args) {
-
-    worker myself;
-    worker_args *pArgs = (worker_args *)args;
-    uint index = pArgs->index;
-    struct Section *sections = (struct Section *)pArgs->sections;
-
-    struct Trait b_trait;
-    struct Trait f_trait;
-    struct Trait i_trait;
-
-    i_trait.type = (char *)"instruction";
-    i_trait.architecture = sections[index].arch_str;
-    ClearTrait(&i_trait);
-    b_trait.type = (char *)"block";
-    b_trait.architecture = sections[index].arch_str;
-    ClearTrait(&b_trait);
-    f_trait.type = (char *)"function";
-    f_trait.architecture = sections[index].arch_str;
-    ClearTrait(&f_trait);
-
-    myself.error = cs_open(sections[index].arch, sections[index].mode, &myself.handle);
-    if (myself.error != CS_ERR_OK) {
-        return NULL;
-    }
-    myself.error = cs_option(myself.handle, CS_OPT_DETAIL, CS_OPT_ON);
-    if (myself.error != CS_ERR_OK) {
-        return NULL;
-    }
-
-    int thread_cycles = 0;
-    cs_insn *insn = cs_malloc(myself.handle);
-    while (true){
-
-        uint64_t tmp_addr = 0;
-        uint64_t address = 0;
-
-        #if defined(__linux__) || defined(__APPLE__)
-        pthread_mutex_lock(&DECOMPILER_MUTEX);
-        #else
-        EnterCriticalSection(&csDecompiler);
-        #endif
-        if (!sections[index].discovered.empty()){
-            address = sections[index].discovered.front();
-            sections[index].discovered.pop();
-            sections[index].visited[address] = DECOMPILER_VISITED_ANALYZED;
-        } else {
-            #if defined(__linux__) || defined(__APPLE__)
-            pthread_mutex_unlock(&DECOMPILER_MUTEX);
-            #else
-            LeaveCriticalSection(&csDecompiler);
-            #endif
-            thread_cycles++;
-            if (thread_cycles == sections[index].thread_cycles){
-                break;
-            }
-            #ifndef _WIN32
-            usleep(sections[index].thread_sleep * 1000);
-            #else
-            Sleep(sections[index].thread_sleep);
-            #endif
-            continue;
-        }
-        sections[index].coverage.insert(address);
-        #if defined(__linux__) || defined(__APPLE__)
-        pthread_mutex_unlock(&DECOMPILER_MUTEX);
-        #else
-        LeaveCriticalSection(&csDecompiler);
-        #endif
-
-        myself.pc = address;
-        myself.code = (uint8_t *)((uint8_t *)sections[index].data + address);
-        myself.code_size = sections[index].data_size + address;
-
-        bool block = IsBlock(sections[index].addresses, address);
-        bool function = IsFunction(sections[index].addresses, address);
-
-        while(true) {
-            uint edges = 0;
-
-            if (myself.pc >= sections[index].data_size) {
-                break;
-            }
-
-            bool result = cs_disasm_iter(myself.handle, &myself.code, &myself.code_size, &myself.pc, insn);
-
-            b_trait.instructions++;
-            f_trait.instructions++;
-
-            if (sections[index].instructions == true){
-                if (result == true){
-                    i_trait.tmp_bytes = HexdumpBE(insn->bytes, insn->size);
-                    i_trait.size = GetByteSize(i_trait.tmp_bytes);
-                    i_trait.offset = sections[index].offset + myself.pc - i_trait.size;
-                    i_trait.tmp_trait = WildcardInsn(insn);
-                    i_trait.instructions = 1;
-                    i_trait.edges = IsConditionalInsn(insn);
-                    AppendTrait(&i_trait, sections, index);
-                    ClearTrait(&i_trait);
-                } else {
-                    i_trait.instructions = 1;
-                    i_trait.invalid_instructions = 1;
-                    i_trait.tmp_bytes = i_trait.tmp_bytes + HexdumpBE(myself.code, 1);
-                    i_trait.tmp_trait = i_trait.tmp_trait + Wildcards(1);
-                    AppendTrait(&i_trait, sections, index);
-                    ClearTrait(&i_trait);
-                }
-            }
-
-            if (result == true){
-                // Need to Wildcard Traits Here
-
-                if (IsWildcardInsn(insn) == true){
-                    b_trait.tmp_trait = b_trait.tmp_trait + Wildcards(insn->size) + " ";
-                    f_trait.tmp_trait = f_trait.tmp_trait + Wildcards(insn->size) + " ";
-                } else {
-                    b_trait.tmp_trait = b_trait.tmp_trait + WildcardInsn(insn) + " ";
-                    f_trait.tmp_trait = f_trait.tmp_trait + WildcardInsn(insn) + " ";
-                }
-                b_trait.tmp_bytes = b_trait.tmp_bytes + HexdumpBE(insn->bytes, insn->size) + " ";
-                f_trait.tmp_bytes = f_trait.tmp_bytes + HexdumpBE(insn->bytes, insn->size) + " ";
-                edges = IsConditionalInsn(insn);
-                b_trait.edges = b_trait.edges + edges;
-                f_trait.edges = f_trait.edges + edges;
-                if (edges > 0){
-                    b_trait.blocks++;
-                    f_trait.blocks++;
-                }
-            }
-
-            if (result == false){
-                b_trait.invalid_instructions++;
-                f_trait.invalid_instructions++;
-                b_trait.tmp_bytes = b_trait.tmp_bytes + HexdumpBE(myself.code, 1) + " ";
-                f_trait.tmp_bytes = f_trait.tmp_bytes + HexdumpBE(myself.code, 1) + " ";
-                b_trait.tmp_trait = b_trait.tmp_trait + Wildcards(1) + " ";
-                f_trait.tmp_trait = f_trait.tmp_trait + Wildcards(1) + " ";
-                myself.pc++;
-                myself.code = (uint8_t *)((uint8_t *)sections[index].data + myself.pc);
-                myself.code_size = sections[index].data_size + myself.pc;
-                continue;
-            }
-
-            #if defined(__linux__) || defined(__APPLE__)
-            pthread_mutex_lock(&DECOMPILER_MUTEX);
-            #else
-            EnterCriticalSection(&csDecompiler);
-            #endif
-
-            if (result == true){
-                sections[index].coverage.insert(myself.pc);
-            } else {
-                sections[index].coverage.insert(myself.pc+1);
-            }
-            CollectInsn(insn, sections, index);
-
-            //printf("address=0x%" PRIx64 ",block=%d,function=%d,queue=%ld,instruction=%s\t%s\n", insn->address,IsBlock(sections[index].addresses, insn->address), IsFunction(sections[index].addresses, insn->address), sections[index].discovered.size(), insn->mnemonic, insn->op_str);
-
-            #if defined(__linux__) || defined(__APPLE__)
-            pthread_mutex_unlock(&DECOMPILER_MUTEX);
-            #else
-            LeaveCriticalSection(&csDecompiler);
-            #endif
-            if (block == true && IsConditionalInsn(insn) > 0){
-                b_trait.tmp_trait = TrimRight(b_trait.tmp_trait);
-                b_trait.tmp_bytes = TrimRight(b_trait.tmp_bytes);
-                b_trait.size = GetByteSize(b_trait.tmp_bytes);
-                b_trait.offset = sections[index].offset + myself.pc - b_trait.size;
-                AppendTrait(&b_trait, sections, index);
-                ClearTrait(&b_trait);
-                if (function == false){
-                    ClearTrait(&f_trait);
-                    break;
-                }
-            }
-            if (block == true && IsEndInsn(insn) == true){
-                b_trait.tmp_trait = TrimRight(b_trait.tmp_trait);
-                b_trait.tmp_bytes = TrimRight(b_trait.tmp_bytes);
-                b_trait.size = GetByteSize(b_trait.tmp_bytes);
-                b_trait.offset = sections[index].offset + myself.pc - b_trait.size;
-                AppendTrait(&b_trait, sections, index);
-                ClearTrait(&b_trait);
-            }
-
-            if (function == true && IsEndInsn(insn) == true){
-                f_trait.tmp_trait = TrimRight(f_trait.tmp_trait);
-                f_trait.tmp_bytes = TrimRight(f_trait.tmp_bytes);
-                f_trait.size = GetByteSize(f_trait.tmp_bytes);
-                f_trait.offset = sections[index].offset + myself.pc - f_trait.size;
-                AppendTrait(&f_trait, sections, index);
-                ClearTrait(&f_trait);
-                break;
-            }
-        }
-    }
-    cs_free(insn, 1);
-    cs_close(&myself.handle);
-    return NULL;
-}
-*/
-/*
-void * CILDecompiler::TraitWorker(void *args){
-    struct Trait *trait = (struct Trait *)args;
-    if (trait->blocks == 0 &&
-        (strcmp(trait->type, "function") == 0 ||
-        strcmp(trait->type, "block") == 0)){
-        trait->blocks++;
-    }
-    trait->bytes_entropy = Entropy(string(trait->bytes));
-    trait->trait_entropy = Entropy(string(trait->trait));
-    string bytes_sha256 = SHA256(trait->bytes);
-    trait->bytes_sha256 = (char *)malloc(bytes_sha256.length()+1);
-    memset(trait->bytes_sha256, 0, bytes_sha256.length()+1);
-    memcpy(trait->bytes_sha256, bytes_sha256.c_str(), bytes_sha256.length());
-    string trait_sha256 = SHA256(trait->trait);
-    trait->trait_sha256 = (char *)malloc(trait_sha256.length()+1);
-    memset(trait->trait_sha256, 0, trait_sha256.length()+1);
-    memcpy(trait->trait_sha256, trait_sha256.c_str(), trait_sha256.length());
-    if (strcmp(trait->type, (char *)"block") == 0){
-        trait->cyclomatic_complexity = trait->edges - 1 + 2;
-        trait->average_instructions_per_block = trait->instructions / 1;
-    }
-    if (strcmp(trait->type, (char *)"function") == 0){
-        trait->cyclomatic_complexity = trait->edges - trait->blocks + 2;
-        trait->average_instructions_per_block = trait->instructions / trait->blocks;
-    }
-    return NULL;
-
-}
-*/
 bool CILDecompiler::IsVisited(map<uint64_t, int> &visited, uint64_t address) {
     return visited.find(address) != visited.end();
 }
