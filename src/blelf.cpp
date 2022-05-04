@@ -42,16 +42,6 @@ bool ELF::ReadVector(const std::vector<uint8_t> &data){
     return ParseSections();
 }
 
-bool ELF::ReadBuffer(void *data, size_t size){
-    vector<uint8_t> data_v((uint8_t *)data, (uint8_t *)data + size);
-    binary = Parser::parse(data_v);
-    if (mode != binary->header().machine_type()){
-        fprintf(stderr, "[x] incorrect mode for binary architecture\n");
-        return false;
-    }
-    return ParseSections();
-}
-
 bool ELF::ParseSections(){
     uint index = 0;
     it_sections local_sections = binary->sections();
