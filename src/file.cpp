@@ -48,4 +48,3 @@ bool File::ReadBuffer(void *data, size_t size){
     vector<uint8_t> data_v((uint8_t *)data, (uint8_t *)data + size);
     return ReadVector(data_v);
 }
-
