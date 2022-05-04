@@ -1,6 +1,8 @@
 #ifndef CIL_H
 #define CIL_H
 
+#include <iostream>
+#include <fstream>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -10,11 +12,12 @@
 #include <byteswap.h>
 #include <ctype.h>
 #include <capstone/capstone.h>
-#include "common.h"
 #include <queue>
 #include <vector>
 #include <set>
 #include <map>
+#include "common.h"
+#include "json.h"
 
 #define INVALID_OP 0xFFFFFFFF
 
