@@ -1,16 +1,5 @@
-#ifdef _WIN32
-#include <Windows.h>
-#endif
-#include <iostream>
-#include <memory>
-#include <vector>
-#include <set>
-#include <iostream>
-#include <exception>
-#include <stdexcept>
-#include <cassert>
 #include "blelf.h"
-#include <LIEF/ELF.hpp>
+
 using namespace binlex;
 using namespace LIEF::ELF;
 
@@ -48,6 +37,9 @@ bool ELF::ReadFile(char *file_path){
     assert(!tlsh.empty());
     assert(!sha256.empty());
     binary = Parser::parse(file_path);
+    if (binary == NULL){
+        return false;
+    }
     if (mode != binary->header().machine_type()){
         fprintf(stderr, "[x] incorrect mode for binary architecture\n");
         return false;
@@ -80,7 +72,7 @@ bool ELF::ParseSections(){
             // Add export to function list
             for (auto j = symbols.begin(); j != symbols.end(); j++){
                 uint64_t tmp_offset = binary->virtual_address_to_offset(j->value());
-                PRINT_DEBUG("Elf Export offset: 0x%x\n", tmp_offset);
+                PRINT_DEBUG("Elf Export offset: 0x%x\n", (int)tmp_offset);
                 if (tmp_offset > sections[index].offset &&
                     tmp_offset < sections[index].offset + sections[index].size){
                     sections[index].functions.insert(tmp_offset-sections[index].offset);
@@ -88,7 +80,7 @@ bool ELF::ParseSections(){
             }
             // Add entrypoint to the function list
             uint64_t entrypoint_offset = binary->virtual_address_to_offset(binary->entrypoint());
-            PRINT_DEBUG("Elf Entrypoint offset: 0x%x\n", entrypoint_offset);
+            PRINT_DEBUG("Elf Entrypoint offset: 0x%x\n", (int)entrypoint_offset);
             if (entrypoint_offset > sections[index].offset && entrypoint_offset < sections[index].offset + sections[index].size){
                 sections[index].functions.insert(entrypoint_offset-sections[index].offset);
             }

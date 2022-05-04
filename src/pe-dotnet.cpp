@@ -5,11 +5,30 @@ using namespace std;
 using namespace dotnet;
 
 
+void pprint(char *buffer, uint8_t size) {
+    char *aux = buffer;
+    for (uint8_t i = 0; i < size; i++) printf("%02X ", aux[i] & 0xFF);
+    printf("\n");
+}
+
+
+TableEntry* TableEntry::TableEntryFactory(uint8_t entry_type) {
+    if ( entry_type == MODULE ) return new ModuleEntry();
+    if ( entry_type == TYPE_REF) return new TypeRefEntry();
+    if ( entry_type == TYPE_DEF) return new TypeDefEntry();
+    if ( entry_type == FIELD_PTR) return new FieldPtrEntry();
+    if ( entry_type == FIELD) return new FieldEntry();
+    if ( entry_type == METHOD_PTR) return new MethodPtrEntry();
+    if ( entry_type == METHOD_DEF) return new MethodDefEntry();
+    return NULL;
+};
+
+
 uint32_t Cor20MetadataTable::ParseTablePointers(char *&buffer) {
     uint32_t *buffer_aux;
     uint32_t read_bytes;
     uint8_t i, j;
-    
+
     buffer_aux = (uint32_t *)buffer;
     j = 0;
     read_bytes = 0;
@@ -25,7 +44,7 @@ uint32_t Cor20MetadataTable::ParseTablePointers(char *&buffer) {
 uint32_t Cor20MetadataTable::ParseTables(char *&buffer) {
     char *buff_aux;
     TableEntry* entry;
-    
+
     buff_aux = buffer;
     for (size_t i = 0; i < 8 * 8; i++)
     {
@@ -48,7 +67,7 @@ Cor20MetadataTable::~Cor20MetadataTable() {
     {
         if (this->table_entries[i] == 0) continue;
         for (size_t j = 0; j < this->tables[i].size(); j++)
-        {   
+        {
             if (this->tables[i][j] != NULL) delete this->tables[i][j];
         }
     }
@@ -67,9 +86,9 @@ bool DOTNET::ParseCor20Header()
 {
     DataDirectory clr_data_directory;
     vector<uint8_t> raw_data;
-    
+
     if (this->binary->has(DATA_DIRECTORY::CLR_RUNTIME_HEADER) == false) return false;
-    
+
     clr_data_directory = this->binary->data_directory(DATA_DIRECTORY::CLR_RUNTIME_HEADER);
     raw_data = this->binary->get_content_from_virtual_address(clr_data_directory.RVA(),
                                                               clr_data_directory.size());
@@ -106,7 +125,7 @@ bool DOTNET::ParseCor20StorageHeader()
     vector<uint8_t> raw_data;
     unsigned char *storage_signature, *storage_header;
     uint32_t size_of_storage_signature;
-   
+
     raw_data = binary->get_content_from_virtual_address(cor20_header.metadata_rva, cor20_header.metadata_size);
     storage_signature = raw_data.data();
 
@@ -198,7 +217,7 @@ void DOTNET::ParseSections(){
         if (mentry->rva == 0) continue;
         Section section = {};
         section.offset = mentry->rva;
-        
+
         header = binary->get_content_from_virtual_address(mentry->rva, 1).data()[0];
 
         // Check header type Tiny or FAT type.
@@ -236,6 +255,9 @@ void DOTNET::ParseSections(){
 
 bool DOTNET::ReadFile(char *file_path){
     this->binary = Parser::parse(file_path);
+    if (this->binary == NULL){
+        return false;
+    }
     if (mode != this->binary->header().machine())
     {
         fprintf(stderr, "[x] incorrect mode for binary architecture\n");

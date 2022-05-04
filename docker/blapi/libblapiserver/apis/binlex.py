@@ -50,3 +50,39 @@ class binlex_modes(Resource):
     @require_user
     def get(self):
         return modes
+
+@api.route(api_prefix + '/samples/<string:corpus>/<string:mode>')
+class binlex_samples_upload(Resource):
+    @require_user
+    def post(self, corpus, mode):
+        if corpus not in corpra : 
+            return {
+                'error': 'Invalid corpus value, mode must be one of the following: ' + ', '.join(corpra)
+            }, 401
+        if mode not in modes :
+            return {
+                'error': 'Invalid mode value, mode must be one of the following: ' + ', '.join(modes)
+            }, 401
+
+        try:
+            f = request.files['filedata']
+            data = f.read()
+            app.config['minio'].upload(
+                bucket_name=corpus,
+                data=data
+            )
+
+            app.config['amqp'].publish(
+                queue=app.config['amqp_queue_decomp'],
+                body=json.dumps({
+                    'corpus': corpus,
+                    'mode': mode,
+                    'object_name': hashlib.sha256(data).hexdigest()
+                }))
+            return {
+                'status': 'processing'
+            }
+        except Exception:
+            return {
+                'error': 'Failed to add to decompiler queue'
+            }, 500

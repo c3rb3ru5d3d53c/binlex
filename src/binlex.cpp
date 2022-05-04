@@ -53,30 +53,17 @@ int main(int argc, char **argv){
         start_timeout(g_args.options.timeout);
         #endif
     }
-    if (g_args.options.mode == NULL){
+    if (g_args.options.mode.c_str() == NULL){
         g_args.print_help();
         return EXIT_FAILURE;
     }
-    if (strcmp(g_args.options.mode, (char *)"auto") == 0 &&
+    if (g_args.options.mode == "auto" &&
         g_args.options.io_type == ARGS_IO_TYPE_FILE){
-
         AutoLex autolex;
-
-        // check for limitations
-        if(autolex.HasLimitations(g_args.options.input) == true){
-            printf("[x] File has limitations and can't be processed. Select a mode to force analysis.\n");
-            return 1;
-        }
-
-        Decompiler decompiler {autolex.ProcessFile(g_args.options.input, \
-        g_args.options.threads, \
-        g_args.options.timeout, \
-        g_args.options.thread_cycles, g_args.options.thread_sleep, \
-        g_args.options.instructions) };
-        decompiler.WriteTraits();
+        return autolex.ProcessFile(g_args.options.input);
         return 0;
     }
-    if (strcmp(g_args.options.mode, (char *)"elf:x86_64") == 0 &&
+    if (g_args.options.mode == "elf:x86_64" &&
         g_args.options.io_type == ARGS_IO_TYPE_FILE){
         ELF elf64;
         if (elf64.Setup(ARCH::EM_X86_64) == false){
@@ -96,7 +83,7 @@ int main(int argc, char **argv){
         decompiler.WriteTraits();
         return EXIT_SUCCESS;
     }
-    if (strcmp(g_args.options.mode, (char *)"elf:x86") == 0 &&
+    if (g_args.options.mode == "elf:x86" &&
         g_args.options.io_type == ARGS_IO_TYPE_FILE){
         ELF elf32;
         if (elf32.Setup(ARCH::EM_386) == false){
@@ -116,7 +103,7 @@ int main(int argc, char **argv){
         decompiler.WriteTraits();
         return EXIT_SUCCESS;
     }
-    if (strcmp(g_args.options.mode, (char *)"pe:cil") == 0 &&
+    if (g_args.options.mode == "pe:cil" &&
         g_args.options.io_type == ARGS_IO_TYPE_FILE){
         // TODO: This should be valid for both x86-86 and x86-64
         // we need to do this more generic
@@ -142,7 +129,7 @@ int main(int argc, char **argv){
         }
         return 0;
     }
-    if (strcmp(g_args.options.mode, (char *)"pe:x86") == 0 &&
+    if (g_args.options.mode == "pe:x86" &&
         g_args.options.io_type == ARGS_IO_TYPE_FILE){
         PE pe32;
         if (pe32.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_I386) == false){
@@ -162,7 +149,7 @@ int main(int argc, char **argv){
         decompiler.WriteTraits();
         return EXIT_SUCCESS;
     }
-    if (strcmp(g_args.options.mode, (char *)"pe:x86_64") == 0 &&
+    if (g_args.options.mode == "pe:x86_64" &&
         g_args.options.io_type == ARGS_IO_TYPE_FILE){
         PE pe64;
         if (pe64.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_AMD64) == false){
@@ -182,7 +169,7 @@ int main(int argc, char **argv){
         decompiler.WriteTraits();
         return EXIT_SUCCESS;
     }
-    if (strcmp(g_args.options.mode, (char *)"raw:x86") == 0 &&
+    if (g_args.options.mode == "raw:x86" &&
         g_args.options.io_type == ARGS_IO_TYPE_FILE){
         Raw rawx86;
         if (rawx86.ReadFile(g_args.options.input, 0) == false)
@@ -196,7 +183,7 @@ int main(int argc, char **argv){
         decompiler.WriteTraits();
         return EXIT_SUCCESS;
     }
-    if (strcmp(g_args.options.mode, (char *)"raw:x86_64") == 0 &&
+    if (g_args.options.mode == "raw:x86_64" &&
         g_args.options.io_type == ARGS_IO_TYPE_FILE){
         Raw rawx86_64;
         if (rawx86_64.ReadFile(g_args.options.input, 0) == false)
@@ -210,7 +197,7 @@ int main(int argc, char **argv){
         decompiler.WriteTraits();
         return EXIT_SUCCESS;
     }
-    if (strcmp(g_args.options.mode, (char *)"raw:cil") == 0 &&
+    if (g_args.options.mode == "raw:cil" &&
         g_args.options.io_type == ARGS_IO_TYPE_FILE){
         printf("comming soon...\n");
         return EXIT_FAILURE;

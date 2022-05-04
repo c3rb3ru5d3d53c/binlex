@@ -48,13 +48,12 @@ Decompiler::Decompiler() {
         sections[i].offset = 0;
         sections[i].data = NULL;
         sections[i].data_size = 0;
-        sections[i].arch_str = NULL;
     }
 }
 
 void Decompiler::AppendTrait(struct Trait *trait, struct Section *sections, uint index){
     struct Trait new_elem_trait = *trait; //copy the stuff populated in the caller, TODO: more cleanup required to not copy anything.
-    
+
     #if defined(__linux__) || defined(__APPLE__)
     pthread_mutex_lock(&DECOMPILER_MUTEX);
     #else
@@ -98,12 +97,6 @@ void Decompiler::AppendTrait(struct Trait *trait, struct Section *sections, uint
 bool Decompiler::Setup(cs_arch arch, cs_mode mode, uint index){
     sections[index].arch = arch;
     sections[index].mode = mode;
-    if (arch == CS_ARCH_X86 && mode == CS_MODE_32){
-        sections[index].arch_str = (char *)"x86";
-    }
-    if (arch == CS_ARCH_X86 && mode == CS_MODE_64){
-        sections[index].arch_str = (char *)"x86_64";
-    }
     return true;
 }
 
@@ -112,7 +105,7 @@ json Decompiler::GetTrait(struct Trait &trait){
     data["type"] = trait.type;
     data["corpus"] = g_args.options.corpus;
     data["tags"] = g_args.options.tags;
-    data["architecture"] = trait.architecture;
+    data["mode"] = g_args.options.mode;
     data["bytes"] = trait.bytes;
     data["trait"] = trait.trait;
     data["edges"] = trait.edges;
@@ -181,13 +174,13 @@ void * Decompiler::DecompileWorker(void *args) {
     struct Trait i_trait;
 
     i_trait.type = (char *)"instruction";
-    i_trait.architecture = sections[index].arch_str;
+    //i_trait.architecture = sections[index].arch_str;
     ClearTrait(&i_trait);
     b_trait.type = (char *)"block";
-    b_trait.architecture = sections[index].arch_str;
+    //b_trait.architecture = sections[index].arch_str;
     ClearTrait(&b_trait);
     f_trait.type = (char *)"function";
-    f_trait.architecture = sections[index].arch_str;
+    //f_trait.architecture = sections[index].arch_str;
     ClearTrait(&f_trait);
 
     myself.error = cs_open(sections[index].arch, sections[index].mode, &myself.handle);
@@ -799,4 +792,8 @@ void Decompiler::py_SetTags(const vector<string> &tags){
 
 void Decompiler::py_SetInstructions(bool instructions) {
     g_args.options.instructions = instructions;
+}
+
+void Decompiler::py_SetMode(string mode){
+    g_args.options.mode = mode;
 }
