@@ -37,6 +37,9 @@ bool PE::ReadFile(char *file_path){
     assert(!tlsh.empty());
     assert(!sha256.empty());
     binary = Parser::parse(file_path);
+    if (binary == NULL){
+        return false;
+    }
     if (mode != binary->header().machine()){
         fprintf(stderr, "[x] incorrect mode for binary architecture\n");
         return false;
@@ -48,6 +51,9 @@ bool PE::ReadFile(char *file_path){
 bool PE::ReadBuffer(void *data, size_t size){
     vector<uint8_t> data_v((uint8_t *)data, (uint8_t *)data + size);
     binary = Parser::parse(data_v);
+    if (binary == NULL){
+        return false;
+    }
     if (mode != binary->header().machine()){
         fprintf(stderr, "[x] incorrect mode for binary architecture\n");
         return false;
