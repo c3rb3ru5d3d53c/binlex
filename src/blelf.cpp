@@ -29,14 +29,9 @@ bool ELF::Setup(ARCH input_mode){
     return true;
 }
 
-bool ELF::ReadFile(char *file_path){
-    if (FileExists(file_path) == false){
-        return false;
-    }
-    CalculateFileHashes(file_path);
-    assert(!tlsh.empty());
-    assert(!sha256.empty());
-    binary = Parser::parse(file_path);
+bool ELF::ReadVector(const std::vector<uint8_t> &data){
+    CalculateFileHashes(data);
+    binary = Parser::parse(data);
     if (binary == NULL){
         return false;
     }

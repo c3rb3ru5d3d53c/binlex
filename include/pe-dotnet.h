@@ -407,7 +407,7 @@ namespace binlex {
             dotnet::Cor20MetadataTable cor20_metadata_table;
 
             vector<Section> _sections;
-            BINLEX_EXPORT bool ReadFile(char *file_path);
+            BINLEX_EXPORT virtual bool ReadVector(const std::vector<uint8_t> &data);
             BINLEX_EXPORT bool Parse();
             BINLEX_EXPORT ~DOTNET();
 

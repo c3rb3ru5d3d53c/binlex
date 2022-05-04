@@ -258,8 +258,9 @@ void DOTNET::ParseSections(){
     }
 }
 
-bool DOTNET::ReadFile(char *file_path){
-    binary = Parser::parse(file_path);
+bool DOTNET::ReadVector(const std::vector<uint8_t> &data){
+    CalculateFileHashes(data);
+    binary = Parser::parse(data);
     if (binary == NULL){
         return false;
     }
