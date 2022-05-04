@@ -183,8 +183,6 @@ target_link_libraries(binlex
         -lpthread
 )
 
-# -ltlsh
-
 set_target_properties(binlex
 	PROPERTIES COMPILE_FLAGS
 	-DCMAKE_CXX_FLAGS_RELEASE=${CMAKE_CXX_FLAGS_RELEASE}

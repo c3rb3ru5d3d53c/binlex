@@ -1,7 +1,6 @@
 .PHONY: all
 .PHONY: docs
 .PHONY: docker
-.PHONY: all
 
 threads=1
 admin_user=admin
