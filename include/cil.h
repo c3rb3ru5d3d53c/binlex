@@ -16,6 +16,8 @@
 #include <set>
 #include <map>
 
+#define INVALID_OP 0xFFFFFFFF
+
 // CIL Decompiler Types
 #define CIL_DECOMPILER_TYPE_FUNCS 0
 #define CIL_DECOMPILER_TYPE_BLCKS 1
@@ -266,11 +268,50 @@ namespace binlex {
             int type = CIL_DECOMPILER_TYPE_UNSET;
             char * hexdump_traits(char *buffer0, const void *data, int size, int operand_size);
             char * traits_nl(char *traits);
+            int update_offset(int operand_size, int i);
+            typedef struct worker {
+                csh handle;
+                cs_err error;
+                uint64_t pc;
+                const uint8_t *code;
+                size_t code_size;
+            } worker;
+            typedef struct{
+                uint index;
+                void *sections;
+            } worker_args;
         public:
             CILDecompiler();
+            struct Instruction {
+                char instruction;
+                uint operand_size;
+                uint offset;
+            };
+            struct Trait {
+                string corpus;
+                string type;
+                string architecture;
+                string tmp_bytes;
+                string bytes;
+                string trait;
+                uint edges;
+                uint blocks;
+                vector< Instruction* >* instructions;
+                uint num_instructions;
+                uint size;
+                uint offset;
+                uint invalid_instructions;
+                uint cyclomatic_complexity;
+                uint average_instructions_per_block;
+                float bytes_entropy;
+                float trait_entropy;
+                string trait_sha256;
+                string bytes_sha256;
+            };
             struct Section {
-                char *function_traits;
-                char *block_traits;
+                vector <Trait*> function_traits;
+                vector <Trait*> block_traits;
+                char *trait;
                 cs_arch arch;
                 cs_mode mode;
                 char *arch_str;
@@ -282,6 +323,7 @@ namespace binlex {
                 useconds_t thread_sleep;
                 uint offset;
                 uint ntraits;
+                struct Trait **traits;
                 void *data;
                 size_t data_size;
                 set<uint64_t> coverage;
@@ -290,10 +332,44 @@ namespace binlex {
                 queue<uint64_t> discovered;
             };
             struct Section sections[CIL_DECOMPILER_MAX_SECTIONS];
+            //Map containing prefix instructions and their operand sizes
+            map<int, int> prefixInstrMap;
+            //Map containing conditional instructions and their operand sizes
+            map<int, int> condInstrMap;
+            //Map for all remaining instruction types that don't need special
+            //treatment
+            map<int, int> miscInstrMap;
             bool Setup(int input_type);
             bool Decompile(void *data, int data_size, int index);
             void WriteTraits(char *file_path);
             void PrintTraits();
+            string GetTrait(struct Trait *trait, bool pretty);
+            /**
+            Converts instruction objects to trait pattern for output
+            @param insn Source instruction to check and resulting operand size
+            */
+            string ConvTraitBytes(vector< Instruction* > instructions);
+            /**
+            Converts instruction objects to raw bytes for output using offsets
+            and section data.
+            @param insn Source instruction to check and resulting operand size
+            */
+            string ConvBytes(vector< Instruction* > allinst, void *data, int data_size);
+            /**
+            Checks if CIL instruction is conditional for stats
+            @param insn Source instruction to check and resulting operand size
+            */
+            bool IsConditionalInsn(Instruction *insn);
+            /**
+            Checks if CIL instruction a prefix instruction
+            @param insn Source instruction to check and resulting operand size
+            */
+            bool IsPrefixInstr(Instruction *insn);
+            /**
+            Gets size of trait using the beginning and ending offsets
+            @param allinst Source instructions
+            */
+            uint SizeOfTrait(vector< Instruction* > allinst);
             ~CILDecompiler();
     };
 };
