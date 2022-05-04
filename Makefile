@@ -11,7 +11,7 @@ config=Release
 
 all: python docs
 
-cli:
+cli: git-unsafe
 	mkdir -p build/
 	cd build/ && \
 		cmake -S ../ \
@@ -19,7 +19,7 @@ cli:
 			${args} && \
 		cmake --build . --config ${config} -- -j ${threads}
 
-python:
+python: git-unsafe
 	mkdir -p build/
 	cd build/ && \
 		cmake -S ../ \
@@ -83,9 +83,12 @@ dist:
 	cd build/ && \
 		make package_source
 
-install:
-	git config --global --add safe.directory `pwd`/build/capstone/src/capstone
-	git config --global --add safe.directory `pwd`/build/LIEF/src/LIEF
+git-unsafe:
+	@git config --global --add safe.directory `pwd`/build/capstone/src/capstone
+	@git config --global --add safe.directory `pwd`/build/LIEF/src/LIEF
+	@git config --global --add safe.directory `pwd`/build/tlsh/src/tlsh
+
+install: git-unsafe
 	cd build/ && \
 		make install && \
 		ldconfig
