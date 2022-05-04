@@ -43,7 +43,7 @@ CRITICAL_SECTION csDecompiler;
 	? (uint64_t)((insn).detail->x86.operands[0].imm) \
 	: (((insn).address + (insn).size) + (uint64_t)(insn).detail->x86.disp))
 
-Decompiler::Decompiler() {
+Decompiler::Decompiler(const binlex::File &firef) : file_reference(firef) {
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++) {
         sections[i].offset = 0;
         sections[i].data = NULL;
