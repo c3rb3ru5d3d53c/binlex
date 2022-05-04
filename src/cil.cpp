@@ -12,6 +12,8 @@
 #include "decompiler.h"
 #include <unistd.h>
 #include <vector>
+#include <iostream>
+#include <fstream>
 
 using namespace binlex;
 using json = nlohmann::json;
@@ -24,8 +26,6 @@ CRITICAL_SECTION csDecompiler;
 CILDecompiler::CILDecompiler(){
     int type = CIL_DECOMPILER_TYPE_UNSET;
     for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
-        sections[i].function_traits = NULL;
-        sections[i].block_traits = NULL;
         sections[i].offset = 0;
         sections[i].ntraits = 0;
         sections[i].data = NULL;
@@ -356,6 +356,7 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
     map<int, int>::iterator it;
     uint num_edges = 0;
     uint num_instructions = 0;
+    string json_str;
     for (int i = 0; i < data_size; i++){
         int operand_size = 0;
         bool end_block = false;
@@ -456,9 +457,14 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
             traits.push_back(ctrait);
             //The number of edges needs to be reset once the trait is stored.
             num_edges = 0;
-            cout << GetTrait(ctrait, true);
+            //cout << GetTrait(ctrait, true);
+            //TODO support both types of traits.
+            sections[index].block_traits.push_back(ctrait);
+            json_str.append(GetTrait(ctrait, g_args.options.pretty));
+            json_str.append("\n");
        }
     }
+    //Cleanup trait pointers and any other data structures before returning.
     return true;
 }
 
@@ -548,24 +554,34 @@ string CILDecompiler::GetTrait(struct Trait *trait, bool pretty){
 }
 
 void CILDecompiler::WriteTraits(char *file_path){
-    FILE *fd = fopen(file_path, "w");
+    ofstream fd;
+    fd.open(string(file_path));
     for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
-        if (sections[i].function_traits != NULL){
-            fwrite(sections[i].function_traits, sizeof(char), strlen(sections[i].function_traits), fd);
+        if (sections[i].function_traits.size() > 0){
+            for(auto trait : sections[i].function_traits) {
+                fd << GetTrait(trait, g_args.options.pretty) << endl;
+            }
         }
-        if (sections[i].block_traits != NULL){
-            fwrite(sections[i].block_traits, sizeof(char), strlen(sections[i].block_traits), fd);
+        if (sections[i].block_traits.size() > 0){
+            for(auto trait : sections[i].block_traits) {
+                fd << GetTrait(trait, g_args.options.pretty) << endl;
+            }
         }
     }
-    fclose(fd);
+    fd.close();
 }
+
 void CILDecompiler::PrintTraits(){
     for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
-        if (sections[i].function_traits != NULL){
-            printf("%s", sections[i].function_traits);
+        if (sections[i].function_traits.size() > 0){
+            for(auto trait : sections[i].function_traits) {
+                cout << GetTrait(trait, g_args.options.pretty) << endl;
+            }
         }
-        if (sections[i].block_traits != NULL){
-            printf("%s", sections[i].block_traits);
+        if (sections[i].block_traits.size() > 0){
+            for(auto trait : sections[i].block_traits) {
+                cout << GetTrait(trait, g_args.options.pretty) << endl;
+            }
         }
     }
 }
@@ -846,12 +862,14 @@ void CILDecompiler::FreeTraits(uint index){
 */
 
 CILDecompiler::~CILDecompiler(){
+    /*
     for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
         if (sections[i].function_traits != NULL){
-            free(sections[i].function_traits);
+            free(sections[i].function_traits.clear());
         }
         if (sections[i].block_traits != NULL){
             free(sections[i].block_traits);
         }
     }
+    */
 }

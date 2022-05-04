@@ -309,8 +309,8 @@ namespace binlex {
                 string bytes_sha256;
             };
             struct Section {
-                char *function_traits;
-                char *block_traits;
+                vector <Trait*> function_traits;
+                vector <Trait*> block_traits;
                 char *trait;
                 cs_arch arch;
                 cs_mode mode;
