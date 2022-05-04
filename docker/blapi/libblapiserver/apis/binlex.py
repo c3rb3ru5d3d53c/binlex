@@ -90,3 +90,52 @@ class binlex_samples_upload(Resource):
             return {
                 'error': 'Failed to add to decompiler queue'
             }, 500
+
+#Download sample
+@api.route(api_prefix + '/samples/<string:sha256>')
+class binlex_samples_download(Resource):
+    @require_user
+    def get(self, sha256):
+        samplecontents = -1
+        error = -1
+        try:
+            response = app.config['minio'].download(
+                bucket_name='goodware',
+                object_name=sha256)
+            if response not in [None, False]:
+                samplecontents = io.BytesIO(response.data).read().decode("utf-8")
+        except Exception as e:
+            error = e
+        try:
+            response = app.config['minio'].download(
+                bucket_name='malware',
+                object_name=sha256)
+            if response not in [None, False]:
+                samplecontents = io.BytesIO(response.data).read().decode("utf-8")
+        except Exception as e:
+            error = e
+        try:
+            response = app.config['minio'].download(
+                bucket_name='default',
+                object_name=sha256)
+            if response not in [None, False]:
+                samplecontents = io.BytesIO(response.data).read().decode("utf-8")
+        except Exception as e:
+            error = e
+        try:
+            response = app.config['minio'].download(
+                bucket_name='bldecomp',
+                object_name=sha256)
+            if response not in [None, False]:
+                samplecontents = io.BytesIO(response.data).read().decode("utf-8")   
+        except Exception as e: 
+            error = e
+        if samplecontents != -1:
+            return samplecontents
+        if error != -1:
+            return {
+                'error': 'download failed'
+            }
+        return {
+            'status': 'could not find requested file to download'
+        }
