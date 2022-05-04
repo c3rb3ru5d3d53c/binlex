@@ -122,7 +122,6 @@ int main(int argc, char **argv){
 			if (cil_decompiler.Decompile(pe._sections[i].data, pe._sections[i].size, 0) == false){
                 continue;
 			}
-            break;
         }
         if (g_args.options.output == NULL){
 		    cil_decompiler.PrintTraits();

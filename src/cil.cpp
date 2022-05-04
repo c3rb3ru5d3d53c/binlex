@@ -368,7 +368,6 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
             insn->operand_size = it->second;
             insn->offset = i;
             instructions->push_back(insn);
-            num_instructions++;
             //Then let's move on to the next instruction
             i++;
             PRINT_DEBUG("Instruction being decompiled: 0x%x\n", pc[i]);
@@ -461,6 +460,9 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
             //cout << GetTrait(ctrait, true);
             //TODO support both types of traits.
             sections[index].block_traits.push_back(ctrait);
+            //Once we're done adding a trait we need to create a new set of instructions
+            //for the next trait.
+            instructions = new vector<Instruction *>;
        }
     }
     //Cleanup trait pointers and any other data structures before returning.
@@ -484,27 +486,30 @@ string CILDecompiler::ConvTraitBytes(vector< Instruction* > allinst) {
     return fstr;
 }
 
-uint CILDecompiler::SizeOfTrait(vector< Instruction* > allinst) {
-    int begin_offset = allinst.front()->offset;
-    int end_offset = allinst.back()->offset;
-    uint size = (end_offset-begin_offset)+(allinst.back()->operand_size/8)+1;
+uint CILDecompiler::SizeOfTrait(vector< Instruction* > inst) {
+    int begin_offset = inst.front()->offset;
+    int end_offset = inst.back()->offset;
+    uint size = (end_offset-begin_offset)+(inst.back()->operand_size/8)+1;
     return size;
 }
 
 string CILDecompiler::ConvBytes(vector< Instruction* > allinst, void *data, int data_size) {
     string byte_rep;
     int begin_offset = allinst.front()->offset;
-    int end_offset = allinst.back()->offset;
+    if(begin_offset > data_size) {
+        PRINT_ERROR_AND_EXIT("Beginning offset trait offset:\
+         %d cannot be greater than total data length: %d", begin_offset, data_size);
+    }
     char *cdata = (char *)data;
     //We need to incorporate the operand size into the data collected starting at
     //the last offset.
     uint trait_size = SizeOfTrait(allinst);
-    for(int i = 0; i < SizeOfTrait(allinst); i++) {
+    for(int i = begin_offset; i < begin_offset+trait_size; i++) {
         char hexbytes[4];
         sprintf(hexbytes, "%02x", cdata[i]);
         hexbytes[3] = '\0';
         byte_rep.append(string(hexbytes));
-        if(i != trait_size-1) {
+        if(i < (begin_offset+trait_size)-1) {
             byte_rep.append(" ");
         }
         //cout << hexbytes;
