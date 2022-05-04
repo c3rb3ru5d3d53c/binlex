@@ -15,6 +15,7 @@ from bson.raw_bson import RawBSONDocument
 from bson.objectid import ObjectId
 import bsonjs
 from libblapiserver.auth import require_user, require_admin
+import io
 
 api_prefix = "/api/v1"
 
@@ -65,8 +66,11 @@ class binlex_samples_upload(Resource):
             }, 401
 
         try:
-            f = request.files['filedata']
-            data = f.read()
+            data = request.data
+            if io.BytesIO(data).getbuffer().nbytes == 0:
+                return {
+                    'error': 'File was empty'
+                }, 401
             app.config['minio'].upload(
                 bucket_name=corpus,
                 data=data
