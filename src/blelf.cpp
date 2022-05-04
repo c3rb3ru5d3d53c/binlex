@@ -37,6 +37,9 @@ bool ELF::ReadFile(char *file_path){
     assert(!tlsh.empty());
     assert(!sha256.empty());
     binary = Parser::parse(file_path);
+    if (binary == NULL){
+        return false;
+    }
     if (mode != binary->header().machine_type()){
         fprintf(stderr, "[x] incorrect mode for binary architecture\n");
         return false;
