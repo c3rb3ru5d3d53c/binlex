@@ -1,4 +1,5 @@
 #include "raw.h"
+#include <stdexcept>
 
 using namespace binlex;
 
@@ -18,19 +19,21 @@ int Raw::GetFileSize(FILE *fd){
     return size;
 }
 
-bool Raw::ReadFile(char *file_path, int section_index){
-    if (access(file_path, F_OK ) != 0){
-        return false;
+bool Raw::ReadVector(const std::vector<uint8_t> &data){
+    const int section_index = 0; // The parameter was always zero.
+    CalculateFileHashes(data);
+    // The original ftell was always called after opening the file, hence 0.
+    sections[section_index].offset = 0;
+    sections[section_index].size = data.size();
+    sections[section_index].data = malloc(data.size());
+    if(sections[section_index].data == NULL) {
+	// No more memory.
+	return false;
     }
-    FILE *fd = fopen(file_path, "rb");
-    sections[section_index].offset = ftell(fd);
-    sections[section_index].size = GetFileSize(fd);
-    sections[section_index].data = malloc(sections[section_index].size);
-    memset(sections[section_index].data, 0, sections[section_index].size);
-    fread(sections[section_index].data, sections[section_index].size, 1, fd);
-    fclose(fd);
+    std::copy(data.begin(), data.end(), static_cast<uint8_t*>(sections[section_index].data));
     return true;
 }
+
 
 Raw::~Raw(){
     for (int i = 0; i < BINARY_MAX_SECTIONS; i++){

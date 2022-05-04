@@ -6,7 +6,7 @@ from hashlib import sha256
 import pybinlex
 
 raw = pybinlex.Raw()
-raw.read_file('tests/raw/raw.x86', 0)
+raw.read_file('tests/raw/raw.x86')
 raw_sections = raw.get_sections()
 pprint(raw_sections)
 
@@ -22,7 +22,7 @@ elf.read_file('tests/elf/elf.x86')
 elf_sections = elf.get_sections()
 pprint(elf_sections)
 
-decompiler = pybinlex.Decompiler()
+decompiler = pybinlex.Decompiler(raw)
 decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_32, 0)
 decompiler.decompile(raw_sections[0]['data'], raw_sections[0]['offset'], 0)
 traits = decompiler.get_traits()

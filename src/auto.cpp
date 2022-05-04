@@ -48,10 +48,10 @@ int AutoLex::ProcessFile(char *file_path){
         return -1;
     }
 
-    Decompiler decompiler;
+    PE pe;
+    Decompiler decompiler(pe);
     if(characteristics.format == LIEF::FORMAT_PE){
 
-        PE pe;
 
         if (!pe.Setup((MACHINE_TYPES)characteristics.machineType)){
             return EXIT_FAILURE;

@@ -8,10 +8,9 @@
 #elif _WIN32
 #include <windows.h>
 #endif
-#include "common.h"
 #include "args.h"
-#include "raw.h"
 #include "pe.h"
+#include "raw.h"
 #include "cil.h"
 #include "pe-dotnet.h"
 #include "blelf.h"
@@ -74,7 +73,7 @@ int main(int argc, char **argv){
         }
         PRINT_DEBUG("Number of total executable sections = %u\n", elf64.total_exec_sections);
 
-        Decompiler decompiler;
+        Decompiler decompiler(elf64);
         for (int i = 0; i < elf64.total_exec_sections; i++){
             decompiler.Setup(CS_ARCH_X86, CS_MODE_64, i);
             decompiler.AppendQueue(elf64.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
@@ -94,7 +93,7 @@ int main(int argc, char **argv){
         }
         PRINT_DEBUG("Number of total executable sections = %u\n", elf32.total_exec_sections);
 
-        Decompiler decompiler;
+        Decompiler decompiler(elf32);
         for (int i = 0; i < elf32.total_exec_sections; i++){
             decompiler.Setup(CS_ARCH_X86, CS_MODE_32, i);
             decompiler.AppendQueue(elf32.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
@@ -141,7 +140,7 @@ int main(int argc, char **argv){
         }
         PRINT_DEBUG("Number of total sections = %u\n", pe32.total_exec_sections);
 
-        Decompiler decompiler;
+        Decompiler decompiler(pe32);
         for (int i = 0; i < pe32.total_exec_sections; i++){
             decompiler.Setup(CS_ARCH_X86, CS_MODE_32, i);
             decompiler.AppendQueue(pe32.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
@@ -161,7 +160,7 @@ int main(int argc, char **argv){
         }
         PRINT_DEBUG("Number of total executable sections = %u\n", pe64.total_exec_sections);
 
-        Decompiler decompiler;
+        Decompiler decompiler(pe64);
         for (int i = 0; i < pe64.total_exec_sections; i++){
             decompiler.Setup(CS_ARCH_X86, CS_MODE_64, i);
             decompiler.AppendQueue(pe64.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
@@ -173,12 +172,12 @@ int main(int argc, char **argv){
     if (g_args.options.mode == "raw:x86" &&
         g_args.options.io_type == ARGS_IO_TYPE_FILE){
         Raw rawx86;
-        if (rawx86.ReadFile(g_args.options.input, 0) == false)
+        if (rawx86.ReadFile(g_args.options.input) == false)
         {
             return EXIT_FAILURE;
         }
 
-        Decompiler decompiler;
+        Decompiler decompiler(rawx86);
         decompiler.Setup(CS_ARCH_X86, CS_MODE_32, 0);
         decompiler.Decompile(rawx86.sections[0].data, rawx86.sections[0].size, rawx86.sections[0].offset, 0);
         decompiler.WriteTraits();
@@ -187,12 +186,12 @@ int main(int argc, char **argv){
     if (g_args.options.mode == "raw:x86_64" &&
         g_args.options.io_type == ARGS_IO_TYPE_FILE){
         Raw rawx86_64;
-        if (rawx86_64.ReadFile(g_args.options.input, 0) == false)
+        if (rawx86_64.ReadFile(g_args.options.input) == false)
         {
             return EXIT_FAILURE;
         }
 
-        Decompiler decompiler;
+        Decompiler decompiler(rawx86_64);
         decompiler.Setup(CS_ARCH_X86, CS_MODE_64, 0);
         decompiler.Decompile(rawx86_64.sections[0].data, rawx86_64.sections[0].size, rawx86_64.sections[0].offset, 0);
         decompiler.WriteTraits();

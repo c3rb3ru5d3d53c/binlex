@@ -5,6 +5,7 @@
 #include <capstone/capstone.h>
 #include "common.h"
 #include "json.h"
+#include "file.h"
 
 #ifdef _WIN32
 #define BINLEX_EXPORT __declspec(dllexport)
@@ -47,6 +48,8 @@ namespace binlex {
             uint index;
             void *sections;
         } worker_args;
+    protected:
+	const binlex::File &file_reference;
     public:
         struct Trait {
             char *type;
@@ -82,7 +85,7 @@ namespace binlex {
             queue<uint64_t> discovered;
         };
         struct Section sections[DECOMPILER_MAX_SECTIONS];
-        BINLEX_EXPORT Decompiler();
+        BINLEX_EXPORT Decompiler(const binlex::File &firef);
         /**
         Set up Capstone Decompiler Architecure and Mode
         @param arch Capstone Decompiler Architecure
