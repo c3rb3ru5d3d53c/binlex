@@ -478,7 +478,6 @@ string CILDecompiler::ConvTraitBytes(vector< Instruction* > allinst) {
         hexbytes[4] = '\0';
         rstr.append(string(hexbytes));
         for(int i = 0; i < inst->operand_size/8; i++) {
-            //cout << "?? ";
             rstr.append("?? ");
         }
     }
