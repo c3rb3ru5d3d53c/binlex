@@ -469,15 +469,17 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
 }
 
 string CILDecompiler::ConvTraitBytes(vector< Instruction* > allinst) {
-    string rstr;
-    string fstr;
+    string rstr = "";
+    string fstr = "";
     for(auto inst : allinst) {
-        char hexbytes[5];
-        sprintf(hexbytes, "%02x ", inst->instruction);
-        hexbytes[4] = '\0';
+        char hexbytes[3];
+        sprintf(hexbytes, "%02x", inst->instruction);
+        hexbytes[2] = '\0';
         rstr.append(string(hexbytes));
+        rstr.append(" ");
         for(int i = 0; i < inst->operand_size/8; i++) {
-            rstr.append("?? ");
+            rstr.append("??");
+            rstr.append(" ");
         }
     }
     fstr = TrimRight(rstr);
@@ -492,24 +494,24 @@ uint CILDecompiler::SizeOfTrait(vector< Instruction* > inst) {
 }
 
 string CILDecompiler::ConvBytes(vector< Instruction* > allinst, void *data, int data_size) {
-    string byte_rep;
+    string byte_rep = "";
+    string byte_rep_t;
     int begin_offset = allinst.front()->offset;
     if(begin_offset > data_size) {
         PRINT_ERROR_AND_EXIT("Beginning offset trait offset:\
          %d cannot be greater than total data length: %d", begin_offset, data_size);
     }
-    char *cdata = (char *)data;
     uint trait_size = SizeOfTrait(allinst);
+    unsigned char *cdata = (unsigned char *)data;
+    char hexbytes[3];
     for(int i = begin_offset; i < begin_offset+trait_size; i++) {
-        char hexbytes[4];
         sprintf(hexbytes, "%02x", cdata[i]);
-        hexbytes[3] = '\0';
+        hexbytes[2] = '\0';
         byte_rep.append(string(hexbytes));
-        if(i < (begin_offset+trait_size)-1) {
-            byte_rep.append(" ");
-        }
+        byte_rep.append(" ");
     }
-    return byte_rep;
+    byte_rep_t = TrimRight(byte_rep);
+    return byte_rep_t;
 }
 
 string CILDecompiler::GetTrait(struct Trait *trait, bool pretty){
