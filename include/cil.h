@@ -349,8 +349,6 @@ namespace binlex {
 	     * @return list of traits json objects
 	     */
 	    vector<json> GetTraits();
-            void WriteTraits(char *file_path);
-            void PrintTraits();
             string GetTrait(struct Trait *trait, bool pretty);
             /**
             Converts instruction objects to trait pattern for output

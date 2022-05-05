@@ -544,39 +544,6 @@ vector<json> CILDecompiler::GetTraits(){
     return traitsjson;
 }
 
-void CILDecompiler::WriteTraits(char *file_path){
-    ofstream fd;
-    fd.open(string(file_path));
-    for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
-        if (sections[i].function_traits.size() > 0){
-            for(auto trait : sections[i].function_traits) {
-                fd << GetTrait(trait, g_args.options.pretty) << endl;
-            }
-        }
-        if (sections[i].block_traits.size() > 0){
-            for(auto trait : sections[i].block_traits) {
-                fd << GetTrait(trait, g_args.options.pretty) << endl;
-            }
-        }
-    }
-    fd.close();
-}
-
-void CILDecompiler::PrintTraits(){
-    for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
-        if (sections[i].function_traits.size() > 0){
-            for(auto trait : sections[i].function_traits) {
-                cout << GetTrait(trait, g_args.options.pretty) << endl;
-            }
-        }
-        if (sections[i].block_traits.size() > 0){
-            for(auto trait : sections[i].block_traits) {
-                cout << GetTrait(trait, g_args.options.pretty) << endl;
-            }
-        }
-    }
-}
-
 CILDecompiler::~CILDecompiler() {
     for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
         if (sections[i].function_traits.size() > 0) {

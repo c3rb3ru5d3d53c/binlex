@@ -118,14 +118,10 @@ int main(int argc, char **argv){
             if (cil_decompiler.Setup(CIL_DECOMPILER_TYPE_BLCKS) == false){
                 return 1;
             }
-			if (cil_decompiler.Decompile(pe._sections[i].data, pe._sections[i].size, 0) == false){
+	    if (cil_decompiler.Decompile(pe._sections[i].data, pe._sections[i].size, 0) == false){
                 continue;
-			}
-            if (g_args.options.output == NULL){
-                cil_decompiler.PrintTraits();
-            } else {
-                cil_decompiler.WriteTraits(g_args.options.output);
-            }
+	    }
+	    cil_decompiler.WriteTraits();
         }
         return EXIT_SUCCESS;
     }
