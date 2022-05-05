@@ -56,6 +56,8 @@ class BLDEC():
             decompiler.decompile(sections[i]['data'], sections[i]['offset'], i)
         traits = decompiler.get_traits()
 
+        os.remove(str(os.path.join('/opt/binlex/docker/bldec/', file_hash)))
+
         return traits, file_hash
 
     def decompile_raw(self, data, file_type):
