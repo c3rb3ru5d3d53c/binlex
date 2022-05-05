@@ -103,7 +103,7 @@ class binlex_samples_download(Resource):
                 bucket_name='goodware',
                 object_name=sha256)
             if response not in [None, False]:
-                samplecontents = io.BytesIO(response.data).read().decode("utf-8")
+                samplecontents = str(response.data)
         except Exception as e:
             error = e
         try:
@@ -111,7 +111,7 @@ class binlex_samples_download(Resource):
                 bucket_name='malware',
                 object_name=sha256)
             if response not in [None, False]:
-                samplecontents = io.BytesIO(response.data).read().decode("utf-8")
+                samplecontents = str(response.data)
         except Exception as e:
             error = e
         try:
@@ -119,7 +119,7 @@ class binlex_samples_download(Resource):
                 bucket_name='default',
                 object_name=sha256)
             if response not in [None, False]:
-                samplecontents = io.BytesIO(response.data).read().decode("utf-8")
+                samplecontents = str(response.data)
         except Exception as e:
             error = e
         try:
@@ -127,7 +127,7 @@ class binlex_samples_download(Resource):
                 bucket_name='bldecomp',
                 object_name=sha256)
             if response not in [None, False]:
-                samplecontents = io.BytesIO(response.data).read().decode("utf-8")   
+                samplecontents = str(response.data)
         except Exception as e: 
             error = e
         if samplecontents != -1:
