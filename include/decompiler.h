@@ -15,10 +15,6 @@
 #define DECOMPILER_MAX_SECTIONS 256
 #define SHA256_PRINTABLE_SIZE   65 /* including NULL terminator */
 
-// #define DECOMPILER_OPERAND_TYPE_BLOCK    0
-// #define DECOMPILER_OPERAND_TYPE_FUNCTION 1
-// #define DECOMPILER_OPERAND_TYPE_UNSET    2
-
 #define DECOMPILER_VISITED_QUEUED   0
 #define DECOMPILER_VISITED_ANALYZED 1
 
@@ -81,8 +77,8 @@ namespace binlex {
             map<uint64_t, int> visited;
             queue<uint64_t> discovered;
         };
-        cs_arch arch;
-        cs_mode mode;
+        static cs_arch arch;
+        static cs_mode mode;
         struct Section sections[DECOMPILER_MAX_SECTIONS];
         BINLEX_EXPORT Decompiler();
         /**
@@ -92,13 +88,6 @@ namespace binlex {
         @return bool
         */
         BINLEX_EXPORT bool Setup(cs_arch architecture, cs_mode mode_type);
-        /**
-        Set Threads and Thread Cycles
-        @param threads number of threads
-        @param thread_cycles thread cycles
-        @param index the section index
-        */
-        BINLEX_EXPORT void SetThreads(uint threads, uint thread_cycles, uint thread_sleep, uint index);
         /**
         Sets The Corpus Name
         @param corpus pointer to corpus name
@@ -111,12 +100,11 @@ namespace binlex {
         */
         BINLEX_EXPORT void SetInstructions(bool instructions, uint index);
         /**
-	    add storage for tags
-        Decompiler Thread Worker
+        Create traits from data contains in binary sections
         @param args pointer to worker arguments
         @returns NULL
         */
-        BINLEX_EXPORT static void * DecompileWorker(void *args);
+        BINLEX_EXPORT void* CreateTraitsForSection(uint index);
         /**
         Collect Function and Conditional Operands for Processing
         @param insn the instruction
@@ -258,7 +246,7 @@ namespace binlex {
 	    This function usees GetTraits() to get the traits data as a json.
         */
         BINLEX_EXPORT void WriteTraits();
-        BINLEX_EXPORT static void * TraitWorker(void *args);
+        BINLEX_EXPORT static void * FinalizeTrait(struct Trait &trait);
         BINLEX_EXPORT void AppendQueue(set<uint64_t> &addresses, uint operand_type, uint index);
         //void Seek(uint offset, uint index);
         BINLEX_EXPORT ~Decompiler();
@@ -269,12 +257,10 @@ namespace binlex {
          */
 
         /**
-        Set Threads and Thread Cycles, via pybind11
+        Set Number of Threads, via pybind11
         @param threads number of threads
-        @param thread_cycles thread cycles
-        @param index the section index
         */
-        BINLEX_EXPORT void py_SetThreads(uint threads, uint thread_cycles, uint thread_sleep);
+        BINLEX_EXPORT void py_SetThreads(uint threads);
 
         /**
         Sets The Corpus Name, via pybind11
