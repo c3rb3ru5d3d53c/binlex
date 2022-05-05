@@ -8,7 +8,7 @@ static pthread_mutex_t DECOMPILER_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 CRITICAL_SECTION csDecompiler;
 #endif
 
-CILDecompiler::CILDecompiler(){
+CILDecompiler::CILDecompiler(const binlex::File &firef) : DecompilerBase(firef) {
     int type = CIL_DECOMPILER_TYPE_UNSET;
     for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
         sections[i].offset = 0;
@@ -523,6 +523,25 @@ string CILDecompiler::GetTrait(struct Trait *trait, bool pretty){
         return data.dump(4);
     }
     return data.dump();
+}
+
+vector<json> CILDecompiler::GetTraits(){
+    vector<json> traitsjson;
+    for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
+        if (sections[i].function_traits.size() > 0){
+            for(auto trait : sections[i].function_traits) {
+		json jdata(GetTrait(trait, g_args.options.pretty));
+		traitsjson.push_back(jdata);
+            }
+        }
+        if (sections[i].block_traits.size() > 0){
+            for(auto trait : sections[i].block_traits) {
+                json jdata(GetTrait(trait, g_args.options.pretty));
+		traitsjson.push_back(jdata);
+            }
+        }
+    }
+    return traitsjson;
 }
 
 void CILDecompiler::WriteTraits(char *file_path){
