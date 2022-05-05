@@ -370,7 +370,7 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
 
     csh cs_dis;
     
-    PRINT_DEBUG("LinearDisassemble: offset = 0x%" PRIx64 " data_size = %" PRId64 " bytes\n", offset, data_size);
+    fprintf(stderr, "LinearDisassemble: offset = 0x%x data_size = %d bytes\n", offset, data_size);
 
     if(cs_open(arch, mode, &cs_dis) != CS_ERR_OK) {
         PRINT_ERROR_AND_EXIT("[x] LinearDisassembly failed to init capstone\n");
@@ -394,7 +394,7 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
     //  - loop until we hit a ret then assume we are back in a good bb
     while(pc < code_size){
         if (!cs_disasm_iter(cs_dis, &code, &code_size, &pc, cs_ins)){
-            PRINT_DEBUG("0x%" PRIx64 ": **** failed\n", pc);
+            fprintf(stderr,"0x%x: **** failed\n", pc);
             pc += 1;
             code_size -= 1;
             code = (uint8_t *)((uint8_t *)code + 1);
@@ -425,7 +425,7 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
             fprintf(stderr, "====================\n");
         }
         else if (cs_ins->id == X86_INS_CALL){
-            PRINT_DEBUG("Found call at 0x%" PRIx64 "\n", cs_ins->address);
+            fprintf(stderr, "Found call at 0x%x \n", cs_ins->address);
         }
         
     }
