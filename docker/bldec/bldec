@@ -29,7 +29,7 @@ class BLDEC():
         self.minio = None
         self.config = None
 
-    def find_traits(self, file_processor, data, file_type):
+    def find_traits(self, file_processor, data, file_type, architecture):
         decompiler = pybinlex.Decompiler(file_processor)
         file_hash = sha256(data).hexdigest()
 
@@ -47,7 +47,12 @@ class BLDEC():
 
         sections = file_processor.get_sections()
         for i in range(0, len(sections)):
-            decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_32, i)
+
+            if architecture == 'x86':
+                decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_32, i)
+            elif architecture == 'x86_64':
+                decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_64, i)
+
             if file_type != "raw":
                 decompiler.append_queue(sections[i]['functions'],
                                     pybinlex.DECOMPILER_OPERAND_TYPE.DECOMPILER_OPERAND_TYPE_FUNCTION, i)
@@ -60,11 +65,11 @@ class BLDEC():
 
         return traits, file_hash
 
-    def decompile_raw(self, data, file_type):
+    def decompile_raw(self, data, architecture, file_type):
 
         raw = pybinlex.Raw()
 
-        return self.find_traits(raw, data, file_type)
+        return self.find_traits(raw, data, file_type, architecture)
 
     def decompile_pe(self, data, architecture, file_type):
         pe = pybinlex.PE()
@@ -73,7 +78,7 @@ class BLDEC():
         if architecture == 'x86_64':
             pe.setup(pybinlex.MACHINE_TYPES.IMAGE_FILE_MACHINE_AMD64)
 
-        return self.find_traits(pe, data, file_type)
+        return self.find_traits(pe, data, file_type, architecture)
 
     def decompile_elf(self, data, architecture, file_type):
         elf = pybinlex.ELF()
@@ -82,7 +87,7 @@ class BLDEC():
         if architecture == 'x86_64':
             elf.setup(pybinlex.ARCH.EM_X86_64)
 
-        return self.find_traits(elf, data, file_type)
+        return self.find_traits(elf, data, file_type, architecture)
 
     def arguments(self):
         parser = argparse.ArgumentParser(
@@ -111,6 +116,7 @@ class BLDEC():
     def process(self, ch, method, properties, body):
         try:
             data = json.loads(body)
+            log.info("processing "+str(data))
             file_type = data['mode'].split(':')[0]
 
             response = self.minio.download(
@@ -129,9 +135,11 @@ class BLDEC():
             elif file_type == 'elf':
                 traits, file_hash = self.decompile_elf(binary_data, architecture, file_type)
             elif file_type == 'raw':
-                traits, file_hash = self.decompile_raw(binary_data, file_type)
+                traits, file_hash = self.decompile_raw(binary_data, architecture, file_type)
             else:
                 raise Exception('unknown file format')
+
+            log.info("Found "+str(len(traits))+" traits for "+file_hash)
 
             for trait in traits:
                 trait['file_sha256'] = file_hash
