@@ -162,6 +162,7 @@ add_library(binlex SHARED
     src/common.cpp
     src/blelf.cpp
     src/auto.cpp
+    src/decompilerbase.cpp
     src/decompiler.cpp
     src/pe-dotnet.cpp
     src/cil.cpp

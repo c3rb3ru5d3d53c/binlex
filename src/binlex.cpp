@@ -110,7 +110,7 @@ int main(int argc, char **argv){
         if (pe.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_I386) == false) return 1;
         if (pe.ReadFile(g_args.options.input) == false) return 1;
 
-        CILDecompiler cil_decompiler;
+        CILDecompiler cil_decompiler(pe);
         PRINT_DEBUG("Analyzing %lu sections for CIL byte code.\n", pe._sections.size());
         for (size_t i = 0; i < pe._sections.size(); i++) {
             if (pe._sections[i].offset == 0) continue;

@@ -73,7 +73,7 @@ int AutoLex::ProcessFile(char *file_path){
 
             for (size_t i = 0; i < pe._sections.size(); i++) {
                 if (pe._sections[i].offset == 0) continue;
-                CILDecompiler cil_decompiler;
+                CILDecompiler cil_decompiler(pe);
 
                 if (cil_decompiler.Setup(CIL_DECOMPILER_TYPE_FUNCS) == false){
                     return 1;
