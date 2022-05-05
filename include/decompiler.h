@@ -120,6 +120,14 @@ namespace binlex {
         @return operand type
         */
         BINLEX_EXPORT static uint CollectInsn(cs_insn* insn, struct Section *sections, uint index);
+         /**
+        Performs a linear disassembly of the data
+        @param data pointer to data
+        @param data_size size of data
+        @param offset include section offset
+        @param index the section index
+        */
+        BINLEX_EXPORT void LinearDisassemble(void* data, size_t data_size, size_t offset, uint index);
         /**
         Decompiles Target Data
         @param data pointer to data
@@ -138,6 +146,30 @@ namespace binlex {
         */
         BINLEX_EXPORT static void AppendTrait(struct Trait *trait, struct Section *sections, uint index);
         BINLEX_EXPORT void FreeTraits(uint index);
+        /**
+        Checks if the Instruction is a nop
+        @param insn the instruction
+        @return bool
+        */
+        BINLEX_EXPORT static bool IsNopInsn(cs_insn *ins);
+        /**
+        Checks if the Instruction is a semantic nop (padding)
+        @param insn the instruction
+        @return bool
+        */
+        BINLEX_EXPORT static bool IsSemanticNopInsn(cs_insn *ins);
+        /**
+        Checks if the Instruction is a trap
+        @param insn the instruction
+        @return bool
+        */
+        BINLEX_EXPORT static bool IsTrapInsn(cs_insn *ins);
+        /**
+        Checks if the Instruction is privileged
+        @param insn the instruction
+        @return bool
+        */
+        BINLEX_EXPORT static bool IsPrivInsn(cs_insn *ins);
         /**
         Checks if the Instruction is an Ending Instruction
         @param insn the instruction
