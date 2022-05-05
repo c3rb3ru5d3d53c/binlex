@@ -316,7 +316,7 @@ namespace binlex {
                 cs_mode mode;
                 char *arch_str;
                 char *cpu;
-                char *corpus;
+                string corpus;
                 uint threads;
                 bool instructions;
                 uint thread_cycles;
