@@ -112,20 +112,22 @@ int main(int argc, char **argv){
 
         CILDecompiler cil_decompiler;
         PRINT_DEBUG("Analyzing %lu sections for CIL byte code.\n", pe._sections.size());
-        for (size_t i = 0; i < pe._sections.size(); i++) {
-            if (pe._sections[i].offset == 0) continue;
+        int si = 0;
+        for (auto section : pe._sections) {
+            if (section.offset == 0) continue;
 
-            if (cil_decompiler.Setup(CIL_DECOMPILER_TYPE_BLCKS) == false){
+            if (cil_decompiler.Setup(CIL_DECOMPILER_TYPE_ALL) == false){
                 return 1;
             }
-			if (cil_decompiler.Decompile(pe._sections[i].data, pe._sections[i].size, 0) == false){
+			if (cil_decompiler.Decompile(section.data, section.size, si) == false){
                 continue;
 			}
-            if (g_args.options.output == NULL){
-                cil_decompiler.PrintTraits();
-            } else {
-                cil_decompiler.WriteTraits(g_args.options.output);
-            }
+            si++;
+        }
+        if (g_args.options.output == NULL){
+            cil_decompiler.PrintTraits();
+        } else {
+            cil_decompiler.WriteTraits(g_args.options.output);
         }
         return EXIT_SUCCESS;
     }
