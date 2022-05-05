@@ -215,9 +215,15 @@ void * Decompiler::CreateTraitsForSection(uint index) {
                 ClearTrait(&b_trait);
                 ClearTrait(&i_trait);
                 ClearTrait(&f_trait);
+                myself.code = (uint8_t *)((uint8_t *)myself.code + 1);
+                myself.code_size +=1;
+                myself.pc +=1;
+                sections[index].coverage.insert(myself.pc);
                 break;
 
             }
+
+            sections[index].coverage.insert(myself.pc);
 
             // Check for suspicious instructions and count them
             if (IsNopInsn(insn) || IsSemanticNopInsn(insn) || IsTrapInsn(insn) || IsPrivInsn(insn) ){
@@ -267,11 +273,7 @@ void * Decompiler::CreateTraitsForSection(uint index) {
             }
 
 
-            if (result == true){
-                sections[index].coverage.insert(myself.pc);
-            } else {
-                sections[index].coverage.insert(myself.pc+1);
-            }
+
             CollectInsn(insn, sections, index);
 
             PRINT_DEBUG("address=0%" PRIx64 ",block=%d,function=%d,queue=%ld,instruction=%s\t%s\n", insn->address,IsBlock(sections[index].addresses, insn->address), IsFunction(sections[index].addresses, insn->address), sections[index].discovered.size(), insn->mnemonic, insn->op_str);
