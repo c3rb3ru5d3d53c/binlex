@@ -572,7 +572,7 @@ function compose() {
         done
         for j in $(seq 1 $shards); do
             for i in $(seq 1 $replicas); do
-                echo "  mongodb-shard${j}-rep${i}";
+                echo "          - mongodb-shard${j}-rep${i}";
 	    done
         done
     done
