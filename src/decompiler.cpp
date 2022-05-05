@@ -43,7 +43,7 @@ CRITICAL_SECTION csDecompiler;
 	? (uint64_t)((insn).detail->x86.operands[0].imm) \
 	: (((insn).address + (insn).size) + (uint64_t)(insn).detail->x86.disp))
 
-Decompiler::Decompiler() {
+Decompiler::Decompiler(const binlex::File &firef) : file_reference(firef) {
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++) {
         sections[i].offset = 0;
         sections[i].data = NULL;
@@ -129,7 +129,7 @@ vector<json> Decompiler::GetTraits(){
         if (sections[i].data != NULL){
             for (int j = 0; j < sections[i].traits.size(); j++){
                 json jdata(GetTrait(sections[i].traits[j]));
-		        traitsjson.push_back(jdata);
+                traitsjson.push_back(jdata);
             }
         }
     }
@@ -149,16 +149,20 @@ void Decompiler::WriteTraits(){
     }
     auto traits(GetTraits());
     if(g_args.options.output != NULL) {
-	    for(auto i : traits) {
-	        output_stream << (g_args.options.pretty ? i.dump(4) : i.dump()) << endl;
-        }
+	for(auto trait : traits) {
+	    trait["file_sha256"] = file_reference.sha256;
+	    trait["file_tlsh"] = file_reference.tlsh;
+	    output_stream << (g_args.options.pretty ? trait.dump(4) : trait.dump()) << endl;
+	}
     } else {
-	    for(auto i : traits) {
-    	    cout << (g_args.options.pretty ? i.dump(4) : i.dump()) << endl;
-	    }
+	for(auto trait : traits) {
+	    trait["file_sha256"] = file_reference.sha256;
+	    trait["file_tlsh"] = file_reference.tlsh;
+	    cout << (g_args.options.pretty ? trait.dump(4) : trait.dump()) << endl;
+	}
     }
     if (g_args.options.output != NULL) {
-        output_stream.close();
+	output_stream.close();
     }
 }
 

@@ -1,19 +1,4 @@
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <inttypes.h>
-#include <assert.h>
-#include <byteswap.h>
-#include <ctype.h>
-#include <capstone/capstone.h>
-#include "common.h"
 #include "cil.h"
-#include "decompiler.h"
-#include <unistd.h>
-#include <vector>
-#include <iostream>
-#include <fstream>
 
 using namespace binlex;
 using json = nlohmann::json;
@@ -428,7 +413,7 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
         if(insn->instruction == CIL_INS_RET) {
             end_func = true;
         }
-        
+
         int updated = update_offset(insn->operand_size, i);
         if (updated != -1) {
             i = updated;
@@ -460,7 +445,7 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
             ctrait->invalid_instructions = 0; //TODO
             ctrait->type = "block"; //TODO support both types
             ctrait->corpus = string(sections[index].corpus);
-            //The cyclomatic complexity differs by type of trait. 
+            //The cyclomatic complexity differs by type of trait.
             //Which for now only supports block.
             ctrait->cyclomatic_complexity = num_edges - 1 + 2;
             ctrait->average_instructions_per_block = instructions->size();
@@ -572,7 +557,7 @@ string CILDecompiler::GetTrait(struct Trait *trait, bool pretty){
     json data;
     data["type"] = trait->type;
     data["corpus"] = trait->corpus;
-    data["architecture"] = trait->architecture;
+    data["mode"] = g_args.options.mode;
     data["bytes"] = trait->bytes;
     data["trait"] = trait->trait;
     data["edges"] = trait->edges;
