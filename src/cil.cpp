@@ -447,6 +447,7 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
             //Once we're done adding a trait we need to create a new set of instructions
             //for the next trait.
             instructions = new vector<Instruction *>;
+            num_instructions = 0;
        }
     }
     //Cleanup trait pointers and any other data structures before returning.
