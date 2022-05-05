@@ -440,7 +440,7 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
     uint64_t pc = offset;
     const uint8_t *code = (uint8_t *)((uint8_t *)data);
     size_t code_size = data_size + pc;
-    string bytes;
+    bool valid_block = true;
 
     // Track our state, assume we start in a valid bb
     // Keep track of call instructions
@@ -454,24 +454,36 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
             pc += 1;
             code_size -= 1;
             code = (uint8_t *)((uint8_t *)code + 1);
+            valid_block = false;
             continue;
         }
-        bytes = HexdumpBE(cs_ins->bytes, cs_ins->size);
         fprintf(stderr, "0x%x: %s\t%s\n", cs_ins->address, cs_ins->mnemonic, cs_ins->op_str);
-        // cs_disasm_iter(cs_dis, &pc, &n, &pc_addr, cs_ins)
-        if(cs_ins->id == X86_INS_INVALID) {
-            fprintf(stderr, "In valid instruction breaking at 0x%x\n", pc);
+
+        if (IsNopInsn(cs_ins) || IsSemanticNopInsn(cs_ins) || IsTrapInsn(cs_ins) || IsPrivInsn(cs_ins) ){
+            fprintf(stderr, "*** Suspicious instruction at 0x%x\n", cs_ins->address);
+            valid_block = false;
         }
+
         if(!cs_ins->size) {
-            fprintf(stderr, "In valid instruction size at 0x%x\n", pc);
+            fprintf(stderr, "Invalid instruction size at 0x%x\n", cs_ins->address);
         }
         if (IsConditionalInsn(cs_ins)){
-            fprintf(stderr, "Found jmp at 0x%x\n", cs_ins->address);
+            if (valid_block){
+                // This is a valid jmp collect it
+                CollectInsn(cs_ins, sections, index);
+                fprintf(stderr, "Found valid jmp at 0x%x\n", cs_ins->address);
+            }
+            else{
+                // Reset block and try again
+                valid_block = true;
+                fprintf(stderr, "Reset invalid block at 0x%x\n", cs_ins->address);
+            }
+            fprintf(stderr, "====================\n");
         }
         else if (cs_ins->id == X86_INS_CALL){
             fprintf(stderr, "Found call at 0x%x\n", cs_ins->address);
         }
-        CollectInsn(cs_ins, sections, index);
+        
     }
 
 
@@ -667,6 +679,8 @@ bool Decompiler::IsTrapInsn(cs_insn *ins)
     switch(ins->id) {
     case X86_INS_INT3:
     case X86_INS_UD2:
+    case X86_INS_INT1:
+    case X86_INS_INTO:
         return true;
     default:
         return false;
