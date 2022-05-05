@@ -183,8 +183,6 @@ target_link_libraries(binlex
         -lpthread
 )
 
-# -ltlsh
-
 set_target_properties(binlex
 	PROPERTIES COMPILE_FLAGS
 	-DCMAKE_CXX_FLAGS_RELEASE=${CMAKE_CXX_FLAGS_RELEASE}
@@ -256,6 +254,7 @@ if (BUILD_PYTHON_BINDINGS)
         SHARED
         bindings/python/blelf.cpp
         bindings/python/common.cpp
+        bindings/python/file.cpp
         bindings/python/pe.cpp
         bindings/python/raw.cpp
         bindings/python/decompiler.cpp

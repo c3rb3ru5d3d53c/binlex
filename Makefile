@@ -1,7 +1,6 @@
 .PHONY: all
 .PHONY: docs
 .PHONY: docker
-.PHONY: all
 
 threads=1
 admin_user=admin
@@ -12,7 +11,7 @@ config=Release
 
 all: python docs
 
-cli:
+cli: git-unsafe
 	mkdir -p build/
 	cd build/ && \
 		cmake -S ../ \
@@ -20,7 +19,7 @@ cli:
 			${args} && \
 		cmake --build . --config ${config} -- -j ${threads}
 
-python:
+python: git-unsafe
 	mkdir -p build/
 	cd build/ && \
 		cmake -S ../ \
@@ -41,8 +40,6 @@ docs:
 docs-update:
 	rm -rf docs/html/
 	cp -r build/docs/html/ docs/
-
-all: cli python docs docs-update
 
 docker:
 	@./docker.sh
@@ -86,9 +83,12 @@ dist:
 	cd build/ && \
 		make package_source
 
-install:
-	git config --global --add safe.directory `pwd`/build/capstone/src/capstone
-	git config --global --add safe.directory `pwd`/build/LIEF/src/LIEF
+git-unsafe:
+	@git config --global --add safe.directory `pwd`/build/capstone/src/capstone
+	@git config --global --add safe.directory `pwd`/build/LIEF/src/LIEF
+	@git config --global --add safe.directory `pwd`/build/tlsh/src/tlsh
+
+install: git-unsafe
 	cd build/ && \
 		make install && \
 		ldconfig
