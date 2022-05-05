@@ -458,21 +458,9 @@ void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint ind
 
     // Run a linear disassemble on the data to populate the queue
     //TODO: enable when this is ready
-    //LinearDisassemble(data, data_size, offset, index);
+    LinearDisassemble(data, data_size, offset, index);
 
-    while (true){
-        CreateTraitsForSection(index);
-        if (sections[index].discovered.empty()){
-            uint64_t tmp_addr = MaxAddress(sections[index].coverage);
-            if (tmp_addr < sections[index].data_size){
-                sections[index].discovered.push(tmp_addr);
-                sections[index].addresses[tmp_addr] = DECOMPILER_OPERAND_TYPE_FUNCTION;
-                sections[index].visited[tmp_addr] = DECOMPILER_VISITED_QUEUED;
-                continue;
-            }
-            break;
-        }
-    }
+    CreateTraitsForSection(index);
 
     for (size_t i = 0; i < sections[index].traits.size(); ++i) {
         FinalizeTrait(sections[index].traits[i]);
