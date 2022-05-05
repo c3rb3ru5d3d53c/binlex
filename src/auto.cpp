@@ -81,11 +81,8 @@ int AutoLex::ProcessFile(char *file_path){
                 if (cil_decompiler.Decompile(pe._sections[i].data, pe._sections[i].size, 0) == false){
                     continue;
                 }
-                if (g_args.options.output == NULL){
-                    cil_decompiler.PrintTraits();
-                } else {
-                    cil_decompiler.WriteTraits(g_args.options.output);
-                }
+		// Output to the commandline-given output device.
+		cil_decompiler.WriteTraits();
             }
             return EXIT_SUCCESS;
         }
