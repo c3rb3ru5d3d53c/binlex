@@ -267,7 +267,7 @@ CILDecompiler::CILDecompiler(){
         {CIL_INS_STELEM_R4, 0},
         {CIL_INS_STELEM_R8, 0},
         {CIL_INS_STELEM_REF, 0},
-        {CIL_INS_STFLD, 32}, //Need to confirm this is correct with the <field> 
+        {CIL_INS_STFLD, 32}, 
         {CIL_INS_STIND_I, 0},
         {CIL_INS_STIND_I1, 0},
         {CIL_INS_STIND_I2, 0},
