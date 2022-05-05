@@ -303,6 +303,9 @@ bool CILDecompiler::Setup(int input_type){
         case CIL_DECOMPILER_TYPE_FUNCS:
             type = CIL_DECOMPILER_TYPE_FUNCS;
             break;
+        case CIL_DECOMPILER_TYPE_ALL:
+            type = CIL_DECOMPILER_TYPE_ALL;
+            break;
         default:
             fprintf(stderr, "[x] unsupported CIL decompiler type\n");
             type = CIL_DECOMPILER_TYPE_UNSET;
@@ -582,13 +585,15 @@ void CILDecompiler::WriteTraits(char *file_path){
     ofstream fd;
     fd.open(string(file_path), ios::app);
     for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
-        if (sections[i].function_traits.size() > 0){
+        if ((sections[i].function_traits.size() > 0) && (type == CIL_DECOMPILER_TYPE_ALL 
+        || type == CIL_DECOMPILER_TYPE_FUNCS)){
             PRINT_DEBUG("Found function traits in section: %d\n", i);
             for(auto trait : sections[i].function_traits) {
                 fd << GetTrait(trait, g_args.options.pretty) << endl;
             }
         }
-        if (sections[i].block_traits.size() > 0){
+        if ((sections[i].block_traits.size() > 0) && (type == CIL_DECOMPILER_TYPE_ALL 
+        || type == CIL_DECOMPILER_TYPE_BLCKS)){
             PRINT_DEBUG("Found block traits in section: %d\n", i);
             for(auto trait : sections[i].block_traits) {
                 fd << GetTrait(trait, g_args.options.pretty) << endl;
@@ -599,13 +604,16 @@ void CILDecompiler::WriteTraits(char *file_path){
 }
 
 void CILDecompiler::PrintTraits(){
+    PRINT_DEBUG("Set type: %d\n", type);
     for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
-        if (sections[i].function_traits.size() > 0){
+        if ((sections[i].function_traits.size() > 0) && (type == CIL_DECOMPILER_TYPE_ALL 
+        || type == CIL_DECOMPILER_TYPE_FUNCS)){
             for(auto trait : sections[i].function_traits) {
                 cout << GetTrait(trait, g_args.options.pretty) << endl;
             }
         }
-        if (sections[i].block_traits.size() > 0){
+        if ((sections[i].block_traits.size() > 0) && (type == CIL_DECOMPILER_TYPE_ALL 
+        || type == CIL_DECOMPILER_TYPE_BLCKS)){
             for(auto trait : sections[i].block_traits) {
                 cout << GetTrait(trait, g_args.options.pretty) << endl;
             }
