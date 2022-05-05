@@ -542,7 +542,7 @@ string CILDecompiler::GetTrait(struct Trait *trait, bool pretty){
 
 void CILDecompiler::WriteTraits(char *file_path){
     ofstream fd;
-    fd.open(string(file_path));
+    fd.open(string(file_path), ios::app);
     for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
         if (sections[i].function_traits.size() > 0){
             for(auto trait : sections[i].function_traits) {
