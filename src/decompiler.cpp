@@ -198,6 +198,7 @@ void * Decompiler::CreateTraitsForSection(uint index) {
 
         bool block = IsBlock(sections[index].addresses, address);
         bool function = IsFunction(sections[index].addresses, address);
+        uint suspicious_instructions = 0;
 
         while(true) {
             uint edges = 0;
@@ -208,60 +209,63 @@ void * Decompiler::CreateTraitsForSection(uint index) {
 
             bool result = cs_disasm_iter(myself.handle, &myself.code, &myself.code_size, &myself.pc, insn);
 
+            if (result != true){
+                // Error with disassembly, not a valid basic block,
+                PRINT_DEBUG("*** Decompile error rejected block: 0x%" PRIx64 "\n", myself.pc);
+                ClearTrait(&b_trait);
+                ClearTrait(&i_trait);
+                ClearTrait(&f_trait);
+                break;
+
+            }
+
+            // Check for suspicious instructions and count them
+            if (IsNopInsn(insn) || IsSemanticNopInsn(insn) || IsTrapInsn(insn) || IsPrivInsn(insn) ){
+                suspicious_instructions += 1;
+            }
+            
+            // If there are too many suspicious instructions in the bb discard it
+            // TODO: Make this configurable as an argument
+            if (suspicious_instructions > 2){
+                PRINT_DEBUG("*** Suspicious instructions rejected block: 0x%" PRIx64 "\n", insn->address);
+                ClearTrait(&b_trait);
+                ClearTrait(&i_trait);
+                ClearTrait(&f_trait);
+                break;
+            }
+
             b_trait.instructions++;
             f_trait.instructions++;
 
             if (g_args.options.instructions == true){
-                if (result == true){
-                    i_trait.tmp_bytes = HexdumpBE(insn->bytes, insn->size);
-                    i_trait.size = GetByteSize(i_trait.tmp_bytes);
-                    i_trait.offset = sections[index].offset + myself.pc - i_trait.size;
-                    i_trait.tmp_trait = WildcardInsn(insn);
-                    i_trait.instructions = 1;
-                    i_trait.edges = IsConditionalInsn(insn);
-                    AppendTrait(&i_trait, sections, index);
-                    ClearTrait(&i_trait);
-                } else {
-                    i_trait.instructions = 1;
-                    i_trait.invalid_instructions = 1;
-                    i_trait.tmp_bytes = i_trait.tmp_bytes + HexdumpBE(myself.code, 1);
-                    i_trait.tmp_trait = i_trait.tmp_trait + Wildcards(1);
-                    AppendTrait(&i_trait, sections, index);
-                    ClearTrait(&i_trait);
-                }
+                i_trait.tmp_bytes = HexdumpBE(insn->bytes, insn->size);
+                i_trait.size = GetByteSize(i_trait.tmp_bytes);
+                i_trait.offset = sections[index].offset + myself.pc - i_trait.size;
+                i_trait.tmp_trait = WildcardInsn(insn);
+                i_trait.instructions = 1;
+                i_trait.edges = IsConditionalInsn(insn);
+                AppendTrait(&i_trait, sections, index);
+                ClearTrait(&i_trait);
             }
 
-            if (result == true){
-                // Need to Wildcard Traits Here
-
-                if (IsWildcardInsn(insn) == true){
-                    b_trait.tmp_trait = b_trait.tmp_trait + Wildcards(insn->size) + " ";
-                    f_trait.tmp_trait = f_trait.tmp_trait + Wildcards(insn->size) + " ";
-                } else {
-                    b_trait.tmp_trait = b_trait.tmp_trait + WildcardInsn(insn) + " ";
-                    f_trait.tmp_trait = f_trait.tmp_trait + WildcardInsn(insn) + " ";
-                }
-                b_trait.tmp_bytes = b_trait.tmp_bytes + HexdumpBE(insn->bytes, insn->size) + " ";
-                f_trait.tmp_bytes = f_trait.tmp_bytes + HexdumpBE(insn->bytes, insn->size) + " ";
-                edges = IsConditionalInsn(insn);
-                b_trait.edges = b_trait.edges + edges;
-                f_trait.edges = f_trait.edges + edges;
-                if (edges > 0){
-                    b_trait.blocks++;
-                    f_trait.blocks++;
-                }
+            // Need to Wildcard Traits Here
+            if (IsWildcardInsn(insn) == true){
+                b_trait.tmp_trait = b_trait.tmp_trait + Wildcards(insn->size) + " ";
+                f_trait.tmp_trait = f_trait.tmp_trait + Wildcards(insn->size) + " ";
             } else {
-                b_trait.invalid_instructions++;
-                f_trait.invalid_instructions++;
-                b_trait.tmp_bytes = b_trait.tmp_bytes + HexdumpBE(myself.code, 1) + " ";
-                f_trait.tmp_bytes = f_trait.tmp_bytes + HexdumpBE(myself.code, 1) + " ";
-                b_trait.tmp_trait = b_trait.tmp_trait + Wildcards(1) + " ";
-                f_trait.tmp_trait = f_trait.tmp_trait + Wildcards(1) + " ";
-                myself.pc++;
-                myself.code = (uint8_t *)((uint8_t *)sections[index].data + myself.pc);
-                myself.code_size = sections[index].data_size + myself.pc;
-                continue;
+                b_trait.tmp_trait = b_trait.tmp_trait + WildcardInsn(insn) + " ";
+                f_trait.tmp_trait = f_trait.tmp_trait + WildcardInsn(insn) + " ";
             }
+            b_trait.tmp_bytes = b_trait.tmp_bytes + HexdumpBE(insn->bytes, insn->size) + " ";
+            f_trait.tmp_bytes = f_trait.tmp_bytes + HexdumpBE(insn->bytes, insn->size) + " ";
+            edges = IsConditionalInsn(insn);
+            b_trait.edges = b_trait.edges + edges;
+            f_trait.edges = f_trait.edges + edges;
+            if (edges > 0){
+                b_trait.blocks++;
+                f_trait.blocks++;
+            }
+
 
             if (result == true){
                 sections[index].coverage.insert(myself.pc);
@@ -357,6 +361,67 @@ void Decompiler::AppendQueue(set<uint64_t> &addresses, uint operand_type, uint i
     PRINT_DEBUG("\n");
 }
 
+void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, uint index) {
+    // Perform a single pass of the data looking for jmp or call instructions to populate the queue
+    // we are looking for intructions that indicate a function or a basic block
+    //      - For each jmp or call push the destination address onto the queue with the appropriate type
+    //      - TODO: For each jmp also push the address of the next instruction on the queue
+
+
+    csh cs_dis;
+    
+    PRINT_DEBUG("LinearDisassemble: offset = 0x%" PRIx64 " data_size = %" PRId64 " bytes\n", offset, data_size);
+
+    if(cs_open(arch, mode, &cs_dis) != CS_ERR_OK) {
+        PRINT_ERROR_AND_EXIT("[x] LinearDisassembly failed to init capstone\n");
+    }
+
+    if (cs_option(cs_dis, CS_OPT_DETAIL, CS_OPT_ON) != CS_ERR_OK) {
+        PRINT_ERROR_AND_EXIT("[x] LinearDisassembly failed to set capstone options\n");
+    }
+
+    cs_insn *cs_ins = cs_malloc(cs_dis);
+    uint64_t pc = offset;
+    const uint8_t *code = (uint8_t *)((uint8_t *)data);
+    size_t code_size = data_size + pc;
+    string bytes;
+
+    // Track our state, assume we start in a valid bb
+    // Keep track of call instructions
+    // If we have a jmp or a ret push the jmp and all saved calls onto the queue
+    // If we encounter a suspicious instruction we are NOT in a bb
+    //  - clear saved call instructions
+    //  - loop until we hit a ret then assume we are back in a good bb
+    while(pc < code_size){
+        if (!cs_disasm_iter(cs_dis, &code, &code_size, &pc, cs_ins)){
+            PRINT_DEBUG("0x%" PRIx64 ": **** failed\n", pc);
+            pc += 1;
+            code_size -= 1;
+            code = (uint8_t *)((uint8_t *)code + 1);
+            continue;
+        }
+        bytes = HexdumpBE(cs_ins->bytes, cs_ins->size);
+        PRINT_DEBUG("0x%" PRIx64 ": %s\t%s\n", cs_ins->address, cs_ins->mnemonic, cs_ins->op_str);
+        // cs_disasm_iter(cs_dis, &pc, &n, &pc_addr, cs_ins)
+        if(cs_ins->id == X86_INS_INVALID) {
+            PRINT_DEBUG("In valid instruction breaking at 0x%" PRIx64 "\n", pc);
+        }
+        if(!cs_ins->size) {
+            PRINT_DEBUG("In valid instruction size at 0x%" PRIx64 "\n", pc);
+        }
+        if (IsConditionalInsn(cs_ins)){
+            PRINT_DEBUG("Found jmp at 0x%" PRIx64 "\n", cs_ins->address);
+        }
+        else if (cs_ins->id == X86_INS_CALL){
+            PRINT_DEBUG("Found call at 0x%" PRIx64 "\n", cs_ins->address);
+        }
+        CollectInsn(cs_ins, sections, index);
+    }
+
+
+
+};
+
 void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint index) {
     sections[index].offset  = offset;
     sections[index].data = data;
@@ -364,6 +429,10 @@ void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint ind
 
     PRINT_DEBUG("Decompile: offset = 0x%x data_size = %" PRId64 " bytes\n", sections[index].offset, sections[index].data_size);
     PRINT_DATA("Section Data (up to 32 bytes)", sections[index].data, std::min((size_t)32, sections[index].data_size));
+
+    // Run a linear disassemble on the data to populate the queue
+    //TODO: enable when this is ready
+    //LinearDisassemble(data, data_size, offset, index);
 
     while (true){
         CreateTraitsForSection(index);
@@ -406,6 +475,115 @@ string Decompiler::WildcardInsn(cs_insn *insn){
 
 bool Decompiler::IsVisited(map<uint64_t, int> &visited, uint64_t address) {
     return visited.find(address) != visited.end();
+}
+
+
+bool Decompiler::IsNopInsn(cs_insn *ins)
+{
+    switch(ins->id) {
+    case X86_INS_NOP:
+    case X86_INS_FNOP:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool Decompiler::IsSemanticNopInsn(cs_insn *ins)
+{
+    cs_x86 *x86;
+
+    /* XXX: to make this truly platform-independent, we need some real
+     * semantic analysis, but for now checking known cases is sufficient */
+
+    x86 = &ins->detail->x86;
+    switch(ins->id) {
+    case X86_INS_MOV:
+        /* mov reg,reg */
+        if((x86->op_count == 2) 
+             && (x86->operands[0].type == X86_OP_REG) 
+             && (x86->operands[1].type == X86_OP_REG) 
+             && (x86->operands[0].reg == x86->operands[1].reg)) {
+            return true;
+        }
+        return false;
+    case X86_INS_XCHG:
+        /* xchg reg,reg */
+        if((x86->op_count == 2) 
+             && (x86->operands[0].type == X86_OP_REG) 
+             && (x86->operands[1].type == X86_OP_REG) 
+             && (x86->operands[0].reg == x86->operands[1].reg)) {
+            return true;
+        }
+        return false;
+    case X86_INS_LEA:
+        /* lea        reg,[reg + 0x0] */
+        if((x86->op_count == 2)
+             && (x86->operands[0].type == X86_OP_REG)
+             && (x86->operands[1].type == X86_OP_MEM)
+             && (x86->operands[1].mem.segment == X86_REG_INVALID)
+             && (x86->operands[1].mem.base == x86->operands[0].reg)
+             && (x86->operands[1].mem.index == X86_REG_INVALID)
+             /* mem.scale is irrelevant since index is not used */
+             && (x86->operands[1].mem.disp == 0)) {
+            return true;
+        }
+        /* lea        reg,[reg + eiz*x + 0x0] */
+        if((x86->op_count == 2)
+             && (x86->operands[0].type == X86_OP_REG)
+             && (x86->operands[1].type == X86_OP_MEM)
+             && (x86->operands[1].mem.segment == X86_REG_INVALID)
+             && (x86->operands[1].mem.base == x86->operands[0].reg)
+             && (x86->operands[1].mem.index == X86_REG_EIZ)
+             /* mem.scale is irrelevant since index is the zero-register */
+             && (x86->operands[1].mem.disp == 0)) {
+            return true;
+        }
+        return false;
+    default:
+        return false;
+    }
+}
+
+bool Decompiler::IsTrapInsn(cs_insn *ins)
+{
+    switch(ins->id) {
+    case X86_INS_INT3:
+    case X86_INS_UD2:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool Decompiler::IsPrivInsn(cs_insn *ins)
+{
+    switch(ins->id) {
+    case X86_INS_HLT:
+    case X86_INS_IN:
+    case X86_INS_INSB:
+    case X86_INS_INSW:
+    case X86_INS_INSD:
+    case X86_INS_OUT:
+    case X86_INS_OUTSB:
+    case X86_INS_OUTSW:
+    case X86_INS_OUTSD:
+    case X86_INS_RDMSR:
+    case X86_INS_WRMSR:
+    case X86_INS_RDPMC:
+    case X86_INS_RDTSC:
+    case X86_INS_LGDT:
+    case X86_INS_LLDT:
+    case X86_INS_LTR:
+    case X86_INS_LMSW:
+    case X86_INS_CLTS:
+    case X86_INS_INVD:
+    case X86_INS_INVLPG:
+    case X86_INS_WBINVD:
+        return true;
+    default:
+        return false;
+    }
 }
 
 bool Decompiler::IsWildcardInsn(cs_insn *insn){
