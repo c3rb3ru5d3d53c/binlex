@@ -30,7 +30,7 @@ class BLDEC():
         self.config = None
 
     def find_traits(self, file_processor, data, file_type):
-        decompiler = pybinlex.Decompiler()
+        decompiler = pybinlex.Decompiler(file_processor)
         file_hash = sha256(data).hexdigest()
 
         byte_file = open(file_hash, 'wb')
