@@ -43,6 +43,7 @@ CILDecompiler::CILDecompiler(){
         {CIL_INS_CEQ, 0},
         {CIL_INS_ARGLIST, 0},
         {CIL_INS_CGT, 0},
+        {CIL_INS_CGT_UN, 0},
         {CIL_INS_CLT, 0},
         {CIL_INS_CLT_UN, 0},
         {CIL_INS_CONSTRAINED, 32},
@@ -266,7 +267,7 @@ CILDecompiler::CILDecompiler(){
         {CIL_INS_STELEM_R4, 0},
         {CIL_INS_STELEM_R8, 0},
         {CIL_INS_STELEM_REF, 0},
-        {CIL_INS_STFLD, 0},
+        {CIL_INS_STFLD, 32}, //Need to confirm this is correct with the <field> 
         {CIL_INS_STIND_I, 0},
         {CIL_INS_STIND_I1, 0},
         {CIL_INS_STIND_I2, 0},
