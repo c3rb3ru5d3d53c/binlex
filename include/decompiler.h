@@ -102,12 +102,6 @@ namespace binlex {
         */
         BINLEX_EXPORT void SetThreads(uint threads, uint thread_cycles, uint thread_sleep, uint index);
         /**
-        Sets The Corpus Name
-        @param corpus pointer to corpus name
-        @param index the section index
-        */
-        BINLEX_EXPORT void SetCorpus(char *corpus, uint index);
-        /**
         @param instructions bool to collect instructions traits or not
         @param index the section index
         */
