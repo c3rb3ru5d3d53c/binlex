@@ -33,7 +33,7 @@ CILDecompiler::CILDecompiler(){
         sections[i].threads = 1;
         sections[i].thread_cycles = 1;
         sections[i].thread_sleep = 500;
-        sections[i].corpus = (char *)"default";
+        sections[i].corpus = g_args.options.corpus;
         sections[i].instructions = false;
         sections[i].arch_str = NULL;
     }
@@ -109,16 +109,13 @@ CILDecompiler::CILDecompiler(){
         //     printf("brnull.s\n");
         //     break;
         {CIL_INS_BRTRUE, 32},
-        {CIL_INS_BRTRUE_S, 8},
+        {CIL_INS_BRTRUE_S, 8}
         // case CIL_INS_BRZERO:
         //     printf("brzero\n");
         //     break;
         // case CIL_INS_BRZERO_S:
         //     printf("brzero.s\n");
         //     break;
-        {CIL_INS_CALL, 32},
-        {CIL_INS_CALLI, 32},
-        {CIL_INS_CALLVIRT, 32}
     };
 
     miscInstrMap = {
@@ -290,7 +287,10 @@ CILDecompiler::CILDecompiler(){
         {CIL_INS_THROW, 0},
         {CIL_INS_UNBOX, 32},
         {CIL_INS_UNBOX_ANY, 32},
-        {CIL_INS_XOR, 0}
+        {CIL_INS_XOR, 0},
+        {CIL_INS_CALL, 32},
+        {CIL_INS_CALLI, 32},
+        {CIL_INS_CALLVIRT, 32}
     };
 }
 
@@ -352,11 +352,16 @@ int CILDecompiler::update_offset(int operand_size, int i) {
 bool CILDecompiler::Decompile(void *data, int data_size, int index){
     const unsigned char *pc = (const unsigned char *)data;
     vector<Trait*> traits;
+    vector<Trait*> ftraits;
     vector< Instruction* >* instructions = new vector<Instruction *>;
+    vector< Instruction* >* finstructions = new vector<Instruction *>;
     //We need an iterator for our hashmap searches
     map<int, int>::iterator it;
     uint num_edges = 0;
+    uint num_f_edges = 0;
     uint num_instructions = 0;
+    uint num_f_instructions = 0;
+    uint func_block_count = 0;
     for (int i = 0; i < data_size; i++){
         int operand_size = 0;
         bool end_block = false;
@@ -369,6 +374,7 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
             insn->operand_size = 0;
             insn->offset = i;
             instructions->push_back(insn);
+            finstructions->push_back(insn);
             //Then let's move on to the next instruction
             i++;
             PRINT_DEBUG("Instruction being decompiled: 0x%x\n", pc[i]);
@@ -382,7 +388,9 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
                 insn->operand_size = it->second;
                 insn->offset = i;
                 instructions->push_back(insn);
+                finstructions->push_back(insn);
                 num_instructions++;
+                num_f_instructions++;
             } else {
                 PRINT_ERROR_AND_EXIT( "[x] unknown prefix opcode 0x%02x at offset %d\n", pc[i], i);
                 return false;
@@ -394,9 +402,11 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
                     insn->instruction = pc[i];
                     insn->operand_size = it->second;
                     insn->offset = i;
-                    instructions->push_back(insn);   
+                    instructions->push_back(insn);
+                    finstructions->push_back(insn);
                     end_block = true;
                     num_instructions++;
+                    num_f_instructions++;
                     PRINT_DEBUG("[+] end block found -> opcode 0x%02x at offset %d\n", pc[i], i);
             } else {
                 it = miscInstrMap.find(pc[i]);
@@ -406,7 +416,9 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
                     insn->operand_size = it->second;
                     insn->offset = i;
                     instructions->push_back(insn);
+                    finstructions->push_back(insn);
                     num_instructions++;
+                    num_f_instructions++;
                 } else {
                     PRINT_ERROR_AND_EXIT("[x] unknown opcode 0x%02x at offset %d\n", pc[i], i);
                     return false;
@@ -422,9 +434,10 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
             i = updated;
         }
         //If we're at the end of a block, at the end of a function, or
-        //at the end of our data then we need to store the trait data.
+        //at the end of our data then we need to store the block trait data.
+        //Even the end of a function should be considered a "block".
         if ((end_func || end_block && i < data_size - 1) ||
-            ((end_func == false && end_block == false) && i == data_size -1)) {
+            ((end_block == false && end_func == false) && i == data_size -1)) {
             Trait *ctrait = new Trait;
             ctrait->instructions = instructions;
             ctrait->corpus = sections[index].corpus;
@@ -455,18 +468,57 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
             ctrait->trait_entropy = Entropy(ctrait->trait);
             ctrait->trait_sha256 = SHA256(&ctrait->trait[0]);
             ctrait->bytes_sha256 = SHA256(&ctrait->bytes[0]);
-            traits.push_back(ctrait);
             //The number of edges needs to be reset once the trait is stored.
             num_edges = 0;
-            //TODO support both types of traits.
             sections[index].block_traits.push_back(ctrait);
             //Once we're done adding a trait we need to create a new set of instructions
             //for the next trait.
             instructions = new vector<Instruction *>;
             num_instructions = 0;
+            func_block_count++;
+       }
+       if ((end_func && i < data_size - 1) ||
+            ((end_func == false) && i == data_size -1)) {
+            Trait *ftrait = new Trait;
+            ftrait->instructions = finstructions;
+            ftrait->corpus = sections[index].corpus;
+            //Limiting to x86 for now but this should be set by the PE parsing code
+            //higher up in the call-stack.
+            ftrait->architecture = "x86";
+            //The first offset of the first instruction will give us the offset
+            //of our trait.
+            uint trait_offset = finstructions->front()->offset;
+            PRINT_DEBUG("Adding offset to function trait: %d\n", trait_offset);
+            ftrait->offset = finstructions->front()->offset;
+            ftrait->num_instructions = num_f_instructions;
+            ftrait->trait = ConvTraitBytes(*finstructions);
+            ftrait->bytes = ConvBytes(*finstructions, data, data_size);
+            //Since traits are differentiated by blocks then this will always be 1
+            //maybe this should be different in the future?
+            ftrait->blocks = func_block_count;
+            ftrait->edges = num_edges;
+            ftrait->size = SizeOfTrait(*finstructions);
+            ftrait->invalid_instructions = 0; //TODO
+            ftrait->type = "function";
+            ftrait->corpus = string(sections[index].corpus);
+            //The cyclomatic complexity differs by type of trait. 
+            //Which for now only supports block.
+            ftrait->cyclomatic_complexity = num_f_edges - func_block_count + 2;
+            ftrait->average_instructions_per_block = finstructions->size()/func_block_count;
+            ftrait->bytes_entropy = Entropy(ftrait->bytes);
+            ftrait->trait_entropy = Entropy(ftrait->trait);
+            ftrait->trait_sha256 = SHA256(&ftrait->trait[0]);
+            ftrait->bytes_sha256 = SHA256(&ftrait->bytes[0]);
+            //The number of edges needs to be reset once the trait is stored.
+            num_edges = 0;
+            sections[index].function_traits.push_back(ftrait);
+            //Once we're done adding a trait we need to create a new set of instructions
+            //for the next trait.
+            finstructions = new vector<Instruction *>;
+            num_f_instructions = 0;
+            func_block_count = 0;
        }
     }
-    //Cleanup trait pointers and any other data structures before returning.
     return true;
 }
 
@@ -546,11 +598,13 @@ void CILDecompiler::WriteTraits(char *file_path){
     fd.open(string(file_path), ios::app);
     for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
         if (sections[i].function_traits.size() > 0){
+            PRINT_DEBUG("Found function traits in section: %d\n", i);
             for(auto trait : sections[i].function_traits) {
                 fd << GetTrait(trait, g_args.options.pretty) << endl;
             }
         }
         if (sections[i].block_traits.size() > 0){
+            PRINT_DEBUG("Found block traits in section: %d\n", i);
             for(auto trait : sections[i].block_traits) {
                 fd << GetTrait(trait, g_args.options.pretty) << endl;
             }
