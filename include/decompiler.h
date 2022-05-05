@@ -106,6 +106,14 @@ namespace binlex {
         */
         BINLEX_EXPORT void* CreateTraitsForSection(uint index);
         /**
+        Add discovered block address to queue
+        @param address the block address
+        @param operand_type the operand type
+        @param index the section index
+        @return bool
+        */
+        BINLEX_EXPORT static void AddDiscoveredBlock(uint64_t address, struct Section *sections, uint index);
+        /**
         Collect Function and Conditional Operands for Processing
         @param insn the instruction
         @param operand_type the operand type
