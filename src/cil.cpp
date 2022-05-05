@@ -500,7 +500,7 @@ string CILDecompiler::ConvBytes(vector< Instruction* > allinst, void *data, int 
     return byte_rep_t;
 }
 
-string CILDecompiler::GetTrait(struct Trait *trait, bool pretty){
+json CILDecompiler::GetTrait(struct Trait *trait){
     json data;
     data["type"] = trait->type;
     data["corpus"] = trait->corpus;
@@ -519,10 +519,7 @@ string CILDecompiler::GetTrait(struct Trait *trait, bool pretty){
     data["invalid_instructions"] = trait->invalid_instructions;
     data["cyclomatic_complexity"] = trait->cyclomatic_complexity;
     data["average_instructions_per_block"] = trait->average_instructions_per_block;
-    if (pretty == true){
-        return data.dump(4);
-    }
-    return data.dump();
+    return data;
 }
 
 vector<json> CILDecompiler::GetTraits(){
@@ -530,13 +527,13 @@ vector<json> CILDecompiler::GetTraits(){
     for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
         if (sections[i].function_traits.size() > 0){
             for(auto trait : sections[i].function_traits) {
-		json jdata(GetTrait(trait, g_args.options.pretty));
+		json jdata(GetTrait(trait));
 		traitsjson.push_back(jdata);
             }
         }
         if (sections[i].block_traits.size() > 0){
             for(auto trait : sections[i].block_traits) {
-                json jdata(GetTrait(trait, g_args.options.pretty));
+                json jdata(GetTrait(trait));
 		traitsjson.push_back(jdata);
             }
         }

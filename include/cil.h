@@ -349,7 +349,7 @@ namespace binlex {
 	     * @return list of traits json objects
 	     */
 	    vector<json> GetTraits();
-            string GetTrait(struct Trait *trait, bool pretty);
+            json GetTrait(struct Trait *trait);
             /**
             Converts instruction objects to trait pattern for output
             @param insn Source instruction to check and resulting operand size
