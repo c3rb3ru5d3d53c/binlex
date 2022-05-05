@@ -6,7 +6,7 @@ import logging
 import hashlib
 from flask import Blueprint
 from flask import current_app as app
-from flask import request, make_response
+from flask import request, make_response, send_file
 from flask_restx import Namespace, Resource, fields
 from pprint import pprint
 from bson import json_util
@@ -64,7 +64,7 @@ class binlex_samples_upload(Resource):
             return {
                 'error': 'Invalid mode value, mode must be one of the following: ' + ', '.join(modes)
             }, 401
-
+        
         try:
             data = request.data
             if io.BytesIO(data).getbuffer().nbytes == 0:
@@ -90,3 +90,57 @@ class binlex_samples_upload(Resource):
             return {
                 'error': 'Failed to add to decompiler queue'
             }, 500
+
+#Download sample
+@api.route(api_prefix + '/samples/<string:sha256>')
+class binlex_samples_download(Resource):
+    @require_user
+    def get(self, sha256):
+        samplecontents = -1
+        error = -1
+        try:
+            response = app.config['minio'].download(
+                bucket_name='goodware',
+                object_name=sha256)
+            if response not in [None, False]:
+                samplecontents = response.data
+        except Exception as e:
+            error = e
+        try:
+            response = app.config['minio'].download(
+                bucket_name='malware',
+                object_name=sha256)
+            if response not in [None, False]:
+                samplecontents = response.data
+        except Exception as e:
+            error = e
+        try:
+            response = app.config['minio'].download(
+                bucket_name='default',
+                object_name=sha256)
+            if response not in [None, False]:
+                samplecontents = response.data
+        except Exception as e:
+            error = e
+        try:
+            response = app.config['minio'].download(
+                bucket_name='bldecomp',
+                object_name=sha256)
+            if response not in [None, False]:
+                samplecontents = response.data
+        except Exception as e: 
+            error = e
+
+        if samplecontents != -1:
+            response = send_file(
+                io.BytesIO(samplecontents),
+                'application/octet-stream'
+            )
+            return response
+        if error != -1:
+            return {
+                'error': 'download failed'
+            }
+        return {
+            'status': 'could not find requested file to download'
+        }
