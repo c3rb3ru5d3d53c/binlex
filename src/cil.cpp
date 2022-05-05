@@ -481,16 +481,12 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
             ftrait->num_instructions = num_f_instructions;
             ftrait->trait = ConvTraitBytes(*finstructions);
             ftrait->bytes = ConvBytes(*finstructions, data, data_size);
-            //Since traits are differentiated by blocks then this will always be 1
-            //maybe this should be different in the future?
             ftrait->blocks = func_block_count;
             ftrait->edges = num_edges;
             ftrait->size = SizeOfTrait(*finstructions);
             ftrait->invalid_instructions = 0; //TODO
             ftrait->type = "function";
             ftrait->corpus = string(sections[index].corpus);
-            //The cyclomatic complexity differs by type of trait. 
-            //Which for now only supports block.
             ftrait->cyclomatic_complexity = num_f_edges - func_block_count + 2;
             ftrait->average_instructions_per_block = finstructions->size()/func_block_count;
             ftrait->bytes_entropy = Entropy(ftrait->bytes);
