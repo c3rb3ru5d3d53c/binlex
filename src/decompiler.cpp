@@ -383,11 +383,12 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
     }
 
     cs_insn *cs_ins = cs_malloc(cs_dis);
+    cs_insn *cs_last_ins = cs_malloc(cs_dis);
     uint64_t pc = offset;
     const uint8_t *code = (uint8_t *)((uint8_t *)data);
     size_t code_size = data_size + pc;
     bool valid_block = true;
-
+    uint64_t block_address = pc;
     // Track our state, assume we start in a valid bb
     // Keep track of call instructions
     // If we have a jmp or a ret push the jmp and all saved calls onto the queue
@@ -405,6 +406,13 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
         }
         fprintf(stderr, "0x%x: %s\t%s\n", cs_ins->address, cs_ins->mnemonic, cs_ins->op_str);
 
+        // Test if this is a repeat instruction
+        if ((cs_ins->id == cs_last_ins->id) && (strcmp(cs_ins->op_str, cs_last_ins->op_str) == 0)){
+            fprintf(stderr, "*** Recurring instruction at 0x%x\n", cs_ins->address);
+            valid_block = false;
+        }
+        cs_last_ins = cs_ins;
+
         if (IsNopInsn(cs_ins) || IsSemanticNopInsn(cs_ins) || IsTrapInsn(cs_ins) || IsPrivInsn(cs_ins) ){
             fprintf(stderr, "*** Suspicious instruction at 0x%x\n", cs_ins->address);
             valid_block = false;
@@ -418,12 +426,15 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
                 // This is a valid jmp collect it
                 CollectInsn(cs_ins, sections, index);
                 fprintf(stderr, "Found valid jmp at 0x%x\n", cs_ins->address);
+                AddDiscoveredBlock(block_address, sections, index);
             }
             else{
                 // Reset block and try again
                 valid_block = true;
                 fprintf(stderr, "Reset invalid block at 0x%x\n", cs_ins->address);
             }
+            // Save next block address
+            block_address = pc;
             fprintf(stderr, "====================\n");
         }
         else if (cs_ins->id == X86_INS_CALL){
@@ -432,7 +443,8 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
         
     }
 
-
+    cs_free(cs_ins, 1);
+    cs_free(cs_last_ins, 1);
 
 };
 
@@ -771,6 +783,14 @@ uint Decompiler::CollectInsn(cs_insn* insn, struct Section *sections, uint index
         return result;
     }
     return result;
+}
+
+void Decompiler::AddDiscoveredBlock(uint64_t address, struct Section *sections, uint index) {
+    if (IsVisited(sections[index].visited, address) == false && address < sections[index].data_size) {
+        sections[index].visited[address] = DECOMPILER_VISITED_QUEUED;
+        sections[index].addresses[address] = DECOMPILER_OPERAND_TYPE_BLOCK;
+        sections[index].discovered.push(address);
+    }
 }
 
 void Decompiler::CollectOperands(cs_insn* insn, int operand_type, struct Section *sections, uint index) {
