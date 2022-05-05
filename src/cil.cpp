@@ -362,10 +362,10 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
         bool end_func = false;
         Instruction *insn = new Instruction;
         PRINT_DEBUG("Instruction being decompiled: 0x%x\n", pc[i]);
-        if (insn->instruction == CIL_INS_PREFIX){
+        if (pc[i] == CIL_INS_PREFIX){
             //Let's add prefix instruction to our instructions
             insn->instruction = pc[i];
-            insn->operand_size = it->second;
+            insn->operand_size = 0;
             insn->offset = i;
             instructions->push_back(insn);
             //Then let's move on to the next instruction
@@ -376,7 +376,7 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
             insn->instruction = pc[i];
             it = prefixInstrMap.find(pc[i]);
             if(it != prefixInstrMap.end()) {
-                fprintf(stderr, "[+] found prefix opcode 0x%02x at offset %d with operand size: %d\n", pc[i], i, it->second);
+                PRINT_DEBUG("[+] found prefix opcode 0x%02x at offset %d with operand size: %d\n", pc[i], i, it->second);
                 insn->instruction = pc[i];
                 insn->operand_size = it->second;
                 insn->offset = i;
