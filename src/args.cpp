@@ -22,8 +22,6 @@ void Args::SetDefault(){
     options.instructions = false;
     options.input = NULL;
     options.threads = 1;
-    options.thread_cycles = 10;
-    options.thread_sleep = 0;
     options.help = false;
     options.output = NULL;
     options.corpus = "default";
@@ -108,8 +106,6 @@ void Args::print_help(){
         "  -g  --tag\t\tadd a tag\t\t(optional)\n"
         "           \t\t(can be specified multiple times)\n"
         "  -t  --threads\t\tnumber of threads\t(optional)\n"
-        "  -tc --thread-cycles\tthread wait cycles\t(optional)\n"
-        "  -ts --thread-sleep\tthread sleep in ms\t(optional)\n"
         "  -to --timeout\t\texecution timeout in s\t(optional)\n"
         "  -h  --help\t\tdisplay help\t\t(optional)\n"
         "  -o  --output\t\toutput file\t\t(optional)\n"
@@ -183,18 +179,6 @@ void Args::parse(int argc, char **argv){
                 exit(EXIT_FAILURE);
             }
         }
-        if (strcmp(argv[i], (char *)"-tc") == 0 ||
-            strcmp(argv[i], (char *)"--thread-cycles") == 0){
-            if (argc < i+2){
-                fprintf(stderr, "[x] invalid thread count\n");
-                exit(EXIT_FAILURE);
-            }
-            options.thread_cycles = atoi(argv[i+1]);
-            if (options.thread_cycles <= 0){
-                fprintf(stderr, "[x] invalid number of threads\n");
-                exit(EXIT_FAILURE);
-            }
-        }
         if (strcmp(argv[i], (char *)"-c") == 0 ||
             strcmp(argv[i], (char *)"--corpus") == 0){
             if (argc < i+2){
@@ -202,18 +186,6 @@ void Args::parse(int argc, char **argv){
                 exit(EXIT_FAILURE);
             }
             options.corpus = argv[i+1];
-        }
-        if (strcmp(argv[i], (char *)"-ts") == 0 ||
-            strcmp(argv[i], (char *)"--thread-sleep") == 0){
-            if (argc < i+2){
-                fprintf(stderr, "[x] invalid thread count\n");
-                exit(EXIT_FAILURE);
-            }
-            options.thread_sleep = atoi(argv[i+1]);
-            if (options.thread_sleep <= 0){
-                fprintf(stderr, "[x] invalid thread sleep value\n");
-                exit(EXIT_FAILURE);
-            }
         }
         if (strcmp(argv[i], (char *)"-o") == 0 ||
             strcmp(argv[i], (char *)"--output") == 0){
