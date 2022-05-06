@@ -74,8 +74,8 @@ int main(int argc, char **argv){
         PRINT_DEBUG("Number of total executable sections = %u\n", elf64.total_exec_sections);
 
         Decompiler decompiler(elf64);
-        for (int i = 0; i < elf64.total_exec_sections; i++){
-            decompiler.Setup(CS_ARCH_X86, CS_MODE_64, i);
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_64);
+        for (uint32_t i = 0; i < elf64.total_exec_sections; i++){
             decompiler.AppendQueue(elf64.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
             decompiler.Decompile(elf64.sections[i].data, elf64.sections[i].size, elf64.sections[i].offset, i);
         }
@@ -94,8 +94,8 @@ int main(int argc, char **argv){
         PRINT_DEBUG("Number of total executable sections = %u\n", elf32.total_exec_sections);
 
         Decompiler decompiler(elf32);
-        for (int i = 0; i < elf32.total_exec_sections; i++){
-            decompiler.Setup(CS_ARCH_X86, CS_MODE_32, i);
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
+        for (uint32_t i = 0; i < elf32.total_exec_sections; i++){
             decompiler.AppendQueue(elf32.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
             decompiler.Decompile(elf32.sections[i].data, elf32.sections[i].size, elf32.sections[i].offset, i);
         }
@@ -112,17 +112,19 @@ int main(int argc, char **argv){
 
         CILDecompiler cil_decompiler(pe);
         PRINT_DEBUG("Analyzing %lu sections for CIL byte code.\n", pe._sections.size());
-        for (size_t i = 0; i < pe._sections.size(); i++) {
-            if (pe._sections[i].offset == 0) continue;
+        int si = 0;
+        for (auto section : pe._sections) {
+            if (section.offset == 0) continue;
 
-            if (cil_decompiler.Setup(CIL_DECOMPILER_TYPE_BLCKS) == false){
+            if (cil_decompiler.Setup(CIL_DECOMPILER_TYPE_ALL) == false){
                 return 1;
             }
-	    if (cil_decompiler.Decompile(pe._sections[i].data, pe._sections[i].size, 0) == false){
+	    if (cil_decompiler.Decompile(section.data, section.size, si) == false){
                 continue;
 	    }
-	    cil_decompiler.WriteTraits();
+	    si++;
         }
+	cil_decompiler.WriteTraits();
         return EXIT_SUCCESS;
     }
     if (g_args.options.mode == "pe:x86" &&
@@ -137,8 +139,8 @@ int main(int argc, char **argv){
         PRINT_DEBUG("Number of total sections = %u\n", pe32.total_exec_sections);
 
         Decompiler decompiler(pe32);
-        for (int i = 0; i < pe32.total_exec_sections; i++){
-            decompiler.Setup(CS_ARCH_X86, CS_MODE_32, i);
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
+        for (uint32_t i = 0; i < pe32.total_exec_sections; i++){
             decompiler.AppendQueue(pe32.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
             decompiler.Decompile(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, i);
         }
@@ -157,8 +159,8 @@ int main(int argc, char **argv){
         PRINT_DEBUG("Number of total executable sections = %u\n", pe64.total_exec_sections);
 
         Decompiler decompiler(pe64);
-        for (int i = 0; i < pe64.total_exec_sections; i++){
-            decompiler.Setup(CS_ARCH_X86, CS_MODE_64, i);
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_64);
+        for (uint32_t i = 0; i < pe64.total_exec_sections; i++){
             decompiler.AppendQueue(pe64.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
             decompiler.Decompile(pe64.sections[i].data, pe64.sections[i].size, pe64.sections[i].offset, i);
         }
@@ -174,7 +176,7 @@ int main(int argc, char **argv){
         }
 
         Decompiler decompiler(rawx86);
-        decompiler.Setup(CS_ARCH_X86, CS_MODE_32, 0);
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
         decompiler.Decompile(rawx86.sections[0].data, rawx86.sections[0].size, rawx86.sections[0].offset, 0);
         decompiler.WriteTraits();
         return EXIT_SUCCESS;
@@ -188,7 +190,7 @@ int main(int argc, char **argv){
         }
 
         Decompiler decompiler(rawx86_64);
-        decompiler.Setup(CS_ARCH_X86, CS_MODE_64, 0);
+        decompiler.Setup(CS_ARCH_X86, CS_MODE_64);
         decompiler.Decompile(rawx86_64.sections[0].data, rawx86_64.sections[0].size, rawx86_64.sections[0].offset, 0);
         decompiler.WriteTraits();
         return EXIT_SUCCESS;
