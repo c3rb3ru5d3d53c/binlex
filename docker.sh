@@ -755,7 +755,7 @@ function blapi_nginx_config_init(){
 
 function rabbitmq_config_init(){
     echo "listeners.tcp = none";
-    echo "loopback_users.guest = false";
+    echo "loopback_users.guest = none";
     echo "listeners.ssl.default = 0.0.0.0:5672";
     echo "cluster_formation.peer_discovery_backend = rabbit_peer_discovery_classic_config";
     for i in $(seq 1 $brokers); do

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
-
+# Main Loop
 while true; do
+    rm /var/run/blapi.pid # this removes pid file from previous gunicorn start
     /etc/init.d/nginx start
     echo "[-] starting gunicorn..."
     gunicorn -D -p /var/run/blapi.pid -b 127.0.0.1:5000 "libblapiserver.main:create_app('/startup/blapi.conf')" --error-logfile /var/log/blapi.log
