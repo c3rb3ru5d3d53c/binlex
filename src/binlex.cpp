@@ -73,7 +73,7 @@ int main(int argc, char **argv){
         }
         PRINT_DEBUG("Number of total executable sections = %u\n", elf64.total_exec_sections);
 
-        Decompiler decompiler;
+        Decompiler decompiler(elf64);
         decompiler.Setup(CS_ARCH_X86, CS_MODE_64);
         for (uint32_t i = 0; i < elf64.total_exec_sections; i++){
             decompiler.AppendQueue(elf64.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
@@ -93,7 +93,7 @@ int main(int argc, char **argv){
         }
         PRINT_DEBUG("Number of total executable sections = %u\n", elf32.total_exec_sections);
 
-        Decompiler decompiler;
+        Decompiler decompiler(elf32);
         decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
         for (uint32_t i = 0; i < elf32.total_exec_sections; i++){
             decompiler.AppendQueue(elf32.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
@@ -142,7 +142,7 @@ int main(int argc, char **argv){
         }
         PRINT_DEBUG("Number of total sections = %u\n", pe32.total_exec_sections);
 
-        Decompiler decompiler;
+        Decompiler decompiler(pe32);
         decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
         for (uint32_t i = 0; i < pe32.total_exec_sections; i++){
             decompiler.AppendQueue(pe32.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
@@ -162,7 +162,7 @@ int main(int argc, char **argv){
         }
         PRINT_DEBUG("Number of total executable sections = %u\n", pe64.total_exec_sections);
 
-        Decompiler decompiler;
+        Decompiler decompiler(pe64);
         decompiler.Setup(CS_ARCH_X86, CS_MODE_64);
         for (uint32_t i = 0; i < pe64.total_exec_sections; i++){
             decompiler.AppendQueue(pe64.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
@@ -179,7 +179,7 @@ int main(int argc, char **argv){
             return EXIT_FAILURE;
         }
 
-        Decompiler decompiler;
+        Decompiler decompiler(rawx86);
         decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
         decompiler.Decompile(rawx86.sections[0].data, rawx86.sections[0].size, rawx86.sections[0].offset, 0);
         decompiler.WriteTraits();
@@ -193,7 +193,7 @@ int main(int argc, char **argv){
             return EXIT_FAILURE;
         }
 
-        Decompiler decompiler;
+        Decompiler decompiler(rawx86_64);
         decompiler.Setup(CS_ARCH_X86, CS_MODE_64);
         decompiler.Decompile(rawx86_64.sections[0].data, rawx86_64.sections[0].size, rawx86_64.sections[0].offset, 0);
         decompiler.WriteTraits();
