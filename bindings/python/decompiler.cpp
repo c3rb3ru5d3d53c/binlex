@@ -13,11 +13,12 @@ namespace py = pybind11;
 
 void init_decompiler(py::module &handle){
     py::class_<binlex::Decompiler>(handle, "Decompiler", "Binlex Decompiler Module")
-    .def(py::init<>())
+    .def(py::init<const binlex::File&>())
     .def("setup", &binlex::Decompiler::Setup)
     .def("set_threads", &binlex::Decompiler::py_SetThreads)
     .def("set_corpus", &binlex::Decompiler::py_SetCorpus)
     .def("set_tags", &binlex::Decompiler::py_SetTags)
+    .def("set_mode", &binlex::Decompiler::py_SetMode)
     .def("set_instructions", &binlex::Decompiler::py_SetInstructions)
     .def("decompile", [](binlex::Decompiler &module, py::buffer data, uint offset, uint index){
         py::buffer_info info = data.request();

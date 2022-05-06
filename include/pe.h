@@ -39,17 +39,6 @@ namespace binlex {
             struct Section sections[BINARY_MAX_SECTIONS];
             uint32_t total_exec_sections;
             /**
-            @param file_path path to the executable
-            @return bool
-            */
-            virtual BINLEX_EXPORT bool ReadFile(char *file_path);
-            /**
-            @param data pointer to executable in memory
-            @param size size of the data
-            @return bool
-            */
-            BINLEX_EXPORT bool ReadBuffer(void *data, size_t size);
-            /**
             Setup to Read Specific PE Format
             @param input_mode MACHINE_TYPES::IMAGE_FILE_MACHINE_<arch>
             @return bool
@@ -65,6 +54,7 @@ namespace binlex {
             @return bool
             */
             BINLEX_EXPORT bool HasLimitations();
+	    virtual bool ReadVector(const std::vector<uint8_t> &data);
             BINLEX_EXPORT ~PE();
     };
 };

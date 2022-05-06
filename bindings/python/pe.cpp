@@ -6,7 +6,8 @@
 namespace py = pybind11;
 
 void init_pe(py::module &handle){
-  py::class_<binlex::PE>(handle, "PE", "Binlex PE Module")
+  py::class_<binlex::File>(handle, "File", "Binlex File (Base)");
+  py::class_<binlex::PE, binlex::File>(handle, "PE", "Binlex PE Module")
   .def(py::init<>())
   .def("setup", &binlex::PE::Setup)
   .def("read_file", &binlex::PE::ReadFile)

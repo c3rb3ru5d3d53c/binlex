@@ -29,31 +29,17 @@ bool PE::Setup(MACHINE_TYPES input_mode){
     return true;
 }
 
-bool PE::ReadFile(char *file_path){
-    if (FileExists(file_path) == false){
+bool PE::ReadVector(const std::vector<uint8_t> &data){
+    CalculateFileHashes(data);
+    binary = Parser::parse(data);
+    if (binary == NULL){
         return false;
     }
-    CalculateFileHashes(file_path);
-    assert(!tlsh.empty());
-    assert(!sha256.empty());
-    binary = Parser::parse(file_path);
     if (mode != binary->header().machine()){
         fprintf(stderr, "[x] incorrect mode for binary architecture\n");
         return false;
     }
-    ParseSections();
-    return true;
-}
-
-bool PE::ReadBuffer(void *data, size_t size){
-    vector<uint8_t> data_v((uint8_t *)data, (uint8_t *)data + size);
-    binary = Parser::parse(data_v);
-    if (mode != binary->header().machine()){
-        fprintf(stderr, "[x] incorrect mode for binary architecture\n");
-        return false;
-    }
-    ParseSections();
-    return true;
+    return ParseSections();
 }
 
 

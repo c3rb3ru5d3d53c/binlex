@@ -31,11 +31,9 @@
 
 using namespace binlex;
 using json = nlohmann::json;
-#ifndef _WIN32
-static pthread_mutex_t DECOMPILER_MUTEX = PTHREAD_MUTEX_INITIALIZER;
-#else
-CRITICAL_SECTION csDecompiler;
-#endif
+
+cs_arch Decompiler::arch;
+cs_mode Decompiler::mode;
 
 //from https://github.com/capstone-engine/capstone/blob/master/include/capstone/x86.h
 
@@ -43,7 +41,7 @@ CRITICAL_SECTION csDecompiler;
 	? (uint64_t)((insn).detail->x86.operands[0].imm) \
 	: (((insn).address + (insn).size) + (uint64_t)(insn).detail->x86.disp))
 
-Decompiler::Decompiler() {
+Decompiler::Decompiler(const binlex::File &firef) : DecompilerBase(firef) {
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++) {
         sections[i].offset = 0;
         sections[i].data = NULL;
@@ -53,12 +51,6 @@ Decompiler::Decompiler() {
 
 void Decompiler::AppendTrait(struct Trait *trait, struct Section *sections, uint index){
     struct Trait new_elem_trait = *trait; //copy the stuff populated in the caller, TODO: more cleanup required to not copy anything.
-
-    #if defined(__linux__) || defined(__APPLE__)
-    pthread_mutex_lock(&DECOMPILER_MUTEX);
-    #else
-    EnterCriticalSection(&csDecompiler);
-    #endif
 
     new_elem_trait.type = (char *)malloc(strlen(trait->type) + 1);
     if (new_elem_trait.type == NULL){
@@ -86,17 +78,11 @@ void Decompiler::AppendTrait(struct Trait *trait, struct Section *sections, uint
         PRINT_ERROR_AND_EXIT("[x] trait memcpy failed\n");
     }
     sections[index].traits.push_back(new_elem_trait);
+ }
 
-    #if defined(__linux__) || defined(__APPLE__)
-    pthread_mutex_unlock(&DECOMPILER_MUTEX);
-    #else
-    LeaveCriticalSection(&csDecompiler);
-    #endif
-}
-
-bool Decompiler::Setup(cs_arch arch, cs_mode mode, uint index){
-    sections[index].arch = arch;
-    sections[index].mode = mode;
+bool Decompiler::Setup(cs_arch architecture, cs_mode mode_type) {
+    arch = architecture;
+    mode = mode_type;
     return true;
 }
 
@@ -129,49 +115,21 @@ vector<json> Decompiler::GetTraits(){
         if (sections[i].data != NULL){
             for (int j = 0; j < sections[i].traits.size(); j++){
                 json jdata(GetTrait(sections[i].traits[j]));
-		        traitsjson.push_back(jdata);
+                traitsjson.push_back(jdata);
             }
         }
     }
     return traitsjson;
 }
 
-// TODO we know how many exec sections we have, we don't need to go through all slots
-// CV to fix by end of GeekWeek 2022
-void Decompiler::WriteTraits(){
-    // if g_args.options.output defined write to file, otherwise to screen
-    ofstream output_stream;
-    if (g_args.options.output != NULL) {
-        output_stream.open(g_args.options.output);
-        if(!output_stream.is_open()) {
-            PRINT_ERROR_AND_EXIT("Unable to open file %s for writing\n", g_args.options.output);
-        }
-    }
-    auto traits(GetTraits());
-    if(g_args.options.output != NULL) {
-	    for(auto i : traits) {
-	        output_stream << (g_args.options.pretty ? i.dump(4) : i.dump()) << endl;
-        }
-    } else {
-	    for(auto i : traits) {
-    	    cout << (g_args.options.pretty ? i.dump(4) : i.dump()) << endl;
-	    }
-    }
-    if (g_args.options.output != NULL) {
-        output_stream.close();
-    }
-}
-
-void * Decompiler::DecompileWorker(void *args) {
-
+void * Decompiler::CreateTraitsForSection(uint index) {
     worker myself;
-    worker_args *pArgs = (worker_args *)args;
-    uint index = pArgs->index;
-    struct Section *sections = (struct Section *)pArgs->sections;
 
     struct Trait b_trait;
     struct Trait f_trait;
     struct Trait i_trait;
+
+    PRINT_DEBUG("----------\nHandling section %u\n----------\n", index);
 
     i_trait.type = (char *)"instruction";
     //i_trait.architecture = sections[index].arch_str;
@@ -183,7 +141,7 @@ void * Decompiler::DecompileWorker(void *args) {
     //f_trait.architecture = sections[index].arch_str;
     ClearTrait(&f_trait);
 
-    myself.error = cs_open(sections[index].arch, sections[index].mode, &myself.handle);
+    myself.error = cs_open(arch, mode, &myself.handle);
     if (myself.error != CS_ERR_OK) {
         return NULL;
     }
@@ -192,45 +150,22 @@ void * Decompiler::DecompileWorker(void *args) {
         return NULL;
     }
 
-    int thread_cycles = 0;
     cs_insn *insn = cs_malloc(myself.handle);
-    while (true){
+    while (!sections[index].discovered.empty()){
 
         uint64_t tmp_addr = 0;
         uint64_t address = 0;
 
-        #if defined(__linux__) || defined(__APPLE__)
-        pthread_mutex_lock(&DECOMPILER_MUTEX);
-        #else
-        EnterCriticalSection(&csDecompiler);
-        #endif
-        if (!sections[index].discovered.empty()){
-            address = sections[index].discovered.front();
-            sections[index].discovered.pop();
-            sections[index].visited[address] = DECOMPILER_VISITED_ANALYZED;
-        } else {
-            #if defined(__linux__) || defined(__APPLE__)
-            pthread_mutex_unlock(&DECOMPILER_MUTEX);
-            #else
-            LeaveCriticalSection(&csDecompiler);
-            #endif
-            thread_cycles++;
-            if (thread_cycles == g_args.options.thread_cycles){
-                break;
-            }
-            #ifndef _WIN32
-            usleep(g_args.options.thread_sleep * 1000);
-            #else
-            Sleep(g_args.options.thread_sleep);
-            #endif
-            continue;
-        }
+        PRINT_DEBUG("discovered size = %u\n", (uint32_t)sections[index].discovered.size());
+        PRINT_DEBUG("visited size = %u\n",    (uint32_t)sections[index].visited.size());
+        PRINT_DEBUG("coverage size = %u\n",   (uint32_t)sections[index].coverage.size());
+        PRINT_DEBUG("addresses size = %u\n",  (uint32_t)sections[index].addresses.size());
+
+        address = sections[index].discovered.front();
+        sections[index].discovered.pop();
+        sections[index].visited[address] = DECOMPILER_VISITED_ANALYZED;
+
         sections[index].coverage.insert(address);
-        #if defined(__linux__) || defined(__APPLE__)
-        pthread_mutex_unlock(&DECOMPILER_MUTEX);
-        #else
-        LeaveCriticalSection(&csDecompiler);
-        #endif
 
         myself.pc = address;
         myself.code = (uint8_t *)((uint8_t *)sections[index].data + address);
@@ -238,6 +173,7 @@ void * Decompiler::DecompileWorker(void *args) {
 
         bool block = IsBlock(sections[index].addresses, address);
         bool function = IsFunction(sections[index].addresses, address);
+        uint suspicious_instructions = 0;
 
         while(true) {
             uint edges = 0;
@@ -248,83 +184,75 @@ void * Decompiler::DecompileWorker(void *args) {
 
             bool result = cs_disasm_iter(myself.handle, &myself.code, &myself.code_size, &myself.pc, insn);
 
+            if (result != true){
+                // Error with disassembly, not a valid basic block,
+                PRINT_DEBUG("*** Decompile error rejected block: 0x%" PRIx64 "\n", myself.pc);
+                ClearTrait(&b_trait);
+                ClearTrait(&i_trait);
+                ClearTrait(&f_trait);
+                myself.code = (uint8_t *)((uint8_t *)myself.code + 1);
+                myself.code_size +=1;
+                myself.pc +=1;
+                sections[index].coverage.insert(myself.pc);
+                break;
+
+            }
+
+            sections[index].coverage.insert(myself.pc);
+
+            // Check for suspicious instructions and count them
+            if (IsNopInsn(insn) || IsSemanticNopInsn(insn) || IsTrapInsn(insn) || IsPrivInsn(insn) ){
+                suspicious_instructions += 1;
+            }
+
+            // If there are too many suspicious instructions in the bb discard it
+            // TODO: Make this configurable as an argument
+            if (suspicious_instructions > 2){
+                PRINT_DEBUG("*** Suspicious instructions rejected block: 0x%" PRIx64 "\n", insn->address);
+                ClearTrait(&b_trait);
+                ClearTrait(&i_trait);
+                ClearTrait(&f_trait);
+                break;
+            }
+
             b_trait.instructions++;
             f_trait.instructions++;
 
             if (g_args.options.instructions == true){
-                if (result == true){
-                    i_trait.tmp_bytes = HexdumpBE(insn->bytes, insn->size);
-                    i_trait.size = GetByteSize(i_trait.tmp_bytes);
-                    i_trait.offset = sections[index].offset + myself.pc - i_trait.size;
-                    i_trait.tmp_trait = WildcardInsn(insn);
-                    i_trait.instructions = 1;
-                    i_trait.edges = IsConditionalInsn(insn);
-                    AppendTrait(&i_trait, sections, index);
-                    ClearTrait(&i_trait);
-                } else {
-                    i_trait.instructions = 1;
-                    i_trait.invalid_instructions = 1;
-                    i_trait.tmp_bytes = i_trait.tmp_bytes + HexdumpBE(myself.code, 1);
-                    i_trait.tmp_trait = i_trait.tmp_trait + Wildcards(1);
-                    AppendTrait(&i_trait, sections, index);
-                    ClearTrait(&i_trait);
-                }
+                i_trait.tmp_bytes = HexdumpBE(insn->bytes, insn->size);
+                i_trait.size = GetByteSize(i_trait.tmp_bytes);
+                i_trait.offset = sections[index].offset + myself.pc - i_trait.size;
+                i_trait.tmp_trait = WildcardInsn(insn);
+                i_trait.instructions = 1;
+                i_trait.edges = IsConditionalInsn(insn);
+                AppendTrait(&i_trait, sections, index);
+                ClearTrait(&i_trait);
             }
 
-            if (result == true){
-                // Need to Wildcard Traits Here
-
-                if (IsWildcardInsn(insn) == true){
-                    b_trait.tmp_trait = b_trait.tmp_trait + Wildcards(insn->size) + " ";
-                    f_trait.tmp_trait = f_trait.tmp_trait + Wildcards(insn->size) + " ";
-                } else {
-                    b_trait.tmp_trait = b_trait.tmp_trait + WildcardInsn(insn) + " ";
-                    f_trait.tmp_trait = f_trait.tmp_trait + WildcardInsn(insn) + " ";
-                }
-                b_trait.tmp_bytes = b_trait.tmp_bytes + HexdumpBE(insn->bytes, insn->size) + " ";
-                f_trait.tmp_bytes = f_trait.tmp_bytes + HexdumpBE(insn->bytes, insn->size) + " ";
-                edges = IsConditionalInsn(insn);
-                b_trait.edges = b_trait.edges + edges;
-                f_trait.edges = f_trait.edges + edges;
-                if (edges > 0){
-                    b_trait.blocks++;
-                    f_trait.blocks++;
-                }
-            }
-
-            if (result == false){
-                b_trait.invalid_instructions++;
-                f_trait.invalid_instructions++;
-                b_trait.tmp_bytes = b_trait.tmp_bytes + HexdumpBE(myself.code, 1) + " ";
-                f_trait.tmp_bytes = f_trait.tmp_bytes + HexdumpBE(myself.code, 1) + " ";
-                b_trait.tmp_trait = b_trait.tmp_trait + Wildcards(1) + " ";
-                f_trait.tmp_trait = f_trait.tmp_trait + Wildcards(1) + " ";
-                myself.pc++;
-                myself.code = (uint8_t *)((uint8_t *)sections[index].data + myself.pc);
-                myself.code_size = sections[index].data_size + myself.pc;
-                continue;
-            }
-
-            #if defined(__linux__) || defined(__APPLE__)
-            pthread_mutex_lock(&DECOMPILER_MUTEX);
-            #else
-            EnterCriticalSection(&csDecompiler);
-            #endif
-
-            if (result == true){
-                sections[index].coverage.insert(myself.pc);
+            // Need to Wildcard Traits Here
+            if (IsWildcardInsn(insn) == true){
+                b_trait.tmp_trait = b_trait.tmp_trait + Wildcards(insn->size) + " ";
+                f_trait.tmp_trait = f_trait.tmp_trait + Wildcards(insn->size) + " ";
             } else {
-                sections[index].coverage.insert(myself.pc+1);
+                b_trait.tmp_trait = b_trait.tmp_trait + WildcardInsn(insn) + " ";
+                f_trait.tmp_trait = f_trait.tmp_trait + WildcardInsn(insn) + " ";
             }
+            b_trait.tmp_bytes = b_trait.tmp_bytes + HexdumpBE(insn->bytes, insn->size) + " ";
+            f_trait.tmp_bytes = f_trait.tmp_bytes + HexdumpBE(insn->bytes, insn->size) + " ";
+            edges = IsConditionalInsn(insn);
+            b_trait.edges = b_trait.edges + edges;
+            f_trait.edges = f_trait.edges + edges;
+            if (edges > 0){
+                b_trait.blocks++;
+                f_trait.blocks++;
+            }
+
+
+
             CollectInsn(insn, sections, index);
 
-            PRINT_DEBUG("address=0x%" PRIx64 ",block=%d,function=%d,queue=%ld,instruction=%s\t%s\n", insn->address,IsBlock(sections[index].addresses, insn->address), IsFunction(sections[index].addresses, insn->address), sections[index].discovered.size(), insn->mnemonic, insn->op_str);
+            PRINT_DEBUG("address=0%" PRIx64 ",block=%d,function=%d,queue=%ld,instruction=%s\t%s\n", insn->address,IsBlock(sections[index].addresses, insn->address), IsFunction(sections[index].addresses, insn->address), sections[index].discovered.size(), insn->mnemonic, insn->op_str);
 
-            #if defined(__linux__) || defined(__APPLE__)
-            pthread_mutex_unlock(&DECOMPILER_MUTEX);
-            #else
-            LeaveCriticalSection(&csDecompiler);
-            #endif
             if (block == true && IsConditionalInsn(insn) > 0){
                 b_trait.tmp_trait = TrimRight(b_trait.tmp_trait);
                 b_trait.tmp_bytes = TrimRight(b_trait.tmp_bytes);
@@ -362,24 +290,23 @@ void * Decompiler::DecompileWorker(void *args) {
     return NULL;
 }
 
-void * Decompiler::TraitWorker(void *args){
-    struct Trait *trait = (struct Trait *)args;
-    if (trait->blocks == 0 &&
-        (strcmp(trait->type, "function") == 0 ||
-        strcmp(trait->type, "block") == 0)){
-        trait->blocks++;
+void * Decompiler::FinalizeTrait(struct Trait &trait){
+    if (trait.blocks == 0 &&
+        (strcmp(trait.type, "function") == 0 ||
+        strcmp(trait.type, "block") == 0)){
+        trait.blocks++;
     }
-    trait->bytes_entropy = Entropy(string(trait->bytes));
-    trait->trait_entropy = Entropy(string(trait->trait));
-    memcpy(&trait->bytes_sha256[0], SHA256(trait->bytes).c_str(), SHA256_PRINTABLE_SIZE);
-    memcpy(&trait->trait_sha256[0], SHA256(trait->trait).c_str(), SHA256_PRINTABLE_SIZE);
-    if (strcmp(trait->type, (char *)"block") == 0){
-        trait->cyclomatic_complexity = trait->edges - 1 + 2;
-        trait->average_instructions_per_block = trait->instructions / 1;
+    trait.bytes_entropy = Entropy(string(trait.bytes));
+    trait.trait_entropy = Entropy(string(trait.trait));
+    memcpy(&trait.bytes_sha256[0], SHA256(trait.bytes).c_str(), SHA256_PRINTABLE_SIZE);
+    memcpy(&trait.trait_sha256[0], SHA256(trait.trait).c_str(), SHA256_PRINTABLE_SIZE);
+    if (strcmp(trait.type, (char *)"block") == 0){
+        trait.cyclomatic_complexity = trait.edges - 1 + 2;
+        trait.average_instructions_per_block = trait.instructions / 1;
     }
-    if (strcmp(trait->type, (char *)"function") == 0){
-        trait->cyclomatic_complexity = trait->edges - trait->blocks + 2;
-        trait->average_instructions_per_block = trait->instructions / trait->blocks;
+    if (strcmp(trait.type, (char *)"function") == 0){
+        trait.cyclomatic_complexity = trait.edges - trait.blocks + 2;
+        trait.average_instructions_per_block = trait.instructions / trait.blocks;
     }
     return NULL;
 
@@ -411,6 +338,104 @@ void Decompiler::AppendQueue(set<uint64_t> &addresses, uint operand_type, uint i
     PRINT_DEBUG("\n");
 }
 
+void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, uint index) {
+    // This function is intended to perform a preliminary quick linear disassembly pass of the section
+    // and initially populate the discovered queue with addressed that may not be found via recursive disassembly.
+    //
+    // TODO: This algorithm is garbage and creates a lot of false positives, it should be replaced with a proper
+    // linear pass that can differentiate data and code.
+    // See research linked here: https://github.com/c3rb3ru5d3d53c/binlex/issues/42#issuecomment-1110479885
+    //
+    // * The Algorithm *
+    // - Disassemble each instruction sequentially
+    // - Track the state of the disassembly (valid / invalid)
+    // - The state is set to invalid for nops, traps, privileged instructions, and errors
+    // - When a jmp (conditional or unconditional) is encountered if the state is valid begin counting valid “blocks”
+    // - When three consecutive blocks are found push the jmp addresses onto the queue
+    // - When a jmp (conditional or unconditional) is encountered if the state is invalid reset to valid and begin tracking blocks
+    //
+    // * Weaknesses *
+    // - We don’t collect calls (these are assumed to be collected in the recursive disassembler)
+    // - We don’t reset the state on ret or call instructions possibly missing some valid blocks
+    // - We don’t collect the next address after a jmp (next block) missing some valid blocks
+    // - Even with the filtering we will still add some number of addresses that are from invalid jmp institutions
+
+    csh cs_dis;
+
+    PRINT_DEBUG("LinearDisassemble: Started at offset = 0x%x data_size = %d bytes\n", offset, data_size);
+
+    if(cs_open(arch, mode, &cs_dis) != CS_ERR_OK) {
+        PRINT_ERROR_AND_EXIT("[x] LinearDisassembly failed to init capstone\n");
+    }
+
+    if (cs_option(cs_dis, CS_OPT_DETAIL, CS_OPT_ON) != CS_ERR_OK) {
+        PRINT_ERROR_AND_EXIT("[x] LinearDisassembly failed to set capstone options\n");
+    }
+
+    cs_insn *cs_ins = cs_malloc(cs_dis);
+    uint64_t pc = offset;
+    const uint8_t *code = (uint8_t *)((uint8_t *)data);
+    size_t code_size = data_size + pc;
+    // Track our state, assume we start in a valid bb
+    bool valid_block = true;
+    uint64_t valid_block_count = 1;
+    // Save the last two valid jmp addresses
+    // These can be pushed once we confirm three valid blocks
+    uint64_t jmp_address_1 = 0;
+    uint64_t jmp_address_2 = 0;
+
+    while(pc < code_size){
+        if (!cs_disasm_iter(cs_dis, &code, &code_size, &pc, cs_ins)){
+            PRINT_DEBUG("LinearDisassemble: 0x%x: Disassemble ERROR\n", pc);
+            // If the disassembly fails skip the byte and continue
+            pc += 1;
+            code_size -= 1;
+            code = (uint8_t *)((uint8_t *)code + 1);
+            valid_block = false;
+            valid_block_count = 0;
+            continue;
+        }
+        PRINT_DEBUG("LinearDisassemble: 0x%x: %s\t%s\n", cs_ins->address, cs_ins->mnemonic, cs_ins->op_str);
+
+        if (IsNopInsn(cs_ins) || IsSemanticNopInsn(cs_ins) || IsTrapInsn(cs_ins) || IsPrivInsn(cs_ins) ){
+            PRINT_DEBUG("LinearDisassemble: Suspicious instruction at 0x%x\n", cs_ins->address);
+            valid_block = false;
+            valid_block_count = 0;
+        }
+
+        if(!cs_ins->size) {
+            PRINT_DEBUG("LinearDisassemble: Invalid instruction size at 0x%x\n", cs_ins->address);
+        }
+        if (IsConditionalInsn(cs_ins)){
+            if (valid_block){
+                if (valid_block_count == 1) {
+                    jmp_address_2 =  X86_REL_ADDR(*cs_ins);
+                }
+                else if (valid_block_count = 2) {
+                    PRINT_DEBUG("LinearDisassemble: Found three consecutive valid blocks adding jmp addresses");
+                    AddDiscoveredBlock(jmp_address_1, sections, index);
+                    AddDiscoveredBlock(jmp_address_2, sections, index);
+                    CollectInsn(cs_ins, sections, index);
+                }
+                else{
+                    CollectInsn(cs_ins, sections, index);
+                }
+                valid_block_count += 1;
+            }
+            else{
+                // Reset block state and try again
+                valid_block = true;
+                valid_block_count = 1;
+                jmp_address_1 = X86_REL_ADDR(*cs_ins);
+            }
+        }
+
+    }
+
+    cs_free(cs_ins, 1);
+
+};
+
 void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint index) {
     sections[index].offset  = offset;
     sections[index].data = data;
@@ -419,82 +444,15 @@ void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint ind
     PRINT_DEBUG("Decompile: offset = 0x%x data_size = %" PRId64 " bytes\n", sections[index].offset, sections[index].data_size);
     PRINT_DATA("Section Data (up to 32 bytes)", sections[index].data, std::min((size_t)32, sections[index].data_size));
 
-    worker_args *args = (worker_args *)malloc(sizeof(worker_args));
-    args->index = index;
-    args->sections = &sections;
+    // Run a linear disassemble on the data to populate the queue
+    //TODO: enable when this is ready
+    LinearDisassemble(data, data_size, offset, index);
 
-    #if defined(__linux__) || defined(__APPLE__)
-    pthread_t threads[g_args.options.threads];
-    pthread_attr_t thread_attribs[g_args.options.threads];
-    #else
-    InitializeCriticalSection(&csDecompiler);
-    DWORD dwThreads = g_args.options.threads;
-    HANDLE* hThreads = (HANDLE*)malloc(sizeof(HANDLE) * dwThreads);
-    DWORD dwThreadId;
-    #endif
+    CreateTraitsForSection(index);
 
-    while (true){
-        for (int i = 0; i < g_args.options.threads; i++){
-            #if defined(__linux__) || defined(__APPLE__)
-            pthread_attr_init(&thread_attribs[i]);
-            pthread_attr_setdetachstate(&thread_attribs[i], PTHREAD_CREATE_JOINABLE);
-            pthread_create(&threads[i], NULL, DecompileWorker, args);
-            #else
-            hThreads[i] = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)DecompileWorker, args, 0, &dwThreadId);
-            #endif
-        }
-        for (int i = 0; i < g_args.options.threads; i++){
-            #if defined(__linux__) || defined(__APPLE__)
-            pthread_join(threads[i], NULL);
-            #else
-            WaitForMultipleObjects(g_args.options.threads, hThreads, TRUE, INFINITE);
-            #endif
-        }
-        if (sections[index].discovered.empty()){
-            uint64_t tmp_addr = MaxAddress(sections[index].coverage);
-            if (tmp_addr < sections[index].data_size){
-                sections[index].discovered.push(tmp_addr);
-                sections[index].addresses[tmp_addr] = DECOMPILER_OPERAND_TYPE_FUNCTION;
-                sections[index].visited[tmp_addr] = DECOMPILER_VISITED_QUEUED;
-                continue;
-            }
-            break;
-        }
+    for (size_t i = 0; i < sections[index].traits.size(); ++i) {
+        FinalizeTrait(sections[index].traits[i]);
     }
-    for (int i = 0; i < sections[index].traits.size(); i += g_args.options.threads) {
-        for (int j = 0; j < g_args.options.threads; j++) {
-            #if defined(__linux__) || defined(__APPLE__)
-            if (i + j < sections[index].traits.size()) {
-                pthread_attr_init(&thread_attribs[j]);
-                pthread_attr_setdetachstate(&thread_attribs[j], PTHREAD_CREATE_JOINABLE);
-                pthread_create( &threads[j], NULL, TraitWorker, (void*)(&sections[index].traits[i + j]) );
-            }
-            else {
-                threads[j] = NULL;
-            }
-            #else
-            if (i + j < sections[index].traits.size()) {
-                hThreads[j] = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)TraitWorker, (void*)sections[index].traits[i + j], 0, &dwThreadId);
-            }
-            else {
-                hThreads[j] = INVALID_HANDLE_VALUE;
-            }
-            #endif
-            }
-        #if defined(__linux__) || defined(__APPLE__)
-        for (int j = 0; j < g_args.options.threads; j++) {
-            if (threads[j] != NULL) {
-                pthread_join(threads[j], NULL);
-            }
-        }
-        #else
-        WaitForMultipleObjects(g_args.options.threads, hThreads, TRUE, INFINITE);
-        #endif
-    }
-    #ifdef _WIN32
-    free(hThreads);
-    #endif
-    free(args);
 }
 
 string Decompiler::WildcardInsn(cs_insn *insn){
@@ -506,7 +464,7 @@ string Decompiler::WildcardInsn(cs_insn *insn){
             case X86_OP_MEM:
                 {
                     if (operand.mem.disp != 0){
-                        trait = WildcardTrait(HexdumpBE(insn->bytes, insn->size), HexdumpMemDisp(operand.mem.disp));
+                        trait = WildcardTrait(bytes, HexdumpBE(&operand.mem.disp, sizeof(uint64_t)));
                     }
                     break;
                 }
@@ -519,6 +477,117 @@ string Decompiler::WildcardInsn(cs_insn *insn){
 
 bool Decompiler::IsVisited(map<uint64_t, int> &visited, uint64_t address) {
     return visited.find(address) != visited.end();
+}
+
+
+bool Decompiler::IsNopInsn(cs_insn *ins)
+{
+    switch(ins->id) {
+    case X86_INS_NOP:
+    case X86_INS_FNOP:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool Decompiler::IsSemanticNopInsn(cs_insn *ins)
+{
+    cs_x86 *x86;
+
+    /* XXX: to make this truly platform-independent, we need some real
+     * semantic analysis, but for now checking known cases is sufficient */
+
+    x86 = &ins->detail->x86;
+    switch(ins->id) {
+    case X86_INS_MOV:
+        /* mov reg,reg */
+        if((x86->op_count == 2)
+             && (x86->operands[0].type == X86_OP_REG)
+             && (x86->operands[1].type == X86_OP_REG)
+             && (x86->operands[0].reg == x86->operands[1].reg)) {
+            return true;
+        }
+        return false;
+    case X86_INS_XCHG:
+        /* xchg reg,reg */
+        if((x86->op_count == 2)
+             && (x86->operands[0].type == X86_OP_REG)
+             && (x86->operands[1].type == X86_OP_REG)
+             && (x86->operands[0].reg == x86->operands[1].reg)) {
+            return true;
+        }
+        return false;
+    case X86_INS_LEA:
+        /* lea        reg,[reg + 0x0] */
+        if((x86->op_count == 2)
+             && (x86->operands[0].type == X86_OP_REG)
+             && (x86->operands[1].type == X86_OP_MEM)
+             && (x86->operands[1].mem.segment == X86_REG_INVALID)
+             && (x86->operands[1].mem.base == x86->operands[0].reg)
+             && (x86->operands[1].mem.index == X86_REG_INVALID)
+             /* mem.scale is irrelevant since index is not used */
+             && (x86->operands[1].mem.disp == 0)) {
+            return true;
+        }
+        /* lea        reg,[reg + eiz*x + 0x0] */
+        if((x86->op_count == 2)
+             && (x86->operands[0].type == X86_OP_REG)
+             && (x86->operands[1].type == X86_OP_MEM)
+             && (x86->operands[1].mem.segment == X86_REG_INVALID)
+             && (x86->operands[1].mem.base == x86->operands[0].reg)
+             && (x86->operands[1].mem.index == X86_REG_EIZ)
+             /* mem.scale is irrelevant since index is the zero-register */
+             && (x86->operands[1].mem.disp == 0)) {
+            return true;
+        }
+        return false;
+    default:
+        return false;
+    }
+}
+
+bool Decompiler::IsTrapInsn(cs_insn *ins)
+{
+    switch(ins->id) {
+    case X86_INS_INT3:
+    case X86_INS_UD2:
+    case X86_INS_INT1:
+    case X86_INS_INTO:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool Decompiler::IsPrivInsn(cs_insn *ins)
+{
+    switch(ins->id) {
+    case X86_INS_HLT:
+    case X86_INS_IN:
+    case X86_INS_INSB:
+    case X86_INS_INSW:
+    case X86_INS_INSD:
+    case X86_INS_OUT:
+    case X86_INS_OUTSB:
+    case X86_INS_OUTSW:
+    case X86_INS_OUTSD:
+    case X86_INS_RDMSR:
+    case X86_INS_WRMSR:
+    case X86_INS_RDPMC:
+    case X86_INS_RDTSC:
+    case X86_INS_LGDT:
+    case X86_INS_LLDT:
+    case X86_INS_LTR:
+    case X86_INS_LMSW:
+    case X86_INS_CLTS:
+    case X86_INS_INVD:
+    case X86_INS_INVLPG:
+    case X86_INS_WBINVD:
+        return true;
+    default:
+        return false;
+    }
 }
 
 bool Decompiler::IsWildcardInsn(cs_insn *insn){
@@ -692,6 +761,14 @@ uint Decompiler::CollectInsn(cs_insn* insn, struct Section *sections, uint index
     return result;
 }
 
+void Decompiler::AddDiscoveredBlock(uint64_t address, struct Section *sections, uint index) {
+    if (IsVisited(sections[index].visited, address) == false && address < sections[index].data_size) {
+        sections[index].visited[address] = DECOMPILER_VISITED_QUEUED;
+        sections[index].addresses[address] = DECOMPILER_OPERAND_TYPE_BLOCK;
+        sections[index].discovered.push(address);
+    }
+}
+
 void Decompiler::CollectOperands(cs_insn* insn, int operand_type, struct Section *sections, uint index) {
     uint64_t address = X86_REL_ADDR(*insn);
     if (IsVisited(sections[index].visited, address) == false && address < sections[index].data_size) {
@@ -768,28 +845,4 @@ Decompiler::~Decompiler() {
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++) {
         FreeTraits(i);
     }
-}
-
-
-/*
- * The following functions are for pybind-only use. They offer a way to pass arguments to
- * the CPP code, which otherwise if obtained via command-line arguments.
- */
-
-void Decompiler::py_SetThreads(uint threads, uint thread_cycles, uint thread_sleep) {
-    g_args.options.threads = threads;
-    g_args.options.thread_cycles = thread_cycles;
-    g_args.options.thread_sleep = thread_sleep;
-}
-
-void Decompiler::py_SetCorpus(const char *corpus) {
-    g_args.options.corpus = corpus;
-}
-
-void Decompiler::py_SetTags(const vector<string> &tags){
-    g_args.options.tags = set<string>(tags.begin(), tags.end());
-}
-
-void Decompiler::py_SetInstructions(bool instructions) {
-    g_args.options.instructions = instructions;
 }
