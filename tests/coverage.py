@@ -59,6 +59,7 @@ def calculate_coverage(ida_json_file, binlex_flat_file):
     total_bb = len(ida_bb_set)
     total_missing_bb = total_bb - len(intersection_bb)
     bb_coverage = round((total_bb - total_missing_bb)/total_bb* 100,2)
+    total_extra_bb = len(binlex_bb_set) - len(intersection_bb)
 
     total_missmatch_bb = 0
 
@@ -72,7 +73,8 @@ def calculate_coverage(ida_json_file, binlex_flat_file):
             'total_missing_bb':total_missing_bb,
             'total_bb':total_bb,
             'bb_coverage':bb_coverage,
-            'total_missmatch_bb':total_missmatch_bb
+            'total_missmatch_bb':total_missmatch_bb,
+            'extra_bb':total_extra_bb
             }
 
 
@@ -86,6 +88,7 @@ def main():
     print(f"Function coverage: {coverage.get('function_coverage')}%  ( Missing {coverage.get('total_missing_functions')} from total {coverage.get('total_functions')} )")
     print(f"Basic block coverage: {coverage.get('bb_coverage')}%  ( Missing {coverage.get('total_missing_bb')} from total {coverage.get('total_bb')} )")
     print(f"Basic block errors: {coverage.get('total_missmatch_bb')}")
+    print(f"Extra blocks from binlex: {coverage.get('extra_bb')}")
 
 
 

@@ -35,8 +35,6 @@ namespace binlex{
                 char *output;
                 uint timeout;
                 uint threads;
-                uint thread_cycles;
-                useconds_t thread_sleep;
                 bool help;
                 bool list_modes;
                 bool instructions;

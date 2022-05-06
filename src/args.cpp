@@ -22,8 +22,6 @@ void Args::SetDefault(){
     options.instructions = false;
     options.input = NULL;
     options.threads = 1;
-    options.thread_cycles = 10;
-    options.thread_sleep = 0;
     options.help = false;
     options.output = NULL;
     options.corpus = "default";
@@ -108,8 +106,6 @@ void Args::print_help(){
         "  -g  --tag\t\tadd a tag\t\t(optional)\n"
         "           \t\t(can be specified multiple times)\n"
         "  -t  --threads\t\tnumber of threads\t(optional)\n"
-        "  -tc --thread-cycles\tthread wait cycles\t(optional)\n"
-        "  -ts --thread-sleep\tthread sleep in ms\t(optional)\n"
         "  -to --timeout\t\texecution timeout in s\t(optional)\n"
         "  -h  --help\t\tdisplay help\t\t(optional)\n"
         "  -o  --output\t\toutput file\t\t(optional)\n"
@@ -124,20 +120,20 @@ void Args::print_help(){
 void Args::parse(int argc, char **argv){
     if (argc < 1){
         print_help();
-        exit(0);
+        exit(EXIT_FAILURE);
     }
     for (int i = 0; i < argc; i++){
         if (strcmp(argv[i], (char *)"-h") == 0 ||
             strcmp(argv[i], (char *)"--help") == 0){
             options.help = true;
             print_help();
-            exit(0);
+            exit(EXIT_SUCCESS);
         }
         if (strcmp(argv[i], (char *)"-v") == 0 ||
             strcmp(argv[i], (char *)"--version") == 0){
             options.help = true;
             printf("%s\n", version);
-            exit(0);
+            exit(EXIT_SUCCESS);
         }
         if (strcmp(argv[i], (char *)"-lm") == 0 ||
             strcmp(argv[i], (char *)"--list-modes") == 0){
@@ -145,7 +141,7 @@ void Args::parse(int argc, char **argv){
             for (int j = 0; j < ARGS_MODE_COUNT; j++){
                 printf("%s\n", modes[j]);
             }
-            exit(0);
+            exit(EXIT_SUCCESS);
         }
         if (strcmp(argv[i], (char *)"-i") == 0 ||
             strcmp(argv[i], (char *)"--input") == 0){
@@ -163,57 +159,33 @@ void Args::parse(int argc, char **argv){
             strcmp(argv[i], (char *)"--threads") == 0){
             if (argc < i+2){
                 fprintf(stderr, "[x] invalid thread count\n");
-                exit(1);
+                exit(EXIT_FAILURE);
             }
             options.threads = atoi(argv[i+1]);
             if (options.threads <= 0){
                 fprintf(stderr, "[x] invalid number of threads\n");
-                exit(1);
+                exit(EXIT_FAILURE);
             }
         }
         if (strcmp(argv[i], (char *)"-to") == 0 ||
             strcmp(argv[i], (char *)"--timeout") == 0){
             if (argc < i+2){
                 fprintf(stderr, "[x] timeout requires a parameter\n");
-                exit(1);
+                exit(EXIT_FAILURE);
             }
             options.timeout = atoi(argv[i+1]);
             if (options.timeout <= 0){
                 fprintf(stderr, "[x] invalid timeout value\n");
-                exit(1);
-            }
-        }
-        if (strcmp(argv[i], (char *)"-tc") == 0 ||
-            strcmp(argv[i], (char *)"--thread-cycles") == 0){
-            if (argc < i+2){
-                fprintf(stderr, "[x] invalid thread count\n");
-                exit(1);
-            }
-            options.thread_cycles = atoi(argv[i+1]);
-            if (options.thread_cycles <= 0){
-                fprintf(stderr, "[x] invalid number of threads\n");
-                exit(1);
+                exit(EXIT_FAILURE);
             }
         }
         if (strcmp(argv[i], (char *)"-c") == 0 ||
             strcmp(argv[i], (char *)"--corpus") == 0){
             if (argc < i+2){
                 fprintf(stderr, "[x] corpus requres 1 parameter\n");
-                exit(1);
+                exit(EXIT_FAILURE);
             }
             options.corpus = argv[i+1];
-        }
-        if (strcmp(argv[i], (char *)"-ts") == 0 ||
-            strcmp(argv[i], (char *)"--thread-sleep") == 0){
-            if (argc < i+2){
-                fprintf(stderr, "[x] invalid thread count\n");
-                exit(1);
-            }
-            options.thread_sleep = atoi(argv[i+1]);
-            if (options.thread_sleep <= 0){
-                fprintf(stderr, "[x] invalid thread sleep value\n");
-                exit(1);
-            }
         }
         if (strcmp(argv[i], (char *)"-o") == 0 ||
             strcmp(argv[i], (char *)"--output") == 0){
@@ -225,7 +197,7 @@ void Args::parse(int argc, char **argv){
 
             if (check_mode(options.mode.c_str()) == false){
                 fprintf(stderr, "%s is an invalid mode\n", options.mode.c_str());
-                exit(1);
+                exit(EXIT_FAILURE);
             }
         }
         if (strcmp(argv[i], (char *)"-d") == 0 ||
@@ -237,7 +209,7 @@ void Args::parse(int argc, char **argv){
             strcmp(argv[i], (char *)"--tag") == 0){
             if (argc < i + 2){
                 fprintf(stderr, "[x] tag requires a parameter\n");
-                exit(1);
+                exit(EXIT_FAILURE);
             }
 	    options.tags.insert(argv[i + 1]);
         }

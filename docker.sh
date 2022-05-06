@@ -44,7 +44,7 @@ blapi_admins=1
 blapi_http_port=8080
 blapi_https_port=8443
 
-bljupyters=1
+bljupyters=0
 bljupyter_port=8888
 bljupyter_version=1.1.1
 bljupyter_token=$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 32 | head -n 1)
@@ -509,6 +509,12 @@ function compose() {
             mongodb_iter=$((mongodb_iter+1));
         fi
     done
+
+    echo "  pybinlex:";
+    echo "      image: pybinlex:${bldec_version}";
+    echo "      build:";
+    echo "          context: .";
+    echo "          dockerfile: docker/pybinlex/Dockerfile";
 
     rabbitmq_iter=1;
     mongodb_iter=1;

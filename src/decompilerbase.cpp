@@ -1,5 +1,6 @@
-#include "decompilerbase.h"
 #include <fstream>
+#include "decompilerbase.h"
+#include "args.h"
 
 using namespace binlex;
 
@@ -14,8 +15,6 @@ DecompilerBase::DecompilerBase(const binlex::File &firef) : file_reference(firef
 
 void DecompilerBase::py_SetThreads(uint threads, uint thread_cycles, uint thread_sleep) {
     g_args.options.threads = threads;
-    g_args.options.thread_cycles = thread_cycles;
-    g_args.options.thread_sleep = thread_sleep;
 }
 
 void DecompilerBase::py_SetCorpus(const char *corpus) {
