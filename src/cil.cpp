@@ -249,7 +249,7 @@ CILDecompiler::CILDecompiler(const binlex::File &firef) : DecompilerBase(firef) 
         {CIL_INS_STELEM_R4, 0},
         {CIL_INS_STELEM_R8, 0},
         {CIL_INS_STELEM_REF, 0},
-        {CIL_INS_STFLD, 32}, 
+        {CIL_INS_STFLD, 32},
         {CIL_INS_STIND_I, 0},
         {CIL_INS_STIND_I1, 0},
         {CIL_INS_STIND_I2, 0},
@@ -561,6 +561,7 @@ json CILDecompiler::GetTrait(struct Trait *trait){
     json data;
     data["type"] = trait->type;
     data["corpus"] = trait->corpus;
+    data["tags"] = g_args.options.tags;
     data["mode"] = g_args.options.mode;
     data["bytes"] = trait->bytes;
     data["trait"] = trait->trait;
@@ -582,14 +583,14 @@ json CILDecompiler::GetTrait(struct Trait *trait){
 vector<json> CILDecompiler::GetTraits(){
     vector<json> traitsjson;
     for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
-        if ((sections[i].function_traits.size() > 0) && (type == CIL_DECOMPILER_TYPE_ALL 
+        if ((sections[i].function_traits.size() > 0) && (type == CIL_DECOMPILER_TYPE_ALL
         || type == CIL_DECOMPILER_TYPE_FUNCS)){
             for(auto trait : sections[i].function_traits) {
                 json jdata(GetTrait(trait));
                 traitsjson.push_back(jdata);
             }
         }
-        if ((sections[i].block_traits.size() > 0) && (type == CIL_DECOMPILER_TYPE_ALL 
+        if ((sections[i].block_traits.size() > 0) && (type == CIL_DECOMPILER_TYPE_ALL
         || type == CIL_DECOMPILER_TYPE_BLCKS)){
             for(auto trait : sections[i].block_traits) {
                 json jdata(GetTrait(trait));
