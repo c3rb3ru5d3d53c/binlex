@@ -8,7 +8,7 @@ static pthread_mutex_t DECOMPILER_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 CRITICAL_SECTION csDecompiler;
 #endif
 
-CILDecompiler::CILDecompiler(){
+CILDecompiler::CILDecompiler(const binlex::File &firef) : DecompilerBase(firef) {
     int type = CIL_DECOMPILER_TYPE_UNSET;
     for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
         sections[i].offset = 0;
@@ -552,7 +552,7 @@ string CILDecompiler::ConvBytes(vector< Instruction* > allinst, void *data, int 
     return byte_rep_t;
 }
 
-string CILDecompiler::GetTrait(struct Trait *trait, bool pretty){
+json CILDecompiler::GetTrait(struct Trait *trait){
     json data;
     data["type"] = trait->type;
     data["corpus"] = trait->corpus;
@@ -571,50 +571,28 @@ string CILDecompiler::GetTrait(struct Trait *trait, bool pretty){
     data["invalid_instructions"] = trait->invalid_instructions;
     data["cyclomatic_complexity"] = trait->cyclomatic_complexity;
     data["average_instructions_per_block"] = trait->average_instructions_per_block;
-    if (pretty == true){
-        return data.dump(4);
-    }
-    return data.dump();
+    return data;
 }
 
-void CILDecompiler::WriteTraits(char *file_path){
-    ofstream fd;
-    fd.open(string(file_path), ios::app);
-    for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
-        if ((sections[i].function_traits.size() > 0) && (type == CIL_DECOMPILER_TYPE_ALL 
-        || type == CIL_DECOMPILER_TYPE_FUNCS)){
-            PRINT_DEBUG("Found function traits in section: %d\n", i);
-            for(auto trait : sections[i].function_traits) {
-                fd << GetTrait(trait, g_args.options.pretty) << endl;
-            }
-        }
-        if ((sections[i].block_traits.size() > 0) && (type == CIL_DECOMPILER_TYPE_ALL 
-        || type == CIL_DECOMPILER_TYPE_BLCKS)){
-            PRINT_DEBUG("Found block traits in section: %d\n", i);
-            for(auto trait : sections[i].block_traits) {
-                fd << GetTrait(trait, g_args.options.pretty) << endl;
-            }
-        }
-    }
-    fd.close();
-}
-
-void CILDecompiler::PrintTraits(){
-    PRINT_DEBUG("Set type: %d\n", type);
+vector<json> CILDecompiler::GetTraits(){
+    vector<json> traitsjson;
     for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
         if ((sections[i].function_traits.size() > 0) && (type == CIL_DECOMPILER_TYPE_ALL 
         || type == CIL_DECOMPILER_TYPE_FUNCS)){
             for(auto trait : sections[i].function_traits) {
-                cout << GetTrait(trait, g_args.options.pretty) << endl;
+		json jdata(GetTrait(trait));
+		traitsjson.push_back(jdata);
             }
         }
         if ((sections[i].block_traits.size() > 0) && (type == CIL_DECOMPILER_TYPE_ALL 
         || type == CIL_DECOMPILER_TYPE_BLCKS)){
             for(auto trait : sections[i].block_traits) {
-                cout << GetTrait(trait, g_args.options.pretty) << endl;
+                json jdata(GetTrait(trait));
+		traitsjson.push_back(jdata);
             }
         }
     }
+    return traitsjson;
 }
 
 CILDecompiler::~CILDecompiler() {

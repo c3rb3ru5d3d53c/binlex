@@ -110,7 +110,7 @@ int main(int argc, char **argv){
         if (pe.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_I386) == false) return 1;
         if (pe.ReadFile(g_args.options.input) == false) return 1;
 
-        CILDecompiler cil_decompiler;
+        CILDecompiler cil_decompiler(pe);
         PRINT_DEBUG("Analyzing %lu sections for CIL byte code.\n", pe._sections.size());
         int si = 0;
         for (auto section : pe._sections) {
@@ -119,16 +119,12 @@ int main(int argc, char **argv){
             if (cil_decompiler.Setup(CIL_DECOMPILER_TYPE_ALL) == false){
                 return 1;
             }
-			if (cil_decompiler.Decompile(section.data, section.size, si) == false){
+	    if (cil_decompiler.Decompile(section.data, section.size, si) == false){
                 continue;
-			}
-            si++;
+	    }
+	    si++;
         }
-        if (g_args.options.output == NULL){
-            cil_decompiler.PrintTraits();
-        } else {
-            cil_decompiler.WriteTraits(g_args.options.output);
-        }
+	cil_decompiler.WriteTraits();
         return EXIT_SUCCESS;
     }
     if (g_args.options.mode == "pe:x86" &&

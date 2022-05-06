@@ -41,7 +41,7 @@ cs_mode Decompiler::mode;
 	? (uint64_t)((insn).detail->x86.operands[0].imm) \
 	: (((insn).address + (insn).size) + (uint64_t)(insn).detail->x86.disp))
 
-Decompiler::Decompiler(const binlex::File &firef) : file_reference(firef) {
+Decompiler::Decompiler(const binlex::File &firef) : DecompilerBase(firef) {
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++) {
         sections[i].offset = 0;
         sections[i].data = NULL;
@@ -122,36 +122,7 @@ vector<json> Decompiler::GetTraits(){
     return traitsjson;
 }
 
-void Decompiler::WriteTraits(){
-    // if g_args.options.output defined write to file, otherwise to screen
-    ofstream output_stream;
-    if (g_args.options.output != NULL) {
-        output_stream.open(g_args.options.output);
-        if(!output_stream.is_open()) {
-            PRINT_ERROR_AND_EXIT("Unable to open file %s for writing\n", g_args.options.output);
-        }
-    }
-    auto traits(GetTraits());
-    if(g_args.options.output != NULL) {
-	for(auto trait : traits) {
-	    trait["file_sha256"] = file_reference.sha256;
-	    trait["file_tlsh"] = file_reference.tlsh;
-	    output_stream << (g_args.options.pretty ? trait.dump(4) : trait.dump()) << endl;
-	}
-    } else {
-	for(auto trait : traits) {
-	    trait["file_sha256"] = file_reference.sha256;
-	    trait["file_tlsh"] = file_reference.tlsh;
-	    cout << (g_args.options.pretty ? trait.dump(4) : trait.dump()) << endl;
-	}
-    }
-    if (g_args.options.output != NULL) {
-	output_stream.close();
-    }
-}
-
 void * Decompiler::CreateTraitsForSection(uint index) {
-
     worker myself;
 
     struct Trait b_trait;
@@ -874,30 +845,4 @@ Decompiler::~Decompiler() {
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++) {
         FreeTraits(i);
     }
-}
-
-
-/*
- * The following functions are for pybind-only use. They offer a way to pass arguments to
- * the CPP code, which otherwise if obtained via command-line arguments.
- */
-
-void Decompiler::py_SetThreads(uint threads) {
-    g_args.options.threads = threads;
-}
-
-void Decompiler::py_SetCorpus(const char *corpus) {
-    g_args.options.corpus = corpus;
-}
-
-void Decompiler::py_SetTags(const vector<string> &tags){
-    g_args.options.tags = set<string>(tags.begin(), tags.end());
-}
-
-void Decompiler::py_SetInstructions(bool instructions) {
-    g_args.options.instructions = instructions;
-}
-
-void Decompiler::py_SetMode(string mode){
-    g_args.options.mode = mode;
 }

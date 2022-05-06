@@ -16,7 +16,7 @@
 #include <vector>
 #include <set>
 #include <map>
-#include "common.h"
+#include "decompilerbase.h"
 #include "json.h"
 
 #define INVALID_OP 0xFFFFFFFF
@@ -266,7 +266,7 @@
 using namespace std;
 
 namespace binlex {
-    class CILDecompiler : public Common {
+    class CILDecompiler : public DecompilerBase {
         private:
             int type = CIL_DECOMPILER_TYPE_UNSET;
             char * hexdump_traits(char *buffer0, const void *data, int size, int operand_size);
@@ -284,7 +284,7 @@ namespace binlex {
                 void *sections;
             } worker_args;
         public:
-            CILDecompiler();
+            CILDecompiler(const binlex::File &firef);
             struct Instruction {
                 unsigned char instruction;
                 uint operand_size;
@@ -344,9 +344,12 @@ namespace binlex {
             map<int, int> miscInstrMap;
             bool Setup(int input_type);
             bool Decompile(void *data, int data_size, int index);
-            void WriteTraits(char *file_path);
-            void PrintTraits();
-            string GetTrait(struct Trait *trait, bool pretty);
+	    /**
+	     * Get Traits as JSON
+	     * @return list of traits json objects
+	     */
+	    vector<json> GetTraits();
+            json GetTrait(struct Trait *trait);
             /**
             Converts instruction objects to trait pattern for output
             @param insn Source instruction to check and resulting operand size
