@@ -10,7 +10,7 @@ using namespace std;
 namespace py = pybind11;
 
 void init_raw(py::module &handle){
-    py::class_<binlex::Raw>(handle, "Raw", "Binlex Raw Module")
+    py::class_<binlex::Raw, binlex::File>(handle, "Raw", "Binlex Raw Module")
     .def(py::init<>())
     .def("get_sections", [](binlex::Raw &module){
         auto result = py::list();

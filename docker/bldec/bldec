@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+import io
 import os
 import sys
 import configparser
@@ -12,7 +12,8 @@ from hashlib import sha256
 from libblapi.minio import MinIOHandler
 from libblapi.amqp import AMQPHandler
 
-logger = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 __author__  = 'c3r3b3ru5'
 __version__ = '1.1.1'
@@ -23,81 +24,68 @@ class BLDEC():
     A Binlex Decompile Worker
     """
 
-    def decompile_raw(self, data, architecture, corpus):
-        decompiler = pybinlex.Decompiler()
-        if architecture == 'x86':
-            decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_32, 0)
-        if architecture == 'x86_64':
-            decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_64, 0)
-        decompiler.set_threads(
-            self.config['bldec'].getint('threads'),
-            self.config['bldec'].getint('thread_cycles'),
-            self.config['bldec'].getint('thread_sleep'),
-            0)
-        decompiler.set_mode("raw:x86", 0)
-        decompiler.set_file_sha256(sha256(data).hexdigest(), 0)
-        decompiler.set_corpus(corpus, 0)
-        decompiler.decompile(data, 0, 0)
-        traits = decompiler.get_traits()
-        return traits
+    def __init__(self):
+        self.amqp = None
+        self.minio = None
+        self.config = None
 
-    def decompile_pe(self, data, architecture, corpus):
+    def find_traits(self, file_processor, data, file_type, architecture):
+        decompiler = pybinlex.Decompiler(file_processor)
         file_hash = sha256(data).hexdigest()
+
+        byte_file = open(file_hash, 'wb')
+        byte_file.write(data)
+        byte_file.close()
+
+        if file_type != "raw":
+            result = file_processor.read_file(os.path.join('/opt/binlex/docker/bldec/', file_hash))
+        else:
+            result = file_processor.read_file(str(os.path.join('/opt/binlex/docker/bldec/', file_hash)), 0)
+
+        if result is False:
+             return result
+
+        sections = file_processor.get_sections()
+        if architecture == 'x86':
+            decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_32)
+        elif architecture == 'x86_64':
+            decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_64)
+        for i in range(0, len(sections)):
+            if file_type != "raw":
+                decompiler.append_queue(sections[i]['functions'],
+                                    pybinlex.DECOMPILER_OPERAND_TYPE.DECOMPILER_OPERAND_TYPE_FUNCTION, i)
+            else:
+                decompiler.append_queue({0}, pybinlex.DECOMPILER_OPERAND_TYPE.DECOMPILER_OPERAND_TYPE_FUNCTION, 0)
+            decompiler.decompile(sections[i]['data'], sections[i]['offset'], i)
+        traits = decompiler.get_traits()
+
+        os.remove(str(os.path.join('/opt/binlex/docker/bldec/', file_hash)))
+
+        return traits, file_hash
+
+    def decompile_raw(self, data, architecture, file_type):
+
+        raw = pybinlex.Raw()
+
+        return self.find_traits(raw, data, file_type, architecture)
+
+    def decompile_pe(self, data, architecture, file_type):
         pe = pybinlex.PE()
-        decompiler = pybinlex.Decompiler()
         if architecture == 'x86':
             pe.setup(pybinlex.MACHINE_TYPES.IMAGE_FILE_MACHINE_I386)
         if architecture == 'x86_64':
             pe.setup(pybinlex.MACHINE_TYPES.IMAGE_FILE_MACHINE_AMD64)
-        pe.read_buffer(data)
-        sections = pe.get_sections()
-        for i in range(0, len(sections)):
-            if architecture == 'x86':
-                decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_32, i)
-                decompiler.set_mode("pe:x86", i)
-            if architecture == 'x86_64':
-                decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_64, i)
-                decompiler.set_mode("pe:x86_64", i)
-            decompiler.set_threads(
-                self.config['bldec'].getint('threads'),
-                self.config['bldec'].getint('thread_cycles'),
-                self.config['bldec'].getint('thread_sleep'),
-                i)
-            decompiler.set_corpus(corpus, i)
-            decompiler.set_file_sha256(file_hash, i)
-            decompiler.decompile(sections[i]['data'], sections[i]['offset'], i)
-        traits = decompiler.get_traits()
-        return traits
 
-    def decompile_elf(self, data, architecture, corpus):
-        file_hash = sha256(data).hexdigest()
+        return self.find_traits(pe, data, file_type, architecture)
+
+    def decompile_elf(self, data, architecture, file_type):
         elf = pybinlex.ELF()
-        decompiler = pybinlex.Decompiler()
         if architecture == 'x86':
             elf.setup(pybinlex.ARCH.EM_386)
         if architecture == 'x86_64':
             elf.setup(pybinlex.ARCH.EM_X86_64)
-        result = elf.read_buffer(data)
-        if result is False:
-            return result
-        sections = elf.get_sections()
-        for i in range(0, len(sections)):
-            if architecture == 'x86':
-                decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_32, i)
-                decompiler.set_mode("elf:x86", i)
-            if architecture == 'x86_64':
-                decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_64, i)
-                decompiler.set_mode("elf:x86_64", i)
-            decompiler.set_corpus(corpus, i)
-            decompiler.set_file_sha256(file_hash, i)
-            decompiler.set_threads(
-                self.config['bldec'].getint('threads'),
-                self.config['bldec'].getint('thread_cycles'),
-                self.config['bldec'].getint('thread_sleep'),
-                i)
-            decompiler.decompile(sections[i]['data'], sections[i]['offset'], i)
-        traits = decompiler.get_traits()
-        return traits
+
+        return self.find_traits(elf, data, file_type, architecture)
 
     def arguments(self):
         parser = argparse.ArgumentParser(
@@ -126,38 +114,49 @@ class BLDEC():
     def process(self, ch, method, properties, body):
         try:
             data = json.loads(body)
+            log.info("processing "+str(data))
             file_type = data['mode'].split(':')[0]
-            binary_data = self.minio.download(
-                bucket_name=self.config['amqp'].get('decomp_queue'),
+
+            response = self.minio.download(
+                bucket_name=data['corpus'],
                 object_name=data['object_name'])
+
+            binary_data = io.BytesIO(response.data).read()
+
+            response.close()
+            response.release_conn()
+
+            architecture = data['mode'].split(':')[1]
+
             if file_type == 'pe':
-                traits = self.decompile_pe(
-                    binary_data,
-                    data['mode'].split(':')[1],
-                    data['corpus'])
+                traits, file_hash = self.decompile_pe(binary_data, architecture, file_type)
             elif file_type == 'elf':
-                traits = self.decompile_elf(
-                    binary_data,
-                    data['mode'].split(':')[1],
-                    data['corpus'])
+                traits, file_hash = self.decompile_elf(binary_data, architecture, file_type)
             elif file_type == 'raw':
-                traits = self.decompile_raw(
-                    binary_data,
-                    data['mode'].split(':')[1],
-                    data['corpus'])
+                traits, file_hash = self.decompile_raw(binary_data, architecture, file_type)
             else:
                 raise Exception('unknown file format')
+
+            log.info("Found "+str(len(traits))+" traits for "+file_hash)
+
             for trait in traits:
-                amqp.publish(
+                trait['file_sha256'] = file_hash
+                trait['architecture'] = architecture
+                del trait['tags']
+                self.amqp.publish(
                     self.config['amqp'].get('traits_queue'),
                     json.dumps(trait))
+
             self.minio.delete(
                 bucket_name=self.config['amqp'].get('decomp_queue'),
                 object_name=data['object_name'])
-        except Exception as e:
+
+            log.info("Done publishing traits to queue for " + file_hash)
+
+        except Exception:
             exc_type, exc_obj, exc_tb = sys.exc_info()
             fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-            logger.error(exc_type, fname, exc_tb.tb_lineno)
+            log.error(exc_type, fname, exc_tb.tb_lineno)
         ch.basic_ack(method.delivery_tag)
 
     def main(self):

@@ -44,15 +44,13 @@ int AutoLex::ProcessFile(char *file_path){
     // - raise exceptions instead of returning a null decompiler  to better handle being called as a lib
 
     if (!GetFileCharacteristics(file_path)){
-        fprintf(stderr, "Unable to get file characteristics.\n");
+        fprintf(stderr, "[x] unable to get file characteristics\n");
         return -1;
     }
 
-    Decompiler decompiler;
     if(characteristics.format == LIEF::FORMAT_PE){
-
         PE pe;
-
+        Decompiler decompiler(pe);
         if (!pe.Setup((MACHINE_TYPES)characteristics.machineType)){
             return EXIT_FAILURE;
         }
@@ -62,46 +60,48 @@ int AutoLex::ProcessFile(char *file_path){
         }
 
         if(pe.HasLimitations()){
-            fprintf(stderr, "File has limitations.\n");
-            return EXIT_FAILURE;
+            PRINT_ERROR_AND_EXIT("[x] file has limitations\n");
         }
 
         if(pe.IsDotNet()){
             DOTNET pe;
+            g_args.options.mode = "pe:cil";
             if (pe.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_I386) == false) return 1;
             if (pe.ReadFile(file_path) == false) return 1;
-
-            for (size_t i = 0; i < pe._sections.size(); i++) {
-                if (pe._sections[i].offset == 0) continue;
-                CILDecompiler cil_decompiler;
-
-                if (cil_decompiler.Setup(CIL_DECOMPILER_TYPE_FUNCS) == false){
-                    return 1;
-                }
-                if (cil_decompiler.Decompile(pe._sections[i].data, pe._sections[i].size, 0) == false){
-                    continue;
-                }
-                if (g_args.options.output == NULL){
-                    cil_decompiler.PrintTraits();
-                } else {
-                    cil_decompiler.WriteTraits(g_args.options.output);
-                }
+            CILDecompiler cil_decompiler(pe);
+            int si = 0;
+            for (auto section : pe._sections) {
+                if (section.offset == 0) continue;
+                if (cil_decompiler.Setup(CIL_DECOMPILER_TYPE_ALL) == false) return 1;
+                if (cil_decompiler.Decompile(section.data, section.size, si) == false) continue;
+	            si++;
             }
+            cil_decompiler.WriteTraits();
             return EXIT_SUCCESS;
-        }
+        } else {
+            if (characteristics.arch == CS_ARCH_X86 &&
+                characteristics.mode == CS_MODE_32){
+                g_args.options.mode = "pe:x86";
 
-        for (int i = 0; i < pe.total_exec_sections; i++) {
-            if (pe.sections[i].data != NULL) {
-                decompiler.Setup(characteristics.arch, characteristics.mode, i);
-                decompiler.AppendQueue(pe.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
-                decompiler.Decompile(pe.sections[i].data, pe.sections[i].size, pe.sections[i].offset, i);
             }
+            if (characteristics.arch == CS_ARCH_X86 &&
+                characteristics.mode == CS_MODE_64){
+                    g_args.options.mode = "pe:x86_64";
+            }
+
+            decompiler.Setup(characteristics.arch, characteristics.mode);
+            for (int i = 0; i < pe.total_exec_sections; i++) {
+                if (pe.sections[i].data != NULL) {
+                    decompiler.AppendQueue(pe.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
+                    decompiler.Decompile(pe.sections[i].data, pe.sections[i].size, pe.sections[i].offset, i);
+                }
+            }
+            decompiler.WriteTraits();
         }
-
     }
-    else if(characteristics.format == LIEF::FORMAT_ELF){
+    else if (characteristics.format == LIEF::FORMAT_ELF){
         ELF elf;
-
+        Decompiler decompiler(elf);
         if (elf.Setup((ARCH)characteristics.machineType) == false){
             return EXIT_FAILURE;
         }
@@ -109,18 +109,26 @@ int AutoLex::ProcessFile(char *file_path){
             return EXIT_FAILURE;
         }
 
-        for (int i = 0; i < elf.total_exec_sections; i++){
+        if (characteristics.arch == CS_ARCH_X86 &&
+            characteristics.mode == CS_MODE_32){
+            g_args.options.mode = "elf:x86";
 
+        }
+        if (characteristics.arch == CS_ARCH_X86 &&
+            characteristics.mode == CS_MODE_64){
+                g_args.options.mode = "elf:x86_64";
+        }
+
+        decompiler.Setup(characteristics.arch, characteristics.mode);
+        for (int i = 0; i < elf.total_exec_sections; i++){
             if (elf.sections[i].data != NULL){
-                decompiler.Setup(characteristics.arch, characteristics.mode, i);
                 decompiler.AppendQueue(elf.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
                 decompiler.Decompile(elf.sections[i].data, elf.sections[i].size, elf.sections[i].offset, i);
             }
 
         }
+        decompiler.WriteTraits();
     }
-
-    decompiler.WriteTraits();
 
     return EXIT_SUCCESS;
 }

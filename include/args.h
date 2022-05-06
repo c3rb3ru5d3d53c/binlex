@@ -35,12 +35,10 @@ namespace binlex{
                 char *output;
                 uint timeout;
                 uint threads;
-                uint thread_cycles;
-                useconds_t thread_sleep;
                 bool help;
                 bool list_modes;
                 bool instructions;
-                char *mode;
+                std::string mode;
                 std::string corpus;
                 bool pretty;
                 bool debug;
@@ -48,7 +46,7 @@ namespace binlex{
             } options;
             BINLEX_EXPORT Args();
             BINLEX_EXPORT void SetDefault();
-            BINLEX_EXPORT bool check_mode(char *mode);
+            BINLEX_EXPORT bool check_mode(const char *mode);
             BINLEX_EXPORT int is_file(const char *path);
             BINLEX_EXPORT int is_dir(const char *path);
             BINLEX_EXPORT void set_io_type(char *input);

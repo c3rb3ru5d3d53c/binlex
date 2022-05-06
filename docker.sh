@@ -44,7 +44,7 @@ blapi_admins=1
 blapi_http_port=8080
 blapi_https_port=8443
 
-bljupyters=1
+bljupyters=0
 bljupyter_port=8888
 bljupyter_version=1.1.1
 bljupyter_token=$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 32 | head -n 1)
@@ -510,6 +510,12 @@ function compose() {
         fi
     done
 
+    echo "  pybinlex:";
+    echo "      image: pybinlex:${bldec_version}";
+    echo "      build:";
+    echo "          context: .";
+    echo "          dockerfile: docker/pybinlex/Dockerfile";
+
     rabbitmq_iter=1;
     mongodb_iter=1;
     minio_iter=1
@@ -749,7 +755,7 @@ function blapi_nginx_config_init(){
 
 function rabbitmq_config_init(){
     echo "listeners.tcp = none";
-    echo "loopback_users.guest = false";
+    echo "loopback_users.guest = none";
     echo "listeners.ssl.default = 0.0.0.0:5672";
     echo "cluster_formation.peer_discovery_backend = rabbit_peer_discovery_classic_config";
     for i in $(seq 1 $brokers); do

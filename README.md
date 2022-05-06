@@ -24,13 +24,11 @@ To help combat malware, we firmly commit our work to the public domain for the g
 ![GitHub all releases](https://img.shields.io/github/downloads/c3rb3ru5d3d53c/binlex/total)
 
 
-# Demos
+## Demos
 
 <p align="center">
   <img src="docs/img/demo_0.gif" alt="animated" />
 </p>
-
-# Introduction Video
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=hgz5gZB3DxE" target="_blank">
@@ -40,7 +38,7 @@ To help combat malware, we firmly commit our work to the public domain for the g
 
 Get slides [here](docs/oalabs.pdf).
 
-# Use Cases
+## Use Cases
 - YARA Signature Creation/Automation
 - Identifying Code-Reuse
 - Threat Hunting
@@ -49,7 +47,7 @@ Get slides [here](docs/oalabs.pdf).
 - Genetic Programming
 - Machine Learning Malware Detection
 
-# Installing
+## Installation
 
 **Dependencies:**
 
@@ -58,14 +56,13 @@ To get started you will need the following dependencies for `binlex`.
 ```bash
 sudo apt install -y git build-essential \
                     cmake make parallel \
-                    doxygen git-lfs rpm liblief-dev \
-                    python3 python3-dev \
-                    libtlsh-dev
+                    doxygen git-lfs rpm \
+                    python3 python3-dev
 git clone --recursive https://github.com/c3rb3ru5d3d53c/binlex.git
 cd binlex/
 ```
 
-Please note that `binlex` requires `cmake` >= 3.5 and `make` >= 4.2.1.
+*__NOTE:__ that `binlex` requires `cmake` >= 3.5, `make` >= 4.2.1 and `ubuntu` >= 20.04.*
 
 Once you have installed, cloned and changed your directory to the project directory, we can continue with installation.
 
@@ -77,8 +74,8 @@ If you want to compile and install via `make install` run the following commands
 make threads=4
 sudo make install
 
-# Test your installation
-binlex -m elf:x86 -i tests/elf/elf.x86
+# Test your Install
+binlex -m auto -i tests/elf/elf.x86
 ```
 
 **Binary Releases:**
@@ -87,11 +84,27 @@ See the [`releases`](https://github.com/c3rb3ru5d3d53c/binlex/releases) page.
 
 If you need the bleeding edge binaries you can download them from our AppVeyor CI/CD [`here`](https://ci.appveyor.com/project/c3rb3ru5d3d53c/binlex/branch/master).
 
-Please note, edge binaries are subject to bugs, if you encounter one, please let us know!
+*__NOTE:__ bleeding edge binaries are subject to bugs, if you encounter one, please let us know!*
 
 **Test Files:**
+
 - To download all the test samples do the command `git lfs fetch`
 - ZIP files in the `tests/` directory can then be extracted using the password `infected`
+
+***NOTE**: The `tests/` directory contains malware, we assume you know what you are doing.*
+
+To download individual `git-lfs` files from a relative path, you can use the following `git` alias in `~/.gitconfig`:
+
+```ini
+[alias]
+download = "!ROOT=$(git rev-parse --show-toplevel); cd $ROOT; git lfs pull --include $GIT_PREFIX$1; cd $ROOT/$GIT_PREFIX"
+```
+
+You will then be able to do the following:
+
+```bash
+git download tests/pe/pe.zip
+```
 
 **Building Packages:**
 
@@ -130,11 +143,12 @@ make python
 
 Please note, we use `pybind11` and support for `python3.9` is experimental.
 
-Examples of how to use `pybinlex` can be found in `tests.py`.
+Examples of how to use `pybinlex` can be found in `tests/tests.py`.
 
-**Building Binlex Servers:**
+## Building Binlex Platform:
 
-Dependencies:
+**Install Dependencies:**
+
 ```bash
 sudo apt install docker.io make
 sudo usermod -a -G docker $USER
@@ -142,7 +156,8 @@ sudo systemctl enable docker
 reboot # ensures your user is added to the docker group
 ```
 
-Building:
+**Building Containers:**
+
 ```bash
 make docker        # generate docker-compose.yml and config files
 # Your generated credentials will be printed to the screen and saved in config/credentials.txt
@@ -152,46 +167,35 @@ make docker-init   # initialize all databases and generated configurations
 make docker-logs   # tail all logs
 ```
 
-Architecture (High Level):
-```text
-    ┌─────┐
-┌─┬─►blapi│        (HTTP API)
-│ │ └─────┘
-│ │
-│ │ ┌─────┐
-│ ├─►bldec│        (decompile cluster)
-│ │ └─────┘
-│ │
-│ │ ┌────┐
-│ │ │bldb◄─────┬─┐ (database insert cluster)
-│ │ └────┘     │ │
-│ │            │ │
-│ │ ┌─────┐    │ │
-│ ├─►minio◄────┼─┤ (object store cluster)
-│ │ └─────┘    │ │
-│ │            │ │
-│ │ ┌────────┐ │ │
-│ └─►rabbitmq◄─┘ │ (messaging queue cluster)
-│   └────────┘   │
-│                │
-│   ┌───────┐    │
-└───►mongodb◄────┘ (document database cluster)
-    └───────┘
-```
-
 If you wish to change the auto-generated initial username and passwords, you can run `./docker.sh` with additional parameters.
 
 To see what parameters are available to you, run `./docker.sh --help`.
 
-Your connection strings for MongoDB per user in this case would be:
-- binlex - `mongodb://binlex:<generated-password>@127.0.0.1/?authSource=binlex` (for trait collection)
-- admin - `mongodb://admin:<generated-password>@127.0.0.1` (for administration)
+**Platform URLs:**
 
-The HTTP API documentation is generated automatically, visit `https://127.0.0.1" in your browser to read.
+- HTTP API `https://127.0.0.1:8443` (API Docs)
+- RabbitMQ `https://127.0.0.1:15672/` (Messaging)
+- MinIO `https://127.0.0.1:9001/` (Object Store)
+- MongoDB `mongodb://<user>:<pass>@127.0.0.1` (MongoDB)
+ - User `mongodb://binlex:<generated-password>@127.0.0.1/?authSource=binlex` (for trait collection)
+ - Admin `mongodb://admin:<generated-password>@127.0.0.1` (for administration)
 
-To make requests to the API do the following:
+__Example HTTP API Requests:__
 ```bash
-curl --insecure -H "X-API-Key: <your-api-key-here>" https://127.0.0.1/binlex/version
+# Get Version
+curl --insecure -H "X-API-Key: <key>" https://127.0.0.1:8443/binlex/api/v1/version
+
+# Upload Sample
+curl -X POST --insecure -H "X-API-Key: <key>" --upload-file <file> https://127.0.0.1:8443/binlex/api/v1/samples/<corpus>/<mode>
+
+# List Corpra
+curl -X GET --insecure -H "X-API-Key: <key>" https://127.0.0.1:8443/binlex/api/v1/corpra
+
+# Get Supported Modes
+curl -X GET --insecure -H "X-API-Key: <key>" https://127.0.0.1:8443/binlex/api/v1/modes
+
+# Download Sample by SHA256
+curl -X GET --insecure -H "X-API-Key: <key>" https://127.0.0.1:8443/binlex/api/v1/samples/<sha256>
 ```
 
 If you work with a team of malware analysts or malware researchers, you create read-only accounts for them.
@@ -206,56 +210,63 @@ cd scripts/
 
 If you have a VERY large team, you can script creation of these accounts.
 
-# Basic Usage
+## CLI Usage
 
 ```text
 binlex v1.1.1 - A Binary Genetic Traits Lexer
   -i  --input           input file              (required)
-  -m  --mode            set mode                (required)
-  -lm --list-modes      list modes
+  -m  --mode            set mode                (optional)
+  -lm --list-modes      list modes              (optional)
+      --instructions    include insn traits     (optional)
   -c  --corpus          corpus name             (optional)
+  -g  --tag             add a tag               (optional)
+                        (can be specified multiple times)
   -t  --threads         number of threads       (optional)
-  -tc --thread-cycles   thread wait cycles      (optional)
-  -ts --thread-sleep    thread sleep in ms      (optional)
   -to --timeout         execution timeout in s  (optional)
-  -h  --help            display help
+  -h  --help            display help            (optional)
   -o  --output          output file             (optional)
   -p  --pretty          pretty output           (optional)
-  -v  --version         display version
+  -d  --debug           print debug info        (optional)
+  -v  --version         display version         (optional)
 Author: @c3rb3ru5d3d53c
 ```
 
-**Currently Supported Modes**
+**Supported Modes**
 
 - `elf:x86`
 - `elf:x86_64`
 - `pe:x86`
 - `pe:x86_64`
+- `pe:cil`
 - `raw:x86`
 - `raw:x86_64`
-- `raw:cil` (experimental)
+- `raw:cil`
+- `auto`
 
-__NOTE:__ The `raw` formats can be used on shellcode
+*__NOTE:__ The `raw` modes can be used on shellcode.*
 
-# Advanced Usage
+*__NOTE:__ The `auto` mode cannot be used on shellcode.*
+
+**Advanced**
 
 If you are hunting using `binlex` you can use `jq` to your advantage for advanced searches.
 
 ```bash
-binlex -m raw:x86 -i tests/raw/raw.x86 | jq -r 'select(.type == "block" and .size < 32 and .size > 0) | .bytes'
-2c 20 c1 cf 0d 01 c7 49 75 ef
-52 57 8b 52 10 8b 42 3c 01 d0 8b 40 78 85 c0 74 4c
-01 d0 50 8b 58 20 8b 48 18 01 d3 85 c9 74 3c
-49 8b 34 8b 01 d6 31 ff 31 c0 c1 cf 0d ac 01 c7 38 e0 75 f4
-03 7d f8 3b 7d 24 75 e0
-58 5f 5a 8b 12 e9 80 ff ff ff
-ff 4e 08 75 ec
-e8 67 00 00 00 6a 00 6a 04 56 57 68 02 d9 c8 5f ff d5 83 f8 00 7e 36
-e9 9b ff ff ff
-01 c3 29 c6 75 c1
+build/binlex -m auto -i tests/pe/pe.x86 | jq -r 'select((.size > 8 and .size < 16) and (.bytes_sha256 != .traits.sha256)) | .trait' | head -10
+8b 48 ?? 03 c8 81 39 50 45 00 00 75 12
+0f b7 41 ?? 3d 0b 01 00 00 74 1f
+83 b9 ?? ?? ?? ?? ?? 76 f2
+33 c0 39 b9 ?? ?? ?? ?? eb 0e
+83 4d ?? ?? b8 ff 00 00 00 e9 ba 00 00 00
+89 75 ?? 66 83 3e 22 75 45
+03 f3 89 75 ?? 66 8b 06 66 3b c7 74 06
+03 f3 89 75 ?? 66 8b 06 66 3b c7 74 06
+56 ff 15 ?? ?? ?? ?? ff 15 ?? ?? ?? ?? eb 2d
+55 8b ec 51 56 33 f6 66 89 33 8a 07 eb 29
 ```
 
-Other queries you can do:
+Here are examples of additional queries.
+
 ```bash
 # Block traits with a size between 0 and 32 bytes
 jq -r 'select(.type == "block" and .size < 32 and .size > 0)'
@@ -289,25 +300,32 @@ rule example_0 {
 You can also use the switch `--pretty` to output `json` to identify more properies to query.
 
 ```bash
-binlex -m pe:x86 -i tests/pe/pe.trickbot.x86 --pretty
-[
-  {
-    "average_instructions_per_block": 29,
-    "blocks": 1,
-    "bytes": "ae 32 c3 32 1a 33 25 34 85 39 ae 3b b4 3b c8 3b 35 3c 3a 3c 6b 3c 71 3c 85 3c aa 3d b0 3d 6a 3e a5 3e b8 3e fd 3e 38 3f 4b 3f 87 3f 00 20 00 00 58 00 00 00 4f 30 aa 30 01 31 1d 31 ac 31 d6 31 e5 31 f5 31 1c 32 31 32 75 34",
-    "bytes_entropy": 5.070523738861084,
-    "bytes_sha256": "67a966fe573ef678feaea6229271bb374304b418fe63f464b71af1fbe2a87f37",
-    "cyclomatic_complexity": 3,
-    "edges": 2,
-    "instructions": 29,
-    "offset": 11589,
-    "size": 74,
-    "trait": "ae 32 c3 32 1a 33 25 ?? ?? ?? ?? 3b b4 3b ?? ?? ?? ?? 3a 3c 6b 3c 71 3c 85 3c aa 3d b0 3d 6a 3e a5 3e b8 3e fd 3e 38 3f 4b 3f 87 3f 00 20 00 00 58 00 00 00 4f ?? aa 30 01 31 1d ?? ?? ?? ?? 31 e5 31 f5 31 1c 32 31 32 75 34",
-    "trait_entropy": 4.9164042472839355,
-    "trait_sha256": "a00fcb2b23a916192990665d8a5f53b2adfa74ec98991277e571542aee94c3a5",
-    "type": "block"
-  }
-]
+build/binlex -m auto -i tests/pe/pe.emotet.x86 -c malware -g malware:emotet -g malware:loader | head -1 | jq
+{
+  "average_instructions_per_block": 29,
+  "blocks": 1,
+  "bytes": "55 8b ec 83 ec 1c 83 65 f0 00 33 d2 c7 45 e4 68 5d df 00 c7 45 e8 43 c4 cb 00 c7 45 ec 8f 08 46 00 c7 45 f8 06 3b 43 00 81 45 f8 25 7a ff ff 81 75 f8 30 f4 44 00 c7 45 fc 22 51 53 00 8b 45 fc 6a 3f 59 f7 f1 6a 1c 89 45 fc 33 d2 8b 45 fc 59 f7 f1 89 45 fc 81 75 fc 3c 95 0e 00 c7 45 f4 0b 16 11 00 81 45 f4 e1 21 ff ff 81 75 f4 79 bd 15 00 ff 4d 0c 75 21",
+  "bytes_entropy": 5.333979606628418,
+  "bytes_sha256": "13e0463c5837bc5ce110990d69397662b82b8de8a9971f77b237f2a6dd2d8982",
+  "corpus": "malware",
+  "cyclomatic_complexity": 3,
+  "edges": 2,
+  "file_sha256": "7b01c7c835552b17f17ad85b8f900c006dd8811d708781b5f49f231448aaccd3",
+  "file_tlsh": "42E34A10F3D341F7DC9608F219B6B22F9F791E023124DFA987981F57ADB5246A2B981C",
+  "instructions": 29,
+  "invalid_instructions": 0,
+  "mode": "pe:x86",
+  "offset": 49711,
+  "size": 118,
+  "tags": [
+    "malware:emotet",
+    "malware:loader"
+  ],
+  "trait": "55 8b ec 83 ec 1c 83 65 ?? ?? 33 d2 c7 45 ?? ?? ?? ?? ?? c7 45 ?? ?? ?? ?? ?? c7 45 ?? ?? ?? ?? ?? c7 45 ?? ?? ?? ?? ?? 81 45 ?? ?? ?? ?? ?? 81 75 ?? ?? ?? ?? ?? c7 45 ?? ?? ?? ?? ?? 8b 45 ?? 6a 3f 59 f7 f1 6a 1c 89 45 ?? 33 d2 8b 45 ?? 59 f7 f1 89 45 ?? 81 75 ?? ?? ?? ?? ?? c7 45 ?? ?? ?? ?? ?? 81 45 ?? ?? ?? ?? ?? 81 75 ?? ?? ?? ?? ?? ff 4d ?? 75 21",
+  "trait_entropy": 3.9699645042419434,
+  "trait_sha256": "7b04c2dbcc3cf23abfdd457b592b4517e4d98b5c83e692c836cde5b91899dd68",
+  "type": "block"
+}
 ```
 
 If you have terabytes of executable files, we can leverage the power of `parallel` to generate traits for us.
@@ -333,7 +351,7 @@ With `binlex` the power is in your hands, "With great power comes great responsi
 
 There has been some interest in making IDA, Ghidra and Cutter plugins for `binlex`.
 
-This is something that will be started soon.
+This is something that will be started soon as we finish the HTTP API endpoints.
 
 This `README.md` will be updated when they are ready to use.
 
@@ -349,25 +367,32 @@ Traits will contain binary code represented in hexadecimal form and will use `??
 
 They will also contain additional properties about the trait including its `offset`, `edges`, `blocks`, `cyclomatic_complexity`, `average_instruction_per_block`, `bytes`, `trait`, `trait_sha256`, `bytes_sha256`, `trait_entropy`, `bytes_entropy`, `type`, `size`, `invalid_instructions` and `instructions`.
 
-```
-[
-  {
-    "average_instructions_per_block": 29,
-    "blocks": 1,
-    "bytes": "ae 32 c3 32 1a 33 25 34 85 39 ae 3b b4 3b c8 3b 35 3c 3a 3c 6b 3c 71 3c 85 3c aa 3d b0 3d 6a 3e a5 3e b8 3e fd 3e 38 3f 4b 3f 87 3f 00 20 00 00 58 00 00 00 4f 30 aa 30 01 31 1d 31 ac 31 d6 31 e5 31 f5 31 1c 32 31 32 75 34",
-    "bytes_entropy": 5.070523738861084,
-    "bytes_sha256": "67a966fe573ef678feaea6229271bb374304b418fe63f464b71af1fbe2a87f37",
-    "cyclomatic_complexity": 3,
-    "edges": 2,
-    "instructions": 29,
-    "offset": 11589,
-    "size": 74,
-    "trait": "ae 32 c3 32 1a 33 25 ?? ?? ?? ?? 3b b4 3b ?? ?? ?? ?? 3a 3c 6b 3c 71 3c 85 3c aa 3d b0 3d 6a 3e a5 3e b8 3e fd 3e 38 3f 4b 3f 87 3f 00 20 00 00 58 00 00 00 4f ?? aa 30 01 31 1d ?? ?? ?? ?? 31 e5 31 f5 31 1c 32 31 32 75 34",
-    "trait_entropy": 4.9164042472839355,
-    "trait_sha256": "a00fcb2b23a916192990665d8a5f53b2adfa74ec98991277e571542aee94c3a5",
-    "type": "block"
-  }
-]
+```json
+{
+  "average_instructions_per_block": 6,
+  "blocks": 1,
+  "bytes": "8b 45 08 a3 10 52 02 10 8b 45 f8 e8 fb d7 00 00 85 c0 74 0d",
+  "bytes_entropy": 3.9219279289245605,
+  "bytes_sha256": "435cb166701006282e457d441ca793e795e38790cacc5b250d4bc418a28961c3",
+  "corpus": "malware",
+  "cyclomatic_complexity": 3,
+  "edges": 2,
+  "file_sha256": "7b01c7c835552b17f17ad85b8f900c006dd8811d708781b5f49f231448aaccd3",
+  "file_tlsh": "42E34A10F3D341F7DC9608F219B6B22F9F791E023124DFA987981F57ADB5246A2B981C",
+  "instructions": 6,
+  "invalid_instructions": 0,
+  "mode": "pe:x86",
+  "offset": 49829,
+  "size": 20,
+  "tags": [
+    "malware:emotet",
+    "malware:loader"
+  ],
+  "trait": "8b 45 ?? a3 ?? ?? ?? ?? 8b 45 ?? e8 fb d7 00 00 85 c0 74 0d",
+  "trait_entropy": 3.3787841796875,
+  "trait_sha256": "fe3b057a28b40a02ac9dd2db6c3208f96f7151fb912fb3c562a7b4581bb7f7a0",
+  "type": "block"
+}
 ```
 
 # Documentation
@@ -386,6 +411,8 @@ The documents will be available at `build/docs/html/index.html`.
 
 # C++ API Example Code
 
+The power of detection is in your hands, `binlex` is a framework, leverage the C++ API.
+
 ```cpp
 #include <binlex/pe.h>
 #include <binlex/decompiler.h>
@@ -395,28 +422,25 @@ using namespace binlex;
 int main(int argc, char **argv){
   PE pe32;
   if (pe32.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_I386) == false){
-      return 1;
+      return EXIT_FAILURE;
   }
-  if (pe32.ReadFile("tests/pe/pe.x86") == false){
-      return 1;
+  if (pe32.ReadFile(argv[1]) == false){
+      return EXIT_FAILURE;
   }
-  Decompiler decompiler;
-  for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
-      if (pe32.sections[i].data != NULL){
-          decompiler.Setup(CS_ARCH_X86, CS_MODE_32, i);
-          decompiler.SetMode("pe:x86", i);
-          decompiler.SetFileSHA256(pe32.hashes.sha256, i);
-          decompiler.SetCorpus("default", i);
-          decompiler.AppendQueue(pe32.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
-          decompiler.Decompile(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, i);
-      }
+  Decompiler decompiler(pe32);
+  decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
+  for (uint32_t i = 0; i < pe32.total_exec_sections; i++){
+      decompiler.AppendQueue(pe32.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
+      decompiler.Decompile(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, i);
   }
-  decompiler.PrintTraits(true);
+  decompiler.WriteTraits();
   return 0;
 }
 ```
 
 # Python API Example Code
+
+The power of detection is in your hands, `binlex` is a framework, leverage the C++ API.
 
 ```python
 #!/usr/bin/env python
@@ -424,19 +448,19 @@ int main(int argc, char **argv){
 import pybinlex
 from hashlib import sha256
 
-data = open('tests/pe/pe.x86', 'rb').read()
-file_hash = sha256(data).hexdigest()
 pe = pybinlex.PE()
-decompiler = pybinlex.Decompiler()
 pe.setup(pybinlex.MACHINE_TYPES.IMAGE_FILE_MACHINE_I386)
-pe.read_buffer(data)
-sections = pe.get_sections()
-for i in range(0, len(sections)):
-    decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_32, i)
-    decompiler.set_mode("pe:x86", i)
-    decompiler.set_corpus("default", i)
-    decompiler.set_file_sha256(file_hash, i)
-    decompiler.decompile(sections[i]['data'], sections[i]['offset'], i)
+result = pe.read_file('../tests/pe/pe.x86')
+if result is False:
+    print("[x] failed to read pe.x86")
+    sys.exit(1)
+pe_sections = pe.get_sections()
+
+decompiler = pybinlex.Decompiler(pe)
+decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_32)
+for i in range(0, len(pe_sections)):
+    decompiler.append_queue(pe_sections[i]['functions'], pybinlex.DECOMPILER_OPERAND_TYPE.DECOMPILER_OPERAND_TYPE_FUNCTION, i)
+    decompiler.decompile(pe_sections[i]['data'], pe_sections[i]['offset'], i)
 traits = decompiler.get_traits()
 print(json.dumps(traits, indent=4))
 ```
@@ -463,10 +487,10 @@ The remaining population of traits will be unique to the malware family tested a
 This fitness model allows for accurate classification of the tested malware family.
 
 # Future Work
-- Recursive Decompiler
-- Java Bytecode Support `raw:jvm`, `java:jvm`
+- Java byte-code Support `raw:jvm`, `java:jvm`
+- Python byte-code Support `raw:pyc`, `python:pyc`
+- More API Endpoints
 - Cutter, Ghidra and IDA Plugins
-- .NET support `pe:cil` and `raw:cil`
 - Mac-O Support `macho:x86_64`, `macho:x86`
 
 # Contributing
@@ -478,3 +502,4 @@ You can also join our Discord [here](https://discord.gg/UDBfRpxV3B).
 Currently looking for help on:
 - MacOS Developer (Parse Mach-O)
 - Plugin Developers (Python)
+- Front-End Developers (Python)

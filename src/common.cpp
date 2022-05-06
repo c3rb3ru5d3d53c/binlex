@@ -105,6 +105,17 @@ string Common::Wildcards(uint count){
     return TrimRight(s.str());
 }
 
+
+
+string Common::GetSHA256(const uint8_t *data, size_t len){
+    BYTE hash[SHA256_BLOCK_SIZE];
+    SHA256_CTX ctx;
+    sha256_init(&ctx);
+    sha256_update(&ctx, data, len);
+    sha256_final(&ctx, hash);
+    return RemoveSpaces(HexdumpBE(&hash, SHA256_BLOCK_SIZE));
+}
+
 string Common::SHA256(char *trait){
     BYTE hash[SHA256_BLOCK_SIZE];
     SHA256_CTX ctx;
@@ -158,12 +169,16 @@ string Common::RemoveSpaces(string s){
 }
 
 string Common::WildcardTrait(string trait, string bytes){
-    size_t index = trait.find(bytes, 0);
-    if (index == string::npos){
-        return bytes;
-    }
-    for (int i = index; i < trait.length(); i = i + 3){
-        trait.replace(i, 2, "??");
+    int count = bytes.length();
+    for(int i = 0; i < count - 2; i = i + 3){
+        bytes.erase(bytes.length() - 3);
+        size_t index = trait.find(bytes, 0);
+        if (index != string::npos){
+            for (int j = index; j < trait.length(); j = j + 3){
+                trait.replace(j, 2, "??");
+            }
+            break;
+        }
     }
     return TrimRight(trait);
 }
