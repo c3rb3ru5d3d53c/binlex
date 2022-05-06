@@ -35,15 +35,7 @@ namespace binlex{
       uint32_t total_exec_sections;
       BINLEX_EXPORT ELF();
       BINLEX_EXPORT bool Setup(ARCH input_mode);
-      /*
-        Read a file into the structure.
-
-        This will calculate the appropriate hashes, too.
-        @param file_path path to file
-        @return true if read was succesful
-      */
-      BINLEX_EXPORT bool ReadFile(char *file_path);
-      BINLEX_EXPORT bool ReadBuffer(void *data, size_t size);
+      virtual bool ReadVector(const std::vector<uint8_t> &data);
       BINLEX_EXPORT ~ELF();
     };
 };
