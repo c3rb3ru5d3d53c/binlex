@@ -585,15 +585,15 @@ vector<json> CILDecompiler::GetTraits(){
         if ((sections[i].function_traits.size() > 0) && (type == CIL_DECOMPILER_TYPE_ALL 
         || type == CIL_DECOMPILER_TYPE_FUNCS)){
             for(auto trait : sections[i].function_traits) {
-		json jdata(GetTrait(trait));
-		traitsjson.push_back(jdata);
+		        json jdata(GetTrait(trait));
+		        traitsjson.push_back(jdata);
             }
         }
         if ((sections[i].block_traits.size() > 0) && (type == CIL_DECOMPILER_TYPE_ALL 
         || type == CIL_DECOMPILER_TYPE_BLCKS)){
             for(auto trait : sections[i].block_traits) {
                 json jdata(GetTrait(trait));
-		traitsjson.push_back(jdata);
+		        traitsjson.push_back(jdata);
             }
         }
     }

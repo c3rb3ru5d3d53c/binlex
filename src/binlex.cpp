@@ -119,10 +119,10 @@ int main(int argc, char **argv){
             if (cil_decompiler.Setup(CIL_DECOMPILER_TYPE_ALL) == false){
                 return 1;
             }
-	    if (cil_decompiler.Decompile(section.data, section.size, si) == false){
-                continue;
-	    }
-	    si++;
+            if (cil_decompiler.Decompile(section.data, section.size, si) == false){
+                    continue;
+            }
+	        si++;
         }
 	cil_decompiler.WriteTraits();
         return EXIT_SUCCESS;
