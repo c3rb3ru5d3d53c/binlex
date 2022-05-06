@@ -116,8 +116,6 @@ string Common::GetSHA256(const uint8_t *data, size_t len){
     return RemoveSpaces(HexdumpBE(&hash, SHA256_BLOCK_SIZE));
 }
 
-
-
 string Common::SHA256(char *trait){
     BYTE hash[SHA256_BLOCK_SIZE];
     SHA256_CTX ctx;
