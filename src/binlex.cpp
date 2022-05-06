@@ -122,7 +122,7 @@ int main(int argc, char **argv){
             if (cil_decompiler.Decompile(section.data, section.size, si) == false){
                     continue;
             }
-	        si++;
+            si++;
         }
 	cil_decompiler.WriteTraits();
         return EXIT_SUCCESS;
