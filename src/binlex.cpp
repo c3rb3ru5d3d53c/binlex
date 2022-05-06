@@ -8,10 +8,9 @@
 #elif _WIN32
 #include <windows.h>
 #endif
-#include "common.h"
 #include "args.h"
-#include "raw.h"
 #include "pe.h"
+#include "raw.h"
 #include "cil.h"
 #include "pe-dotnet.h"
 #include "blelf.h"
@@ -111,23 +110,26 @@ int main(int argc, char **argv){
         if (pe.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_I386) == false) return 1;
         if (pe.ReadFile(g_args.options.input) == false) return 1;
 
-        for (size_t i = 0; i < pe._sections.size(); i++) {
-            if (pe._sections[i].offset == 0) continue;
-		    CILDecompiler cil_decompiler;
+        CILDecompiler cil_decompiler;
+        PRINT_DEBUG("Analyzing %lu sections for CIL byte code.\n", pe._sections.size());
+        int si = 0;
+        for (auto section : pe._sections) {
+            if (section.offset == 0) continue;
 
-            if (cil_decompiler.Setup(CIL_DECOMPILER_TYPE_FUNCS) == false){
+            if (cil_decompiler.Setup(CIL_DECOMPILER_TYPE_ALL) == false){
                 return 1;
             }
-			if (cil_decompiler.Decompile(pe._sections[i].data, pe._sections[i].size, 0) == false){
+			if (cil_decompiler.Decompile(section.data, section.size, si) == false){
                 continue;
 			}
-		    if (g_args.options.output == NULL){
-		    	cil_decompiler.PrintTraits();
-		    } else {
-		    	cil_decompiler.WriteTraits(g_args.options.output);
-		    }
+            si++;
         }
-        return 0;
+        if (g_args.options.output == NULL){
+            cil_decompiler.PrintTraits();
+        } else {
+            cil_decompiler.WriteTraits(g_args.options.output);
+        }
+        return EXIT_SUCCESS;
     }
     if (g_args.options.mode == "pe:x86" &&
         g_args.options.io_type == ARGS_IO_TYPE_FILE){
@@ -172,7 +174,7 @@ int main(int argc, char **argv){
     if (g_args.options.mode == "raw:x86" &&
         g_args.options.io_type == ARGS_IO_TYPE_FILE){
         Raw rawx86;
-        if (rawx86.ReadFile(g_args.options.input, 0) == false)
+        if (rawx86.ReadFile(g_args.options.input) == false)
         {
             return EXIT_FAILURE;
         }
@@ -186,7 +188,7 @@ int main(int argc, char **argv){
     if (g_args.options.mode == "raw:x86_64" &&
         g_args.options.io_type == ARGS_IO_TYPE_FILE){
         Raw rawx86_64;
-        if (rawx86_64.ReadFile(g_args.options.input, 0) == false)
+        if (rawx86_64.ReadFile(g_args.options.input) == false)
         {
             return EXIT_FAILURE;
         }
