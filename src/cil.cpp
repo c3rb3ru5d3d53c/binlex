@@ -446,7 +446,7 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
             ctrait->edges = num_edges;
             ctrait->size = SizeOfTrait(*instructions);
             ctrait->invalid_instructions = 0; //TODO
-            ctrait->type = "block"; //TODO support both types
+            ctrait->type = "block";
             ctrait->corpus = string(sections[index].corpus);
             //The cyclomatic complexity differs by type of trait.
             //Which for now only supports block.
@@ -510,11 +510,16 @@ string CILDecompiler::ConvTraitBytes(vector< Instruction* > allinst) {
     string rstr = "";
     string fstr = "";
     for(auto inst : allinst) {
-        char hexbytes[3];
-        sprintf(hexbytes, "%02x", inst->instruction);
-        hexbytes[2] = '\0';
-        rstr.append(string(hexbytes));
-        rstr.append(" ");
+        if(inst->instruction == CIL_INS_NOP) {
+            rstr.append("??");
+            rstr.append(" ");
+        } else {
+            char hexbytes[3];
+            sprintf(hexbytes, "%02x", inst->instruction);
+            hexbytes[2] = '\0';
+            rstr.append(string(hexbytes));
+            rstr.append(" ");
+        }
         for(int i = 0; i < inst->operand_size/8; i++) {
             rstr.append("??");
             rstr.append(" ");
