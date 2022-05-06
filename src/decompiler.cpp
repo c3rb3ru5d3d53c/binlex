@@ -195,7 +195,7 @@ void * Decompiler::CreateTraitsForSection(uint index) {
         sections[index].visited[address] = DECOMPILER_VISITED_ANALYZED;
 
         sections[index].coverage.insert(address);
- 
+
         myself.pc = address;
         myself.code = (uint8_t *)((uint8_t *)sections[index].data + address);
         myself.code_size = sections[index].data_size + address;
@@ -233,7 +233,7 @@ void * Decompiler::CreateTraitsForSection(uint index) {
             if (IsNopInsn(insn) || IsSemanticNopInsn(insn) || IsTrapInsn(insn) || IsPrivInsn(insn) ){
                 suspicious_instructions += 1;
             }
-            
+
             // If there are too many suspicious instructions in the bb discard it
             // TODO: Make this configurable as an argument
             if (suspicious_instructions > 2){
@@ -368,15 +368,15 @@ void Decompiler::AppendQueue(set<uint64_t> &addresses, uint operand_type, uint i
 }
 
 void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, uint index) {
-    // This function is intended to perform a preliminary quick linear disassembly pass of the section 
+    // This function is intended to perform a preliminary quick linear disassembly pass of the section
     // and initially populate the discovered queue with addressed that may not be found via recursive disassembly.
     //
-    // TODO: This algorithm is garbage and creates a lot of false positives, it should be replaced with a proper 
-    // linear pass that can differentiate data and code. 
+    // TODO: This algorithm is garbage and creates a lot of false positives, it should be replaced with a proper
+    // linear pass that can differentiate data and code.
     // See research linked here: https://github.com/c3rb3ru5d3d53c/binlex/issues/42#issuecomment-1110479885
     //
     // * The Algorithm *
-    // - Disassemble each instruction sequentially 
+    // - Disassemble each instruction sequentially
     // - Track the state of the disassembly (valid / invalid)
     // - The state is set to invalid for nops, traps, privileged instructions, and errors
     // - When a jmp (conditional or unconditional) is encountered if the state is valid begin counting valid “blocks”
@@ -384,13 +384,13 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
     // - When a jmp (conditional or unconditional) is encountered if the state is invalid reset to valid and begin tracking blocks
     //
     // * Weaknesses *
-    // - We don’t collect calls (these are assumed to be collected in the recursive disassembler) 
+    // - We don’t collect calls (these are assumed to be collected in the recursive disassembler)
     // - We don’t reset the state on ret or call instructions possibly missing some valid blocks
     // - We don’t collect the next address after a jmp (next block) missing some valid blocks
     // - Even with the filtering we will still add some number of addresses that are from invalid jmp institutions
 
     csh cs_dis;
-    
+
     PRINT_DEBUG("LinearDisassemble: Started at offset = 0x%x data_size = %d bytes\n", offset, data_size);
 
     if(cs_open(arch, mode, &cs_dis) != CS_ERR_OK) {
@@ -408,11 +408,11 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
     // Track our state, assume we start in a valid bb
     bool valid_block = true;
     uint64_t valid_block_count = 1;
-    // Save the last two valid jmp addresses 
+    // Save the last two valid jmp addresses
     // These can be pushed once we confirm three valid blocks
     uint64_t jmp_address_1 = 0;
     uint64_t jmp_address_2 = 0;
-    
+
     while(pc < code_size){
         if (!cs_disasm_iter(cs_dis, &code, &code_size, &pc, cs_ins)){
             PRINT_DEBUG("LinearDisassemble: 0x%x: Disassemble ERROR\n", pc);
@@ -436,7 +436,7 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
             PRINT_DEBUG("LinearDisassemble: Invalid instruction size at 0x%x\n", cs_ins->address);
         }
         if (IsConditionalInsn(cs_ins)){
-            if (valid_block){ 
+            if (valid_block){
                 if (valid_block_count == 1) {
                     jmp_address_2 =  X86_REL_ADDR(*cs_ins);
                 }
@@ -458,7 +458,7 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
                 jmp_address_1 = X86_REL_ADDR(*cs_ins);
             }
         }
-        
+
     }
 
     cs_free(cs_ins, 1);
@@ -493,7 +493,7 @@ string Decompiler::WildcardInsn(cs_insn *insn){
             case X86_OP_MEM:
                 {
                     if (operand.mem.disp != 0){
-                        trait = WildcardTrait(HexdumpBE(insn->bytes, insn->size), HexdumpMemDisp(operand.mem.disp));
+                        trait = WildcardTrait(bytes, HexdumpBE(&operand.mem.disp, sizeof(uint64_t)));
                     }
                     break;
                 }
@@ -531,18 +531,18 @@ bool Decompiler::IsSemanticNopInsn(cs_insn *ins)
     switch(ins->id) {
     case X86_INS_MOV:
         /* mov reg,reg */
-        if((x86->op_count == 2) 
-             && (x86->operands[0].type == X86_OP_REG) 
-             && (x86->operands[1].type == X86_OP_REG) 
+        if((x86->op_count == 2)
+             && (x86->operands[0].type == X86_OP_REG)
+             && (x86->operands[1].type == X86_OP_REG)
              && (x86->operands[0].reg == x86->operands[1].reg)) {
             return true;
         }
         return false;
     case X86_INS_XCHG:
         /* xchg reg,reg */
-        if((x86->op_count == 2) 
-             && (x86->operands[0].type == X86_OP_REG) 
-             && (x86->operands[1].type == X86_OP_REG) 
+        if((x86->op_count == 2)
+             && (x86->operands[0].type == X86_OP_REG)
+             && (x86->operands[1].type == X86_OP_REG)
              && (x86->operands[0].reg == x86->operands[1].reg)) {
             return true;
         }
