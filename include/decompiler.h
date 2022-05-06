@@ -5,7 +5,7 @@
 #include <capstone/capstone.h>
 #include "common.h"
 #include "json.h"
-#include "file.h"
+#include "decompilerbase.h"
 
 #ifdef _WIN32
 #define BINLEX_EXPORT __declspec(dllexport)
@@ -31,7 +31,7 @@ typedef enum DECOMPILER_OPERAND_TYPE {
 using json = nlohmann::json;
 
 namespace binlex {
-    class Decompiler : public Common {
+    class Decompiler : public DecompilerBase {
     private:
         typedef struct worker {
             csh handle;
@@ -46,8 +46,6 @@ namespace binlex {
             cs_mode mode;
             void *sections;
         } worker_args;
-    protected:
-	const binlex::File &file_reference;
     public:
         struct Trait {
             char *type;
@@ -239,54 +237,17 @@ namespace binlex {
         @param trait pointer to trait structure
         @return json string
         */
-        BINLEX_EXPORT static json GetTrait(struct Trait &trait);
+        BINLEX_EXPORT json GetTrait(struct Trait &trait);
         /**
         Get Traits as JSON
         @return list of traits json objects
         */
         vector<json> GetTraits();
-        /**
-        Write Traits to File
-
-	    This function usees GetTraits() to get the traits data as a json.
-        */
-        BINLEX_EXPORT void WriteTraits();
-        BINLEX_EXPORT static void * FinalizeTrait(struct Trait &trait);
+        BINLEX_EXPORT static void * TraitWorker(void *args);
+	BINLEX_EXPORT static void * FinalizeTrait(struct Trait &trait);
         BINLEX_EXPORT void AppendQueue(set<uint64_t> &addresses, uint operand_type, uint index);
         //void Seek(uint offset, uint index);
         BINLEX_EXPORT ~Decompiler();
-
-        /*
-         * The following functions are for pybind-only use. They offer a way to pass arguments to
-         * the CPP code, which otherwise if obtained via command-line arguments.
-         */
-
-        /**
-        Set Number of Threads, via pybind11
-        @param threads number of threads
-        */
-        BINLEX_EXPORT void py_SetThreads(uint threads);
-
-        /**
-        Sets The Corpus Name, via pybind11
-        @param corpus pointer to corpus name
-        @param index the section index
-        */
-        BINLEX_EXPORT void py_SetCorpus(const char *corpus);
-
-        /**
-        Specify if instruction traits are collected, via pybind11
-        @param instructions bool to collect instructions traits or not
-        @param index the section index
-        */
-        BINLEX_EXPORT void py_SetInstructions(bool instructions);
-
-        /**
-         Sets the tags, via pybind11
-         @param tags set of tags
-        */
-        BINLEX_EXPORT void py_SetTags(const vector<string> &tags);
-        BINLEX_EXPORT void py_SetMode(string mode);
     };
 }
 #endif
