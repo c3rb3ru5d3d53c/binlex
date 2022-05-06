@@ -244,7 +244,7 @@ namespace binlex {
         */
         vector<json> GetTraits();
         BINLEX_EXPORT static void * TraitWorker(void *args);
-	BINLEX_EXPORT static void * FinalizeTrait(struct Trait &trait);
+	    BINLEX_EXPORT static void * FinalizeTrait(struct Trait &trait);
         BINLEX_EXPORT void AppendQueue(set<uint64_t> &addresses, uint operand_type, uint index);
         //void Seek(uint offset, uint index);
         BINLEX_EXPORT ~Decompiler();
