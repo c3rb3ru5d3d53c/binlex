@@ -33,7 +33,8 @@ class AMQPHandler:
                                                     host="rabbitmq-broker" + str(num),
                                                     ssl_options=(ssl_options if tls else None),
                                                     credentials=pika.credentials.PlainCredentials(
-                                                        username=username, password=password))
+                                                        username=username, password=password),
+                                                    heartbeat=600, blocked_connection_timeout=300)
             self.all_hosts.append(conn_params)
 
         self.establish_connection()
