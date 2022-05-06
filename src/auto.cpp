@@ -64,45 +64,40 @@ int AutoLex::ProcessFile(char *file_path){
         }
 
         if(pe.IsDotNet()){
-            g_args.options.mode = "pe:cil";
             DOTNET pe;
+            g_args.options.mode = "pe:cil";
             if (pe.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_I386) == false) return 1;
             if (pe.ReadFile(file_path) == false) return 1;
-
             CILDecompiler cil_decompiler(pe);
-            for (size_t i = 0; i < pe._sections.size(); i++) {
-                if (pe._sections[i].offset == 0) continue;
-                CILDecompiler cil_decompiler(pe);
-                if (cil_decompiler.Setup(CIL_DECOMPILER_TYPE_ALL) == false){
-                    return 1;
-                }
-                if (cil_decompiler.Decompile(pe._sections[i].data, pe._sections[i].size, 0) == false){
-                    continue;
-                }
-		// Output to the commandline-given output device.
-		cil_decompiler.WriteTraits();
+            int si = 0;
+            for (auto section : pe._sections) {
+                if (section.offset == 0) continue;
+                if (cil_decompiler.Setup(CIL_DECOMPILER_TYPE_ALL) == false) return 1;
+                if (cil_decompiler.Decompile(section.data, section.size, si) == false) continue;
+                si++;
             }
+            cil_decompiler.WriteTraits();
             return EXIT_SUCCESS;
-        }
+        } else {
+            if (characteristics.arch == CS_ARCH_X86 &&
+                characteristics.mode == CS_MODE_32){
+                g_args.options.mode = "pe:x86";
 
-        if (characteristics.arch == CS_ARCH_X86 &&
-            characteristics.mode == CS_MODE_32){
-            g_args.options.mode = "pe:x86";
-
-        }
-        if (characteristics.arch == CS_ARCH_X86 &&
-            characteristics.mode == CS_MODE_64){
-                g_args.options.mode = "pe:x86_64";
-        }
-
-        decompiler.Setup(characteristics.arch, characteristics.mode);
-        for (int i = 0; i < pe.total_exec_sections; i++) {
-            if (pe.sections[i].data != NULL) {
-                decompiler.AppendQueue(pe.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
-                decompiler.Decompile(pe.sections[i].data, pe.sections[i].size, pe.sections[i].offset, i);
             }
+            if (characteristics.arch == CS_ARCH_X86 &&
+                characteristics.mode == CS_MODE_64){
+                    g_args.options.mode = "pe:x86_64";
+            }
+
+            decompiler.Setup(characteristics.arch, characteristics.mode);
+            for (int i = 0; i < pe.total_exec_sections; i++) {
+                if (pe.sections[i].data != NULL) {
+                    decompiler.AppendQueue(pe.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
+                    decompiler.Decompile(pe.sections[i].data, pe.sections[i].size, pe.sections[i].offset, i);
+                }
+            }
+            decompiler.WriteTraits();
         }
-        decompiler.WriteTraits();
     }
     else if (characteristics.format == LIEF::FORMAT_ELF){
         ELF elf;
