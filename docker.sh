@@ -510,6 +510,12 @@ function compose() {
         fi
     done
 
+    echo "  pybinlex:";
+    echo "      image: pybinlex:${bldec_version}";
+    echo "      build:";
+    echo "          context: .";
+    echo "          dockerfile: docker/pybinlex/Dockerfile";
+
     rabbitmq_iter=1;
     mongodb_iter=1;
     minio_iter=1
