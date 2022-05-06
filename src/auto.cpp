@@ -64,24 +64,19 @@ int AutoLex::ProcessFile(char *file_path){
         }
 
         if(pe.IsDotNet()){
-            g_args.options.mode = "pe:cil";
             DOTNET pe;
+            g_args.options.mode = "pe:cil";
             if (pe.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_I386) == false) return 1;
             if (pe.ReadFile(file_path) == false) return 1;
-
             CILDecompiler cil_decompiler(pe);
-            for (size_t i = 0; i < pe._sections.size(); i++) {
-                if (pe._sections[i].offset == 0) continue;
-                CILDecompiler cil_decompiler(pe);
-                if (cil_decompiler.Setup(CIL_DECOMPILER_TYPE_ALL) == false){
-                    return 1;
-                }
-                if (cil_decompiler.Decompile(pe._sections[i].data, pe._sections[i].size, 0) == false){
-                    continue;
-                }
-		// Output to the commandline-given output device.
-		cil_decompiler.WriteTraits();
+            int si = 0;
+            for (auto section : pe._sections) {
+                if (section.offset == 0) continue;
+                if (cil_decompiler.Setup(CIL_DECOMPILER_TYPE_ALL) == false) return 1;
+                if (cil_decompiler.Decompile(section.data, section.size, si) == false) continue;
+	            si++;
             }
+            cil_decompiler.WriteTraits();
             return EXIT_SUCCESS;
         }
 
