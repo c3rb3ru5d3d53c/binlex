@@ -44,15 +44,13 @@ int AutoLex::ProcessFile(char *file_path){
     // - raise exceptions instead of returning a null decompiler  to better handle being called as a lib
 
     if (!GetFileCharacteristics(file_path)){
-        fprintf(stderr, "Unable to get file characteristics.\n");
+        fprintf(stderr, "[x] unable to get file characteristics\n");
         return -1;
     }
 
-    PE pe;
-    Decompiler decompiler(pe);
     if(characteristics.format == LIEF::FORMAT_PE){
-
-
+        PE pe;
+        Decompiler decompiler(pe);
         if (!pe.Setup((MACHINE_TYPES)characteristics.machineType)){
             return EXIT_FAILURE;
         }
@@ -62,11 +60,11 @@ int AutoLex::ProcessFile(char *file_path){
         }
 
         if(pe.HasLimitations()){
-            fprintf(stderr, "File has limitations.\n");
-            return EXIT_FAILURE;
+            PRINT_ERROR_AND_EXIT("[x] file has limitations\n");
         }
 
         if(pe.IsDotNet()){
+            g_args.options.mode = "pe:cil";
             DOTNET pe;
             if (pe.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_I386) == false) return 1;
             if (pe.ReadFile(file_path) == false) return 1;
@@ -90,6 +88,16 @@ int AutoLex::ProcessFile(char *file_path){
             return EXIT_SUCCESS;
         }
 
+        if (characteristics.arch == CS_ARCH_X86 &&
+            characteristics.mode == CS_MODE_32){
+            g_args.options.mode = "pe:x86";
+
+        }
+        if (characteristics.arch == CS_ARCH_X86 &&
+            characteristics.mode == CS_MODE_64){
+                g_args.options.mode = "pe:x86_64";
+        }
+
         decompiler.Setup(characteristics.arch, characteristics.mode);
         for (int i = 0; i < pe.total_exec_sections; i++) {
             if (pe.sections[i].data != NULL) {
@@ -97,16 +105,26 @@ int AutoLex::ProcessFile(char *file_path){
                 decompiler.Decompile(pe.sections[i].data, pe.sections[i].size, pe.sections[i].offset, i);
             }
         }
-
+        decompiler.WriteTraits();
     }
-    else if(characteristics.format == LIEF::FORMAT_ELF){
+    else if (characteristics.format == LIEF::FORMAT_ELF){
         ELF elf;
-
+        Decompiler decompiler(elf);
         if (elf.Setup((ARCH)characteristics.machineType) == false){
             return EXIT_FAILURE;
         }
         if (!elf.ReadFile(file_path)){
             return EXIT_FAILURE;
+        }
+
+        if (characteristics.arch == CS_ARCH_X86 &&
+            characteristics.mode == CS_MODE_32){
+            g_args.options.mode = "elf:x86";
+
+        }
+        if (characteristics.arch == CS_ARCH_X86 &&
+            characteristics.mode == CS_MODE_64){
+                g_args.options.mode = "elf:x86_64";
         }
 
         decompiler.Setup(characteristics.arch, characteristics.mode);
@@ -117,9 +135,8 @@ int AutoLex::ProcessFile(char *file_path){
             }
 
         }
+        decompiler.WriteTraits();
     }
-
-    decompiler.WriteTraits();
 
     return EXIT_SUCCESS;
 }
