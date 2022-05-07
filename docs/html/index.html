@@ -372,7 +372,7 @@ C++ API Example Code</h1>
 <div class="line">  <span class="keywordflow">if</span> (pe32.<a class="code" href="classbinlex_1_1PE.html#aaf2fa4d79bc0fc9449eadd366b870d6b">Setup</a>(MACHINE_TYPES::IMAGE_FILE_MACHINE_I386) == <span class="keyword">false</span>){</div>
 <div class="line">      <span class="keywordflow">return</span> EXIT_FAILURE;</div>
 <div class="line">  }</div>
-<div class="line">  <span class="keywordflow">if</span> (pe32.ReadFile(argv[1]) == <span class="keyword">false</span>){</div>
+<div class="line">  <span class="keywordflow">if</span> (pe32.<a class="code" href="classbinlex_1_1File.html#af69581745439422e597e9c8ab2dcb27c">ReadFile</a>(argv[1]) == <span class="keyword">false</span>){</div>
 <div class="line">      <span class="keywordflow">return</span> EXIT_FAILURE;</div>
 <div class="line">  }</div>
 <div class="line">  <a class="code" href="classbinlex_1_1Decompiler.html">Decompiler</a> decompiler(pe32);</div>
@@ -445,9 +445,10 @@ Contributing</h1>
 </div></div><!-- PageDoc -->
 </div><!-- contents -->
 </div><!-- doc-content -->
-<div class="ttc" id="aclassbinlex_1_1Decompiler_html"><div class="ttname"><a href="classbinlex_1_1Decompiler.html">binlex::Decompiler</a></div><div class="ttdef"><b>Definition:</b> decompiler.h:34</div></div>
+<div class="ttc" id="aclassbinlex_1_1Decompiler_html"><div class="ttname"><a href="classbinlex_1_1Decompiler.html">binlex::Decompiler</a></div><div class="ttdef"><b>Definition:</b> decompiler.h:52</div></div>
 <div class="ttc" id="aclassbinlex_1_1PE_html"><div class="ttname"><a href="classbinlex_1_1PE.html">binlex::PE</a></div><div class="ttdef"><b>Definition:</b> pe.h:28</div></div>
 <div class="ttc" id="aclassbinlex_1_1PE_html_aaf2fa4d79bc0fc9449eadd366b870d6b"><div class="ttname"><a href="classbinlex_1_1PE.html#aaf2fa4d79bc0fc9449eadd366b870d6b">binlex::PE::Setup</a></div><div class="ttdeci">BINLEX_EXPORT bool Setup(MACHINE_TYPES input_mode)</div></div>
+<div class="ttc" id="aclassbinlex_1_1File_html_af69581745439422e597e9c8ab2dcb27c"><div class="ttname"><a href="classbinlex_1_1File.html#af69581745439422e597e9c8ab2dcb27c">binlex::File::ReadFile</a></div><div class="ttdeci">bool ReadFile(const char *file_path)</div></div>
 <div class="ttc" id="anamespacebinlex_html"><div class="ttname"><a href="namespacebinlex.html">binlex</a></div><div class="ttdoc">the binlex namespace</div></div>
 <!-- start footer part -->
 <div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->

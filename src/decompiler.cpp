@@ -1,30 +1,3 @@
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <fstream>
-#include <iostream>
-#include <algorithm>
-#include <vector>
-#include <iomanip>
-#include <math.h>
-
-#if defined(__linux__) || defined(__APPLE__)
-#include <pthread.h>
-#include <openssl/sha.h>
-#elif _WIN32
-#include <windows.h>
-#include <wincrypt.h>
-#endif
-
-#ifndef _WIN32
-#include <unistd.h>
-#else
-#include <windows.h>
-#endif
-
-#include <capstone/capstone.h>
-#include "json.h"
 #include "decompiler.h"
 
 // Very WIP Multi-Threaded Recursive Decompiler

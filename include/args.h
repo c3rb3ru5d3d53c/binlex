@@ -1,7 +1,20 @@
 #ifndef ARGS_H
 #define ARGS_H
+
 #include <set>
 #include <string>
+#include <sstream>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+
+#ifndef _WIN32
+#include <unistd.h>
+#else
+#include <windows.h>
+#endif
 
 #ifdef _WIN32
 #define BINLEX_EXPORT __declspec(dllexport)
@@ -45,14 +58,50 @@ namespace binlex{
                 std::set<std::string> tags; //!< Set for storing the tags.
             } options;
             BINLEX_EXPORT Args();
+            /**
+             * Set the default CLI parameters.
+             * @return void
+             */
             BINLEX_EXPORT void SetDefault();
+            /**
+             * Check the CLI mode provided by the user.
+             * @param mode the mode provided
+             * @return bool
+             */
             BINLEX_EXPORT bool check_mode(const char *mode);
+            /**
+             * Check if path to file is valid.
+             * @param path file path
+             * @return int result
+             */
             BINLEX_EXPORT int is_file(const char *path);
+            /**
+             * Check if path is a directory.
+             * @param path path to a directory
+             * @return int result
+             */
             BINLEX_EXPORT int is_dir(const char *path);
+            /**
+             * Set input type.
+             * @param input file path or directory
+             * @return void
+             */
             BINLEX_EXPORT void set_io_type(char *input);
+            /**
+             * Print CLI help menu.
+             * @return void
+             */
             BINLEX_EXPORT void print_help();
+            /**
+             * Parse CLI arguments.
+             * @return void
+             */
             BINLEX_EXPORT void parse(int argc, char **argv);
-	    BINLEX_EXPORT std::string get_tags_as_str();
+            /**
+             * Get tags from CLI as string.
+             * @return std::string
+             */
+	        BINLEX_EXPORT std::string get_tags_as_str();
             BINLEX_EXPORT ~Args();
     };
 }

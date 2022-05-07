@@ -1,14 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#ifndef _WIN32
-#include <unistd.h>
-#else
-#include <windows.h>
-#endif
-#include <sstream>
 #include "args.h"
 
 using namespace binlex;

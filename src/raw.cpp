@@ -1,5 +1,4 @@
 #include "raw.h"
-#include <stdexcept>
 
 using namespace binlex;
 
