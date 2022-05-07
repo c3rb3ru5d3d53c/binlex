@@ -27,7 +27,7 @@ python: git-unsafe
 
 python-whl:
 	virtualenv -p python3 venv/
-	bash -c "source venv/bin/activate; python3 -m pip wheel -v -w build/ ."
+	bash -c "source venv/bin/activate; BUILD_DIR=`pwd` python3 -m pip wheel -v -w build/ ."
 	rm -rf venv/
 
 docs:
