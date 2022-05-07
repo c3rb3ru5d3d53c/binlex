@@ -1,8 +1,10 @@
 var searchData=
 [
-  ['pe_49',['PE',['../classbinlex_1_1PE.html',1,'binlex']]],
-  ['py_5fsetcorpus_50',['py_SetCorpus',['../classbinlex_1_1Decompiler.html#a132478ba1f917fc8d2f971ad4a8c0e70',1,'binlex::Decompiler']]],
-  ['py_5fsetinstructions_51',['py_SetInstructions',['../classbinlex_1_1Decompiler.html#a68507158b29a480255049f1b9483cc13',1,'binlex::Decompiler']]],
-  ['py_5fsettags_52',['py_SetTags',['../classbinlex_1_1Decompiler.html#a84ee206f44f3f08976235acd794a5881',1,'binlex::Decompiler']]],
-  ['py_5fsetthreads_53',['py_SetThreads',['../classbinlex_1_1Decompiler.html#a8d0dcf503ce46dd06e7b82d17ee45294',1,'binlex::Decompiler']]]
+  ['maxaddress_54',['MaxAddress',['../classbinlex_1_1Decompiler.html#a0df46873b8d487ed00bc252d59fb9aaa',1,'binlex::Decompiler']]],
+  ['method_55',['Method',['../classdotnet_1_1Method.html',1,'dotnet']]],
+  ['methoddefentry_56',['MethodDefEntry',['../classdotnet_1_1MethodDefEntry.html',1,'dotnet']]],
+  ['methodheader_57',['MethodHeader',['../classdotnet_1_1MethodHeader.html',1,'dotnet']]],
+  ['methodptrentry_58',['MethodPtrEntry',['../classdotnet_1_1MethodPtrEntry.html',1,'dotnet']]],
+  ['moduleentry_59',['ModuleEntry',['../classdotnet_1_1ModuleEntry.html',1,'dotnet']]],
+  ['multitableindex_60',['MultiTableIndex',['../classdotnet_1_1MultiTableIndex.html',1,'dotnet']]]
 ];

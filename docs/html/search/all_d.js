@@ -1,12 +1,11 @@
 var searchData=
 [
-  ['tableentry_67',['TableEntry',['../classdotnet_1_1TableEntry.html',1,'dotnet']]],
-  ['tags_68',['tags',['../classbinlex_1_1Args.html#a518028a031f2d399dc14c4e280fc14cd',1,'binlex::Args']]],
-  ['tinyheader_69',['TinyHeader',['../classdotnet_1_1TinyHeader.html',1,'dotnet']]],
-  ['trait_70',['Trait',['../structbinlex_1_1Decompiler_1_1Trait.html',1,'binlex::Decompiler']]],
-  ['traittochar_71',['TraitToChar',['../classbinlex_1_1Common.html#aa341aea214e4eb0121ef7b76f75f2a86',1,'binlex::Common']]],
-  ['trimright_72',['TrimRight',['../classbinlex_1_1Common.html#a0ce1656f5c035e0b600ea136a72cabfa',1,'binlex::Common']]],
-  ['typedefentry_73',['TypeDefEntry',['../classdotnet_1_1TypeDefEntry.html',1,'dotnet']]],
-  ['typedeforrefindex_74',['TypeDefOrRefIndex',['../classdotnet_1_1TypeDefOrRefIndex.html',1,'dotnet']]],
-  ['typerefentry_75',['TypeRefEntry',['../classdotnet_1_1TypeRefEntry.html',1,'dotnet']]]
+  ['section_70',['Section',['../structbinlex_1_1Decompiler_1_1Section.html',1,'binlex::Decompiler::Section'],['../structbinlex_1_1CILDecompiler_1_1Section.html',1,'binlex::CILDecompiler::Section'],['../structbinlex_1_1File_1_1Section.html',1,'binlex::File::Section'],['../structbinlex_1_1Raw_1_1Section.html',1,'binlex::Raw::Section']]],
+  ['setinstructions_71',['SetInstructions',['../classbinlex_1_1Decompiler.html#a48c0658768bd8fc5683b964141103e68',1,'binlex::Decompiler']]],
+  ['setup_72',['Setup',['../classbinlex_1_1Decompiler.html#a87c28dc8b055a327f8c0502ed84c02f8',1,'binlex::Decompiler::Setup()'],['../classbinlex_1_1PE.html#aaf2fa4d79bc0fc9449eadd366b870d6b',1,'binlex::PE::Setup()']]],
+  ['sha256_73',['SHA256',['../classbinlex_1_1Common.html#a0c3eb3179bd7d87b3180387be76573e7',1,'binlex::Common']]],
+  ['sha256_5fctx_74',['SHA256_CTX',['../structSHA256__CTX.html',1,'']]],
+  ['simpletableindex_75',['SimpleTableIndex',['../classdotnet_1_1SimpleTableIndex.html',1,'dotnet']]],
+  ['sizeoftrait_76',['SizeOfTrait',['../classbinlex_1_1CILDecompiler.html#ad36cfbf20a7ead33e32cf31464cb906d',1,'binlex::CILDecompiler']]],
+  ['stringheapindex_77',['StringHeapIndex',['../classdotnet_1_1StringHeapIndex.html',1,'dotnet']]]
 ];

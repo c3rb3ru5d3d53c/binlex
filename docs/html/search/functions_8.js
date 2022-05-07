@@ -1,5 +1,7 @@
 var searchData=
 [
-  ['removespaces_146',['RemoveSpaces',['../classbinlex_1_1Common.html#ad5ca8c8e5a5177c3bab1dafe1e9d17c0',1,'binlex::Common']]],
-  ['removewildcards_147',['RemoveWildcards',['../classbinlex_1_1Common.html#a35dbc25fdb59cf2d65eb35fcb1126c69',1,'binlex::Common']]]
+  ['py_5fsetcorpus_164',['py_SetCorpus',['../classbinlex_1_1DecompilerBase.html#a83d585e6e625f33db9f0411f137eec91',1,'binlex::DecompilerBase']]],
+  ['py_5fsetinstructions_165',['py_SetInstructions',['../classbinlex_1_1DecompilerBase.html#a05c7b3139af23eae016cc7a39bf52e6b',1,'binlex::DecompilerBase']]],
+  ['py_5fsettags_166',['py_SetTags',['../classbinlex_1_1DecompilerBase.html#a0a0d7ff04acbf54166a42efa2eb89369',1,'binlex::DecompilerBase']]],
+  ['py_5fsetthreads_167',['py_SetThreads',['../classbinlex_1_1DecompilerBase.html#a79df4e8d514351faf0254fb239053b4d',1,'binlex::DecompilerBase']]]
 ];
