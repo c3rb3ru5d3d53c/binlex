@@ -1,17 +1,9 @@
-#include <fstream>
 #include "decompilerbase.h"
-#include "args.h"
 
 using namespace binlex;
 
 DecompilerBase::DecompilerBase(const binlex::File &firef) : file_reference(firef) {
 }
-
-
-/*
- * The following functions are for pybind-only use. They offer a way to pass arguments to
- * the CPP code, which otherwise if obtained via command-line arguments.
- */
 
 void DecompilerBase::py_SetThreads(uint threads, uint thread_cycles, uint thread_sleep) {
     g_args.options.threads = threads;
@@ -36,7 +28,6 @@ void DecompilerBase::py_SetMode(string mode){
 // TODO we know how many exec sections we have, we don't need to go through all slots
 // CV to fix by end of GeekWeek 2022
 void DecompilerBase::WriteTraits(){
-    // if g_args.options.output defined write to file, otherwise to screen
     std::ofstream output_stream;
     if (g_args.options.output != NULL) {
         output_stream.open(g_args.options.output);
@@ -62,4 +53,3 @@ void DecompilerBase::WriteTraits(){
 	output_stream.close();
     }
 }
-

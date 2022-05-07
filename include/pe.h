@@ -26,6 +26,9 @@ using namespace LIEF::PE;
 
 namespace binlex {
   class PE : public File{
+        /**
+         * This class is for reading PE files or buffers.
+         */
         private:
             bool ParseSections();
         public:
@@ -39,22 +42,27 @@ namespace binlex {
             struct Section sections[BINARY_MAX_SECTIONS];
             uint32_t total_exec_sections;
             /**
-            Setup to Read Specific PE Format
-            @param input_mode MACHINE_TYPES::IMAGE_FILE_MACHINE_<arch>
-            @return bool
-            */
+             * Setup to Read Specific PE Format
+             * @param input_mode MACHINE_TYPES::IMAGE_FILE_MACHINE_<arch>
+             * @return bool
+             */
             BINLEX_EXPORT bool Setup(MACHINE_TYPES input_mode);
-            /*
-            Check if the PE file is a .NET file
-            @return bool
-            */
+            /**
+             * Check if the PE file is a .NET file
+             * @return bool
+             */
             BINLEX_EXPORT bool IsDotNet();
             /**
-            Check if the file has limitations that may result in invalid traits.
-            @return bool
-            */
+             * Check if the file has limitations that may result in invalid traits.
+             * @return bool
+             */
             BINLEX_EXPORT bool HasLimitations();
-	    virtual bool ReadVector(const std::vector<uint8_t> &data);
+            /**
+             * Read data vector pointer.
+             * @param data vector of uint8_t data.
+             * @return bool
+             */
+	        virtual bool ReadVector(const std::vector<uint8_t> &data);
             BINLEX_EXPORT ~PE();
     };
 };

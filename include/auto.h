@@ -35,18 +35,18 @@ namespace binlex{
                 int machineType;
             } characteristics;
             /**
-            Get initial characteristics of a file.
-            @param file_path path to the file to read
-            @return bool
-            */
+             * Get initial characteristics of a file.
+             * @param file_path path to the file to read
+             * @return bool
+             */
             bool GetFileCharacteristics(char *file_path);
         public:
             BINLEX_EXPORT AutoLex();
             /**
-            This method processes a files for auto mode.
-            @param file_path path to the file to read
-            @return int result
-            */
+             * This method processes a files for auto mode.
+             * @param file_path path to the file to read
+             * @return int result
+             */
             BINLEX_EXPORT int ProcessFile(char *file_path);
     };
 };

@@ -1,37 +1,14 @@
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <sstream>
-#include <iostream>
-#include <algorithm>
-#include <vector>
-#include <iomanip>
-#include <math.h>
-#include <map>
-#include <capstone/capstone.h>
-extern "C" {
-    #include "sha256.h"
-}
 #include "common.h"
-#ifdef _WIN32
-#pragma comment(lib, "capstone")
-#pragma comment(lib, "LIEF")
-#endif
-#include <tlsh.h>
-#include <stdexcept>
 
 using namespace binlex;
 
+// Global Arguments
 Args g_args;
 
-void print_data(string title, void *data, uint32_t size)
-{
-    if (g_args.options.debug)
-    {
+void print_data(string title, void *data, uint32_t size){
+    if (g_args.options.debug){
         uint32_t i;
         uint32_t counter = 0;
-
         cerr << "Hexdump: " << title;
         for (i = 0; i < size; i++) {
             if (counter % 16 == 0) { cerr << endl; }
@@ -44,7 +21,6 @@ void print_data(string title, void *data, uint32_t size)
 
 string Common::GetTLSH(const uint8_t *data, size_t len){
     Tlsh tlsh;
-
     tlsh.update(data, len);
     tlsh.final();
     return tlsh.getHash();
@@ -56,16 +32,15 @@ string Common::GetFileTLSH(const char *file_path){
     Tlsh tlsh;
     size_t bread;
     string ret;
-
     inp = fopen(file_path, "rb");
     if(!inp){
-	throw std::runtime_error(strerror(errno));
+	    throw std::runtime_error(strerror(errno));
     }
     while((bread = fread(buf, 1, sizeof(buf), inp)) > 0){
-	tlsh.update(buf, bread);
+	    tlsh.update(buf, bread);
     }
     if(errno != 0) {
-	throw std::runtime_error(strerror(errno));
+	    throw std::runtime_error(strerror(errno));
     }
     tlsh.final();
     fclose(inp);
@@ -79,17 +54,16 @@ string Common::GetFileSHA256(char *file_path){
     uint8_t buf[8192];
     size_t bread;
     BYTE hash[SHA256_BLOCK_SIZE];
-
     inp = fopen(file_path, "rb");
     if(!inp){
-	throw std::runtime_error(strerror(errno));
+	    throw std::runtime_error(strerror(errno));
     }
     sha256_init(&ctx);
     while((bread = fread(buf, 1, sizeof(buf), inp)) > 0){
-	sha256_update(&ctx, buf, bread);
+	    sha256_update(&ctx, buf, bread);
     }
     if(errno != 0) {
-	throw std::runtime_error(strerror(errno));
+	    throw std::runtime_error(strerror(errno));
     }
     sha256_final(&ctx, hash);
     fclose(inp);
@@ -104,8 +78,6 @@ string Common::Wildcards(uint count){
     }
     return TrimRight(s.str());
 }
-
-
 
 string Common::GetSHA256(const uint8_t *data, size_t len){
     BYTE hash[SHA256_BLOCK_SIZE];

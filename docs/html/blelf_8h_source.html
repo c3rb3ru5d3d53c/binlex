@@ -113,18 +113,18 @@ $(document).ready(function(){initNavTree('blelf_8h_source.html',''); initResizab
 <div class="line"><a name="l00025"></a><span class="lineno">   25</span>&#160;<span class="keyword">using namespace </span>LIEF::ELF;</div>
 <div class="line"><a name="l00026"></a><span class="lineno">   26</span>&#160; </div>
 <div class="line"><a name="l00027"></a><span class="lineno">   27</span>&#160;<span class="keyword">namespace </span><a class="code" href="namespacebinlex.html">binlex</a>{</div>
-<div class="line"><a name="l00028"></a><span class="lineno"><a class="line" href="classbinlex_1_1ELF.html">   28</a></span>&#160;  <span class="keyword">class </span><a class="code" href="classbinlex_1_1ELF.html">ELF</a> : <span class="keyword">public</span> <a class="code" href="classbinlex_1_1File.html">File</a>{</div>
-<div class="line"><a name="l00032"></a><span class="lineno">   32</span>&#160;    <span class="keyword">private</span>:</div>
-<div class="line"><a name="l00037"></a><span class="lineno">   37</span>&#160;      <span class="keywordtype">bool</span> ParseSections();</div>
-<div class="line"><a name="l00038"></a><span class="lineno">   38</span>&#160;    <span class="keyword">public</span>:</div>
-<div class="line"><a name="l00039"></a><span class="lineno">   39</span>&#160;      ARCH mode = ARCH::EM_NONE;</div>
-<div class="line"><a name="l00040"></a><span class="lineno">   40</span>&#160;      unique_ptr&lt;LIEF::ELF::Binary&gt; binary;</div>
-<div class="line"><a name="l00041"></a><span class="lineno">   41</span>&#160;      <span class="keyword">struct </span><a class="code" href="structbinlex_1_1File_1_1Section.html">Section</a> sections[BINARY_MAX_SECTIONS];</div>
-<div class="line"><a name="l00042"></a><span class="lineno">   42</span>&#160;      uint32_t total_exec_sections;</div>
-<div class="line"><a name="l00043"></a><span class="lineno">   43</span>&#160;      BINLEX_EXPORT <a class="code" href="classbinlex_1_1ELF.html">ELF</a>();</div>
-<div class="line"><a name="l00049"></a><span class="lineno">   49</span>&#160;      BINLEX_EXPORT <span class="keywordtype">bool</span> Setup(ARCH input_mode);</div>
-<div class="line"><a name="l00055"></a><span class="lineno">   55</span>&#160;      <span class="keyword">virtual</span> <span class="keywordtype">bool</span> ReadVector(<span class="keyword">const</span> std::vector&lt;uint8_t&gt; &amp;data);</div>
-<div class="line"><a name="l00056"></a><span class="lineno">   56</span>&#160;      BINLEX_EXPORT ~<a class="code" href="classbinlex_1_1ELF.html">ELF</a>();</div>
+<div class="line"><a name="l00028"></a><span class="lineno"><a class="line" href="classbinlex_1_1ELF.html">   28</a></span>&#160;    <span class="keyword">class </span><a class="code" href="classbinlex_1_1ELF.html">ELF</a> : <span class="keyword">public</span> <a class="code" href="classbinlex_1_1File.html">File</a>{</div>
+<div class="line"><a name="l00032"></a><span class="lineno">   32</span>&#160;        <span class="keyword">private</span>:</div>
+<div class="line"><a name="l00037"></a><span class="lineno">   37</span>&#160;            <span class="keywordtype">bool</span> ParseSections();</div>
+<div class="line"><a name="l00038"></a><span class="lineno">   38</span>&#160;        <span class="keyword">public</span>:</div>
+<div class="line"><a name="l00039"></a><span class="lineno">   39</span>&#160;            ARCH mode = ARCH::EM_NONE;</div>
+<div class="line"><a name="l00040"></a><span class="lineno">   40</span>&#160;            unique_ptr&lt;LIEF::ELF::Binary&gt; binary;</div>
+<div class="line"><a name="l00041"></a><span class="lineno">   41</span>&#160;            <span class="keyword">struct </span><a class="code" href="structbinlex_1_1File_1_1Section.html">Section</a> sections[BINARY_MAX_SECTIONS];</div>
+<div class="line"><a name="l00042"></a><span class="lineno">   42</span>&#160;            uint32_t total_exec_sections;</div>
+<div class="line"><a name="l00043"></a><span class="lineno">   43</span>&#160;            BINLEX_EXPORT <a class="code" href="classbinlex_1_1ELF.html">ELF</a>();</div>
+<div class="line"><a name="l00049"></a><span class="lineno">   49</span>&#160;            BINLEX_EXPORT <span class="keywordtype">bool</span> Setup(ARCH input_mode);</div>
+<div class="line"><a name="l00055"></a><span class="lineno">   55</span>&#160;            <span class="keyword">virtual</span> <span class="keywordtype">bool</span> ReadVector(<span class="keyword">const</span> std::vector&lt;uint8_t&gt; &amp;data);</div>
+<div class="line"><a name="l00056"></a><span class="lineno">   56</span>&#160;            BINLEX_EXPORT ~<a class="code" href="classbinlex_1_1ELF.html">ELF</a>();</div>
 <div class="line"><a name="l00057"></a><span class="lineno">   57</span>&#160;    };</div>
 <div class="line"><a name="l00058"></a><span class="lineno">   58</span>&#160;};</div>
 <div class="line"><a name="l00059"></a><span class="lineno">   59</span>&#160; </div>
@@ -132,7 +132,7 @@ $(document).ready(function(){initNavTree('blelf_8h_source.html',''); initResizab
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 <div class="ttc" id="aclassbinlex_1_1ELF_html"><div class="ttname"><a href="classbinlex_1_1ELF.html">binlex::ELF</a></div><div class="ttdef"><b>Definition:</b> blelf.h:28</div></div>
-<div class="ttc" id="astructbinlex_1_1File_1_1Section_html"><div class="ttname"><a href="structbinlex_1_1File_1_1Section.html">binlex::File::Section</a></div><div class="ttdef"><b>Definition:</b> file.h:18</div></div>
+<div class="ttc" id="astructbinlex_1_1File_1_1Section_html"><div class="ttname"><a href="structbinlex_1_1File_1_1Section.html">binlex::File::Section</a></div><div class="ttdef"><b>Definition:</b> file.h:21</div></div>
 <div class="ttc" id="aclassbinlex_1_1File_html"><div class="ttname"><a href="classbinlex_1_1File.html">binlex::File</a></div><div class="ttdef"><b>Definition:</b> file.h:14</div></div>
 <div class="ttc" id="anamespacebinlex_html"><div class="ttname"><a href="namespacebinlex.html">binlex</a></div><div class="ttdoc">the binlex namespace</div></div>
 <!-- start footer part -->

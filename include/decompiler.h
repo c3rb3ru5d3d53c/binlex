@@ -2,10 +2,28 @@
 #define DECOMPILER_H
 
 #include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <fstream>
+#include <iostream>
+#include <algorithm>
+#include <vector>
+#include <iomanip>
+#include <math.h>
 #include <capstone/capstone.h>
 #include "common.h"
 #include "json.h"
 #include "decompilerbase.h"
+
+#if defined(__linux__) || defined(__APPLE__)
+#include <pthread.h>
+#include <unistd.h>
+#elif _WIN32
+#include <windows.h>
+#include <wincrypt.h>
+#endif
 
 #ifdef _WIN32
 #define BINLEX_EXPORT __declspec(dllexport)

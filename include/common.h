@@ -7,12 +7,33 @@
 #include <queue>
 #include <set>
 #include <map>
+#include <math.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <sstream>
+#include <algorithm>
+#include <vector>
+#include <iomanip>
+#include <capstone/capstone.h>
+#include <tlsh.h>
+#include <stdexcept>
 #include "args.h"
+
+extern "C" {
+    #include "sha256.h"
+}
 
 #ifdef _WIN32
 #define BINLEX_EXPORT __declspec(dllexport)
 #else
 #define BINLEX_EXPORT
+#endif
+
+#ifdef _WIN32
+#pragma comment(lib, "capstone")
+#pragma comment(lib, "LIEF")
 #endif
 
 using std::set;
