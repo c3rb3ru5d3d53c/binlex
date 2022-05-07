@@ -62,7 +62,7 @@ git clone --recursive https://github.com/c3rb3ru5d3d53c/binlex.git
 cd binlex/
 ```
 
-*__NOTE:__ that `binlex` requires `cmake` >= 3.5, `make` >= 4.2.1 and `ubuntu` >= 20.04.*
+*NOTE: that `binlex` requires `cmake` >= 3.5, `make` >= 4.2.1 and `ubuntu` >= 20.04.*
 
 Once you have installed, cloned and changed your directory to the project directory, we can continue with installation.
 
@@ -84,14 +84,14 @@ See the [`releases`](https://github.com/c3rb3ru5d3d53c/binlex/releases) page.
 
 If you need the bleeding edge binaries you can download them from our AppVeyor CI/CD [`here`](https://ci.appveyor.com/project/c3rb3ru5d3d53c/binlex/branch/master).
 
-*__NOTE:__ bleeding edge binaries are subject to bugs, if you encounter one, please let us know!*
+*NOTE: bleeding edge binaries are subject to bugs, if you encounter one, please let us know!*
 
 **Test Files:**
 
 - To download all the test samples do the command `git lfs fetch`
 - ZIP files in the `tests/` directory can then be extracted using the password `infected`
 
-***NOTE**: The `tests/` directory contains malware, we assume you know what you are doing.*
+*NOTE: The `tests/` directory contains malware, we assume you know what you are doing.*
 
 To download individual `git-lfs` files from a relative path, you can use the following `git` alias in `~/.gitconfig`:
 
@@ -141,7 +141,7 @@ If you wish to compile the bindings with `cmake`:
 make python
 ```
 
-Please note, we use `pybind11` and support for `python3.9` is experimental.
+*NOTE: we use `pybind11` and support for `python3.9` is experimental.*
 
 Examples of how to use `pybinlex` can be found in `tests/tests.py`.
 
@@ -243,9 +243,9 @@ Author: @c3rb3ru5d3d53c
 - `raw:cil`
 - `auto`
 
-*__NOTE:__ The `raw` modes can be used on shellcode.*
+*NOTE: The `raw` modes can be used on shellcode.*
 
-*__NOTE:__ The `auto` mode cannot be used on shellcode.*
+*NOTE: The `auto` mode cannot be used on shellcode.*
 
 **Advanced**
 
