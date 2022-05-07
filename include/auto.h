@@ -24,17 +24,30 @@ using namespace std;
 
 namespace binlex{
     class AutoLex{
-    private:
-        struct {
-            LIEF::EXE_FORMATS format;
-            cs_mode mode;
-            cs_arch arch;
-            int machineType;
-        } characteristics;
-        bool GetFileCharacteristics(char *file_path);
-    public:
-        BINLEX_EXPORT AutoLex();
-        BINLEX_EXPORT int ProcessFile(char *file_path);
+        /**
+        This class is used to process files with auto mode.
+        */
+        private:
+            struct {
+                LIEF::EXE_FORMATS format;
+                cs_mode mode;
+                cs_arch arch;
+                int machineType;
+            } characteristics;
+            /**
+            Get initial characteristics of a file.
+            @param file_path path to the file to read
+            @return bool
+            */
+            bool GetFileCharacteristics(char *file_path);
+        public:
+            BINLEX_EXPORT AutoLex();
+            /**
+            This method processes a files for auto mode.
+            @param file_path path to the file to read
+            @return int result
+            */
+            BINLEX_EXPORT int ProcessFile(char *file_path);
     };
 };
 
