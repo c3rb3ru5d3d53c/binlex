@@ -24,15 +24,15 @@ var NAVTREE =
 [
   [ "binlex", "index.html", [
     [ "Demos", "index.html#autotoc_md1", null ],
-    [ "Introduction Video", "index.html#autotoc_md2", null ],
-    [ "Use Cases", "index.html#autotoc_md3", null ],
-    [ "Installing", "index.html#autotoc_md4", null ],
-    [ "Basic Usage", "index.html#autotoc_md5", null ],
-    [ "Advanced Usage", "index.html#autotoc_md6", null ],
-    [ "Trait Format", "index.html#autotoc_md7", null ],
-    [ "Documentation", "index.html#autotoc_md8", null ],
-    [ "Building Docs", "index.html#autotoc_md9", null ],
-    [ "C++ API Example Code", "index.html#autotoc_md10", null ],
+    [ "Use Cases", "index.html#autotoc_md2", null ],
+    [ "Installation", "index.html#autotoc_md3", null ],
+    [ "Building Binlex Platform:", "index.html#autotoc_md4", null ],
+    [ "CLI Usage", "index.html#autotoc_md5", null ],
+    [ "Trait Format", "index.html#autotoc_md6", null ],
+    [ "Documentation", "index.html#autotoc_md7", null ],
+    [ "Building Docs", "index.html#autotoc_md8", null ],
+    [ "C++ API Example Code", "index.html#autotoc_md9", null ],
+    [ "Python API Example Code", "index.html#autotoc_md10", null ],
     [ "Tips", "index.html#autotoc_md11", null ],
     [ "Example Fitness Model", "index.html#autotoc_md12", null ],
     [ "Future Work", "index.html#autotoc_md13", null ],
@@ -46,7 +46,8 @@ var NAVTREE =
       [ "Class Hierarchy", "hierarchy.html", "hierarchy" ],
       [ "Class Members", "functions.html", [
         [ "All", "functions.html", null ],
-        [ "Functions", "functions_func.html", null ]
+        [ "Functions", "functions_func.html", null ],
+        [ "Variables", "functions_vars.html", null ]
       ] ]
     ] ],
     [ "Files", "files.html", [
@@ -57,7 +58,8 @@ var NAVTREE =
 
 var NAVTREEINDEX =
 [
-"annotated.html"
+".html",
+"structSHA256__CTX.html"
 ];
 
 var SYNCONMSG = 'click to disable panel synchronisation';

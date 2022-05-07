@@ -1,0 +1,122 @@
+#!/usr/bin/env python
+
+import os
+import sys
+import json
+import logging
+import argparse
+from libblapi.mongodb import MongoDBHandler
+from libblapi.amqp import AMQPHandler
+import configparser
+
+log = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+
+__version__ = '1.1.1'
+__author__ = '@c3rb3ru5d3d53c'
+
+
+class BLDB:
+
+    """
+    A Binlex Database Worker
+    """
+
+    def __init__(self):
+        self.mongodb = None
+        self.amqp = None
+        self.args = None
+        self.parser = None
+        self.config = configparser.ConfigParser()
+
+    def arguments(self):
+        self.parser = argparse.ArgumentParser(
+            prog=f'bldb v{__version__}',
+            description='A Binlex Database Worker',
+            epilog=f'Author: {__author__}'
+        )
+        self.parser.add_argument(
+            '--version',
+            action='version',
+            version=f'v{__version__}'
+        )
+        self.parser.add_argument(
+            '-c',
+            '--config',
+            type=str,
+            default=None,
+            help='Configuration File',
+            required=True
+        )
+        self.args = self.parser.parse_args()
+        self.config.read(self.args.config)
+        self.amqp = AMQPHandler(self.config)
+        self.mongodb = MongoDBHandler(self.config)
+
+    def process(self, ch, method, properties, body):
+        try:
+            data = json.loads(body)
+            corpus = data['corpus']
+            file_data = {
+                'corpus': data['corpus'],
+                'offset': data['offset'],
+                'sha256': data['file_sha256'],
+                'mode': data['mode']
+            }
+            del data['corpus']
+            del data['offset']
+            del data['file_sha256']
+            del data['mode']
+
+            if corpus.startswith('default'):
+                trait_id = self.mongodb.upsert_trait(data, 'default')
+                log.info('[*] default collection trait_id ' + str(trait_id))
+                file_data['trait_id'] = trait_id
+                file_data['collection'] = 'default'
+                files_id = self.mongodb.upsert_file_trait(file_data, trait_id)
+                if files_id is None:
+                    log.info('default files trait already exists')
+                else:
+                    log.info('default collection inserted files_id ' + str(files_id))
+            elif corpus.startswith('malware') is True:
+                trait_id = self.mongodb.upsert_trait(data, 'malware')
+                log.info('[*] malware collection trait_id ' + str(trait_id))
+                file_data['trait_id'] = trait_id
+                file_data['collection'] = 'malware'
+                files_id = self.mongodb.upsert_file_trait(file_data, trait_id)
+                if files_id is None:
+                    log.info('malware files trait already exists')
+                else:
+                    log.info('malware collection inserted files_id ' + str(files_id))
+            elif corpus.startswith('goodware') is True:
+                trait_id = self.mongodb.upsert_trait(data, 'goodware')
+                log.info('[*] goodware collection trait_id ' + str(trait_id))
+                file_data['trait_id'] = trait_id
+                file_data['collection'] = 'goodware'
+                files_id = self.mongodb.upsert_file_trait(file_data, trait_id)
+                if files_id is None:
+                    log.info('goodware files trait already exists')
+                else:
+                    log.info('goodware collection inserted files_id ' + str(files_id))
+            else:
+                log.error('message contained invalid corpus')
+        except Exception as e:
+            exc_type, exc_obj, exc_tb = sys.exc_info()
+            fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+            log.error(exc_type, fname, exc_tb.tb_lineno)
+        ch.basic_ack(method.delivery_tag)
+
+    def consume(self):
+        self.amqp.consume(self.config['amqp'].get('traits_queue'), self.process)
+
+    def main(self):
+        self.arguments()
+        self.consume()
+
+
+if __name__ in '__main__':
+    try:
+        bldb = BLDB()
+        bldb.main()
+    except KeyboardInterrupt:
+        print('[x] keyboard interrupt, exiting...')

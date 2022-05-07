@@ -18,9 +18,83 @@ extern "C" {
 #pragma comment(lib, "capstone")
 #pragma comment(lib, "LIEF")
 #endif
+#include <tlsh.h>
+#include <stdexcept>
 
-using namespace std;
 using namespace binlex;
+
+Args g_args;
+
+void print_data(string title, void *data, uint32_t size)
+{
+    if (g_args.options.debug)
+    {
+        uint32_t i;
+        uint32_t counter = 0;
+
+        cerr << "Hexdump: " << title;
+        for (i = 0; i < size; i++) {
+            if (counter % 16 == 0) { cerr << endl; }
+            cerr << hex << setfill('0') << setw(2) << (uint32_t)((uint8_t *)data)[i] << " ";
+            ++counter;
+        }
+        cerr << endl;
+    }
+}
+
+string Common::GetTLSH(const uint8_t *data, size_t len){
+    Tlsh tlsh;
+
+    tlsh.update(data, len);
+    tlsh.final();
+    return tlsh.getHash();
+}
+
+string Common::GetFileTLSH(const char *file_path){
+    FILE *inp;
+    uint8_t buf[8192];
+    Tlsh tlsh;
+    size_t bread;
+    string ret;
+
+    inp = fopen(file_path, "rb");
+    if(!inp){
+	throw std::runtime_error(strerror(errno));
+    }
+    while((bread = fread(buf, 1, sizeof(buf), inp)) > 0){
+	tlsh.update(buf, bread);
+    }
+    if(errno != 0) {
+	throw std::runtime_error(strerror(errno));
+    }
+    tlsh.final();
+    fclose(inp);
+    ret = tlsh.getHash();
+    return ret;
+}
+
+string Common::GetFileSHA256(char *file_path){
+    FILE *inp;
+    SHA256_CTX ctx;
+    uint8_t buf[8192];
+    size_t bread;
+    BYTE hash[SHA256_BLOCK_SIZE];
+
+    inp = fopen(file_path, "rb");
+    if(!inp){
+	throw std::runtime_error(strerror(errno));
+    }
+    sha256_init(&ctx);
+    while((bread = fread(buf, 1, sizeof(buf), inp)) > 0){
+	sha256_update(&ctx, buf, bread);
+    }
+    if(errno != 0) {
+	throw std::runtime_error(strerror(errno));
+    }
+    sha256_final(&ctx, hash);
+    fclose(inp);
+    return RemoveSpaces(HexdumpBE(&hash, SHA256_BLOCK_SIZE));
+}
 
 string Common::Wildcards(uint count){
     stringstream s;
@@ -29,6 +103,17 @@ string Common::Wildcards(uint count){
         s << "?? ";
     }
     return TrimRight(s.str());
+}
+
+
+
+string Common::GetSHA256(const uint8_t *data, size_t len){
+    BYTE hash[SHA256_BLOCK_SIZE];
+    SHA256_CTX ctx;
+    sha256_init(&ctx);
+    sha256_update(&ctx, data, len);
+    sha256_final(&ctx, hash);
+    return RemoveSpaces(HexdumpBE(&hash, SHA256_BLOCK_SIZE));
 }
 
 string Common::SHA256(char *trait){
@@ -43,7 +128,7 @@ string Common::SHA256(char *trait){
 vector<char> Common::TraitToChar(string trait){
     trait = RemoveSpaces(RemoveWildcards(trait));
     vector<char> bytes;
-    for (int i = 0; i < trait.length(); i = i + 2){
+    for (size_t i = 0; i < trait.length(); i = i + 2){
         const char *s_byte = trait.substr(i, 2).c_str();
         unsigned char byte = (char)strtol(s_byte, NULL, 16);
         bytes.push_back(byte);
@@ -54,13 +139,15 @@ vector<char> Common::TraitToChar(string trait){
 float Common::Entropy(string trait){
     vector<char> bytes = TraitToChar(trait);
     float result = 0;
-    map<char,int> frequencies;
+    vector<unsigned long> frequencies(256);
     for (char c : bytes){
-        frequencies[c]++;
+        frequencies[static_cast<unsigned char>(c)]++;
     }
-    for (pair<char,int> p : frequencies) {
-        float freq = static_cast<float>( p.second ) / bytes.size();
-        result -= freq * log2(freq) ;
+    for (auto count : frequencies){
+	if(count > 0){
+	    float freq = static_cast<float>( count ) / bytes.size();
+	    result -= freq * log2(freq);
+	}
     }
     return result;
 }
@@ -82,12 +169,16 @@ string Common::RemoveSpaces(string s){
 }
 
 string Common::WildcardTrait(string trait, string bytes){
-    size_t index = trait.find(bytes, 0);
-    if (index == string::npos){
-        return bytes;
-    }
-    for (int i = index; i < trait.length(); i = i + 3){
-        trait.replace(i, 2, "??");
+    int count = bytes.length();
+    for(int i = 0; i < count - 2; i = i + 3){
+        bytes.erase(bytes.length() - 3);
+        size_t index = trait.find(bytes, 0);
+        if (index != string::npos){
+            for (int j = index; j < trait.length(); j = j + 3){
+                trait.replace(j, 2, "??");
+            }
+            break;
+        }
     }
     return TrimRight(trait);
 }

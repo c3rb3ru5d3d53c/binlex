@@ -1,7 +1,11 @@
 var searchData=
 [
-  ['wildcardinsn_42',['WildcardInsn',['../classbinlex_1_1Decompiler.html#ac34cfaf7065e2e529e206b7a28eb37c5',1,'binlex::Decompiler']]],
-  ['wildcards_43',['Wildcards',['../classbinlex_1_1Common.html#a3904881c98c33ae3db55534e809d4510',1,'binlex::Common']]],
-  ['wildcardtrait_44',['WildcardTrait',['../classbinlex_1_1Common.html#a40376f43f29528869d74d7c29c0117ba',1,'binlex::Common']]],
-  ['writetraits_45',['WriteTraits',['../classbinlex_1_1Decompiler.html#ac50cdc13964e9a1a40a6d09fd838fde7',1,'binlex::Decompiler']]]
+  ['section_70',['Section',['../structbinlex_1_1Decompiler_1_1Section.html',1,'binlex::Decompiler::Section'],['../structbinlex_1_1CILDecompiler_1_1Section.html',1,'binlex::CILDecompiler::Section'],['../structbinlex_1_1File_1_1Section.html',1,'binlex::File::Section'],['../structbinlex_1_1Raw_1_1Section.html',1,'binlex::Raw::Section']]],
+  ['setinstructions_71',['SetInstructions',['../classbinlex_1_1Decompiler.html#a48c0658768bd8fc5683b964141103e68',1,'binlex::Decompiler']]],
+  ['setup_72',['Setup',['../classbinlex_1_1Decompiler.html#a87c28dc8b055a327f8c0502ed84c02f8',1,'binlex::Decompiler::Setup()'],['../classbinlex_1_1PE.html#aaf2fa4d79bc0fc9449eadd366b870d6b',1,'binlex::PE::Setup()']]],
+  ['sha256_73',['SHA256',['../classbinlex_1_1Common.html#a0c3eb3179bd7d87b3180387be76573e7',1,'binlex::Common']]],
+  ['sha256_5fctx_74',['SHA256_CTX',['../structSHA256__CTX.html',1,'']]],
+  ['simpletableindex_75',['SimpleTableIndex',['../classdotnet_1_1SimpleTableIndex.html',1,'dotnet']]],
+  ['sizeoftrait_76',['SizeOfTrait',['../classbinlex_1_1CILDecompiler.html#ad36cfbf20a7ead33e32cf31464cb906d',1,'binlex::CILDecompiler']]],
+  ['stringheapindex_77',['StringHeapIndex',['../classdotnet_1_1StringHeapIndex.html',1,'dotnet']]]
 ];

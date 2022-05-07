@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['trait_54',['Trait',['../structbinlex_1_1Decompiler_1_1Trait.html',1,'binlex::Decompiler']]]
+  ['instruction_110',['Instruction',['../structbinlex_1_1CILDecompiler_1_1Instruction.html',1,'binlex::CILDecompiler']]]
 ];

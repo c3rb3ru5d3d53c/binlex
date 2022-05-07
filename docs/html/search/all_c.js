@@ -1,6 +1,7 @@
 var searchData=
 [
-  ['trait_39',['Trait',['../structbinlex_1_1Decompiler_1_1Trait.html',1,'binlex::Decompiler']]],
-  ['traittochar_40',['TraitToChar',['../classbinlex_1_1Common.html#a81073029ea6d68a11b8222a899bc6c49',1,'binlex::Common']]],
-  ['trimright_41',['TrimRight',['../classbinlex_1_1Common.html#a4eab8b52c93ff30879c1908abda8b6ce',1,'binlex::Common']]]
+  ['raw_66',['Raw',['../classbinlex_1_1Raw.html',1,'binlex']]],
+  ['removespaces_67',['RemoveSpaces',['../classbinlex_1_1Common.html#ad5ca8c8e5a5177c3bab1dafe1e9d17c0',1,'binlex::Common']]],
+  ['removewildcards_68',['RemoveWildcards',['../classbinlex_1_1Common.html#a35dbc25fdb59cf2d65eb35fcb1126c69',1,'binlex::Common']]],
+  ['resolutionscopeindex_69',['ResolutionScopeIndex',['../classdotnet_1_1ResolutionScopeIndex.html',1,'dotnet']]]
 ];

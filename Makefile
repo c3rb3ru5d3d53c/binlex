@@ -1,12 +1,36 @@
+.PHONY: all
 .PHONY: docs
+.PHONY: docker
 
 threads=1
+admin_user=admin
+admin_pass=changeme
+user=binlex
+pass=changeme
+config=Release
 
-all:
+all: python docs
+
+cli: git-unsafe
 	mkdir -p build/
 	cd build/ && \
-		cmake -S ../ -B . ${args} && \
-		make -j ${threads}
+		cmake -S ../ \
+			-B . \
+			${args} && \
+		cmake --build . --config ${config} -- -j ${threads}
+
+python: git-unsafe
+	mkdir -p build/
+	cd build/ && \
+		cmake -S ../ \
+			-B . \
+			-DBUILD_PYTHON_BINDINGS=true \
+			-DPYBIND11_PYTHON_VERSION=`python -c "import platform; print(platform.python_version())"` \
+			${args} && \
+		cmake --build . --config ${config} -- -j ${threads}
+
+python-whl:
+	python3 -m pip wheel -v -w build/ .
 
 docs:
 	mkdir -p build/docs/html/docs/
@@ -17,26 +41,39 @@ docs-update:
 	rm -rf docs/html/
 	cp -r build/docs/html/ docs/
 
-database:
-	@cd docker/ && \
-		echo "MONGO_ROOT_USER=${admin_user}" > .env && \
-		echo "MONGO_ROOT_PASSWORD=${admin_pass}" >> .env && \
-		echo "MONGOEXPRESS_LOGIN=${admin_user}" >> .env && \
-		echo "MONGOEXPRESS_PASSWORD=${admin_pass}" >> .env && \
-		echo "REDIS_PASSWORD=${admin_pass}" >> .env && \
-		echo "db.createCollection(\"default\");" > .init.js && \
-		echo "db.createCollection(\"malware\");" >> .init.js && \
-		echo "db.createCollection(\"goodware\");" >> .init.js && \
-		echo "db.createUser({user:\"${user}\",pwd:\"${pass}\",roles:[{role:\"readWrite\",db:\"binlex\"}],mechanisms:[\"SCRAM-SHA-1\"]});" >> .init.js && \
-		docker-compose up --no-start
+docker:
+	@./docker.sh
 
-database-start:
-	cd docker/ && \
-		docker-compose up -d
+docker-build:
+	@docker-compose build
 
-database-stop:
-	cd docker && \
-		docker-compose down
+docker-start:
+	@docker-compose up -d
+
+docker-logs:
+	@docker-compose logs -f -t --tail 32
+
+docker-stop:
+	@docker-compose stop
+
+docker-init:
+	@cd scripts/ && \
+		./init-all.sh
+
+docker-clean:
+	@docker stop $(shell docker ps -a -q) 2>/dev/null || echo > /dev/null
+	@docker rm $(shell docker ps -a -q) 2>/dev/null || echo > /dev/null
+	@docker rmi $(shell docker images -a -q) 2>/dev/null || echo > /dev/null
+
+docker-restart-blapi:
+	@docker stop $(shell docker container list --all -aqf name="blapi1")
+	@docker rm $(shell docker container list --all -aqf name="blapi1")
+	@docker-compose build blapi1
+	@docker-compose up -d blapi1
+
+mongodb-shell:
+	@cd scripts/ && \
+		./mongodb-shell.sh mongodb-router1
 
 pkg:
 	cd build/ && \
@@ -46,7 +83,12 @@ dist:
 	cd build/ && \
 		make package_source
 
-install:
+git-unsafe:
+	@git config --global --add safe.directory `pwd`/build/capstone/src/capstone
+	@git config --global --add safe.directory `pwd`/build/LIEF/src/LIEF
+	@git config --global --add safe.directory `pwd`/build/tlsh/src/tlsh
+
+install: git-unsafe
 	cd build/ && \
 		make install && \
 		ldconfig
@@ -114,3 +156,10 @@ clean:
 	rm -rf pybinlex.egg-info/
 	rm -f *.so
 	rm -f *.whl
+	rm -f docker-compose.yml
+	rm -rf scripts/
+	rm -rf config/
+	rm -rf venv/
+
+clean-data:
+	rm -rf data/

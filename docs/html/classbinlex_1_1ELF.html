@@ -83,7 +83,6 @@ $(document).ready(function(){initNavTree('classbinlex_1_1ELF.html',''); initResi
 
 <div class="header">
   <div class="summary">
-<a href="#nested-classes">Classes</a> &#124;
 <a href="#pub-methods">Public Member Functions</a> &#124;
 <a href="#pub-attribs">Public Attributes</a> &#124;
 <a href="classbinlex_1_1ELF-members.html">List of all members</a>  </div>
@@ -97,26 +96,35 @@ Inheritance diagram for binlex::ELF:</div>
  <div class="center">
   <img src="classbinlex_1_1ELF.png" usemap="#binlex::ELF_map" alt=""/>
   <map id="binlex::ELF_map" name="binlex::ELF_map">
+<area href="classbinlex_1_1File.html" alt="binlex::File" shape="rect" coords="0,56,99,80"/>
 <area href="classbinlex_1_1Common.html" alt="binlex::Common" shape="rect" coords="0,0,99,24"/>
   </map>
 </div></div>
 <table class="memberdecls">
-<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="nested-classes"></a>
-Classes</h2></td></tr>
-<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structbinlex_1_1ELF_1_1Section.html">Section</a></td></tr>
-<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
-</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
-<tr class="memitem:ac4f160a6135ad5e4d3bfcc84a079ca64"><td class="memItemLeft" align="right" valign="top"><a id="ac4f160a6135ad5e4d3bfcc84a079ca64"></a>
-bool&#160;</td><td class="memItemRight" valign="bottom"><b>Setup</b> (ARCH input_mode)</td></tr>
-<tr class="separator:ac4f160a6135ad5e4d3bfcc84a079ca64"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a70cf25f905c793e16d229fdd4839db69"><td class="memItemLeft" align="right" valign="top"><a id="a70cf25f905c793e16d229fdd4839db69"></a>
-bool&#160;</td><td class="memItemRight" valign="bottom"><b>ReadFile</b> (char *file_path)</td></tr>
-<tr class="separator:a70cf25f905c793e16d229fdd4839db69"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ada02cb928a7e4a606d5de6398a818150"><td class="memItemLeft" align="right" valign="top"><a id="ada02cb928a7e4a606d5de6398a818150"></a>
+<tr class="memitem:a1fedaeda9047ad1b92d720d7564d88e1"><td class="memItemLeft" align="right" valign="top"><a id="a1fedaeda9047ad1b92d720d7564d88e1"></a>
+BINLEX_EXPORT bool&#160;</td><td class="memItemRight" valign="bottom"><b>Setup</b> (ARCH input_mode)</td></tr>
+<tr class="separator:a1fedaeda9047ad1b92d720d7564d88e1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4674a8acf19db9a120ec0af10ed25538"><td class="memItemLeft" align="right" valign="top"><a id="a4674a8acf19db9a120ec0af10ed25538"></a>
+virtual bool&#160;</td><td class="memItemRight" valign="bottom"><b>ReadVector</b> (const std::vector&lt; uint8_t &gt; &amp;data)</td></tr>
+<tr class="separator:a4674a8acf19db9a120ec0af10ed25538"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="inherit_header pub_methods_classbinlex_1_1File"><td colspan="2" onclick="javascript:toggleInherit('pub_methods_classbinlex_1_1File')"><img src="closed.png" alt="-"/>&#160;Public Member Functions inherited from <a class="el" href="classbinlex_1_1File.html">binlex::File</a></td></tr>
+<tr class="memitem:a744ec07afb83c38432ab836cedbfc15b inherit pub_methods_classbinlex_1_1File"><td class="memItemLeft" align="right" valign="top"><a id="a744ec07afb83c38432ab836cedbfc15b"></a>
+void&#160;</td><td class="memItemRight" valign="bottom"><b>CalculateFileHashes</b> (char *file_path)</td></tr>
+<tr class="separator:a744ec07afb83c38432ab836cedbfc15b inherit pub_methods_classbinlex_1_1File"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ada874bdcd50ff6426c1bd479cc2be290 inherit pub_methods_classbinlex_1_1File"><td class="memItemLeft" align="right" valign="top"><a id="ada874bdcd50ff6426c1bd479cc2be290"></a>
+void&#160;</td><td class="memItemRight" valign="bottom"><b>CalculateFileHashes</b> (const vector&lt; uint8_t &gt; &amp;data)</td></tr>
+<tr class="separator:ada874bdcd50ff6426c1bd479cc2be290 inherit pub_methods_classbinlex_1_1File"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae458e8b96b3f7ca03017ff4561525d3d inherit pub_methods_classbinlex_1_1File"><td class="memItemLeft" align="right" valign="top"><a id="ae458e8b96b3f7ca03017ff4561525d3d"></a>
+std::vector&lt; uint8_t &gt;&#160;</td><td class="memItemRight" valign="bottom"><b>ReadFileIntoVector</b> (const char *file_path)</td></tr>
+<tr class="separator:ae458e8b96b3f7ca03017ff4561525d3d inherit pub_methods_classbinlex_1_1File"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af69581745439422e597e9c8ab2dcb27c inherit pub_methods_classbinlex_1_1File"><td class="memItemLeft" align="right" valign="top"><a id="af69581745439422e597e9c8ab2dcb27c"></a>
+bool&#160;</td><td class="memItemRight" valign="bottom"><b>ReadFile</b> (const char *file_path)</td></tr>
+<tr class="separator:af69581745439422e597e9c8ab2dcb27c inherit pub_methods_classbinlex_1_1File"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7d80d86e8c30d68e11a7f024518c9172 inherit pub_methods_classbinlex_1_1File"><td class="memItemLeft" align="right" valign="top"><a id="a7d80d86e8c30d68e11a7f024518c9172"></a>
 bool&#160;</td><td class="memItemRight" valign="bottom"><b>ReadBuffer</b> (void *data, size_t size)</td></tr>
-<tr class="separator:ada02cb928a7e4a606d5de6398a818150"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="separator:a7d80d86e8c30d68e11a7f024518c9172 inherit pub_methods_classbinlex_1_1File"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-attribs"></a>
 Public Attributes</h2></td></tr>
@@ -126,39 +134,57 @@ ARCH&#160;</td><td class="memItemRight" valign="bottom"><b>mode</b> = ARCH::EM_N
 <tr class="memitem:a222bd1da73be1d76e1edac5046445e23"><td class="memItemLeft" align="right" valign="top"><a id="a222bd1da73be1d76e1edac5046445e23"></a>
 unique_ptr&lt; LIEF::ELF::Binary &gt;&#160;</td><td class="memItemRight" valign="bottom"><b>binary</b></td></tr>
 <tr class="separator:a222bd1da73be1d76e1edac5046445e23"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a5208d046ffd2bff568ca8f140d10c5a0"><td class="memItemLeft" align="right" valign="top"><a id="a5208d046ffd2bff568ca8f140d10c5a0"></a>
-struct <a class="el" href="structbinlex_1_1ELF_1_1Section.html">Section</a>&#160;</td><td class="memItemRight" valign="bottom"><b>sections</b> [ELF_MAX_SECTIONS]</td></tr>
-<tr class="separator:a5208d046ffd2bff568ca8f140d10c5a0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa4381fcf4eae5275b684c1a0cbf4a724"><td class="memItemLeft" align="right" valign="top"><a id="aa4381fcf4eae5275b684c1a0cbf4a724"></a>
+struct <a class="el" href="structbinlex_1_1File_1_1Section.html">Section</a>&#160;</td><td class="memItemRight" valign="bottom"><b>sections</b> [BINARY_MAX_SECTIONS]</td></tr>
+<tr class="separator:aa4381fcf4eae5275b684c1a0cbf4a724"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad1a3e3c992bd38474aa0946b3378cb64"><td class="memItemLeft" align="right" valign="top"><a id="ad1a3e3c992bd38474aa0946b3378cb64"></a>
+uint32_t&#160;</td><td class="memItemRight" valign="bottom"><b>total_exec_sections</b></td></tr>
+<tr class="separator:ad1a3e3c992bd38474aa0946b3378cb64"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="inherit_header pub_attribs_classbinlex_1_1File"><td colspan="2" onclick="javascript:toggleInherit('pub_attribs_classbinlex_1_1File')"><img src="closed.png" alt="-"/>&#160;Public Attributes inherited from <a class="el" href="classbinlex_1_1File.html">binlex::File</a></td></tr>
+<tr class="memitem:a131432625c0ab075df51a4ab63764fa9 inherit pub_attribs_classbinlex_1_1File"><td class="memItemLeft" align="right" valign="top"><a id="a131432625c0ab075df51a4ab63764fa9"></a>
+string&#160;</td><td class="memItemRight" valign="bottom"><b>sha256</b></td></tr>
+<tr class="separator:a131432625c0ab075df51a4ab63764fa9 inherit pub_attribs_classbinlex_1_1File"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1a669b45d67e40703a72fbc7e1ff2fd0 inherit pub_attribs_classbinlex_1_1File"><td class="memItemLeft" align="right" valign="top"><a id="a1a669b45d67e40703a72fbc7e1ff2fd0"></a>
+string&#160;</td><td class="memItemRight" valign="bottom"><b>tlsh</b></td></tr>
+<tr class="separator:a1a669b45d67e40703a72fbc7e1ff2fd0 inherit pub_attribs_classbinlex_1_1File"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="inherited"></a>
 Additional Inherited Members</h2></td></tr>
 <tr class="inherit_header pub_static_methods_classbinlex_1_1Common"><td colspan="2" onclick="javascript:toggleInherit('pub_static_methods_classbinlex_1_1Common')"><img src="closed.png" alt="-"/>&#160;Static Public Member Functions inherited from <a class="el" href="classbinlex_1_1Common.html">binlex::Common</a></td></tr>
-<tr class="memitem:a4b3b0495c70e06ead0cb067cd9e912d4 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a4b3b0495c70e06ead0cb067cd9e912d4">SHA256</a> (char *trait)</td></tr>
-<tr class="separator:a4b3b0495c70e06ead0cb067cd9e912d4 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a81073029ea6d68a11b8222a899bc6c49 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static vector&lt; char &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a81073029ea6d68a11b8222a899bc6c49">TraitToChar</a> (string trait)</td></tr>
-<tr class="separator:a81073029ea6d68a11b8222a899bc6c49 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a52a0d5df20a6123bd9d69faea24b05a0 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a52a0d5df20a6123bd9d69faea24b05a0">RemoveWildcards</a> (string trait)</td></tr>
-<tr class="separator:a52a0d5df20a6123bd9d69faea24b05a0 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a593bba469d727c0d4469555a058b13e7 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static uint&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a593bba469d727c0d4469555a058b13e7">GetByteSize</a> (string s)</td></tr>
-<tr class="separator:a593bba469d727c0d4469555a058b13e7 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:af1e434357de3e8b01bd34a17cc645c16 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#af1e434357de3e8b01bd34a17cc645c16">RemoveSpaces</a> (string s)</td></tr>
-<tr class="separator:af1e434357de3e8b01bd34a17cc645c16 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a40376f43f29528869d74d7c29c0117ba inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a40376f43f29528869d74d7c29c0117ba">WildcardTrait</a> (string trait, string bytes)</td></tr>
-<tr class="separator:a40376f43f29528869d74d7c29c0117ba inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a4eab8b52c93ff30879c1908abda8b6ce inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a4eab8b52c93ff30879c1908abda8b6ce">TrimRight</a> (const std::string &amp;s)</td></tr>
-<tr class="separator:a4eab8b52c93ff30879c1908abda8b6ce inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a608294ca038bd76ea61dca83f9931755 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a608294ca038bd76ea61dca83f9931755">HexdumpBE</a> (const void *data, size_t size)</td></tr>
-<tr class="separator:a608294ca038bd76ea61dca83f9931755 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a3904881c98c33ae3db55534e809d4510 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a3904881c98c33ae3db55534e809d4510">Wildcards</a> (uint count)</td></tr>
-<tr class="separator:a3904881c98c33ae3db55534e809d4510 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:afca7660efce7304365e7a15ba5fe6718 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top"><a id="afca7660efce7304365e7a15ba5fe6718"></a>
-static string&#160;</td><td class="memItemRight" valign="bottom"><b>HexdumpMemDisp</b> (uint64_t disp)</td></tr>
-<tr class="separator:afca7660efce7304365e7a15ba5fe6718 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a1b59439fa3781e6209ce55aca7fc02c1 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top"><a id="a1b59439fa3781e6209ce55aca7fc02c1"></a>
-static float&#160;</td><td class="memItemRight" valign="bottom"><b>Entropy</b> (string trait)</td></tr>
-<tr class="separator:a1b59439fa3781e6209ce55aca7fc02c1 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ab88e80c931e79518eb6457f9f2c8e1f2 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#ab88e80c931e79518eb6457f9f2c8e1f2">Hexdump</a> (const char *desc, const void *addr, const int len)</td></tr>
-<tr class="separator:ab88e80c931e79518eb6457f9f2c8e1f2 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:adf666341ef78e3cba311e576e525fbf4 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#adf666341ef78e3cba311e576e525fbf4">GetTLSH</a> (const uint8_t *data, size_t len)</td></tr>
+<tr class="separator:adf666341ef78e3cba311e576e525fbf4 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0c426523358896f7594a836cb286fca2 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a0c426523358896f7594a836cb286fca2">GetFileTLSH</a> (const char *file_path)</td></tr>
+<tr class="separator:a0c426523358896f7594a836cb286fca2 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0c3eb3179bd7d87b3180387be76573e7 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a0c3eb3179bd7d87b3180387be76573e7">SHA256</a> (char *trait)</td></tr>
+<tr class="separator:a0c3eb3179bd7d87b3180387be76573e7 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:acaf355a97857c4563c3b8e6162187e90 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#acaf355a97857c4563c3b8e6162187e90">GetFileSHA256</a> (char *file_path)</td></tr>
+<tr class="separator:acaf355a97857c4563c3b8e6162187e90 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a85b33e0d5148b97b1db40d2f59b2679c inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a85b33e0d5148b97b1db40d2f59b2679c">GetSHA256</a> (const uint8_t *data, size_t len)</td></tr>
+<tr class="separator:a85b33e0d5148b97b1db40d2f59b2679c inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa341aea214e4eb0121ef7b76f75f2a86 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT vector&lt; char &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#aa341aea214e4eb0121ef7b76f75f2a86">TraitToChar</a> (string trait)</td></tr>
+<tr class="separator:aa341aea214e4eb0121ef7b76f75f2a86 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a35dbc25fdb59cf2d65eb35fcb1126c69 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a35dbc25fdb59cf2d65eb35fcb1126c69">RemoveWildcards</a> (string trait)</td></tr>
+<tr class="separator:a35dbc25fdb59cf2d65eb35fcb1126c69 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:afcb68aa2cb7c96abedd55b3fc77fabdd inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT uint&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#afcb68aa2cb7c96abedd55b3fc77fabdd">GetByteSize</a> (string s)</td></tr>
+<tr class="separator:afcb68aa2cb7c96abedd55b3fc77fabdd inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad5ca8c8e5a5177c3bab1dafe1e9d17c0 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#ad5ca8c8e5a5177c3bab1dafe1e9d17c0">RemoveSpaces</a> (string s)</td></tr>
+<tr class="separator:ad5ca8c8e5a5177c3bab1dafe1e9d17c0 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0953a67d8f0f1ba8569f3d4708f2806b inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a0953a67d8f0f1ba8569f3d4708f2806b">WildcardTrait</a> (string trait, string bytes)</td></tr>
+<tr class="separator:a0953a67d8f0f1ba8569f3d4708f2806b inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0ce1656f5c035e0b600ea136a72cabfa inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a0ce1656f5c035e0b600ea136a72cabfa">TrimRight</a> (const std::string &amp;s)</td></tr>
+<tr class="separator:a0ce1656f5c035e0b600ea136a72cabfa inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a92eb94689731b4cf6a376b34eca54480 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a92eb94689731b4cf6a376b34eca54480">HexdumpBE</a> (const void *data, size_t size)</td></tr>
+<tr class="separator:a92eb94689731b4cf6a376b34eca54480 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac7d8711f35ec828b1fff89aa8e567a98 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#ac7d8711f35ec828b1fff89aa8e567a98">Wildcards</a> (uint count)</td></tr>
+<tr class="separator:ac7d8711f35ec828b1fff89aa8e567a98 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:abb21236d547f49ff3983ea485b241233 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top"><a id="abb21236d547f49ff3983ea485b241233"></a>
+static BINLEX_EXPORT string&#160;</td><td class="memItemRight" valign="bottom"><b>HexdumpMemDisp</b> (uint64_t disp)</td></tr>
+<tr class="separator:abb21236d547f49ff3983ea485b241233 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a581cc519cdd00312a55fe0649a4b168d inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top"><a id="a581cc519cdd00312a55fe0649a4b168d"></a>
+static BINLEX_EXPORT float&#160;</td><td class="memItemRight" valign="bottom"><b>Entropy</b> (string trait)</td></tr>
+<tr class="separator:a581cc519cdd00312a55fe0649a4b168d inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a654dea4accfca1f897e7a7bc1587f343 inherit pub_static_methods_classbinlex_1_1Common"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a654dea4accfca1f897e7a7bc1587f343">Hexdump</a> (const char *desc, const void *addr, const int len)</td></tr>
+<tr class="separator:a654dea4accfca1f897e7a7bc1587f343 inherit pub_static_methods_classbinlex_1_1Common"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <hr/>The documentation for this class was generated from the following file:<ul>
 <li>include/<a class="el" href="blelf_8h_source.html">blelf.h</a></li>
