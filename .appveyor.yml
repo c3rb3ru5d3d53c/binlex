@@ -22,7 +22,7 @@ for:
       - git submodule update --init --recursive
     build_script:
       - make threads=4
-      - python3 -m pip wheel -v -w build/ .
+      # - python3 -m pip wheel -v -w build/ .
       - make pkg
       - make dist
     test_script:
