@@ -10,6 +10,9 @@ import platform
 from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext
 
+project_root = os.getenv('BUILD_DIR')
+build_temp = os.path.join(os.getenv('BUILD_DIR'), 'build/')
+
 __version__ = "1.1.1"
 __author__ = "@c3rb3ru5d3d53c"
 
@@ -35,20 +38,20 @@ class CMakeBuild(build_ext):
             '-DBUILD_PYTHON_BINDINGS=true',
             f'-DPYBIND11_PYTHON_VERSION={__version__}'
         ]
-        if not os.path.exists(self.build_temp):
-            os.makedirs(self.build_temp)
+        if not os.path.exists(build_temp):
+            os.makedirs(build_temp)
         subprocess.check_call(
-            ["cmake", os.path.dirname(os.path.abspath(__file__))] + cmake_args, cwd=self.build_temp
+            ["cmake", project_root] + cmake_args, cwd=build_temp
         )
         subprocess.check_call(
-            ["cmake", "--build", "."], cwd=self.build_temp
+            ["cmake", "--build", "."], cwd=build_temp
         )
         if platform.system() == 'Linux' and in_virtualenv() is False:
             subprocess.check_call(
-                ["make", "install"], cwd=self.build_temp
+                ["make", "install"], cwd=build_temp
             )
             subprocess.check_call(
-                ["ldconfig"], cwd=self.build_temp
+                ["ldconfig"], cwd=build_temp
             )
 
 setup(
