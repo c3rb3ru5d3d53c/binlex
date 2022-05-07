@@ -3,10 +3,6 @@
 .PHONY: docker
 
 threads=1
-admin_user=admin
-admin_pass=changeme
-user=binlex
-pass=changeme
 config=Release
 
 all: python docs
@@ -30,7 +26,9 @@ python: git-unsafe
 		cmake --build . --config ${config} -- -j ${threads}
 
 python-whl:
-	python3 -m pip wheel -v -w build/ .
+	virtualenv -p python3 venv/
+	bash -c "source venv/bin/activate; python3 -m pip wheel -v -w build/ ."
+	rm -rf venv/
 
 docs:
 	mkdir -p build/docs/html/docs/
@@ -59,11 +57,6 @@ docker-stop:
 docker-init:
 	@cd scripts/ && \
 		./init-all.sh
-
-docker-clean:
-	@docker stop $(shell docker ps -a -q) 2>/dev/null || echo > /dev/null
-	@docker rm $(shell docker ps -a -q) 2>/dev/null || echo > /dev/null
-	@docker rmi $(shell docker images -a -q) 2>/dev/null || echo > /dev/null
 
 docker-restart-blapi:
 	@docker stop $(shell docker container list --all -aqf name="blapi1")
@@ -160,6 +153,11 @@ clean:
 	rm -rf scripts/
 	rm -rf config/
 	rm -rf venv/
+
+clean-docker:
+	@docker stop $(shell docker ps -a -q) 2>/dev/null || echo > /dev/null
+	@docker rm $(shell docker ps -a -q) 2>/dev/null || echo > /dev/null
+	@docker rmi $(shell docker images -a -q) 2>/dev/null || echo > /dev/null
 
 clean-data:
 	rm -rf data/
