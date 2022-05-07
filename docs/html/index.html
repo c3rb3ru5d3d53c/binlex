@@ -120,7 +120,7 @@ Installation</h1>
 <div class="line">                    python3 python3-dev</div>
 <div class="line">git clone --recursive https://github.com/c3rb3ru5d3d53c/binlex.git</div>
 <div class="line">cd binlex/</div>
-</div><!-- fragment --><p>*__NOTE:__ that <code>binlex</code> requires <code>cmake</code> &gt;= 3.5, <code>make</code> &gt;= 4.2.1 and <code>ubuntu</code> &gt;= 20.04.*</p>
+</div><!-- fragment --><p><em>NOTE: that <code>binlex</code> requires <code>cmake</code> &gt;= 3.5, <code>make</code> &gt;= 4.2.1 and <code>ubuntu</code> &gt;= 20.04.</em></p>
 <p>Once you have installed, cloned and changed your directory to the project directory, we can continue with installation.</p>
 <p><b>From Source:</b></p>
 <p>If you want to compile and install via <code>make install</code> run the following commands:</p>
@@ -132,13 +132,13 @@ Installation</h1>
 </div><!-- fragment --><p><b>Binary Releases:</b></p>
 <p>See the <a href="https://github.com/c3rb3ru5d3d53c/binlex/releases"><code>releases</code></a> page.</p>
 <p>If you need the bleeding edge binaries you can download them from our AppVeyor CI/CD <a href="https://ci.appveyor.com/project/c3rb3ru5d3d53c/binlex/branch/master"><code>here</code></a>.</p>
-<p>*__NOTE:__ bleeding edge binaries are subject to bugs, if you encounter one, please let us know!*</p>
+<p><em>NOTE: bleeding edge binaries are subject to bugs, if you encounter one, please let us know!</em></p>
 <p><b>Test Files:</b></p>
 <ul>
 <li>To download all the test samples do the command <code>git lfs fetch</code></li>
 <li>ZIP files in the <code>tests/</code> directory can then be extracted using the password <code>infected</code></li>
 </ul>
-<p>***NOTE**: The <code>tests/</code> directory contains malware, we assume you know what you are doing.*</p>
+<p><em>NOTE: The <code>tests/</code> directory contains malware, we assume you know what you are doing.</em></p>
 <p>To download individual <code>git-lfs</code> files from a relative path, you can use the following <code>git</code> alias in <code>~/.gitconfig</code>:</p>
 <div class="fragment"><div class="line">[alias]</div>
 <div class="line">download = &quot;!ROOT=$(git rev-parse --show-toplevel); cd $ROOT; git lfs pull --include $GIT_PREFIX$1; cd $ROOT/$GIT_PREFIX&quot;</div>
@@ -163,7 +163,7 @@ Installation</h1>
 <div class="line">python3</div>
 <div class="line">&gt;&gt;&gt; import pybinlex</div>
 </div><!-- fragment --><p>If you wish to compile the bindings with <code>cmake</code>: </p><div class="fragment"><div class="line">make python</div>
-</div><!-- fragment --><p>Please note, we use <code>pybind11</code> and support for <code>python3.9</code> is experimental.</p>
+</div><!-- fragment --><p><em>NOTE: we use <code>pybind11</code> and support for <code>python3.9</code> is experimental.</em></p>
 <p>Examples of how to use <code>pybinlex</code> can be found in <code>tests/tests.py</code>.</p>
 <h1><a class="anchor" id="autotoc_md4"></a>
 Building Binlex Platform:</h1>
@@ -241,8 +241,8 @@ CLI Usage</h1>
 <li><code>raw:cil</code></li>
 <li><code>auto</code></li>
 </ul>
-<p>*__NOTE:__ The <code>raw</code> modes can be used on shellcode.*</p>
-<p>*__NOTE:__ The <code>auto</code> mode cannot be used on shellcode.*</p>
+<p><em>NOTE: The <code>raw</code> modes can be used on shellcode.</em></p>
+<p><em>NOTE: The <code>auto</code> mode cannot be used on shellcode.</em></p>
 <p><b>Advanced</b></p>
 <p>If you are hunting using <code>binlex</code> you can use <code>jq</code> to your advantage for advanced searches.</p>
 <div class="fragment"><div class="line">build/binlex -m auto -i tests/pe/pe.x86 | jq -r &#39;select((.size &gt; 8 and .size &lt; 16) and (.bytes_sha256 != .traits.sha256)) | .trait&#39; | head -10</div>
