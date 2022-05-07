@@ -5,8 +5,8 @@ image:
 platform:
   - x64
 
-configuration:
-  - Release
+# configuration:
+#   - Release
 
 for:
   -
@@ -77,4 +77,4 @@ for:
 #     - path: build/Debug/*.exe
 #     - path: build/Debug/*.dll
 
-# build: only
+build: off
