@@ -1,21 +1,12 @@
-#ifdef _WIN32
-#include <Windows.h>
-#endif
-#include <iostream>
-#include <memory>
-#include <vector>
-#include <set>
-#include <iostream>
-#include <exception>
-#include <stdexcept>
 #include "blelf.h"
-#include <LIEF/ELF.hpp>
-using namespace std;
+
 using namespace binlex;
 using namespace LIEF::ELF;
 
 ELF::ELF(){
-    for (int i = 0; i < ELF_MAX_SECTIONS; i++){
+    total_exec_sections = 0;
+
+    for (int i = 0; i < BINARY_MAX_SECTIONS; i++){
         sections[i].offset = 0;
         sections[i].size = 0;
         sections[i].data = NULL;
@@ -38,28 +29,20 @@ bool ELF::Setup(ARCH input_mode){
     return true;
 }
 
-bool ELF::ReadFile(char *file_path){
-    binary = Parser::parse(file_path);
+bool ELF::ReadVector(const std::vector<uint8_t> &data){
+    CalculateFileHashes(data);
+    binary = Parser::parse(data);
+    if (binary == NULL){
+        return false;
+    }
     if (mode != binary->header().machine_type()){
         fprintf(stderr, "[x] incorrect mode for binary architecture\n");
         return false;
     }
-    ParseSections();
-    return true;
+    return ParseSections();
 }
 
-bool ELF::ReadBuffer(void *data, size_t size){
-    vector<uint8_t> data_v((uint8_t *)data, (uint8_t *)data + size);
-    binary = Parser::parse(data_v);
-    if (mode != binary->header().machine_type()){
-        fprintf(stderr, "[x] incorrect mode for binary architecture\n");
-        return false;
-    }
-    ParseSections();
-    return true;
-}
-
-void ELF::ParseSections(){
+bool ELF::ParseSections(){
     uint index = 0;
     it_sections local_sections = binary->sections();
     for (auto it = local_sections.begin(); it != local_sections.end(); it++){
@@ -71,24 +54,38 @@ void ELF::ParseSections(){
             vector<uint8_t> data = binary->get_content_from_virtual_address(it->virtual_address(), it->original_size());
             memcpy(sections[index].data, &data[0], sections[index].size);
             it_exported_symbols symbols = binary->exported_symbols();
+            // Add export to function list
             for (auto j = symbols.begin(); j != symbols.end(); j++){
                 uint64_t tmp_offset = binary->virtual_address_to_offset(j->value());
-                 if (tmp_offset > sections[index].offset &&
+                PRINT_DEBUG("Elf Export offset: 0x%x\n", (int)tmp_offset);
+                if (tmp_offset > sections[index].offset &&
                     tmp_offset < sections[index].offset + sections[index].size){
                     sections[index].functions.insert(tmp_offset-sections[index].offset);
                 }
             }
+            // Add entrypoint to the function list
+            uint64_t entrypoint_offset = binary->virtual_address_to_offset(binary->entrypoint());
+            PRINT_DEBUG("Elf Entrypoint offset: 0x%x\n", (int)entrypoint_offset);
+            if (entrypoint_offset > sections[index].offset && entrypoint_offset < sections[index].offset + sections[index].size){
+                sections[index].functions.insert(entrypoint_offset-sections[index].offset);
+            }
+            index++;
+            if (BINARY_MAX_SECTIONS == index)
+            {
+                fprintf(stderr, "[x] malformed binary, too many executable sections\n");
+                return false;
+            }
         }
-        index++;
     }
+    total_exec_sections = index + 1;
+    return true;
 }
 
 ELF::~ELF(){
-    for (int i = 0; i < ELF_MAX_SECTIONS; i++){
+    for (int i = 0; i < total_exec_sections; i++){
         sections[i].offset = 0;
         sections[i].size = 0;
-        if (sections[i].data != NULL){
-            free(sections[i].data);
-        }
+        free(sections[i].data);
+        sections[i].functions.clear();
     }
 }

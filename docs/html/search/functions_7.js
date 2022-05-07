@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['printtraits_75',['PrintTraits',['../classbinlex_1_1Decompiler.html#a788f80fd44f34f00084375d4669bd443',1,'binlex::Decompiler']]]
+  ['maxaddress_163',['MaxAddress',['../classbinlex_1_1Decompiler.html#a0df46873b8d487ed00bc252d59fb9aaa',1,'binlex::Decompiler']]]
 ];

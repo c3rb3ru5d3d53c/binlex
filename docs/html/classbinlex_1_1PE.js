@@ -1,12 +1,13 @@
 var classbinlex_1_1PE =
 [
-    [ "Section", "structbinlex_1_1PE_1_1Section.html", "structbinlex_1_1PE_1_1Section" ],
-    [ "PE", "classbinlex_1_1PE.html#a0362806490c9bfb50c93f6f4caa8e57b", null ],
-    [ "~PE", "classbinlex_1_1PE.html#afabfb6ffc52e0197cc2f55e241bbc953", null ],
-    [ "ReadBuffer", "classbinlex_1_1PE.html#a7e30edaa034bef62d987959ac6c0ecf4", null ],
-    [ "ReadFile", "classbinlex_1_1PE.html#a7e7d93bcad0287e5b4ec75b3599d54f6", null ],
-    [ "Setup", "classbinlex_1_1PE.html#a57ba7e50c3f9d2c0a44a4473890099ff", null ],
+    [ "PE", "classbinlex_1_1PE.html#a3c55b3f95f760907c695ac4cf5f620d1", null ],
+    [ "~PE", "classbinlex_1_1PE.html#a50d93d36adff55df2ee9659f1539b362", null ],
+    [ "HasLimitations", "classbinlex_1_1PE.html#afc5cd018a384c015a298fe97d3658a3e", null ],
+    [ "IsDotNet", "classbinlex_1_1PE.html#a7d59d7af11c403d379d4b748065517d6", null ],
+    [ "ReadVector", "classbinlex_1_1PE.html#a4722bee8f84fa658852eb429d7e2399c", null ],
+    [ "Setup", "classbinlex_1_1PE.html#aaf2fa4d79bc0fc9449eadd366b870d6b", null ],
     [ "binary", "classbinlex_1_1PE.html#a819ef05e9bb17dc5fac3443dd5e4328d", null ],
     [ "mode", "classbinlex_1_1PE.html#a5bce348267c07fa8b1c9f195a4525ed6", null ],
-    [ "sections", "classbinlex_1_1PE.html#af3e6cbc8cfbbdc2cb24d381a04688296", null ]
+    [ "sections", "classbinlex_1_1PE.html#a4f66c24dddeba3c650c0158ba3e4a220", null ],
+    [ "total_exec_sections", "classbinlex_1_1PE.html#a399768f4c205f01df0c1172898731d5e", null ]
 ];
