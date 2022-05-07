@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['maxaddress_141',['MaxAddress',['../classbinlex_1_1Decompiler.html#a0df46873b8d487ed00bc252d59fb9aaa',1,'binlex::Decompiler']]]
+  ['lineardisassemble_162',['LinearDisassemble',['../classbinlex_1_1Decompiler.html#a0045a92875a089edb6e862387851bb4d',1,'binlex::Decompiler']]]
 ];

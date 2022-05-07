@@ -4,8 +4,10 @@ var hierarchy =
     [ "binlex::AutoLex", "classbinlex_1_1AutoLex.html", null ],
     [ "dotnet::BlobHeapIndex", "classdotnet_1_1BlobHeapIndex.html", null ],
     [ "binlex::Common", "classbinlex_1_1Common.html", [
-      [ "binlex::CILDecompiler", "classbinlex_1_1CILDecompiler.html", null ],
-      [ "binlex::Decompiler", "classbinlex_1_1Decompiler.html", null ],
+      [ "binlex::DecompilerBase", "classbinlex_1_1DecompilerBase.html", [
+        [ "binlex::CILDecompiler", "classbinlex_1_1CILDecompiler.html", null ],
+        [ "binlex::Decompiler", "classbinlex_1_1Decompiler.html", null ]
+      ] ],
       [ "binlex::File", "classbinlex_1_1File.html", [
         [ "binlex::ELF", "classbinlex_1_1ELF.html", null ],
         [ "binlex::PE", "classbinlex_1_1PE.html", [
@@ -20,6 +22,7 @@ var hierarchy =
     [ "dotnet::COR20_STREAM_HEADER", "structdotnet_1_1COR20__STREAM__HEADER.html", null ],
     [ "dotnet::Cor20MetadataTable", "classdotnet_1_1Cor20MetadataTable.html", null ],
     [ "dotnet::GuidHeapIndex", "classdotnet_1_1GuidHeapIndex.html", null ],
+    [ "binlex::CILDecompiler::Instruction", "structbinlex_1_1CILDecompiler_1_1Instruction.html", null ],
     [ "dotnet::Method", "classdotnet_1_1Method.html", null ],
     [ "dotnet::MethodHeader", "classdotnet_1_1MethodHeader.html", [
       [ "dotnet::FatHeader", "classdotnet_1_1FatHeader.html", null ],
@@ -29,8 +32,8 @@ var hierarchy =
       [ "dotnet::ResolutionScopeIndex", "classdotnet_1_1ResolutionScopeIndex.html", null ],
       [ "dotnet::TypeDefOrRefIndex", "classdotnet_1_1TypeDefOrRefIndex.html", null ]
     ] ],
-    [ "binlex::CILDecompiler::Section", "structbinlex_1_1CILDecompiler_1_1Section.html", null ],
     [ "binlex::Decompiler::Section", "structbinlex_1_1Decompiler_1_1Section.html", null ],
+    [ "binlex::CILDecompiler::Section", "structbinlex_1_1CILDecompiler_1_1Section.html", null ],
     [ "binlex::File::Section", "structbinlex_1_1File_1_1Section.html", null ],
     [ "binlex::Raw::Section", "structbinlex_1_1Raw_1_1Section.html", null ],
     [ "SHA256_CTX", "structSHA256__CTX.html", null ],
@@ -45,5 +48,6 @@ var hierarchy =
       [ "dotnet::TypeDefEntry", "classdotnet_1_1TypeDefEntry.html", null ],
       [ "dotnet::TypeRefEntry", "classdotnet_1_1TypeRefEntry.html", null ]
     ] ],
-    [ "binlex::Decompiler::Trait", "structbinlex_1_1Decompiler_1_1Trait.html", null ]
+    [ "binlex::Decompiler::Trait", "structbinlex_1_1Decompiler_1_1Trait.html", null ],
+    [ "binlex::CILDecompiler::Trait", "structbinlex_1_1CILDecompiler_1_1Trait.html", null ]
 ];
