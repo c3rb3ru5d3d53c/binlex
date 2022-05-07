@@ -56,24 +56,25 @@ for:
       - path: build/*.whl
       - path: build/pybinlex*.so
       - path: build/*.so.*
-  # Removing Windows Testing For GeekWeek
-  # -
-  #   matrix:
-  #     only:
-  #       - image: Visual Studio 2019
-  #   configuration:
-  #     - Release
-  #   platform: Any CPU
-  #   install:
-  #     - git submodule update --init --recursive
-  #     - set PATH=C:\Program Files\CMake\bin;%PATH%
-  #   test_script:
-  #     - ps: mkdir build
-  #     - ps: cd build/
-  #     - ps: cmake ..
-  #     - ps: cmake --build . --config Debug
-  #   artifacts:
-  #     - path: build/Debug/*.exe
-  #     - path: build/Debug/*.dll
 
-build: off
+# Removing Windows Testing For GeekWeek
+# -
+#   matrix:
+#     only:
+#       - image: Visual Studio 2019
+#   configuration:
+#     - Release
+#   platform: Any CPU
+#   install:
+#     - git submodule update --init --recursive
+#     - set PATH=C:\Program Files\CMake\bin;%PATH%
+#   test_script:
+#     - ps: mkdir build
+#     - ps: cd build/
+#     - ps: cmake ..
+#     - ps: cmake --build . --config Debug
+#   artifacts:
+#     - path: build/Debug/*.exe
+#     - path: build/Debug/*.dll
+
+# build: only
