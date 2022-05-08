@@ -362,7 +362,7 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
 
     csh cs_dis;
 
-    PRINT_DEBUG("LinearDisassemble: Started at offset = 0x%x data_size = %d bytes\n", offset, data_size);
+    PRINT_DEBUG("LinearDisassemble: Started at offset = 0x%" PRIu64 " data_size = %" PRIu64 " bytes\n", offset, data_size);
 
     if(cs_open(arch, mode, &cs_dis) != CS_ERR_OK) {
         PRINT_ERROR_AND_EXIT("[x] LinearDisassembly failed to init capstone\n");
@@ -386,7 +386,7 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
 
     while(pc < code_size){
         if (!cs_disasm_iter(cs_dis, &code, &code_size, &pc, cs_ins)){
-            PRINT_DEBUG("LinearDisassemble: 0x%x: Disassemble ERROR\n", pc);
+            PRINT_DEBUG("LinearDisassemble: 0x%" PRIu64 ": Disassemble ERROR\n", pc);
             // If the disassembly fails skip the byte and continue
             pc += 1;
             code_size -= 1;
@@ -395,16 +395,16 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
             valid_block_count = 0;
             continue;
         }
-        PRINT_DEBUG("LinearDisassemble: 0x%x: %s\t%s\n", cs_ins->address, cs_ins->mnemonic, cs_ins->op_str);
+        PRINT_DEBUG("LinearDisassemble: 0x%" PRIu64 ": %s\t%s\n", cs_ins->address, cs_ins->mnemonic, cs_ins->op_str);
 
         if (IsNopInsn(cs_ins) || IsSemanticNopInsn(cs_ins) || IsTrapInsn(cs_ins) || IsPrivInsn(cs_ins) ){
-            PRINT_DEBUG("LinearDisassemble: Suspicious instruction at 0x%x\n", cs_ins->address);
+            PRINT_DEBUG("LinearDisassemble: Suspicious instruction at 0x%" PRIu64 "\n", cs_ins->address);
             valid_block = false;
             valid_block_count = 0;
         }
 
         if(!cs_ins->size) {
-            PRINT_DEBUG("LinearDisassemble: Invalid instruction size at 0x%x\n", cs_ins->address);
+            PRINT_DEBUG("LinearDisassemble: Invalid instruction size at 0x%" PRIu64 "\n", cs_ins->address);
         }
         if (IsConditionalInsn(cs_ins)){
             if (valid_block){
@@ -421,8 +421,7 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
                     CollectInsn(cs_ins, sections, index);
                 }
                 valid_block_count += 1;
-            }
-            else{
+            } else {
                 // Reset block state and try again
                 valid_block = true;
                 valid_block_count = 1;
