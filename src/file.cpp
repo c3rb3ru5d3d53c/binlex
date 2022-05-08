@@ -20,13 +20,13 @@ std::vector<uint8_t> File::ReadFileIntoVector(const char *file_path){
 
     inp = fopen(file_path, "rb");
     if(!inp){
-	throw std::runtime_error(strerror(errno));
+	    throw std::runtime_error(strerror(errno));
     }
     while((bread = fread(buf, 1, sizeof(buf), inp)) > 0){
-	data.insert(data.end(), buf, buf + bread);
+	    data.insert(data.end(), buf, buf + bread);
     }
     if(errno != 0) {
-	throw std::runtime_error(strerror(errno));
+	    throw std::runtime_error(strerror(errno));
     }
     fclose(inp);
     return data;
@@ -34,12 +34,12 @@ std::vector<uint8_t> File::ReadFileIntoVector(const char *file_path){
 
 bool File::ReadFile(const char *file_path){
     try {
-	std::vector<uint8_t> data_v(ReadFileIntoVector(file_path));
-	ReadVector(data_v);
+	    std::vector<uint8_t> data_v(ReadFileIntoVector(file_path));
+	    ReadVector(data_v);
     }
     catch(const std::exception &err) {
-	cerr << "error while reading: " << err.what() << endl;
-	return false;
+	    cerr << "error while reading: " << err.what() << endl;
+	    return false;
     }
     return true;
 }
