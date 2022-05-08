@@ -1,4 +1,8 @@
 #include <ctype.h>
+#include <string>
+#include <sstream>
+#include <vector>
+#include <iomanip>
 #include "common.h"
 
 using namespace binlex;
@@ -166,16 +170,34 @@ string Common::HexdumpBE(const void *data, size_t size){
     return TrimRight(bytes.str());
 }
 
-string Common::HexdumpMemDisp(uint64_t disp){
-    stringstream bytes;
-    const unsigned char *local_pc = (const unsigned char *)&disp;
-    for (int i = 0; i < sizeof(disp) -1 ; i++){
-        if (local_pc[i] != 0 && local_pc[i] != 255){
-            bytes << hex << setfill('0') << setw(2) << (uint32_t)local_pc[i] << " ";
-        }
-    }
-    return TrimRight(bytes.str());
+string Common::TraitToTLSH(string trait){
+    const vector<uint8_t> data = TraitToData(trait);
+    if (data.size() < 50) return "";
+    return GetTLSH((uint8_t *)&data[0], data.size());
 }
+
+vector<uint8_t> Common::TraitToData(string bytes){
+    string hexstr = RemoveSpaces(RemoveWildcards(bytes));
+    vector<uint8_t> result;
+    for (size_t i = 0; i < hexstr.size(); i += 2){
+        uint8_t x;
+        std::istringstream strm(hexstr.substr(i, 2));
+        strm >> std::hex >> x;
+        result.push_back(x);
+    }
+    return result;
+}
+
+// string Common::HexdumpMemDisp(uint64_t disp){
+//     stringstream bytes;
+//     const unsigned char *local_pc = (const unsigned char *)&disp;
+//     for (int i = 0; i < sizeof(disp) -1 ; i++){
+//         if (local_pc[i] != 0 && local_pc[i] != 255){
+//             bytes << hex << setfill('0') << setw(2) << (uint32_t)local_pc[i] << " ";
+//         }
+//     }
+//     return TrimRight(bytes.str());
+// }
 
 string Common::TrimRight(const string &s){
     const string whitespace = " \n\r\t\f\v";
