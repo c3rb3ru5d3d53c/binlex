@@ -124,7 +124,7 @@ int main(int argc, char **argv){
             }
             si++;
         }
-	cil_decompiler.WriteTraits();
+        cil_decompiler.WriteTraits();
         return EXIT_SUCCESS;
     }
     if (g_args.options.mode == "pe:x86" &&

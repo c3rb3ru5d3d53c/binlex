@@ -7,6 +7,7 @@
 #include <queue>
 #include <set>
 #include <map>
+#include <chrono>
 #include "args.h"
 
 #ifdef _WIN32
@@ -45,6 +46,9 @@ extern binlex::Args g_args;
 #define PRINT_ERROR_AND_EXIT(...) { fprintf(stderr, __VA_ARGS__); exit(EXIT_FAILURE); }
 void print_data(string title, void *data, uint32_t size);
 #define PRINT_DATA(title, data, size) { print_data(title, data, size); }
+
+#define PERF_START(tag) { binlex::TimedCode *tc = new binlex::TimedCode(tag);
+#define PERF_END tc->Print(); }
 
 namespace binlex {
     class Common{
@@ -146,6 +150,16 @@ namespace binlex {
         @param size The size of the data to collect
         */
         BINLEX_EXPORT static void Hexdump(const char * desc, const void * addr, const int len);
+    };
+
+    class TimedCode {
+        private:
+            std::chrono::steady_clock::time_point start;
+            const char *print_tag;
+        public:
+            TimedCode(const char *tag);
+            void Print();
+            ~TimedCode() {};
     };
 }
 

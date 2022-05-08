@@ -412,7 +412,7 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
                     jmp_address_2 =  X86_REL_ADDR(*cs_ins);
                 }
                 else if (valid_block_count = 2) {
-                    PRINT_DEBUG("LinearDisassemble: Found three consecutive valid blocks adding jmp addresses");
+                    PRINT_DEBUG("LinearDisassemble: Found three consecutive valid blocks adding jmp addresses\n");
                     AddDiscoveredBlock(jmp_address_1, sections, index);
                     AddDiscoveredBlock(jmp_address_2, sections, index);
                     CollectInsn(cs_ins, sections, index);
@@ -448,11 +448,14 @@ void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint ind
     //TODO: enable when this is ready
     LinearDisassemble(data, data_size, offset, index);
 
+    //PERF_START("CreateTraitsForSection() call")
     CreateTraitsForSection(index);
-
+    //PERF_END
+    //PERF_START("FinalizeTrait() loop")
     for (size_t i = 0; i < sections[index].traits.size(); ++i) {
         FinalizeTrait(sections[index].traits[i]);
     }
+    //PERF_END
 }
 
 string Decompiler::WildcardInsn(cs_insn *insn){

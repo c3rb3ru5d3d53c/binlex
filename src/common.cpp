@@ -243,3 +243,23 @@ void Common::Hexdump(const char * desc, const void * addr, const int len){
     }
     printf ("  %s\n", buff);
 }
+
+TimedCode::TimedCode(const char *tag) {
+    print_tag = tag;
+    start = std::chrono::steady_clock::now();
+}
+
+void TimedCode::Print() {
+    std::chrono::_V2::steady_clock::time_point end = std::chrono::steady_clock::now();
+
+    int64_t start_time = std::chrono::time_point_cast<std::chrono::microseconds>(start).time_since_epoch().count();
+    int64_t end_time = std::chrono::time_point_cast<std::chrono::microseconds>(end).time_since_epoch().count();
+
+    int64_t diff = end_time - start_time;
+    int64_t diff_s = diff / 1000000;
+    int64_t diff_ms = diff / 1000 - diff_s * 1000;
+    int64_t diff_us = diff - diff_s * 1000000 - diff_ms * 1000;
+
+    cerr << "TimedCode: '" << print_tag << "': " << diff_s  << " s "
+         << diff_ms << " ms " << diff_us << " us" << endl;
+}
