@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include "common.h"
 
 using namespace binlex;
@@ -23,7 +24,7 @@ string Common::GetTLSH(const uint8_t *data, size_t len){
     Tlsh tlsh;
     tlsh.update(data, len);
     tlsh.final();
-    return tlsh.getHash();
+    return "T1" + string(tlsh.getHash());
 }
 
 string Common::GetFileTLSH(const char *file_path){

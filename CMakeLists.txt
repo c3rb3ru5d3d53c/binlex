@@ -78,7 +78,7 @@ add_dependencies(capstone_static capstone)
 set(TLSH_GIT_URL "https://github.com/trendmicro/tlsh.git")
 set(TLSH_ROOT    "${CMAKE_BINARY_DIR}/tlsh/")
 set(TLSH_INCLUDE_DIRS "${TLSH_ROOT}/src/tlsh/include/")
-set(TLSH_GIT_TAG 7c676d32b252c84cf3a540eb5438c315006d68de)
+set(TLSH_GIT_TAG 4.8.2)
 
 set(TLSH_CMAKE_ARGS
   -DCMAKE_BUILD_TYPE=Release
@@ -94,6 +94,7 @@ ExternalProject_Add(
     INSTALL_DIR         "${TLSH_ROOT}"
     GIT_REPOSITORY      "${TLSH_GIT_URL}"
     GIT_TAG             "${TLSH_GIT_TAG}"
+    GIT_SHALLOW         ON
     BUILD_COMMAND make -j${N}
     INSTALL_COMMAND ""
     CMAKE_ARGS ${TLSH_CMAKE_ARGS}
