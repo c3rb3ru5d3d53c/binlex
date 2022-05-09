@@ -28,7 +28,11 @@ string Common::GetTLSH(const uint8_t *data, size_t len){
     Tlsh tlsh;
     tlsh.update(data, len);
     tlsh.final();
-    return "T1" + string(tlsh.getHash());
+    string result = "T1" + string(tlsh.getHash());
+    if (result == "T1"){
+        return "";
+    }
+    return result;
 }
 
 string Common::GetFileTLSH(const char *file_path){
@@ -172,32 +176,22 @@ string Common::HexdumpBE(const void *data, size_t size){
 
 string Common::TraitToTLSH(string trait){
     const vector<uint8_t> data = TraitToData(trait);
-    if (data.size() < 50) return "";
+    if (data.size() < 50){
+        return "";
+    }
     return GetTLSH((uint8_t *)&data[0], data.size());
 }
 
-vector<uint8_t> Common::TraitToData(string bytes){
-    string hexstr = RemoveSpaces(RemoveWildcards(bytes));
-    vector<uint8_t> result;
-    for (size_t i = 0; i < hexstr.size(); i += 2){
-        uint8_t x;
-        std::istringstream strm(hexstr.substr(i, 2));
-        strm >> std::hex >> x;
-        result.push_back(x);
+vector<uint8_t> Common::TraitToData(string trait){
+    trait = RemoveSpaces(RemoveWildcards(trait));
+    vector<uint8_t> bytes;
+    for (size_t i = 0; i < trait.length(); i = i + 2){
+        const char *s_byte = trait.substr(i, 2).c_str();
+        unsigned char byte = (char)strtol(s_byte, NULL, 16);
+        bytes.push_back(byte);
     }
-    return result;
+    return bytes;
 }
-
-// string Common::HexdumpMemDisp(uint64_t disp){
-//     stringstream bytes;
-//     const unsigned char *local_pc = (const unsigned char *)&disp;
-//     for (int i = 0; i < sizeof(disp) -1 ; i++){
-//         if (local_pc[i] != 0 && local_pc[i] != 255){
-//             bytes << hex << setfill('0') << setw(2) << (uint32_t)local_pc[i] << " ";
-//         }
-//     }
-//     return TrimRight(bytes.str());
-// }
 
 string Common::TrimRight(const string &s){
     const string whitespace = " \n\r\t\f\v";

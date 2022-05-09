@@ -83,7 +83,7 @@ json Decompiler::GetTrait(struct Trait &trait){
     data["trait_sha256"] = &trait.trait_sha256[0];
     string trait_tlsh = TraitToTLSH(trait.trait);
     if (trait_tlsh.length() > 0){
-        data["trait_tlsh"] = bytes_tlsh;
+        data["trait_tlsh"] = trait_tlsh;
     } else {
         data["trait_tlsh"] = nullptr;
     }

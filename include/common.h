@@ -158,14 +158,18 @@ namespace binlex {
          * @return TLSH hash string
          */
         BINLEX_EXPORT static string TraitToTLSH(string bytes);
-        BINLEX_EXPORT static vector<uint8_t> TraitToData(string bytes);
+        /**
+         * This method converts a trait to a uint_8 vector
+         * @param trait string
+         * @return uint8_t vector of data
+         */
+        BINLEX_EXPORT static vector<uint8_t> TraitToData(string trait);
         /**
          * Generate Number of Wildcards
          * @param count number of wildcard bytes to create
          * @return string
          */
         BINLEX_EXPORT static string Wildcards(uint count);
-        // BINLEX_EXPORT static string HexdumpMemDisp(uint64_t disp);
         /**
          * Calculate the entropy of a trait.
          * @param trait trait hex string
