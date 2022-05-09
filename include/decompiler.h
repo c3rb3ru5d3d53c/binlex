@@ -232,7 +232,7 @@ namespace binlex {
         @param address the address to check
         @return bool
         */
-        BINLEX_EXPORT bool IsAddress(map<uint64_t, uint> &addresses, uint64_t address, uint index);
+        BINLEX_EXPORT bool IsAddress(map<uint64_t, uint> &addresses, uint64_t address);
         /**
         Checks if Instruction is Wildcard Instruction
         @param insn the instruction
