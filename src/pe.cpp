@@ -127,7 +127,7 @@ bool PE::ParseSections(){
 }
 
 PE::~PE(){
-    for (int i = 0; i < total_exec_sections; i++){
+    for (uint32_t i = 0; i < total_exec_sections; i++){
         sections[i].offset = 0;
         sections[i].size = 0;
         free(sections[i].data);

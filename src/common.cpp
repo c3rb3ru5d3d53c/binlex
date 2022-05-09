@@ -82,7 +82,7 @@ string Common::GetFileSHA256(char *file_path){
 string Common::Wildcards(uint count){
     stringstream s;
     s << "";
-    for (int i = 0; i < count; i++){
+    for (uint i = 0; i < count; i++){
         s << "?? ";
     }
     return TrimRight(s.str());
@@ -155,7 +155,7 @@ string Common::WildcardTrait(string trait, string bytes){
         bytes.erase(bytes.length() - 3);
         size_t index = trait.find(bytes, 0);
         if (index != string::npos){
-            for (int j = index; j < trait.length(); j = j + 3){
+            for (size_t j = index; j < trait.length(); j = j + 3){
                 trait.replace(j, 2, "??");
             }
             break;
@@ -168,7 +168,7 @@ string Common::HexdumpBE(const void *data, size_t size){
     stringstream bytes;
     bytes << "";
     const unsigned char *local_pc = (const unsigned char *)data;
-    for (int i = 0; i < size; i++){
+    for (size_t i = 0; i < size; i++){
         bytes << hex << setfill('0') << setw(2) << (uint32_t)local_pc[i] << " ";
     }
     return TrimRight(bytes.str());
@@ -231,4 +231,24 @@ void Common::Hexdump(const char * desc, const void * addr, const int len){
         i++;
     }
     printf ("  %s\n", buff);
+}
+
+TimedCode::TimedCode(const char *tag) {
+    print_tag = tag;
+    start = std::chrono::steady_clock::now();
+}
+
+void TimedCode::Print() {
+    std::chrono::_V2::steady_clock::time_point end = std::chrono::steady_clock::now();
+
+    int64_t start_time = std::chrono::time_point_cast<std::chrono::microseconds>(start).time_since_epoch().count();
+    int64_t end_time = std::chrono::time_point_cast<std::chrono::microseconds>(end).time_since_epoch().count();
+
+    int64_t diff = end_time - start_time;
+    int64_t diff_s = diff / 1000000;
+    int64_t diff_ms = diff / 1000 - diff_s * 1000;
+    int64_t diff_us = diff - diff_s * 1000000 - diff_ms * 1000;
+
+    cerr << "TimedCode: '" << print_tag << "': " << diff_s  << " s "
+         << diff_ms << " ms " << diff_us << " us" << endl;
 }

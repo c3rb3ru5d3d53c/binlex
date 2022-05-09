@@ -98,7 +98,7 @@ vector<json> Decompiler::GetTraits(){
     vector<json> traitsjson;
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
         if (sections[i].data != NULL){
-            for (int j = 0; j < sections[i].traits.size(); j++){
+            for (size_t j = 0; j < sections[i].traits.size(); j++){
                 json jdata(GetTrait(sections[i].traits[j]));
                 traitsjson.push_back(jdata);
             }
@@ -137,8 +137,6 @@ void * Decompiler::CreateTraitsForSection(uint index) {
 
     cs_insn *insn = cs_malloc(myself.handle);
     while (!sections[index].discovered.empty()){
-
-        uint64_t tmp_addr = 0;
         uint64_t address = 0;
 
         PRINT_DEBUG("discovered size = %u\n", (uint32_t)sections[index].discovered.size());
@@ -347,7 +345,7 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
 
     csh cs_dis;
 
-    PRINT_DEBUG("LinearDisassemble: Started at offset = 0x%x data_size = %d bytes\n", offset, data_size);
+    PRINT_DEBUG("LinearDisassemble: Started at offset = 0x%" PRIu64 " data_size = %" PRIu64 " bytes\n", offset, data_size);
 
     if(cs_open(arch, mode, &cs_dis) != CS_ERR_OK) {
         PRINT_ERROR_AND_EXIT("[x] LinearDisassembly failed to init capstone\n");
@@ -371,7 +369,7 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
 
     while(pc < code_size){
         if (!cs_disasm_iter(cs_dis, &code, &code_size, &pc, cs_ins)){
-            PRINT_DEBUG("LinearDisassemble: 0x%x: Disassemble ERROR\n", pc);
+            PRINT_DEBUG("LinearDisassemble: 0x%" PRIu64 ": Disassemble ERROR\n", pc);
             // If the disassembly fails skip the byte and continue
             pc += 1;
             code_size -= 1;
@@ -380,24 +378,24 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
             valid_block_count = 0;
             continue;
         }
-        PRINT_DEBUG("LinearDisassemble: 0x%x: %s\t%s\n", cs_ins->address, cs_ins->mnemonic, cs_ins->op_str);
+        PRINT_DEBUG("LinearDisassemble: 0x%" PRIu64 ": %s\t%s\n", cs_ins->address, cs_ins->mnemonic, cs_ins->op_str);
 
         if (IsNopInsn(cs_ins) || IsSemanticNopInsn(cs_ins) || IsTrapInsn(cs_ins) || IsPrivInsn(cs_ins) ){
-            PRINT_DEBUG("LinearDisassemble: Suspicious instruction at 0x%x\n", cs_ins->address);
+            PRINT_DEBUG("LinearDisassemble: Suspicious instruction at 0x%" PRIu64 "\n", cs_ins->address);
             valid_block = false;
             valid_block_count = 0;
         }
 
         if(!cs_ins->size) {
-            PRINT_DEBUG("LinearDisassemble: Invalid instruction size at 0x%x\n", cs_ins->address);
+            PRINT_DEBUG("LinearDisassemble: Invalid instruction size at 0x%" PRIu64 "\n", cs_ins->address);
         }
         if (IsConditionalInsn(cs_ins)){
             if (valid_block){
                 if (valid_block_count == 1) {
                     jmp_address_2 =  X86_REL_ADDR(*cs_ins);
                 }
-                else if (valid_block_count = 2) {
-                    PRINT_DEBUG("LinearDisassemble: Found three consecutive valid blocks adding jmp addresses");
+                else if (valid_block_count == 2) {
+                    PRINT_DEBUG("LinearDisassemble: Found three consecutive valid blocks adding jmp addresses\n");
                     AddDiscoveredBlock(jmp_address_1, sections, index);
                     AddDiscoveredBlock(jmp_address_2, sections, index);
                     CollectInsn(cs_ins, sections, index);
@@ -406,8 +404,7 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
                     CollectInsn(cs_ins, sections, index);
                 }
                 valid_block_count += 1;
-            }
-            else{
+            } else {
                 // Reset block state and try again
                 valid_block = true;
                 valid_block_count = 1;
@@ -433,11 +430,14 @@ void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint ind
     //TODO: enable when this is ready
     LinearDisassemble(data, data_size, offset, index);
 
+    //PERF_START("CreateTraitsForSection() call")
     CreateTraitsForSection(index);
-
+    //PERF_END
+    //PERF_START("FinalizeTrait() loop")
     for (size_t i = 0; i < sections[index].traits.size(); ++i) {
         FinalizeTrait(sections[index].traits[i]);
     }
+    //PERF_END
 }
 
 string Decompiler::WildcardInsn(cs_insn *insn){
@@ -781,7 +781,7 @@ uint64_t Decompiler::MaxAddress(set<uint64_t> coverage){
     return max_element;
 }
 
-bool Decompiler::IsAddress(map<uint64_t, uint> &addresses, uint64_t address, uint index){
+bool Decompiler::IsAddress(map<uint64_t, uint> &addresses, uint64_t address){
     if (addresses.find(address) == addresses.end()){
         return false;
     }
@@ -811,7 +811,7 @@ bool Decompiler::IsBlock(map<uint64_t, uint> &addresses, uint64_t address){
 
 void Decompiler::FreeTraits(uint index){
     if (sections[index].data != NULL){
-        for (int i = 0; i < sections[index].traits.size(); i++){
+        for (size_t i = 0; i < sections[index].traits.size(); i++){
             if (sections[index].traits[i].type != NULL){
                 free(sections[index].traits[i].type);
             }

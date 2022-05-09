@@ -5,7 +5,7 @@ using namespace binlex;
 DecompilerBase::DecompilerBase(const binlex::File &firef) : file_reference(firef) {
 }
 
-void DecompilerBase::py_SetThreads(uint threads, uint thread_cycles, uint thread_sleep) {
+void DecompilerBase::py_SetThreads(uint threads) {
     g_args.options.threads = threads;
 }
 
@@ -25,8 +25,6 @@ void DecompilerBase::py_SetMode(string mode){
     g_args.options.mode = mode;
 }
 
-// TODO we know how many exec sections we have, we don't need to go through all slots
-// CV to fix by end of GeekWeek 2022
 void DecompilerBase::WriteTraits(){
     std::ofstream output_stream;
     if (g_args.options.output != NULL) {
