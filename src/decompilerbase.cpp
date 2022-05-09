@@ -13,7 +13,7 @@ DecompilerBase::DecompilerBase(const binlex::File &firef) : file_reference(firef
  * the CPP code, which otherwise if obtained via command-line arguments.
  */
 
-void DecompilerBase::py_SetThreads(uint threads, uint thread_cycles, uint thread_sleep) {
+void DecompilerBase::py_SetThreads(uint threads) {
     g_args.options.threads = threads;
 }
 

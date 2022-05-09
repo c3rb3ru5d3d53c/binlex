@@ -113,7 +113,7 @@ vector<json> Decompiler::GetTraits(){
     vector<json> traitsjson;
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
         if (sections[i].data != NULL){
-            for (int j = 0; j < sections[i].traits.size(); j++){
+            for (size_t j = 0; j < sections[i].traits.size(); j++){
                 json jdata(GetTrait(sections[i].traits[j]));
                 traitsjson.push_back(jdata);
             }
@@ -151,9 +151,7 @@ void * Decompiler::CreateTraitsForSection(uint index) {
     }
 
     cs_insn *insn = cs_malloc(myself.handle);
-    while (!sections[index].discovered.empty()){
-
-        uint64_t tmp_addr = 0;
+    while (!sections[index].discovered.empty()) {
         uint64_t address = 0;
 
         PRINT_DEBUG("discovered size = %u\n", (uint32_t)sections[index].discovered.size());
@@ -411,7 +409,7 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
                 if (valid_block_count == 1) {
                     jmp_address_2 =  X86_REL_ADDR(*cs_ins);
                 }
-                else if (valid_block_count = 2) {
+                else if (valid_block_count == 2) {
                     PRINT_DEBUG("LinearDisassemble: Found three consecutive valid blocks adding jmp addresses\n");
                     AddDiscoveredBlock(jmp_address_1, sections, index);
                     AddDiscoveredBlock(jmp_address_2, sections, index);
@@ -798,7 +796,7 @@ uint64_t Decompiler::MaxAddress(set<uint64_t> coverage){
     return max_element;
 }
 
-bool Decompiler::IsAddress(map<uint64_t, uint> &addresses, uint64_t address, uint index){
+bool Decompiler::IsAddress(map<uint64_t, uint> &addresses, uint64_t address){
     if (addresses.find(address) == addresses.end()){
         return false;
     }
@@ -828,7 +826,7 @@ bool Decompiler::IsBlock(map<uint64_t, uint> &addresses, uint64_t address){
 
 void Decompiler::FreeTraits(uint index){
     if (sections[index].data != NULL){
-        for (int i = 0; i < sections[index].traits.size(); i++){
+        for (size_t i = 0; i < sections[index].traits.size(); i++){
             if (sections[index].traits[i].type != NULL){
                 free(sections[index].traits[i].type);
             }

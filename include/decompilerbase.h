@@ -34,10 +34,8 @@ namespace binlex {
             /**
             Set Threads and Thread Cycles, via pybind11
             @param threads number of threads
-            @param thread_cycles thread cycles
-            @param index the section index
             */
-            BINLEX_EXPORT void py_SetThreads(uint threads, uint thread_cycles, uint thread_sleep);
+            BINLEX_EXPORT void py_SetThreads(uint threads);
 
             /**
             Sets The Corpus Name, via pybind11

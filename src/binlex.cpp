@@ -24,6 +24,7 @@
 using namespace binlex;
 
 void timeout_handler(int signum) {
+    (void)signum;
     fprintf(stderr, "[x] execution timeout\n");
     exit(0);
 }
