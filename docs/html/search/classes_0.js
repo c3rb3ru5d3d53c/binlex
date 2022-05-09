@@ -1,5 +1,5 @@
 var searchData=
 [
-  ['args_109',['Args',['../classbinlex_1_1Args.html',1,'binlex']]],
-  ['autolex_110',['AutoLex',['../classbinlex_1_1AutoLex.html',1,'binlex']]]
+  ['args_112',['Args',['../classbinlex_1_1Args.html',1,'binlex']]],
+  ['autolex_113',['AutoLex',['../classbinlex_1_1AutoLex.html',1,'binlex']]]
 ];

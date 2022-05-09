@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['binlex_148',['binlex',['../namespacebinlex.html',1,'']]]
+  ['binlex_151',['binlex',['../namespacebinlex.html',1,'']]]
 ];

@@ -74,7 +74,19 @@ json Decompiler::GetTrait(struct Trait &trait){
     data["offset"] = trait.offset;
     data["bytes_entropy"] = trait.bytes_entropy;
     data["bytes_sha256"] = &trait.bytes_sha256[0];
+    string bytes_tlsh = TraitToTLSH(trait.bytes);
+    if (bytes_tlsh.length() > 0){
+        data["bytes_tlsh"] = bytes_tlsh;
+    } else {
+        data["bytes_tlsh"] = nullptr;
+    }
     data["trait_sha256"] = &trait.trait_sha256[0];
+    string trait_tlsh = TraitToTLSH(trait.trait);
+    if (trait_tlsh.length() > 0){
+        data["trait_tlsh"] = trait_tlsh;
+    } else {
+        data["trait_tlsh"] = nullptr;
+    }
     data["trait_entropy"] = trait.trait_entropy;
     data["invalid_instructions"] = trait.invalid_instructions;
     data["cyclomatic_complexity"] = trait.cyclomatic_complexity;

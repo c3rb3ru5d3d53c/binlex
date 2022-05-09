@@ -1,9 +1,11 @@
 var searchData=
 [
-  ['readbuffer_198',['ReadBuffer',['../classbinlex_1_1File.html#a7d80d86e8c30d68e11a7f024518c9172',1,'binlex::File']]],
-  ['readfile_199',['ReadFile',['../classbinlex_1_1File.html#af69581745439422e597e9c8ab2dcb27c',1,'binlex::File']]],
-  ['readfileintovector_200',['ReadFileIntoVector',['../classbinlex_1_1File.html#a2194b1dc5be789889ebe10099a778935',1,'binlex::File']]],
-  ['readvector_201',['ReadVector',['../classbinlex_1_1ELF.html#a4674a8acf19db9a120ec0af10ed25538',1,'binlex::ELF::ReadVector()'],['../classbinlex_1_1File.html#a29099a68d0b4f22be01c8818ec83d8a8',1,'binlex::File::ReadVector()'],['../classbinlex_1_1DOTNET.html#a1c59921ce0752ad78c176229a664b27c',1,'binlex::DOTNET::ReadVector()'],['../classbinlex_1_1PE.html#a4722bee8f84fa658852eb429d7e2399c',1,'binlex::PE::ReadVector()'],['../classbinlex_1_1Raw.html#a8c13d914c33d29f1df3d01e4cdc0273b',1,'binlex::Raw::ReadVector()']]],
-  ['removespaces_202',['RemoveSpaces',['../classbinlex_1_1Common.html#ad5ca8c8e5a5177c3bab1dafe1e9d17c0',1,'binlex::Common']]],
-  ['removewildcards_203',['RemoveWildcards',['../classbinlex_1_1Common.html#a35dbc25fdb59cf2d65eb35fcb1126c69',1,'binlex::Common']]]
+  ['parse_194',['parse',['../classbinlex_1_1Args.html#ad98e40d517d1f5f00ea0957c91a565bc',1,'binlex::Args']]],
+  ['print_5fhelp_195',['print_help',['../classbinlex_1_1Args.html#abf121fddbd8c005159add8135fc81786',1,'binlex::Args']]],
+  ['processfile_196',['ProcessFile',['../classbinlex_1_1AutoLex.html#a3b8efd8b134bddb06956041230d4c7b9',1,'binlex::AutoLex']]],
+  ['py_5fsetcorpus_197',['py_SetCorpus',['../classbinlex_1_1DecompilerBase.html#a83d585e6e625f33db9f0411f137eec91',1,'binlex::DecompilerBase']]],
+  ['py_5fsetinstructions_198',['py_SetInstructions',['../classbinlex_1_1DecompilerBase.html#a05c7b3139af23eae016cc7a39bf52e6b',1,'binlex::DecompilerBase']]],
+  ['py_5fsetmode_199',['py_SetMode',['../classbinlex_1_1DecompilerBase.html#ac56114b8f7f1abc3e633aa27eedaf60a',1,'binlex::DecompilerBase']]],
+  ['py_5fsettags_200',['py_SetTags',['../classbinlex_1_1DecompilerBase.html#a0a0d7ff04acbf54166a42efa2eb89369',1,'binlex::DecompilerBase']]],
+  ['py_5fsetthreads_201',['py_SetThreads',['../classbinlex_1_1DecompilerBase.html#a79df4e8d514351faf0254fb239053b4d',1,'binlex::DecompilerBase']]]
 ];

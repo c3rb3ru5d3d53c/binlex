@@ -132,18 +132,51 @@ Static Public Member Functions</h2></td></tr>
 <tr class="separator:a0ce1656f5c035e0b600ea136a72cabfa"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a92eb94689731b4cf6a376b34eca54480"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a92eb94689731b4cf6a376b34eca54480">HexdumpBE</a> (const void *data, size_t size)</td></tr>
 <tr class="separator:a92eb94689731b4cf6a376b34eca54480"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aeefad66e1265ceb795fac0e98813d982"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#aeefad66e1265ceb795fac0e98813d982">TraitToTLSH</a> (string bytes)</td></tr>
+<tr class="separator:aeefad66e1265ceb795fac0e98813d982"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a626ac4340c77d4b6a3f42e23f0f683b1"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT vector&lt; uint8_t &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a626ac4340c77d4b6a3f42e23f0f683b1">TraitToData</a> (string trait)</td></tr>
+<tr class="separator:a626ac4340c77d4b6a3f42e23f0f683b1"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ac7d8711f35ec828b1fff89aa8e567a98"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#ac7d8711f35ec828b1fff89aa8e567a98">Wildcards</a> (uint count)</td></tr>
 <tr class="separator:ac7d8711f35ec828b1fff89aa8e567a98"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:abb21236d547f49ff3983ea485b241233"><td class="memItemLeft" align="right" valign="top"><a id="abb21236d547f49ff3983ea485b241233"></a>
-static BINLEX_EXPORT string&#160;</td><td class="memItemRight" valign="bottom"><b>HexdumpMemDisp</b> (uint64_t disp)</td></tr>
-<tr class="separator:abb21236d547f49ff3983ea485b241233"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a581cc519cdd00312a55fe0649a4b168d"><td class="memItemLeft" align="right" valign="top"><a id="a581cc519cdd00312a55fe0649a4b168d"></a>
-static BINLEX_EXPORT float&#160;</td><td class="memItemRight" valign="bottom"><b>Entropy</b> (string trait)</td></tr>
+<tr class="memitem:a581cc519cdd00312a55fe0649a4b168d"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT float&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a581cc519cdd00312a55fe0649a4b168d">Entropy</a> (string trait)</td></tr>
 <tr class="separator:a581cc519cdd00312a55fe0649a4b168d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a654dea4accfca1f897e7a7bc1587f343"><td class="memItemLeft" align="right" valign="top">static BINLEX_EXPORT void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classbinlex_1_1Common.html#a654dea4accfca1f897e7a7bc1587f343">Hexdump</a> (const char *desc, const void *addr, const int len)</td></tr>
 <tr class="separator:a654dea4accfca1f897e7a7bc1587f343"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Member Function Documentation</h2>
+<a id="a581cc519cdd00312a55fe0649a4b168d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a581cc519cdd00312a55fe0649a4b168d">&#9670;&nbsp;</a></span>Entropy()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static BINLEX_EXPORT float binlex::Common::Entropy </td>
+          <td>(</td>
+          <td class="paramtype">string&#160;</td>
+          <td class="paramname"><em>trait</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>Calculate the entropy of a trait. </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">trait</td><td>trait hex string </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>entropy float </dd></dl>
+
+</div>
+</div>
 <a id="afcb68aa2cb7c96abedd55b3fc77fabdd"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#afcb68aa2cb7c96abedd55b3fc77fabdd">&#9670;&nbsp;</a></span>GetByteSize()</h2>
 
@@ -572,6 +605,72 @@ static BINLEX_EXPORT float&#160;</td><td class="memItemRight" valign="bottom"><b
   </dd>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>Returns char vector of bytes </dd></dl>
+
+</div>
+</div>
+<a id="a626ac4340c77d4b6a3f42e23f0f683b1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a626ac4340c77d4b6a3f42e23f0f683b1">&#9670;&nbsp;</a></span>TraitToData()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static BINLEX_EXPORT vector&lt;uint8_t&gt; binlex::Common::TraitToData </td>
+          <td>(</td>
+          <td class="paramtype">string&#160;</td>
+          <td class="paramname"><em>trait</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>This method converts a trait to a uint_8 vector </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">trait</td><td>string </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>uint8_t vector of data </dd></dl>
+
+</div>
+</div>
+<a id="aeefad66e1265ceb795fac0e98813d982"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aeefad66e1265ceb795fac0e98813d982">&#9670;&nbsp;</a></span>TraitToTLSH()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static BINLEX_EXPORT string binlex::Common::TraitToTLSH </td>
+          <td>(</td>
+          <td class="paramtype">string&#160;</td>
+          <td class="paramname"><em>bytes</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>This method converts bytes hex string to TLSH of the bytes. </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">bytes</td><td>hex string of bytes </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>TLSH hash string </dd></dl>
 
 </div>
 </div>

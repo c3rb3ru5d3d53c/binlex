@@ -16,7 +16,6 @@ void init_common(py::module &handle){
     .def_static("trim_right", &binlex::Common::TrimRight)
     .def_static("wildcards", &binlex::Common::Wildcards)
     .def_static("entropy", &binlex::Common::Entropy)
-    .def_static("hexdump_mem_disp", &binlex::Common::HexdumpMemDisp)
     .def_static("hexdump", &binlex::Common::Hexdump)
     .def_static("hexdump_be", &binlex::Common::HexdumpBE);
 }

@@ -1,9 +1,9 @@
 var searchData=
 [
-  ['set_5fio_5ftype_204',['set_io_type',['../classbinlex_1_1Args.html#a0589f1ceb485b09037e248c5867f0644',1,'binlex::Args']]],
-  ['setdefault_205',['SetDefault',['../classbinlex_1_1Args.html#a315af4879832687b962c26c559d9fb4d',1,'binlex::Args']]],
-  ['setinstructions_206',['SetInstructions',['../classbinlex_1_1Decompiler.html#a48c0658768bd8fc5683b964141103e68',1,'binlex::Decompiler']]],
-  ['setup_207',['Setup',['../classbinlex_1_1ELF.html#a1fedaeda9047ad1b92d720d7564d88e1',1,'binlex::ELF::Setup()'],['../classbinlex_1_1Decompiler.html#a87c28dc8b055a327f8c0502ed84c02f8',1,'binlex::Decompiler::Setup()'],['../classbinlex_1_1PE.html#aaf2fa4d79bc0fc9449eadd366b870d6b',1,'binlex::PE::Setup()']]],
-  ['sha256_208',['SHA256',['../classbinlex_1_1Common.html#a0c3eb3179bd7d87b3180387be76573e7',1,'binlex::Common']]],
-  ['sizeoftrait_209',['SizeOfTrait',['../classbinlex_1_1CILDecompiler.html#ad36cfbf20a7ead33e32cf31464cb906d',1,'binlex::CILDecompiler']]]
+  ['readbuffer_202',['ReadBuffer',['../classbinlex_1_1File.html#a7d80d86e8c30d68e11a7f024518c9172',1,'binlex::File']]],
+  ['readfile_203',['ReadFile',['../classbinlex_1_1File.html#af69581745439422e597e9c8ab2dcb27c',1,'binlex::File']]],
+  ['readfileintovector_204',['ReadFileIntoVector',['../classbinlex_1_1File.html#a2194b1dc5be789889ebe10099a778935',1,'binlex::File']]],
+  ['readvector_205',['ReadVector',['../classbinlex_1_1ELF.html#a4674a8acf19db9a120ec0af10ed25538',1,'binlex::ELF::ReadVector()'],['../classbinlex_1_1File.html#a29099a68d0b4f22be01c8818ec83d8a8',1,'binlex::File::ReadVector()'],['../classbinlex_1_1DOTNET.html#a1c59921ce0752ad78c176229a664b27c',1,'binlex::DOTNET::ReadVector()'],['../classbinlex_1_1PE.html#a4722bee8f84fa658852eb429d7e2399c',1,'binlex::PE::ReadVector()'],['../classbinlex_1_1Raw.html#a8c13d914c33d29f1df3d01e4cdc0273b',1,'binlex::Raw::ReadVector()']]],
+  ['removespaces_206',['RemoveSpaces',['../classbinlex_1_1Common.html#ad5ca8c8e5a5177c3bab1dafe1e9d17c0',1,'binlex::Common']]],
+  ['removewildcards_207',['RemoveWildcards',['../classbinlex_1_1Common.html#a35dbc25fdb59cf2d65eb35fcb1126c69',1,'binlex::Common']]]
 ];
