@@ -400,10 +400,10 @@ namespace binlex {
             bool ParseCor20StreamsHeader();
             bool ParseCor20MetadataStream();
         public:
-			dotnet::COR20_HEADER cor20_header = { 0 };
-			dotnet::COR20_STORAGE_SIGNATURE cor20_storage_signature = { 0 };
-			dotnet::COR20_STORAGE_HEADER cor20_storage_header = { 0 };
-            dotnet::COR20_STREAM_HEADER **StreamsHeader = { 0 };
+			dotnet::COR20_HEADER cor20_header = {};
+			dotnet::COR20_STORAGE_SIGNATURE cor20_storage_signature = {};
+			dotnet::COR20_STORAGE_HEADER cor20_storage_header = {};
+            dotnet::COR20_STREAM_HEADER **StreamsHeader = {};
             dotnet::Cor20MetadataTable cor20_metadata_table;
 
             vector<Section> _sections;
