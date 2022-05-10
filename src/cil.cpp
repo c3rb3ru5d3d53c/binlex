@@ -2,14 +2,8 @@
 
 using namespace binlex;
 using json = nlohmann::json;
-#ifndef _WIN32
-static pthread_mutex_t DECOMPILER_MUTEX = PTHREAD_MUTEX_INITIALIZER;
-#else
-CRITICAL_SECTION csDecompiler;
-#endif
 
 CILDecompiler::CILDecompiler(const binlex::File &firef) : DecompilerBase(firef) {
-    int type = CIL_DECOMPILER_TYPE_UNSET;
     for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
         sections[i].offset = 0;
         sections[i].ntraits = 0;
@@ -279,22 +273,6 @@ CILDecompiler::CILDecompiler(const binlex::File &firef) : DecompilerBase(firef) 
     };
 }
 
-char * CILDecompiler::hexdump_traits(char *buffer0, const void *data, int size, int operand_size) {
-    const unsigned char *pc = (const unsigned char *)data;
-    for (int i = 0; i < size; i++){
-        if (i >= size - (operand_size/8)){
-            sprintf(buffer0, "%s?? ", buffer0);
-        } else {
-            sprintf(buffer0, "%s%02x ", buffer0, pc[i]);
-        }
-    }
-    return buffer0;
-}
-char * CILDecompiler::traits_nl(char *traits){
-    sprintf(traits, "%s\n", traits);
-    return traits;
-}
-
 bool CILDecompiler::Setup(int input_type){
     switch(input_type){
         case CIL_DECOMPILER_TYPE_BLCKS:
@@ -351,7 +329,6 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
     uint num_f_instructions = 0;
     uint func_block_count = 0;
     for (int i = 0; i < data_size; i++){
-        int operand_size = 0;
         bool end_block = false;
         bool end_func = false;
         Instruction *insn = new Instruction;
@@ -424,7 +401,7 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
         //If we're at the end of a block, at the end of a function, or
         //at the end of our data then we need to store the block trait data.
         //Even the end of a function should be considered a "block".
-        if ((end_func || end_block && i < data_size - 1) ||
+        if ((end_func || (end_block && i < data_size - 1)) ||
             ((end_block == false && end_func == false) && i == data_size -1)) {
             Trait *ctrait = new Trait;
             ctrait->instructions = instructions;
@@ -520,12 +497,12 @@ string CILDecompiler::ConvTraitBytes(vector< Instruction* > allinst) {
             rstr.append(string(hexbytes));
             rstr.append(" ");
         }
-        for(int i = 0; i < inst->operand_size/8; i++) {
+        for(uint i = 0; i < inst->operand_size/8; i++) {
             rstr.append("??");
             rstr.append(" ");
         }
     }
-    fstr = TrimRight(rstr);
+    fstr = TrimRight(rstr);ng polymorphic type ‘class LIEF:
     return fstr;
 }
 
@@ -547,7 +524,7 @@ string CILDecompiler::ConvBytes(vector< Instruction* > allinst, void *data, int 
     uint trait_size = SizeOfTrait(allinst);
     unsigned char *cdata = (unsigned char *)data;
     char hexbytes[3];
-    for(int i = begin_offset; i < begin_offset+trait_size; i++) {
+    for(uint i = begin_offset; i < begin_offset+trait_size; i++) {
         sprintf(hexbytes, "%02x", cdata[i]);
         hexbytes[2] = '\0';
         byte_rep.append(string(hexbytes));

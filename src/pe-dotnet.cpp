@@ -191,7 +191,6 @@ bool DOTNET::ParseCor20MetadataStream()
 {
     vector<uint8_t> raw_data;
     unsigned char *storage_signature, *storage_header, *streams_header, *streams_header_aux;
-    uint32_t size_of_storage_signature;
     dotnet::COR20_STREAM_HEADER *stream_metadata_header = NULL;
 
     raw_data = binary->get_content_from_virtual_address(cor20_header.metadata_rva, cor20_header.metadata_size);
