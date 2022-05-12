@@ -469,8 +469,10 @@ We hope this encourages people to build their own detection solutions based on b
 
 # Tips
 - If you are hunting be sure to use `jq` to improve your searches
-- Does not support PE files that are VB6 or .NET if you run against these you will get errors
+- Does not support PE files that are VB6 if you run against these you will get errors
 - Don't mix packed and unpacked malware or you will taint your dataset (seen this in academics all the time)
+- When comparing samples to identify if their code is similar, DO NOT mix their architectures in your comparison
+  - Comparing CIL byte-code or .NET to x86 machine code may yield interesting properties, but they are invalid
 - Verify the samples you are collecting into a group using skilled analysts
 - These traits are best used with a hybrid approach (supervised)
 
