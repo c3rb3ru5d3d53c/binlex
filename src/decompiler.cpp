@@ -24,16 +24,6 @@ Decompiler::Decompiler(const binlex::File &firef) : DecompilerBase(firef) {
 
 void Decompiler::AppendTrait(struct Trait *trait, struct Section *sections, uint index){
     struct Trait new_elem_trait = *trait; //copy the stuff populated in the caller, TODO: more cleanup required to not copy anything.
-
-    new_elem_trait.type = (char *)malloc(strlen(trait->type) + 1);
-    if (new_elem_trait.type == NULL){
-        PRINT_ERROR_AND_EXIT("[x] trait malloc failed\n");
-    }
-    memset(new_elem_trait.type, 0, strlen(trait->type) + 1);
-    if (memcpy(new_elem_trait.type, trait->type, strlen(trait->type)) == NULL){
-        PRINT_ERROR_AND_EXIT("[x] trait memcpy failed\n");
-    }
-
     new_elem_trait.trait = (char *)malloc(strlen(trait->tmp_trait.c_str()) + 1);
     if (new_elem_trait.trait == NULL){
         PRINT_ERROR_AND_EXIT("[x] trait malloc failed\n");
@@ -116,13 +106,13 @@ void * Decompiler::CreateTraitsForSection(uint index) {
 
     PRINT_DEBUG("----------\nHandling section %u\n----------\n", index);
 
-    i_trait.type = (char *)"instruction";
+    i_trait.type = "instruction";
     //i_trait.architecture = sections[index].arch_str;
     ClearTrait(&i_trait);
-    b_trait.type = (char *)"block";
+    b_trait.type = "block";
     //b_trait.architecture = sections[index].arch_str;
     ClearTrait(&b_trait);
-    f_trait.type = (char *)"function";
+    f_trait.type = "function";
     //f_trait.architecture = sections[index].arch_str;
     ClearTrait(&f_trait);
 
@@ -275,24 +265,23 @@ void * Decompiler::CreateTraitsForSection(uint index) {
 
 void * Decompiler::FinalizeTrait(struct Trait &trait){
     if (trait.blocks == 0 &&
-        (strcmp(trait.type, "function") == 0 ||
-        strcmp(trait.type, "block") == 0)){
+        (strcmp(trait.type.c_str(), "function") == 0 ||
+        strcmp(trait.type.c_str(), "block") == 0)){
         trait.blocks++;
     }
     trait.bytes_entropy = Entropy(string(trait.bytes));
     trait.trait_entropy = Entropy(string(trait.trait));
     memcpy(&trait.bytes_sha256[0], SHA256(trait.bytes).c_str(), SHA256_PRINTABLE_SIZE);
     memcpy(&trait.trait_sha256[0], SHA256(trait.trait).c_str(), SHA256_PRINTABLE_SIZE);
-    if (strcmp(trait.type, (char *)"block") == 0){
+    if (strcmp(trait.type.c_str(), (char *)"block") == 0){
         trait.cyclomatic_complexity = trait.edges - 1 + 2;
         trait.average_instructions_per_block = trait.instructions / 1;
     }
-    if (strcmp(trait.type, (char *)"function") == 0){
+    if (strcmp(trait.type.c_str(), (char *)"function") == 0){
         trait.cyclomatic_complexity = trait.edges - trait.blocks + 2;
         trait.average_instructions_per_block = trait.instructions / trait.blocks;
     }
     return NULL;
-
 }
 
 void Decompiler::ClearTrait(struct Trait *trait){
@@ -732,9 +721,9 @@ bool Decompiler::IsBlock(map<uint64_t, uint> &addresses, uint64_t address){
 void Decompiler::FreeTraits(uint index){
     if (sections[index].data != NULL){
         for (size_t i = 0; i < sections[index].traits.size(); i++){
-            if (sections[index].traits[i].type != NULL){
-                free(sections[index].traits[i].type);
-            }
+            // if (sections[index].traits[i].type != NULL){
+            //     free(sections[index].traits[i].type);
+            // }
             if (sections[index].traits[i].bytes != NULL){
                 free(sections[index].traits[i].bytes);
             }
