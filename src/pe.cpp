@@ -63,7 +63,7 @@ bool PE::IsDotNet(){
         }
         return false;
     }
-    catch(LIEF::bad_format bf){
+    catch(LIEF::bad_format const&){
         return false;
     }
 }
