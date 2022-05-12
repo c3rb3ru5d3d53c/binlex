@@ -588,15 +588,10 @@ bool Decompiler::IsWildcardInsn(cs_insn *insn){
 bool Decompiler::IsEndInsn(cs_insn *insn) {
     switch (insn->id) {
         case X86_INS_RET:
-            return true;
         case X86_INS_RETF:
-            return true;
         case X86_INS_RETFQ:
-            return true;
         case X86_INS_IRET:
-            return true;
         case X86_INS_IRETD:
-            return true;
         case X86_INS_IRETQ:
             return true;
         default:
@@ -610,41 +605,23 @@ uint Decompiler::IsConditionalInsn(cs_insn* insn) {
     case X86_INS_JMP:
         return 1;
     case X86_INS_JNE:
-        return 2;
     case X86_INS_JNO:
-        return 2;
     case X86_INS_JNP:
-        return 2;
     case X86_INS_JL:
-        return 2;
     case X86_INS_JLE:
-        return 2;
     case X86_INS_JG:
-        return 2;
     case X86_INS_JGE:
-        return 2;
     case X86_INS_JE:
-        return 2;
     case X86_INS_JECXZ:
-        return 2;
     case X86_INS_JCXZ:
-        return 2;
     case X86_INS_JB:
-        return 2;
     case X86_INS_JBE:
-        return 2;
     case X86_INS_JA:
-        return 2;
     case X86_INS_JAE:
-        return 2;
     case X86_INS_JNS:
-        return 2;
     case X86_INS_JO:
-        return 2;
     case X86_INS_JP:
-        return 2;
     case X86_INS_JRCXZ:
-        return 2;
     case X86_INS_JS:
         return 2;
     default:
@@ -657,81 +634,24 @@ uint Decompiler::CollectInsn(cs_insn* insn, struct Section *sections, uint index
     uint result = DECOMPILER_OPERAND_TYPE_UNSET;
     switch (insn->id) {
     case X86_INS_JMP:
-        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
-        result = DECOMPILER_OPERAND_TYPE_BLOCK;
-        break;
     case X86_INS_JNE:
-        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
-        result = DECOMPILER_OPERAND_TYPE_BLOCK;
-        break;
     case X86_INS_JNO:
-        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
-        result = DECOMPILER_OPERAND_TYPE_BLOCK;
-        break;
     case X86_INS_JNP:
-        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
-        result = DECOMPILER_OPERAND_TYPE_BLOCK;
-        break;
     case X86_INS_JL:
-        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
-        result = DECOMPILER_OPERAND_TYPE_BLOCK;
-        break;
     case X86_INS_JLE:
-        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
-        result = DECOMPILER_OPERAND_TYPE_BLOCK;
-        break;
     case X86_INS_JG:
-        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
-        result = DECOMPILER_OPERAND_TYPE_BLOCK;
-        break;
     case X86_INS_JGE:
-        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
-        result = DECOMPILER_OPERAND_TYPE_BLOCK;
-        break;
     case X86_INS_JE:
-        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
-        result = DECOMPILER_OPERAND_TYPE_BLOCK;
-        break;
     case X86_INS_JECXZ:
-        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
-        result = DECOMPILER_OPERAND_TYPE_BLOCK;
-        break;
     case X86_INS_JCXZ:
-        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
-        result = DECOMPILER_OPERAND_TYPE_BLOCK;
-        break;
     case X86_INS_JB:
-        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
-        result = DECOMPILER_OPERAND_TYPE_BLOCK;
-        break;
     case X86_INS_JBE:
-        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
-        result = DECOMPILER_OPERAND_TYPE_BLOCK;
-        break;
     case X86_INS_JA:
-        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
-        result = DECOMPILER_OPERAND_TYPE_BLOCK;
-        break;
     case X86_INS_JAE:
-        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
-        result = DECOMPILER_OPERAND_TYPE_BLOCK;
-        break;
     case X86_INS_JNS:
-        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
-        result = DECOMPILER_OPERAND_TYPE_BLOCK;
-        break;
     case X86_INS_JO:
-        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
-        result = DECOMPILER_OPERAND_TYPE_BLOCK;
-        break;
     case X86_INS_JP:
-        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
-        result = DECOMPILER_OPERAND_TYPE_BLOCK;
-        break;
     case X86_INS_JRCXZ:
-        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
-        result = DECOMPILER_OPERAND_TYPE_BLOCK;
-        break;
     case X86_INS_JS:
         CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
         result = DECOMPILER_OPERAND_TYPE_BLOCK;
