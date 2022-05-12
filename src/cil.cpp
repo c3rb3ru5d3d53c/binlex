@@ -502,7 +502,7 @@ string CILDecompiler::ConvTraitBytes(vector< Instruction* > allinst) {
             rstr.append(" ");
         }
     }
-    fstr = TrimRight(rstr);ng polymorphic type ‘class LIEF:
+    fstr = TrimRight(rstr);
     return fstr;
 }
 
