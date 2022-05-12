@@ -66,7 +66,7 @@ namespace binlex {
         } worker_args;
     public:
         struct Trait {
-            char *type;
+            string type;
             string tmp_bytes;
             char *bytes;
             string tmp_trait;
