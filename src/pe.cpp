@@ -17,12 +17,18 @@ bool PE::Setup(MACHINE_TYPES input_mode){
     switch(input_mode){
         case MACHINE_TYPES::IMAGE_FILE_MACHINE_I386:
             mode = MACHINE_TYPES::IMAGE_FILE_MACHINE_I386;
+            binary_arch = BINARY_ARCH_X86;
+            binary_mode = BINARY_MODE_32;
             break;
         case MACHINE_TYPES::IMAGE_FILE_MACHINE_AMD64:
             mode = MACHINE_TYPES::IMAGE_FILE_MACHINE_AMD64;
+            binary_arch = BINARY_ARCH_X86_64;
+            binary_mode = BINARY_MODE_64;
             break;
         default:
             mode = MACHINE_TYPES::IMAGE_FILE_MACHINE_UNKNOWN;
+            binary_arch = BINARY_ARCH_UNKNOWN;
+            binary_mode = BINARY_MODE_UNKNOWN;
             fprintf(stderr, "[x] unsupported mode.\n");
             return false;
     }

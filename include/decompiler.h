@@ -98,7 +98,7 @@ namespace binlex {
         };
         static cs_arch arch;
         static cs_mode mode;
-        struct Section sections[DECOMPILER_MAX_SECTIONS];
+        struct Section sections[BINARY_MAX_SECTIONS];
         BINLEX_EXPORT Decompiler(const binlex::File &firef);
         /**
         Set up Capstone Decompiler Architecure and Mode

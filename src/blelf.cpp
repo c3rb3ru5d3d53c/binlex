@@ -17,12 +17,18 @@ bool ELF::Setup(ARCH input_mode){
     switch(input_mode){
         case ARCH::EM_386:
             mode = ARCH::EM_386;
+            binary_arch = BINARY_ARCH_X86;
+            binary_mode = BINARY_MODE_32;
             break;
         case ARCH::EM_X86_64:
             mode = ARCH::EM_X86_64;
+            binary_arch = BINARY_ARCH_X86_64;
+            binary_mode = BINARY_MODE_64;
             break;
         default:
             mode = ARCH::EM_NONE;
+            binary_arch = BINARY_ARCH_UNKNOWN;
+            binary_mode = BINARY_MODE_UNKNOWN;
             fprintf(stderr, "[x] unsupported mode.\n");
             return false;
     }

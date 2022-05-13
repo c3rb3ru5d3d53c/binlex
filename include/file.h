@@ -16,6 +16,8 @@ namespace binlex {
 		 * This class holds data and methods common to files.
 		 */
 		public:
+			int binary_arch;
+			int binary_mode;
 			string sha256;
 			string tlsh;
 		struct Section {
