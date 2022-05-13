@@ -26,13 +26,11 @@ bool Raw::ReadVector(const std::vector<uint8_t> &data){
     sections[section_index].size = data.size();
     sections[section_index].data = malloc(data.size());
     if(sections[section_index].data == NULL) {
-	// No more memory.
-	return false;
+	    return false;
     }
     std::copy(data.begin(), data.end(), static_cast<uint8_t*>(sections[section_index].data));
     return true;
 }
-
 
 Raw::~Raw(){
     for (int i = 0; i < BINARY_MAX_SECTIONS; i++){
