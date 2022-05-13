@@ -10,5 +10,6 @@ var namespacebinlex =
     [ "ELF", "classbinlex_1_1ELF.html", "classbinlex_1_1ELF" ],
     [ "File", "classbinlex_1_1File.html", "classbinlex_1_1File" ],
     [ "PE", "classbinlex_1_1PE.html", "classbinlex_1_1PE" ],
-    [ "Raw", "classbinlex_1_1Raw.html", "classbinlex_1_1Raw" ]
+    [ "Raw", "classbinlex_1_1Raw.html", "classbinlex_1_1Raw" ],
+    [ "TimedCode", "classbinlex_1_1TimedCode.html", "classbinlex_1_1TimedCode" ]
 ];

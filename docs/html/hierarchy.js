@@ -32,10 +32,11 @@ var hierarchy =
       [ "dotnet::ResolutionScopeIndex", "classdotnet_1_1ResolutionScopeIndex.html", null ],
       [ "dotnet::TypeDefOrRefIndex", "classdotnet_1_1TypeDefOrRefIndex.html", null ]
     ] ],
+    [ "dotnet::TableEntry::ParseArgs", "structdotnet_1_1TableEntry_1_1ParseArgs.html", null ],
     [ "binlex::Decompiler::Section", "structbinlex_1_1Decompiler_1_1Section.html", null ],
-    [ "binlex::CILDecompiler::Section", "structbinlex_1_1CILDecompiler_1_1Section.html", null ],
-    [ "binlex::File::Section", "structbinlex_1_1File_1_1Section.html", null ],
     [ "binlex::Raw::Section", "structbinlex_1_1Raw_1_1Section.html", null ],
+    [ "binlex::File::Section", "structbinlex_1_1File_1_1Section.html", null ],
+    [ "binlex::CILDecompiler::Section", "structbinlex_1_1CILDecompiler_1_1Section.html", null ],
     [ "SHA256_CTX", "structSHA256__CTX.html", null ],
     [ "dotnet::SimpleTableIndex", "classdotnet_1_1SimpleTableIndex.html", null ],
     [ "dotnet::StringHeapIndex", "classdotnet_1_1StringHeapIndex.html", null ],
@@ -48,6 +49,7 @@ var hierarchy =
       [ "dotnet::TypeDefEntry", "classdotnet_1_1TypeDefEntry.html", null ],
       [ "dotnet::TypeRefEntry", "classdotnet_1_1TypeRefEntry.html", null ]
     ] ],
+    [ "binlex::TimedCode", "classbinlex_1_1TimedCode.html", null ],
     [ "binlex::Decompiler::Trait", "structbinlex_1_1Decompiler_1_1Trait.html", null ],
     [ "binlex::CILDecompiler::Trait", "structbinlex_1_1CILDecompiler_1_1Trait.html", null ]
 ];

@@ -10,7 +10,7 @@ var classbinlex_1_1Decompiler =
     [ "FreeTraits", "classbinlex_1_1Decompiler.html#a22fe3fbb20dd55fbaa4b64f28afaddbc", null ],
     [ "GetTrait", "classbinlex_1_1Decompiler.html#a1f766992f51fb6a39f26e0a111a3fd06", null ],
     [ "GetTraits", "classbinlex_1_1Decompiler.html#afc5ee0847582e4df55b12bdb36e5ac1b", null ],
-    [ "IsAddress", "classbinlex_1_1Decompiler.html#aee8efe58cf2c68b07fe66a9294a5ca5d", null ],
+    [ "IsAddress", "classbinlex_1_1Decompiler.html#a4b98cc138ec7b506f54abf66cedd058d", null ],
     [ "LinearDisassemble", "classbinlex_1_1Decompiler.html#a0045a92875a089edb6e862387851bb4d", null ],
     [ "SetInstructions", "classbinlex_1_1Decompiler.html#a48c0658768bd8fc5683b964141103e68", null ],
     [ "Setup", "classbinlex_1_1Decompiler.html#a87c28dc8b055a327f8c0502ed84c02f8", null ],

@@ -361,100 +361,98 @@ $(document).ready(function(){initNavTree('cil_8h_source.html',''); initResizable
 <div class="line"><a name="l00273"></a><span class="lineno">  273</span>&#160;<span class="comment">        */</span></div>
 <div class="line"><a name="l00274"></a><span class="lineno">  274</span>&#160;        <span class="keyword">private</span>:</div>
 <div class="line"><a name="l00275"></a><span class="lineno">  275</span>&#160;            <span class="keywordtype">int</span> type = CIL_DECOMPILER_TYPE_UNSET;</div>
-<div class="line"><a name="l00276"></a><span class="lineno">  276</span>&#160;            <span class="keywordtype">char</span> * hexdump_traits(<span class="keywordtype">char</span> *buffer0, <span class="keyword">const</span> <span class="keywordtype">void</span> *data, <span class="keywordtype">int</span> size, <span class="keywordtype">int</span> operand_size);</div>
-<div class="line"><a name="l00277"></a><span class="lineno">  277</span>&#160;            <span class="keywordtype">char</span> * traits_nl(<span class="keywordtype">char</span> *traits);</div>
-<div class="line"><a name="l00278"></a><span class="lineno">  278</span>&#160;            <span class="keywordtype">int</span> update_offset(<span class="keywordtype">int</span> operand_size, <span class="keywordtype">int</span> i);</div>
-<div class="line"><a name="l00279"></a><span class="lineno">  279</span>&#160;            <span class="keyword">typedef</span> <span class="keyword">struct </span>worker {</div>
-<div class="line"><a name="l00280"></a><span class="lineno">  280</span>&#160;                csh handle;</div>
-<div class="line"><a name="l00281"></a><span class="lineno">  281</span>&#160;                cs_err error;</div>
-<div class="line"><a name="l00282"></a><span class="lineno">  282</span>&#160;                uint64_t pc;</div>
-<div class="line"><a name="l00283"></a><span class="lineno">  283</span>&#160;                <span class="keyword">const</span> uint8_t *code;</div>
-<div class="line"><a name="l00284"></a><span class="lineno">  284</span>&#160;                <span class="keywordtype">size_t</span> code_size;</div>
-<div class="line"><a name="l00285"></a><span class="lineno">  285</span>&#160;            } worker;</div>
-<div class="line"><a name="l00286"></a><span class="lineno">  286</span>&#160;            <span class="keyword">typedef</span> <span class="keyword">struct</span>{</div>
-<div class="line"><a name="l00287"></a><span class="lineno">  287</span>&#160;                uint index;</div>
-<div class="line"><a name="l00288"></a><span class="lineno">  288</span>&#160;                <span class="keywordtype">void</span> *sections;</div>
-<div class="line"><a name="l00289"></a><span class="lineno">  289</span>&#160;            } worker_args;</div>
-<div class="line"><a name="l00290"></a><span class="lineno">  290</span>&#160;        <span class="keyword">public</span>:</div>
-<div class="line"><a name="l00291"></a><span class="lineno">  291</span>&#160;            <a class="code" href="classbinlex_1_1CILDecompiler.html">CILDecompiler</a>(<span class="keyword">const</span> <a class="code" href="classbinlex_1_1File.html">binlex::File</a> &amp;firef);</div>
-<div class="line"><a name="l00292"></a><span class="lineno"><a class="line" href="structbinlex_1_1CILDecompiler_1_1Instruction.html">  292</a></span>&#160;            <span class="keyword">struct </span><a class="code" href="structbinlex_1_1CILDecompiler_1_1Instruction.html">Instruction</a> {</div>
-<div class="line"><a name="l00293"></a><span class="lineno">  293</span>&#160;                <span class="keywordtype">unsigned</span> <span class="keywordtype">char</span> instruction;</div>
-<div class="line"><a name="l00294"></a><span class="lineno">  294</span>&#160;                uint operand_size;</div>
-<div class="line"><a name="l00295"></a><span class="lineno">  295</span>&#160;                uint offset;</div>
-<div class="line"><a name="l00296"></a><span class="lineno">  296</span>&#160;            };</div>
-<div class="line"><a name="l00297"></a><span class="lineno"><a class="line" href="structbinlex_1_1CILDecompiler_1_1Trait.html">  297</a></span>&#160;            <span class="keyword">struct </span><a class="code" href="structbinlex_1_1CILDecompiler_1_1Trait.html">Trait</a> {</div>
-<div class="line"><a name="l00298"></a><span class="lineno">  298</span>&#160;                <span class="keywordtype">string</span> corpus;</div>
-<div class="line"><a name="l00299"></a><span class="lineno">  299</span>&#160;                <span class="keywordtype">string</span> type;</div>
-<div class="line"><a name="l00300"></a><span class="lineno">  300</span>&#160;                <span class="keywordtype">string</span> architecture;</div>
-<div class="line"><a name="l00301"></a><span class="lineno">  301</span>&#160;                <span class="keywordtype">string</span> tmp_bytes;</div>
-<div class="line"><a name="l00302"></a><span class="lineno">  302</span>&#160;                <span class="keywordtype">string</span> bytes;</div>
-<div class="line"><a name="l00303"></a><span class="lineno">  303</span>&#160;                <span class="keywordtype">string</span> trait;</div>
-<div class="line"><a name="l00304"></a><span class="lineno">  304</span>&#160;                uint edges;</div>
-<div class="line"><a name="l00305"></a><span class="lineno">  305</span>&#160;                uint blocks;</div>
-<div class="line"><a name="l00306"></a><span class="lineno">  306</span>&#160;                vector&lt; Instruction* &gt;* instructions;</div>
-<div class="line"><a name="l00307"></a><span class="lineno">  307</span>&#160;                uint num_instructions;</div>
-<div class="line"><a name="l00308"></a><span class="lineno">  308</span>&#160;                uint size;</div>
-<div class="line"><a name="l00309"></a><span class="lineno">  309</span>&#160;                uint offset;</div>
-<div class="line"><a name="l00310"></a><span class="lineno">  310</span>&#160;                uint invalid_instructions;</div>
-<div class="line"><a name="l00311"></a><span class="lineno">  311</span>&#160;                uint cyclomatic_complexity;</div>
-<div class="line"><a name="l00312"></a><span class="lineno">  312</span>&#160;                uint average_instructions_per_block;</div>
-<div class="line"><a name="l00313"></a><span class="lineno">  313</span>&#160;                <span class="keywordtype">float</span> bytes_entropy;</div>
-<div class="line"><a name="l00314"></a><span class="lineno">  314</span>&#160;                <span class="keywordtype">float</span> trait_entropy;</div>
-<div class="line"><a name="l00315"></a><span class="lineno">  315</span>&#160;                <span class="keywordtype">string</span> trait_sha256;</div>
-<div class="line"><a name="l00316"></a><span class="lineno">  316</span>&#160;                <span class="keywordtype">string</span> bytes_sha256;</div>
-<div class="line"><a name="l00317"></a><span class="lineno">  317</span>&#160;            };</div>
-<div class="line"><a name="l00318"></a><span class="lineno"><a class="line" href="structbinlex_1_1CILDecompiler_1_1Section.html">  318</a></span>&#160;            <span class="keyword">struct </span><a class="code" href="structbinlex_1_1CILDecompiler_1_1Section.html">Section</a> {</div>
-<div class="line"><a name="l00319"></a><span class="lineno">  319</span>&#160;                vector &lt;Trait*&gt; function_traits;</div>
-<div class="line"><a name="l00320"></a><span class="lineno">  320</span>&#160;                vector &lt;Trait*&gt; block_traits;</div>
-<div class="line"><a name="l00321"></a><span class="lineno">  321</span>&#160;                <span class="keywordtype">char</span> *trait;</div>
-<div class="line"><a name="l00322"></a><span class="lineno">  322</span>&#160;                cs_arch arch;</div>
-<div class="line"><a name="l00323"></a><span class="lineno">  323</span>&#160;                cs_mode mode;</div>
-<div class="line"><a name="l00324"></a><span class="lineno">  324</span>&#160;                <span class="keywordtype">char</span> *arch_str;</div>
-<div class="line"><a name="l00325"></a><span class="lineno">  325</span>&#160;                <span class="keywordtype">char</span> *cpu;</div>
-<div class="line"><a name="l00326"></a><span class="lineno">  326</span>&#160;                <span class="keywordtype">string</span> corpus;</div>
-<div class="line"><a name="l00327"></a><span class="lineno">  327</span>&#160;                uint threads;</div>
-<div class="line"><a name="l00328"></a><span class="lineno">  328</span>&#160;                <span class="keywordtype">bool</span> instructions;</div>
-<div class="line"><a name="l00329"></a><span class="lineno">  329</span>&#160;                uint thread_cycles;</div>
-<div class="line"><a name="l00330"></a><span class="lineno">  330</span>&#160;                useconds_t thread_sleep;</div>
-<div class="line"><a name="l00331"></a><span class="lineno">  331</span>&#160;                uint offset;</div>
-<div class="line"><a name="l00332"></a><span class="lineno">  332</span>&#160;                uint ntraits;</div>
-<div class="line"><a name="l00333"></a><span class="lineno">  333</span>&#160;                <span class="keyword">struct </span><a class="code" href="structbinlex_1_1CILDecompiler_1_1Trait.html">Trait</a> **traits;</div>
-<div class="line"><a name="l00334"></a><span class="lineno">  334</span>&#160;                <span class="keywordtype">void</span> *data;</div>
-<div class="line"><a name="l00335"></a><span class="lineno">  335</span>&#160;                <span class="keywordtype">size_t</span> data_size;</div>
-<div class="line"><a name="l00336"></a><span class="lineno">  336</span>&#160;                set&lt;uint64_t&gt; coverage;</div>
-<div class="line"><a name="l00337"></a><span class="lineno">  337</span>&#160;                map&lt;uint64_t, uint&gt; addresses;</div>
-<div class="line"><a name="l00338"></a><span class="lineno">  338</span>&#160;                map&lt;uint64_t, int&gt; visited;</div>
-<div class="line"><a name="l00339"></a><span class="lineno">  339</span>&#160;                queue&lt;uint64_t&gt; discovered;</div>
-<div class="line"><a name="l00340"></a><span class="lineno">  340</span>&#160;            };</div>
-<div class="line"><a name="l00341"></a><span class="lineno">  341</span>&#160;            <span class="keyword">struct </span><a class="code" href="structbinlex_1_1CILDecompiler_1_1Section.html">Section</a> sections[CIL_DECOMPILER_MAX_SECTIONS];</div>
-<div class="line"><a name="l00342"></a><span class="lineno">  342</span>&#160;            <span class="comment">//Map containing prefix instructions and their operand sizes</span></div>
-<div class="line"><a name="l00343"></a><span class="lineno">  343</span>&#160;            map&lt;int, int&gt; prefixInstrMap;</div>
-<div class="line"><a name="l00344"></a><span class="lineno">  344</span>&#160;            <span class="comment">//Map containing conditional instructions and their operand sizes</span></div>
-<div class="line"><a name="l00345"></a><span class="lineno">  345</span>&#160;            map&lt;int, int&gt; condInstrMap;</div>
-<div class="line"><a name="l00346"></a><span class="lineno">  346</span>&#160;            <span class="comment">//Map for all remaining instruction types that don&#39;t need special</span></div>
-<div class="line"><a name="l00347"></a><span class="lineno">  347</span>&#160;            <span class="comment">//treatment</span></div>
-<div class="line"><a name="l00348"></a><span class="lineno">  348</span>&#160;            map&lt;int, int&gt; miscInstrMap;</div>
-<div class="line"><a name="l00349"></a><span class="lineno">  349</span>&#160;            <span class="keywordtype">bool</span> Setup(<span class="keywordtype">int</span> input_type);</div>
-<div class="line"><a name="l00350"></a><span class="lineno">  350</span>&#160;            <span class="keywordtype">bool</span> Decompile(<span class="keywordtype">void</span> *data, <span class="keywordtype">int</span> data_size, <span class="keywordtype">int</span> index);</div>
-<div class="line"><a name="l00355"></a><span class="lineno">  355</span>&#160;            vector&lt;json&gt; GetTraits();</div>
-<div class="line"><a name="l00360"></a><span class="lineno">  360</span>&#160;            json GetTrait(<span class="keyword">struct</span> <a class="code" href="structbinlex_1_1CILDecompiler_1_1Trait.html">Trait</a> *trait);</div>
-<div class="line"><a name="l00365"></a><span class="lineno">  365</span>&#160;            <span class="keywordtype">string</span> ConvTraitBytes(vector&lt; Instruction* &gt; instructions);</div>
-<div class="line"><a name="l00371"></a><span class="lineno">  371</span>&#160;            <span class="keywordtype">string</span> ConvBytes(vector&lt; Instruction* &gt; allinst, <span class="keywordtype">void</span> *data, <span class="keywordtype">int</span> data_size);</div>
-<div class="line"><a name="l00376"></a><span class="lineno">  376</span>&#160;            <span class="keywordtype">bool</span> IsConditionalInsn(<a class="code" href="structbinlex_1_1CILDecompiler_1_1Instruction.html">Instruction</a> *insn);</div>
-<div class="line"><a name="l00381"></a><span class="lineno">  381</span>&#160;            <span class="keywordtype">bool</span> IsPrefixInstr(<a class="code" href="structbinlex_1_1CILDecompiler_1_1Instruction.html">Instruction</a> *insn);</div>
-<div class="line"><a name="l00386"></a><span class="lineno">  386</span>&#160;            uint SizeOfTrait(vector&lt; Instruction* &gt; allinst);</div>
-<div class="line"><a name="l00387"></a><span class="lineno">  387</span>&#160;            ~<a class="code" href="classbinlex_1_1CILDecompiler.html">CILDecompiler</a>();</div>
-<div class="line"><a name="l00388"></a><span class="lineno">  388</span>&#160;    };</div>
-<div class="line"><a name="l00389"></a><span class="lineno">  389</span>&#160;};</div>
-<div class="line"><a name="l00390"></a><span class="lineno">  390</span>&#160; </div>
-<div class="line"><a name="l00391"></a><span class="lineno">  391</span>&#160;<span class="preprocessor">#endif</span></div>
+<div class="line"><a name="l00276"></a><span class="lineno">  276</span>&#160;            <span class="keywordtype">int</span> update_offset(<span class="keywordtype">int</span> operand_size, <span class="keywordtype">int</span> i);</div>
+<div class="line"><a name="l00277"></a><span class="lineno">  277</span>&#160;            <span class="keyword">typedef</span> <span class="keyword">struct </span>worker {</div>
+<div class="line"><a name="l00278"></a><span class="lineno">  278</span>&#160;                csh handle;</div>
+<div class="line"><a name="l00279"></a><span class="lineno">  279</span>&#160;                cs_err error;</div>
+<div class="line"><a name="l00280"></a><span class="lineno">  280</span>&#160;                uint64_t pc;</div>
+<div class="line"><a name="l00281"></a><span class="lineno">  281</span>&#160;                <span class="keyword">const</span> uint8_t *code;</div>
+<div class="line"><a name="l00282"></a><span class="lineno">  282</span>&#160;                <span class="keywordtype">size_t</span> code_size;</div>
+<div class="line"><a name="l00283"></a><span class="lineno">  283</span>&#160;            } worker;</div>
+<div class="line"><a name="l00284"></a><span class="lineno">  284</span>&#160;            <span class="keyword">typedef</span> <span class="keyword">struct</span>{</div>
+<div class="line"><a name="l00285"></a><span class="lineno">  285</span>&#160;                uint index;</div>
+<div class="line"><a name="l00286"></a><span class="lineno">  286</span>&#160;                <span class="keywordtype">void</span> *sections;</div>
+<div class="line"><a name="l00287"></a><span class="lineno">  287</span>&#160;            } worker_args;</div>
+<div class="line"><a name="l00288"></a><span class="lineno">  288</span>&#160;        <span class="keyword">public</span>:</div>
+<div class="line"><a name="l00289"></a><span class="lineno">  289</span>&#160;            <a class="code" href="classbinlex_1_1CILDecompiler.html">CILDecompiler</a>(<span class="keyword">const</span> <a class="code" href="classbinlex_1_1File.html">binlex::File</a> &amp;firef);</div>
+<div class="line"><a name="l00290"></a><span class="lineno"><a class="line" href="structbinlex_1_1CILDecompiler_1_1Instruction.html">  290</a></span>&#160;            <span class="keyword">struct </span><a class="code" href="structbinlex_1_1CILDecompiler_1_1Instruction.html">Instruction</a> {</div>
+<div class="line"><a name="l00291"></a><span class="lineno">  291</span>&#160;                <span class="keywordtype">unsigned</span> <span class="keywordtype">char</span> instruction;</div>
+<div class="line"><a name="l00292"></a><span class="lineno">  292</span>&#160;                uint operand_size;</div>
+<div class="line"><a name="l00293"></a><span class="lineno">  293</span>&#160;                uint offset;</div>
+<div class="line"><a name="l00294"></a><span class="lineno">  294</span>&#160;            };</div>
+<div class="line"><a name="l00295"></a><span class="lineno"><a class="line" href="structbinlex_1_1CILDecompiler_1_1Trait.html">  295</a></span>&#160;            <span class="keyword">struct </span><a class="code" href="structbinlex_1_1CILDecompiler_1_1Trait.html">Trait</a> {</div>
+<div class="line"><a name="l00296"></a><span class="lineno">  296</span>&#160;                <span class="keywordtype">string</span> corpus;</div>
+<div class="line"><a name="l00297"></a><span class="lineno">  297</span>&#160;                <span class="keywordtype">string</span> type;</div>
+<div class="line"><a name="l00298"></a><span class="lineno">  298</span>&#160;                <span class="keywordtype">string</span> architecture;</div>
+<div class="line"><a name="l00299"></a><span class="lineno">  299</span>&#160;                <span class="keywordtype">string</span> tmp_bytes;</div>
+<div class="line"><a name="l00300"></a><span class="lineno">  300</span>&#160;                <span class="keywordtype">string</span> bytes;</div>
+<div class="line"><a name="l00301"></a><span class="lineno">  301</span>&#160;                <span class="keywordtype">string</span> trait;</div>
+<div class="line"><a name="l00302"></a><span class="lineno">  302</span>&#160;                uint edges;</div>
+<div class="line"><a name="l00303"></a><span class="lineno">  303</span>&#160;                uint blocks;</div>
+<div class="line"><a name="l00304"></a><span class="lineno">  304</span>&#160;                vector&lt; Instruction* &gt;* instructions;</div>
+<div class="line"><a name="l00305"></a><span class="lineno">  305</span>&#160;                uint num_instructions;</div>
+<div class="line"><a name="l00306"></a><span class="lineno">  306</span>&#160;                uint size;</div>
+<div class="line"><a name="l00307"></a><span class="lineno">  307</span>&#160;                uint offset;</div>
+<div class="line"><a name="l00308"></a><span class="lineno">  308</span>&#160;                uint invalid_instructions;</div>
+<div class="line"><a name="l00309"></a><span class="lineno">  309</span>&#160;                uint cyclomatic_complexity;</div>
+<div class="line"><a name="l00310"></a><span class="lineno">  310</span>&#160;                uint average_instructions_per_block;</div>
+<div class="line"><a name="l00311"></a><span class="lineno">  311</span>&#160;                <span class="keywordtype">float</span> bytes_entropy;</div>
+<div class="line"><a name="l00312"></a><span class="lineno">  312</span>&#160;                <span class="keywordtype">float</span> trait_entropy;</div>
+<div class="line"><a name="l00313"></a><span class="lineno">  313</span>&#160;                <span class="keywordtype">string</span> trait_sha256;</div>
+<div class="line"><a name="l00314"></a><span class="lineno">  314</span>&#160;                <span class="keywordtype">string</span> bytes_sha256;</div>
+<div class="line"><a name="l00315"></a><span class="lineno">  315</span>&#160;            };</div>
+<div class="line"><a name="l00316"></a><span class="lineno"><a class="line" href="structbinlex_1_1CILDecompiler_1_1Section.html">  316</a></span>&#160;            <span class="keyword">struct </span><a class="code" href="structbinlex_1_1CILDecompiler_1_1Section.html">Section</a> {</div>
+<div class="line"><a name="l00317"></a><span class="lineno">  317</span>&#160;                vector &lt;Trait*&gt; function_traits;</div>
+<div class="line"><a name="l00318"></a><span class="lineno">  318</span>&#160;                vector &lt;Trait*&gt; block_traits;</div>
+<div class="line"><a name="l00319"></a><span class="lineno">  319</span>&#160;                <span class="keywordtype">char</span> *trait;</div>
+<div class="line"><a name="l00320"></a><span class="lineno">  320</span>&#160;                cs_arch arch;</div>
+<div class="line"><a name="l00321"></a><span class="lineno">  321</span>&#160;                cs_mode mode;</div>
+<div class="line"><a name="l00322"></a><span class="lineno">  322</span>&#160;                <span class="keywordtype">char</span> *arch_str;</div>
+<div class="line"><a name="l00323"></a><span class="lineno">  323</span>&#160;                <span class="keywordtype">char</span> *cpu;</div>
+<div class="line"><a name="l00324"></a><span class="lineno">  324</span>&#160;                <span class="keywordtype">string</span> corpus;</div>
+<div class="line"><a name="l00325"></a><span class="lineno">  325</span>&#160;                uint threads;</div>
+<div class="line"><a name="l00326"></a><span class="lineno">  326</span>&#160;                <span class="keywordtype">bool</span> instructions;</div>
+<div class="line"><a name="l00327"></a><span class="lineno">  327</span>&#160;                uint thread_cycles;</div>
+<div class="line"><a name="l00328"></a><span class="lineno">  328</span>&#160;                useconds_t thread_sleep;</div>
+<div class="line"><a name="l00329"></a><span class="lineno">  329</span>&#160;                uint offset;</div>
+<div class="line"><a name="l00330"></a><span class="lineno">  330</span>&#160;                uint ntraits;</div>
+<div class="line"><a name="l00331"></a><span class="lineno">  331</span>&#160;                <span class="keyword">struct </span><a class="code" href="structbinlex_1_1CILDecompiler_1_1Trait.html">Trait</a> **traits;</div>
+<div class="line"><a name="l00332"></a><span class="lineno">  332</span>&#160;                <span class="keywordtype">void</span> *data;</div>
+<div class="line"><a name="l00333"></a><span class="lineno">  333</span>&#160;                <span class="keywordtype">size_t</span> data_size;</div>
+<div class="line"><a name="l00334"></a><span class="lineno">  334</span>&#160;                set&lt;uint64_t&gt; coverage;</div>
+<div class="line"><a name="l00335"></a><span class="lineno">  335</span>&#160;                map&lt;uint64_t, uint&gt; addresses;</div>
+<div class="line"><a name="l00336"></a><span class="lineno">  336</span>&#160;                map&lt;uint64_t, int&gt; visited;</div>
+<div class="line"><a name="l00337"></a><span class="lineno">  337</span>&#160;                queue&lt;uint64_t&gt; discovered;</div>
+<div class="line"><a name="l00338"></a><span class="lineno">  338</span>&#160;            };</div>
+<div class="line"><a name="l00339"></a><span class="lineno">  339</span>&#160;            <span class="keyword">struct </span><a class="code" href="structbinlex_1_1CILDecompiler_1_1Section.html">Section</a> sections[CIL_DECOMPILER_MAX_SECTIONS];</div>
+<div class="line"><a name="l00340"></a><span class="lineno">  340</span>&#160;            <span class="comment">//Map containing prefix instructions and their operand sizes</span></div>
+<div class="line"><a name="l00341"></a><span class="lineno">  341</span>&#160;            map&lt;int, int&gt; prefixInstrMap;</div>
+<div class="line"><a name="l00342"></a><span class="lineno">  342</span>&#160;            <span class="comment">//Map containing conditional instructions and their operand sizes</span></div>
+<div class="line"><a name="l00343"></a><span class="lineno">  343</span>&#160;            map&lt;int, int&gt; condInstrMap;</div>
+<div class="line"><a name="l00344"></a><span class="lineno">  344</span>&#160;            <span class="comment">//Map for all remaining instruction types that don&#39;t need special</span></div>
+<div class="line"><a name="l00345"></a><span class="lineno">  345</span>&#160;            <span class="comment">//treatment</span></div>
+<div class="line"><a name="l00346"></a><span class="lineno">  346</span>&#160;            map&lt;int, int&gt; miscInstrMap;</div>
+<div class="line"><a name="l00347"></a><span class="lineno">  347</span>&#160;            <span class="keywordtype">bool</span> Setup(<span class="keywordtype">int</span> input_type);</div>
+<div class="line"><a name="l00348"></a><span class="lineno">  348</span>&#160;            <span class="keywordtype">bool</span> Decompile(<span class="keywordtype">void</span> *data, <span class="keywordtype">int</span> data_size, <span class="keywordtype">int</span> index);</div>
+<div class="line"><a name="l00353"></a><span class="lineno">  353</span>&#160;            vector&lt;json&gt; GetTraits();</div>
+<div class="line"><a name="l00358"></a><span class="lineno">  358</span>&#160;            json GetTrait(<span class="keyword">struct</span> <a class="code" href="structbinlex_1_1CILDecompiler_1_1Trait.html">Trait</a> *trait);</div>
+<div class="line"><a name="l00363"></a><span class="lineno">  363</span>&#160;            <span class="keywordtype">string</span> ConvTraitBytes(vector&lt; Instruction* &gt; instructions);</div>
+<div class="line"><a name="l00369"></a><span class="lineno">  369</span>&#160;            <span class="keywordtype">string</span> ConvBytes(vector&lt; Instruction* &gt; allinst, <span class="keywordtype">void</span> *data, <span class="keywordtype">int</span> data_size);</div>
+<div class="line"><a name="l00374"></a><span class="lineno">  374</span>&#160;            <span class="keywordtype">bool</span> IsConditionalInsn(<a class="code" href="structbinlex_1_1CILDecompiler_1_1Instruction.html">Instruction</a> *insn);</div>
+<div class="line"><a name="l00379"></a><span class="lineno">  379</span>&#160;            <span class="keywordtype">bool</span> IsPrefixInstr(<a class="code" href="structbinlex_1_1CILDecompiler_1_1Instruction.html">Instruction</a> *insn);</div>
+<div class="line"><a name="l00384"></a><span class="lineno">  384</span>&#160;            uint SizeOfTrait(vector&lt; Instruction* &gt; allinst);</div>
+<div class="line"><a name="l00385"></a><span class="lineno">  385</span>&#160;            ~<a class="code" href="classbinlex_1_1CILDecompiler.html">CILDecompiler</a>();</div>
+<div class="line"><a name="l00386"></a><span class="lineno">  386</span>&#160;    };</div>
+<div class="line"><a name="l00387"></a><span class="lineno">  387</span>&#160;};</div>
+<div class="line"><a name="l00388"></a><span class="lineno">  388</span>&#160; </div>
+<div class="line"><a name="l00389"></a><span class="lineno">  389</span>&#160;<span class="preprocessor">#endif</span></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 <div class="ttc" id="aclassbinlex_1_1CILDecompiler_html"><div class="ttname"><a href="classbinlex_1_1CILDecompiler.html">binlex::CILDecompiler</a></div><div class="ttdef"><b>Definition:</b> cil.h:270</div></div>
 <div class="ttc" id="aclassbinlex_1_1DecompilerBase_html"><div class="ttname"><a href="classbinlex_1_1DecompilerBase.html">binlex::DecompilerBase</a></div><div class="ttdef"><b>Definition:</b> decompilerbase.h:14</div></div>
-<div class="ttc" id="astructbinlex_1_1CILDecompiler_1_1Instruction_html"><div class="ttname"><a href="structbinlex_1_1CILDecompiler_1_1Instruction.html">binlex::CILDecompiler::Instruction</a></div><div class="ttdef"><b>Definition:</b> cil.h:292</div></div>
-<div class="ttc" id="astructbinlex_1_1CILDecompiler_1_1Section_html"><div class="ttname"><a href="structbinlex_1_1CILDecompiler_1_1Section.html">binlex::CILDecompiler::Section</a></div><div class="ttdef"><b>Definition:</b> cil.h:318</div></div>
-<div class="ttc" id="astructbinlex_1_1CILDecompiler_1_1Trait_html"><div class="ttname"><a href="structbinlex_1_1CILDecompiler_1_1Trait.html">binlex::CILDecompiler::Trait</a></div><div class="ttdef"><b>Definition:</b> cil.h:297</div></div>
+<div class="ttc" id="astructbinlex_1_1CILDecompiler_1_1Instruction_html"><div class="ttname"><a href="structbinlex_1_1CILDecompiler_1_1Instruction.html">binlex::CILDecompiler::Instruction</a></div><div class="ttdef"><b>Definition:</b> cil.h:290</div></div>
+<div class="ttc" id="astructbinlex_1_1CILDecompiler_1_1Section_html"><div class="ttname"><a href="structbinlex_1_1CILDecompiler_1_1Section.html">binlex::CILDecompiler::Section</a></div><div class="ttdef"><b>Definition:</b> cil.h:316</div></div>
+<div class="ttc" id="astructbinlex_1_1CILDecompiler_1_1Trait_html"><div class="ttname"><a href="structbinlex_1_1CILDecompiler_1_1Trait.html">binlex::CILDecompiler::Trait</a></div><div class="ttdef"><b>Definition:</b> cil.h:295</div></div>
 <div class="ttc" id="aclassbinlex_1_1File_html"><div class="ttname"><a href="classbinlex_1_1File.html">binlex::File</a></div><div class="ttdef"><b>Definition:</b> file.h:14</div></div>
 <div class="ttc" id="anamespacebinlex_html"><div class="ttname"><a href="namespacebinlex.html">binlex</a></div><div class="ttdoc">the binlex namespace</div></div>
 <!-- start footer part -->
