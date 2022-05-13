@@ -11,8 +11,6 @@
 #define BINLEX_EXPORT
 #endif
 
-//#define PE_DOTNET_MAX_SECTIONS 1000
-
 using namespace binlex;
 
 #define	MODULE                 0
@@ -189,9 +187,16 @@ namespace dotnet {
             };
     };
 
-    class TableEntry{
+    class TableEntry {
         public:
-            virtual uint32_t Parse(char *buff, uint8_t heap_sizes, uint32_t *table_entries){ return 0; };
+            struct ParseArgs {
+                char *buff;
+                uint8_t heap_sizes;
+                uint32_t *table_entries;
+            };
+            virtual uint32_t Parse(ParseArgs *args){
+                return (uint32_t)args->heap_sizes*0;
+            }
             static TableEntry* TableEntryFactory(uint8_t entry_type);
             virtual ~TableEntry() { };
     };
@@ -203,20 +208,20 @@ namespace dotnet {
             GuidHeapIndex mv_id = 0;
             GuidHeapIndex enc_id = 0;
             GuidHeapIndex enc_base_id = 0;
-            uint32_t Parse(char *buff, uint8_t heap_sizes, uint32_t *table_entries) {
+            uint32_t Parse(ParseArgs *args){
                 char *buff_aux;
-                buff_aux = buff;
+                buff_aux = args->buff;
                 memcpy(&generation, buff_aux, 2);
                 buff_aux += 2;
-                name = StringHeapIndex(heap_sizes);
+                name = StringHeapIndex(args->heap_sizes);
                 buff_aux += name.Parse(buff_aux);
-                mv_id = GuidHeapIndex(heap_sizes);
+                mv_id = GuidHeapIndex(args->heap_sizes);
                 buff_aux += mv_id.Parse(buff_aux);
-                enc_id = GuidHeapIndex(heap_sizes);
+                enc_id = GuidHeapIndex(args->heap_sizes);
                 buff_aux += enc_id.Parse(buff_aux);
-                enc_base_id = GuidHeapIndex(heap_sizes);
+                enc_base_id = GuidHeapIndex(args->heap_sizes);
                 buff_aux += enc_base_id.Parse(buff_aux);
-                return buff_aux - buff;
+                return buff_aux - args->buff;
             };
     };
 
@@ -225,16 +230,16 @@ namespace dotnet {
             ResolutionScopeIndex resolution_scope;
             StringHeapIndex name = 0;
             StringHeapIndex name_space = 0;
-            uint32_t Parse(char *buff, uint8_t heap_sizes, uint32_t *table_entries) {
+            uint32_t Parse(ParseArgs *args){
                 char *buff_aux;
-                buff_aux = buff;
+                buff_aux = args->buff;
                 resolution_scope = ResolutionScopeIndex();
-                buff_aux += resolution_scope.Parse(buff_aux, table_entries);
-                name = StringHeapIndex(heap_sizes);
+                buff_aux += resolution_scope.Parse(buff_aux, args->table_entries);
+                name = StringHeapIndex(args->heap_sizes);
                 buff_aux += name.Parse(buff_aux);
-                name_space = StringHeapIndex(heap_sizes);
+                name_space = StringHeapIndex(args->heap_sizes);
                 buff_aux += name_space.Parse(buff_aux);
-                return buff_aux - buff;
+                return buff_aux - args->buff;
             };
     };
 
@@ -246,30 +251,30 @@ namespace dotnet {
             TypeDefOrRefIndex extends;
             SimpleTableIndex field_list;
             SimpleTableIndex method_list;
-            uint32_t Parse(char *buff, uint8_t heap_sizes, uint32_t *table_entries) {
+            uint32_t Parse(ParseArgs *args){
                 char *buff_aux;
-                buff_aux = buff;
+                buff_aux = args->buff;
                 flags = *(uint32_t *)buff_aux;
                 buff_aux += 4;
-                name = StringHeapIndex(heap_sizes);
+                name = StringHeapIndex(args->heap_sizes);
                 buff_aux += name.Parse(buff_aux);
-                name_space = StringHeapIndex(heap_sizes);
+                name_space = StringHeapIndex(args->heap_sizes);
                 buff_aux += name_space.Parse(buff_aux);
                 extends = TypeDefOrRefIndex();
-                buff_aux += extends.Parse(buff_aux, table_entries);
+                buff_aux += extends.Parse(buff_aux, args->table_entries);
                 field_list = SimpleTableIndex();
                 buff_aux += field_list.Parse(buff_aux);
                 method_list = SimpleTableIndex();
                 buff_aux += method_list.Parse(buff_aux);
-                return buff_aux - buff;
+                return buff_aux - args->buff;
             };
     };
 
     class FieldPtrEntry: public TableEntry {
         public:
             uint16_t ref;
-            uint32_t Parse(char *buff, uint8_t heap_sizes, uint32_t *table_entries) {
-                ref = *(uint16_t *)buff;
+            uint32_t Parse(ParseArgs *args){
+                ref = *(uint16_t *)args->buff;
                 return 2;
             };
     };
@@ -279,24 +284,24 @@ namespace dotnet {
             uint16_t flags;
             StringHeapIndex name = 0;
             BlobHeapIndex signature = 0;
-            uint32_t Parse(char *buff, uint8_t heap_sizes, uint32_t *table_entries) {
+            uint32_t Parse(ParseArgs *args){
                 char *buff_aux;
-                buff_aux = buff;
+                buff_aux = args->buff;
                 flags = *(uint16_t *)buff_aux;
                 buff_aux += 2;
-                name = StringHeapIndex(heap_sizes);
+                name = StringHeapIndex(args->heap_sizes);
                 buff_aux += name.Parse(buff_aux);
-                signature = BlobHeapIndex(heap_sizes);
+                signature = BlobHeapIndex(args->heap_sizes);
                 buff_aux += signature.Parse(buff_aux);
-                return buff_aux - buff;
+                return buff_aux - args->buff;
             };
     };
 
     class MethodPtrEntry: public TableEntry {
         public:
             uint16_t ref;
-            uint32_t Parse(char *buff, uint8_t heap_sizes, uint32_t *table_entries) {
-                ref = *(uint16_t *)buff;
+            uint32_t Parse(ParseArgs *args){
+                ref = *(uint16_t *)args->buff;
                 return 2;
             };
     };
@@ -309,22 +314,22 @@ namespace dotnet {
             StringHeapIndex name = 0;
             BlobHeapIndex signature = 0;
             SimpleTableIndex param_list;
-            uint32_t Parse(char *buff, uint8_t heap_sizes, uint32_t *table_entries) {
+             uint32_t Parse(ParseArgs *args){
                 char *buff_aux;
-                buff_aux = buff;
+                buff_aux = args->buff;
                 rva = *(uint32_t *)buff_aux;
                 buff_aux += 4;
                 impl_flags = *(uint16_t *)buff_aux;
                 buff_aux += 2;
                 flags = *(uint16_t *)buff_aux;
                 buff_aux += 2;
-                name = StringHeapIndex(heap_sizes);
+                name = StringHeapIndex(args->heap_sizes);
                 buff_aux += name.Parse(buff_aux);
-                signature = BlobHeapIndex(heap_sizes);
+                signature = BlobHeapIndex(args->heap_sizes);
                 buff_aux += signature.Parse(buff_aux);
                 param_list = SimpleTableIndex();
                 buff_aux += param_list.Parse(buff_aux);
-                return buff_aux - buff;
+                return buff_aux - args->buff;
             };
     };
 
@@ -389,7 +394,6 @@ namespace dotnet {
     };
 };
 
-
 namespace binlex {
     class DOTNET : public PE {
         private:
@@ -400,10 +404,10 @@ namespace binlex {
             bool ParseCor20StreamsHeader();
             bool ParseCor20MetadataStream();
         public:
-			dotnet::COR20_HEADER cor20_header = { 0 };
-			dotnet::COR20_STORAGE_SIGNATURE cor20_storage_signature = { 0 };
-			dotnet::COR20_STORAGE_HEADER cor20_storage_header = { 0 };
-            dotnet::COR20_STREAM_HEADER **StreamsHeader = { 0 };
+			dotnet::COR20_HEADER cor20_header = {};
+			dotnet::COR20_STORAGE_SIGNATURE cor20_storage_signature = {};
+			dotnet::COR20_STORAGE_HEADER cor20_storage_header = {};
+            dotnet::COR20_STREAM_HEADER **StreamsHeader = {};
             dotnet::Cor20MetadataTable cor20_metadata_table;
 
             vector<Section> _sections;
