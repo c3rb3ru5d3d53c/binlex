@@ -273,8 +273,6 @@ namespace binlex {
         */
         private:
             int type = CIL_DECOMPILER_TYPE_UNSET;
-            char * hexdump_traits(char *buffer0, const void *data, int size, int operand_size);
-            char * traits_nl(char *traits);
             int update_offset(int operand_size, int i);
             typedef struct worker {
                 csh handle;
