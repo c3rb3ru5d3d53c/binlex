@@ -59,7 +59,7 @@ var NAVTREE =
 var NAVTREEINDEX =
 [
 ".html",
-"structSHA256__CTX.html"
+"pe-dotnet_8h_source.html"
 ];
 
 var SYNCONMSG = 'click to disable panel synchronisation';
