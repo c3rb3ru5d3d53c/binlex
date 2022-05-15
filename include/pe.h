@@ -42,11 +42,10 @@ namespace binlex {
             struct Section sections[BINARY_MAX_SECTIONS];
             uint32_t total_exec_sections;
             /**
-             * Setup to Read Specific PE Format
-             * @param input_mode MACHINE_TYPES::IMAGE_FILE_MACHINE_<arch>
+             * Setup set binary architecture and mode.
              * @return bool
              */
-            BINLEX_EXPORT bool Setup(MACHINE_TYPES input_mode);
+            BINLEX_EXPORT bool Setup();
             /**
              * Check if the PE file is a .NET file
              * @return bool

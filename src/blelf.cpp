@@ -5,7 +5,6 @@ using namespace LIEF::ELF;
 
 ELF::ELF(){
     total_exec_sections = 0;
-
     for (int i = 0; i < BINARY_MAX_SECTIONS; i++){
         sections[i].offset = 0;
         sections[i].size = 0;
@@ -13,38 +12,36 @@ ELF::ELF(){
     }
 }
 
-bool ELF::Setup(ARCH input_mode){
-    switch(input_mode){
+bool ELF::Setup(){
+    switch(binary->header().machine_type()){
         case ARCH::EM_386:
-            mode = ARCH::EM_386;
             binary_arch = BINARY_ARCH_X86;
             binary_mode = BINARY_MODE_32;
-            break;
+            return true;
         case ARCH::EM_X86_64:
             mode = ARCH::EM_X86_64;
             binary_arch = BINARY_ARCH_X86_64;
             binary_mode = BINARY_MODE_64;
-            break;
+            return true;
         default:
-            mode = ARCH::EM_NONE;
             binary_arch = BINARY_ARCH_UNKNOWN;
             binary_mode = BINARY_MODE_UNKNOWN;
-            fprintf(stderr, "[x] unsupported mode.\n");
             return false;
     }
-    return true;
 }
 
 bool ELF::ReadVector(const std::vector<uint8_t> &data){
-    CalculateFileHashes(data);
     binary = Parser::parse(data);
     if (binary == NULL){
         return false;
     }
-    if (mode != binary->header().machine_type()){
-        fprintf(stderr, "[x] incorrect mode for binary architecture\n");
-        return false;
+    if (binary_arch == BINARY_ARCH_UNKNOWN ||
+        binary_mode == BINARY_MODE_UNKNOWN){
+        if (Setup() == false){
+            return false;
+        }
     }
+    CalculateFileHashes(data);
     return ParseSections();
 }
 
