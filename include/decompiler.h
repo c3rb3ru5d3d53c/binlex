@@ -102,11 +102,11 @@ namespace binlex {
         BINLEX_EXPORT Decompiler(const binlex::File &firef);
         /**
         Set up Capstone Decompiler Architecure and Mode
-        @param architecture Capstone Decompiler Architecure
-        @param mode_type Capstone Mode
+        @param binary_arch Binary Architecure
+        @param binary_mode Binary Mode
         @return bool
         */
-        BINLEX_EXPORT bool Setup(cs_arch architecture, cs_mode mode_type);
+        BINLEX_EXPORT bool Setup(int binary_arch, int binary_mode);
         /**
         @param instructions bool to collect instructions traits or not
         @param index the section index
@@ -118,6 +118,13 @@ namespace binlex {
         @returns NULL
         */
         BINLEX_EXPORT void* CreateTraitsForSection(uint index);
+        /**
+         * This method sets the archetcure for the core decompiler.
+         * @param binary_arch the BINARY_ARCH value.
+         * @return bool
+         */
+        BINLEX_EXPORT bool SetArchitecture(int binary_arch);
+        BINLEX_EXPORT bool SetMode(int binary_mode);
         /**
         Add discovered block address to queue
         @param address the block address

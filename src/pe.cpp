@@ -5,7 +5,6 @@ using namespace LIEF::PE;
 
 PE::PE(){
     total_exec_sections = 0;
-
     for (int i = 0; i < BINARY_MAX_SECTIONS; i++){
         sections[i].offset = 0;
         sections[i].size = 0;
@@ -13,49 +12,48 @@ PE::PE(){
     }
 }
 
-bool PE::Setup(MACHINE_TYPES input_mode){
-    switch(input_mode){
-        case MACHINE_TYPES::IMAGE_FILE_MACHINE_I386:
-            mode = MACHINE_TYPES::IMAGE_FILE_MACHINE_I386;
-            binary_arch = BINARY_ARCH_X86;
-            binary_mode = BINARY_MODE_32;
-            break;
-        case MACHINE_TYPES::IMAGE_FILE_MACHINE_AMD64:
-            mode = MACHINE_TYPES::IMAGE_FILE_MACHINE_AMD64;
-            binary_arch = BINARY_ARCH_X86_64;
-            binary_mode = BINARY_MODE_64;
-            break;
-        default:
-            mode = MACHINE_TYPES::IMAGE_FILE_MACHINE_UNKNOWN;
-            binary_arch = BINARY_ARCH_UNKNOWN;
-            binary_mode = BINARY_MODE_UNKNOWN;
-            fprintf(stderr, "[x] unsupported mode.\n");
-            return false;
+bool PE::Setup(){
+    if (IsDotNet() == true){
+        binary_arch = BINARY_ARCH_X86;
+        binary_mode = BINARY_MODE_CIL;
+        return true;
+    } else {
+        switch(binary->header().machine()){
+            case MACHINE_TYPES::IMAGE_FILE_MACHINE_I386:
+                binary_arch = BINARY_ARCH_X86;
+                binary_mode = BINARY_MODE_32;
+                return true;
+            case MACHINE_TYPES::IMAGE_FILE_MACHINE_AMD64:
+                binary_arch = BINARY_ARCH_X86;
+                binary_mode = BINARY_MODE_64;
+                return true;
+            default:
+                binary_arch = BINARY_ARCH_UNKNOWN;
+                binary_mode = BINARY_MODE_UNKNOWN;
+                return false;
+        }
     }
-    return true;
 }
 
 bool PE::ReadVector(const std::vector<uint8_t> &data){
-    CalculateFileHashes(data);
     binary = Parser::parse(data);
     if (binary == NULL){
         return false;
     }
-    if (mode != binary->header().machine()){
-        fprintf(stderr, "[x] incorrect mode for binary architecture\n");
-        return false;
+    if (binary_arch == BINARY_ARCH_UNKNOWN ||
+        binary_mode == BINARY_MODE_UNKNOWN){
+        if (Setup() == false){
+            return false;
+        }
     }
+    CalculateFileHashes(data);
     return ParseSections();
 }
 
-
 bool PE::IsDotNet(){
     try {
-
         auto imports = binary->imports();
-
-        for(Import i : imports)
-        {
+        for(Import i : imports) {
             if (i.name() == "mscorelib.dll") {
                 if(binary->data_directory(DATA_DIRECTORY::CLR_RUNTIME_HEADER).RVA() > 0) {
                     return true;
@@ -68,15 +66,13 @@ bool PE::IsDotNet(){
             }
         }
         return false;
-    }
-    catch(LIEF::bad_format const&){
+    } catch(LIEF::bad_format const&) {
         return false;
     }
 }
 
 
 bool PE::HasLimitations(){
-
     if(binary->has_imports()){
         auto imports = binary->imports();
         for(Import i : imports){
@@ -87,7 +83,6 @@ bool PE::HasLimitations(){
     }
     return false;
 }
-
 
 bool PE::ParseSections(){
     uint32_t index = 0;
@@ -127,7 +122,6 @@ bool PE::ParseSections(){
             }
         }
     }
-
     total_exec_sections = index + 1;
     return true;
 }

@@ -12,6 +12,31 @@ void File::CalculateFileHashes(const vector<uint8_t> &data){
     sha256 = GetSHA256(&data[0], data.size());
 }
 
+bool File::SetBinaryArch(int arch){
+    switch(arch){
+        case BINARY_ARCH_X86:
+        case BINARY_ARCH_X86_64:
+            binary_arch = arch;
+            return true;
+        default:
+            binary_arch = BINARY_ARCH_UNKNOWN;
+            return false;
+    }
+}
+
+bool File::SetBinaryMode(int mode){
+    switch(mode){
+        case BINARY_MODE_32:
+        case BINARY_MODE_64:
+        case BINARY_MODE_CIL:
+            binary_mode = mode;
+            return true;
+        default:
+            binary_mode = BINARY_MODE_UNKNOWN;
+            return false;
+    }
+}
+
 std::vector<uint8_t> File::ReadFileIntoVector(const char *file_path){
     FILE *inp;
     uint8_t buf[8192];

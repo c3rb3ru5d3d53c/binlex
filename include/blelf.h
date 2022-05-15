@@ -46,7 +46,7 @@ namespace binlex{
             @param input_mode architecure of the file
             @return bool
             */
-            BINLEX_EXPORT bool Setup(ARCH input_mode);
+            BINLEX_EXPORT bool Setup();
             /**
             This method reads an ELF file from a buffer.
             @param data vector

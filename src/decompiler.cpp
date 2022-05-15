@@ -15,6 +15,7 @@ cs_mode Decompiler::mode;
 	: (((insn).address + (insn).size) + (uint64_t)(insn).detail->x86.disp))
 
 Decompiler::Decompiler(const binlex::File &firef) : DecompilerBase(firef) {
+    Setup(firef.binary_arch, firef.binary_mode);
     for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++) {
         sections[i].offset = 0;
         sections[i].data = NULL;
@@ -29,9 +30,40 @@ void Decompiler::AppendTrait(struct Trait *trait, struct Section *sections, uint
     sections[index].traits.push_back(new_elem_trait);
  }
 
-bool Decompiler::Setup(cs_arch architecture, cs_mode mode_type) {
-    arch = architecture;
-    mode = mode_type;
+bool Decompiler::SetArchitecture(int binary_arch){
+    switch(binary_arch){
+        case BINARY_ARCH_X86:
+        case BINARY_ARCH_X86_64:
+            PRINT_DEBUG("DECOMPILER_CORE: set arch x86\n");
+            arch = CS_ARCH_X86;
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool Decompiler::SetMode(int binary_mode){
+    switch(binary_mode){
+        case BINARY_MODE_32:
+            mode = CS_MODE_32;
+            PRINT_DEBUG("DECOMPILER_CORE: set mode 32\n");
+            return true;
+        case BINARY_MODE_64:
+            mode = CS_MODE_64;
+            PRINT_DEBUG("DECOMPILER_CORE: set mode 64\n");
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool Decompiler::Setup(int binary_arch, int binary_mode) {
+    if (SetArchitecture(binary_arch) == false){
+        return false;
+    }
+    if (SetMode(binary_mode) == false){
+        return false;
+    }
     return true;
 }
 

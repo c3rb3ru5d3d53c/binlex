@@ -16,8 +16,8 @@ namespace binlex {
 		 * This class holds data and methods common to files.
 		 */
 		public:
-			int binary_arch;
-			int binary_mode;
+			int binary_arch = BINARY_ARCH_UNKNOWN;
+			int binary_mode = BINARY_MODE_UNKNOWN;
 			string sha256;
 			string tlsh;
 		struct Section {
@@ -26,6 +26,8 @@ namespace binlex {
 			void *data;
 			set<uint64_t> functions;
 		};
+		bool SetBinaryArch(int binary_arch);
+		bool SetBinaryMode(int binary_mode);
 		/**
 		 * Function will calculate all the hashes for the complete file.
 		 * @param file_path: path to the file
