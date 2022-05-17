@@ -103,7 +103,6 @@ int AutoLex::ProcessFile(char *file_path){
         if (characteristics.arch == CS_ARCH_X86 &&
             characteristics.mode == CS_MODE_32){
             g_args.options.mode = "elf:x86";
-
         }
         if (characteristics.arch == CS_ARCH_X86 &&
             characteristics.mode == CS_MODE_64){

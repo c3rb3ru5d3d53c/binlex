@@ -42,11 +42,6 @@ namespace binlex {
             struct Section sections[BINARY_MAX_SECTIONS];
             uint32_t total_exec_sections;
             /**
-             * Setup set binary architecture and mode.
-             * @return bool
-             */
-            BINLEX_EXPORT bool Setup();
-            /**
              * Check if the PE file is a .NET file
              * @return bool
              */

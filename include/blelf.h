@@ -42,12 +42,6 @@ namespace binlex{
             uint32_t total_exec_sections;
             BINLEX_EXPORT ELF();
             /**
-            This method sets the architecture of the ELF file you wish to read.
-            @param input_mode architecure of the file
-            @return bool
-            */
-            BINLEX_EXPORT bool Setup();
-            /**
             This method reads an ELF file from a buffer.
             @param data vector
             @return bool

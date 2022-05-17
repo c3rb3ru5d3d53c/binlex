@@ -12,29 +12,6 @@ PE::PE(){
     }
 }
 
-bool PE::Setup(){
-    if (IsDotNet() == true){
-        binary_arch = BINARY_ARCH_X86;
-        binary_mode = BINARY_MODE_CIL;
-        return true;
-    } else {
-        switch(binary->header().machine()){
-            case MACHINE_TYPES::IMAGE_FILE_MACHINE_I386:
-                binary_arch = BINARY_ARCH_X86;
-                binary_mode = BINARY_MODE_32;
-                return true;
-            case MACHINE_TYPES::IMAGE_FILE_MACHINE_AMD64:
-                binary_arch = BINARY_ARCH_X86;
-                binary_mode = BINARY_MODE_64;
-                return true;
-            default:
-                binary_arch = BINARY_ARCH_UNKNOWN;
-                binary_mode = BINARY_MODE_UNKNOWN;
-                return false;
-        }
-    }
-}
-
 bool PE::ReadVector(const std::vector<uint8_t> &data){
     binary = Parser::parse(data);
     if (binary == NULL){
@@ -42,8 +19,24 @@ bool PE::ReadVector(const std::vector<uint8_t> &data){
     }
     if (binary_arch == BINARY_ARCH_UNKNOWN ||
         binary_mode == BINARY_MODE_UNKNOWN){
-        if (Setup() == false){
-            return false;
+        if (IsDotNet() == true){
+            binary_arch = BINARY_ARCH_X86;
+            binary_mode = BINARY_MODE_CIL;
+        } else {
+            switch(binary->header().machine()){
+                case MACHINE_TYPES::IMAGE_FILE_MACHINE_I386:
+                    binary_arch = BINARY_ARCH_X86;
+                    binary_mode = BINARY_MODE_32;
+                    break;
+                case MACHINE_TYPES::IMAGE_FILE_MACHINE_AMD64:
+                    binary_arch = BINARY_ARCH_X86;
+                    binary_mode = BINARY_MODE_64;
+                    break;
+                default:
+                    binary_arch = BINARY_ARCH_UNKNOWN;
+                    binary_mode = BINARY_MODE_UNKNOWN;
+                    return false;
+            }
         }
     }
     CalculateFileHashes(data);
@@ -114,8 +107,7 @@ bool PE::ParseSections(){
                 sections[index].functions.insert(entrypoint_offset-sections[index].offset);
             }
             index++;
-            if (BINARY_MAX_SECTIONS == index)
-            {
+            if (BINARY_MAX_SECTIONS == index){
                 fprintf(stderr, "[x] malformed binary, too many executable sections\n");
                 return false;
             }
