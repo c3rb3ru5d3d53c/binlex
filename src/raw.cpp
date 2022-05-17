@@ -19,6 +19,10 @@ int Raw::GetFileSize(FILE *fd){
 }
 
 bool Raw::ReadVector(const std::vector<uint8_t> &data){
+    if (binary_arch == BINARY_ARCH_UNKNOWN ||
+        binary_mode == BINARY_MODE_UNKNOWN){
+        return false;
+    }
     const int section_index = 0; // The parameter was always zero.
     CalculateFileHashes(data);
     // The original ftell was always called after opening the file, hence 0.

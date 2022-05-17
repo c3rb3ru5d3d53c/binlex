@@ -12,24 +12,6 @@ ELF::ELF(){
     }
 }
 
-bool ELF::Setup(){
-    switch(binary->header().machine_type()){
-        case ARCH::EM_386:
-            binary_arch = BINARY_ARCH_X86;
-            binary_mode = BINARY_MODE_32;
-            return true;
-        case ARCH::EM_X86_64:
-            mode = ARCH::EM_X86_64;
-            binary_arch = BINARY_ARCH_X86_64;
-            binary_mode = BINARY_MODE_64;
-            return true;
-        default:
-            binary_arch = BINARY_ARCH_UNKNOWN;
-            binary_mode = BINARY_MODE_UNKNOWN;
-            return false;
-    }
-}
-
 bool ELF::ReadVector(const std::vector<uint8_t> &data){
     binary = Parser::parse(data);
     if (binary == NULL){
@@ -37,8 +19,20 @@ bool ELF::ReadVector(const std::vector<uint8_t> &data){
     }
     if (binary_arch == BINARY_ARCH_UNKNOWN ||
         binary_mode == BINARY_MODE_UNKNOWN){
-        if (Setup() == false){
-            return false;
+        switch(binary->header().machine_type()){
+            case ARCH::EM_386:
+                binary_arch = BINARY_ARCH_X86;
+                binary_mode = BINARY_MODE_32;
+                break;
+            case ARCH::EM_X86_64:
+                mode = ARCH::EM_X86_64;
+                binary_arch = BINARY_ARCH_X86_64;
+                binary_mode = BINARY_MODE_64;
+                break;
+            default:
+                binary_arch = BINARY_ARCH_UNKNOWN;
+                binary_mode = BINARY_MODE_UNKNOWN;
+                return false;
         }
     }
     CalculateFileHashes(data);
