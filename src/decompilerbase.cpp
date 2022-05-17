@@ -17,10 +17,6 @@ void DecompilerBase::py_SetTags(const vector<string> &tags){
     g_args.options.tags = set<string>(tags.begin(), tags.end());
 }
 
-void DecompilerBase::py_SetInstructions(bool instructions) {
-    g_args.options.instructions = instructions;
-}
-
 void DecompilerBase::py_SetMode(string mode){
     g_args.options.mode = mode;
 }
