@@ -71,7 +71,6 @@ bool PE::IsDotNet(){
     }
 }
 
-
 bool PE::HasLimitations(){
     if(binary->has_imports()){
         auto imports = binary->imports();

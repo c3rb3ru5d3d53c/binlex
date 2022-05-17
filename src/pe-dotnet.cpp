@@ -249,15 +249,24 @@ void DOTNET::ParseSections(){
 }
 
 bool DOTNET::ReadVector(const std::vector<uint8_t> &data){
-    CalculateFileHashes(data);
     binary = Parser::parse(data);
     if (binary == NULL){
         return false;
     }
-    if (mode != binary->header().machine()){
-        fprintf(stderr, "[x] incorrect mode for binary architecture\n");
-        return false;
+    if (binary_arch == BINARY_ARCH_UNKNOWN ||
+        binary_mode == BINARY_MODE_UNKNOWN){
+        switch(binary->header().machine()){
+            case MACHINE_TYPES::IMAGE_FILE_MACHINE_I386:
+                binary_arch = BINARY_ARCH_X86;
+                binary_mode = BINARY_MODE_CIL;
+                break;
+            default:
+                binary_arch = BINARY_ARCH_UNKNOWN;
+                binary_mode = BINARY_MODE_UNKNOWN;
+                return false;
+        }
     }
+    CalculateFileHashes(data);
     if (IsDotNet() == false) return false;
     if (Parse() == false) return false;
     ParseSections();
