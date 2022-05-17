@@ -124,14 +124,9 @@ void * Decompiler::CreateTraitsForSection(uint index) {
 
     PRINT_DEBUG("----------\nHandling section %u\n----------\n", index);
 
-    i_trait.type = "instruction";
-    //i_trait.architecture = sections[index].arch_str;
-    ClearTrait(&i_trait);
     b_trait.type = "block";
-    //b_trait.architecture = sections[index].arch_str;
     ClearTrait(&b_trait);
     f_trait.type = "function";
-    //f_trait.architecture = sections[index].arch_str;
     ClearTrait(&f_trait);
 
     myself.error = cs_open(arch, mode, &myself.handle);
@@ -179,7 +174,6 @@ void * Decompiler::CreateTraitsForSection(uint index) {
                 // Error with disassembly, not a valid basic block,
                 PRINT_DEBUG("*** Decompile error rejected block: 0x%" PRIx64 "\n", myself.pc);
                 ClearTrait(&b_trait);
-                ClearTrait(&i_trait);
                 ClearTrait(&f_trait);
                 myself.code = (uint8_t *)((uint8_t *)myself.code + 1);
                 myself.code_size +=1;
@@ -201,24 +195,12 @@ void * Decompiler::CreateTraitsForSection(uint index) {
             if (suspicious_instructions > 2){
                 PRINT_DEBUG("*** Suspicious instructions rejected block: 0x%" PRIx64 "\n", insn->address);
                 ClearTrait(&b_trait);
-                ClearTrait(&i_trait);
                 ClearTrait(&f_trait);
                 break;
             }
 
             b_trait.instructions++;
             f_trait.instructions++;
-
-            if (g_args.options.instructions == true){
-                i_trait.tmp_bytes = HexdumpBE(insn->bytes, insn->size);
-                i_trait.size = GetByteSize(i_trait.tmp_bytes);
-                i_trait.offset = sections[index].offset + myself.pc - i_trait.size;
-                i_trait.tmp_trait = WildcardInsn(insn);
-                i_trait.instructions = 1;
-                i_trait.edges = IsConditionalInsn(insn);
-                AppendTrait(&i_trait, sections, index);
-                ClearTrait(&i_trait);
-            }
 
             // Need to Wildcard Traits Here
             if (IsWildcardInsn(insn) == true){

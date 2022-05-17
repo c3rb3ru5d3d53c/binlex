@@ -19,7 +19,6 @@ void init_decompiler(py::module &handle){
     .def("set_corpus", &binlex::Decompiler::py_SetCorpus)
     .def("set_tags", &binlex::Decompiler::py_SetTags)
     .def("set_mode", &binlex::Decompiler::py_SetMode)
-    .def("set_instructions", &binlex::Decompiler::py_SetInstructions)
     .def("decompile", [](binlex::Decompiler &module, py::buffer data, uint offset, uint index){
         py::buffer_info info = data.request();
         module.Decompile(info.ptr, info.size, offset, index);
