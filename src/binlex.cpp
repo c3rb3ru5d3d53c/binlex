@@ -64,34 +64,26 @@ int main(int argc, char **argv){
     if (g_args.options.mode == "elf:x86_64" &&
         g_args.options.io_type == ARGS_IO_TYPE_FILE){
         ELF elf64;
-        elf64.SetBinaryArch(BINARY_ARCH_X86_64);
-        elf64.SetBinaryMode(BINARY_MODE_64);
+        elf64.SetArchitecture(BINARY_ARCH_X86_64, BINARY_MODE_64);
         if (elf64.ReadFile(g_args.options.input) == false){
             return EXIT_FAILURE;
         }
         PRINT_DEBUG("[binlex.cpp] number of total executable sections = %u\n", elf64.total_exec_sections);
         Decompiler decompiler(elf64);
-        for (uint32_t i = 0; i < elf64.total_exec_sections; i++){
-            decompiler.AppendQueue(elf64.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
-            decompiler.Decompile(elf64.sections[i].data, elf64.sections[i].size, elf64.sections[i].offset, i);
-        }
+        decompiler.Decompile();
         decompiler.WriteTraits();
         return EXIT_SUCCESS;
     }
     if (g_args.options.mode == "elf:x86" &&
         g_args.options.io_type == ARGS_IO_TYPE_FILE){
         ELF elf32;
-        elf32.SetBinaryArch(BINARY_ARCH_X86);
-        elf32.SetBinaryMode(BINARY_MODE_32);
+        elf32.SetArchitecture(BINARY_ARCH_X86, BINARY_MODE_32);
         if (elf32.ReadFile(g_args.options.input) == false){
             return EXIT_FAILURE;
         }
         PRINT_DEBUG("[binlex.cpp] number of total executable sections = %u\n", elf32.total_exec_sections);
         Decompiler decompiler(elf32);
-        for (uint32_t i = 0; i < elf32.total_exec_sections; i++){
-            decompiler.AppendQueue(elf32.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
-            decompiler.Decompile(elf32.sections[i].data, elf32.sections[i].size, elf32.sections[i].offset, i);
-        }
+        decompiler.Decompile();
         decompiler.WriteTraits();
         return EXIT_SUCCESS;
     }
@@ -100,8 +92,7 @@ int main(int argc, char **argv){
         // TODO: This should be valid for both x86-86 and x86-64
         // we need to do this more generic
         DOTNET pe;
-        pe.SetBinaryArch(BINARY_ARCH_X86);
-        pe.SetBinaryMode(BINARY_MODE_CIL);
+        pe.SetArchitecture(BINARY_ARCH_X86, BINARY_MODE_CIL);
         if (pe.ReadFile(g_args.options.input) == false) return 1;
         CILDecompiler cil_decompiler(pe);
         PRINT_DEBUG("[binlex.cpp] analyzing %lu sections for CIL byte code.\n", pe._sections.size());
@@ -123,60 +114,50 @@ int main(int argc, char **argv){
     if (g_args.options.mode == "pe:x86" &&
         g_args.options.io_type == ARGS_IO_TYPE_FILE){
         PE pe32;
-        pe32.SetBinaryArch(BINARY_ARCH_X86);
-        pe32.SetBinaryMode(BINARY_MODE_32);
+        pe32.SetArchitecture(BINARY_ARCH_X86, BINARY_MODE_32);
         if (pe32.ReadFile(g_args.options.input) == false){
             return EXIT_FAILURE;
         }
         PRINT_DEBUG("[binlex.cpp] number of total sections = %u\n", pe32.total_exec_sections);
         Decompiler decompiler(pe32);
-        for (uint32_t i = 0; i < pe32.total_exec_sections; i++){
-            decompiler.AppendQueue(pe32.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
-            decompiler.Decompile(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, i);
-        }
+        decompiler.Decompile();
         decompiler.WriteTraits();
         return EXIT_SUCCESS;
     }
     if (g_args.options.mode == "pe:x86_64" &&
         g_args.options.io_type == ARGS_IO_TYPE_FILE){
         PE pe64;
-        pe64.SetBinaryArch(BINARY_ARCH_X86_64);
-        pe64.SetBinaryMode(BINARY_MODE_64);
+        pe64.SetArchitecture(BINARY_ARCH_X86_64, BINARY_MODE_64);
         if (pe64.ReadFile(g_args.options.input) == false){
             return EXIT_FAILURE;
         }
         PRINT_DEBUG("[binlex.cpp] number of total executable sections = %u\n", pe64.total_exec_sections);
         Decompiler decompiler(pe64);
-        for (uint32_t i = 0; i < pe64.total_exec_sections; i++){
-            decompiler.AppendQueue(pe64.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
-            decompiler.Decompile(pe64.sections[i].data, pe64.sections[i].size, pe64.sections[i].offset, i);
-        }
+        decompiler.Decompile();
         decompiler.WriteTraits();
         return EXIT_SUCCESS;
     }
     if (g_args.options.mode == "raw:x86" &&
         g_args.options.io_type == ARGS_IO_TYPE_FILE){
         Raw rawx86;
-        rawx86.SetBinaryArch(BINARY_ARCH_X86);
-        rawx86.SetBinaryMode(BINARY_MODE_32);
+        rawx86.SetArchitecture(BINARY_ARCH_X86, BINARY_MODE_32);
         if (rawx86.ReadFile(g_args.options.input) == false){
             return EXIT_FAILURE;
         }
         Decompiler decompiler(rawx86);
-        decompiler.Decompile(rawx86.sections[0].data, rawx86.sections[0].size, rawx86.sections[0].offset, 0);
+        decompiler.Decompile();
         decompiler.WriteTraits();
         return EXIT_SUCCESS;
     }
     if (g_args.options.mode == "raw:x86_64" &&
         g_args.options.io_type == ARGS_IO_TYPE_FILE){
         Raw rawx86_64;
-        rawx86_64.SetBinaryArch(BINARY_ARCH_X86_64);
-        rawx86_64.SetBinaryMode(BINARY_MODE_64);
+        rawx86_64.SetArchitecture(BINARY_ARCH_X86_64, BINARY_MODE_64);
         if (rawx86_64.ReadFile(g_args.options.input) == false){
             return EXIT_FAILURE;
         }
         Decompiler decompiler(rawx86_64);
-        decompiler.Decompile(rawx86_64.sections[0].data, rawx86_64.sections[0].size, rawx86_64.sections[0].offset, 0);
+        decompiler.Decompile();
         decompiler.WriteTraits();
         return EXIT_SUCCESS;
     }

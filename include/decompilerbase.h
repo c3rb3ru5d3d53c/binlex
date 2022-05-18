@@ -15,9 +15,8 @@ namespace binlex {
         /**
          * This class shares common methods between all decompilers.
          */
-        protected:
-            const binlex::File &file_reference;
         public:
+            const binlex::File &file_reference;
             /**
              * Decompiler constructor requiring file object.
              * @param fileref File object

@@ -38,8 +38,8 @@ namespace binlex{
         public:
             ARCH mode = ARCH::EM_NONE;
             unique_ptr<LIEF::ELF::Binary> binary;
-            struct Section sections[BINARY_MAX_SECTIONS];
-            uint32_t total_exec_sections;
+            //struct Section sections[BINARY_MAX_SECTIONS];
+            //uint32_t total_exec_sections;
             BINLEX_EXPORT ELF();
             /**
             This method reads an ELF file from a buffer.
