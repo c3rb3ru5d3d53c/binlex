@@ -15,6 +15,7 @@
 #include <capstone/capstone.h>
 #include "common.h"
 #include "json.h"
+#include "file.h"
 #include "decompilerbase.h"
 
 #if defined(__linux__) || defined(__APPLE__)
@@ -31,7 +32,7 @@
 #define BINLEX_EXPORT
 #endif
 
-#define DECOMPILER_MAX_SECTIONS 256
+//#define DECOMPILER_MAX_SECTIONS 256
 #define SHA256_PRINTABLE_SIZE   65 /* including NULL terminator */
 
 #define DECOMPILER_VISITED_QUEUED   0
@@ -49,7 +50,7 @@ typedef enum DECOMPILER_OPERAND_TYPE {
 using json = nlohmann::json;
 
 namespace binlex {
-    class Decompiler : public DecompilerBase {
+    class Decompiler : public DecompilerBase{
     private:
         typedef struct worker {
             csh handle;
@@ -101,13 +102,6 @@ namespace binlex {
         struct Section sections[BINARY_MAX_SECTIONS];
         BINLEX_EXPORT Decompiler(const binlex::File &firef);
         /**
-        Set up Capstone Decompiler Architecure and Mode
-        @param binary_arch Binary Architecure
-        @param binary_mode Binary Mode
-        @return bool
-        */
-        BINLEX_EXPORT bool Setup(int binary_arch, int binary_mode);
-        /**
         @param instructions bool to collect instructions traits or not
         @param index the section index
         */
@@ -118,13 +112,6 @@ namespace binlex {
         @returns NULL
         */
         BINLEX_EXPORT void* CreateTraitsForSection(uint index);
-        /**
-         * This method sets the archetcure for the core decompiler.
-         * @param binary_arch the BINARY_ARCH value.
-         * @return bool
-         */
-        BINLEX_EXPORT bool SetArchitecture(int binary_arch);
-        BINLEX_EXPORT bool SetMode(int binary_mode);
         /**
         Add discovered block address to queue
         @param address the block address
@@ -163,7 +150,7 @@ namespace binlex {
         @param offset include section offset
         @param index the section index
         */
-        BINLEX_EXPORT void Decompile(void* data, size_t data_size, size_t offset, uint index);
+        BINLEX_EXPORT void Decompile();
         //void Seek(uint64_t address, size_t data_size, uint index);
         /**
         Append Additional Traits

@@ -15,8 +15,32 @@ cs_mode Decompiler::mode;
 	: (((insn).address + (insn).size) + (uint64_t)(insn).detail->x86.disp))
 
 Decompiler::Decompiler(const binlex::File &firef) : DecompilerBase(firef) {
-    Setup(firef.binary_arch, firef.binary_mode);
-    for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++) {
+    // Set Decompiler Architecture
+    switch(file_reference.binary_arch){
+        case BINARY_ARCH_X86:
+        case BINARY_ARCH_X86_64:
+            arch = CS_ARCH_X86;
+            break;
+        default:
+            PRINT_ERROR_AND_EXIT("[x] failed to set decompiler architecture\n");
+    }
+    // Set Decompiler Mode
+    switch(file_reference.binary_mode){
+        case BINARY_MODE_32:
+            mode = CS_MODE_32;
+            break;
+        case BINARY_MODE_64:
+            mode = CS_MODE_64;
+            break;
+        default:
+            PRINT_ERROR_AND_EXIT("[x] failed to set decompiler mode\n");
+    }
+    // Append the Function Queue
+    for (uint32_t i = 0; i < file_reference.total_exec_sections; i++){
+        std::set<uint64_t> tmp = file_reference.sections[i].functions;
+        AppendQueue(tmp, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
+    }
+    for (int i = 0; i < BINARY_MAX_SECTIONS; i++) {
         sections[i].offset = 0;
         sections[i].data = NULL;
         sections[i].data_size = 0;
@@ -29,43 +53,6 @@ void Decompiler::AppendTrait(struct Trait *trait, struct Section *sections, uint
     new_elem_trait.bytes = trait->tmp_bytes;
     sections[index].traits.push_back(new_elem_trait);
  }
-
-bool Decompiler::SetArchitecture(int binary_arch){
-    switch(binary_arch){
-        case BINARY_ARCH_X86:
-        case BINARY_ARCH_X86_64:
-            PRINT_DEBUG("DECOMPILER_CORE: set arch x86\n");
-            arch = CS_ARCH_X86;
-            return true;
-        default:
-            return false;
-    }
-}
-
-bool Decompiler::SetMode(int binary_mode){
-    switch(binary_mode){
-        case BINARY_MODE_32:
-            mode = CS_MODE_32;
-            PRINT_DEBUG("DECOMPILER_CORE: set mode 32\n");
-            return true;
-        case BINARY_MODE_64:
-            mode = CS_MODE_64;
-            PRINT_DEBUG("DECOMPILER_CORE: set mode 64\n");
-            return true;
-        default:
-            return false;
-    }
-}
-
-bool Decompiler::Setup(int binary_arch, int binary_mode) {
-    if (SetArchitecture(binary_arch) == false){
-        return false;
-    }
-    if (SetMode(binary_mode) == false){
-        return false;
-    }
-    return true;
-}
 
 json Decompiler::GetTrait(struct Trait &trait){
     json data;
@@ -104,7 +91,7 @@ json Decompiler::GetTrait(struct Trait &trait){
 
 vector<json> Decompiler::GetTraits(){
     vector<json> traitsjson;
-    for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++){
+    for (int i = 0; i < BINARY_MAX_SECTIONS; i++){
         if (sections[i].data != NULL){
             for (size_t j = 0; j < sections[i].traits.size(); j++){
                 json jdata(GetTrait(sections[i].traits[j]));
@@ -406,7 +393,18 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
 
 };
 
-void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint index) {
+void Decompiler::Decompile() {
+    for (uint32_t i = 0; i < file_reference.total_exec_sections; i++){
+        sections[i].offset = file_reference.sections[i].offset;
+        sections[i].data = file_reference.sections[i].data;
+        sections[i].data_size = file_reference.sections[i].size;
+        LinearDisassemble(sections[i].data, sections[i].data_size, sections[i].offset, i);
+        CreateTraitsForSection(i);
+        for (size_t j = 0; j < sections[i].traits.size(); ++j) {
+            FinalizeTrait(sections[i].traits[j]);
+        }
+    }
+    /*
     sections[index].offset  = offset;
     sections[index].data = data;
     sections[index].data_size = data_size;
@@ -426,6 +424,7 @@ void Decompiler::Decompile(void* data, size_t data_size, size_t offset, uint ind
         FinalizeTrait(sections[index].traits[i]);
     }
     //PERF_END
+    */
 }
 
 string Decompiler::WildcardInsn(cs_insn *insn){
@@ -722,7 +721,7 @@ void Decompiler::FreeTraits(uint index){
 }
 
 Decompiler::~Decompiler() {
-    for (int i = 0; i < DECOMPILER_MAX_SECTIONS; i++) {
+    for (int i = 0; i < BINARY_MAX_SECTIONS; i++) {
         FreeTraits(i);
     }
 }

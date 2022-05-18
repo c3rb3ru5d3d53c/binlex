@@ -58,8 +58,6 @@ int AutoLex::ProcessFile(char *file_path){
             PRINT_ERROR_AND_EXIT("[x] file has limitations\n");
         }
 
-        Decompiler decompiler(pe);
-
         if(pe.IsDotNet()){
             DOTNET pe;
             g_args.options.mode = "pe:cil";
@@ -83,12 +81,8 @@ int AutoLex::ProcessFile(char *file_path){
                 characteristics.mode == CS_MODE_64){
                     g_args.options.mode = "pe:x86_64";
             }
-            for (uint32_t i = 0; i < pe.total_exec_sections; i++) {
-                if (pe.sections[i].data != NULL) {
-                    decompiler.AppendQueue(pe.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
-                    decompiler.Decompile(pe.sections[i].data, pe.sections[i].size, pe.sections[i].offset, i);
-                }
-            }
+            Decompiler decompiler(pe);
+            decompiler.Decompile();
             decompiler.WriteTraits();
         }
     } else if (characteristics.format == LIEF::FORMAT_ELF){
@@ -108,14 +102,7 @@ int AutoLex::ProcessFile(char *file_path){
             characteristics.mode == CS_MODE_64){
                 g_args.options.mode = "elf:x86_64";
         }
-
-        for (uint32_t i = 0; i < elf.total_exec_sections; i++){
-            if (elf.sections[i].data != NULL){
-                decompiler.AppendQueue(elf.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
-                decompiler.Decompile(elf.sections[i].data, elf.sections[i].size, elf.sections[i].offset, i);
-            }
-
-        }
+        decompiler.Decompile();
         decompiler.WriteTraits();
     }
     return EXIT_SUCCESS;
