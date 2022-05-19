@@ -39,7 +39,7 @@ namespace binlex{
                 int size;
                 uint offset;
             };
-            struct Section sections[BINARY_MAX_SECTIONS];
+            //struct Section sections[BINARY_MAX_SECTIONS];
             BINLEX_EXPORT Raw();
             /**
              * Read data.

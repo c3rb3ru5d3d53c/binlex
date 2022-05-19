@@ -15,9 +15,8 @@ namespace binlex {
         /**
          * This class shares common methods between all decompilers.
          */
-        protected:
-            const binlex::File &file_reference;
         public:
+            const binlex::File &file_reference;
             /**
              * Decompiler constructor requiring file object.
              * @param fileref File object
@@ -50,11 +49,6 @@ namespace binlex {
              * @param corpus pointer to corpus name
              */
             BINLEX_EXPORT void py_SetCorpus(const char *corpus);
-            /**
-             *Specify if instruction traits are collected, via pybind11
-             *@param instructions bool to collect instructions traits or not
-             */
-            BINLEX_EXPORT void py_SetInstructions(bool instructions);
             /**
              * Sets the tags, via pybind11
              * @param tags set of tags

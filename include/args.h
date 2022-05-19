@@ -50,7 +50,6 @@ namespace binlex{
                 uint threads;
                 bool help;
                 bool list_modes;
-                bool instructions;
                 std::string mode;
                 std::string corpus;
                 bool pretty;

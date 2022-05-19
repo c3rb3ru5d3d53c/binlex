@@ -38,15 +38,9 @@ namespace binlex{
         public:
             ARCH mode = ARCH::EM_NONE;
             unique_ptr<LIEF::ELF::Binary> binary;
-            struct Section sections[BINARY_MAX_SECTIONS];
-            uint32_t total_exec_sections;
+            //struct Section sections[BINARY_MAX_SECTIONS];
+            //uint32_t total_exec_sections;
             BINLEX_EXPORT ELF();
-            /**
-            This method sets the architecture of the ELF file you wish to read.
-            @param input_mode architecure of the file
-            @return bool
-            */
-            BINLEX_EXPORT bool Setup(ARCH input_mode);
             /**
             This method reads an ELF file from a buffer.
             @param data vector

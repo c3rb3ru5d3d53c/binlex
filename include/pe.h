@@ -39,14 +39,8 @@ namespace binlex {
             #endif
             unique_ptr<LIEF::PE::Binary> binary;
             BINLEX_EXPORT PE();
-            struct Section sections[BINARY_MAX_SECTIONS];
-            uint32_t total_exec_sections;
-            /**
-             * Setup to Read Specific PE Format
-             * @param input_mode MACHINE_TYPES::IMAGE_FILE_MACHINE_<arch>
-             * @return bool
-             */
-            BINLEX_EXPORT bool Setup(MACHINE_TYPES input_mode);
+            //struct Section sections[BINARY_MAX_SECTIONS];
+            //uint32_t total_exec_sections;
             /**
              * Check if the PE file is a .NET file
              * @return bool

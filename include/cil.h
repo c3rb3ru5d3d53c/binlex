@@ -344,7 +344,6 @@ namespace binlex {
             //Map for all remaining instruction types that don't need special
             //treatment
             map<int, int> miscInstrMap;
-            bool Setup(int input_type);
             bool Decompile(void *data, int data_size, int index);
             /**
              * Get Traits as json vector
