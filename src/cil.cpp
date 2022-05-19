@@ -4,6 +4,7 @@ using namespace binlex;
 using json = nlohmann::json;
 
 CILDecompiler::CILDecompiler(const binlex::File &firef) : DecompilerBase(firef) {
+    type = CIL_DECOMPILER_TYPE_ALL;
     for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
         sections[i].offset = 0;
         sections[i].ntraits = 0;
@@ -273,24 +274,6 @@ CILDecompiler::CILDecompiler(const binlex::File &firef) : DecompilerBase(firef) 
     };
 }
 
-bool CILDecompiler::Setup(int input_type){
-    switch(input_type){
-        case CIL_DECOMPILER_TYPE_BLCKS:
-            type = CIL_DECOMPILER_TYPE_BLCKS;
-            break;
-        case CIL_DECOMPILER_TYPE_FUNCS:
-            type = CIL_DECOMPILER_TYPE_FUNCS;
-            break;
-        case CIL_DECOMPILER_TYPE_ALL:
-            type = CIL_DECOMPILER_TYPE_ALL;
-            break;
-        default:
-            fprintf(stderr, "[x] unsupported CIL decompiler type\n");
-            type = CIL_DECOMPILER_TYPE_UNSET;
-            return false;
-    }
-    return true;
-}
 int CILDecompiler::update_offset(int operand_size, int i) {
     //fprintf(stderr, "[+] updating offset using operand size %d\n", operand_size);
     switch(operand_size){

@@ -99,10 +99,6 @@ int main(int argc, char **argv){
         int si = 0;
         for (auto section : pe._sections) {
             if (section.offset == 0) continue;
-
-            if (cil_decompiler.Setup(CIL_DECOMPILER_TYPE_ALL) == false){
-                return 1;
-            }
             if (cil_decompiler.Decompile(section.data, section.size, si) == false){
                     continue;
             }
