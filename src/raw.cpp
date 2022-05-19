@@ -36,8 +36,10 @@ bool Raw::ReadVector(const std::vector<uint8_t> &data){
     CalculateFileHashes(data);
     // The original ftell was always called after opening the file, hence 0.
     sections[section_index].offset = 0;
+    sections[section_index].functions.insert(0);
     sections[section_index].size = data.size();
     sections[section_index].data = malloc(data.size());
+    total_exec_sections++;
     if(sections[section_index].data == NULL) {
 	    return false;
     }
