@@ -13,7 +13,7 @@ void File::CalculateFileHashes(const vector<uint8_t> &data){
 }
 
 bool File::SetArchitecture(int arch, int mode){
-    switch(binary_arch){
+    switch(arch){
         case BINARY_ARCH_X86:
         case BINARY_ARCH_X86_64:
             binary_arch = arch;

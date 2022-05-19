@@ -22,6 +22,15 @@ bool Raw::ReadVector(const std::vector<uint8_t> &data){
     if (binary_arch == BINARY_ARCH_UNKNOWN ||
         binary_mode == BINARY_MODE_UNKNOWN){
         return false;
+    } else {
+        if (binary_arch == BINARY_ARCH_X86 &&
+            binary_mode == BINARY_MODE_32){
+            g_args.options.mode = "raw:x86";
+        } else if ((binary_arch == BINARY_ARCH_X86 ||
+            binary_arch == BINARY_ARCH_X86_64) &&
+            binary_mode == BINARY_MODE_64){
+                g_args.options.mode = "raw:x86_64";
+            }
     }
     const int section_index = 0; // The parameter was always zero.
     CalculateFileHashes(data);

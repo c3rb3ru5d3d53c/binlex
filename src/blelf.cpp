@@ -21,13 +21,12 @@ bool ELF::ReadVector(const std::vector<uint8_t> &data){
         binary_mode == BINARY_MODE_UNKNOWN){
         switch(binary->header().machine_type()){
             case ARCH::EM_386:
-                binary_arch = BINARY_ARCH_X86;
-                binary_mode = BINARY_MODE_32;
+                SetArchitecture(BINARY_ARCH_X86, BINARY_MODE_32);
+                g_args.options.mode = "elf:x86";
                 break;
             case ARCH::EM_X86_64:
-                mode = ARCH::EM_X86_64;
-                binary_arch = BINARY_ARCH_X86_64;
-                binary_mode = BINARY_MODE_64;
+                SetArchitecture(BINARY_ARCH_X86, BINARY_MODE_64);
+                g_args.options.mode = "elf:x86_64";
                 break;
             default:
                 binary_arch = BINARY_ARCH_UNKNOWN;

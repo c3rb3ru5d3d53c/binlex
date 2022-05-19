@@ -25,12 +25,12 @@ bool PE::ReadVector(const std::vector<uint8_t> &data){
         } else {
             switch(binary->header().machine()){
                 case MACHINE_TYPES::IMAGE_FILE_MACHINE_I386:
-                    binary_arch = BINARY_ARCH_X86;
-                    binary_mode = BINARY_MODE_32;
+                    SetArchitecture(BINARY_ARCH_X86, BINARY_MODE_32);
+                    g_args.options.mode = "pe:x86";
                     break;
                 case MACHINE_TYPES::IMAGE_FILE_MACHINE_AMD64:
-                    binary_arch = BINARY_ARCH_X86;
-                    binary_mode = BINARY_MODE_64;
+                    SetArchitecture(BINARY_ARCH_X86, BINARY_MODE_64);
+                    g_args.options.mode = "pe:x86_64";
                     break;
                 default:
                     binary_arch = BINARY_ARCH_UNKNOWN;
