@@ -421,20 +421,13 @@ using namespace binlex;
 
 int main(int argc, char **argv){
   PE pe32;
-  if (pe32.Setup(MACHINE_TYPES::IMAGE_FILE_MACHINE_I386) == false){
-      return EXIT_FAILURE;
-  }
   if (pe32.ReadFile(argv[1]) == false){
       return EXIT_FAILURE;
   }
   Decompiler decompiler(pe32);
-  decompiler.Setup(CS_ARCH_X86, CS_MODE_32);
-  for (uint32_t i = 0; i < pe32.total_exec_sections; i++){
-      decompiler.AppendQueue(pe32.sections[i].functions, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
-      decompiler.Decompile(pe32.sections[i].data, pe32.sections[i].size, pe32.sections[i].offset, i);
-  }
+  decompiler.Decompile();
   decompiler.WriteTraits();
-  return 0;
+  return EXIT_SUCCESS;
 }
 ```
 
@@ -446,21 +439,12 @@ The power of detection is in your hands, `binlex` is a framework, leverage the C
 #!/usr/bin/env python
 
 import pybinlex
-from hashlib import sha256
 
 pe = pybinlex.PE()
-pe.setup(pybinlex.MACHINE_TYPES.IMAGE_FILE_MACHINE_I386)
-result = pe.read_file('../tests/pe/pe.x86')
-if result is False:
-    print("[x] failed to read pe.x86")
-    sys.exit(1)
-pe_sections = pe.get_sections()
-
+result = pe.read_file('example.exe')
+if result is False: sys.exit(1)
 decompiler = pybinlex.Decompiler(pe)
-decompiler.setup(pybinlex.cs_arch.CS_ARCH_X86, pybinlex.cs_mode.CS_MODE_32)
-for i in range(0, len(pe_sections)):
-    decompiler.append_queue(pe_sections[i]['functions'], pybinlex.DECOMPILER_OPERAND_TYPE.DECOMPILER_OPERAND_TYPE_FUNCTION, i)
-    decompiler.decompile(pe_sections[i]['data'], pe_sections[i]['offset'], i)
+decompiler.decompile()
 traits = decompiler.get_traits()
 print(json.dumps(traits, indent=4))
 ```

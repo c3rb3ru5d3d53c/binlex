@@ -55,6 +55,19 @@ using std::setw;
 
 #define BINARY_MAX_SECTIONS 256
 
+typedef enum BINARY_ARCH {
+    BINARY_ARCH_UNKNOWN = 0,
+    BINARY_ARCH_X86 = 1,
+    BINARY_ARCH_X86_64 = 2,
+} BINARY_ARCH;
+
+typedef enum BINARY_MODE {
+    BINARY_MODE_UNKNOWN = 0,
+    BINARY_MODE_32 = 1,
+    BINARY_MODE_64 = 2,
+    BINARY_MODE_CIL = 3,
+} BINARY_MODE;
+
 #ifdef _WIN32
 typedef unsigned int uint;
 typedef uint useconds_t;
