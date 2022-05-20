@@ -94,6 +94,8 @@ namespace binlex {
             size_t data_size;
             set<uint64_t> coverage;
             map<uint64_t, uint> addresses;
+            set<uint64_t> blocks;
+            set<uint64_t> functions;
             map<uint64_t, int> visited;
             queue<uint64_t> discovered;
         };
@@ -120,6 +122,7 @@ namespace binlex {
         @return bool
         */
         BINLEX_EXPORT static void AddDiscoveredBlock(uint64_t address, struct Section *sections, uint index);
+        BINLEX_EXPORT static void AddDiscoveredFunction(uint64_t address, struct Section *sections, uint index);
         /**
         Collect Function and Conditional Operands for Processing
         @param insn the instruction
@@ -208,13 +211,13 @@ namespace binlex {
         @param address address to check
         @return bool
         */
-        BINLEX_EXPORT static bool IsFunction(map<uint64_t, uint> &addresses, uint64_t address);
+        BINLEX_EXPORT static bool IsFunction(set<uint64_t> &addresses, uint64_t address);
         /**
         Checks if Address if Function
         @param address address to check
         @return bool
         */
-        BINLEX_EXPORT static bool IsBlock(map<uint64_t, uint> &addresses, uint64_t address);
+        BINLEX_EXPORT static bool IsBlock(set<uint64_t> &addresses, uint64_t address);
         /**
         Checks if Address was Already Visited
         @param address address to check
