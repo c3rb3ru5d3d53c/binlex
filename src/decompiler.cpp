@@ -144,8 +144,8 @@ void * Decompiler::CreateTraitsForSection(uint index) {
         myself.code = (uint8_t *)((uint8_t *)sections[index].data + address);
         myself.code_size = sections[index].data_size + address;
 
-        bool block = IsBlock(sections[index].addresses, address);
-        bool function = IsFunction(sections[index].addresses, address);
+        bool block = IsBlock(sections[index].blocks, address);
+        bool function = IsFunction(sections[index].functions, address);
         uint suspicious_instructions = 0;
 
         while(true) {
@@ -167,7 +167,6 @@ void * Decompiler::CreateTraitsForSection(uint index) {
                 myself.pc +=1;
                 sections[index].coverage.insert(myself.pc);
                 break;
-
             }
 
             sections[index].coverage.insert(myself.pc);
@@ -207,11 +206,9 @@ void * Decompiler::CreateTraitsForSection(uint index) {
                 f_trait.blocks++;
             }
 
-
-
             CollectInsn(insn, sections, index);
 
-            PRINT_DEBUG("address=0%" PRIx64 ",block=%d,function=%d,queue=%ld,instruction=%s\t%s\n", insn->address,IsBlock(sections[index].addresses, insn->address), IsFunction(sections[index].addresses, insn->address), sections[index].discovered.size(), insn->mnemonic, insn->op_str);
+            PRINT_DEBUG("address=0%" PRIx64 ",block=%d,function=%d,queue=%ld,instruction=%s\t%s\n", insn->address,IsBlock(sections[index].blocks, insn->address), IsFunction(sections[index].functions, insn->address), sections[index].discovered.size(), insn->mnemonic, insn->op_str);
 
             if (block == true && IsConditionalInsn(insn) > 0){
                 b_trait.tmp_trait = TrimRight(b_trait.tmp_trait);
@@ -292,6 +289,16 @@ void Decompiler::AppendQueue(set<uint64_t> &addresses, uint operand_type, uint i
         sections[index].discovered.push(tmp_addr);
         sections[index].visited[tmp_addr] = DECOMPILER_VISITED_QUEUED;
         sections[index].addresses[tmp_addr] = operand_type;
+        switch(operand_type){
+            case DECOMPILER_OPERAND_TYPE_BLOCK:
+                AddDiscoveredBlock(tmp_addr, sections, index);
+                break;
+            case DECOMPILER_OPERAND_TYPE_FUNCTION:
+                AddDiscoveredFunction(tmp_addr, sections, index);
+                break;
+            default:
+                break;
+        }
         PRINT_DEBUG("0x%" PRIu64 " ", tmp_addr);
     }
     PRINT_DEBUG("\n");
@@ -404,27 +411,6 @@ void Decompiler::Decompile() {
             FinalizeTrait(sections[i].traits[j]);
         }
     }
-    /*
-    sections[index].offset  = offset;
-    sections[index].data = data;
-    sections[index].data_size = data_size;
-
-    PRINT_DEBUG("Decompile: offset = 0x%x data_size = %" PRId64 " bytes\n", sections[index].offset, sections[index].data_size);
-    PRINT_DATA("Section Data (up to 32 bytes)", sections[index].data, std::min((size_t)32, sections[index].data_size));
-
-    // Run a linear disassemble on the data to populate the queue
-    //TODO: enable when this is ready
-    LinearDisassemble(data, data_size, offset, index);
-
-    //PERF_START("CreateTraitsForSection() call")
-    CreateTraitsForSection(index);
-    //PERF_END
-    //PERF_START("FinalizeTrait() loop")
-    for (size_t i = 0; i < sections[index].traits.size(); ++i) {
-        FinalizeTrait(sections[index].traits[i]);
-    }
-    //PERF_END
-    */
 }
 
 string Decompiler::WildcardInsn(cs_insn *insn){
@@ -655,28 +641,39 @@ uint Decompiler::CollectInsn(cs_insn* insn, struct Section *sections, uint index
 
 void Decompiler::AddDiscoveredBlock(uint64_t address, struct Section *sections, uint index) {
     if (IsVisited(sections[index].visited, address) == false && address < sections[index].data_size) {
-        sections[index].visited[address] = DECOMPILER_VISITED_QUEUED;
-        sections[index].addresses[address] = DECOMPILER_OPERAND_TYPE_BLOCK;
-        sections[index].discovered.push(address);
+        if (sections[index].blocks.insert(address).second == true){
+            sections[index].visited[address] = DECOMPILER_VISITED_QUEUED;
+            sections[index].addresses[address] = DECOMPILER_OPERAND_TYPE_BLOCK;
+            sections[index].discovered.push(address);
+        }
+    }
+}
+
+void Decompiler::AddDiscoveredFunction(uint64_t address, struct Section *sections, uint index) {
+    if (IsVisited(sections[index].visited, address) == false && address < sections[index].data_size) {
+        if (sections[index].functions.insert(address).second == true){
+            sections[index].visited[address] = DECOMPILER_VISITED_QUEUED;
+            sections[index].addresses[address] = DECOMPILER_OPERAND_TYPE_BLOCK;
+            sections[index].discovered.push(address);
+        }
     }
 }
 
 void Decompiler::CollectOperands(cs_insn* insn, int operand_type, struct Section *sections, uint index) {
     uint64_t address = X86_REL_ADDR(*insn);
-    if (IsVisited(sections[index].visited, address) == false && address < sections[index].data_size) {
-        sections[index].visited[address] = DECOMPILER_VISITED_QUEUED;
-        switch(operand_type){
-            case DECOMPILER_OPERAND_TYPE_BLOCK:
-                sections[index].addresses[address] = DECOMPILER_OPERAND_TYPE_BLOCK;
-                sections[index].discovered.push(address);
+    switch(operand_type){
+        case DECOMPILER_OPERAND_TYPE_BLOCK:
+            {
+                AddDiscoveredBlock(address, sections, index);
                 break;
-            case DECOMPILER_OPERAND_TYPE_FUNCTION:
-                sections[index].addresses[address] = DECOMPILER_OPERAND_TYPE_FUNCTION;
-                sections[index].discovered.push(address);
+            }
+        case DECOMPILER_OPERAND_TYPE_FUNCTION:
+            {
+                AddDiscoveredFunction(address, sections, index);
                 break;
-            default:
-                break;
-        }
+            }
+        default:
+            break;
     }
 }
 
@@ -695,22 +692,15 @@ bool Decompiler::IsAddress(map<uint64_t, uint> &addresses, uint64_t address){
     return true;
 }
 
-bool Decompiler::IsFunction(map<uint64_t, uint> &addresses, uint64_t address){
-    if (addresses.find(address) == addresses.end()){
-        return false;
+bool Decompiler::IsFunction(set<uint64_t> &addresses, uint64_t address){
+    if (addresses.find(address) != addresses.end()){
+        return true;
     }
-    if (addresses.find(address)->second != DECOMPILER_OPERAND_TYPE_FUNCTION){
-        return false;
-    }
-    return true;
+    return false;
 }
 
-bool Decompiler::IsBlock(map<uint64_t, uint> &addresses, uint64_t address){
-    if (addresses.find(address) == addresses.end()){
-        return false;
-    }
-    if (addresses.find(address)->second == DECOMPILER_OPERAND_TYPE_BLOCK ||
-        addresses.find(address)->second == DECOMPILER_OPERAND_TYPE_FUNCTION){
+bool Decompiler::IsBlock(set<uint64_t> &addresses, uint64_t address){
+    if (addresses.find(address) != addresses.end()){
         return true;
     }
     return false;
