@@ -222,16 +222,13 @@ void * Decompiler::CreateTraitsForSection(uint index) {
                     break;
                 }
             }
-            if (block == true && IsEndInsn(insn) == true){
+            if (IsEndInsn(insn) == true){
                 b_trait.tmp_trait = TrimRight(b_trait.tmp_trait);
                 b_trait.tmp_bytes = TrimRight(b_trait.tmp_bytes);
                 b_trait.size = GetByteSize(b_trait.tmp_bytes);
                 b_trait.offset = sections[index].offset + myself.pc - b_trait.size;
                 AppendTrait(&b_trait, sections, index);
                 ClearTrait(&b_trait);
-            }
-
-            if (function == true && IsEndInsn(insn) == true){
                 f_trait.tmp_trait = TrimRight(f_trait.tmp_trait);
                 f_trait.tmp_bytes = TrimRight(f_trait.tmp_bytes);
                 f_trait.size = GetByteSize(f_trait.tmp_bytes);
@@ -653,7 +650,7 @@ void Decompiler::AddDiscoveredFunction(uint64_t address, struct Section *section
     if (IsVisited(sections[index].visited, address) == false && address < sections[index].data_size) {
         if (sections[index].functions.insert(address).second == true){
             sections[index].visited[address] = DECOMPILER_VISITED_QUEUED;
-            sections[index].addresses[address] = DECOMPILER_OPERAND_TYPE_BLOCK;
+            sections[index].addresses[address] = DECOMPILER_OPERAND_TYPE_FUNCTION;
             sections[index].discovered.push(address);
         }
     }
