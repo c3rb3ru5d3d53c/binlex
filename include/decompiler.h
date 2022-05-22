@@ -93,7 +93,9 @@ namespace binlex {
             void *data;
             size_t data_size;
             set<uint64_t> coverage;
-            map<uint64_t, uint> addresses;
+            //map<uint64_t, uint> addresses;
+            set<uint64_t> blocks;
+            set<uint64_t> functions;
             map<uint64_t, int> visited;
             queue<uint64_t> discovered;
         };
@@ -120,6 +122,7 @@ namespace binlex {
         @return bool
         */
         BINLEX_EXPORT static void AddDiscoveredBlock(uint64_t address, struct Section *sections, uint index);
+        BINLEX_EXPORT static void AddDiscoveredFunction(uint64_t address, struct Section *sections, uint index);
         /**
         Collect Function and Conditional Operands for Processing
         @param insn the instruction
@@ -198,35 +201,23 @@ namespace binlex {
         */
         BINLEX_EXPORT static uint IsConditionalInsn(cs_insn *insn);
         /**
-        Checks Code Coverage for Max Address
-        @param coverage set of addresses decompiled
-        @return the maximum address from the set
+        Checks if Address if Function
+        @param address address to check
+        @return bool
         */
-        BINLEX_EXPORT static uint64_t MaxAddress(set<uint64_t> coverage);
+        BINLEX_EXPORT static bool IsFunction(set<uint64_t> &addresses, uint64_t address);
         /**
         Checks if Address if Function
         @param address address to check
         @return bool
         */
-        BINLEX_EXPORT static bool IsFunction(map<uint64_t, uint> &addresses, uint64_t address);
-        /**
-        Checks if Address if Function
-        @param address address to check
-        @return bool
-        */
-        BINLEX_EXPORT static bool IsBlock(map<uint64_t, uint> &addresses, uint64_t address);
+        BINLEX_EXPORT static bool IsBlock(set<uint64_t> &addresses, uint64_t address);
         /**
         Checks if Address was Already Visited
         @param address address to check
         @return bool
         */
         BINLEX_EXPORT static bool IsVisited(map<uint64_t, int> &visited, uint64_t address);
-        /**
-        Check if Function or Block Address Collected
-        @param address the address to check
-        @return bool
-        */
-        BINLEX_EXPORT bool IsAddress(map<uint64_t, uint> &addresses, uint64_t address);
         /**
         Checks if Instruction is Wildcard Instruction
         @param insn the instruction
