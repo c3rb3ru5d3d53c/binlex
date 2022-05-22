@@ -200,6 +200,7 @@ namespace binlex {
         @return edges if > 0; then is conditional
         */
         BINLEX_EXPORT static uint IsConditionalInsn(cs_insn *insn);
+        BINLEX_EXPORT static bool IsCallInsn(cs_insn *insn);
         /**
         Checks if Address if Function
         @param address address to check
