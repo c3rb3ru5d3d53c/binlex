@@ -7,20 +7,27 @@ set(GLOBAL_VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 
+option(BUILD_PYTHON_BINDINGS "Build python bindings (pybinlex)" OFF)
+
 project(binlex
     VERSION ${GLOBAL_VERSION}
     DESCRIPTION "A Binary Genetic Traits Lexer and C++ Library"
 )
 
 if(MSVC)
-    add_definitions(-D_WIN32=1)
-	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
+    add_definitions(-DNOMINMAX)
 endif()
 
 include(ExternalProject)
 include(ProcessorCount)
-
 ProcessorCount(N)
+
+if(CMAKE_GENERATOR MATCHES "Visual Studio")
+    # https://stackoverflow.com/a/70102570/1806760
+    set(EXTERNAL_BUILD_COMMAND cmake --build . --parallel ${N} -- /p:CL_MPcount=${N})
+else()
+    set(EXTERNAL_BUILD_COMMAND cmake --build . --parallel ${N})
+endif()
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/tests.py
      DESTINATION ${CMAKE_BINARY_DIR})
@@ -37,7 +44,7 @@ ExternalProject_Add(
     GIT_REPOSITORY      "${CAPSTONE_GIT_URL}"
     GIT_TAG             "${CAPSTONE_GIT_TAG}"
     GIT_SHALLOW         ON
-    BUILD_COMMAND make -j${N}
+    BUILD_COMMAND       ${EXTERNAL_BUILD_COMMAND}
     CMAKE_ARGS          -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
                         -DCAPSTONE_BUILD_SHARED=OFF
                         -DCAPSTONE_BUILD_TESTS=OFF
@@ -75,10 +82,10 @@ set_target_properties(
 )
 add_dependencies(capstone_static capstone)
 
-set(TLSH_GIT_URL "https://github.com/trendmicro/tlsh.git")
+set(TLSH_GIT_URL "https://github.com/mrexodia/tlsh.git")
 set(TLSH_ROOT    "${CMAKE_BINARY_DIR}/tlsh/")
 set(TLSH_INCLUDE_DIRS "${TLSH_ROOT}/src/tlsh/include/")
-set(TLSH_GIT_TAG 4.8.2)
+set(TLSH_GIT_TAG      "24d5c0b7fa2ed4d77d9c5dd0c7e1cbf4cd31b42f")
 
 set(TLSH_CMAKE_ARGS
   -DCMAKE_BUILD_TYPE=Release
@@ -86,6 +93,7 @@ set(TLSH_CMAKE_ARGS
   -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
   -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
   -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON
+  -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
 )
 
 ExternalProject_Add(
@@ -95,17 +103,19 @@ ExternalProject_Add(
     GIT_REPOSITORY      "${TLSH_GIT_URL}"
     GIT_TAG             "${TLSH_GIT_TAG}"
     GIT_SHALLOW         ON
-    BUILD_COMMAND make -j${N}
-    INSTALL_COMMAND ""
-    CMAKE_ARGS ${TLSH_CMAKE_ARGS}
+    BUILD_COMMAND       ${EXTERNAL_BUILD_COMMAND}
+    CMAKE_ARGS          ${TLSH_CMAKE_ARGS}
 )
 
 add_library(tlsh_static STATIC IMPORTED)
 set_target_properties(
     tlsh_static PROPERTIES IMPORTED_LOCATION
-    ${TLSH_ROOT}/src/tlsh/lib/${CMAKE_STATIC_LIBRARY_PREFIX}tlsh${CMAKE_STATIC_LIBRARY_SUFFIX}
+    ${TLSH_ROOT}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}tlsh${CMAKE_STATIC_LIBRARY_SUFFIX}
 )
 add_dependencies(tlsh_static tlsh)
+if(WIN32)
+    target_compile_definitions(tlsh_static INTERFACE TLSH_WINDOWS)
+endif()
 
 set(LIEF_PREFIX       "${CMAKE_BINARY_DIR}/LIEF/")
 set(LIEF_INSTALL_DIR  "${LIEF_PREFIX}")
@@ -115,7 +125,7 @@ set(LIB_LIEF ${LIEF_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}LIEF${CMAKE_STATIC
 
 set(LIEF_GIT_URL "https://github.com/lief-project/LIEF.git")
 
-set(LIEF_VERSION 0.11.5)
+set(LIEF_VERSION 0.12.1)
 
 set(LIEF_CMAKE_ARGS
   -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
@@ -135,17 +145,11 @@ set(LIEF_CMAKE_ARGS
   -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
 )
 
-if(MSVC)
-  list(APPEND ${LIEF_CMAKE_ARGS} -DLIEF_USE_CRT_RELEASE=MT)
-endif()
-
-# -DCMAKE_BUILD_TYPE=Release
-
 ExternalProject_Add(LIEF
   PREFIX           ${LIEF_PREFIX}
   GIT_REPOSITORY   ${LIEF_GIT_URL}
   GIT_TAG          ${LIEF_VERSION}
-  BUILD_COMMAND make -j${N}
+  BUILD_COMMAND    ${EXTERNAL_BUILD_COMMAND}
   INSTALL_DIR      ${LIEF_INSTALL_DIR}
   CMAKE_ARGS       ${LIEF_CMAKE_ARGS}
 )
@@ -157,7 +161,7 @@ set_target_properties(
 )
 add_dependencies(lief_static LIEF)
 
-add_library(binlex SHARED
+add_library(binlex
     src/args.cpp
     src/raw.cpp
     src/common.cpp
@@ -177,12 +181,14 @@ add_dependencies(binlex capstone)
 
 set_target_properties(binlex PROPERTIES SOVERSION ${GLOBAL_VERSION})
 
+find_package(Threads REQUIRED)
+
 target_link_libraries(binlex
     PUBLIC
         lief_static
         capstone_static
         tlsh_static
-        -lpthread
+        Threads::Threads
 )
 
 set_target_properties(binlex
@@ -196,7 +202,6 @@ add_library(binlex::library ALIAS binlex)
 
 if(MSVC)
   target_compile_options(binlex PUBLIC /FIiso646.h)
-  set_property(TARGET binlex PROPERTY LINK_FLAGS /NODEFAULTLIB:MSVCRT)
 endif()
 
 target_include_directories(binlex
@@ -222,8 +227,10 @@ target_link_libraries(binlex-bin
         binlex::library
 )
 
-set_target_properties(binlex-bin
-    PROPERTIES OUTPUT_NAME binlex
+set_target_properties(binlex-bin PROPERTIES
+    OUTPUT_NAME binlex
+    ARCHIVE_OUTPUT_NAME binlex-bin # TODO: the executable shouldn't have any exports
+    PDB_NAME binlex-bin
 )
 
 install(TARGETS binlex-bin DESTINATION bin)
@@ -271,7 +278,7 @@ if (BUILD_PYTHON_BINDINGS)
             binlex::library
         PUBLIC
             capstone_static
-            -lpthread
+            Threads::Threads
             lief_static
             tlsh_static
             ${pybind11_LIBRARIES}
