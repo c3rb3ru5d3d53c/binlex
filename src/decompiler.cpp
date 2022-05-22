@@ -132,7 +132,8 @@ void * Decompiler::CreateTraitsForSection(uint index) {
         PRINT_DEBUG("discovered size = %u\n", (uint32_t)sections[index].discovered.size());
         PRINT_DEBUG("visited size = %u\n",    (uint32_t)sections[index].visited.size());
         PRINT_DEBUG("coverage size = %u\n",   (uint32_t)sections[index].coverage.size());
-        PRINT_DEBUG("addresses size = %u\n",  (uint32_t)sections[index].addresses.size());
+        PRINT_DEBUG("functions size = %u\n",  (uint32_t)sections[index].functions.size());
+        PRINT_DEBUG("blocks size = %u\n",  (uint32_t)sections[index].blocks.size());
 
         address = sections[index].discovered.front();
         sections[index].discovered.pop();
@@ -285,7 +286,7 @@ void Decompiler::AppendQueue(set<uint64_t> &addresses, uint operand_type, uint i
         uint64_t tmp_addr = *it;
         sections[index].discovered.push(tmp_addr);
         sections[index].visited[tmp_addr] = DECOMPILER_VISITED_QUEUED;
-        sections[index].addresses[tmp_addr] = operand_type;
+        //sections[index].addresses[tmp_addr] = operand_type;
         switch(operand_type){
             case DECOMPILER_OPERAND_TYPE_BLOCK:
                 AddDiscoveredBlock(tmp_addr, sections, index);
@@ -640,7 +641,6 @@ void Decompiler::AddDiscoveredBlock(uint64_t address, struct Section *sections, 
     if (IsVisited(sections[index].visited, address) == false && address < sections[index].data_size) {
         if (sections[index].blocks.insert(address).second == true){
             sections[index].visited[address] = DECOMPILER_VISITED_QUEUED;
-            sections[index].addresses[address] = DECOMPILER_OPERAND_TYPE_BLOCK;
             sections[index].discovered.push(address);
         }
     }
@@ -650,7 +650,6 @@ void Decompiler::AddDiscoveredFunction(uint64_t address, struct Section *section
     if (IsVisited(sections[index].visited, address) == false && address < sections[index].data_size) {
         if (sections[index].functions.insert(address).second == true){
             sections[index].visited[address] = DECOMPILER_VISITED_QUEUED;
-            sections[index].addresses[address] = DECOMPILER_OPERAND_TYPE_FUNCTION;
             sections[index].discovered.push(address);
         }
     }
@@ -672,21 +671,6 @@ void Decompiler::CollectOperands(cs_insn* insn, int operand_type, struct Section
         default:
             break;
     }
-}
-
-uint64_t Decompiler::MaxAddress(set<uint64_t> coverage){
-    uint64_t max_element;
-    if (!coverage.empty()){
-        max_element = *(coverage.rbegin());
-    }
-    return max_element;
-}
-
-bool Decompiler::IsAddress(map<uint64_t, uint> &addresses, uint64_t address){
-    if (addresses.find(address) == addresses.end()){
-        return false;
-    }
-    return true;
 }
 
 bool Decompiler::IsFunction(set<uint64_t> &addresses, uint64_t address){

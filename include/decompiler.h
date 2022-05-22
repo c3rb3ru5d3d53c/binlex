@@ -93,7 +93,7 @@ namespace binlex {
             void *data;
             size_t data_size;
             set<uint64_t> coverage;
-            map<uint64_t, uint> addresses;
+            //map<uint64_t, uint> addresses;
             set<uint64_t> blocks;
             set<uint64_t> functions;
             map<uint64_t, int> visited;
@@ -201,12 +201,6 @@ namespace binlex {
         */
         BINLEX_EXPORT static uint IsConditionalInsn(cs_insn *insn);
         /**
-        Checks Code Coverage for Max Address
-        @param coverage set of addresses decompiled
-        @return the maximum address from the set
-        */
-        BINLEX_EXPORT static uint64_t MaxAddress(set<uint64_t> coverage);
-        /**
         Checks if Address if Function
         @param address address to check
         @return bool
@@ -224,12 +218,6 @@ namespace binlex {
         @return bool
         */
         BINLEX_EXPORT static bool IsVisited(map<uint64_t, int> &visited, uint64_t address);
-        /**
-        Check if Function or Block Address Collected
-        @param address the address to check
-        @return bool
-        */
-        BINLEX_EXPORT bool IsAddress(map<uint64_t, uint> &addresses, uint64_t address);
         /**
         Checks if Instruction is Wildcard Instruction
         @param insn the instruction
