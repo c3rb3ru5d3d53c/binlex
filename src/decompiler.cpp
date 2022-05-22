@@ -365,6 +365,7 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
             PRINT_DEBUG("LinearDisassemble: Suspicious instruction at 0x%" PRIu64 "\n", cs_ins->address);
             valid_block = false;
             valid_block_count = 0;
+            continue;
         }
 
         if(!cs_ins->size) {
@@ -374,8 +375,7 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
             if (valid_block){
                 if (valid_block_count == 1) {
                     jmp_address_2 =  X86_REL_ADDR(*cs_ins);
-                }
-                else if (valid_block_count == 2) {
+                } else if (valid_block_count == 2) {
                     PRINT_DEBUG("LinearDisassemble: Found three consecutive valid blocks adding jmp addresses\n");
                     AddDiscoveredBlock(jmp_address_1, sections, index);
                     AddDiscoveredBlock(jmp_address_2, sections, index);
@@ -392,7 +392,13 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
                 jmp_address_1 = X86_REL_ADDR(*cs_ins);
             }
         }
-
+        if (IsCallInsn(cs_ins)){
+            if (valid_block){
+                if (valid_block_count > 1){
+                    CollectInsn(cs_ins, sections, index);
+                }
+            }
+        }
     }
     cs_free(cs_ins, 1);
 
@@ -599,6 +605,16 @@ uint Decompiler::IsConditionalInsn(cs_insn* insn) {
         break;
     }
     return 0;
+}
+
+bool Decompiler::IsCallInsn(cs_insn *insn){
+    switch(insn->id){
+        case X86_INS_CALL:
+            return true;
+        default:
+            break;
+    }
+    return false;
 }
 
 uint Decompiler::CollectInsn(cs_insn* insn, struct Section *sections, uint index) {
