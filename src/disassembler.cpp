@@ -313,8 +313,8 @@ void Disassembler::LinearDisassemble(void* data, size_t data_size, size_t offset
     //
     // * Weaknesses *
     // - We don’t collect calls (these are assumed to be collected in the recursive disassembler) (DONE)
-    // - We don’t reset the state on ret or call instructions possibly missing some valid blocks
-    // - We don’t collect the next address after a jmp (next block) missing some valid blocks (DONE)
+    // - We don’t reset the state on ret or call instructions possibly missing some valid blocks (DONE)
+    // - We don’t collect the next address after a jmp (next block) missing some valid blocks (effective?)
     // - Even with the filtering we will still add some number of addresses that are from invalid jmp institutions
 
     csh cs_dis;
