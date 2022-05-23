@@ -9,7 +9,9 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <assert.h>
+#ifndef _WIN32
 #include <byteswap.h>
+#endif // _WIN32
 #include <ctype.h>
 #include <capstone/capstone.h>
 #include <queue>
