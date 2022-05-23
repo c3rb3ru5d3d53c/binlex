@@ -392,12 +392,8 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
                 jmp_address_1 = X86_REL_ADDR(*cs_ins);
             }
         }
-        if (IsCallInsn(cs_ins)){
-            if (valid_block){
-                if (valid_block_count > 1){
-                    CollectInsn(cs_ins, sections, index);
-                }
-            }
+        if (IsCallInsn(cs_ins) == true && valid_block == true){
+            CollectInsn(cs_ins, sections, index);
         }
     }
     cs_free(cs_ins, 1);
