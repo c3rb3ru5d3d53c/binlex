@@ -312,9 +312,9 @@ void Disassembler::LinearDisassemble(void* data, size_t data_size, size_t offset
     // - When a jmp (conditional or unconditional) is encountered if the state is invalid reset to valid and begin tracking blocks
     //
     // * Weaknesses *
-    // - We don’t collect calls (these are assumed to be collected in the recursive disassembler)
+    // - We don’t collect calls (these are assumed to be collected in the recursive disassembler) (DONE)
     // - We don’t reset the state on ret or call instructions possibly missing some valid blocks
-    // - We don’t collect the next address after a jmp (next block) missing some valid blocks
+    // - We don’t collect the next address after a jmp (next block) missing some valid blocks (DONE)
     // - Even with the filtering we will still add some number of addresses that are from invalid jmp institutions
 
     csh cs_dis;
@@ -385,12 +385,9 @@ void Disassembler::LinearDisassemble(void* data, size_t data_size, size_t offset
                 jmp_address_1 = X86_REL_ADDR(*cs_ins);
             }
         }
-        // if (IsCallInsn(cs_ins) == true && valid_block_count >= 1){
-        //     CollectInsn(cs_ins, sections, index);
-        // }
     }
     cs_free(cs_ins, 1);
-
+    cs_close(&cs_dis);
 };
 
 void Disassembler::Disassemble() {
@@ -668,6 +665,7 @@ void Disassembler::CollectOperands(cs_insn* insn, int operand_type, struct Secti
         case DISASSEMBLER_OPERAND_TYPE_BLOCK:
             {
                 AddDiscoveredBlock(address, sections, index);
+                AddDiscoveredBlock(insn->address + insn->size, sections, index);
                 break;
             }
         case DISASSEMBLER_OPERAND_TYPE_FUNCTION:
