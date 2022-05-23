@@ -165,6 +165,7 @@ add_library(binlex SHARED
     src/auto.cpp
     src/decompilerbase.cpp
     src/decompiler.cpp
+    src/disassembler.cpp
     src/pe-dotnet.cpp
     src/cil.cpp
     src/pe.cpp

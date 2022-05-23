@@ -16,6 +16,7 @@
 #include "blelf.h"
 #include "auto.h"
 #include "decompiler.h"
+#include "disassembler.h"
 
 #ifdef _WIN32
 #pragma comment(lib, "capstone")
@@ -115,9 +116,9 @@ int main(int argc, char **argv){
             return EXIT_FAILURE;
         }
         PRINT_DEBUG("[binlex.cpp] number of total sections = %u\n", pe32.total_exec_sections);
-        Decompiler decompiler(pe32);
-        decompiler.Decompile();
-        decompiler.WriteTraits();
+        Disassembler disassembler(pe32);
+        disassembler.Disassemble();
+        disassembler.WriteTraits();
         return EXIT_SUCCESS;
     }
     if (g_args.options.mode == "pe:x86_64" &&

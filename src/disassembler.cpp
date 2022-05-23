@@ -1,12 +1,12 @@
-#include "decompiler.h"
+#include "disassembler.h"
 
 // Very WIP Multi-Threaded Recursive Decompiler
 
 using namespace binlex;
 using json = nlohmann::json;
 
-cs_arch Decompiler::arch;
-cs_mode Decompiler::mode;
+cs_arch Disassembler::arch;
+cs_mode Disassembler::mode;
 
 //from https://github.com/capstone-engine/capstone/blob/master/include/capstone/x86.h
 
@@ -14,7 +14,7 @@ cs_mode Decompiler::mode;
 	? (uint64_t)((insn).detail->x86.operands[0].imm) \
 	: (((insn).address + (insn).size) + (uint64_t)(insn).detail->x86.disp))
 
-Decompiler::Decompiler(const binlex::File &firef) : DecompilerBase(firef) {
+Disassembler::Disassembler(const binlex::File &firef) : DecompilerBase(firef) {
     // Set Decompiler Architecture
     switch(file_reference.binary_arch){
         case BINARY_ARCH_X86:
@@ -38,7 +38,7 @@ Decompiler::Decompiler(const binlex::File &firef) : DecompilerBase(firef) {
     // Append the Function Queue
     for (uint32_t i = 0; i < file_reference.total_exec_sections; i++){
         std::set<uint64_t> tmp = file_reference.sections[i].functions;
-        AppendQueue(tmp, DECOMPILER_OPERAND_TYPE_FUNCTION, i);
+        AppendQueue(tmp, DISASSEMBLER_OPERAND_TYPE_FUNCTION, i);
     }
     for (int i = 0; i < BINARY_MAX_SECTIONS; i++) {
         sections[i].offset = 0;
@@ -47,14 +47,12 @@ Decompiler::Decompiler(const binlex::File &firef) : DecompilerBase(firef) {
     }
 }
 
-void Decompiler::AppendTrait(struct Trait *trait, struct Section *sections, uint index){
+void Disassembler::AppendTrait(struct Trait *trait, struct Section *sections, uint index){
     struct Trait new_elem_trait = *trait;
-    new_elem_trait.trait = trait->tmp_trait;
-    new_elem_trait.bytes = trait->tmp_bytes;
     sections[index].traits.push_back(new_elem_trait);
  }
 
-json Decompiler::GetTrait(struct Trait &trait){
+json Disassembler::GetTrait(struct Trait &trait){
     json data;
     data["type"] = trait.type;
     data["corpus"] = g_args.options.corpus;
@@ -68,14 +66,14 @@ json Decompiler::GetTrait(struct Trait &trait){
     data["size"] = trait.size;
     data["offset"] = trait.offset;
     data["bytes_entropy"] = trait.bytes_entropy;
-    data["bytes_sha256"] = &trait.bytes_sha256[0];
+    data["bytes_sha256"] = trait.bytes_sha256;
     string bytes_tlsh = TraitToTLSH(trait.bytes);
     if (bytes_tlsh.length() > 0){
         data["bytes_tlsh"] = bytes_tlsh;
     } else {
         data["bytes_tlsh"] = nullptr;
     }
-    data["trait_sha256"] = &trait.trait_sha256[0];
+    data["trait_sha256"] = trait.trait_sha256;
     string trait_tlsh = TraitToTLSH(trait.trait);
     if (trait_tlsh.length() > 0){
         data["trait_tlsh"] = trait_tlsh;
@@ -89,7 +87,7 @@ json Decompiler::GetTrait(struct Trait &trait){
     return data;
 }
 
-vector<json> Decompiler::GetTraits(){
+vector<json> Disassembler::GetTraits(){
     vector<json> traitsjson;
     for (int i = 0; i < BINARY_MAX_SECTIONS; i++){
         if (sections[i].data != NULL){
@@ -102,12 +100,11 @@ vector<json> Decompiler::GetTraits(){
     return traitsjson;
 }
 
-void * Decompiler::CreateTraitsForSection(uint index) {
-    worker myself;
+void * Disassembler::CreateTraitsForSection(uint index) {
+    disasm_t myself;
 
     struct Trait b_trait;
     struct Trait f_trait;
-    struct Trait i_trait;
 
     PRINT_DEBUG("----------\nHandling section %u\n----------\n", index);
 
@@ -131,15 +128,12 @@ void * Decompiler::CreateTraitsForSection(uint index) {
 
         PRINT_DEBUG("discovered size = %u\n", (uint32_t)sections[index].discovered.size());
         PRINT_DEBUG("visited size = %u\n",    (uint32_t)sections[index].visited.size());
-        PRINT_DEBUG("coverage size = %u\n",   (uint32_t)sections[index].coverage.size());
         PRINT_DEBUG("functions size = %u\n",  (uint32_t)sections[index].functions.size());
         PRINT_DEBUG("blocks size = %u\n",  (uint32_t)sections[index].blocks.size());
 
         address = sections[index].discovered.front();
         sections[index].discovered.pop();
-        sections[index].visited[address] = DECOMPILER_VISITED_ANALYZED;
-
-        sections[index].coverage.insert(address);
+        sections[index].visited[address] = DISASSEMBLER_VISITED_ANALYZED;
 
         myself.pc = address;
         myself.code = (uint8_t *)((uint8_t *)sections[index].data + address);
@@ -166,11 +160,8 @@ void * Decompiler::CreateTraitsForSection(uint index) {
                 myself.code = (uint8_t *)((uint8_t *)myself.code + 1);
                 myself.code_size +=1;
                 myself.pc +=1;
-                sections[index].coverage.insert(myself.pc);
                 break;
             }
-
-            sections[index].coverage.insert(myself.pc);
 
             // Check for suspicious instructions and count them
             if (IsNopInsn(insn) || IsSemanticNopInsn(insn) || IsTrapInsn(insn) || IsPrivInsn(insn) ){
@@ -191,15 +182,15 @@ void * Decompiler::CreateTraitsForSection(uint index) {
 
             // Need to Wildcard Traits Here
             if (IsWildcardInsn(insn) == true){
-                b_trait.tmp_trait = b_trait.tmp_trait + Wildcards(insn->size) + " ";
-                f_trait.tmp_trait = f_trait.tmp_trait + Wildcards(insn->size) + " ";
+                b_trait.trait = b_trait.trait + Wildcards(insn->size) + " ";
+                f_trait.trait = f_trait.trait + Wildcards(insn->size) + " ";
             } else {
-                b_trait.tmp_trait = b_trait.tmp_trait + WildcardInsn(insn) + " ";
-                f_trait.tmp_trait = f_trait.tmp_trait + WildcardInsn(insn) + " ";
+                b_trait.trait = b_trait.trait + WildcardInsn(insn) + " ";
+                f_trait.trait = f_trait.trait + WildcardInsn(insn) + " ";
             }
-            b_trait.tmp_bytes = b_trait.tmp_bytes + HexdumpBE(insn->bytes, insn->size) + " ";
-            f_trait.tmp_bytes = f_trait.tmp_bytes + HexdumpBE(insn->bytes, insn->size) + " ";
-            edges = IsConditionalInsn(insn);
+            b_trait.bytes = b_trait.bytes + HexdumpBE(insn->bytes, insn->size) + " ";
+            f_trait.bytes = f_trait.bytes + HexdumpBE(insn->bytes, insn->size) + " ";
+            edges = GetInsnEdges(insn);
             b_trait.edges = b_trait.edges + edges;
             f_trait.edges = f_trait.edges + edges;
             if (edges > 0){
@@ -211,10 +202,10 @@ void * Decompiler::CreateTraitsForSection(uint index) {
 
             PRINT_DEBUG("address=0%" PRIx64 ",block=%d,function=%d,queue=%ld,instruction=%s\t%s\n", insn->address,IsBlock(sections[index].blocks, insn->address), IsFunction(sections[index].functions, insn->address), sections[index].discovered.size(), insn->mnemonic, insn->op_str);
 
-            if (block == true && IsConditionalInsn(insn) > 0){
-                b_trait.tmp_trait = TrimRight(b_trait.tmp_trait);
-                b_trait.tmp_bytes = TrimRight(b_trait.tmp_bytes);
-                b_trait.size = GetByteSize(b_trait.tmp_bytes);
+            if (IsJumpInsn(insn) == true){
+                b_trait.trait = TrimRight(b_trait.trait);
+                b_trait.bytes = TrimRight(b_trait.bytes);
+                b_trait.size = GetByteSize(b_trait.bytes);
                 b_trait.offset = sections[index].offset + myself.pc - b_trait.size;
                 AppendTrait(&b_trait, sections, index);
                 ClearTrait(&b_trait);
@@ -223,16 +214,18 @@ void * Decompiler::CreateTraitsForSection(uint index) {
                     break;
                 }
             }
-            if (IsEndInsn(insn) == true){
-                b_trait.tmp_trait = TrimRight(b_trait.tmp_trait);
-                b_trait.tmp_bytes = TrimRight(b_trait.tmp_bytes);
-                b_trait.size = GetByteSize(b_trait.tmp_bytes);
+            if (IsRetInsn(insn) == true){
+                b_trait.xrefs.insert(address);
+                b_trait.trait = TrimRight(b_trait.trait);
+                b_trait.bytes = TrimRight(b_trait.bytes);
+                b_trait.size = GetByteSize(b_trait.bytes);
                 b_trait.offset = sections[index].offset + myself.pc - b_trait.size;
                 AppendTrait(&b_trait, sections, index);
                 ClearTrait(&b_trait);
-                f_trait.tmp_trait = TrimRight(f_trait.tmp_trait);
-                f_trait.tmp_bytes = TrimRight(f_trait.tmp_bytes);
-                f_trait.size = GetByteSize(f_trait.tmp_bytes);
+                f_trait.xrefs.insert(address);
+                f_trait.trait = TrimRight(f_trait.trait);
+                f_trait.bytes = TrimRight(f_trait.bytes);
+                f_trait.size = GetByteSize(f_trait.bytes);
                 f_trait.offset = sections[index].offset + myself.pc - f_trait.size;
                 AppendTrait(&f_trait, sections, index);
                 ClearTrait(&f_trait);
@@ -245,7 +238,7 @@ void * Decompiler::CreateTraitsForSection(uint index) {
     return NULL;
 }
 
-void * Decompiler::FinalizeTrait(struct Trait &trait){
+void * Disassembler::FinalizeTrait(struct Trait &trait){
     if (trait.blocks == 0 &&
         (strcmp(trait.type.c_str(), "function") == 0 ||
         strcmp(trait.type.c_str(), "block") == 0)){
@@ -253,8 +246,8 @@ void * Decompiler::FinalizeTrait(struct Trait &trait){
     }
     trait.bytes_entropy = Entropy(string(trait.bytes));
     trait.trait_entropy = Entropy(string(trait.trait));
-    memcpy(&trait.bytes_sha256[0], SHA256((char *)trait.bytes.c_str()).c_str(), SHA256_PRINTABLE_SIZE);
-    memcpy(&trait.trait_sha256[0], SHA256((char *)trait.trait.c_str()).c_str(), SHA256_PRINTABLE_SIZE);
+    trait.trait_sha256 = SHA256((char *)trait.trait.c_str());
+    trait.bytes_sha256 = SHA256((char *)trait.bytes.c_str());
     if (strcmp(trait.type.c_str(), (char *)"block") == 0){
         trait.cyclomatic_complexity = trait.edges - 1 + 2;
         trait.average_instructions_per_block = trait.instructions / 1;
@@ -266,32 +259,32 @@ void * Decompiler::FinalizeTrait(struct Trait &trait){
     return NULL;
 }
 
-void Decompiler::ClearTrait(struct Trait *trait){
-    trait->tmp_bytes.clear();
+void Disassembler::ClearTrait(struct Trait *trait){
+    trait->bytes.clear();
     trait->edges = 0;
     trait->instructions = 0;
     trait->blocks = 0;
     trait->offset = 0;
     trait->size = 0;
     trait->invalid_instructions = 0;
-    trait->tmp_trait.clear();
     trait->trait.clear();
-    memset(&trait->bytes_sha256[0], 0, SHA256_PRINTABLE_SIZE);
-    memset(&trait->trait_sha256[0], 0, SHA256_PRINTABLE_SIZE);
+    trait->trait.clear();
+    trait->bytes_sha256.clear();
+    trait->trait_sha256.clear();
+    trait->xrefs.clear();
 }
 
-void Decompiler::AppendQueue(set<uint64_t> &addresses, uint operand_type, uint index){
+void Disassembler::AppendQueue(set<uint64_t> &addresses, uint operand_type, uint index){
     PRINT_DEBUG("List of queued addresses for section %u correponding to found functions: ", index);
     for (auto it = addresses.begin(); it != addresses.end(); ++it){
         uint64_t tmp_addr = *it;
         sections[index].discovered.push(tmp_addr);
-        sections[index].visited[tmp_addr] = DECOMPILER_VISITED_QUEUED;
-        //sections[index].addresses[tmp_addr] = operand_type;
+        sections[index].visited[tmp_addr] = DISASSEMBLER_VISITED_QUEUED;
         switch(operand_type){
-            case DECOMPILER_OPERAND_TYPE_BLOCK:
+            case DISASSEMBLER_OPERAND_TYPE_BLOCK:
                 AddDiscoveredBlock(tmp_addr, sections, index);
                 break;
-            case DECOMPILER_OPERAND_TYPE_FUNCTION:
+            case DISASSEMBLER_OPERAND_TYPE_FUNCTION:
                 AddDiscoveredFunction(tmp_addr, sections, index);
                 break;
             default:
@@ -302,7 +295,7 @@ void Decompiler::AppendQueue(set<uint64_t> &addresses, uint operand_type, uint i
     PRINT_DEBUG("\n");
 }
 
-void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, uint index) {
+void Disassembler::LinearDisassemble(void* data, size_t data_size, size_t offset, uint index) {
     // This function is intended to perform a preliminary quick linear disassembly pass of the section
     // and initially populate the discovered queue with addressed that may not be found via recursive disassembly.
     //
@@ -371,7 +364,7 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
         if(!cs_ins->size) {
             PRINT_DEBUG("LinearDisassemble: Invalid instruction size at 0x%" PRIu64 "\n", cs_ins->address);
         }
-        if (IsConditionalInsn(cs_ins)){
+        if (IsJumpInsn(cs_ins) == true){
             if (valid_block){
                 if (valid_block_count == 1) {
                     jmp_address_2 =  X86_REL_ADDR(*cs_ins);
@@ -392,15 +385,15 @@ void Decompiler::LinearDisassemble(void* data, size_t data_size, size_t offset, 
                 jmp_address_1 = X86_REL_ADDR(*cs_ins);
             }
         }
-        if (IsCallInsn(cs_ins) == true && valid_block_count >= 1){
-            CollectInsn(cs_ins, sections, index);
-        }
+        // if (IsCallInsn(cs_ins) == true && valid_block_count >= 1){
+        //     CollectInsn(cs_ins, sections, index);
+        // }
     }
     cs_free(cs_ins, 1);
 
 };
 
-void Decompiler::Decompile() {
+void Disassembler::Disassemble() {
     for (uint32_t i = 0; i < file_reference.total_exec_sections; i++){
         sections[i].offset = file_reference.sections[i].offset;
         sections[i].data = file_reference.sections[i].data;
@@ -413,7 +406,7 @@ void Decompiler::Decompile() {
     }
 }
 
-string Decompiler::WildcardInsn(cs_insn *insn){
+string Disassembler::WildcardInsn(cs_insn *insn){
     string bytes = HexdumpBE(insn->bytes, insn->size);
     string trait = bytes;
     for (int j = 0; j < insn->detail->x86.op_count; j++){
@@ -433,13 +426,11 @@ string Decompiler::WildcardInsn(cs_insn *insn){
     return TrimRight(trait);
 }
 
-bool Decompiler::IsVisited(map<uint64_t, int> &visited, uint64_t address) {
+bool Disassembler::IsVisited(map<uint64_t, int> &visited, uint64_t address) {
     return visited.find(address) != visited.end();
 }
 
-
-bool Decompiler::IsNopInsn(cs_insn *ins)
-{
+bool Disassembler::IsNopInsn(cs_insn *ins){
     switch(ins->id) {
     case X86_INS_NOP:
     case X86_INS_FNOP:
@@ -449,7 +440,7 @@ bool Decompiler::IsNopInsn(cs_insn *ins)
     }
 }
 
-bool Decompiler::IsSemanticNopInsn(cs_insn *ins)
+bool Disassembler::IsSemanticNopInsn(cs_insn *ins)
 {
     cs_x86 *x86;
 
@@ -505,8 +496,7 @@ bool Decompiler::IsSemanticNopInsn(cs_insn *ins)
     }
 }
 
-bool Decompiler::IsTrapInsn(cs_insn *ins)
-{
+bool Disassembler::IsTrapInsn(cs_insn *ins){
     switch(ins->id) {
     case X86_INS_INT3:
     case X86_INS_UD2:
@@ -518,39 +508,39 @@ bool Decompiler::IsTrapInsn(cs_insn *ins)
     }
 }
 
-bool Decompiler::IsPrivInsn(cs_insn *ins)
-{
+bool Disassembler::IsPrivInsn(cs_insn *ins){
     switch(ins->id) {
-    case X86_INS_HLT:
-    case X86_INS_IN:
-    case X86_INS_INSB:
-    case X86_INS_INSW:
-    case X86_INS_INSD:
-    case X86_INS_OUT:
-    case X86_INS_OUTSB:
-    case X86_INS_OUTSW:
-    case X86_INS_OUTSD:
-    case X86_INS_RDMSR:
-    case X86_INS_WRMSR:
-    case X86_INS_RDPMC:
-    case X86_INS_RDTSC:
-    case X86_INS_LGDT:
-    case X86_INS_LLDT:
-    case X86_INS_LTR:
-    case X86_INS_LMSW:
-    case X86_INS_CLTS:
-    case X86_INS_INVD:
-    case X86_INS_INVLPG:
-    case X86_INS_WBINVD:
-        return true;
-    default:
-        return false;
+        case X86_INS_HLT:
+        case X86_INS_IN:
+        case X86_INS_INSB:
+        case X86_INS_INSW:
+        case X86_INS_INSD:
+        case X86_INS_OUT:
+        case X86_INS_OUTSB:
+        case X86_INS_OUTSW:
+        case X86_INS_OUTSD:
+        case X86_INS_RDMSR:
+        case X86_INS_WRMSR:
+        case X86_INS_RDPMC:
+        case X86_INS_RDTSC:
+        case X86_INS_LGDT:
+        case X86_INS_LLDT:
+        case X86_INS_LTR:
+        case X86_INS_LMSW:
+        case X86_INS_CLTS:
+        case X86_INS_INVD:
+        case X86_INS_INVLPG:
+        case X86_INS_WBINVD:
+            return true;
+        default:
+            return false;
     }
 }
 
-bool Decompiler::IsWildcardInsn(cs_insn *insn){
+bool Disassembler::IsWildcardInsn(cs_insn *insn){
     switch (insn->id) {
         case X86_INS_NOP:
+        case X86_INS_FNOP:
             return true;
         default:
             break;
@@ -558,7 +548,7 @@ bool Decompiler::IsWildcardInsn(cs_insn *insn){
     return false;
 }
 
-bool Decompiler::IsEndInsn(cs_insn *insn) {
+bool Disassembler::IsRetInsn(cs_insn *insn) {
     switch (insn->id) {
         case X86_INS_RET:
         case X86_INS_RETF:
@@ -568,42 +558,67 @@ bool Decompiler::IsEndInsn(cs_insn *insn) {
         case X86_INS_IRETQ:
             return true;
         default:
-            break;
+            return false;
+    }
+}
+
+bool Disassembler::IsJumpInsn(cs_insn *insn){
+    if (IsUnconditionalJumpInsn(insn) == true){
+        return true;
+    }
+    if (IsConditionalJumpInsn(insn) == true){
+        return true;
     }
     return false;
 }
 
-uint Decompiler::IsConditionalInsn(cs_insn* insn) {
-    switch (insn->id) {
-    case X86_INS_JMP:
+uint64_t Disassembler::GetInsnEdges(cs_insn *insn){
+    if (IsUnconditionalJumpInsn(insn) == true){
         return 1;
-    case X86_INS_JNE:
-    case X86_INS_JNO:
-    case X86_INS_JNP:
-    case X86_INS_JL:
-    case X86_INS_JLE:
-    case X86_INS_JG:
-    case X86_INS_JGE:
-    case X86_INS_JE:
-    case X86_INS_JECXZ:
-    case X86_INS_JCXZ:
-    case X86_INS_JB:
-    case X86_INS_JBE:
-    case X86_INS_JA:
-    case X86_INS_JAE:
-    case X86_INS_JNS:
-    case X86_INS_JO:
-    case X86_INS_JP:
-    case X86_INS_JRCXZ:
-    case X86_INS_JS:
+    }
+    if (IsConditionalJumpInsn(insn) == true){
         return 2;
-    default:
-        break;
     }
     return 0;
 }
 
-bool Decompiler::IsCallInsn(cs_insn *insn){
+bool Disassembler::IsUnconditionalJumpInsn(cs_insn *insn){
+    switch (insn->id) {
+        case X86_INS_JMP:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool Disassembler::IsConditionalJumpInsn(cs_insn* insn) {
+    switch (insn->id) {
+        case X86_INS_JNE:
+        case X86_INS_JNO:
+        case X86_INS_JNP:
+        case X86_INS_JL:
+        case X86_INS_JLE:
+        case X86_INS_JG:
+        case X86_INS_JGE:
+        case X86_INS_JE:
+        case X86_INS_JECXZ:
+        case X86_INS_JCXZ:
+        case X86_INS_JB:
+        case X86_INS_JBE:
+        case X86_INS_JA:
+        case X86_INS_JAE:
+        case X86_INS_JNS:
+        case X86_INS_JO:
+        case X86_INS_JP:
+        case X86_INS_JRCXZ:
+        case X86_INS_JS:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool Disassembler::IsCallInsn(cs_insn *insn){
     switch(insn->id){
         case X86_INS_CALL:
         case X86_INS_LCALL:
@@ -614,69 +629,48 @@ bool Decompiler::IsCallInsn(cs_insn *insn){
     return false;
 }
 
-uint Decompiler::CollectInsn(cs_insn* insn, struct Section *sections, uint index) {
-    uint result = DECOMPILER_OPERAND_TYPE_UNSET;
-    switch (insn->id) {
-    case X86_INS_JMP:
-    case X86_INS_JNE:
-    case X86_INS_JNO:
-    case X86_INS_JNP:
-    case X86_INS_JL:
-    case X86_INS_JLE:
-    case X86_INS_JG:
-    case X86_INS_JGE:
-    case X86_INS_JE:
-    case X86_INS_JECXZ:
-    case X86_INS_JCXZ:
-    case X86_INS_JB:
-    case X86_INS_JBE:
-    case X86_INS_JA:
-    case X86_INS_JAE:
-    case X86_INS_JNS:
-    case X86_INS_JO:
-    case X86_INS_JP:
-    case X86_INS_JRCXZ:
-    case X86_INS_JS:
-        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_BLOCK, sections, index);
-        result = DECOMPILER_OPERAND_TYPE_BLOCK;
-        break;
-    case X86_INS_CALL:
-        CollectOperands(insn, DECOMPILER_OPERAND_TYPE_FUNCTION, sections, index);
-        result = DECOMPILER_OPERAND_TYPE_FUNCTION;
-        break;
-    default:
+uint Disassembler::CollectInsn(cs_insn* insn, struct Section *sections, uint index) {
+    uint result = DISASSEMBLER_OPERAND_TYPE_UNSET;
+    if (IsJumpInsn(insn) == true){
+        CollectOperands(insn, DISASSEMBLER_OPERAND_TYPE_BLOCK, sections, index);
+        result = DISASSEMBLER_OPERAND_TYPE_BLOCK;
+        return result;
+    }
+    if (IsCallInsn(insn) == true){
+        CollectOperands(insn, DISASSEMBLER_OPERAND_TYPE_FUNCTION, sections, index);
+        result = DISASSEMBLER_OPERAND_TYPE_FUNCTION;
         return result;
     }
     return result;
 }
 
-void Decompiler::AddDiscoveredBlock(uint64_t address, struct Section *sections, uint index) {
+void Disassembler::AddDiscoveredBlock(uint64_t address, struct Section *sections, uint index) {
     if (IsVisited(sections[index].visited, address) == false && address < sections[index].data_size) {
         if (sections[index].blocks.insert(address).second == true){
-            sections[index].visited[address] = DECOMPILER_VISITED_QUEUED;
+            sections[index].visited[address] = DISASSEMBLER_VISITED_QUEUED;
             sections[index].discovered.push(address);
         }
     }
 }
 
-void Decompiler::AddDiscoveredFunction(uint64_t address, struct Section *sections, uint index) {
+void Disassembler::AddDiscoveredFunction(uint64_t address, struct Section *sections, uint index) {
     if (IsVisited(sections[index].visited, address) == false && address < sections[index].data_size) {
         if (sections[index].functions.insert(address).second == true){
-            sections[index].visited[address] = DECOMPILER_VISITED_QUEUED;
+            sections[index].visited[address] = DISASSEMBLER_VISITED_QUEUED;
             sections[index].discovered.push(address);
         }
     }
 }
 
-void Decompiler::CollectOperands(cs_insn* insn, int operand_type, struct Section *sections, uint index) {
+void Disassembler::CollectOperands(cs_insn* insn, int operand_type, struct Section *sections, uint index) {
     uint64_t address = X86_REL_ADDR(*insn);
     switch(operand_type){
-        case DECOMPILER_OPERAND_TYPE_BLOCK:
+        case DISASSEMBLER_OPERAND_TYPE_BLOCK:
             {
                 AddDiscoveredBlock(address, sections, index);
                 break;
             }
-        case DECOMPILER_OPERAND_TYPE_FUNCTION:
+        case DISASSEMBLER_OPERAND_TYPE_FUNCTION:
             {
                 AddDiscoveredFunction(address, sections, index);
                 break;
@@ -686,26 +680,18 @@ void Decompiler::CollectOperands(cs_insn* insn, int operand_type, struct Section
     }
 }
 
-bool Decompiler::IsFunction(set<uint64_t> &addresses, uint64_t address){
+bool Disassembler::IsFunction(set<uint64_t> &addresses, uint64_t address){
     if (addresses.find(address) != addresses.end()){
         return true;
     }
     return false;
 }
 
-bool Decompiler::IsBlock(set<uint64_t> &addresses, uint64_t address){
+bool Disassembler::IsBlock(set<uint64_t> &addresses, uint64_t address){
     if (addresses.find(address) != addresses.end()){
         return true;
     }
     return false;
 }
 
-void Decompiler::FreeTraits(uint index){
-    sections[index].traits.clear();
-}
-
-Decompiler::~Decompiler() {
-    for (int i = 0; i < BINARY_MAX_SECTIONS; i++) {
-        FreeTraits(i);
-    }
-}
+Disassembler::~Disassembler() {}
