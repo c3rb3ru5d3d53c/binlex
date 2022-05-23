@@ -3,6 +3,12 @@ cmake_minimum_required(VERSION 3.5)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 
 option(BUILD_PYTHON_BINDINGS "Build python bindings (pybinlex)" OFF)
+
+# Linking a pybind11 module with a static library without -fPIC will error
+if(BUILD_PYTHON_BINDINGS)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+endif()
+
 if(WIN32)
     # TODO: this can be supported with https://cmake.org/cmake/help/latest/module/GenerateExportHeader.html
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
