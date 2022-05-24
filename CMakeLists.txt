@@ -1,34 +1,59 @@
 cmake_minimum_required(VERSION 3.5)
 
-set(VERSION_MAJOR 1)
-set(VERSION_MINOR 1)
-set(VERSION_PATCH 1)
-set(GLOBAL_VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
-
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 
+option(BUILD_PYTHON_BINDINGS "Build python bindings (pybinlex)" OFF)
+
+# Linking a pybind11 module with a static library without -fPIC will error
+if(BUILD_PYTHON_BINDINGS)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+endif()
+
+if(WIN32)
+    # TODO: this can be supported with https://cmake.org/cmake/help/latest/module/GenerateExportHeader.html
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+else()
+    # NOTE: mutually exclusive with python bindings
+    option(BUILD_SHARED_LIBS "Build binlex as a shared library (linux only)" OFF)
+endif()
+
+# Enable folder support
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+
 project(binlex
-    VERSION ${GLOBAL_VERSION}
+    VERSION 1.1.1
     DESCRIPTION "A Binary Genetic Traits Lexer and C++ Library"
 )
 
+if(CMAKE_COMPILER_IS_GNUCC)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
+endif()
+
 if(MSVC)
-    add_definitions(-D_WIN32=1)
-	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
+    add_definitions(-DNOMINMAX)
+    # HACK: be compatible with the ExternalProject's that are built in Release mode
+    string(REPLACE "/RTC1" "" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
 endif()
 
 include(ExternalProject)
 include(ProcessorCount)
-
 ProcessorCount(N)
 
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/tests.py
-     DESTINATION ${CMAKE_BINARY_DIR})
+if(CMAKE_GENERATOR MATCHES "Visual Studio")
+    # https://stackoverflow.com/a/70102570/1806760
+    set(EXTERNAL_BUILD_COMMAND cmake --build . --parallel ${N} -- /p:CL_MPcount=${N})
+else()
+    set(EXTERNAL_BUILD_COMMAND cmake --build . --parallel ${N})
+endif()
 
-set(CAPSTONE_ROOT    "${CMAKE_BINARY_DIR}/capstone/")
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/tests.py
+     DESTINATION ${CMAKE_BINARY_DIR}
+)
+
+set(CAPSTONE_ROOT         "${CMAKE_BINARY_DIR}/capstone/")
 set(CAPSTONE_INCLUDE_DIRS "${CAPSTONE_ROOT}/include/")
-set(CAPSTONE_GIT_URL "https://github.com/capstone-engine/capstone.git")
-set(CAPSTONE_GIT_TAG 4.0.2)
+set(CAPSTONE_GIT_URL      "https://github.com/capstone-engine/capstone.git")
+set(CAPSTONE_GIT_TAG      "4.0.2")
 
 ExternalProject_Add(
     capstone
@@ -37,7 +62,7 @@ ExternalProject_Add(
     GIT_REPOSITORY      "${CAPSTONE_GIT_URL}"
     GIT_TAG             "${CAPSTONE_GIT_TAG}"
     GIT_SHALLOW         ON
-    BUILD_COMMAND make -j${N}
+    BUILD_COMMAND       ${EXTERNAL_BUILD_COMMAND}
     CMAKE_ARGS          -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
                         -DCAPSTONE_BUILD_SHARED=OFF
                         -DCAPSTONE_BUILD_TESTS=OFF
@@ -69,23 +94,25 @@ ExternalProject_Add(
 )
 
 add_library(capstone_static STATIC IMPORTED)
-set_target_properties(
-    capstone_static PROPERTIES IMPORTED_LOCATION
-    ${CAPSTONE_ROOT}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}capstone${CMAKE_STATIC_LIBRARY_SUFFIX}
+set_target_properties(capstone_static PROPERTIES
+    IMPORTED_LOCATION ${CAPSTONE_ROOT}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}capstone${CMAKE_STATIC_LIBRARY_SUFFIX}
 )
 add_dependencies(capstone_static capstone)
+file(MAKE_DIRECTORY ${CAPSTONE_INCLUDE_DIRS})
+target_include_directories(capstone_static INTERFACE ${CAPSTONE_INCLUDE_DIRS})
 
-set(TLSH_GIT_URL "https://github.com/trendmicro/tlsh.git")
-set(TLSH_ROOT    "${CMAKE_BINARY_DIR}/tlsh/")
+set(TLSH_GIT_URL      "https://github.com/mrexodia/tlsh.git")
+set(TLSH_ROOT         "${CMAKE_BINARY_DIR}/tlsh/")
 set(TLSH_INCLUDE_DIRS "${TLSH_ROOT}/src/tlsh/include/")
-set(TLSH_GIT_TAG 4.8.2)
+set(TLSH_GIT_TAG      "24d5c0b7fa2ed4d77d9c5dd0c7e1cbf4cd31b42f")
 
 set(TLSH_CMAKE_ARGS
-  -DCMAKE_BUILD_TYPE=Release
-  -DCMAKE_CXX_FLAGS_RELEASE=${CMAKE_CXX_FLAGS_RELEASE}
-  -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
-  -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
-  -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON
+    -DCMAKE_BUILD_TYPE=Release
+    -DCMAKE_CXX_FLAGS_RELEASE=${CMAKE_CXX_FLAGS_RELEASE}
+    -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+    -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+    -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON
+    -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
 )
 
 ExternalProject_Add(
@@ -95,27 +122,27 @@ ExternalProject_Add(
     GIT_REPOSITORY      "${TLSH_GIT_URL}"
     GIT_TAG             "${TLSH_GIT_TAG}"
     GIT_SHALLOW         ON
-    BUILD_COMMAND make -j${N}
-    INSTALL_COMMAND ""
-    CMAKE_ARGS ${TLSH_CMAKE_ARGS}
+    BUILD_COMMAND       ${EXTERNAL_BUILD_COMMAND}
+    CMAKE_ARGS          ${TLSH_CMAKE_ARGS}
 )
 
 add_library(tlsh_static STATIC IMPORTED)
 set_target_properties(
     tlsh_static PROPERTIES IMPORTED_LOCATION
-    ${TLSH_ROOT}/src/tlsh/lib/${CMAKE_STATIC_LIBRARY_PREFIX}tlsh${CMAKE_STATIC_LIBRARY_SUFFIX}
+    ${TLSH_ROOT}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}tlsh${CMAKE_STATIC_LIBRARY_SUFFIX}
 )
 add_dependencies(tlsh_static tlsh)
+if(WIN32)
+    target_compile_definitions(tlsh_static INTERFACE TLSH_WINDOWS)
+endif()
+file(MAKE_DIRECTORY ${TLSH_INCLUDE_DIRS})
+target_include_directories(tlsh_static INTERFACE ${TLSH_INCLUDE_DIRS})
 
 set(LIEF_PREFIX       "${CMAKE_BINARY_DIR}/LIEF/")
 set(LIEF_INSTALL_DIR  "${LIEF_PREFIX}")
 set(LIEF_INCLUDE_DIRS "${LIEF_PREFIX}/include/")
-
-set(LIB_LIEF ${LIEF_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}LIEF${CMAKE_STATIC_LIBRARY_SUFFIX})
-
-set(LIEF_GIT_URL "https://github.com/lief-project/LIEF.git")
-
-set(LIEF_VERSION 0.11.5)
+set(LIEF_GIT_URL      "https://github.com/lief-project/LIEF.git")
+set(LIEF_VERSION      "0.12.1")
 
 set(LIEF_CMAKE_ARGS
   -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
@@ -135,29 +162,24 @@ set(LIEF_CMAKE_ARGS
   -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
 )
 
-if(MSVC)
-  list(APPEND ${LIEF_CMAKE_ARGS} -DLIEF_USE_CRT_RELEASE=MT)
-endif()
-
-# -DCMAKE_BUILD_TYPE=Release
-
 ExternalProject_Add(LIEF
   PREFIX           ${LIEF_PREFIX}
   GIT_REPOSITORY   ${LIEF_GIT_URL}
   GIT_TAG          ${LIEF_VERSION}
-  BUILD_COMMAND make -j${N}
+  BUILD_COMMAND    ${EXTERNAL_BUILD_COMMAND}
   INSTALL_DIR      ${LIEF_INSTALL_DIR}
   CMAKE_ARGS       ${LIEF_CMAKE_ARGS}
 )
 
 add_library(lief_static STATIC IMPORTED)
-set_target_properties(
-    lief_static PROPERTIES IMPORTED_LOCATION
-    ${LIEF_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}LIEF${CMAKE_STATIC_LIBRARY_SUFFIX}
+set_target_properties(lief_static PROPERTIES
+    IMPORTED_LOCATION ${LIEF_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}LIEF${CMAKE_STATIC_LIBRARY_SUFFIX}
 )
 add_dependencies(lief_static LIEF)
+file(MAKE_DIRECTORY ${LIEF_INCLUDE_DIRS})
+target_include_directories(lief_static INTERFACE ${LIEF_INCLUDE_DIRS})
 
-add_library(binlex SHARED
+add_library(binlex
     src/args.cpp
     src/raw.cpp
     src/common.cpp
@@ -173,58 +195,37 @@ add_library(binlex SHARED
     src/sha256.c
 )
 
-add_dependencies(binlex LIEF)
-add_dependencies(binlex capstone)
+set_target_properties(binlex PROPERTIES SOVERSION ${PROJECT_VERSION})
 
-set_target_properties(binlex PROPERTIES SOVERSION ${GLOBAL_VERSION})
+find_package(Threads REQUIRED)
 
-target_link_libraries(binlex
-    PUBLIC
-        lief_static
-        capstone_static
-        tlsh_static
-        -lpthread
-)
-
-set_target_properties(binlex
-	PROPERTIES COMPILE_FLAGS
-	-DCMAKE_CXX_FLAGS_RELEASE=${CMAKE_CXX_FLAGS_RELEASE}
-	-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
-	-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+target_link_libraries(binlex PUBLIC
+    lief_static
+    capstone_static
+    tlsh_static
+    Threads::Threads
 )
 
 add_library(binlex::library ALIAS binlex)
 
 if(MSVC)
-  target_compile_options(binlex PUBLIC /FIiso646.h)
-  set_property(TARGET binlex PROPERTY LINK_FLAGS /NODEFAULTLIB:MSVCRT)
+    target_compile_options(binlex PUBLIC /FIiso646.h)
 endif()
 
-target_include_directories(binlex
-    PUBLIC
-        ${PROJECT_SOURCE_DIR}/include
-        ${LIEF_INCLUDE_DIRS}
-        ${CAPSTONE_INCLUDE_DIRS}
-        ${TLSH_INCLUDE_DIRS}
-)
+target_include_directories(binlex PUBLIC include)
 
-if ( CMAKE_COMPILER_IS_GNUCC )
-    set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Wall -Wextra")
-endif()
 add_executable(binlex-bin
     src/binlex.cpp
 )
 
-add_dependencies(binlex-bin LIEF)
-add_dependencies(binlex-bin capstone)
-
-target_link_libraries(binlex-bin
-    PRIVATE
-        binlex::library
+target_link_libraries(binlex-bin PRIVATE
+    binlex::library
 )
 
-set_target_properties(binlex-bin
-    PROPERTIES OUTPUT_NAME binlex
+set_target_properties(binlex-bin PROPERTIES
+    OUTPUT_NAME binlex
+    ARCHIVE_OUTPUT_NAME binlex-bin # TODO: the executable shouldn't have any exports
+    PDB_NAME binlex-bin
 )
 
 install(TARGETS binlex-bin DESTINATION bin)
@@ -239,25 +240,13 @@ set(SOURCES_BLYARA
 
 add_executable(blyara ${SOURCES_BLYARA})
 
-target_include_directories(blyara
-    PRIVATE
-        ${PROJECT_SOURCE_DIR}/include
-        ${LIEF_INCLUDE_DIRS}
-        ${CAPSTONE_INCLUDE_DIRS}
-        ${TLSH_INCLUDE_DIRS}
-)
+target_include_directories(blyara PRIVATE include)
 
 install(TARGETS blyara DESTINATION bin)
 
 if (BUILD_PYTHON_BINDINGS)
-    include_directories(
-        include/
-        ${pybind11_INCLUDE_DIRS}
-    )
-    link_directories(src/)
-    add_subdirectory(bindings/python/pybind11/)
-    pybind11_add_module(pybinlex
-        SHARED
+    add_subdirectory(bindings/python/pybind11)
+    pybind11_add_module(pybinlex MODULE
         bindings/python/blelf.cpp
         bindings/python/common.cpp
         bindings/python/file.cpp
@@ -266,16 +255,8 @@ if (BUILD_PYTHON_BINDINGS)
         bindings/python/decompiler.cpp
         bindings/python/pybinlex.cpp
     )
-    target_link_libraries(pybinlex
-        PRIVATE
-            pybind11::module
-            binlex::library
-        PUBLIC
-            capstone_static
-            -lpthread
-            lief_static
-            tlsh_static
-            ${pybind11_LIBRARIES}
+    target_link_libraries(pybinlex PRIVATE
+        binlex::library
     )
 endif()
 
@@ -284,23 +265,10 @@ add_custom_target(uninstall
 )
 
 set(CPACK_PACKAGE_NAME binlex)
-string(CONCAT PKG_NAME "${CPACK_PACKAGE_NAME}"
-                       "-"
-                       "${VERSION_MAJOR}"
-                       "."
-                       "${VERSION_MINOR}"
-                       "."
-                       "${VERSION_PATCH}"
-)
+set(PKG_NAME "${CPACK_PACKAGE_NAME}-${PROJECT_VERSION}")
 
 SET(CPACK_GENERATOR DEB RPM)
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Binary Genetic Traits Lexer Utilities and C++ Library"
-    CACHE STRING "Binary Genetic Traits Lexer Utilities and C++ Library"
-)
 set(CPACK_RESOURCE_FILE_LICENSE "")
-set(CPACK_PACKAGE_VERSION_MAJOR ${VERSION_MAJOR})
-set(CPACK_PACKAGE_VERSION_MINOR ${VERSION_MINOR})
-set(CPACK_PACKAGE_VERSION_PATCH ${VERSION_PATCH})
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "@c3rb3ru5d3d53c")
 set(CPACK_PACKAGE_CONTACT "c3rb3ru5d3d53c@gmail.com")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
@@ -328,4 +296,4 @@ set(CPACK_SOURCE_IGNORE_FILES
     "${CPACK_SOURCE_IGNORE_FILES}"
 )
 
-include (CPack)
+include(CPack)

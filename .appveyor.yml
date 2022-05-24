@@ -72,8 +72,11 @@ for:
       # - ps: cd build/
       # - ps: cmake ..
       # - ps: cmake --build . --config Debug
+    build_script:
+      - cmake -B build -DBUILD_PYTHON_BINDINGS=ON "-DPYTHON_EXECUTABLE:FILEPATH=C:\Python310-x64\python.exe"
+      - cmake --build build -j
     artifacts:
-      - path: build/Debug/*.exe
-      - path: build/Debug/*.dll
+      - path: build/Release/*.exe
+      - path: build/Release/*.pyd
 
 build: off

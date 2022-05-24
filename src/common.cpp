@@ -62,7 +62,7 @@ string Common::GetFileSHA256(char *file_path){
     SHA256_CTX ctx;
     uint8_t buf[8192];
     size_t bread;
-    BYTE hash[SHA256_BLOCK_SIZE];
+    uint8_t hash[SHA256_BLOCK_SIZE];
     inp = fopen(file_path, "rb");
     if(!inp){
 	    throw std::runtime_error(strerror(errno));
@@ -89,7 +89,7 @@ string Common::Wildcards(uint count){
 }
 
 string Common::GetSHA256(const uint8_t *data, size_t len){
-    BYTE hash[SHA256_BLOCK_SIZE];
+    uint8_t hash[SHA256_BLOCK_SIZE];
     SHA256_CTX ctx;
     sha256_init(&ctx);
     sha256_update(&ctx, data, len);
@@ -98,10 +98,10 @@ string Common::GetSHA256(const uint8_t *data, size_t len){
 }
 
 string Common::SHA256(char *trait){
-    BYTE hash[SHA256_BLOCK_SIZE];
+    uint8_t hash[SHA256_BLOCK_SIZE];
     SHA256_CTX ctx;
     sha256_init(&ctx);
-    sha256_update(&ctx, (BYTE *)trait, strlen(trait));
+    sha256_update(&ctx, (uint8_t *)trait, strlen(trait));
     sha256_final(&ctx, hash);
     return RemoveSpaces(HexdumpBE(&hash, SHA256_BLOCK_SIZE));
 }
@@ -239,7 +239,7 @@ TimedCode::TimedCode(const char *tag) {
 }
 
 void TimedCode::Print() {
-    std::chrono::_V2::steady_clock::time_point end = std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 
     int64_t start_time = std::chrono::time_point_cast<std::chrono::microseconds>(start).time_since_epoch().count();
     int64_t end_time = std::chrono::time_point_cast<std::chrono::microseconds>(end).time_since_epoch().count();

@@ -40,7 +40,7 @@ bool ELF::ReadVector(const std::vector<uint8_t> &data){
 
 bool ELF::ParseSections(){
     uint index = 0;
-    it_sections local_sections = binary->sections();
+    Binary::it_sections local_sections = binary->sections();
     for (auto it = local_sections.begin(); it != local_sections.end(); it++){
         if (it->flags() & (uint64_t)ELF_SECTION_FLAGS::SHF_EXECINSTR){
             sections[index].offset = it->offset();
@@ -49,7 +49,7 @@ bool ELF::ParseSections(){
             memset(sections[index].data, 0, sections[index].size);
             vector<uint8_t> data = binary->get_content_from_virtual_address(it->virtual_address(), it->original_size());
             memcpy(sections[index].data, &data[0], sections[index].size);
-            it_exported_symbols symbols = binary->exported_symbols();
+            Binary::it_exported_symbols symbols = binary->exported_symbols();
             // Add export to function list
             for (auto j = symbols.begin(); j != symbols.end(); j++){
                 uint64_t tmp_offset = binary->virtual_address_to_offset(j->value());
