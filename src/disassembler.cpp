@@ -164,7 +164,7 @@ void * Disassembler::CreateTraitsForSection(uint index) {
             }
 
             // Check for suspicious instructions and count them
-            if (IsInvalidNopInsn(insn) || IsSemanticNopInsn(insn) || IsTrapInsn(insn) || IsPrivInsn(insn) ){
+            if (IsPaddingInsn(insn) || IsSemanticNopInsn(insn) || IsTrapInsn(insn) || IsPrivInsn(insn) ){
                 suspicious_instructions += 1;
             }
 
@@ -354,7 +354,7 @@ void Disassembler::LinearDisassemble(void* data, size_t data_size, size_t offset
         }
         PRINT_DEBUG("LinearDisassemble: 0x%" PRIu64 ": %s\t%s\n", cs_ins->address, cs_ins->mnemonic, cs_ins->op_str);
 
-        if (IsInvalidNopInsn(cs_ins) || IsSemanticNopInsn(cs_ins) || IsTrapInsn(cs_ins) || IsPrivInsn(cs_ins) ){
+        if (IsPaddingInsn(cs_ins) || IsSemanticNopInsn(cs_ins) || IsTrapInsn(cs_ins) || IsPrivInsn(cs_ins) ){
             PRINT_DEBUG("LinearDisassemble: Suspicious instruction at 0x%" PRIu64 "\n", cs_ins->address);
             valid_block = false;
             valid_block_count = 0;
@@ -429,15 +429,15 @@ bool Disassembler::IsVisited(map<uint64_t, DISASSEMBLER_VISITED> &visited, uint6
 
 bool Disassembler::IsNopInsn(cs_insn *ins){
     switch(ins->id) {
-    case X86_INS_NOP:
-    case X86_INS_FNOP:
-        return true;
-    default:
-        return false;
+        case X86_INS_NOP:
+        case X86_INS_FNOP:
+            return true;
+        default:
+            return false;
     }
 }
 
-bool Disassembler::IsInvalidNopInsn(cs_insn *insn){
+bool Disassembler::IsPaddingInsn(cs_insn *insn){
     return IsNopInsn(insn) ||
         (IsSemanticNopInsn(insn) && (file_reference.binary_type != BINARY_TYPE_PE)) ||
         (IsTrapInsn(insn) && (file_reference.binary_type == BINARY_TYPE_PE));
@@ -451,50 +451,50 @@ bool Disassembler::IsSemanticNopInsn(cs_insn *ins){
 
     x86 = &ins->detail->x86;
     switch(ins->id) {
-    case X86_INS_MOV:
-        /* mov reg,reg */
-        if((x86->op_count == 2)
-             && (x86->operands[0].type == X86_OP_REG)
-             && (x86->operands[1].type == X86_OP_REG)
-             && (x86->operands[0].reg == x86->operands[1].reg)) {
-            return true;
-        }
-        return false;
-    case X86_INS_XCHG:
-        /* xchg reg,reg */
-        if((x86->op_count == 2)
-             && (x86->operands[0].type == X86_OP_REG)
-             && (x86->operands[1].type == X86_OP_REG)
-             && (x86->operands[0].reg == x86->operands[1].reg)) {
-            return true;
-        }
-        return false;
-    case X86_INS_LEA:
-        /* lea        reg,[reg + 0x0] */
-        if((x86->op_count == 2)
-             && (x86->operands[0].type == X86_OP_REG)
-             && (x86->operands[1].type == X86_OP_MEM)
-             && (x86->operands[1].mem.segment == X86_REG_INVALID)
-             && (x86->operands[1].mem.base == x86->operands[0].reg)
-             && (x86->operands[1].mem.index == X86_REG_INVALID)
-             /* mem.scale is irrelevant since index is not used */
-             && (x86->operands[1].mem.disp == 0)) {
-            return true;
-        }
-        /* lea        reg,[reg + eiz*x + 0x0] */
-        if((x86->op_count == 2)
-             && (x86->operands[0].type == X86_OP_REG)
-             && (x86->operands[1].type == X86_OP_MEM)
-             && (x86->operands[1].mem.segment == X86_REG_INVALID)
-             && (x86->operands[1].mem.base == x86->operands[0].reg)
-             && (x86->operands[1].mem.index == X86_REG_EIZ)
-             /* mem.scale is irrelevant since index is the zero-register */
-             && (x86->operands[1].mem.disp == 0)) {
-            return true;
-        }
-        return false;
-    default:
-        return false;
+        case X86_INS_MOV:
+            /* mov reg,reg */
+            if((x86->op_count == 2)
+                && (x86->operands[0].type == X86_OP_REG)
+                && (x86->operands[1].type == X86_OP_REG)
+                && (x86->operands[0].reg == x86->operands[1].reg)) {
+                return true;
+            }
+            return false;
+        case X86_INS_XCHG:
+            /* xchg reg,reg */
+            if((x86->op_count == 2)
+                && (x86->operands[0].type == X86_OP_REG)
+                && (x86->operands[1].type == X86_OP_REG)
+                && (x86->operands[0].reg == x86->operands[1].reg)) {
+                return true;
+            }
+            return false;
+        case X86_INS_LEA:
+            /* lea        reg,[reg + 0x0] */
+            if((x86->op_count == 2)
+                && (x86->operands[0].type == X86_OP_REG)
+                && (x86->operands[1].type == X86_OP_MEM)
+                && (x86->operands[1].mem.segment == X86_REG_INVALID)
+                && (x86->operands[1].mem.base == x86->operands[0].reg)
+                && (x86->operands[1].mem.index == X86_REG_INVALID)
+                /* mem.scale is irrelevant since index is not used */
+                && (x86->operands[1].mem.disp == 0)) {
+                return true;
+            }
+            /* lea        reg,[reg + eiz*x + 0x0] */
+            if((x86->op_count == 2)
+                && (x86->operands[0].type == X86_OP_REG)
+                && (x86->operands[1].type == X86_OP_MEM)
+                && (x86->operands[1].mem.segment == X86_REG_INVALID)
+                && (x86->operands[1].mem.base == x86->operands[0].reg)
+                && (x86->operands[1].mem.index == X86_REG_EIZ)
+                /* mem.scale is irrelevant since index is the zero-register */
+                && (x86->operands[1].mem.disp == 0)) {
+                return true;
+            }
+            return false;
+        default:
+            return false;
     }
 }
 
