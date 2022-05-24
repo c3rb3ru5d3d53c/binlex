@@ -164,7 +164,7 @@ void * Disassembler::CreateTraitsForSection(uint index) {
             }
 
             // Check for suspicious instructions and count them
-            if (IsNopInsn(insn) || IsSemanticNopInsn(insn) || IsTrapInsn(insn) || IsPrivInsn(insn) ){
+            if (IsInvalidNopInsn(insn) || IsSemanticNopInsn(insn) || IsTrapInsn(insn) || IsPrivInsn(insn) ){
                 suspicious_instructions += 1;
             }
 
@@ -274,7 +274,7 @@ void Disassembler::ClearTrait(struct Trait *trait){
     trait->xrefs.clear();
 }
 
-void Disassembler::AppendQueue(set<uint64_t> &addresses, uint operand_type, uint index){
+void Disassembler::AppendQueue(set<uint64_t> &addresses, DISASSEMBLER_OPERAND_TYPE operand_type, uint index){
     PRINT_DEBUG("List of queued addresses for section %u correponding to found functions: ", index);
     for (auto it = addresses.begin(); it != addresses.end(); ++it){
         uint64_t tmp_addr = *it;
@@ -354,7 +354,7 @@ void Disassembler::LinearDisassemble(void* data, size_t data_size, size_t offset
         }
         PRINT_DEBUG("LinearDisassemble: 0x%" PRIu64 ": %s\t%s\n", cs_ins->address, cs_ins->mnemonic, cs_ins->op_str);
 
-        if (IsNopInsn(cs_ins) || IsSemanticNopInsn(cs_ins) || IsTrapInsn(cs_ins) || IsPrivInsn(cs_ins) ){
+        if (IsInvalidNopInsn(cs_ins) || IsSemanticNopInsn(cs_ins) || IsTrapInsn(cs_ins) || IsPrivInsn(cs_ins) ){
             PRINT_DEBUG("LinearDisassemble: Suspicious instruction at 0x%" PRIu64 "\n", cs_ins->address);
             valid_block = false;
             valid_block_count = 0;
@@ -423,7 +423,7 @@ string Disassembler::WildcardInsn(cs_insn *insn){
     return TrimRight(trait);
 }
 
-bool Disassembler::IsVisited(map<uint64_t, int> &visited, uint64_t address) {
+bool Disassembler::IsVisited(map<uint64_t, DISASSEMBLER_VISITED> &visited, uint64_t address) {
     return visited.find(address) != visited.end();
 }
 
@@ -437,8 +437,13 @@ bool Disassembler::IsNopInsn(cs_insn *ins){
     }
 }
 
-bool Disassembler::IsSemanticNopInsn(cs_insn *ins)
-{
+bool Disassembler::IsInvalidNopInsn(cs_insn *insn){
+    return IsNopInsn(insn) ||
+        (IsSemanticNopInsn(insn) && (file_reference.binary_type != BINARY_TYPE_PE)) ||
+        (IsTrapInsn(insn) && (file_reference.binary_type == BINARY_TYPE_PE));
+}
+
+bool Disassembler::IsSemanticNopInsn(cs_insn *ins){
     cs_x86 *x86;
 
     /* XXX: to make this truly platform-independent, we need some real
@@ -495,13 +500,13 @@ bool Disassembler::IsSemanticNopInsn(cs_insn *ins)
 
 bool Disassembler::IsTrapInsn(cs_insn *ins){
     switch(ins->id) {
-    case X86_INS_INT3:
-    case X86_INS_UD2:
-    case X86_INS_INT1:
-    case X86_INS_INTO:
-        return true;
-    default:
-        return false;
+        case X86_INS_INT3:
+        case X86_INS_UD2:
+        case X86_INS_INT1:
+        case X86_INS_INTO:
+            return true;
+        default:
+            return false;
     }
 }
 
@@ -642,7 +647,9 @@ uint Disassembler::CollectInsn(cs_insn* insn, struct Section *sections, uint ind
 }
 
 void Disassembler::AddDiscoveredBlock(uint64_t address, struct Section *sections, uint index) {
-    if (IsVisited(sections[index].visited, address) == false && address < sections[index].data_size) {
+    if (IsVisited(sections[index].visited, address) == false &&
+    address < sections[index].data_size &&
+    IsFunction(sections[index].functions, address) == false) {
         if (sections[index].blocks.insert(address).second == true){
             sections[index].visited[address] = DISASSEMBLER_VISITED_QUEUED;
             sections[index].discovered.push(address);

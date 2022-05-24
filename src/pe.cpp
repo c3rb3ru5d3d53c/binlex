@@ -17,6 +17,7 @@ bool PE::ReadVector(const std::vector<uint8_t> &data){
     if (binary == NULL){
         return false;
     }
+    binary_type = BINARY_TYPE_PE;
     if (binary_arch == BINARY_ARCH_UNKNOWN ||
         binary_mode == BINARY_MODE_UNKNOWN){
         if (IsDotNet() == true){

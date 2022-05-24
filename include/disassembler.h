@@ -32,14 +32,12 @@
 #define BINLEX_EXPORT
 #endif
 
-//#define DISASSEMBLER_MAX_SECTIONS 256
 #define SHA256_PRINTABLE_SIZE   65 /* including NULL terminator */
 
-#define DISASSEMBLER_VISITED_QUEUED   0
-#define DISASSEMBLER_VISITED_ANALYZED 1
-
-#define DISASSEMBLER_GPU_MODE_CUDA   0
-#define DISASSEMBLER_GPU_MODE_OPENCL 1
+typedef enum DISASSEMBLER_VISITED {
+    DISASSEMBLER_VISITED_QUEUED = 0,
+    DISASSEMBLER_VISITED_ANALYZED = 1
+} DISASSEMBLER_VISITED;
 
 typedef enum DISASSEMBLER_OPERAND_TYPE {
 	DISASSEMBLER_OPERAND_TYPE_BLOCK = 0,
@@ -87,7 +85,7 @@ namespace binlex {
             size_t data_size;
             set<uint64_t> blocks;
             set<uint64_t> functions;
-            map<uint64_t, int> visited;
+            map<uint64_t, DISASSEMBLER_VISITED> visited;
             queue<uint64_t> discovered;
         };
         static cs_arch arch;
@@ -194,6 +192,7 @@ namespace binlex {
         BINLEX_EXPORT static bool IsConditionalJumpInsn(cs_insn *insn);
         BINLEX_EXPORT static bool IsJumpInsn(cs_insn *insn);
         BINLEX_EXPORT static bool IsCallInsn(cs_insn *insn);
+        BINLEX_EXPORT bool IsInvalidNopInsn(cs_insn *ins);
         BINLEX_EXPORT static uint64_t GetInsnEdges(cs_insn *insn);
         /**
         Checks if Address if Function
@@ -212,7 +211,7 @@ namespace binlex {
         @param address address to check
         @return bool
         */
-        BINLEX_EXPORT static bool IsVisited(map<uint64_t, int> &visited, uint64_t address);
+        BINLEX_EXPORT static bool IsVisited(map<uint64_t, DISASSEMBLER_VISITED> &visited, uint64_t address);
         /**
         Checks if Instruction is Wildcard Instruction
         @param insn the instruction
@@ -243,7 +242,7 @@ namespace binlex {
         vector<json> GetTraits();
         BINLEX_EXPORT static void * TraitWorker(void *args);
 	    BINLEX_EXPORT static void * FinalizeTrait(struct Trait &trait);
-        BINLEX_EXPORT void AppendQueue(set<uint64_t> &addresses, uint operand_type, uint index);
+        BINLEX_EXPORT void AppendQueue(set<uint64_t> &addresses, DISASSEMBLER_OPERAND_TYPE operand_type, uint index);
         //void Seek(uint offset, uint index);
         BINLEX_EXPORT ~Disassembler();
     };

@@ -32,6 +32,7 @@ bool Raw::ReadVector(const std::vector<uint8_t> &data){
                 g_args.options.mode = "raw:x86_64";
             }
     }
+    binary_type = BINARY_TYPE_RAW;
     const int section_index = 0; // The parameter was always zero.
     CalculateFileHashes(data);
     // The original ftell was always called after opening the file, hence 0.
