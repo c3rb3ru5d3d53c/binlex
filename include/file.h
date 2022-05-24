@@ -4,7 +4,9 @@
 #include <iostream>
 #include <memory>
 #include <set>
+#ifndef _WIN32
 #include <unistd.h>
+#endif // _WIN32
 #include <string.h>
 #include "common.h"
 

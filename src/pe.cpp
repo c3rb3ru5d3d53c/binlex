@@ -78,7 +78,7 @@ bool PE::HasLimitations(){
 
 bool PE::ParseSections(){
     uint32_t index = 0;
-    it_sections local_sections = binary->sections();
+    Binary::it_sections local_sections = binary->sections();
     for (auto it = local_sections.begin(); it != local_sections.end(); it++){
         if (it->characteristics() & (uint32_t)SECTION_CHARACTERISTICS::IMAGE_SCN_MEM_EXECUTE){
             sections[index].offset = it->offset();
@@ -90,7 +90,7 @@ bool PE::ParseSections(){
             // Add exports to the function list
             if (binary->has_exports()){
                 Export exports = binary->get_export();
-                it_export_entries export_entries = exports.entries();
+                Export::it_entries export_entries = exports.entries();
                 for (auto j = export_entries.begin(); j != export_entries.end(); j++){
                     PRINT_DEBUG("PE Export offset: 0x%x\n", (int)binary->rva_to_offset(j->address()));
                     uint64_t tmp_offset = binary->rva_to_offset(j->address());
