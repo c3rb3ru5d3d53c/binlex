@@ -68,6 +68,14 @@ typedef enum BINARY_MODE {
     BINARY_MODE_CIL = 3,
 } BINARY_MODE;
 
+typedef enum BINARY_TYPE {
+    BINARY_TYPE_PE = 0,
+    BINARY_TYPE_ELF = 1,
+    BINARY_TYPE_MACHO = 2,
+    BINARY_TYPE_RAW = 3,
+    BINARY_TYPE_UNKNOWN = 4
+} BINARY_TYPE;
+
 #ifdef _WIN32
 typedef unsigned int uint;
 typedef uint useconds_t;
