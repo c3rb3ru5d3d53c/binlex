@@ -164,7 +164,7 @@ void * Disassembler::CreateTraitsForSection(uint index) {
             }
 
             // Check for suspicious instructions and count them
-            if (IsPaddingInsn(insn) || IsSemanticNopInsn(insn) || IsTrapInsn(insn) || IsPrivInsn(insn) ){
+            if (IsSuspiciousInsn(insn) == true){
                 suspicious_instructions += 1;
             }
 
@@ -317,53 +317,50 @@ void Disassembler::LinearDisassemble(void* data, size_t data_size, size_t offset
     // - We don’t collect the next address after a jmp (next block) missing some valid blocks (effective?)
     // - Even with the filtering we will still add some number of addresses that are from invalid jmp institutions
 
-    csh cs_dis;
+    disasm_t disasm;
 
     PRINT_DEBUG("LinearDisassemble: Started at offset = 0x%" PRIu64 " data_size = %" PRIu64 " bytes\n", offset, data_size);
 
-    if(cs_open(arch, mode, &cs_dis) != CS_ERR_OK) {
+    if(cs_open(arch, mode, &disasm.handle) != CS_ERR_OK) {
         PRINT_ERROR_AND_EXIT("[x] LinearDisassembly failed to init capstone\n");
     }
 
-    if (cs_option(cs_dis, CS_OPT_DETAIL, CS_OPT_ON) != CS_ERR_OK) {
+    if (cs_option(disasm.handle, CS_OPT_DETAIL, CS_OPT_ON) != CS_ERR_OK) {
         PRINT_ERROR_AND_EXIT("[x] LinearDisassembly failed to set capstone options\n");
     }
 
-    cs_insn *cs_ins = cs_malloc(cs_dis);
-    uint64_t pc = offset;
-    const uint8_t *code = (uint8_t *)((uint8_t *)data);
-    size_t code_size = data_size + pc;
-    // Track our state, assume we start in a valid bb
+    cs_insn *cs_ins = cs_malloc(disasm.handle);
+    disasm.pc = offset;
+    disasm.code = (uint8_t *)((uint8_t *)data);
+    disasm.code_size = data_size + disasm.pc;
     bool valid_block = true;
     uint64_t valid_block_count = 1;
-    // Save the last two valid jmp addresses
-    // These can be pushed once we confirm three valid blocks
     uint64_t jmp_address_1 = 0;
     uint64_t jmp_address_2 = 0;
 
-    while(pc < code_size){
-        if (!cs_disasm_iter(cs_dis, &code, &code_size, &pc, cs_ins)){
-            PRINT_DEBUG("LinearDisassemble: 0x%" PRIu64 ": Disassemble ERROR\n", pc);
-            // If the disassembly fails skip the byte and continue
-            pc += 1;
-            code_size -= 1;
-            code = (uint8_t *)((uint8_t *)code + 1);
+    while(disasm.pc < disasm.code_size){
+        if (!cs_disasm_iter(disasm.handle, &disasm.code, &disasm.code_size, &disasm.pc, cs_ins)){
+            PRINT_DEBUG("LinearDisassemble: 0x%" PRIu64 ": Disassemble ERROR\n", disasm.pc);
+            disasm.pc += 1;
+            disasm.code_size -= 1;
+            disasm.code = (uint8_t *)((uint8_t *)disasm.code + 1);
             valid_block = false;
             valid_block_count = 0;
             continue;
         }
         PRINT_DEBUG("LinearDisassemble: 0x%" PRIu64 ": %s\t%s\n", cs_ins->address, cs_ins->mnemonic, cs_ins->op_str);
 
-        if (IsPaddingInsn(cs_ins) || IsSemanticNopInsn(cs_ins) || IsTrapInsn(cs_ins) || IsPrivInsn(cs_ins) ){
+        if (IsSuspiciousInsn(cs_ins) == true){
             PRINT_DEBUG("LinearDisassemble: Suspicious instruction at 0x%" PRIu64 "\n", cs_ins->address);
             valid_block = false;
             valid_block_count = 0;
             continue;
         }
 
-        if(!cs_ins->size) {
-            PRINT_DEBUG("LinearDisassemble: Invalid instruction size at 0x%" PRIu64 "\n", cs_ins->address);
+        if (IsCallInsn(cs_ins) == true && valid_block_count >= 2){
+            CollectInsn(cs_ins, sections, index);
         }
+
         if (IsJumpInsn(cs_ins) == true){
             if (valid_block){
                 if (valid_block_count == 1) {
@@ -374,12 +371,8 @@ void Disassembler::LinearDisassemble(void* data, size_t data_size, size_t offset
                     AddDiscoveredBlock(jmp_address_2, sections, index);
                     CollectInsn(cs_ins, sections, index);
                 }
-                else{
-                    CollectInsn(cs_ins, sections, index);
-                }
-                valid_block_count += 1;
+                valid_block_count++;
             } else {
-                // Reset block state and try again
                 valid_block = true;
                 valid_block_count = 1;
                 jmp_address_1 = X86_REL_ADDR(*cs_ins);
@@ -387,7 +380,7 @@ void Disassembler::LinearDisassemble(void* data, size_t data_size, size_t offset
         }
     }
     cs_free(cs_ins, 1);
-    cs_close(&cs_dis);
+    cs_close(&disasm.handle);
 };
 
 void Disassembler::Disassemble() {
@@ -508,6 +501,10 @@ bool Disassembler::IsTrapInsn(cs_insn *ins){
         default:
             return false;
     }
+}
+
+bool Disassembler::IsSuspiciousInsn(cs_insn *insn){
+    return (IsPaddingInsn(insn) || IsSemanticNopInsn(insn) || IsTrapInsn(insn) || IsPrivInsn(insn));
 }
 
 bool Disassembler::IsPrivInsn(cs_insn *ins){
@@ -631,8 +628,8 @@ bool Disassembler::IsCallInsn(cs_insn *insn){
     return false;
 }
 
-uint Disassembler::CollectInsn(cs_insn* insn, struct Section *sections, uint index) {
-    uint result = DISASSEMBLER_OPERAND_TYPE_UNSET;
+DISASSEMBLER_OPERAND_TYPE Disassembler::CollectInsn(cs_insn* insn, struct Section *sections, uint index) {
+    DISASSEMBLER_OPERAND_TYPE result = DISASSEMBLER_OPERAND_TYPE_UNSET;
     if (IsJumpInsn(insn) == true){
         CollectOperands(insn, DISASSEMBLER_OPERAND_TYPE_BLOCK, sections, index);
         result = DISASSEMBLER_OPERAND_TYPE_BLOCK;

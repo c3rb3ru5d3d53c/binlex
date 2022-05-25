@@ -128,7 +128,7 @@ namespace binlex {
          * @param index the section index
          * @return operand type
          */
-        BINLEX_EXPORT uint CollectInsn(cs_insn* insn, struct Section *sections, uint index);
+        BINLEX_EXPORT DISASSEMBLER_OPERAND_TYPE CollectInsn(cs_insn* insn, struct Section *sections, uint index);
         /**
          * This method performs a linear disassembly of the binary to identify initial blocks and functions for the queue.
          * @param data pointer to data
@@ -189,6 +189,12 @@ namespace binlex {
          * @return bool
          */
         BINLEX_EXPORT static bool IsUnconditionalJumpInsn(cs_insn *insn);
+        /**
+         * This method checks if an instruction is suspicious.
+         * @param insn the instruction
+         * @return bool
+         */
+        BINLEX_EXPORT bool IsSuspiciousInsn(cs_insn *insn);
         /**
          * This method checks if the instruction is a conditional jump.
          * @param insn the instruction
