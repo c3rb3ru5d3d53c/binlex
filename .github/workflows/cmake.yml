@@ -10,16 +10,13 @@ jobs:
       matrix:
         os: [ubuntu-20.04, windows-latest, macOS-latest]
         include:
-          - target: macos
-            os: macOS-latest
+          - os: macOS-latest
             build-type: Release
             extra-cmake-flags: "\"-DBUILD_PYTHON_BINDINGS=ON\""
-          - target: ubuntu-20.04
-            os: ubuntu-latest
+          - os: ubuntu-latest
             build-type: Release
             extra-cmake-flags: "\"-DBUILD_PYTHON_BINDINGS=ON\""
-          - target: windows
-            os: windows-latest
+          - os: windows-latest
             build-type: Release
             extra-cmake-flags: "\"-DBUILD_PYTHON_BINDINGS=ON\""
     runs-on: ${{ matrix.os }}
