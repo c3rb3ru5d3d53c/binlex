@@ -1,8 +1,5 @@
 name: CMake
 
-env:
-  python-version: '3.8.10'
-
 on: [push, pull_request]
 
 jobs:
@@ -22,19 +19,19 @@ jobs:
             build-type: Release
             extra-cmake-flags: >-
               "-DBUILD_PYTHON_BINDINGS=ON"
-              "-DPYBIND11_PYTHON_VERSION=${{ env.python-version }}"
+              "-DPYBIND11_PYTHON_VERSION=3.8.10"
           - target: windows
             os: windows-latest
             build-type: Release
             extra-cmake-flags: >-
               "-DBUILD_PYTHON_BINDINGS=ON"
-              "-DPYBIND11_PYTHON_VERSION=${{ env.python-version }}"
+              "-DPYBIND11_PYTHON_VERSION=3.8.10"
           - target: macos
             os: macOS-latest
             build-type: Release
             extra-cmake-flags: >-
               "-DBUILD_PYTHON_BINDINGS=ON"
-              "-DPYBIND11_PYTHON_VERSION=${{ env.python-version }}"
+              "-DPYBIND11_PYTHON_VERSION=3.8.10"
     steps:
     - name: Checkout
       uses: actions/checkout@v2
@@ -48,7 +45,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v3
       with:
-        python-version: ${{ env.python-version }}
+        python-version: '3.8.10'
         run: python --version
 
     - name: Enable Developer Command Prompt
