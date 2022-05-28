@@ -6,11 +6,10 @@ jobs:
   build:
     # Skip building pull requests from the same repository
     if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
-    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
-      # TODO: replace extra-cmake-flags with CMake presets
       matrix:
+        os: [ubuntu-20.04, windows-latest, macos-latest]
         target:
           - macos
           - ubuntu
@@ -27,6 +26,7 @@ jobs:
           - target: windows-latest
             build-type: Release
             extra-cmake-flags: "\"-DBUILD_PYTHON_BINDINGS=ON\""
+    runs-on: ${{ matrix.os }}
     steps:
     - name: Checkout
       uses: actions/checkout@v2
