@@ -48,7 +48,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v3
       with:
-        python-version: $${{ env.python-version }}
+        python-version: ${{ env.python-version }}
       run: python --version
 
     - name: Enable Developer Command Prompt
