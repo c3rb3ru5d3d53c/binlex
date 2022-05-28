@@ -12,6 +12,9 @@ endif()
 if(WIN32)
     # TODO: this can be supported with https://cmake.org/cmake/help/latest/module/GenerateExportHeader.html
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+elseif(APPLE)
+    set (CMAKE_C_STANDARD 11)
+    set (CMAKE_CXX_STANDARD 11)
 else()
     # NOTE: mutually exclusive with python bindings
     option(BUILD_SHARED_LIBS "Build binlex as a shared library (linux only)" OFF)
