@@ -4,7 +4,7 @@ on: [push, pull_request]
 
 jobs:
   build:
-    if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
+    if: ${{ github.event_name == 'pull_request' }}
     strategy:
       matrix:
         os: [ubuntu-20.04, windows-latest, macos-latest]
