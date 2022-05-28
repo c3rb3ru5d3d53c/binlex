@@ -4,9 +4,3 @@
 [submodule "bindings/python/pybind11"]
 	path = bindings/python/pybind11
 	url = https://github.com/pybind/pybind11.git
-[submodule "deps/LIEF"]
-	path = deps/LIEF
-	url = https://github.com/lief-project/LIEF.git
-[submodule "deps/capstone-engine"]
-	path = deps/capstone-engine
-	url = https://github.com/capstone-engine/capstone.git
