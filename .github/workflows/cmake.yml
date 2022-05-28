@@ -1,10 +1,12 @@
 name: CMake
 
+env:
+  python-version: '3.8.10'
+
 on: [push, pull_request]
 
 jobs:
   build:
-    # Skip building pull requests from the same repository
     if: ${{ github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -18,19 +20,21 @@ jobs:
           - target: ubuntu
             os: ubuntu-latest
             build-type: Release
-            # You can add flags separated by newlines here
             extra-cmake-flags: >-
               "-DBUILD_PYTHON_BINDINGS=ON"
+              "-DPYBIND11_PYTHON_VERSION=${{ env.python-version }}"
           - target: windows
             os: windows-latest
             build-type: Release
             extra-cmake-flags: >-
               "-DBUILD_PYTHON_BINDINGS=ON"
+              "-DPYBIND11_PYTHON_VERSION=${{ env.python-version }}"
           - target: macos
             os: macOS-latest
             build-type: Release
             extra-cmake-flags: >-
               "-DBUILD_PYTHON_BINDINGS=ON"
+              "-DPYBIND11_PYTHON_VERSION=${{ env.python-version }}"
     steps:
     - name: Checkout
       uses: actions/checkout@v2
@@ -40,6 +44,12 @@ jobs:
 
     - name: Install ninja-build tool
       uses: seanmiddleditch/gha-setup-ninja@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: $${{ env.python-version }}
+      run: python --version
 
     - name: Enable Developer Command Prompt
       if: ${{ runner.os == 'Windows' }}
@@ -56,18 +66,30 @@ jobs:
         cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} ${{ matrix.extra-cmake-flags }}
         cmake --build build --config ${{ matrix.build-type }} --parallel
         cmake --install build --prefix build/install --config ${{ matrix.build-type }}
-    
+
     - name: Test
       # When using add_test in CMake you can do this to trigger the tests
       # ctest --output-on-failure --test-dir build/tests -C ${{ matrix.build-type }}
       run: |
         echo TODO
 
+    # - name: Package
+    #   run: |
+    #     cd build/ && cpack
+
     - name: Upload artifacts
       uses: actions/upload-artifact@v2
       with:
         name: ${{ github.event.repository.name }}-${{ matrix.target }}
-        path: build/install/bin/*
+        path: |
+          build/binlex
+          build/blyara
+          build/*.so
+          build/*.deb
+          build/*.exe
+          build/*.dll
+          build/*.tar.gz
+          build/*.rpm
 
     - name: Compress artifacts
       uses: vimtor/action-zip@v1
