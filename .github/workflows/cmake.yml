@@ -11,7 +11,7 @@ jobs:
       matrix:
         target:
           - ubuntu-20.04
-          - ubuntu-22.04
+          - ubuntu-latest
           - windows
           - macos
         include:
@@ -21,8 +21,8 @@ jobs:
             extra-cmake-flags: >-
               "-DBUILD_PYTHON_BINDINGS=ON"
               "-DPYBIND11_PYTHON_VERSION=3.8.10"
-          - target: ubuntu-22.04
-            os: ubuntu-22.04
+          - target: ubuntu-latest
+            os: ubuntu-latest
             build-type: Release
             extra-cmake-flags: >-
               "-DBUILD_PYTHON_BINDINGS=ON"
