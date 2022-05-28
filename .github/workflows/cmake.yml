@@ -3,8 +3,9 @@ name: CMake
 on: [push, pull_request]
 
 jobs:
-  example_matrix:
+  build:
     if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-20.04, windows-latest, macos-latest]
@@ -18,7 +19,6 @@ jobs:
         - os: windows-latest
           build-type: Release
           extra-cmake-flags: "\"-DBUILD_PYTHON_BINDINGS=ON\""
-    runs-on: ${{ matrix.os }}
     steps:
     - name: Checkout
       uses: actions/checkout@v2
