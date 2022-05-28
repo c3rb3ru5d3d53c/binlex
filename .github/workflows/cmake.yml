@@ -2,74 +2,85 @@ name: CMake
 
 on: [push, pull_request]
 
+
 jobs:
-  build:
-    # Skip building pull requests from the same repository
-    if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
+  example_matrix:
     strategy:
-      fail-fast: false
       matrix:
         os: [ubuntu-20.04, windows-latest, macos-latest]
-        target:
-          - macos
-          - ubuntu
-          - windows
-        include:
-          - target: macos
-            os: macOS-latest
-            build-type: Release
-            extra-cmake-flags: "\"-DBUILD_PYTHON_BINDINGS=ON\""
-          - target: ubuntu
-            os: ubuntu-latest
-            build-type: Release
-            extra-cmake-flags: "\"-DBUILD_PYTHON_BINDINGS=ON\""
-          - target: windows-latest
-            build-type: Release
-            extra-cmake-flags: "\"-DBUILD_PYTHON_BINDINGS=ON\""
     runs-on: ${{ matrix.os }}
     steps:
-    - name: Checkout
-      uses: actions/checkout@v2
-      with:
-        lfs: true
-        submodules: true
+      - uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.version }}
 
-    - name: Install ninja-build tool
-      uses: seanmiddleditch/gha-setup-ninja@v3
+# jobs:
+#   build:
+#     if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
+#     strategy:
+#       fail-fast: false
+#       matrix:
+#         os: [ubuntu-20.04, windows-latest, macos-latest]
+#         target:
+#           - macos
+#           - ubuntu
+#           - windows
+#         include:
+#           - target: macos
+#             os: macOS-latest
+#             build-type: Release
+#             extra-cmake-flags: "\"-DBUILD_PYTHON_BINDINGS=ON\""
+#           - target: ubuntu
+#             os: ubuntu-latest
+#             build-type: Release
+#             extra-cmake-flags: "\"-DBUILD_PYTHON_BINDINGS=ON\""
+#           - target: windows-latest
+#             build-type: Release
+#             extra-cmake-flags: "\"-DBUILD_PYTHON_BINDINGS=ON\""
+#     runs-on: ${{ matrix.os }}
+#     steps:
+#     - name: Checkout
+#       uses: actions/checkout@v2
+#       with:
+#         lfs: true
+#         submodules: true
 
-    - name: Enable Developer Command Prompt
-      if: ${{ runner.os == 'Windows' }}
-      uses: ilammy/msvc-dev-cmd@v1.7.0
+#     - name: Install ninja-build tool
+#       uses: seanmiddleditch/gha-setup-ninja@v3
 
-    - name: Set up GCC
-      if: ${{ runner.os == 'Linux' }}
-      uses: egor-tensin/setup-gcc@v1
-      with:
-        version: 11
+#     - name: Enable Developer Command Prompt
+#       if: ${{ runner.os == 'Windows' }}
+#       uses: ilammy/msvc-dev-cmd@v1.7.0
 
-    - name: Build
-      run: |
-        cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} ${{ matrix.extra-cmake-flags }}
-        cmake --build build --config ${{ matrix.build-type }} --parallel
-        cmake --install build --prefix build/install --config ${{ matrix.build-type }}
+#     - name: Set up GCC
+#       if: ${{ runner.os == 'Linux' }}
+#       uses: egor-tensin/setup-gcc@v1
+#       with:
+#         version: 11
 
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v2
-      with:
-        name: ${{ github.event.repository.name }}-${{ matrix.target }}
-        path: build/install/bin/*
+#     - name: Build
+#       run: |
+#         cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} ${{ matrix.extra-cmake-flags }}
+#         cmake --build build --config ${{ matrix.build-type }} --parallel
+#         cmake --install build --prefix build/install --config ${{ matrix.build-type }}
 
-    - name: Compress artifacts
-      uses: vimtor/action-zip@v1
-      with:
-        files: build/install/bin/
-        dest: ${{ github.event.repository.name }}-${{ matrix.target }}.zip
+#     - name: Upload artifacts
+#       uses: actions/upload-artifact@v2
+#       with:
+#         name: ${{ github.event.repository.name }}-${{ matrix.target }}
+#         path: build/install/bin/*
 
-    - name: Release
-      uses: softprops/action-gh-release@v1
-      if: ${{ startsWith(github.ref, 'refs/tags/') }}
-      with:
-        prerelease: ${{ !startsWith(github.ref, 'refs/tags/v') || contains(github.ref, '-pre') }}
-        files: ${{ github.event.repository.name }}-${{ matrix.target }}.zip
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#     - name: Compress artifacts
+#       uses: vimtor/action-zip@v1
+#       with:
+#         files: build/install/bin/
+#         dest: ${{ github.event.repository.name }}-${{ matrix.target }}.zip
+
+#     - name: Release
+#       uses: softprops/action-gh-release@v1
+#       if: ${{ startsWith(github.ref, 'refs/tags/') }}
+#       with:
+#         prerelease: ${{ !startsWith(github.ref, 'refs/tags/v') || contains(github.ref, '-pre') }}
+#         files: ${{ github.event.repository.name }}-${{ matrix.target }}.zip
+#       env:
+#         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
