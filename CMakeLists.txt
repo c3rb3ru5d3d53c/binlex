@@ -261,6 +261,7 @@ if (BUILD_PYTHON_BINDINGS)
     target_link_libraries(pybinlex PRIVATE
         binlex::library
     )
+    install(TARGETS pybinlex DESTINATION bin)
 endif()
 
 add_custom_target(uninstall
