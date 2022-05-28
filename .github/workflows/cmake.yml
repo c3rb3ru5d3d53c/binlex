@@ -4,21 +4,33 @@ on: [push, pull_request]
 
 jobs:
   build:
-    if: ${{ github.event_name == 'pull_request' }}
-    strategy:
-      matrix:
-        os: [ubuntu-20.04, windows-latest, macos-latest]
-        include:
-          - os: macos-latest
-            build-type: Release
-            extra-cmake-flags: "\"-DBUILD_PYTHON_BINDINGS=ON\""
-          - os: ubuntu-20.04
-            build-type: Release
-            extra-cmake-flags: "\"-DBUILD_PYTHON_BINDINGS=ON\""
-          - os: windows-latest
-            build-type: Release
-            extra-cmake-flags: "\"-DBUILD_PYTHON_BINDINGS=ON\""
+    # Skip building pull requests from the same repository
+    if: ${{ github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) }}
     runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - ubuntu
+          - windows
+          - macos
+        include:
+          - target: ubuntu
+            os: ubuntu-latest
+            build-type: Release
+            # You can add flags separated by newlines here
+            extra-cmake-flags: >-
+              "-DBUILD_PYTHON_BINDINGS=ON"
+          - target: windows
+            os: windows-latest
+            build-type: Release
+            extra-cmake-flags: >-
+              "-DBUILD_PYTHON_BINDINGS=ON"
+          - target: macos
+            os: macOS-latest
+            build-type: Release
+            extra-cmake-flags: >-
+              "-DBUILD_PYTHON_BINDINGS=ON"
     steps:
     - name: Checkout
       uses: actions/checkout@v2
@@ -44,6 +56,12 @@ jobs:
         cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} ${{ matrix.extra-cmake-flags }}
         cmake --build build --config ${{ matrix.build-type }} --parallel
         cmake --install build --prefix build/install --config ${{ matrix.build-type }}
+    
+    - name: Test
+      # When using add_test in CMake you can do this to trigger the tests
+      # ctest --output-on-failure --test-dir build/tests -C ${{ matrix.build-type }}
+      run: |
+        echo TODO
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v2
