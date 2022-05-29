@@ -289,8 +289,7 @@ if (LINUX)
 endif()
 
 if (APPLE)
-    set(CPACK_BUNDLE_NAME "${CPACK_PACKAGE_NAME}-${PROJECT_VERSION}")
-    set(CPACK_GENERATOR DragNDrop Bundle PackageMaker)
+    set(CPACK_GENERATOR DragNDrop PackageMaker)
 endif()
 
 if (WINDOWS)
