@@ -7,6 +7,12 @@ option(BUILD_PYTHON_BINDINGS "Build python bindings (pybinlex)" OFF)
 # Linking a pybind11 module with a static library without -fPIC will error
 if(BUILD_PYTHON_BINDINGS)
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+    if(NOT PYBIND11_PYTHON_VERSION)
+        execute_process(
+            COMMAND python3 -c "import platform; print(platform.python_version(), end='')"
+            OUTPUT_VARIABLE PYTHON_VERSION)
+        set(PYBIND11_PYTHON_VERSION "${PYTHON_VERSION}")
+    endif()
 endif()
 
 if(WIN32)

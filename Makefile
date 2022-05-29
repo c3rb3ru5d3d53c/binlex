@@ -21,7 +21,6 @@ python: git-unsafe
 		cmake -S ../ \
 			-B . \
 			-DBUILD_PYTHON_BINDINGS=true \
-			-DPYBIND11_PYTHON_VERSION=`python -c "import platform; print(platform.python_version())"` \
 			${args} && \
 		cmake --build . --config ${config} -- -j ${threads}
 
