@@ -9,7 +9,8 @@ import subprocess
 zip_files = [
     'tests/pe.zip',
     'tests/raw.zip',
-    'tests/elf.zip'
+    'tests/elf.zip',
+    'tests/ida_baseline.zip'
 ]
 
 pe_files = [
