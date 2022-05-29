@@ -93,6 +93,8 @@ jobs:
           build/*.dll
           build/*.tar.gz
           build/*.rpm
+          build/install/bin/*
+          build/install/lib/*
 
     - name: Compress artifacts
       uses: vimtor/action-zip@v1
