@@ -10,7 +10,6 @@ zip_files = [
     'tests/pe.zip',
     'tests/raw.zip',
     'tests/elf.zip',
-    'tests/ida_baseline.zip'
 ]
 
 pe_files = [
@@ -139,6 +138,9 @@ for zip_file in zip_files:
     z.setpassword(b'infected')
     z.extractall("tests/")
     print("[*] {}".format(zip_file))
+
+z = zipfile.ZipFile('tests/ida_baseline.zip', 'r')
+z.extractall('tests/')
 
 for pe_file in pe_files:
     print("[-] {}".format(pe_file))
