@@ -289,7 +289,7 @@ if (LINUX)
 endif()
 
 if (APPLE)
-    set(CPACK_GENERATOR DragNDrop PackageMaker)
+    set(CPACK_GENERATOR DragNDrop)
 endif()
 
 if (WINDOWS)
