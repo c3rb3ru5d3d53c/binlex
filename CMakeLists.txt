@@ -205,6 +205,8 @@ target_link_libraries(binlex PUBLIC
     Threads::Threads
 )
 
+target_compile_features(binlex PUBLIC cxx_std_11)
+
 add_library(binlex::library ALIAS binlex)
 
 if(MSVC)
@@ -241,6 +243,8 @@ add_executable(blyara ${SOURCES_BLYARA})
 
 target_include_directories(blyara PRIVATE include)
 
+target_compile_features(blyara PRIVATE cxx_std_11)
+
 install(TARGETS blyara DESTINATION bin)
 
 if (BUILD_PYTHON_BINDINGS)
@@ -257,6 +261,7 @@ if (BUILD_PYTHON_BINDINGS)
     target_link_libraries(pybinlex PRIVATE
         binlex::library
     )
+    install(TARGETS pybinlex DESTINATION bin)
 endif()
 
 add_custom_target(uninstall

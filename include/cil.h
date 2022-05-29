@@ -9,7 +9,7 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <assert.h>
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__APPLE__)
 #include <byteswap.h>
 #endif // _WIN32
 #include <ctype.h>

@@ -14,7 +14,7 @@ While the C++ API allows developers to get creative with their own detection sol
 
 To help combat malware, we firmly commit our work to the public domain for the greater good of the world.
 
-[![Build status](https://ci.appveyor.com/api/projects/status/wa423scoigl7xh7x/branch/master?svg=true)](https://ci.appveyor.com/project/c3rb3ru5d3d53c/binlex)
+![build](https://github.com/c3rb3ru5d3d53c/binlex/actions/workflows/cmake.yml/badge.svg?branch=master)
 ![OS Linux](https://img.shields.io/badge/os-linux-brightgreen)
 ![OS Windows](https://img.shields.io/badge/os-windows-brightgreen)
 [![GitHub stars](https://img.shields.io/github/stars/c3rb3ru5d3d53c/binlex)](https://github.com/c3rb3ru5d3d53c/binlex/stargazers)
