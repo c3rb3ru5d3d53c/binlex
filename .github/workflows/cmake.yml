@@ -70,13 +70,13 @@ jobs:
         cmake --build build --config ${{ matrix.build-type }} --parallel
         cmake --install build --prefix build/install --config ${{ matrix.build-type }}
 
-    - name: Test
-      run: |
-        python3 test.py
-
-    # - name: Package
+    # - name: Test
     #   run: |
-    #     cd build/ && cpack
+    #     python3 test.py
+
+    - name: Package
+      run: |
+        cd build/ && cpack
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v2
@@ -91,8 +91,7 @@ jobs:
           build/*.dll
           build/*.tar.gz
           build/*.rpm
-          build/install/bin/*
-          build/install/lib/*
+          build/*.a
 
     - name: Compress artifacts
       uses: vimtor/action-zip@v1
