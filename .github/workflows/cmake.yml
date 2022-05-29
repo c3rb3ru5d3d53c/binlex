@@ -71,10 +71,8 @@ jobs:
         cmake --install build --prefix build/install --config ${{ matrix.build-type }}
 
     - name: Test
-      # When using add_test in CMake you can do this to trigger the tests
-      # ctest --output-on-failure --test-dir build/tests -C ${{ matrix.build-type }}
       run: |
-        echo TODO
+        python3 test.py
 
     # - name: Package
     #   run: |
