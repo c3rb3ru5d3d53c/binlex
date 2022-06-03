@@ -17,6 +17,7 @@ To help combat malware, we firmly commit our work to the public domain for the g
 ![build](https://github.com/c3rb3ru5d3d53c/binlex/actions/workflows/cmake.yml/badge.svg?branch=master)
 ![OS Linux](https://img.shields.io/badge/os-linux-brightgreen)
 ![OS Windows](https://img.shields.io/badge/os-windows-brightgreen)
+![OS MacOS](https://img.shields.io/badge/os-macos-brightgreen)
 [![GitHub stars](https://img.shields.io/github/stars/c3rb3ru5d3d53c/binlex)](https://github.com/c3rb3ru5d3d53c/binlex/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/c3rb3ru5d3d53c/binlex)](https://github.com/c3rb3ru5d3d53c/binlex/network)
 [![Discord Status](https://img.shields.io/discord/915569998469144636?logo=discord)](https://discord.gg/UDBfRpxV3B)
