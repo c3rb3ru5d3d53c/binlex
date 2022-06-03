@@ -10,9 +10,6 @@ import platform
 from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext
 
-project_root = os.getenv('BUILD_DIR')
-build_temp = os.path.join(os.getenv('BUILD_DIR'), 'build/')
-
 __version__ = "1.1.1"
 __author__ = "@c3rb3ru5d3d53c"
 
@@ -23,36 +20,29 @@ def in_virtualenv():
     return get_base_prefix_compat() != sys.prefix
 
 class CMakeExtension(Extension):
-    def __init__(self, name, sources=[]):
-        super().__init__(name = name, sources = sources)
+    def __init__(self, name, sourcedir=""):
+        Extension.__init__(self, name, sources=[])
+        self.sourcedir = os.path.abspath(sourcedir)
 
 class CMakeBuild(build_ext):
     def build_extension(self, ext):
         extdir = os.path.abspath(os.path.dirname(self.get_ext_fullpath(ext.name)))
         if not extdir.endswith(os.path.sep):
             extdir += os.path.sep
+        debug = int(os.environ.get("DEBUG", 0)) if self.debug is None else self.debug
+        cfg = "Debug" if debug else "Release"
         cmake_args = [
             f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}",
             f"-DPYTHON_EXECUTABLE={sys.executable}",
-            "-DCMAKE_BUILD_TYPE=Release",
-            '-DBUILD_PYTHON_BINDINGS=true',
-            f'-DPYBIND11_PYTHON_VERSION={__version__}'
+            f"-DCMAKE_BUILD_TYPE={cfg}",
+            '-DBUILD_PYTHON_BINDINGS=ON'
         ]
+        build_temp = os.path.join(self.build_temp, ext.name)
         if not os.path.exists(build_temp):
             os.makedirs(build_temp)
-        subprocess.check_call(
-            ["cmake", project_root] + cmake_args, cwd=build_temp
-        )
-        subprocess.check_call(
-            ["cmake", "--build", "."], cwd=build_temp
-        )
-        if platform.system() == 'Linux' and in_virtualenv() is False:
-            subprocess.check_call(
-                ["make", "install"], cwd=build_temp
-            )
-            subprocess.check_call(
-                ["ldconfig"], cwd=build_temp
-            )
+        subprocess.check_call(["cmake", "-B", "build", ext.sourcedir] + cmake_args, cwd=build_temp)
+        subprocess.check_call(["cmake", "--build", "build", "--config", cfg], cwd=build_temp)
+        subprocess.check_call(["cmake", "--install", "build", "--prefix", "build/install", "--config", cfg], cwd=build_temp)
 
 setup(
     name="pybinlex",
