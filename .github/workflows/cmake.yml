@@ -62,13 +62,14 @@ jobs:
       if: ${{ runner.os == 'Linux' }}
       uses: egor-tensin/setup-gcc@v1
       with:
-        version: 11
+        version: 9
 
     - name: Build
       run: |
         cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} ${{ matrix.extra-cmake-flags }}
         cmake --build build --config ${{ matrix.build-type }} --parallel
         cmake --install build --prefix build/install --config ${{ matrix.build-type }}
+        python3 -m pip wheel -v -w build/ .
 
     # - name: Test
     #   run: |
