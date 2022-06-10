@@ -185,7 +185,7 @@ add_library(binlex
     src/common.cpp
     src/blelf.cpp
     src/auto.cpp
-    src/decompilerbase.cpp
+    src/disassemblerbase.cpp
     src/disassembler.cpp
     src/pe-dotnet.cpp
     src/cil.cpp

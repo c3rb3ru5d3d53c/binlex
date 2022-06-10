@@ -14,7 +14,7 @@ cs_mode Disassembler::mode;
 	? (uint64_t)((insn).detail->x86.operands[0].imm) \
 	: (((insn).address + (insn).size) + (uint64_t)(insn).detail->x86.disp))
 
-Disassembler::Disassembler(const binlex::File &firef) : DecompilerBase(firef) {
+Disassembler::Disassembler(const binlex::File &firef) : DisassemblerBase(firef) {
     // Set Decompiler Architecture
     switch(file_reference.binary_arch){
         case BINARY_ARCH_X86:

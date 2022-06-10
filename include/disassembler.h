@@ -16,7 +16,7 @@
 #include "common.h"
 #include "json.h"
 #include "file.h"
-#include "decompilerbase.h"
+#include "disassemblerbase.h"
 
 #if defined(__linux__) || defined(__APPLE__)
 #include <pthread.h>
@@ -48,7 +48,7 @@ typedef enum DISASSEMBLER_OPERAND_TYPE {
 using json = nlohmann::json;
 
 namespace binlex {
-    class Disassembler : public DecompilerBase{
+    class Disassembler : public DisassemblerBase{
     private:
         typedef struct disasm_t {
             csh handle;
