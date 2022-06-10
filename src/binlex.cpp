@@ -51,7 +51,7 @@ int main(int argc, char **argv){
         start_timeout(g_args.options.timeout);
         #endif
     }
-    if (g_args.options.mode.c_str() == NULL){
+    if (g_args.options.mode.empty() == true){
         g_args.print_help();
         return EXIT_FAILURE;
     }
