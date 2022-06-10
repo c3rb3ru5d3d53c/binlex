@@ -1,27 +1,27 @@
-#include "decompilerbase.h"
+#include "disassemblerbase.h"
 
 using namespace binlex;
 
-DecompilerBase::DecompilerBase(const binlex::File &firef) : file_reference(firef) {
+DisassemblerBase::DisassemblerBase(const binlex::File &firef) : file_reference(firef) {
 }
 
-void DecompilerBase::py_SetThreads(uint threads) {
+void DisassemblerBase::py_SetThreads(uint threads) {
     g_args.options.threads = threads;
 }
 
-void DecompilerBase::py_SetCorpus(const char *corpus) {
+void DisassemblerBase::py_SetCorpus(const char *corpus) {
     g_args.options.corpus = corpus;
 }
 
-void DecompilerBase::py_SetTags(const vector<string> &tags){
+void DisassemblerBase::py_SetTags(const vector<string> &tags){
     g_args.options.tags = set<string>(tags.begin(), tags.end());
 }
 
-void DecompilerBase::py_SetMode(string mode){
+void DisassemblerBase::py_SetMode(string mode){
     g_args.options.mode = mode;
 }
 
-void DecompilerBase::WriteTraits(){
+void DisassemblerBase::WriteTraits(){
     std::ofstream output_stream;
     if (g_args.options.output != NULL) {
         output_stream.open(g_args.options.output);
