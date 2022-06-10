@@ -186,7 +186,6 @@ add_library(binlex
     src/blelf.cpp
     src/auto.cpp
     src/decompilerbase.cpp
-    src/decompiler.cpp
     src/disassembler.cpp
     src/pe-dotnet.cpp
     src/cil.cpp
@@ -252,7 +251,7 @@ if (BUILD_PYTHON_BINDINGS)
         bindings/python/file.cpp
         bindings/python/pe.cpp
         bindings/python/raw.cpp
-        bindings/python/decompiler.cpp
+        bindings/python/disassembler.cpp
         bindings/python/pybinlex.cpp
     )
     target_link_libraries(pybinlex PRIVATE

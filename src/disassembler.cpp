@@ -139,7 +139,7 @@ void * Disassembler::CreateTraitsForSection(uint index) {
         myself.code = (uint8_t *)((uint8_t *)sections[index].data + address);
         myself.code_size = sections[index].data_size + address;
 
-        bool block = IsBlock(sections[index].blocks, address);
+        //bool block = IsBlock(sections[index].blocks, address);
         bool function = IsFunction(sections[index].functions, address);
         uint suspicious_instructions = 0;
 
