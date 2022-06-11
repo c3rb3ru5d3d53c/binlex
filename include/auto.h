@@ -8,7 +8,7 @@
 #include "pe.h"
 #include "pe-dotnet.h"
 #include "blelf.h"
-#include "decompiler.h"
+#include "disassembler.h"
 #include "cil.h"
 #include "common.h"
 #include <LIEF/LIEF.hpp>

@@ -80,9 +80,9 @@ int AutoLex::ProcessFile(char *file_path){
                 characteristics.mode == CS_MODE_64){
                     g_args.options.mode = "pe:x86_64";
             }
-            Decompiler decompiler(pe);
-            decompiler.Decompile();
-            decompiler.WriteTraits();
+            Disassembler disassembler(pe);
+            disassembler.Disassemble();
+            disassembler.WriteTraits();
         }
     } else if (characteristics.format == LIEF::FORMAT_ELF){
         ELF elf;
@@ -90,8 +90,7 @@ int AutoLex::ProcessFile(char *file_path){
         if (!elf.ReadFile(file_path)){
             return EXIT_FAILURE;
         }
-
-        Decompiler decompiler(elf);
+        Disassembler disassembler(elf);
 
         if (characteristics.arch == CS_ARCH_X86 &&
             characteristics.mode == CS_MODE_32){
@@ -101,8 +100,8 @@ int AutoLex::ProcessFile(char *file_path){
             characteristics.mode == CS_MODE_64){
                 g_args.options.mode = "elf:x86_64";
         }
-        decompiler.Decompile();
-        decompiler.WriteTraits();
+        disassembler.Disassemble();
+        disassembler.WriteTraits();
     }
     return EXIT_SUCCESS;
 }
