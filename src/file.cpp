@@ -12,7 +12,7 @@ void File::CalculateFileHashes(const vector<uint8_t> &data){
     sha256 = GetSHA256(&data[0], data.size());
 }
 
-bool File::SetArchitecture(int arch, int mode){
+bool File::SetArchitecture(BINARY_ARCH arch, BINARY_MODE mode){
     switch(arch){
         case BINARY_ARCH_X86:
         case BINARY_ARCH_X86_64:

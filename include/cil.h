@@ -18,7 +18,7 @@
 #include <vector>
 #include <set>
 #include <map>
-#include "decompilerbase.h"
+#include "disassemblerbase.h"
 #include "json.h"
 
 // Bytecode Reference: https://en.wikipedia.org/wiki/List_of_CIL_instructions
@@ -269,7 +269,7 @@
 using namespace std;
 
 namespace binlex {
-    class CILDecompiler : public DecompilerBase {
+    class CILDecompiler : public DisassemblerBase {
         /*
         This class is used to decompile CIL/.NET bytecode.
         */

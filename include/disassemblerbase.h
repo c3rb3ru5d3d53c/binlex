@@ -1,5 +1,5 @@
-#ifndef DECOMPILERBASE_H
-#define DECOMPILERBASE_H
+#ifndef DISASSEMBLERBASE_H
+#define DISASSEMBLERBASE_H
 
 #include <stdint.h>
 #include <fstream>
@@ -11,7 +11,7 @@
 using json = nlohmann::json;
 
 namespace binlex {
-    class DecompilerBase : public Common {
+    class DisassemblerBase : public Common {
         /**
          * This class shares common methods between all decompilers.
          */
@@ -21,7 +21,7 @@ namespace binlex {
              * Decompiler constructor requiring file object.
              * @param fileref File object
              */
-            DecompilerBase(const binlex::File &firef);
+            DisassemblerBase(const binlex::File &firef);
             /**
              * Get Traits as JSON
              * @return list of traits json objects

@@ -15,7 +15,7 @@
 #include "pe-dotnet.h"
 #include "blelf.h"
 #include "auto.h"
-#include "decompiler.h"
+#include "disassembler.h"
 
 #ifdef _WIN32
 #pragma comment(lib, "capstone")
@@ -51,7 +51,7 @@ int main(int argc, char **argv){
         start_timeout(g_args.options.timeout);
         #endif
     }
-    if (g_args.options.mode.c_str() == NULL){
+    if (g_args.options.mode.empty() == true){
         g_args.print_help();
         return EXIT_FAILURE;
     }
@@ -69,9 +69,9 @@ int main(int argc, char **argv){
             return EXIT_FAILURE;
         }
         PRINT_DEBUG("[binlex.cpp] number of total executable sections = %u\n", elf64.total_exec_sections);
-        Decompiler decompiler(elf64);
-        decompiler.Decompile();
-        decompiler.WriteTraits();
+        Disassembler disassembler(elf64);
+        disassembler.Disassemble();
+        disassembler.WriteTraits();
         return EXIT_SUCCESS;
     }
     if (g_args.options.mode == "elf:x86" &&
@@ -82,9 +82,9 @@ int main(int argc, char **argv){
             return EXIT_FAILURE;
         }
         PRINT_DEBUG("[binlex.cpp] number of total executable sections = %u\n", elf32.total_exec_sections);
-        Decompiler decompiler(elf32);
-        decompiler.Decompile();
-        decompiler.WriteTraits();
+        Disassembler disassembler(elf32);
+        disassembler.Disassemble();
+        disassembler.WriteTraits();
         return EXIT_SUCCESS;
     }
     if (g_args.options.mode == "pe:cil" &&
@@ -115,9 +115,9 @@ int main(int argc, char **argv){
             return EXIT_FAILURE;
         }
         PRINT_DEBUG("[binlex.cpp] number of total sections = %u\n", pe32.total_exec_sections);
-        Decompiler decompiler(pe32);
-        decompiler.Decompile();
-        decompiler.WriteTraits();
+        Disassembler disassembler(pe32);
+        disassembler.Disassemble();
+        disassembler.WriteTraits();
         return EXIT_SUCCESS;
     }
     if (g_args.options.mode == "pe:x86_64" &&
@@ -128,9 +128,9 @@ int main(int argc, char **argv){
             return EXIT_FAILURE;
         }
         PRINT_DEBUG("[binlex.cpp] number of total executable sections = %u\n", pe64.total_exec_sections);
-        Decompiler decompiler(pe64);
-        decompiler.Decompile();
-        decompiler.WriteTraits();
+        Disassembler disassembler(pe64);
+        disassembler.Disassemble();
+        disassembler.WriteTraits();
         return EXIT_SUCCESS;
     }
     if (g_args.options.mode == "raw:x86" &&
@@ -140,9 +140,9 @@ int main(int argc, char **argv){
         if (rawx86.ReadFile(g_args.options.input) == false){
             return EXIT_FAILURE;
         }
-        Decompiler decompiler(rawx86);
-        decompiler.Decompile();
-        decompiler.WriteTraits();
+        Disassembler disassembler(rawx86);
+        disassembler.Disassemble();
+        disassembler.WriteTraits();
         return EXIT_SUCCESS;
     }
     if (g_args.options.mode == "raw:x86_64" &&
@@ -152,9 +152,9 @@ int main(int argc, char **argv){
         if (rawx86_64.ReadFile(g_args.options.input) == false){
             return EXIT_FAILURE;
         }
-        Decompiler decompiler(rawx86_64);
-        decompiler.Decompile();
-        decompiler.WriteTraits();
+        Disassembler disassembler(rawx86_64);
+        disassembler.Disassemble();
+        disassembler.WriteTraits();
         return EXIT_SUCCESS;
     }
     if (g_args.options.mode == "raw:cil" &&
