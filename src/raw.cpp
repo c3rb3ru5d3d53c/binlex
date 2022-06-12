@@ -3,6 +3,7 @@
 using namespace binlex;
 
 Raw::Raw(){
+    total_exec_sections = 0;
     for (int i = 0; i < BINARY_MAX_SECTIONS; i++){
         sections[i].offset = 0;
         sections[i].size = 0;
@@ -50,8 +51,9 @@ bool Raw::ReadVector(const std::vector<uint8_t> &data){
 
 Raw::~Raw(){
     for (uint32_t i = 0; i < total_exec_sections; i++){
-        free(sections[i].data);
         sections[i].size = 0;
         sections[i].offset = 0;
+        free(sections[i].data);
+        sections[i].functions.clear();
     }
 }
