@@ -3,7 +3,7 @@
 using namespace binlex;
 using json = nlohmann::json;
 
-CILDecompiler::CILDecompiler(const binlex::File &firef) : DecompilerBase(firef) {
+CILDecompiler::CILDecompiler(const binlex::File &firef) : DisassemblerBase(firef) {
     type = CIL_DECOMPILER_TYPE_ALL;
     for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
         sections[i].offset = 0;
