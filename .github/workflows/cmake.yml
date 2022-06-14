@@ -69,11 +69,11 @@ jobs:
         cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} ${{ matrix.extra-cmake-flags }}
         cmake --build build --config ${{ matrix.build-type }} --parallel
         cmake --install build --prefix build/install --config ${{ matrix.build-type }}
-        python3 -m pip wheel -v -w ${{ github.workspace }}/build/ .
 
     # - name: Test
     #   run: |
     #     python3 test.py
+    # python3 -m pip wheel -v -w ${{ github.workspace }}/build/ .
 
     - name: Package
       run: |
