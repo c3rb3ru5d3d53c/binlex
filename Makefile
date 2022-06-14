@@ -4,30 +4,24 @@
 
 threads=1
 config=Release
+PWD=$(shell pwd)
 
-all: python docs
+all: build docs
 
-cli: git-unsafe
-	mkdir -p build/
-	cd build/ && \
-		cmake -S ../ \
-			-B . \
-			${args} && \
-		cmake --build . --config ${config} -- -j ${threads}
+check-config:
+	@echo "---check-config---"
+	@if [ -z `echo ${config} | grep -P '(Release|Debug)'` ]; then \
+		echo "[x] config parameter ${config} is invalid" 1>&2; \
+		exit 1; \
+	fi
 
-python: git-unsafe
-	mkdir -p build/
-	cd build/ && \
-		cmake -S ../ \
-			-B . \
-			-DBUILD_PYTHON_BINDINGS=true \
-			${args} && \
-		cmake --build . --config ${config} -- -j ${threads}
+build: check-config
+	cmake -B build -DCMAKE_BUILD_TYPE=${config} ${args}
+	cmake --build build --config ${config} --parallel
+	cmake --install build --prefix build/install --config ${config}
 
 python-whl:
-	virtualenv -p python3 venv/
-	bash -c "source venv/bin/activate; BUILD_DIR=`pwd` python3 -m pip wheel -v -w build/ ."
-	rm -rf venv/
+	python3 -m pip wheel -v -w ${PWD}/build/ .
 
 docs:
 	mkdir -p build/docs/html/docs/
