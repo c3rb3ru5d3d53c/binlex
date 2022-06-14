@@ -35,6 +35,7 @@ bool ELF::ReadVector(const std::vector<uint8_t> &data){
         }
     }
     CalculateFileHashes(data);
+    binary_type = BINARY_TYPE_ELF;
     return ParseSections();
 }
 

@@ -36,12 +36,6 @@ namespace binlex{
              * @return int result
              */
             int GetFileSize(FILE *fd);
-            struct Section {
-                void *data;
-                int size;
-                uint offset;
-            };
-            //struct Section sections[BINARY_MAX_SECTIONS];
             BINLEX_EXPORT Raw();
             /**
              * Read data.
