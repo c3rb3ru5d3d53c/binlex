@@ -1,9 +1,58 @@
 #!/usr/bin/env python
 
-import json
-import sys
 import os
+import sys
+import json
+import zipfile
+import subprocess
 
+zip_files = [
+    'tests/pe.zip',
+    'tests/raw.zip',
+    'tests/elf.zip',
+]
+
+pe_files = [
+    'tests/pe/pe.cil.0',
+    'tests/pe/pe.cil.1',
+    'tests/pe/emotet.x86',
+    'tests/pe/pe.trickbot.x86',
+    'tests/pe/pe.trickbot.x86_64',
+    'tests/pe/pe.x86',
+    'tests/pe/pe.x86_64'
+]
+
+elf_files = [
+    'tests/elf/elf.x86',
+    'tests/elf/elf.x86_64'
+]
+
+coverage_files = [
+    {
+        'ida': 'tests/ida_baseline/elf.x86.ida.json',
+        'binlex': 'tests/elf/elf.x86.json'
+    },
+    {
+        'ida': 'tests/ida_baseline/elf.x86_64.ida.json',
+        'binlex': 'tests/elf/elf.x86_64.json'
+    },
+    {
+        'ida': 'tests/ida_baseline/pe.trickbot.x86.ida.json',
+        'binlex': 'tests/pe/pe.trickbot.x86.json'
+    },
+    {
+        'ida': 'tests/ida_baseline/pe.trickbot.x86_64.ida.json',
+        'binlex': 'tests/pe/pe.trickbot.x86_64.json'
+    },
+    {
+        'ida': 'tests/ida_baseline/pe.x86.ida.json',
+        'binlex': 'tests/pe/pe.x86.json'
+    },
+    {
+        'ida': 'tests/ida_baseline/pe.x86_64.ida.json',
+        'binlex': 'tests/pe/pe.x86_64.json'
+    }
+]
 
 def noramilize_binlex_data(binlex_flat_file):
     # Parse binlex data into three sets
@@ -67,7 +116,7 @@ def calculate_coverage(ida_json_file, binlex_flat_file):
         if binlex_bb_code_map[bb] != ida_bb_code_map[bb]:
             total_missmatch_bb += 1
 
-    return {'total_missing_functions':total_missing_functions, 
+    return {'total_missing_functions':total_missing_functions,
             'total_functions':total_functions,
             'function_coverage':function_coverage,
             'total_missing_bb':total_missing_bb,
@@ -77,30 +126,39 @@ def calculate_coverage(ida_json_file, binlex_flat_file):
             'extra_bb':total_extra_bb
             }
 
-
-def main():
-    if len(sys.argv) != 3:
-        print(f"\nArgument Error! - Please feed me exactly: \n\n\t{sys.argv[0]} <path_to_ida_json_file> <path_to_binlex_flat_file>\n")
-        sys.exit(1)
-
-    coverage = calculate_coverage(sys.argv[1], sys.argv[2])
-
+def print_coverage(coverage):
     print(f"Function coverage: {coverage.get('function_coverage')}%  ( Missing {coverage.get('total_missing_functions')} from total {coverage.get('total_functions')} )")
     print(f"Basic block coverage: {coverage.get('bb_coverage')}%  ( Missing {coverage.get('total_missing_bb')} from total {coverage.get('total_bb')} )")
     print(f"Basic block errors: {coverage.get('total_missmatch_bb')}")
     print(f"Extra blocks from binlex: {coverage.get('extra_bb')}")
 
+for zip_file in zip_files:
+    print("[-] {}".format(zip_file))
+    z = zipfile.ZipFile(zip_file,"r")
+    z.setpassword(b'infected')
+    z.extractall("tests/")
+    print("[*] {}".format(zip_file))
 
+z = zipfile.ZipFile('tests/ida_baseline.zip', 'r')
+z.extractall('tests/')
 
+for pe_file in pe_files:
+    print("[-] {}".format(pe_file))
+    command = [
+        'build/binlex',
+        '-i', pe_file,
+        '-o', os.path.join(os.path.dirname(pe_file),os.path.basename(pe_file) + '.json')]
+    subprocess.run(command)
+    print("[*] {}".format(pe_file))
 
-if __name__ == "__main__":
-    main()
+for elf_file in elf_files:
+    print("[-] {}".format(elf_file))
+    command = [
+        'build/binlex',
+        '-i', elf_file,
+        '-o', os.path.join(os.path.dirname(elf_file),os.path.basename(elf_file) + '.json')]
+    subprocess.run(command)
+    print("[*] {}".format(elf_file))
 
-
-
-
-
-
-
-
-
+for coverage_file in coverage_files:
+    print_coverage(calculate_coverage(coverage_file['ida'], coverage_file['binlex']))

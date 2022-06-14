@@ -30,7 +30,7 @@ namespace binlex {
 				set<uint64_t> functions;
 			};
 			struct Section sections[BINARY_MAX_SECTIONS];
-            uint32_t total_exec_sections;
+            uint32_t total_exec_sections = 0;
 			/**
 			 * This method manually sets the binary architecture and its mode.
 			 * @param arch BINARY_ARCH
