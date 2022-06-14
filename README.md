@@ -191,8 +191,6 @@ cd scripts/
 ./mongodb-createuser.sh mongodb-router1 <username> <password>
 ```
 
-If you have a VERY large team, you can script creation of these accounts.
-
 ## Test Files
 
 - To download all the test samples do the command `git lfs fetch`
