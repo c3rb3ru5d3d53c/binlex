@@ -17,6 +17,7 @@ To help combat malware, we firmly commit our work to the public domain for the g
 ![build](https://github.com/c3rb3ru5d3d53c/binlex/actions/workflows/cmake.yml/badge.svg?branch=master)
 ![OS Linux](https://img.shields.io/badge/os-linux-brightgreen)
 ![OS Windows](https://img.shields.io/badge/os-windows-brightgreen)
+![OS MacOS](https://img.shields.io/badge/os-macos-brightgreen)
 [![GitHub stars](https://img.shields.io/github/stars/c3rb3ru5d3d53c/binlex)](https://github.com/c3rb3ru5d3d53c/binlex/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/c3rb3ru5d3d53c/binlex)](https://github.com/c3rb3ru5d3d53c/binlex/network)
 [![Discord Status](https://img.shields.io/discord/915569998469144636?logo=discord)](https://discord.gg/UDBfRpxV3B)
@@ -49,7 +50,9 @@ Get slides [here](docs/oalabs.pdf).
 
 ## Installation
 
-**Dependencies:**
+This part of the guide will show you how to install and use `binlex`.
+
+### Dependencies
 
 To get started you will need the following dependencies for `binlex`.
 
@@ -66,7 +69,7 @@ cd binlex/
 
 Once you have installed, cloned and changed your directory to the project directory, we can continue with installation.
 
-**From Source:**
+### From Source
 
 If you want to compile and install via `make install` run the following commands:
 
@@ -78,35 +81,15 @@ sudo make install
 binlex -m auto -i tests/elf/elf.x86
 ```
 
-**Binary Releases:**
+### Binary Releases
 
 See the [`releases`](https://github.com/c3rb3ru5d3d53c/binlex/releases) page.
 
-If you need the bleeding edge binaries you can download them from our AppVeyor CI/CD [`here`](https://ci.appveyor.com/project/c3rb3ru5d3d53c/binlex/branch/master).
+If you need the bleeding edge binaries you can download them from our GitHub Actions [`here`](https://github.com/c3rb3ru5d3d53c/binlex/actions).
 
 *NOTE: bleeding edge binaries are subject to bugs, if you encounter one, please let us know!*
 
-**Test Files:**
-
-- To download all the test samples do the command `git lfs fetch`
-- ZIP files in the `tests/` directory can then be extracted using the password `infected`
-
-*NOTE: The `tests/` directory contains malware, we assume you know what you are doing.*
-
-To download individual `git-lfs` files from a relative path, you can use the following `git` alias in `~/.gitconfig`:
-
-```ini
-[alias]
-download = "!ROOT=$(git rev-parse --show-toplevel); cd $ROOT; git lfs pull --include $GIT_PREFIX$1; cd $ROOT/$GIT_PREFIX"
-```
-
-You will then be able to do the following:
-
-```bash
-git download tests/pe/pe.zip
-```
-
-**Building Packages:**
+### Building Packages
 
 Additionally, another option is to build Debian binary packages for and install those.
 
@@ -122,7 +105,7 @@ binlex -m elf:x86 -i tests/elf/elf.x86
 
 You will then be provided with `.deb`, `.rpm` and `.tar.gz` packages for `binlex`.
 
-**Building Python Bindings:**
+### Building Python Bindings
 
 To get started using `pybinlex`:
 ```bash
@@ -138,7 +121,7 @@ python3
 
 If you wish to compile the bindings with `cmake`:
 ```bash
-make python
+make config=Release threads=4 args=-DBUILD_PYTHON_BINDINGS=ON
 ```
 
 *NOTE: we use `pybind11` and support for `python3.9` is experimental.*
@@ -147,7 +130,7 @@ Examples of how to use `pybinlex` can be found in `tests/tests.py`.
 
 ## Building Binlex Platform:
 
-**Install Dependencies:**
+### Install Dependencies
 
 ```bash
 sudo apt install docker.io make
@@ -156,7 +139,7 @@ sudo systemctl enable docker
 reboot # ensures your user is added to the docker group
 ```
 
-**Building Containers:**
+### Building Containers
 
 ```bash
 make docker        # generate docker-compose.yml and config files
@@ -171,7 +154,7 @@ If you wish to change the auto-generated initial username and passwords, you can
 
 To see what parameters are available to you, run `./docker.sh --help`.
 
-**Platform URLs:**
+### Platform URLs
 
 - HTTP API `https://127.0.0.1:8443` (API Docs)
 - RabbitMQ `https://127.0.0.1:15672/` (Messaging)
@@ -180,7 +163,7 @@ To see what parameters are available to you, run `./docker.sh --help`.
  - User `mongodb://binlex:<generated-password>@127.0.0.1/?authSource=binlex` (for trait collection)
  - Admin `mongodb://admin:<generated-password>@127.0.0.1` (for administration)
 
-__Example HTTP API Requests:__
+### Example HTTP API Requests
 ```bash
 # Get Version
 curl --insecure -H "X-API-Key: <key>" https://127.0.0.1:8443/binlex/api/v1/version
@@ -208,7 +191,25 @@ cd scripts/
 ./mongodb-createuser.sh mongodb-router1 <username> <password>
 ```
 
-If you have a VERY large team, you can script creation of these accounts.
+## Test Files
+
+- To download all the test samples do the command `git lfs fetch`
+- ZIP files in the `tests/` directory can then be extracted using the password `infected`
+
+*NOTE: The `tests/` directory contains malware, we assume you know what you are doing.*
+
+To download individual `git-lfs` files from a relative path, you can use the following `git` alias in `~/.gitconfig`:
+
+```ini
+[alias]
+download = "!ROOT=$(git rev-parse --show-toplevel); cd $ROOT; git lfs pull --include $GIT_PREFIX$1; cd $ROOT/$GIT_PREFIX"
+```
+
+You will then be able to do the following:
+
+```bash
+git download tests/pe/pe.zip
+```
 
 ## CLI Usage
 
@@ -217,7 +218,6 @@ binlex v1.1.1 - A Binary Genetic Traits Lexer
   -i  --input           input file              (required)
   -m  --mode            set mode                (optional)
   -lm --list-modes      list modes              (optional)
-      --instructions    include insn traits     (optional)
   -c  --corpus          corpus name             (optional)
   -g  --tag             add a tag               (optional)
                         (can be specified multiple times)
@@ -231,7 +231,7 @@ binlex v1.1.1 - A Binary Genetic Traits Lexer
 Author: @c3rb3ru5d3d53c
 ```
 
-**Supported Modes**
+### Supported Modes
 
 - `elf:x86`
 - `elf:x86_64`
@@ -247,7 +247,7 @@ Author: @c3rb3ru5d3d53c
 
 *NOTE: The `auto` mode cannot be used on shellcode.*
 
-**Advanced**
+### Advanced
 
 If you are hunting using `binlex` you can use `jq` to your advantage for advanced searches.
 
@@ -328,15 +328,6 @@ build/binlex -m auto -i tests/pe/pe.emotet.x86 -c malware -g malware:emotet -g m
 }
 ```
 
-If you have terabytes of executable files, we can leverage the power of `parallel` to generate traits for us.
-
-```bash
-make traits source=samples/malware/pe/x32/ dest=dist/ type=malware format=pe arch=x86 threads=4
-make traits-combine source=dist/ dest=dist/ type=malware format=pe arch=x86 threads=4
-```
-
-It also allows you to name your type of dataset, i.e. goodware/malware/riskware/pua etc...
-
 With `binlex` it is up to you to remove goodware traits from your extracted traits.
 
 There have been many questions about removing "library code", there is a make target shown below to help you with this.
@@ -347,7 +338,7 @@ make traits-clean remove=goodware.traits source=sample.traits dest=malware.trait
 
 With `binlex` the power is in your hands, "With great power comes great responsibility", it is up to you!
 
-**Plugins:**
+## Plugins
 
 There has been some interest in making IDA, Ghidra and Cutter plugins for `binlex`.
 
@@ -355,13 +346,13 @@ This is something that will be started soon as we finish the HTTP API endpoints.
 
 This `README.md` will be updated when they are ready to use.
 
-**General Usage Information:**
+## General Usage Information
 
 Binlex is designed to do one thing and one thing only, extract genetic traits from executable code in files. This means it is up to you "the researcher" / "the data scientist" to determine which traits are good and which traits are bad. To accomplish this, you need to use your own [fitness function](https://en.wikipedia.org/wiki/Fitness_function). I encourage you to read about [genetic programming](https://en.wikipedia.org/wiki/Genetic_programming) to gain a better understanding of this in practice. Perhaps watching [this](https://www.youtube.com/watch?v=qiKW1qX97qA) introductory video will help your understanding.
 
 Again, **it's up to you to implement your own algorithms for detection based on the genetic traits you extract**.
 
-# Trait Format
+## Trait Format
 
 Traits will contain binary code represented in hexadecimal form and will use `??` as wild cards for memory operands or other operands subject to change.
 
@@ -395,11 +386,11 @@ They will also contain additional properties about the trait including its `offs
 }
 ```
 
-# Documentation
+## Documentation
 
 Public documentation on `binlex` can be viewed [here](https://c3rb3ru5d3d53c.github.io/binlex/html/index.html).
 
-# Building Docs
+### Building Docs
 
 You can access the C++ API Documentation and everything else by building the documents using `doxygen`.
 
@@ -409,58 +400,65 @@ make docs threads=4
 
 The documents will be available at `build/docs/html/index.html`.
 
-# C++ API Example Code
+## Example Library Code
+
+As you may already know `binlex` can be used as a `C++` and `Python` library API.
+
+This allows you to write your own detection logic surrounding the data `binlex` extracts.
+
+### C++ API Example Code
 
 The power of detection is in your hands, `binlex` is a framework, leverage the C++ API.
 
 ```cpp
 #include <binlex/pe.h>
-#include <binlex/decompiler.h>
+#include <binlex/disassembler.h>
 
 using namespace binlex;
 
 int main(int argc, char **argv){
-  PE pe32;
-  if (pe32.ReadFile(argv[1]) == false){
+  PE pe;
+  if (pe.ReadFile("example.exe") == false){
       return EXIT_FAILURE;
   }
-  Decompiler decompiler(pe32);
-  decompiler.Decompile();
-  decompiler.WriteTraits();
+  Disassembler disassembler(pe32);
+  disassembler.Disassemble();
+  disassembler.WriteTraits();
   return EXIT_SUCCESS;
 }
 ```
 
-# Python API Example Code
+### Python API Example Code
 
 The power of detection is in your hands, `binlex` is a framework, leverage the C++ API.
 
 ```python
 #!/usr/bin/env python
 
+import sys
 import pybinlex
 
 pe = pybinlex.PE()
 result = pe.read_file('example.exe')
 if result is False: sys.exit(1)
-decompiler = pybinlex.Decompiler(pe)
-decompiler.decompile()
-traits = decompiler.get_traits()
+disassembler = pybinlex.Disassembler(pe)
+disassembler.disassemble()
+traits = disassembler.get_traits()
 print(json.dumps(traits, indent=4))
 ```
 
 We hope this encourages people to build their own detection solutions based on binary genetic traits.
 
-# Tips
+## Tips
 - If you are hunting be sure to use `jq` to improve your searches
 - Does not support PE files that are VB6 if you run against these you will get errors
-- Don't mix packed and unpacked malware or you will taint your dataset (seen this in academics all the time)
+- Don't mix packed and unpacked malware, or you will taint your dataset (seen this in academics all the time)
 - When comparing samples to identify if their code is similar, DO NOT mix their architectures in your comparison
   - Comparing CIL byte-code or .NET to x86 machine code may yield interesting properties, but they are invalid
 - Verify the samples you are collecting into a group using skilled analysts
 - These traits are best used with a hybrid approach (supervised)
 
-# Example Fitness Model
+## Example Fitness Model
 
 Traits will be compared amongst their common malware family, any traits not common to all samples will be discarded.
 
@@ -472,14 +470,14 @@ The remaining population of traits will be unique to the malware family tested a
 
 This fitness model allows for accurate classification of the tested malware family.
 
-# Future Work
+## Future Work
 - Java byte-code Support `raw:jvm`, `java:jvm`
 - Python byte-code Support `raw:pyc`, `python:pyc`
 - More API Endpoints
 - Cutter, Ghidra and IDA Plugins
 - Mac-O Support `macho:x86_64`, `macho:x86`
 
-# Contributing
+## Contributing
 
 If you wish to contribute to Binlex DM me on Twitter [here](https://twitter.com/c3rb3ru5d3d53c).
 

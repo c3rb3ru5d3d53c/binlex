@@ -2,11 +2,19 @@ cmake_minimum_required(VERSION 3.5)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 
+set(CMAKE_INSTALL_INCLUDEDIR include)
+
 option(BUILD_PYTHON_BINDINGS "Build python bindings (pybinlex)" OFF)
 
 # Linking a pybind11 module with a static library without -fPIC will error
 if(BUILD_PYTHON_BINDINGS)
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+    if(NOT PYBIND11_PYTHON_VERSION)
+        execute_process(
+            COMMAND python3 -c "import platform; print(platform.python_version(), end='')"
+            OUTPUT_VARIABLE PYTHON_VERSION)
+        set(PYBIND11_PYTHON_VERSION "${PYTHON_VERSION}")
+    endif()
 endif()
 
 if(WIN32)
@@ -235,6 +243,9 @@ install(TARGETS binlex
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
+install(DIRECTORY include/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
 set(SOURCES_BLYARA
     src/blyara.cpp
 )
@@ -270,16 +281,25 @@ add_custom_target(uninstall
 
 set(CPACK_PACKAGE_NAME binlex)
 set(PKG_NAME "${CPACK_PACKAGE_NAME}-${PROJECT_VERSION}")
-
-SET(CPACK_GENERATOR DEB RPM)
+set(CPACK_PACKAGE_FILE_NAME "${PKG_NAME}")
 set(CPACK_RESOURCE_FILE_LICENSE "")
-set(CPACK_DEBIAN_PACKAGE_MAINTAINER "@c3rb3ru5d3d53c")
 set(CPACK_PACKAGE_CONTACT "c3rb3ru5d3d53c@gmail.com")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
 set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
-set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
-set(CPACK_PACKAGE_FILE_NAME "${PKG_NAME}")
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "libtlsh-dev")
+
+if (UNIX AND NOT APPLE)
+    set(CPACK_GENERATOR DEB RPM)
+    set(CPACK_DEBIAN_PACKAGE_MAINTAINER "@c3rb3ru5d3d53c")
+    set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+endif()
+
+if (APPLE)
+    set(CPACK_GENERATOR DragNDrop)
+endif()
+
+if (WIN32)
+    set(CPACK_GENERATOR NSIS64)
+endif()
 
 set(CPACK_SOURCE_GENERATOR TGZ ZIP)
 set(CPACK_SOURCE_PACKAGE_FILE_NAME "${PKG_NAME}")

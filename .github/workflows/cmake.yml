@@ -62,7 +62,7 @@ jobs:
       if: ${{ runner.os == 'Linux' }}
       uses: egor-tensin/setup-gcc@v1
       with:
-        version: 11
+        version: 9
 
     - name: Build
       run: |
@@ -70,15 +70,14 @@ jobs:
         cmake --build build --config ${{ matrix.build-type }} --parallel
         cmake --install build --prefix build/install --config ${{ matrix.build-type }}
 
-    - name: Test
-      # When using add_test in CMake you can do this to trigger the tests
-      # ctest --output-on-failure --test-dir build/tests -C ${{ matrix.build-type }}
-      run: |
-        echo TODO
-
-    # - name: Package
+    # - name: Test
     #   run: |
-    #     cd build/ && cpack
+    #     python3 test.py
+    # python3 -m pip wheel -v -w ${{ github.workspace }}/build/ .
+
+    - name: Package
+      run: |
+        cd build/ && cpack
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v2
@@ -93,8 +92,9 @@ jobs:
           build/*.dll
           build/*.tar.gz
           build/*.rpm
-          build/install/bin/*
-          build/install/lib/*
+          build/*.a
+          build/*.whl
+          build/*.dmg
 
     - name: Compress artifacts
       uses: vimtor/action-zip@v1
