@@ -142,6 +142,7 @@ class BLDEC():
             for trait in traits:
                 trait['file_sha256'] = file_hash
                 trait['architecture'] = architecture
+                trait['corpus'] = data['corpus']
                 del trait['tags']
                 self.amqp.publish(
                     self.config['amqp'].get('traits_queue'),
