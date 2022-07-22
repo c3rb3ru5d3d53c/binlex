@@ -10,7 +10,7 @@ WORKDIR /opt/binlex/
 RUN apt-get -qq -y update && \
     apt-get install -qq -y build-essential make cmake git wget nano curl nginx net-tools
 
-RUN pip install gunicorn
+RUN pip install Werkzeug==2.1.2 gunicorn
 
 WORKDIR /opt/binlex/lib/python/libblapi/
 
