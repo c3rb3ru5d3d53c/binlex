@@ -133,7 +133,7 @@ Examples of how to use `pybinlex` can be found in `tests/tests.py`.
 ### Install Dependencies
 
 ```bash
-sudo apt install docker.io make
+sudo apt install docker.io docker-compose make
 sudo usermod -a -G docker $USER
 sudo systemctl enable docker
 reboot # ensures your user is added to the docker group
@@ -142,12 +142,12 @@ reboot # ensures your user is added to the docker group
 ### Building Containers
 
 ```bash
-make docker        # generate docker-compose.yml and config files
+make docker             # generate docker-compose.yml and config files
 # Your generated credentials will be printed to the screen and saved in config/credentials.txt
-make docker-build  # build the images (can take a long time, go get a coffee!)
-make docker-start  # start the containers
-make docker-init   # initialize all databases and generated configurations
-make docker-logs   # tail all logs
+sudo make docker-build  # build the images (can take a long time, go get a coffee!)
+make docker-start       # start the containers
+make docker-init        # initialize all databases and generated configurations
+make docker-logs        # tail all logs
 ```
 
 If you wish to change the auto-generated initial username and passwords, you can run `./docker.sh` with additional parameters.

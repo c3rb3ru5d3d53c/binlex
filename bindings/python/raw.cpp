@@ -12,7 +12,6 @@ namespace py = pybind11;
 void init_raw(py::module &handle){
     py::class_<binlex::Raw, binlex::File>(handle, "Raw", "Binlex Raw Module")
     .def(py::init<>())
-    .def("set_architecture", &binlex::Raw::SetArchitecture)
     .def("get_sections", [](binlex::Raw &module){
         auto result = py::list();
         for (int i = 0; i < BINARY_MAX_SECTIONS; i++){
@@ -21,7 +20,6 @@ void init_raw(py::module &handle){
                 dict["size"] = module.sections[i].size;
                 dict["data"] = py::bytes((char *)module.sections[i].data, module.sections[i].size);
                 dict["offset"] = module.sections[i].offset;
-                dict["functions"] = module.sections[i].functions;
                 result.append(dict);
             }
         }

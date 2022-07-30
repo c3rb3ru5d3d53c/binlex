@@ -11,7 +11,7 @@ void init_pe(py::module &handle);
 void init_elf(py::module &handle);
 void init_common(py::module &handle);
 void init_raw(py::module &handle);
-void init_disassembler(py::module &handle);
+void init_decompiler(py::module &handle);
 
 PYBIND11_MODULE(pybinlex, handle){
   handle.doc() = "Binlex - A Binary Genetic Traits Lexer Library and Utility";
@@ -20,5 +20,5 @@ PYBIND11_MODULE(pybinlex, handle){
   init_elf(handle);
   init_common(handle);
   init_raw(handle);
-  init_disassembler(handle);
+  init_decompiler(handle);
 }

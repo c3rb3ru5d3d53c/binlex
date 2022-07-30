@@ -8,7 +8,7 @@ namespace py = pybind11;
 void init_elf(py::module &handle){
   py::class_<binlex::ELF, binlex::File>(handle, "ELF", "Binlex ELF Module")
   .def(py::init<>())
-  .def("set_architecture", &binlex::ELF::SetArchitecture)
+  .def("setup", &binlex::ELF::Setup)
   .def("read_file", &binlex::ELF::ReadFile)
   .def("get_sections", [](binlex::ELF &module){
     auto result = py::list();
