@@ -86,9 +86,9 @@ class binlex_samples_upload(Resource):
             return {
                 'status': 'processing'
             }
-        except Exception as e:
+        except Exception:
             return {
-                'error': f'Failed to add to decompiler queue: {e}'
+                'error': 'Failed to add to decompiler queue'
             }, 500
 
 #Download sample
