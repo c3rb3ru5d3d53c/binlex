@@ -16,15 +16,7 @@ void init_common(py::module &handle){
     .def_static("trim_right", &binlex::Common::TrimRight)
     .def_static("wildcards", &binlex::Common::Wildcards)
     .def_static("entropy", &binlex::Common::Entropy)
+    .def_static("hexdump_mem_disp", &binlex::Common::HexdumpMemDisp)
     .def_static("hexdump", &binlex::Common::Hexdump)
     .def_static("hexdump_be", &binlex::Common::HexdumpBE);
-    py::enum_<BINARY_ARCH>(handle, "BINARY_ARCH")
-    .value("BINARY_ARCH_X86", BINARY_ARCH_X86)
-    .value("BINARY_ARCH_X86_64", BINARY_ARCH_X86_64)
-    .value("BINARY_ARCH_UNKNOWN", BINARY_ARCH_UNKNOWN);
-    py::enum_<BINARY_MODE>(handle, "BINARY_MODE")
-    .value("BINARY_MODE_32", BINARY_MODE_32)
-    .value("BINARY_MODE_64", BINARY_MODE_64)
-    .value("BINARY_MODE_CIL", BINARY_MODE_CIL)
-    .value("BINARY_MODE_UNKNOWN", BINARY_MODE_UNKNOWN);
 }
