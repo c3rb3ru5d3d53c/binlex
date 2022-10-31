@@ -44,11 +44,14 @@ bool ELF::ParseSections(){
     Binary::it_sections local_sections = binary->sections();
     for (auto it = local_sections.begin(); it != local_sections.end(); it++){
         if (it->flags() & (uint64_t)ELF_SECTION_FLAGS::SHF_EXECINSTR){
+            vector<uint8_t> data = binary->get_content_from_virtual_address(it->virtual_address(), it->original_size());
+            if (data.size() == 0) {
+                continue;
+            }
             sections[index].offset = it->offset();
             sections[index].size = it->original_size();
             sections[index].data = malloc(sections[index].size);
             memset(sections[index].data, 0, sections[index].size);
-            vector<uint8_t> data = binary->get_content_from_virtual_address(it->virtual_address(), it->original_size());
             memcpy(sections[index].data, &data[0], sections[index].size);
             Binary::it_exported_symbols symbols = binary->exported_symbols();
             // Add export to function list
