@@ -27,5 +27,6 @@ void init_raw(py::module &handle){
         }
         return result;
     })
+    .def("read_vector", &binlex::Raw::ReadVector)
     .def("read_file", &binlex::Raw::ReadFile);
 }
