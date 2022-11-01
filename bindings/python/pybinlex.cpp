@@ -7,6 +7,8 @@
 
 namespace py = pybind11;
 
+LIEF::logging::disable();
+
 void init_pe(py::module &handle);
 void init_elf(py::module &handle);
 void init_common(py::module &handle);
