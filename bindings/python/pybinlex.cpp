@@ -4,10 +4,9 @@
 #include "blelf.h"
 #include "common.h"
 #include <vector>
+#include <LIEF/LIEF.hpp>
 
 namespace py = pybind11;
-
-LIEF::logging::disable();
 
 void init_pe(py::module &handle);
 void init_elf(py::module &handle);
@@ -16,6 +15,7 @@ void init_raw(py::module &handle);
 void init_disassembler(py::module &handle);
 
 PYBIND11_MODULE(pybinlex, handle){
+  LIEF::logging::disable();
   handle.doc() = "Binlex - A Binary Genetic Traits Lexer Library and Utility";
   handle.attr("__version__") = "1.1.1";
   init_pe(handle);
