@@ -150,7 +150,7 @@ set(LIEF_PREFIX       "${CMAKE_BINARY_DIR}/LIEF/")
 set(LIEF_INSTALL_DIR  "${LIEF_PREFIX}")
 set(LIEF_INCLUDE_DIRS "${LIEF_PREFIX}/include/")
 set(LIEF_GIT_URL      "https://github.com/lief-project/LIEF.git")
-set(LIEF_VERSION      "0.12.1")
+set(LIEF_VERSION      "0.12.2")
 
 set(LIEF_CMAKE_ARGS
   -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>

@@ -45,6 +45,7 @@ void start_timeout(time_t seconds){
 #endif
 
 int main(int argc, char **argv){
+    LIEF::logging::disable();
     g_args.parse(argc, argv);
     if (g_args.options.timeout > 0){
         #if defined(__linux__) || defined(__APPLE__)
