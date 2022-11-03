@@ -14,6 +14,10 @@ bool AutoLex::GetFileCharacteristics(char * file_path){
 
     auto bin = LIEF::Parser::parse(file_path);
 
+    if (bin == NULL){
+        return false;
+    }
+
     characteristics.format = bin->format();
 
     if(bin->header().is_32()){
