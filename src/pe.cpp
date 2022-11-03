@@ -13,35 +13,34 @@ PE::PE(){
 }
 
 bool PE::ReadVector(const std::vector<uint8_t> &data){
-    binary = Parser::parse(data);
-    if (binary == NULL){
-        return false;
-    }
-    binary_type = BINARY_TYPE_PE;
-    if (binary_arch == BINARY_ARCH_UNKNOWN ||
-        binary_mode == BINARY_MODE_UNKNOWN){
-        if (IsDotNet() == true){
-            binary_arch = BINARY_ARCH_X86;
-            binary_mode = BINARY_MODE_CIL;
-        } else {
-            switch(binary->header().machine()){
-                case MACHINE_TYPES::IMAGE_FILE_MACHINE_I386:
-                    SetArchitecture(BINARY_ARCH_X86, BINARY_MODE_32);
-                    g_args.options.mode = "pe:x86";
-                    break;
-                case MACHINE_TYPES::IMAGE_FILE_MACHINE_AMD64:
-                    SetArchitecture(BINARY_ARCH_X86, BINARY_MODE_64);
-                    g_args.options.mode = "pe:x86_64";
-                    break;
-                default:
-                    binary_arch = BINARY_ARCH_UNKNOWN;
-                    binary_mode = BINARY_MODE_UNKNOWN;
-                    return false;
+    if (binary = Parser::parse(data)){
+        binary_type = BINARY_TYPE_PE;
+        if (binary_arch == BINARY_ARCH_UNKNOWN ||
+            binary_mode == BINARY_MODE_UNKNOWN){
+            if (IsDotNet() == true){
+                binary_arch = BINARY_ARCH_X86;
+                binary_mode = BINARY_MODE_CIL;
+            } else {
+                switch(binary->header().machine()){
+                    case MACHINE_TYPES::IMAGE_FILE_MACHINE_I386:
+                        SetArchitecture(BINARY_ARCH_X86, BINARY_MODE_32);
+                        g_args.options.mode = "pe:x86";
+                        break;
+                    case MACHINE_TYPES::IMAGE_FILE_MACHINE_AMD64:
+                        SetArchitecture(BINARY_ARCH_X86, BINARY_MODE_64);
+                        g_args.options.mode = "pe:x86_64";
+                        break;
+                    default:
+                        binary_arch = BINARY_ARCH_UNKNOWN;
+                        binary_mode = BINARY_MODE_UNKNOWN;
+                        return false;
+                }
             }
         }
+        CalculateFileHashes(data);
+        return ParseSections();
     }
-    CalculateFileHashes(data);
-    return ParseSections();
+    return false;
 }
 
 bool PE::IsDotNet(){
