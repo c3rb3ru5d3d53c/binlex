@@ -56,11 +56,24 @@ This part of the guide will show you how to install and use `binlex`.
 
 To get started you will need the following dependencies for `binlex`.
 
+#### Linux
+
 ```bash
 sudo apt install -y git build-essential \
                     cmake make parallel \
                     doxygen git-lfs rpm \
                     python3 python3-dev
+```
+
+#### macOS
+
+```bash
+brew install cmake parallel doxygen git-lfs
+```
+
+#### All Platforms
+
+```bash
 git clone --recursive https://github.com/c3rb3ru5d3d53c/binlex.git
 cd binlex/
 ```

@@ -10,7 +10,7 @@ all: build docs
 
 check-config:
 	@echo "---check-config---"
-	@if [ -z `echo ${config} | grep -P '(Release|Debug)'` ]; then \
+	@if [ -z `echo ${config} | grep 'Release\|Debug'` ]; then \
 		echo "[x] config parameter ${config} is invalid" 1>&2; \
 		exit 1; \
 	fi
