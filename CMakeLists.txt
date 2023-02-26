@@ -49,9 +49,9 @@ ProcessorCount(N)
 
 if(CMAKE_GENERATOR MATCHES "Visual Studio")
     # https://stackoverflow.com/a/70102570/1806760
-    set(EXTERNAL_BUILD_COMMAND cmake --build . --parallel ${N} -- /p:CL_MPcount=${N})
+    set(EXTERNAL_BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config ${CMAKE_CFG_INTDIR} --parallel ${N} -- /p:CL_MPcount=${N})
 else()
-    set(EXTERNAL_BUILD_COMMAND cmake --build . --parallel ${N})
+    set(EXTERNAL_BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config ${CMAKE_CFG_INTDIR} --parallel ${N})
 endif()
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/tests.py
