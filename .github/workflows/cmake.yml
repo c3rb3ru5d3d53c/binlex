@@ -11,7 +11,6 @@ jobs:
       matrix:
         target:
           - ubuntu-20.04
-          - ubuntu-latest
           - windows
           - macos
         include:
