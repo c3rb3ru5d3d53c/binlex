@@ -47,13 +47,6 @@ include(ExternalProject)
 include(ProcessorCount)
 ProcessorCount(N)
 
-if(CMAKE_GENERATOR MATCHES "Visual Studio")
-    # https://stackoverflow.com/a/70102570/1806760
-    set(EXTERNAL_BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config ${CMAKE_CFG_INTDIR} --parallel ${N} -- /p:CL_MPcount=${N})
-else()
-    set(EXTERNAL_BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config ${CMAKE_CFG_INTDIR} --parallel ${N})
-endif()
-
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/tests.py
      DESTINATION ${CMAKE_BINARY_DIR}
 )
@@ -70,7 +63,6 @@ ExternalProject_Add(
     GIT_REPOSITORY      "${CAPSTONE_GIT_URL}"
     GIT_TAG             "${CAPSTONE_GIT_TAG}"
     GIT_SHALLOW         ON
-    BUILD_COMMAND       ${EXTERNAL_BUILD_COMMAND}
     CMAKE_ARGS          -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
                         -DCAPSTONE_BUILD_SHARED=OFF
                         -DCAPSTONE_BUILD_TESTS=OFF
@@ -130,7 +122,6 @@ ExternalProject_Add(
     GIT_REPOSITORY      "${TLSH_GIT_URL}"
     GIT_TAG             "${TLSH_GIT_TAG}"
     GIT_SHALLOW         ON
-    BUILD_COMMAND       ${EXTERNAL_BUILD_COMMAND}
     CMAKE_ARGS          ${TLSH_CMAKE_ARGS}
 )
 
@@ -174,7 +165,6 @@ ExternalProject_Add(LIEF
   PREFIX           ${LIEF_PREFIX}
   GIT_REPOSITORY   ${LIEF_GIT_URL}
   GIT_TAG          ${LIEF_VERSION}
-  BUILD_COMMAND    ${EXTERNAL_BUILD_COMMAND}
   INSTALL_DIR      ${LIEF_INSTALL_DIR}
   CMAKE_ARGS       ${LIEF_CMAKE_ARGS}
 )
@@ -299,6 +289,8 @@ endif()
 
 if (WIN32)
     set(CPACK_GENERATOR NSIS64)
+    set(CPACK_NSIS_MODIFY_PATH ON)
+    set(CPACK_NSIS_URL_INFO_ABOUT "https://github.com/c3rb3ru5d3d53c/binlex")
 endif()
 
 set(CPACK_SOURCE_GENERATOR TGZ ZIP)

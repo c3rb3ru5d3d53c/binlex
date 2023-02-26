@@ -22,7 +22,7 @@ jobs:
               "-DPYBIND11_PYTHON_VERSION=3.8.10"
           - target: windows
             os: windows-latest
-            build-type: Debug
+            build-type: Release
             extra-cmake-flags: >-
               "-DBUILD_PYTHON_BINDINGS=ON"
               "-DPYBIND11_PYTHON_VERSION=3.8.10"
@@ -59,7 +59,7 @@ jobs:
 
     - name: Build
       run: |
-        cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} ${{ matrix.extra-cmake-flags }}
+        cmake -B build ${{ matrix.extra-cmake-flags }}
         cmake --build build --config ${{ matrix.build-type }} --parallel
         cmake --install build --prefix build/install --config ${{ matrix.build-type }}
 
@@ -83,6 +83,8 @@ jobs:
           build/*.deb
           build/*.exe
           build/*.dll
+          build/*.lib
+          build/*.whl
           build/*.tar.gz
           build/*.rpm
           build/*.a
