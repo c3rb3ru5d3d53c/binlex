@@ -164,8 +164,15 @@ int main(int argc, char **argv){
     }
     if (g_args.options.mode == "raw:cil" &&
         g_args.options.io_type == ARGS_IO_TYPE_FILE){
-        printf("comming soon...\n");
-        return EXIT_FAILURE;
+        Raw rawcil;
+        rawcil.SetArchitecture(BINARY_ARCH_X86, BINARY_MODE_CIL);
+        if (rawcil.ReadFile(g_args.options.input) == false){
+            return EXIT_FAILURE;
+        }
+        CILDecompiler cil_decompiler(rawcil);
+        cil_decompiler.Decompile(rawcil.sections[0].data, rawcil.sections[0].size, 0);
+        cil_decompiler.WriteTraits();
+        return EXIT_SUCCESS;
     }
 
     g_args.print_help();
