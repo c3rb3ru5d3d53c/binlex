@@ -47,6 +47,13 @@ include(ExternalProject)
 include(ProcessorCount)
 ProcessorCount(N)
 
+if(CMAKE_GENERATOR MATCHES "Visual Studio")
+    # https://stackoverflow.com/a/70102570/1806760
+    set(EXTERNAL_BUILD_COMMAND "")
+else()
+    set(EXTERNAL_BUILD_COMMAND cmake --build . --parallel ${N})
+endif()
+
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/tests.py
      DESTINATION ${CMAKE_BINARY_DIR}
 )
@@ -63,6 +70,7 @@ ExternalProject_Add(
     GIT_REPOSITORY      "${CAPSTONE_GIT_URL}"
     GIT_TAG             "${CAPSTONE_GIT_TAG}"
     GIT_SHALLOW         ON
+    BUILD_COMMAND       ${EXTERNAL_BUILD_COMMAND}
     CMAKE_ARGS          -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
                         -DCAPSTONE_BUILD_SHARED=OFF
                         -DCAPSTONE_BUILD_TESTS=OFF
@@ -122,6 +130,7 @@ ExternalProject_Add(
     GIT_REPOSITORY      "${TLSH_GIT_URL}"
     GIT_TAG             "${TLSH_GIT_TAG}"
     GIT_SHALLOW         ON
+    BUILD_COMMAND       ${EXTERNAL_BUILD_COMMAND}
     CMAKE_ARGS          ${TLSH_CMAKE_ARGS}
 )
 
@@ -165,6 +174,7 @@ ExternalProject_Add(LIEF
   PREFIX           ${LIEF_PREFIX}
   GIT_REPOSITORY   ${LIEF_GIT_URL}
   GIT_TAG          ${LIEF_VERSION}
+  BUILD_COMMAND    ${EXTERNAL_BUILD_COMMAND}
   INSTALL_DIR      ${LIEF_INSTALL_DIR}
   CMAKE_ARGS       ${LIEF_CMAKE_ARGS}
 )
