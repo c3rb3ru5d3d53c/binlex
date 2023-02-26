@@ -21,12 +21,6 @@ jobs:
             extra-cmake-flags: >-
               "-DBUILD_PYTHON_BINDINGS=ON"
               "-DPYBIND11_PYTHON_VERSION=3.8.10"
-          - target: ubuntu-22.04
-            os: ubuntu-22.04
-            build-type: Release
-            extra-cmake-flags: >-
-              "-DBUILD_PYTHON_BINDINGS=ON"
-              "-DPYBIND11_PYTHON_VERSION=3.8.10"
           - target: windows
             os: windows-latest
             build-type: Release
