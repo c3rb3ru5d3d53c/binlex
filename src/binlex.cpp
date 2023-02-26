@@ -99,17 +99,17 @@ int main(int argc, char **argv){
         DOTNET pe;
         pe.SetArchitecture(BINARY_ARCH_X86, BINARY_MODE_CIL);
         if (pe.ReadFile(g_args.options.input) == false) return 1;
-        CILDecompiler cil_decompiler(pe);
+        CILDisassembler disassembler(pe);
         PRINT_DEBUG("[binlex.cpp] analyzing %lu sections for CIL byte code.\n", pe._sections.size());
         int si = 0;
         for (auto section : pe._sections) {
             if (section.offset == 0) continue;
-            if (cil_decompiler.Decompile(section.data, section.size, si) == false){
+            if (disassembler.Disassemble(section.data, section.size, si) == false){
                     continue;
             }
             si++;
         }
-        cil_decompiler.WriteTraits();
+        disassembler.WriteTraits();
         return EXIT_SUCCESS;
     }
     if (g_args.options.mode == "pe:x86" &&
@@ -169,9 +169,9 @@ int main(int argc, char **argv){
         if (rawcil.ReadFile(g_args.options.input) == false){
             return EXIT_FAILURE;
         }
-        CILDecompiler cil_decompiler(rawcil);
-        cil_decompiler.Decompile(rawcil.sections[0].data, rawcil.sections[0].size, 0);
-        cil_decompiler.WriteTraits();
+        CILDisassembler disassembler(rawcil);
+        disassembler.Disassemble(rawcil.sections[0].data, rawcil.sections[0].size, 0);
+        disassembler.WriteTraits();
         return EXIT_SUCCESS;
     }
 

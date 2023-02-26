@@ -25,13 +25,13 @@
 #define INVALID_OP 0xFFFFFFFF
 
 // CIL Decompiler Types
-#define CIL_DECOMPILER_TYPE_FUNCS 0
-#define CIL_DECOMPILER_TYPE_BLCKS 1
-#define CIL_DECOMPILER_TYPE_UNSET 2
-#define CIL_DECOMPILER_TYPE_ALL   3
+#define CIL_DISASSEMBLER_TYPE_FUNCS 0
+#define CIL_DISASSEMBLER_TYPE_BLCKS 1
+#define CIL_DISASSEMBLER_TYPE_UNSET 2
+#define CIL_DISASSEMBLER_TYPE_ALL   3
 
-#define CIL_DECOMPILER_MAX_SECTIONS 256
-#define CIL_DECOMPILER_MAX_INSN     16384
+#define CIL_DISASSEMBLER_MAX_SECTIONS 256
+#define CIL_DISASSEMBLER_MAX_INSN     16384
 
 // CIL Instructions
 #define CIL_INS_ADD            0x58
@@ -269,12 +269,12 @@
 using namespace std;
 
 namespace binlex {
-    class CILDecompiler : public DisassemblerBase {
+    class CILDisassembler : public DisassemblerBase {
         /*
         This class is used to decompile CIL/.NET bytecode.
         */
         private:
-            int type = CIL_DECOMPILER_TYPE_UNSET;
+            int type = CIL_DISASSEMBLER_TYPE_UNSET;
             int update_offset(int operand_size, int i);
             typedef struct worker {
                 csh handle;
@@ -288,7 +288,7 @@ namespace binlex {
                 void *sections;
             } worker_args;
         public:
-            CILDecompiler(const binlex::File &firef);
+            CILDisassembler(const binlex::File &firef);
             struct Instruction {
                 unsigned char instruction;
                 uint operand_size;
@@ -338,7 +338,7 @@ namespace binlex {
                 map<uint64_t, int> visited;
                 queue<uint64_t> discovered;
             };
-            struct Section sections[CIL_DECOMPILER_MAX_SECTIONS];
+            struct Section sections[CIL_DISASSEMBLER_MAX_SECTIONS];
             //Map containing prefix instructions and their operand sizes
             map<int, int> prefixInstrMap;
             //Map containing conditional instructions and their operand sizes
@@ -346,7 +346,14 @@ namespace binlex {
             //Map for all remaining instruction types that don't need special
             //treatment
             map<int, int> miscInstrMap;
-            bool Decompile(void *data, int data_size, int index);
+            /**
+             * Disassemble traits
+             * @param data pointer to data to disassemble
+             * @param data_size size of the data to disassemble
+             * @param index the section index
+             * @return bool
+            */
+            bool Disassemble(void *data, int data_size, int index);
             /**
              * Get Traits as json vector
              * @return list of traits JSON objects
@@ -383,7 +390,7 @@ namespace binlex {
              * @param allinst Source instructions
              */
             uint SizeOfTrait(vector< Instruction* > allinst);
-            ~CILDecompiler();
+            ~CILDisassembler();
     };
 };
 
