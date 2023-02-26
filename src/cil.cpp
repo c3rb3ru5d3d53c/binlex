@@ -3,9 +3,9 @@
 using namespace binlex;
 using json = nlohmann::json;
 
-CILDecompiler::CILDecompiler(const binlex::File &firef) : DisassemblerBase(firef) {
-    type = CIL_DECOMPILER_TYPE_ALL;
-    for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
+CILDisassembler::CILDisassembler(const binlex::File &firef) : DisassemblerBase(firef) {
+    type = CIL_DISASSEMBLER_TYPE_ALL;
+    for (int i = 0; i < CIL_DISASSEMBLER_MAX_SECTIONS; i++){
         sections[i].offset = 0;
         sections[i].ntraits = 0;
         sections[i].data = NULL;
@@ -274,7 +274,7 @@ CILDecompiler::CILDecompiler(const binlex::File &firef) : DisassemblerBase(firef
     };
 }
 
-int CILDecompiler::update_offset(int operand_size, int i) {
+int CILDisassembler::update_offset(int operand_size, int i) {
     //fprintf(stderr, "[+] updating offset using operand size %d\n", operand_size);
     switch(operand_size){
         case 0:
@@ -298,7 +298,7 @@ int CILDecompiler::update_offset(int operand_size, int i) {
     return i;
 }
 
-bool CILDecompiler::Decompile(void *data, int data_size, int index){
+bool CILDisassembler::Disassemble(void *data, int data_size, int index){
     const unsigned char *pc = (const unsigned char *)data;
     vector<Trait*> traits;
     vector<Trait*> ftraits;
@@ -466,7 +466,7 @@ bool CILDecompiler::Decompile(void *data, int data_size, int index){
     return true;
 }
 
-string CILDecompiler::ConvTraitBytes(vector< Instruction* > allinst) {
+string CILDisassembler::ConvTraitBytes(vector< Instruction* > allinst) {
     string rstr = "";
     string fstr = "";
     for(auto inst : allinst) {
@@ -489,14 +489,14 @@ string CILDecompiler::ConvTraitBytes(vector< Instruction* > allinst) {
     return fstr;
 }
 
-uint CILDecompiler::SizeOfTrait(vector< Instruction* > inst) {
+uint CILDisassembler::SizeOfTrait(vector< Instruction* > inst) {
     int begin_offset = inst.front()->offset;
     int end_offset = inst.back()->offset;
     uint size = (end_offset-begin_offset)+(inst.back()->operand_size/8)+1;
     return size;
 }
 
-string CILDecompiler::ConvBytes(vector< Instruction* > allinst, void *data, int data_size) {
+string CILDisassembler::ConvBytes(vector< Instruction* > allinst, void *data, int data_size) {
     string byte_rep = "";
     string byte_rep_t;
     int begin_offset = allinst.front()->offset;
@@ -517,7 +517,7 @@ string CILDecompiler::ConvBytes(vector< Instruction* > allinst, void *data, int 
     return byte_rep_t;
 }
 
-json CILDecompiler::GetTrait(struct Trait *trait){
+json CILDisassembler::GetTrait(struct Trait *trait){
     json data;
     data["type"] = trait->type;
     data["corpus"] = trait->corpus;
@@ -552,18 +552,18 @@ json CILDecompiler::GetTrait(struct Trait *trait){
     return data;
 }
 
-vector<json> CILDecompiler::GetTraits(){
+vector<json> CILDisassembler::GetTraits(){
     vector<json> traitsjson;
-    for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
-        if ((sections[i].function_traits.size() > 0) && (type == CIL_DECOMPILER_TYPE_ALL
-        || type == CIL_DECOMPILER_TYPE_FUNCS)){
+    for (int i = 0; i < CIL_DISASSEMBLER_MAX_SECTIONS; i++){
+        if ((sections[i].function_traits.size() > 0) && (type == CIL_DISASSEMBLER_TYPE_ALL
+        || type == CIL_DISASSEMBLER_TYPE_FUNCS)){
             for(auto trait : sections[i].function_traits) {
                 json jdata(GetTrait(trait));
                 traitsjson.push_back(jdata);
             }
         }
-        if ((sections[i].block_traits.size() > 0) && (type == CIL_DECOMPILER_TYPE_ALL
-        || type == CIL_DECOMPILER_TYPE_BLCKS)){
+        if ((sections[i].block_traits.size() > 0) && (type == CIL_DISASSEMBLER_TYPE_ALL
+        || type == CIL_DISASSEMBLER_TYPE_BLCKS)){
             for(auto trait : sections[i].block_traits) {
                 json jdata(GetTrait(trait));
                 traitsjson.push_back(jdata);
@@ -573,8 +573,8 @@ vector<json> CILDecompiler::GetTraits(){
     return traitsjson;
 }
 
-CILDecompiler::~CILDecompiler() {
-    for (int i = 0; i < CIL_DECOMPILER_MAX_SECTIONS; i++){
+CILDisassembler::~CILDisassembler() {
+    for (int i = 0; i < CIL_DISASSEMBLER_MAX_SECTIONS; i++){
         if (sections[i].function_traits.size() > 0) {
             for(auto trait : sections[i].function_traits) {
                 delete trait->instructions;

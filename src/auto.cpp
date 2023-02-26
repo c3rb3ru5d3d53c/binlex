@@ -66,14 +66,14 @@ int AutoLex::ProcessFile(char *file_path){
             DOTNET pe;
             g_args.options.mode = "pe:cil";
             if (pe.ReadFile(file_path) == false) return 1;
-            CILDecompiler cil_decompiler(pe);
+            CILDisassembler disassembler(pe);
             int si = 0;
             for (auto section : pe._sections) {
                 if (section.offset == 0) continue;
-                if (cil_decompiler.Decompile(section.data, section.size, si) == false) continue;
+                if (disassembler.Disassemble(section.data, section.size, si) == false) continue;
 	            si++;
             }
-            cil_decompiler.WriteTraits();
+            disassembler.WriteTraits();
             return EXIT_SUCCESS;
         } else {
             if (characteristics.arch == CS_ARCH_X86 &&
