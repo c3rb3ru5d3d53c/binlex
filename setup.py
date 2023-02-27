@@ -52,6 +52,7 @@ setup(
     url="https://github.com/c3rb3ru5d3d53c/binlex",
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
+    #scripts=['blserver'],
     ext_modules=[CMakeExtension("pybinlex")],
     cmdclass={
         "build_ext": CMakeBuild
