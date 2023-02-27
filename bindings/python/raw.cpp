@@ -27,6 +27,9 @@ void init_raw(py::module &handle){
         }
         return result;
     })
-    .def("read_vector", &binlex::Raw::ReadVector)
+    .def("read_buffer", [](binlex::Raw &module, py::bytes data){
+        py::buffer_info info(py::buffer(data).request());
+        return module.ReadBuffer(info.ptr, info.size);
+    })
     .def("read_file", &binlex::Raw::ReadFile);
 }

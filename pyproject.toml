@@ -3,4 +3,5 @@ requires = [
     "setuptools>=42",
     "wheel",
     "pybind11>=2.10.0",
+    "Flask==2.2.3"
 ]
