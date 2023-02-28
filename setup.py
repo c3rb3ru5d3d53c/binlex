@@ -41,7 +41,7 @@ class CMakeBuild(build_ext):
         if not os.path.exists(build_temp):
             os.makedirs(build_temp)
         subprocess.check_call(["cmake", "-B", "build", ext.sourcedir] + cmake_args, cwd=build_temp)
-        subprocess.check_call(["cmake", "--build", "build", "--config", cfg], cwd=build_temp)
+        subprocess.check_call(["cmake", "--build", "build", "--config", cfg, '--parallel'], cwd=build_temp)
         subprocess.check_call(["cmake", "--install", "build", "--prefix", "build/install", "--config", cfg], cwd=build_temp)
 
 setup(
@@ -53,6 +53,10 @@ setup(
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
     scripts=['scripts/blserver'],
+    install_requires=[
+        'Flask==2.2.3',
+        'flask-restx==1.0.6'
+    ],
     ext_modules=[CMakeExtension("pybinlex")],
     cmdclass={
         "build_ext": CMakeBuild
