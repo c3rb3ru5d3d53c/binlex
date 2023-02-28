@@ -64,51 +64,71 @@ def parse_mode(mode):
         }
     except: return None
 
-def disasm_pe(arch, data):
-    if arch not in ['x86', 'x64', 'auto']: return [], 404
+def parse_tags(tags):
+    if tags in ['', None]: return None
+    return tags.split(',')
+
+def disasm_pe(corpus, mode, tags, data):
+    if mode['arch'] not in ['x86', 'x86_64', 'auto']: return [], 404
     if len(data) <= 0: return 422, []
     f = PE()
-    if arch == 'x86': f.set_architecture(BINARY_ARCH_X86, BINARY_MODE_32)
-    if arch == 'x64': f.set_architecture(BINARY_ARCH_X86, BINARY_MODE_64)
+    if mode['arch'] == 'x86': f.set_architecture(BINARY_ARCH_X86, BINARY_MODE_32)
+    if mode['arch'] == 'x86_64': f.set_architecture(BINARY_ARCH_X86, BINARY_MODE_64)
     f.read_buffer(data)
     d = Disassembler(f)
+    d.set_tags([])
+    if tags is not None: d.set_tags(tags)
+    d.set_corpus(corpus)
+    if mode['arch'] != 'auto': d.set_mode(mode['type'] + ':' + mode['arch'])
     d.disassemble()
     return d.get_traits()
 
-def disasm_elf(arch, data):
-    if arch not in ['x86', 'x64', 'auto']: return [], 404
+def disasm_elf(corpus, mode, tags, data):
+    if mode['arch'] not in ['x86', 'x86_64', 'auto']: return [], 404
     f = ELF()
-    if arch == 'x86': f.set_architecture(BINARY_ARCH_X86, BINARY_MODE_32)
-    if arch == 'x64': f.set_architecture(BINARY_ARCH_X86, BINARY_MODE_64)
+    if mode['arch'] == 'x86': f.set_architecture(BINARY_ARCH_X86, BINARY_MODE_32)
+    if mode['arch'] == 'x86_64': f.set_architecture(BINARY_ARCH_X86, BINARY_MODE_64)
     f.read_buffer(data)
     d = Disassembler(f)
+    d.set_tags([])
+    if tags is not None: d.set_tags(tags)
+    d.set_corpus(corpus)
+    if mode['arch'] != 'auto': d.set_mode(mode['type'] + ':' + mode['arch'])
     d.disassemble()
     return d.get_traits()
 
-def disasm_raw(arch, data):
-    if arch not in ['x86', 'x64']: return [], 404
+def disasm_raw(corpus, mode, tags, data):
+    if mode['arch'] not in ['x86', 'x86_64']: return [], 404
     f = Raw()
-    if arch == 'x86': f.set_architecture(BINARY_ARCH_X86, BINARY_MODE_32)
-    if arch == 'x64': f.set_architecture(BINARY_ARCH_X86, BINARY_MODE_64)
+    if mode['arch'] == 'x86': f.set_architecture(BINARY_ARCH_X86, BINARY_MODE_32)
+    if mode['arch'] == 'x86_64': f.set_architecture(BINARY_ARCH_X86, BINARY_MODE_64)
     f.read_buffer(data)
     d = Disassembler(f)
+    d.set_tags([])
+    if tags is not None: d.set_tags(tags)
+    d.set_corpus(corpus)
+    d.set_mode(mode['type'] + ':' + mode['arch'])
     d.disassemble()
     return d.get_traits()
 
-@blapi.route('/api/v1/<mode>')
+@blapi.route('/api/v1/<corpus>/<mode>')
+@blapi.route('/api/v1/<corpus>/<mode>/<tags>')
 @blapi.param('mode', 'Trait disassembler mode')
+@blapi.param('corpus', 'Corpus name')
+@blapi.param('tags', 'List of tags delimited by commas (optional)')
 class Disasm(Resource):
-    def post(self, mode):
+    def post(self, corpus, mode, tags=None):
         """
         Disassemble Traits
         """
         mode = parse_mode(mode)
-        print(mode)
+        tags = parse_tags(tags)
         if mode is None: return [], 404
+        if corpus in ['', None]: return [], 404
         if len(request.data) <= 0 or request.data is None: return [], 422
-        if mode['type'] == 'pe': return disasm_pe(mode['arch'], request.data)
-        if mode['type'] == 'elf': return disasm_elf(mode['arch'], request.data)
-        if mode['type'] == 'raw': return disasm_raw(mode['arch'], request.data)
+        if mode['type'] == 'pe': return disasm_pe(corpus, mode, tags, request.data)
+        if mode['type'] == 'elf': return disasm_elf(corpus, mode, tags, request.data)
+        if mode['type'] == 'raw': return disasm_raw(corpus, mode, tags, request.data)
         if result is None: return [], 404
         return [], 404
 
@@ -120,12 +140,12 @@ class Modes(Resource):
         """
         return [
                 'pe:x86',
-                'pe:x64',
+                'pe:x86_64',
                 'pe:auto',
                 'raw:x86',
-                'raw:x64',
+                'raw:x86_64',
                 'elf:x86',
-                'elf:x64',
+                'elf:x86_64',
                 'elf:auto'
             ], 200
 
