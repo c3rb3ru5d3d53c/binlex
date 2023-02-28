@@ -143,7 +143,6 @@ clean:
 	rm -f *.so
 	rm -f *.whl
 	rm -f docker-compose.yml
-	rm -rf scripts/
 	rm -rf config/
 	rm -rf venv/
 
