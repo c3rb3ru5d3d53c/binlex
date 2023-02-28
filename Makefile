@@ -32,35 +32,6 @@ docs-update:
 	rm -rf docs/html/
 	cp -r build/docs/html/ docs/
 
-docker:
-	@./docker.sh
-
-docker-build:
-	@docker-compose build
-
-docker-start:
-	@docker-compose up -d
-
-docker-logs:
-	@docker-compose logs -f -t --tail 32
-
-docker-stop:
-	@docker-compose stop
-
-docker-init:
-	@cd scripts/ && \
-		./init-all.sh
-
-docker-restart-blapi:
-	@docker stop $(shell docker container list --all -aqf name="blapi1")
-	@docker rm $(shell docker container list --all -aqf name="blapi1")
-	@docker-compose build blapi1
-	@docker-compose up -d blapi1
-
-mongodb-shell:
-	@cd scripts/ && \
-		./mongodb-shell.sh mongodb-router1
-
 pkg:
 	cd build/ && \
 		cpack
