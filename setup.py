@@ -7,7 +7,7 @@ from shutil import move
 from glob import glob
 import subprocess
 import platform
-from setuptools import Extension, setup
+from setuptools import Extension, setup, find_packages
 from setuptools.command.build_ext import build_ext
 
 __version__ = "1.1.1"
@@ -52,10 +52,12 @@ setup(
     url="https://github.com/c3rb3ru5d3d53c/binlex",
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
+    packages=['libpybinlex'],
     scripts=['scripts/blserver'],
     install_requires=[
         'Flask==2.2.3',
-        'flask-restx==1.0.6'
+        'flask-restx==1.0.6',
+        'gunicorn==20.1.0'
     ],
     ext_modules=[CMakeExtension("pybinlex")],
     cmdclass={
