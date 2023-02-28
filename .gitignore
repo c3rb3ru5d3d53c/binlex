@@ -16,7 +16,6 @@ pybinlex.egg-info/**
 .idea/
 data/**
 docker-compose.yml
-scripts/**
 ssl/**
 *.key
 config/**
