@@ -1,6 +1,7 @@
 docs
 *~
 build/**
+deps/build/**
 dist/**
 samples/**
 windows/**
