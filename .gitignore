@@ -5,6 +5,7 @@ dist/**
 samples/**
 windows/**
 dump.bin
+__pycache__/
 *.yara
 *.traits
 dump.json

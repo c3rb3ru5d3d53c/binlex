@@ -57,7 +57,8 @@ setup(
     install_requires=[
         'Flask==2.2.3',
         'flask-restx==1.0.6',
-        'gunicorn==20.1.0'
+        'gunicorn==20.1.0',
+        'requests==2.28.2'
     ],
     ext_modules=[CMakeExtension("pybinlex")],
     cmdclass={
