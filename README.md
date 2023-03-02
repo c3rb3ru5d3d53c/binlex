@@ -141,67 +141,42 @@ make config=Release threads=4 args=-DBUILD_PYTHON_BINDINGS=ON
 
 Examples of how to use `pybinlex` can be found in `tests/tests.py`.
 
-## Building Binlex Platform:
-
-### Install Dependencies
+### Binlex Web API
 
 ```bash
-sudo apt install docker.io make
-sudo usermod -a -G docker $USER
-sudo systemctl enable docker
-reboot # ensures your user is added to the docker group
+docker build -t binlex:latest .
+docker run --rm -p 8080:8080 -e LOG_LEVEL='debug' -it binlex:latest
 ```
 
-### Building Containers
+Browse to `http://127.0.0.1:8080` to view the web API documentation.
+
+#### Example Requests
 
 ```bash
-make docker        # generate docker-compose.yml and config files
-# Your generated credentials will be printed to the screen and saved in config/credentials.txt
-make docker-build  # build the images (can take a long time, go get a coffee!)
-make docker-start  # start the containers
-make docker-init   # initialize all databases and generated configurations
-make docker-logs   # tail all logs
+# Get Modes
+curl http://127.0.0.1/api/v1/modes
+
+# Get Traits
+curl -X POST http://127.0.0.1:8080/api/v1/<corpus>/<mode>/<tags> --upload-file <file>
 ```
 
-If you wish to change the auto-generated initial username and passwords, you can run `./docker.sh` with additional parameters.
+#### Python Web API Wrapper Example
 
-To see what parameters are available to you, run `./docker.sh --help`.
+```python
+#!/usr/bin/env python
 
-### Platform URLs
+import json
+from libpybinlex.webapi import WebAPIv1
 
-- HTTP API `https://127.0.0.1:8443` (API Docs)
-- RabbitMQ `https://127.0.0.1:15672/` (Messaging)
-- MinIO `https://127.0.0.1:9001/` (Object Store)
-- MongoDB `mongodb://<user>:<pass>@127.0.0.1` (MongoDB)
- - User `mongodb://binlex:<generated-password>@127.0.0.1/?authSource=binlex` (for trait collection)
- - Admin `mongodb://admin:<generated-password>@127.0.0.1` (for administration)
-
-### Example HTTP API Requests
-```bash
-# Get Version
-curl --insecure -H "X-API-Key: <key>" https://127.0.0.1:8443/binlex/api/v1/version
-
-# Upload Sample
-curl -X POST --insecure -H "X-API-Key: <key>" --upload-file <file> https://127.0.0.1:8443/binlex/api/v1/samples/<corpus>/<mode>
-
-# List Corpra
-curl -X GET --insecure -H "X-API-Key: <key>" https://127.0.0.1:8443/binlex/api/v1/corpra
-
-# Get Supported Modes
-curl -X GET --insecure -H "X-API-Key: <key>" https://127.0.0.1:8443/binlex/api/v1/modes
-
-# Download Sample by SHA256
-curl -X GET --insecure -H "X-API-Key: <key>" https://127.0.0.1:8443/binlex/api/v1/samples/<sha256>
-```
-
-If you work with a team of malware analysts or malware researchers, you create read-only accounts for them.
-
-This will ensure they can do advanced queries to hunt and write detection signatures.
-
-Adding New Read-Only Users to MongoDB:
-```bash
-cd scripts/
-./mongodb-createuser.sh mongodb-router1 <username> <password>
+api = WebAPIv1(url='http://127.0.0.1:8080')
+data = open('sample.bin', 'rb').read()
+response = api.get_traits(
+  data=data,
+  corpus='default',
+  mode='pe:x86',
+  tags=['foo', 'bar'])
+traits = json.loads(response.content)
+print(json.dumps(traits, indent=4))
 ```
 
 ## Test Files
