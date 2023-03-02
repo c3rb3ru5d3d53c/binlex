@@ -5,6 +5,7 @@ dist/**
 samples/**
 windows/**
 dump.bin
+__pycache__/
 *.yara
 *.traits
 dump.json
@@ -16,7 +17,6 @@ pybinlex.egg-info/**
 .idea/
 data/**
 docker-compose.yml
-scripts/**
 ssl/**
 *.key
 config/**

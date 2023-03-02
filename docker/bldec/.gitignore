@@ -1,4 +1,0 @@
-*.conf
-build/**
-dist/**
-bldec.egg-info/**

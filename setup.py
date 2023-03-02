@@ -7,7 +7,7 @@ from shutil import move
 from glob import glob
 import subprocess
 import platform
-from setuptools import Extension, setup
+from setuptools import Extension, setup, find_packages
 from setuptools.command.build_ext import build_ext
 
 __version__ = "1.1.1"
@@ -41,7 +41,7 @@ class CMakeBuild(build_ext):
         if not os.path.exists(build_temp):
             os.makedirs(build_temp)
         subprocess.check_call(["cmake", "-B", "build", ext.sourcedir] + cmake_args, cwd=build_temp)
-        subprocess.check_call(["cmake", "--build", "build", "--config", cfg], cwd=build_temp)
+        subprocess.check_call(["cmake", "--build", "build", "--config", cfg, '--parallel'], cwd=build_temp)
         subprocess.check_call(["cmake", "--install", "build", "--prefix", "build/install", "--config", cfg], cwd=build_temp)
 
 setup(
@@ -52,6 +52,14 @@ setup(
     url="https://github.com/c3rb3ru5d3d53c/binlex",
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
+    packages=['libpybinlex'],
+    scripts=['scripts/blserver'],
+    install_requires=[
+        'Flask==2.2.3',
+        'flask-restx==1.0.6',
+        'gunicorn==20.1.0',
+        'requests==2.28.2'
+    ],
     ext_modules=[CMakeExtension("pybinlex")],
     cmdclass={
         "build_ext": CMakeBuild
