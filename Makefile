@@ -50,6 +50,7 @@ uninstall:
 
 clean:
 	rm -rf build/
+	rm -rf deps/build/
 	rm -rf dist/
 	rm -rf pybinlex.egg-info/
 	rm -f *.so
