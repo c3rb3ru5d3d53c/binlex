@@ -57,10 +57,15 @@ jobs:
       with:
         version: 9
 
+    - name: Build Deps
+      run: |
+        cmake -B deps/build -S deps
+        cmake --build deps/build --config ${{ matrix.build-type }} --parallel 4
+
     - name: Build
       run: |
         cmake -B build ${{ matrix.extra-cmake-flags }}
-        cmake --build build --config ${{ matrix.build-type }} --parallel
+        cmake --build build --config ${{ matrix.build-type }} --parallel 4
         cmake --install build --prefix build/install --config ${{ matrix.build-type }}
 
     # - name: Test

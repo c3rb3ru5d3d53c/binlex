@@ -84,14 +84,15 @@ Once you have installed, cloned and changed your directory to the project direct
 
 ### From Source
 
-If you want to compile and install via `make install` run the following commands:
+If you want to compile and install use `cmake` with the following commands:
 
 ```bash
-make threads=4
-sudo make install
+cmake -B deps/build -S deps
+cmake --build deps/build --config Release --parallel 8
+cmake -B build -DBUILD_PYTHON_BINDINGS=ON
+cmake --build build --config Release --parallel 8
 
-# Test your Install
-binlex -m auto -i tests/elf/elf.x86
+build/binlex -m auto -i tests/elf/elf.x86
 ```
 
 ### Binary Releases
@@ -109,9 +110,10 @@ Additionally, another option is to build Debian binary packages for and install 
 To build packages use `cpack`, which comes with `cmake`.
 
 ```bash
-make threads=4
-make pkg  # builds binary packages
-make dist # builds source packages
+cmake -B deps/build -S deps
+cmake --build deps/build --config Release --parallel 8
+cmake -B build -DBUILD_PYTHON_BINDINGS=ON
+cmake --build build --config Release --parallel 8
 sudo apt install ./build/binlex_1.1.1_amd64.deb
 binlex -m elf:x86 -i tests/elf/elf.x86
 ```

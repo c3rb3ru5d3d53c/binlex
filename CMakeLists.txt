@@ -37,155 +37,17 @@ if(CMAKE_COMPILER_IS_GNUCC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
 endif()
 
-if(MSVC)
-    add_definitions(-DNOMINMAX)
-    # HACK: be compatible with the ExternalProject's that are built in Release mode
-    string(REPLACE "/RTC1" "" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
-endif()
-
 include(ExternalProject)
 include(ProcessorCount)
 ProcessorCount(N)
-
-if(CMAKE_GENERATOR MATCHES "Visual Studio")
-    # https://stackoverflow.com/a/70102570/1806760
-    set(EXTERNAL_BUILD_COMMAND "")
-else()
-    set(EXTERNAL_BUILD_COMMAND cmake --build . --parallel ${N})
-endif()
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/tests.py
      DESTINATION ${CMAKE_BINARY_DIR}
 )
 
-set(CAPSTONE_ROOT         "${CMAKE_BINARY_DIR}/capstone/")
-set(CAPSTONE_INCLUDE_DIRS "${CAPSTONE_ROOT}/include/")
-set(CAPSTONE_GIT_URL      "https://github.com/capstone-engine/capstone.git")
-set(CAPSTONE_GIT_TAG      "4.0.2")
-
-ExternalProject_Add(
-    capstone
-    PREFIX              "${CAPSTONE_ROOT}"
-    INSTALL_DIR         "${CAPSTONE_ROOT}"
-    GIT_REPOSITORY      "${CAPSTONE_GIT_URL}"
-    GIT_TAG             "${CAPSTONE_GIT_TAG}"
-    GIT_SHALLOW         ON
-    BUILD_COMMAND       ${EXTERNAL_BUILD_COMMAND}
-    CMAKE_ARGS          -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
-                        -DCAPSTONE_BUILD_SHARED=OFF
-                        -DCAPSTONE_BUILD_TESTS=OFF
-                        -DCAPSTONE_MIPS_SUPPORT=OFF
-                        -DCAPSTONE_ARM_SUPPORT=OFF
-                        -DCAPSTONE_ARM64_SUPPORT=OFF
-                        -DCAPSTONE_M68K_SUPPORT=OFF
-                        -DCAPSTONE_TMS320C64X_SUPPORT=OFF
-                        -DCAPSTONE_M680X_SUPPORT=OFF
-                        -DCAPSTONE_EVM_SUPPORT=OFF
-                        -DCAPSTONE_PPC_SUPPORT=OFF
-                        -DCAPSTONE_SPARC_SUPPORT=OFF
-                        -DCAPSTONE_SYSZ_SUPPORT=OFF
-                        -DCAPSTONE_XCORE_SUPPORT=OFF
-                        -DCAPSTONE_X86_SUPPORT=ON
-                        -DCMAKE_OSX_SYSROOT=${CMAKE_OSX_SYSROOT}
-                        -DCMAKE_OSX_ARCHITECTURES=${CMAKE_OSX_ARCHITECTURES}
-                        -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}
-                        -DCMAKE_C_FLAGS_DEBUG=${CMAKE_C_FLAGS_DEBUG}
-                        -DCMAKE_C_FLAGS_RELEASE=${CMAKE_C_FLAGS_RELEASE}
-                        -DCMAKE_C_FLAGS_MINSIZEREL=${CMAKE_C_FLAGS_MINSIZEREL}
-                        -DCMAKE_C_FLAGS_RELWITHDEBINFO=${CMAKE_C_FLAGS_RELWITHDEBINFO}
-                        -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}
-                        -DCMAKE_CXX_FLAGS_DEBUG=${CMAKE_CXX_FLAGS_DEBUG}
-                        -DCMAKE_CXX_FLAGS_RELEASE=${CMAKE_CXX_FLAGS_RELEASE}
-                        -DCMAKE_CXX_FLAGS_MINSIZEREL=${CMAKE_CXX_FLAGS_MINSIZEREL}
-                        -DCMAKE_CXX_FLAGS_RELWITHDEBINFO=${CMAKE_CXX_FLAGS_RELWITHDEBINFO}
-                        -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON
-)
-
-add_library(capstone_static STATIC IMPORTED)
-set_target_properties(capstone_static PROPERTIES
-    IMPORTED_LOCATION ${CAPSTONE_ROOT}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}capstone${CMAKE_STATIC_LIBRARY_SUFFIX}
-)
-add_dependencies(capstone_static capstone)
-file(MAKE_DIRECTORY ${CAPSTONE_INCLUDE_DIRS})
-target_include_directories(capstone_static INTERFACE ${CAPSTONE_INCLUDE_DIRS})
-
-set(TLSH_GIT_URL      "https://github.com/mrexodia/tlsh.git")
-set(TLSH_ROOT         "${CMAKE_BINARY_DIR}/tlsh/")
-set(TLSH_INCLUDE_DIRS "${TLSH_ROOT}/src/tlsh/include/")
-set(TLSH_GIT_TAG      "24d5c0b7fa2ed4d77d9c5dd0c7e1cbf4cd31b42f")
-
-set(TLSH_CMAKE_ARGS
-    -DCMAKE_BUILD_TYPE=Release
-    -DCMAKE_CXX_FLAGS_RELEASE=${CMAKE_CXX_FLAGS_RELEASE}
-    -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
-    -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
-    -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON
-    -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
-)
-
-ExternalProject_Add(
-    tlsh
-    PREFIX              "${TLSH_ROOT}"
-    INSTALL_DIR         "${TLSH_ROOT}"
-    GIT_REPOSITORY      "${TLSH_GIT_URL}"
-    GIT_TAG             "${TLSH_GIT_TAG}"
-    GIT_SHALLOW         ON
-    BUILD_COMMAND       ${EXTERNAL_BUILD_COMMAND}
-    CMAKE_ARGS          ${TLSH_CMAKE_ARGS}
-)
-
-add_library(tlsh_static STATIC IMPORTED)
-set_target_properties(
-    tlsh_static PROPERTIES IMPORTED_LOCATION
-    ${TLSH_ROOT}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}tlsh${CMAKE_STATIC_LIBRARY_SUFFIX}
-)
-add_dependencies(tlsh_static tlsh)
-if(WIN32)
-    target_compile_definitions(tlsh_static INTERFACE TLSH_WINDOWS)
-endif()
-file(MAKE_DIRECTORY ${TLSH_INCLUDE_DIRS})
-target_include_directories(tlsh_static INTERFACE ${TLSH_INCLUDE_DIRS})
-
-set(LIEF_PREFIX       "${CMAKE_BINARY_DIR}/LIEF/")
-set(LIEF_INSTALL_DIR  "${LIEF_PREFIX}")
-set(LIEF_INCLUDE_DIRS "${LIEF_PREFIX}/include/")
-set(LIEF_GIT_URL      "https://github.com/lief-project/LIEF.git")
-set(LIEF_VERSION      "0.12.2")
-
-set(LIEF_CMAKE_ARGS
-  -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
-  -DCMAKE_BUILD_TYPE=Release
-  -DLIEF_DOC=off
-  -DLIEF_PYTHON_API=off
-  -DLIEF_EXAMPLES=off
-  -DLIEF_PE=on
-  -DLIEF_ELF=on
-  -DLIEF_MACHO=off
-  -DLIEF_OAT=off
-  -DLIEF_DEX=off
-  -DLIEF_VDEX=off
-  -DLIEF_ART=off
-  -DCMAKE_CXX_FLAGS_RELEASE=${CMAKE_CXX_FLAGS_RELEASE}
-  -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
-  -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
-)
-
-ExternalProject_Add(LIEF
-  PREFIX           ${LIEF_PREFIX}
-  GIT_REPOSITORY   ${LIEF_GIT_URL}
-  GIT_TAG          ${LIEF_VERSION}
-  BUILD_COMMAND    ${EXTERNAL_BUILD_COMMAND}
-  INSTALL_DIR      ${LIEF_INSTALL_DIR}
-  CMAKE_ARGS       ${LIEF_CMAKE_ARGS}
-)
-
-add_library(lief_static STATIC IMPORTED)
-set_target_properties(lief_static PROPERTIES
-    IMPORTED_LOCATION ${LIEF_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}LIEF${CMAKE_STATIC_LIBRARY_SUFFIX}
-)
-add_dependencies(lief_static LIEF)
-file(MAKE_DIRECTORY ${LIEF_INCLUDE_DIRS})
-target_include_directories(lief_static INTERFACE ${LIEF_INCLUDE_DIRS})
+find_package(CAPSTONE REQUIRED)
+find_package(TLSH REQUIRED)
+find_package(LIEF REQUIRED)
 
 add_library(binlex
     src/args.cpp
