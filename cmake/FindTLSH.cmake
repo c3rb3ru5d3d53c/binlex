@@ -1,5 +1,6 @@
 set(TLSH_ROOT "${CMAKE_SOURCE_DIR}/deps/build/tlsh")
 set(TLSH_INCLUDE_DIRS "${TLSH_ROOT}/src/tlsh/include")
+file(MAKE_DIRECTORY ${TLSH_INCLUDE_DIRS})
 
 add_library(tlsh_static STATIC IMPORTED)
 set_target_properties(
