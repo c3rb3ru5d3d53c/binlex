@@ -11,6 +11,7 @@ jobs:
       matrix:
         target:
           - ubuntu-20.04
+          - ubuntu-22.04
           - windows
           - macos
         include:
@@ -19,19 +20,25 @@ jobs:
             build-type: Release
             extra-cmake-flags: >-
               "-DBUILD_PYTHON_BINDINGS=ON"
-              "-DPYBIND11_PYTHON_VERSION=3.8.10"
+              "-DPYBIND11_PYTHON_VERSION=3.10.6"
+          - target: ubuntu-22.04
+            os: ubuntu-22.04
+            build-type: Release
+            extra-cmake-flags: >-
+              "-DBUILD_PYTHON_BINDINGS=ON"
+              "-DPYBIND11_PYTHON_VERSION=3.10.6"
           - target: windows
             os: windows-latest
             build-type: Release
             extra-cmake-flags: >-
               "-DBUILD_PYTHON_BINDINGS=ON"
-              "-DPYBIND11_PYTHON_VERSION=3.8.10"
+              "-DPYBIND11_PYTHON_VERSION=3.10.6"
           - target: macos
             os: macOS-latest
             build-type: Release
             extra-cmake-flags: >-
               "-DBUILD_PYTHON_BINDINGS=ON"
-              "-DPYBIND11_PYTHON_VERSION=3.8.10"
+              "-DPYBIND11_PYTHON_VERSION=3.10.6"
     steps:
     - name: Checkout
       uses: actions/checkout@v2
@@ -45,7 +52,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v3
       with:
-        python-version: '3.8.10'
+        python-version: '3.10.6'
 
     - name: Enable Developer Command Prompt
       if: ${{ runner.os == 'Windows' }}
