@@ -74,11 +74,17 @@ jobs:
         cmake --build build --config ${{ matrix.build-type }} --parallel 4
         cmake --install build --prefix build/install --config ${{ matrix.build-type }}
 
-    - name: Build Python
+    - name: Build Python Unix
+      if: ${{ runner.os != 'Windows' }}
       run: |
         python3.8 -m pip wheel -v -w ${{ github.workspace }}/build/ .
         python3.9 -m pip wheel -v -w ${{ github.workspace }}/build/ .
         python3.10 -m pip wheel -v -w ${{ github.workspace }}/build/ .
+
+    - name: Build Python Windows
+      if: ${{ runner.os == 'Windows' }}
+      run: |
+        where python
 
     - name: Package
       run: |
