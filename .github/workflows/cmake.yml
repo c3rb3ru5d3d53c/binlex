@@ -11,6 +11,7 @@ jobs:
       matrix:
         target:
           - ubuntu-20.04
+          - ubuntu-22.04
           - windows
           - macos
         include:
@@ -19,22 +20,24 @@ jobs:
             build-type: Release
             extra-cmake-flags: >-
               "-DBUILD_PYTHON_BINDINGS=ON"
-              "-DPYBIND11_PYTHON_VERSION=3.8.10"
+          - target: ubuntu-22.04
+            os: ubuntu-22.04
+            build-type: Release
+            extra-cmake-flags: >-
+              "-DBUILD_PYTHON_BINDINGS=ON"
           - target: windows
             os: windows-latest
             build-type: Release
             extra-cmake-flags: >-
               "-DBUILD_PYTHON_BINDINGS=ON"
-              "-DPYBIND11_PYTHON_VERSION=3.8.10"
           - target: macos
             os: macOS-latest
             build-type: Release
             extra-cmake-flags: >-
               "-DBUILD_PYTHON_BINDINGS=ON"
-              "-DPYBIND11_PYTHON_VERSION=3.8.10"
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         lfs: true
         submodules: true
@@ -43,9 +46,12 @@ jobs:
       uses: seanmiddleditch/gha-setup-ninja@v3
 
     - name: Set up Python
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v4
       with:
-        python-version: '3.8.10'
+        python-version: |
+          3.8
+          3.9
+          3.10
 
     - name: Enable Developer Command Prompt
       if: ${{ runner.os == 'Windows' }}
@@ -68,10 +74,19 @@ jobs:
         cmake --build build --config ${{ matrix.build-type }} --parallel 4
         cmake --install build --prefix build/install --config ${{ matrix.build-type }}
 
-    # - name: Test
-    #   run: |
-    #     python3 test.py
-    # python3 -m pip wheel -v -w ${{ github.workspace }}/build/ .
+    - name: Build Python Unix
+      if: ${{ runner.os != 'Windows' }}
+      run: |
+        python3.8 -m pip wheel -v -w ${{ github.workspace }}/build/ .
+        python3.9 -m pip wheel -v -w ${{ github.workspace }}/build/ .
+        python3.10 -m pip wheel -v -w ${{ github.workspace }}/build/ .
+
+    - name: Build Python Windows
+      if: ${{ runner.os == 'Windows' }}
+      run: |
+        py -3.8 -m pip wheel -v -w ${{ github.workspace }}/build/ .
+        py -3.9 -m pip wheel -v -w ${{ github.workspace }}/build/ .
+        py -3.10 -m pip wheel -v -w ${{ github.workspace }}/build/ .
 
     - name: Package
       run: |
@@ -89,11 +104,10 @@ jobs:
           build/*.exe
           build/*.dll
           build/*.lib
-          build/*.whl
           build/*.tar.gz
           build/*.rpm
           build/*.a
-          build/*.whl
+          build/pybinlex*.whl
           build/*.dmg
 
     - name: Compress artifacts

@@ -1,5 +1,6 @@
 set(LIEF_PREFIX       "${CMAKE_SOURCE_DIR}/deps/build/LIEF")
 set(LIEF_INCLUDE_DIRS "${LIEF_PREFIX}/include")
+file(MAKE_DIRECTORY ${LIEF_INCLUDE_DIRS})
 
 add_library(lief_static STATIC IMPORTED)
 set_target_properties(lief_static PROPERTIES

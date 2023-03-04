@@ -7,6 +7,7 @@ from shutil import move
 from glob import glob
 import subprocess
 import platform
+from multiprocessing import cpu_count
 from setuptools import Extension, setup, find_packages
 from setuptools.command.build_ext import build_ext
 
@@ -35,14 +36,17 @@ class CMakeBuild(build_ext):
             f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}",
             f"-DPYTHON_EXECUTABLE={sys.executable}",
             f"-DCMAKE_BUILD_TYPE={cfg}",
-            '-DBUILD_PYTHON_BINDINGS=ON'
+            '-DBUILD_PYTHON_BINDINGS=ON',
+            f'-DPYBIND11_PYTHON_VERSION={platform.python_version()}'
         ]
         build_temp = os.path.join(self.build_temp, ext.name)
         if not os.path.exists(build_temp):
             os.makedirs(build_temp)
-        subprocess.check_call(["cmake", "-B", "build", ext.sourcedir] + cmake_args, cwd=build_temp)
-        subprocess.check_call(["cmake", "--build", "build", "--config", cfg, '--parallel'], cwd=build_temp)
-        subprocess.check_call(["cmake", "--install", "build", "--prefix", "build/install", "--config", cfg], cwd=build_temp)
+        subprocess.check_call(["cmake", "-B", "deps/build", "-S", "deps"], cwd=ext.sourcedir)
+        subprocess.check_call(["cmake", "--build", "deps/build", "--config", cfg, '--parallel', f'{cpu_count()}'], cwd=ext.sourcedir)
+        subprocess.check_call(["cmake", "-B", "build"] + cmake_args, cwd=ext.sourcedir)
+        subprocess.check_call(["cmake", "--build", "build", "--config", cfg, '--parallel', f'{cpu_count()}'], cwd=ext.sourcedir)
+        subprocess.check_call(["cmake", "--install", "build", "--prefix", "build/install", "--config", cfg], cwd=ext.sourcedir)
 
 setup(
     name="pybinlex",
