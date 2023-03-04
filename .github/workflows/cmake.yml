@@ -84,7 +84,10 @@ jobs:
     - name: Build Python Windows
       if: ${{ runner.os == 'Windows' }}
       run: |
-        where python
+        py --list-paths
+        %AppData%\Python\Python38\python.exe -m pip wheel -v -w ${{ github.workspace }}/build/ .
+        %AppData%\Python\Python39\python.exe -m pip wheel -v -w ${{ github.workspace }}/build/ .
+        %AppData%\Python\Python310\python.exe -m pip wheel -v -w ${{ github.workspace }}/build/ .
 
     - name: Package
       run: |
