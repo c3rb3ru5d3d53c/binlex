@@ -36,7 +36,8 @@ class CMakeBuild(build_ext):
             f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}",
             f"-DPYTHON_EXECUTABLE={sys.executable}",
             f"-DCMAKE_BUILD_TYPE={cfg}",
-            '-DBUILD_PYTHON_BINDINGS=ON'
+            '-DBUILD_PYTHON_BINDINGS=ON',
+            f'-DPYBIND11_PYTHON_VERSION={platform.python_version()}'
         ]
         build_temp = os.path.join(self.build_temp, ext.name)
         if not os.path.exists(build_temp):

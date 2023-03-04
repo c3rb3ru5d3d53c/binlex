@@ -49,6 +49,8 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: |
+          3.8
+          3.9
           3.10
 
     - name: Enable Developer Command Prompt
@@ -74,6 +76,8 @@ jobs:
 
     - name: Build Python
       run: |
+        python3.8 -m pip wheel -v -w ${{ github.workspace }}/build/ .
+        python3.9 -m pip wheel -v -w ${{ github.workspace }}/build/ .
         python3.10 -m pip wheel -v -w ${{ github.workspace }}/build/ .
 
     - name: Package
