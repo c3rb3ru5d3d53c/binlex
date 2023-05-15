@@ -611,6 +611,8 @@ bool Disassembler::IsConditionalJumpInsn(cs_insn* insn) {
         case X86_INS_JP:
         case X86_INS_JRCXZ:
         case X86_INS_JS:
+        case X86_INS_LOOPE:
+        case X86_INS_LOOPNE:
             return true;
         default:
             return false;
