@@ -28,3 +28,4 @@ test/**
 .DS_Store
 .AppleDouble
 .LSOverride
+.cache
