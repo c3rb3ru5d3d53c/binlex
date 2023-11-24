@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.5)
 
+project(deps)
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 include(ExternalProject)
 
 if(MSVC)
@@ -21,6 +25,7 @@ ExternalProject_Add(
     GIT_TAG             "${CAPSTONE_GIT_TAG}"
     GIT_SHALLOW         ON
     CMAKE_ARGS          -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+                        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
                         -DCAPSTONE_BUILD_SHARED=OFF
                         -DCAPSTONE_BUILD_TESTS=OFF
                         -DCAPSTONE_MIPS_SUPPORT=OFF
@@ -57,6 +62,7 @@ set(TLSH_INCLUDE_DIRS "${TLSH_ROOT}/src/tlsh/include")
 set(TLSH_GIT_TAG      "24d5c0b7fa2ed4d77d9c5dd0c7e1cbf4cd31b42f")
 
 set(TLSH_CMAKE_ARGS
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
     -DCMAKE_BUILD_TYPE=Release
     -DCMAKE_CXX_FLAGS_RELEASE=${CMAKE_CXX_FLAGS_RELEASE}
     -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
@@ -84,6 +90,7 @@ set(LIEF_GIT_URL      "https://github.com/lief-project/LIEF.git")
 set(LIEF_VERSION      "0.12.2")
 
 set(LIEF_CMAKE_ARGS
+  -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
   -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
   -DCMAKE_BUILD_TYPE=Release
   -DLIEF_DOC=off
