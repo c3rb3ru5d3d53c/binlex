@@ -1,0 +1,203 @@
+name: Rust CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, macos-13, windows-latest]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Dependencies (Ubuntu)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libssl-dev make
+
+      - name: Install Dependencies (macOS)
+        if: startsWith(matrix.os, 'macos-')
+        run: |
+          brew update
+          brew install openssl
+
+      - name: Enable Developer Command Prompt (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        uses: ilammy/msvc-dev-cmd@v1.7.0
+
+      - name: Install Python Build Tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install setuptools wheel virtualenv
+
+      - name: Run Unit Tests
+        run: cargo test
+
+      - name: Build Project (Ubuntu)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: make deb
+
+      - name: Build Project (macOS)
+        if: startsWith(matrix.os, 'macos-')
+        run: cargo build --release
+
+      - name: Build Project (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: cargo build --release
+
+      - name: Build Python Wheels (Ubuntu)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: |
+          python -m venv venv
+          . venv/bin/activate
+          cd src/bindings/python/
+          pip install maturin[patchelf]
+          maturin build --release
+
+      - name: Build Python Wheels (MacOS)
+        if: startsWith(matrix.os, 'macos-')
+        run: |
+          python -m venv venv
+          . venv/bin/activate
+          cd src/bindings/python/
+          pip install maturin
+          maturin build --release
+
+      - name: Build Python Wheels (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: |
+          python -m venv venv
+          .\venv\Scripts\activate
+          cd src/bindings/python/
+          pip install maturin
+          maturin build --release
+
+      - name: Create Dist Directory
+        run: mkdir dist
+
+      - name: Copy Binary (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: |
+          copy target\release\binlex.exe dist\
+          copy target\release\blyara.exe dist\
+          copy target\release\blpdb.exe dist\
+          copy target\release\blelfsym.exe dist\
+          copy target\release\blmachosym.exe dist\
+          copy target\release\blrizin.exe dist\
+          copy target\release\blimage.exe dist\
+          copy target\release\blhash.exe dist\
+          copy target\release\blscaler.exe dist\
+          copy target\wheels\*.whl dist\
+
+      - name: Copy Binary (macOS)
+        if: startsWith(matrix.os, 'macos-')
+        run: |
+          cp target/release/binlex dist/
+          cp target/release/blyara dist/
+          cp target/release/blpdb dist/
+          cp target/release/blelfsym dist/
+          cp target/release/blmachosym dist/
+          cp target/release/blrizin dist/
+          cp target/release/blimage dist/
+          cp target/release/blhash dist/
+          cp target/release/blscaler dist/
+          cp target/wheels/*.whl dist/
+
+      - name: Copy Binary (Ubuntu)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: |
+          cp target/release/binlex dist/
+          cp target/release/blyara dist/
+          cp target/release/blpdb dist/
+          cp target/release/blelfsym dist/
+          cp target/release/blmachosym dist/
+          cp target/release/blrizin dist/
+          cp target/release/blimage dist/
+          cp target/release/blhash dist/
+          cp target/release/blscaler dist/
+          cp target/debian/*.deb dist/
+          cp target/wheels/*.whl dist/
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.os }}-artifacts
+          path: dist/
+
+  archlinux:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+    steps:
+      - name: Install Arch Dependencies
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm base-devel curl git
+          echo '%wheel ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+          useradd -m -G wheel builder
+          echo 'builder ALL=(ALL) NOPASSWD: /usr/bin/make' >> /etc/sudoers
+
+      - name: Setup Rust
+        run: |
+          sudo -u builder bash -c 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y'
+          sudo -u builder bash -c 'echo "export PATH=\\"$PATH:/home/builder/.cargo/bin\\"" >> /home/builder/.bashrc'
+          sudo -u builder bash -c 'echo "source /home/builder/.cargo/env" >> /home/builder/.bashrc'
+
+      - name: Checkout Code to Builder Home
+        run: |
+          sudo -u builder mkdir -p /home/builder/repo
+          sudo -u builder bash -c "git clone https://github.com/${GITHUB_REPOSITORY}.git /home/builder/repo"
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+
+      - name: Build Project (Arch Linux)
+        run: |
+          sudo -u builder bash -c 'cd /home/builder/repo/ && . /home/builder/.cargo/env && make zst'
+
+      - name: Run Unit Tests
+        run: |
+          sudo -u builder bash -c 'cd /home/builder/repo/ && . /home/builder/.cargo/env && cargo test'
+
+      - name: Copy Binary (Arch Linux)
+        run: |
+          mkdir dist
+          cp /home/builder/repo/target/release/binlex dist/
+          cp /home/builder/repo/target/release/blyara dist/
+          cp /home/builder/repo/target/release/blpdb dist/
+          cp /home/builder/repo/target/release/blelfsym dist/
+          cp /home/builder/repo/target/release/blmachosym dist/
+          cp /home/builder/repo/target/release/blrizin dist/
+          cp /home/builder/repo/target/release/blimage dist/
+          cp /home/builder/repo/target/release/blhash dist/
+          cp /home/builder/repo/target/release/blscaler dist/
+          cp /home/builder/repo/target/zst/*.zst dist/
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: archlinux-artifacts
+          path: dist/

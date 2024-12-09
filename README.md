@@ -1,479 +1,989 @@
-# binlex
-
-<h2>A Genetic Binary Trait Lexer Library and Utility</h2>
-
-The purpose of `binlex` is to extract basic blocks and functions as traits from binaries for malware research, hunting and detection.
-
-Most projects attempting this use Python to generate traits, but it is very slow.
-
-The design philosophy behind `binlex` is it to keep it simple and extendable.
-
-The simple command-line interface allows malware researchers and analysts to hunt traits across hundreds or thousands of potentially similar malware saving time and money in production environments.
-
-While the C++ API allows developers to get creative with their own detection solutions, completely unencumbered by license limitations.
-
-To help combat malware, we firmly commit our work to the public domain for the greater good of the world.
-
 ![build](https://github.com/c3rb3ru5d3d53c/binlex/actions/workflows/cmake.yml/badge.svg?branch=master)
 ![OS Linux](https://img.shields.io/badge/os-linux-brightgreen)
 ![OS Windows](https://img.shields.io/badge/os-windows-brightgreen)
 ![OS MacOS](https://img.shields.io/badge/os-macos-brightgreen)
 [![GitHub stars](https://img.shields.io/github/stars/c3rb3ru5d3d53c/binlex)](https://github.com/c3rb3ru5d3d53c/binlex/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/c3rb3ru5d3d53c/binlex)](https://github.com/c3rb3ru5d3d53c/binlex/network)
 [![Discord Status](https://img.shields.io/discord/915569998469144636?logo=discord)](https://discord.gg/UDBfRpxV3B)
 [![GitHub license](https://img.shields.io/github/license/c3rb3ru5d3d53c/binlex)](https://github.com/c3rb3ru5d3d53c/binlex/blob/master/LICENSE)
 ![GitHub all releases](https://img.shields.io/github/downloads/c3rb3ru5d3d53c/binlex/total)
 
+<table>
+  <tr>
+    <td style="border: none;"><img src="./assets/binlex.png" alt="Binlex logo" width="100"></td>
+    <td style="border: none; vertical-align: middle; padding-left: 10px;">
+      <h1 style="font-weight: bold; margin: 0;">Binlex - A Binary Genetic Trait Lexer Framework</h1>
+    </td>
+  </tr>
+</table>
 
-## Demos
+The purpose of **binlex** is to extract basic blocks and functions as **genomes** from binaries for **malware research**, **hunting**, and **detection**. 🦠🔍
 
-<p align="center">
-  <img src="docs/img/demo_0.gif" alt="animated" />
-</p>
+Most projects attempting this use pure Python to generate traits, but it’s often **slow** 🐢.
 
-<p align="center">
-  <a href="https://www.youtube.com/watch?v=hgz5gZB3DxE" target="_blank">
-    <img src="https://img.youtube.com/vi/hgz5gZB3DxE/0.jpg" alt="Introduction Video">
-  </a>
-</p>
+The design philosophy behind **binlex** is to keep it **simple** and **extendable**, with an ecosystem of helpful tools and library code. ⚙️
 
-Get slides [here](docs/oalabs.pdf).
+The simple **command-line interface** allows malware researchers and analysts to hunt for traits across **hundreds** or **thousands** of potentially similar malware samples, saving **time** ⏳ and **money** 💰 in production environments.
 
-## Use Cases
-- YARA Signature Creation/Automation
-- Identifying Code-Reuse
-- Threat Hunting
-- Building Goodware Trait Corpus
-- Building Malware Trait Corpus
-- Genetic Programming
-- Machine Learning Malware Detection
+The **Rust API** and **Python bindings** let developers create their own detection solutions with minimal **license limitations**. 🔓
 
-## Installation
+To help combat malware, we provide our work for the greater good. 🌍
 
-This part of the guide will show you how to install and use `binlex`.
+No installation needed, just **download the binaries** from the **release page**! 📥
 
-### Dependencies
+## 🚀 Features
 
-To get started you will need the following dependencies for `binlex`.
+The latest version of **binlex** provides the following amazing features!
 
-#### Linux
+| Feature                         | Description                                                                                     |
+|---------------------------------|-------------------------------------------------------------------------------------------------|
+| 🌐 **Platforms**   | - Windows 🪟<br>- MacOS 🍏<br>- Linux 🐧                                                    |
+| 🌐 **Formats**   | - PE <br>- MachO <br>- ELF                                                  |
+| 🌐 **Architectures**   | - AMD64 <br>- I386<br> - CIL                                               |
+| 🧵 **Multi-Threading**          | - 🔒 Thread-Safe Disassembler Queuing<br>- 🚄 Multi-Threaded Tooling for Maximum Efficiency      |
+| ⚙️ **Customizable Performance** | Toggle features on/off to optimize for your use case                                           |
+| 📉 **JSON String Compression**  | Save memory with JSON compression                                                    |
+| 🧩 **Similarity Hashing**       | - 🔍 Minhash<br>- 🔒 TLSH<br>- 🔐 SHA256                                                        |
+| 🧩 **Function Symbols**         | - Pass function symbols to **binlex** as standard input using **blpdb**, **blelfsym** or **blmachosym** or your own tooling                        |
+| 🏷️ **Tagging**                  | Tagging for easy organization                                                                  |
+| 🎯 **Wildcarding** | Perfect for generating YARA rules and now at a resolution of nibbles!                                                     |
+| **API** | - 🦀 Rust API<br>-Python API                                                         |
+| 🤖 **Machine Learning Features** | - 📊 Normalized Features for Consistency<br>- 📏 Feature Scaler Utility<br>- 🔍 Trait Filtering<br>- 📚 Onnx Sample Training<br>- 🧠 Sample Classification |
+| 📂 **Virtual Imaging** | - Efficient mapping cache for virtual images<br>- 🗄️ Compatible with ZFS / BTRFS<br>- Speeds up repetitive tasks and filtering<br>- Lightening speed ⚡ |
+
+By caching virtual images, **binlex** is able to perform at increased speeds, making repeat runs faster and more efficient.
+
+## Building
+
+To build **binlex** you will need Rust.
+
+### Linux, MacOS and Windows
+
+Installation is straight foward on Linux and MacOS.
 
 ```bash
-sudo apt install -y git build-essential \
-                    cmake make parallel \
-                    doxygen git-lfs rpm \
-                    python3 python3-dev
+cargo build --release
 ```
 
-#### macOS
-
+### Python Bindings
 ```bash
-brew install cmake parallel doxygen git-lfs
-```
-
-#### All Platforms
-
-```bash
-git clone --recursive https://github.com/c3rb3ru5d3d53c/binlex.git
-cd binlex/
-```
-
-*NOTE: that `binlex` requires `cmake` >= 3.5, `make` >= 4.2.1 and `ubuntu` >= 20.04.*
-
-Once you have installed, cloned and changed your directory to the project directory, we can continue with installation.
-
-### From Source
-
-If you want to compile and install use `cmake` with the following commands:
-
-```bash
-cmake -B deps/build -S deps
-cmake --build deps/build --config Release --parallel 8
-cmake -B build -DBUILD_PYTHON_BINDINGS=ON
-cmake --build build --config Release --parallel 8
-
-build/binlex -m auto -i tests/elf/elf.x86
-```
-
-### Binary Releases
-
-See the [`releases`](https://github.com/c3rb3ru5d3d53c/binlex/releases) page.
-
-If you need the bleeding edge binaries you can download them from our GitHub Actions [`here`](https://github.com/c3rb3ru5d3d53c/binlex/actions).
-
-*NOTE: bleeding edge binaries are subject to bugs, if you encounter one, please let us know!*
-
-### Building Packages
-
-Additionally, another option is to build Debian binary packages for and install those.
-
-To build packages use `cpack`, which comes with `cmake`.
-
-```bash
-cmake -B deps/build -S deps
-cmake --build deps/build --config Release --parallel 8
-cmake -B build -DBUILD_PYTHON_BINDINGS=ON
-cmake --build build --config Release --parallel 8
-sudo apt install ./build/binlex_1.1.1_amd64.deb
-binlex -m elf:x86 -i tests/elf/elf.x86
-```
-
-You will then be provided with `.deb`, `.rpm` and `.tar.gz` packages for `binlex`.
-
-### Building Python Bindings
-
-To get started using `pybinlex`:
-```bash
-virtualenv -p python3 venv
+cd src/bindings/python/
+virtualenv -p python3 venv/
 source venv/bin/activate
-# Install Library
-pip install -v .
-# Build Wheel Package
-pip wheel -v -w build/ .
-python3
->>> import pybinlex
+pip install maturin[patchelf]
+maturin develop
+python
+>> import binlex
 ```
 
-If you wish to compile the bindings with `cmake`:
-```bash
-make config=Release threads=4 args=-DBUILD_PYTHON_BINDINGS=ON
-```
+### Packaging
 
-*NOTE: we use `pybind11` and support for `python3.9` is experimental.*
-
-Examples of how to use `pybinlex` can be found in `tests/tests.py`.
-
-### Binlex Web API
+To build packages for various platforms use the `Makefile`.
 
 ```bash
-docker build -t binlex:latest .
-docker run --rm -p 8080:8080 -e LOG_LEVEL='debug' -it binlex:latest
+make zst   # Make Arch Linux Package
+make deb   # Make Debian Package
+make wheel # Make Python Wheel
 ```
 
-Browse to `http://127.0.0.1:8080` to view the web API documentation.
+The resulting packages will be in the `target/` directory.
 
-#### Example Requests
+### Documentation
 
 ```bash
-# Get Modes
-curl http://127.0.0.1/api/v1/modes
-
-# Get Traits
-curl -X POST http://127.0.0.1:8080/api/v1/<corpus>/<mode>/<tags> --upload-file <file>
+cargo doc
 ```
 
-#### Python Web API Wrapper Example
-
-```python
-#!/usr/bin/env python
-
-import json
-from libpybinlex.webapi import WebAPIv1
-
-api = WebAPIv1(url='http://127.0.0.1:8080')
-data = open('sample.bin', 'rb').read()
-response = api.get_traits(
-  data=data,
-  corpus='default',
-  mode='pe:x86',
-  tags=['foo', 'bar'])
-traits = json.loads(response.content)
-print(json.dumps(traits, indent=4))
-```
-
-## Test Files
-
-- To download all the test samples do the command `git lfs fetch`
-- ZIP files in the `tests/` directory can then be extracted using the password `infected`
-
-*NOTE: The `tests/` directory contains malware, we assume you know what you are doing.*
-
-To download individual `git-lfs` files from a relative path, you can use the following `git` alias in `~/.gitconfig`:
-
-```ini
-[alias]
-download = "!ROOT=$(git rev-parse --show-toplevel); cd $ROOT; git lfs pull --include $GIT_PREFIX$1; cd $ROOT/$GIT_PREFIX"
-```
-
-You will then be able to do the following:
+You can also open the docs.
 
 ```bash
-git download tests/pe/pe.zip
+cargo doc --open
 ```
 
-## CLI Usage
+## Binary Genomes, Chromosomes, Allele Pairs and Genes
+
+In **binlex**, a hierarchy of genetic-inspired terms is used to describe and symbolize the structure and traits of binary code. This terminology reflects the relationships between different abstractions and their genetic analogies:
+
+- **Genome**: Represents the each object being analyzed, such as a function or block. It encapsulates all the information, including metadata, chromosomes, and other attributes.
+
+- **Chromosome**: Represents the core patterns or sequences extracted from a block or function. A chromosome acts as the blueprint for identifying key characteristics of the binary without memory addressing as indicated by wildcards like `?`, where a single wildcard represents a single gene.
+
+- **AllelePair**: A unit within the chromosome consisting of **two genes**. Allele pairs are the building blocks of the chromosome, combining genes into meaningful pairs.
+
+- **Gene**: The smallest unit of genetic information, representing a single nibble of data (half a byte).
+
+The relationship between these abstractions can be visualized as follows:
 
 ```text
-binlex v1.1.1 - A Binary Genetic Traits Lexer
-  -i  --input           input file              (required)
-  -m  --mode            set mode                (optional)
-  -lm --list-modes      list modes              (optional)
-  -c  --corpus          corpus name             (optional)
-  -g  --tag             add a tag               (optional)
-                        (can be specified multiple times)
-  -t  --threads         number of threads       (optional)
-  -to --timeout         execution timeout in s  (optional)
-  -h  --help            display help            (optional)
-  -o  --output          output file             (optional)
-  -p  --pretty          pretty output           (optional)
-  -d  --debug           print debug info        (optional)
-  -v  --version         display version         (optional)
+Genome (function / block)
+ └── Chromosome (pattern / sequence)
+      └── AllelePair (two genes / single byte / two nibbles)
+           └── Gene (single nibble)
+```
+
+### Genome Example
+
+```JSON
+{
+  "type": "block",
+  "architecture": "amd64",
+  "address": 6442934577,
+  "next": null,
+  "to": [],
+  "edges": 0,
+  "prologue": false,
+  "conditional": false,
+  "chromosome": {
+    "pattern": "4c8b47??498bc0",
+    "feature": [4,12,8,11,4,7,4,9,8,11,12,0],
+    "entropy": 2.2516291673878226,
+    "sha256": "1f227bf409b0d9fbc576e747de70139a48e42edec60a18fe1e6efdacb598f551",
+    "minhash": "09b8b1ad1142924519f601854444c6c904a3063942cda4da445721dd0703f290208f3e32451bf5d52741e381a13f12f9142b5de21828a00b2cf90cf77948aac4138443c60bf77ec31199247042694ebb2e4e14a41369eddc7d9f84351be34bcf61458425383a03a55f80cbad420bb6e638550c15876fd0c6208da7b50816847e62d72b2c13a896f4849aa6a36188be1d4a5333865eab570e3939fab1359cbd16758f36fa290164d0259f83c07333df535b2e38f148298db255ac05612cae04d60bb0dd810a91b80a7df9615381e9dc242969dd052691d044287ac2992f9092fa0a75d970100d48362f62b58f7f1d9ec594babdf52f58180c30f4cfca142e76bf",
+    "tlsh": null
+  },
+  "size": 7,
+  "bytes": "4c8b4708498bc0",
+  "functions": {},
+  "number_of_instructions": 3,
+  "entropy": 2.5216406363433186,
+  "sha256": "84d4485bfd833565fdf41be46c1a499c859f0a5f04c8c99ea9c34404729fd999",
+  "minhash": "20c995de6a15c8a524fa7e325a6e42b217b636ab03b00812732f877f4739eeee41d7dde92ceac73525e541f9091d8dc928f6425b84a6f44b3f01d17912ec6e8c6f913a760229f685088d2528447e40c768c06d680afe63cb219a1b77a097f679122804dd5a1b9d990aa2579e75f8ef201eeb20d5650da5660efa3a281983a37f28004f9f2a57af8f81728c7d1b02949609c7ad5a30125ff836d8cc3106f2531f306e679a11cabf992556802a3cb2a75a7fe3773e37e3d5ab107a23bf22754aee15a5f41056859b06120f86cb5d39071425855ec90628687741aa0402030d73e04bc60adb0bd2430560442c4309ae258517fc1605438c95485ac4c8621026a1bb",
+  "tlsh": null,
+  "contiguous": true,
+  "attributes": [
+    {
+      "type": "tag",
+      "value": "corpus:malware"
+    },
+    {
+      "type": "tag",
+      "value": "malware:lummastealer"
+    },
+    {
+      "entropy": 6.55061550644311,
+      "sha256": "ec1426109420445df8e9799ac21a4c13364dc12229fb16197e428803bece1140",
+      "size": 725696,
+      "tlsh": "T17AF48C12AF990595E9BBC23DD1974637FAB2B445232047CF426489BD0E1BBE4B73E381",
+      "type": "file"
+    }
+  ]
+}
+```
+
+Given this JSON genome example.
+- **Genome**: The JSON object describing the block, including its metadata, chromosome, and attributes.
+- **Chromosome**: as described by the pattern `"4c8b47??498bc0"`
+- **AllelePair**: `"4c"` or `"8b"`
+- **Gene**: `"4"` or `"c"`
+
+Using the **binlex** API it is possible to mutate these chromosomes, their allelepairs and genes to facilitate genetic programming.
+
+Genetic programming in this context can have several benifits including but not limited to:
+- Hunting for novel samples given a dataset
+- YARA rule generation
+
+## Command-Line
+
+The simplest way to get started is with the command-line, leveraging a JSON filtering tool like `jq`.
+
+The following command disassembles `sample.dll` with `16` threads, the relevant traits are JSON objects, one per line and are piped into `jq` for filtering and beautifying.
+
+To see what options are available when using the **binlex** command-line use `-h` or `--help`.
+
+```bash
+A Binary Pattern Lexer
+
+Version: 1.0.0
+
+Usage: binlex [OPTIONS] --input <INPUT>
+
+Options:
+  -i, --input <INPUT>
+  -o, --output <OUTPUT>
+  -c, --config <CONFIG>
+  -t, --threads <THREADS>
+      --tags <TAGS>
+      --minimal
+  -d, --debug
+      --disable-hashing
+      --disable-disassembler-sweep
+      --disable-heuristics
+      --enable-mmap-cache
+      --mmap-directory <MMAP_DIRECTORY>
+  -h, --help                             Print help
+  -V, --version                          Print version
+
 Author: @c3rb3ru5d3d53c
 ```
 
-### Supported Modes
-
-- `elf:x86`
-- `elf:x86_64`
-- `pe:x86`
-- `pe:x86_64`
-- `pe:cil`
-- `raw:x86`
-- `raw:x86_64`
-- `raw:cil`
-- `auto`
-
-*NOTE: The `raw` modes can be used on shellcode.*
-
-*NOTE: The `auto` mode cannot be used on shellcode.*
-
-### Advanced
-
-If you are hunting using `binlex` you can use `jq` to your advantage for advanced searches.
+A simple example of using the command-line is provided below.
 
 ```bash
-build/binlex -m auto -i tests/pe/pe.x86 | jq -r 'select((.size > 8 and .size < 16) and (.bytes_sha256 != .traits.sha256)) | .trait' | head -10
-8b 48 ?? 03 c8 81 39 50 45 00 00 75 12
-0f b7 41 ?? 3d 0b 01 00 00 74 1f
-83 b9 ?? ?? ?? ?? ?? 76 f2
-33 c0 39 b9 ?? ?? ?? ?? eb 0e
-83 4d ?? ?? b8 ff 00 00 00 e9 ba 00 00 00
-89 75 ?? 66 83 3e 22 75 45
-03 f3 89 75 ?? 66 8b 06 66 3b c7 74 06
-03 f3 89 75 ?? 66 8b 06 66 3b c7 74 06
-56 ff 15 ?? ?? ?? ?? ff 15 ?? ?? ?? ?? eb 2d
-55 8b ec 51 56 33 f6 66 89 33 8a 07 eb 29
+binlex -i sample.dll --threads 16 | jq
 ```
 
-Here are examples of additional queries.
+Please note that **binlex** will detect the file format fort you and currently supports `PE`, `ELF` and `MACHO` binary formats.
 
-```bash
-# Block traits with a size between 0 and 32 bytes
-jq -r 'select(.type == "block" and .size < 32 and .size > 0)'
-# Function traits with a cyclomatic complexity greater than 32 (maybe obfuscation)
-jq -r 'select(.type == "function" and .cyclomatic_complexity > 32)'
-# Traits where bytes have high entropy
-jq -r 'select(.bytes_entropy > 7)'
-# Output all trait strings only
-jq -r '.trait'
-# Output only trait hashes
-jq -r '.trait_sha256'
+### Configuration
+
+Upon your first execution of **binlex** it will store the configuration file in your configuration directory in `binlex/binlex.toml`.
+
+This **binlex** finds the default configuration directory based on your operating system as indicated in the table below for its configuration.
+
+| OS       | Environment Variable                  | Example Binlex Configuration Path                              |
+|----------|---------------------------------------|----------------------------------------------------------------|
+| Linux    | `$XDG_CONFIG_HOME` or `$HOME/.config` | `/home/alice/.config/binlex/binlex.toml`                       |
+| macOS    | `$HOME/Library/Application Support`   | `/Users/Alice/Library/Application Support/binlex/binlex.toml`  |
+| Windows  | `{FOLDERID_RoamingAppData}`           | `C:\Users\Alice\AppData\Roaming\binlex\binlex.toml`            |
+
+The default configuration name `binlex.toml` for **binlex** is provided below.
+
+```toml
+[general]
+threads = 1
+minimal = false
+debug = false
+
+[formats.file.hashing.sha256]
+enabled = true
+
+[formats.file.hashing.tlsh]
+enabled = true
+minimum_byte_size = 50
+
+[formats.file.hashing.minhash]
+enabled = true
+number_of_hashes = 64
+shingle_size = 4
+maximum_byte_size = 50
+seed = 0
+
+[formats.file.heuristics.features]
+enabled = true
+
+[formats.file.heuristics.normalized]
+enabled = false
+
+[formats.file.heuristics.entropy]
+enabled = true
+
+[blocks.hashing.sha256]
+enabled = true
+
+[blocks.hashing.tlsh]
+enabled = true
+minimum_byte_size = 50
+
+[blocks.hashing.minhash]
+enabled = true
+number_of_hashes = 64
+shingle_size = 4
+maximum_byte_size = 50
+seed = 0
+
+[blocks.heuristics.features]
+enabled = true
+
+[blocks.heuristics.normalized]
+enabled = false
+
+[blocks.heuristics.entropy]
+enabled = true
+
+[functions.hashing.sha256]
+enabled = true
+
+[functions.hashing.tlsh]
+enabled = true
+minimum_byte_size = 50
+
+[functions.hashing.minhash]
+enabled = true
+number_of_hashes = 64
+shingle_size = 4
+maximum_byte_size = 50
+seed = 0
+
+[functions.heuristics.features]
+enabled = true
+
+[functions.heuristics.normalized]
+enabled = false
+
+[functions.heuristics.entropy]
+enabled = true
+
+[chromosomes.hashing.sha256]
+enabled = true
+
+[chromosomes.hashing.tlsh]
+enabled = true
+minimum_byte_size = 50
+
+[chromosomes.hashing.minhash]
+enabled = true
+number_of_hashes = 64
+shingle_size = 4
+maximum_byte_size = 50
+seed = 0
+
+[chromosomes.heuristics.features]
+enabled = true
+
+[chromosomes.heuristics.normalized]
+enabled = false
+
+[chromosomes.heuristics.entropy]
+enabled = true
+
+[mmap]
+directory = "/tmp/binlex"
+
+[mmap.cache]
+enabled = false
+
+[disassembler.sweep]
+enabled = true
 ```
 
-If you output just traits you want to `stdout` you can do build a `yara` signature on the fly with the included tool `blyara`:
+If the command-line options are not enough the configuration file provides the most granular control of all options.
+
+If you wish to override the default configuration file and specify another configuration file use the command-line parameter.
 
 ```bash
-build/binlex -m raw:x86 -i tests/raw/raw.x86 | jq -r 'select(.size > 16 and .size < 32) | .trait' | build/blyara --name example_0 -m author example -m tlp white -c 1
-rule example_0 {
-    metadata:
-        author = "example"
-        tlp = "white"
+binlex -c config.toml -i sample.dll
+```
+
+When you run **binlex**, it uses the configuration file and overrides any settings when the respective command-line parameter is used.
+
+### Making a YARA Rule
+
+Here is a general workflow getting started with making YARA rules, where we get 10 unique wildcarded YARA hex strings from a given sample.
+
+```bash
+binlex -i sample.dll --threads 16 | jq -r 'select(.size >= 16 and .size <= 32 and .signature.pattern != null) | .signature.pattern' | sort | uniq | head -10
+016b??8b4b??8bc74c6bd858433b4c0b2c0f83c5??????
+01835404????c6836a0400????837e04??
+03c04c8d05????????4863c8420fb60401460fb64401018942??85c074??
+03c38bf0488d140033c9ff15????????488bd84885c075??
+03c6488d55??41ffc58945a?41b804000000418bcce8b8fd01??eb??
+03c6488d55??41ffc58945a?41b804000000418bcce8e3fb01??eb??
+03f7488d05????????4883c310483bd87c??
+03fb4c8bc6498bd7498bcc448d0c7d04000000e89409????8bd84885f6
+03fe448bc6488bd3418bcee8d8e501??85ed
+03fe897c24??397c24??0f867301????
+```
+
+To take this a step further you can run it through the `blyara` tool to make a quick YARA signature.
+
+```bash
+binlex -i sample.dll --threads 16 | jq -r 'select(.size >= 16 and .size <= 32 and .signature.pattern != null) | .signature.pattern' | sort | uniq | head -10 | blyara -n example
+rule example {
     strings:
-        trait_0 = {52 57 8b 52 ?? 8b 42 ?? 01 d0 8b 40 ?? 85 c0 74 4c}
-        trait_1 = {49 8b 34 8b 01 d6 31 ff 31 c0 c1 cf ?? ac 01 c7 38 e0 75 f4}
-        trait_2 = {e8 67 00 00 00 6a 00 6a ?? 56 57 68 ?? ?? ?? ?? ff d5 83 f8 00 7e 36}
+        $trait_0 = {016b??8b4b??8bc74c6bd858433b4c0b2c0f83c5??????}
+        $trait_1 = {01835404????c6836a0400????837e04??}
+        $trait_2 = {03c04c8d05????????4863c8420fb60401460fb64401018942??85c074??}
+        $trait_3 = {03c38bf0488d140033c9ff15????????488bd84885c075??}
+        $trait_4 = {03c6488d55??41ffc58945a?41b804000000418bcce8b8fd01??eb??}
+        $trait_5 = {03c6488d55??41ffc58945a?41b804000000418bcce8e3fb01??eb??}
+        $trait_6 = {03f7488d05????????4883c310483bd87c??}
+        $trait_7 = {03fb4c8bc6498bd7498bcc448d0c7d04000000e89409????8bd84885f6}
+        $trait_8 = {03fe448bc6488bd3418bcee8d8e501??85ed}
+        $trait_9 = {03fe897c24??397c24??0f867301????}
     condition:
         1 of them
-}
 ```
 
-You can also use the switch `--pretty` to output `json` to identify more properies to query.
+### Comparing Traits Based on Similarity
+
+In **binlex** comparisons can be done using the tool `blcompare`, at this time it only supports TLSH similarity hashing.
+
+All comparisons are one to many, as for every left hand side trait is compared to every right hand side trait.
+
+These are symbolized as `lhs` and `rhs` respectively.
+
+The command-line help for `blcompare` is provided below.
+
+```text
+A Binlex Trait Comparison Tool
+
+Version: 1.0.0
+
+Usage: blcompare [OPTIONS] --input-rhs <INPUT_RHS>
+
+Options:
+      --input-lhs <INPUT_LHS>  Input file or wildcard pattern for LHS (Left-Hand Side)
+      --input-rhs <INPUT_RHS>  Input file or wildcard pattern for RHS (Right-Hand Side)
+  -t, --threads <THREADS>      Number of threads to use [default: 1]
+  -r, --recursive              Enable recursive wildcard expansion
+  -h, --help                   Print help
+  -V, --version                Print version
+
+Author: @c3rb3ru5d3d53c
+```
+
+Using this tool you can compare full directories using globbing file searches of lhs traits vs rhs traits.
+
+This also accepts standard input so you can process something from **binlex** as lhs and then specify a rhs file path glob recursive or not for compairson.
+
+The output can then be filtered using `jq`.
+
+This tool supports multiple threads and processes one file at a time, but the one to many comparison is multi-threaded.
+
+NOTE: Comparisons should be use sparingly to decide what to keep. By default `blcompare` keeps everything which can be many GB of data. As such it is recommended to perform filtering to only keep similairty within a threshold using `jq`.
+
+### Using Ghidra with Binlex
+
+To use **binlex** with ghidra use the `blghidra/blghidra.py` script in the scripts directory.
+
+To leverage function names and virtual addresses from your `Ghidra` projects and provide them to **binlex** use the `analyzeHeadless` script in your `Ghidra` install directory.
 
 ```bash
-build/binlex -m auto -i tests/pe/pe.emotet.x86 -c malware -g malware:emotet -g malware:loader | head -1 | jq
-{
-  "average_instructions_per_block": 29,
-  "blocks": 1,
-  "bytes": "55 8b ec 83 ec 1c 83 65 f0 00 33 d2 c7 45 e4 68 5d df 00 c7 45 e8 43 c4 cb 00 c7 45 ec 8f 08 46 00 c7 45 f8 06 3b 43 00 81 45 f8 25 7a ff ff 81 75 f8 30 f4 44 00 c7 45 fc 22 51 53 00 8b 45 fc 6a 3f 59 f7 f1 6a 1c 89 45 fc 33 d2 8b 45 fc 59 f7 f1 89 45 fc 81 75 fc 3c 95 0e 00 c7 45 f4 0b 16 11 00 81 45 f4 e1 21 ff ff 81 75 f4 79 bd 15 00 ff 4d 0c 75 21",
-  "bytes_entropy": 5.333979606628418,
-  "bytes_sha256": "13e0463c5837bc5ce110990d69397662b82b8de8a9971f77b237f2a6dd2d8982",
-  "corpus": "malware",
-  "cyclomatic_complexity": 3,
-  "edges": 2,
-  "file_sha256": "7b01c7c835552b17f17ad85b8f900c006dd8811d708781b5f49f231448aaccd3",
-  "file_tlsh": "42E34A10F3D341F7DC9608F219B6B22F9F791E023124DFA987981F57ADB5246A2B981C",
-  "instructions": 29,
-  "invalid_instructions": 0,
-  "mode": "pe:x86",
-  "offset": 49711,
-  "size": 118,
-  "tags": [
-    "malware:emotet",
-    "malware:loader"
-  ],
-  "trait": "55 8b ec 83 ec 1c 83 65 ?? ?? 33 d2 c7 45 ?? ?? ?? ?? ?? c7 45 ?? ?? ?? ?? ?? c7 45 ?? ?? ?? ?? ?? c7 45 ?? ?? ?? ?? ?? 81 45 ?? ?? ?? ?? ?? 81 75 ?? ?? ?? ?? ?? c7 45 ?? ?? ?? ?? ?? 8b 45 ?? 6a 3f 59 f7 f1 6a 1c 89 45 ?? 33 d2 8b 45 ?? 59 f7 f1 89 45 ?? 81 75 ?? ?? ?? ?? ?? c7 45 ?? ?? ?? ?? ?? 81 45 ?? ?? ?? ?? ?? 81 75 ?? ?? ?? ?? ?? ff 4d ?? 75 21",
-  "trait_entropy": 3.9699645042419434,
-  "trait_sha256": "7b04c2dbcc3cf23abfdd457b592b4517e4d98b5c83e692c836cde5b91899dd68",
-  "type": "block"
-}
+./analyzeHeadless \
+  <project-directory> \
+  <project-name> \
+  -process sample.dll \
+  -noanalysis \
+  -postscript blghidra.py 2>/dev/null |  grep -P "^{\"type" | binlex -i sample.dll
 ```
 
-With `binlex` it is up to you to remove goodware traits from your extracted traits.
+Please note that `analyzeHeadless` prints log messages to `stdout` and other log output to `stderr` that is of no use interoperability with other command-line utilities.
 
-There have been many questions about removing "library code", there is a make target shown below to help you with this.
+As such, to collect the output of the script it must be filtered with `2>/dev/null |  grep -P "^{\"type"`.
+
+### Using Rizin with Binlex
+
+To leverage the power of Rizin function detection and function naming in **binlex**, run `rizin` on your project using `aflj` to list the functions in JSON format.
+
+Then pipe this output to `blrizin`, which parses `rizin` JSON to a format **binlex** undestands.
+
+Additionally, you can combine this with other tools like `blpdb` to parse PDB symbols to get function addresses and names.
+
+You can then do any parsing as you generally would using `jq`, in this example we count the functions processed by **binlex** to see if we are detecting more of them.
 
 ```bash
-make traits-clean remove=goodware.traits source=sample.traits dest=malware.traits
+rizin -c 'aaa;aflj;' -q sample.dll | \
+  blrizin | \
+  blpdb -i sample.pdb | \
+  binlex -i sample.dll | \
+  jq 'select(.type == "function") | .address' | wc -l
 ```
 
-With `binlex` the power is in your hands, "With great power comes great responsibility", it is up to you!
+**NOTE**: At this time `blrizin` is also compatiable with the output from `radare2` using `blrizin`.
 
-## Plugins
+### Collecting Machine Learning Features
 
-There has been some interest in making IDA, Ghidra and Cutter plugins for `binlex`.
-
-This is something that will be started soon as we finish the HTTP API endpoints.
-
-This `README.md` will be updated when they are ready to use.
-
-## General Usage Information
-
-Binlex is designed to do one thing and one thing only, extract genetic traits from executable code in files. This means it is up to you "the researcher" / "the data scientist" to determine which traits are good and which traits are bad. To accomplish this, you need to use your own [fitness function](https://en.wikipedia.org/wiki/Fitness_function). I encourage you to read about [genetic programming](https://en.wikipedia.org/wiki/Genetic_programming) to gain a better understanding of this in practice. Perhaps watching [this](https://www.youtube.com/watch?v=qiKW1qX97qA) introductory video will help your understanding.
-
-Again, **it's up to you to implement your own algorithms for detection based on the genetic traits you extract**.
-
-## Trait Format
-
-Traits will contain binary code represented in hexadecimal form and will use `??` as wild cards for memory operands or other operands subject to change.
-
-They will also contain additional properties about the trait including its `offset`, `edges`, `blocks`, `cyclomatic_complexity`, `average_instruction_per_block`, `bytes`, `trait`, `trait_sha256`, `bytes_sha256`, `trait_entropy`, `bytes_entropy`, `type`, `size`, `invalid_instructions` and `instructions`.
-
-```json
-{
-  "average_instructions_per_block": 6,
-  "blocks": 1,
-  "bytes": "8b 45 08 a3 10 52 02 10 8b 45 f8 e8 fb d7 00 00 85 c0 74 0d",
-  "bytes_entropy": 3.9219279289245605,
-  "bytes_sha256": "435cb166701006282e457d441ca793e795e38790cacc5b250d4bc418a28961c3",
-  "corpus": "malware",
-  "cyclomatic_complexity": 3,
-  "edges": 2,
-  "file_sha256": "7b01c7c835552b17f17ad85b8f900c006dd8811d708781b5f49f231448aaccd3",
-  "file_tlsh": "42E34A10F3D341F7DC9608F219B6B22F9F791E023124DFA987981F57ADB5246A2B981C",
-  "instructions": 6,
-  "invalid_instructions": 0,
-  "mode": "pe:x86",
-  "offset": 49829,
-  "size": 20,
-  "tags": [
-    "malware:emotet",
-    "malware:loader"
-  ],
-  "trait": "8b 45 ?? a3 ?? ?? ?? ?? 8b 45 ?? e8 fb d7 00 00 85 c0 74 0d",
-  "trait_entropy": 3.3787841796875,
-  "trait_sha256": "fe3b057a28b40a02ac9dd2db6c3208f96f7151fb912fb3c562a7b4581bb7f7a0",
-  "type": "block"
-}
-```
-
-## Documentation
-
-Public documentation on `binlex` can be viewed [here](https://c3rb3ru5d3d53c.github.io/binlex/html/index.html).
-
-### Building Docs
-
-You can access the C++ API Documentation and everything else by building the documents using `doxygen`.
+If you are would like to do some machine learning, you can get features representing the nibbles without memory addressing from binlex like this.
 
 ```bash
-make docs threads=4
+binlex -i sample.dll --threads 16 | jq -r -c 'select(.size >= 16 and .size <= 32 and .signature.feature != null)| .signature.feature' | head -10
+[4,9,8,11,12,0,4,1,11,9,0,3,0,0,1,15,0,0,4,5,3,3,12,0,8,5,13,2,4,8,8,11,13,0,4,1,0,15,9,5,12,0,4,8,15,15,2,5]
+[4,4,8,11,5,1,4,5,3,3,12,0,3,3,12,0,4,8,8,3,12,1,3,0,4,1,0,15,10,3,12,2]
+[4,8,8,3,14,12,4,12,8,11,12,10,4,4,8,9,4,4,2,4,11,2,0,1,4,4,0,15,11,7,12,1,8,10,12,10,14,8,5,11,4,8,8,3,12,4,12,3]
+[4,8,8,3,14,12,4,4,8,9,4,4,2,4,4,12,8,11,12,10,4,4,0,15,11,7,12,1,11,2,0,1,3,3,12,9,14,8,0,11,4,8,8,3,12,4,12,3]
+[4,0,5,3,4,8,8,3,14,12,15,15,1,5,8,11,12,8,8,11,13,8,15,15,1,5,8,11,12,3,4,8,8,3,12,4,5,11,12,3]
+[11,9,2,0,0,3,15,14,7,15,4,8,8,11,8,11,0,4,2,5,4,8,0,15,10,15,12,1,4,8,12,1,14,8,1,8,12,3]
+[8,11,0,12,2,5,11,8,2,0,0,3,15,14,7,15,4,8,12,1,14,1,2,0,4,8,8,11,4,8,12,1,14,0,0,8,4,8,15,7,14,1,4,8,8,11,12,2,12,3]
+[4,8,8,11,0,5,4,8,8,5,12,0,7,5,12,3,4,8,15,15,2,5]
+[4,8,8,11,0,13,3,3,12,0,3,8,8,1,11,0,0,8,0,15,9,5,12,0,12,3]
+[4,8,8,11,0,5,4,8,8,5,12,0,7,5,12,3,4,8,15,15,2,5]
 ```
 
-The documents will be available at `build/docs/html/index.html`.
+If you would like to refine this for your machine learning model by normalizing them between 0 and 1 float values binlex has you covered with the `blscaler` tool.
 
-## Example Library Code
+```bash
+binlex -i sample.dll --threads 16 | jq -r -c 'select(.size >= 16 and .size <= 32 and .signature.feature != null)' | blscaler --threads 16 | jq -c -r '.signature.feature' | head -1
+[0.26666666666666666,0.6,0.5333333333333333,0.7333333333333333,0.8,0.0,0.26666666666666666,0.06666666666666667,0.7333333333333333,0.6,0.0,0.2,0.0,0.0,0.06666666666666667,1.0,0.0,0.0,0.26666666666666666,0.3333333333333333,0.2,0.2,0.8,0.0,0.5333333333333333,0.3333333333333333,0.8666666666666667,0.13333333333333333,0.26666666666666666,0.5333333333333333,0.5333333333333333,0.7333333333333333,0.8666666666666667,0.0,0.26666666666666666,0.06666666666666667,0.0,1.0,0.6,0.3333333333333333,0.8,0.0,0.26666666666666666,0.5333333333333333,1.0,1.0,0.13333333333333333,0.3333333333333333]
+```
 
-As you may already know `binlex` can be used as a `C++` and `Python` library API.
+### Virtual Image File Mapping Cache with Compression
+To leverage the powerful feature of filemapping to reduce memory usage but still benifit from virtual images.
 
-This allows you to write your own detection logic surrounding the data `binlex` extracts.
+```bash
+# Install BTRFS
+sudo pacman -S btrfs-progs compsize
+# Enable the Kernel Module on Boot
+echo "btrfs" | sudo tee /etc/modules-load.d/btrfs.conf
+# Reboot
+reboot
+# Create Virtual Image Cache Storage Pool
+dd if=/dev/zero of=btrfs.img bs=1M count=2048
+# Make it BTRFS
+mkfs.btrfs btrfs.img
+# Make a Cache Directory in /tmp/
+mkdir -p /tmp/binlex/
+# Mount the Cache (Multiple Compression Options Available)
+sudo mount -o compress=lzo btrfs.img /tmp/binlex/
+# Run Binlex
+binlex -i sample.dll --threads 16 --enable-file-mapping --file-mapping-directory /tmp/binlex/ --enable-file-mapping-cache
+sudo compsize ec1426109420445df8e9799ac21a4c13364dc12229fb16197e428803bece1140
+# Virtual Image 6GB vs Stored Size of 192MB
+# Processed 1 file, 49156 regular extents (49156 refs), 0 inline.
+# Type       Perc     Disk Usage   Uncompressed Referenced
+# TOTAL        3%      192M         6.0G         6.0G
+# none       100%      384K         384K         384K
+# lzo          3%      192M         6.0G         6.0G
+```
 
-### C++ API Example Code
+This can set this up to be on disk or if `/tmp/` directory is mapped to RAM.
 
-The power of detection is in your hands, `binlex` is a framework, leverage the C++ API.
+When mapped to RAM, we are taking advantage of virtual image disassembling but without the additional RAM penalty where repetitive tasks almost double in processing speed.
 
-```cpp
-#include <binlex/pe.h>
-#include <binlex/disassembler.h>
+Since `btrfs` abstracts the access to the mapped file in kernel we are able to access it as we would any mapped file but with the benefit of compression.
 
-using namespace binlex;
+To save yourself time if you choose this option, make the mounting of the `btrfs` pool happen on boot and have your **binlex** configuration file set to prefer virtual image caching in the mounted pool directory. This approach ensures that you need not rely on the command-line parameters each time.
 
-int main(int argc, char **argv){
-  PE pe;
-  if (pe.ReadFile("example.exe") == false){
-      return EXIT_FAILURE;
-  }
-  Disassembler disassembler(pe32);
-  disassembler.Disassemble();
-  disassembler.WriteTraits();
-  return EXIT_SUCCESS;
+## Binlex API
+
+The philophsy of the **binlex** project is focused on security, simplicity, speed and extendability.
+
+Part of this is providing an API for developers to write their own detection and hunting logic.
+
+At this time, **binlex** provides both Rust and Python bindings.
+
+### Rust API
+
+The Rust, API makes is easy to get started
+
+#### Native PE
+
+```rs
+use std::process;
+use binlex::Config;
+use binlex::formats::PE;
+use binlex::disassemblers::capstone::Disassembler;
+use binlex::controlflow::Graph;
+
+// Get Default Configuration
+let mut config = Config();
+
+// Use 16 Threads for Multi-Threaded Operations
+config.general.threads = 16;
+
+// Read PE File
+let pe = PE.new("./sample.dll", config)
+  .unwrap_or_else(|error| {
+    eprintln!("{}", error);
+    process::exit(1);
+  });
+
+// To check if DotNet PE use pe.is_dotnet()
+
+// Get Memory Mapped File
+let mapped_file = pe.image()
+  .unwrap_or_else(|error| {
+    eprintln!("{}", error);
+    process::exit(1)
+  });
+
+// Get Mapped File Virtual Image
+let image = mapped_file
+  .mmap()
+  .unwrap_or_else(|error| {
+    eprintln!("{}", error);
+    process::exit(1);
+  });
+
+// Create Disassembler
+let disassembler = Disassembler(pe.architecture(), &image, pe.executable_virtual_address_ranges())
+  .unwrap_or_else(|error| {
+    eprintln!("{}", error);
+    process::exit(1);
+  });
+
+// Create Control Flow Graph
+let cfg = Graph(pe.architecture(), config);
+
+// Disassemble Control Flow
+disassembler.disassemble_controlflow(pe.entrypoints(), &mut cfg);
+```
+
+#### .NET (MSIL/CIL) PE
+
+```rs
+use std::process;
+use binlex::Config;
+use binlex::formats::PE;
+use binlex::disassemblers::custom::cil::Disassembler;
+use binlex::controlflow::Graph;
+
+// Get Default Configuration
+let mut config = Config();
+
+// Use 16 Threads for Multi-Threaded Operations
+config.general.threads = 16;
+
+// Read PE File
+let pe = PE.new("./sample.exe", config)
+  .unwrap_or_else(|error| {
+    eprintln!("{}", error);
+    process::exit(1);
+  });
+
+// To check if DotNet PE use pe.is_dotnet()
+
+// Get Memory Mapped File
+let mapped_file = pe.image()
+  .unwrap_or_else(|error| {
+    eprintln!("{}", error);
+    process::exit(1)
+  });
+
+// Get Mapped File Virtual Image
+let image = mapped_file
+  .mmap()
+  .unwrap_or_else(|error| {
+    eprintln!("{}", error);
+    process::exit(1);
+  });
+
+// Create Disassembler
+let disassembler = Disassembler(pe.architecture(), &image, pe.dotnet_executable_virtual_address_ranges())
+  .unwrap_or_else(|error| {
+    eprintln!("{}", error);
+    process::exit(1);
+  });
+
+// Create Control Flow Graph
+let cfg = Graph(pe.architecture(), config);
+
+// Disassemble Control Flow
+disassembler.disassemble_controlflow(pe.dotnet_entrypoints(), &mut cfg);
+```
+
+#### ELF
+
+```rs
+use std::process;
+use binlex::Config;
+use binlex::formats::ELF;
+use binlex::disassemblers::custom::cil::Disassembler;
+use binlex::controlflow::Graph;
+
+// Get Default Configuration
+let mut config = Config();
+
+// Use 16 Threads for Multi-Threaded Operations
+config.general.threads = 16;
+
+// Read PE File
+let elf = ELF.new("./sample.exe", config)
+  .unwrap_or_else(|error| {
+    eprintln!("{}", error);
+    process::exit(1);
+  });
+
+// Get Memory Mapped File
+let mapped_file = elf.image()
+  .unwrap_or_else(|error| {
+    eprintln!("{}", error);
+    process::exit(1)
+  });
+
+// Get Mapped File Virtual Image
+let image = mapped_file
+  .mmap()
+  .unwrap_or_else(|error| {
+    eprintln!("{}", error);
+    process::exit(1);
+  });
+
+// Create Disassembler
+let disassembler = Disassembler(elf.architecture(), &image, elf.executable_virtual_address_ranges())
+  .unwrap_or_else(|error| {
+    eprintln!("{}", error);
+    process::exit(1);
+  });
+
+// Create Control Flow Graph
+let cfg = Graph(elf.architecture(), config);
+
+// Disassemble Control Flow
+disassembler.disassemble_controlflow(elf.entrypoints(), &mut cfg);
+```
+
+#### MACHO
+
+```rs
+use std::process;
+use binlex::Config;
+use binlex::formats::MACHO;
+use binlex::disassemblers::custom::cil::Disassembler;
+use binlex::controlflow::Graph;
+
+// Get Default Configuration
+let mut config = Config();
+
+// Use 16 Threads for Multi-Threaded Operations
+config.general.threads = 16;
+
+// Read PE File
+let macho = MACHO.new("./sample.app", config)
+  .unwrap_or_else(|error| {
+    eprintln!("{}", error);
+    process::exit(1);
+  });
+
+// Iterate the MACHO Fat Binary Slices
+for index in macho.number_of_slices() {
+  // Get Memory Mapped File
+  let mapped_file = macho.image(index)
+    .unwrap_or_else(|error| {
+      eprintln!("{}", error);
+      process::exit(1)
+    });
+
+  // Get Mapped File Virtual Image
+  let image = mapped_file
+    .mmap()
+    .unwrap_or_else(|error| {
+      eprintln!("{}", error);
+      process::exit(1);
+    });
+
+  // Create Disassembler
+  let disassembler = Disassembler(macho.architecture(index), &image, macho.executable_virtual_address_ranges(index))
+    .unwrap_or_else(|error| {
+      eprintln!("{}", error);
+      process::exit(1);
+    });
+
+  // Create Control Flow Graph
+  let cfg = Graph(macho.architecture(index), config);
+
+  // Disassemble Control Flow
+  disassembler.disassemble_controlflow(macho.entrypoints(index), &mut cfg);
+}
+
+```
+
+#### Accessing Genetic Traits
+
+```rs
+use binlex::controlflow::Instruction;
+use binlex::controlflow::Block;
+use binlex::controlflow::Function;
+
+for address in cfg.instructions.valid_addresses() {
+  // Read Instruction from Control Flow
+  instruction = Instruction(address, &cfg);
+
+  // Print Instruction from Control Flow
+  instruction.print();
+}
+
+for address in cfg.blocks.valid_addresses() {
+  // Read Block from Control Flow
+  block = Block(address, &cfg);
+
+  // Print Block from Control Flow
+  block.print();
+}
+
+for address in cfg.functions.valid_addresses() {
+  // Read Function from Control Flow
+  function = Function(address, &cfg);
+
+  // Print Function from Control Flow
+  function.print();
 }
 ```
 
-### Python API Example Code
+### Python API
 
-The power of detection is in your hands, `binlex` is a framework, leverage the C++ API.
+The binlex Python API is now designed to abstract the disassembler and the controlflow graph.
+
+To disassemble a PE memory mapped image use the following examples.
+
+#### Native PE
 
 ```python
-#!/usr/bin/env python
+from binlex.formats import PE
+from binlex.disassemblers.capstone import Disassembler
+from binlex.controlflow import Graph
+from binlex import Config
 
-import sys
-import pybinlex
+# Get Default Configuration
+config = Config()
 
-pe = pybinlex.PE()
-result = pe.read_file('example.exe')
-if result is False: sys.exit(1)
-disassembler = pybinlex.Disassembler(pe)
-disassembler.disassemble()
-traits = disassembler.get_traits()
-print(json.dumps(traits, indent=4))
+# Use 16 Threads for Multi-Threaded Operations
+config.general.threads = 16
+
+# Open the PE File
+pe = PE('./sample.exe', config)
+
+# To check if a DotNet PE use ps.is_dotnet()
+
+# Get the Memory Mapped File
+mapped_file = pe.image()
+
+# Get the Memory Map
+image = mapped_file.as_memoryview()
+
+# Create Disassembler on Mapped PE Image and PE Architecture
+disassembler = Disassembler(pe.architecture(), image, pe.executable_virtual_address_ranges())
+
+# Create the Controlflow Graph
+cfg = Graph(pe.architecture(), config)
+
+# Disassemble the PE Image Entrypoints Recursively
+disassembler.disassemble_controlflow(pe.entrypoints(), cfg)
 ```
 
-We hope this encourages people to build their own detection solutions based on binary genetic traits.
+#### .NET (MSIL/CIL) PE
+```python
+from binlex.formats import PE
+from binlex.disassemblers.custom.cil import Disassembler
+from binlex.controlflow import Graph
+from binlex import Config
 
-## Tips
-- If you are hunting be sure to use `jq` to improve your searches
-- Does not support PE files that are VB6 if you run against these you will get errors
-- Don't mix packed and unpacked malware, or you will taint your dataset (seen this in academics all the time)
-- When comparing samples to identify if their code is similar, DO NOT mix their architectures in your comparison
-  - Comparing CIL byte-code or .NET to x86 machine code may yield interesting properties, but they are invalid
-- Verify the samples you are collecting into a group using skilled analysts
-- These traits are best used with a hybrid approach (supervised)
 
-## Example Fitness Model
+# Get Default Configuration
+config = Config()
 
-Traits will be compared amongst their common malware family, any traits not common to all samples will be discarded.
+# Use 16 Threads for Multi-Threaded Operations
+config.general.threads = 16
 
-Once completed, all remaining traits will be compared to traits from a goodware set, any traits that match the goodware set will be discarded.
+# Open the PE File
+pe = PE('./sample.exe', config)
 
-To further differ the traits from other malware families, the remaining population will be compared to other malware families, any that match will be discarded.
+# To check if a DotNet PE use ps.is_dotnet()
 
-The remaining population of traits will be unique to the malware family tested and not legitimate binaries or other malware families.
+# Get the Memory Mapped File
+mapped_file = pe.image()
 
-This fitness model allows for accurate classification of the tested malware family.
+# Get the Memory Map
+image = mapped_file.as_memoryview()
 
-## Future Work
-- Java byte-code Support `raw:jvm`, `java:jvm`
-- Python byte-code Support `raw:pyc`, `python:pyc`
-- More API Endpoints
-- Cutter, Ghidra and IDA Plugins
-- Mac-O Support `macho:x86_64`, `macho:x86`
+# Create Disassembler on Mapped PE Image and PE Architecture
+disassembler = Disassembler(pe.architecture(), image, pe.dotnet_executable_virtual_address_ranges())
 
-## Contributing
+# Create the Controlflow Graph
+cfg = Graph(pe.architecture(), config)
 
-If you wish to contribute to Binlex DM me on Twitter [here](https://twitter.com/c3rb3ru5d3d53c).
+# Disassemble the PE Image Entrypoints Recursively
+disassembler.disassemble_controlflow(pe.dotnet_entrypoints(), cfg)
+```
 
-You can also join our Discord [here](https://discord.gg/UDBfRpxV3B).
+#### ELF
 
-Currently looking for help on:
-- MacOS Developer (Parse Mach-O)
-- Plugin Developers (Python)
-- Front-End Developers (Python)
+```python
+from binlex.formats import ELF
+from binlex.disassemblers.capstone import Disassembler
+from binlex.controlflow import Graph
+from binlex import Config
+
+# Get Default Configuration
+config = Config()
+
+# Use 16 Threads for Multi-Threaded Operations
+config.general.threads = 16
+
+# Open the ELF File
+elf = ELF('./sample.so', config)
+
+# Get the Memory Mapped File
+mapped_file = pe.image()
+
+# Get the Memory Map
+image = mapped_file.as_memoryview()
+
+# Create Disassembler on Mapped PE Image and PE Architecture
+disassembler = Disassembler(elf.architecture(), image, elf.executable_virtual_address_ranges())
+
+# Create the Controlflow Graph
+cfg = Graph(elf.architecture(), config)
+
+# Disassemble the PE Image Entrypoints Recursively
+disassembler.disassemble_controlflow(elf.entrypoints(), cfg)
+```
+
+#### MACHO
+
+```python
+from binlex.formats import MACHO
+from binlex.disassemblers.capstone import Disassembler
+from binlex.controlflow import Graph
+from binlex import Config
+
+# Get Default Configuration
+config = Config()
+
+# Use 16 Threads for Multi-Threaded Operations
+config.general.threads = 16
+
+# Open the ELF File
+macho = MACHO('./sample.app', config)
+
+# MachO Fat Binary Can Support Multiple Architectures
+for index in macho.number_of_slices():
+
+  # Get the Memory Mapped File
+  mapped_file = macho.image(index)
+
+  # Get the Memory Map
+  image = mapped_file.as_memoryview()
+
+  # Create Disassembler on Mapped PE Image and PE Architecture
+  disassembler = Disassembler(macho.architecture(index), image, macho.executable_virtual_address_ranges(index))
+
+  # Create the Controlflow Graph
+  cfg = Graph(macho.architecture(index), config)
+
+  # Disassemble the PE Image Entrypoints Recursively
+  disassembler.disassemble_controlflow(macho.entrypoints(index), cfg)
+```
+
+#### Accessing Genetic Traits
+```python
+from binlex.controlflow import Instruction
+from binlex.controlflow import Block
+from binlex.controlflow import Function
+
+# Iterate Valid Instructions
+for address in cfg.instructions.valid_addresses():
+    # Read Instruction from Control Flow
+    instruction = Instruction(address, cfg)
+    # Print Instruction from Control Flow
+    instruction.print()
+
+# Iterate Valid Blocks
+for address in cfg.blocks.valid_addresses():
+  # Read Block from Control Flow
+  block = Block(address, cfg)
+  # Print Block from Control Flow
+  block.print()
+
+# Iterate Valid Functions
+for address in cfg.functions.valid_addresses():
+  # Read Function from Control Flow
+  function = Function(address, cfg)
+  # Print Function from Control Flow
+  function.print()
+```
+
+Please note that although the Python bindings also take advantage of Rust multi-threading.
+
+There are limitations in Python that will affect speed and memory performance due to how Python is designed.
+
+Mainly, this is due to requiring additional locking and unlocking in Python for thread safety.
+
+As such, if you need lightening fast performance consider using the Rust API instead.
+
+## Citation
+
+If you are using **binlex** in a journal publication, or an open-source AI model use the following citation.
+
+```bibtex
+@misc{binlex,
+  author = {c3rb3ru5d3d53c},
+  title = {binlex: A Binary Genetic Trait Lexer Framework},
+  year = {2024},
+  note = {Available at \url{https://github.com/c3rb3ru5d3d53c/binlex-rs}}
+}
+```
+
+If the use of **binlex** is for corporate, personal purposes, or for generating outputs that are not open-source AI models, no citation is needed.
+
+For example, if you use **binlex** to create YARA rules, no citation is needed.
+
+This ensures that **binlex** stays relevant but also ensures permissive corporate and personal use.
