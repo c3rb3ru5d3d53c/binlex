@@ -50,7 +50,7 @@ The latest version of **binlex** provides the following amazing features!
 | 🤖 **Machine Learning Features** | - 📊 Normalized Features for Consistency<br>- 📏 Feature Scaler Utility<br>- 🔍 Trait Filtering<br>- 📚 Onnx Sample Training<br>- 🧠 Sample Classification |
 | 📂 **Virtual Imaging** | - Efficient mapping cache for virtual images<br>- 🗄️ Compatible with ZFS / BTRFS<br>- Speeds up repetitive tasks and filtering<br>- Lightening speed ⚡ |
 
-By caching virtual images, **binlex** is able to perform at increased speeds, making repeat runs faster and more efficient.
+By caching virtual images, **binlex** is able to perform at better speeds, making repeat runs faster and more efficient.
 
 ## Building
 
