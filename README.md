@@ -54,7 +54,7 @@ By caching virtual images, **binlex** is able to perform at better speeds, makin
 
 ## Building
 
-To build **binlex** you will need Rust.
+To build **binlex** you need Rust.
 
 ### Linux, MacOS and Windows
 
