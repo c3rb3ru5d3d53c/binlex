@@ -1,0 +1,6 @@
+*.dll
+*.exe
+*.so
+*.macho
+venv/
+*.py

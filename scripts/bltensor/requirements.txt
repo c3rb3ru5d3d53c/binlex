@@ -1,0 +1,5 @@
+onnx==1.17.0
+tf2onnx==1.16.1
+numpy==2.0.2
+tensorflow==2.18.0
+onnxruntime==1.20.0
