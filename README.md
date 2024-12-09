@@ -1,4 +1,4 @@
-![build](https://github.com/c3rb3ru5d3d53c/binlex/actions/workflows/cmake.yml/badge.svg?branch=master)
+![build](https://github.com/c3rb3ru5d3d53c/binlex/actions/workflows/cicd.yml/badge.svg?branch=master)
 ![OS Linux](https://img.shields.io/badge/os-linux-brightgreen)
 ![OS Windows](https://img.shields.io/badge/os-windows-brightgreen)
 ![OS MacOS](https://img.shields.io/badge/os-macos-brightgreen)
