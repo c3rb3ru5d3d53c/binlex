@@ -1,5 +1,6 @@
 use crate::Architecture;
 use crate::controlflow::instruction::Instruction;
+use crate::controlflow::InstructionJson;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Value;
@@ -46,6 +47,8 @@ pub struct BlockJson {
     pub functions: BTreeMap<u64, u64>,
     /// The number of instructions in this block.
     pub number_of_instructions: usize,
+    /// Instructions assocated with this block.
+    pub instructions: Vec<InstructionJson>,
     /// The entropy of the block, if enabled.
     pub entropy: Option<f64>,
     /// The SHA-256 hash of the block, if enabled.
@@ -178,6 +181,7 @@ impl<'block> Block<'block> {
             size: self.size(),
             bytes: Binary::to_hex(&self.bytes()),
             number_of_instructions: self.number_of_instructions(),
+            instructions: self.instructions(),
             functions: self.functions(),
             entropy: self.entropy(),
             sha256: self.sha256(),
@@ -186,6 +190,25 @@ impl<'block> Block<'block> {
             contiguous: true,
             attributes: None,
         }
+    }
+
+    /// Retrives the instructions associated with the block.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Vec<InstructionJson>` representing the instructions associated with a block.
+    pub fn instructions(&self) -> Vec<InstructionJson> {
+        let mut result = Vec::<InstructionJson>::new();
+        if !self.cfg.config.blocks.instructions.enabled { return result; }
+        for entry in self.cfg.listing.range(self.address..){
+            let instruction = entry.value();
+            result.push(instruction.process());
+            if instruction.address >= self.terminator.address {
+                break;
+            }
+        }
+        result
+
     }
 
     /// Processes the block into its JSON-serializable representation including `Attributes`.

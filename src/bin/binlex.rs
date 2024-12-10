@@ -59,6 +59,8 @@ pub struct Args {
     #[arg(long, default_value_t = false)]
     pub enable_instructions: bool,
     #[arg(long, default_value_t = false)]
+    pub enable_block_instructions: bool,
+    #[arg(long, default_value_t = false)]
     pub disable_hashing: bool,
     #[arg(long, default_value_t = false)]
     pub disable_disassembler_sweep: bool,
@@ -309,11 +311,11 @@ fn get_pe_function_symbols(pe: &PE) -> BTreeMap<u64, Symbol> {
     return symbols;
 }
 
-fn process_output(output: Option<String>, enable_instructions: bool, cfg: &Graph, attributes: &Attributes, function_symbols: &BTreeMap<u64, Symbol>) {
+fn process_output(output: Option<String>, cfg: &Graph, attributes: &Attributes, function_symbols: &BTreeMap<u64, Symbol>) {
 
     let mut instructions = Vec::<LZ4String>::new();
- 
-    if enable_instructions {
+
+    if cfg.config.instructions.enabled {
         instructions = cfg.instructions.valid()
             .iter()
             .map(|entry| *entry)
@@ -325,40 +327,46 @@ fn process_output(output: Option<String>, enable_instructions: bool, cfg: &Graph
             .collect();
     }
 
-    let blocks: Vec<LZ4String> = cfg.blocks.valid()
-        .iter()
-        .map(|entry| *entry)
-        .collect::<Vec<u64>>()
-        .par_iter()
-        .filter_map(|address| Block::new(*address, &cfg).ok())
-        .filter_map(|block| block.json_with_attributes(attributes.clone()).ok())
-        .map(|js| LZ4String::new(&js))
-        .collect();
+    let mut blocks = Vec::<LZ4String>::new();
 
-    let functions: Vec<LZ4String> = cfg.functions.valid()
-        .iter()
-        .map(|entry| *entry)
-        .collect::<Vec<u64>>()
-        .par_iter()
-        .filter_map(|address| Function::new(*address, &cfg).ok())
-        .filter_map(|function| {
-            let mut function_attributes = attributes.clone();
-            let symbol= function_symbols.get(&function.address);
-            if symbol.is_some() {
-                function_attributes.push(symbol.unwrap().attribute());
-            }
-            function.json_with_attributes(function_attributes).ok()
-        })
-        .map(|js| LZ4String::new(&js))
-        .collect();
+    if cfg.config.blocks.enabled {
+        blocks = cfg.blocks.valid()
+            .iter()
+            .map(|entry| *entry)
+            .collect::<Vec<u64>>()
+            .par_iter()
+            .filter_map(|address| Block::new(*address, &cfg).ok())
+            .filter_map(|block| block.json_with_attributes(attributes.clone()).ok())
+            .map(|js| LZ4String::new(&js))
+            .collect();
+    }
+
+    let mut functions = Vec::<LZ4String>::new();
+
+    if cfg.config.functions.enabled {
+        functions = cfg.functions.valid()
+            .iter()
+            .map(|entry| *entry)
+            .collect::<Vec<u64>>()
+            .par_iter()
+            .filter_map(|address| Function::new(*address, &cfg).ok())
+            .filter_map(|function| {
+                let mut function_attributes = attributes.clone();
+                let symbol= function_symbols.get(&function.address);
+                if symbol.is_some() {
+                    function_attributes.push(symbol.unwrap().attribute());
+                }
+                function.json_with_attributes(function_attributes).ok()
+            })
+            .map(|js| LZ4String::new(&js))
+            .collect();
+    }
 
     if output.is_none() {
 
-        if enable_instructions {
-            instructions.iter().for_each(|result| {
-                Stdout::print(result);
-            });
-        }
+        instructions.iter().for_each(|result| {
+            Stdout::print(result);
+        });
 
         blocks.iter().for_each(|result| {
             Stdout::print(result);
@@ -378,7 +386,7 @@ fn process_output(output: Option<String>, enable_instructions: bool, cfg: &Graph
             }
         };
 
-        if enable_instructions {
+        if cfg.config.instructions.enabled {
             for instruction in instructions {
                 if let Err(error) = writeln!(file, "{}", instruction) {
                     eprintln!("{}", error);
@@ -404,7 +412,7 @@ fn process_output(output: Option<String>, enable_instructions: bool, cfg: &Graph
     }
 }
 
-fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: Option<String>, enable_instructions: bool) {
+fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: Option<String>) {
     let mut attributes = Attributes::new();
 
     let pe = match PE::new(input, config.clone()) {
@@ -466,7 +474,7 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
                 process::exit(1);
             }
         };
-    
+
         disassembler.disassemble_controlflow(entrypoints.clone(), &mut cfg)
             .unwrap_or_else(|error| {
                 eprintln!("{}", error);
@@ -491,10 +499,10 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
         process::exit(1);
     }
 
-    process_output(output, enable_instructions, &cfg, &attributes, &function_symbols);
+    process_output(output, &cfg, &attributes, &function_symbols);
 }
 
-fn process_elf(input: String, config: Config, tags: Option<Vec<String>>, output: Option<String>, enable_instructions: bool) {
+fn process_elf(input: String, config: Config, tags: Option<Vec<String>>, output: Option<String>) {
     let mut attributes = Attributes::new();
 
     let elf = ELF::new(input, config.clone()).unwrap_or_else(|error| {
@@ -551,10 +559,10 @@ fn process_elf(input: String, config: Config, tags: Option<Vec<String>>, output:
             process::exit(1);
         });
 
-    process_output(output, enable_instructions, &cfg, &attributes, &function_symbols);
+    process_output(output, &cfg, &attributes, &function_symbols);
 }
 
-fn process_code(input: String, config: Config, architecture: Architecture, output: Option<String>, enable_instructions: bool) {
+fn process_code(input: String, config: Config, architecture: Architecture, output: Option<String>) {
     let mut attributes = Attributes::new();
 
     let mut file = BLFile::new(input, config.clone()).unwrap_or_else(|error| {
@@ -573,7 +581,7 @@ fn process_code(input: String, config: Config, architecture: Architecture, outpu
     executable_address_ranges.insert(0, file.size());
 
     let mut entrypoints = BTreeSet::<u64>::new();
-    
+
     entrypoints.insert(0x00);
 
     match architecture {
@@ -585,7 +593,7 @@ fn process_code(input: String, config: Config, architecture: Architecture, outpu
                     process::exit(1);
                 }
             };
-        
+
             disassembler.disassemble_controlflow(entrypoints, &mut cfg)
             .unwrap_or_else(|error| {
                 eprintln!("{}", error);
@@ -600,7 +608,7 @@ fn process_code(input: String, config: Config, architecture: Architecture, outpu
                     process::exit(1);
                 }
             };
-        
+
             disassembler.disassemble_controlflow(entrypoints, &mut cfg)
             .unwrap_or_else(|error| {
                 eprintln!("{}", error);
@@ -614,10 +622,10 @@ fn process_code(input: String, config: Config, architecture: Architecture, outpu
 
     let function_symbols = BTreeMap::<u64, Symbol>::new();
 
-    process_output(output, enable_instructions, &cfg, &attributes, &function_symbols);
+    process_output(output, &cfg, &attributes, &function_symbols);
 }
 
-fn process_macho(input: String, config: Config, tags: Option<Vec<String>>, output: Option<String>, enable_instructions: bool) {
+fn process_macho(input: String, config: Config, tags: Option<Vec<String>>, output: Option<String>) {
     let mut attributes = Attributes::new();
 
     let macho = MACHO::new(input, config.clone()).unwrap_or_else(|error| {
@@ -674,7 +682,7 @@ fn process_macho(input: String, config: Config, tags: Option<Vec<String>>, outpu
             process::exit(1);
         });
 
-        process_output(output.clone(), enable_instructions, &cfg, &attributes, &function_symbols);
+        process_output(output.clone(), &cfg, &attributes, &function_symbols);
     }
 }
 
@@ -737,6 +745,14 @@ fn main() {
         config.enable_minimal();
     }
 
+    if args.enable_instructions != false {
+        config.instructions.enabled = args.enable_instructions;
+    }
+
+    if args.enable_block_instructions != false {
+        config.blocks.instructions.enabled = args.enable_block_instructions;
+    }
+
     Stderr::print_debug(config.clone(), "finished reading arguments and configuration");
 
     ThreadPoolBuilder::new()
@@ -756,15 +772,15 @@ fn main() {
         match format {
             Format::PE => {
                 Stderr::print_debug(config.clone(), "processing pe");
-                process_pe(args.input, config, args.tags, args.output, args.enable_instructions);
+                process_pe(args.input, config, args.tags, args.output);
             },
             Format::ELF => {
                 Stderr::print_debug(config.clone(), "processing elf");
-                process_elf(args.input, config, args.tags, args.output, args.enable_instructions);
+                process_elf(args.input, config, args.tags, args.output);
             },
             Format::MACHO => {
                 Stderr::print_debug(config.clone(), "processing macho");
-                process_macho(args.input, config, args.tags, args.output, args.enable_instructions);
+                process_macho(args.input, config, args.tags, args.output);
             }
             _ => {
                 eprintln!("unable to identify file format");
@@ -776,7 +792,7 @@ fn main() {
         match architecture {
             Architecture::AMD64 | Architecture::I386 | Architecture::CIL => {
                 Stderr::print_debug(config.clone(), "processing code");
-                process_code(args.input, config, architecture, args.output, args.enable_instructions);
+                process_code(args.input, config, architecture, args.output);
             },
             _ => {
                 eprintln!("unsupported architecture");

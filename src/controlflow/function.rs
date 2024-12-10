@@ -3,7 +3,6 @@ use crate::Architecture;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::io::Error;
 use std::io::ErrorKind;
 use crate::binary::Binary;
@@ -17,6 +16,7 @@ use crate::hashing::SHA256;
 use crate::hashing::TLSH;
 use crate::hashing::MinHash32;
 use serde_json::Value;
+use crate::controlflow::BlockJson;
 
 /// Represents a JSON-serializable structure containing metadata about a function.
 #[derive(Serialize, Deserialize)]
@@ -41,9 +41,11 @@ pub struct FunctionJson {
     /// A map of functions associated with the function.
     pub functions: BTreeMap<u64, u64>,
     /// The set of blocks contained within the function.
-    pub blocks: BTreeSet<u64>,
+    pub blocks: Vec<BlockJson>,
     /// The number of instructions in the function.
     pub number_of_instructions: usize,
+    /// Number of blocks
+    pub number_of_blocks: usize,
     /// The cyclomatic complexity of the function.
     pub cyclomatic_complexity: usize,
     /// Average Instructions per Block
@@ -161,6 +163,7 @@ impl<'function> Function<'function> {
             size: self.size(),
             functions: self.functions(),
             blocks: self.blocks(),
+            number_of_blocks: self.number_of_blocks(),
             number_of_instructions: self.number_of_instructions(),
             cyclomatic_complexity: self.cyclomatic_complexity(),
             average_instructions_per_block: self.average_instructions_per_block(),
@@ -172,6 +175,15 @@ impl<'function> Function<'function> {
             architecture: self.architecture().to_string(),
             attributes: None,
         }
+    }
+
+    /// Retrives the number of blocks in the function.
+    ///
+    /// # Returns
+    ///
+    /// Returns `usize` representing the number of blocks in the function.
+    pub fn number_of_blocks(&self) -> usize {
+        self.blocks.len()
     }
 
     /// Processes the function into its JSON-serializable representation including `Attributes`
@@ -269,15 +281,19 @@ impl<'function> Function<'function> {
         return false;
     }
 
-    /// Retrieves the set of block addresses in the function.
+    /// Retrieves the blocks associated with this function.
     ///
     /// # Returns
     ///
-    /// Returns a `BTreeSet<u64>` containing the addresses of all blocks in the function.
-    pub fn blocks(&self) -> BTreeSet<u64> {
-        let mut result = BTreeSet::<u64>::new();
+    /// Returns a `Vec<BlockJson>` representing the blocks associated with this function.
+    pub fn blocks(&self) -> Vec<BlockJson> {
+        let mut result = Vec::<BlockJson>::new();
+        if !self.cfg.config.functions.blocks.enabled { return result; }
         for (block_address, _) in &self.blocks {
-            result.insert(*block_address);
+            let block = Block::new(*block_address, &self.cfg)
+                .expect("failed to get block associated with function");
+            result.push(block.process())
+
         }
         result
     }

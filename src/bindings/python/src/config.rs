@@ -29,6 +29,46 @@ impl Architecture {
 }
 
 #[pyclass]
+pub struct ConfigBlockInstructions {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigBlockInstructions {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.blocks.instructions.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.blocks.instructions.enabled = value;
+    }
+}
+
+#[pyclass]
+pub struct ConfigFunctionBlocks {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigFunctionBlocks {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.functions.blocks.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.functions.blocks.enabled = value;
+    }
+}
+
+#[pyclass]
 pub struct ConfigChromosomes {
     inner: Arc<Mutex<InnerConfig>>,
 }
@@ -62,12 +102,7 @@ impl ConfigChromosomesHeuristics {
             inner: Arc::clone(&self.inner)
         }
     }
-    #[getter]
-    pub fn get_normalized(&self) -> ConfigChromosomesHeuristicsNormalization {
-        ConfigChromosomesHeuristicsNormalization {
-            inner: Arc::clone(&self.inner)
-        }
-    }
+
     #[getter]
     pub fn get_entropy(&self) -> ConfigChromosomesHeuristicsEntropy {
         ConfigChromosomesHeuristicsEntropy {
@@ -124,26 +159,6 @@ impl ConfigChromosomesHeuristicsEntropy {
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
         inner.chromosomes.heuristics.entropy.enabled = value;
-    }
-}
-
-#[pyclass]
-pub struct ConfigChromosomesHeuristicsNormalization {
-    pub inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigChromosomesHeuristicsNormalization {
-    #[getter]
-    pub fn get_enabled(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
-        inner.chromosomes.heuristics.normalized.enabled
-    }
-
-    #[setter]
-    pub fn set_enabled(&mut self, value: bool) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.heuristics.normalized.enabled = value;
     }
 }
 
@@ -295,13 +310,34 @@ pub struct ConfigFunctions {
 }
 
 #[pymethods]
-impl  ConfigFunctions {
+impl ConfigFunctions {
+
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.functions.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.functions.enabled = value;
+    }
+
+    #[getter]
+    pub fn get_blocks(&self) -> ConfigFunctionBlocks {
+        ConfigFunctionBlocks {
+            inner: Arc::clone(&self.inner)
+        }
+    }
+
     #[getter]
     pub fn get_hashing(&self) -> ConfigFunctionsHashing {
         ConfigFunctionsHashing {
             inner: Arc::clone(&self.inner)
         }
     }
+
     #[getter]
     pub fn get_heuristics(&self) -> ConfigFunctionsHeuristics {
         ConfigFunctionsHeuristics {
@@ -323,12 +359,7 @@ impl ConfigFunctionsHeuristics {
             inner: Arc::clone(&self.inner)
         }
     }
-    #[getter]
-    pub fn get_normalized(&self) -> ConfigFunctionsHeuristicsNormalization {
-        ConfigFunctionsHeuristicsNormalization {
-            inner: Arc::clone(&self.inner)
-        }
-    }
+
     #[getter]
     pub fn get_entropy(&self) -> ConfigFunctionsHeuristicsEntropy {
         ConfigFunctionsHeuristicsEntropy {
@@ -385,26 +416,6 @@ impl ConfigFunctionsHeuristicsEntropy {
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
         inner.functions.heuristics.entropy.enabled = value;
-    }
-}
-
-#[pyclass]
-pub struct ConfigFunctionsHeuristicsNormalization {
-    pub inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigFunctionsHeuristicsNormalization {
-    #[getter]
-    pub fn get_enabled(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
-        inner.functions.heuristics.normalized.enabled
-    }
-
-    #[setter]
-    pub fn set_enabled(&mut self, value: bool) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.functions.heuristics.normalized.enabled = value;
     }
 }
 
@@ -556,16 +567,93 @@ pub struct ConfigBlocks {
 }
 
 #[pymethods]
-impl  ConfigBlocks {
+impl ConfigBlocks {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.blocks.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.blocks.enabled = value;
+    }
+
+    #[getter]
+    pub fn get_instructions(&self) -> ConfigBlockInstructions {
+        ConfigBlockInstructions {
+            inner: Arc::clone(&self.inner)
+        }
+    }
+
     #[getter]
     pub fn get_hashing(&self) -> ConfigBlocksHashing {
         ConfigBlocksHashing {
             inner: Arc::clone(&self.inner)
         }
     }
+
     #[getter]
     pub fn get_heuristics(&self) -> ConfigBlocksHeuristics {
         ConfigBlocksHeuristics {
+            inner: Arc::clone(&self.inner)
+        }
+    }
+}
+
+
+#[pyclass]
+pub struct ConfigInstructions {
+    inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigInstructions {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.instructions.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.instructions.enabled = value;
+    }
+
+    #[getter]
+    pub fn get_hashing(&self) -> ConfigInstructionsHashing {
+        ConfigInstructionsHashing {
+            inner: Arc::clone(&self.inner)
+        }
+    }
+
+    #[getter]
+    pub fn get_heuristics(&self) -> ConfigInstructionsHeuristics {
+        ConfigInstructionsHeuristics {
+            inner: Arc::clone(&self.inner)
+        }
+    }
+}
+
+#[pyclass]
+pub struct ConfigInstructionsHeuristics {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigInstructionsHeuristics {
+    #[getter]
+    pub fn get_features(&self) -> ConfigInstructionsHeuristicsFeatures {
+        ConfigInstructionsHeuristicsFeatures {
+            inner: Arc::clone(&self.inner)
+        }
+    }
+
+    #[getter]
+    pub fn get_entropy(&self) -> ConfigInstructionsHeuristicsEntropy {
+        ConfigInstructionsHeuristicsEntropy {
             inner: Arc::clone(&self.inner)
         }
     }
@@ -584,15 +672,39 @@ impl ConfigBlocksHeuristics {
             inner: Arc::clone(&self.inner)
         }
     }
-    #[getter]
-    pub fn get_normalized(&self) -> ConfigBlocksHeuristicsNormalization {
-        ConfigBlocksHeuristicsNormalization {
-            inner: Arc::clone(&self.inner)
-        }
-    }
+
     #[getter]
     pub fn get_entropy(&self) -> ConfigBlocksHeuristicsEntropy {
         ConfigBlocksHeuristicsEntropy {
+            inner: Arc::clone(&self.inner)
+        }
+    }
+}
+
+#[pyclass]
+pub struct ConfigInstructionsHashing {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigInstructionsHashing {
+    #[getter]
+    pub fn get_sha256(&self) -> ConfigInstructionsHashingSHA256 {
+        ConfigInstructionsHashingSHA256 {
+            inner: Arc::clone(&self.inner)
+        }
+    }
+
+    #[getter]
+    pub fn get_tlsh(&self) -> ConfigInstructionsHashingTLSH {
+        ConfigInstructionsHashingTLSH {
+            inner: Arc::clone(&self.inner)
+        }
+    }
+
+    #[getter]
+    pub fn get_minhash(&self) -> ConfigInstructionsHashingMinhash {
+        ConfigInstructionsHashingMinhash {
             inner: Arc::clone(&self.inner)
         }
     }
@@ -628,6 +740,25 @@ impl ConfigBlocksHashing {
     }
 }
 
+#[pyclass]
+pub struct ConfigInstructionHeuristicsEntropy {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigInstructionHeuristicsEntropy {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.instructions.heuristics.entropy.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.instructions.heuristics.entropy.enabled = value;
+    }
+}
 
 #[pyclass]
 pub struct ConfigBlocksHeuristicsEntropy {
@@ -646,26 +777,6 @@ impl ConfigBlocksHeuristicsEntropy {
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
         inner.blocks.heuristics.entropy.enabled = value;
-    }
-}
-
-#[pyclass]
-pub struct ConfigBlocksHeuristicsNormalization {
-    pub inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigBlocksHeuristicsNormalization {
-    #[getter]
-    pub fn get_enabled(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
-        inner.blocks.heuristics.normalized.enabled
-    }
-
-    #[setter]
-    pub fn set_enabled(&mut self, value: bool) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.blocks.heuristics.normalized.enabled = value;
     }
 }
 
@@ -690,6 +801,46 @@ impl ConfigBlocksHeuristicsFeatures {
 }
 
 #[pyclass]
+pub struct ConfigInstructionsHeuristicsFeatures {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigInstructionsHeuristicsFeatures {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.instructions.heuristics.features.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.instructions.heuristics.features.enabled = value;
+    }
+}
+
+#[pyclass]
+pub struct ConfigInstructionsHeuristicsEntropy {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigInstructionsHeuristicsEntropy {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.instructions.heuristics.entropy.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.instructions.heuristics.entropy.enabled = value;
+    }
+}
+
+#[pyclass]
 pub struct ConfigBlocksHashingSHA256 {
     pub inner: Arc<Mutex<InnerConfig>>,
 }
@@ -706,6 +857,125 @@ impl ConfigBlocksHashingSHA256 {
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
         inner.blocks.hashing.sha256.enabled = value;
+    }
+}
+
+#[pyclass]
+pub struct ConfigInstructionsHashingSHA256 {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigInstructionsHashingSHA256 {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.instructions.hashing.sha256.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.instructions.hashing.sha256.enabled = value;
+    }
+}
+
+#[pyclass]
+pub struct ConfigInstructionsHashingTLSH {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigInstructionsHashingTLSH {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.instructions.hashing.tlsh.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.instructions.hashing.tlsh.enabled = value;
+    }
+
+    #[getter]
+    pub fn get_minimum_byte_size(&self) -> usize {
+        let inner = self.inner.lock().unwrap();
+        inner.instructions.hashing.tlsh.minimum_byte_size
+    }
+
+    #[setter]
+    pub fn set_minimum_byte_size(&mut self, value: usize) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.instructions.hashing.tlsh.minimum_byte_size = value;
+    }
+}
+
+#[pyclass]
+pub struct ConfigInstructionsHashingMinhash {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigInstructionsHashingMinhash {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.instructions.hashing.minhash.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.instructions.hashing.minhash.enabled = value;
+    }
+
+    #[getter]
+    pub fn get_number_of_hashes(&self) -> usize {
+        let inner = self.inner.lock().unwrap();
+        inner.instructions.hashing.minhash.number_of_hashes
+    }
+
+    #[setter]
+    pub fn set_number_of_hashes(&mut self, value: usize) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.instructions.hashing.minhash.number_of_hashes = value;
+    }
+
+    #[getter]
+    pub fn get_shingle_size(&self) -> usize {
+        let inner = self.inner.lock().unwrap();
+        inner.instructions.hashing.minhash.shingle_size
+    }
+
+    #[setter]
+    pub fn set_shingle_size(&mut self, value: usize) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.instructions.hashing.minhash.shingle_size = value;
+    }
+
+    #[getter]
+    pub fn get_maximum_byte_size(&self) -> usize {
+        let inner = self.inner.lock().unwrap();
+        inner.instructions.hashing.minhash.maximum_byte_size
+    }
+
+    #[setter]
+    pub fn set_maximum_byte_size(&mut self, value: usize) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.instructions.hashing.minhash.maximum_byte_size = value;
+    }
+    #[getter]
+    pub fn get_seed(&self) -> u64 {
+        let inner = self.inner.lock().unwrap();
+        inner.instructions.hashing.minhash.seed
+    }
+
+    #[setter]
+    pub fn set_seed(&mut self, value: u64) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.instructions.hashing.minhash.seed = value;
     }
 }
 
@@ -861,12 +1131,7 @@ impl ConfigFormatsFileHeuristics {
             inner: Arc::clone(&self.inner)
         }
     }
-    #[getter]
-    pub fn get_normalized(&self) -> ConfigFormatsFileHeuristicsNormalization {
-        ConfigFormatsFileHeuristicsNormalization {
-            inner: Arc::clone(&self.inner)
-        }
-    }
+
     #[getter]
     pub fn get_entropy(&self) -> ConfigFormatsFileHeuristicsEntropy {
         ConfigFormatsFileHeuristicsEntropy {
@@ -923,26 +1188,6 @@ impl ConfigFormatsFileHeuristicsEntropy {
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
         inner.formats.file.heuristics.entropy.enabled = value;
-    }
-}
-
-#[pyclass]
-pub struct ConfigFormatsFileHeuristicsNormalization {
-    pub inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigFormatsFileHeuristicsNormalization {
-    #[getter]
-    pub fn get_enabled(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
-        inner.formats.file.heuristics.normalized.enabled
-    }
-
-    #[setter]
-    pub fn set_enabled(&mut self, value: bool) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.formats.file.heuristics.normalized.enabled = value;
     }
 }
 
@@ -1121,6 +1366,13 @@ impl Config {
     }
 
     #[getter]
+    pub fn get_instructions(&self) -> PyResult<ConfigInstructions> {
+        Ok(ConfigInstructions {
+            inner: Arc::clone(&self.inner),
+        })
+    }
+
+    #[getter]
     pub fn get_functions(&self) -> PyResult<ConfigFunctions> {
         Ok(ConfigFunctions {
             inner: Arc::clone(&self.inner),
@@ -1172,6 +1424,10 @@ impl Config {
         self.inner.lock().unwrap().disable_block_hashing();
     }
 
+    pub fn disable_instruction_hashing(&mut self) {
+        self.inner.lock().unwrap().disable_instruction_hashing();
+    }
+
     pub fn disable_function_hashing(&mut self) {
         self.inner.lock().unwrap().disable_function_hashing();
     }
@@ -1182,6 +1438,10 @@ impl Config {
 
     pub fn disable_block_heuristics(&mut self) {
         self.inner.lock().unwrap().disable_block_heuristics();
+    }
+
+    pub fn disable_instruction_heuristics(&mut self) {
+        self.inner.lock().unwrap().disable_instruction_heuristics();
     }
 }
 

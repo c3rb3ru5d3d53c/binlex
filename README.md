@@ -175,7 +175,7 @@ Given this JSON genome example.
 - **AllelePair**: `"4c"` or `"8b"`
 - **Gene**: `"4"` or `"c"`
 
-Using the **binlex** API it is possible to mutate these chromosomes, their allelepairs and genes to facilitate genetic programming.
+Using the **binlex** API it is possible to mutate these chromosomes, their allele pairs and genes to facilitate genetic programming.
 
 Genetic programming in this context can have several benifits including but not limited to:
 - Hunting for novel samples given a dataset
@@ -192,18 +192,21 @@ To see what options are available when using the **binlex** command-line use `-h
 ```bash
 A Binary Pattern Lexer
 
-Version: 1.0.0
+Version: 2.0.0
 
 Usage: binlex [OPTIONS] --input <INPUT>
 
 Options:
   -i, --input <INPUT>
   -o, --output <OUTPUT>
+  -a, --architecture <ARCHITECTURE>      [amd64, i386, cil]
   -c, --config <CONFIG>
   -t, --threads <THREADS>
       --tags <TAGS>
       --minimal
   -d, --debug
+      --enable-instructions
+      --enable-block-instructions
       --disable-hashing
       --disable-disassembler-sweep
       --disable-heuristics
@@ -266,6 +269,38 @@ enabled = false
 [formats.file.heuristics.entropy]
 enabled = true
 
+[instructions]
+enabled = false
+
+[instructions.hashing.sha256]
+enabled = true
+
+[instructions.hashing.tlsh]
+enabled = true
+minimum_byte_size = 50
+
+[instructions.hashing.minhash]
+enabled = true
+number_of_hashes = 64
+shingle_size = 4
+maximum_byte_size = 50
+seed = 0
+
+[instructions.heuristics.features]
+enabled = true
+
+[instructions.heuristics.normalized]
+enabled = false
+
+[instructions.heuristics.entropy]
+enabled = true
+
+[blocks]
+enabled = true
+
+[blocks.instructions]
+enabled = false
+
 [blocks.hashing.sha256]
 enabled = true
 
@@ -287,6 +322,12 @@ enabled = true
 enabled = false
 
 [blocks.heuristics.entropy]
+enabled = true
+
+[functions]
+enabled = true
+
+[functions.blocks]
 enabled = true
 
 [functions.hashing.sha256]
@@ -360,7 +401,7 @@ When you run **binlex**, it uses the configuration file and overrides any settin
 Here is a general workflow getting started with making YARA rules, where we get 10 unique wildcarded YARA hex strings from a given sample.
 
 ```bash
-binlex -i sample.dll --threads 16 | jq -r 'select(.size >= 16 and .size <= 32 and .signature.pattern != null) | .signature.pattern' | sort | uniq | head -10
+binlex -i sample.dll --threads 16 | jq -r 'select(.size >= 16 and .size <= 32 and .chromosome.pattern != null) | .chromosome.pattern' | sort | uniq | head -10
 016b??8b4b??8bc74c6bd858433b4c0b2c0f83c5??????
 01835404????c6836a0400????837e04??
 03c04c8d05????????4863c8420fb60401460fb64401018942??85c074??
@@ -376,7 +417,7 @@ binlex -i sample.dll --threads 16 | jq -r 'select(.size >= 16 and .size <= 32 an
 To take this a step further you can run it through the `blyara` tool to make a quick YARA signature.
 
 ```bash
-binlex -i sample.dll --threads 16 | jq -r 'select(.size >= 16 and .size <= 32 and .signature.pattern != null) | .signature.pattern' | sort | uniq | head -10 | blyara -n example
+binlex -i sample.dll --threads 16 | jq -r 'select(.size >= 16 and .size <= 32 and .chromosome.pattern != null) | .chromosome.pattern' | sort | uniq | head -10 | blyara -n example
 rule example {
     strings:
         $trait_0 = {016b??8b4b??8bc74c6bd858433b4c0b2c0f83c5??????}
@@ -887,7 +928,7 @@ mapped_file = pe.image()
 # Get the Memory Map
 image = mapped_file.as_memoryview()
 
-# Create Disassembler on Mapped PE Image and PE Architecture
+# Create Disassembler on Mapped ELF Image and ELF Architecture
 disassembler = Disassembler(elf.architecture(), image, elf.executable_virtual_address_ranges())
 
 # Create the Controlflow Graph
@@ -923,13 +964,13 @@ for index in macho.number_of_slices():
   # Get the Memory Map
   image = mapped_file.as_memoryview()
 
-  # Create Disassembler on Mapped PE Image and PE Architecture
+  # Create Disassembler on Mapped MACHO Image and MACHO Architecture
   disassembler = Disassembler(macho.architecture(index), image, macho.executable_virtual_address_ranges(index))
 
   # Create the Controlflow Graph
   cfg = Graph(macho.architecture(index), config)
 
-  # Disassemble the PE Image Entrypoints Recursively
+  # Disassemble the MACHO Image Entrypoints Recursively
   disassembler.disassemble_controlflow(macho.entrypoints(index), cfg)
 ```
 
