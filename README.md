@@ -678,7 +678,7 @@ let image = mapped_file
   });
 
 // Create Disassembler
-let disassembler = Disassembler(pe.architecture(), &image, pe.dotnet_executable_virtual_address_ranges())
+let disassembler = Disassembler(pe.architecture(), &image, pe.dotnet_metadata_token_virtual_addresses(), pe.dotnet_executable_virtual_address_ranges())
   .unwrap_or_else(|error| {
     eprintln!("{}", error);
     process::exit(1);
@@ -896,7 +896,7 @@ mapped_file = pe.image()
 image = mapped_file.as_memoryview()
 
 # Create Disassembler on Mapped PE Image and PE Architecture
-disassembler = Disassembler(pe.architecture(), image, pe.dotnet_executable_virtual_address_ranges())
+disassembler = Disassembler(pe.architecture(), image, pe.dotnet_metadata_token_virtual_addresses(), pe.dotnet_executable_virtual_address_ranges())
 
 # Create the Controlflow Graph
 cfg = Graph(pe.architecture(), config)

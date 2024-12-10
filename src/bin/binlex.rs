@@ -481,7 +481,7 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
                 process::exit(1);
             });
     } else if pe.is_dotnet() {
-        let disassembler = match CILDisassembler::new(pe.architecture(), &image, executable_address_ranges.clone()) {
+        let disassembler = match CILDisassembler::new(pe.architecture(), &image, pe.dotnet_metadata_token_virtual_addresses().clone(), executable_address_ranges.clone()) {
             Ok(disassembler) => disassembler,
             Err(error) => {
                 eprintln!("{}", error);
@@ -601,7 +601,7 @@ fn process_code(input: String, config: Config, architecture: Architecture, outpu
             });
         },
         Architecture::CIL => {
-            let disassembler = match CILDisassembler::new(architecture, &file.data, executable_address_ranges.clone()) {
+            let disassembler = match CILDisassembler::new(architecture, &file.data, BTreeMap::<u64, u64>::new(), executable_address_ranges.clone()) {
                 Ok(disassembler) => disassembler,
                 Err(error) => {
                     eprintln!("{}", error);

@@ -12,12 +12,13 @@ use crate::io::Stderr;
 
 pub struct Disassembler <'disassembler> {
     pub architecture: Architecture,
+    pub metadata_token_addresses: BTreeMap<u64, u64>,
     pub executable_address_ranges: BTreeMap<u64, u64>,
     pub image: &'disassembler [u8]
 }
 
 impl <'disassembler> Disassembler <'disassembler> {
-    pub fn new(architecture: Architecture, image: &'disassembler[u8], executable_address_rannges: BTreeMap<u64, u64>) -> Result<Self, Error> {
+    pub fn new(architecture: Architecture, image: &'disassembler[u8], metadata_token_addresses: BTreeMap<u64, u64>, executable_address_ranges: BTreeMap<u64, u64>) -> Result<Self, Error> {
         match architecture {
             Architecture::CIL => {},
             _ => {
@@ -26,7 +27,8 @@ impl <'disassembler> Disassembler <'disassembler> {
         }
         Ok(Self {
             architecture: architecture,
-            executable_address_ranges: executable_address_rannges,
+            metadata_token_addresses: metadata_token_addresses,
+            executable_address_ranges: executable_address_ranges,
             image: image
         })
     }
@@ -35,6 +37,16 @@ impl <'disassembler> Disassembler <'disassembler> {
         self.executable_address_ranges
             .iter()
             .any(|(start, end)| address >= *start && address <= *end)
+    }
+
+    fn get_instruction_functions(&self, instruction: &Instruction) -> BTreeSet<u64> {
+        let mut result = BTreeSet::<u64>::new();
+        let call_metadata_token = instruction.get_call_metadata_token();
+        if call_metadata_token.is_none() { return result; }
+        let call_address = self.metadata_token_addresses.get(&(call_metadata_token.unwrap() as u64));
+        if call_address.is_none() { return result; }
+        result.insert(*call_address.unwrap());
+        result
     }
 
     pub fn disassemble_instruction(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error> {
@@ -65,6 +77,7 @@ impl <'disassembler> Disassembler <'disassembler> {
         cfginstruction.pattern = instruction.pattern();
         cfginstruction.edges = instruction.edges();
         cfginstruction.to = instruction.to();
+        cfginstruction.functions = self.get_instruction_functions(&instruction);
 
         Stderr::print_debug(
             cfg.config.clone(),
@@ -182,6 +195,8 @@ impl <'disassembler> Disassembler <'disassembler> {
 
         let external_executable_address_ranges = self.executable_address_ranges.clone();
 
+        let external_metadata_token_addresses = self.metadata_token_addresses.clone();
+
         pool.install(|| {
             while !cfg.functions.queue.is_empty() {
                 let function_addresses = cfg.functions.dequeue_all();
@@ -191,9 +206,10 @@ impl <'disassembler> Disassembler <'disassembler> {
                     .map(|address| {
                         let machine = external_machine.clone();
                         let executable_address_ranges = external_executable_address_ranges.clone();
+                        let metadata_token_addresses = external_metadata_token_addresses.clone();
                         let image = external_image;
                         let mut graph = Graph::new(machine, cfg.config.clone());
-                        if let Ok(disasm) = Disassembler::new(machine, image, executable_address_ranges) {
+                        if let Ok(disasm) = Disassembler::new(machine, image, metadata_token_addresses, executable_address_ranges) {
                             let _ = disasm.disassemble_function(*address, &mut graph);
                         }
                         graph
