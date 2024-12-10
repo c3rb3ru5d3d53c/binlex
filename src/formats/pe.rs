@@ -388,6 +388,67 @@ impl PE {
         Some(entries)
     }
 
+
+    /// Computes a .NET metadata token from a given table index and entry index.
+    ///
+    /// # Parameters
+    /// - `table_index`: The index of the metadata table.
+    /// - `entry_index`: The index of the entry within the table.
+    ///
+    /// # Returns
+    /// A `u64` value representing the metadata token. The calculation is based on the formula:
+    /// `(0x01000000 * table_index) + (entry_index * 1)`.
+    pub fn dotnet_metadata_token_from_index(table_index: u64, entry_index: u64) -> u64 {
+        return (0x01000000 * table_index) + (entry_index * 1);
+    }
+
+    /// Constructs a map of metadata tokens to their corresponding virtual addresses.
+    ///
+    /// This function analyzes the .NET metadata table entries and calculates the virtual
+    /// addresses for `MethodDef` entries. Each metadata token is generated based on the entry's
+    /// index in the metadata table and is mapped to the computed virtual address.
+    ///
+    /// # Returns
+    ///
+    /// A `BTreeMap<u64, u64>` where:
+    /// - The key is the metadata token.
+    /// - The value is the corresponding virtual address.
+    pub fn dotnet_metadata_token_virtual_addresses(&self) -> BTreeMap<u64, u64> {
+        let mut result = BTreeMap::<u64, u64>::new();
+        if !self.is_dotnet() { return result; }
+        let entries = match self.dotnet_metadata_table_entries() {
+            Some(entries) => entries,
+            None => {
+                return result;
+            },
+        };
+
+        let mut i: u64 = 0;
+        for entry in entries {
+            match entry {
+                Entry::MethodDef(entry) => {
+                    let token: u64 = PE::dotnet_metadata_token_from_index(6, i);
+                    i += 1;
+                    if entry.rva <= 0 { continue; }
+                    let mut va = self.relative_virtual_address_to_virtual_address(entry.rva as u64);
+                    let method_header = match self.dotnet_method_header(va) {
+                        Ok(method_header) => method_header,
+                        Err(_) => {
+                            continue;
+                        }
+                    };
+                    if method_header.size().is_none() {
+                        continue;
+                    }
+                    va += method_header.size().unwrap() as u64;
+                    result.insert(token, va);
+                },
+                _ => {},
+            }
+        }
+        result
+    }
+
     /// Converts a virtual address to a relative virtual address (RVA).
     ///
     /// This function computes the relative virtual address by subtracting the image base

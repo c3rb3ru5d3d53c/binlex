@@ -67,6 +67,11 @@ impl PE {
     }
 
     #[pyo3(text_signature = "($self)")]
+    pub fn dotnet_metadata_token_virtual_addresses(&self) -> BTreeMap<u64, u64> {
+        self.inner.lock().unwrap().dotnet_metadata_token_virtual_addresses()
+    }
+
+    #[pyo3(text_signature = "($self)")]
     pub fn dotnet_executable_virtual_address_ranges(&self) -> BTreeMap<u64, u64> {
         self.inner.lock().unwrap().dotnet_executable_virtual_address_ranges()
     }
@@ -154,7 +159,6 @@ impl PE {
     pub fn file_alignment(&self) -> u64 {
         self.inner.lock().unwrap().file_alignment()
     }
-
 }
 
 #[pymodule]
