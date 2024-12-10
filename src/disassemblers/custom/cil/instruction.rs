@@ -164,6 +164,21 @@ impl <'instruction> Instruction <'instruction> {
         }
     }
 
+    pub fn get_call_metadata_token(&self) -> Option<u32> {
+        if matches!(self.mnemonic, Mnemonic::Call | Mnemonic::CallVirt) {
+            let operand_bytes = self.operand_bytes();
+            if operand_bytes.len() >= 4 {
+                return Some(u32::from_le_bytes([
+                    operand_bytes[0],
+                    operand_bytes[1],
+                    operand_bytes[2],
+                    operand_bytes[3],
+                ]));
+            }
+        }
+        None
+    }
+
     pub fn is_conditional_jump(&self) -> bool {
         match self.mnemonic {
             Mnemonic::BrFalse => true,
