@@ -16,19 +16,20 @@
   </tr>
 </table>
 
-The purpose of **binlex** is to extract basic blocks and functions as **genomes** from binaries for **malware research**, **hunting**, and **detection**. 🦠🔍
+**Binlex** is a tool for malware analysts and researchers that extracts **instructions**, **basic blocks**, and **functions** from binary files and organizes them into a structured hierarchy of **genomes**, **chromosomes**, **allele pairs**, and **genes**. 🦠🔍
 
-Most projects attempting this use pure Python to generate traits, but it’s often **slow** 🐢.
+- A **genome** represents an **instruction**, **block**, or **function** in the binary. 🧬
+- Each genome contains one or more **chromosomes**, which are **patterns** or **sequences** of data within the instruction, function, or block.
+- A **chromosome** is made up of **allele pairs**, each representing **two genes**, encoded as a **single byte** (split into two **nibbles**).
+- A **gene** is the smallest unit, represented by a **single nibble**.
 
-The design philosophy behind **binlex** is to keep it **simple** and **extendable**, with an ecosystem of helpful tools and library code. ⚙️
+This hierarchical breakdown allows **binlex** to analyze and compare malware binaries by treating their code structure like a "DNA fingerprint," making it easier to detect patterns, similarities, and variations across samples.
 
-The simple **command-line interface** allows malware researchers and analysts to hunt for traits across **hundreds** or **thousands** of potentially similar malware samples, saving **time** ⏳ and **money** 💰 in production environments.
+Unlike tools relying on **pure Python**, which can be slow 🐢, Binlex is designed for speed, simplicity, and flexibility. Its **command-line interface** helps analysts search for patterns across **hundreds or thousands of malware samples**, saving **time** ⏳ and **resources** 💰.
 
-The **Rust API** and **Python bindings** let developers create their own detection solutions with minimal **license limitations**. 🔓
+For developers, **binlex** offers a **Rust API** and **Python bindings** to build custom detection tools with minimal licensing restrictions. 🔓
 
-To help combat malware, we provide our work for the greater good. 🌍
-
-No installation needed, just **download the binaries** from the **release page**! 📥
+As part of the fight against malware, **binlex** is free to use—just **download the binaries** from the release page. 📥
 
 ## 🚀 Features
 

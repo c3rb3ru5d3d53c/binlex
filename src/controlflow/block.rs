@@ -407,16 +407,11 @@ impl<'block> Block<'block> {
     /// Returns the address as a `u64`.
     #[allow(dead_code)]
     pub fn end(&self) -> u64 {
+        if self.terminator.is_jump { return self.terminator.address + self.terminator.size() as u64; }
         if self.address == self.terminator.address { return self.terminator.address + self.terminator.size() as u64; }
-        if self.terminator.is_block_start {
-            return self.terminator.address;
-        }
-        if self.terminator.is_return {
-            return self.terminator.address + self.terminator.size() as u64;
-        }
-        if let Some(next)= self.next() {
-            return next;
-        }
+        if self.terminator.is_block_start {return self.terminator.address; }
+        if self.terminator.is_return { return self.terminator.address + self.terminator.size() as u64; }
+        if let Some(next)= self.next() { return next; }
         return self.terminator.address;
     }
 
