@@ -1,7 +1,6 @@
 use pyo3::prelude::*;
 
 use pyo3::Py;
-use std::collections::BTreeSet;
 use std::collections::BTreeMap;
 use binlex::controlflow::Function as InnerFunction;
 use crate::controlflow::Graph;
@@ -100,15 +99,6 @@ impl Function {
     /// - `Option<f64>`: The entropy value, if available.
     pub fn entropy(&self, py: Python) -> PyResult<Option<f64>> {
         self.with_inner_function(py, |function| Ok(function.entropy()))
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Returns a set of all block addresses in the function.
-    ///
-    /// # Returns
-    /// - `BTreeSet<u64>`: A set of block addresses.
-    pub fn blocks(&self, py: Python) -> PyResult<BTreeSet<u64>> {
-        self.with_inner_function(py, |function| Ok(function.blocks()))
     }
 
     #[pyo3(text_signature = "($self)")]

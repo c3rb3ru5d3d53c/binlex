@@ -12,7 +12,26 @@ pub const DIRECTORY: &str = "binlex";
 pub const FILE_NAME: &str = "binlex.toml";
 
 #[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigBlockInstructions {
+    pub enabled: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigFunctionBlocks {
+    pub enabled: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigInstructions {
+    pub enabled: bool,
+    pub hashing: ConfigHashing,
+    pub heuristics: ConfigHeuristics,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigBlocks {
+    pub enabled: bool,
+    pub instructions: ConfigBlockInstructions,
     pub hashing: ConfigHashing,
     pub heuristics: ConfigHeuristics,
 }
@@ -25,6 +44,8 @@ pub struct ConfigChromosomes {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigFunctions {
+    pub enabled: bool,
+    pub blocks: ConfigFunctionBlocks,
     pub hashing: ConfigHashing,
     pub heuristics: ConfigHeuristics,
 }
@@ -44,6 +65,7 @@ pub struct ConfigFormats {
 pub struct Config {
     pub general: ConfigGeneral,
     pub formats: ConfigFormats,
+    pub instructions: ConfigInstructions,
     pub blocks: ConfigBlocks,
     pub functions: ConfigFunctions,
     pub chromosomes: ConfigChromosomes,
@@ -64,17 +86,11 @@ pub struct ConfigDisassemblerSweep {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigHeuristics {
     pub features: ConfigHeuristicFeatures,
-    pub normalized: ConfigHeuristicNormalization,
     pub entropy: ConfigHeuristicEntropy,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigHeuristicFeatures {
-    pub enabled: bool,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigHeuristicNormalization {
     pub enabled: bool,
 }
 
@@ -165,16 +181,14 @@ impl Config {
                         features: ConfigHeuristicFeatures {
                             enabled: true,
                         },
-                        normalized: ConfigHeuristicNormalization {
-                            enabled: false,
-                        },
                         entropy: ConfigHeuristicEntropy {
                             enabled: true,
                         }
                     }
                 }
             },
-            blocks: ConfigBlocks {
+            instructions: ConfigInstructions {
+                enabled: false,
                 hashing: ConfigHashing {
                     sha256: ConfigSHA256 {
                         enabled: true,
@@ -195,8 +209,35 @@ impl Config {
                     features: ConfigHeuristicFeatures {
                         enabled: true,
                     },
-                    normalized: ConfigHeuristicNormalization {
-                        enabled: false,
+                    entropy: ConfigHeuristicEntropy {
+                        enabled: true,
+                    }
+                }
+            },
+            blocks: ConfigBlocks {
+                enabled: true,
+                instructions: ConfigBlockInstructions {
+                    enabled: false,
+                },
+                hashing: ConfigHashing {
+                    sha256: ConfigSHA256 {
+                        enabled: true,
+                    },
+                    tlsh: ConfigTLSH {
+                        enabled: true,
+                        minimum_byte_size: 50,
+                    },
+                    minhash: ConfigMinhash {
+                        enabled: true,
+                        number_of_hashes: 64,
+                        shingle_size: 4,
+                        maximum_byte_size: 50,
+                        seed: 0,
+                    }
+                },
+                heuristics: ConfigHeuristics {
+                    features: ConfigHeuristicFeatures {
+                        enabled: true,
                     },
                     entropy: ConfigHeuristicEntropy {
                         enabled: true,
@@ -204,6 +245,10 @@ impl Config {
                 }
             },
             functions: ConfigFunctions {
+                enabled: true,
+                blocks: ConfigFunctionBlocks {
+                    enabled: true,
+                },
                 hashing: ConfigHashing {
                     sha256: ConfigSHA256 {
                         enabled: true,
@@ -223,9 +268,6 @@ impl Config {
                 heuristics: ConfigHeuristics {
                     features: ConfigHeuristicFeatures {
                         enabled: true,
-                    },
-                    normalized: ConfigHeuristicNormalization {
-                        enabled: false,
                     },
                     entropy: ConfigHeuristicEntropy {
                         enabled: true,
@@ -252,9 +294,6 @@ impl Config {
                 heuristics: ConfigHeuristics {
                     features: ConfigHeuristicFeatures {
                         enabled: true,
-                    },
-                    normalized: ConfigHeuristicNormalization {
-                        enabled: false,
                     },
                     entropy: ConfigHeuristicEntropy {
                         enabled: true,
@@ -291,7 +330,12 @@ impl Config {
     pub fn disable_chromosome_heuristics(&mut self) {
         self.chromosomes.heuristics.entropy.enabled = false;
         self.chromosomes.heuristics.features.enabled = false;
-        self.chromosomes.heuristics.normalized.enabled = false;
+    }
+
+    pub fn disable_instruction_hashing(&mut self){
+        self.instructions.hashing.sha256.enabled = false;
+        self.instructions.hashing.tlsh.enabled = false;
+        self.instructions.hashing.minhash.enabled = false;
     }
 
     pub fn disable_block_hashing(&mut self){
@@ -309,7 +353,6 @@ impl Config {
     pub fn disable_file_heuristics(&mut self) {
         self.formats.file.heuristics.entropy.enabled = false;
         self.formats.file.heuristics.features.enabled = false;
-        self.formats.file.heuristics.normalized.enabled = false;
     }
 
     pub fn disable_heuristics(&mut self) {
@@ -334,13 +377,16 @@ impl Config {
     pub fn disable_block_heuristics(&mut self) {
         self.blocks.heuristics.entropy.enabled = false;
         self.blocks.heuristics.features.enabled = false;
-        self.blocks.heuristics.normalized.enabled = false;
+    }
+
+    pub fn disable_instruction_heuristics(&mut self) {
+        self.instructions.heuristics.entropy.enabled = false;
+        self.instructions.heuristics.features.enabled = false;
     }
 
     pub fn disable_function_heuristics(&mut self) {
         self.functions.heuristics.entropy.enabled = false;
         self.functions.heuristics.features.enabled = false;
-        self.functions.heuristics.normalized.enabled = false;
     }
 
     // Get Default File Mapping Directory
