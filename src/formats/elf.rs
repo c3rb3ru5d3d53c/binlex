@@ -78,7 +78,7 @@ impl ELF {
         architecture
     }
 
-    pub fn entrypoint(&self) -> u64 {
+    pub fn entrypoint_virtual_address(&self) -> u64 {
         self.imagebase() + self.elf.header().entrypoint()
     }
 
@@ -98,7 +98,7 @@ impl ELF {
         self.file.size()
     }
 
-    pub fn exports(&self) -> BTreeSet<u64> {
+    pub fn export_virtual_addresses(&self) -> BTreeSet<u64> {
         let mut result = BTreeSet::<u64>::new();
         for symbol in self.elf.exported_symbols() {
             result.insert(self.imagebase() + symbol.value());
@@ -195,10 +195,10 @@ impl ELF {
         self.file.sha256()
     }
 
-    pub fn entrypoints(&self) -> BTreeSet<u64> {
+    pub fn entrypoint_virtual_addresses(&self) -> BTreeSet<u64> {
         let mut entrypoints = BTreeSet::<u64>::new();
-        entrypoints.insert(self.entrypoint());
-        entrypoints.extend(self.exports());
+        entrypoints.insert(self.entrypoint_virtual_address());
+        entrypoints.extend(self.export_virtual_addresses());
         entrypoints.extend(self.symbols().keys());
         entrypoints
     }

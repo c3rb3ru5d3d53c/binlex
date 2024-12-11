@@ -56,13 +56,13 @@ impl ELF {
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn entrypoints(&self) -> BTreeSet<u64> {
-        self.inner.lock().unwrap().entrypoints()
+    pub fn entrypoint_virtual_addresses(&self) -> BTreeSet<u64> {
+        self.inner.lock().unwrap().entrypoint_virtual_addresses()
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn entrypoint(&self) -> u64  {
-        self.inner.lock().unwrap().entrypoint()
+    pub fn entrypoint_virtual_address(&self) -> u64  {
+        self.inner.lock().unwrap().entrypoint_virtual_address()
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -90,8 +90,8 @@ impl ELF {
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn exports(&self) -> BTreeSet<u64> {
-        self.inner.lock().unwrap().exports()
+    pub fn export_virtual_addresses(&self) -> BTreeSet<u64> {
+        self.inner.lock().unwrap().export_virtual_addresses()
     }
 
 }

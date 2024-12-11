@@ -636,7 +636,7 @@ let disassembler = Disassembler(pe.architecture(), &image, pe.executable_virtual
 let cfg = Graph(pe.architecture(), config);
 
 // Disassemble Control Flow
-disassembler.disassemble_controlflow(pe.entrypoints(), &mut cfg);
+disassembler.disassemble_controlflow(pe.entrypoint_virtual_addresses(), &mut cfg);
 ```
 
 #### .NET (MSIL/CIL) PE
@@ -689,7 +689,7 @@ let disassembler = Disassembler(pe.architecture(), &image, pe.dotnet_metadata_to
 let cfg = Graph(pe.architecture(), config);
 
 // Disassemble Control Flow
-disassembler.disassemble_controlflow(pe.dotnet_entrypoints(), &mut cfg);
+disassembler.disassemble_controlflow(pe.dotnet_entrypoint_virtual_addresses(), &mut cfg);
 ```
 
 #### ELF
@@ -740,7 +740,7 @@ let disassembler = Disassembler(elf.architecture(), &image, elf.executable_virtu
 let cfg = Graph(elf.architecture(), config);
 
 // Disassemble Control Flow
-disassembler.disassemble_controlflow(elf.entrypoints(), &mut cfg);
+disassembler.disassemble_controlflow(elf.entrypoint_virtual_addresses(), &mut cfg);
 ```
 
 #### MACHO
@@ -868,7 +868,7 @@ disassembler = Disassembler(pe.architecture(), image, pe.executable_virtual_addr
 cfg = Graph(pe.architecture(), config)
 
 # Disassemble the PE Image Entrypoints Recursively
-disassembler.disassemble_controlflow(pe.entrypoints(), cfg)
+disassembler.disassemble_controlflow(pe.entrypoint_virtual_addresses(), cfg)
 ```
 
 #### .NET (MSIL/CIL) PE
@@ -903,7 +903,7 @@ disassembler = Disassembler(pe.architecture(), image, pe.dotnet_metadata_token_v
 cfg = Graph(pe.architecture(), config)
 
 # Disassemble the PE Image Entrypoints Recursively
-disassembler.disassemble_controlflow(pe.dotnet_entrypoints(), cfg)
+disassembler.disassemble_controlflow(pe.dotnet_entrypoint_virtual_addresses(), cfg)
 ```
 
 #### ELF
@@ -936,7 +936,7 @@ disassembler = Disassembler(elf.architecture(), image, elf.executable_virtual_ad
 cfg = Graph(elf.architecture(), config)
 
 # Disassemble the PE Image Entrypoints Recursively
-disassembler.disassemble_controlflow(elf.entrypoints(), cfg)
+disassembler.disassemble_controlflow(elf.entrypoint_virtual_addresses(), cfg)
 ```
 
 #### MACHO

@@ -180,7 +180,7 @@ mod tests {
         let pe_result = PE::from_bytes(data, config);
         assert!(pe_result.is_ok(), "failed to parse pe file");
         let pe = pe_result.unwrap();
-        assert_eq!(pe.entrypoint(), 0x140001cd0, "incorrect pe entrypoint");
+        assert_eq!(pe.entrypoint_virtual_address(), 0x140001cd0, "incorrect pe entrypoint");
         let mut executable_address_ranges = BTreeMap::<u64, u64>::new();
         executable_address_ranges.insert(0x140001000, 0x140002839);
         assert_eq!(pe.executable_virtual_address_ranges(), executable_address_ranges, "pe execuable address ranges are incorrect");
@@ -206,7 +206,7 @@ mod tests {
             ]
             .into_iter()
             .collect();
-        assert_eq!(pe.exports(), set, "missing pe exports");
+        assert_eq!(pe.export_virtual_addresses(), set, "missing pe exports");
 
     }
 }

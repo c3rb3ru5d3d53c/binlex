@@ -82,28 +82,28 @@ impl PE {
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn pogos(&self) -> HashMap<u64, String> {
-        self.inner.lock().unwrap().pogos()
+    pub fn pogo_virtual_addresses(&self) -> HashMap<u64, String> {
+        self.inner.lock().unwrap().pogo_virtual_addresses()
     }
 
     #[pyo3(text_signature = "($self)")]
     pub fn tlscallbacks(&self) -> BTreeSet<u64> {
-        self.inner.lock().unwrap().tlscallbacks()
+        self.inner.lock().unwrap().tlscallback_virtual_addresses()
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn dotnet_entrypoints(&self) -> BTreeSet<u64> {
-        self.inner.lock().unwrap().dotnet_entrypoints()
+    pub fn dotnet_entrypoint_virtual_addresses(&self) -> BTreeSet<u64> {
+        self.inner.lock().unwrap().dotnet_entrypoint_virtual_addresses()
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn entrypoints(&self) -> BTreeSet<u64> {
-        self.inner.lock().unwrap().entrypoints()
+    pub fn entrypoint_virtual_addresses(&self) -> BTreeSet<u64> {
+        self.inner.lock().unwrap().entrypoint_virtual_addresses()
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn entrypoint(&self) -> u64  {
-        self.inner.lock().unwrap().entrypoint()
+    pub fn entrypoint_virtual_address(&self) -> u64  {
+        self.inner.lock().unwrap().entrypoint_virtual_address()
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -131,8 +131,8 @@ impl PE {
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn exports(&self) -> BTreeSet<u64> {
-        self.inner.lock().unwrap().exports()
+    pub fn export_virtual_addresses(&self) -> BTreeSet<u64> {
+        self.inner.lock().unwrap().export_virtual_addresses()
     }
 
     #[pyo3(text_signature = "($self)")]

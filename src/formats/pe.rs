@@ -622,6 +622,64 @@ impl PE {
         result
     }
 
+    /// Identifies and returns a set of virtual addresses that belong to vtable entries
+    /// within executable sections of a PE file.
+    ///
+    /// This function scans all sections of a PE file to find consecutive virtual addresses
+    /// that are considered executable. It filters the sections based on their characteristics
+    /// and excludes certain edge cases, such as .NET binaries.
+    ///
+    /// # Returns
+    /// - A `BTreeSet` of `u64` representing executable vtable virtual addresses.
+    pub fn vtable_executable_virtual_addresses(&self) -> BTreeSet<u64> {
+        let mut result = BTreeSet::<u64>::new();
+
+        if self.is_dotnet() { return result; }
+
+        let executable_virtual_address_ranges = self.executable_virtual_address_ranges();
+
+        for section in self.pe.sections() {
+            if (section.characteristics().bits() & u64::from(Characteristics::MEM_EXECUTE)) != 0
+                || section.virtual_size() == 0
+                || section.sizeof_raw_data() == 0
+            {
+                continue;
+            }
+
+            let start_offset = match self.relative_virtual_address_to_file_offset(section.pointerto_raw_data() as u64) {
+                Some(offset) => offset,
+                None => continue,
+            };
+
+            let end_offset = start_offset + section.sizeof_raw_data() as u64;
+
+            let mut consecutive_addresses = Vec::new();
+
+            for offset in (start_offset as usize..end_offset as usize).step_by(4) {
+                if offset + 4 > self.file.data.len() {
+                    break;
+                }
+
+                let virtual_address = self.imagebase() + u32::from_le_bytes(self.file.data[offset..offset + 4].try_into().unwrap()) as u64;
+
+                if executable_virtual_address_ranges
+                    .iter()
+                    .any(|(start, end)| virtual_address >= *start && virtual_address <= *end) {
+                    consecutive_addresses.push(virtual_address);
+
+                    if consecutive_addresses.len() >= 6 {
+                        result.extend(&consecutive_addresses);
+                        consecutive_addresses.clear();
+                    }
+                } else {
+                    consecutive_addresses.clear();
+                }
+            }
+        }
+
+        result
+    }
+
     /// Returns the ranges of executable memory addresses within the PE file.
     ///
     /// This includes sections marked as executable (`MEM_EXECUTE`) and with valid data.
@@ -652,7 +710,7 @@ impl PE {
     /// # Returns
     /// A `HashMap` where the key is the RVA of the start of the Pogo entry and the value is the name of the entry.
     #[allow(dead_code)]
-    pub fn pogos(&self) -> HashMap<u64, String> {
+    pub fn pogo_virtual_addresses(&self) -> HashMap<u64, String> {
         let mut result = HashMap::<u64, String>::new();
         for entry in self.pe.debug() {
             match entry {
@@ -676,7 +734,7 @@ impl PE {
     ///
     /// # Returns
     /// A `BTreeSet<u64>` containing the addresses of the TLS callback functions.
-    pub fn tlscallbacks(&self) -> BTreeSet<u64> {
+    pub fn tlscallback_virtual_addresses(&self) -> BTreeSet<u64> {
         self.pe.tls()
             .into_iter()
             .flat_map(|tls| tls.callbacks())
@@ -687,7 +745,7 @@ impl PE {
     ///
     /// # Returns
     /// A `BTreeSet` of function addresses in the PE file.
-    pub fn dotnet_entrypoints(&self) -> BTreeSet<u64> {
+    pub fn dotnet_entrypoint_virtual_addresses(&self) -> BTreeSet<u64> {
         let mut addresses = BTreeSet::<u64>::new();
         if !self.is_dotnet() { return addresses; }
         let entries = match self.dotnet_metadata_table_entries() {
@@ -725,12 +783,13 @@ impl PE {
     /// # Returns
     /// A `BTreeSet` of function addresses in the PE file.
     #[allow(dead_code)]
-    pub fn entrypoints(&self) -> BTreeSet<u64> {
+    pub fn entrypoint_virtual_addresses(&self) -> BTreeSet<u64> {
         let mut addresses = BTreeSet::<u64>::new();
-        addresses.insert(self.entrypoint());
-        addresses.extend(self.exports());
-        addresses.extend(self.tlscallbacks());
-        addresses.extend(self.pogos().keys().cloned());
+        addresses.insert(self.entrypoint_virtual_address());
+        addresses.extend(self.export_virtual_addresses());
+        addresses.extend(self.tlscallback_virtual_addresses());
+        addresses.extend(self.pogo_virtual_addresses().keys().cloned());
+        addresses.extend(self.vtable_executable_virtual_addresses());
         return addresses;
     }
 
@@ -739,7 +798,7 @@ impl PE {
     /// # Returns
     /// The entry point address as a `u64` value.
     #[allow(dead_code)]
-    pub fn entrypoint(&self) -> u64 {
+    pub fn entrypoint_virtual_address(&self) -> u64 {
         self.imagebase() + self.pe.optional_header().addressof_entrypoint() as u64
     }
 
@@ -923,7 +982,7 @@ impl PE {
     /// # Returns
     /// A `BTreeSet` of exported function addresses.
     #[allow(dead_code)]
-    pub fn exports(&self) -> BTreeSet<u64> {
+    pub fn export_virtual_addresses(&self) -> BTreeSet<u64> {
         let mut addresses = BTreeSet::<u64>::new();
         let export = match self.pe.export(){
             Some(export) => export,
