@@ -22,7 +22,8 @@
 //   An "Application" is any work that makes use of an interface provided
 // by the Library, but which is not otherwise based on the Library.
 // Defining a subclass of a class defined by the Library is deemed a mode
-// of using an interface provided by the Library.
+// of using an interface provided by the Library.pub use allepair::AllelePair;
+
 //
 //   A "Combined Work" is a work produced by combining or linking an
 // Application with the Library.  The particular version of the Library
@@ -172,6 +173,7 @@ pub mod disassemblers;
 pub mod binary;
 pub mod global;
 pub mod io;
+pub mod genetics;
 
 pub use global::Config;
 pub use binary::Binary;
