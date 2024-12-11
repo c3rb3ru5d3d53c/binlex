@@ -179,6 +179,11 @@ use binlex::{AUTHOR, VERSION};
 use binlex::hashing::TLSH;
 use binlex::io::{JSON, Stdout};
 
+#[derive(Serialize, Deserialize)]
+pub struct SimilarityScoreJson{
+    pub tlsh: Option<f64>,
+}
+
 /// Structure to represent the comparison result between two JSON entries.
 #[derive(Serialize, Deserialize)]
 pub struct ComparisonJson {
@@ -190,7 +195,7 @@ pub struct ComparisonJson {
     /// The JSON entry from the RHS.
     pub rhs: Value,
     /// TLSH Similarity Score
-    pub tlsh: Option<u32>,
+    pub similarity: SimilarityScoreJson,
 }
 
 #[derive(Parser, Debug)]
@@ -303,12 +308,6 @@ fn handle_stdin_lhs(rhs_files: &[String]) {
         }
     };
 
-    eprintln!(
-        "Starting comparisons: 1 LHS (from stdin) x {} RHS files = {} pairs.",
-        rhs_files.len(),
-        rhs_files.len()
-    );
-
     rhs_files.par_iter().for_each(|rhs_path| {
         let json_rhs = load_json_with_filter(rhs_path);
 
@@ -331,9 +330,7 @@ fn load_json_with_filter(path: &str) -> Option<JSON> {
 fn filter_json(value: &mut Value) -> bool {
     value.get("architecture").and_then(|v| v.as_str()).is_some()
         && value
-            .get("signature")
-            .and_then(|v| v.get("tlsh"))
-            .and_then(|v| v.as_str())
+            .get("chromosome")
             .is_some()
 }
 
@@ -342,29 +339,37 @@ fn compare_json_entries(json_lhs: &JSON, json_rhs: &JSON) {
     let rhs_entries: Vec<Value> = json_rhs.values().into_iter().cloned().collect();
 
     for lhs in lhs_entries {
-        let lhs_type = match extract_field(lhs, "type") {
+
+
+        let lhs_type = match extract_string_value(lhs, "type") {
             Some(t) => t,
             None => continue,
         };
-        let lhs_arch = match extract_field(lhs, "architecture") {
+
+        let lhs_arch = match extract_string_value(lhs, "architecture") {
             Some(a) => a,
             None => continue,
         };
-        let lhs_tlsh = match extract_nested_field(lhs, "signature", "tlsh") {
+        let lhs_tlsh = extract_nested_field(lhs, "chromosome", "tlsh");
+
+        let lhs_contiguous = match extract_boolean_value(lhs, "contiguous") {
             Some(t) => t,
             None => continue,
         };
 
         for rhs in &rhs_entries {
-            let rhs_type = match extract_field(rhs, "type") {
+            let rhs_type = match extract_string_value(rhs, "type") {
                 Some(t) => t,
                 None => continue,
             };
-            let rhs_arch = match extract_field(rhs, "architecture") {
+
+            let rhs_arch = match extract_string_value(rhs, "architecture") {
                 Some(a) => a,
                 None => continue,
             };
-            let rhs_tlsh = match extract_nested_field(rhs, "signature", "tlsh") {
+            let rhs_tlsh = extract_nested_field(rhs, "chromosome", "tlsh");
+
+            let rhs_contiguous = match extract_boolean_value(rhs, "contiguous") {
                 Some(t) => t,
                 None => continue,
             };
@@ -373,13 +378,34 @@ fn compare_json_entries(json_lhs: &JSON, json_rhs: &JSON) {
                 continue;
             }
 
-            let tlsh_similarity = TLSH::compare(lhs_tlsh.clone(), rhs_tlsh.clone()).ok();
+            let mut tlsh_similarity: Option<f64> = None;
+
+            if lhs_contiguous == true && rhs_contiguous == true && lhs_tlsh.is_some() && rhs_tlsh.is_some() {
+                tlsh_similarity = TLSH::compare(
+                    lhs_tlsh.clone().unwrap(),
+                    rhs_tlsh.clone().unwrap())
+                        .ok()
+                        .map(|score| score as f64);
+            }
+
+            if (lhs_contiguous == false || rhs_contiguous == false) && lhs_type == "function" && rhs_type == "function" {
+                if let (Some(lhs_blocks), Some(rhs_blocks)) = (
+                    lhs.get("blocks").and_then(|b| b.as_array()),
+                    rhs.get("blocks").and_then(|b| b.as_array()),
+                ) {
+                    tlsh_similarity = calculate_non_contiguous_similarity(lhs_blocks, rhs_blocks);
+                }
+            }
+
+            if tlsh_similarity.is_none() { continue; }
 
             let comparison = ComparisonJson {
                 type_: "comparison".to_string(),
                 lhs: lhs.clone(),
                 rhs: rhs.clone(),
-                tlsh: tlsh_similarity,
+                similarity: SimilarityScoreJson {
+                    tlsh: tlsh_similarity,
+                },
             };
 
             match serde_json::to_string(&comparison) {
@@ -390,7 +416,46 @@ fn compare_json_entries(json_lhs: &JSON, json_rhs: &JSON) {
     }
 }
 
-fn extract_field<'a>(value: &'a Value, field: &str) -> Option<String> {
+fn calculate_non_contiguous_similarity(lhs_blocks: &[Value], rhs_blocks: &[Value]) -> Option<f64> {
+    let mut best_similarities = Vec::new();
+
+    for lhs_tlsh in extract_tlsh_values(lhs_blocks) {
+        let mut best_similarity: Option<u32> = None;
+
+        for rhs_tlsh in extract_tlsh_values(rhs_blocks) {
+            if let Ok(similarity) = TLSH::compare(lhs_tlsh.clone(), rhs_tlsh.clone()) {
+                best_similarity = match best_similarity {
+                    Some(current_best) => Some(current_best.min(similarity)),
+                    None => Some(similarity),
+                };
+            }
+        }
+
+        if let Some(similarity) = best_similarity {
+            best_similarities.push(similarity as f64);
+        }
+    }
+
+    if !best_similarities.is_empty() {
+        let total_similarity: f64 = best_similarities.iter().sum();
+        return Some(total_similarity / best_similarities.len() as f64);
+    }
+
+    None
+}
+
+fn extract_tlsh_values(blocks: &[Value]) -> Vec<String> {
+    blocks
+        .iter()
+        .filter_map(|block| extract_nested_field(block, "chromosome", "tlsh"))
+        .collect()
+}
+
+fn extract_boolean_value<'a>(value: &'a Value, field: &str) -> Option<bool> {
+    value.get(field)?.as_bool()
+}
+
+fn extract_string_value<'a>(value: &'a Value, field: &str) -> Option<String> {
     value.get(field)?.as_str().map(String::from)
 }
 
