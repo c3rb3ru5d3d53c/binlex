@@ -318,6 +318,9 @@ impl Config {
         self.general.minimal = true;
         self.disable_heuristics();
         self.disable_hashing();
+        self.functions.blocks.enabled = false;
+        self.instructions.enabled = false;
+        self.blocks.instructions.enabled = false;
     }
 
     pub fn disable_hashing(&mut self) {

@@ -65,6 +65,8 @@ pub struct Args {
     #[arg(long, default_value_t = false)]
     pub disable_disassembler_sweep: bool,
     #[arg(long, default_value_t = false)]
+    pub disable_function_blocks: bool,
+    #[arg(long, default_value_t = false)]
     pub disable_heuristics: bool,
     #[arg(long, default_value_t = false)]
     pub enable_mmap_cache: bool,
@@ -458,8 +460,8 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
     let mut entrypoints = BTreeSet::<u64>::new();
 
     match pe.is_dotnet(){
-        true => entrypoints.extend(pe.dotnet_entrypoints()),
-        _ => entrypoints.extend(pe.entrypoints()),
+        true => entrypoints.extend(pe.dotnet_entrypoint_virtual_addresses()),
+        _ => entrypoints.extend(pe.entrypoint_virtual_addresses()),
     }
 
     entrypoints.extend(function_symbols.keys());
@@ -541,7 +543,7 @@ fn process_elf(input: String, config: Config, tags: Option<Vec<String>>, output:
 
     let mut entrypoints = BTreeSet::<u64>::new();
 
-    entrypoints.extend(elf.entrypoints());
+    entrypoints.extend(elf.entrypoint_virtual_addresses());
 
     let mut cfg = Graph::new(elf.architecture(), config.clone());
 
@@ -664,7 +666,7 @@ fn process_macho(input: String, config: Config, tags: Option<Vec<String>>, outpu
 
         let mut entrypoints = BTreeSet::<u64>::new();
 
-        entrypoints.extend(macho.entrypoints(slice));
+        entrypoints.extend(macho.entrypoint_virtual_addresses(slice));
 
         let mut cfg = Graph::new(architecture, config.clone());
 
@@ -751,6 +753,10 @@ fn main() {
 
     if args.enable_block_instructions != false {
         config.blocks.instructions.enabled = args.enable_block_instructions;
+    }
+
+    if args.disable_function_blocks != false {
+        config.functions.blocks.enabled = !args.disable_function_blocks;
     }
 
     Stderr::print_debug(config.clone(), "finished reading arguments and configuration");

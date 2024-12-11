@@ -100,7 +100,7 @@ impl MACHO {
     ///
     /// # Returns
     /// A `Option<u64>` representing the entrypoint of the binary.
-    pub fn entrypoint(&self, slice: usize) -> Option<u64> {
+    pub fn entrypoint_virtual_address(&self, slice: usize) -> Option<u64> {
         Some(self.imagebase(slice)? + self.macho.iter().nth(slice)?.main_command()?.entrypoint())
     }
 
@@ -175,13 +175,13 @@ impl MACHO {
     ///
     /// # Returns
     /// A `BTreeSet` of function addresses for the MachO slice.
-    pub fn entrypoints(&self, slice: usize) -> BTreeSet<u64> {
+    pub fn entrypoint_virtual_addresses(&self, slice: usize) -> BTreeSet<u64> {
         let mut entrypoints = BTreeSet::<u64>::new();
-        if self.entrypoint(slice).is_some() {
-            entrypoints.insert(self.entrypoint(slice).unwrap());
+        if self.entrypoint_virtual_address(slice).is_some() {
+            entrypoints.insert(self.entrypoint_virtual_address(slice).unwrap());
         }
         entrypoints.extend(self.symbols(slice).keys());
-        entrypoints.extend(self.exports(slice));
+        entrypoints.extend(self.export_virtual_addresses(slice));
         entrypoints
     }
 
@@ -205,7 +205,7 @@ impl MACHO {
     ///
     /// # Returns
     /// A `BTreeSet<u64>` containing the virtual addresses of function export addresses.
-    pub fn exports(&self, slice: usize) -> BTreeSet<u64> {
+    pub fn export_virtual_addresses(&self, slice: usize) -> BTreeSet<u64> {
         let mut result = BTreeSet::<u64>::new();
         let binding = self.macho.iter().nth(slice);
         if binding.is_none() { return result; }

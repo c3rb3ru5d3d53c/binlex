@@ -51,8 +51,8 @@ impl MACHO {
     }
 
     #[pyo3(text_signature = "($self, slice)")]
-    pub fn entrypoint(&self, slice: usize) -> Option<u64> {
-        self.inner.lock().unwrap().entrypoint(slice)
+    pub fn entrypoint_virtual_address(&self, slice: usize) -> Option<u64> {
+        self.inner.lock().unwrap().entrypoint_virtual_address(slice)
     }
 
     #[pyo3(text_signature = "($self, slice)")]
@@ -73,13 +73,13 @@ impl MACHO {
     }
 
     #[pyo3(text_signature = "($self, slice)")]
-    pub fn entrypoints(&self, slice: usize) -> BTreeSet<u64> {
-        self.inner.lock().unwrap().entrypoints(slice)
+    pub fn entrypoint_virtual_addresses(&self, slice: usize) -> BTreeSet<u64> {
+        self.inner.lock().unwrap().entrypoint_virtual_addresses(slice)
     }
 
     #[pyo3(text_signature = "($self, slice)")]
-    pub fn exports(&self, slice: usize) -> BTreeSet<u64> {
-        self.inner.lock().unwrap().exports(slice)
+    pub fn export_virtual_addresses(&self, slice: usize) -> BTreeSet<u64> {
+        self.inner.lock().unwrap().export_virtual_addresses(slice)
     }
 
     #[pyo3(text_signature = "($self, slice)")]
