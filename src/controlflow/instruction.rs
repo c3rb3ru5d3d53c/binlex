@@ -172,8 +172,8 @@ use serde_json::Value;
 use std::io::ErrorKind;
 use crate::controlflow::Graph;
 use crate::controlflow::Attributes;
-use crate::controlflow::Chromosome;
-use crate::controlflow::ChromosomeJson;
+use crate::genetics::Chromosome;
+use crate::genetics::ChromosomeJson;
 use crate::Config;
 use crate::Architecture;
 
