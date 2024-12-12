@@ -250,6 +250,34 @@ impl <'minhash32> MinHash32 <'minhash32> {
         Some(min_hashes)
     }
 
+    /// Computes the Jaccard similarity between two MinHash signatures represented as hexadecimal strings.
+    ///
+    /// The similarity is calculated as the ratio of the number of matching hash values
+    /// to the total number of hash values.
+    ///
+    /// # Arguments
+    ///
+    /// * `hexdigest1` - The first MinHash signature as a hexadecimal string.
+    /// * `hexdigest2` - The second MinHash signature as a hexadecimal string.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `f64` value representing the Jaccard similarity between the two signatures.
+    /// If the signatures have different lengths or cannot be parsed, it returns `0.0`.
+    pub fn jaccard_similarity_from_hexdigests(hexdigest1: &str, hexdigest2: &str) -> f64 {
+        let hash1 = Self::parse_hexdigest(hexdigest1);
+        let hash2 = Self::parse_hexdigest(hexdigest2);
+
+        if hash1.is_none() || hash2.is_none() {
+            return 0.0;
+        }
+
+        let hash1 = hash1.unwrap();
+        let hash2 = hash2.unwrap();
+
+        return Self::jaccard_similarity(&hash1, &hash2);
+    }
+
     /// Computes the Jaccard similarity between two MinHash signatures.
     ///
     /// The similarity is calculated as the ratio of the number of matching hash values
@@ -274,6 +302,21 @@ impl <'minhash32> MinHash32 <'minhash32> {
             }
         }
         intersection as f64 / hash1.len() as f64
+    }
+
+    fn parse_hexdigest(hexdigest: &str) -> Option<Vec<u32>> {
+        if hexdigest.len() % 8 != 0 {
+            return None;
+        }
+
+        let mut result = Vec::new();
+        for chunk in hexdigest.as_bytes().chunks(8) {
+            let chunk_str = std::str::from_utf8(chunk).ok()?;
+            let value = u32::from_str_radix(chunk_str, 16).ok()?;
+            result.push(value);
+        }
+
+        Some(result)
     }
 
     /// Computes the MinHash signature and returns it as a hexadecimal string.
