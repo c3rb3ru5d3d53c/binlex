@@ -173,10 +173,28 @@ pub enum Gene {
 
 #[allow(dead_code)]
 impl Gene {
+
+    pub fn from_u8(v: u8) -> Self {
+        Self::Value(v)
+    }
+
     pub fn to_char(self) -> String {
         match self {
             Gene::Wildcard => "?".to_string(),
             Gene::Value(v) => format!("{:x}", v),
+        }
+    }
+
+    pub fn from_char(c: char) -> Result<Self, std::io::Error> {
+        match c {
+            '?' => Ok(Gene::Wildcard),
+            '0'..='9' => c.to_digit(16)
+                .map(|v| Gene::Value(v as u8))
+                .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid hexadecimal digit")),
+            'a'..='f' | 'A'..='F' => c.to_digit(16)
+                .map(|v| Gene::Value(v as u8))
+                .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid hexadecimal digit")),
+            _ => Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid character")),
         }
     }
 }

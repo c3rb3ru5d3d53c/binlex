@@ -171,6 +171,7 @@ pub mod hashing;
 pub mod binary;
 pub mod disassemblers;
 pub mod controlflow;
+pub mod genetics;
 
 pub use config::Architecture;
 pub use binary::Binary;
@@ -182,6 +183,7 @@ use crate::config::config_init;
 use crate::binary::binary_init;
 use crate::disassemblers::disassemblers_init;
 use crate::controlflow::controlflow_init;
+use crate::genetics::genitics_init;
 
 use pyo3::{prelude::*, wrap_pymodule};
 
@@ -193,6 +195,7 @@ fn binlex(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pymodule!(config_init))?;
     m.add_wrapped(wrap_pymodule!(binary_init))?;
     m.add_wrapped(wrap_pymodule!(disassemblers_init))?;
+    m.add_wrapped(wrap_pymodule!(genitics_init))?;
     m.add_class::<Binary>()?;
     m.add_class::<Config>()?;
     Ok(())

@@ -410,10 +410,10 @@ fn compare_json_entries(json_lhs: &JSON, json_rhs: &JSON, non_contiguous_thresho
                     lhs.get("blocks").and_then(|b| b.as_array()),
                     rhs.get("blocks").and_then(|b| b.as_array()),
                 ) {
-                    if get_blocks_minhash_ratio(&lhs_blocks) >= 0.75 && get_blocks_minhash_ratio(&rhs_blocks) >= 0.75 {
+                    if get_blocks_minhash_ratio(&lhs_blocks) >= non_contiguous_threshold && get_blocks_minhash_ratio(&rhs_blocks) >= non_contiguous_threshold {
                         minhash_similarity = calculate_non_contiguous_minhash_similarity(lhs_blocks, rhs_blocks);
                     }
-                    if get_blocks_tlsh_ratio(&lhs_blocks) >= 0.75 && get_blocks_tlsh_ratio(&rhs_blocks) >= 0.75 {
+                    if get_blocks_tlsh_ratio(&lhs_blocks) >= non_contiguous_threshold && get_blocks_tlsh_ratio(&rhs_blocks) >= non_contiguous_threshold {
                         tlsh_similarity = calculate_non_contiguous_tlsh_similarity(lhs_blocks, rhs_blocks);
                     }
                 }

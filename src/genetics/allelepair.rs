@@ -165,6 +165,8 @@
 // Library.
 
 use crate::genetics::Gene;
+use std::io::Error;
+use std::io::ErrorKind;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
@@ -175,6 +177,38 @@ pub struct AllelePair {
 
 #[allow(dead_code)]
 impl AllelePair {
+    pub fn new(high: Gene, low: Gene) -> Self {
+        Self {
+            high: high,
+            low: low,
+        }
+    }
+
+    pub fn genes(&self) -> Vec<Gene> {
+        let mut result = Vec::<Gene>::new();
+        result.push(self.low);
+        result.push(self.high);
+        result
+    }
+
+    pub fn from_string(pair: String) -> Result<Self, Error> {
+        if pair.len() != 2 {
+            return Err(Error::new(ErrorKind::InvalidData, "allele pair string must have a length of 2"))
+        }
+
+        let mut chars = pair.chars();
+        let high_char = chars.next().unwrap();
+        let low_char = chars.next().unwrap();
+
+        let high = Gene::from_char(high_char)?;
+        let low = Gene::from_char(low_char)?;
+
+        Ok(Self{
+            high: high,
+            low: low,
+        })
+    }
+
     pub fn to_string(&self) -> String {
         format!("{}{}", self.high.to_char(), self.low.to_char())
     }

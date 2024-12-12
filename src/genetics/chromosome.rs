@@ -195,7 +195,7 @@ pub struct ChromosomeJson {
 
 /// Represents a chromosome within a control flow graph.
 pub struct Chromosome {
-    pub pairs: Vec<AllelePair>,
+    pub allelepairs: Vec<AllelePair>,
     config: Config,
 }
 
@@ -211,9 +211,9 @@ impl Chromosome {
     ///
     /// Returns `Result<Chromosome, Error>`.
     pub fn new(pattern: String, config: Config) -> Result<Self, Error> {
-        let pairs = Self::parse_pairs(pattern)?;
+        let allelepairs = Self::parse_pairs(pattern)?;
         Ok(Self {
-            pairs: pairs,
+            allelepairs: allelepairs,
             config: config,
         })
     }
@@ -245,9 +245,13 @@ impl Chromosome {
         }
     }
 
+    pub fn allelepairs(&self) -> Vec<AllelePair> {
+        return self.allelepairs.clone();
+    }
+
     pub fn pattern(&self) -> String {
         let mut result = String::new();
-        for pair in &self.pairs {
+        for pair in &self.allelepairs {
             result += &pair.to_string();
         }
         result
@@ -261,7 +265,7 @@ impl Chromosome {
     pub fn normalized(&self) -> Vec<u8> {
         let mut result = Vec::new();
         let mut temp_byte: Option<u8> = None;
-        for pair in &self.pairs {
+        for pair in &self.allelepairs {
             if let Gene::Value(high) = pair.high {
                 if let Some(low) = temp_byte {
                     result.push((low << 4) | high);
