@@ -168,6 +168,8 @@ use pyo3::prelude::*;
 use std::collections::BTreeSet;
 use binlex::controlflow::Instruction as InnerInstruction;
 use crate::controlflow::Graph;
+use crate::Config;
+use crate::genetics::Chromosome;
 use std::sync::Mutex;
 use std::sync::Arc;
 
@@ -175,7 +177,7 @@ use std::sync::Arc;
 pub struct Instruction {
     pub address: u64,
     pub cfg: Py<Graph>,
-    inner: Arc<Mutex<Option<InnerInstruction>>>,
+    pub inner: Arc<Mutex<Option<InnerInstruction>>>,
 }
 
 impl Instruction {
@@ -208,11 +210,28 @@ impl Instruction {
 impl Instruction {
     #[new]
     #[pyo3(text_signature = "(address, cfg)")]
-    fn new(address: u64, cfg: Py<Graph>) -> PyResult<Self> {
+    pub fn new(address: u64, cfg: Py<Graph>) -> PyResult<Self> {
         Ok(Self {
             address,
             cfg,
             inner: Arc::new(Mutex::new(None)),
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Returns the chromosome associated with this instruction.
+    ///
+    /// # Returns
+    /// - `PyResult<Option<Chromosome>>`: The chromosome associated with this instruction.
+    pub fn chromosome(&self, py: Python) -> PyResult<Option<Chromosome>> {
+        self.with_inner_instruction(py, |instruction| {
+            let inner_config = self.cfg.borrow(py).inner.lock().unwrap().config.clone();
+            let config = Py::new(py, Config {
+                inner: Arc::new(Mutex::new(inner_config))
+            }).unwrap();
+            let pattern = instruction.pattern();
+            let chromosome = Chromosome::new(py, pattern, config).ok();
+            return Ok(chromosome);
         })
     }
 

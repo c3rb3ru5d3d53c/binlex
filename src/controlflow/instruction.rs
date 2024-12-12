@@ -357,7 +357,7 @@ impl Instruction {
             is_block_start: self.is_block_start,
             bytes: Binary::to_hex(&self.bytes),
             size: self.size(),
-            chromosome: self.chromosome(),
+            chromosome: self.chromosome_json(),
             is_return: self.is_return,
             is_trap: self.is_trap,
             is_call: self.is_call,
@@ -374,13 +374,29 @@ impl Instruction {
         }
     }
 
-    /// Generates a signature for the block using its address range and control flow graph.
+    pub fn pattern(&self) -> String {
+        self.pattern.clone()
+    }
+
+    /// Retrieves the chromosome representing the instruction.
     ///
     /// # Returns
     ///
-    /// Returns a `SignatureJson` representing the block's signature.
-    pub fn chromosome(&self) -> ChromosomeJson {
-        Chromosome::new(self.pattern.clone(), self.config.clone()).unwrap().process()
+    /// Returns a `Chromosome` represnting the instruction.
+    pub fn chromosome(&self) -> Chromosome {
+        Chromosome::new(self.pattern.clone(), self.config.clone())
+            .expect("failed to parse instruction chromosome")
+    }
+
+    /// Retrieves the chromosome representing the instruction.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `ChromosomeJson` representing the instruction.
+    pub fn chromosome_json(&self) -> ChromosomeJson {
+        Chromosome::new(self.pattern.clone(), self.config.clone())
+        .expect("failed to parse instruction chromosome")
+        .process()
     }
 
     /// Retrieves the set of addresses this instruction may jump or branch to.

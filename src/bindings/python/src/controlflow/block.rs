@@ -168,7 +168,10 @@ use pyo3::prelude::*;
 use pyo3::Py;
 use std::collections::{BTreeMap, BTreeSet};
 use binlex::controlflow::Block as InnerBlock;
+use crate::controlflow::Instruction;
+use crate::genetics::Chromosome;
 use crate::controlflow::graph::Graph;
+use crate::Config;
 use std::sync::Arc;
 use std::sync::Mutex;
 use pyo3::types::PyBytes;
@@ -180,7 +183,7 @@ pub struct Block {
     pub address: u64,
     /// A reference to the control flow graph associated with the block.
     pub cfg: Py<Graph>,
-    inner_block_cache: Arc<Mutex<Option<InnerBlock<'static>>>>,
+    pub inner_block_cache: Arc<Mutex<Option<InnerBlock<'static>>>>,
 }
 
 impl Block {
@@ -215,7 +218,7 @@ impl Block {
     ///
     /// # Returns
     /// A new `Block` object.
-    fn new(address: u64, cfg: Py<Graph>) -> PyResult<Self> {
+    pub fn new(address: u64, cfg: Py<Graph>) -> PyResult<Self> {
         Ok(Self {
             address,
             cfg,
@@ -224,8 +227,42 @@ impl Block {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Returns the chromosome associated with this block.
+    ///
+    /// # Returns
+    /// - `PyResult<Option<Chromosome>>`: The chromosome associated with this block.
+    pub fn chromosome(&self, py: Python) -> PyResult<Option<Chromosome>> {
+        self.with_inner_block(py, |block| {
+            let inner_config = self.cfg.borrow(py).inner.lock().unwrap().config.clone();
+            let config = Py::new(py, Config {
+                inner: Arc::new(Mutex::new(inner_config))
+            }).unwrap();
+            let pattern = block.pattern();
+            let chromosome = Chromosome::new(py, pattern, config).ok();
+            return Ok(chromosome);
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Returns the instructions associated with this block.
+    ///
+    /// # Returns
+    /// - `PyResult<Vec<Instruction>>`: The instructions associated with this block
+    pub fn instructions(&self, py: Python) -> PyResult<Vec<Instruction>> {
+        self.with_inner_block(py, |block| {
+            let mut result = Vec::<Instruction>::new();
+            for instruction in &block.instructions() {
+                let instruction = Instruction::new(instruction.address, self.cfg.clone_ref(py))
+                    .expect("failed to get instruction");
+                result.push(instruction);
+            }
+            return Ok(result);
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
     /// Retrieves the raw bytes of the block.
-    fn bytes(&self, py: Python) -> PyResult<Py<PyBytes>> {
+    pub fn bytes(&self, py: Python) -> PyResult<Py<PyBytes>> {
         self.with_inner_block(py, |block| {
             let bytes = PyBytes::new_bound(py, &block.bytes());
             Ok(bytes.into())

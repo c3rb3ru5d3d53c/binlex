@@ -291,6 +291,7 @@ impl GraphQueue {
     }
 }
 
+
 #[pyclass]
 pub struct Graph {
     pub inner: Arc<Mutex<InnerGraph>>,
