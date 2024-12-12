@@ -208,11 +208,11 @@ pub struct ComparisonJson {
     after_help = format!("Author: {}", AUTHOR),
 )]
 struct Args {
-    /// Input file or wildcard pattern for LHS (Left-Hand Side).
+    /// Input file or glob pattern for LHS (Left-Hand Side).
     #[arg(long)]
     input_lhs: Option<String>,
 
-    /// Input file or wildcard pattern for RHS (Right-Hand Side).
+    /// Input file or glob pattern for RHS (Right-Hand Side).
     #[arg(long)]
     input_rhs: String,
 
@@ -220,7 +220,10 @@ struct Args {
     #[arg(short, long, default_value_t = 1)]
     pub threads: usize,
 
-    /// Enable recursive wildcard expansion.
+    #[arg(long, default_value_t = 0.75)]
+    pub non_contiguous_threshold: f64,
+
+    /// Enable recursive glob expansion.
     #[arg(short = 'r', long = "recursive")]
     pub recursive: bool,
 }
@@ -237,8 +240,8 @@ fn main() {
     }
 
     match args.input_lhs {
-        Some(lhs_pattern) => handle_lhs_files(&lhs_pattern, &rhs_files, args.recursive),
-        None => handle_stdin_lhs(&rhs_files),
+        Some(lhs_pattern) => handle_lhs_files(&lhs_pattern, &rhs_files, args.recursive, args.non_contiguous_threshold),
+        None => handle_stdin_lhs(&rhs_files, args.non_contiguous_threshold),
     }
 
     process::exit(0);
@@ -279,7 +282,7 @@ fn expand_paths(pattern: &str, recursive: bool) -> Vec<String> {
         .collect()
 }
 
-fn handle_lhs_files(lhs_pattern: &str, rhs_files: &[String], recursive: bool) {
+fn handle_lhs_files(lhs_pattern: &str, rhs_files: &[String], recursive: bool, non_contiguous_threshold: f64) {
     let lhs_files = expand_paths(lhs_pattern, recursive);
     if lhs_files.is_empty() {
         eprintln!("No LHS files matched the pattern.");
@@ -296,12 +299,12 @@ fn handle_lhs_files(lhs_pattern: &str, rhs_files: &[String], recursive: bool) {
         let json_rhs = load_json_with_filter(rhs_path);
 
         if let (Some(json_lhs), Some(json_rhs)) = (json_lhs, json_rhs) {
-            compare_json_entries(&json_lhs, &json_rhs);
+            compare_json_entries(&json_lhs, &json_rhs, non_contiguous_threshold);
         }
     });
 }
 
-fn handle_stdin_lhs(rhs_files: &[String]) {
+fn handle_stdin_lhs(rhs_files: &[String], non_contiguous_threshold: f64) {
     let json_lhs = match JSON::from_stdin_with_filter(filter_json) {
         Ok(json) => Arc::new(json),
         Err(e) => {
@@ -314,7 +317,7 @@ fn handle_stdin_lhs(rhs_files: &[String]) {
         let json_rhs = load_json_with_filter(rhs_path);
 
         if let Some(json_rhs) = json_rhs {
-            compare_json_entries(&json_lhs, &json_rhs);
+            compare_json_entries(&json_lhs, &json_rhs, non_contiguous_threshold);
         }
     });
 }
@@ -336,7 +339,7 @@ fn filter_json(value: &mut Value) -> bool {
             .is_some()
 }
 
-fn compare_json_entries(json_lhs: &JSON, json_rhs: &JSON) {
+fn compare_json_entries(json_lhs: &JSON, json_rhs: &JSON, non_contiguous_threshold: f64) {
     let lhs_entries = json_lhs.values();
     let rhs_entries: Vec<Value> = json_rhs.values().into_iter().cloned().collect();
 
@@ -401,17 +404,23 @@ fn compare_json_entries(json_lhs: &JSON, json_rhs: &JSON) {
                 minhash_similarity = Some(MinHash32::jaccard_similarity_from_hexdigests(&lhs_minhash.clone().unwrap(), &rhs_minhash.clone().unwrap()));
             }
 
+            // Handle Non-Contiguous Function Similarity
             if (lhs_contiguous == false || rhs_contiguous == false) && lhs_type == "function" && rhs_type == "function" {
                 if let (Some(lhs_blocks), Some(rhs_blocks)) = (
                     lhs.get("blocks").and_then(|b| b.as_array()),
                     rhs.get("blocks").and_then(|b| b.as_array()),
                 ) {
-                    tlsh_similarity = calculate_non_contiguous_tlsh_similarity(lhs_blocks, rhs_blocks);
-                    minhash_similarity = calculate_non_contiguous_minhash_similarity(lhs_blocks, rhs_blocks);
+                    if get_blocks_minhash_ratio(&lhs_blocks) >= 0.75 && get_blocks_minhash_ratio(&rhs_blocks) >= 0.75 {
+                        minhash_similarity = calculate_non_contiguous_minhash_similarity(lhs_blocks, rhs_blocks);
+                    }
+                    if get_blocks_tlsh_ratio(&lhs_blocks) >= 0.75 && get_blocks_tlsh_ratio(&rhs_blocks) >= 0.75 {
+                        tlsh_similarity = calculate_non_contiguous_tlsh_similarity(lhs_blocks, rhs_blocks);
+                    }
                 }
             }
 
-            if tlsh_similarity.is_none() { continue; }
+            // Skip if Similarity Cannot be Compared
+            if tlsh_similarity.is_none() && minhash_similarity.is_none() { continue; }
 
             let comparison = ComparisonJson {
                 type_: "comparison".to_string(),
@@ -507,11 +516,43 @@ fn extract_minhash_values(blocks: &[Value]) -> Vec<String> {
         .collect()
 }
 
+fn get_blocks_minhash_ratio(blocks: &[Value]) -> f64 {
+    let mut minhash_size: usize = 0;
+    let mut total_size: usize = 0;
+    for block in blocks {
+        let minhash = extract_nested_field(block, "chromosome", "minhash");
+        let size = extract_u64_value(block, "size").unwrap_or(0) as usize;
+        total_size += size;
+        if minhash.is_some() {
+            minhash_size += size;
+        }
+    }
+    return minhash_size as f64 / total_size as f64;
+}
+
+fn get_blocks_tlsh_ratio(blocks: &[Value]) -> f64 {
+    let mut tlsh_size: usize = 0;
+    let mut total_size: usize = 0;
+    for block in blocks {
+        let tlsh = extract_nested_field(block, "chromosome", "tlsh");
+        let size = extract_u64_value(block, "size").unwrap_or(0) as usize;
+        total_size += size;
+        if tlsh.is_some() {
+            tlsh_size += size;
+        }
+    }
+    return tlsh_size as f64 / total_size as f64;
+}
+
 fn extract_tlsh_values(blocks: &[Value]) -> Vec<String> {
     blocks
         .iter()
         .filter_map(|block| extract_nested_field(block, "chromosome", "tlsh"))
         .collect()
+}
+
+fn extract_u64_value<'a>(value: &'a Value, field: &str) -> Option<u64> {
+    value.get(field)?.as_u64()
 }
 
 fn extract_boolean_value<'a>(value: &'a Value, field: &str) -> Option<bool> {
