@@ -614,9 +614,13 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
     let mapped_file = pe.image()
         .unwrap_or_else(|error| { eprintln!("failed to map pe image: {}", error); process::exit(1)});
 
+    Stderr::print_debug(config.clone(), "mapped pe image");
+
     let image = mapped_file
         .mmap()
         .unwrap_or_else(|error| { eprintln!("failed to get pe virtual image: {}", error); process::exit(1); });
+
+    Stderr::print_debug(config.clone(), "obtained mapped image pointer");
 
     let executable_address_ranges = match pe.is_dotnet() {
         true => pe.dotnet_executable_virtual_address_ranges(),
@@ -635,6 +639,8 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
     let mut cfg = Graph::new(pe.architecture(), config.clone());
 
     if !pe.is_dotnet() {
+        Stderr::print_debug(config.clone(), "starting pe disassembler");
+
         let disassembler = match Disassembler::new(pe.architecture(), &image, executable_address_ranges.clone()) {
             Ok(disassembler) => disassembler,
             Err(error) => {
@@ -649,6 +655,8 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
                 process::exit(1);
             });
     } else if pe.is_dotnet() {
+        Stderr::print_debug(config.clone(), "starting pe dotnet disassembler");
+
         let disassembler = match CILDisassembler::new(pe.architecture(), &image, pe.dotnet_metadata_token_virtual_addresses().clone(), executable_address_ranges.clone()) {
             Ok(disassembler) => disassembler,
             Err(error) => {

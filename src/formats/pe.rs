@@ -297,7 +297,9 @@ impl PE {
     /// * `None` - If the file is not a .NET executable or the storage signature
     ///   cannot be parsed.
     fn dotnet_parse_storage_signature(&self) -> Option<(u64, &StorageSignature)> {
-        if !self.is_dotnet() { return None; }
+        if !self.is_dotnet() {
+            return None;
+        }
         let (_, image_cor20_header) = self.dotnet_parse_cor20_header()?;
         let rva = image_cor20_header.meta_data.virtual_address as u64;
         let start = self.relative_virtual_address_to_file_offset(rva)? as usize;
@@ -334,7 +336,9 @@ impl PE {
     ///   * A reference to the fparsed `StorageHeader` structure.
     /// * `None` - If the file is not a .NET executable or the storage header cannot be parsed.
     fn dotnet_parse_storage_header(&self) -> Option<(u64, &StorageHeader)> {
-        if !self.is_dotnet() { return None; };
+        if !self.is_dotnet() {
+            return None;
+        };
         let (mut start, cor20_storage_signaure_header) = self.dotnet_parse_storage_signature()?;
         start += StorageSignature::size() as u64;
         start += cor20_storage_signaure_header.version_string_size as u64;
@@ -373,7 +377,9 @@ impl PE {
     /// * `None` - If the file is not a .NET executable, the storage header cannot be parsed,
     ///   or no stream headers are found.
     fn dotnet_parse_stream_headers(&self) -> Option<BTreeMap<u64, &StreamHeader>> {
-        if !self.is_dotnet() { return None; }
+        if !self.is_dotnet() {
+            return None;
+        }
         let (cor20_storage_header_offset, cor20_storage_header) = self.dotnet_parse_storage_header()?;
         let mut offset = cor20_storage_header_offset as usize + StorageHeader::size();
         let mut result = BTreeMap::<u64, &StreamHeader>::new();
@@ -424,7 +430,9 @@ impl PE {
     /// * `None` - If the file is not a .NET executable, the relevant stream header cannot
     ///   be found, or the metadata table cannot be parsed.
     fn dotnet_parse_metadata_table(&self) -> Option<(u64, &MetadataTable)> {
-        if !self.is_dotnet() { return None; }
+        if !self.is_dotnet() {
+            return None;
+        }
         let (mut start, _) = self.dotnet_parse_storage_signature()?;
         for (_, header) in self.dotnet_parse_stream_headers()? {
             if header.name() == vec![0x23, 0x7e, 0x00, 0x00] {
@@ -469,7 +477,9 @@ impl PE {
     ///   data sizes within entries.
     /// * If an invalid offset or entry count is encountered, the function will return `None`.
     pub fn dotnet_metadata_table_entries(&self) -> Option<Vec<Entry>> {
-        if !self.is_dotnet() { return None; }
+        if !self.is_dotnet() {
+            return None;
+        }
 
         let (cor20_metadata_table_offset, cor20_metadata_table) = self.dotnet_parse_metadata_table()?;
 
@@ -753,10 +763,14 @@ impl PE {
     ///   * Values represent the end of the method's executable code (virtual address).
     pub fn dotnet_executable_virtual_address_ranges(&self) -> BTreeMap<u64, u64> {
         let mut result = BTreeMap::<u64, u64>::new();
-        if !self.is_dotnet() { return result; }
+        if !self.is_dotnet() {
+            return result;
+        }
         let entries = match self.dotnet_metadata_table_entries() {
             Some(entries) => entries,
-            None => return result,
+            None => {
+                return result
+            },
         };
 
         for entry in entries {

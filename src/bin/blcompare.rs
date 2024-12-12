@@ -177,11 +177,13 @@ use serde_json::Value;
 
 use binlex::{AUTHOR, VERSION};
 use binlex::hashing::TLSH;
+use binlex::hashing::MinHash32;
 use binlex::io::{JSON, Stdout};
 
 #[derive(Serialize, Deserialize)]
 pub struct SimilarityScoreJson{
     pub tlsh: Option<f64>,
+    pub minhash: Option<f64>,
 }
 
 /// Structure to represent the comparison result between two JSON entries.
@@ -340,7 +342,6 @@ fn compare_json_entries(json_lhs: &JSON, json_rhs: &JSON) {
 
     for lhs in lhs_entries {
 
-
         let lhs_type = match extract_string_value(lhs, "type") {
             Some(t) => t,
             None => continue,
@@ -350,7 +351,10 @@ fn compare_json_entries(json_lhs: &JSON, json_rhs: &JSON) {
             Some(a) => a,
             None => continue,
         };
+
         let lhs_tlsh = extract_nested_field(lhs, "chromosome", "tlsh");
+
+        let lhs_minhash = extract_nested_field(lhs, "chromosome", "minhash");
 
         let lhs_contiguous = match extract_boolean_value(lhs, "contiguous") {
             Some(t) => t,
@@ -367,7 +371,10 @@ fn compare_json_entries(json_lhs: &JSON, json_rhs: &JSON) {
                 Some(a) => a,
                 None => continue,
             };
+
             let rhs_tlsh = extract_nested_field(rhs, "chromosome", "tlsh");
+
+            let rhs_minhash = extract_nested_field(rhs, "chromosome", "minhash");
 
             let rhs_contiguous = match extract_boolean_value(rhs, "contiguous") {
                 Some(t) => t,
@@ -379,6 +386,7 @@ fn compare_json_entries(json_lhs: &JSON, json_rhs: &JSON) {
             }
 
             let mut tlsh_similarity: Option<f64> = None;
+            let mut minhash_similarity: Option<f64> = None;
 
             if lhs_contiguous == true && rhs_contiguous == true && lhs_tlsh.is_some() && rhs_tlsh.is_some() {
                 tlsh_similarity = TLSH::compare(
@@ -386,6 +394,11 @@ fn compare_json_entries(json_lhs: &JSON, json_rhs: &JSON) {
                     rhs_tlsh.clone().unwrap())
                         .ok()
                         .map(|score| score as f64);
+
+            }
+
+            if lhs_contiguous == true && rhs_contiguous == true && lhs_minhash.is_some() && rhs_minhash.is_some() {
+                minhash_similarity = Some(MinHash32::jaccard_similarity_from_hexdigests(&lhs_minhash.clone().unwrap(), &rhs_minhash.clone().unwrap()));
             }
 
             if (lhs_contiguous == false || rhs_contiguous == false) && lhs_type == "function" && rhs_type == "function" {
@@ -393,7 +406,8 @@ fn compare_json_entries(json_lhs: &JSON, json_rhs: &JSON) {
                     lhs.get("blocks").and_then(|b| b.as_array()),
                     rhs.get("blocks").and_then(|b| b.as_array()),
                 ) {
-                    tlsh_similarity = calculate_non_contiguous_similarity(lhs_blocks, rhs_blocks);
+                    tlsh_similarity = calculate_non_contiguous_tlsh_similarity(lhs_blocks, rhs_blocks);
+                    minhash_similarity = calculate_non_contiguous_minhash_similarity(lhs_blocks, rhs_blocks);
                 }
             }
 
@@ -405,6 +419,7 @@ fn compare_json_entries(json_lhs: &JSON, json_rhs: &JSON) {
                 rhs: rhs.clone(),
                 similarity: SimilarityScoreJson {
                     tlsh: tlsh_similarity,
+                    minhash: minhash_similarity,
                 },
             };
 
@@ -416,13 +431,54 @@ fn compare_json_entries(json_lhs: &JSON, json_rhs: &JSON) {
     }
 }
 
-fn calculate_non_contiguous_similarity(lhs_blocks: &[Value], rhs_blocks: &[Value]) -> Option<f64> {
-    let mut best_similarities = Vec::new();
+fn calculate_non_contiguous_minhash_similarity(lhs_blocks: &[Value], rhs_blocks: &[Value]) -> Option<f64> {
+    let lhs_minhash_values = extract_minhash_values(lhs_blocks);
+    let rhs_minhash_values = extract_minhash_values(rhs_blocks);
 
-    for lhs_tlsh in extract_tlsh_values(lhs_blocks) {
+    if lhs_blocks.len() != lhs_minhash_values.len() || rhs_blocks.len() != rhs_minhash_values.len() {
+        return None;
+    }
+
+    let mut similarities = Vec::new();
+
+    for lhs_tlsh in lhs_minhash_values {
+        let mut best_similarity: Option<f64> = None;
+
+        for rhs_tlsh in &rhs_minhash_values {
+            let similarity = MinHash32::jaccard_similarity_from_hexdigests(&lhs_tlsh.clone(), &rhs_tlsh.clone());
+            best_similarity = match best_similarity {
+                Some(current_best) => Some(current_best.max(similarity)),
+                None => Some(similarity),
+            };
+        }
+
+        if let Some(similarity) = best_similarity {
+            similarities.push(similarity as f64);
+        }
+    }
+
+    if !similarities.is_empty() {
+        let total_similarity: f64 = similarities.iter().sum();
+        return Some(total_similarity / similarities.len() as f64);
+    }
+
+    None
+}
+
+fn calculate_non_contiguous_tlsh_similarity(lhs_blocks: &[Value], rhs_blocks: &[Value]) -> Option<f64> {
+    let lhs_tlsh_values = extract_tlsh_values(lhs_blocks);
+    let rhs_tlsh_values = extract_tlsh_values(rhs_blocks);
+
+    if lhs_blocks.len() != lhs_tlsh_values.len() || rhs_blocks.len() != rhs_tlsh_values.len() {
+        return None;
+    }
+
+    let mut similarities = Vec::new();
+
+    for lhs_tlsh in lhs_tlsh_values {
         let mut best_similarity: Option<u32> = None;
 
-        for rhs_tlsh in extract_tlsh_values(rhs_blocks) {
+        for rhs_tlsh in &rhs_tlsh_values {
             if let Ok(similarity) = TLSH::compare(lhs_tlsh.clone(), rhs_tlsh.clone()) {
                 best_similarity = match best_similarity {
                     Some(current_best) => Some(current_best.min(similarity)),
@@ -432,16 +488,23 @@ fn calculate_non_contiguous_similarity(lhs_blocks: &[Value], rhs_blocks: &[Value
         }
 
         if let Some(similarity) = best_similarity {
-            best_similarities.push(similarity as f64);
+            similarities.push(similarity as f64);
         }
     }
 
-    if !best_similarities.is_empty() {
-        let total_similarity: f64 = best_similarities.iter().sum();
-        return Some(total_similarity / best_similarities.len() as f64);
+    if !similarities.is_empty() {
+        let total_similarity: f64 = similarities.iter().sum();
+        return Some(total_similarity / similarities.len() as f64);
     }
 
     None
+}
+
+fn extract_minhash_values(blocks: &[Value]) -> Vec<String> {
+    blocks
+        .iter()
+        .filter_map(|block| extract_nested_field(block, "chromosome", "minhash"))
+        .collect()
 }
 
 fn extract_tlsh_values(blocks: &[Value]) -> Vec<String> {

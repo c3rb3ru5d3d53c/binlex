@@ -301,9 +301,6 @@ impl Cor20Header {
         if bytes.len() != mem::size_of::<Self>() {
             return None;
         }
-        if bytes.as_ptr().align_offset(mem::align_of::<Self>()) != 0 {
-            return None;
-        }
         Some(unsafe { &*(bytes.as_ptr() as *const Self) })
     }
 
@@ -350,9 +347,6 @@ impl StorageSignature {
         if bytes.len() != mem::size_of::<Self>() {
             return None;
         }
-        if bytes.as_ptr().align_offset(mem::align_of::<Self>()) != 0 {
-            return None;
-        }
         Some(unsafe { &*(bytes.as_ptr() as *const Self) })
     }
 
@@ -391,9 +385,6 @@ impl StorageHeader {
     /// * `None` - If the byte slice is invalid, does not contain enough data, or is misaligned.
     pub fn from_bytes(bytes: &[u8]) -> Option<&Self> {
         if bytes.len() != mem::size_of::<Self>() {
-            return None;
-        }
-        if bytes.as_ptr().align_offset(mem::align_of::<Self>()) != 0 {
             return None;
         }
         Some(unsafe { &*(bytes.as_ptr() as *const Self) })
@@ -481,7 +472,7 @@ impl StreamHeader {
 
 /// Represents a Metadata Table header in a .NET metadata structure.
 ///
-/// The `MetadataTable` provides information about the structure and versioning of 
+/// The `MetadataTable` provides information about the structure and versioning of
 /// the metadata, as well as the sizes and characteristics of various heaps.
 #[repr(C)]
 pub struct MetadataTable {
@@ -504,7 +495,7 @@ pub struct MetadataTable {
 impl MetadataTable {
     /// Parses a `MetadataTable` from a byte slice.
     ///
-    /// This function validates the size and alignment of the byte slice before 
+    /// This function validates the size and alignment of the byte slice before
     /// returning a reference to the `MetadataTable`.
     ///
     /// # Parameters
@@ -517,9 +508,6 @@ impl MetadataTable {
     /// * `None` - If the byte slice is invalid, does not contain enough data, or is misaligned.
     pub fn from_bytes(bytes: &[u8]) -> Option<&Self> {
         if bytes.len() != mem::size_of::<Self>() {
-            return None;
-        }
-        if bytes.as_ptr().align_offset(mem::align_of::<Self>()) != 0 {
             return None;
         }
         Some(unsafe { &*(bytes.as_ptr() as *const Self) })
@@ -891,7 +879,7 @@ impl SimpleTableIndex {
     /// # Parameters
     ///
     /// * `bytes` - A byte slice containing the index data.
-    /// * `heap_size` - A `u8` value indicating the size of the heap (used to determine 
+    /// * `heap_size` - A `u8` value indicating the size of the heap (used to determine
     ///   whether the index is 2 or 4 bytes).
     ///
     /// # Returns
@@ -944,7 +932,7 @@ impl StringHeapIndex {
     /// # Parameters
     ///
     /// * `bytes` - A byte slice containing the index data.
-    /// * `heap_size` - A `u8` value indicating the size of the heap (used to determine 
+    /// * `heap_size` - A `u8` value indicating the size of the heap (used to determine
     ///   whether the index is 2 or 4 bytes).
     ///
     /// # Returns
@@ -997,7 +985,7 @@ impl GuidHeapIndex {
     /// # Parameters
     ///
     /// * `bytes` - A byte slice containing the index data.
-    /// * `heap_size` - A `u8` value indicating the size of the heap (used to determine 
+    /// * `heap_size` - A `u8` value indicating the size of the heap (used to determine
     ///   whether the index is 2 or 4 bytes).
     ///
     /// # Returns
@@ -1050,7 +1038,7 @@ impl ResolutionScopeIndex {
     /// # Parameters
     ///
     /// * `bytes` - A byte slice containing the index data.
-    /// * `heap_size` - A `u8` value indicating the size of the heap (used to determine 
+    /// * `heap_size` - A `u8` value indicating the size of the heap (used to determine
     ///   whether the index is 2 or 4 bytes).
     ///
     /// # Returns
@@ -1104,7 +1092,7 @@ impl TypeDefOrRefIndex {
     /// # Parameters
     ///
     /// * `bytes` - A byte slice containing the index data.
-    /// * `heap_size` - A `u8` value indicating the size of the heap (used to determine 
+    /// * `heap_size` - A `u8` value indicating the size of the heap (used to determine
     ///   whether the index is 2 or 4 bytes).
     ///
     /// # Returns
@@ -1138,7 +1126,7 @@ impl TypeDefOrRefIndex {
 
 /// Represents an index into the Blob heap in a .NET metadata structure.
 ///
-/// The `BlobHeapIndex` is used to reference data in the Blob heap, which contains 
+/// The `BlobHeapIndex` is used to reference data in the Blob heap, which contains
 /// metadata such as constants, custom attributes, and signatures.
 ///
 /// # Fields
@@ -1162,7 +1150,7 @@ impl BlobHeapIndex {
     /// # Parameters
     ///
     /// * `bytes` - A byte slice containing the index data.
-    /// * `heap_size` - A `u8` value indicating the size of the heap (used to determine 
+    /// * `heap_size` - A `u8` value indicating the size of the heap (used to determine
     ///   whether the index is 2 or 4 bytes).
     ///
     /// # Returns
@@ -1196,7 +1184,7 @@ impl BlobHeapIndex {
 
 /// Represents an entry in the .NET metadata table.
 ///
-/// Each entry corresponds to a specific metadata table type, such as `Module`, 
+/// Each entry corresponds to a specific metadata table type, such as `Module`,
 /// `TypeRef`, `TypeDef`, `Field`, or `MethodDef`.
 ///
 /// # Variants
@@ -1231,7 +1219,7 @@ pub struct TinyHeader {
 impl TinyHeader {
     /// Parses a `TinyHeader` from a byte slice.
     ///
-    /// This function validates the size and alignment of the byte slice before 
+    /// This function validates the size and alignment of the byte slice before
     /// returning a reference to the `TinyHeader`.
     ///
     /// # Parameters
@@ -1246,9 +1234,6 @@ impl TinyHeader {
         if bytes.len() != mem::size_of::<Self>() {
             return None;
         }
-        if bytes.as_ptr().align_offset(mem::align_of::<Self>()) != 0 {
-            return None;
-        }
         Some(unsafe { &*(bytes.as_ptr() as *const Self) })
     }
 
@@ -1259,7 +1244,7 @@ impl TinyHeader {
 
 /// Represents the method header in a .NET executable.
 ///
-/// The method header can either be a `Tiny` or `Fat` header, depending on the 
+/// The method header can either be a `Tiny` or `Fat` header, depending on the
 /// method's structure and size.
 ///
 /// # Variants
@@ -1301,7 +1286,7 @@ impl MethodHeader {
 
 /// Represents a fat method header in a .NET executable.
 ///
-/// The fat header provides detailed information about a method, including its 
+/// The fat header provides detailed information about a method, including its
 /// flags, stack size, code size, and local variable signature token.
 #[repr(C)]
 pub struct FatHeader {
