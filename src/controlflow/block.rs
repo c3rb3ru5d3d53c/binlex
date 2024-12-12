@@ -165,7 +165,7 @@
 // Library.
 
 use crate::Architecture;
-use crate::controlflow::instruction::Instruction;
+use crate::controlflow::Instruction;
 use crate::controlflow::InstructionJson;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -341,13 +341,13 @@ impl<'block> Block<'block> {
             next: self.next(),
             to: self.terminator.to(),
             edges: self.edges(),
-            chromosome: self.chromosome(),
+            chromosome: self.chromosome_json(),
             prologue: self.is_prologue(),
             conditional: self.terminator.is_conditional,
             size: self.size(),
             bytes: Binary::to_hex(&self.bytes()),
             number_of_instructions: self.number_of_instructions(),
-            instructions: self.instructions(),
+            instructions: self.instructions_json(),
             functions: self.functions(),
             entropy: self.entropy(),
             sha256: self.sha256(),
@@ -362,8 +362,25 @@ impl<'block> Block<'block> {
     ///
     /// # Returns
     ///
+    /// Returns a `Vec<Instruction>` representing the instructions associated with a block.
+    pub fn instructions(&self) -> Vec<Instruction> {
+        let mut result = Vec::<Instruction>::new();
+        for entry in self.cfg.listing.range(self.address..) {
+            let address = *entry.key();
+            let instruction = Instruction::new(*entry.key(), self.cfg)
+                .expect("failed to retrieve instruction");
+            result.push(instruction);
+            if address >= self.terminator.address { break; }
+        }
+        result
+    }
+
+    /// Retrives the instructions associated with the block.
+    ///
+    /// # Returns
+    ///
     /// Returns a `Vec<InstructionJson>` representing the instructions associated with a block.
-    pub fn instructions(&self) -> Vec<InstructionJson> {
+    pub fn instructions_json(&self) -> Vec<InstructionJson> {
         let mut result = Vec::<InstructionJson>::new();
         if !self.cfg.config.blocks.instructions.enabled { return result; }
         for entry in self.cfg.listing.range(self.address..){
@@ -444,12 +461,22 @@ impl<'block> Block<'block> {
         result
     }
 
+    /// Retrieves a chromosome representing this block.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Chromosome` representing this block.
+    pub fn chromosome(&self) -> Chromosome {
+        Chromosome::new(self.pattern(), self.cfg.config.clone())
+            .expect("failed to parse block chromosome")
+    }
+
     /// Generates a signature for the block using its address range and control flow graph.
     ///
     /// # Returns
     ///
     /// Returns a `SignatureJson` representing the block's signature.
-    pub fn chromosome(&self) -> ChromosomeJson {
+    pub fn chromosome_json(&self) -> ChromosomeJson {
         Chromosome::new(self.pattern(), self.cfg.config.clone()).unwrap().process()
     }
 
@@ -458,7 +485,7 @@ impl<'block> Block<'block> {
     /// # Returns
     ///
     /// Returns a `Option<String>` containing the pattern representation of the chromosome.
-    fn pattern(&self) -> String {
+    pub fn pattern(&self) -> String {
         let mut result = String::new();
         for entry in self.cfg.listing.range(self.address..self.address + self.size() as u64) {
             let instruction = entry.value();

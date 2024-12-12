@@ -169,10 +169,13 @@ use pyo3::prelude::*;
 use pyo3::Py;
 use std::collections::BTreeMap;
 use binlex::controlflow::Function as InnerFunction;
+use crate::genetics::Chromosome;
+use crate::Config;
 use crate::controlflow::Graph;
 use std::sync::Arc;
 use std::sync::Mutex;
 use pyo3::types::PyBytes;
+use crate::controlflow::Block;
 
 #[pyclass]
 /// Represents a function within a control flow graph (CFG).
@@ -225,11 +228,46 @@ impl Function {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Returns the chromosome associated with this function.
+    ///
+    /// # Returns
+    /// - `PyResult<Option<Chromosome>>`: The chromosome associated with this function
+    pub fn chromosome(&self, py: Python) -> PyResult<Option<Chromosome>> {
+        self.with_inner_function(py, |function| {
+            let inner_config = self.cfg.borrow(py).inner.lock().unwrap().config.clone();
+            let config = Py::new(py, Config {
+                inner: Arc::new(Mutex::new(inner_config))
+            }).unwrap();
+            let pattern = function.pattern();
+            if pattern.is_none() { return Ok(None); }
+            let chromosome = Chromosome::new(py, pattern.unwrap(), config).ok();
+            return Ok(chromosome);
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Returns the blocks associated with this function.
+    ///
+    /// # Returns
+    /// - `PyResult<Vec<Block>>`: The blocks associated with this function
+    pub fn blocks(&self, py: Python) -> PyResult<Vec<Block>> {
+        self.with_inner_function(py, |function| {
+            let mut result = Vec::<Block>::new();
+            for (block_address, _) in &function.blocks {
+                let block = Block::new(*block_address, self.cfg.clone_ref(py))
+                    .expect("failed to get block");
+                result.push(block);
+            }
+            return Ok(result);
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
     /// Returns the raw bytes of the function.
     ///
     /// # Returns
     /// - `bytes | None`: The raw bytes of the function, if available
-    fn bytes(&self, py: Python) -> PyResult<Option<Py<PyBytes>>> {
+    pub fn bytes(&self, py: Python) -> PyResult<Option<Py<PyBytes>>> {
         self.with_inner_function(py, |function| {
             if let Some(raw_bytes) = function.bytes() {
                 let bytes = PyBytes::new_bound(py, &raw_bytes);

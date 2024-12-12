@@ -307,7 +307,7 @@ impl<'function> Function<'function> {
     ///
     /// Returns a `usize` representing the cyclomatic complexity.
     pub fn cyclomatic_complexity(&self) -> usize {
-        let nodes = self.blocks().len();
+        let nodes = self.blocks.len();
         let edges = self.edges();
         let components = 1;
         edges - nodes + 2 * components
@@ -324,11 +324,11 @@ impl<'function> Function<'function> {
             type_: "function".to_string(),
             edges: self.edges(),
             prologue: self.is_prologue(),
-            chromosome: self.chromosome(),
+            chromosome: self.chromosome_json(),
             bytes: self.bytes_to_hex(),
             size: self.size(),
             functions: self.functions(),
-            blocks: self.blocks(),
+            blocks: self.blocks_json(),
             number_of_blocks: self.number_of_blocks(),
             number_of_instructions: self.number_of_instructions(),
             cyclomatic_complexity: self.cyclomatic_complexity(),
@@ -397,8 +397,22 @@ impl<'function> Function<'function> {
     ///
     /// # Returns
     ///
+    /// Returns `Some(Chromosome)` if the function is contiguous; otherwise, `None`.
+    pub fn chromosome(&self) -> Option<Chromosome> {
+        if !self.is_contiguous() { return None; }
+        let bytes = self.bytes();
+        if bytes.is_none() { return None; }
+        let pattern = self.pattern()?;
+        let chromosome = Chromosome::new(pattern, self.cfg.config.clone()).ok()?;
+        return Some(chromosome)
+    }
+
+    /// Generates the function's chromosome JSON if the function is contiguous.
+    ///
+    /// # Returns
+    ///
     /// Returns `Some(ChromosomeJson)` if the function is contiguous; otherwise, `None`.
-    pub fn chromosome(&self) -> Option<ChromosomeJson> {
+    pub fn chromosome_json(&self) -> Option<ChromosomeJson> {
         if !self.is_contiguous() { return None; }
         let bytes = self.bytes();
         if bytes.is_none() { return None; }
@@ -412,7 +426,7 @@ impl<'function> Function<'function> {
     /// # Returns
     ///
     /// Returns a `Option<String>` containing the pattern representation of the chromosome.
-    fn pattern(&self) -> Option<String> {
+    pub fn pattern(&self) -> Option<String> {
         if !self.is_contiguous() { return None; }
         let mut result = String::new();
         for entry in self.cfg.listing.range(self.address..self.address + self.size() as u64) {
@@ -451,8 +465,25 @@ impl<'function> Function<'function> {
     ///
     /// # Returns
     ///
+    /// Returns a `Vec<Block>` representing the blocks associated with this function.
+    pub fn blocks(&self) -> Vec<Block> {
+        let mut result = Vec::<Block>::new();
+        if !self.cfg.config.functions.blocks.enabled { return result; }
+        for (block_address, _) in &self.blocks {
+            let block = Block::new(*block_address, &self.cfg)
+                .expect("failed to get block associated with function");
+            result.push(block)
+
+        }
+        result
+    }
+
+    /// Retrieves the blocks associated with this function.
+    ///
+    /// # Returns
+    ///
     /// Returns a `Vec<BlockJson>` representing the blocks associated with this function.
-    pub fn blocks(&self) -> Vec<BlockJson> {
+    pub fn blocks_json(&self) -> Vec<BlockJson> {
         let mut result = Vec::<BlockJson>::new();
         if !self.cfg.config.functions.blocks.enabled { return result; }
         for (block_address, _) in &self.blocks {
