@@ -196,6 +196,7 @@ pub struct ChromosomeJson {
 /// Represents a chromosome within a control flow graph.
 pub struct Chromosome {
     pub allelepairs: Vec<AllelePair>,
+    pub number_of_mutations: usize,
     config: Config,
 }
 
@@ -214,8 +215,19 @@ impl Chromosome {
         let allelepairs = Self::parse_pairs(pattern)?;
         Ok(Self {
             allelepairs: allelepairs,
+            number_of_mutations: 0,
             config: config,
         })
+    }
+
+    pub fn number_of_mutations(&self) -> usize {
+        self.number_of_mutations
+    }
+
+    pub fn mutate(&mut self, pattern: String) -> Result<(), Error> {
+        self.allelepairs = Self::parse_pairs(pattern)?;
+        self.number_of_mutations += 1;
+        Ok(())
     }
 
     #[allow(dead_code)]
@@ -228,7 +240,7 @@ impl Chromosome {
         for chunk in chars.chunks(2) {
             let high = Self::parse_gene(chunk[0])?;
             let low = Self::parse_gene(chunk[1])?;
-            parsed.push(AllelePair { high, low });
+            parsed.push(AllelePair { high: high, low: low, number_mutations: 0});
         }
         Ok(parsed)
     }
