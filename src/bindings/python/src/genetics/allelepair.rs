@@ -73,6 +73,11 @@ impl AllelePair {
     }
 
     #[pyo3(text_signature = "($self)")]
+    pub fn print(&self) {
+        self.inner.lock().unwrap().print();
+    }
+
+    #[pyo3(text_signature = "($self)")]
     pub fn to_string(&self) -> String {
         self.inner.lock().unwrap().to_string()
     }
