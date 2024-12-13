@@ -174,6 +174,7 @@ use crate::controlflow::Graph;
 use crate::controlflow::Attributes;
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeJson;
+use crate::genetics::ChromosomeSimilarity;
 use crate::Config;
 use crate::Architecture;
 
@@ -318,6 +319,15 @@ impl Instruction {
             result.insert(item);
         }
         result
+    }
+
+    /// Compares this instruction to another for similarity.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Option<ChromosomeSimilarity>` representing the similarity between this instruction to another.
+    pub fn compare(&self, rhs: &Instruction) -> Option<ChromosomeSimilarity> {
+        self.chromosome().compare(&rhs.chromosome())
     }
 
     /// Retrieves the address of the next sequential instruction.

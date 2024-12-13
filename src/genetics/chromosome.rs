@@ -176,6 +176,57 @@ use crate::genetics::AllelePair;
 use crate::genetics::Gene;
 use crate::Config;
 
+#[derive(Clone)]
+pub struct ChromosomeSimilarity {
+    pub minhash: Option<f64>,
+    pub tlsh: Option<u32>,
+}
+
+impl ChromosomeSimilarity {
+    pub fn new(minhash: Option<f64>, tlsh: Option<u32>) -> Self {
+        Self {
+            minhash,
+            tlsh
+        }
+    }
+
+    pub fn process(&self) -> ChromosomeSimilarityJson {
+        ChromosomeSimilarityJson {
+            minhash: self.minhash,
+            tlsh: self.tlsh,
+        }
+    }
+
+    pub fn minhash(&self) -> Option<f64> {
+        self.minhash
+    }
+
+    pub fn tlsh(&self) -> Option<u32> {
+        self.tlsh
+    }
+
+    #[allow(dead_code)]
+    pub fn json(&self) -> Result<String, Error> {
+        let raw = self.process();
+        let result =  serde_json::to_string(&raw)?;
+        Ok(result)
+    }
+
+    #[allow(dead_code)]
+     pub fn print(&self) {
+         if let Ok(json) = self.json() {
+             println!("{}", json);
+         }
+     }
+
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ChromosomeSimilarityJson {
+    pub minhash: Option<f64>,
+    pub tlsh: Option<u32>,
+}
+
 /// Represents a JSON-serializable structure containing metadata about a chromosome.
 #[derive(Serialize, Deserialize)]
 pub struct ChromosomeJson {
@@ -194,6 +245,7 @@ pub struct ChromosomeJson {
 }
 
 /// Represents a chromosome within a control flow graph.
+#[derive(Clone)]
 pub struct Chromosome {
     pub allelepairs: Vec<AllelePair>,
     pub number_of_mutations: usize,
@@ -369,6 +421,31 @@ impl Chromosome {
             minhash: self.minhash(),
             tlsh: self.tlsh(),
         }
+    }
+
+    /// Compares the similarity of one chromosome to another.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Option<ChromosomeSimilarity>` representing the similarity between two chromosomes.
+    pub fn compare(self, rhs: &Chromosome) -> Option<ChromosomeSimilarity> {
+        let lhs_minhash = self.minhash();
+        let rhs_minhash = rhs.minhash();
+        let mut minhash: Option<f64> = None;
+        if lhs_minhash.is_some() && rhs_minhash.is_some() {
+            minhash = Some(MinHash32::jaccard_similarity_from_hexdigests(&lhs_minhash.unwrap(), &rhs_minhash.unwrap()));
+        }
+        let lhs_tlsh = self.tlsh();
+        let rhs_tlsh = rhs.tlsh();
+        let mut tlsh: Option<u32> = None;
+        if lhs_tlsh.is_some() && rhs_tlsh.is_some() {
+            tlsh = TLSH::compare(lhs_tlsh.unwrap(), rhs_tlsh.unwrap()).ok();
+        }
+        if minhash.is_none() && tlsh.is_none() { return None; }
+        Some(ChromosomeSimilarity {
+            minhash: minhash,
+            tlsh: tlsh,
+        })
     }
 
     /// Converts the signature metadata into a JSON string representation.

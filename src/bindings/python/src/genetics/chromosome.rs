@@ -1,12 +1,74 @@
 use pyo3::prelude::*;
 use pyo3::Py;
 use binlex::genetics::Chromosome as InnerChromosome;
+use binlex::genetics::ChromosomeSimilarity as InnerChromosomeSimilarity;
 use crate::genetics::AllelePair;
 use std::sync::Arc;
 use std::sync::Mutex;
 use crate::config::Config;
 use pyo3::types::PyBytes;
 use pyo3::exceptions::PyRuntimeError;
+
+#[pyclass]
+pub struct ChromosomeSimilarity {
+    inner: Arc<Mutex<InnerChromosomeSimilarity>>,
+}
+
+#[pymethods]
+impl ChromosomeSimilarity {
+    #[new]
+    #[pyo3(signature = (minhash=None, tlsh=None))]
+    pub fn new(minhash: Option<f64>, tlsh: Option<u32>) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(InnerChromosomeSimilarity::new(minhash, tlsh))),
+        }
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn json(&self, _py: Python) -> PyResult<String> {
+        self.inner
+            .lock()
+            .unwrap()
+            .json()
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn minhash(&self) -> Option<f64> {
+        self.inner
+            .lock()
+            .unwrap()
+            .minhash()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn tlsh(&self) -> Option<u32> {
+        self.inner
+            .lock()
+            .unwrap()
+            .tlsh()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn print(&self) {
+        self.inner
+            .lock()
+            .unwrap()
+            .print();
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn to_dict(&self, py: Python) -> PyResult<Py<PyAny>> {
+        let json_str = self.json(py)?;
+        let json_module = py.import_bound("json")?;
+        let py_dict = json_module.call_method1("loads", (json_str,))?;
+        Ok(py_dict.into())
+    }
+
+    pub fn __str__(&self, py: Python) -> PyResult<String> {
+        self.json(py)
+    }
+}
 
 #[pyclass]
 pub struct Chromosome {
@@ -48,6 +110,18 @@ impl Chromosome {
             .unwrap()
             .mutate(pattern)
             .map_err(|error| PyRuntimeError::new_err(format!("{}", error)))
+    }
+
+    #[pyo3(text_signature = "($self, rhs)")]
+    pub fn compare(&self, py: Python, rhs: Py<Chromosome>) -> Option<ChromosomeSimilarity> {
+        let rhs_inner = rhs.borrow(py).inner.lock().unwrap().clone();
+        let lhs_inner = self.inner.lock().unwrap().clone();
+        let similarity = lhs_inner.compare(&rhs_inner)?;
+        Some(
+            ChromosomeSimilarity {
+                inner: Arc::new(Mutex::new(similarity)),
+            }
+        )
     }
 
     #[pyo3(text_signature = "($self)")]
