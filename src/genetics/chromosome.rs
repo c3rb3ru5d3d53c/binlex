@@ -273,7 +273,7 @@ impl Chromosome {
     ///
     /// # Returns
     ///
-    /// Returns a `Vec<u8>` containing the raw bytes of the chromosome.
+    /// Returns a `Vec<u8>` containing the normalized bytes of the chromosome.
     pub fn normalized(&self) -> Vec<u8> {
         let mut result = Vec::new();
         let mut temp_byte: Option<u8> = None;
@@ -304,11 +304,17 @@ impl Chromosome {
     ///
     /// Returns a `Vec<u8>` containing the feature vector, or an empty vector if feature extraction is disabled.
     pub fn feature(&self) -> Vec<u8> {
-        if !self.config.chromosomes.heuristics.features.enabled { return Vec::<u8>::new(); }
-        self.normalized()
-            .iter()
-            .flat_map(|byte| vec![((byte & 0xf0) >> 4) as u8, (byte & 0x0f) as u8])
-            .collect()
+        let mut result = Vec::<u8>::new();
+        if !self.config.chromosomes.heuristics.features.enabled { return result; }
+        for allelepair in &self.allelepairs {
+            if let Gene::Value(high) = allelepair.high {
+                result.push(high);
+            }
+            if let Gene::Value(low) = allelepair.low {
+                result.push(low);
+            }
+        }
+        result
     }
 
     /// Computes the TLSH (Locality Sensitive Hash) of the normalized chromosome, if enabled.
