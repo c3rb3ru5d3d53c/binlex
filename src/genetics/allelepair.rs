@@ -173,6 +173,7 @@ use std::io::ErrorKind;
 pub struct AllelePair {
     pub high: Gene,
     pub low: Gene,
+    pub number_mutations: usize,
 }
 
 #[allow(dead_code)]
@@ -181,7 +182,17 @@ impl AllelePair {
         Self {
             high: high,
             low: low,
+            number_mutations: 0,
         }
+    }
+
+    pub fn number_of_mutations(&self) -> usize {
+        self.number_mutations
+    }
+
+    pub fn mutate(&mut self, high: Gene, low: Gene) {
+        self.high = high;
+        self.low = low;
     }
 
     pub fn genes(&self) -> Vec<Gene> {
@@ -206,6 +217,7 @@ impl AllelePair {
         Ok(Self{
             high: high,
             low: low,
+            number_mutations: 0,
         })
     }
 

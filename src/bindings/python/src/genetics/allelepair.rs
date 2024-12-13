@@ -13,8 +13,8 @@ pub struct AllelePair {
 #[pymethods]
 impl AllelePair {
     #[new]
-    #[pyo3(text_signature = "(high, low)")]
-    pub fn new(py: Python, high: Py<Gene>, low: Py<Gene>) -> PyResult<Self> {
+    #[pyo3(text_signature = "(low, high)")]
+    pub fn new(py: Python, low: Py<Gene>, high: Py<Gene>) -> PyResult<Self> {
         let high_binding = high.borrow(py);
         let high_inner = high_binding.inner.lock().unwrap().clone();
         let low_binding = low.borrow(py);
@@ -23,6 +23,20 @@ impl AllelePair {
         Ok(Self{
             inner: Arc::new(Mutex::new(inner)),
         })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn number_of_mutations(&self) -> usize {
+        self.inner.lock().unwrap().number_of_mutations()
+    }
+
+    #[pyo3(text_signature = "($self, low, high)")]
+    pub fn mutate(&mut self, py: Python, low: Py<Gene>, high: Py<Gene>) {
+        let high_binding = high.borrow(py);
+        let high_inner = high_binding.inner.lock().unwrap().clone();
+        let low_binding = low.borrow(py);
+        let low_inner = low_binding.inner.lock().unwrap().clone();
+        self.inner.lock().unwrap().mutate(high_inner, low_inner);
     }
 
     #[pyo3(text_signature = "($self)")]

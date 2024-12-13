@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use crate::config::Config;
 use pyo3::types::PyBytes;
+use pyo3::exceptions::PyRuntimeError;
 
 #[pyclass]
 pub struct Chromosome {
@@ -35,6 +36,19 @@ impl Chromosome {
         result
     }
 
+    #[pyo3(text_signature = "($self)")]
+    pub fn number_of_mutations(&self) -> usize {
+        self.inner.lock().unwrap().number_of_mutations()
+    }
+
+    #[pyo3(text_signature = "($self, pattern)")]
+    pub fn mutate(&mut self, pattern: String) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .mutate(pattern)
+            .map_err(|error| PyRuntimeError::new_err(format!("{}", error)))
+    }
 
     #[pyo3(text_signature = "($self)")]
     pub fn pattern(&self) -> String {
