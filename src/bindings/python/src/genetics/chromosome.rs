@@ -86,6 +86,14 @@ impl Chromosome {
     }
 
     #[pyo3(text_signature = "($self)")]
+    pub fn print(&self) {
+        self.inner
+            .lock()
+            .unwrap()
+            .print();
+    }
+
+    #[pyo3(text_signature = "($self)")]
     pub fn to_dict(&self, py: Python) -> PyResult<Py<PyAny>> {
         let json_str = self.json(py)?;
         let json_module = py.import_bound("json")?;

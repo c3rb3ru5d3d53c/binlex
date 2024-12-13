@@ -221,6 +221,10 @@ impl AllelePair {
         })
     }
 
+    pub fn print(&self) {
+        println!("{}", self.to_string());
+    }
+
     pub fn to_string(&self) -> String {
         format!("{}{}", self.high.to_char(), self.low.to_char())
     }

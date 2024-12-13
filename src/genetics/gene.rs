@@ -164,37 +164,119 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
+use std::io::Error;
+use std::io::ErrorKind;
+
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
-pub enum Gene {
+pub struct Gene {
+    pub kind: GeneKind,
+    pub value: Option<u8>,
+    pub number_of_mutations: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum GeneKind {
     Wildcard,
-    Value(u8),
+    Value,
 }
 
 #[allow(dead_code)]
 impl Gene {
 
-    pub fn from_u8(v: u8) -> Self {
-        Self::Value(v)
+    pub fn is_wildcard(&self) -> bool {
+        match self.kind {
+            GeneKind::Wildcard => true,
+            _ => false,
+        }
     }
 
-    pub fn to_char(self) -> String {
-        match self {
-            Gene::Wildcard => "?".to_string(),
-            Gene::Value(v) => format!("{:x}", v),
+    pub fn is_value(&self) -> bool {
+        match self.kind {
+            GeneKind::Value => true,
+            _ => false,
+        }
+    }
+
+    pub fn from_wildcard() -> Self {
+        Self {
+            kind: GeneKind::Wildcard,
+            value: None,
+            number_of_mutations: 0,
+        }
+    }
+
+    pub fn wildcard(&self) -> Option<String> {
+        match self.kind {
+            GeneKind::Wildcard => {
+                return Some("?".to_string());
+            }
+            _ => { return None; }
+        }
+    }
+
+    pub fn value(&self) -> Option<u8> {
+        match self.kind {
+            GeneKind::Value => {
+                return self.value;
+            }
+            _ => { return None; }
+        }
+    }
+
+    pub fn from_value(v: u8) -> Self {
+        Self {
+            kind: GeneKind::Value,
+            value: Some(v),
+            number_of_mutations: 0,
+        }
+    }
+
+    pub fn mutate(&mut self, c: char) -> Result<(), Error> {
+        match c {
+            '?' => {
+                self.kind = GeneKind::Wildcard;
+                self.value = None;
+                self.number_of_mutations += 1;
+                return Ok(());
+            },
+            '0'..='9' | 'a'..='f' | 'A'..='F' => {
+                self.kind = GeneKind::Value;
+                self.value = c.to_digit(16).map(|v| v as u8);
+                self.number_of_mutations += 1;
+                return Ok(());
+            },
+            _ => {
+                return Err(Error::new(ErrorKind::InvalidData, "invaid data to mutate gene"));
+            },
+        }
+    }
+
+    pub fn print(&self) {
+        println!("{}", self.to_char());
+    }
+
+    pub fn to_char(&self) -> String {
+        match self.kind {
+            GeneKind::Wildcard => "?".to_string(),
+            GeneKind::Value => {
+                if let Some(v) = self.value {
+                    format!("{:x}", v)
+                } else {
+                    panic!("Gene of kind Value is missing a value")
+                }
+            }
         }
     }
 
     pub fn from_char(c: char) -> Result<Self, std::io::Error> {
         match c {
-            '?' => Ok(Gene::Wildcard),
-            '0'..='9' => c.to_digit(16)
-                .map(|v| Gene::Value(v as u8))
-                .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid hexadecimal digit")),
-            'a'..='f' | 'A'..='F' => c.to_digit(16)
-                .map(|v| Gene::Value(v as u8))
-                .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid hexadecimal digit")),
-            _ => Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid character")),
+            '?' => Ok(Self::from_wildcard()),
+            '0'..='9' | 'a'..='f' | 'A'..='F' => c.to_digit(16)
+                .map(|v| Self::from_value(v as u8))
+                .ok_or_else(|| Error::new(ErrorKind::InvalidData, "invalid hexadecimal digit")),
+            _ => Err(Error::new(ErrorKind::InvalidInput, "invalid character")),
         }
     }
+
 }

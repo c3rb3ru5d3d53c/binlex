@@ -246,15 +246,7 @@ impl Chromosome {
     }
 
     fn parse_gene(c: char) -> Result<Gene, Error> {
-        match c {
-            '?' => Ok(Gene::Wildcard),
-            _ if c.is_ascii_hexdigit() => {
-                let value = u8::from_str_radix(&c.to_string(), 16)
-                    .map_err(|_| Error::new(ErrorKind::InvalidData, format!("invalid genene hexidecimal value")))?;
-                Ok(Gene::Value(value))
-            }
-            _ => Err(Error::new(ErrorKind::InvalidData, "invalid character in gene")),
-        }
+        Ok(Gene::from_char(c)?)
     }
 
     pub fn allelepairs(&self) -> Vec<AllelePair> {
@@ -278,7 +270,7 @@ impl Chromosome {
         let mut result = Vec::new();
         let mut temp_byte: Option<u8> = None;
         for pair in &self.allelepairs {
-            if let Gene::Value(high) = pair.high {
+            if let Some(high) = pair.high.value() {
                 if let Some(low) = temp_byte {
                     result.push((low << 4) | high);
                     temp_byte = None;
@@ -286,7 +278,7 @@ impl Chromosome {
                     temp_byte = Some(high);
                 }
             }
-            if let Gene::Value(low) = pair.low {
+            if let Some(low) = pair.low.value() {
                 if let Some(high) = temp_byte {
                     result.push((high << 4) | low);
                     temp_byte = None;
@@ -307,10 +299,10 @@ impl Chromosome {
         let mut result = Vec::<u8>::new();
         if !self.config.chromosomes.heuristics.features.enabled { return result; }
         for allelepair in &self.allelepairs {
-            if let Gene::Value(high) = allelepair.high {
+            if let Some(high) = allelepair.high.value() {
                 result.push(high);
             }
-            if let Gene::Value(low) = allelepair.low {
+            if let Some(low) = allelepair.low.value() {
                 result.push(low);
             }
         }
@@ -391,5 +383,13 @@ impl Chromosome {
         let result =  serde_json::to_string(&raw)?;
         Ok(result)
     }
+
+     /// Prints the JSON representation of the chromosome to standard output.
+     #[allow(dead_code)]
+     pub fn print(&self) {
+         if let Ok(json) = self.json() {
+             println!("{}", json);
+         }
+     }
 
 }

@@ -975,7 +975,7 @@ for index in macho.number_of_slices():
   disassembler.disassemble_controlflow(macho.entrypoints(index), cfg)
 ```
 
-#### Accessing Genetic Traits
+#### Accessing Controlflow
 ```python
 from binlex.controlflow import Instruction
 from binlex.controlflow import Block
@@ -983,10 +983,10 @@ from binlex.controlflow import Function
 
 # Iterate Valid Instructions
 for address in cfg.instructions.valid_addresses():
-    # Read Instruction from Control Flow
-    instruction = Instruction(address, cfg)
-    # Print Instruction from Control Flow
-    instruction.print()
+  # Read Instruction from Control Flow
+  instruction = Instruction(address, cfg)
+  # Print Instruction from Control Flow
+  instruction.print()
 
 # Iterate Valid Blocks
 for address in cfg.blocks.valid_addresses():
@@ -1003,13 +1003,53 @@ for address in cfg.functions.valid_addresses():
   function.print()
 ```
 
-Please note that although the Python bindings also take advantage of Rust multi-threading.
+#### Accessing Genetic Properties
 
-There are limitations in Python that will affect speed and memory performance due to how Python is designed.
+Each instruction, block and function or **genome** has an associated chromosome which can be accessed via the API.
 
-Mainly, this is due to requiring additional locking and unlocking in Python for thread safety.
+You can follow these abstractions down to allele pairs, and their respective genes.
 
-As such, if you need lightening fast performance consider using the Rust API instead.
+```python
+# Iterate Block Chromosome
+chromosome = block.chromosome()
+for allelepair in chromosome.allelepairs():
+  for gene in allelepair.genes()
+    gene.print()
+
+# Iterate Block Chromosome
+chromosome = function.chromosome()
+for allelepair in chromosome.allelepairs():
+  for gene in allelepair.genes()
+    gene.print()
+
+# Iterate Block Chromosome
+chromosome = function.chromosome()
+for allelepair in chromosome.allelepairs():
+  for gene in allelepair.genes()
+    gene.print()
+```
+
+#### Performing Genetic Mutations
+
+If you are looking to perform genetic programming tasks you can also mutate chromosomes, allelepairs, and genes and they keep track of their own number of mutations.
+
+```python
+chromosome = block.chromosome()
+chromosome.mutate('deadbe?f')
+chromosome.number_of_mutations()
+chromosome.print()
+
+for allelepair in chromosome.allelepairs():
+  allelepair.mutate('dead')
+  allelepair.number_of_mutations()
+  allelepair.print()
+  for gene in allelepair.genes():
+    gene.mutate('d')
+    gene.number_of_mutations()
+    gene.print()
+```
+
+This facilitates mutations with genetic algorithms you may with to employ for your usecases.
 
 ## Citation
 
