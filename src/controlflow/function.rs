@@ -165,6 +165,7 @@
 // Library.
 
 
+use crate::genetics::ChromosomeSimilarity;
 use crate::Architecture;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -341,6 +342,104 @@ impl<'function> Function<'function> {
             architecture: self.architecture().to_string(),
             attributes: None,
         }
+    }
+
+    /// Compares this block to another for similarity.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Option<ChromosomeSimilarity>` representing the similarity between this block to another.
+    pub fn compare(&self, rhs: &Function) -> Option<ChromosomeSimilarity> {
+        if self.is_contiguous() && rhs.is_contiguous() {
+            return self
+                .chromosome()
+                .unwrap()
+                .compare(&rhs.chromosome().unwrap());
+        }
+
+        let lhs_minhash_ratio = self.minhash_ratio();
+        let lhs_tlsh_ratio = self.tlsh_ratio();
+
+        let rhs_minhash_ratio = rhs.minhash_ratio();
+        let rhs_tlsh_ratio = rhs.tlsh_ratio();
+
+        let minhash_threshold_met = lhs_minhash_ratio > 0.75 && rhs_minhash_ratio >= 0.75;
+        let tlsh_threshold_met = lhs_tlsh_ratio >= 0.75 && rhs_tlsh_ratio >= 0.75;
+
+        if !minhash_threshold_met && !tlsh_threshold_met { return None; }
+
+        let mut minhashes = Vec::<f64>::new();
+        let mut tls_values = Vec::<u32>::new();
+
+        for lhs_block in self.blocks() {
+            let mut best_minhash: Option<f64> = None;
+            let mut best_tls: Option<u32> = None;
+
+            for rhs_block in rhs.blocks() {
+                if let Some(similarity) = lhs_block.compare(&rhs_block) {
+                    let minhash = similarity.minhash();
+                    let tlsh = similarity.tlsh();
+
+                    if minhash.is_none() && tlsh.is_none() {
+                        continue;
+                    }
+
+                    if let Some(mh) = minhash {
+                        best_minhash = Some(best_minhash.map_or(mh, |prev| prev.max(mh)));
+                    }
+
+                    if let Some(t) = tlsh {
+                        best_tls = Some(best_tls.map_or(t, |prev| prev.min(t)));
+                    }
+                }
+            }
+
+            if let Some(mh) = best_minhash {
+                minhashes.push(mh);
+            }
+
+            if let Some(t) = best_tls {
+                tls_values.push(t);
+            }
+        }
+
+        if !minhashes.is_empty() || !tls_values.is_empty() {
+            let minhash_average = {
+                let avg = minhashes.iter().sum::<f64>() / minhashes.len() as f64;
+                if avg > 0.0 { Some(avg) } else { None }
+            };
+
+            let tlsh_average = {
+                let avg = (tls_values.iter().sum::<u32>() as f64 / tls_values.len() as f64) as u32;
+                if avg > 0 { Some(avg) } else { None }
+            };
+
+            if minhash_average.is_none() || tlsh_average.is_none() {
+                return None;
+            }
+
+            return Some(ChromosomeSimilarity::new(minhash_average, tlsh_average));
+        }
+
+        None
+    }
+
+    pub fn tlsh_ratio(&self) -> f64 {
+        if self.is_contiguous() { return 1.0; }
+        let mut tlsh_size: usize = 0;
+        for block in self.blocks() {
+            if self.tlsh().is_some() { tlsh_size += block.size(); }
+        }
+        return tlsh_size as f64 / self.size() as f64;
+    }
+
+    pub fn minhash_ratio(&self) -> f64 {
+        if self.is_contiguous() { return 1.0; }
+        let mut minhash_size: usize = 0;
+        for block in self.blocks() {
+            if self.minhash().is_some() { minhash_size += block.size(); }
+        }
+        return minhash_size as f64 / self.size() as f64;
     }
 
     /// Retrives the number of blocks in the function.

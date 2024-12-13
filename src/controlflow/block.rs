@@ -182,6 +182,7 @@ use crate::hashing::SHA256;
 use crate::hashing::TLSH;
 use crate::hashing::MinHash32;
 use crate::controlflow::Attributes;
+use crate::genetics::ChromosomeSimilarity;
 
 /// Represents the JSON-serializable structure of a control flow block.
 #[derive(Serialize, Deserialize)]
@@ -304,6 +305,15 @@ impl<'block> Block<'block> {
         if let Ok(json) = self.json() {
             println!("{}", json);
         }
+    }
+
+    /// Compares this block to another for similarity.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Option<ChromosomeSimilarity>` representing the similarity between this block to another.
+    pub fn compare(&self, rhs: &Block) -> Option<ChromosomeSimilarity> {
+        self.chromosome().compare(&rhs.chromosome())
     }
 
     /// Converts the block into a JSON string representation.
