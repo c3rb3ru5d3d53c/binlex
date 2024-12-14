@@ -171,7 +171,7 @@ use binlex::genetics::ChromosomeSimilarity as InnerChromosomeSimilarity;
 use crate::genetics::AllelePair;
 use std::sync::Arc;
 use std::sync::Mutex;
-use crate::config::Config;
+use crate::Config;
 use pyo3::types::PyBytes;
 use pyo3::exceptions::PyRuntimeError;
 

@@ -164,40 +164,26 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-pub mod formats;
-pub mod types;
-pub mod global;
-pub mod hashing;
-pub mod binary;
-pub mod disassemblers;
-pub mod controlflow;
-pub mod genetics;
+pub mod config;
+pub mod architecture;
 
-pub use binary::Binary;
-pub use global::Config;
-pub use global::Architecture;
-
-use crate::formats::formats_init;
-use crate::types::types_init;
-use crate::binary::binary_init;
-use crate::disassemblers::disassemblers_init;
-use crate::controlflow::controlflow_init;
-use crate::genetics::genitics_init;
-use crate::global::global_init;
+use crate::global::config::config_init;
+pub use crate::global::config::Config;
+use crate::global::architecture::architecture_init;
+pub use crate::global::architecture::Architecture;
 
 use pyo3::{prelude::*, wrap_pymodule};
 
 #[pymodule]
-fn binlex(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_wrapped(wrap_pymodule!(formats_init))?;
-    m.add_wrapped(wrap_pymodule!(controlflow_init))?;
-    m.add_wrapped(wrap_pymodule!(types_init))?;
-    m.add_wrapped(wrap_pymodule!(global_init))?;
-    m.add_wrapped(wrap_pymodule!(binary_init))?;
-    m.add_wrapped(wrap_pymodule!(disassemblers_init))?;
-    m.add_wrapped(wrap_pymodule!(genitics_init))?;
-    m.add_class::<Binary>()?;
-    m.add_class::<Architecture>()?;
+#[pyo3(name = "global")]
+pub fn global_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_wrapped(wrap_pymodule!(config_init))?;
+    m.add_wrapped(wrap_pymodule!(architecture_init))?;
     m.add_class::<Config>()?;
+    m.add_class::<Architecture>()?;
+    py.import_bound("sys")?
+        .getattr("modules")?
+        .set_item("binlex.global", m)?;
+    m.setattr("__name__", "binlex.global")?;
     Ok(())
 }

@@ -164,40 +164,64 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-pub mod formats;
-pub mod types;
-pub mod global;
-pub mod hashing;
-pub mod binary;
-pub mod disassemblers;
-pub mod controlflow;
-pub mod genetics;
+use std::str::FromStr;
 
-pub use binary::Binary;
-pub use global::Config;
-pub use global::Architecture;
+use pyo3::prelude::*;
+use pyo3::exceptions::PyValueError;
+use binlex::Architecture as InnerArchitecture;
 
-use crate::formats::formats_init;
-use crate::types::types_init;
-use crate::binary::binary_init;
-use crate::disassemblers::disassemblers_init;
-use crate::controlflow::controlflow_init;
-use crate::genetics::genitics_init;
-use crate::global::global_init;
+#[pyclass(eq)]
+#[derive(PartialEq)]
+pub struct Architecture {
+    pub inner: InnerArchitecture,
+}
 
-use pyo3::{prelude::*, wrap_pymodule};
+#[pymethods]
+impl Architecture {
+    #[staticmethod]
+    pub fn from_value(value: u16) -> Self {
+        let inner = match value {
+            0x00 => InnerArchitecture::AMD64,
+            0x01 => InnerArchitecture::I386,
+            0x02 => InnerArchitecture::CIL,
+            _ => InnerArchitecture::UNKNOWN,
+        };
+        Architecture { inner }
+    }
+
+    #[staticmethod]
+    #[pyo3(text_signature = "(s)")]
+    pub fn from_str(s: String) -> PyResult<Self> {
+        let inner = InnerArchitecture::from_str(&s)
+        .map_err(|err| PyValueError::new_err(format!(
+            "invalid or unsupported binary architecture: {}",
+            err
+        )))?;
+        Ok(Architecture { inner })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn to_string(&self) -> String {
+        self.inner.to_string()
+    }
+
+    pub fn __str__(&self) -> String {
+        self.inner.to_string()
+    }
+
+    #[getter]
+    pub fn get_value(&self) -> u16 {
+        self.inner as u16
+    }
+}
 
 #[pymodule]
-fn binlex(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_wrapped(wrap_pymodule!(formats_init))?;
-    m.add_wrapped(wrap_pymodule!(controlflow_init))?;
-    m.add_wrapped(wrap_pymodule!(types_init))?;
-    m.add_wrapped(wrap_pymodule!(global_init))?;
-    m.add_wrapped(wrap_pymodule!(binary_init))?;
-    m.add_wrapped(wrap_pymodule!(disassemblers_init))?;
-    m.add_wrapped(wrap_pymodule!(genitics_init))?;
-    m.add_class::<Binary>()?;
+#[pyo3(name = "architecture")]
+pub fn architecture_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Architecture>()?;
-    m.add_class::<Config>()?;
+    py.import_bound("sys")?
+        .getattr("modules")?
+        .set_item("binlex.global.architecture", m)?;
+    m.setattr("__name__", "binlex.global.architecture")?;
     Ok(())
 }

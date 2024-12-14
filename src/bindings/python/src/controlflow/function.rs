@@ -165,9 +165,7 @@
 // Library.
 
 use pyo3::prelude::*;
-
 use pyo3::Py;
-use std::borrow::Borrow;
 use std::collections::BTreeMap;
 use binlex::controlflow::Function as InnerFunction;
 use crate::genetics::Chromosome;

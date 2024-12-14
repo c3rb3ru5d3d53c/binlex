@@ -203,7 +203,7 @@ impl ELF {
 
     #[pyo3(text_signature = "($self)")]
     pub fn architecture(&self) -> Architecture {
-        return Architecture::new(self.inner.lock().unwrap().architecture() as u16);
+        return Architecture::from_value(self.inner.lock().unwrap().architecture() as u16);
     }
 
     #[pyo3(text_signature = "($self)")]
