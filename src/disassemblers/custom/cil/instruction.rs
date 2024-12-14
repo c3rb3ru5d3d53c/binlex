@@ -183,6 +183,12 @@ impl <'instruction> Instruction <'instruction> {
 
     pub fn pattern(&self) -> String {
         if self.is_wildcard() { return "??".repeat(self.size()); }
+        if self.is_metadata_token_wildcard_instruction() {
+            let mut pattern = Binary::to_hex(&self.mnemonic_bytes());
+            pattern.push_str(&"??".repeat(self.operand_size() - 1));
+            pattern.push_str(&Binary::to_hex(&vec![*self.operand_bytes().last().unwrap()]));
+            return pattern;
+        }
         let mut pattern = Binary::to_hex(&self.mnemonic_bytes());
         pattern.push_str(&"??".repeat(self.operand_size()));
         pattern
@@ -326,6 +332,17 @@ impl <'instruction> Instruction <'instruction> {
     pub fn is_switch(&self) -> bool {
         match self.mnemonic {
             Mnemonic::Switch => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_metadata_token_wildcard_instruction(&self) -> bool {
+        match self.mnemonic {
+            Mnemonic::Call => true,
+            Mnemonic::CallVirt => true,
+            Mnemonic::LdSFld => true,
+            Mnemonic::LdFld => true,
+            Mnemonic::NewObj => true,
             _ => false,
         }
     }
