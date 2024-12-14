@@ -1038,6 +1038,35 @@ for function in cfg.functions():
                     print(gene)
 ```
 
+#### Comparing Function Similarity
+
+One of the most powerful tools you can use in **binlex** is to compare functions, blocks, and instructions using similarity hashing.
+
+To perform these comparisons is as simple as calling the `compare` method.
+
+```python
+for lhs in lhs_cfg.functions():
+  for rhs in rhs_cfg.functions():
+    similarity = lhs.compare(rhs)
+    similarity.print()
+
+for lhs in lhs_cfg.blocks():
+  for rhs in rhs_cfg.blocks():
+    similarity = lhs.compare(rhs)
+    similarity.print()
+
+for lhs in lhs_cfg.instructions():
+  for rhs in rhs_cfg.instructions():
+    similarity = lhs.compare(rhs)
+    similarity.print()
+```
+
+Any supported similarity hashing algorithms will be calcualted if they are enabled with your configuration.
+
+Although it can be challenging, **binlex** supports performing similarity analysis on non-contiguous functions using its own algorithm to find the best similarity matches.
+
+At least 75% or more of a non-contiguous function's data must be hashable to yield a similarity hash.
+
 #### Accessing Genetic Properties
 
 Each instruction, block and function or **genome** has an associated chromosome which can be accessed via the API.
