@@ -250,9 +250,10 @@ impl Instruction {
     pub fn compare(&self, py: Python, rhs: Py<Instruction>) -> PyResult<Option<ChromosomeSimilarity>> {
         self.with_inner_instruction(py, |instruction| {
             let rhs_address = rhs.borrow(py).address.clone();
-            let binding = self.cfg.borrow(py);
-            let cfg = binding.inner.lock().unwrap();
-            let rhs_inner = InnerInstruction::new(rhs_address, &cfg).expect("rhs instruction is invalid");
+            let rhs_binding_0 = rhs.borrow(py);
+            let rhs_binding_1 = rhs_binding_0.cfg.borrow(py);
+            let rhs_cfg = rhs_binding_1.inner.lock().unwrap();
+            let rhs_inner = InnerInstruction::new(rhs_address, &rhs_cfg).expect("rhs instruction is invalid");
             let inner = instruction.compare(&rhs_inner);
             if inner.is_none() { return Ok(None); }
             let similarity = ChromosomeSimilarity {

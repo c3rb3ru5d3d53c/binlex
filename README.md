@@ -836,6 +836,8 @@ The binlex Python API is now designed to abstract the disassembler and the contr
 
 To disassemble a PE memory mapped image use the following examples.
 
+There are more examples in the `examples/python/` directory.
+
 #### Native PE
 
 ```python
