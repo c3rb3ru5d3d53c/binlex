@@ -167,6 +167,7 @@
 use pyo3::prelude::*;
 
 use pyo3::Py;
+use std::borrow::Borrow;
 use std::collections::BTreeMap;
 use binlex::controlflow::Function as InnerFunction;
 use crate::genetics::Chromosome;
@@ -260,10 +261,12 @@ impl Function {
     pub fn compare(&self, py: Python, rhs: Py<Function>) -> PyResult<Option<ChromosomeSimilarity>> {
         self.with_inner_function(py, |function| {
             let rhs_address = rhs.borrow(py).address.clone();
-            let binding = self.cfg.borrow(py);
-            let cfg = binding.inner.lock().unwrap();
-            let rhs_inner = InnerFunction::new(rhs_address, &cfg).expect("rhs function is invalid");
-            let inner = function.compare(&rhs_inner);
+            let rhs_binding_0 = rhs.borrow(py);
+            let rhs_binding_1 = rhs_binding_0.cfg.borrow(py);
+            let rhs_cfg = rhs_binding_1.inner.lock().unwrap();
+            let rhs_inner = InnerFunction::new(rhs_address, &rhs_cfg).ok();
+            if rhs_inner.is_none() { return Ok(None); }
+            let inner = function.compare(&rhs_inner.unwrap());
             if inner.is_none() { return Ok(None); }
             let similarity = ChromosomeSimilarity {
                 inner: Arc::new(Mutex::new(inner.unwrap())),
