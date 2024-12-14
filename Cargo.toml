@@ -7,7 +7,7 @@ description = "A Binary Genetic Trait Lexer Framework"
 authors = ["c3rb3ru5d3d53c"]
 
 [target.'cfg(target_os = "windows")'.dependencies]
-winapi = { version = "0.3.9", features = ["winnt"] }
+winapi = { version = "0.3.9", features = ["winnt", "fileapi", "ioapiset", "winioctl"] }
 
 [dependencies]
 clap = { version = "4.5.20", features = ["derive"] }
