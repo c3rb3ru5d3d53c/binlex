@@ -170,6 +170,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use binlex::controlflow::Block as InnerBlock;
 use crate::controlflow::Instruction;
 use crate::genetics::Chromosome;
+use crate::genetics::ChromosomeSimilarity;
 use crate::controlflow::graph::Graph;
 use crate::Config;
 use std::sync::Arc;
@@ -223,6 +224,32 @@ impl Block {
             address,
             cfg,
             inner_block_cache: Arc::new(Mutex::new(None)),
+        })
+    }
+
+    #[getter]
+    pub fn get_address(&self) -> u64 {
+        self.address
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Compares this block with another returning the similarity.
+    ///
+    /// # Returns
+    ///
+    /// Returns an `Option<ChromosomeSimilarity>` reprenting the similarity between this block and another.
+    pub fn compare(&self, py: Python, rhs: Py<Block>) -> PyResult<Option<ChromosomeSimilarity>> {
+        self.with_inner_block(py, |block| {
+            let rhs_address = rhs.borrow(py).address.clone();
+            let binding = self.cfg.borrow(py);
+            let cfg = binding.inner.lock().unwrap();
+            let rhs_inner = InnerBlock::new(rhs_address, &cfg).expect("rhs block is invalid");
+            let inner = block.compare(&rhs_inner);
+            if inner.is_none() { return Ok(None); }
+            let similarity = ChromosomeSimilarity {
+                inner: Arc::new(Mutex::new(inner.unwrap())),
+            };
+            return Ok(Some(similarity));
         })
     }
 

@@ -170,6 +170,9 @@ use binlex::controlflow::GraphQueue as InnerGraphQueue;
 use binlex::controlflow::Graph as InnerGraph;
 use crate::Architecture;
 use crate::config::Config;
+use crate::controlflow::Function;
+use crate::controlflow::Block;
+use crate::controlflow::Instruction;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -307,6 +310,48 @@ impl Graph {
         Self {
             inner: Arc::new(Mutex::new(inner)),
         }
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn instructions(&self, py: Python) -> Vec<Instruction> {
+        let mut result = Vec::<Instruction>::new();
+        for inner_instruction in self.inner.lock().unwrap().blocks() {
+            let cfg = Graph { inner: Arc::clone(&self.inner) };
+            let pycfg = Py::new(py, cfg).ok();
+            if pycfg.is_none() { continue; }
+            let instruction = Instruction::new(inner_instruction.address, pycfg.unwrap()).ok();
+            if instruction.is_none() { continue; }
+            result.push(instruction.unwrap());
+        }
+        result
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn blocks(&self, py: Python) -> Vec<Block> {
+        let mut result = Vec::<Block>::new();
+        for inner_block in self.inner.lock().unwrap().blocks() {
+            let cfg = Graph { inner: Arc::clone(&self.inner) };
+            let pycfg = Py::new(py, cfg).ok();
+            if pycfg.is_none() { continue; }
+            let block = Block::new(inner_block.address, pycfg.unwrap()).ok();
+            if block.is_none() { continue; }
+            result.push(block.unwrap());
+        }
+        result
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn functions(&self, py: Python) -> Vec<Function> {
+        let mut result = Vec::<Function>::new();
+        for inner_function in self.inner.lock().unwrap().functions() {
+            let cfg = Graph { inner: Arc::clone(&self.inner) };
+            let pycfg = Py::new(py, cfg).ok();
+            if pycfg.is_none() { continue; }
+            let function = Function::new(inner_function.address, pycfg.unwrap()).ok();
+            if function.is_none() { continue; }
+            result.push(function.unwrap());
+        }
+        result
     }
 
     #[getter]

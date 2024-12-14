@@ -170,6 +170,7 @@ use binlex::controlflow::Instruction as InnerInstruction;
 use crate::controlflow::Graph;
 use crate::Config;
 use crate::genetics::Chromosome;
+use crate::genetics::ChromosomeSimilarity;
 use std::sync::Mutex;
 use std::sync::Arc;
 
@@ -218,6 +219,11 @@ impl Instruction {
         })
     }
 
+    #[getter]
+    pub fn get_address(&self) -> u64 {
+        self.address
+    }
+
     #[pyo3(text_signature = "($self)")]
     /// Returns the chromosome associated with this instruction.
     ///
@@ -232,6 +238,27 @@ impl Instruction {
             let pattern = instruction.pattern();
             let chromosome = Chromosome::new(py, pattern, config).ok();
             return Ok(chromosome);
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Compares this instruction with another returning the similarity.
+    ///
+    /// # Returns
+    ///
+    /// Returns an `Option<ChromosomeSimilarity>` reprenting the similarity between this instruction and another.
+    pub fn compare(&self, py: Python, rhs: Py<Instruction>) -> PyResult<Option<ChromosomeSimilarity>> {
+        self.with_inner_instruction(py, |instruction| {
+            let rhs_address = rhs.borrow(py).address.clone();
+            let binding = self.cfg.borrow(py);
+            let cfg = binding.inner.lock().unwrap();
+            let rhs_inner = InnerInstruction::new(rhs_address, &cfg).expect("rhs instruction is invalid");
+            let inner = instruction.compare(&rhs_inner);
+            if inner.is_none() { return Ok(None); }
+            let similarity = ChromosomeSimilarity {
+                inner: Arc::new(Mutex::new(inner.unwrap())),
+            };
+            return Ok(Some(similarity));
         })
     }
 
