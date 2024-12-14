@@ -170,6 +170,15 @@ use std::io::{self, Error, Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 
 #[cfg(windows)]
+use winapi::um::ioapiset::DeviceIoControl;
+
+#[cfg(windows)]
+use winapi::um::winioctl::FSCTL_SET_SPARSE;
+
+#[cfg(windows)]
+use std::os::windows::io::AsRawHandle;
+
+#[cfg(windows)]
 use std::os::windows::fs::OpenOptionsExt;
 
 #[cfg(windows)]
@@ -196,20 +205,10 @@ impl MemoryMappedFile {
     /// This function opens a file at the specified path, with options to append and/or cache the file.
     /// If the file's parent directories do not exist, they are created.
     ///
-    /// # Arguments
-    ///
-    /// * `path` - The `PathBuf` specifying the file's location.
-    /// * `append` - If `true`, opens the file in append mode.
-    /// * `cache` - If `true`, retains the file on disk after the `MemoryMappedFile` instance is dropped.
-    ///
     /// # Returns
     ///
     /// A `Result` containing the `MemoryMappedFile` on success, or an `io::Error` if file creation fails.
     pub fn new(path: PathBuf, cache: bool) -> Result<Self, Error> {
-        // if let Some(parent) = path.parent() {
-        //     std::fs::create_dir_all(parent)?;
-        // }
-
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| {
                 io::Error::new(
@@ -229,14 +228,35 @@ impl MemoryMappedFile {
         #[cfg(windows)]
         options.share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE);
 
-        //let handle = options.open(&path)?;
-
         let handle = options.open(&path).map_err(|e| {
             io::Error::new(
                 e.kind(),
                 format!("failed to open file '{}': {}", path.display(), e)
             )
         })?;
+
+        #[cfg(windows)]
+        {
+            let handle_raw = handle.as_raw_handle() as *mut winapi::ctypes::c_void;
+            let mut bytes_returned = 0;
+
+            let result = unsafe {
+                DeviceIoControl(
+                    handle_raw,
+                    FSCTL_SET_SPARSE,
+                    std::ptr::null_mut(),
+                    0,
+                    std::ptr::null_mut(),
+                    0,
+                    &mut bytes_returned,
+                    std::ptr::null_mut(),
+                )
+            };
+
+            if result == 0 {
+                return Err(io::Error::last_os_error());
+            }
+        }
 
         Ok(Self {
             path: path.to_string_lossy().into_owned(),
