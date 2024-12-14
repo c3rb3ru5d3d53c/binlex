@@ -167,6 +167,8 @@
 use std::collections::BTreeSet;
 use crate::Architecture;
 use crate::controlflow::Instruction;
+use crate::controlflow::Function;
+use crate::controlflow::Block;
 use crossbeam::queue::SegQueue;
 use crossbeam_skiplist::SkipMap;
 use crossbeam_skiplist::SkipSet;
@@ -447,6 +449,36 @@ impl Graph {
             instructions: GraphQueue::new(),
             config: config,
         };
+    }
+
+    pub fn instructions(&self) -> Vec<Instruction> {
+        let mut result = Vec::<Instruction>::new();
+        for address in self.instructions.valid_addresses() {
+            let instruction = Instruction::new(address, &self).ok();
+            if instruction.is_none() { continue; }
+            result.push(instruction.unwrap());
+        }
+        result
+    }
+
+    pub fn blocks(&self) -> Vec<Block> {
+        let mut result = Vec::<Block>::new();
+        for address in self.blocks.valid_addresses() {
+            let block = Block::new(address, &self).ok();
+            if block.is_none() { continue; }
+            result.push(block.unwrap());
+        }
+        result
+    }
+
+    pub fn functions(&self) -> Vec<Function> {
+        let mut result = Vec::<Function>::new();
+        for address in self.functions.valid_addresses() {
+            let function = Function::new(address, &self).ok();
+            if function.is_none() { continue; }
+            result.push(function.unwrap());
+        }
+        result
     }
 
     pub fn instruction_addresses(&self) -> BTreeSet<u64> {

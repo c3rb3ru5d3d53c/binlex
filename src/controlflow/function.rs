@@ -311,6 +311,7 @@ impl<'function> Function<'function> {
         let nodes = self.blocks.len();
         let edges = self.edges();
         let components = 1;
+        if edges < nodes { return 0; }
         edges - nodes + 2 * components
     }
 
@@ -351,6 +352,9 @@ impl<'function> Function<'function> {
     /// Returns `Option<ChromosomeSimilarity>` representing the similarity between this block to another.
     pub fn compare(&self, rhs: &Function) -> Option<ChromosomeSimilarity> {
         if self.is_contiguous() && rhs.is_contiguous() {
+            let lhs_chromosome = self.chromosome();
+            let rhs_chromosome = rhs.chromosome();
+            if lhs_chromosome.is_none() && rhs_chromosome.is_none() { return None; }
             return self
                 .chromosome()
                 .unwrap()
@@ -363,7 +367,7 @@ impl<'function> Function<'function> {
         let rhs_minhash_ratio = rhs.minhash_ratio();
         let rhs_tlsh_ratio = rhs.tlsh_ratio();
 
-        let minhash_threshold_met = lhs_minhash_ratio > 0.75 && rhs_minhash_ratio >= 0.75;
+        let minhash_threshold_met = lhs_minhash_ratio >= 0.75 && rhs_minhash_ratio >= 0.75;
         let tlsh_threshold_met = lhs_tlsh_ratio >= 0.75 && rhs_tlsh_ratio >= 0.75;
 
         if !minhash_threshold_met && !tlsh_threshold_met { return None; }
@@ -377,6 +381,7 @@ impl<'function> Function<'function> {
 
             for rhs_block in rhs.blocks() {
                 if let Some(similarity) = lhs_block.compare(&rhs_block) {
+
                     let minhash = similarity.minhash();
                     let tlsh = similarity.tlsh();
 
@@ -414,7 +419,7 @@ impl<'function> Function<'function> {
                 if avg > 0 { Some(avg) } else { None }
             };
 
-            if minhash_average.is_none() || tlsh_average.is_none() {
+            if minhash_average.is_none() && tlsh_average.is_none() {
                 return None;
             }
 
@@ -428,7 +433,7 @@ impl<'function> Function<'function> {
         if self.is_contiguous() { return 1.0; }
         let mut tlsh_size: usize = 0;
         for block in self.blocks() {
-            if self.tlsh().is_some() { tlsh_size += block.size(); }
+            if block.tlsh().is_some() { tlsh_size += block.size(); }
         }
         return tlsh_size as f64 / self.size() as f64;
     }
@@ -437,7 +442,7 @@ impl<'function> Function<'function> {
         if self.is_contiguous() { return 1.0; }
         let mut minhash_size: usize = 0;
         for block in self.blocks() {
-            if self.minhash().is_some() { minhash_size += block.size(); }
+            if block.minhash().is_some() { minhash_size += block.size(); }
         }
         return minhash_size as f64 / self.size() as f64;
     }

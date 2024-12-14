@@ -170,6 +170,7 @@ use pyo3::Py;
 use std::collections::BTreeMap;
 use binlex::controlflow::Function as InnerFunction;
 use crate::genetics::Chromosome;
+use crate::genetics::ChromosomeSimilarity;
 use crate::Config;
 use crate::controlflow::Graph;
 use std::sync::Arc;
@@ -219,12 +220,17 @@ impl Function {
     ///
     /// # Returns
     /// - A new instance of `Function`.
-    fn new(address: u64, cfg: Py<Graph>) -> PyResult<Self> {
+    pub fn new(address: u64, cfg: Py<Graph>) -> PyResult<Self> {
         Ok(Self {
             address,
             cfg,
             inner_function_cache: Arc::new(Mutex::new(None)),
         })
+    }
+
+    #[getter]
+    pub fn get_address(&self) -> u64 {
+        self.address
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -242,6 +248,41 @@ impl Function {
             if pattern.is_none() { return Ok(None); }
             let chromosome = Chromosome::new(py, pattern.unwrap(), config).ok();
             return Ok(chromosome);
+        })
+    }
+
+    #[pyo3(text_signature = "($self, rhs)")]
+    /// Compares this block with another returning the similarity.
+    ///
+    /// # Returns
+    ///
+    /// Returns an `Option<ChromosomeSimilarity>` reprenting the similarity between this block and another.
+    pub fn compare(&self, py: Python, rhs: Py<Function>) -> PyResult<Option<ChromosomeSimilarity>> {
+        self.with_inner_function(py, |function| {
+            let rhs_address = rhs.borrow(py).address.clone();
+            let binding = self.cfg.borrow(py);
+            let cfg = binding.inner.lock().unwrap();
+            let rhs_inner = InnerFunction::new(rhs_address, &cfg).expect("rhs function is invalid");
+            let inner = function.compare(&rhs_inner);
+            if inner.is_none() { return Ok(None); }
+            let similarity = ChromosomeSimilarity {
+                inner: Arc::new(Mutex::new(inner.unwrap())),
+            };
+            return Ok(Some(similarity));
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn minhash_ratio(&self, py: Python) -> PyResult<f64> {
+        self.with_inner_function(py, |function| {
+            Ok(function.minhash_ratio())
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn tlsh_ratio(&self, py: Python) -> PyResult<f64> {
+        self.with_inner_function(py, |function| {
+            Ok(function.tlsh_ratio())
         })
     }
 

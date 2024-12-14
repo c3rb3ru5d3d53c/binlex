@@ -11,7 +11,7 @@ use pyo3::exceptions::PyRuntimeError;
 
 #[pyclass]
 pub struct ChromosomeSimilarity {
-    inner: Arc<Mutex<InnerChromosomeSimilarity>>,
+    pub inner: Arc<Mutex<InnerChromosomeSimilarity>>,
 }
 
 #[pymethods]

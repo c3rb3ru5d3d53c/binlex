@@ -975,7 +975,12 @@ for index in macho.number_of_slices():
   disassembler.disassemble_controlflow(macho.entrypoints(index), cfg)
 ```
 
-#### Accessing Controlflow
+#### Parsing the Controlflow Graph
+
+Sometimes it maybe nessassary to parse the controlflow graph generated.
+
+In this case, you can use the following technique.
+
 ```python
 from binlex.controlflow import Instruction
 from binlex.controlflow import Block
@@ -1001,6 +1006,36 @@ for address in cfg.functions.valid_addresses():
   function = Function(address, cfg)
   # Print Function from Control Flow
   function.print()
+```
+
+#### Iterating Controlflow Instructions, Blocks, and Functions
+
+Instead of parsing you can access the instructions, blocks, and functions more directly.
+
+```python
+for instruction in cfg.instructions():
+  instruction.print()
+
+for block in cfg.blocks():
+  block.print()
+
+for function in cfg.functions():
+  function.print()
+```
+
+#### Iterating from Functions to Instructions
+
+It is also possible to iterate from functions to blocks, to instructions, to allele pairs, to genes.
+
+This represents going from the highest level abstraction to the lowest abstraction.
+
+```python
+for function in cfg.functions():
+    for block in function.blocks():
+        for instruction in block.instructions():
+            for allelepair in instruction.chromosome().allelepairs():
+                for gene in allelepair.genes():
+                    print(gene)
 ```
 
 #### Accessing Genetic Properties
