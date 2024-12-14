@@ -390,6 +390,24 @@ impl Graph {
         .expect("failed to get functions graph queue")
     }
 
+    #[pyo3(text_signature = "($self, address)")]
+    pub fn set_block(&self, address: u64) -> bool {
+        self.inner.lock().unwrap().set_block(address)
+    }
+
+    #[pyo3(text_signature = "($self, address)")]
+    pub fn set_function(&self, address: u64) -> bool {
+        self.inner.lock().unwrap().set_function(address)
+    }
+
+    #[pyo3(text_signature = "($self, address)")]
+    pub fn get_instruction(&self, py: Python, address: u64) -> Option<Instruction> {
+        let cfg = Graph { inner: Arc::clone(&self.inner) };
+        let pycfg = Py::new(py, cfg).ok();
+        if pycfg.is_none() { return None; }
+        Instruction::new(address, pycfg.unwrap()).ok()
+    }
+
     #[pyo3(text_signature = "($self, cfg)")]
     pub fn absorb(&mut self, py: Python, cfg: Py<Self>) {
         self.inner
