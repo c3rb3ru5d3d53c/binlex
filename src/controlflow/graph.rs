@@ -493,6 +493,31 @@ impl Graph {
         return &self.listing;
     }
 
+    pub fn set_function(&mut self, address: u64) -> bool {
+        let mut instruction = match self.get_instruction(address) {
+            Some(instruction) => instruction,
+            None => { return false; }
+        };
+        self.functions.insert_processed(address);
+        self.functions.insert_valid(address);
+        instruction.is_function_start = true;
+        instruction.is_block_start = true;
+        self.update_instruction(instruction);
+        true
+    }
+
+    pub fn set_block(&mut self, address: u64) -> bool {
+        let mut instruction = match self.get_instruction(address) {
+            Some(instruction) => instruction,
+            None => { return false; }
+        };
+        self.blocks.insert_processed(address);
+        self.blocks.insert_valid(address);
+        instruction.is_block_start = true;
+        self.update_instruction(instruction);
+        true
+    }
+
     pub fn insert_instruction(&mut self, instruction: Instruction) {
         if !self.is_instruction_address(instruction.address) {
             self.listing.insert(instruction.address, instruction);
