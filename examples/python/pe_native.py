@@ -188,6 +188,8 @@ parser.add_argument(
     required=True
 )
 
+args = parser.parse_args()
+
 # Get Default Configuration
 config = Config()
 

@@ -169,7 +169,7 @@ use std::collections::BTreeSet;
 use binlex::controlflow::GraphQueue as InnerGraphQueue;
 use binlex::controlflow::Graph as InnerGraph;
 use crate::Architecture;
-use crate::config::Config;
+use crate::Config;
 use crate::controlflow::Function;
 use crate::controlflow::Block;
 use crate::controlflow::Instruction;
