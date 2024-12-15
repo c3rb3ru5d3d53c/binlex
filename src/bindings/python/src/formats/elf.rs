@@ -260,6 +260,16 @@ impl ELF {
         self.inner.lock().unwrap().export_virtual_addresses()
     }
 
+    #[pyo3(text_signature = "($self)")]
+    pub fn entropy(&self) -> Option<f64> {
+        self.inner.lock().unwrap().entropy()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn file_json(&self) -> PyResult<String> {
+        self.inner.lock().unwrap().file_json().map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+    }
+
 }
 
 #[pymodule]

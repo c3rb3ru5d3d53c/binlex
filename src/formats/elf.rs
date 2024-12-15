@@ -361,6 +361,24 @@ impl ELF {
         self.file.sha256()
     }
 
+    /// Returns the entropy of the ELF file.
+    ///
+    /// # Returns
+    /// The entropy of the file as a `Option<f64>`.
+    #[allow(dead_code)]
+    pub fn entropy(&self) -> Option<f64> {
+        self.file.entropy()
+    }
+
+    /// Returns the File JSON associated with the ELF
+    ///
+    /// # Returns
+    /// An `Result<String, Error>` containing the `File` JSON.
+    #[allow(dead_code)]
+    pub fn file_json(&self) -> Result<String, Error> {
+        self.file.json()
+    }
+
     pub fn entrypoint_virtual_addresses(&self) -> BTreeSet<u64> {
         let mut entrypoints = BTreeSet::<u64>::new();
         entrypoints.insert(self.entrypoint_virtual_address());

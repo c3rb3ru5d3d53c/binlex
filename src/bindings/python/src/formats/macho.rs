@@ -261,6 +261,31 @@ impl MACHO {
         let py_memory_mapped_file = Py::new(py, MemoryMappedFile { inner: result, mmap: None})?;
         Ok(py_memory_mapped_file)
     }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn size(&self) -> u64 {
+        self.inner.lock().unwrap().size()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn tlsh(&self) -> Option<String> {
+        self.inner.lock().unwrap().tlsh()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn sha256(&self) -> Option<String> {
+        self.inner.lock().unwrap().sha256()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn entropy(&self) -> Option<f64> {
+        self.inner.lock().unwrap().entropy()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn file_json(&self) -> PyResult<String> {
+        self.inner.lock().unwrap().file_json().map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+    }
 }
 
 #[pymodule]

@@ -1157,6 +1157,15 @@ impl PE {
         self.file.sha256()
     }
 
+    /// Returns the File JSON associated with the PE
+    ///
+    /// # Returns
+    /// An `Result<String, Error>` containing the File JSON.
+    #[allow(dead_code)]
+    pub fn file_json(&self) -> Result<String, Error> {
+        self.file.json()
+    }
+
     /// Returns the base address (image base) of the PE file.
     ///
     /// # Returns
