@@ -419,6 +419,18 @@ impl ConfigChromosomesHashingMinhash {
     }
 
     #[getter]
+    pub fn get_maximum_byte_size_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.chromosomes.hashing.minhash.maximum_byte_size_enabled
+    }
+
+    #[setter]
+    pub fn set_maximum_byte_size_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.chromosomes.hashing.minhash.maximum_byte_size_enabled = value;
+    }
+
+    #[getter]
     pub fn get_maximum_byte_size(&self) -> usize {
         let inner = self.inner.lock().unwrap();
         inner.chromosomes.hashing.minhash.maximum_byte_size
@@ -673,6 +685,18 @@ impl ConfigFunctionsHashingMinhash {
     pub fn set_shingle_size(&mut self, value: usize) {
         let mut inner = self.inner.lock().unwrap();
         inner.functions.hashing.minhash.shingle_size = value;
+    }
+
+    #[getter]
+    pub fn get_maximum_byte_size_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.functions.hashing.minhash.maximum_byte_size_enabled
+    }
+
+    #[setter]
+    pub fn set_maximum_byte_size_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.functions.hashing.minhash.maximum_byte_size_enabled = value;
     }
 
     #[getter]
@@ -1096,6 +1120,18 @@ impl ConfigInstructionsHashingMinhash {
     }
 
     #[getter]
+    pub fn get_maximum_byte_size_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.instructions.hashing.minhash.maximum_byte_size_enabled
+    }
+
+    #[setter]
+    pub fn set_maximum_byte_size_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.instructions.hashing.minhash.maximum_byte_size_enabled = value;
+    }
+
+    #[getter]
     pub fn get_maximum_byte_size(&self) -> usize {
         let inner = self.inner.lock().unwrap();
         inner.instructions.hashing.minhash.maximum_byte_size
@@ -1106,6 +1142,7 @@ impl ConfigInstructionsHashingMinhash {
         let mut inner = self.inner.lock().unwrap();
         inner.instructions.hashing.minhash.maximum_byte_size = value;
     }
+
     #[getter]
     pub fn get_seed(&self) -> u64 {
         let inner = self.inner.lock().unwrap();
@@ -1196,6 +1233,18 @@ impl ConfigBlocksHashingMinhash {
     }
 
     #[getter]
+    pub fn get_maximum_byte_size_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.blocks.hashing.minhash.maximum_byte_size_enabled
+    }
+
+    #[setter]
+    pub fn set_maximum_byte_size_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.blocks.hashing.minhash.maximum_byte_size_enabled = value;
+    }
+
+    #[getter]
     pub fn get_maximum_byte_size(&self) -> usize {
         let inner = self.inner.lock().unwrap();
         inner.blocks.hashing.minhash.maximum_byte_size
@@ -1206,6 +1255,7 @@ impl ConfigBlocksHashingMinhash {
         let mut inner = self.inner.lock().unwrap();
         inner.blocks.hashing.minhash.maximum_byte_size = value;
     }
+
     #[getter]
     pub fn get_seed(&self) -> u64 {
         let inner = self.inner.lock().unwrap();
@@ -1445,6 +1495,18 @@ impl ConfigFormatsFileHashingMinhash {
     pub fn set_shingle_size(&mut self, value: usize) {
         let mut inner = self.inner.lock().unwrap();
         inner.formats.file.hashing.minhash.shingle_size = value;
+    }
+
+    #[getter]
+    pub fn get_maximum_byte_size_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.formats.file.hashing.minhash.maximum_byte_size_enabled
+    }
+
+    #[setter]
+    pub fn set_maximum_byte_size_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.formats.file.hashing.minhash.maximum_byte_size_enabled = value;
     }
 
     #[getter]

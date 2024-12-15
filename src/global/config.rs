@@ -301,6 +301,7 @@ pub struct ConfigMinhash {
     pub enabled: bool,
     pub number_of_hashes: usize,
     pub shingle_size: usize,
+    pub maximum_byte_size_enabled: bool,
     pub maximum_byte_size: usize,
     pub seed: u64,
 }
@@ -339,6 +340,7 @@ impl Config {
                             enabled: true,
                             number_of_hashes: 64,
                             shingle_size: 4,
+                            maximum_byte_size_enabled: false,
                             maximum_byte_size: 50,
                             seed: 0,
                         }
@@ -367,6 +369,7 @@ impl Config {
                         enabled: true,
                         number_of_hashes: 64,
                         shingle_size: 4,
+                        maximum_byte_size_enabled: false,
                         maximum_byte_size: 50,
                         seed: 0,
                     }
@@ -397,6 +400,7 @@ impl Config {
                         enabled: true,
                         number_of_hashes: 64,
                         shingle_size: 4,
+                        maximum_byte_size_enabled: false,
                         maximum_byte_size: 50,
                         seed: 0,
                     }
@@ -427,6 +431,7 @@ impl Config {
                         enabled: true,
                         number_of_hashes: 64,
                         shingle_size: 4,
+                        maximum_byte_size_enabled: false,
                         maximum_byte_size: 50,
                         seed: 0,
                     }
@@ -453,6 +458,7 @@ impl Config {
                         enabled: true,
                         number_of_hashes: 64,
                         shingle_size: 4,
+                        maximum_byte_size_enabled: false,
                         maximum_byte_size: 50,
                         seed: 0,
                     }

@@ -1130,6 +1130,15 @@ impl PE {
         self.file.size()
     }
 
+    /// Returns the entropy of the PE file.
+    ///
+    /// # Returns
+    /// The entropy of the file as a `Option<f64>`.
+    #[allow(dead_code)]
+    pub fn entropy(&self) -> Option<f64> {
+        self.file.entropy()
+    }
+
     /// Returns the TLS (Thread Local Storage) hash value if present in the PE file.
     ///
     /// # Returns

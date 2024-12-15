@@ -312,6 +312,11 @@ impl PE {
     }
 
     #[pyo3(text_signature = "($self)")]
+    pub fn entropy(&self) -> Option<f64> {
+        self.inner.lock().unwrap().entropy()
+    }
+
+    #[pyo3(text_signature = "($self)")]
     pub fn imagebase(&self) -> u64 {
         self.inner.lock().unwrap().imagebase()
     }
