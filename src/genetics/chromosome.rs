@@ -379,7 +379,10 @@ impl Chromosome {
     #[allow(dead_code)]
     pub fn minhash(&self) -> Option<String> {
         if !self.config.chromosomes.hashing.minhash.enabled { return None; }
-        if self.normalized().len() > self.config.chromosomes.hashing.minhash.maximum_byte_size { return None; }
+        if self.normalized().len() > self.config.chromosomes.hashing.minhash.maximum_byte_size
+            && self.config.chromosomes.hashing.minhash.maximum_byte_size_enabled == true {
+            return None;
+        }
         return MinHash32::new(
             &self.normalized(),
             self.config.chromosomes.hashing.minhash.number_of_hashes,

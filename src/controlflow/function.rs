@@ -361,11 +361,11 @@ impl<'function> Function<'function> {
                 .compare(&rhs.chromosome().unwrap());
         }
 
-        let lhs_minhash_ratio = self.minhash_ratio();
-        let lhs_tlsh_ratio = self.tlsh_ratio();
+        let lhs_minhash_ratio = self.minhash_chromosome_ratio();
+        let lhs_tlsh_ratio = self.tlsh_chromosome_ratio();
 
-        let rhs_minhash_ratio = rhs.minhash_ratio();
-        let rhs_tlsh_ratio = rhs.tlsh_ratio();
+        let rhs_minhash_ratio = rhs.minhash_chromosome_ratio();
+        let rhs_tlsh_ratio = rhs.tlsh_chromosome_ratio();
 
         let minhash_threshold_met = lhs_minhash_ratio >= 0.75 && rhs_minhash_ratio >= 0.75;
         let tlsh_threshold_met = lhs_tlsh_ratio >= 0.75 && rhs_tlsh_ratio >= 0.75;
@@ -427,6 +427,24 @@ impl<'function> Function<'function> {
         }
 
         None
+    }
+
+    pub fn tlsh_chromosome_ratio(&self) -> f64 {
+        if self.is_contiguous() { return 1.0; }
+        let mut tlsh_size: usize = 0;
+        for block in self.blocks() {
+            if block.chromosome().tlsh().is_some() { tlsh_size += block.size(); }
+        }
+        return tlsh_size as f64 / self.size() as f64;
+    }
+
+    pub fn minhash_chromosome_ratio(&self) -> f64 {
+        if self.is_contiguous() { return 1.0; }
+        let mut minhash_size: usize = 0;
+        for block in self.blocks() {
+            if block.chromosome().minhash().is_some() { minhash_size += block.size(); }
+        }
+        return minhash_size as f64 / self.size() as f64;
     }
 
     pub fn tlsh_ratio(&self) -> f64 {
@@ -732,7 +750,10 @@ impl<'function> Function<'function> {
         if !self.cfg.config.functions.hashing.minhash.enabled { return None; }
         if !self.is_contiguous() { return None; }
         if let Some(bytes) = self.bytes() {
-            if bytes.len() > self.cfg.config.functions.hashing.minhash.maximum_byte_size { return None; }
+            if bytes.len() > self.cfg.config.functions.hashing.minhash.maximum_byte_size
+                && self.cfg.config.functions.hashing.minhash.maximum_byte_size_enabled == true {
+                return None;
+            }
             return MinHash32::new(
                 &bytes,
                 self.cfg.config.functions.hashing.minhash.number_of_hashes,

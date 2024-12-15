@@ -274,6 +274,20 @@ impl Function {
     }
 
     #[pyo3(text_signature = "($self)")]
+    pub fn minhash_chromosome_ratio(&self, py: Python) -> PyResult<f64> {
+        self.with_inner_function(py, |function| {
+            Ok(function.minhash_chromosome_ratio())
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn tlsh_chromosome_ratio(&self, py: Python) -> PyResult<f64> {
+        self.with_inner_function(py, |function| {
+            Ok(function.tlsh_chromosome_ratio())
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
     pub fn minhash_ratio(&self, py: Python) -> PyResult<f64> {
         self.with_inner_function(py, |function| {
             Ok(function.minhash_ratio())

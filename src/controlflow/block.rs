@@ -548,7 +548,10 @@ impl<'block> Block<'block> {
     /// Returns `Some(String)` containing the MinHash, or `None` if MinHash is disabled or the block's size exceeds the configured maximum.
     pub fn minhash(&self) -> Option<String> {
         if !self.cfg.config.blocks.hashing.minhash.enabled { return None; }
-        if self.bytes().len() > self.cfg.config.blocks.hashing.minhash.maximum_byte_size { return None; }
+        if self.bytes().len() > self.cfg.config.blocks.hashing.minhash.maximum_byte_size
+            && self.cfg.config.blocks.hashing.minhash.maximum_byte_size_enabled == true {
+            return None;
+        }
         return MinHash32::new(
             &self.bytes(),
             self.cfg.config.blocks.hashing.minhash.number_of_hashes,
