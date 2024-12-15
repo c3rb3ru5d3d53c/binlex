@@ -469,4 +469,49 @@ impl MACHO {
         Ok(tempmap)
     }
 
+    /// Returns the size of the MACHO file.
+    ///
+    /// # Returns
+    /// The size of the file as a `u64`.
+    #[allow(dead_code)]
+    pub fn size(&self) -> u64 {
+        self.file.size()
+    }
+
+    /// Returns the entropy of the MACHO file.
+    ///
+    /// # Returns
+    /// The entropy of the file as a `Option<f64>`.
+    #[allow(dead_code)]
+    pub fn entropy(&self) -> Option<f64> {
+        self.file.entropy()
+    }
+
+    /// Returns the TLS (Thread Local Storage) hash value if present in the MACHO file.
+    ///
+    /// # Returns
+    /// An `Option<String>` containing the TLS hash if present, otherwise `None`.
+    #[allow(dead_code)]
+    pub fn tlsh(&self) -> Option<String> {
+        self.file.tlsh()
+    }
+
+    /// Returns the SHA-256 hash value of the MACHO file.
+    ///
+    /// # Returns
+    /// An `Option<String>` containing the SHA-256 hash if available, otherwise `None`.
+    #[allow(dead_code)]
+    pub fn sha256(&self) -> Option<String> {
+        self.file.sha256()
+    }
+
+    /// Returns the File JSON associated with the PE
+    ///
+    /// # Returns
+    /// An `Result<String, Error>` containing the File JSON.
+    #[allow(dead_code)]
+    pub fn file_json(&self) -> Result<String, Error> {
+        self.file.json()
+    }
+
 }

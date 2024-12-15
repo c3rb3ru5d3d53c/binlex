@@ -317,6 +317,11 @@ impl PE {
     }
 
     #[pyo3(text_signature = "($self)")]
+    pub fn file_json(&self) -> PyResult<String> {
+        self.inner.lock().unwrap().file_json().map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+    }
+
+    #[pyo3(text_signature = "($self)")]
     pub fn imagebase(&self) -> u64 {
         self.inner.lock().unwrap().imagebase()
     }

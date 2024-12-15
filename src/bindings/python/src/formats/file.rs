@@ -209,6 +209,10 @@ impl File {
         self.inner.read()
     }
 
+    #[pyo3(text_signature = "($self)")]
+    pub fn json(&self) -> PyResult<String> {
+        self.inner.json().map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+    }
 }
 
 #[pymodule]
