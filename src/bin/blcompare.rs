@@ -401,7 +401,7 @@ fn compare_json_entries(json_lhs: &JSON, json_rhs: &JSON, non_contiguous_thresho
             }
 
             if lhs_contiguous == true && rhs_contiguous == true && lhs_minhash.is_some() && rhs_minhash.is_some() {
-                minhash_similarity = Some(MinHash32::jaccard_similarity_from_hexdigests(&lhs_minhash.clone().unwrap(), &rhs_minhash.clone().unwrap()));
+                minhash_similarity = Some(MinHash32::compare_jaccard_similarity(&lhs_minhash.clone().unwrap(), &rhs_minhash.clone().unwrap()));
             }
 
             // Handle Non-Contiguous Function Similarity
@@ -454,7 +454,7 @@ fn calculate_non_contiguous_minhash_similarity(lhs_blocks: &[Value], rhs_blocks:
         let mut best_similarity: Option<f64> = None;
 
         for rhs_tlsh in &rhs_minhash_values {
-            let similarity = MinHash32::jaccard_similarity_from_hexdigests(&lhs_tlsh.clone(), &rhs_tlsh.clone());
+            let similarity = MinHash32::compare_jaccard_similarity(&lhs_tlsh.clone(), &rhs_tlsh.clone());
             best_similarity = match best_similarity {
                 Some(current_best) => Some(current_best.max(similarity)),
                 None => Some(similarity),

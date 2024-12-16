@@ -165,7 +165,7 @@
 // Library.
 
 use pyo3::prelude::*;
-
+use pyo3::exceptions::PyValueError;
 use binlex::hashing::tlsh::TLSH as InnerTLSH;
 
 #[pyclass]
@@ -186,6 +186,13 @@ impl TLSH {
     #[pyo3(text_signature = "($self)")]
     pub fn hexdigest(&self, mininum_byte_size: usize) -> Option<String> {
         InnerTLSH::new(&self.bytes, mininum_byte_size).hexdigest()
+    }
+
+    #[staticmethod]
+    #[pyo3(text_signature = "(lhs, rhs)")]
+    pub fn compare(lhs: String, rhs: String) -> PyResult<u32> {
+        InnerTLSH::compare(lhs, rhs)
+            .map_err(|err| PyValueError::new_err(err.to_string()))
     }
 
 }
