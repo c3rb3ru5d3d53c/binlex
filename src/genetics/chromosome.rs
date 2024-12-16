@@ -436,7 +436,7 @@ impl Chromosome {
         let rhs_minhash = rhs.minhash();
         let mut minhash: Option<f64> = None;
         if lhs_minhash.is_some() && rhs_minhash.is_some() {
-            minhash = Some(MinHash32::jaccard_similarity_from_hexdigests(&lhs_minhash.unwrap(), &rhs_minhash.unwrap()));
+            minhash = Some(MinHash32::compare_jaccard_similarity(&lhs_minhash.unwrap(), &rhs_minhash.unwrap()));
         }
         let lhs_tlsh = self.tlsh();
         let rhs_tlsh = rhs.tlsh();

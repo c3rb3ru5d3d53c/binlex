@@ -230,6 +230,17 @@ pub struct BlockJson {
     pub attributes: Option<Value>,
 }
 
+impl BlockJson {
+    /// Converts a JSON string into a `BlockJson` object.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(BlockJson)` if the JSON is valid; otherwise, returns an `Err`.
+    pub fn from_json(json_str: &str) -> Result<Self, serde_json::Error> {
+        serde_json::from_str(json_str)
+    }
+}
+
 /// Represents a control flow block within a graph.
 #[derive(Clone)]
 pub struct Block <'block>{

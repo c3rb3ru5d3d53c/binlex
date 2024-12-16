@@ -231,6 +231,17 @@ pub struct FunctionJson {
     pub attributes: Option<Value>,
 }
 
+impl FunctionJson {
+    /// Converts a JSON string into a `FunctionJson` object.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(FunctionJson)` if the JSON is valid; otherwise, returns an `Err`.
+    pub fn from_json(json_str: &str) -> Result<Self, serde_json::Error> {
+        serde_json::from_str(json_str)
+    }
+}
+
 /// Represents a control flow function within a graph.
 #[derive(Clone)]
 pub struct Function <'function>{

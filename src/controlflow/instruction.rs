@@ -264,6 +264,17 @@ pub struct InstructionJson {
     pub attributes: Option<Value>,
 }
 
+impl InstructionJson {
+    /// Converts a JSON string into a `InstructionJson` object.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(InstructionJson)` if the JSON is valid; otherwise, returns an `Err`.
+    pub fn from_json(json_str: &str) -> Result<Self, serde_json::Error> {
+        serde_json::from_str(json_str)
+    }
+}
+
 impl Instruction {
     /// Creates a new `Instruction` with the specified address.
     ///
