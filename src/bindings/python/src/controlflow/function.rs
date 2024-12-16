@@ -302,6 +302,20 @@ impl Function {
     }
 
     #[pyo3(text_signature = "($self)")]
+    pub fn cyclomatic_complexity(&self, py: Python) -> PyResult<usize> {
+        self.with_inner_function(py, |function| {
+            Ok(function.cyclomatic_complexity())
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn average_instructions_per_block(&self, py: Python) -> PyResult<f64> {
+        self.with_inner_function(py, |function| {
+            Ok(function.average_instructions_per_block())
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
     /// Returns the blocks associated with this function.
     ///
     /// # Returns
