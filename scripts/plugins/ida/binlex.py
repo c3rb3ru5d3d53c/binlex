@@ -3989,6 +3989,8 @@ import zlib
 from binlex.formats import File
 from binlex.formats import PE
 from binlex.formats import ELF
+from binlex.hashing import MinHash32
+from binlex.hashing import TLSH
 from binlex import Config
 from binlex import Architecture
 from binlex.controlflow import Graph
@@ -4331,7 +4333,7 @@ class MainWindow(QDialog):
 
         layout.addWidget(btn1)
 
-        btn3 = QPushButton('Hash Table')
+        btn3 = QPushButton('Function Table')
         btn3.clicked.connect(self.plugin.open_table_window)
 
         btn3.setStyleSheet(QPUSHBUTTON_STYLE)
@@ -4590,34 +4592,107 @@ class BinlexPlugin(idaapi.plugin_t):
         if value is None: return ''
         return value
 
+    @staticmethod
+    def minhash_chromosome_ratio(function: dict) -> float:
+        if function['contiguous']: return 1.0
+        minhash_size = 0
+        for block in function['blocks']:
+            if block['chromosome']['minhash'] is not None:
+                minhash_size += block['size']
+        return minhash_size / function['size']
+
+    def compare_function(lhs: str, rhs: str) -> dict | None:
+        similarity = {
+            'minhash': None,
+            'tlsh': None,
+        }
+        lhs = json.loads(lhs)
+        rhs = json.loads(rhs)
+        if lhs['contiguous'] and rhs['contiguous']:
+            lhs_chromosome = lhs['chromosome']
+            rhs_chromosome = rhs['chromosome']
+            if lhs_chromosome is None and rhs_chromosome is None:
+                return None
+            lhs_chromosome_minhash = lhs['chromosome']['minhash']
+            rhs_chromosome_minhash = rhs['chromosome']['minhash']
+            if lhs_chromosome_minhash is not None and rhs_chromosome_minhash is not None:
+                similarity['minhash'] = MinHash32.compare_jaccard_similarity(lhs_chromosome_minhash, rhs_chromosome_minhash)
+            return similarity
+        lhs_minhash_chromosome_ratio = self.minhash_chromosome_ratio(lhs)
+        rhs_minhash_chromosome_ratio = self.minhash_chromosome_ratio(rhs)
+        if lhs_minhash_chromosome_ratio < 0.75 and rhs_minhash_chromosome_ratio < 0.75:
+            return None
+        minhash_values = []
+        for lhs_block in lhs['blocks']:
+            best_minhash = None
+            lhs_block_chromosome_minhash = lhs_block['chromosome']['minhash']
+            for rhs_block in rhs['blocks']:
+                rhs_block_chromosome_minhash = rhs_block['chromosome']['minhash']
+                similarity_value = MinHash32.compare_jaccard_similarity(lhs_block_chromosome_minhash, rhs_block_chromosome_minhash)
+                if best_minhash is None or (similarity_value is not None and similarity_value > best_minhash):
+                    best_minhash = similarity_value
+            if best_minhash is not None:
+                minhash_values.append(best_minhash)
+        if not minhash_values:
+            return None
+        similarity['minhash'] = sum(minhash_values) / len(minhash_values)
+        return similarity
+
     def open_table_window(self):
         if self.table_window: return None
         self.disassemble_controlflow()
         data = []
         for function in self.cfg.functions():
+            chromosome = function.chromosome()
             row = []
             row.append(str(hex(function.address)))
             row.append(IDA.get_function_name(function.address))
             row.append("function")
             row.append(function.is_contiguous())
             row.append(function.size())
+            row.append(function.number_of_blocks())
+            row.append(function.cyclomatic_complexity())
+            row.append(function.average_instructions_per_block())
             row.append(self.value_to_string(function.minhash_chromosome_ratio()))
-            row.append(self.value_to_string(function.minhash()))
+            if chromosome is not None:
+                row.append(self.value_to_string(chromosome.minhash()))
+            else:
+                row.append(self.value_to_string(None))
             row.append(self.value_to_string(function.tlsh_chromosome_ratio()))
-            row.append(self.value_to_string(function.tlsh()))
+            if chromosome is not None:
+                row.append(self.value_to_string(chromosome.tlsh()))
+            else:
+                row.append(self.value_to_string(None))
+            if chromosome is not None:
+                row.append(self.value_to_string(function.chromosome().pattern()))
+            else:
+                row.append(self.value_to_string(None))
             data.append(row)
-        headers = ["Address", "Name", "Type", "Contiguous", "Size", "Minhash Ratio", "Minhash", "TLSH Ratio", "TLSH"]
+        headers = [
+            "Address",
+            "Name",
+            "Type",
+            "Contiguous",
+            "Size",
+            "Number of Blocks",
+            "Cyclomatic Complexity",
+            "Average Instructions Per Block",
+            "Minhash Chromosome Ratio",
+            "Chromosome Minhash",
+            "TLSH Chromosome Ratio",
+            "Chromosome TLSH",
+            "Chromosome Pattern"]
         form = TableWindow(
             data,
             headers,
-            color_column=5,
+            color_column=7,
             min_value=0,
             max_value=1,
             low_to_high=True,
             default_filter_column=1,
             default_sort_column=5,
             default_sort_ascending=False)
-        form.Show('Binlex Hash Table')
+        form.Show('Binlex Function Table')
 
     def run(self, arg):
         self.open_main_window()
