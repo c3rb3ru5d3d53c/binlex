@@ -385,6 +385,15 @@ impl Function {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Returns the number of blocks in the function.
+    ///
+    /// # Returns
+    /// - `usize`: The number of blocks.
+    pub fn number_of_blocks(&self, py: Python) -> PyResult<usize> {
+        self.with_inner_function(py, |function| Ok(function.number_of_blocks()))
+    }
+
+    #[pyo3(text_signature = "($self)")]
     /// Returns a mapping of function calls within the current function.
     ///
     /// # Returns
