@@ -88,6 +88,37 @@ make wheel # Make Python Wheel
 
 The resulting packages will be in the `target/` directory.
 
+### IDA Plugin
+
+Installing the IDA plugin is easy to install, just make sure you installed the Python bindings in the Python environment for IDA.
+
+Now copy the directory for the **binlex** plugin to your plugin directory.
+
+```bash
+mkdir -p ~/.idapro/plugins/
+cp -r scripts/plugins/ida/binlex/ ~/.idapro/plugins/
+```
+
+Once you open IDA, you should be greeted with the **binlex** welcome message.
+
+![Binlex IDA Plugin](assets/ida.png)
+
+Using the IDA plugin you have various features that are provided to help you with YARA rule writing and similarity analysis.
+
+**Main Menu:**
+- Export Binlex JSON (Uses IDA CFG and Function Names)
+- Function Hash Table View
+
+**Disassembler Context Menu:**
+- Copy YARA Pattern
+- Copy Hex
+- Copy MinHash from Selection
+- Copy TLSH from Selection
+- Scan for MinHash
+- Scan for TLSH
+
+**NOTE:** Function comparison is coming soon in the IDA plugin so you can compare databases...
+
 ### Documentation
 
 ```bash
@@ -433,6 +464,12 @@ rule example {
         $trait_9 = {03fe897c24??397c24??0f867301????}
     condition:
         1 of them
+```
+
+For even better results if you exported the **genomes** using the **binlex** IDA plugin or by other means you can filter for function starting prefixes like `mw::`, for `malware`, which is pretty common.
+
+```bash
+cat dump.json | jq -r 'select(.type == "function" and .size > 32 and (.attributes[] | .type == "symbol" and (.name | startswith("mw::")))) | .blocks[] | select(.size > 32) | .chromosome.pattern' | blyara -n example
 ```
 
 ### Comparing Traits Based on Similarity
