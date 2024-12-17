@@ -9,10 +9,10 @@
 
 <table>
   <tr>
-    <td style="border: none;">
-      <img src="./assets/binlex.png" alt="Binlex logo" width="100">
+    <td style="border: none; text-align: center; vertical-align: middle;">
+      <img src="./assets/binlex.png" alt="Binlex logo" width="100" style="display: inline-block;">
     </td>
-    <td style="border: none; vertical-align: middle; padding-left: 10px; text-align: center;">
+    <td style="border: none; text-align: center; vertical-align: middle; padding-left: 10px;">
       <h1 style="font-weight: bold; margin: 0;">Binlex - A Binary Genetic Trait Lexer Framework</h1>
       <div style="font-size: smaller; font-weight: bold; margin-top: 5px;">
         If maldevs think their binary is FUD,<br>they're about to have an existential crisis.
@@ -20,9 +20,6 @@
     </td>
   </tr>
 </table>
-
-
-
 
 **Binlex** is a tool for malware analysts and researchers that extracts **instructions**, **basic blocks**, and **functions** from binary files and organizes them into a structured hierarchy of **genomes**, **chromosomes**, **allele pairs**, and **genes**. 🦠🔍
 
