@@ -102,7 +102,7 @@ cp -r scripts/plugins/ida/binlex/ ~/.idapro/plugins/
 Once you open IDA, you should be greeted with the **binlex** welcome message.
 
 <p align="center">
-  <img src="assets/ida.png" alt="Binlex IDA Plugin" width="300"/>
+  <img src="assets/ida.png" alt="Binlex IDA Plugin" width="600"/>
 </p>
 
 Using the IDA plugin you have various features that are provided to help you with YARA rule writing and similarity analysis.
