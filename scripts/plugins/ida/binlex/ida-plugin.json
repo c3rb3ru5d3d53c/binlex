@@ -1,0 +1,7 @@
+{
+  "IDAMetadataDescriptorVersion": 1,
+  "plugin": {
+    "name": "My First Plugin",
+    "entryPoint": "main.py"
+  }
+}
