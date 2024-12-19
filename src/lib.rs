@@ -174,6 +174,7 @@ pub mod binary;
 pub mod global;
 pub mod io;
 pub mod genetics;
+pub mod lcs;
 
 pub use global::Config;
 pub use binary::Binary;

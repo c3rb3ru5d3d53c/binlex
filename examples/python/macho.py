@@ -208,7 +208,7 @@ for index in macho.number_of_slices():
   image = mapped_file.as_memoryview()
 
   # Create Disassembler on Mapped MACHO Image and MACHO Architecture
-  disassembler = Disassembler(macho.architecture(index), image, macho.executable_virtual_address_ranges(index))
+  disassembler = Disassembler(macho.architecture(index), image, macho.executable_virtual_address_ranges(index), config)
 
   # Create the Controlflow Graph
   cfg = Graph(macho.architecture(index), config)

@@ -190,23 +190,26 @@ use crate::controlflow::graph::Graph;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
 use crate::io::Stderr;
+use crate::Config;
 
 pub struct Disassembler<'disassembler> {
     cs: Capstone,
     image: &'disassembler[u8],
     machine: Architecture,
     executable_address_ranges: BTreeMap<u64, u64>,
+    config: Config,
 }
 
 impl<'disassembler> Disassembler<'disassembler> {
 
-    pub fn new(machine: Architecture, image: &'disassembler[u8], executable_address_ranges: BTreeMap<u64, u64>) -> Result<Self, Error> {
+    pub fn new(machine: Architecture, image: &'disassembler[u8], executable_address_ranges: BTreeMap<u64, u64>, config: Config) -> Result<Self, Error> {
         let cs = Disassembler::cs_new(machine, true)?;
         Ok(Self{
             cs: cs,
             image: image,
             machine: machine,
             executable_address_ranges: executable_address_ranges,
+            config: config,
         })
     }
 
@@ -293,6 +296,8 @@ impl<'disassembler> Disassembler<'disassembler> {
 
         let external_executable_address_ranges = self.executable_address_ranges.clone();
 
+        let external_config = self.config.clone();
+
         pool.install(|| {
             while !cfg.functions.queue.is_empty() {
                 let function_addresses = cfg.functions.dequeue_all();
@@ -304,7 +309,7 @@ impl<'disassembler> Disassembler<'disassembler> {
                         let executable_address_ranges = external_executable_address_ranges.clone();
                         let image = external_image;
                         let mut graph = Graph::new(machine, cfg.config.clone());
-                        if let Ok(disasm) = Disassembler::new(machine, image, executable_address_ranges) {
+                        if let Ok(disasm) = Disassembler::new(machine, image, executable_address_ranges, external_config.clone()) {
                             let _ = disasm.disassemble_function(*address, &mut graph);
                         }
                         graph
@@ -620,7 +625,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         let total_operand_size = self.get_instruction_total_operand_size(instruction)?;
 
         if total_operand_size > instruction_size {
-            return Err(Error::new(ErrorKind::Other,  format!("Instruction -> 0x{:x}: operand offset exceeds instruction size", instruction.address())));
+            return Ok(Binary::to_hex(instruction.bytes()));
         }
 
         let instruction_trailing_null_offset = instruction_size - instruction_trailing_null_size;
@@ -891,6 +896,7 @@ impl<'disassembler> Disassembler<'disassembler> {
             InsnId(X86Insn::X86_INS_MOVUPS as u32),
             InsnId(X86Insn::X86_INS_MOVAPS as u32),
             InsnId(X86Insn::X86_INS_XORPS as u32),
+            InsnId(X86Insn::X86_INS_SHUFPS as u32),
         ].contains(&instruction.id())
     }
 

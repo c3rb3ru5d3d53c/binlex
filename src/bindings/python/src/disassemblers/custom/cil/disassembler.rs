@@ -178,6 +178,7 @@ use pyo3::types::PyAny;
 use pyo3::types::PyMemoryView;
 use pyo3::exceptions::PyTypeError;
 use pyo3::buffer::PyBuffer;
+use crate::Config;
 
 #[pyclass(unsendable)]
 pub struct Disassembler{
@@ -185,18 +186,20 @@ pub struct Disassembler{
     machine: Py<Architecture>,
     metadata_token_addresses: BTreeMap<u64, u64>,
     executable_address_ranges: BTreeMap<u64, u64>,
+    config: Py<Config>,
 }
 
 #[pymethods]
 impl Disassembler {
     #[new]
-    #[pyo3(text_signature = "(machine, image, executable_address_ranges)")]
-    pub fn new(machine: Py<Architecture>, image: Py<PyAny>, metadata_token_addresses: BTreeMap<u64, u64>, executable_address_ranges: BTreeMap<u64, u64>) -> Self {
+    #[pyo3(text_signature = "(machine, image, executable_address_ranges, config)")]
+    pub fn new(machine: Py<Architecture>, image: Py<PyAny>, metadata_token_addresses: BTreeMap<u64, u64>, executable_address_ranges: BTreeMap<u64, u64>, config: Py<Config>) -> Self {
         Self {
             machine: machine,
             image: image,
             metadata_token_addresses: metadata_token_addresses,
             executable_address_ranges: executable_address_ranges,
+            config: config,
         }
     }
 
@@ -234,7 +237,8 @@ impl Disassembler {
     pub fn disassemble_instruction(&self, py: Python, address: u64, cfg: Py<Graph>) -> Result<u64, Error> {
         let image = self.get_image_data(py)?;
         let machine_binding = &self.machine.borrow(py);
-        let disassembler = InnerDisassembler::new(machine_binding.inner, image, self.metadata_token_addresses.clone(), self.executable_address_ranges.clone())?;
+        let inner_config = self.config.borrow(py).inner.lock().unwrap().clone();
+        let disassembler = InnerDisassembler::new(machine_binding.inner, image, self.metadata_token_addresses.clone(), self.executable_address_ranges.clone(), inner_config)?;
         let cfg_ref=  &mut cfg.borrow_mut(py);
         let result = disassembler.disassemble_instruction(address, &mut cfg_ref.inner.lock().unwrap())?;
         return Ok(result);
@@ -244,7 +248,8 @@ impl Disassembler {
     pub fn disassemble_function(&self, py: Python, address: u64, cfg: Py<Graph>) -> Result<u64, Error> {
         let image = self.get_image_data(py)?;
         let machine_binding = &self.machine.borrow(py);
-        let disassembler = InnerDisassembler::new(machine_binding.inner, image, self.metadata_token_addresses.clone(), self.executable_address_ranges.clone())?;
+        let inner_config = self.config.borrow(py).inner.lock().unwrap().clone();
+        let disassembler = InnerDisassembler::new(machine_binding.inner, image, self.metadata_token_addresses.clone(), self.executable_address_ranges.clone(), inner_config)?;
         let cfg_ref=  &mut cfg.borrow_mut(py);
         let result = disassembler.disassemble_function(address, &mut cfg_ref.inner.lock().unwrap())?;
         return Ok(result);
@@ -254,7 +259,8 @@ impl Disassembler {
     pub fn disassemble_block(&self, py: Python, address: u64, cfg: Py<Graph>) -> Result<u64, Error> {
         let image = self.get_image_data(py)?;
         let machine_binding = &self.machine.borrow(py);
-        let disassembler = InnerDisassembler::new(machine_binding.inner, image, self.metadata_token_addresses.clone(), self.executable_address_ranges.clone())?;
+        let inner_config = self.config.borrow(py).inner.lock().unwrap().clone();
+        let disassembler = InnerDisassembler::new(machine_binding.inner, image, self.metadata_token_addresses.clone(), self.executable_address_ranges.clone(), inner_config)?;
         let cfg_ref=  &mut cfg.borrow_mut(py);
         let result = disassembler.disassemble_block(address, &mut cfg_ref.inner.lock().unwrap())?;
         return Ok(result);
@@ -264,7 +270,8 @@ impl Disassembler {
     pub fn disassemble_controlflow(&self, py: Python, addresses: BTreeSet<u64>, cfg: Py<Graph>) -> Result<(), Error> {
         let image = self.get_image_data(py)?;
         let machine_binding = &self.machine.borrow(py);
-        let disassembler = InnerDisassembler::new(machine_binding.inner, image, self.metadata_token_addresses.clone(), self.executable_address_ranges.clone())?;
+        let inner_config = self.config.borrow(py).inner.lock().unwrap().clone();
+        let disassembler = InnerDisassembler::new(machine_binding.inner, image, self.metadata_token_addresses.clone(), self.executable_address_ranges.clone(), inner_config)?;
         let cfg_ref=  &mut cfg.borrow_mut(py);
         disassembler.disassemble_controlflow(addresses, &mut cfg_ref.inner.lock().unwrap())?;
         Ok(())

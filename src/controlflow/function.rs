@@ -184,6 +184,7 @@ use crate::hashing::TLSH;
 use crate::hashing::MinHash32;
 use serde_json::Value;
 use crate::controlflow::BlockJson;
+use crate::genetics::chromosome::HomologousChromosome;
 
 /// Represents a JSON-serializable structure containing metadata about a function.
 #[derive(Serialize, Deserialize)]
@@ -433,8 +434,11 @@ impl<'function> Function<'function> {
             if minhash_average.is_none() && tlsh_average.is_none() {
                 return None;
             }
-
-            return Some(ChromosomeSimilarity::new(minhash_average, tlsh_average));
+            return Some(ChromosomeSimilarity{
+                minhash: minhash_average,
+                tlsh: tlsh_average,
+                homologues: Vec::<HomologousChromosome>::new(),
+            });
         }
 
         None

@@ -208,7 +208,7 @@ mapped_file = pe.image()
 image = mapped_file.as_memoryview()
 
 # Create Disassembler on Mapped PE Image and PE Architecture
-disassembler = Disassembler(pe.architecture(), image, pe.dotnet_metadata_token_virtual_addresses(), pe.dotnet_executable_virtual_address_ranges())
+disassembler = Disassembler(pe.architecture(), image, pe.dotnet_metadata_token_virtual_addresses(), pe.dotnet_executable_virtual_address_ranges(), config)
 
 # Create the Controlflow Graph
 cfg = Graph(pe.architecture(), config)
