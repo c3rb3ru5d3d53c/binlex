@@ -284,7 +284,7 @@ impl  ConfigHomologues {
     }
 
     #[setter]
-    pub fn set_theshold(&mut self, value: f64) {
+    pub fn set_threshold(&mut self, value: f64) {
         let mut inner = self.inner.lock().unwrap();
         inner.chromosomes.homologues.threshold = value;
     }
