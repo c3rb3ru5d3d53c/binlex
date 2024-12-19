@@ -21,21 +21,6 @@
   </tr>
 </table>
 
-TODO:
-- function minhash non-contiguous threshold
-- function tlsh non-contiguous threshold
-- homologous min_size
-- homologous wildcard ratio
-- homologous max results
-- homologous score threshold
-- homologous minhash threshold
-- homologous tlsh threshold
-- homologous enable minhash
-- homologous enable tlsh
-- ConfigHomologousChromosomeMinhash, threshold, enabled
-- ConfigHomologousChromosomeTLSH, threshold, enabled
-- ConfigHomologousChromosome, threshold, wildcard_ratio, max_results, mininum_size
-
 **Binlex** is a tool for malware analysts and researchers that extracts **instructions**, **basic blocks**, and **functions** from binary files and organizes them into a structured hierarchy of **genomes**, **chromosomes**, **allele pairs**, and **genes**. 🦠🔍
 
 - A **genome** represents an **instruction**, **block**, or **function** in the binary. 🧬
