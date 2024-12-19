@@ -175,16 +175,18 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
 use std::collections::BTreeSet;
 use crate::io::Stderr;
+use crate::Config;
 
 pub struct Disassembler <'disassembler> {
     pub architecture: Architecture,
     pub metadata_token_addresses: BTreeMap<u64, u64>,
     pub executable_address_ranges: BTreeMap<u64, u64>,
-    pub image: &'disassembler [u8]
+    pub image: &'disassembler [u8],
+    config: Config,
 }
 
 impl <'disassembler> Disassembler <'disassembler> {
-    pub fn new(architecture: Architecture, image: &'disassembler[u8], metadata_token_addresses: BTreeMap<u64, u64>, executable_address_ranges: BTreeMap<u64, u64>) -> Result<Self, Error> {
+    pub fn new(architecture: Architecture, image: &'disassembler[u8], metadata_token_addresses: BTreeMap<u64, u64>, executable_address_ranges: BTreeMap<u64, u64>, config: Config) -> Result<Self, Error> {
         match architecture {
             Architecture::CIL => {},
             _ => {
@@ -195,7 +197,8 @@ impl <'disassembler> Disassembler <'disassembler> {
             architecture: architecture,
             metadata_token_addresses: metadata_token_addresses,
             executable_address_ranges: executable_address_ranges,
-            image: image
+            image: image,
+            config: config,
         })
     }
 
@@ -363,6 +366,8 @@ impl <'disassembler> Disassembler <'disassembler> {
 
         let external_metadata_token_addresses = self.metadata_token_addresses.clone();
 
+        let external_config = self.config.clone();
+
         pool.install(|| {
             while !cfg.functions.queue.is_empty() {
                 let function_addresses = cfg.functions.dequeue_all();
@@ -375,7 +380,7 @@ impl <'disassembler> Disassembler <'disassembler> {
                         let metadata_token_addresses = external_metadata_token_addresses.clone();
                         let image = external_image;
                         let mut graph = Graph::new(machine, cfg.config.clone());
-                        if let Ok(disasm) = Disassembler::new(machine, image, metadata_token_addresses, executable_address_ranges) {
+                        if let Ok(disasm) = Disassembler::new(machine, image, metadata_token_addresses, executable_address_ranges, external_config.clone()) {
                             let _ = disasm.disassemble_function(*address, &mut graph);
                         }
                         graph

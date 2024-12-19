@@ -21,6 +21,21 @@
   </tr>
 </table>
 
+TODO:
+- function minhash non-contiguous threshold
+- function tlsh non-contiguous threshold
+- homologous min_size
+- homologous wildcard ratio
+- homologous max results
+- homologous score threshold
+- homologous minhash threshold
+- homologous tlsh threshold
+- homologous enable minhash
+- homologous enable tlsh
+- ConfigHomologousChromosomeMinhash, threshold, enabled
+- ConfigHomologousChromosomeTLSH, threshold, enabled
+- ConfigHomologousChromosome, threshold, wildcard_ratio, max_results, mininum_size
+
 **Binlex** is a tool for malware analysts and researchers that extracts **instructions**, **basic blocks**, and **functions** from binary files and organizes them into a structured hierarchy of **genomes**, **chromosomes**, **allele pairs**, and **genes**. 🦠🔍
 
 - A **genome** represents an **instruction**, **block**, or **function** in the binary. 🧬
@@ -670,7 +685,7 @@ let image = mapped_file
   });
 
 // Create Disassembler
-let disassembler = Disassembler(pe.architecture(), &image, pe.executable_virtual_address_ranges())
+let disassembler = Disassembler(pe.architecture(), &image, pe.executable_virtual_address_ranges(), config)
   .unwrap_or_else(|error| {
     eprintln!("{}", error);
     process::exit(1);
@@ -723,7 +738,7 @@ let image = mapped_file
   });
 
 // Create Disassembler
-let disassembler = Disassembler(pe.architecture(), &image, pe.dotnet_metadata_token_virtual_addresses(), pe.dotnet_executable_virtual_address_ranges())
+let disassembler = Disassembler(pe.architecture(), &image, pe.dotnet_metadata_token_virtual_addresses(), pe.dotnet_executable_virtual_address_ranges(), config)
   .unwrap_or_else(|error| {
     eprintln!("{}", error);
     process::exit(1);
@@ -774,7 +789,7 @@ let image = mapped_file
   });
 
 // Create Disassembler
-let disassembler = Disassembler(elf.architecture(), &image, elf.executable_virtual_address_ranges())
+let disassembler = Disassembler(elf.architecture(), &image, elf.executable_virtual_address_ranges(), config)
   .unwrap_or_else(|error| {
     eprintln!("{}", error);
     process::exit(1);
@@ -827,7 +842,7 @@ for index in macho.number_of_slices() {
     });
 
   // Create Disassembler
-  let disassembler = Disassembler(macho.architecture(index), &image, macho.executable_virtual_address_ranges(index))
+  let disassembler = Disassembler(macho.architecture(index), &image, macho.executable_virtual_address_ranges(index), config)
     .unwrap_or_else(|error| {
       eprintln!("{}", error);
       process::exit(1);
@@ -908,7 +923,7 @@ mapped_file = pe.image()
 image = mapped_file.as_memoryview()
 
 # Create Disassembler on Mapped PE Image and PE Architecture
-disassembler = Disassembler(pe.architecture(), image, pe.executable_virtual_address_ranges())
+disassembler = Disassembler(pe.architecture(), image, pe.executable_virtual_address_ranges(), config)
 
 # Create the Controlflow Graph
 cfg = Graph(pe.architecture(), config)
@@ -943,7 +958,7 @@ mapped_file = pe.image()
 image = mapped_file.as_memoryview()
 
 # Create Disassembler on Mapped PE Image and PE Architecture
-disassembler = Disassembler(pe.architecture(), image, pe.dotnet_metadata_token_virtual_addresses(), pe.dotnet_executable_virtual_address_ranges())
+disassembler = Disassembler(pe.architecture(), image, pe.dotnet_metadata_token_virtual_addresses(), pe.dotnet_executable_virtual_address_ranges(), config)
 
 # Create the Controlflow Graph
 cfg = Graph(pe.architecture(), config)
@@ -976,7 +991,7 @@ mapped_file = pe.image()
 image = mapped_file.as_memoryview()
 
 # Create Disassembler on Mapped ELF Image and ELF Architecture
-disassembler = Disassembler(elf.architecture(), image, elf.executable_virtual_address_ranges())
+disassembler = Disassembler(elf.architecture(), image, elf.executable_virtual_address_ranges(), config)
 
 # Create the Controlflow Graph
 cfg = Graph(elf.architecture(), config)
@@ -1012,7 +1027,7 @@ for index in macho.number_of_slices():
   image = mapped_file.as_memoryview()
 
   # Create Disassembler on Mapped MACHO Image and MACHO Architecture
-  disassembler = Disassembler(macho.architecture(index), image, macho.executable_virtual_address_ranges(index))
+  disassembler = Disassembler(macho.architecture(index), image, macho.executable_virtual_address_ranges(index), config)
 
   # Create the Controlflow Graph
   cfg = Graph(macho.architecture(index), config)

@@ -641,7 +641,7 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
     if !pe.is_dotnet() {
         Stderr::print_debug(config.clone(), "starting pe disassembler");
 
-        let disassembler = match Disassembler::new(pe.architecture(), &image, executable_address_ranges.clone()) {
+        let disassembler = match Disassembler::new(pe.architecture(), &image, executable_address_ranges.clone(), config.clone()) {
             Ok(disassembler) => disassembler,
             Err(error) => {
                 eprintln!("{}", error);
@@ -657,7 +657,7 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
     } else if pe.is_dotnet() {
         Stderr::print_debug(config.clone(), "starting pe dotnet disassembler");
 
-        let disassembler = match CILDisassembler::new(pe.architecture(), &image, pe.dotnet_metadata_token_virtual_addresses().clone(), executable_address_ranges.clone()) {
+        let disassembler = match CILDisassembler::new(pe.architecture(), &image, pe.dotnet_metadata_token_virtual_addresses().clone(), executable_address_ranges.clone(), config.clone()) {
             Ok(disassembler) => disassembler,
             Err(error) => {
                 eprintln!("{}", error);
@@ -721,7 +721,7 @@ fn process_elf(input: String, config: Config, tags: Option<Vec<String>>, output:
 
     let mut cfg = Graph::new(elf.architecture(), config.clone());
 
-    let disassembler = match Disassembler::new(elf.architecture(), &image, executable_address_ranges.clone()) {
+    let disassembler = match Disassembler::new(elf.architecture(), &image, executable_address_ranges.clone(), config.clone()) {
         Ok(disassembler) => disassembler,
         Err(error) => {
             eprintln!("{}", error);
@@ -762,7 +762,7 @@ fn process_code(input: String, config: Config, architecture: Architecture, outpu
 
     match architecture {
         Architecture::AMD64 | Architecture::I386 => {
-            let disassembler = match Disassembler::new(architecture, &file.data, executable_address_ranges.clone()) {
+            let disassembler = match Disassembler::new(architecture, &file.data, executable_address_ranges.clone(), config.clone()) {
                 Ok(disassembler) => disassembler,
                 Err(error) => {
                     eprintln!("{}", error);
@@ -777,7 +777,7 @@ fn process_code(input: String, config: Config, architecture: Architecture, outpu
             });
         },
         Architecture::CIL => {
-            let disassembler = match CILDisassembler::new(architecture, &file.data, BTreeMap::<u64, u64>::new(), executable_address_ranges.clone()) {
+            let disassembler = match CILDisassembler::new(architecture, &file.data, BTreeMap::<u64, u64>::new(), executable_address_ranges.clone(), config.clone()) {
                 Ok(disassembler) => disassembler,
                 Err(error) => {
                     eprintln!("{}", error);
@@ -844,7 +844,7 @@ fn process_macho(input: String, config: Config, tags: Option<Vec<String>>, outpu
 
         let mut cfg = Graph::new(architecture, config.clone());
 
-        let disassembler = match Disassembler::new(architecture, &image, executable_address_ranges.clone()) {
+        let disassembler = match Disassembler::new(architecture, &image, executable_address_ranges.clone(), config.clone()) {
             Ok(disassembler) => disassembler,
             Err(error) => {
                 eprintln!("{}", error);

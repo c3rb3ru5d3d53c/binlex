@@ -178,6 +178,35 @@ pub const DIRECTORY: &str = "binlex";
 pub const FILE_NAME: &str = "binlex.toml";
 
 #[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigHomologuesMinhash {
+    pub enabled: bool,
+    pub threshold: f64,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigHomologuesTLSH {
+    pub enabled: bool,
+    pub threshold: usize,
+}
+
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigHomologuesHashing {
+    pub minhash: ConfigHomologuesMinhash,
+    pub tlsh: ConfigHomologuesTLSH,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigHomologues {
+    pub enabled: bool,
+    pub hashing: ConfigHomologuesHashing,
+    pub threshold: f64,
+    pub wildcard_ratio: f64,
+    pub maximum: usize,
+    pub size: usize,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigBlockInstructions {
     pub enabled: bool,
 }
@@ -206,6 +235,7 @@ pub struct ConfigBlocks {
 pub struct ConfigChromosomes {
     pub hashing: ConfigHashing,
     pub heuristics: ConfigHeuristics,
+    pub homologues: ConfigHomologues,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -304,12 +334,14 @@ pub struct ConfigMinhash {
     pub maximum_byte_size_enabled: bool,
     pub maximum_byte_size: usize,
     pub seed: u64,
+    pub threshold: f64,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigTLSH {
     pub enabled: bool,
     pub minimum_byte_size: usize,
+    pub threshold: usize,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -335,6 +367,7 @@ impl Config {
                         tlsh: ConfigTLSH {
                             enabled: true,
                             minimum_byte_size: 50,
+                            threshold: 200,
                         },
                         minhash: ConfigMinhash {
                             enabled: true,
@@ -343,6 +376,7 @@ impl Config {
                             maximum_byte_size_enabled: false,
                             maximum_byte_size: 50,
                             seed: 0,
+                            threshold: 0.75,
                         }
                     },
                     heuristics: ConfigHeuristics {
@@ -364,6 +398,7 @@ impl Config {
                     tlsh: ConfigTLSH {
                         enabled: true,
                         minimum_byte_size: 50,
+                        threshold: 200,
                     },
                     minhash: ConfigMinhash {
                         enabled: true,
@@ -372,6 +407,7 @@ impl Config {
                         maximum_byte_size_enabled: false,
                         maximum_byte_size: 50,
                         seed: 0,
+                        threshold: 0.75,
                     }
                 },
                 heuristics: ConfigHeuristics {
@@ -395,6 +431,7 @@ impl Config {
                     tlsh: ConfigTLSH {
                         enabled: true,
                         minimum_byte_size: 50,
+                        threshold: 200,
                     },
                     minhash: ConfigMinhash {
                         enabled: true,
@@ -403,6 +440,7 @@ impl Config {
                         maximum_byte_size_enabled: false,
                         maximum_byte_size: 50,
                         seed: 0,
+                        threshold: 0.75,
                     }
                 },
                 heuristics: ConfigHeuristics {
@@ -426,6 +464,7 @@ impl Config {
                     tlsh: ConfigTLSH {
                         enabled: true,
                         minimum_byte_size: 50,
+                        threshold: 200,
                     },
                     minhash: ConfigMinhash {
                         enabled: true,
@@ -434,6 +473,7 @@ impl Config {
                         maximum_byte_size_enabled: false,
                         maximum_byte_size: 50,
                         seed: 0,
+                        threshold: 0.75,
                     }
                 },
                 heuristics: ConfigHeuristics {
@@ -453,6 +493,7 @@ impl Config {
                     tlsh: ConfigTLSH {
                         enabled: true,
                         minimum_byte_size: 50,
+                        threshold: 200,
                     },
                     minhash: ConfigMinhash {
                         enabled: true,
@@ -461,6 +502,7 @@ impl Config {
                         maximum_byte_size_enabled: false,
                         maximum_byte_size: 50,
                         seed: 0,
+                        threshold: 0.75,
                     }
                 },
                 heuristics: ConfigHeuristics {
@@ -469,6 +511,23 @@ impl Config {
                     },
                     entropy: ConfigHeuristicEntropy {
                         enabled: true,
+                    }
+                },
+                homologues: ConfigHomologues {
+                    enabled: true,
+                    threshold: 0.75,
+                    wildcard_ratio: 0.50,
+                    maximum: 4,
+                    size: 8,
+                    hashing: ConfigHomologuesHashing {
+                        minhash: ConfigHomologuesMinhash {
+                            enabled: true,
+                            threshold: 0.25,
+                        },
+                        tlsh: ConfigHomologuesTLSH {
+                            enabled: true,
+                            threshold: 200,
+                        }
                     }
                 }
             },

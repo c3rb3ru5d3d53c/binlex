@@ -234,7 +234,7 @@ rhs_mapped_file = rhs_pe.image()
 rhs_image = rhs_mapped_file.as_memoryview()
 
 # Create Disassembler on Mapped PE Image and PE Architecture
-rhs_disassembler = Disassembler(rhs_pe.architecture(), rhs_image, rhs_pe.executable_virtual_address_ranges())
+rhs_disassembler = Disassembler(rhs_pe.architecture(), rhs_image, rhs_pe.executable_virtual_address_ranges(), config)
 
 # Create the Controlflow Graph
 rhs_cfg = Graph(rhs_pe.architecture(), config)

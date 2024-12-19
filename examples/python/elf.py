@@ -206,7 +206,7 @@ mapped_file = pe.image()
 image = mapped_file.as_memoryview()
 
 # Create Disassembler on Mapped ELF Image and ELF Architecture
-disassembler = Disassembler(elf.architecture(), image, elf.executable_virtual_address_ranges())
+disassembler = Disassembler(elf.architecture(), image, elf.executable_virtual_address_ranges(), config)
 
 # Create the Controlflow Graph
 cfg = Graph(elf.architecture(), config)

@@ -174,6 +174,40 @@ use std::sync::Mutex;
 use crate::Config;
 use pyo3::types::PyBytes;
 use pyo3::exceptions::PyRuntimeError;
+use binlex::genetics::chromosome::HomologousChromosome as InnerHomologousChromosome;
+
+
+#[pyclass]
+pub struct HomologousChromosome {
+    pub inner: Arc<Mutex<InnerHomologousChromosome>>,
+}
+
+#[pymethods]
+impl HomologousChromosome {
+    #[new]
+    #[pyo3(text_signature = "($score, chromosome)")]
+    pub fn new(py: Python, score: f64, chromosome: Py<Chromosome>) -> PyResult<Self> {
+        let binding = chromosome.borrow(py);
+        let inner_chromosome = binding.inner.lock().unwrap().clone();
+        Ok(Self {
+            inner: Arc::new(Mutex::new(InnerHomologousChromosome::new(score, inner_chromosome)))
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn json(&self, _py: Python) -> PyResult<String> {
+        self.inner
+            .lock()
+            .unwrap()
+            .json()
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn print(&self) {
+        self.inner.lock().unwrap().print();
+    }
+}
 
 #[pyclass]
 pub struct ChromosomeSimilarity {
@@ -182,13 +216,13 @@ pub struct ChromosomeSimilarity {
 
 #[pymethods]
 impl ChromosomeSimilarity {
-    #[new]
-    #[pyo3(signature = (minhash=None, tlsh=None))]
-    pub fn new(minhash: Option<f64>, tlsh: Option<u32>) -> Self {
-        Self {
-            inner: Arc::new(Mutex::new(InnerChromosomeSimilarity::new(minhash, tlsh))),
-        }
-    }
+    // #[new]
+    // #[pyo3(signature = (minhash=None, tlsh=None))]
+    // pub fn new(minhash: Option<f64>, tlsh: Option<u32>) -> Self {
+    //     Self {
+    //         inner: Arc::new(Mutex::new(InnerChromosomeSimilarity::new(minhash, tlsh))),
+    //     }
+    // }
 
     #[pyo3(text_signature = "($self)")]
     pub fn json(&self, _py: Python) -> PyResult<String> {
