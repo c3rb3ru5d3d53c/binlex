@@ -181,6 +181,7 @@ pub struct MemoryMappedFile {
 #[pymethods]
 impl MemoryMappedFile {
     #[new]
+    #[pyo3(text_signature = "(path, cache)")]
     pub fn new(path: &str, cache: bool) -> PyResult<Self> {
         let path = std::path::PathBuf::from(path);
         let inner = InnerMemoryMappedFile::new(path, cache)
@@ -188,16 +189,17 @@ impl MemoryMappedFile {
         Ok(MemoryMappedFile { inner: inner, mmap: None })
     }
 
-    #[getter]
+    #[pyo3(text_signature = "($self)")]
     pub fn is_cached(&self) -> bool {
         self.inner.is_cached()
     }
 
-    #[getter]
+    #[pyo3(text_signature = "($self)")]
     pub fn path(&self) -> String {
         self.inner.path()
     }
 
+    #[pyo3(text_signature = "($self, data)")]
     pub fn write(&mut self, data: &[u8]) -> PyResult<u64> {
         let mut reader = std::io::Cursor::new(data);
         self.inner
@@ -205,13 +207,28 @@ impl MemoryMappedFile {
             .map_err(|e| exceptions::PyIOError::new_err(e.to_string()))
     }
 
+    #[pyo3(text_signature = "($self, length)")]
     pub fn write_padding(&mut self, length: usize) -> PyResult<()> {
         self.inner
             .write_padding(length)
             .map_err(|e| exceptions::PyIOError::new_err(e.to_string()))
     }
 
-    #[getter]
+    #[pyo3(text_signature = "($self)")]
+    pub fn seek_to_end(&mut self) -> PyResult<u64> {
+        self.inner
+            .seek_to_end()
+            .map_err(|e| exceptions::PyIOError::new_err(e.to_string()))
+    }
+
+    #[pyo3(text_signature = "($self, offset)")]
+    pub fn seek(&mut self, offset: u64) -> PyResult<u64>{
+        self.inner
+            .seek(offset)
+            .map_err(|e| exceptions::PyIOError::new_err(e.to_string()))
+    }
+
+    #[pyo3(text_signature = "($self)")]
     pub fn size(&self) -> PyResult<u64> {
         self.inner
             .size()
@@ -219,6 +236,7 @@ impl MemoryMappedFile {
     }
 
     /// Maps the file into memory and returns a MappedFile object.
+    #[pyo3(text_signature = "($self)")]
     pub fn mmap(&self) -> PyResult<MappedFile> {
         let mmap = self
             .inner
@@ -228,6 +246,7 @@ impl MemoryMappedFile {
     }
 
     /// Maps the file into memory and returns a memoryview without copying data.
+    #[pyo3(text_signature = "($self)")]
     pub fn as_memoryview<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyMemoryView>> {
         if self.mmap.is_none() {
             let mmap = self

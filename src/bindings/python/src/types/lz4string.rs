@@ -175,12 +175,14 @@ pub struct LZ4String {
 #[pymethods]
 impl LZ4String {
     #[new]
+    #[pyo3(text_signature = "(string)")]
     pub fn new(string: String) -> Self {
         Self {
             inner: InnerLZ4String::new(&string)
         }
     }
 
+    #[pyo3(text_signature = "($self)")]
     pub fn to_string(&self) -> String {
         self.inner.to_string()
     }

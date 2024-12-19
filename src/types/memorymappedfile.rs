@@ -266,6 +266,24 @@ impl MemoryMappedFile {
         })
     }
 
+    pub fn seek_from_current(&mut self, offset: i64) -> Result<u64, io::Error> {
+        if let Some(ref mut handle) = self.handle {
+            let pos = handle.seek(SeekFrom::Current(offset))?;
+            Ok(pos)
+        } else {
+            Err(io::Error::new(io::ErrorKind::Other, "file handle is closed"))
+        }
+    }
+
+    pub fn seek(&mut self, offset: u64) -> Result<u64, io::Error> {
+        if let Some(ref mut handle) = self.handle {
+            let pos = handle.seek(SeekFrom::Start(offset))?;
+            Ok(pos)
+        } else {
+            Err(io::Error::new(io::ErrorKind::Other, "file handle is closed"))
+        }
+    }
+
     pub fn seek_to_end(&mut self) -> Result<u64, io::Error> {
         if let Some(ref mut handle) = self.handle {
             let pos = handle.seek(SeekFrom::End(0))?;
