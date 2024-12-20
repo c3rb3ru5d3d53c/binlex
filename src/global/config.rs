@@ -341,7 +341,7 @@ pub struct ConfigMinhash {
 pub struct ConfigTLSH {
     pub enabled: bool,
     pub minimum_byte_size: usize,
-    pub threshold: usize,
+    pub threshold: f64,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -367,7 +367,7 @@ impl Config {
                         tlsh: ConfigTLSH {
                             enabled: true,
                             minimum_byte_size: 50,
-                            threshold: 200,
+                            threshold: 200.0,
                         },
                         minhash: ConfigMinhash {
                             enabled: true,
@@ -398,7 +398,7 @@ impl Config {
                     tlsh: ConfigTLSH {
                         enabled: true,
                         minimum_byte_size: 50,
-                        threshold: 200,
+                        threshold: 200.0,
                     },
                     minhash: ConfigMinhash {
                         enabled: true,
@@ -431,7 +431,7 @@ impl Config {
                     tlsh: ConfigTLSH {
                         enabled: true,
                         minimum_byte_size: 50,
-                        threshold: 200,
+                        threshold: 200.0,
                     },
                     minhash: ConfigMinhash {
                         enabled: true,
@@ -464,7 +464,7 @@ impl Config {
                     tlsh: ConfigTLSH {
                         enabled: true,
                         minimum_byte_size: 50,
-                        threshold: 200,
+                        threshold: 200.0,
                     },
                     minhash: ConfigMinhash {
                         enabled: true,
@@ -493,7 +493,7 @@ impl Config {
                     tlsh: ConfigTLSH {
                         enabled: true,
                         minimum_byte_size: 50,
-                        threshold: 200,
+                        threshold: 200.0,
                     },
                     minhash: ConfigMinhash {
                         enabled: true,
