@@ -184,17 +184,15 @@ pub struct HomologousChromosome {
 }
 
 impl HomologousChromosome {
-    pub fn new(score: f64, chromosome: Chromosome) -> Self {
-        Self {
-            score,
-            chromosome
-        }
-    }
     pub fn process(&self) -> HomologousChromosomeJson {
         HomologousChromosomeJson {
-            score: self.score,
+            score: self.score(),
             chromosome: self.chromosome.process(),
         }
+    }
+
+    pub fn score(&self) -> f64 {
+        self.score
     }
 
     #[allow(dead_code)]
@@ -219,9 +217,51 @@ pub struct HomologousChromosomeJson {
 }
 
 #[derive(Clone)]
-pub struct ChromosomeSimilarity {
+pub struct ChromosomeSimilarityScore {
     pub minhash: Option<f64>,
-    pub tlsh: Option<u32>,
+    pub tlsh: Option<f64>,
+}
+
+impl ChromosomeSimilarityScore {
+    pub fn process(&self) -> ChromosomeSimilarityScoreJson {
+        ChromosomeSimilarityScoreJson {
+            minhash: self.minhash(),
+            tlsh: self.tlsh(),
+        }
+    }
+
+    pub fn minhash(&self) -> Option<f64> {
+        self.minhash
+    }
+
+    pub fn tlsh(&self) -> Option<f64> {
+        self.tlsh
+    }
+
+    #[allow(dead_code)]
+    pub fn json(&self) -> Result<String, Error> {
+        let raw = self.process();
+        let result =  serde_json::to_string(&raw)?;
+        Ok(result)
+    }
+
+    #[allow(dead_code)]
+     pub fn print(&self) {
+         if let Ok(json) = self.json() {
+             println!("{}", json);
+         }
+     }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ChromosomeSimilarityScoreJson {
+    pub minhash: Option<f64>,
+    pub tlsh: Option<f64>,
+}
+
+#[derive(Clone)]
+pub struct ChromosomeSimilarity {
+    pub score: ChromosomeSimilarityScore,
     pub homologues: Vec<HomologousChromosome>,
 }
 
@@ -241,18 +281,13 @@ impl ChromosomeSimilarity {
 
     pub fn process(&self) -> ChromosomeSimilarityJson {
         ChromosomeSimilarityJson {
-            minhash: self.minhash,
-            tlsh: self.tlsh,
+            score: self.score.process(),
             homologues: self.process_homologues(),
         }
     }
 
-    pub fn minhash(&self) -> Option<f64> {
-        self.minhash
-    }
-
-    pub fn tlsh(&self) -> Option<u32> {
-        self.tlsh
+    pub fn score(&self) -> ChromosomeSimilarityScore{
+        self.score.clone()
     }
 
     #[allow(dead_code)]
@@ -273,8 +308,7 @@ impl ChromosomeSimilarity {
 
 #[derive(Serialize, Deserialize)]
 pub struct ChromosomeSimilarityJson {
-    pub minhash: Option<f64>,
-    pub tlsh: Option<u32>,
+    pub score: ChromosomeSimilarityScoreJson,
     pub homologues: Vec<HomologousChromosomeJson>,
 }
 
@@ -472,20 +506,6 @@ impl Chromosome {
         }
     }
 
-    fn meets_homologues_threshold(&self, minhash: Option<f64>, tlsh: Option<u32>) -> bool {
-        if minhash.is_some() && self.config.chromosomes.homologues.hashing.minhash.enabled == true {
-            if minhash.unwrap() >= self.config.chromosomes.homologues.hashing.minhash.threshold {
-                return true;
-            }
-        }
-        if tlsh.is_some() && self.config.chromosomes.homologues.hashing.tlsh.enabled == true {
-            if tlsh.unwrap() <= self.config.chromosomes.homologues.hashing.tlsh.threshold as u32 {
-                return true;
-            }
-        }
-        return false;
-    }
-
     /// Compares the similarity of one chromosome to another.
     ///
     /// # Returns
@@ -496,37 +516,22 @@ impl Chromosome {
         let rhs_minhash = rhs.minhash();
         let mut minhash: Option<f64> = None;
         if lhs_minhash.is_some() && rhs_minhash.is_some() {
-            minhash = Some(MinHash32::compare_jaccard_similarity(&lhs_minhash.unwrap(), &rhs_minhash.unwrap()));
+            minhash = Some(MinHash32::compare(&lhs_minhash.unwrap(), &rhs_minhash.unwrap()));
         }
         let lhs_tlsh = self.tlsh();
         let rhs_tlsh = rhs.tlsh();
-        let mut tlsh: Option<u32> = None;
+        let mut tlsh: Option<f64> = None;
         if lhs_tlsh.is_some() && rhs_tlsh.is_some() {
-            tlsh = TLSH::compare(lhs_tlsh.unwrap(), rhs_tlsh.unwrap()).ok();
+            tlsh = TLSH::compare(lhs_tlsh.unwrap(), rhs_tlsh.unwrap());
         }
         if minhash.is_none() && tlsh.is_none() { return None; }
 
-        if minhash.is_some() {
-            if minhash.unwrap() == 1.0 {
-                return None;
-            }
-        }
-
-        if tlsh.is_some() {
-            if tlsh.unwrap() == 0 {
-                return None;
-            }
-        }
         let mut homologues = Vec::<HomologousChromosome>::new();
-        if self.meets_homologues_threshold(minhash, tlsh) {
+        if self.config.chromosomes.homologues.enabled {
             let lhs_pattern = self.pattern();
             let rhs_pattern = rhs.pattern();
             let fuzzy = FuzzyLCS::new(&lhs_pattern, &rhs_pattern);
-            let matches = fuzzy.compare(
-                self.config.chromosomes.homologues.threshold,
-                self.config.chromosomes.homologues.maximum,
-                self.config.chromosomes.homologues.size,
-                self.config.chromosomes.homologues.wildcard_ratio);
+            let matches = fuzzy.compare(self.config.chromosomes.homologues.maximum);
             for (score, string) in matches.iter() {
                 let c = Chromosome::new(
                     string.to_string(),
@@ -540,8 +545,10 @@ impl Chromosome {
             }
         }
         Some(ChromosomeSimilarity {
-            minhash: minhash,
-            tlsh: tlsh,
+            score: ChromosomeSimilarityScore {
+                minhash: minhash,
+                tlsh: tlsh,
+            },
             homologues: homologues,
         })
     }

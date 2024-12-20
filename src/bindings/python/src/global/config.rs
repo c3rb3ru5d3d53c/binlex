@@ -168,96 +168,6 @@ use pyo3::prelude::*;
 use std::sync::{Arc, Mutex};
 use binlex::Config as InnerConfig;
 
-
-#[pyclass]
-pub struct ConfigHomologuesHashing {
-    inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigHomologuesHashing {
-
-    #[getter]
-    pub fn minhash(&self) -> ConfigHomologuesMinhsh {
-        ConfigHomologuesMinhsh {
-            inner: Arc::clone(&self.inner)
-        }
-    }
-
-    #[getter]
-    pub fn tlsh(&self) -> ConfigHomologuesTLSH {
-        ConfigHomologuesTLSH {
-            inner: Arc::clone(&self.inner)
-        }
-    }
-}
-
-
-#[pyclass]
-pub struct ConfigHomologuesMinhsh {
-    pub inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigHomologuesMinhsh {
-    #[getter]
-    pub fn get_enabled(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
-        inner.chromosomes.homologues.hashing.minhash.enabled
-    }
-
-    #[setter]
-    pub fn set_enabled(&mut self, value: bool) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.homologues.hashing.minhash.enabled = value;
-    }
-
-    #[getter]
-    pub fn get_threshold(&self) -> f64 {
-        let inner = self.inner.lock().unwrap();
-        inner.chromosomes.homologues.hashing.minhash.threshold
-    }
-
-    #[setter]
-    pub fn set_threshold(&mut self, value: f64) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.homologues.hashing.minhash.threshold = value;
-    }
-}
-
-
-#[pyclass]
-pub struct ConfigHomologuesTLSH {
-    pub inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigHomologuesTLSH {
-    #[getter]
-    pub fn get_enabled(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
-        inner.chromosomes.homologues.hashing.tlsh.enabled
-    }
-
-    #[setter]
-    pub fn set_enabled(&mut self, value: bool) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.homologues.hashing.tlsh.enabled = value;
-    }
-
-    #[getter]
-    pub fn get_threshold(&self) -> usize {
-        let inner = self.inner.lock().unwrap();
-        inner.chromosomes.homologues.hashing.tlsh.threshold
-    }
-
-    #[setter]
-    pub fn set_threshold(&mut self, value: usize) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.homologues.hashing.tlsh.threshold = value;
-    }
-}
-
 #[pyclass]
 pub struct ConfigHomologues {
     inner: Arc<Mutex<InnerConfig>>,
@@ -278,30 +188,6 @@ impl  ConfigHomologues {
     }
 
     #[getter]
-    pub fn get_threshold(&self) -> f64 {
-        let inner = self.inner.lock().unwrap();
-        inner.chromosomes.homologues.threshold
-    }
-
-    #[setter]
-    pub fn set_threshold(&mut self, value: f64) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.homologues.threshold = value;
-    }
-
-    #[getter]
-    pub fn get_wildcard_ratio(&self) -> f64 {
-        let inner = self.inner.lock().unwrap();
-        inner.chromosomes.homologues.wildcard_ratio
-    }
-
-    #[setter]
-    pub fn set_wildcard_ratio(&mut self, value: f64) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.homologues.wildcard_ratio = value;
-    }
-
-    #[getter]
     pub fn get_maximum(&self) -> usize {
         let inner = self.inner.lock().unwrap();
         inner.chromosomes.homologues.maximum
@@ -311,25 +197,6 @@ impl  ConfigHomologues {
     pub fn set_maximum(&mut self, value: usize) {
         let mut inner = self.inner.lock().unwrap();
         inner.chromosomes.homologues.maximum = value;
-    }
-
-    #[getter]
-    pub fn get_size(&self) -> usize {
-        let inner = self.inner.lock().unwrap();
-        inner.chromosomes.homologues.size
-    }
-
-    #[setter]
-    pub fn set_size(&mut self, value: usize) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.homologues.size = value;
-    }
-
-    #[getter]
-    pub fn hashing(&self) -> ConfigHomologuesHashing {
-        ConfigHomologuesHashing {
-            inner: Arc::clone(&self.inner)
-        }
     }
 }
 

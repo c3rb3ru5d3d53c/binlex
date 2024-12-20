@@ -53,10 +53,6 @@ name = "blpdb"
 path = "src/bin/blpdb.rs"
 
 [[bin]]
-name = "blscaler"
-path = "src/bin/blscaler.rs"
-
-[[bin]]
 name = "blrizin"
 path = "src/bin/blrizin.rs"
 
@@ -67,10 +63,6 @@ path = "src/bin/blimage.rs"
 [[bin]]
 name = "blhash"
 path = "src/bin/blhash.rs"
-
-[[bin]]
-name = "blcompare"
-path = "src/bin/blcompare.rs"
 
 [[bin]]
 name = "blelfsym"

@@ -165,8 +165,6 @@
 // Library.
 
 use tlsh;
-use std::io::Error;
-use std::io::ErrorKind;
 
 /// Represents a wrapper around the TLSH (Trend Micro Locality Sensitive Hash) functionality.
 ///
@@ -204,9 +202,10 @@ impl <'tlsh> TLSH <'tlsh> {
     /// # Returns
     ///
     /// Returns a `Result<u32, Error>` where the `u32` is the similarity score and `Error` if compare fails.
-    pub fn compare(lhs: String, rhs: String) -> Result<u32, Error> {
+    pub fn compare(lhs: String, rhs: String) -> Option<f64> {
         tlsh::compare(&lhs, &rhs)
-            .map_err(|e| Error::new(ErrorKind::Other, e))
+            .map(|value| value as f64) // Convert the u32 to f64
+            .ok()
     }
 
     /// Computes the TLSH hash of the byte slice if it meets the minimum size requirement.

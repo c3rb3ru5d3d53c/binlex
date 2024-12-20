@@ -264,7 +264,7 @@ impl <'minhash32> MinHash32 <'minhash32> {
     ///
     /// Returns a `f64` value representing the Jaccard similarity between the two signatures.
     /// If the signatures have different lengths or cannot be parsed, it returns `0.0`.
-    pub fn compare_jaccard_similarity(hexdigest1: &str, hexdigest2: &str) -> f64 {
+    pub fn compare(hexdigest1: &str, hexdigest2: &str) -> f64 {
         let hash1 = Self::parse_hexdigest(hexdigest1);
         let hash2 = Self::parse_hexdigest(hexdigest2);
 

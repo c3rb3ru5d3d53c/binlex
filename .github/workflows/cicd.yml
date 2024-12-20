@@ -276,7 +276,6 @@ jobs:
           copy target\release\blrizin.exe dist\
           copy target\release\blimage.exe dist\
           copy target\release\blhash.exe dist\
-          copy target\release\blscaler.exe dist\
           copy target\wheels\*.whl dist\
 
       - name: Copy Binary (macOS)
@@ -290,7 +289,6 @@ jobs:
           cp target/release/blrizin dist/
           cp target/release/blimage dist/
           cp target/release/blhash dist/
-          cp target/release/blscaler dist/
           cp target/wheels/*.whl dist/
 
       - name: Copy Binary (Ubuntu)
@@ -304,7 +302,6 @@ jobs:
           cp target/release/blrizin dist/
           cp target/release/blimage dist/
           cp target/release/blhash dist/
-          cp target/release/blscaler dist/
           cp target/debian/*.deb dist/
           cp target/wheels/*.whl dist/
 
@@ -359,7 +356,6 @@ jobs:
           cp /home/builder/repo/target/release/blrizin dist/
           cp /home/builder/repo/target/release/blimage dist/
           cp /home/builder/repo/target/release/blhash dist/
-          cp /home/builder/repo/target/release/blscaler dist/
           cp /home/builder/repo/target/zst/*.zst dist/
 
       - name: Upload Artifacts
