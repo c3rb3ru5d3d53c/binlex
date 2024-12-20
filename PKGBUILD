@@ -17,6 +17,5 @@ package() {
     install -Dm755 "$builddir/target/release/blmachosym" "$pkgdir/usr/bin/blmachosym"
     install -Dm755 "$builddir/target/release/blpdb" "$pkgdir/usr/bin/blpdb"
     install -Dm755 "$builddir/target/release/blrizin" "$pkgdir/usr/bin/blrizin"
-    install -Dm755 "$builddir/target/release/blscaler" "$pkgdir/usr/bin/blscaler"
     install -Dm755 "$builddir/target/release/blyara" "$pkgdir/usr/bin/blyara"
 }

@@ -196,8 +196,8 @@ impl MinHash32 {
 
     #[staticmethod]
     #[pyo3(text_signature = "(lhs, rhs)")]
-    pub fn compare_jaccard_similarity(lhs: String, rhs: String) -> f64 {
-        InnerMinHash32::compare_jaccard_similarity(&lhs, &rhs)
+    pub fn compare(lhs: String, rhs: String) -> f64 {
+        InnerMinHash32::compare(&lhs, &rhs)
     }
 }
 

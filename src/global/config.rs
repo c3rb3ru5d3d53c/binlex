@@ -177,33 +177,33 @@ pub const AUTHOR: &str = "@c3rb3ru5d3d53c";
 pub const DIRECTORY: &str = "binlex";
 pub const FILE_NAME: &str = "binlex.toml";
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigHomologuesMinhash {
-    pub enabled: bool,
-    pub threshold: f64,
-}
+// #[derive(Serialize, Deserialize, Clone)]
+// pub struct ConfigHomologuesMinhash {
+//     pub enabled: bool,
+//     pub threshold: f64,
+// }
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigHomologuesTLSH {
-    pub enabled: bool,
-    pub threshold: usize,
-}
+// #[derive(Serialize, Deserialize, Clone)]
+// pub struct ConfigHomologuesTLSH {
+//     pub enabled: bool,
+//     pub threshold: f64,
+// }
 
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigHomologuesHashing {
-    pub minhash: ConfigHomologuesMinhash,
-    pub tlsh: ConfigHomologuesTLSH,
-}
+// #[derive(Serialize, Deserialize, Clone)]
+// pub struct ConfigHomologuesHashing {
+//     pub minhash: ConfigHomologuesMinhash,
+//     pub tlsh: ConfigHomologuesTLSH,
+// }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigHomologues {
     pub enabled: bool,
-    pub hashing: ConfigHomologuesHashing,
-    pub threshold: f64,
-    pub wildcard_ratio: f64,
+    //pub hashing: ConfigHomologuesHashing,
+    //pub threshold: f64,
+    //pub wildcard_ratio: f64,
     pub maximum: usize,
-    pub size: usize,
+    //pub size: usize,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -515,20 +515,7 @@ impl Config {
                 },
                 homologues: ConfigHomologues {
                     enabled: true,
-                    threshold: 0.75,
-                    wildcard_ratio: 0.50,
                     maximum: 4,
-                    size: 8,
-                    hashing: ConfigHomologuesHashing {
-                        minhash: ConfigHomologuesMinhash {
-                            enabled: true,
-                            threshold: 0.25,
-                        },
-                        tlsh: ConfigHomologuesTLSH {
-                            enabled: true,
-                            threshold: 200,
-                        }
-                    }
                 }
             },
             mmap: ConfigMmap {

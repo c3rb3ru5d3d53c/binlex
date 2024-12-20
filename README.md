@@ -281,7 +281,7 @@ The default configuration name `binlex.toml` for **binlex** is provided below.
 
 ```toml
 [general]
-threads = 1
+threads = 16
 minimal = false
 debug = false
 
@@ -291,19 +291,19 @@ enabled = true
 [formats.file.hashing.tlsh]
 enabled = true
 minimum_byte_size = 50
+threshold = 200
 
 [formats.file.hashing.minhash]
 enabled = true
 number_of_hashes = 64
 shingle_size = 4
+maximum_byte_size_enabled = false
 maximum_byte_size = 50
 seed = 0
+threshold = 0.75
 
 [formats.file.heuristics.features]
 enabled = true
-
-[formats.file.heuristics.normalized]
-enabled = false
 
 [formats.file.heuristics.entropy]
 enabled = true
@@ -317,19 +317,19 @@ enabled = true
 [instructions.hashing.tlsh]
 enabled = true
 minimum_byte_size = 50
+threshold = 200
 
 [instructions.hashing.minhash]
 enabled = true
 number_of_hashes = 64
 shingle_size = 4
+maximum_byte_size_enabled = false
 maximum_byte_size = 50
 seed = 0
+threshold = 0.75
 
 [instructions.heuristics.features]
 enabled = true
-
-[instructions.heuristics.normalized]
-enabled = false
 
 [instructions.heuristics.entropy]
 enabled = true
@@ -346,19 +346,19 @@ enabled = true
 [blocks.hashing.tlsh]
 enabled = true
 minimum_byte_size = 50
+threshold = 200
 
 [blocks.hashing.minhash]
 enabled = true
 number_of_hashes = 64
 shingle_size = 4
+maximum_byte_size_enabled = false
 maximum_byte_size = 50
 seed = 0
+threshold = 0.75
 
 [blocks.heuristics.features]
 enabled = true
-
-[blocks.heuristics.normalized]
-enabled = false
 
 [blocks.heuristics.entropy]
 enabled = true
@@ -375,19 +375,19 @@ enabled = true
 [functions.hashing.tlsh]
 enabled = true
 minimum_byte_size = 50
+threshold = 200
 
 [functions.hashing.minhash]
 enabled = true
 number_of_hashes = 64
 shingle_size = 4
+maximum_byte_size_enabled = false
 maximum_byte_size = 50
 seed = 0
+threshold = 0.75
 
 [functions.heuristics.features]
 enabled = true
-
-[functions.heuristics.normalized]
-enabled = false
 
 [functions.heuristics.entropy]
 enabled = true
@@ -398,22 +398,26 @@ enabled = true
 [chromosomes.hashing.tlsh]
 enabled = true
 minimum_byte_size = 50
+threshold = 200
 
 [chromosomes.hashing.minhash]
 enabled = true
 number_of_hashes = 64
 shingle_size = 4
+maximum_byte_size_enabled = false
 maximum_byte_size = 50
 seed = 0
+threshold = 0.75
 
 [chromosomes.heuristics.features]
 enabled = true
 
-[chromosomes.heuristics.normalized]
-enabled = false
-
 [chromosomes.heuristics.entropy]
 enabled = true
+
+[chromosomes.homologues]
+enabled = true
+maximum = 4
 
 [mmap]
 directory = "/tmp/binlex"
@@ -478,44 +482,6 @@ For even better results if you exported the **genomes** using the **binlex** IDA
 ```bash
 cat dump.json | jq -r 'select(.type == "function" and .size > 32 and (.attributes[] | .type == "symbol" and (.name | startswith("mw::")))) | .blocks[] | select(.size > 32) | .chromosome.pattern' | blyara -n example
 ```
-
-### Comparing Traits Based on Similarity
-
-In **binlex** comparisons can be done using the tool `blcompare`, at this time it only supports TLSH similarity hashing.
-
-All comparisons are one to many, as for every left hand side trait is compared to every right hand side trait.
-
-These are symbolized as `lhs` and `rhs` respectively.
-
-The command-line help for `blcompare` is provided below.
-
-```text
-A Binlex Trait Comparison Tool
-
-Version: 1.0.0
-
-Usage: blcompare [OPTIONS] --input-rhs <INPUT_RHS>
-
-Options:
-      --input-lhs <INPUT_LHS>  Input file or wildcard pattern for LHS (Left-Hand Side)
-      --input-rhs <INPUT_RHS>  Input file or wildcard pattern for RHS (Right-Hand Side)
-  -t, --threads <THREADS>      Number of threads to use [default: 1]
-  -r, --recursive              Enable recursive wildcard expansion
-  -h, --help                   Print help
-  -V, --version                Print version
-
-Author: @c3rb3ru5d3d53c
-```
-
-Using this tool you can compare full directories using globbing file searches of lhs traits vs rhs traits.
-
-This also accepts standard input so you can process something from **binlex** as lhs and then specify a rhs file path glob recursive or not for compairson.
-
-The output can then be filtered using `jq`.
-
-This tool supports multiple threads and processes one file at a time, but the one to many comparison is multi-threaded.
-
-NOTE: Comparisons should be use sparingly to decide what to keep. By default `blcompare` keeps everything which can be many GB of data. As such it is recommended to perform filtering to only keep similairty within a threshold using `jq`.
 
 ### Using Ghidra with Binlex
 

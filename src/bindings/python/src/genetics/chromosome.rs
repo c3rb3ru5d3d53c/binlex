@@ -176,6 +176,46 @@ use pyo3::types::PyBytes;
 use pyo3::exceptions::PyRuntimeError;
 use binlex::genetics::chromosome::HomologousChromosome as InnerHomologousChromosome;
 
+#[pyclass]
+pub struct ChromosomeSimilarityScore {
+    pub inner: Arc<Mutex<InnerChromosomeSimilarity>>,
+}
+
+#[pymethods]
+impl ChromosomeSimilarityScore {
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn minhash(&self) -> Option<f64> {
+        self.inner
+            .lock()
+            .unwrap()
+            .score()
+            .minhash()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn tlsh(&self) -> Option<f64> {
+        self.inner
+            .lock()
+            .unwrap()
+            .score()
+            .tlsh()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn json(&self, _py: Python) -> PyResult<String> {
+        self.inner
+            .lock()
+            .unwrap()
+            .json()
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn print(&self) {
+        self.inner.lock().unwrap().print();
+    }
+}
 
 #[pyclass]
 pub struct HomologousChromosome {
@@ -189,8 +229,12 @@ impl HomologousChromosome {
     pub fn new(py: Python, score: f64, chromosome: Py<Chromosome>) -> PyResult<Self> {
         let binding = chromosome.borrow(py);
         let inner_chromosome = binding.inner.lock().unwrap().clone();
+        let inner_homologous_chromosome = InnerHomologousChromosome {
+            score: score,
+            chromosome: inner_chromosome,
+        };
         Ok(Self {
-            inner: Arc::new(Mutex::new(InnerHomologousChromosome::new(score, inner_chromosome)))
+            inner: Arc::new(Mutex::new(inner_homologous_chromosome))
         })
     }
 
@@ -233,20 +277,11 @@ impl ChromosomeSimilarity {
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
     }
 
-    #[pyo3(text_signature = "($self)")]
-    pub fn minhash(&self) -> Option<f64> {
-        self.inner
-            .lock()
-            .unwrap()
-            .minhash()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    pub fn tlsh(&self) -> Option<u32> {
-        self.inner
-            .lock()
-            .unwrap()
-            .tlsh()
+    #[getter]
+    pub fn score(&self) -> ChromosomeSimilarityScore {
+        ChromosomeSimilarityScore{
+            inner: Arc::clone(&self.inner)
+        }
     }
 
     #[pyo3(text_signature = "($self)")]
