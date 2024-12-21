@@ -13,3 +13,4 @@ pkg/
 *.tar
 *.tar.gz
 *.pkg.tar.zst
+*.zip

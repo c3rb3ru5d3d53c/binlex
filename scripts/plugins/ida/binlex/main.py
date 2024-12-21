@@ -175,6 +175,7 @@ import idautils
 import ida_ua
 import ida_kernwin
 import ida_loader
+import ida_ida
 import json
 import os
 import base64
@@ -183,16 +184,19 @@ from binlex.formats import File, PE, ELF
 from binlex.hashing import MinHash32, TLSH
 from binlex import Config, Architecture
 from binlex.controlflow import Graph, Instruction
+from binlex.genetics import Chromosome
 from binlex.disassemblers.capstone import Disassembler as CapstoneDisassembler
+from binlex.types import MemoryMappedFile
 from PyQt5.QtWidgets import QApplication, QDialog
-
+import tempfile
+import os
 from assets import LOGO
 from assets import MOVIE
 from styles import QPUSHBUTTON_STYLE
 from text import CREDITS
 from ida import IDA
-from gui.about import About
-from gui.scan_minhash import ScanMinHashInputDialog
+from gui import About
+from gui import ScanMinHashInputDialog
 from gui.action_handlers import (
     BinlexExportActionHandler,
     CopyMinHashActionHandler,
@@ -203,84 +207,72 @@ from gui.action_handlers import (
     CopyTLSHActionHandler,
 )
 from gui.hooks import UIHooks
-from gui.gradient_table import GradientTable
-from gui.scan_tlsh import ScanTLSHInputDialog
-from gui.action_handlers import register_action_handlers
-from gui.main import Main
+from gui import GradientTable
+from gui import ScanTLSHInputDialog
+from gui import CompareFunctionsDialog
+from gui import register_action_handlers
+from gui import unregister_action_handlers
+from gui import Main
+from gui import SVGWidget
+from gui import Progress
 from text import BANNER
+from actions import copy_pattern
+from actions import copy_hex
+from actions import scan_minhash
+from actions import copy_minhash
+from actions import copy_tlsh
+from actions import scan_tlsh
+from actions import function_table
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from functools import partial
 
 class BinlexPlugin(idaapi.plugin_t):
     flags = idaapi.PLUGIN_DRAW
-    comment = "Binlex IDA Plugin"
-    help = "A Binary Genetic Trait Lexer Framework"
-    wanted_name = "Binlex"
+    comment = 'Binlex IDA Plugin'
+    help = 'A Binary Genetic Trait Lexer Framework'
+    wanted_name = 'Binlex'
 
     def init(self):
         self.config = Config()
+        self.config.from_default()
         self.main_window = None
         self.about_window = None
         self.table_window = None
+        self.binary_view_window = None
         self.ui_hooks = UIHooks(self)
         self.ui_hooks.hook()
         register_action_handlers(self)
-        self.load_image()
+        self.load_binary()
         ida_kernwin.msg(BANNER + '\n')
         return idaapi.PLUGIN_KEEP
 
     def action_copy_pattern(self):
-        start_ea, end_ea = IDA.get_disassembly_selection_range()
-        pattern = ''
-        pc = start_ea
-        while pc < end_ea:
-            insn = ida_ua.insn_t()
-            ida_ua.decode_insn(insn, pc)
-            self.disassemble_instruction(pc, {start_ea: end_ea})
-            blinsn = Instruction(pc, self.cfg)
-            pattern += blinsn.chromosome().pattern()
-            pc += insn.size
-        QApplication.clipboard().setText(pattern)
-        ida_kernwin.msg('[*] pattern copied to clipboard\n')
+        copy_pattern(self)
 
     def action_copy_hex(self):
-        start_ea, end_ea = IDA.get_disassembly_selection_range()
-        pattern = ida_bytes.get_bytes(start_ea, end_ea - start_ea).hex()
-        QApplication.clipboard().setText(pattern)
-        ida_kernwin.msg('[*] hex copied to clipboard\n')
+        copy_hex(self)
 
     def action_copy_tlsh(self):
-        start_ea, end_ea = IDA.get_disassembly_selection_range()
-        data = ida_bytes.get_bytes(start_ea, end_ea - start_ea)
-        tlsh = TLSH(data).hexdigest(50)
-        if tlsh is None:
-            ida_kernwin.msg('[x] not enough data or minhash failed\n')
-            return
-        QApplication.clipboard().setText(tlsh)
-        ida_kernwin.msg(f'[*] copied tlsh to clipboard based on {len(data)} bytes\n')
+        copy_tlsh(self)
 
     def action_copy_minhash(self):
-        start_ea, end_ea = IDA.get_disassembly_selection_range()
-        data = ida_bytes.get_bytes(start_ea, end_ea - start_ea)
-        minhash = MinHash32(
-            data,
-            self.config.instructions.hashing.minhash.number_of_hashes,
-            self.config.instructions.hashing.minhash.shingle_size,
-            self.config.instructions.hashing.minhash.seed).hexdigest()
-        if minhash is None:
-            ida_kernwin.msg('[x] not enough data or minhash failed\n')
-            return
-        QApplication.clipboard().setText(minhash)
-        ida_kernwin.msg(f'[*] copied minhash to clipboard based on {len(data)} bytes\n')
+        copy_minhash(self)
 
     def capstone_disassemble_instruction(self, ea: int, executable_virtual_address_ranges: dict):
-        disassembler = CapstoneDisassembler(self.architecture, self.image, executable_virtual_address_ranges)
+        disassembler = CapstoneDisassembler(self.architecture, self.image, executable_virtual_address_ranges, self.config)
         disassembler.disassemble_instruction(ea, self.cfg)
 
     def disassemble_instruction(self, ea: int, executable_virtual_address_ranges: dict):
         self.capstone_disassemble_instruction(ea, executable_virtual_address_ranges)
 
     def capstone_disassemble_controlflow(self, architecture: Architecture, image: bytes, executable_address_ranges: dict):
-        disassembler = CapstoneDisassembler(architecture, image, executable_address_ranges)
+        disassembler = CapstoneDisassembler(architecture, image, executable_address_ranges, self.config)
+        number_of_functions = len(IDA.get_functions())
+        progress = Progress(title='Disassembling CFG', max_value=number_of_functions)
+        progress.show()
         for function in IDA.get_functions():
+            progress.increment()
             for block in IDA.get_function_blocks(function):
                 for instruction in IDA.get_block_instructions(block):
                     disassembler.disassemble_instruction(instruction.ea, self.cfg)
@@ -288,6 +280,7 @@ class BinlexPlugin(idaapi.plugin_t):
                         self.cfg.set_function(instruction.ea)
                     if block.start_ea == instruction.ea:
                         self.cfg.set_block(instruction.ea)
+        progress.close()
 
     def update(self, ctx):
         if ctx.widget:
@@ -310,7 +303,7 @@ class BinlexPlugin(idaapi.plugin_t):
         return attribute
 
     def disassemble_controlflow(self):
-        self.capstone_disassemble_controlflow(self.architecture, self.image, self.executable_virtual_address_ranges)
+        self.capstone_disassemble_controlflow(self.architecture, self.image, {0: self.mapped_file.size()})
 
     def export(self):
         self.disassemble_controlflow()
@@ -320,43 +313,46 @@ class BinlexPlugin(idaapi.plugin_t):
             for function in self.cfg.functions():
                 j = json.loads(function.json())
                 j['attributes'] = []
-                j['attributes'].append(self.file_attribute)
+                j['attributes'].append(IDA.file_attribute())
                 j['attributes'].append(self.get_function_symbol_attribute(function.address))
                 file.write(json.dumps(j) + '\n')
         ida_kernwin.msg(f'[*] exported binlex functions to {file_path}\n')
 
-    def load_pe(self):
-        pe = PE(idc.get_input_file_path(), self.config)
-        self.architecture = pe.architecture()
-        self.file_attribute = json.loads(pe.file_json())
-        self.cfg = Graph(self.architecture, self.config)
-        self.mapped_file = pe.image()
+    def load_image(self):
+        directory = os.path.join(tempfile.gettempdir(), 'binlex')
+        if not os.path.exists(directory): os.makedirs(directory)
+        file_path = os.path.join(directory, ida_nalt.retrieve_input_file_sha256().hex())
+        self.mapped_file = MemoryMappedFile(file_path, False)
+        for segment in idautils.Segments():
+            start = idc.get_segm_start(segment)
+            end = idc.get_segm_end(segment)
+            data = ida_bytes.get_bytes(start, end - start)
+            if data is None: continue
+            if self.mapped_file.size() < start:
+                self.mapped_file.seek_to_end()
+                self.mapped_file.write_padding(start - self.mapped_file.size())
+            self.mapped_file.seek_to_end()
+            self.mapped_file.write(data)
         self.image = self.mapped_file.as_memoryview()
-        self.executable_virtual_address_ranges = pe.executable_virtual_address_ranges()
 
-    def load_elf(self):
-        elf = ELF(idc.get_input_file_path(), self.config)
-        self.architecture = pe.architecture()
-        self.file_attribute = json.loads(elf.file_json())
-        self.cfg = Graph(self.architecture, self.config)
-        self.mapped_file = elf.image()
-        self.image = self.mapped_file.as_memoryview()
-        self.executable_virtual_address_ranges = elf.executable_virtual_address_ranges()
-
-    def load_image(self) -> bool:
-        file_type = ida_loader.get_file_type_name()
-        if '(PE)' in file_type:
-            self.load_pe()
-            return True
-        if '(ELF)' in file_type:
-            self.load_elf()
-            return True
+    def load_binary(self) -> bool:
+        if ida_ida.inf_get_procname() == 'metapc':
+            if ida_ida.inf_is_32bit_exactly() is True:
+                self.architecture = Architecture.from_str('i386')
+                self.cfg = Graph(self.architecture, self.config)
+                self.load_image()
+                return True
+            else:
+                self.architecture = Architecture.from_str('amd64')
+                self.cfg = Graph(self.architecture, self.config)
+                self.load_image()
+                return True
         return False
 
     def open_main_window(self):
         if not self.main_window:
             self.main_window = Main(self)
-        self.main_window.exec_()
+        self.main_window.show()
 
     def open_about_window(self):
         if not self.about_window:
@@ -369,77 +365,10 @@ class BinlexPlugin(idaapi.plugin_t):
         return value
 
     def action_scan_tlsh(self):
-        dialog = ScanTLSHInputDialog()
-        if dialog.exec_() != QDialog.Accepted: return
-        rhs_tlsh, num_bytes, threshold = dialog.get_inputs()
-        table = []
-        for addr in IDA.get_instruction_addresses():
-            data = idaapi.get_bytes(addr, num_bytes)
-            lhs_tlsh = TLSH(data).hexdigest(50)
-            if lhs_tlsh is None: continue
-            similarity = TLSH.compare(lhs_tlsh, rhs_tlsh)
-            if similarity is not None and similarity < threshold:
-                row = []
-                row.append(str(hex(addr)))
-                row.append(self.value_to_string(similarity))
-                row.append(rhs_tlsh)
-                row.append(lhs_tlsh)
-                table.append(row)
-        headers = [
-            'Address',
-            'Score',
-            'TLSH LHS',
-            'TLSH RHS',
-        ]
-        form = GradientTable(
-            table,
-            headers,
-            color_column=1,
-            min_value=threshold,
-            max_value=0,
-            low_to_high=True,
-            default_filter_column=0,
-            default_sort_column=1,
-            default_sort_ascending=True)
-        form.Show('Binlex TLSH Scan Table')
+        scan_tlsh(self)
 
     def action_scan_minhash(self):
-        dialog = ScanMinHashInputDialog()
-        if dialog.exec_() != QDialog.Accepted: return
-        rhs_minhash, num_bytes, threshold = dialog.get_inputs()
-        table = []
-        for addr in IDA.get_instruction_addresses():
-            data = idaapi.get_bytes(addr, num_bytes)
-            lhs_minhash = MinHash32(
-                data,
-                self.config.instructions.hashing.minhash.number_of_hashes,
-                self.config.instructions.hashing.minhash.shingle_size,
-                self.config.instructions.hashing.minhash.seed).hexdigest()
-            similarity = MinHash32.compare_jaccard_similarity(lhs_minhash, rhs_minhash)
-            if similarity is not None and similarity > threshold:
-                row = []
-                row.append(str(hex(addr)))
-                row.append(self.value_to_string(similarity))
-                row.append(lhs_minhash)
-                row.append(rhs_minhash)
-                table.append(row)
-        headers = [
-            'Address',
-            'Score',
-            'MinHash LHS',
-            'MinHash RHS',
-        ]
-        form = GradientTable(
-            table,
-            headers,
-            color_column=1,
-            min_value=threshold,
-            max_value=1,
-            low_to_high=True,
-            default_filter_column=0,
-            default_sort_column=1,
-            default_sort_ascending=False)
-        form.Show('Binlex MinHash Scan Table')
+        scan_minhash(self)
 
     @staticmethod
     def minhash_chromosome_ratio(function: dict) -> float:
@@ -451,109 +380,257 @@ class BinlexPlugin(idaapi.plugin_t):
         return minhash_size / function['size']
 
     @staticmethod
-    def compare_function(lhs: str, rhs: str) -> dict | None:
-        similarity = {
-            'minhash': None,
-            'tlsh': None,
-        }
-        lhs = json.loads(lhs)
-        rhs = json.loads(rhs)
-        if lhs['contiguous'] and rhs['contiguous']:
-            lhs_chromosome = lhs['chromosome']
-            rhs_chromosome = rhs['chromosome']
-            if lhs_chromosome is None and rhs_chromosome is None:
-                return None
-            lhs_chromosome_minhash = lhs['chromosome']['minhash']
-            rhs_chromosome_minhash = rhs['chromosome']['minhash']
-            if lhs_chromosome_minhash is not None and rhs_chromosome_minhash is not None:
-                similarity['minhash'] = MinHash32.compare_jaccard_similarity(lhs_chromosome_minhash, rhs_chromosome_minhash)
-            return similarity
-        lhs_minhash_chromosome_ratio = self.minhash_chromosome_ratio(lhs)
-        rhs_minhash_chromosome_ratio = self.minhash_chromosome_ratio(rhs)
-        if lhs_minhash_chromosome_ratio < 0.75 and rhs_minhash_chromosome_ratio < 0.75:
-            return None
-        minhash_values = []
-        for lhs_block in lhs['blocks']:
-            best_minhash = None
-            lhs_block_chromosome_minhash = lhs_block['chromosome']['minhash']
-            for rhs_block in rhs['blocks']:
-                rhs_block_chromosome_minhash = rhs_block['chromosome']['minhash']
-                similarity_value = MinHash32.compare_jaccard_similarity(lhs_block_chromosome_minhash, rhs_block_chromosome_minhash)
-                if best_minhash is None or (similarity_value is not None and similarity_value > best_minhash):
-                    best_minhash = similarity_value
-            if best_minhash is not None:
-                minhash_values.append(best_minhash)
-        if not minhash_values:
-            return None
-        similarity['minhash'] = sum(minhash_values) / len(minhash_values)
-        return similarity
+    def size_ratio(len1, len2):
+        return 1 - (abs(len1 - len2) / max(len1, len2)) if max(len1, len2) != 0 else 1.0
 
-    def open_table_window(self):
-        if self.table_window: return None
+    @staticmethod
+    def get_rhs_function_name(rhs: dict) -> str:
+        if rhs['attributes'] is None: return ''
+        for attribute in rhs['attributes']:
+            if attribute['type'] != 'symbol': continue
+            if attribute['symbol_type'] != 'function': continue
+            if attribute['name'] is None: continue
+            return attribute['name']
+        return ''
+
+    @staticmethod
+    def compare_function(
+        lhs: dict,
+        rhs: dict,
+        config,
+        minhash_score_threshold: float = 0.25,
+        chromosome_minhash_ratio_threshold: float = 0.75) -> float | None:
+        if lhs['contiguous'] and rhs['contiguous']:
+            lhs_chromosome = Chromosome(lhs['chromosome']['pattern'], config)
+            rhs_chromosome = Chromosome(rhs['chromosome']['pattern'], config)
+            delta = lhs_chromosome.compare(rhs_chromosome)
+            if delta is None: return None
+            delta = json.loads(delta.json())
+            if delta['score']['minhash'] is None: return None
+            if delta['score']['minhash'] < minhash_score_threshold: return None
+            return delta['score']['minhash']
+        lhs_chromosome_minhash_ratio = lhs['chromosome_minhash_ratio']
+        rhs_chromosome_minhash_ratio = rhs['chromosome_minhash_ratio']
+        if lhs_chromosome_minhash_ratio < chromosome_minhash_ratio_threshold: return None
+        if rhs_chromosome_minhash_ratio < chromosome_minhash_ratio_threshold: return None
+        minhash_block_scores = []
+        for lhs_block in lhs['blocks']:
+            lhs_chromosome = Chromosome(lhs_block['chromosome']['pattern'], config)
+            minhash_scores = []
+            for rhs_block in rhs['blocks']:
+                rhs_chromosome = Chromosome(rhs_block['chromosome']['pattern'], config)
+                delta = lhs_chromosome.compare(rhs_chromosome)
+                if delta is None:
+                    minhash_scores.append(0.0)
+                    continue
+                delta = json.loads(delta.json())
+                if delta['score']['minhash'] is None:
+                    minhash_scores.append(0.0)
+                    continue
+                minhash_scores.append(delta['score']['minhash'])
+            minhash_score = 0.0
+            if len(minhash_scores) > 0:
+                minhash_score = max(minhash_scores)
+            minhash_block_scores.append(minhash_score)
+        minhash_score =  sum(minhash_block_scores) / len(minhash_block_scores)
+        if minhash_score < minhash_score_threshold: return None
+        return minhash_score
+
+    def action_compare_functions(self):
+        dialog = CompareFunctionsDialog()
+        if dialog.exec_() != QDialog.Accepted:
+            return
+
+        # Retrieve user inputs from the dialog
+        minhash_score_threshold, mininum_size, size_ratio, chromosome_minhash_ratio_threshold = dialog.get_inputs()
+
+        # Prompt the user to select a JSON file
+        file_path = ida_kernwin.ask_file(0, "*.json", 'Binlex JSON File')
+        if not file_path:
+            return
+
+        # Disassemble control flow and retrieve all functions from the CFG
         self.disassemble_controlflow()
-        data = []
-        for function in self.cfg.functions():
-            chromosome = function.chromosome()
-            row = []
-            row.append(str(hex(function.address)))
-            row.append(IDA.get_function_name(function.address))
-            row.append("function")
-            row.append(function.is_contiguous())
-            row.append(function.size())
-            row.append(function.number_of_blocks())
-            row.append(function.cyclomatic_complexity())
-            row.append(function.average_instructions_per_block())
-            row.append(self.value_to_string(function.minhash_chromosome_ratio()))
-            if chromosome is not None:
-                row.append(self.value_to_string(chromosome.minhash()))
-            else:
-                row.append(self.value_to_string(None))
-            row.append(self.value_to_string(function.tlsh_chromosome_ratio()))
-            if chromosome is not None:
-                row.append(self.value_to_string(chromosome.tlsh()))
-            else:
-                row.append(self.value_to_string(None))
-            if chromosome is not None:
-                row.append(self.value_to_string(function.chromosome().pattern()))
-            else:
-                row.append(self.value_to_string(None))
-            data.append(row)
+        all_functions = self.cfg.functions()
+
+        # Pre-filter CFG functions based on size and minhash ratio
+        lhs_functions = []
+        lhs_names = {}  # Dictionary to store LHS function names
+        for func in all_functions:
+            func_data = json.loads(func.json())
+            if func_data['size'] >= mininum_size and func_data['chromosome_minhash_ratio'] >= chromosome_minhash_ratio_threshold:
+                lhs_functions.append(func_data)
+                lhs_address = func_data['address']
+                # Precompute function names to avoid IDA API calls in threads
+                lhs_name = self.value_to_string(IDA.get_function_name(lhs_address))
+                lhs_names[lhs_address] = lhs_name
+
+        # Read and parse the JSON file once
+        try:
+            with open(file_path, 'r') as f:
+                rhs_functions_raw = [json.loads(line) for line in f]
+        except Exception as e:
+            ida_kernwin.warning(f"[x] Error reading JSON file: {e}")
+            return
+
+        # Pre-filter RHS functions based on size and minhash ratio
+        rhs_functions = []
+        rhs_names = {}  # Dictionary to store RHS function names
+        for rhs in rhs_functions_raw:
+            if rhs['size'] < mininum_size or rhs['chromosome_minhash_ratio'] < chromosome_minhash_ratio_threshold:
+                continue
+            rhs_functions.append(rhs)
+            rhs_address = rhs['address']
+            # Precompute function names for RHS
+            rhs_name = self.get_rhs_function_name(rhs)
+            rhs_names[rhs_address] = rhs_name
+
+        # Initialize and display the progress bar
+        progress = Progress(title='Comparing Functions', max_value=len(lhs_functions))
+        progress.show()
+
+        table = []
+        table_lock = threading.Lock()  # Lock to ensure thread-safe writes to the table
+
+        def worker_compare(lhs, rhs_functions, size_ratio, minhash_score_threshold, chromosome_minhash_ratio_threshold):
+            """
+            Worker function to compare a single LHS function against all RHS functions.
+            Returns a list of rows to be added to the table.
+            """
+            local_rows = []
+            for rhs in rhs_functions:
+                # Filter based on size ratio
+                ratio = self.size_ratio(lhs['size'], rhs['size'])
+                if ratio < size_ratio:
+                    continue
+
+                # Perform the comparison using the full JSON objects
+                delta = self.compare_function(
+                    lhs,
+                    rhs,
+                    self.config,
+                    minhash_score_threshold=minhash_score_threshold,
+                    chromosome_minhash_ratio_threshold=chromosome_minhash_ratio_threshold
+                )
+                if delta is None:
+                    continue
+
+                # Retrieve precomputed names
+                lhs_address = lhs['address']
+                lhs_name = lhs_names.get(lhs_address, 'Unknown')
+
+                rhs_address = rhs['address']
+                rhs_name = rhs_names.get(rhs_address, 'Unknown')
+
+                # Retrieve contiguous and minhash fields
+                lhs_contiguous = lhs['contiguous']
+                lhs_minhash = self.value_to_string(lhs['chromosome']['minhash']) if lhs_contiguous else ''
+
+                rhs_contiguous = rhs['contiguous']
+                rhs_minhash = self.value_to_string(rhs['chromosome']['minhash']) if rhs_contiguous else ''
+
+                # Construct the row with all required data
+                row = [
+                    hex(lhs_address),
+                    lhs_name,
+                    hex(rhs_address),
+                    rhs_name,
+                    str(delta),
+                    str(lhs_contiguous),
+                    str(rhs_contiguous),
+                    lhs_minhash,
+                    rhs_minhash
+                ]
+                local_rows.append(row)
+            return local_rows
+
+        # Determine the number of worker threads
+        max_workers = min(self.config.general.threads, len(lhs_functions))
+
+        # Use ThreadPoolExecutor to manage threads
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Create a partial function with fixed arguments except for 'lhs'
+            compare_partial = partial(
+                worker_compare,
+                rhs_functions=rhs_functions,
+                size_ratio=size_ratio,
+                minhash_score_threshold=minhash_score_threshold,
+                chromosome_minhash_ratio_threshold=chromosome_minhash_ratio_threshold
+            )
+
+            # Submit all tasks to the thread pool
+            future_to_lhs = {executor.submit(compare_partial, lhs): lhs for lhs in lhs_functions}
+
+            # As each task completes, collect the results and update the table
+            for future in as_completed(future_to_lhs):
+                lhs = future_to_lhs[future]
+                try:
+                    rows = future.result()
+                    with table_lock:
+                        table.extend(rows)
+                except Exception as e:
+                    ida_kernwin.warning(f"[x] error comparing function at {hex(lhs['address'])}: {e}")
+                    return
+                finally:
+                    # Increment progress by 1 for each completed LHS function
+                    progress.increment(1)
+
+        # Close the progress bar after all comparisons are done
+        progress.close()
+
+        # Define table headers
         headers = [
-            'Address',
-            'Name',
-            'Type',
-            'Contiguous',
-            'Size',
-            'Number of Blocks',
-            'Cyclomatic Complexity',
-            'Average Instructions Per Block',
-            'Minhash Chromosome Ratio',
-            'Chromosome Minhash',
-            'TLSH Chromosome Ratio',
-            'Chromosome TLSH',
-            'Chromosome Pattern']
+            'LHS Address',
+            'LHS Name',
+            'RHS Address',
+            'RHS Name',
+            'MinHash Score',
+            'LHS Contiguous',
+            'RHS Contiguous',
+            'LHS MinHash',
+            'RHS MinHash'
+        ]
+
+        # Create and display the gradient table with the comparison results
         form = GradientTable(
-            data,
+            table,
             headers,
-            color_column=7,
+            color_column=4,
             min_value=0,
             max_value=1,
             low_to_high=True,
             default_filter_column=1,
-            default_sort_column=5,
-            default_sort_ascending=False)
-        form.Show('Binlex Function Table')
+            default_sort_column=4,
+            default_sort_ascending=False
+        )
+        form.Show('Binlex Function Compare Table')
+
+
+    def action_binary_view(self):
+        if not self.binary_view_window:
+            SVG_STRING = '''
+            <svg xmlns="http://www.w3.org/2000/svg" width="800" height="600">
+                <rect x="50" y="50" width="200" height="150" fill="#FF0000" data-json='{"name": "Red Rectangle", "id": 1, "description": "This is a red rectangle."}' />
+                <rect x="300" y="50" width="200" height="150" fill="#00FF00" data-json='{"name": "Green Rectangle", "id": 2, "description": "This is a green rectangle."}' />
+                <rect x="550" y="50" width="200" height="150" fill="#0000FF" data-json='{"name": "Blue Rectangle", "id": 3, "description": "This is a blue rectangle."}' />
+                <rect x="50" y="250" width="200" height="150" fill="#FFFF00" data-json='{"name": "Yellow Rectangle", "id": 4, "description": "This is a yellow rectangle."}' />
+                <rect x="300" y="250" width="200" height="150" fill="#FF00FF" data-json='{"name": "Magenta Rectangle", "id": 5, "description": "This is a magenta rectangle."}' />
+                <rect x="550" y="250" width="200" height="150" fill="#00FFFF" data-json='{"name": "Cyan Rectangle", "id": 6, "description": "This is a cyan rectangle."}' />
+                <!-- Add more rects as needed for testing -->
+            </svg>
+            '''
+            self.binary_view_window = SVGWidget(svg_string=SVG_STRING, title='Binlex Binary View')
+        self.binary_view_window.show()
+
+    def open_table_window(self):
+        function_table(self)
 
     def run(self, arg):
         self.open_main_window()
 
     def term(self):
         self.ui_hooks.unhook()
-        ida_kernwin.unregister_action("binlex:copy_pattern")
-        ida_kernwin.unregister_action("binlex:copy_minhash")
-        ida_kernwin.unregister_action("binlex:scan_minhash")
-        ida_kernwin.unregister_action("binlex:copy_tlsh")
-        ida_kernwin.unregister_action("binlex:copy_hex")
+        unregister_action_handlers()
 
 def PLUGIN_ENTRY():
     return BinlexPlugin()
