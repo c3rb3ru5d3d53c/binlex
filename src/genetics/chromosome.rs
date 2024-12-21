@@ -524,24 +524,21 @@ impl Chromosome {
         if lhs_tlsh.is_some() && rhs_tlsh.is_some() {
             tlsh = TLSH::compare(lhs_tlsh.unwrap(), rhs_tlsh.unwrap());
         }
+
         if minhash.is_none() && tlsh.is_none() { return None; }
 
         let mut homologues = Vec::<HomologousChromosome>::new();
         if self.config.chromosomes.homologues.enabled {
             let lhs_pattern = self.pattern();
             let rhs_pattern = rhs.pattern();
-            let fuzzy = FuzzyLCS::new(&lhs_pattern, &rhs_pattern);
-            let matches = fuzzy.compare(self.config.chromosomes.homologues.maximum);
-            for (score, string) in matches.iter() {
-                let c = Chromosome::new(
-                    string.to_string(),
-                    self.config.clone());
-                if c.is_err() { continue; }
-                let homologous_chromosome = HomologousChromosome {
-                    score: *score as f64,
-                    chromosome: c.unwrap(),
-                };
-                homologues.push(homologous_chromosome);
+            for (score, (_, _), homologue) in lhs_pattern.fuzzy_find_subyara_all(rhs_pattern, 0.25) {
+                if let Ok(c) = Chromosome::new(homologue.to_string().clone(), self.config.clone()) {
+                    let homologous_chromosome = HomologousChromosome {
+                        score: score as f64,
+                        chromosome: c.clone(),
+                    };
+                    homologues.push(homologous_chromosome);
+                }
             }
         }
         Some(ChromosomeSimilarity {
