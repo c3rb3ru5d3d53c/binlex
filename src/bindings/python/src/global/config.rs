@@ -1762,48 +1762,91 @@ impl Config {
         })
     }
 
+    #[pyo3(text_signature = "($self)")]
     pub fn enable_minimal(&mut self) {
         self.inner.lock().unwrap().enable_minimal();
     }
 
+    #[pyo3(text_signature = "($self)")]
     pub fn disable_hashing(&mut self) {
         self.inner.lock().unwrap().disable_hashing();
     }
 
+    #[pyo3(text_signature = "($self)")]
     pub fn disable_heuristics(&mut self) {
         self.inner.lock().unwrap().disable_heuristics();
     }
 
+    #[pyo3(text_signature = "($self)")]
     pub fn disable_chromosome_heuristics(&mut self) {
         self.inner.lock().unwrap().disable_chromosome_heuristics();
     }
 
+    #[pyo3(text_signature = "($self)")]
     pub fn disable_chromosome_hashing(&mut self) {
         self.inner.lock().unwrap().disable_chromosome_hashing();
     }
 
+    #[pyo3(text_signature = "($self)")]
     pub fn disable_block_hashing(&mut self) {
         self.inner.lock().unwrap().disable_block_hashing();
     }
 
+    #[pyo3(text_signature = "($self)")]
     pub fn disable_instruction_hashing(&mut self) {
         self.inner.lock().unwrap().disable_instruction_hashing();
     }
 
+    #[pyo3(text_signature = "($self)")]
     pub fn disable_function_hashing(&mut self) {
         self.inner.lock().unwrap().disable_function_hashing();
     }
 
+    #[pyo3(text_signature = "($self)")]
     pub fn disable_function_heuristics(&mut self) {
         self.inner.lock().unwrap().disable_function_heuristics();
     }
 
+    #[pyo3(text_signature = "($self)")]
     pub fn disable_block_heuristics(&mut self) {
         self.inner.lock().unwrap().disable_block_heuristics();
     }
 
+    #[pyo3(text_signature = "($self)")]
     pub fn disable_instruction_heuristics(&mut self) {
         self.inner.lock().unwrap().disable_instruction_heuristics();
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn from_default(&mut self) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .from_default()
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn to_string(&self) -> PyResult<String> {
+        self.inner
+            .lock()
+            .unwrap()
+            .to_string()
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn print(&self) {
+        self.inner.lock().unwrap().print()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn write_to_file(&self, file_path: String) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .write_to_file(&file_path)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
     }
 }
 
