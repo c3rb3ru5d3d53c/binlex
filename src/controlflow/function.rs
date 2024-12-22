@@ -203,9 +203,13 @@ pub struct FunctionJson {
     pub prologue: bool,
     /// The chromosome of the function in JSON format.
     pub chromosome: Option<ChromosomeJson>,
+    /// Chromosome MinHash Ratio
     pub chromosome_minhash_ratio: f64,
+    /// Chromosome TLSH Ratio
     pub chromosome_tlsh_ratio: f64,
+    /// Minhash Ratio
     pub minhash_ratio: f64,
+    /// TLSH ratio
     pub tlsh_ratio: f64,
     /// The size of the function in bytes, if available.
     pub size: usize,
