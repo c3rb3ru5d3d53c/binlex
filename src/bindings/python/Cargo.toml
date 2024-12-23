@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 pyo3 = { version = "0.22.6", features = ["extension-module"] }
 memmap2 = "0.9.5"
+rayon = "1.10.0"
 
 [lib]
 name = "binlex"
