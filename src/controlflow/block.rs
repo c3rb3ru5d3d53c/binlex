@@ -183,6 +183,9 @@ use crate::hashing::TLSH;
 use crate::hashing::MinHash32;
 use crate::controlflow::Attributes;
 use crate::genetics::ChromosomeSimilarity;
+use crate::Config;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use rayon::ThreadPoolBuilder;
 
 /// Represents the JSON-serializable structure of a control flow block.
 #[derive(Serialize, Deserialize)]
@@ -230,14 +233,95 @@ pub struct BlockJson {
     pub attributes: Option<Value>,
 }
 
-impl BlockJson {
-    /// Converts a JSON string into a `BlockJson` object.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(BlockJson)` if the JSON is valid; otherwise, returns an `Err`.
-    pub fn from_json(json_str: &str) -> Result<Self, serde_json::Error> {
-        serde_json::from_str(json_str)
+pub struct BlockJsonDeserializer {
+    json: BlockJson,
+    config: Config,
+}
+
+impl BlockJsonDeserializer {
+    pub fn new(string: &str, config: Config) -> Result<Self, serde_json::Error> {
+        let json = serde_json::from_str(string)?;
+        Ok(Self{
+            json: json,
+            config: config.clone(),
+        })
+    }
+
+    pub fn chromosome(&self) -> Chromosome {
+        Chromosome::new(self.json.chromosome.pattern.clone(), self.config.clone())
+            .expect("invalid chromosome")
+    }
+
+    pub fn compare(&self, rhs: &BlockJsonDeserializer) -> Option<ChromosomeSimilarity> {
+        self.chromosome().compare(&rhs.chromosome())
+    }
+
+    pub fn compare_many(&self, rhs_blocks: Vec<BlockJsonDeserializer>) -> Result<BTreeMap<u64, ChromosomeSimilarity>, Error> {
+        let pool = ThreadPoolBuilder::new()
+            .num_threads(self.config.general.threads)
+            .build()
+            .map_err(|error| Error::new(ErrorKind::Other, format!("{}", error)))?;
+        pool.install(|| {
+            let result = rhs_blocks
+                .par_iter()
+                .filter_map(|block| self.compare(block).map(|sim| (block.address(), sim)))
+                .collect();
+            Ok(result)
+        })
+    }
+
+    pub fn edges(&self) -> usize {
+        self.json.edges
+    }
+    pub fn tlsh(&self) -> Option<String> {
+        self.json.tlsh.clone()
+    }
+    pub fn functions(&self) -> BTreeMap<u64, u64> {
+        self.json.functions.clone()
+    }
+    pub fn architecture(&self) -> String {
+        self.json.architecture.clone()
+    }
+    pub fn entropy(&self) -> Option<f64> {
+        self.json.entropy
+    }
+    pub fn address(&self) -> u64 {
+        self.json.address
+    }
+    pub fn size(&self) -> usize {
+        self.json.size
+    }
+    pub fn next(&self) -> Option<u64> {
+        self.json.next
+    }
+    pub fn to(&self) -> BTreeSet<u64> {
+        self.json.to.clone()
+    }
+    pub fn number_of_instructions(&self) -> usize {
+        self.json.number_of_instructions
+    }
+    pub fn minhash(&self) -> Option<String> {
+        self.json.minhash.clone()
+    }
+    pub fn contiguous(&self) -> bool {
+        self.json.contiguous
+    }
+    pub fn sha256(&self) -> Option<String> {
+        self.json.sha256.clone()
+    }
+    pub fn conditional(&self) -> bool {
+        self.json.conditional
+    }
+    pub fn json(&self) -> Result<String, Error> {
+        let result = serde_json::to_string(&self.json)?;
+        Ok(result)
+    }
+
+    #[allow(dead_code)]
+    pub fn print(&self) {
+        if let Ok(json) = self.json() {
+            println!("{}", json);
+        }
     }
 }
 
@@ -304,6 +388,11 @@ impl<'block> Block<'block> {
         });
     }
 
+    /// Gets the address of the block.
+    pub fn address(&self) -> u64 {
+        self.address
+    }
+
     #[allow(dead_code)]
     /// Get the architecture of the block.
     pub fn architecture(&self) -> Architecture {
@@ -325,6 +414,25 @@ impl<'block> Block<'block> {
     /// Returns `Option<ChromosomeSimilarity>` representing the similarity between this block to another.
     pub fn compare(&self, rhs: &Block) -> Option<ChromosomeSimilarity> {
         self.chromosome().compare(&rhs.chromosome())
+    }
+
+    /// Compares this block to many other blocks for similarity.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Vec<ChromosomeSimilarity>` representing the similarity between this block to other blocks.
+    pub fn compare_many(&self, rhs_blocks: Vec<Block>) -> Result<BTreeMap<u64, ChromosomeSimilarity>, Error> {
+        let pool = ThreadPoolBuilder::new()
+            .num_threads(self.cfg.config.general.threads)
+            .build()
+            .map_err(|error| Error::new(ErrorKind::Other, format!("{}", error)))?;
+        pool.install(|| {
+            let result = rhs_blocks
+                .par_iter()
+                .filter_map(|block| self.compare(block).map(|sim| (block.address(), sim)))
+                .collect();
+            Ok(result)
+        })
     }
 
     /// Converts the block into a JSON string representation.
