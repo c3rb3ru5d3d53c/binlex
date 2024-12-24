@@ -200,6 +200,11 @@ impl FunctionJsonDeserializer {
     }
 
     #[pyo3(text_signature = "($self)")]
+    pub fn size(&self) -> usize {
+        self.inner.lock().unwrap().size()
+    }
+
+    #[pyo3(text_signature = "($self)")]
     pub fn architecture(&self) -> PyResult<Architecture> {
         let inner = self.inner.lock().unwrap().architecture()
             .map_err(|err| pyo3::exceptions::PyRuntimeError::new_err(format!("{}", err)))?;
