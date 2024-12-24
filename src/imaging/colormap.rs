@@ -67,88 +67,105 @@ impl ColorMapType {
     }
 }
 
-pub struct ColorMap <'colormap> {
-    bytes: &'colormap[u8],
-    shape_size: usize,
-    colormaptype: ColorMapType,
-    metadata: BTreeMap::<String, String>,
-    offset: u64,
+pub struct ColorMap {
+    cell_size: usize,
+    color_map_type: ColorMapType,
+    metadata_entries: BTreeMap<String, String>,
+    svg_rectangles: Vec<String>,
+    total_cells: usize,
+    fixed_width: usize,
 }
 
-impl <'colormap> ColorMap <'colormap> {
-    pub fn new(bytes: &'colormap [u8]) -> Self {
+impl ColorMap {
+    pub fn new() -> Self {
         Self {
-            bytes: bytes,
-            shape_size: 10,
-            colormaptype: ColorMapType::Grayscale,
-            metadata: BTreeMap::<String, String>::new(),
-            offset: 0,
+            cell_size: 10,
+            color_map_type: ColorMapType::Grayscale,
+            metadata_entries: BTreeMap::new(),
+            svg_rectangles: Vec::new(),
+            total_cells: 0,
+            fixed_width: 1024,
         }
     }
 
-    pub fn set_shape_size(&mut self, shape_size: usize) {
-        self.shape_size = shape_size
+    pub fn set_cell_size(&mut self, cell_size: usize) {
+        self.cell_size = cell_size;
     }
 
-    pub fn set_type(&mut self, colormaptype: ColorMapType) {
-        self.colormaptype = colormaptype;
+    pub fn set_color_map_type(&mut self, color_map_type: ColorMapType) {
+        self.color_map_type = color_map_type;
+    }
+
+    pub fn set_fixed_width(&mut self, fixed_width: usize) {
+        self.fixed_width = fixed_width;
     }
 
     pub fn insert_metadata(&mut self, key: String, value: String) {
-        self.metadata.insert(key, value);
+        self.metadata_entries.insert(key, value);
     }
 
-    pub fn set_offset(&mut self, offset: u64) {
-        self.offset = offset
-    }
+    pub fn append(&mut self, offset: u64, data: &[u8]) {
+        for (i, &byte) in data.iter().enumerate() {
+            let cell_index = i;
+            self.total_cells = self.total_cells.max(cell_index + 1);
 
-    fn metadata(&self) -> String {
-        let mut svg = String::new();
-        for (key, value) in &self.metadata {
-            svg.push_str(r#"<metadata>\n"#);
-            svg.push_str(&format!(r#"<{}>{}</{}>\n"#, key, value, key));
-            svg.push_str(r#"</metadata>\n"#);
-        }
-        svg
-    }
+            let row = cell_index / self.fixed_width;
+            let col = cell_index % self.fixed_width;
 
-    pub fn to_string(&self) -> String {
-        let num_bytes = self.bytes.len();
-        let grid_size = (num_bytes as f64).sqrt().ceil() as usize;
+            let x = col * self.cell_size;
+            let y = row * self.cell_size;
 
-        let mut svg = String::new();
+            let color = self.color_map_type.map_byte(byte);
 
-        svg.push_str(&format!(
-            r#"<svg xmlns="http://www.w3.org/2000/svg" width="{}" height="{}" viewBox="0 0 {} {}">\n"#,
-            grid_size * self.shape_size,
-            grid_size * self.shape_size,
-            grid_size * self.shape_size,
-            grid_size * self.shape_size
-        ));
-
-        svg.push_str(&self.metadata());
-
-        for (i, &byte) in self.bytes.iter().enumerate() {
-            let row = i / grid_size;
-            let col = i % grid_size;
-
-            let x = col * self.shape_size;
-            let y = row * self.shape_size;
-
-            let color = self.colormaptype.map_byte(byte);
-
-            svg.push_str(&format!(
-                r#"<rect x="{}" y="{}" width="{}" height="{}" fill="{}" offset="{}"/>\n"#,
-                x, y, self.shape_size, self.shape_size, color, i as u64 + self.offset
+            self.svg_rectangles.push(format!(
+                r#"<rect x="{}" y="{}" width="{}" height="{}" fill="{}" cell-index="{}" address="{}"/>
+"#,
+                x, y, self.cell_size, self.cell_size, color, cell_index, offset + i as u64
             ));
         }
-
-        svg.push_str("</svg>\n");
-
-        svg
     }
 
-    pub fn write(&self, file_path: String) -> Result<(), Error> {
-        Ok(std::fs::write(file_path, self.to_string())?)
+    fn generate_metadata(&self) -> String {
+        let mut metadata_section = String::new();
+        for (key, value) in &self.metadata_entries {
+            metadata_section.push_str(r#"<metadata>
+"#);
+            metadata_section.push_str(&format!(r#"<{}>{}</{}>
+"#, key, value, key));
+            metadata_section.push_str(r#"</metadata>
+"#);
+        }
+        metadata_section
+    }
+
+    pub fn to_svg_string(&self) -> String {
+        // Calculate the total number of rows needed to fit all the cells
+        let total_width = self.fixed_width * self.cell_size;
+        let total_height = ((self.total_cells as f64) / (self.fixed_width as f64)).ceil() as usize * self.cell_size;
+
+        let mut svg_content = String::new();
+        svg_content.push_str(&format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="{}" height="{}" viewBox="0 0 {} {}">
+"#,
+            total_width,
+            total_height,
+            total_width,
+            total_height
+        ));
+
+        svg_content.push_str(&self.generate_metadata());
+
+        // Write each rectangle into the SVG
+        for rectangle in &self.svg_rectangles {
+            svg_content.push_str(rectangle);
+        }
+
+        svg_content.push_str("</svg>\n");
+
+        svg_content
+    }
+
+    pub fn write(&self, file_path: &str) -> Result<(), std::io::Error> {
+        std::fs::write(file_path, self.to_svg_string())
     }
 }
