@@ -139,7 +139,6 @@ impl ColorMap {
     }
 
     pub fn to_svg_string(&self) -> String {
-        // Calculate the total number of rows needed to fit all the cells
         let total_width = self.fixed_width * self.cell_size;
         let total_height = ((self.total_cells as f64) / (self.fixed_width as f64)).ceil() as usize * self.cell_size;
 
