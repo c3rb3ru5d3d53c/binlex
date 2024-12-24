@@ -516,20 +516,13 @@ impl Chromosome {
         let rhs_minhash = rhs.minhash();
         let mut minhash: Option<f64> = None;
         if lhs_minhash.is_some() && rhs_minhash.is_some() {
-            let value = MinHash32::compare(&lhs_minhash.unwrap(), &rhs_minhash.unwrap());
-            if value > self.config.chromosomes.hashing.minhash.threshold {
-                minhash = Some(value);
-            }
+            minhash = Some(MinHash32::compare(&lhs_minhash.unwrap(), &rhs_minhash.unwrap()))
         }
         let lhs_tlsh = self.tlsh();
         let rhs_tlsh = rhs.tlsh();
         let mut tlsh: Option<f64> = None;
         if lhs_tlsh.is_some() && rhs_tlsh.is_some() {
-            if let Some(value)= TLSH::compare(lhs_tlsh.unwrap(), rhs_tlsh.unwrap()) {
-                if value < self.config.chromosomes.hashing.tlsh.threshold {
-                    tlsh = Some(value);
-                }
-            }
+            tlsh = TLSH::compare(lhs_tlsh.unwrap(), rhs_tlsh.unwrap());
         }
 
         if minhash.is_none() && tlsh.is_none() { return None; }

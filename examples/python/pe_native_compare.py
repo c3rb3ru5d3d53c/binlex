@@ -170,6 +170,7 @@ from binlex.formats import PE
 from binlex.disassemblers.capstone import Disassembler
 from binlex.controlflow import Graph
 from binlex.controlflow import Function
+from binlex.controlflow import FunctionJsonDeserializer
 from binlex import Config
 import argparse
 
@@ -242,18 +243,27 @@ rhs_cfg = Graph(rhs_pe.architecture(), config)
 # Disassemble the PE Image Entrypoints Recursively
 rhs_disassembler.disassemble_controlflow(rhs_pe.entrypoint_virtual_addresses(), rhs_cfg)
 
-lhs_blocks = lhs_cfg.blocks()
-rhs_blocks = rhs_cfg.blocks()
-lhs_block = lhs_blocks[0]
+# lhs_blocks = lhs_cfg.blocks()
+# rhs_blocks = rhs_cfg.blocks()
+# lhs_block = lhs_blocks[0]
 
-results = lhs_block.compare_many(rhs_blocks)
+# results = lhs_block.compare_many(rhs_blocks)
 
-for k, v in results.items():
-    v = json.loads(v.json())
-    if v['score']['minhash'] == None: continue
-    if v['score']['minhash'] <= 0.5: continue
-    print(json.dumps(v))
+# for k, v in results.items():
+#     v = json.loads(v.json())
+#     if v['score']['minhash'] == None: continue
+#     if v['score']['minhash'] <= 0.5: continue
+#     print(json.dumps(v))
 
+lhs_functions = lhs_cfg.functions()
+
+rhs_functions = rhs_cfg.functions()
+
+print(f'rhs_functions: {len(rhs_functions)}')
+
+for lhs_function in lhs_functions:
+    print(f'lhs_function: {lhs_function.address()}')
+    lhs_function.compare_many(rhs_functions)
 
 # lhs_filtered = []
 # rhs_filtered = []

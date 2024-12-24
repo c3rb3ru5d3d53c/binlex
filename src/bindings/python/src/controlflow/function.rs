@@ -168,6 +168,8 @@ use pyo3::prelude::*;
 use pyo3::Py;
 use std::collections::BTreeMap;
 use binlex::controlflow::Function as InnerFunction;
+use binlex::controlflow::Graph as InnerGraph;
+use binlex::controlflow::FunctionJsonDeserializer as InnerFunctionJsonDeserializer;
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeSimilarity;
 use crate::Config;
@@ -176,6 +178,216 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use pyo3::types::PyBytes;
 use crate::controlflow::Block;
+use pyo3::types::PyList;
+use crate::Architecture;
+use binlex::Binary as InnerBinary;
+
+#[pyclass]
+pub struct FunctionJsonDeserializer {
+    pub inner: Arc<Mutex<InnerFunctionJsonDeserializer>>,
+}
+
+#[pymethods]
+impl FunctionJsonDeserializer {
+    #[new]
+    #[pyo3(text_signature = "(string, config)")]
+    pub fn new(py: Python, string: String, config: Py<Config>) -> PyResult<Self> {
+        let inner_config = config.borrow(py).inner.lock().unwrap().clone();
+        let inner = InnerFunctionJsonDeserializer::new(string, inner_config)?;
+        Ok(Self {
+           inner: Arc::new(Mutex::new(inner)),
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn architecture(&self) -> PyResult<Architecture> {
+        let inner = self.inner.lock().unwrap().architecture()
+            .map_err(|err| pyo3::exceptions::PyRuntimeError::new_err(format!("{}", err)))?;
+        Ok(Architecture {
+            inner: inner
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn bytes(&self, py: Python) -> PyResult<Option<Py<PyBytes>>> {
+        let binding = self.inner.lock().unwrap();
+        let string = binding.json.bytes.clone();
+        if string.is_none() { return Ok(None); }
+        let bytes = InnerBinary::from_hex(&string.unwrap())
+            .map_err(|err| pyo3::exceptions::PyRuntimeError::new_err(format!("{}", err)))?;
+        let result = PyBytes::new_bound(py, &bytes);
+        Ok(Some(result.into()))
+    }
+
+    #[pyo3(text_signature = "($self, rhs)")]
+    pub fn compare(&self, py: Python, rhs: Py<FunctionJsonDeserializer>) -> PyResult<Option<ChromosomeSimilarity>> {
+        let binding = rhs.borrow(py);
+        let rhs_inner = binding.inner.lock().unwrap();
+        let similarity = self.inner.lock().unwrap().compare(&rhs_inner)?;
+        if similarity.is_none() { return Ok(None); }
+        Ok(Some(ChromosomeSimilarity {
+            inner: Arc::new(Mutex::new(similarity.unwrap()))
+        }))
+    }
+
+    #[pyo3(text_signature = "($self, rhs_functions)")]
+    pub fn compare_many(&self, py: Python, rhs_functions: Py<PyList>) -> PyResult<BTreeMap<u64, ChromosomeSimilarity>> {
+        // Initialize the function deserializer
+        let function = InnerFunctionJsonDeserializer::new(
+            self.json()?,
+            self.inner.lock().unwrap().config.clone(),
+        )?;
+
+        // Prepare a vector to hold tasks (deserializers)
+        let mut tasks = Vec::<InnerFunctionJsonDeserializer>::new();
+
+        // Bind the Python list
+        let list = rhs_functions.bind(py);
+
+        // Collect items from the Python list
+        let items: Vec<Py<PyAny>> = list.iter().map(|item| item.into()).collect();
+
+        // Iterate over each item to deserialize and collect tasks
+        for item in items {
+            let py_item = item.bind(py);
+            if !py_item.is_instance_of::<FunctionJsonDeserializer>() {
+                return Err(pyo3::exceptions::PyTypeError::new_err(
+                    "All items in rhs_functions must be instances of FunctionJsonDeserializer",
+                ));
+            }
+
+            // Attempt to extract the deserializer
+            let rhs: Option<Py<FunctionJsonDeserializer>> = py_item.extract().ok();
+            if let Some(rhs_binding) = rhs {
+                let rhs_borrowed = rhs_binding.borrow(py);
+                let task: InnerFunctionJsonDeserializer = rhs_borrowed.inner.lock().unwrap().clone();
+                tasks.push(task);
+            }
+        }
+
+        // Perform the comparisons sequentially
+        let mut results = BTreeMap::new();
+        for rhs_function in tasks.iter() {
+            if let Ok(Some(similarity)) = function.compare(rhs_function) {
+                results.insert(
+                    rhs_function.address(),
+                    ChromosomeSimilarity {
+                        inner: Arc::new(Mutex::new(similarity)),
+                    },
+                );
+            }
+        }
+
+        Ok(results)
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn address(&self) -> u64 {
+        self.inner.lock().unwrap().address()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn number_of_instructions(&self) -> usize {
+        self.inner.lock().unwrap().number_of_instructions()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn number_of_blocks(&self) -> usize {
+        self.inner.lock().unwrap().number_of_blocks()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn average_instructions_per_block(&self) -> f64 {
+        self.inner.lock().unwrap().average_instructions_per_block()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn entropy(&self) -> Option<f64> {
+        self.inner.lock().unwrap().entropy()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn edges(&self) -> usize {
+        self.inner.lock().unwrap().edges()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn sha256(&self) -> Option<String> {
+        self.inner.lock().unwrap().sha256()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn minhash(&self) -> Option<String> {
+        self.inner.lock().unwrap().minhash()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn tlsh(&self) -> Option<String> {
+        self.inner.lock().unwrap().tlsh()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn tlsh_ratio(&self) -> f64 {
+        self.inner.lock().unwrap().tlsh_ratio()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn minhash_ratio(&self) -> f64 {
+        self.inner.lock().unwrap().minhash_ratio()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn chromosome_minhash_ratio(&self) -> f64 {
+        self.inner.lock().unwrap().chromosome_minhash_ratio()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn chromosome_tlsh_ratio(&self) -> f64 {
+        self.inner.lock().unwrap().chromosome_tlsh_ratio()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn prologue(&self) -> bool {
+        self.inner.lock().unwrap().prologue()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn chromosome(&self) -> Chromosome {
+        let inner_chromosome = self.inner.lock().unwrap().chromosome();
+        Chromosome {
+            inner: Arc::new(Mutex::new(inner_chromosome.unwrap()))
+        }
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn to_dict(&self, py: Python) -> PyResult<Py<PyAny>> {
+        let json_str = self.json()?;
+        let json_module = py.import_bound("json")?;
+        let py_dict = json_module.call_method1("loads", (json_str,))?;
+        Ok(py_dict.into())
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn json(&self) -> PyResult<String> {
+        self.inner
+            .lock()
+            .unwrap()
+            .json()
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn print(&self) {
+        self.inner
+            .lock()
+            .unwrap()
+            .print()
+    }
+
+    pub fn __str__(&self) -> PyResult<String> {
+        self.json()
+    }
+}
 
 #[pyclass]
 /// Represents a function within a control flow graph (CFG).
@@ -227,8 +439,7 @@ impl Function {
         })
     }
 
-    #[getter]
-    pub fn get_address(&self) -> u64 {
+    pub fn address(&self) -> u64 {
         self.address
     }
 
@@ -272,6 +483,127 @@ impl Function {
             return Ok(Some(similarity));
         })
     }
+
+    #[pyo3(text_signature = "($self, rhs_functions)")]
+    pub fn compare_many(
+        &self,
+        py: Python,
+        rhs_functions: Py<PyList>,
+    ) -> PyResult<BTreeMap<u64, ChromosomeSimilarity>> {
+        self.with_inner_function(py, |function| {
+            let mut tasks = Vec::<(u64, Arc<Mutex<InnerGraph>>)>::new();
+
+            // Bind the PyList to access its items
+            let list = rhs_functions.bind(py);
+
+            // Collect items into a Rust Vec for processing
+            let items: Vec<Py<PyAny>> = list.iter().map(|item| item.into()).collect();
+
+            // Iterate over each item to validate and collect necessary data
+            for item in items {
+                let py_item = item.bind(py);
+
+                // Ensure the item is an instance of `Function`
+                if !py_item.is_instance_of::<Function>() {
+                    return Err(pyo3::exceptions::PyTypeError::new_err(
+                        "all items in rhs_functions must be instances of Function",
+                    ));
+                }
+
+                // Attempt to extract the `Function` instance
+                let rhs: Option<Py<Function>> = py_item.extract().ok();
+                if let Some(rhs_binding) = rhs {
+                    let rhs_borrowed = rhs_binding.borrow(py);
+                    let address = rhs_borrowed.address();
+                    let rhs_cfg = Arc::clone(&rhs_borrowed.cfg.borrow(py).inner);
+                    tasks.push((address, rhs_cfg));
+                }
+            }
+
+            // Initialize the results map
+            let mut results: BTreeMap<u64, ChromosomeSimilarity> = BTreeMap::new();
+
+            // Sequentially process each task
+            for (address, inner_cfg) in tasks.iter() {
+                // Lock the inner configuration
+                let c = inner_cfg.lock().map_err(|e| {
+                    pyo3::exceptions::PyRuntimeError::new_err(format!(
+                        "Failed to lock InnerGraph: {}",
+                        e
+                    ))
+                })?;
+
+                // Create a new InnerFunction instance
+                if let Ok(rhs_function) = InnerFunction::new(*address, &c) {
+                    // Compare the functions to get similarity
+                    if let Ok(Some(similarity)) = function.compare(&rhs_function) {
+                        // Insert the similarity result into the map
+                        results.insert(
+                            *address,
+                            ChromosomeSimilarity {
+                                inner: Arc::new(Mutex::new(similarity)),
+                            },
+                        );
+                    }
+                }
+            }
+
+            // Return the collected results
+            Ok(results)
+        })
+    }
+
+    // #[pyo3(text_signature = "($self, rhs_functions)")]
+    // pub fn compare_many(&self, py: Python, rhs_functions: Py<PyList>) -> PyResult<BTreeMap<u64, ChromosomeSimilarity>> {
+    //     self.with_inner_function(py, |function| {
+    //         let mut tasks = Vec::<(u64, Arc<Mutex<InnerGraph>>)>::new();
+
+    //         let list = rhs_functions.bind(py);
+
+    //         let items: Vec<Py<PyAny>> = list.iter().map(|item| item.into()).collect();
+
+    //         for item in items {
+    //             let py_item = item.bind(py);
+    //             if !py_item.is_instance_of::<Function>() {
+    //                 return Err(pyo3::exceptions::PyTypeError::new_err(
+    //                     "all items in rhs_functions must be instances of Function",
+    //                 ));
+    //             }
+    //             let rhs: Option<Py<Function>> = py_item.extract().ok();
+    //             if rhs.is_none() { continue; }
+    //             let rhs_binding_0 = rhs.unwrap();
+    //             let rhs_binding_1 = rhs_binding_0.borrow(py);
+    //             let address = rhs_binding_1.address();
+    //             let rhs_cfg = Arc::clone(&rhs_binding_1.cfg.borrow(py).inner);
+    //             tasks.push((address, rhs_cfg));
+    //         };
+
+    //         let pool = ThreadPoolBuilder::new()
+    //             .num_threads(function.cfg.config.general.threads)
+    //             .build()
+    //             .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(format!("{}", error)))?;
+
+    //         let results: BTreeMap<u64, ChromosomeSimilarity> = pool.install(|| {
+    //             tasks
+    //                 .par_iter()
+    //                 .filter_map(|(address, inner_cfg)| {
+    //                     let c = inner_cfg.lock().unwrap();
+    //                     let rhs_function = InnerFunction::new(*address, &c).ok()?;
+    //                     let similarity = function.compare(&rhs_function).ok()?;
+    //                     similarity.map(|similarity| {
+    //                         (
+    //                             *address,
+    //                             ChromosomeSimilarity {
+    //                                 inner: Arc::new(Mutex::new(similarity)),
+    //                             },
+    //                         )
+    //                     })
+    //                 })
+    //                 .collect()
+    //         });
+    //         Ok(results)
+    //     })
+    // }
 
     #[pyo3(text_signature = "($self)")]
     pub fn chromosome_minhash_ratio(&self, py: Python) -> PyResult<f64> {
@@ -498,6 +830,7 @@ impl Function {
 #[pyo3(name = "function")]
 pub fn function_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Function>()?;
+    m.add_class::<FunctionJsonDeserializer>()?;
     py.import_bound("sys")?
         .getattr("modules")?
         .set_item("binlex.controlflow.function", m)?;

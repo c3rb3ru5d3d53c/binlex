@@ -188,8 +188,6 @@ use crate::controlflow::BlockJson;
 use crate::genetics::chromosome::HomologousChromosome;
 use crate::Config;
 use super::block::BlockJsonDeserializer;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use rayon::ThreadPoolBuilder;
 
 /// Represents a JSON-serializable structure containing metadata about a function.
 #[derive(Serialize, Deserialize, Clone)]
@@ -248,8 +246,8 @@ pub struct FunctionJson {
 #[allow(dead_code)]
 #[derive(Clone)]
 pub struct FunctionJsonDeserializer {
-    json: FunctionJson,
-    config: Config,
+    pub json: FunctionJson,
+    pub config: Config,
 }
 
 impl FunctionJsonDeserializer {
@@ -258,7 +256,7 @@ impl FunctionJsonDeserializer {
         let json: FunctionJson = serde_json::from_str(&string)
             .map_err(|error| Error::new(ErrorKind::Other, format!("{}", error)))?;
         if json.type_ != "function" {
-            return Err(Error::new(ErrorKind::Other, format!("Deserialized JSON is not a function type")));
+            return Err(Error::new(ErrorKind::Other, format!("feserialized json is not a function type")));
         }
         Ok(Self {
             json,
@@ -269,6 +267,12 @@ impl FunctionJsonDeserializer {
     #[allow(dead_code)]
     pub fn address(&self) -> u64 {
         self.json.address
+    }
+
+    #[allow(dead_code)]
+    pub fn bytes(&self) -> Option<Vec<u8>> {
+        if self.json.bytes.is_none() { return None; }
+        Binary::from_hex(&self.json.bytes.clone().unwrap()).ok()
     }
 
     #[allow(dead_code)]
@@ -306,13 +310,13 @@ impl FunctionJsonDeserializer {
                     return Err(Error::new(ErrorKind::InvalidData, format!("{}", error)));
                 }
             };
-            let asdf= match BlockJsonDeserializer::new(string, self.config.clone()) {
-                Ok(asdf) => asdf,
+            let blockjsondeserializer= match BlockJsonDeserializer::new(string, self.config.clone()) {
+                Ok(blockjsondeserializer) => blockjsondeserializer,
                 Err(error) => {
                     return Err(Error::new(ErrorKind::InvalidData, format!("{}", error)));
                 }
             };
-            result.push(asdf);
+            result.push(blockjsondeserializer);
         }
         Ok(result)
     }
@@ -333,8 +337,8 @@ impl FunctionJsonDeserializer {
     }
 
     #[allow(dead_code)]
-    pub fn architecture(&self) -> String {
-        self.json.architecture.clone()
+    pub fn architecture(&self) -> Result<Architecture, Error> {
+        Architecture::from_string(&self.json.architecture)
     }
 
     #[allow(dead_code)]
@@ -360,6 +364,95 @@ impl FunctionJsonDeserializer {
     #[allow(dead_code)]
     pub fn contiguous(&self) -> bool {
         self.json.contiguous
+    }
+
+    pub fn compare(&self, rhs: &FunctionJsonDeserializer) -> Result<Option<ChromosomeSimilarity>, Error> {
+        if self.contiguous() && rhs.contiguous() {
+            let lhs_chromosome = self.chromosome();
+            let rhs_chromosome = rhs.chromosome();
+            if lhs_chromosome.is_none() && rhs_chromosome.is_none() { return Ok(None); }
+            return Ok(self
+                .chromosome()
+                .unwrap()
+                .compare(&rhs.chromosome().unwrap()));
+        }
+
+        let mut minhashes = Vec::<f64>::new();
+        let mut tls_values = Vec::<f64>::new();
+
+        for lhs_block in self.blocks()? {
+            let mut best_minhash: Option<f64> = None;
+            let mut best_tls: Option<f64> = None;
+
+            let results = match lhs_block.compare_many(rhs.blocks()?) {
+                Ok(results) => results,
+                Err(error) => {
+                    return Err(Error::new(ErrorKind::InvalidData, format!("{}", error)));
+                }
+            };
+
+            for (_, similarity) in results {
+                let minhash = similarity.score().minhash();
+                let tlsh = similarity.score.minhash();
+                if minhash.is_none() && tlsh.is_none() {
+                    continue;
+                }
+                if let Some(mh) = minhash {
+                    best_minhash = Some(best_minhash.map_or(mh, |prev| prev.max(mh)));
+                }
+
+                if let Some(t) = tlsh {
+                    best_tls = Some(best_tls.map_or(t, |prev| prev.min(t)));
+                }
+            }
+
+            if let Some(mh) = best_minhash {
+                minhashes.push(mh);
+            }
+
+            if let Some(t) = best_tls {
+                tls_values.push(t);
+            }
+        }
+
+        if !minhashes.is_empty() || !tls_values.is_empty() {
+            let minhash_average = {
+                let avg = minhashes.iter().sum::<f64>() / minhashes.len() as f64;
+                if avg > 0.0 { Some(avg) } else { None }
+            };
+
+            let tlsh_average = {
+                let avg = tls_values.iter().sum::<f64>() as f64 / tls_values.len() as f64;
+                if avg > 0.0 { Some(avg) } else { None }
+            };
+
+            if minhash_average.is_none() && tlsh_average.is_none() {
+                return Ok(None);
+            }
+
+            return Ok(Some(ChromosomeSimilarity{
+                score: ChromosomeSimilarityScore {
+                    minhash: minhash_average,
+                    tlsh: tlsh_average,
+                },
+                homologues: Vec::<HomologousChromosome>::new(),
+            }));
+        }
+
+        Ok(None)
+    }
+
+    pub fn compare_many(&self, rhs_functions: Vec<FunctionJsonDeserializer>) -> Result<BTreeMap<u64, ChromosomeSimilarity>, Error> {
+        rhs_functions
+            .iter()
+            .filter_map(|function| {
+                match self.compare(function) {
+                    Ok(Some(similarity)) => Some(Ok((function.address(), similarity))),
+                    Ok(None) => None,
+                    Err(e) => Some(Err(e)),
+                }
+            })
+            .collect()
     }
 
     #[allow(dead_code)]
@@ -602,25 +695,18 @@ impl<'function> Function<'function> {
     }
 
     pub fn compare_many(&self, rhs_functions: Vec<Function>) -> Result<BTreeMap<u64, ChromosomeSimilarity>, Error> {
-        let pool = ThreadPoolBuilder::new()
-            .num_threads(self.cfg.config.general.threads)
-            .build()
-            .map_err(|error| Error::new(ErrorKind::Other, format!("{}", error)))?;
+        let result: Result<BTreeMap<u64, ChromosomeSimilarity>, Error> = rhs_functions
+            .iter()
+            .filter_map(|function| {
+                match self.compare(function) {
+                    Ok(Some(similarity)) => Some(Ok((function.address(), similarity))),
+                    Ok(None) => None,
+                    Err(e) => Some(Err(e)),
+                }
+            })
+            .collect();
 
-        pool.install(|| {
-            let result: Result<BTreeMap<u64, ChromosomeSimilarity>, Error> = rhs_functions
-                .par_iter()
-                .filter_map(|function| {
-                    match self.compare(function) {
-                        Ok(Some(similarity)) => Some(Ok((function.address(), similarity))),
-                        Ok(None) => None,
-                        Err(e) => Some(Err(e)),
-                    }
-                })
-                .collect::<Result<BTreeMap<u64, ChromosomeSimilarity>, Error>>();
-
-            result
-        })
+        result
     }
 
     pub fn chromosome_tlsh_ratio(&self) -> f64 {
