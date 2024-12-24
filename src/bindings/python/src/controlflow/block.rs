@@ -168,6 +168,7 @@ use pyo3::prelude::*;
 use pyo3::Py;
 use std::collections::{BTreeMap, BTreeSet};
 use binlex::controlflow::Block as InnerBlock;
+use binlex::controlflow::BlockJsonDeserializer as InnerBlockJsonDeserializer;
 use binlex::controlflow::Graph as InnerGraph;
 use crate::controlflow::Instruction;
 use crate::genetics::Chromosome;
@@ -180,6 +181,186 @@ use pyo3::types::PyBytes;
 use pyo3::types::PyList;
 use rayon::prelude::*;
 use rayon::ThreadPoolBuilder;
+use binlex::Binary as InnerBinary;
+use binlex::Architecture as InnerArchitecture;
+use crate::Architecture;
+
+#[pyclass]
+pub struct BlockJsonDeserializer {
+    pub inner: Arc<Mutex<InnerBlockJsonDeserializer>>,
+}
+
+#[pymethods]
+impl BlockJsonDeserializer {
+    #[new]
+    #[pyo3(text_signature = "(string, config)")]
+    pub fn new(py: Python, string: String, config: Py<Config>) -> PyResult<Self> {
+        let inner_config = config.borrow(py).inner.lock().unwrap().clone();
+        let inner = InnerBlockJsonDeserializer::new(string, inner_config)?;
+        Ok(Self {
+           inner: Arc::new(Mutex::new(inner)),
+        })
+    }
+
+    pub fn architecture(&self) -> PyResult<Architecture> {
+        let inner = InnerArchitecture::from_string(&self.inner.lock().unwrap().json.architecture)
+            .map_err(|err| pyo3::exceptions::PyRuntimeError::new_err(format!("{}", err)))?;
+        Ok(Architecture {
+            inner: inner
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn bytes(&self, py: Python) -> PyResult<Py<PyBytes>> {
+        let bytes = InnerBinary::from_hex(&self.inner.lock().unwrap().json.bytes)
+            .map_err(|err| pyo3::exceptions::PyRuntimeError::new_err(format!("{}", err)))?;
+        let result = PyBytes::new_bound(py, &bytes);
+        Ok(result.into())
+    }
+
+    #[pyo3(text_signature = "($self, rhs)")]
+    pub fn compare(&self, py: Python, rhs: Py<BlockJsonDeserializer>) -> Option<ChromosomeSimilarity> {
+        let binding = rhs.borrow(py);
+        let rhs_inner = binding.inner.lock().unwrap();
+        let similarity = self.inner.lock().unwrap().compare(&rhs_inner);
+        if similarity.is_none() { return None; }
+        Some(ChromosomeSimilarity {
+            inner: Arc::new(Mutex::new(similarity.unwrap()))
+        })
+    }
+
+    #[pyo3(text_signature = "($self, rhs_blocks)")]
+    pub fn compare_many(&self, py: Python, rhs_blocks: Py<PyList>) -> PyResult<BTreeMap<u64, ChromosomeSimilarity>> {
+        let block = InnerBlockJsonDeserializer::new(self.json()?, self.inner.lock().unwrap().config.clone())?;
+
+        let inner_config = self.inner.lock().unwrap().config.clone();
+
+        let mut tasks = Vec::<InnerBlockJsonDeserializer>::new();
+
+        let list = rhs_blocks.bind(py);
+
+        let items: Vec<Py<PyAny>> = list.iter().map(|item| item.into()).collect();
+
+        for item in items {
+            let py_item = item.bind(py);
+            if !py_item.is_instance_of::<BlockJsonDeserializer>() {
+                return Err(pyo3::exceptions::PyTypeError::new_err(
+                    "all items in rhs_blocks must be instances of BlockJsonDeserializer",
+                ));
+            }
+            let rhs: Option<Py<BlockJsonDeserializer>> = py_item.extract().ok();
+            if rhs.is_none() { continue; }
+            let rhs_binding_0 = rhs.unwrap();
+            let rhs_binding_1 = rhs_binding_0.borrow(py);
+            let a = rhs_binding_1.inner.lock().unwrap().clone();
+            tasks.push(a);
+        };
+
+        let pool = ThreadPoolBuilder::new()
+            .num_threads(inner_config.general.threads)
+            .build()
+            .map_err(|err| pyo3::exceptions::PyRuntimeError::new_err(format!("{}", err)))?;
+
+        let results: BTreeMap<u64, ChromosomeSimilarity> = pool.install(|| {
+            tasks
+                .par_iter()
+                .filter_map(|rhs_block| {
+                    block.compare(&rhs_block).map(|similarity| {
+                        (
+                            rhs_block.address(),
+                            ChromosomeSimilarity {
+                                inner: Arc::new(Mutex::new(similarity)),
+                            },
+                        )
+                    })
+                })
+                .collect()
+        });
+        Ok(results)
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn address(&self) -> u64 {
+        self.inner.lock().unwrap().address()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn minhash(&self) -> Option<String> {
+        self.inner.lock().unwrap().minhash()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn tlsh(&self) -> Option<String> {
+        self.inner.lock().unwrap().tlsh()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn sha256(&self) -> Option<String> {
+        self.inner.lock().unwrap().sha256()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn edges(&self) -> usize {
+        self.inner.lock().unwrap().edges()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn to(&self) -> BTreeSet<u64> {
+        self.inner.lock().unwrap().to()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn next(&self) -> Option<u64> {
+        self.inner.lock().unwrap().next()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn size(&self) -> usize {
+        self.inner.lock().unwrap().size()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn number_of_instructions(&self) -> usize {
+        self.inner.lock().unwrap().number_of_instructions()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn chromosome(&self) -> Chromosome {
+        let inner_chromosome = self.inner.lock().unwrap().chromosome();
+        Chromosome {
+            inner: Arc::new(Mutex::new(inner_chromosome))
+        }
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn to_dict(&self, py: Python) -> PyResult<Py<PyAny>> {
+        let json_str = self.json()?;
+        let json_module = py.import_bound("json")?;
+        let py_dict = json_module.call_method1("loads", (json_str,))?;
+        Ok(py_dict.into())
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn json(&self) -> PyResult<String> {
+        self.inner
+            .lock()
+            .unwrap()
+            .json()
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn print(&self) {
+        self.inner
+            .lock()
+            .unwrap()
+            .print()
+    }
+
+    pub fn __str__(&self) -> PyResult<String> {
+        self.json()
+    }
+}
 
 
 /// A class representing a control flow block in the binary analysis.
@@ -360,8 +541,8 @@ impl Block {
 
     #[pyo3(text_signature = "($self)")]
     /// Checks if the block is a prologue block.
-    pub fn is_prologue(&self, py: Python) -> PyResult<bool> {
-        self.with_inner_block(py, |block| Ok(block.is_prologue()))
+    pub fn prologue(&self, py: Python) -> PyResult<bool> {
+        self.with_inner_block(py, |block| Ok(block.prologue()))
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -469,6 +650,7 @@ impl Block {
 #[pyo3(name = "block")]
 pub fn block_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Block>()?;
+    m.add_class::<BlockJsonDeserializer>()?;
     py.import_bound("sys")?
         .getattr("modules")?
         .set_item("binlex.controlflow.block", m)?;

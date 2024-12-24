@@ -188,7 +188,7 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
 
 /// Represents the JSON-serializable structure of a control flow block.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct BlockJson {
     /// The type of this entity, always `"block"`.
     #[serde(rename = "type")]
@@ -233,29 +233,39 @@ pub struct BlockJson {
     pub attributes: Option<Value>,
 }
 
+#[allow(dead_code)]
+#[derive(Clone)]
 pub struct BlockJsonDeserializer {
-    json: BlockJson,
-    config: Config,
+    pub json: BlockJson,
+    pub config: Config,
 }
 
 impl BlockJsonDeserializer {
-    pub fn new(string: &str, config: Config) -> Result<Self, serde_json::Error> {
-        let json = serde_json::from_str(string)?;
-        Ok(Self{
-            json: json,
+    #[allow(dead_code)]
+    pub fn new(string: String, config: Config) -> Result<Self, Error> {
+        let json: BlockJson = serde_json::from_str(&string)
+            .map_err(|error| Error::new(ErrorKind::Other, format!("{}", error)))?;
+        if json.type_ != "block" {
+            return Err(Error::new(ErrorKind::Other, format!("Deserialized JSON is not a function type")));
+        }
+        Ok(Self {
+            json,
             config: config.clone(),
         })
     }
 
+    #[allow(dead_code)]
     pub fn chromosome(&self) -> Chromosome {
         Chromosome::new(self.json.chromosome.pattern.clone(), self.config.clone())
             .expect("invalid chromosome")
     }
 
+    #[allow(dead_code)]
     pub fn compare(&self, rhs: &BlockJsonDeserializer) -> Option<ChromosomeSimilarity> {
         self.chromosome().compare(&rhs.chromosome())
     }
 
+    #[allow(dead_code)]
     pub fn compare_many(&self, rhs_blocks: Vec<BlockJsonDeserializer>) -> Result<BTreeMap<u64, ChromosomeSimilarity>, Error> {
         let pool = ThreadPoolBuilder::new()
             .num_threads(self.config.general.threads)
@@ -270,48 +280,82 @@ impl BlockJsonDeserializer {
         })
     }
 
+    #[allow(dead_code)]
     pub fn edges(&self) -> usize {
         self.json.edges
     }
+
+    #[allow(dead_code)]
     pub fn tlsh(&self) -> Option<String> {
         self.json.tlsh.clone()
     }
+
+    #[allow(dead_code)]
     pub fn functions(&self) -> BTreeMap<u64, u64> {
         self.json.functions.clone()
     }
-    pub fn architecture(&self) -> String {
-        self.json.architecture.clone()
+
+    #[allow(dead_code)]
+    pub fn architecture(&self) -> Result<Architecture, Error> {
+        let result = match Architecture::from_string(&self.json.architecture) {
+            Ok(result) => Ok(result),
+            Err(error) => {
+                return Err(Error::new(ErrorKind::Unsupported, format!("{}", error)));
+            }
+        };
+        result
     }
+
+    #[allow(dead_code)]
     pub fn entropy(&self) -> Option<f64> {
         self.json.entropy
     }
+
+    #[allow(dead_code)]
     pub fn address(&self) -> u64 {
         self.json.address
     }
+
+    #[allow(dead_code)]
     pub fn size(&self) -> usize {
         self.json.size
     }
+
+    #[allow(dead_code)]
     pub fn next(&self) -> Option<u64> {
         self.json.next
     }
+
+    #[allow(dead_code)]
     pub fn to(&self) -> BTreeSet<u64> {
         self.json.to.clone()
     }
+
+    #[allow(dead_code)]
     pub fn number_of_instructions(&self) -> usize {
         self.json.number_of_instructions
     }
+
+    #[allow(dead_code)]
     pub fn minhash(&self) -> Option<String> {
         self.json.minhash.clone()
     }
+
+    #[allow(dead_code)]
     pub fn contiguous(&self) -> bool {
         self.json.contiguous
     }
+    #[allow(dead_code)]
     pub fn sha256(&self) -> Option<String> {
         self.json.sha256.clone()
     }
+
+    #[allow(dead_code)]
     pub fn conditional(&self) -> bool {
         self.json.conditional
     }
+
+    #[allow(dead_code)]
     pub fn json(&self) -> Result<String, Error> {
         let result = serde_json::to_string(&self.json)?;
         Ok(result)
@@ -471,7 +515,7 @@ impl<'block> Block<'block> {
             to: self.terminator.to(),
             edges: self.edges(),
             chromosome: self.chromosome_json(),
-            prologue: self.is_prologue(),
+            prologue: self.prologue(),
             conditional: self.terminator.is_conditional,
             size: self.size(),
             bytes: Binary::to_hex(&self.bytes()),
@@ -485,6 +529,11 @@ impl<'block> Block<'block> {
             contiguous: true,
             attributes: None,
         }
+    }
+
+    /// Blocks are contiguous.
+    pub fn contiguous(&self) -> bool {
+        true
     }
 
     /// Retrives the instructions associated with the block.
@@ -539,7 +588,7 @@ impl<'block> Block<'block> {
     /// # Returns
     ///
     /// Returns `true` if the block starts with a prologue; otherwise, `false`.
-    pub fn is_prologue(&self) -> bool {
+    pub fn prologue(&self) -> bool {
         if let Some(entry) =  self.cfg.listing.get(&self.address) {
             return entry.value().is_prologue;
         }

@@ -172,6 +172,7 @@ pub mod function;
 pub use crate::controlflow::graph::Graph;
 pub use crate::controlflow::graph::GraphQueue;
 pub use crate::controlflow::block::Block;
+pub use crate::controlflow::block::BlockJsonDeserializer;
 pub use crate::controlflow::function::Function;
 pub use crate::controlflow::instruction::Instruction;
 
@@ -193,6 +194,7 @@ pub fn controlflow_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<GraphQueue>()?;
     m.add_class::<Instruction>()?;
     m.add_class::<Block>()?;
+    m.add_class::<BlockJsonDeserializer>()?;
     m.add_class::<Function>()?;
     py.import_bound("sys")?
         .getattr("modules")?

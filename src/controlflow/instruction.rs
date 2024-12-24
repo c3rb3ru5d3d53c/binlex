@@ -219,7 +219,7 @@ pub struct Instruction {
 }
 
 /// Represents a JSON-serializable view of an `Instruction`.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct InstructionJson {
     /// The type of this entity, always `"instruction"`.
     #[serde(rename = "type")]
