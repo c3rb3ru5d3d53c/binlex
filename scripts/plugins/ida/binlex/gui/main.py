@@ -44,12 +44,12 @@ class Main(QWidget):
 
         layout.addWidget(btn5)
 
-        # btn6 = QPushButton('Binary View')
-        # btn6.clicked.connect(self.plugin.action_binary_view)
+        btn6 = QPushButton('Color Map')
+        btn6.clicked.connect(self.plugin.action_binary_view)
 
-        # btn6.setStyleSheet(QPUSHBUTTON_STYLE)
+        btn6.setStyleSheet(QPUSHBUTTON_STYLE)
 
-        # layout.addWidget(btn6)
+        layout.addWidget(btn6)
 
         btn2 = QPushButton('About')
         btn2.clicked.connect(self.plugin.open_about_window)

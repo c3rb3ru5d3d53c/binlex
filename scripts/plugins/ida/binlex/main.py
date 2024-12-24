@@ -183,7 +183,7 @@ import zlib
 from binlex.formats import File, PE, ELF
 from binlex.hashing import MinHash32, TLSH
 from binlex import Config, Architecture
-from binlex.controlflow import Graph, Instruction
+from binlex.controlflow import Graph, Instruction, FunctionJsonDeserializer
 from binlex.genetics import Chromosome
 from binlex.disassemblers.capstone import Disassembler as CapstoneDisassembler
 from binlex.types import MemoryMappedFile
@@ -226,6 +226,7 @@ from actions import function_table
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import partial
+from binlex.imaging import ColorMap
 
 class BinlexPlugin(idaapi.plugin_t):
     flags = idaapi.PLUGIN_DRAW
@@ -314,7 +315,7 @@ class BinlexPlugin(idaapi.plugin_t):
                 j = json.loads(function.json())
                 j['attributes'] = []
                 j['attributes'].append(IDA.file_attribute())
-                j['attributes'].append(self.get_function_symbol_attribute(function.address))
+                j['attributes'].append(self.get_function_symbol_attribute(function.address()))
                 file.write(json.dumps(j) + '\n')
         ida_kernwin.msg(f'[*] exported binlex functions to {file_path}\n')
 
@@ -393,233 +394,156 @@ class BinlexPlugin(idaapi.plugin_t):
             return attribute['name']
         return ''
 
-    @staticmethod
-    def compare_function(
-        lhs: dict,
-        rhs: dict,
-        config,
-        minhash_score_threshold: float = 0.25,
-        chromosome_minhash_ratio_threshold: float = 0.75) -> float | None:
-        if lhs['contiguous'] and rhs['contiguous']:
-            lhs_chromosome = Chromosome(lhs['chromosome']['pattern'], config)
-            rhs_chromosome = Chromosome(rhs['chromosome']['pattern'], config)
-            delta = lhs_chromosome.compare(rhs_chromosome)
-            if delta is None: return None
-            delta = json.loads(delta.json())
-            if delta['score']['minhash'] is None: return None
-            if delta['score']['minhash'] < minhash_score_threshold: return None
-            return delta['score']['minhash']
-        lhs_chromosome_minhash_ratio = lhs['chromosome_minhash_ratio']
-        rhs_chromosome_minhash_ratio = rhs['chromosome_minhash_ratio']
-        if lhs_chromosome_minhash_ratio < chromosome_minhash_ratio_threshold: return None
-        if rhs_chromosome_minhash_ratio < chromosome_minhash_ratio_threshold: return None
-        minhash_block_scores = []
-        for lhs_block in lhs['blocks']:
-            lhs_chromosome = Chromosome(lhs_block['chromosome']['pattern'], config)
-            minhash_scores = []
-            for rhs_block in rhs['blocks']:
-                rhs_chromosome = Chromosome(rhs_block['chromosome']['pattern'], config)
-                delta = lhs_chromosome.compare(rhs_chromosome)
-                if delta is None:
-                    minhash_scores.append(0.0)
-                    continue
-                delta = json.loads(delta.json())
-                if delta['score']['minhash'] is None:
-                    minhash_scores.append(0.0)
-                    continue
-                minhash_scores.append(delta['score']['minhash'])
-            minhash_score = 0.0
-            if len(minhash_scores) > 0:
-                minhash_score = max(minhash_scores)
-            minhash_block_scores.append(minhash_score)
-        minhash_score =  sum(minhash_block_scores) / len(minhash_block_scores)
-        if minhash_score < minhash_score_threshold: return None
-        return minhash_score
-
     def action_compare_functions(self):
         dialog = CompareFunctionsDialog()
         if dialog.exec_() != QDialog.Accepted:
             return
 
         # Retrieve user inputs from the dialog
-        minhash_score_threshold, mininum_size, size_ratio, chromosome_minhash_ratio_threshold = dialog.get_inputs()
+        (
+            minhash_score_threshold,
+            mininum_size,
+            size_ratio,
+            chromosome_minhash_ratio_threshold
+        ) = dialog.get_inputs()
 
         # Prompt the user to select a JSON file
         file_path = ida_kernwin.ask_file(0, "*.json", 'Binlex JSON File')
         if not file_path:
             return
 
-        # Disassemble control flow and retrieve all functions from the CFG
         self.disassemble_controlflow()
-        all_functions = self.cfg.functions()
 
-        # Pre-filter CFG functions based on size and minhash ratio
+        # Build LHS function list (only once)
         lhs_functions = []
-        lhs_names = {}  # Dictionary to store LHS function names
-        for func in all_functions:
-            func_data = json.loads(func.json())
-            if func_data['size'] >= mininum_size and func_data['chromosome_minhash_ratio'] >= chromosome_minhash_ratio_threshold:
-                lhs_functions.append(func_data)
-                lhs_address = func_data['address']
-                # Precompute function names to avoid IDA API calls in threads
-                lhs_name = self.value_to_string(IDA.get_function_name(lhs_address))
-                lhs_names[lhs_address] = lhs_name
+        for func in self.cfg.functions():
+            lhs_func = FunctionJsonDeserializer(func.json(), self.config)
+            # Filter out small functions or those with a low chromosome ratio
+            if lhs_func.size() < mininum_size:
+                continue
+            if lhs_func.chromosome_minhash_ratio() < chromosome_minhash_ratio_threshold:
+                continue
+            lhs_functions.append(lhs_func)
 
-        # Read and parse the JSON file once
+        # Build RHS function list from JSON file
+        rhs_functions = []
+        rhs_function_names = {}
         try:
             with open(file_path, 'r') as f:
-                rhs_functions_raw = [json.loads(line) for line in f]
+                for line in f:
+                    # Parse JSON exactly once per line
+                    try:
+                        function_dict = json.loads(line)
+                    except json.JSONDecodeError:
+                        # Skip lines that aren't valid JSON
+                        continue
+
+                    # Skip if not a function
+                    if function_dict.get('type') != 'function':
+                        continue
+
+                    rhs_func = FunctionJsonDeserializer(line, self.config)
+
+                    # Filter out small functions or those with a low chromosome ratio
+                    if rhs_func.size() < mininum_size:
+                        continue
+                    if rhs_func.chromosome_minhash_ratio() < chromosome_minhash_ratio_threshold:
+                        continue
+
+                    rhs_functions.append(rhs_func)
+                    # Cache the "RHS function name" only once
+                    rhs_function_names[rhs_func.address()] = self.get_rhs_function_name(function_dict)
         except Exception as e:
             ida_kernwin.warning(f"[x] Error reading JSON file: {e}")
             return
 
-        # Pre-filter RHS functions based on size and minhash ratio
-        rhs_functions = []
-        rhs_names = {}  # Dictionary to store RHS function names
-        for rhs in rhs_functions_raw:
-            if rhs['size'] < mininum_size or rhs['chromosome_minhash_ratio'] < chromosome_minhash_ratio_threshold:
-                continue
-            rhs_functions.append(rhs)
-            rhs_address = rhs['address']
-            # Precompute function names for RHS
-            rhs_name = self.get_rhs_function_name(rhs)
-            rhs_names[rhs_address] = rhs_name
-
-        # Initialize and display the progress bar
-        progress = Progress(title='Comparing Functions', max_value=len(lhs_functions))
+        print("[-] starting function compare")
+        progress = Progress(title="Comparing Functions", max_value=len(lhs_functions))
         progress.show()
 
         table = []
-        table_lock = threading.Lock()  # Lock to ensure thread-safe writes to the table
+        for lhs_function in lhs_functions:
+            if progress.is_closed:
+                break
 
-        def worker_compare(lhs, rhs_functions, size_ratio, minhash_score_threshold, chromosome_minhash_ratio_threshold):
-            """
-            Worker function to compare a single LHS function against all RHS functions.
-            Returns a list of rows to be added to the table.
-            """
-            local_rows = []
-            for rhs in rhs_functions:
-                # Filter based on size ratio
-                ratio = self.size_ratio(lhs['size'], rhs['size'])
-                if ratio < size_ratio:
+            # Precompute common values for LHS
+            lhs_address = lhs_function.address()
+            lhs_address_hex = hex(lhs_address)
+            lhs_contiguous = str(lhs_function.contiguous())
+            lhs_name = self.value_to_string(IDA.get_function_name(lhs_address))
+
+            # Filter RHS once based on size ratio
+            filtered_rhs = [
+                rhs_func for rhs_func in rhs_functions
+                if self.size_ratio(lhs_function.size(), rhs_func.size()) >= size_ratio
+            ]
+
+            # Compare LHS against the filtered RHS set
+            compare_results = lhs_function.compare_many(filtered_rhs)
+
+            for rhs_addr, result in compare_results.items():
+                minhash_score = result.score.minhash()
+                if minhash_score is None or minhash_score < minhash_score_threshold:
                     continue
 
-                # Perform the comparison using the full JSON objects
-                delta = self.compare_function(
-                    lhs,
-                    rhs,
-                    self.config,
-                    minhash_score_threshold=minhash_score_threshold,
-                    chromosome_minhash_ratio_threshold=chromosome_minhash_ratio_threshold
-                )
-                if delta is None:
-                    continue
+                tlsh_score = result.score.tlsh()
 
-                # Retrieve precomputed names
-                lhs_address = lhs['address']
-                lhs_name = lhs_names.get(lhs_address, 'Unknown')
+                print(f"[-] lhs: {lhs_address_hex} vs. rhs: {hex(rhs_addr)}: {minhash_score}")
 
-                rhs_address = rhs['address']
-                rhs_name = rhs_names.get(rhs_address, 'Unknown')
-
-                # Retrieve contiguous and minhash fields
-                lhs_contiguous = lhs['contiguous']
-                lhs_minhash = self.value_to_string(lhs['chromosome']['minhash']) if lhs_contiguous else ''
-
-                rhs_contiguous = rhs['contiguous']
-                rhs_minhash = self.value_to_string(rhs['chromosome']['minhash']) if rhs_contiguous else ''
-
-                # Construct the row with all required data
                 row = [
-                    hex(lhs_address),
+                    lhs_address_hex,
+                    lhs_contiguous,
                     lhs_name,
-                    hex(rhs_address),
-                    rhs_name,
-                    str(delta),
-                    str(lhs_contiguous),
-                    str(rhs_contiguous),
-                    lhs_minhash,
-                    rhs_minhash
+                    str(hex(rhs_addr)),
+                    rhs_function_names[rhs_addr],
+                    str(minhash_score),
+                    str(self.value_to_string(tlsh_score))
                 ]
-                local_rows.append(row)
-            return local_rows
+                table.append(row)
 
-        # Determine the number of worker threads
-        max_workers = min(self.config.general.threads, len(lhs_functions))
+            progress.increment()
 
-        # Use ThreadPoolExecutor to manage threads
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Create a partial function with fixed arguments except for 'lhs'
-            compare_partial = partial(
-                worker_compare,
-                rhs_functions=rhs_functions,
-                size_ratio=size_ratio,
-                minhash_score_threshold=minhash_score_threshold,
-                chromosome_minhash_ratio_threshold=chromosome_minhash_ratio_threshold
-            )
-
-            # Submit all tasks to the thread pool
-            future_to_lhs = {executor.submit(compare_partial, lhs): lhs for lhs in lhs_functions}
-
-            # As each task completes, collect the results and update the table
-            for future in as_completed(future_to_lhs):
-                lhs = future_to_lhs[future]
-                try:
-                    rows = future.result()
-                    with table_lock:
-                        table.extend(rows)
-                except Exception as e:
-                    ida_kernwin.warning(f"[x] error comparing function at {hex(lhs['address'])}: {e}")
-                    return
-                finally:
-                    # Increment progress by 1 for each completed LHS function
-                    progress.increment(1)
-
-        # Close the progress bar after all comparisons are done
+        print("[*] function compare completed")
         progress.close()
 
-        # Define table headers
         headers = [
-            'LHS Address',
-            'LHS Name',
-            'RHS Address',
-            'RHS Name',
-            'MinHash Score',
-            'LHS Contiguous',
-            'RHS Contiguous',
-            'LHS MinHash',
-            'RHS MinHash'
+            "LHS Address",
+            "LHS Contiguous",
+            "LHS Name",
+            "RHS Address",
+            "RHS Name",
+            "MinHash Score",
+            "TLSH Score",
         ]
 
-        # Create and display the gradient table with the comparison results
         form = GradientTable(
             table,
             headers,
-            color_column=4,
+            color_column=5,
             min_value=0,
             max_value=1,
             low_to_high=True,
-            default_filter_column=1,
-            default_sort_column=4,
+            default_filter_column=2,
+            default_sort_column=5,
             default_sort_ascending=False
         )
-        form.Show('Binlex Function Compare Table')
+        form.Show("Binlex Function Compare Table")
 
 
     def action_binary_view(self):
         if not self.binary_view_window:
-            SVG_STRING = '''
-            <svg xmlns="http://www.w3.org/2000/svg" width="800" height="600">
-                <rect x="50" y="50" width="200" height="150" fill="#FF0000" data-json='{"name": "Red Rectangle", "id": 1, "description": "This is a red rectangle."}' />
-                <rect x="300" y="50" width="200" height="150" fill="#00FF00" data-json='{"name": "Green Rectangle", "id": 2, "description": "This is a green rectangle."}' />
-                <rect x="550" y="50" width="200" height="150" fill="#0000FF" data-json='{"name": "Blue Rectangle", "id": 3, "description": "This is a blue rectangle."}' />
-                <rect x="50" y="250" width="200" height="150" fill="#FFFF00" data-json='{"name": "Yellow Rectangle", "id": 4, "description": "This is a yellow rectangle."}' />
-                <rect x="300" y="250" width="200" height="150" fill="#FF00FF" data-json='{"name": "Magenta Rectangle", "id": 5, "description": "This is a magenta rectangle."}' />
-                <rect x="550" y="250" width="200" height="150" fill="#00FFFF" data-json='{"name": "Cyan Rectangle", "id": 6, "description": "This is a cyan rectangle."}' />
-                <!-- Add more rects as needed for testing -->
-            </svg>
-            '''
-            self.binary_view_window = SVGWidget(svg_string=SVG_STRING, title='Binlex Binary View')
+            colormap = ColorMap()
+            segments = []
+            for seg_ea in idautils.Segments():
+                start = idc.get_segm_start(seg_ea)
+                end = idc.get_segm_end(seg_ea)
+                segments.append((start, end))
+            segments.sort(key=lambda x: x[0], reverse=True)
+            for start, end in segments:
+                data = IDA.get_bytes(start, end - start)
+                colormap.append(start, data)
+            SVG_STRING = colormap.to_svg_string()
+            self.binary_view_window = SVGWidget(svg_string=SVG_STRING, title='Binlex Color Map')
         self.binary_view_window.show()
 
     def open_table_window(self):
