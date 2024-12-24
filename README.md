@@ -114,7 +114,9 @@ Using the IDA plugin you have various features that are provided to help you wit
 
 **Main Menu:**
 - Export Binlex JSON (Uses IDA CFG and Function Names)
-- Function Hash Table View
+- Function Table (Contains Function Similarity Hashes and Patterns)
+- Compare Functions for Similarity
+- Color Map (Visually Navigate with Color Map)
 
 **Disassembler Context Menu:**
 - Copy YARA Pattern
@@ -124,7 +126,9 @@ Using the IDA plugin you have various features that are provided to help you wit
 - Scan for MinHash
 - Scan for TLSH
 
-**NOTE:** Function comparison is coming soon in the IDA plugin so you can compare databases...
+The copy pattern and copy hex feature is intended to help with YARA rules and the copying of similarity hashes and scanning is for hunting for similar data.
+
+To compare one database against another, use the export feature to export the JSON file, then click `Compare Functions`, which will populate a table once completed.
 
 ### Documentation
 
