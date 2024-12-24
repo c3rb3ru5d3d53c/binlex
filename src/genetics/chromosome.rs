@@ -313,7 +313,7 @@ pub struct ChromosomeSimilarityJson {
 }
 
 /// Represents a JSON-serializable structure containing metadata about a chromosome.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ChromosomeJson {
     /// The raw pattern string of the chromosome.
     pub pattern: String,
@@ -516,13 +516,20 @@ impl Chromosome {
         let rhs_minhash = rhs.minhash();
         let mut minhash: Option<f64> = None;
         if lhs_minhash.is_some() && rhs_minhash.is_some() {
-            minhash = Some(MinHash32::compare(&lhs_minhash.unwrap(), &rhs_minhash.unwrap()));
+            let value = MinHash32::compare(&lhs_minhash.unwrap(), &rhs_minhash.unwrap());
+            if value > self.config.chromosomes.hashing.minhash.threshold {
+                minhash = Some(value);
+            }
         }
         let lhs_tlsh = self.tlsh();
         let rhs_tlsh = rhs.tlsh();
         let mut tlsh: Option<f64> = None;
         if lhs_tlsh.is_some() && rhs_tlsh.is_some() {
-            tlsh = TLSH::compare(lhs_tlsh.unwrap(), rhs_tlsh.unwrap());
+            if let Some(value)= TLSH::compare(lhs_tlsh.unwrap(), rhs_tlsh.unwrap()) {
+                if value < self.config.chromosomes.hashing.tlsh.threshold {
+                    tlsh = Some(value);
+                }
+            }
         }
 
         if minhash.is_none() && tlsh.is_none() { return None; }

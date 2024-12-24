@@ -166,6 +166,8 @@
 
 use std::str::FromStr;
 use std::fmt;
+use std::io::Error;
+use std::io::ErrorKind;
 
 /// Represents the different architectures of a binary.
 #[repr(u16)]
@@ -194,6 +196,18 @@ impl Architecture {
 impl Architecture {
     pub fn to_list() -> String {
         Architecture::to_vec().join(", ")
+    }
+
+    pub fn from_string(s: &str) -> Result<Self, Error> {
+        match s.to_lowercase().as_str() {
+            "amd64" => Ok(Architecture::AMD64),
+            "i386" => Ok(Architecture::I386),
+            "cil" => Ok(Architecture::CIL),
+            _ => Err(Error::new(
+                ErrorKind::InvalidInput,
+                format!("invalid or unsupported architecture: {}", s),
+            )),
+        }
     }
 }
 

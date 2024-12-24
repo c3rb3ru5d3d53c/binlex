@@ -264,7 +264,7 @@ impl Function {
             let rhs_cfg = rhs_binding_1.inner.lock().unwrap();
             let rhs_inner = InnerFunction::new(rhs_address, &rhs_cfg).ok();
             if rhs_inner.is_none() { return Ok(None); }
-            let inner = function.compare(&rhs_inner.unwrap());
+            let inner = function.compare(&rhs_inner.unwrap())?;
             if inner.is_none() { return Ok(None); }
             let similarity = ChromosomeSimilarity {
                 inner: Arc::new(Mutex::new(inner.unwrap())),
@@ -353,8 +353,8 @@ impl Function {
     ///
     /// # Returns
     /// - `bool`: `true` if the function starts with a prologue; otherwise, `false`.
-    pub fn is_prologue(&self, py: Python) -> PyResult<bool> {
-        self.with_inner_function(py, |function| Ok(function.is_prologue()))
+    pub fn prologue(&self, py: Python) -> PyResult<bool> {
+        self.with_inner_function(py, |function| Ok(function.prologue()))
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -443,8 +443,8 @@ impl Function {
     ///
     /// # Returns
     /// - `bool`: `True` if contiguous; otherwise, `False`.
-    pub fn is_contiguous(&self, py: Python) -> PyResult<bool> {
-        self.with_inner_function(py, |function| Ok(function.is_contiguous()))
+    pub fn contiguous(&self, py: Python) -> PyResult<bool> {
+        self.with_inner_function(py, |function| Ok(function.contiguous()))
     }
 
     #[pyo3(text_signature = "($self)")]

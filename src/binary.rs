@@ -222,6 +222,20 @@ impl Binary {
             .collect::<String>()
     }
 
+    pub fn from_hex(hex: &str) -> Result<Vec<u8>, String> {
+        if hex.len() % 2 != 0 {
+            return Err("hex string has an odd length".to_string());
+        }
+
+        hex.as_bytes()
+            .chunks(2)
+            .map(|chunk| {
+                let hex_str = std::str::from_utf8(chunk).map_err(|_| "invalid UTF-8 in hex string")?;
+                u8::from_str_radix(hex_str, 16).map_err(|_| format!("invalid hex: {}", hex_str))
+            })
+            .collect()
+    }
+
     /// Creates a human-readable hex dump of the provided byte data.
     ///
     /// This method formats the binary data into a string representation with both

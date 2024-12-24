@@ -164,8 +164,6 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-use std::str::FromStr;
-
 use pyo3::prelude::*;
 use pyo3::exceptions::PyValueError;
 use binlex::Architecture as InnerArchitecture;
@@ -192,7 +190,7 @@ impl Architecture {
     #[staticmethod]
     #[pyo3(text_signature = "(s)")]
     pub fn from_str(s: String) -> PyResult<Self> {
-        let inner = InnerArchitecture::from_str(&s)
+        let inner = InnerArchitecture::from_string(&s)
         .map_err(|err| PyValueError::new_err(format!(
             "invalid or unsupported binary architecture: {}",
             err
