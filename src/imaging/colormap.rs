@@ -84,7 +84,7 @@ impl ColorMap {
             metadata_entries: BTreeMap::new(),
             svg_rectangles: Vec::new(),
             total_cells: 0,
-            fixed_width: 1024,
+            fixed_width: 256,
         }
     }
 
