@@ -402,18 +402,6 @@ impl ConfigChromosomesHashingTLSH {
     }
 
     #[getter]
-    pub fn get_threshold(&self) -> f64 {
-        let inner = self.inner.lock().unwrap();
-        inner.chromosomes.hashing.tlsh.threshold
-    }
-
-    #[setter]
-    pub fn set_threshold(&mut self, value: f64) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.hashing.tlsh.threshold = value;
-    }
-
-    #[getter]
     pub fn get_minimum_byte_size(&self) -> usize {
         let inner = self.inner.lock().unwrap();
         inner.chromosomes.hashing.tlsh.minimum_byte_size
@@ -444,18 +432,6 @@ impl ConfigChromosomesHashingMinhash {
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
         inner.chromosomes.hashing.minhash.enabled = value;
-    }
-
-    #[getter]
-    pub fn get_threshold(&self) -> f64 {
-        let inner = self.inner.lock().unwrap();
-        inner.chromosomes.hashing.minhash.threshold
-    }
-
-    #[setter]
-    pub fn set_threshold(&mut self, value: f64) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.hashing.minhash.threshold = value;
     }
 
     #[getter]
@@ -695,18 +671,6 @@ impl ConfigFunctionsHashingTLSH {
     }
 
     #[getter]
-    pub fn get_threshold(&self) -> f64 {
-        let inner = self.inner.lock().unwrap();
-        inner.functions.hashing.tlsh.threshold
-    }
-
-    #[setter]
-    pub fn set_threshold(&mut self, value: f64) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.functions.hashing.tlsh.threshold = value;
-    }
-
-    #[getter]
     pub fn get_minimum_byte_size(&self) -> usize {
         let inner = self.inner.lock().unwrap();
         inner.functions.hashing.tlsh.minimum_byte_size
@@ -737,18 +701,6 @@ impl ConfigFunctionsHashingMinhash {
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
         inner.functions.hashing.minhash.enabled = value;
-    }
-
-    #[getter]
-    pub fn get_threshold(&self) -> f64 {
-        let inner = self.inner.lock().unwrap();
-        inner.functions.hashing.minhash.threshold
-    }
-
-    #[setter]
-    pub fn set_threshold(&mut self, value: f64) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.functions.hashing.minhash.threshold = value;
     }
 
     #[getter]
@@ -1152,18 +1104,6 @@ impl ConfigInstructionsHashingTLSH {
     }
 
     #[getter]
-    pub fn get_threshold(&self) -> f64 {
-        let inner = self.inner.lock().unwrap();
-        inner.instructions.hashing.tlsh.threshold
-    }
-
-    #[setter]
-    pub fn set_threshold(&mut self, value: f64) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.instructions.hashing.tlsh.threshold = value;
-    }
-
-    #[getter]
     pub fn get_minimum_byte_size(&self) -> usize {
         let inner = self.inner.lock().unwrap();
         inner.instructions.hashing.tlsh.minimum_byte_size
@@ -1193,18 +1133,6 @@ impl ConfigInstructionsHashingMinhash {
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
         inner.instructions.hashing.minhash.enabled = value;
-    }
-
-    #[getter]
-    pub fn get_threshold(&self) -> f64 {
-        let inner = self.inner.lock().unwrap();
-        inner.instructions.hashing.minhash.threshold
-    }
-
-    #[setter]
-    pub fn set_threshold(&mut self, value: f64) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.instructions.hashing.minhash.threshold = value;
     }
 
     #[getter]
@@ -1288,18 +1216,6 @@ impl ConfigBlocksHashingTLSH {
     }
 
     #[getter]
-    pub fn get_threshold(&self) -> f64 {
-        let inner = self.inner.lock().unwrap();
-        inner.blocks.hashing.tlsh.threshold
-    }
-
-    #[setter]
-    pub fn set_threshold(&mut self, value: f64) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.blocks.hashing.tlsh.threshold = value;
-    }
-
-    #[getter]
     pub fn get_minimum_byte_size(&self) -> usize {
         let inner = self.inner.lock().unwrap();
         inner.blocks.hashing.tlsh.minimum_byte_size
@@ -1330,18 +1246,6 @@ impl ConfigBlocksHashingMinhash {
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
         inner.blocks.hashing.minhash.enabled = value;
-    }
-
-    #[getter]
-    pub fn get_threshold(&self) -> f64 {
-        let inner = self.inner.lock().unwrap();
-        inner.blocks.hashing.minhash.threshold
-    }
-
-    #[setter]
-    pub fn set_threshold(&mut self, value: f64) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.blocks.hashing.minhash.threshold = value;
     }
 
     #[getter]
@@ -1577,18 +1481,6 @@ impl ConfigFormatsFileHashingTLSH {
     }
 
     #[getter]
-    pub fn get_threshold(&self) -> f64 {
-        let inner = self.inner.lock().unwrap();
-        inner.formats.file.hashing.tlsh.threshold
-    }
-
-    #[setter]
-    pub fn set_threshold(&mut self, value: f64) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.formats.file.hashing.tlsh.threshold = value;
-    }
-
-    #[getter]
     pub fn get_minimum_byte_size(&self) -> usize {
         let inner = self.inner.lock().unwrap();
         inner.formats.file.hashing.tlsh.minimum_byte_size
@@ -1619,18 +1511,6 @@ impl ConfigFormatsFileHashingMinhash {
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
         inner.formats.file.hashing.minhash.enabled = value;
-    }
-
-    #[getter]
-    pub fn get_threshold(&self) -> f64 {
-        let inner = self.inner.lock().unwrap();
-        inner.formats.file.hashing.minhash.threshold
-    }
-
-    #[setter]
-    pub fn set_threshold(&mut self, value: f64) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.formats.file.hashing.minhash.threshold = value;
     }
 
     #[getter]
