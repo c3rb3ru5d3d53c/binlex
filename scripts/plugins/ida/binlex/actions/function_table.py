@@ -8,10 +8,10 @@ def execute(parent):
     for function in parent.cfg.functions():
         chromosome = function.chromosome()
         row = []
-        row.append(str(hex(function.address)))
-        row.append(IDA.get_function_name(function.address))
+        row.append(str(hex(function.address())))
+        row.append(IDA.get_function_name(function.address()))
         row.append("function")
-        row.append(function.is_contiguous())
+        row.append(function.contiguous())
         row.append(function.size())
         row.append(function.number_of_blocks())
         row.append(function.cyclomatic_complexity())
