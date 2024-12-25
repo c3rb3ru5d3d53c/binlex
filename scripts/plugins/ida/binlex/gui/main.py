@@ -15,7 +15,7 @@ class Main(QWidget):
 
     def init_ui(self):
         self.setWindowTitle('Binlex')
-        self.setFixedSize(300, 200)
+        self.setFixedSize(300, 250)
         self.setWindowFlags(Qt.Window | Qt.WindowCloseButtonHint | Qt.WindowTitleHint)
 
         image_data = zlib.decompress(base64.b64decode(LOGO))
@@ -50,6 +50,16 @@ class Main(QWidget):
         btn6.setStyleSheet(QPUSHBUTTON_STYLE)
 
         layout.addWidget(btn6)
+
+        # hi
+
+        btn7 = QPushButton('JSON Search')
+        btn7.clicked.connect(self.plugin.action_json_search_window)
+
+        btn7.setStyleSheet(QPUSHBUTTON_STYLE)
+
+        layout.addWidget(btn7)
+        # hi
 
         btn2 = QPushButton('About')
         btn2.clicked.connect(self.plugin.open_about_window)
