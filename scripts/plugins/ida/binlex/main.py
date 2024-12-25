@@ -215,6 +215,7 @@ from gui import unregister_action_handlers
 from gui import Main
 from gui import SVGWidget
 from gui import Progress
+from gui import JSONSearchWindow
 from text import BANNER
 from actions import copy_pattern
 from actions import copy_hex
@@ -241,6 +242,7 @@ class BinlexPlugin(idaapi.plugin_t):
         self.about_window = None
         self.table_window = None
         self.binary_view_window = None
+        self.json_search_window = None
         self.ui_hooks = UIHooks(self)
         self.ui_hooks.hook()
         register_action_handlers(self)
@@ -529,6 +531,13 @@ class BinlexPlugin(idaapi.plugin_t):
         )
         form.Show("Binlex Function Compare Table")
 
+    def action_json_search_window(self):
+        if not self.json_search_window:
+            self.disassemble_controlflow()
+            data = [json.loads(function.json()) for function in self.cfg.functions()]
+            data.extend([json.loads(block.json()) for block in self.cfg.blocks()])
+            self.json_search_window = JSONSearchWindow(json_objects=data)
+        self.json_search_window.Show('Binlex JSON Search')
 
     def action_binary_view(self):
         if not self.binary_view_window:

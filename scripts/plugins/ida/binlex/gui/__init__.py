@@ -6,6 +6,7 @@ from .scan_minhash import ScanMinHashInputDialog
 from .scan_tlsh import ScanTLSHInputDialog
 from .compare_functions import CompareFunctionsDialog
 from .svg import SVGWidget
+from .json_search import JSONSearchWindow
 from .action_handlers import BinlexExportActionHandler
 from .action_handlers import CopyHexActionHandler
 from .action_handlers import CopyPatternActionHandler
