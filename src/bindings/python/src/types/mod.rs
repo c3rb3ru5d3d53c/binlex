@@ -175,6 +175,7 @@ use crate::types::lz4string::lz4string_init;
 pub use crate::types::memorymappedfile::MemoryMappedFile;
 pub use crate::types::lz4string::LZ4String;
 pub use crate::types::vecnode::VecNode;
+pub use crate::types::vecnode::VecGraph;
 
 use pyo3::{prelude::*, wrap_pymodule};
 
@@ -187,6 +188,7 @@ pub fn types_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<MemoryMappedFile>()?;
     m.add_class::<LZ4String>()?;
     m.add_class::<VecNode>()?;
+    m.add_class::<VecGraph>()?;
     py.import_bound("sys")?
         .getattr("modules")?
         .set_item("binlex.types", m)?;

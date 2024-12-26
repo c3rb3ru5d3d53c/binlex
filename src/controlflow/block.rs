@@ -215,6 +215,8 @@ pub struct BlockJson {
     pub bytes: String,
     /// A map of function addresses related to this block.
     pub functions: BTreeMap<u64, u64>,
+    // Blocks this blocks has as children.
+    pub blocks: BTreeSet<u64>,
     /// The number of instructions in this block.
     pub number_of_instructions: usize,
     /// Instructions assocated with this block.
@@ -278,6 +280,11 @@ impl BlockJsonDeserializer {
                 .collect();
             Ok(result)
         })
+    }
+
+    #[allow(dead_code)]
+    pub fn blocks(&self) -> BTreeSet<u64> {
+        self.json.blocks.clone()
     }
 
     #[allow(dead_code)]
@@ -522,6 +529,7 @@ impl<'block> Block<'block> {
             number_of_instructions: self.number_of_instructions(),
             instructions: self.instructions_json(),
             functions: self.functions(),
+            blocks: self.blocks(),
             entropy: self.entropy(),
             sha256: self.sha256(),
             minhash: self.minhash(),

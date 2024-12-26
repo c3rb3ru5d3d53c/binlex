@@ -305,8 +305,23 @@ impl BlockJsonDeserializer {
     }
 
     #[pyo3(text_signature = "($self)")]
+    pub fn blocks(&self) -> BTreeSet<u64> {
+        self.inner.lock().unwrap().blocks()
+    }
+
+    #[pyo3(text_signature = "($self)")]
     pub fn to(&self) -> BTreeSet<u64> {
         self.inner.lock().unwrap().to()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn conditional(&self) -> bool {
+        self.inner.lock().unwrap().conditional()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn entropy(&self) -> Option<f64> {
+        self.inner.lock().unwrap().entropy()
     }
 
     #[pyo3(text_signature = "($self)")]
