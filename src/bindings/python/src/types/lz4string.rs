@@ -195,7 +195,7 @@ impl LZ4String {
 
 #[pymodule]
 #[pyo3(name = "lz4string")]
-pub fn memorymappedfile_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+pub fn lz4string_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<LZ4String>()?;
     py.import_bound("sys")?
         .getattr("modules")?
