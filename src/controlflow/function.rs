@@ -269,6 +269,18 @@ impl FunctionJsonDeserializer {
         self.json.address
     }
 
+    pub fn blocks(&self) -> Vec<BlockJsonDeserializer> {
+        let mut result = Vec::<BlockJsonDeserializer>::new();
+        for block in &self.json.blocks {
+            let block_json_seserializer = BlockJsonDeserializer {
+                json: block.clone(),
+                config: self.config.clone(),
+            };
+            result.push(block_json_seserializer);
+        }
+        result
+    }
+
     #[allow(dead_code)]
     pub fn bytes(&self) -> Option<Vec<u8>> {
         if self.json.bytes.is_none() { return None; }
@@ -301,24 +313,8 @@ impl FunctionJsonDeserializer {
     }
 
     #[allow(dead_code)]
-    pub fn blocks(&self) -> Result<Vec<BlockJsonDeserializer>, Error> {
-        let mut result = Vec::<BlockJsonDeserializer>::new();
-        for block in &self.json.blocks {
-            let string = match serde_json::to_string(block) {
-                Ok(string) => string,
-                Err(error) => {
-                    return Err(Error::new(ErrorKind::InvalidData, format!("{}", error)));
-                }
-            };
-            let blockjsondeserializer= match BlockJsonDeserializer::new(string, self.config.clone()) {
-                Ok(blockjsondeserializer) => blockjsondeserializer,
-                Err(error) => {
-                    return Err(Error::new(ErrorKind::InvalidData, format!("{}", error)));
-                }
-            };
-            result.push(blockjsondeserializer);
-        }
-        Ok(result)
+    pub fn functions(&self) -> BTreeMap<u64, u64> {
+        self.json.functions.clone()
     }
 
     #[allow(dead_code)]
@@ -380,11 +376,11 @@ impl FunctionJsonDeserializer {
         let mut minhashes = Vec::<f64>::new();
         let mut tls_values = Vec::<f64>::new();
 
-        for lhs_block in self.blocks()? {
+        for lhs_block in self.blocks() {
             let mut best_minhash: Option<f64> = None;
             let mut best_tls: Option<f64> = None;
 
-            let results = match lhs_block.compare_many(rhs.blocks()?) {
+            let results = match lhs_block.compare_many(rhs.blocks()) {
                 Ok(results) => results,
                 Err(error) => {
                     return Err(Error::new(ErrorKind::InvalidData, format!("{}", error)));

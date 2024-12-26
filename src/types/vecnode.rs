@@ -1,11 +1,10 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 
 #[derive(Debug, Clone)]
 pub struct VecNode {
     id: u64,
     properties: BTreeMap<String, Vec<f64>>,
-    children: Vec<VecNode>,
-    parents: Vec<VecNode>,
+    relationships: Vec<u64>,
 }
 
 impl VecNode {
@@ -13,8 +12,7 @@ impl VecNode {
         VecNode {
             id,
             properties: BTreeMap::new(),
-            children: Vec::new(),
-            parents: Vec::new(),
+            relationships: Vec::new(),
         }
     }
 
@@ -22,12 +20,8 @@ impl VecNode {
         self.id
     }
 
-    pub fn children(&self) -> &Vec<VecNode> {
-        &self.children
-    }
-
-    pub fn parents(&self) -> &Vec<VecNode> {
-        &self.parents
+    pub fn relationships(&self) -> &Vec<u64> {
+        &self.relationships
     }
 
     pub fn add_property(&mut self, key: &str, value: f64) {
@@ -44,106 +38,89 @@ impl VecNode {
             .extend(values);
     }
 
-    pub fn add_child(&mut self, mut child: VecNode) {
-        if !self.children.iter().any(|c| c.id == child.id) {
-            self.children.push(child.clone());
+    pub fn add_relationship(&mut self, id: u64) {
+        if !self.relationships.contains(&id) {
+            self.relationships.push(id);
         }
+    }
+}
 
-        if !child.parents.iter().any(|p| p.id == self.id) {
-            child.parents.push(self.clone());
+#[derive(Debug)]
+pub struct VecGraph {
+    nodes: HashMap<u64, VecNode>,
+}
+
+impl VecGraph {
+    pub fn new() -> Self {
+        VecGraph {
+            nodes: HashMap::new(),
         }
     }
 
-    pub fn add_parent(&mut self, mut parent: VecNode) {
-        if !self.parents.iter().any(|p| p.id == parent.id) {
-            self.parents.push(parent.clone());
-        }
+    pub fn insert_node(&mut self, node: VecNode) {
+        self.nodes.insert(node.id(), node);
+    }
 
-        if !parent.children.iter().any(|c| c.id == self.id) {
-            parent.children.push(self.clone());
+    pub fn get_node(&self, id: u64) -> Option<&VecNode> {
+        self.nodes.get(&id)
+    }
+
+    pub fn add_relationship(&mut self, node1_id: u64, node2_id: u64) {
+        if let Some(node1) = self.nodes.get_mut(&node1_id) {
+            node1.add_relationship(node2_id);
+        }
+        if let Some(node2) = self.nodes.get_mut(&node2_id) {
+            node2.add_relationship(node1_id);
         }
     }
 
     pub fn print(&self) {
-        self.print_internal(0);
-    }
-
-    fn print_internal(&self, depth: usize) {
-        let indent = "  ".repeat(depth);
-        println!("{}Node ID: {}", indent, self.id);
-
-        if self.properties.is_empty() {
-            println!("{}  Properties: None", indent);
-        } else {
-            println!("{}  Properties:", indent);
-            for (key, values) in &self.properties {
-                println!("{}    {}: {:?}", indent, key, values);
+        for node in self.nodes.values() {
+            println!("Node ID: {}", node.id);
+            println!("  Properties:");
+            for (key, values) in &node.properties {
+                println!("    {}: {:?}", key, values);
             }
-        }
-
-        if self.parents.is_empty() {
-            println!("{}  Parents: None", indent);
-        } else {
-            println!(
-                "{}  Parents: {:?}",
-                indent,
-                self.parents.iter().map(|p| p.id).collect::<Vec<_>>()
-            );
-        }
-
-        if self.children.is_empty() {
-            println!("{}  Children: None", indent);
-        } else {
-            println!("{}  Children:", indent);
-            for child in &self.children {
-                child.print_internal(depth + 1);
-            }
+            println!("  Relationships: {:?}", node.relationships);
         }
     }
 
     pub fn to_vec(&self) -> Vec<f64> {
-        fn encode_tree(
-            node: &VecNode,
-            depth: usize,
-            visited: &mut HashSet<u64>,
-            id_to_index: &mut HashMap<u64, usize>,
-            next_index: &mut usize,
-        ) -> Vec<f64> {
-            let mut node_vector = Vec::new();
-
-            if visited.contains(&node.id) {
-                let reference_index = *id_to_index.get(&node.id).unwrap();
-                node_vector.push(reference_index as f64);
-                return node_vector;
-            }
-
-            visited.insert(node.id);
-
-            let index = *id_to_index.entry(node.id).or_insert_with(|| {
-                let current = *next_index;
-                *next_index += 1;
-                current
-            });
-
-            node_vector.push(index as f64);
-            node_vector.push(depth as f64);
-            for values in node.properties.values() {
-                node_vector.extend(values);
-            }
-
-            for child in &node.children {
-                let child_vector =
-                    encode_tree(child, depth + 1, visited, id_to_index, next_index);
-                node_vector.extend(child_vector);
-            }
-
-            node_vector
-        }
-
-        let mut visited = HashSet::new();
-        let mut id_to_index = HashMap::new();
+        let mut graph_vector = Vec::new();
+        let mut visited = HashMap::new();
         let mut next_index = 0;
 
-        encode_tree(self, 0, &mut visited, &mut id_to_index, &mut next_index)
+        for node in self.nodes.values() {
+            if !visited.contains_key(&node.id) {
+                self.encode_node(node, &mut graph_vector, &mut visited, &mut next_index);
+            }
+        }
+
+        graph_vector
+    }
+
+    fn encode_node(
+        &self,
+        node: &VecNode,
+        graph_vector: &mut Vec<f64>,
+        visited: &mut HashMap<u64, usize>,
+        next_index: &mut usize,
+    ) {
+        let index = *visited.entry(node.id).or_insert_with(|| {
+            let current = *next_index;
+            *next_index += 1;
+            current
+        });
+
+        graph_vector.push(index as f64);
+        for values in node.properties.values() {
+            graph_vector.extend(values);
+        }
+
+        for related_id in &node.relationships {
+            if let Some(related_index) = visited.get(related_id) {
+                graph_vector.push(*related_index as f64);
+            }
+        }
     }
 }
