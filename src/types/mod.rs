@@ -166,9 +166,6 @@
 
 pub mod lz4string;
 pub mod memorymappedfile;
-pub mod vecnode;
 
 pub use lz4string::LZ4String;
 pub use memorymappedfile::MemoryMappedFile;
-pub use vecnode::VecNode;
-pub use vecnode::VecGraph;

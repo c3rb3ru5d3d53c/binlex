@@ -202,6 +202,12 @@ impl BlockJsonDeserializer {
         })
     }
 
+    #[pyo3(text_signature = "($self)")]
+    pub fn functions(&self) -> BTreeMap<u64, u64> {
+        self.inner.lock().unwrap().functions()
+    }
+
+    #[pyo3(text_signature = "($self)")]
     pub fn architecture(&self) -> PyResult<Architecture> {
         let inner = InnerArchitecture::from_string(&self.inner.lock().unwrap().json.architecture)
             .map_err(|err| pyo3::exceptions::PyRuntimeError::new_err(format!("{}", err)))?;
