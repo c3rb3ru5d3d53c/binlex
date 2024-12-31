@@ -35,6 +35,15 @@ databases = [
     'goodware',
     'malware',
 ]
+collections = [
+    'blocks',
+    'functions',
+]
+partitions = [
+    'amd64',
+    'i386',
+    'cil',
+]
 
 [milvus.collection.names]
 functions = 'functions'
