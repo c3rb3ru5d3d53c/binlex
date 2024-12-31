@@ -61,36 +61,36 @@ services:
       - "etcd"
       - "minio"
 
-  # blserver:
-  #   container_name: blserver
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #   environment:
-  #     CONFIG_FILE: /app/config.toml
-  #   volumes:
-  #     - ${DOCKER_VOLUME_DIRECTORY:-.}/configs/blserver.toml:/app/config.toml
-  #   command: ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "blserver:create_app(config='/app/config.toml')"]
-  #   ports:
-  #     - "5000:5000"
-  #   depends_on:
-  #     - "milvus"
-  #     - "minio"
+  blserver:
+    container_name: blserver
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      CONFIG_FILE: /app/config.toml
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/configs/blserver.toml:/app/config.toml
+    command: ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "blserver:create_app(config='/app/config.toml')"]
+    ports:
+      - "5000:5000"
+    depends_on:
+      - "milvus"
+      - "minio"
 
-  # blserver-proxy:
-  #   container_name: blserver-proxy
-  #   image: nginx:latest
-  #   depends_on:
-  #     - blserver
-  #   ports:
-  #     - "8080:8080"
-  #     - "8443:8443"
-  #   volumes:
-  #     -  ${DOCKER_VOLUME_DIRECTORY:-.}/configs/nginx.conf:/etc/nginx/nginx.conf:ro
-  #     -  ${DOCKER_VOLUME_DIRECTORY:-.}/configs/nginx.crt:/etc/nginx/certs/server.crt:ro
-  #     -  ${DOCKER_VOLUME_DIRECTORY:-.}/configs/nginx.key:/etc/nginx/certs/server.key:ro
-  #   networks:
-  #     - default
+  blserver-proxy:
+    container_name: blserver-proxy
+    image: nginx:latest
+    depends_on:
+      - blserver
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+    volumes:
+      -  ${DOCKER_VOLUME_DIRECTORY:-.}/configs/nginx.conf:/etc/nginx/nginx.conf:ro
+      -  ${DOCKER_VOLUME_DIRECTORY:-.}/configs/nginx.crt:/etc/nginx/certs/server.crt:ro
+      -  ${DOCKER_VOLUME_DIRECTORY:-.}/configs/nginx.key:/etc/nginx/certs/server.key:ro
+    networks:
+      - default
 
 networks:
   default:
