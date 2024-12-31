@@ -1,0 +1,7 @@
+flask-restx==1.3.0
+pymilvus==2.5.2
+torch-geometric==2.6.1
+torch==2.5.1
+torch-pca==1.0.0
+minio==7.2.13
+gunicorn==23.0.0

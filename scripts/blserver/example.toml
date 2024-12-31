@@ -1,0 +1,50 @@
+[blserver]
+threads = 1
+host = '0.0.0.0'
+port = 5000
+debug = true
+
+[blserver.authentication]
+api_keys = [
+    '39248239c8ed937d6333a41874f1c8e310c5070703af30c06e67b0d308cb82c5',
+]
+
+[blserver.similarity]
+top_k = 3
+threshold = 0.75
+
+[blserver.cache]
+enabled = true
+
+[minio]
+host = 'minio'
+port = 9000
+bucket = 'binlex'
+secure = false
+
+[minio.keys]
+access = 'minioadmin'
+secret = 'minioadmin'
+
+[milvus]
+host = 'milvus'
+port = 19530
+database = 'default'
+databases = [
+    'default',
+    'goodware',
+    'malware',
+]
+
+[milvus.collection.names]
+functions = 'functions'
+blocks = 'blocks'
+
+[milvus.authentication]
+username = 'root'
+password = 'Milvus'
+
+[milvus.dimensions]
+input = 16
+hidden = 32
+output = 16
