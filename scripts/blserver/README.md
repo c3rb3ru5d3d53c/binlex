@@ -1,19 +1,17 @@
 # Binlex Server
 
+The **binlex** server provides HTTP endpoints enabling the storage of vector embeddings for functions.
+
+This is accomplished by receiving **binlex** formatted JSON, converting it into Graph Neural Network (GNN)
 
 ## Installing
+
+Getting the **binlex** server up and running is as simple as using two commands.
+
 ```bash
-cp example.toml config.toml # Config for blserver
-cp example.yaml milvus.yaml # Config for Milvus
-docker-compose up -d
+make -C configs/       # Create Default Configurations
+docker-compose up -d   # Build and Start
 ```
 
-### Setting up MinIO
+Once started naviagate to `https://127.0.0.1:8443/swagger` to view the API docs.
 
-Milvus comes with MinIO, and `blserver` leverages it for object storage.
-
-Navigate to `http://127.0.0.1:9001`, and login with the MinIO credentials you set in the `docker-compose.yml` file.
-
-Once logged in you will need to create an access key, which will provide you an access key and secret key.
-
-This access key and secret key needs to be set for MinIO in your `config.toml` configuration file for `blserver`.

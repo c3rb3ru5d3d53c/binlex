@@ -6,7 +6,7 @@ COPY . /app
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-RUN cp example.toml config.toml
+RUN cp configs/blserver.toml.bak config.toml
 
 ENV CONFIG_FILE=/app/config.toml
 
