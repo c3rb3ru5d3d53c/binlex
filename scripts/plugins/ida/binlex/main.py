@@ -216,6 +216,8 @@ from gui import Main
 from gui import SVGWidget
 from gui import Progress
 from gui import JSONSearchWindow
+from gui import DatabaseExportOptionsDialog
+from gui import BinlexServerSettingsDialog
 from text import BANNER
 from actions import copy_pattern
 from actions import copy_hex
@@ -228,6 +230,8 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import partial
 from binlex.imaging import ColorMap
+from database import BinlexVectorDB
+from binlexserverclient import BinlexServerClient
 
 class BinlexPlugin(idaapi.plugin_t):
     flags = idaapi.PLUGIN_DRAW
@@ -398,138 +402,61 @@ class BinlexPlugin(idaapi.plugin_t):
 
     def action_compare_functions(self):
         dialog = CompareFunctionsDialog()
-        if dialog.exec_() != QDialog.Accepted:
-            return
-
-        # Retrieve user inputs from the dialog
+        if dialog.exec_() != QDialog.Accepted: return
         (
             minhash_score_threshold,
             mininum_size,
-            size_ratio,
-            chromosome_minhash_ratio_threshold
+            size_ratio_threshold,
+            chromosome_minhash_ratio_threshold,
+            combined_ratio_threshold,
+            gnn_similarity_threshold,
+            url,
+            api_key,
+            database,
         ) = dialog.get_inputs()
-
-        # Prompt the user to select a JSON file
-        file_path = ida_kernwin.ask_file(0, "*.json", 'Binlex JSON File')
-        if not file_path:
-            return
-
+        client = BinlexServerClient(url=url, api_key=api_key)
         self.disassemble_controlflow()
-
-        # Build LHS function list (only once)
-        lhs_functions = []
-        for func in self.cfg.functions():
-            lhs_func = FunctionJsonDeserializer(func.json(), self.config)
-            # Filter out small functions or those with a low chromosome ratio
-            if lhs_func.size() < mininum_size:
-                continue
-            if lhs_func.chromosome_minhash_ratio() < chromosome_minhash_ratio_threshold:
-                continue
-            lhs_functions.append(lhs_func)
-
-        # Build RHS function list from JSON file
-        rhs_functions = []
-        rhs_function_names = {}
-        try:
-            with open(file_path, 'r') as f:
-                for line in f:
-                    # Parse JSON exactly once per line
-                    try:
-                        function_dict = json.loads(line)
-                    except json.JSONDecodeError:
-                        # Skip lines that aren't valid JSON
-                        continue
-
-                    # Skip if not a function
-                    if function_dict.get('type') != 'function':
-                        continue
-
-                    rhs_func = FunctionJsonDeserializer(line, self.config)
-
-                    # Filter out small functions or those with a low chromosome ratio
-                    if rhs_func.size() < mininum_size:
-                        continue
-                    if rhs_func.chromosome_minhash_ratio() < chromosome_minhash_ratio_threshold:
-                        continue
-
-                    rhs_functions.append(rhs_func)
-                    # Cache the "RHS function name" only once
-                    rhs_function_names[rhs_func.address()] = self.get_rhs_function_name(function_dict)
-        except Exception as e:
-            ida_kernwin.warning(f"[x] Error reading JSON file: {e}")
-            return
-
-        print("[-] starting function compare")
-        progress = Progress(title="Comparing Functions", max_value=len(lhs_functions))
+        functions = self.get_function_json_deserializers()
+        progress = Progress(title='Performing Function Queries', max_value=len(functions))
         progress.show()
-
         table = []
-        for lhs_function in lhs_functions:
-            if progress.is_closed:
-                break
-
-            # Precompute common values for LHS
-            lhs_address = lhs_function.address()
-            lhs_address_hex = hex(lhs_address)
-            lhs_contiguous = str(lhs_function.contiguous())
-            lhs_name = self.value_to_string(IDA.get_function_name(lhs_address))
-
-            # Filter RHS once based on size ratio
-            filtered_rhs = [
-                rhs_func for rhs_func in rhs_functions
-                if self.size_ratio(lhs_function.size(), rhs_func.size()) >= size_ratio
-            ]
-
-            # Compare LHS against the filtered RHS set
-            compare_results = lhs_function.compare_many(filtered_rhs)
-
-            for rhs_addr, result in compare_results.items():
-                minhash_score = result.score.minhash()
-                if minhash_score is None or minhash_score < minhash_score_threshold:
-                    continue
-
-                tlsh_score = result.score.tlsh()
-
-                print(f"[-] lhs: {lhs_address_hex} vs. rhs: {hex(rhs_addr)}: {minhash_score}")
-
-                row = [
-                    lhs_address_hex,
-                    lhs_contiguous,
-                    lhs_name,
-                    str(hex(rhs_addr)),
-                    rhs_function_names[rhs_addr],
-                    str(minhash_score),
-                    str(self.value_to_string(tlsh_score))
-                ]
-                table.append(row)
-
+        for function in functions:
             progress.increment()
+            if function.size() < mininum_size: continue
+            if function.chromosome_minhash_ratio() < chromosome_minhash_ratio_threshold: continue
+            if progress.is_closed: break
+            status, vector = client.inference(function.to_dict())
+            if status != 200: return
+            status, results = client.search(
+                database=database,
+                collection='functions',
+                partition=function.architecture().to_string(),
+                offset=0,
+                limit=1,
+                threshold=gnn_similarity_threshold,
+                vector=json.loads(vector)
+            )
+            if status != 200:
+                print(f'[x] status: {status}, response: {results}')
+                return
 
-        print("[*] function compare completed")
-        progress.close()
+            filtered = []
+            for result in results:
+                gnn_similarity = result['similarity']
+                if gnn_similarity < gnn_similarity_threshold: continue
+                rhs_function = FunctionJsonDeserializer(json.dumps(result['embedding']['data']), self.config)
+                size_ratio = self.size_ratio(function.size(), rhs_function.size())
+                if size_ratio < size_ratio_threshold: continue
+                delta = function.compare(rhs_function)
+                if delta is None: continue
+                minhash_score = delta.score.minhash()
+                if minhash_score is None: continue
+                if minhash_score < minhash_score_threshold: continue
+                combined_score =  ((result['similarity'] + minhash_score) / 2)
+                if combined_score < combined_ratio_threshold: continue
+                filtered.append(result)
 
-        headers = [
-            "LHS Address",
-            "LHS Contiguous",
-            "LHS Name",
-            "RHS Address",
-            "RHS Name",
-            "MinHash Score",
-            "TLSH Score",
-        ]
-
-        form = GradientTable(
-            table,
-            headers,
-            color_column=5,
-            min_value=0,
-            max_value=1,
-            low_to_high=True,
-            default_filter_column=2,
-            default_sort_column=5,
-            default_sort_ascending=False
-        )
-        form.Show("Binlex Function Compare Table")
+            if len(filtered) > 0: print(f'[-] query status: {status}, response: {filtered}')
 
     def action_json_search_window(self):
         if not self.json_search_window:
@@ -550,10 +477,48 @@ class BinlexPlugin(idaapi.plugin_t):
             segments.sort(key=lambda x: x[0], reverse=True)
             for start, end in segments:
                 data = IDA.get_bytes(start, end - start)
-                colormap.append(start, data)
+                colormap.append(data, offset=start)
             SVG_STRING = colormap.to_svg_string()
             self.binary_view_window = SVGWidget(svg_string=SVG_STRING, title='Binlex Color Map')
         self.binary_view_window.show()
+
+    def get_function_json_deserializers(self) -> list[str]:
+        results = []
+        for function in self.cfg.functions():
+            j = json.loads(function.json())
+            j['attributes'] = []
+            j['attributes'].append(IDA.file_attribute())
+            j['attributes'].append(self.get_function_symbol_attribute(function.address()))
+            results.append(FunctionJsonDeserializer(json.dumps(j), self.config))
+        return results
+
+    def action_export_database(self):
+        dialog = BinlexServerSettingsDialog()
+        if dialog.exec_() != QDialog.Accepted: return
+        (
+            url,
+            api_key,
+        ) = dialog.get_inputs()
+        client = BinlexServerClient(url=url, api_key=api_key)
+        self.disassemble_controlflow()
+        functions = self.get_function_json_deserializers()
+        progress = Progress(title='Indexing Vector Embeddings', max_value=len(functions))
+        progress.show()
+        for function in functions:
+            if progress.is_closed: break
+            progress.increment()
+            status, vector = client.index(
+                database='default',
+                collection='functions',
+                partition=function.architecture().to_string(),
+                data=function.to_dict()
+            )
+            if status != 200:
+                print(f'status: {status}, response: {vector}')
+                return
+            print(f'{hex(function.address())}: {vector}')
+        progress.close()
+        print('[*] indexed database')
 
     def open_table_window(self):
         function_table(self)

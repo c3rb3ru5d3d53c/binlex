@@ -15,7 +15,7 @@ class Main(QWidget):
 
     def init_ui(self):
         self.setWindowTitle('Binlex')
-        self.setFixedSize(300, 250)
+        self.setFixedSize(300, 300)
         self.setWindowFlags(Qt.Window | Qt.WindowCloseButtonHint | Qt.WindowTitleHint)
 
         image_data = zlib.decompress(base64.b64decode(LOGO))
@@ -30,6 +30,13 @@ class Main(QWidget):
 
         layout.addWidget(btn1)
 
+        btn8 = QPushButton('Index Database')
+        btn8.clicked.connect(self.plugin.action_export_database)
+
+        btn8.setStyleSheet(QPUSHBUTTON_STYLE)
+
+        layout.addWidget(btn8)
+
         btn3 = QPushButton('Function Table')
         btn3.clicked.connect(self.plugin.open_table_window)
 
@@ -37,7 +44,7 @@ class Main(QWidget):
 
         layout.addWidget(btn3)
 
-        btn5 = QPushButton('Compare Functions')
+        btn5 = QPushButton('Compare Database')
         btn5.clicked.connect(self.plugin.action_compare_functions)
 
         btn5.setStyleSheet(QPUSHBUTTON_STYLE)
