@@ -28,7 +28,9 @@ class IDA():
 
     @staticmethod
     def get_function_name(ea: int) -> str:
-        return idc.get_func_name(ea)
+        name =  idc.get_func_name(ea)
+        if name is None: return ''
+        return name
 
     @staticmethod
     def get_function_blocks(function) -> list:

@@ -1,7 +1,7 @@
-jq=1.8.0
 numpy==2.2.1
 pandas==2.2.3
 torch==2.5.1
 torch-pca==1.0.0
 lancedb==0.17.1
 torch-geometric==2.6.1
+requests==2.32.3
