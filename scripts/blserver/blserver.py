@@ -157,7 +157,7 @@ def create_app(config: str) -> Flask:
             except Exception as e:
                 return json.dumps({'error': str(e)}), 500
 
-    @api.route('/embeddings/<string:database>/<string:collection>/<string:partition>/search')
+    @api.route('/embeddings/<string:database>/<string:collection>/<string:partition>/search/<int:offset>/<int:limit>/<float:threshold>')
     class BinlexServerEmbeddingsSearch(Resource):
         @require_api_key
         @api.expect(embedding_search_model, validate=True)
@@ -169,7 +169,7 @@ def create_app(config: str) -> Flask:
         @api.response(400, 'Invalid Input', error_response_model)
         @api.response(500, 'Internal Server Error', error_response_model)
         @api.doc(description='Search Embeddings')
-        def post(self, database, collection, partition):
+        def post(self, database, collection, partition, offset, limit, threshold):
             try:
                 request_data = json.loads(request.data)
 
@@ -185,17 +185,15 @@ def create_app(config: str) -> Flask:
                 if partition not in milvus_client.get_partition_names(database=database, collection_name=collection):
                     return json.dumps({'error': 'unsupported partition or architecture'}), 404
 
-                top_k = server_config['blserver']['similarity']['top_k']
-                similarity_threshold = server_config['blserver']['similarity']['threshold']
-
                 results = milvus_client.search_vector(
                     minio_client=minio_client,
                     database=database,
                     collection_name=collection,
                     partition_names=[partition],
                     float_vector=request_data,
-                    top_k=top_k,
-                    similarity_threshold=similarity_threshold
+                    offset=offset,
+                    limit=limit,
+                    similarity_threshold=threshold
                 )
 
                 return json.dumps(results), 200
