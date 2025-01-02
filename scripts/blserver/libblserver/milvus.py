@@ -108,8 +108,6 @@ class BinlexMilvus:
 
         for collection_name in self.config['milvus']['collections']:
             self._create_or_load_collection(collection_name, primary_schema)
-        # self._create_or_load_collection('function', primary_schema)
-        # self._create_or_load_collection('block', primary_schema)
         self._create_or_load_collection('relationships', relationships_schema)
 
     def _create_primary_schema(self) -> CollectionSchema:
@@ -373,7 +371,7 @@ class BinlexMilvus:
             print(f"Failed to upload data to MinIO: {e}")
             return None
 
-    def _prepare_relationships_insert_data(self, sha256: str, vector: List[float], symbols_names: List[str]) -> Dict[str, List[Any]]:
+    def _prepare_relationships_insert_data(self, sha256: str, vector: List[float], symbols_names: List[str]) -> List[Dict[str, Any]]:
         """
         Prepare data for inserting into the relationships collection.
 
@@ -383,15 +381,22 @@ class BinlexMilvus:
             symbols_names (List[str]): List of symbol names associated with the vector.
 
         Returns:
-            Dict[str, List[Any]]: Data dictionary ready for insertion into Milvus.
+            List[Dict[str, Any]]: List of dictionaries ready for insertion into Milvus.
         """
-        combined_uuids = [self._derive_combined_uuid(sha256, vector, name) for name in symbols_names]
-        return {
-            "uuid": combined_uuids,
-            "sha256": [sha256] * len(symbols_names),
-            "vector": [vector] * len(symbols_names),
-            "name": symbols_names
-        }
+        if not symbols_names:
+            raise ValueError("symbols_names list cannot be empty.")
+
+        insert_data = []
+        for name in symbols_names:
+            combined_uuid = self._derive_combined_uuid(sha256, vector, name)
+            insert_data.append({
+                "uuid": combined_uuid,
+                "sha256": sha256,
+                "vector": vector,
+                "name": name,
+            })
+
+        return insert_data
 
     def search_relationships(
         self,

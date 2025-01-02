@@ -193,7 +193,7 @@ impl Attribute {
 
 #[derive(Clone)]
 pub struct Attributes {
-    values: Vec<Attribute>,
+    pub values: Vec<Attribute>,
 }
 
 impl Attributes {
