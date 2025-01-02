@@ -30,9 +30,7 @@ def create_app(config: str) -> Flask:
 
     app = Flask(__name__)
 
-    print('connecting to minio...')
     minio_client = BinlexMinio(server_config)
-    print('connecting to milvus...')
     milvus_client = BinlexMilvus(server_config)
 
     def require_api_key(func):
@@ -132,11 +130,11 @@ def create_app(config: str) -> Flask:
                 if partition != data['architecture']:
                     return json.dumps({'error': 'the architecture does not match the partition'}), 400
 
-                if data['type'] == 'function' and collection != 'functions':
-                    return json.dumps({'error': 'the type of data does not match the collection'}), 400
+                if data['type'] != 'function':
+                    return json.dumps({'error': 'currently unsupported type'}), 400
 
                 gnn = BinlexGNN(
-                    json.dumps(data),
+                    data,
                     block_pca_dim=server_config['milvus']['dimensions']['input'],
                     gnn_hidden_dim=server_config['milvus']['dimensions']['hidden'],
                     gnn_output_dim=server_config['milvus']['dimensions']['output'],
@@ -144,7 +142,7 @@ def create_app(config: str) -> Flask:
 
                 embedding = gnn.to_embedding()
 
-                milvus_client.index_vector(
+                result = milvus_client.index_vector(
                     minio_client=minio_client,
                     database=database,
                     collection_name=collection,
@@ -153,7 +151,10 @@ def create_app(config: str) -> Flask:
                     data=embedding.data
                 )
 
-                return json.dumps(embedding.vector), 200
+                if result is None:
+                    return json.dumps({'error': 'failed to index data'}), 400
+
+                return json.dumps(result), 200
             except Exception as e:
                 return json.dumps({'error': str(e)}), 500
 
@@ -219,7 +220,7 @@ def create_app(config: str) -> Flask:
                     return json.dumps({'error': 'invalid or unsupported input data'}), 400
 
                 gnn = BinlexGNN(
-                    json.dumps(request_data),
+                    request_data,
                     block_pca_dim=server_config['milvus']['dimensions']['input'],
                     gnn_hidden_dim=server_config['milvus']['dimensions']['hidden'],
                     gnn_output_dim=server_config['milvus']['dimensions']['output'],
