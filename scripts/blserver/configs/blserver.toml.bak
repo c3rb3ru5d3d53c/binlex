@@ -36,8 +36,8 @@ databases = [
     'malware',
 ]
 collections = [
-    'blocks',
-    'functions',
+    'block',
+    'function',
 ]
 partitions = [
     'amd64',

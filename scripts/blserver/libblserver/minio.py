@@ -46,3 +46,6 @@ class BinlexMinio():
         finally:
             response.close()
             response.release_conn()
+
+    def delete(self, bucket_name: str, object_name: str):
+        self.client.remove_object(bucket_name, object_name)

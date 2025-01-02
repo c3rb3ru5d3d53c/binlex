@@ -43,7 +43,6 @@ class BinlexVectorEmbedding:
             'data': self.data,
         }
 
-
 class BinlexInnerGNN(Module):
     def __init__(self, node_features_dim: int, hidden_dim: int, output_dim: int):
         super().__init__()
@@ -51,24 +50,23 @@ class BinlexInnerGNN(Module):
         self.bn1 = BatchNorm1d(hidden_dim)
         self.dropout = Dropout(p=0.3)
         self.conv2 = GCNConv(hidden_dim, output_dim)
+        self.bn2 = BatchNorm1d(output_dim)
 
     def forward(self, x: Tensor, edge_index: Tensor) -> Tensor:
         x = self.conv1(x, edge_index)
-
         if x.size(0) > 1:
             x = self.bn1(x)
-
         x = x.relu()
         x = self.dropout(x)
         x = self.conv2(x, edge_index)
-
-        x = x.tanh()
+        if x.size(0) > 1:
+            x = self.bn2(x)
         return x
 
 class BinlexGNN:
     def __init__(
         self,
-        data: str,
+        data: dict,
         seed: int = 0,
         block_pca_dim: int = 16,
         gnn_hidden_dim: int = 32,
@@ -77,7 +75,7 @@ class BinlexGNN:
         random.seed(seed)
         np.random.seed(seed)
         manual_seed(seed)
-        self.data = json.loads(data)
+        self.data = data
         self.block_pca_dim = block_pca_dim
         self.gnn_hidden_dim = gnn_hidden_dim
         self.gnn_output_dim = gnn_output_dim
@@ -183,7 +181,10 @@ class BinlexGNN:
             node_embeddings,
             batch=zeros(node_embeddings.size(0), dtype=torch_long),
         )
-        return graph_embedding.squeeze().tolist()
+
+        # Normalize embedding to unit length (L2 normalization)
+        norm_embedding = functional.normalize(graph_embedding, p=2, dim=1)
+        return norm_embedding.squeeze().tolist()
 
     def to_embedding(self) -> BinlexVectorEmbedding | None:
         if 'type' not in self.data: return None
