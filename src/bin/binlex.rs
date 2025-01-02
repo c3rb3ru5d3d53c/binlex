@@ -257,7 +257,7 @@ fn validate_args(args: &Args) {
 fn get_elf_function_symbols(elf: &ELF) -> BTreeMap<u64, Symbol> {
     let mut symbols = BTreeMap::<u64, Symbol>::new();
 
-    if !Stdin::is_terminal() { return symbols; }
+    if Stdin::is_terminal() { return symbols; }
 
     let json = JSON::from_stdin_with_filter(|value| {
         let obj = match value.as_object_mut() {
@@ -329,7 +329,7 @@ fn get_elf_function_symbols(elf: &ELF) -> BTreeMap<u64, Symbol> {
 fn get_macho_function_symbols(macho: &MACHO) -> BTreeMap<u64, Symbol> {
     let mut symbols = BTreeMap::<u64, Symbol>::new();
 
-    if !Stdin::is_terminal() { return symbols; }
+    if Stdin::is_terminal() { return symbols; }
 
     let json = JSON::from_stdin_with_filter(|value| {
         let obj = match value.as_object_mut() {
@@ -410,7 +410,7 @@ fn get_macho_function_symbols(macho: &MACHO) -> BTreeMap<u64, Symbol> {
 fn get_pe_function_symbols(pe: &PE) -> BTreeMap<u64, Symbol> {
     let mut symbols = BTreeMap::<u64, Symbol>::new();
 
-    if !Stdin::is_terminal() { return symbols; }
+    if Stdin::is_terminal() { return symbols; }
 
     let json = JSON::from_stdin_with_filter(|value| {
         let obj = match value.as_object_mut() {
@@ -490,7 +490,17 @@ fn process_output(output: Option<String>, cfg: &Graph, attributes: &Attributes, 
             .collect::<Vec<u64>>()
             .par_iter()
             .filter_map(|address| Instruction::new(*address, &cfg).ok())
-            .filter_map(|instruction| instruction.json_with_attributes(attributes.clone()).ok())
+            .filter_map(|instruction| {
+                let mut instruction_attributes = Attributes::new();
+                let symbol= function_symbols.get(&instruction.address);
+                if symbol.is_some() {
+                    instruction_attributes.push(symbol.unwrap().attribute());
+                }
+                for attribute in &attributes.values {
+                    instruction_attributes.push(attribute.clone());
+                }
+                instruction.json_with_attributes(instruction_attributes.clone()).ok()
+            })
             .map(|js| LZ4String::new(&js))
             .collect();
     }
@@ -504,7 +514,17 @@ fn process_output(output: Option<String>, cfg: &Graph, attributes: &Attributes, 
             .collect::<Vec<u64>>()
             .par_iter()
             .filter_map(|address| Block::new(*address, &cfg).ok())
-            .filter_map(|block| block.json_with_attributes(attributes.clone()).ok())
+            .filter_map(|block| {
+                let mut block_attributes = Attributes::new();
+                let symbol= function_symbols.get(&block.address);
+                if symbol.is_some() {
+                    block_attributes.push(symbol.unwrap().attribute());
+                }
+                for attribute in &attributes.values {
+                    block_attributes.push(attribute.clone());
+                }
+                block.json_with_attributes(block_attributes.clone()).ok()
+            })
             .map(|js| LZ4String::new(&js))
             .collect();
     }
@@ -519,10 +539,13 @@ fn process_output(output: Option<String>, cfg: &Graph, attributes: &Attributes, 
             .par_iter()
             .filter_map(|address| Function::new(*address, &cfg).ok())
             .filter_map(|function| {
-                let mut function_attributes = attributes.clone();
+                let mut function_attributes = Attributes::new();
                 let symbol= function_symbols.get(&function.address);
                 if symbol.is_some() {
                     function_attributes.push(symbol.unwrap().attribute());
+                }
+                for attribute in &attributes.values {
+                    function_attributes.push(attribute.clone());
                 }
                 function.json_with_attributes(function_attributes).ok()
             })
@@ -610,6 +633,10 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
     }
 
     let function_symbols = get_pe_function_symbols(&pe);
+
+    // for (_, symbol) in &function_symbols {
+    //     attributes.push(Attribute::Symbol(symbol.process().clone()));
+    // }
 
     let mapped_file = pe.image()
         .unwrap_or_else(|error| { eprintln!("failed to map pe image: {}", error); process::exit(1)});
@@ -705,6 +732,10 @@ fn process_elf(input: String, config: Config, tags: Option<Vec<String>>, output:
     }
 
     let function_symbols = get_elf_function_symbols(&elf);
+
+    // for (_, symbol) in &function_symbols {
+    //     attributes.push(Attribute::Symbol(symbol.process().clone()));
+    // }
 
     let mapped_file = elf.image()
         .unwrap_or_else(|error| { eprintln!("{}", error); process::exit(1)});
@@ -828,6 +859,10 @@ fn process_macho(input: String, config: Config, tags: Option<Vec<String>>, outpu
         }
 
         let function_symbols = get_macho_function_symbols(&macho);
+
+        // for (_, symbol) in &function_symbols {
+        //     attributes.push(Attribute::Symbol(symbol.process().clone()));
+        // }
 
         let mapped_file = macho.image(slice)
         .unwrap_or_else(|error| { eprintln!("{}", error); process::exit(1)});
