@@ -12,7 +12,7 @@ http {
     # SERVER BLOCK FOR HTTPS (Port 8443)
     # ---------------------------------------------------------
     server {
-        listen 8443 ssl;
+        listen 443 ssl;
         server_name _;  # or your domain, e.g. example.com
 
         # Point to the cert/key files
@@ -37,10 +37,10 @@ http {
     # SERVER BLOCK FOR REDIRECT (Port 8080 -> 8443)
     # ---------------------------------------------------------
     server {
-        listen 8080;
+        listen 80;
         server_name _;  # or your domain
 
         # Simple redirect to HTTPS on port 8443
-        return 301 https://$host:8443$request_uri;
+        return 301 https://$host$request_uri;
     }
 }

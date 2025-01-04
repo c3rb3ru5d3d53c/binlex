@@ -8,9 +8,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 RUN cp configs/blserver.toml.bak config.toml
 
-ENV CONFIG_FILE=/app/config.toml
+ENV CONFIG=/app/config.toml
 
 ENV PORT=5000
 
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:$PORT", "blserver:create_app('$CONFIG_FILE')"]
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:$PORT", "blserver:create_app('$CONFIG')"]
 

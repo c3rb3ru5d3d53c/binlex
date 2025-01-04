@@ -1,5 +1,11 @@
 blserver.toml
 milvus.yaml
-nginx.conf
-nginx.crt
-nginx.key
+blserver-proxy.conf
+blserver-proxy.crt
+blserver-proxy.key
+attu-proxy.conf
+attu-proxy.crt
+attu-proxy.key
+minio-proxy.conf
+minio-proxy.crt
+minio-proxy.key

@@ -1,0 +1,46 @@
+events {
+    worker_connections 1024;
+}
+
+http {
+    # ---------------------------------------------------------
+    # Proxy Cache Path
+    # ---------------------------------------------------------
+    proxy_cache_path /var/cache/nginx levels=1:2 keys_zone=my_cache:10m max_size=100m inactive=60m use_temp_path=off;
+
+    # ---------------------------------------------------------
+    # SERVER BLOCK FOR HTTPS (Port 8443)
+    # ---------------------------------------------------------
+    server {
+        listen 7443 ssl;
+        server_name _;  # or your domain, e.g. example.com
+
+        # Point to the cert/key files
+        ssl_certificate     /etc/nginx/certs/server.crt;
+        ssl_certificate_key /etc/nginx/certs/server.key;
+
+        # Basic SSL config; you may want to adjust ciphers, etc.
+        ssl_protocols       TLSv1.2 TLSv1.3;
+        ssl_prefer_server_ciphers on;
+
+        # Your reverse proxy config
+        location / {
+            proxy_pass         http://minio:9001;
+            proxy_cache        my_cache;
+            proxy_cache_valid  200 1m;
+            proxy_cache_valid  any 1m;
+            add_header X-Proxy-Cache $upstream_cache_status;
+        }
+    }
+
+    # ---------------------------------------------------------
+    # SERVER BLOCK FOR REDIRECT (Port 8080 -> 8443)
+    # ---------------------------------------------------------
+    server {
+        listen 7080;
+        server_name _;  # or your domain
+
+        # Simple redirect to HTTPS on port 8443
+        return 301 https://$host:7443$request_uri;
+    }
+}

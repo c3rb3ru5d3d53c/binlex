@@ -36,6 +36,21 @@ services:
       timeout: 20s
       retries: 3
 
+  minio-proxy:
+    container_name: minio-proxy
+    image: nginx:latest
+    depends_on:
+      - minio
+    ports:
+      - "7080:7080"
+      - "7443:7443"
+    volumes:
+      -  ${DOCKER_VOLUME_DIRECTORY:-.}/configs/minio-proxy.conf:/etc/nginx/nginx.conf:ro
+      -  ${DOCKER_VOLUME_DIRECTORY:-.}/configs/minio-proxy.crt:/etc/nginx/certs/server.crt:ro
+      -  ${DOCKER_VOLUME_DIRECTORY:-.}/configs/minio-proxy.key:/etc/nginx/certs/server.key:ro
+    networks:
+      - default
+
   milvus:
     container_name: milvus-standalone
     image: milvusdb/milvus:v2.5.1
@@ -71,13 +86,28 @@ services:
     depends_on:
       - "milvus"
 
+  attu-proxy:
+    container_name: attu-proxy
+    image: nginx:latest
+    depends_on:
+      - attu
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+    volumes:
+      -  ${DOCKER_VOLUME_DIRECTORY:-.}/configs/attu-proxy.conf:/etc/nginx/nginx.conf:ro
+      -  ${DOCKER_VOLUME_DIRECTORY:-.}/configs/attu-proxy.crt:/etc/nginx/certs/server.crt:ro
+      -  ${DOCKER_VOLUME_DIRECTORY:-.}/configs/attu-proxy.key:/etc/nginx/certs/server.key:ro
+    networks:
+      - default
+
   blserver:
     container_name: blserver
     build:
       context: .
       dockerfile: Dockerfile
     environment:
-      CONFIG_FILE: /app/config.toml
+      CONFIG: /app/config.toml
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/configs/blserver.toml:/app/config.toml
     command: >
@@ -94,12 +124,12 @@ services:
     depends_on:
       - blserver
     ports:
-      - "8080:8080"
-      - "8443:8443"
+      - "80:80"
+      - "443:443"
     volumes:
-      -  ${DOCKER_VOLUME_DIRECTORY:-.}/configs/nginx.conf:/etc/nginx/nginx.conf:ro
-      -  ${DOCKER_VOLUME_DIRECTORY:-.}/configs/nginx.crt:/etc/nginx/certs/server.crt:ro
-      -  ${DOCKER_VOLUME_DIRECTORY:-.}/configs/nginx.key:/etc/nginx/certs/server.key:ro
+      -  ${DOCKER_VOLUME_DIRECTORY:-.}/configs/blserver-proxy.conf:/etc/nginx/nginx.conf:ro
+      -  ${DOCKER_VOLUME_DIRECTORY:-.}/configs/blserver-proxy.crt:/etc/nginx/certs/server.crt:ro
+      -  ${DOCKER_VOLUME_DIRECTORY:-.}/configs/blserver-proxy.key:/etc/nginx/certs/server.key:ro
     networks:
       - default
 
