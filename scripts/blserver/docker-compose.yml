@@ -61,6 +61,16 @@ services:
       - "etcd"
       - "minio"
 
+  attu:
+    container_name: milvus-attu
+    image: zilliz/attu:latest
+    environment:
+      MILVUS_URL: milvus:19530
+    ports:
+      - "3000:3000"
+    depends_on:
+      - "milvus"
+
   blserver:
     container_name: blserver
     build:
@@ -70,7 +80,8 @@ services:
       CONFIG_FILE: /app/config.toml
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/configs/blserver.toml:/app/config.toml
-    command: ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "blserver:create_app(config='/app/config.toml')"]
+    command: >
+          bash -c "while true; do sleep 5; gunicorn -w 4 -b 0.0.0.0:5000 'blserver:create_app(config=\"/app/config.toml\")'; done"
     ports:
       - "5000:5000"
     depends_on:
@@ -94,4 +105,4 @@ services:
 
 networks:
   default:
-    name: milvus
+    name: binlex

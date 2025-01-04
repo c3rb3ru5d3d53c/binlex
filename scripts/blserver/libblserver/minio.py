@@ -19,7 +19,7 @@ class BinlexMinio():
             return
         self.client.make_bucket(bucket_name)
 
-    def upload(self, bucket_name: str, data: bytes | dict, content_type='application/octet-stream') -> str:
+    def upload(self, bucket_name: str, data: bytes | dict, object_name: str, content_type='application/octet-stream') -> str:
         if not isinstance(data, bytes) and not isinstance(data, dict):
             raise ValueError('data must be of type bytes or dict')
 
@@ -27,7 +27,6 @@ class BinlexMinio():
             data = json.dumps(data).encode()
 
         self.create_bucket(bucket_name)
-        object_name = hashlib.sha256(data).hexdigest()
 
         self.client.put_object(
             bucket_name,

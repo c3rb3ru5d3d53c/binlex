@@ -25,6 +25,11 @@ def is_valid_data(data: dict) -> bool:
     if data['type'] != 'function': return False
     return True
 
+def get_username_by_api_key(config: dict, api_key: str) -> str | None:
+    for username, api_key in config['blserver']['authentication']['api_keys'].items():
+        if api_key != api_key: continue
+        return username
+
 def create_app(config: str) -> Flask:
     server_config = read_config(config)
 
@@ -33,11 +38,11 @@ def create_app(config: str) -> Flask:
     minio_client = BinlexMinio(server_config)
     milvus_client = BinlexMilvus(server_config)
 
-    def require_api_key(func):
+    def require_user_api_key(func):
         """Decorator to require an API key for endpoint access."""
         def wrapper(*args, **kwargs):
             api_key = request.headers.get('API-Key')
-            if api_key not in server_config['blserver']['authentication']['api_keys']:
+            if get_username_by_api_key(server_config, api_key) is None or api_key is None:
                 return Response(
                     response=json.dumps({'error': 'Unauthorized'}),
                     status=401,
@@ -104,7 +109,7 @@ def create_app(config: str) -> Flask:
 
     @api.route('/embeddings/<string:database>/<string:collection>/<string:partition>/index')
     class BinlexServerEmbeddingsInsert(Resource):
-        @require_api_key
+        @require_user_api_key
         @api.expect(embedding_input_model, validate=True)
         @api.response(200, 'Success', embedding_response_model)
         @api.response(400, 'Invalid Input', error_response_model)
@@ -116,22 +121,27 @@ def create_app(config: str) -> Flask:
                 data = json.loads(request.data)
 
                 if not is_valid_data(data):
-                    return json.dumps({'error': 'Invalid JSON data'}), 400
+                    return {'error': 'Invalid JSON data'}, 400
 
                 if database not in milvus_client.list_databases():
-                    return json.dumps({'error': 'database does not exist'}), 404
+                    return {'error': 'database does not exist'}, 404
 
                 if collection not in milvus_client.get_collection_names(database=database):
-                    return json.dumps({'error': 'unsupported collection'}), 404
+                    return {'error': 'unsupported collection'}, 404
 
                 if partition not in milvus_client.get_partition_names(database=database, collection_name=collection):
-                    return json.dumps({'error': 'invalid or unsupported architecture for partition'}), 404
+                    return {'error': 'invalid or unsupported architecture for partition'}, 404
 
                 if partition != data['architecture']:
-                    return json.dumps({'error': 'the architecture does not match the partition'}), 400
+                    return {'error': 'the architecture does not match the partition'}, 400
 
                 if data['type'] != 'function':
-                    return json.dumps({'error': 'currently unsupported type'}), 400
+                    return {'error': 'currently unsupported type'}, 400
+
+                username = get_username_by_api_key(server_config, request.headers.get('API-Key'))
+
+                if username is None:
+                    return {'error': 'missing username, unauthorized'}, 401
 
                 gnn = BinlexGNN(
                     data,
@@ -148,19 +158,20 @@ def create_app(config: str) -> Flask:
                     collection_name=collection,
                     partition_name=partition,
                     vector=embedding.vector,
-                    data=embedding.data
+                    data=embedding.data,
+                    username=username
                 )
 
                 if result is None:
-                    return json.dumps({'error': 'failed to index data'}), 400
+                    return {'error': 'failed to index data'}, 400
 
                 return json.dumps(result), 200
             except Exception as e:
-                return json.dumps({'error': str(e)}), 500
+                return {'error': str(e)}, 500
 
-    @api.route('/embeddings/<string:database>/<string:collection>/<string:partition>/search/<int:offset>/<int:limit>/<float:threshold>')
+    @api.route('/embeddings/<string:database>/<string:collection>/<string:partitions>/search/<int:offset>/<int:limit>/<float:threshold>')
     class BinlexServerEmbeddingsSearch(Resource):
-        @require_api_key
+        @require_user_api_key
         @api.expect(embedding_search_model, validate=True)
         @api.response(200, 'Success', fields.List(
             fields.Raw(
@@ -170,42 +181,46 @@ def create_app(config: str) -> Flask:
         @api.response(400, 'Invalid Input', error_response_model)
         @api.response(500, 'Internal Server Error', error_response_model)
         @api.doc(description='Search Embeddings')
-        def post(self, database, collection, partition, offset, limit, threshold):
+        def post(self, database, collection, partitions, offset, limit, threshold):
             try:
+
+                partitions = partitions.split('||')
+
                 request_data = json.loads(request.data)
 
                 if not isinstance(request_data, list) or not all(isinstance(x, (int, float)) for x in request_data):
-                    return json.dumps({'error': 'expected a list of float values'}), 400
+                    return {'error': 'expected a list of float values'}, 400
 
                 if database not in milvus_client.list_databases():
-                    return json.dumps({'error': 'database does not exist'}), 404
+                    return {'error': 'database does not exist'}, 404
 
                 if collection not in milvus_client.get_collection_names(database=database):
-                    return json.dumps({'error': 'unsupported collection'}), 404
+                    return {'error': 'unsupported collection'}, 404
 
-                if partition not in milvus_client.get_partition_names(database=database, collection_name=collection):
-                    return json.dumps({'error': 'unsupported partition or architecture'}), 404
+                for partition in partitions:
+                    if partition not in milvus_client.get_partition_names(database=database, collection_name=collection):
+                        return {'error': f'{partition} is an unsupported partition or architecture'}, 404
 
                 results = milvus_client.search_vector(
                     minio_client=minio_client,
                     database=database,
                     collection_name=collection,
-                    partition_names=[partition],
+                    partition_names=partitions,
+                    threshold=threshold,
                     float_vector=request_data,
                     offset=offset,
-                    limit=limit,
-                    similarity_threshold=threshold
+                    limit=limit
                 )
 
                 return json.dumps(results), 200
             except json.JSONDecodeError:
-                return json.dumps({'error': 'Invalid JSON input'}), 400
+                return {'error': 'Invalid JSON input'}, 400
             except Exception as e:
-                return json.dumps({'error': str(e)}), 500
+                return {'error': str(e)}, 500
 
     @api.route('/embeddings/inference')
     class BinlexServerEmbeddingsInference(Resource):
-        @require_api_key
+        @require_user_api_key
         @api.expect(embedding_input_model, validate=True)
         @api.response(200, 'Success', embedding_response_model)
         @api.response(400, 'Invalid Input', error_response_model)
@@ -217,7 +232,7 @@ def create_app(config: str) -> Flask:
                 request_data = json.loads(request.data)
 
                 if not is_valid_data(request_data):
-                    return json.dumps({'error': 'invalid or unsupported input data'}), 400
+                    return {'error': 'invalid or unsupported input data'}, 400
 
                 gnn = BinlexGNN(
                     request_data,
@@ -228,51 +243,80 @@ def create_app(config: str) -> Flask:
 
                 embedding = gnn.to_embedding()
 
-                return json.dumps(embedding.vector), 200
+                return embedding.vector, 200
             except Exception as e:
-                return json.dumps({'error': str(e)}), 500
+                return {'error': str(e)}, 500
 
     @api.route('/embeddings/databases')
     class BinlexEmbeddingsDatabases(Resource):
-        @require_api_key
+        @require_user_api_key
         @api.doc(description='List Databases')
         def get(self):
             try:
                 databases = milvus_client.list_databases()
-                return json.dumps(databases), 200
+                return databases, 200
             except Exception as e:
-                return json.dumps({'error': str(e)}), 500
+                return {'error': str(e)}, 500
+
+    @api.route('/embeddings/dimensions')
+    class BinlexEmbeddingsDimensions(Resource):
+        @require_user_api_key
+        @api.doc(description='Get Embedding Dimensions')
+        def get(self):
+            try:
+                return {
+                    'input': server_config['milvus']['dimensions']['input'],
+                    'hidden': server_config['milvus']['dimensions']['hidden'],
+                    'output': server_config['milvus']['dimensions']['output']
+                }, 200
+            except Exception as e:
+                return {'error': str(e)}, 500
+
+    @api.route('/authentication/whoami')
+    class BinlexAuthenticationWhoami(Resource):
+        @require_user_api_key
+        @api.doc(description='Get Username')
+        def get(self):
+            try:
+                api_key = request.headers.get('API-Key')
+                username = get_username_by_api_key(server_config, api_key)
+                if username is None:
+                    return {'error': 'username not found'}, 404
+                return {'username': username}, 200
+            except Exception as e:
+                return {'error': str(e)}, 500
+
 
     @api.route('/embeddings/<string:database>/collections')
     class BinlexEmbeddingsDatabaseCollections(Resource):
-        @require_api_key
+        @require_user_api_key
         @api.doc(description='List Database Collections')
         def get(self, database):
             try:
                 if database not in milvus_client.list_databases():
-                    return json.dumps({'error': 'database does not exist'}), 404
+                    return {'error': 'database does not exist'}, 404
                 collections = milvus_client.get_collection_names(database=database)
-                return json.dumps(collections), 200
+                return collections, 200
             except Exception as e:
-                return json.dumps({'error': str(e)}), 500
+                return {'error': str(e)}, 500
 
     @api.route('/embeddings/<string:database>/<string:collection>/partitions')
     class BinlexEmbeddingsDatabaseCollectionPartitions(Resource):
-        @require_api_key
+        @require_user_api_key
         @api.doc(description='List Database Collection Partitions')
         def get(self, database, collection):
             try:
                 if database not in milvus_client.list_databases():
-                    return json.dumps({'error': 'database does not exist'}), 404
+                    return {'error': 'database does not exist'}, 404
 
                 if collection not in milvus_client.get_collection_names(database=database):
-                    return json.dumps({'error': 'unsupported collection'}), 404
+                    return {'error': 'unsupported collection'}, 404
 
                 partitions = milvus_client.get_partition_names(database=database, collection_name=collection)
 
-                return json.dumps(partitions), 200
+                return partitions, 200
             except Exception as e:
-                return json.dumps({'error': str(e)}), 500
+                return {'error': str(e)}, 500
 
     print('server started')
 
