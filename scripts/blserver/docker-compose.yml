@@ -27,6 +27,9 @@ services:
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/minio:/minio_data
     command: minio server /minio_data --console-address ":9001"
+    ports:
+      - "9001:9001"
+      - "9000:9000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 30s
@@ -66,6 +69,9 @@ services:
       start_period: 90s
       timeout: 20s
       retries: 3
+    ports:
+      - "19530:19530"
+      - "9091:9091"
     depends_on:
       - "etcd"
       - "minio"

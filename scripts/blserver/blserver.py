@@ -150,6 +150,11 @@ def create_app(config: str) -> Flask:
                     gnn_output_dim=server_config['milvus']['dimensions']['output'],
                 )
 
+                gnn.train_on_function(
+                    function_data=data,
+                    epochs=server_config['blserver']['gnn']['epochs']
+                )
+
                 embedding = gnn.to_embedding()
 
                 result = milvus_client.index_vector(
@@ -239,6 +244,11 @@ def create_app(config: str) -> Flask:
                     block_pca_dim=server_config['milvus']['dimensions']['input'],
                     gnn_hidden_dim=server_config['milvus']['dimensions']['hidden'],
                     gnn_output_dim=server_config['milvus']['dimensions']['output'],
+                )
+
+                gnn.train_on_function(
+                    function_data=request_data,
+                    epochs=server_config['blserver']['gnn']['epochs']
                 )
 
                 embedding = gnn.to_embedding()
