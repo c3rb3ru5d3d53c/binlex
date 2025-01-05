@@ -81,15 +81,16 @@ class BinlexGNN:
         self.gnn_output_dim = gnn_output_dim
 
     @staticmethod
-    def nibbles_to_histogram_vector(nibbles: list[int]) -> list[int]:
+    def nibbles_to_histogram_vector(nibbles: list[int]) -> list[float]:
         histogram = [0] * 16
         for nibble in nibbles:
             if 0 <= nibble <= 15:
                 histogram[nibble] += 1
-
+        total_count = sum(histogram)
         encoded_histogram = []
-        for value, count in enumerate(histogram):
-            encoded_histogram.extend([value, count])
+        for nibble, count in enumerate(histogram):
+            ratio = count / total_count if total_count > 0 else 0.0
+            encoded_histogram.extend([float(nibble), ratio])
         return encoded_histogram
 
     @staticmethod
@@ -182,7 +183,6 @@ class BinlexGNN:
             batch=zeros(node_embeddings.size(0), dtype=torch_long),
         )
 
-        # Normalize embedding to unit length (L2 normalization)
         norm_embedding = functional.normalize(graph_embedding, p=2, dim=1)
         return norm_embedding.squeeze().tolist()
 
