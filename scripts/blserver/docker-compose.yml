@@ -24,9 +24,6 @@ services:
     environment:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
-    ports:
-      - "9001:9001"
-      - "9000:9000"
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/minio:/minio_data
     command: minio server /minio_data --console-address ":9001"
@@ -69,9 +66,6 @@ services:
       start_period: 90s
       timeout: 20s
       retries: 3
-    ports:
-      - "19530:19530"
-      - "9091:9091"
     depends_on:
       - "etcd"
       - "minio"
@@ -81,8 +75,6 @@ services:
     image: zilliz/attu:latest
     environment:
       MILVUS_URL: milvus:19530
-    ports:
-      - "3000:3000"
     depends_on:
       - "milvus"
 
@@ -112,8 +104,6 @@ services:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/configs/blserver.toml:/app/config.toml
     command: >
           bash -c "while true; do sleep 5; gunicorn -w 4 -b 0.0.0.0:5000 'blserver:create_app(config=\"/app/config.toml\")'; done"
-    ports:
-      - "5000:5000"
     depends_on:
       - "milvus"
       - "minio"

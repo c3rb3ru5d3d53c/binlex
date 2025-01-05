@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import re
 import time
 import json
 import hashlib
@@ -485,6 +486,8 @@ class BinlexMilvus:
         names = []
         for attribute in data.get('attributes', []):
             if attribute.get('type') == 'symbol' and attribute.get('name'):
+                # Skip Default Rizin, Binja, IDA an Ghidra Function Names
+                if re.match(r'^(fcn\.|fun_|sub_)[0-9a-f]+$', attribute['name'], re.IGNORECASE): continue
                 names.append(attribute['name'])
         return names
 

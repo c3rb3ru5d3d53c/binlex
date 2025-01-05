@@ -13,5 +13,14 @@ make -C configs/       # Create Default Configurations
 docker-compose up -d   # Build and Start
 ```
 
-Once started naviagate to `https://127.0.0.1:8443/swagger` to view the API docs.
+If you need to edit the configurations simply edit them in the `configs/` directory.
 
+That being said, **binlex** server will startup without any additional configuration with insecure defaults so you can get started quickly.
+
+## Services
+
+| **Service Name**             | **Description**                             | **URL**                                 |
+|------------------------------|---------------------------------------------|-----------------------------------------|
+| Binlex Server                | API Documentation                           | `https://127.0.0.1/swagger`             |
+| Attu Milvus Vector Database  | Attu Milvus Vector Database UI              | `https://127.0.0.1:8443`                |
+| MinIO                        | MinIO Object Store                          | `https://127.0.0.1:7443`                |

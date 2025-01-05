@@ -3,44 +3,81 @@ events {
 }
 
 http {
-    # ---------------------------------------------------------
-    # Proxy Cache Path
-    # ---------------------------------------------------------
-    proxy_cache_path /var/cache/nginx levels=1:2 keys_zone=my_cache:10m max_size=100m inactive=60m use_temp_path=off;
+    # Upstream configuration for MinIO S3 and Console
+    upstream minio_s3 {
+        least_conn;
+        server minio:9001;
+    }
 
-    # ---------------------------------------------------------
-    # SERVER BLOCK FOR HTTPS (Port 8443)
-    # ---------------------------------------------------------
+    upstream minio_console {
+        least_conn;
+        server minio:9000;
+    }
+
+    # Main server block for HTTPS
     server {
         listen 7443 ssl;
-        server_name _;  # or your domain, e.g. example.com
+        server_name minio.example.net;
 
-        # Point to the cert/key files
+        # SSL configuration
         ssl_certificate     /etc/nginx/certs/server.crt;
         ssl_certificate_key /etc/nginx/certs/server.key;
-
-        # Basic SSL config; you may want to adjust ciphers, etc.
         ssl_protocols       TLSv1.2 TLSv1.3;
         ssl_prefer_server_ciphers on;
 
-        # Your reverse proxy config
+        # General settings
+        ignore_invalid_headers off;
+        client_max_body_size 0;
+        proxy_buffering off;
+        proxy_request_buffering off;
+
+        # Proxy requests to MinIO S3
         location / {
-            proxy_pass         http://minio:9001;
-            proxy_cache        my_cache;
-            proxy_cache_valid  200 1m;
-            proxy_cache_valid  any 1m;
-            add_header X-Proxy-Cache $upstream_cache_status;
+            proxy_set_header Host $http_host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            real_ip_header X-Real-IP;
+            proxy_connect_timeout 300;
+
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+
+            chunked_transfer_encoding off;
+
+            proxy_pass http://minio_s3;
+        }
+
+        # Proxy requests to MinIO Console
+        location /minio/ {
+            rewrite ^/minio/(.*) /$1 break;
+            proxy_set_header Host $http_host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-NginX-Proxy true;
+
+            real_ip_header X-Real-IP;
+            proxy_connect_timeout 300;
+
+            # WebSocket support
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+
+            chunked_transfer_encoding off;
+
+            proxy_pass http://minio_console;
         }
     }
 
-    # ---------------------------------------------------------
-    # SERVER BLOCK FOR REDIRECT (Port 8080 -> 8443)
-    # ---------------------------------------------------------
+    # Redirect HTTP traffic to HTTPS
     server {
         listen 7080;
-        server_name _;  # or your domain
+        server_name minio.example.net;
 
-        # Simple redirect to HTTPS on port 8443
         return 301 https://$host:7443$request_uri;
     }
 }

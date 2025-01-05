@@ -13,4 +13,3 @@ ENV CONFIG=/app/config.toml
 ENV PORT=5000
 
 CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:$PORT", "blserver:create_app('$CONFIG')"]
-
