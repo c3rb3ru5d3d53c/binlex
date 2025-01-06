@@ -10,6 +10,10 @@ all:
 	cp minio-proxy.conf.bak minio-proxy.conf
 	cp minio-proxy.key.bak minio-proxy.key
 	cp minio-proxy.crt.bak minio-proxy.crt
+	cp jupyterhub.py.bak jupyterhub.py
+	cp jupyterhub-proxy.conf.bak jupyterhub-proxy.conf
+	cp jupyterhub-proxy.key.bak jupyterhub-proxy.key
+	cp jupyterhub-proxy.crt.bak jupyterhub-proxy.crt
 
 clean:
 	rm -f blserver.toml
@@ -23,3 +27,7 @@ clean:
 	rm -f minio-proxy.conf
 	rm -f minio-proxy.crt
 	rm -f minio-proxy.key
+	rm -f jupyterhub.py
+	rm -f jupyterhub-proxy.conf
+	rm -f jupyterhub-proxy.crt
+	rm -f jupyterhub-proxy.key

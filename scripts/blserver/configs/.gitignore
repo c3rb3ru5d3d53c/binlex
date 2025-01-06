@@ -9,3 +9,7 @@ attu-proxy.key
 minio-proxy.conf
 minio-proxy.crt
 minio-proxy.key
+jupyterhub.py
+jupyterhub-proxy.conf
+jupyterhub-proxy.crt
+jupyterhub-proxy.key

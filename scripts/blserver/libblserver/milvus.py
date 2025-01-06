@@ -63,7 +63,6 @@ class BinlexMilvus:
             'host',
             'port',
             'authentication',
-            'dimensions',
             'databases',
             'partitions'
         ]
@@ -138,7 +137,7 @@ class BinlexMilvus:
             FieldSchema(
                 name='vector',
                 dtype=DataType.FLOAT_VECTOR,
-                dim=self.config['milvus']['dimensions']['output']
+                dim=self.config['blserver']['gnn']['output']
             ),
             FieldSchema(name='name', dtype=DataType.VARCHAR, max_length=512),
         ]
