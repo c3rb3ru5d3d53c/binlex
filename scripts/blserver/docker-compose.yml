@@ -17,6 +17,8 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
+    networks:
+      - default
 
   minio:
     container_name: milvus-minio
@@ -27,6 +29,7 @@ services:
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/minio:/minio_data
     command: minio server /minio_data --console-address ":9001"
+    # In production Comment this Out!
     ports:
       - "9001:9001"
       - "9000:9000"
@@ -35,6 +38,8 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
+    networks:
+      - default
 
   minio-proxy:
     container_name: minio-proxy
@@ -69,20 +74,28 @@ services:
       start_period: 90s
       timeout: 20s
       retries: 3
+    # In production Comment this Out!
     ports:
       - "19530:19530"
       - "9091:9091"
     depends_on:
       - "etcd"
       - "minio"
+    networks:
+      - default
 
   attu:
     container_name: milvus-attu
     image: zilliz/attu:latest
     environment:
       MILVUS_URL: milvus:19530
+    # In production Comment this Out!
+    ports:
+      - "3000:3000"
     depends_on:
       - "milvus"
+    networks:
+      - default
 
   attu-proxy:
     container_name: attu-proxy
@@ -110,9 +123,14 @@ services:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/configs/blserver.toml:/app/config.toml
     command: >
           bash -c "while true; do sleep 5; gunicorn -w 4 -b 0.0.0.0:5000 'blserver:create_app(config=\"/app/config.toml\")'; done"
+    # In production Comment this Out!
+    ports:
+      - "5000:5000"
     depends_on:
       - "milvus"
       - "minio"
+    networks:
+      - default
 
   blserver-proxy:
     container_name: blserver-proxy
@@ -126,6 +144,48 @@ services:
       -  ${DOCKER_VOLUME_DIRECTORY:-.}/configs/blserver-proxy.conf:/etc/nginx/nginx.conf:ro
       -  ${DOCKER_VOLUME_DIRECTORY:-.}/configs/blserver-proxy.crt:/etc/nginx/certs/server.crt:ro
       -  ${DOCKER_VOLUME_DIRECTORY:-.}/configs/blserver-proxy.key:/etc/nginx/certs/server.key:ro
+    networks:
+      - default
+
+  jupyterhub:
+    image: jupyterhub/jupyterhub:latest
+    container_name: jupyterhub
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/jupyterhub/:/srv/jupyterhub/
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/configs/jupyterhub.py:/srv/jupyterhub/jupyterhub.py:ro
+    # In production Comment this Out!
+    ports:
+      - "8000:8000"
+    entrypoint: >
+      /bin/bash -c "
+      if [ ! -f /srv/jupyterhub/setup_done ]; then
+        pip install jupyterlab &&
+        if ! id admin >/dev/null 2>&1; then
+          useradd -m -s /bin/bash admin &&
+          echo 'admin:admin' | chpasswd;
+        fi &&
+        mkdir -p /srv/jupyterhub/notebooks/ &&
+        chown root:root /srv/jupyterhub/notebooks/ &&
+        chmod 777 -R /srv/jupyterhub/notebooks/ &&
+        touch /srv/jupyterhub/setup_done;
+      fi &&
+      jupyterhub --config /srv/jupyterhub/jupyterhub.py"
+    restart: always
+    networks:
+      - default
+
+  jupyterhub-proxy:
+    container_name: jupyterhub-proxy
+    image: nginx:latest
+    depends_on:
+      - jupyterhub
+    ports:
+      - "6080:6080"
+      - "6443:6443"
+    volumes:
+      -  ${DOCKER_VOLUME_DIRECTORY:-.}/configs/jupyterhub-proxy.conf:/etc/nginx/nginx.conf:ro
+      -  ${DOCKER_VOLUME_DIRECTORY:-.}/configs/jupyterhub-proxy.crt:/etc/nginx/certs/server.crt:ro
+      -  ${DOCKER_VOLUME_DIRECTORY:-.}/configs/jupyterhub-proxy.key:/etc/nginx/certs/server.key:ro
     networks:
       - default
 

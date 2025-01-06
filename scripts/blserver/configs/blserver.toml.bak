@@ -8,6 +8,9 @@ debug = true
 admin = '39248239c8ed937d6333a41874f1c8e310c5070703af30c06e67b0d308cb82c5'
 
 [blserver.gnn]
+input = 16
+hidden = 32
+output = 16
 epochs = 10
 
 [blserver.cache]
@@ -49,8 +52,3 @@ blocks = 'blocks'
 [milvus.authentication]
 username = 'root'
 password = 'Milvus'
-
-[milvus.dimensions]
-input = 16
-hidden = 32
-output = 16

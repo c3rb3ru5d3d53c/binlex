@@ -1,0 +1,61 @@
+events {
+    worker_connections 1024;
+}
+
+http {
+    # ---------------------------------------------------------
+    # Proxy Cache Path
+    # ---------------------------------------------------------
+    proxy_cache_path /var/cache/nginx levels=1:2 keys_zone=my_cache:10m max_size=100m inactive=60m use_temp_path=off;
+
+    # ---------------------------------------------------------
+    # SERVER BLOCK FOR HTTPS (Port 6443)
+    # ---------------------------------------------------------
+    server {
+        listen 6443 ssl;
+        server_name _;  # or your domain, e.g. example.com
+
+        # Point to the cert/key files
+        ssl_certificate     /etc/nginx/certs/server.crt;
+        ssl_certificate_key /etc/nginx/certs/server.key;
+
+        # Basic SSL config; you may want to adjust ciphers, etc.
+        ssl_protocols       TLSv1.2 TLSv1.3;
+        ssl_prefer_server_ciphers on;
+
+        # Reverse proxy for JupyterHub
+        location / {
+            proxy_pass         http://jupyterhub:8000;
+
+            proxy_set_header Host $http_host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            real_ip_header X-Real-IP;
+            proxy_connect_timeout 300;
+
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+
+            chunked_transfer_encoding off;
+        }
+
+        # Allow requests for Let's Encrypt verification
+        location ~ /.well-known {
+            allow all;
+        }
+    }
+
+    # ---------------------------------------------------------
+    # SERVER BLOCK FOR REDIRECT (Port 6080 -> 6443)
+    # ---------------------------------------------------------
+    server {
+        listen 6080;
+        server_name _;  # Replace with your domain if needed
+
+        # Redirect HTTP traffic on port 6080 to HTTPS on port 6443
+        return 301 https://$host:6443$request_uri;
+    }
+}

@@ -15,7 +15,9 @@ docker-compose up -d   # Build and Start
 
 If you need to edit the configurations simply edit them in the `configs/` directory.
 
-That being said, **binlex** server will startup without any additional configuration with insecure defaults so you can get started quickly.
+That being said, **binlex** server will startup without any additional configuratin.
+
+**NOTE:** With no configuration **binlex** server is insecure, you should really modify the `docker-compose.yml` and configs in `configs/`.
 
 ## Services
 
@@ -24,3 +26,4 @@ That being said, **binlex** server will startup without any additional configura
 | Binlex Server                | API Documentation                           | `https://127.0.0.1/swagger`             |
 | Attu Milvus Vector Database  | Attu Milvus Vector Database UI              | `https://127.0.0.1:8443`                |
 | MinIO                        | MinIO Object Store                          | `https://127.0.0.1:7443`                |
+| JupyterHub                   | JupyterHub Web GUI                          | `https://127.0.0.1:6443`                |

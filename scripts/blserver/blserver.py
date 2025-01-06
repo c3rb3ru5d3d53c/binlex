@@ -145,9 +145,9 @@ def create_app(config: str) -> Flask:
 
                 gnn = BinlexGNN(
                     data,
-                    block_pca_dim=server_config['milvus']['dimensions']['input'],
-                    gnn_hidden_dim=server_config['milvus']['dimensions']['hidden'],
-                    gnn_output_dim=server_config['milvus']['dimensions']['output'],
+                    block_pca_dim=server_config['blserver']['gnn']['input'],
+                    gnn_hidden_dim=server_config['blserver']['gnn']['hidden'],
+                    gnn_output_dim=server_config['blserver']['gnn']['output'],
                 )
 
                 gnn.train_on_function(
@@ -241,9 +241,9 @@ def create_app(config: str) -> Flask:
 
                 gnn = BinlexGNN(
                     request_data,
-                    block_pca_dim=server_config['milvus']['dimensions']['input'],
-                    gnn_hidden_dim=server_config['milvus']['dimensions']['hidden'],
-                    gnn_output_dim=server_config['milvus']['dimensions']['output'],
+                    block_pca_dim=server_config['blserver']['gnn']['input'],
+                    gnn_hidden_dim=server_config['blserver']['gnn']['hidden'],
+                    gnn_output_dim=server_config['blserver']['gnn']['output'],
                 )
 
                 gnn.train_on_function(
@@ -275,9 +275,9 @@ def create_app(config: str) -> Flask:
         def get(self):
             try:
                 return {
-                    'input': server_config['milvus']['dimensions']['input'],
-                    'hidden': server_config['milvus']['dimensions']['hidden'],
-                    'output': server_config['milvus']['dimensions']['output']
+                    'input': server_config['blserver']['gnn']['input'],
+                    'hidden': server_config['blserver']['gnn']['hidden'],
+                    'output': server_config['blserver']['gnn']['output']
                 }, 200
             except Exception as e:
                 return {'error': str(e)}, 500
