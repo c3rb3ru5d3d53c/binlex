@@ -5,8 +5,9 @@ from .progress import Progress
 from .database_export_options import DatabaseExportOptionsDialog
 from .scan_minhash import ScanMinHashInputDialog
 from .scan_tlsh import ScanTLSHInputDialog
-from .compare_functions import CompareFunctionsDialog
+from .search_database import SearchDatabaseDialog
 from .svg import SVGWidget
+from .okaycancel import OkayCancelDialog
 from .json_search import JSONSearchWindow
 from .binlex_server_settings import BinlexServerSettingsDialog
 from .action_handlers import BinlexExportActionHandler

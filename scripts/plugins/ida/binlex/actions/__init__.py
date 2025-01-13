@@ -5,3 +5,7 @@ from .scan_tlsh import execute as scan_tlsh
 from .copy_minhash import execute as copy_minhash
 from .copy_tlsh import execute as copy_tlsh
 from .function_table import execute as function_table
+from .search_database import execute as search_database
+from .index_database import execute as index_database
+from .export import execute as export
+from .export_byte_colormap import execute as export_byte_colormap

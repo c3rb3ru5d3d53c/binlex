@@ -4,7 +4,7 @@ import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-class BinlexServerClient():
+class BLClient():
     def __init__(self, url: str, api_key: str, verify=False):
         self.url = url
         self.api_key = api_key

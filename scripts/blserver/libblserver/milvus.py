@@ -130,7 +130,7 @@ class BinlexMilvus:
         """
         fields = [
             FieldSchema(name='id', dtype=DataType.VARCHAR, max_length=36, is_primary=True),
-            FieldSchema(name='date', dtype=DataType.INT64),
+            FieldSchema(name='timestamp', dtype=DataType.INT64),
             FieldSchema(name='username', dtype=DataType.VARCHAR, max_length=512),
             FieldSchema(name='object', dtype=DataType.VARCHAR, max_length=64),
             FieldSchema(name='sha256', dtype=DataType.VARCHAR, max_length=64),
@@ -285,7 +285,7 @@ class BinlexMilvus:
             try:
                 insert_data = {
                     "id": _uuid,
-                    "date": int(time.time()),
+                    "timestamp": int(time.time()),
                     "username": username,
                     "object": _object,
                     "sha256": sha256,
@@ -356,7 +356,7 @@ class BinlexMilvus:
             param=search_params,
             limit=top_k,
             expr=None,
-            output_fields=["id", "object", "vector"],
+            output_fields=["id", "object", "vector", "name", "username", "timestamp", "sha256"],
             partition_names=partition_names
         )
 
@@ -369,27 +369,31 @@ class BinlexMilvus:
         hits_above_threshold = [hit for hit in raw_hits if hit.score >= threshold]
         hits_slice = hits_above_threshold[offset:offset + limit]
 
-        # 3) Download MinIO data and build output
         results = []
         for hit in hits_slice:
-            # Retrieve fields we requested
-            id_val = hit.entity.get("id")
-            object_name = hit.entity.get("object")
-            retrieved_vector = hit.entity.get("vector")
+            entity = hit.entity
+            id_val = entity.get('id')
+            object_name = entity.get('object')
 
-            # Basic sanity checks
+            score = hit.score
+
+            if score > 1.0: score = 1.0
+
             if not id_val or not object_name:
                 continue
 
-            # Download associated data from MinIO
             data = self._retrieve_data_from_minio(minio_client, object_name)
             if data is None:
                 continue
 
             results.append({
                 "id": id_val,
-                "score": hit.score,
-                "vector": retrieved_vector,
+                "score": score,
+                "vector": entity.get('vector'),
+                "name": entity.get('name'),
+                "username": entity.get('username'),
+                "timestamp": entity.get('timestamp'),
+                "sha256": entity.get('sha256'),
                 "data": data
             })
 
