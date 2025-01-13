@@ -102,7 +102,30 @@ Now copy the directory for the **binlex** plugin to your plugin directory.
 ```bash
 mkdir -p ~/.idapro/plugins/
 cp -r scripts/plugins/ida/binlex/ ~/.idapro/plugins/
+cd ~/.idaapro/plugins/binlex/
+pip install -r requirements.txt
 ```
+
+You will also need to ensure the server is running, GPU hardware is recommended for faster GNN inference but not required.
+
+```bash
+cd scripts/blserver/
+make -C configs/
+docker-compose up -d
+```
+
+Once completed the following services will be available.
+
+
+| **Service Name**             | **Description**                             | **URL**                                 |
+|------------------------------|---------------------------------------------|-----------------------------------------|
+| Binlex Server                | API Documentation                           | `https://127.0.0.1/swagger`             |
+| Attu Milvus Vector Database  | Attu Milvus Vector Database UI              | `https://127.0.0.1:8443`                |
+| MinIO                        | MinIO Object Store                          | `https://127.0.0.1:7443`                |
+| JupyterHub                   | JupyterHub Web GUI                          | `https://127.0.0.1:6443`                |
+
+
+The default API key is `39248239c8ed937d6333a41874f1c8e310c5070703af30c06e67b0d308cb82c5`, which you can use with your IDA plugin.
 
 Once you open IDA, you should be greeted with the **binlex** welcome message.
 
@@ -113,10 +136,12 @@ Once you open IDA, you should be greeted with the **binlex** welcome message.
 Using the IDA plugin you have various features that are provided to help you with YARA rule writing and similarity analysis.
 
 **Main Menu:**
-- Export Binlex JSON (Uses IDA CFG and Function Names)
-- Function Table (Contains Function Similarity Hashes and Patterns)
-- Compare Functions for Similarity
-- Color Map (Visually Navigate with Color Map)
+- Export Database (Export to JSON)
+- Index Database
+- Search Database
+- Functions (Functions Table)
+- Export Byte Color Map (Save Byte ColorMap to SVG)
+- JSON Query (jq queries inside IDA)
 
 **Disassembler Context Menu:**
 - Copy YARA Pattern
@@ -126,9 +151,13 @@ Using the IDA plugin you have various features that are provided to help you wit
 - Scan for MinHash
 - Scan for TLSH
 
+Once you set your API key and URL, it is saved in the IDA registry and auto-completed for you in the future.
+
 The copy pattern and copy hex feature is intended to help with YARA rules and the copying of similarity hashes and scanning is for hunting for similar data.
 
-To compare one database against another, use the export feature to export the JSON file, then click `Compare Functions`, which will populate a table once completed.
+To ensure your database can be accessed by others using the same server click `Index Database`, which pushes the function data to the server.
+
+To find function names, click `Search Database`, which will populate a table once completed of best matches from the vector databaase.
 
 ### Documentation
 
