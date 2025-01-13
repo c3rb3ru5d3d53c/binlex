@@ -1721,6 +1721,15 @@ impl Config {
     }
 
     #[pyo3(text_signature = "($self)")]
+    pub fn write_default(&self) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .write_default()
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+    }
+
+    #[pyo3(text_signature = "($self, file_path)")]
     pub fn write_to_file(&self, file_path: String) -> PyResult<()> {
         self.inner
             .lock()

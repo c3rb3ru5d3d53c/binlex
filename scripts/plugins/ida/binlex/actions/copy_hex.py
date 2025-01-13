@@ -1,6 +1,6 @@
 import ida_kernwin
 import ida_bytes
-from ida import IDA
+from lib import IDA
 from PyQt5.QtWidgets import QApplication
 
 def execute(parent):

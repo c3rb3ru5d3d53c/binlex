@@ -194,17 +194,17 @@ def create_app(config: str) -> Flask:
                 request_data = json.loads(request.data)
 
                 if not isinstance(request_data, list) or not all(isinstance(x, (int, float)) for x in request_data):
-                    return {'error': 'expected a list of float values'}, 400
+                    return json.dumps({'error': 'expected a list of float values'}), 400
 
                 if database not in milvus_client.list_databases():
-                    return {'error': 'database does not exist'}, 404
+                    return json.dumps({'error': 'database does not exist'}), 404
 
                 if collection not in milvus_client.get_collection_names(database=database):
-                    return {'error': 'unsupported collection'}, 404
+                    return json.dumps({'error': 'unsupported collection'}), 404
 
                 for partition in partitions:
                     if partition not in milvus_client.get_partition_names(database=database, collection_name=collection):
-                        return {'error': f'{partition} is an unsupported partition or architecture'}, 404
+                        return json.dumps({'error': f'{partition} is an unsupported partition or architecture'}), 404
 
                 results = milvus_client.search_vector(
                     minio_client=minio_client,
@@ -219,9 +219,9 @@ def create_app(config: str) -> Flask:
 
                 return json.dumps(results), 200
             except json.JSONDecodeError:
-                return {'error': 'Invalid JSON input'}, 400
+                return json.dumps({'error': 'Invalid JSON input'}), 400
             except Exception as e:
-                return {'error': str(e)}, 500
+                return json.dumps({'error': str(e)}), 500
 
     @api.route('/embeddings/inference')
     class BinlexServerEmbeddingsInference(Resource):

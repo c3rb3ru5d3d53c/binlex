@@ -1,7 +1,7 @@
 import zlib
 import base64
-from assets import LOGO
-from styles import QPUSHBUTTON_STYLE
+from lib.assets import LOGO
+from lib.styles import QPUSHBUTTON_STYLE
 from PyQt5.QtWidgets import QDialog, QVBoxLayout, QPushButton, QMainWindow, QWidget
 from PyQt5.QtCore import Qt, QRect
 from PyQt5.QtGui import QPixmap, QPainter
@@ -23,57 +23,40 @@ class Main(QWidget):
 
         layout = QVBoxLayout()
 
-        btn1 = QPushButton('Export')
-        btn1.clicked.connect(self.plugin.export)
+        export_database_button = QPushButton('Export Database')
+        export_database_button.clicked.connect(self.plugin.action_export)
+        export_database_button.setStyleSheet(QPUSHBUTTON_STYLE)
+        layout.addWidget(export_database_button)
 
-        btn1.setStyleSheet(QPUSHBUTTON_STYLE)
+        index_database_button = QPushButton('Index Database')
+        index_database_button.clicked.connect(self.plugin.action_index_database)
+        index_database_button.setStyleSheet(QPUSHBUTTON_STYLE)
+        layout.addWidget(index_database_button)
 
-        layout.addWidget(btn1)
+        search_database_button = QPushButton('Search Database')
+        search_database_button.clicked.connect(self.plugin.action_search_database)
+        search_database_button.setStyleSheet(QPUSHBUTTON_STYLE)
+        layout.addWidget(search_database_button)
 
-        btn8 = QPushButton('Index Database')
-        btn8.clicked.connect(self.plugin.action_export_database)
+        functions_button = QPushButton('Functions')
+        functions_button.clicked.connect(self.plugin.action_function_table)
+        functions_button.setStyleSheet(QPUSHBUTTON_STYLE)
+        layout.addWidget(functions_button)
 
-        btn8.setStyleSheet(QPUSHBUTTON_STYLE)
+        export_byte_colormap_button = QPushButton('Export Byte ColorMap')
+        export_byte_colormap_button.clicked.connect(self.plugin.action_export_byte_colormap)
+        export_byte_colormap_button.setStyleSheet(QPUSHBUTTON_STYLE)
+        layout.addWidget(export_byte_colormap_button)
 
-        layout.addWidget(btn8)
+        json_query_button = QPushButton('JSON Query')
+        json_query_button.clicked.connect(self.plugin.action_json_search_window)
+        json_query_button.setStyleSheet(QPUSHBUTTON_STYLE)
+        layout.addWidget(json_query_button)
 
-        btn3 = QPushButton('Function Table')
-        btn3.clicked.connect(self.plugin.open_table_window)
-
-        btn3.setStyleSheet(QPUSHBUTTON_STYLE)
-
-        layout.addWidget(btn3)
-
-        btn5 = QPushButton('Compare Database')
-        btn5.clicked.connect(self.plugin.action_compare_functions)
-
-        btn5.setStyleSheet(QPUSHBUTTON_STYLE)
-
-        layout.addWidget(btn5)
-
-        btn6 = QPushButton('Color Map')
-        btn6.clicked.connect(self.plugin.action_binary_view)
-
-        btn6.setStyleSheet(QPUSHBUTTON_STYLE)
-
-        layout.addWidget(btn6)
-
-        # hi
-
-        btn7 = QPushButton('JSON Search')
-        btn7.clicked.connect(self.plugin.action_json_search_window)
-
-        btn7.setStyleSheet(QPUSHBUTTON_STYLE)
-
-        layout.addWidget(btn7)
-        # hi
-
-        btn2 = QPushButton('About')
-        btn2.clicked.connect(self.plugin.open_about_window)
-
-        btn2.setStyleSheet(QPUSHBUTTON_STYLE)
-
-        layout.addWidget(btn2)
+        about_button = QPushButton('About')
+        about_button.clicked.connect(self.plugin.open_about_window)
+        about_button.setStyleSheet(QPUSHBUTTON_STYLE)
+        layout.addWidget(about_button)
 
         self.setLayout(layout)
 

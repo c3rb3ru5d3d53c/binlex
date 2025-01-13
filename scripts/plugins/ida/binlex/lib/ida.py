@@ -1,4 +1,5 @@
-
+import re
+import pickle
 import idc
 import idaapi
 import ida_bytes
@@ -6,11 +7,25 @@ import idautils
 import ida_ua
 import ida_kernwin
 import ida_nalt
+import ida_registry
 
 class IDA():
+
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def get_database_sha256():
+        return ida_nalt.retrieve_input_file_sha256().hex()
+
     @staticmethod
     def get_bytes(ea: int, size: int) -> bytes | None:
-        return ida_bytes.get_bytes(ea, size)
+        result = None
+        def thunk_get_bytes():
+            nonlocal result
+            result = idaapi.get_bytes(ea, size)
+        ida_kernwin.execute_sync(thunk_get_bytes, ida_kernwin.MFF_READ)
+        return result
 
     @staticmethod
     def file_attribute():
@@ -21,6 +36,24 @@ class IDA():
             'size': None,
             'entropy': None,
         }
+
+    def set_name(self, ea: int, name: str):
+        name = self.normalize_function_name(name)
+        idaapi.set_name(ea, name, idaapi.SN_FORCE)
+
+    @staticmethod
+    def normalize_function_name(name: str) -> str:
+        normalized = re.sub(r'[^0-9A-Za-z_]', '_', name)
+        normalized = re.sub(r'_+', '_', normalized)
+        if re.match(r'^\d', normalized):
+            normalized = f'_{normalized}'
+        return normalized
+
+    def get_function_names(self):
+        function_names = {}
+        for function in self.get_functions():
+            function_names[function.start_ea] = self.get_function_name(function.start_ea)
+        return function_names
 
     @staticmethod
     def get_functions() -> list:
@@ -76,3 +109,23 @@ class IDA():
                     instruction_addresses.append(ea)
                 ea = idc.next_head(ea, end)
         return instruction_addresses
+
+    @staticmethod
+    def set_registry_value(key: str, value, subkey: str = 'binlex'):
+        serialized_value = pickle.dumps(value)
+        ida_registry.reg_write_binary(key, serialized_value, subkey=subkey)
+
+    @staticmethod
+    def get_registry_value(key: str, subkey: str = 'binlex'):
+        value = ida_registry.reg_read_binary(key, subkey=subkey)
+        if value is None:
+            return None
+
+        try:
+            return pickle.loads(value)
+        except (pickle.UnpicklingError, TypeError):
+            return None
+
+    @staticmethod
+    def delete_registry_value(key: str, subkey: str = 'binlex'):
+        ida_registry.reg_delete(key, subkey=subkey)

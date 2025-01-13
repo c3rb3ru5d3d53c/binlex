@@ -1,6 +1,6 @@
-from assets import LOGO
-from assets import MOVIE
-from text import CREDITS
+from lib.assets import LOGO
+from lib.assets import MOVIE
+from lib.text import CREDITS
 
 import zlib
 import base64

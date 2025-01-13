@@ -1,5 +1,5 @@
 import ida_bytes
-from ida import IDA
+from lib import IDA
 from PyQt5.QtWidgets import QApplication
 import ida_kernwin
 from binlex.controlflow import Instruction

@@ -71,16 +71,6 @@ class GradientTable(ida_kernwin.PluginForm):
         default_sort_column=0,
         default_sort_ascending=True
     ):
-        """
-        :param data: 2D list of table rows
-        :param headers: list of column headers
-        :param color_column: (int) index of the column used for color mapping, or None
-        :param min_value, max_value: numeric range for color mapping
-        :param low_to_high: if True, low value is red and high value is green
-        :param default_filter_column: Which column index to filter on by default
-        :param default_sort_column: Which column index to sort by when the table is created
-        :param default_sort_ascending: Boolean; True = ascending sort, False = descending
-        """
         super().__init__()
         self.data = data
         self.headers = headers
@@ -97,6 +87,12 @@ class GradientTable(ida_kernwin.PluginForm):
         self.table_view = None
         self.column_combo_box = None
         self.filter_line_edit = None
+
+        self.row_callbacks = []
+
+    def register_row_callback(self, menu_text, callback):
+        """Register a row callback to be added to the context menu."""
+        self.row_callbacks.append((menu_text, callback))
 
     def OnCreate(self, form):
         self.parent = self.FormToPyQtWidget(form)
@@ -202,12 +198,40 @@ class GradientTable(ida_kernwin.PluginForm):
     def show_context_menu(self, position):
         menu = QMenu(self.table_view)
         column_actions = {}
+
+        # Add "Copy" actions for each column
         for col_idx, header in enumerate(self.headers):
             action = menu.addAction(f"Copy {header}")
             column_actions[action] = col_idx
+
+        # Add row callbacks
+        if self.row_callbacks:
+            menu.addSeparator()
+        for menu_text, callback in self.row_callbacks:
+            action = menu.addAction(menu_text)
+            column_actions[action] = callback
+
         selected_action = menu.exec_(self.table_view.viewport().mapToGlobal(position))
         if selected_action in column_actions:
-            self.copy_column_data(column_actions[selected_action])
+            selected_item = column_actions[selected_action]
+            if callable(selected_item):
+                # Execute the row callback
+                self.execute_row_callback(selected_item)
+            else:
+                self.copy_column_data(selected_item)
+
+    def execute_row_callback(self, callback):
+        """Execute a row callback on the selected row."""
+        selection_model = self.table_view.selectionModel()
+        if not selection_model.hasSelection():
+            return
+        proxy_index = selection_model.selectedRows()[0]
+        source_index = self.proxy_model.mapToSource(proxy_index)
+        row_data = [
+            self.model.item(source_index.row(), col_idx).text()
+            for col_idx in range(self.model.columnCount())
+        ]
+        callback(row_data)
 
     def copy_column_data(self, column_index):
         selection_model = self.table_view.selectionModel()

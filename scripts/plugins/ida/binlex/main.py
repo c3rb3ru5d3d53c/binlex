@@ -169,69 +169,61 @@
 import idc
 import idaapi
 import ida_bytes
-import ida_segment
-import ida_nalt
 import idautils
-import ida_ua
 import ida_kernwin
-import ida_loader
 import ida_ida
 import json
 import os
-import base64
-import zlib
-from binlex.formats import File, PE, ELF
-from binlex.hashing import MinHash32, TLSH
-from binlex import Config, Architecture
-from binlex.controlflow import Graph, Instruction, FunctionJsonDeserializer
+from binlex.formats import (
+    File,
+    PE,
+    ELF
+)
+from binlex.hashing import (
+    MinHash32,
+    TLSH
+)
+from binlex import (
+    Config,
+    Architecture
+)
+from binlex.controlflow import (
+    Graph,
+    Instruction,
+    FunctionJsonDeserializer
+)
 from binlex.genetics import Chromosome
 from binlex.disassemblers.capstone import Disassembler as CapstoneDisassembler
 from binlex.types import MemoryMappedFile
 from PyQt5.QtWidgets import QApplication, QDialog
 import tempfile
-import os
-from assets import LOGO
-from assets import MOVIE
-from styles import QPUSHBUTTON_STYLE
-from text import CREDITS
-from ida import IDA
-from gui import About
-from gui import ScanMinHashInputDialog
-from gui.action_handlers import (
-    BinlexExportActionHandler,
-    CopyMinHashActionHandler,
-    CopyPatternActionHandler,
-    CopyHexActionHandler,
-    ScanMinHashActionHandler,
-    ScanTLSHActionHandler,
-    CopyTLSHActionHandler,
-)
+from lib import IDA
 from gui.hooks import UIHooks
-from gui import GradientTable
-from gui import ScanTLSHInputDialog
-from gui import CompareFunctionsDialog
-from gui import register_action_handlers
-from gui import unregister_action_handlers
-from gui import Main
-from gui import SVGWidget
-from gui import Progress
-from gui import JSONSearchWindow
-from gui import DatabaseExportOptionsDialog
-from gui import BinlexServerSettingsDialog
-from text import BANNER
-from actions import copy_pattern
-from actions import copy_hex
-from actions import scan_minhash
-from actions import copy_minhash
-from actions import copy_tlsh
-from actions import scan_tlsh
-from actions import function_table
-import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from functools import partial
+from gui import (
+    register_action_handlers,
+    unregister_action_handlers,
+    Main,
+    SVGWidget,
+    Progress,
+    JSONSearchWindow,
+    OkayCancelDialog,
+    About,
+)
+from lib.text import BANNER
+from actions import (
+    copy_pattern,
+    copy_hex,
+    scan_minhash,
+    copy_minhash,
+    copy_tlsh,
+    scan_tlsh,
+    function_table,
+    search_database,
+    index_database,
+    export,
+    export_byte_colormap,
+)
 from binlex.imaging import ColorMap
-from database import BinlexVectorDB
-from binlexserverclient import BinlexServerClient
 
 class BinlexPlugin(idaapi.plugin_t):
     flags = idaapi.PLUGIN_DRAW
@@ -244,11 +236,12 @@ class BinlexPlugin(idaapi.plugin_t):
         self.config.from_default()
         self.main_window = None
         self.about_window = None
-        self.table_window = None
-        self.binary_view_window = None
+        self.function_table_window = None
         self.json_search_window = None
+        self.is_disassembled = False
         self.ui_hooks = UIHooks(self)
         self.ui_hooks.hook()
+        self.ida = IDA()
         register_action_handlers(self)
         self.load_binary()
         ida_kernwin.msg(BANNER + '\n')
@@ -310,25 +303,22 @@ class BinlexPlugin(idaapi.plugin_t):
         return attribute
 
     def disassemble_controlflow(self):
-        self.capstone_disassemble_controlflow(self.architecture, self.image, {0: self.mapped_file.size()})
+        if not self.is_disassembled:
+            self.capstone_disassemble_controlflow(self.architecture, self.image, {0: self.mapped_file.size()})
+            self.is_disassembled = True
+            return
 
-    def export(self):
-        self.disassemble_controlflow()
-        file_path = ida_kernwin.ask_file(1, "*.json", 'Export Binlex Functions to JSON File')
-        if not file_path: return
-        with open(file_path, 'w') as file:
-            for function in self.cfg.functions():
-                j = json.loads(function.json())
-                j['attributes'] = []
-                j['attributes'].append(IDA.file_attribute())
-                j['attributes'].append(self.get_function_symbol_attribute(function.address()))
-                file.write(json.dumps(j) + '\n')
-        ida_kernwin.msg(f'[*] exported binlex functions to {file_path}\n')
+        dialog = OkayCancelDialog(title='Disassemble Again?', okay_text='Disassemble', cancel_text='Continue')
+        if dialog.exec_() == QDialog.Accepted:
+            self.capstone_disassemble_controlflow(self.architecture, self.image, {0: self.mapped_file.size()})
+
+    def action_export(self):
+        export(self)
 
     def load_image(self):
         directory = os.path.join(tempfile.gettempdir(), 'binlex')
         if not os.path.exists(directory): os.makedirs(directory)
-        file_path = os.path.join(directory, ida_nalt.retrieve_input_file_sha256().hex())
+        file_path = os.path.join(directory, IDA().get_database_sha256())
         self.mapped_file = MemoryMappedFile(file_path, False)
         for segment in idautils.Segments():
             start = idc.get_segm_start(segment)
@@ -366,97 +356,14 @@ class BinlexPlugin(idaapi.plugin_t):
             self.about_window = About(self)
         self.about_window.exec_()
 
-    @staticmethod
-    def value_to_string(value):
-        if value is None: return ''
-        return value
-
     def action_scan_tlsh(self):
         scan_tlsh(self)
 
     def action_scan_minhash(self):
         scan_minhash(self)
 
-    @staticmethod
-    def minhash_chromosome_ratio(function: dict) -> float:
-        if function['contiguous']: return 1.0
-        minhash_size = 0
-        for block in function['blocks']:
-            if block['chromosome']['minhash'] is not None:
-                minhash_size += block['size']
-        return minhash_size / function['size']
-
-    @staticmethod
-    def size_ratio(len1, len2):
-        return 1 - (abs(len1 - len2) / max(len1, len2)) if max(len1, len2) != 0 else 1.0
-
-    @staticmethod
-    def get_rhs_function_name(rhs: dict) -> str:
-        if rhs['attributes'] is None: return ''
-        for attribute in rhs['attributes']:
-            if attribute['type'] != 'symbol': continue
-            if attribute['symbol_type'] != 'function': continue
-            if attribute['name'] is None: continue
-            return attribute['name']
-        return ''
-
-    def action_compare_functions(self):
-        dialog = CompareFunctionsDialog()
-        if dialog.exec_() != QDialog.Accepted: return
-        (
-            minhash_score_threshold,
-            mininum_size,
-            size_ratio_threshold,
-            chromosome_minhash_ratio_threshold,
-            combined_ratio_threshold,
-            gnn_similarity_threshold,
-            url,
-            api_key,
-            database,
-        ) = dialog.get_inputs()
-        client = BinlexServerClient(url=url, api_key=api_key)
-        self.disassemble_controlflow()
-        functions = self.get_function_json_deserializers()
-        progress = Progress(title='Performing Function Queries', max_value=len(functions))
-        progress.show()
-        table = []
-        for function in functions:
-            progress.increment()
-            if function.size() < mininum_size: continue
-            if function.chromosome_minhash_ratio() < chromosome_minhash_ratio_threshold: continue
-            if progress.is_closed: break
-            status, vector = client.inference(function.to_dict())
-            if status != 200: return
-            status, results = client.search(
-                database=database,
-                collection='functions',
-                partition=function.architecture().to_string(),
-                offset=0,
-                limit=1,
-                threshold=gnn_similarity_threshold,
-                vector=json.loads(vector)
-            )
-            if status != 200:
-                print(f'[x] status: {status}, response: {results}')
-                return
-
-            filtered = []
-            for result in results:
-                gnn_similarity = result['similarity']
-                if gnn_similarity < gnn_similarity_threshold: continue
-                rhs_function = FunctionJsonDeserializer(json.dumps(result['embedding']['data']), self.config)
-                size_ratio = self.size_ratio(function.size(), rhs_function.size())
-                if size_ratio < size_ratio_threshold: continue
-                delta = function.compare(rhs_function)
-                if delta is None: continue
-                minhash_score = delta.score.minhash()
-                if minhash_score is None: continue
-                if minhash_score < minhash_score_threshold: continue
-                combined_score =  ((result['similarity'] + minhash_score) / 2)
-                if combined_score < combined_ratio_threshold: continue
-                filtered.append(result)
-
-            if len(filtered) > 0: print(f'[-] query status: {status}, response: {filtered}')
+    def action_search_database(self):
+        search_database(self)
 
     def action_json_search_window(self):
         if not self.json_search_window:
@@ -466,21 +373,8 @@ class BinlexPlugin(idaapi.plugin_t):
             self.json_search_window = JSONSearchWindow(json_objects=data)
         self.json_search_window.Show('Binlex JSON Search')
 
-    def action_binary_view(self):
-        if not self.binary_view_window:
-            colormap = ColorMap()
-            segments = []
-            for seg_ea in idautils.Segments():
-                start = idc.get_segm_start(seg_ea)
-                end = idc.get_segm_end(seg_ea)
-                segments.append((start, end))
-            segments.sort(key=lambda x: x[0], reverse=True)
-            for start, end in segments:
-                data = IDA.get_bytes(start, end - start)
-                colormap.append(data, offset=start)
-            SVG_STRING = colormap.to_svg_string()
-            self.binary_view_window = SVGWidget(svg_string=SVG_STRING, title='Binlex Color Map')
-        self.binary_view_window.show()
+    def action_export_byte_colormap(self):
+        export_byte_colormap(self)
 
     def get_function_json_deserializers(self) -> list[str]:
         results = []
@@ -492,35 +386,10 @@ class BinlexPlugin(idaapi.plugin_t):
             results.append(FunctionJsonDeserializer(json.dumps(j), self.config))
         return results
 
-    def action_export_database(self):
-        dialog = BinlexServerSettingsDialog()
-        if dialog.exec_() != QDialog.Accepted: return
-        (
-            url,
-            api_key,
-        ) = dialog.get_inputs()
-        client = BinlexServerClient(url=url, api_key=api_key)
-        self.disassemble_controlflow()
-        functions = self.get_function_json_deserializers()
-        progress = Progress(title='Indexing Vector Embeddings', max_value=len(functions))
-        progress.show()
-        for function in functions:
-            if progress.is_closed: break
-            progress.increment()
-            status, vector = client.index(
-                database='default',
-                collection='functions',
-                partition=function.architecture().to_string(),
-                data=function.to_dict()
-            )
-            if status != 200:
-                print(f'status: {status}, response: {vector}')
-                return
-            print(f'{hex(function.address())}: {vector}')
-        progress.close()
-        print('[*] indexed database')
+    def action_index_database(self):
+        index_database(self)
 
-    def open_table_window(self):
+    def action_function_table(self):
         function_table(self)
 
     def run(self, arg):
