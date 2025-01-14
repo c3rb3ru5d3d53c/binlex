@@ -32,7 +32,19 @@ This hierarchical breakdown allows **binlex** to analyze and compare malware bin
 
 Unlike tools relying on **pure Python**, which can be slow 🐢, Binlex is designed for speed, simplicity, and flexibility. Its **command-line interface** helps analysts search for patterns across **hundreds or thousands of malware samples**, saving **time** ⏳ and **resources** 💰.
 
-For developers, **binlex** offers a **Rust API** and **Python bindings** to build custom detection tools with minimal licensing restrictions. 🔓
+For malware analysts and reverse engineers, **binlex** includes a powerful IDA plugin and a vector database designed to identify similar functions, much like existing tools such as **BinDiff**, **Diaphora**, and **Lumina**.
+
+What sets **binlex** apart is the use of a **Graph Neural Network (GNN)** to store functions in a vector database as embeddings, combining this with similarity hashing techniques to deliver more accurate and realistic results.
+
+While tools like **BinDiff** and **Diaphora** excel in single-file comparisons, the **binlex** server operates more like **Lumina** but with a modern approach. Instead of relying on FLIRT signatures—which have known limitations—**binlex** leverages the power of GNN and similarity hashing for enhanced precision and flexibility.
+
+Overall, **binlex** sever provides teams with the transparency and flexibility **Lumina** does not.
+
+With **binlex** sever, you gain access to usernames, timestamps, and the sample hashes from which function signatures are derived—critical insights that are not available when using **Lumina**.
+
+A set of command-line tools are also provided to malware analysis and reverse engineers to help speed up the hunting of common patterns for threat hunting and detection.
+
+For developers, **binlex** offers a **Rust API** and **Python bindings** to build custom tooling with minimal licensing restrictions. 🔓
 
 As part of the fight against malware, **binlex** is free to use—just **download the binaries** from the release page. 📥
 
@@ -53,7 +65,7 @@ The latest version of **binlex** provides the following amazing features!
 | 🏷️ **Tagging**                  | Tagging for easy organization                                                                  |
 | 🎯 **Wildcarding** | Perfect for generating YARA rules and now at a resolution of nibbles!                                                     |
 | **API** | - 🦀 Rust API<br>-Python API                                                         |
-| 🤖 **Machine Learning Features** | - 📊 Normalized Features for Consistency<br>- 📏 Feature Scaler Utility<br>- 🔍 Trait Filtering<br>- 📚 Onnx Sample Training<br>- 🧠 Sample Classification |
+| 🤖 **Machine Learning Features** | - 📊 Normalized Features<br>- 🔍 Vector Database<br>- 📚 Jupyter Notebook<br>- 🧠 Function Identification |
 | 📂 **Virtual Imaging** | - Efficient mapping cache for virtual images<br>- 🗄️ Compatible with ZFS / BTRFS<br>- Speeds up repetitive tasks and filtering<br>- Lightening speed ⚡ |
 
 By caching virtual images, **binlex** is able to perform at better speeds, making repeat runs faster and more efficient.
@@ -138,7 +150,7 @@ Using the IDA plugin you have various features that are provided to help you wit
 **Main Menu:**
 - Export Database (Export to JSON)
 - Index Database
-- Search Database
+- Search Database (Search and Apply Function Names)
 - Functions (Functions Table)
 - Export Byte Color Map (Save Byte ColorMap to SVG)
 - JSON Query (jq queries inside IDA)
@@ -157,7 +169,7 @@ The copy pattern and copy hex feature is intended to help with YARA rules and th
 
 To ensure your database can be accessed by others using the same server click `Index Database`, which pushes the function data to the server.
 
-To find function names, click `Search Database`, which will populate a table once completed of best matches from the vector databaase.
+To find function names, click `Search Database`, which will populate a table once completed of best matches from the vector databaase you can then apply to your project.
 
 ### Documentation
 
