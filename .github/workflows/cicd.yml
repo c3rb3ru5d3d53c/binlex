@@ -305,7 +305,16 @@ jobs:
           cp target/debian/*.deb dist/
           cp target/wheels/*.whl dist/
 
-      - name: Create binlex-ida.zip
+      - name: Create binlex-ida.zip (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: |
+          mkdir dist\plugins\ida\binlex
+          xcopy /E /I scripts\plugins\ida\binlex dist\plugins\ida\binlex
+          powershell Compress-Archive -Path dist\plugins\ida\binlex\* -DestinationPath dist\plugins\ida\binlex-ida.zip
+          rmdir /S /Q dist\plugins\ida\binlex
+
+      - name: Create binlex-ida.zip (macOS and Ubuntu)
+        if: ${{ matrix.os != 'windows-latest' }}
         run: |
           mkdir -p dist/plugins/ida/binlex/
           cp -r scripts/plugins/ida/binlex/* dist/plugins/ida/binlex/
