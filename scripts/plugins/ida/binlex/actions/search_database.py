@@ -140,10 +140,41 @@ def complete(table: list):
         default_sort_ascending=False
     )
     def apply_rhs_name(row: list):
-        IDA().set_name(int(row[0], 16), row[6])
+        address = int(row[0], 16)
+        gnn_score = float(row[1])
+        minhash_score = float(row[2])
+        score = float(row[3])
+        size = int(row[4])
+        size_ratio = float(row[5])
+        number_of_instructions = int(row[6])
+        entropy = float(row[7])
+        average_instructions_per_block = float(row[8])
+        cyclomatic_complexity = int(row[9])
+        rhs_name = row[11]
+        sample_sha256 = row[12]
+        timestamp = row[13]
+        username = row[14]
+        IDA().set_name(address, rhs_name)
+        comment = (
+            "Binlex Function Details:\n"
+            f"SHA256: {sample_sha256}\n"
+            f"Score: {score}\n"
+            f"GNN Score: {gnn_score}\n"
+            f"Minhash Score: {minhash_score}\n"
+            f"Size: {size}\n"
+            f"Size Ratio: {size_ratio}\n"
+            f"Number of Instructions: {number_of_instructions}\n"
+            f"Entropy: {entropy}\n"
+            f"Average Instructions per Block: {average_instructions_per_block}\n"
+            f"Cyclomatic Complexity: {cyclomatic_complexity}\n"
+            f"Username: {username}\n"
+        )
+        IDA().set_function_comment(address, comment)
 
     def apply_lhs_name(row: list):
-        IDA().set_name(int(row[0], 16), row[5])
+        address = int(row[0], 16)
+        IDA().set_name(address, row[10])
+        IDA().delete_function_comment(address)
 
     def apply_all_names(table: list):
         dialog = OkayCancelDialog(title='Are you sure?', okay_text='Okay', cancel_text='Cancel')
