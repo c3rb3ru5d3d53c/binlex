@@ -32,9 +32,9 @@ This hierarchical breakdown allows **binlex** to analyze and compare malware bin
 
 Unlike tools relying on **pure Python**, which can be slow 🐢, Binlex is designed for speed, simplicity, and flexibility. Its **command-line interface** helps analysts search for patterns across **hundreds or thousands of malware samples**, saving **time** ⏳ and **resources** 💰.
 
-For malware analysts and reverse engineers, **binlex** includes a IDA plugin and a vector database designed to identify similar functions.
+For malware analysts and reverse engineers, **binlex** includes a IDA plugin and a vector database (**binlex** server) designed to identify similar functions.
 
-While tools like **BinDiff** and **Diaphora** excel in single-file comparisons, the **binlex** server operates more like **Lumina** but with a modern approach. Instead of relying on FLIRT signatures—which have known limitations—**binlex** leverages the power of GNN and similarity hashing for enhanced precision and flexibility.
+While tools like **BinDiff** and **Diaphora** excel in single-file comparisons, the **binlex** server operates more like **Lumina** but with a modern approach. Instead of relying on FLIRT signatures—which have known limitations—**binlex** server leverages the power of a **Graph Neural Network (GNN)** and similarity hashing for enhanced precision and flexibility.
 
 Overall, **binlex** sever provides teams with the transparency and flexibility **Lumina** does not.
 
