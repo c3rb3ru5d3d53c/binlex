@@ -8,6 +8,7 @@ import ida_ua
 import ida_kernwin
 import ida_nalt
 import ida_registry
+import ida_funcs
 
 class IDA():
 
@@ -54,6 +55,14 @@ class IDA():
         for function in self.get_functions():
             function_names[function.start_ea] = self.get_function_name(function.start_ea)
         return function_names
+
+    @staticmethod
+    def set_function_comment(ea: int, comment: str, repeatable: bool = True):
+        f = idaapi.get_func(ea)
+        idaapi.set_func_cmt(f, comment, repeatable)
+
+    def delete_function_comment(self, ea: int, repeatable: bool = True):
+        self.set_function_comment(ea, '', repeatable=repeatable)
 
     @staticmethod
     def get_functions() -> list:

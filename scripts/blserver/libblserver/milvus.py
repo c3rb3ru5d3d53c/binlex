@@ -114,12 +114,17 @@ class BinlexMilvus:
 
     def _init_collections(self):
         """
-        Initialize collections by creating them if they don't exist.
+        Ensure that all databases have the required collections initialized.
         """
         primary_schema = self._create_primary_schema()
 
-        for collection_name in self.config['milvus']['collections']:
-            self._create_or_load_collection(collection_name, primary_schema)
+        for db_name in self.config['milvus']['databases']:
+            self.connect(database=db_name)
+            existing_collections = set(self.get_collection_names(db_name))
+
+            for collection_name in self.config['milvus']['collections']:
+                if collection_name not in existing_collections:
+                    self._create_or_load_collection(collection_name, primary_schema)
 
     def _create_primary_schema(self) -> CollectionSchema:
         """
@@ -131,6 +136,13 @@ class BinlexMilvus:
         fields = [
             FieldSchema(name='id', dtype=DataType.VARCHAR, max_length=36, is_primary=True),
             FieldSchema(name='timestamp', dtype=DataType.INT64),
+            FieldSchema(name='size', dtype=DataType.INT64),
+            FieldSchema(name='entropy', dtype=DataType.FLOAT),
+            FieldSchema(name='number_of_instructions', dtype=DataType.INT64),
+            FieldSchema(name='number_of_blocks', dtype=DataType.INT64),
+            FieldSchema(name='edges', dtype=DataType.INT64),
+            FieldSchema(name='cyclomatic_complexity', dtype=DataType.INT64),
+            FieldSchema(name='average_instructions_per_block', dtype=DataType.FLOAT),
             FieldSchema(name='username', dtype=DataType.VARCHAR, max_length=512),
             FieldSchema(name='object', dtype=DataType.VARCHAR, max_length=64),
             FieldSchema(name='sha256', dtype=DataType.VARCHAR, max_length=64),
@@ -240,6 +252,10 @@ class BinlexMilvus:
         Returns:
             Optional[Dict[str, Any]]: Inserted record(s) or None if failed.
         """
+
+        if data['type'] not in ['function', 'block']:
+            return None
+
         self.connect(database=database)
 
         _object = self._sha256_of_vector(vector)
@@ -283,9 +299,24 @@ class BinlexMilvus:
                 continue
 
             try:
+                if data['type'] == 'block':
+                    average_instructions_per_block = data['number_of_instructions']
+                    cyclomatic_complexity = 0
+                    number_of_blocks = 1
+                if data['type'] == 'function':
+                    average_instructions_per_block = data['average_instructions_per_block']
+                    cyclomatic_complexity = data['cyclomatic_complexity']
+                    number_of_blocks = len(data['blocks'])
                 insert_data = {
                     "id": _uuid,
                     "timestamp": int(time.time()),
+                    "size": data['size'],
+                    "number_of_instructions": data['number_of_instructions'],
+                    "number_of_blocks": number_of_blocks,
+                    "entropy": data['entropy'],
+                    "edges": data['edges'],
+                    "cyclomatic_complexity": cyclomatic_complexity,
+                    "average_instructions_per_block": average_instructions_per_block,
                     "username": username,
                     "object": _object,
                     "sha256": sha256,
@@ -335,8 +366,6 @@ class BinlexMilvus:
         # Validate input
         self._validate_search_vector_params(partition_names, offset, limit)
 
-
-
         # Connect and load the collection
         self.connect(database=database)
         collection = self.load_collection(collection_name)
@@ -356,7 +385,22 @@ class BinlexMilvus:
             param=search_params,
             limit=top_k,
             expr=None,
-            output_fields=["id", "object", "vector", "name", "username", "timestamp", "sha256"],
+            output_fields=[
+                "id",
+                "object",
+                "vector",
+                "name",
+                "username",
+                "timestamp",
+                "sha256",
+                "edges",
+                "entropy",
+                "cyclomatic_complexity",
+                "average_instructions_per_block",
+                "size",
+                "number_of_instructions",
+                "number_of_blocks",
+            ],
             partition_names=partition_names
         )
 
@@ -392,6 +436,13 @@ class BinlexMilvus:
                 "vector": entity.get('vector'),
                 "name": entity.get('name'),
                 "username": entity.get('username'),
+                "edges": entity.get('edges'),
+                "entropy": entity.get('entropy'),
+                "size": entity.get('size'),
+                "cyclomatic_complexity": entity.get('cyclomatic_complexity'),
+                "average_instructions_per_block": entity.get('average_instructions_per_block'),
+                "number_of_instructions": entity.get('number_of_instructions'),
+                "number_of_blocks": entity.get('number_of_blocks'),
                 "timestamp": entity.get('timestamp'),
                 "sha256": entity.get('sha256'),
                 "data": data

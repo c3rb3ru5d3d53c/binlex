@@ -7,6 +7,7 @@ from gui import SearchDatabaseDialog
 from PyQt5.QtWidgets import QDialog
 from lib import IDA
 from datetime import datetime
+from gui import OkayCancelDialog
 
 def process(
     functions: list,
@@ -89,7 +90,12 @@ def process(
                 str(gnn_similarity),
                 str(minhash_score),
                 str(combined_score),
+                str(search_result['size']),
                 str(size_ratio),
+                str(search_result['number_of_instructions']),
+                str(search_result['entropy']),
+                str(search_result['average_instructions_per_block']),
+                str(search_result['cyclomatic_complexity']),
                 function_names[lhs_function.address()],
                 search_result['name'],
                 search_result['sha256'],
@@ -111,7 +117,12 @@ def complete(table: list):
             'GNN Score',
             'Minhash Score',
             'Combined Score',
+            'Size',
             'Size Ratio',
+            'Number of Instructions',
+            'Entropy',
+            'Average Instructions Per Block',
+            'Cyclomatic Complexity',
             'LHS Name',
             'RHS Name',
             'RHS SHA256',
@@ -124,16 +135,76 @@ def complete(table: list):
         min_value=0,
         max_value=1,
         low_to_high=True,
-        default_filter_column=5,
+        default_filter_column=11,
         default_sort_column=3,
         default_sort_ascending=False
     )
     def apply_rhs_name(row: list):
         IDA().set_name(int(row[0], 16), row[6])
+
     def apply_lhs_name(row: list):
         IDA().set_name(int(row[0], 16), row[5])
+
+    def apply_all_names(table: list):
+        dialog = OkayCancelDialog(title='Are you sure?', okay_text='Okay', cancel_text='Cancel')
+        if dialog.exec_() == QDialog.Rejected: return
+
+        function_names = {}
+
+        for row in table:
+            address = int(row[0], 16)
+            gnn_score = float(row[1])
+            minhash_score = float(row[2])
+            score = float(row[3])
+            size = int(row[4])
+            size_ratio = float(row[5])
+            number_of_instructions = int(row[6])
+            entropy = float(row[7])
+            average_instructions_per_block = float(row[8])
+            cyclomatic_complexity = int(row[9])
+            rhs_name = row[11]
+            sample_sha256 = row[12]
+            timestamp = row[13]
+            username = row[14]
+
+            if address not in function_names or function_names[address]['score'] < score:
+                function_names[address] = {
+                    'rhs_name': rhs_name,
+                    'sample_sha256': sample_sha256,
+                    'score': score,
+                    'gnn_score': gnn_score,
+                    'minhash_score': minhash_score,
+                    'size': size,
+                    'size_ratio': size_ratio,
+                    'number_of_instructions': number_of_instructions,
+                    'entropy': entropy,
+                    'average_instructions_per_block': average_instructions_per_block,
+                    'cyclomatic_complexity': cyclomatic_complexity,
+                    'timestamp': timestamp,
+                    'username': username,
+                }
+
+        for address, info in function_names.items():
+            IDA().set_name(address, info['rhs_name'])
+            comment = (
+                "Binlex Function Details:\n"
+                f"SHA256: {info['sample_sha256']}\n"
+                f"Score: {info['score']}\n"
+                f"GNN Score: {info['gnn_score']}\n"
+                f"Minhash Score: {info['minhash_score']}\n"
+                f"Size: {info['size']}\n"
+                f"Size Ratio: {info['size_ratio']}\n"
+                f"Number of Instructions: {info['number_of_instructions']}\n"
+                f"Entropy: {info['entropy']}\n"
+                f"Average Instructions per Block: {info['average_instructions_per_block']}\n"
+                f"Cyclomatic Complexity: {info['cyclomatic_complexity']}\n"
+                f"Username: {info['username']}\n"
+            )
+            IDA().set_function_comment(address, comment)
+
     gradient_table.register_row_callback('Apply RHS Name', apply_rhs_name)
     gradient_table.register_row_callback('Apply LHS Name', apply_lhs_name)
+    gradient_table.register_table_callback('Apply All RHS Names', apply_all_names)
     gradient_table.Show('Binlex Function Compare Results')
 
 def execute(parent):
