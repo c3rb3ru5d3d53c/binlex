@@ -305,6 +305,13 @@ jobs:
           cp target/debian/*.deb dist/
           cp target/wheels/*.whl dist/
 
+      - name: Create binlex-ida.zip
+        run: |
+          mkdir -p dist/binlex
+          cp -r scripts/plugins/ida/binlex/* dist/binlex/
+          cd dist && zip -r binlex-ida.zip binlex
+          rm -rf binlex
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
@@ -357,6 +364,13 @@ jobs:
           cp /home/builder/repo/target/release/blimage dist/
           cp /home/builder/repo/target/release/blhash dist/
           cp /home/builder/repo/target/zst/*.zst dist/
+
+      - name: Create binlex-ida.zip
+        run: |
+          mkdir -p dist/binlex
+          cp -r /home/builder/repo/scripts/plugins/ida/binlex/* dist/binlex/
+          cd dist && zip -r binlex-ida.zip binlex
+          rm -rf binlex
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
