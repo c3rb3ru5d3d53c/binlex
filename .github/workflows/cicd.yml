@@ -307,9 +307,9 @@ jobs:
 
       - name: Create binlex-ida.zip
         run: |
-          mkdir -p dist/binlex
-          cp -r scripts/plugins/ida/binlex/* dist/binlex/
-          cd dist && zip -r binlex-ida.zip binlex
+          mkdir -p dist/plugins/ida/binlex/
+          cp -r scripts/plugins/ida/binlex/* dist/plugins/ida/binlex/
+          cd dist/plugins/ida/ && zip -r binlex-ida.zip binlex
           rm -rf binlex
 
       - name: Upload Artifacts
@@ -367,9 +367,9 @@ jobs:
 
       - name: Create binlex-ida.zip
         run: |
-          mkdir -p dist/binlex
-          cp -r /home/builder/repo/scripts/plugins/ida/binlex/* dist/binlex/
-          cd dist && zip -r binlex-ida.zip binlex
+          mkdir -p dist/plugins/ida/binlex/
+          cp -r /home/builder/repo/scripts/plugins/ida/binlex/* dist/plugins/ida/binlex/
+          cd dist/plugins/ida/ && zip -r binlex-ida.zip binlex
           rm -rf binlex
 
       - name: Upload Artifacts
