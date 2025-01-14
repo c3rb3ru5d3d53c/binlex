@@ -311,7 +311,7 @@ jobs:
           mkdir dist\plugins\ida\binlex
           xcopy /E /I scripts\plugins\ida\binlex dist\plugins\ida\binlex
           powershell Compress-Archive -Path dist\plugins\ida\binlex\* -DestinationPath dist\plugins\ida\binlex-ida.zip
-          rmdir /S /Q dist\plugins\ida\binlex
+          powershell Remove-Item -Recurse -Force dist\plugins\ida\binlex
 
       - name: Create binlex-ida.zip (macOS and Ubuntu)
         if: ${{ matrix.os != 'windows-latest' }}
