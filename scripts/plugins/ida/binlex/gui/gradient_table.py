@@ -59,6 +59,38 @@ class TableFilterProxyModel(QSortFilterProxyModel):
         return self.filter_string in cell_text.lower()
 
 class GradientTable(ida_kernwin.PluginForm):
+    # def __init__(
+    #     self,
+    #     data,
+    #     headers,
+    #     color_column=None,
+    #     min_value=0,
+    #     max_value=1,
+    #     low_to_high=True,
+    #     default_filter_column=0,
+    #     default_sort_column=0,
+    #     default_sort_ascending=True
+    # ):
+    #     super().__init__()
+    #     self.data = data
+    #     self.headers = headers
+    #     self.color_column = color_column
+    #     self.min_value = min_value
+    #     self.max_value = max_value
+    #     self.low_to_high = low_to_high
+    #     self.default_filter_column = default_filter_column
+    #     self.default_sort_column = default_sort_column
+    #     self.default_sort_ascending = default_sort_ascending
+
+    #     self.model = None
+    #     self.proxy_model = None
+    #     self.table_view = None
+    #     self.column_combo_box = None
+    #     self.filter_line_edit = None
+
+    #     self.row_callbacks = []
+    #     self.table_callbacks = []
+
     def __init__(
         self,
         data,
@@ -89,6 +121,11 @@ class GradientTable(ida_kernwin.PluginForm):
         self.filter_line_edit = None
 
         self.row_callbacks = []
+        self.table_callbacks = []
+
+    def register_table_callback(self, menu_text, callback):
+        """Register a full-table callback to be added to the context menu."""
+        self.table_callbacks.append((menu_text, callback))
 
     def register_row_callback(self, menu_text, callback):
         """Register a row callback to be added to the context menu."""
@@ -211,14 +248,61 @@ class GradientTable(ida_kernwin.PluginForm):
             action = menu.addAction(menu_text)
             column_actions[action] = callback
 
+        # Add full-table callbacks
+        if self.table_callbacks:
+            menu.addSeparator()
+        for menu_text, callback in self.table_callbacks:
+            action = menu.addAction(menu_text)
+            column_actions[action] = callback
+
         selected_action = menu.exec_(self.table_view.viewport().mapToGlobal(position))
         if selected_action in column_actions:
             selected_item = column_actions[selected_action]
             if callable(selected_item):
-                # Execute the row callback
-                self.execute_row_callback(selected_item)
+                if selected_item in dict(self.row_callbacks).values():
+                    # Execute the row callback
+                    self.execute_row_callback(selected_item)
+                elif selected_item in dict(self.table_callbacks).values():
+                    # Execute the full-table callback
+                    self.execute_table_callback(selected_item)
             else:
                 self.copy_column_data(selected_item)
+
+    def execute_table_callback(self, callback):
+        """Execute a table callback."""
+        table_data = []
+        for row_idx in range(self.model.rowCount()):
+            row_data = [
+                self.model.item(row_idx, col_idx).text()
+                for col_idx in range(self.model.columnCount())
+            ]
+            table_data.append(row_data)
+        callback(table_data)
+
+    # def show_context_menu(self, position):
+    #     menu = QMenu(self.table_view)
+    #     column_actions = {}
+
+    #     # Add "Copy" actions for each column
+    #     for col_idx, header in enumerate(self.headers):
+    #         action = menu.addAction(f"Copy {header}")
+    #         column_actions[action] = col_idx
+
+    #     # Add row callbacks
+    #     if self.row_callbacks:
+    #         menu.addSeparator()
+    #     for menu_text, callback in self.row_callbacks:
+    #         action = menu.addAction(menu_text)
+    #         column_actions[action] = callback
+
+    #     selected_action = menu.exec_(self.table_view.viewport().mapToGlobal(position))
+    #     if selected_action in column_actions:
+    #         selected_item = column_actions[selected_action]
+    #         if callable(selected_item):
+    #             # Execute the row callback
+    #             self.execute_row_callback(selected_item)
+    #         else:
+    #             self.copy_column_data(selected_item)
 
     def execute_row_callback(self, callback):
         """Execute a row callback on the selected row."""
