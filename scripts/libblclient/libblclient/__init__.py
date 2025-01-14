@@ -1,2 +1,2 @@
-from libblclient.client import BinlexHTTPClient
+from libblclient.client import BLClient
 
