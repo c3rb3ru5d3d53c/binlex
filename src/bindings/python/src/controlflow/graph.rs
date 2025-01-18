@@ -400,6 +400,11 @@ impl Graph {
         self.inner.lock().unwrap().set_function(address)
     }
 
+    #[pyo3(text_signature = "($self, address, addresses)")]
+    pub fn extend_instruction_edges(&self, address: u64, addresses: BTreeSet<u64>) -> bool {
+        self.inner.lock().unwrap().extend_instruction_edges(address, addresses)
+    }
+
     #[pyo3(text_signature = "($self, address)")]
     pub fn get_instruction(&self, py: Python, address: u64) -> Option<Instruction> {
         let cfg = Graph { inner: Arc::clone(&self.inner) };

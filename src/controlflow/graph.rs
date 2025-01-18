@@ -518,6 +518,16 @@ impl Graph {
         true
     }
 
+    pub fn extend_instruction_edges(&mut self, address: u64, addresses: BTreeSet<u64>) -> bool {
+        let mut instruction = match self.get_instruction(address) {
+            Some(instruction) => instruction,
+            None => { return false; }
+        };
+        instruction.to.extend(addresses);
+        self.update_instruction(instruction);
+        true
+    }
+
     pub fn insert_instruction(&mut self, instruction: Instruction) {
         if !self.is_instruction_address(instruction.address) {
             self.listing.insert(instruction.address, instruction);
