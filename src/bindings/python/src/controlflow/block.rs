@@ -439,6 +439,15 @@ impl Block {
         self.address
     }
 
+    #[pyo3(text_signature = "($self)")]
+    pub fn architecture(&self, py: Python) -> PyResult<Architecture> {
+        self.with_inner_block(py, |block| {
+            Ok(Architecture {
+                inner: block.architecture()
+            })
+        })
+    }
+
     #[pyo3(text_signature = "($self, rhs)")]
     /// Compares this block with another returning the similarity.
     ///

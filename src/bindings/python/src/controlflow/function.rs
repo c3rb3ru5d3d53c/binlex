@@ -473,8 +473,18 @@ impl Function {
         })
     }
 
+    #[pyo3(text_signature = "($self)")]
     pub fn address(&self) -> u64 {
         self.address
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn architecture(&self, py: Python) -> PyResult<Architecture> {
+        self.with_inner_function(py, |function| {
+            Ok(Architecture {
+                inner: function.architecture()
+            })
+        })
     }
 
     #[pyo3(text_signature = "($self)")]
