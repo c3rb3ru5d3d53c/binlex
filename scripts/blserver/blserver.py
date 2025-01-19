@@ -22,7 +22,7 @@ def read_config(file_path: str) -> dict:
 def is_valid_data(data: dict) -> bool:
     if 'type' not in data: return False
     if 'architecture' not in data: return False
-    if data['type'] != 'function': return False
+    if data['type'] not in ['function', 'block']: return False
     return True
 
 def get_username_by_api_key(config: dict, api_key: str) -> str | None:
@@ -135,7 +135,7 @@ def create_app(config: str) -> Flask:
                 if partition != data['architecture']:
                     return {'error': 'the architecture does not match the partition'}, 400
 
-                if data['type'] != 'function':
+                if data['type'] not in ['block', 'function']:
                     return {'error': 'currently unsupported type'}, 400
 
                 username = get_username_by_api_key(server_config, request.headers.get('API-Key'))
@@ -150,10 +150,7 @@ def create_app(config: str) -> Flask:
                     gnn_output_dim=server_config['blserver']['gnn']['output'],
                 )
 
-                gnn.train_on_function(
-                    function_data=data,
-                    epochs=server_config['blserver']['gnn']['epochs']
-                )
+                gnn.train(epochs=server_config['blserver']['gnn']['epochs'])
 
                 embedding = gnn.to_embedding()
 
@@ -246,10 +243,7 @@ def create_app(config: str) -> Flask:
                     gnn_output_dim=server_config['blserver']['gnn']['output'],
                 )
 
-                gnn.train_on_function(
-                    function_data=request_data,
-                    epochs=server_config['blserver']['gnn']['epochs']
-                )
+                gnn.train(epochs=server_config['blserver']['gnn']['epochs'])
 
                 embedding = gnn.to_embedding()
 

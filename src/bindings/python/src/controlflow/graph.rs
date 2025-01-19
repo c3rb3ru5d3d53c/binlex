@@ -355,7 +355,7 @@ impl Graph {
     }
 
     #[getter]
-    pub fn get_instructions(&self, py: Python) -> Py<GraphQueue> {
+    pub fn get_queue_instructions(&self, py: Python) -> Py<GraphQueue> {
         Py::new(
             py,
             GraphQueue {
@@ -367,7 +367,7 @@ impl Graph {
     }
 
     #[getter]
-    pub fn get_blocks(&self, py: Python) -> Py<GraphQueue> {
+    pub fn get_queue_blocks(&self, py: Python) -> Py<GraphQueue> {
         Py::new(
             py,
             GraphQueue {
@@ -379,7 +379,7 @@ impl Graph {
     }
 
     #[getter]
-    pub fn get_functions(&self, py: Python) -> Py<GraphQueue> {
+    pub fn get_queue_functions(&self, py: Python) -> Py<GraphQueue> {
         Py::new(
             py,
             GraphQueue {
