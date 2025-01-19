@@ -807,8 +807,8 @@ impl Function {
     /// # Returns
     /// - `str`: JSON string representing the function.
     pub fn json(&self, py: Python) -> PyResult<String> {
-        self.with_inner_function(py, |block| {
-            block.json().map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+        self.with_inner_function(py, |function| {
+            function.json().map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
         })
     }
 

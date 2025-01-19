@@ -187,6 +187,8 @@ pub struct GraphQueue {
     pub valid: SkipSet<u64>,
     /// Set of invalid addresses in the graph.
     pub invalid: SkipSet<u64>,
+    /// Pending addresses in the graph.
+    pub pending: SkipSet<u64>,
 }
 
 impl Clone for GraphQueue {
@@ -213,11 +215,16 @@ impl Clone for GraphQueue {
         for item in self.invalid.iter() {
             cloned_invalid.insert(*item);
         }
+        let cloned_pending = SkipSet::new();
+        for item in self.pending.iter() {
+            cloned_pending.insert(*item);
+        }
         GraphQueue {
             queue: cloned_queue,
             processed: cloned_processed,
             valid: cloned_valid,
             invalid: cloned_invalid,
+            pending: cloned_pending,
         }
     }
 }
@@ -234,6 +241,7 @@ impl GraphQueue {
             processed: SkipSet::<u64>::new(),
             valid: SkipSet::<u64>::new(),
             invalid: SkipSet::<u64>::new(),
+            pending: SkipSet::<u64>::new(),
         }
     }
 
@@ -393,6 +401,8 @@ impl GraphQueue {
     /// Returns `true` if the address was enqueued, otherwise `false`.
     pub fn enqueue(&mut self, address: u64) -> bool {
         if self.is_processed(address) { return false; }
+        if self.pending.contains(&address) { return false; }
+        self.pending.insert(address);
         self.queue.push(address);
         return true;
     }
@@ -403,7 +413,11 @@ impl GraphQueue {
     ///
     /// Returns `Some(u64)` containing the dequeued address if available, otherwise `None`.
     pub fn dequeue(&mut self) -> Option<u64> {
-        self.queue.pop()
+        if let Some(x) = self.queue.pop() {
+            self.pending.remove(&x);
+            return Some(x);
+        }
+        None
     }
 
     /// Removes all addresses from the processing queue.
@@ -414,6 +428,7 @@ impl GraphQueue {
     pub fn dequeue_all(&mut self) -> BTreeSet<u64> {
         let mut set = BTreeSet::new();
         while let Some(address) = self.queue.pop() {
+            self.pending.remove(&address);
             set.insert(address);
         }
         set
@@ -482,42 +497,6 @@ impl Graph {
             result.push(function.unwrap());
         }
         result
-    }
-
-    pub fn write(&self, file_path: &str) -> Result<(), Error> {
-        self.write_blocks(file_path)?;
-        self.write_functions(file_path)?;
-        Ok(())
-    }
-
-    pub fn write_functions(&self, file_path: &str) -> Result<(), Error> {
-        for address in self.functions.valid_addresses() {
-            if let Some(function) = Function::new(address, &self).ok() {
-                if let Some(json) = function.json().ok() {
-                    let mut file = OpenOptions::new()
-                        .create(true)
-                        .append(true)
-                        .open(file_path)?;
-                    writeln!(file, "{}", json)?;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    pub fn write_blocks(&self, file_path: &str) -> Result<(), Error> {
-        for address in self.blocks.valid_addresses() {
-            if let Some(block) = Block::new(address, &self).ok() {
-                if let Some(json) = block.json().ok() {
-                    let mut file = OpenOptions::new()
-                        .create(true)
-                        .append(true)
-                        .open(file_path)?;
-                    writeln!(file, "{}", json)?;
-                }
-            }
-        }
-        Ok(())
     }
 
     pub fn instruction_addresses(&self) -> BTreeSet<u64> {
