@@ -151,7 +151,7 @@ class BinlexMilvus:
                 dtype=DataType.FLOAT_VECTOR,
                 dim=self.config['blserver']['gnn']['output']
             ),
-            FieldSchema(name='name', dtype=DataType.VARCHAR, max_length=512),
+            FieldSchema(name='name', dtype=DataType.VARCHAR, max_length=65535),
         ]
         return CollectionSchema(
             fields=fields,
