@@ -354,6 +354,36 @@ impl Graph {
         result
     }
 
+    #[pyo3(text_signature = "($self, file_path)")]
+    pub fn write(&self, file_path: String) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .write(&file_path)
+            .map_err(|error| PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("{}", error)))?;
+        Ok(())
+    }
+
+    #[pyo3(text_signature = "($self, file_path)")]
+    pub fn write_functions(&self, file_path: String) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .write_functions(&file_path)
+            .map_err(|error| PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("{}", error)))?;
+        Ok(())
+    }
+
+    #[pyo3(text_signature = "($self, file_path)")]
+    pub fn write_blocks(&self, file_path: String) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .write_blocks(&file_path)
+            .map_err(|error| PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("{}", error)))?;
+        Ok(())
+    }
+
     #[getter]
     pub fn get_queue_instructions(&self, py: Python) -> Py<GraphQueue> {
         Py::new(
