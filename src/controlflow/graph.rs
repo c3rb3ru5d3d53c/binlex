@@ -173,9 +173,6 @@ use crossbeam::queue::SegQueue;
 use crossbeam_skiplist::SkipMap;
 use crossbeam_skiplist::SkipSet;
 use crate::Config;
-use std::io::Write;
-use std::fs::OpenOptions;
-use std::io::Error;
 
 /// Queue structure used within `Graph` for managing addresses in processing stages.
 pub struct GraphQueue {
