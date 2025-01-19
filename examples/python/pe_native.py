@@ -168,7 +168,7 @@
 
 from binlex.formats import PE
 from binlex.disassemblers.capstone import Disassembler
-from binlex.controlflow import Graph
+from binlex.controlflow import Graph, Function
 from binlex import Config
 import argparse
 
@@ -216,5 +216,8 @@ cfg = Graph(pe.architecture(), config)
 # Disassemble the PE Image Entrypoints Recursively
 disassembler.disassemble_controlflow(pe.entrypoint_virtual_addresses(), cfg)
 
-for function in cfg.functions():
+for address in cfg.queue_functions.valid_addresses():
+    function = Function(address, cfg)
     function.print()
+# for function in cfg.functions():
+#     function.print()

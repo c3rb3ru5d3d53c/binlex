@@ -405,10 +405,6 @@ impl<'block> Block<'block> {
             return Err(Error::new(ErrorKind::Other, format!("Block -> 0x{:x}: is not valid", address)));
         }
 
-        if !cfg.is_instruction_address(address) {
-            return Err(Error::new(ErrorKind::Other, format!("Instruction -> 0x{:x}: is not valid", address)));
-        }
-
         let mut terminator: Option<Instruction> = None;
 
         let previous_address: Option<u64> = None;

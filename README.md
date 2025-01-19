@@ -1042,21 +1042,21 @@ from binlex.controlflow import Block
 from binlex.controlflow import Function
 
 # Iterate Valid Instructions
-for address in cfg.instructions.valid_addresses():
+for address in cfg.queue_instructions.valid_addresses():
   # Read Instruction from Control Flow
   instruction = Instruction(address, cfg)
   # Print Instruction from Control Flow
   instruction.print()
 
 # Iterate Valid Blocks
-for address in cfg.blocks.valid_addresses():
+for address in cfg.queue_blocks.valid_addresses():
   # Read Block from Control Flow
   block = Block(address, cfg)
   # Print Block from Control Flow
   block.print()
 
 # Iterate Valid Functions
-for address in cfg.functions.valid_addresses():
+for address in cfg.queue_functions.valid_addresses():
   # Read Function from Control Flow
   function = Function(address, cfg)
   # Print Function from Control Flow

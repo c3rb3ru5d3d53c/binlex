@@ -516,10 +516,6 @@ impl<'function> Function<'function> {
             return Err(Error::new(ErrorKind::Other, format!("Function -> 0x{:x}: is not valid", address)));
         }
 
-        if !cfg.is_instruction_address(address) {
-            return Err(Error::new(ErrorKind::Other, format!("Instruction -> 0x{:x}: is not valid", address)));
-        }
-
         let mut blocks = BTreeMap::<u64, Block>::new();
 
         let mut queue = GraphQueue::new();
