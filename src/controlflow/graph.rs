@@ -173,6 +173,9 @@ use crossbeam::queue::SegQueue;
 use crossbeam_skiplist::SkipMap;
 use crossbeam_skiplist::SkipSet;
 use crate::Config;
+use std::io::Write;
+use std::fs::OpenOptions;
+use std::io::Error;
 
 /// Queue structure used within `Graph` for managing addresses in processing stages.
 pub struct GraphQueue {
@@ -479,6 +482,42 @@ impl Graph {
             result.push(function.unwrap());
         }
         result
+    }
+
+    pub fn write(&self, file_path: &str) -> Result<(), Error> {
+        self.write_blocks(file_path)?;
+        self.write_functions(file_path)?;
+        Ok(())
+    }
+
+    pub fn write_functions(&self, file_path: &str) -> Result<(), Error> {
+        for address in self.functions.valid_addresses() {
+            if let Some(function) = Function::new(address, &self).ok() {
+                if let Some(json) = function.json().ok() {
+                    let mut file = OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(file_path)?;
+                    writeln!(file, "{}", json)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn write_blocks(&self, file_path: &str) -> Result<(), Error> {
+        for address in self.blocks.valid_addresses() {
+            if let Some(block) = Block::new(address, &self).ok() {
+                if let Some(json) = block.json().ok() {
+                    let mut file = OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(file_path)?;
+                    writeln!(file, "{}", json)?;
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn instruction_addresses(&self) -> BTreeSet<u64> {
