@@ -75,6 +75,14 @@ class IDA():
         return name
 
     @staticmethod
+    def get_basic_block(ea: int):
+        function = idaapi.get_func(ea)
+        if function is None: return None
+        for block in idaapi.FlowChart(function):
+            if block.start_ea <= ea < block.end_ea:
+                return block
+
+    @staticmethod
     def get_function_blocks(function) -> list:
         return [block for block in idaapi.FlowChart(function)]
 

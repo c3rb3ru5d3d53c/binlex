@@ -190,7 +190,8 @@ from binlex import (
 from binlex.controlflow import (
     Graph,
     Instruction,
-    FunctionJsonDeserializer
+    FunctionJsonDeserializer,
+    BlockJsonDeserializer,
 )
 from binlex.genetics import Chromosome
 from binlex.disassemblers.capstone import Disassembler as CapstoneDisassembler
@@ -233,6 +234,10 @@ class BinlexPlugin(idaapi.plugin_t):
 
     def init(self):
         self.config = Config()
+        try:
+            self.config.write_default()
+        except:
+            pass
         self.config.from_default()
         self.main_window = None
         self.about_window = None
@@ -274,12 +279,15 @@ class BinlexPlugin(idaapi.plugin_t):
         for function in IDA.get_functions():
             progress.increment()
             for block in IDA.get_function_blocks(function):
+                to = set([bb.start_ea for bb in block.succs()])
                 for instruction in IDA.get_block_instructions(block):
                     disassembler.disassemble_instruction(instruction.ea, self.cfg)
                     if function.start_ea == instruction.ea:
                         self.cfg.set_function(instruction.ea)
                     if block.start_ea == instruction.ea:
                         self.cfg.set_block(instruction.ea)
+                    if idc.prev_head(block.end_ea) == instruction.ea:
+                        self.cfg.extend_instruction_edges(instruction.ea, to)
         progress.close()
 
     def update(self, ctx):
@@ -376,14 +384,21 @@ class BinlexPlugin(idaapi.plugin_t):
     def action_export_byte_colormap(self):
         export_byte_colormap(self)
 
-    def get_function_json_deserializers(self) -> list[str]:
-        results = []
-        for function in self.cfg.functions():
-            j = json.loads(function.json())
-            j['attributes'] = []
-            j['attributes'].append(IDA.file_attribute())
-            j['attributes'].append(self.get_function_symbol_attribute(function.address()))
-            results.append(FunctionJsonDeserializer(json.dumps(j), self.config))
+    def get_function_attributes(self) -> dict:
+        results = {}
+        for address in self.cfg.queue_functions.valid_addresses():
+            attributes = []
+            attributes.append(IDA.file_attribute())
+            attributes.append(self.get_function_symbol_attribute(address))
+            results[address] = attributes
+        return results
+
+    def get_block_attributes(self) -> dict:
+        results = {}
+        for address in self.cfg.queue_blocks.valid_addresses():
+            attributes = []
+            attributes.append(IDA.file_attribute())
+            results[address] = attributes
         return results
 
     def action_index_database(self):

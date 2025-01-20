@@ -2,7 +2,7 @@ import json
 from gui import GradientTable
 from lib import Worker
 from lib import BLClient
-from binlex.controlflow import FunctionJsonDeserializer
+from binlex.controlflow import FunctionJsonDeserializer, Function
 from gui import SearchDatabaseDialog
 from PyQt5.QtWidgets import QDialog
 from lib import IDA
@@ -10,7 +10,8 @@ from datetime import datetime
 from gui import OkayCancelDialog
 
 def process(
-    functions: list,
+    cfg,
+    function_addresses,
     client: BLClient,
     config,
     function_names: dict,
@@ -32,7 +33,9 @@ def process(
 
     results_table = []
 
-    for lhs_function in functions:
+    for address in function_addresses:
+        lhs_function = Function(address, cfg)
+        lhs_function = FunctionJsonDeserializer(lhs_function.json(), config)
         if exclude_named_functions and not function_names[lhs_function.address()].startswith('sub_'):
             continue
 
@@ -258,12 +261,14 @@ def execute(parent):
     IDA().set_registry_value('url', url)
     IDA().set_registry_value('api_key', api_key)
     parent.disassemble_controlflow()
-    functions = parent.get_function_json_deserializers()
+    #functions = parent.get_function_json_deserializers()
+    function_addresses = parent.cfg.queue_functions.valid_addresses()
     function_names = parent.ida.get_function_names()
     worker = Worker(
         target=process,
         args=(
-            functions,
+            parent.cfg,
+            function_addresses,
             client,
             parent.config,
             function_names,
