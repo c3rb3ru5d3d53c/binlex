@@ -7,7 +7,8 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QPushButton,
     QHBoxLayout,
-    QComboBox
+    QComboBox,
+    QCheckBox,
 )
 from lib import IDA
 from lib import BLClient
@@ -61,6 +62,10 @@ class BinlexServerSettingsDialog(QDialog):
         layout.addWidget(self.database_label)
         layout.addWidget(self.database_input)
 
+        self.include_blocks = QCheckBox('Include Blocks')
+        self.include_blocks.setChecked(False)
+        layout.addWidget(self.include_blocks)
+
         self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         self.button_box.accepted.connect(self.accept)
         self.button_box.rejected.connect(self.reject)
@@ -79,4 +84,5 @@ class BinlexServerSettingsDialog(QDialog):
             self.url_input.text(),
             self.api_key_input.text(),
             self.database_input.currentText(),
+            self.include_blocks.isChecked(),
         )

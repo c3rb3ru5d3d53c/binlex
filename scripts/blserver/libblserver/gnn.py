@@ -74,49 +74,7 @@ class BinlexGNN:
         gnn_hidden_dim: int = 32,
         gnn_output_dim: int = 16,
     ):
-        """
-        Initialize the GNN with data (either function or block). You can then call train(...)
-        to train the model on that data, and then call to_embedding() to retrieve an embedding.
 
-        The 'data' dict is expected to have at least a 'type' key with the value
-        'function' or 'block', plus the necessary fields for extracting features.
-
-        Example data for function:
-            {
-              "type": "function",
-              "average_instructions_per_block": 5,
-              "blocks": [
-                  {
-                      "size": ...,
-                      "entropy": ...,
-                      "number_of_instructions": ...,
-                      "conditional": ...,
-                      "edges": ...,
-                      "functions": [...],
-                      "chromosome": {
-                          "feature": [...]
-                      },
-                      "blocks": [ ... adjacency list ... ],
-                      "address": ...
-                  },
-                  ...
-              ]
-            }
-
-        Example data for block:
-            {
-              "type": "block",
-              "size": ...,
-              "entropy": ...,
-              "number_of_instructions": ...,
-              "conditional": ...,
-              "edges": ...,
-              "functions": [...],
-              "chromosome": {
-                  "feature": [...]
-              }
-            }
-        """
         random.seed(seed)
         np.random.seed(seed)
         manual_seed(seed)
@@ -130,7 +88,6 @@ class BinlexGNN:
         self.criterion = torch.nn.MSELoss()
         self.optimizer = None
 
-        # Will store the most recent Data object for training, and the original data
         self._last_graph_data = None
         self._last_data_dict = None
 
@@ -194,7 +151,7 @@ class BinlexGNN:
         Extract and assemble features from a single block.
         """
         features = [
-            block['size'],
+            len(block['functions']) / block['number_of_instructions'],
             block['entropy'],
             block['number_of_instructions'],
             block['conditional'],
@@ -212,24 +169,44 @@ class BinlexGNN:
         function: dict
     ) -> tuple[list[int], list[int], list[list[float]]]:
         """
-        Build the adjacency (a, b) and node feature list for a function graph.
+        Build zero-based adjacency (a, b) and the node feature list for a function graph.
+        Rather than storing addresses directly, we re-index each block by its order
+        so the GNN does not see actual addresses.
+
+        Returns:
+        - a: list of source indices for edges
+        - b: list of target indices for edges
+        - features: list of feature vectors, indexed consistently with (a, b)
         """
-        a, b = [], []
+
+        # First, map each block's address to a zero-based index
+        address_to_index = {}
+        for i, block in enumerate(function['blocks']):
+            address_to_index[block['address']] = i
+
+        # Build up features and adjacency (in zero-based indices)
         features = []
+        a, b = [], []
 
         for block in function['blocks']:
-            feature = self._extract_block_features(block)
-            # Append function-level info
-            feature.append(function['average_instructions_per_block'])
+            # Extract the block-level features
+            block_features = self._extract_block_features(block)
 
-            feature_nx3 = self.to_nx3_array(feature)
+            # Append some function-level info
+            block_features.append(function['average_instructions_per_block'])
+            block_features.append(function['cyclomatic_complexity'])
+
+            # PCA reduce
+            feature_nx3 = self.to_nx3_array(block_features)
             feature_reduced = self.pca_reduce(feature_nx3, output_dim=self.block_pca_dim)
             features.append(feature_reduced.tolist())
 
-            # Build adjacency from each block's internal references
-            for address in block['blocks']:
-                a.append(block['address'])
-                b.append(address)
+            # Build adjacency using the re-mapped indices
+            src_idx = address_to_index[block['address']]
+            for child_address in block['blocks']:
+                dst_idx = address_to_index[child_address]
+                a.append(src_idx)
+                b.append(dst_idx)
 
         return a, b, features
 
@@ -240,18 +217,18 @@ class BinlexGNN:
         features: list[list[float]]
     ) -> Data:
         """
-        Given adjacency (a, b) and features, build a torch_geometric Data object.
+        Given zero-based adjacency (a, b) and features, build a torch_geometric Data object.
+
+        We no longer make edges bidirectional by default, and we do not clamp
+        (since 'a' and 'b' are already guaranteed to be within valid range by design).
+
+        We still remove duplicate edges if any exist.
         """
-        max_node_index = len(features) - 1
-        a_clamped = [min(max_node_index, idx) for idx in a]
-        b_clamped = [min(max_node_index, idx) for idx in b]
-
         node_features = tensor(features, dtype=torch_float)
-        edge_index = tensor([a_clamped, b_clamped], dtype=torch_long)
+        edge_index = tensor([a, b], dtype=torch_long)
 
-        # Make edges bidirectional and remove duplicates
-        edge_index_rev = stack((edge_index[1], edge_index[0]), dim=0)
-        edge_index = cat([edge_index, edge_index_rev], dim=1).unique(dim=1)
+        # Remove duplicates (optional, but often helpful)
+        edge_index = edge_index.unique(dim=1)
 
         return Data(x=node_features, edge_index=edge_index)
 
