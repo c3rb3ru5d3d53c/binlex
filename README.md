@@ -38,7 +38,7 @@ While tools like **BinDiff** and **Diaphora** excel in single-file comparisons, 
 
 With **binlex** sever, you gain access to usernames, timestamps, and the sample hashes from which function signatures are derived, critical insights for collaborative analysis.
 
-A set of command-line tools are also provided to malware analysis and reverse engineers to help speed up the hunting of common patterns for threat hunting and detection.
+A set of command-line tools are also provided to malware analysts and reverse engineers to help speed up the hunting of common patterns for threat hunting and detection.
 
 For developers, **binlex** offers a **Rust API** and **Python bindings** to build custom tooling with minimal licensing restrictions. 🔓
 

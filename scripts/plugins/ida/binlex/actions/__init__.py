@@ -13,3 +13,5 @@ from .copy_block_vector import execute as copy_block_vector
 from .copy_block_json import execute as copy_block_json
 from .copy_function_vector import execute as copy_function_vector
 from .copy_function_json import execute as copy_function_json
+from .index_function import execute as index_function
+from .index_block import execute as index_block

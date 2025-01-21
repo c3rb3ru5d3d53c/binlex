@@ -227,6 +227,8 @@ from actions import (
     copy_block_vector,
     copy_function_vector,
     copy_function_json,
+    index_function,
+    index_block,
 )
 from binlex.imaging import ColorMap
 
@@ -267,6 +269,12 @@ class BinlexPlugin(idaapi.plugin_t):
 
     def action_copy_minhash(self):
         copy_minhash(self)
+
+    def action_index_function(self):
+        index_function(self)
+
+    def action_index_block(self):
+        index_block(self)
 
     def _disassemble_controlflow(self):
         number_of_functions = len(IDA.get_functions())

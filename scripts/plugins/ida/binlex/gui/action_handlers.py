@@ -153,6 +153,34 @@ class CopyFunctionJsonActionHandler(idaapi.action_handler_t):
             return idaapi.AST_ENABLE_ALWAYS
         return idaapi.AST_DISABLE
 
+class IndexFunctionActionHandler(idaapi.action_handler_t):
+    def __init__(self, plugin):
+        super().__init__()
+        self.plugin = plugin
+
+    def activate(self, ctx):
+        self.plugin.action_index_function()
+        return 1
+
+    def update(self, ctx):
+        if ctx.widget and ida_kernwin.get_widget_type(ctx.widget) in [ida_kernwin.BWN_DISASM, ida_kernwin.BWN_DISASM]:
+            return idaapi.AST_ENABLE_ALWAYS
+        return idaapi.AST_DISABLE
+
+class IndexBlockActionHandler(idaapi.action_handler_t):
+    def __init__(self, plugin):
+        super().__init__()
+        self.plugin = plugin
+
+    def activate(self, ctx):
+        self.plugin.action_index_block()
+        return 1
+
+    def update(self, ctx):
+        if ctx.widget and ida_kernwin.get_widget_type(ctx.widget) in [ida_kernwin.BWN_DISASM, ida_kernwin.BWN_DISASM]:
+            return idaapi.AST_ENABLE_ALWAYS
+        return idaapi.AST_DISABLE
+
 def unregister_action_handlers():
     ida_kernwin.unregister_action('binlex:copy_pattern')
     ida_kernwin.unregister_action('binlex:copy_minhash')
@@ -163,8 +191,28 @@ def unregister_action_handlers():
     ida_kernwin.unregister_action('binlex::copy_block_json')
     ida_kernwin.unregister_action('binlex::copy_function_vector')
     ida_kernwin.unregister_action('binlex::copy_function_json')
+    ida_kernwin.unregister_action('binlex::index_function')
+    ida_kernwin.unregister_action('binlex::index_block')
 
 def register_action_handlers(parent):
+    action_desc = idaapi.action_desc_t(
+        "binlex:index_block",
+        "Index Block",
+        IndexBlockActionHandler(parent),
+        None,
+        "Index current block",
+        -1
+    )
+    if not ida_kernwin.register_action(action_desc): ida_kernwin.msg('[x] failed to register index_block action.\n')
+    action_desc = idaapi.action_desc_t(
+        "binlex:index_function",
+        "Index Function",
+        IndexFunctionActionHandler(parent),
+        None,
+        "Index current function",
+        -1
+    )
+    if not ida_kernwin.register_action(action_desc): ida_kernwin.msg('[x] failed to register index_function action.\n')
     action_desc = idaapi.action_desc_t(
         "binlex:copy_function_json",
         "Copy Function JSON",
