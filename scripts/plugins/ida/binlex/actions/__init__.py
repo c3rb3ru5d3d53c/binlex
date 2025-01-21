@@ -9,3 +9,7 @@ from .search_database import execute as search_database
 from .index_database import execute as index_database
 from .export import execute as export
 from .export_byte_colormap import execute as export_byte_colormap
+from .copy_block_vector import execute as copy_block_vector
+from .copy_block_json import execute as copy_block_json
+from .copy_function_vector import execute as copy_function_vector
+from .copy_function_json import execute as copy_function_json

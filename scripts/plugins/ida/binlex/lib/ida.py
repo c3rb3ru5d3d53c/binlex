@@ -38,6 +38,24 @@ class IDA():
             'entropy': None,
         }
 
+    @staticmethod
+    def get_function_symbol_attribute(ea: int):
+        attribute = {}
+        attribute['type'] = 'symbol'
+        attribute['symbol_type'] = 'function'
+        attribute['file_offset'] = None
+        attribute['relative_virtual_address'] = None
+        attribute['virtual_address'] = ea
+        attribute['name'] = IDA.get_function_name(ea)
+        attribute['slice'] = None
+        return attribute
+
+    def get_function_attributes(self, function) -> list:
+        attributes = []
+        attributes.append(self.file_attribute())
+        attributes.append(self.get_function_symbol_attribute(function.start_ea))
+        return attributes
+
     def set_name(self, ea: int, name: str):
         name = self.normalize_function_name(name)
         idaapi.set_name(ea, name, idaapi.SN_FORCE)
@@ -67,6 +85,15 @@ class IDA():
     @staticmethod
     def get_functions() -> list:
         return [idaapi.get_func(ea) for ea in idautils.Functions()]
+
+    @staticmethod
+    def get_function(ea: int):
+        return idaapi.get_func(ea)
+
+    def is_function_ea(self, ea: int) -> bool:
+        function = self.get_function(ea)
+        if function is None: return False
+        return function.start_ea == ea
 
     @staticmethod
     def get_function_name(ea: int) -> str:
@@ -113,6 +140,10 @@ class IDA():
         else:
             next_instr_ea = current_screen_ea
         return (current_screen_ea, next_instr_ea)
+
+    @staticmethod
+    def get_screen_ea() -> int:
+        return ida_kernwin.get_screen_ea()
 
     @staticmethod
     def get_instruction_addresses():
