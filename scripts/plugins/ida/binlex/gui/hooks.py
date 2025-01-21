@@ -69,3 +69,15 @@ class UIHooks(idaapi.UI_Hooks):
                 "binlex:copy_function_json",
                 "Binlex/"
             )
+            ida_kernwin.attach_action_to_popup(
+                widget,
+                popup,
+                "binlex:index_function",
+                "Binlex/"
+            )
+            ida_kernwin.attach_action_to_popup(
+                widget,
+                popup,
+                "binlex:index_block",
+                "Binlex/"
+            )

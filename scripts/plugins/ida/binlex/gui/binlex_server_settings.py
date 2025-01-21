@@ -14,7 +14,7 @@ from lib import IDA
 from lib import BLClient
 
 class BinlexServerSettingsDialog(QDialog):
-    def __init__(self, databases: list = ['default', 'goodware', 'malware'], parent=None):
+    def __init__(self, databases: list = ['default', 'goodware', 'malware'], show_include_blocks: bool = True, parent=None):
         super(BinlexServerSettingsDialog, self).__init__(parent)
         self.setWindowTitle('Binlex Server Settings')
         self.setModal(True)
@@ -64,7 +64,7 @@ class BinlexServerSettingsDialog(QDialog):
 
         self.include_blocks = QCheckBox('Include Blocks')
         self.include_blocks.setChecked(False)
-        layout.addWidget(self.include_blocks)
+        if show_include_blocks: layout.addWidget(self.include_blocks)
 
         self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         self.button_box.accepted.connect(self.accept)
