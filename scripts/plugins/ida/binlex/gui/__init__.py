@@ -9,6 +9,7 @@ from .search_database import SearchDatabaseDialog
 from .svg import SVGWidget
 from .okaycancel import OkayCancelDialog
 from .json_search import JSONSearchWindow
+from .binlex_server_authentication import BinlexServerAuthenticationDialog
 from .binlex_server_settings import BinlexServerSettingsDialog
 from .action_handlers import BinlexExportActionHandler
 from .action_handlers import CopyHexActionHandler

@@ -223,6 +223,10 @@ from actions import (
     index_database,
     export,
     export_byte_colormap,
+    copy_block_json,
+    copy_block_vector,
+    copy_function_vector,
+    copy_function_json,
 )
 from binlex.imaging import ColorMap
 
@@ -264,31 +268,47 @@ class BinlexPlugin(idaapi.plugin_t):
     def action_copy_minhash(self):
         copy_minhash(self)
 
-    def capstone_disassemble_instruction(self, ea: int, executable_virtual_address_ranges: dict):
-        disassembler = CapstoneDisassembler(self.architecture, self.image, executable_virtual_address_ranges, self.config)
-        disassembler.disassemble_instruction(ea, self.cfg)
-
-    def disassemble_instruction(self, ea: int, executable_virtual_address_ranges: dict):
-        self.capstone_disassemble_instruction(ea, executable_virtual_address_ranges)
-
-    def capstone_disassemble_controlflow(self, architecture: Architecture, image: bytes, executable_address_ranges: dict):
-        disassembler = CapstoneDisassembler(architecture, image, executable_address_ranges, self.config)
+    def _disassemble_controlflow(self):
         number_of_functions = len(IDA.get_functions())
         progress = Progress(title='Disassembling CFG', max_value=number_of_functions)
         progress.show()
         for function in IDA.get_functions():
             progress.increment()
-            for block in IDA.get_function_blocks(function):
-                to = set([bb.start_ea for bb in block.succs()])
-                for instruction in IDA.get_block_instructions(block):
-                    disassembler.disassemble_instruction(instruction.ea, self.cfg)
-                    if function.start_ea == instruction.ea:
-                        self.cfg.set_function(instruction.ea)
-                    if block.start_ea == instruction.ea:
-                        self.cfg.set_block(instruction.ea)
-                    if idc.prev_head(block.end_ea) == instruction.ea:
-                        self.cfg.extend_instruction_edges(instruction.ea, to)
+            self.disassemble_function(function)
         progress.close()
+
+    def disassemble_function(self, function):
+        for block in IDA.get_function_blocks(function):
+            self.disassemble_block(block)
+
+    def disassemble_block(self, block):
+        to = set([bb.start_ea for bb in block.succs()])
+        for instruction in IDA.get_block_instructions(block):
+            self.disassemble_instruction(instruction)
+            if IDA().is_function_ea(instruction.ea):
+                self.cfg.set_function(instruction.ea)
+            if block.start_ea == instruction.ea:
+                self.cfg.set_block(instruction.ea)
+            if idc.prev_head(block.end_ea) == instruction.ea:
+                self.cfg.extend_instruction_edges(instruction.ea, to)
+
+    def disassemble_instruction(self, instruction):
+        self.disassembler.disassemble_instruction(instruction.ea, self.cfg)
+
+    def load_disassembler(self):
+        self.disassembler = CapstoneDisassembler(self.architecture, self.image, self.executable_address_ranges, self.config)
+
+    def action_copy_block_vector(self):
+        copy_block_vector(self)
+
+    def action_copy_block_json(self):
+        copy_block_json(self)
+
+    def action_copy_function_vector(self):
+        copy_function_vector(self)
+
+    def action_copy_function_json(self):
+        copy_function_json(self)
 
     def update(self, ctx):
         if ctx.widget:
@@ -312,13 +332,13 @@ class BinlexPlugin(idaapi.plugin_t):
 
     def disassemble_controlflow(self):
         if not self.is_disassembled:
-            self.capstone_disassemble_controlflow(self.architecture, self.image, {0: self.mapped_file.size()})
+            self._disassemble_controlflow()
             self.is_disassembled = True
             return
 
         dialog = OkayCancelDialog(title='Disassemble Again?', okay_text='Disassemble', cancel_text='Continue')
         if dialog.exec_() == QDialog.Accepted:
-            self.capstone_disassemble_controlflow(self.architecture, self.image, {0: self.mapped_file.size()})
+            self._disassemble_controlflow()
 
     def action_export(self):
         export(self)
@@ -338,6 +358,7 @@ class BinlexPlugin(idaapi.plugin_t):
                 self.mapped_file.write_padding(start - self.mapped_file.size())
             self.mapped_file.seek_to_end()
             self.mapped_file.write(data)
+        self.executable_address_ranges = {0: self.mapped_file.size()}
         self.image = self.mapped_file.as_memoryview()
 
     def load_binary(self) -> bool:
@@ -346,11 +367,13 @@ class BinlexPlugin(idaapi.plugin_t):
                 self.architecture = Architecture.from_str('i386')
                 self.cfg = Graph(self.architecture, self.config)
                 self.load_image()
+                self.load_disassembler()
                 return True
             else:
                 self.architecture = Architecture.from_str('amd64')
                 self.cfg = Graph(self.architecture, self.config)
                 self.load_image()
+                self.load_disassembler()
                 return True
         return False
 

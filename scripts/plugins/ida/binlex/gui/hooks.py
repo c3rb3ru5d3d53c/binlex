@@ -45,3 +45,27 @@ class UIHooks(idaapi.UI_Hooks):
                 "binlex:scan_tlsh",
                 "Binlex/"
             )
+            ida_kernwin.attach_action_to_popup(
+                widget,
+                popup,
+                "binlex:copy_block_vector",
+                "Binlex/"
+            )
+            ida_kernwin.attach_action_to_popup(
+                widget,
+                popup,
+                "binlex:copy_block_json",
+                "Binlex/"
+            )
+            ida_kernwin.attach_action_to_popup(
+                widget,
+                popup,
+                "binlex:copy_function_vector",
+                "Binlex/"
+            )
+            ida_kernwin.attach_action_to_popup(
+                widget,
+                popup,
+                "binlex:copy_function_json",
+                "Binlex/"
+            )
