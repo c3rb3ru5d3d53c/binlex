@@ -34,11 +34,9 @@ Unlike tools relying on **pure Python**, which can be slow 🐢, Binlex is desig
 
 For malware analysts and reverse engineers, **binlex** includes a IDA plugin and a vector database (**binlex** server) designed to identify similar functions.
 
-While tools like **BinDiff** and **Diaphora** excel in single-file comparisons, the **binlex** server operates more like **Lumina** but with a modern approach. Instead of relying on FLIRT signatures—which have known limitations—**binlex** server leverages the power of a **Graph Neural Network (GNN)** and similarity hashing with architecture specific normalization for enhanced precision and flexibility.
+While tools like **BinDiff** and **Diaphora** excel in single-file comparisons, **binlex** server operates more like **Lumina** but with a modern approach. Instead of relying on FLIRT signatures, **binlex** server leverages the power of a **Graph Neural Network (GNN)** and similarity hashing with architecture specific normalization for enhanced precision and flexibility.
 
-Overall, **binlex** sever provides teams with the transparency and flexibility **Lumina** does not.
-
-With **binlex** sever, you gain access to usernames, timestamps, and the sample hashes from which function signatures are derived—critical insights that are not available when using **Lumina**.
+With **binlex** sever, you gain access to usernames, timestamps, and the sample hashes from which function signatures are derived, critical insights for collaborative analysis.
 
 A set of command-line tools are also provided to malware analysis and reverse engineers to help speed up the hunting of common patterns for threat hunting and detection.
 
