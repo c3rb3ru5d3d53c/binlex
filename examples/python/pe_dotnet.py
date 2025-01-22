@@ -205,7 +205,7 @@ pe = PE(args.input, config)
 mapped_file = pe.image()
 
 # Get the Memory Map
-image = mapped_file.as_memoryview()
+image = mapped_file.mmap()
 
 # Create Disassembler on Mapped PE Image and PE Architecture
 disassembler = Disassembler(pe.architecture(), image, pe.dotnet_metadata_token_virtual_addresses(), pe.dotnet_executable_virtual_address_ranges(), config)

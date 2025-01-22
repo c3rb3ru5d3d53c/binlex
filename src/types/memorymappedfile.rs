@@ -164,6 +164,7 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
+
 use memmap2::{Mmap, MmapMut};
 use std::fs::OpenOptions;
 use std::io::{self, Error, Read, Seek, SeekFrom, Write};
@@ -182,7 +183,7 @@ use std::os::windows::io::AsRawHandle;
 use std::os::windows::fs::OpenOptionsExt;
 
 #[cfg(windows)]
-use winapi::um::winnt::{FILE_SHARE_READ, FILE_SHARE_WRITE};
+use winapi::um::winnt::{FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_SHARE_DELETE};
 
 /// A `MemoryMappedFile` struct that provides a memory-mapped file interface,
 /// enabling file read/write operations with optional disk caching,
@@ -197,43 +198,26 @@ pub struct MemoryMappedFile {
     /// Flag to determine if the file should be cached. If `false`, the file will
     /// be deleted upon the object being dropped.
     pub cache: bool,
+    mmap: Option<Mmap>,
+    mmap_mut: Option<MmapMut>,
 }
 
 impl MemoryMappedFile {
-    /// Creates a new `MemoryMappedFile` instance.
-    ///
-    /// This function opens a file at the specified path, with options to append and/or cache the file.
-    /// If the file's parent directories do not exist, they are created.
-    ///
-    /// # Returns
-    ///
-    /// A `Result` containing the `MemoryMappedFile` on success, or an `io::Error` if file creation fails.
+
     pub fn new(path: PathBuf, cache: bool) -> Result<Self, Error> {
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| {
-                io::Error::new(
-                    e.kind(),
-                    format!("failed to create parent directories for '{}': {}",
-                            path.display(), e)
-                )
-            })?;
+            std::fs::create_dir_all(parent)?;
         }
 
         let is_cached = path.is_file();
 
         let mut options = OpenOptions::new();
-
         options.read(true).write(true).create(true);
 
         #[cfg(windows)]
-        options.share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE);
+        options.share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE);
 
-        let handle = options.open(&path).map_err(|e| {
-            io::Error::new(
-                e.kind(),
-                format!("failed to open file '{}': {}", path.display(), e)
-            )
-        })?;
+        let handle = options.open(&path)?;
 
         #[cfg(windows)]
         {
@@ -263,8 +247,11 @@ impl MemoryMappedFile {
             handle: Some(handle),
             is_cached,
             cache,
+            mmap: None,
+            mmap_mut: None,
         })
     }
+
 
     pub fn seek_from_current(&mut self, offset: i64) -> Result<u64, io::Error> {
         if let Some(ref mut handle) = self.handle {
@@ -291,32 +278,6 @@ impl MemoryMappedFile {
         } else {
             Err(io::Error::new(io::ErrorKind::Other, "File handle is closed"))
         }
-    }
-
-    /// Creates a new `MemoryMappedFile` instance in read-only mode.
-    ///
-    /// # Arguments
-    ///
-    /// * `path` - The `PathBuf` specifying the file's location.
-    ///
-    /// # Returns
-    ///
-    /// A `Result` containing the `MemoryMappedFile` on success, or an `Error` if file creation fails.
-    pub fn new_readonly(path: PathBuf) -> Result<Self, Error> {
-        let mut options = OpenOptions::new();
-        options.read(true).write(false).create(false);
-
-        #[cfg(windows)]
-        options.share_mode(FILE_SHARE_READ);
-
-        let handle = options.open(&path)?;
-
-        Ok(Self {
-            path: path.to_string_lossy().into_owned(),
-            handle: Some(handle),
-            is_cached: false,
-            cache: false,
-        })
     }
 
     /// Explicitly closes the file handle.
@@ -365,13 +326,35 @@ impl MemoryMappedFile {
         }
     }
 
-    /// Maps the file into memory as mutable using `mmap2`.
-    pub fn mmap_mut(&self) -> Result<MmapMut, Error> {
-        if let Some(ref handle) = self.handle {
-            unsafe { MmapMut::map_mut(handle) }
-        } else {
-            Err(Error::new(io::ErrorKind::Other, "File handle is closed"))
+    pub fn mmap_mut(&mut self) -> Result<&mut MmapMut, Error> {
+        if self.mmap_mut.is_none() {
+            if let Some(ref handle) = self.handle {
+                self.mmap_mut = Some(unsafe { MmapMut::map_mut(handle)? });
+            } else {
+                return Err(Error::new(io::ErrorKind::Other, "File handle is closed"));
+            }
         }
+        self.mmap_mut.as_mut().ok_or_else(|| {
+            Error::new(io::ErrorKind::Other, "Failed to create mutable memory map")
+        })
+    }
+
+    pub fn mmap(&mut self) -> Result<&Mmap, Error> {
+        if self.mmap.is_none() {
+            if let Some(ref handle) = self.handle {
+                self.mmap = Some(unsafe { Mmap::map(handle)? });
+            } else {
+                return Err(Error::new(io::ErrorKind::Other, "File handle is closed"));
+            }
+        }
+        self.mmap.as_ref().ok_or_else(|| {
+            Error::new(io::ErrorKind::Other, "Failed to create memory map")
+        })
+    }
+
+    pub fn unmap(&mut self) {
+        self.mmap = None;
+        self.mmap_mut = None;
     }
 
     /// Retrieves the size of the file in bytes.
@@ -383,22 +366,13 @@ impl MemoryMappedFile {
         }
     }
 
-    /// Maps the file into memory using `mmap`.
-    pub fn mmap(&self) -> Result<Mmap, Error> {
-        if let Some(ref handle) = self.handle {
-            unsafe { Mmap::map(handle) }
-        } else {
-            Err(Error::new(io::ErrorKind::Other, "File handle is closed"))
-        }
-    }
 }
 
-/// Automatically handles cleanup for the `MemoryMappedFile` when it goes out of scope.
-///
-/// If caching is disabled, this `Drop` implementation deletes the file from disk
-/// when the `MemoryMappedFile` instance is dropped, provided there were no errors in file removal.
 impl Drop for MemoryMappedFile {
     fn drop(&mut self) {
+
+        self.unmap();
+
         // Ensure the file handle is dropped
         self.close();
 

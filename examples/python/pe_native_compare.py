@@ -232,7 +232,7 @@ rhs_pe = PE(args.rhs, config)
 rhs_mapped_file = rhs_pe.image()
 
 # Get the Memory Map
-rhs_image = rhs_mapped_file.as_memoryview()
+rhs_image = rhs_mapped_file.mmap()
 
 # Create Disassembler on Mapped PE Image and PE Architecture
 rhs_disassembler = Disassembler(rhs_pe.architecture(), rhs_image, rhs_pe.executable_virtual_address_ranges(), config)

@@ -258,7 +258,7 @@ impl MACHO {
         let result = self.inner.lock().unwrap().image(slice).map_err(|e| {
             pyo3::exceptions::PyIOError::new_err(e.to_string())
         })?;
-        let py_memory_mapped_file = Py::new(py, MemoryMappedFile { inner: result, mmap: None})?;
+        let py_memory_mapped_file = Py::new(py, MemoryMappedFile { inner: result})?;
         Ok(py_memory_mapped_file)
     }
 
