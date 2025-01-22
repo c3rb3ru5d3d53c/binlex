@@ -205,7 +205,7 @@ for index in macho.number_of_slices():
   mapped_file = macho.image(index)
 
   # Get the Memory Map
-  image = mapped_file.as_memoryview()
+  image = mapped_file.mmap()
 
   # Create Disassembler on Mapped MACHO Image and MACHO Architecture
   disassembler = Disassembler(macho.architecture(index), image, macho.executable_virtual_address_ranges(index), config)

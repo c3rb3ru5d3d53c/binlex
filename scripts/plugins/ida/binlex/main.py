@@ -367,7 +367,7 @@ class BinlexPlugin(idaapi.plugin_t):
             self.mapped_file.seek_to_end()
             self.mapped_file.write(data)
         self.executable_address_ranges = {0: self.mapped_file.size()}
-        self.image = self.mapped_file.as_memoryview()
+        self.image = self.mapped_file.mmap()
 
     def load_binary(self) -> bool:
         if ida_ida.inf_get_procname() == 'metapc':

@@ -203,7 +203,7 @@ elf = ELF(args.input, config)
 mapped_file = pe.image()
 
 # Get the Memory Map
-image = mapped_file.as_memoryview()
+image = mapped_file.mmap()
 
 # Create Disassembler on Mapped ELF Image and ELF Architecture
 disassembler = Disassembler(elf.architecture(), image, elf.executable_virtual_address_ranges(), config)

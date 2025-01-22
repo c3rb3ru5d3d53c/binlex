@@ -638,7 +638,7 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
     //     attributes.push(Attribute::Symbol(symbol.process().clone()));
     // }
 
-    let mapped_file = pe.image()
+    let mut mapped_file = pe.image()
         .unwrap_or_else(|error| { eprintln!("failed to map pe image: {}", error); process::exit(1)});
 
     Stderr::print_debug(config.clone(), "mapped pe image");
@@ -737,7 +737,7 @@ fn process_elf(input: String, config: Config, tags: Option<Vec<String>>, output:
     //     attributes.push(Attribute::Symbol(symbol.process().clone()));
     // }
 
-    let mapped_file = elf.image()
+    let mut mapped_file = elf.image()
         .unwrap_or_else(|error| { eprintln!("{}", error); process::exit(1)});
 
     let image = mapped_file
@@ -864,7 +864,7 @@ fn process_macho(input: String, config: Config, tags: Option<Vec<String>>, outpu
         //     attributes.push(Attribute::Symbol(symbol.process().clone()));
         // }
 
-        let mapped_file = macho.image(slice)
+        let mut mapped_file = macho.image(slice)
         .unwrap_or_else(|error| { eprintln!("{}", error); process::exit(1)});
 
         let image = mapped_file
