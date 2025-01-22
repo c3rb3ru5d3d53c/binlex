@@ -205,7 +205,7 @@ pe = PE(args.input, config)
 mapped_file = pe.image()
 
 # Get the Memory Map
-image = mapped_file.as_memoryview()
+image = mapped_file.mmap()
 
 # Create Disassembler on Mapped PE Image and PE Architecture
 disassembler = Disassembler(pe.architecture(), image, pe.executable_virtual_address_ranges(), config)
@@ -216,8 +216,8 @@ cfg = Graph(pe.architecture(), config)
 # Disassemble the PE Image Entrypoints Recursively
 disassembler.disassemble_controlflow(pe.entrypoint_virtual_addresses(), cfg)
 
-# for address in cfg.queue_functions.valid_addresses():
-#     function = Function(address, cfg)
-#     function.print()
+for address in cfg.queue_functions.valid_addresses():
+    function = Function(address, cfg)
+    function.print()
 # for function in cfg.functions():
 #     function.print()
