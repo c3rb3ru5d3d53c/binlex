@@ -10,26 +10,26 @@ authors = ["c3rb3ru5d3d53c"]
 winapi = { version = "0.3.9", features = ["winnt", "fileapi", "ioapiset", "winioctl"] }
 
 [dependencies]
-clap = { version = "4.5.20", features = ["derive"] }
+clap = { version = "4.5.27", features = ["derive"] }
 lief = "0.15.1"
 capstone = "0.12.0"
 fast-tlsh = "0.1.6"
 ring = "0.17.8"
-serde = { version = "1.0.213", features = ["derive"] }
-serde_json = "1.0.132"
+serde = { version = "1.0.217", features = ["derive"] }
+serde_json = "1.0.137"
 twox-hash = "2.0.0"
 rand = { version = "0.8.5", features = ["small_rng"] }
 once_cell = "1.20.2"
 rayon = "1.10.0"
 crossbeam = "0.8.4"
 crossbeam-skiplist = "0.1.3"
-lz4 = "1.28.0"
+lz4 = "1.28.1"
 pdb = "0.8.0"
 memmap2 = "0.9.5"
-dirs = "5.0.1"
+dirs = "6.0.0"
 toml = "0.8.19"
-glob = "0.3.1"
-indexmap = "2.7.0"
+glob = "0.3.2"
+indexmap = "2.7.1"
 
 [workspace]
 members = [
