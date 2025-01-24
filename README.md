@@ -912,7 +912,7 @@ pe = PE('./sample.exe', config)
 mapped_file = pe.image()
 
 # Get the Memory Map
-image = mapped_file.as_memoryview()
+image = mapped_file.mmap()
 
 # Create Disassembler on Mapped PE Image and PE Architecture
 disassembler = Disassembler(pe.architecture(), image, pe.executable_virtual_address_ranges(), config)
@@ -947,7 +947,7 @@ pe = PE('./sample.exe', config)
 mapped_file = pe.image()
 
 # Get the Memory Map
-image = mapped_file.as_memoryview()
+image = mapped_file.mmap()
 
 # Create Disassembler on Mapped PE Image and PE Architecture
 disassembler = Disassembler(pe.architecture(), image, pe.dotnet_metadata_token_virtual_addresses(), pe.dotnet_executable_virtual_address_ranges(), config)
@@ -980,7 +980,7 @@ elf = ELF('./sample.so', config)
 mapped_file = pe.image()
 
 # Get the Memory Map
-image = mapped_file.as_memoryview()
+image = mapped_file.mmap()
 
 # Create Disassembler on Mapped ELF Image and ELF Architecture
 disassembler = Disassembler(elf.architecture(), image, elf.executable_virtual_address_ranges(), config)
@@ -1016,7 +1016,7 @@ for index in macho.number_of_slices():
   mapped_file = macho.image(index)
 
   # Get the Memory Map
-  image = mapped_file.as_memoryview()
+  image = mapped_file.mmap()
 
   # Create Disassembler on Mapped MACHO Image and MACHO Architecture
   disassembler = Disassembler(macho.architecture(index), image, macho.executable_virtual_address_ranges(index), config)
@@ -1176,8 +1176,8 @@ If you are using **binlex** in a journal publication, or an open-source AI model
 @misc{binlex,
   author = {c3rb3ru5d3d53c},
   title = {binlex: A Binary Genetic Trait Lexer Framework},
-  year = {2024},
-  note = {Available at \url{https://github.com/c3rb3ru5d3d53c/binlex-rs}}
+  year = {2025},
+  note = {Available at \url{https://github.com/c3rb3ru5d3d53c/binlex}}
 }
 ```
 
