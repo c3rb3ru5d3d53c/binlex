@@ -11,7 +11,7 @@ def execute(parent):
     while pc < end_ea:
         insn = ida_ua.insn_t()
         ida_ua.decode_insn(insn, pc)
-        parent.disassemble_instruction(pc, {start_ea: end_ea})
+        parent.disassemble_instruction(insn)
         blinsn = Instruction(pc, parent.cfg)
         pattern += blinsn.chromosome().pattern()
         pc += insn.size
