@@ -286,7 +286,7 @@ pub fn binlex_cil_disassembler_init(py: Python, m: &Bound<'_, PyModule>) -> PyRe
     m.add_class::<Disassembler>()?;
      py.import_bound("sys")?
         .getattr("modules")?
-        .set_item("binlex.disassemblers.custom.cil", m)?;
-    m.setattr("__name__", "binlex.disassemblers.custom.cil")?;
+        .set_item("binlex_bindings.binlex.disassemblers.custom.cil", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.disassemblers.custom.cil")?;
     Ok(())
 }

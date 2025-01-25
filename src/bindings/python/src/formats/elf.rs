@@ -278,7 +278,7 @@ pub fn elf_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<ELF>()?;
      py.import_bound("sys")?
         .getattr("modules")?
-        .set_item("binlex.formats.elf", m)?;
-    m.setattr("__name__", "binlex.formats.elf")?;
+        .set_item("binlex_bindings.binlex.formats.elf", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.formats.elf")?;
     Ok(())
 }

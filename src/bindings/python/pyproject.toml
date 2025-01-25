@@ -1,0 +1,22 @@
+[project]
+name = "binlex"
+version = "2.0.0"
+authors = [{ name = "c3rb3ru5d3d53c", email = "c3rb3ru5d3d53c@gmail.com" }]
+description = "A Binary Genetic Traits Lexer Framework"
+keywords = ["malware", "genomics", "binary similarity", "cybersecurity", "research"]
+classifiers = [
+    "Programming Language :: Python",
+    "Programming Language :: Rust",
+    "Topic :: Security",
+    "License :: OSI Approved :: MIT License"
+]
+requires-python = ">=3.9"
+
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[tool.maturin]
+python-source = "project"
+module-name = "binlex_bindings.binlex"
+python-packages = ["binlex", "binlex_bindings"]

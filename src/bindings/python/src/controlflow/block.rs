@@ -683,7 +683,7 @@ pub fn block_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<BlockJsonDeserializer>()?;
     py.import_bound("sys")?
         .getattr("modules")?
-        .set_item("binlex.controlflow.block", m)?;
-    m.setattr("__name__", "binlex.controlflow.block")?;
+        .set_item("binlex_bindings.binlex.controlflow.block", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.controlflow.block")?;
     Ok(())
 }

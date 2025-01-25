@@ -184,7 +184,7 @@ pub fn types_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<LZ4String>()?;
     py.import_bound("sys")?
         .getattr("modules")?
-        .set_item("binlex.types", m)?;
-    m.setattr("__name__", "binlex.types")?;
+        .set_item("binlex_bindings.binlex.types", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.types")?;
     Ok(())
 }

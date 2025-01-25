@@ -208,7 +208,7 @@ pub fn minhash_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<MinHash32>()?;
     py.import_bound("sys")?
         .getattr("modules")?
-        .set_item("binlex.hashing.minhash", m)?;
-    m.setattr("__name__", "binlex.hashing.minhash")?;
+        .set_item("binlex_bindings.binlex.hashing.minhash", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.hashing.minhash")?;
     Ok(())
 }

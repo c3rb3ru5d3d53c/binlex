@@ -196,7 +196,7 @@ pub fn sha256_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<SHA256>()?;
     py.import_bound("sys")?
         .getattr("modules")?
-        .set_item("binlex.hashing.sha256", m)?;
-    m.setattr("__name__", "binlex.hashing.sha256")?;
+        .set_item("binlex_bindings.binlex.hashing.sha256", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.hashing.sha256")?;
     Ok(())
 }

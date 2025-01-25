@@ -178,7 +178,7 @@ pub fn capstone_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Disassembler>()?;
      py.import_bound("sys")?
         .getattr("modules")?
-        .set_item("binlex.disassemblers.capstone", m)?;
-    m.setattr("__name__", "binlex.disassemblers.capstone")?;
+        .set_item("binlex_bindings.binlex.disassemblers.capstone", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.disassemblers.capstone")?;
     Ok(())
 }

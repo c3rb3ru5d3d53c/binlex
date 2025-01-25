@@ -219,7 +219,7 @@ pub fn architecture_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()
     m.add_class::<Architecture>()?;
     py.import_bound("sys")?
         .getattr("modules")?
-        .set_item("binlex.global.architecture", m)?;
-    m.setattr("__name__", "binlex.global.architecture")?;
+        .set_item("binlex_bindings.binlex._global.architecture", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex._global.architecture")?;
     Ok(())
 }

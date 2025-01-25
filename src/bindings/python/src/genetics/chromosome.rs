@@ -430,7 +430,7 @@ pub fn chromosome_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Chromosome>()?;
      py.import_bound("sys")?
         .getattr("modules")?
-        .set_item("binlex.genetics.chromosome", m)?;
-    m.setattr("__name__", "binlex.genetics.chromosome")?;
+        .set_item("binlex_bindings.binlex.genetics.chromosome", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.genetics.chromosome")?;
     Ok(())
 }

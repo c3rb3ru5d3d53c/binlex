@@ -429,7 +429,7 @@ pub fn graph_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Graph>()?;
     py.import_bound("sys")?
         .getattr("modules")?
-        .set_item("binlex.controlflow.graph", m)?;
-    m.setattr("__name__", "binlex.controlflow.graph")?;
+        .set_item("binlex_bindings.binlex.controlflow.graph", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.controlflow.graph")?;
     Ok(())
 }

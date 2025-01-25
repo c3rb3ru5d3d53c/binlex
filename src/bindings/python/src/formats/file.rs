@@ -221,7 +221,7 @@ pub fn file_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<File>()?;
      py.import_bound("sys")?
         .getattr("modules")?
-        .set_item("binlex.formats.file", m)?;
-    m.setattr("__name__", "binlex.formats.file")?;
+        .set_item("binlex_bindings.binlex.formats.file", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.formats.file")?;
     Ok(())
 }

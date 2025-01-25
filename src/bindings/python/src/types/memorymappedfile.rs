@@ -278,8 +278,8 @@ pub fn memorymappedfile_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResul
     m.add_class::<MemoryMappedFile>()?;
     py.import_bound("sys")?
         .getattr("modules")?
-        .set_item("binlex.types.memorymappedfile", m)?;
-    m.setattr("__name__", "binlex.types.memorymappedfile")?;
+        .set_item("binlex_bindings.binlex.types.memorymappedfile", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.types.memorymappedfile")?;
     Ok(())
 }
 

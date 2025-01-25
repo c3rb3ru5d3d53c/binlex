@@ -2,6 +2,9 @@
 *.exe
 *.so
 *.macho
+*.so
+*.dll
+*.pyc
+__pycache__/
 venv/
-*.py
 *.svg
