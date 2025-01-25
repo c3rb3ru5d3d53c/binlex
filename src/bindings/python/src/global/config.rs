@@ -1871,7 +1871,7 @@ pub fn config_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Config>()?;
     py.import_bound("sys")?
         .getattr("modules")?
-        .set_item("binlex.global.config", m)?;
-    m.setattr("__name__", "binlex.global.config")?;
+        .set_item("binlex_bindings.binlex._global.config", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex._global.config")?;
     Ok(())
 }

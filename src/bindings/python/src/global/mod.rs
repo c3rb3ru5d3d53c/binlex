@@ -175,7 +175,7 @@ pub use crate::global::architecture::Architecture;
 use pyo3::{prelude::*, wrap_pymodule};
 
 #[pymodule]
-#[pyo3(name = "global")]
+#[pyo3(name = "_global")]
 pub fn global_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pymodule!(config_init))?;
     m.add_wrapped(wrap_pymodule!(architecture_init))?;
@@ -183,7 +183,7 @@ pub fn global_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Architecture>()?;
     py.import_bound("sys")?
         .getattr("modules")?
-        .set_item("binlex.global", m)?;
-    m.setattr("__name__", "binlex.global")?;
+        .set_item("binlex_bindings.binlex._global", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex._global")?;
     Ok(())
 }

@@ -176,7 +176,7 @@ pub fn custom_disassemblers_init(py: Python, m: &Bound<'_, PyModule>) -> PyResul
     m.add_wrapped(wrap_pymodule!(cil_init))?;
     py.import_bound("sys")?
         .getattr("modules")?
-        .set_item("binlex.disassemblers.custom", m)?;
-    m.setattr("__name__", "binlex.disassemblers.custom")?;
+        .set_item("binlex_bindings.binlex.disassemblers.custom", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.disassemblers.custom")?;
     Ok(())
 }

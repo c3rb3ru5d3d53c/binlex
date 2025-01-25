@@ -343,7 +343,7 @@ pub fn pe_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PE>()?;
      py.import_bound("sys")?
         .getattr("modules")?
-        .set_item("binlex.formats.pe", m)?;
-    m.setattr("__name__", "binlex.formats.pe")?;
+        .set_item("binlex_bindings.binlex.formats.pe", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.formats.pe")?;
     Ok(())
 }

@@ -192,7 +192,7 @@ pub fn genitics_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<ChromosomeSimilarity>()?;
      py.import_bound("sys")?
         .getattr("modules")?
-        .set_item("binlex.genetics", m)?;
-    m.setattr("__name__", "binlex.genetics")?;
+        .set_item("binlex_bindings.binlex.genetics", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.genetics")?;
     Ok(())
 }

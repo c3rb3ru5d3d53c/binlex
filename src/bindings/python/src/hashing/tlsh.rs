@@ -202,7 +202,7 @@ pub fn tlsh_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<TLSH>()?;
     py.import_bound("sys")?
         .getattr("modules")?
-        .set_item("binlex.hashing.tlsh", m)?;
-    m.setattr("__name__", "binlex.hashing.tlsh")?;
+        .set_item("binlex_bindings.binlex.hashing.tlsh", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.hashing.tlsh")?;
     Ok(())
 }

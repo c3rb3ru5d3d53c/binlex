@@ -825,7 +825,7 @@ pub fn function_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<FunctionJsonDeserializer>()?;
     py.import_bound("sys")?
         .getattr("modules")?
-        .set_item("binlex.controlflow.function", m)?;
-    m.setattr("__name__", "binlex.controlflow.function")?;
+        .set_item("binlex_bindings.binlex.controlflow.function", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.controlflow.function")?;
     Ok(())
 }

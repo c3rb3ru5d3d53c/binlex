@@ -179,7 +179,7 @@ pub fn disassemblers_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pymodule!(capstone_init))?;
     py.import_bound("sys")?
         .getattr("modules")?
-        .set_item("binlex.disassemblers", m)?;
-    m.setattr("__name__", "binlex.disassemblers")?;
+        .set_item("binlex_bindings.binlex.disassemblers", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.disassemblers")?;
     Ok(())
 }

@@ -14,7 +14,7 @@ pub fn imaging_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<ColorMapType>()?;
     py.import_bound("sys")?
         .getattr("modules")?
-        .set_item("binlex.imaging", m)?;
-    m.setattr("__name__", "binlex.imaging")?;
+        .set_item("binlex_bindings.binlex.imaging", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.imaging")?;
     Ok(())
 }
