@@ -889,6 +889,44 @@ To disassemble a PE memory mapped image use the following examples.
 
 There are more examples in the `examples/python/` directory.
 
+
+### IDA Pro Headless Python
+
+It is now possible to leverage IDA's disassembler in headless mode as well.
+
+```python
+import json
+from binlex import Config
+from binlex.controlflow import Graph, Function
+from binlex.disassemblers.ida import IDA, Disassembler
+
+config = Config()
+
+ida = IDA()
+
+ida.open_database('sample.exe', True)
+
+image = ida.image()
+
+cfg = Graph(ida.architecture(), config)
+
+disassembler = Disassembler(
+    ida.architecture(),
+    image.mmap(), {0: image.size()},
+    config
+)
+
+disassembler.disassemble_controlflow(cfg)
+
+for address in cfg.queue_functions.valid_addresses():
+    function = Function(address, cfg)
+    function = function.to_dict()
+    function['attributes'] = ida.attributes(address)
+    print(json.dumps(function))
+
+ida.close_database()
+```
+
 #### Native PE
 
 ```python
