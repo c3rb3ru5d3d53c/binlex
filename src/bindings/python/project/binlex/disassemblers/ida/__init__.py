@@ -135,7 +135,7 @@ class IDA():
             'entropy': None,
         }
 
-	def open_database(self, path: str, run_auto_analysis: bool):
+	def open_database(self, path: str, run_auto_analysis: bool = True):
 		idapro.open_database(path, run_auto_analysis=run_auto_analysis)
 
 	def close_database(self):

@@ -904,7 +904,7 @@ config = Config()
 
 ida = IDA()
 
-ida.open_database('sample.exe', True)
+ida.open_database('sample.i64', run_auto_analysis=False)
 
 image = ida.image()
 
