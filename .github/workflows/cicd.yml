@@ -326,6 +326,7 @@ jobs:
         with:
           name: ${{ matrix.os }}-artifacts
           path: dist/
+          merge-multiple: true
 
   archlinux:
     runs-on: ubuntu-latest
