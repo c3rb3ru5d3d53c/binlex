@@ -170,7 +170,7 @@ use std::borrow::Borrow;
 use std::io::Error;
 use std::collections::BTreeSet;
 use std::collections::BTreeMap;
-use binlex::disassemblers::capstone::Disassembler as InnerDisassembler;
+use binlex::disassemblers::capstone::x86::Disassembler as InnerDisassembler;
 use crate::Architecture;
 use crate::controlflow::Graph;
 use pyo3::types::PyBytes;
@@ -298,7 +298,7 @@ pub fn disassembler_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Disassembler>()?;
      py.import_bound("sys")?
         .getattr("modules")?
-        .set_item("binlex_bindings.binlex.disassemblers.capstone", m)?;
-    m.setattr("__name__", "binlex_bindings.binlex.disassemblers.capstone")?;
+        .set_item("binlex_bindings.binlex.disassemblers.capstone.x86.disassembler", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.disassemblers.capstone.disassembler")?;
     Ok(())
 }

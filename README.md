@@ -931,7 +931,7 @@ ida.close_database()
 
 ```python
 from binlex.formats import PE
-from binlex.disassemblers.capstone import Disassembler
+from binlex.disassemblers.capstone.x86 import Disassembler
 from binlex.controlflow import Graph
 from binlex import Config
 
@@ -1001,7 +1001,7 @@ disassembler.disassemble_controlflow(pe.dotnet_entrypoint_virtual_addresses(), c
 
 ```python
 from binlex.formats import ELF
-from binlex.disassemblers.capstone import Disassembler
+from binlex.disassemblers.capstone.x86 import Disassembler
 from binlex.controlflow import Graph
 from binlex import Config
 
@@ -1034,7 +1034,7 @@ disassembler.disassemble_controlflow(elf.entrypoint_virtual_addresses(), cfg)
 
 ```python
 from binlex.formats import MACHO
-from binlex.disassemblers.capstone import Disassembler
+from binlex.disassemblers.capstone.x86 import Disassembler
 from binlex.controlflow import Graph
 from binlex import Config
 
