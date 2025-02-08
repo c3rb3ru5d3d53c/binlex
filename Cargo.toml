@@ -30,6 +30,7 @@ dirs = "6.0.0"
 toml = "0.8.19"
 glob = "0.3.2"
 indexmap = "2.7.1"
+cxx = "1.0.138"
 
 [workspace]
 members = [
