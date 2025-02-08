@@ -164,5 +164,6 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-pub mod capstone;
-pub mod custom;
+pub mod disassembler;
+
+pub use disassembler::Disassembler;
