@@ -324,9 +324,8 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.os }}-artifacts
+          name: ${{ matrix.os }}-artifacts-${{ strategy.job-index }}
           path: dist/
-          merge-multiple: true
 
   archlinux:
     runs-on: ubuntu-latest
