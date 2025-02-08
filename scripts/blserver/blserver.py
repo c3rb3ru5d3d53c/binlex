@@ -81,6 +81,20 @@ def create_app(config: str) -> Flask:
             )
         }
     )
+    
+    address_search_database = api.model(
+        'AddressSearchDatabase',
+        {
+            'sha256': fields.String(
+                description='SHA256 of the sample',
+                example="2d66d000874a77e4c81f5ab34674fbc0bf5e28aac86ce07e5fd99aee1b84d244"
+            ),
+            'address': fields.Integer(
+                description='Address of the function inside the sample',
+                example="4411523"
+            )
+        }
+    )
 
     embedding_response_model = api.model(
         'EmbeddingResponse',
@@ -170,6 +184,45 @@ def create_app(config: str) -> Flask:
                 return json.dumps(result), 200
             except Exception as e:
                 return {'error': str(e)}, 500
+
+    @api.route('/embeddings/<string:database>/function/<string:partitions>/search_address')
+    class BinlexServerAddressSearch(Resource):
+        @require_user_api_key
+        @api.expect(address_search_database, validate=True)
+        @api.response(200, 'Success', fields.List(
+            fields.Raw(
+                description='A function data from that sample'
+            )
+        ))
+        @api.response(400, 'Invalid Input', error_response_model)
+        @api.response(500, 'Internal Server Error', error_response_model)
+        @api.doc(description='Search Embeddings')
+        def post(self, database, partitions):
+            try:
+
+                partitions = partitions.split('||')
+
+                request_data = json.loads(request.data)
+
+                if database not in milvus_client.list_databases():
+                    return json.dumps({'error': 'database does not exist'}), 404
+
+                for partition in partitions:
+                    if partition not in milvus_client.get_partition_names(database=database, collection_name='function'):
+                        return json.dumps({'error': f'{partition} is an unsupported partition or architecture'}), 404
+
+                results = milvus_client.search_address(
+                    minio_client=minio_client,
+                    database=database,
+                    partition_names=partitions,
+                    sha256=request_data["sha256"],
+                    address=request_data["address"]
+                )
+                return json.dumps(results), 200
+            except json.JSONDecodeError:
+                return json.dumps({'error': 'Invalid JSON input'}), 400
+            except Exception as e:
+                return json.dumps({'error': str(e)}), 500
 
     @api.route('/embeddings/<string:database>/<string:collection>/<string:partitions>/search/<int:offset>/<int:limit>/<float:threshold>')
     class BinlexServerEmbeddingsSearch(Resource):

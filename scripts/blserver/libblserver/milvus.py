@@ -146,6 +146,7 @@ class BinlexMilvus:
             FieldSchema(name='username', dtype=DataType.VARCHAR, max_length=512),
             FieldSchema(name='object', dtype=DataType.VARCHAR, max_length=64),
             FieldSchema(name='sha256', dtype=DataType.VARCHAR, max_length=64),
+            FieldSchema(name='address', dtype=DataType.INT64),
             FieldSchema(
                 name='vector',
                 dtype=DataType.FLOAT_VECTOR,
@@ -320,6 +321,7 @@ class BinlexMilvus:
                     "username": username,
                     "object": _object,
                     "sha256": sha256,
+                    "address": data['address'],
                     "vector": vector,
                     "name": name,
                 }
@@ -393,6 +395,7 @@ class BinlexMilvus:
                 "username",
                 "timestamp",
                 "sha256",
+                "address",
                 "edges",
                 "entropy",
                 "cyclomatic_complexity",
@@ -445,11 +448,98 @@ class BinlexMilvus:
                 "number_of_blocks": entity.get('number_of_blocks'),
                 "timestamp": entity.get('timestamp'),
                 "sha256": entity.get('sha256'),
+                "address": entity.get('address'),
                 "data": data
             })
 
         return results
 
+    def search_address(
+        self,
+        minio_client,
+        database: str,
+        partition_names: List[str],
+        sha256: str,
+        address: int
+    ) -> List[dict]:
+        """
+        Search functions based on its address inside the sample and SHA256 of the sample. 
+
+        Parameters:
+            minio_client: MinIO client instance.
+            database (str): Database name.
+            partition_names (List[str]): List of partition names to search within.
+            sha256 (str): SHA256 of the sample.
+            address (int): Virtual address of the function inside the sample.
+
+        Returns:
+            List[dict]: Search results for the specified function.
+                        Each dictionary contains:
+                            - uuid: Unique identifier of the hit (the "id" field).
+                            - vector: The retrieved vector.
+                            - data: The associated data from MinIO.
+        """
+        self.connect(database=database)
+        collection = self.load_collection("function")
+
+        search_results = collection.query(
+          expr=f"sha256 == '{sha256}' and address == {address}", 
+          output_fields=[
+                "id",
+                "object",
+                "vector",
+                "name",
+                "username",
+                "timestamp",
+                "sha256",
+                "address",
+                "edges",
+                "entropy",
+                "cyclomatic_complexity",
+                "average_instructions_per_block",
+                "size",
+                "number_of_instructions",
+                "number_of_blocks",
+            ],
+          partition_names=partition_names
+        )
+        
+        if not search_results or not search_results[0]:
+            return []
+        
+        results = []
+        for search_result in search_results:
+            id_val = search_result.get('id')
+            object_name = search_result.get('object')
+            
+            if not id_val or not object_name:
+                continue
+            
+            data = self._retrieve_data_from_minio(minio_client, object_name)
+            if data is None:
+                continue
+            
+            results.append({
+                "id": id_val,
+                "vector": list(map(float, search_result.get('vector'))),
+                "name": search_result.get('name'),
+                "username": search_result.get('username'),
+                "edges": search_result.get('edges'),
+                "entropy": search_result.get('entropy').item(),
+                "size": search_result.get('size'),
+                "cyclomatic_complexity": search_result.get('cyclomatic_complexity'),
+                "average_instructions_per_block": search_result.get('average_instructions_per_block').item(),
+                "number_of_instructions": search_result.get('number_of_instructions'),
+                "number_of_blocks": search_result.get('number_of_blocks'),
+                "timestamp": search_result.get('timestamp'),
+                "sha256": search_result.get('sha256'),
+                "address": search_result.get('address'),
+                "data": data
+            })
+        
+        return results
+        
+    
     def _validate_search_vector_params(self, partition_names: List[str], offset: int, limit: int):
         """
         Validate parameters for the search_vector method.

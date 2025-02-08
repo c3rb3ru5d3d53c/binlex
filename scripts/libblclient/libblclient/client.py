@@ -80,3 +80,18 @@ class BLClient():
             verify=self.verify,
         )
         return r.status_code, json.loads(r.json())
+
+    def search_address(
+            self,
+            database: str,
+            partition: str,
+            function_info: dict):
+            r = requests.post(
+                url=f'{self.url}/embeddings/{database}/function/{partition}/search_address',
+                headers={
+                    'API-Key': self.api_key
+                },
+                json=function_info,
+                verify=self.verify,
+            )
+            return r.status_code, json.loads(r.json())
