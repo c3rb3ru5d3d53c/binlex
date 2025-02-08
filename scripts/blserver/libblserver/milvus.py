@@ -267,6 +267,8 @@ class BinlexMilvus:
         if sha256 is None:
             return None
 
+        virtual_address = self._get_symbol_virtual_address(data)
+        
         names = self._get_symbol_names(data)
 
         primary_collection = self.load_collection(collection_name)
@@ -290,7 +292,7 @@ class BinlexMilvus:
             names.append('')
 
         for name in names:
-            _uuid = self._derive_uuid([sha256, _object, name])
+            _uuid = self._derive_uuid([virtual_address, sha256, _object, name])
 
             existing_uuid = primary_collection.query(
                 expr=f"id == '{_uuid}'",
@@ -454,37 +456,44 @@ class BinlexMilvus:
 
         return results
 
-    def search_address(
+    def query(
         self,
         minio_client,
         database: str,
+        collection_name: str,
         partition_names: List[str],
-        sha256: str,
-        address: int
+        query: str,
+        offset: int = 0,
+        limit: int = 10,
     ) -> List[dict]:
         """
-        Search functions based on its address inside the sample and SHA256 of the sample. 
+        Search database using the specified query.
 
         Parameters:
             minio_client: MinIO client instance.
             database (str): Database name.
+            collection_name (str): Collection to search in.
             partition_names (List[str]): List of partition names to search within.
-            sha256 (str): SHA256 of the sample.
-            address (int): Virtual address of the function inside the sample.
+            query (str): Search query.
+            offset (int): Offset for pagination.
+            limit (int): Maximum number of results to return.
 
         Returns:
-            List[dict]: Search results for the specified function.
+            List[dict]: Search results for the query.
                         Each dictionary contains:
                             - uuid: Unique identifier of the hit (the "id" field).
                             - vector: The retrieved vector.
                             - data: The associated data from MinIO.
         """
         self.connect(database=database)
-        collection = self.load_collection("function")
+        collection = self.load_collection(collection_name)
+        
 
         search_results = collection.query(
-          expr=f"sha256 == '{sha256}' and address == {address}", 
-          output_fields=[
+            expr=query,
+            offset=offset,
+            limit=limit,
+            output_fields=[
                 "id",
                 "object",
                 "vector",
@@ -501,7 +510,7 @@ class BinlexMilvus:
                 "number_of_instructions",
                 "number_of_blocks",
             ],
-          partition_names=partition_names
+            partition_names=partition_names
         )
         
         if not search_results or not search_results[0]:
@@ -651,4 +660,21 @@ class BinlexMilvus:
             if attribute.get('type') == 'file':
                 if 'sha256' in attribute:
                     return attribute['sha256']
+        return None
+    
+    def _get_symbol_virtual_address(self, data: dict) -> str:
+        """
+        Extract virtual address of the symbol from 'attributes' in the provided dict.
+
+        Parameters:
+            data (dict): The data containing attributes.
+
+        Returns:
+            str: A virtual address of the symbol.
+        """
+        if 'attributes' not in data:
+            return None
+        for attribute in data.get('attributes', []):
+            if attribute.get('type') == 'symbol' and attribute.get('virtual_address'):
+                return str(attribute["virtual_address"])
         return None

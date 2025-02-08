@@ -205,12 +205,15 @@ def main(args):
         print(f"Database {args.database} not found. Available databases: {databases}")
         sys.exit(1)
     
-    # Search using just an address and SHA256 of the sample
-    data = {"sha256":pe.sha256(), "address":args.address}
-    status, search_addr_results = client.search_address(
+    # Search using just an address and SHA256 of the sample as a query usage example
+    query = f"sha256=='{pe.sha256()}' and address=={args.address}"
+    status, search_addr_results = client.query(
                 database=args.database,
+                collection="function",
                 partition=pe.architecture(),
-                obj_info=data
+                query=query,
+                offset=0,
+                limit=15
             )
     # Print raw results
     print(search_addr_results)

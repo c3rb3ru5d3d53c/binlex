@@ -82,16 +82,12 @@ def create_app(config: str) -> Flask:
         }
     )
     
-    address_search_database = api.model(
-        'AddressSearchDatabase',
+    embedding_query_database = api.model(
+        'EmbeddingQueryDatabase',
         {
-            'sha256': fields.String(
-                description='SHA256 of the sample',
-                example="2d66d000874a77e4c81f5ab34674fbc0bf5e28aac86ce07e5fd99aee1b84d244"
-            ),
-            'address': fields.Integer(
-                description='Address of the function inside the sample',
-                example="4411523"
+            'query': fields.String(
+                description='Query to send to Milvus database',
+                example="sha256='2d66d000874a77e4c81f5ab34674fbc0bf5e28aac86ce07e5fd99aee1b84d244' and address=4411523"
             )
         }
     )
@@ -185,38 +181,46 @@ def create_app(config: str) -> Flask:
             except Exception as e:
                 return {'error': str(e)}, 500
 
-    @api.route('/embeddings/<string:database>/function/<string:partitions>/search_address')
-    class BinlexServerAddressSearch(Resource):
+    @api.route('/embeddings/<string:database>/<string:collection>/<string:partitions>/query/<int:offset>/<int:limit>')
+    class BinlexServerEmbeddingsQuery(Resource):
         @require_user_api_key
-        @api.expect(address_search_database, validate=True)
+        @api.expect(embedding_query_database, validate=True)
         @api.response(200, 'Success', fields.List(
             fields.Raw(
-                description='A function data from that sample'
+                description='List of search results from the query sent'
             )
         ))
         @api.response(400, 'Invalid Input', error_response_model)
         @api.response(500, 'Internal Server Error', error_response_model)
         @api.doc(description='Search Embeddings')
-        def post(self, database, partitions):
+        def post(self, database, collection, partitions, offset, limit):
             try:
 
                 partitions = partitions.split('||')
 
                 request_data = json.loads(request.data)
 
+                if not isinstance(request_data, str):
+                    return json.dumps({'error': 'expected a string'}), 400
+                
                 if database not in milvus_client.list_databases():
                     return json.dumps({'error': 'database does not exist'}), 404
 
+                if collection not in milvus_client.get_collection_names(database=database):
+                    return json.dumps({'error': 'unsupported collection'}), 404
+                
                 for partition in partitions:
                     if partition not in milvus_client.get_partition_names(database=database, collection_name='function'):
                         return json.dumps({'error': f'{partition} is an unsupported partition or architecture'}), 404
 
-                results = milvus_client.search_address(
+                results = milvus_client.query(
                     minio_client=minio_client,
                     database=database,
+                    collection_name=collection,
                     partition_names=partitions,
-                    sha256=request_data["sha256"],
-                    address=request_data["address"]
+                    query=request_data,
+                    offset=offset,
+                    limit=limit
                 )
                 return json.dumps(results), 200
             except json.JSONDecodeError:
