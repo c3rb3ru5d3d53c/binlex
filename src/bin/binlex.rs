@@ -168,7 +168,7 @@ use binlex::io::Stderr;
 use binlex::Architecture;
 use rayon::ThreadPoolBuilder;
 use binlex::formats::pe::PE;
-use binlex::disassemblers::capstone::Disassembler;
+use binlex::disassemblers::capstone::x86::Disassembler;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde_json::json;
 use std::collections::BTreeMap;

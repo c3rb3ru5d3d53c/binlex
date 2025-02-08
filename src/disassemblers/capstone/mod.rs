@@ -164,6 +164,4 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-pub mod disassembler;
-
-pub use disassembler::Disassembler;
+pub mod x86;
