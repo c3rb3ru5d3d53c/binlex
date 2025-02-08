@@ -322,7 +322,7 @@ jobs:
           rm -rf binlex
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os }}-artifacts
           path: dist/
@@ -382,7 +382,7 @@ jobs:
           rm -rf binlex
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: archlinux-artifacts
           path: dist/
