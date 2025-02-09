@@ -1,3 +1,3 @@
 fn main() {
-    println!("cargo:rustc-link-arg=-std=c++17");
+    println!("cargo:rustc-flags=-C link-args=-std=c++17");
 }
