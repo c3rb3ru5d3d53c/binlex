@@ -283,18 +283,20 @@ class BinlexMilvus:
                 for list_addr in ["to", "blocks"]:
                     minio_data[list_addr] = [adr - minio_data["address"] for adr in minio_data[list_addr]]
             
-            for key in ["address", "functions", "entropy", "sha256", "minhash", "tlsh", "attributes"]:
-                minio_data.pop(key, None)
-            
             if minio_data['type'] == "function":
                 minio_data.pop("attributes", None)
                 for block in minio_data["blocks"]:
                     if block["next"]:
-                        block["next"] = block["next"] - block["address"]
+                        block["next"] = block["next"] - minio_data["address"]
                     for list_addr in ["to", "blocks"]:
-                        block[list_addr] = [adr - block["address"] for adr in block[list_addr]]
-                    for key in ["address", "functions", "entropy", "sha256", "minhash", "tlsh", "attributes"]:
+                        block[list_addr] = [adr - minio_data["address"] for adr in block[list_addr]]
+                    block["address"] = block["address"] - minio_data["address"]
+                    for key in ["functions", "entropy", "sha256", "minhash", "tlsh", "attributes"]:
                         block.pop(key, None)
+            
+            minio_data["address"] = 0
+            for key in ["functions", "entropy", "sha256", "minhash", "tlsh", "attributes"]:
+                minio_data.pop(key, None)
                         
             minio_client.upload(
                 self.config['minio']['bucket'],
