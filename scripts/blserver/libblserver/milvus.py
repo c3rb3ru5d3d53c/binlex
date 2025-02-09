@@ -8,6 +8,7 @@ import uuid
 import struct
 from typing import List, Optional, Dict, Any, Union
 import sys
+from copy import deepcopy
 
 from pymilvus import (
     connections,
@@ -135,24 +136,20 @@ class BinlexMilvus:
         """
         fields = [
             FieldSchema(name='id', dtype=DataType.VARCHAR, max_length=36, is_primary=True),
+            FieldSchema(name='name', dtype=DataType.VARCHAR, max_length=65535),
             FieldSchema(name='timestamp', dtype=DataType.INT64),
-            FieldSchema(name='size', dtype=DataType.INT64),
-            FieldSchema(name='entropy', dtype=DataType.FLOAT),
-            FieldSchema(name='number_of_instructions', dtype=DataType.INT64),
-            FieldSchema(name='number_of_blocks', dtype=DataType.INT64),
-            FieldSchema(name='edges', dtype=DataType.INT64),
-            FieldSchema(name='cyclomatic_complexity', dtype=DataType.INT64),
-            FieldSchema(name='average_instructions_per_block', dtype=DataType.FLOAT),
             FieldSchema(name='username', dtype=DataType.VARCHAR, max_length=512),
             FieldSchema(name='object', dtype=DataType.VARCHAR, max_length=64),
-            FieldSchema(name='sha256', dtype=DataType.VARCHAR, max_length=64),
+            FieldSchema(name='object_stat', dtype=DataType.JSON),
+            FieldSchema(name='file_sha256', dtype=DataType.VARCHAR, max_length=64),
             FieldSchema(name='address', dtype=DataType.INT64),
+            FieldSchema(name='functions_called', dtype=DataType.JSON),
+            FieldSchema(name='extra_attributes', dtype=DataType.JSON),
             FieldSchema(
                 name='vector',
                 dtype=DataType.FLOAT_VECTOR,
                 dim=self.config['blserver']['gnn']['output']
             ),
-            FieldSchema(name='name', dtype=DataType.VARCHAR, max_length=65535),
         ]
         return CollectionSchema(
             fields=fields,
@@ -267,7 +264,7 @@ class BinlexMilvus:
         if sha256 is None:
             return None
 
-        virtual_address = self._get_symbol_virtual_address(data)
+        virtual_address = str(data["address"])
         
         names = self._get_symbol_names(data)
 
@@ -277,11 +274,31 @@ class BinlexMilvus:
             expr=f"object == '{_object}'",
             output_fields=["object"]
         )
-
+        
         if not existing_object:
+            minio_data = deepcopy(data)
+            if minio_data["type"] == "block":
+                if minio_data["next"]:
+                    minio_data["next"] = minio_data["next"] - minio_data["address"]
+                for list_addr in ["to", "blocks"]:
+                    minio_data[list_addr] = [adr - minio_data["address"] for adr in minio_data[list_addr]]
+            
+            for key in ["address", "functions", "entropy", "sha256", "minhash", "tlsh", "attributes"]:
+                minio_data.pop(key, None)
+            
+            if minio_data['type'] == "function":
+                minio_data.pop("attributes", None)
+                for block in minio_data["blocks"]:
+                    if block["next"]:
+                        block["next"] = block["next"] - block["address"]
+                    for list_addr in ["to", "blocks"]:
+                        block[list_addr] = [adr - block["address"] for adr in block[list_addr]]
+                    for key in ["address", "functions", "entropy", "sha256", "minhash", "tlsh", "attributes"]:
+                        block.pop(key, None)
+                        
             minio_client.upload(
                 self.config['minio']['bucket'],
-                data,
+                minio_data,
                 _object,
                 content_type='application/json'
             )
@@ -303,29 +320,61 @@ class BinlexMilvus:
 
             try:
                 if data['type'] == 'block':
-                    average_instructions_per_block = data['number_of_instructions']
-                    cyclomatic_complexity = 0
-                    number_of_blocks = 1
+                    object_stat = {
+                        "size": data['size'], 
+                        "number_of_instructions": data['number_of_instructions'], 
+                        "edges": data['edges'], 
+                        "entropy": data['entropy']
+                    }
+                    extra_attributes = {
+                        "entropy": data["entropy"], 
+                        "sha256": data["sha256"], 
+                        "minhash": data["minhash"], 
+                        "tlsh": data["tlsh"]
+                    }
                 if data['type'] == 'function':
-                    average_instructions_per_block = data['average_instructions_per_block']
-                    cyclomatic_complexity = data['cyclomatic_complexity']
-                    number_of_blocks = len(data['blocks'])
+                    object_stat = {
+                        "size": data['size'], 
+                        "number_of_instructions": data['number_of_instructions'], 
+                        "edges": data['edges'], 
+                        "entropy": data['entropy'],
+                        "number_of_blocks": len(data['blocks']),
+                        "cyclomatic_complexity": data['cyclomatic_complexity'],
+                        "average_instructions_per_block": data['average_instructions_per_block']
+                    }
+                    
+                    file_attributes = self._get_file_attributes(data)
+                    extra_attributes = {
+                        **({"file": file_attributes} if file_attributes else {}),
+                        "function": {
+                            "entropy": data['entropy'],
+                            "sha256": data['sha256'],
+                            "minhash": data['minhash'],
+                            "tlsh": data['tlsh']
+                        },
+                        "blocks": [
+                            {
+                                "address": block['address'], 
+                                "functions_called": block['functions'], 
+                                "entropy": block['entropy'], 
+                                "sha256": block['sha256'], 
+                                "minhash": block['minhash'], 
+                                "tlsh": block['tlsh']
+                            } for block in data['blocks']
+                        ]
+                    }
                 insert_data = {
                     "id": _uuid,
+                    "name": name,
                     "timestamp": int(time.time()),
-                    "size": data['size'],
-                    "number_of_instructions": data['number_of_instructions'],
-                    "number_of_blocks": number_of_blocks,
-                    "entropy": data['entropy'],
-                    "edges": data['edges'],
-                    "cyclomatic_complexity": cyclomatic_complexity,
-                    "average_instructions_per_block": average_instructions_per_block,
                     "username": username,
                     "object": _object,
-                    "sha256": sha256,
+                    "object_stat": object_stat,
+                    "file_sha256": sha256,
                     "address": data['address'],
+                    "functions_called": data['functions'],
+                    "extra_attributes": extra_attributes,
                     "vector": vector,
-                    "name": name,
                 }
                 primary_collection.insert(insert_data, partition_name=partition_name)
                 results.append(insert_data)
@@ -342,9 +391,10 @@ class BinlexMilvus:
         collection_name: str,
         partition_names: List[str],
         float_vector: List[float],
+        query: str = None,
         threshold: float = 0.75,
         offset: int = 0,
-        limit: int = 10,
+        limit: int = 10
     ) -> List[dict]:
         """
         Search vectors in a specified collection by COSINE similarity.
@@ -355,6 +405,7 @@ class BinlexMilvus:
             collection_name (str): Collection to search in.
             partition_names (List[str]): List of partition names to search within.
             float_vector (List[float]): Query vector for similarity search.
+            query (str): Search query to filter restults further.
             similarity_threshold (float): Minimum COSINE similarity in [-1, 1].
             offset (int): Offset for pagination.
             limit (int): Maximum number of results to return.
@@ -388,23 +439,19 @@ class BinlexMilvus:
             anns_field="vector",
             param=search_params,
             limit=top_k,
-            expr=None,
+            expr=query,
             output_fields=[
                 "id",
-                "object",
-                "vector",
                 "name",
-                "username",
                 "timestamp",
-                "sha256",
+                "username",
+                "object",
+                "object_stat",
+                "file_sha256",
                 "address",
-                "edges",
-                "entropy",
-                "cyclomatic_complexity",
-                "average_instructions_per_block",
-                "size",
-                "number_of_instructions",
-                "number_of_blocks",
+                "functions_called",
+                "extra_attributes",
+                "vector"
             ],
             partition_names=partition_names
         )
@@ -441,16 +488,12 @@ class BinlexMilvus:
                 "vector": entity.get('vector'),
                 "name": entity.get('name'),
                 "username": entity.get('username'),
-                "edges": entity.get('edges'),
-                "entropy": entity.get('entropy'),
-                "size": entity.get('size'),
-                "cyclomatic_complexity": entity.get('cyclomatic_complexity'),
-                "average_instructions_per_block": entity.get('average_instructions_per_block'),
-                "number_of_instructions": entity.get('number_of_instructions'),
-                "number_of_blocks": entity.get('number_of_blocks'),
+                "object_stat": entity.get('object_stat'),
                 "timestamp": entity.get('timestamp'),
-                "sha256": entity.get('sha256'),
+                "file_sha256": entity.get('file_sha256'),
                 "address": entity.get('address'),
+                "functions_called": entity.get('functions_called'),
+                "extra_attributes": entity.get('extra_attributes'),
                 "data": data
             })
 
@@ -495,20 +538,16 @@ class BinlexMilvus:
             limit=limit,
             output_fields=[
                 "id",
-                "object",
-                "vector",
                 "name",
-                "username",
                 "timestamp",
-                "sha256",
+                "username",
+                "object",
+                "object_stat",
+                "file_sha256",
                 "address",
-                "edges",
-                "entropy",
-                "cyclomatic_complexity",
-                "average_instructions_per_block",
-                "size",
-                "number_of_instructions",
-                "number_of_blocks",
+                "functions_called",
+                "extra_attributes",
+                "vector"
             ],
             partition_names=partition_names
         )
@@ -533,16 +572,12 @@ class BinlexMilvus:
                 "vector": list(map(float, search_result.get('vector'))),
                 "name": search_result.get('name'),
                 "username": search_result.get('username'),
-                "edges": search_result.get('edges'),
-                "entropy": search_result.get('entropy').item(),
-                "size": search_result.get('size'),
-                "cyclomatic_complexity": search_result.get('cyclomatic_complexity'),
-                "average_instructions_per_block": search_result.get('average_instructions_per_block').item(),
-                "number_of_instructions": search_result.get('number_of_instructions'),
-                "number_of_blocks": search_result.get('number_of_blocks'),
+                "object_stat": search_result.get('object_stat'),
                 "timestamp": search_result.get('timestamp'),
-                "sha256": search_result.get('sha256'),
+                "file_sha256": search_result.get('sha256'),
                 "address": search_result.get('address'),
+                "functions_called": search_result.get('functions_called'),
+                "extra_attributes": search_result.get('extra_attributes'),
                 "data": data
             })
         
@@ -662,19 +697,28 @@ class BinlexMilvus:
                     return attribute['sha256']
         return None
     
-    def _get_symbol_virtual_address(self, data: dict) -> str:
+    @staticmethod
+    def _get_file_attributes(data: dict) -> dict:
         """
-        Extract virtual address of the symbol from 'attributes' in the provided dict.
+        Extract the file entropy, sha256, size, tlsh from 'attributes' in the provided dict.
 
         Parameters:
             data (dict): The data containing attributes.
 
         Returns:
-            str: A virtual address of the symbol.
+            dict: The dictionary containing found file attributes that are not None, else {}.
         """
         if 'attributes' not in data:
-            return None
-        for attribute in data.get('attributes', []):
-            if attribute.get('type') == 'symbol' and attribute.get('virtual_address'):
-                return str(attribute["virtual_address"])
-        return None
+            return {}
+        file_attributes = {}
+        for attribute in data['attributes']:
+            if attribute.get('type') == 'file':
+                if 'entropy' in attribute and attribute['entropy']:
+                    file_attributes["entropy"] = attribute['entropy']
+                if 'sha256' in attribute and attribute['sha256']: 
+                    file_attributes["sha256"] = attribute['sha256']
+                if 'size' in attribute and attribute['size']:
+                    file_attributes["size"] = attribute['size']
+                if 'tlsh' in attribute and attribute['tlsh']: 
+                    file_attributes["tlsh"] = attribute['tlsh']
+        return file_attributes

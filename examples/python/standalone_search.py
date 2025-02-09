@@ -206,7 +206,7 @@ def main(args):
         sys.exit(1)
     
     # Search using just an address and SHA256 of the sample as a query usage example
-    query = f"sha256=='{pe.sha256()}' and address=={args.address}"
+    query = f"file_sha256 == '{pe.sha256()}' and address == {args.address}"
     status, search_addr_results = client.query(
                 database=args.database,
                 collection="function",
@@ -232,6 +232,7 @@ def main(args):
                 partition=pe.architecture(),
                 offset=0,
                 limit=limit, # Maximum number of results to return
+                query=f"file_sha256 != '{pe.sha256()}'",
                 threshold=gnn_similarity_threshold,
                 vector=vector
             )
@@ -246,7 +247,8 @@ def main(args):
         gnn_similarity = min(search_result['score'], 1.0)
         if gnn_similarity < gnn_similarity_threshold:
             continue
-
+        
+        # OSError: missing field `address` at line 1 column 1912
         rhs_function = FunctionJsonDeserializer(json.dumps(search_result['data']), config)
 
         size_ratio = calculate_size_ratio(bl_func.size(), rhs_function.size())
@@ -269,16 +271,16 @@ def main(args):
         vector_results.append( 
             {
                 "id": search_result['id'],
+                "name": search_result['name'],
                 "timestamp": search_result['timestamp'],
                 "username": search_result['username'],
-                "name": search_result['name'],
-                "sha256": search_result['sha256'],
+                "sha256": search_result['file_sha256'],
                 "address": str(search_result['data']['address']),
-                "cyclomatic_complexity": str(search_result['cyclomatic_complexity']),
-                "number_of_instructions": str(search_result['number_of_instructions']),
-                "entropy": str(search_result['entropy']),
-                "average_instructions_per_block": str(search_result['average_instructions_per_block']),
-                "size": str(search_result['size']),
+                "cyclomatic_complexity": str(search_result['object_stat']['cyclomatic_complexity']),
+                "number_of_instructions": str(search_result['object_stat']['number_of_instructions']),
+                "entropy": str(search_result['object_stat']['entropy']),
+                "average_instructions_per_block": str(search_result['object_stat']['average_instructions_per_block']),
+                "size": str(search_result['object_stat']['size']),
                 "gnn_similarity": str(gnn_similarity),
                 "minhash_score": str(minhash_score),
                 "combined_score": str(combined_score),

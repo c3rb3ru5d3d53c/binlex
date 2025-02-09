@@ -70,17 +70,18 @@ class BLClient():
         offset: int,
         limit: int,
         threshold: float,
-        vector: dict):
+        vector: list,
+        query: str = None):
         r = requests.post(
             url=f'{self.url}/embeddings/{database}/{collection}/{partition}/search/{offset}/{limit}/{threshold}',
             headers={
                 'API-Key': self.api_key
             },
-            json=vector,
+            json={"vector": vector, "query": query},
             verify=self.verify,
         )
         return r.status_code, json.loads(r.json())
-
+    
     def query(
             self,
             database: str,
@@ -88,7 +89,7 @@ class BLClient():
             partition: str,
             offset: int,
             limit: int,
-            query: dict):
+            query: str):
             r = requests.post(
                 url=f'{self.url}/embeddings/{database}/{collection}/{partition}/query/{offset}/{limit}',
                 headers={
