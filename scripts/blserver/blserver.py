@@ -78,6 +78,10 @@ def create_app(config: str) -> Flask:
                 required=True,
                 description='A list of float values representing the embedding vector to search',
                 example=[0.1, 0.2, 0.3, 0.4]
+            ),
+            'query': fields.String(
+                description='Query to send to Milvus database to filter results',
+                example="file_sha256 != '2d66d000874a77e4c81f5ab34674fbc0bf5e28aac86ce07e5fd99aee1b84d244'"
             )
         }
     )
@@ -87,7 +91,7 @@ def create_app(config: str) -> Flask:
         {
             'query': fields.String(
                 description='Query to send to Milvus database',
-                example="sha256='2d66d000874a77e4c81f5ab34674fbc0bf5e28aac86ce07e5fd99aee1b84d244' and address=4411523"
+                example="file_sha256 == '2d66d000874a77e4c81f5ab34674fbc0bf5e28aac86ce07e5fd99aee1b84d244' and address == 4411523"
             )
         }
     )
@@ -163,7 +167,7 @@ def create_app(config: str) -> Flask:
                 gnn.train(epochs=server_config['blserver']['gnn']['epochs'])
 
                 embedding = gnn.to_embedding()
-
+                
                 result = milvus_client.index_vector(
                     minio_client=minio_client,
                     database=database,
@@ -247,7 +251,7 @@ def create_app(config: str) -> Flask:
 
                 request_data = json.loads(request.data)
 
-                if not isinstance(request_data, list) or not all(isinstance(x, (int, float)) for x in request_data):
+                if not isinstance(request_data["vector"], list) or not all(isinstance(x, (int, float)) for x in request_data["vector"]):
                     return json.dumps({'error': 'expected a list of float values'}), 400
 
                 if database not in milvus_client.list_databases():
@@ -266,7 +270,8 @@ def create_app(config: str) -> Flask:
                     collection_name=collection,
                     partition_names=partitions,
                     threshold=threshold,
-                    float_vector=request_data,
+                    float_vector=request_data["vector"],
+                    query=request_data["query"],
                     offset=offset,
                     limit=limit
                 )
