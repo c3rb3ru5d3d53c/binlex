@@ -169,11 +169,10 @@ import json, argparse, sys
 
 from binlex.formats import PE
 from binlex.disassemblers.capstone import Disassembler
-from binlex.controlflow import Graph
-from binlex.controlflow import Function
-from binlex.controlflow import FunctionJsonDeserializer
+from binlex.controlflow import Graph, Function, FunctionJsonDeserializer
 from blclient import BLClient
 from binlex import Config
+
 
 def calculate_size_ratio(len1: int, len2: int) -> float:
     if max(len1, len2) == 0:
@@ -220,7 +219,6 @@ def main(args):
     
     # Search using GNN vector and verify similarity with minhash and size check
     status, vector = client.inference(bl_func.to_dict())
-    
     gnn_similarity_threshold: float = 0.75
     size_ratio_threshold: float = 0.75
     combined_ratio_threshold: float = 0.75
@@ -232,23 +230,18 @@ def main(args):
                 partition=pe.architecture(),
                 offset=0,
                 limit=limit, # Maximum number of results to return
-                query=f"file_sha256 != '{pe.sha256()}'",
+                query=f"file_sha256 != '{pe.sha256()}'", # An example query to go with vector search
                 threshold=gnn_similarity_threshold,
                 vector=vector
             )
 
     vector_results = []
     for search_result in search_vector_results:
-        
+
         # Ignore functions without manually set names
         if len(search_result['name']) == 0:
             continue
-        
-        gnn_similarity = min(search_result['score'], 1.0)
-        if gnn_similarity < gnn_similarity_threshold:
-            continue
-        
-        # OSError: missing field `address` at line 1 column 1912
+
         rhs_function = FunctionJsonDeserializer(json.dumps(search_result['data']), config)
 
         size_ratio = calculate_size_ratio(bl_func.size(), rhs_function.size())
@@ -264,7 +257,7 @@ def main(args):
         if minhash_score is None or minhash_score < minhash_score_threshold:
             continue
 
-        combined_score = (gnn_similarity + minhash_score) / 2.0
+        combined_score = (search_result['score'] + minhash_score) / 2.0
         if combined_score < combined_ratio_threshold:
             continue
 
@@ -281,7 +274,7 @@ def main(args):
                 "entropy": str(search_result['object_stat']['entropy']),
                 "average_instructions_per_block": str(search_result['object_stat']['average_instructions_per_block']),
                 "size": str(search_result['object_stat']['size']),
-                "gnn_similarity": str(gnn_similarity),
+                "gnn_similarity": str(search_result['score']),
                 "minhash_score": str(minhash_score),
                 "combined_score": str(combined_score),
                 "size_ratio":  str(size_ratio)

@@ -66,10 +66,6 @@ def process(
             if len(search_result['name']) == 0:
                 continue
 
-            gnn_similarity = min(search_result['score'], 1.0)
-            if gnn_similarity < gnn_similarity_threshold:
-                continue
-
             rhs_function = FunctionJsonDeserializer(json.dumps(search_result['data']), config)
 
             size_ratio = calculate_size_ratio(lhs_function.size(), rhs_function.size())
@@ -84,24 +80,24 @@ def process(
             if minhash_score is None or minhash_score < minhash_score_threshold:
                 continue
 
-            combined_score = (gnn_similarity + minhash_score) / 2.0
+            combined_score = (search_result['score'] + minhash_score) / 2.0
             if combined_score < combined_ratio_threshold:
                 continue
 
             row = [
                 str(hex(lhs_function.address())),
-                str(gnn_similarity),
+                str(search_result['score']),
                 str(minhash_score),
                 str(combined_score),
                 str(search_result['size']),
                 str(size_ratio),
-                str(search_result['number_of_instructions']),
-                str(search_result['entropy']),
-                str(search_result['average_instructions_per_block']),
-                str(search_result['cyclomatic_complexity']),
+                str(search_result['object_stat']['number_of_instructions']),
+                str(search_result['object_stat']['entropy']),
+                str(search_result['object_stat']['average_instructions_per_block']),
+                str(search_result['object_stat']['cyclomatic_complexity']),
                 function_names[lhs_function.address()],
                 search_result['name'],
-                search_result['sha256'],
+                search_result['file_sha256'],
                 datetime.fromtimestamp(search_result['timestamp']).isoformat(),
                 search_result['username'],
                 str(lhs_vector),

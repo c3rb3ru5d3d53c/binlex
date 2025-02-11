@@ -280,24 +280,34 @@ class BinlexMilvus:
             if minio_data["type"] == "block":
                 if minio_data["next"]:
                     minio_data["next"] = minio_data["next"] - minio_data["address"]
-                for list_addr in ["to", "blocks"]:
-                    minio_data[list_addr] = [adr - minio_data["address"] for adr in minio_data[list_addr]]
+                for set_adr in {"to", "blocks"}:
+                    minio_data[set_adr] = [adr - minio_data["address"] for adr in minio_data[set_adr]]
             
             if minio_data['type'] == "function":
-                minio_data.pop("attributes", None)
                 for block in minio_data["blocks"]:
                     if block["next"]:
                         block["next"] = block["next"] - minio_data["address"]
-                    for list_addr in ["to", "blocks"]:
-                        block[list_addr] = [adr - minio_data["address"] for adr in block[list_addr]]
+                    for set_adr in {"to", "blocks"}:
+                        block[set_adr] = [adr - minio_data["address"] for adr in block[set_adr]]
                     block["address"] = block["address"] - minio_data["address"]
-                    for key in ["functions", "entropy", "sha256", "minhash", "tlsh", "attributes"]:
+                    for key in ["functions", "entropy", "sha256", "minhash", "tlsh"]:
                         block.pop(key, None)
+                    for i, attribute in enumerate(block["attributes"]):
+                        if attribute["type"] == "file":
+                            del block["attributes"][i]
             
             minio_data["address"] = 0
-            for key in ["functions", "entropy", "sha256", "minhash", "tlsh", "attributes"]:
+            
+            indexes_to_remove = [
+                i for i, attribute in enumerate(minio_data["attributes"]) 
+                if attribute["type"] in {"file", "symbol"}
+            ]
+            for i in reversed(indexes_to_remove):
+                del minio_data["attributes"][i]
+
+            for key in ["functions", "entropy", "sha256", "minhash", "tlsh"]:
                 minio_data.pop(key, None)
-                        
+            
             minio_client.upload(
                 self.config['minio']['bucket'],
                 minio_data,
@@ -321,50 +331,55 @@ class BinlexMilvus:
                 continue
 
             try:
+                object_stat = {
+                    "size": data['size'], 
+                    "number_of_instructions": data['number_of_instructions'], 
+                    "edges": data['edges'], 
+                    "entropy": data['entropy']
+                }
+                file_attributes = self._get_file_attributes(data)
+                extra_attributes = {
+                    **({"file": file_attributes} if file_attributes else {})
+                }
                 if data['type'] == 'block':
-                    object_stat = {
-                        "size": data['size'], 
-                        "number_of_instructions": data['number_of_instructions'], 
-                        "edges": data['edges'], 
-                        "entropy": data['entropy']
-                    }
-                    extra_attributes = {
-                        "entropy": data["entropy"], 
-                        "sha256": data["sha256"], 
-                        "minhash": data["minhash"], 
-                        "tlsh": data["tlsh"]
-                    }
+                    extra_attributes.update(
+                        {
+                            "block": {
+                                "entropy": data["entropy"], 
+                                "sha256": data["sha256"], 
+                                "minhash": data["minhash"], 
+                                "tlsh": data["tlsh"]
+                            }
+                        }
+                    )
                 if data['type'] == 'function':
-                    object_stat = {
-                        "size": data['size'], 
-                        "number_of_instructions": data['number_of_instructions'], 
-                        "edges": data['edges'], 
-                        "entropy": data['entropy'],
-                        "number_of_blocks": len(data['blocks']),
-                        "cyclomatic_complexity": data['cyclomatic_complexity'],
-                        "average_instructions_per_block": data['average_instructions_per_block']
-                    }
-                    
-                    file_attributes = self._get_file_attributes(data)
-                    extra_attributes = {
-                        **({"file": file_attributes} if file_attributes else {}),
-                        "function": {
-                            "entropy": data['entropy'],
-                            "sha256": data['sha256'],
-                            "minhash": data['minhash'],
-                            "tlsh": data['tlsh']
-                        },
-                        "blocks": [
-                            {
-                                "address": block['address'], 
-                                "functions_called": block['functions'], 
-                                "entropy": block['entropy'], 
-                                "sha256": block['sha256'], 
-                                "minhash": block['minhash'], 
-                                "tlsh": block['tlsh']
-                            } for block in data['blocks']
-                        ]
-                    }
+                    object_stat.update(
+                        {
+                            "number_of_blocks": len(data['blocks']),
+                            "cyclomatic_complexity": data['cyclomatic_complexity'],
+                            "average_instructions_per_block": data['average_instructions_per_block']
+                        }
+                    )
+                    extra_attributes.update(
+                        {
+                            "function": {
+                                "entropy": data['entropy'],
+                                "sha256": data['sha256'],
+                                "minhash": data['minhash'],
+                                "tlsh": data['tlsh']
+                            },
+                            "blocks": [
+                                {
+                                    "address": block['address'], 
+                                    "functions": block['functions'], 
+                                    "entropy": block['entropy'], 
+                                    "sha256": block['sha256'], 
+                                    "minhash": block['minhash'], 
+                                    "tlsh": block['tlsh']
+                                } for block in data['blocks']
+                            ]
+                        }
+                    )
                 insert_data = {
                     "id": _uuid,
                     "name": name,
@@ -479,10 +494,12 @@ class BinlexMilvus:
 
             if not id_val or not object_name:
                 continue
-
+            
             data = self._retrieve_data_from_minio(minio_client, object_name)
             if data is None:
                 continue
+            
+            self._restore_extra_attributes(data, entity)
 
             results.append({
                 "id": id_val,
@@ -495,7 +512,6 @@ class BinlexMilvus:
                 "file_sha256": entity.get('file_sha256'),
                 "address": entity.get('address'),
                 "functions_called": entity.get('functions_called'),
-                "extra_attributes": entity.get('extra_attributes'),
                 "data": data
             })
 
@@ -569,6 +585,8 @@ class BinlexMilvus:
             if data is None:
                 continue
             
+            self._restore_extra_attributes(data, search_result)
+            
             results.append({
                 "id": id_val,
                 "vector": list(map(float, search_result.get('vector'))),
@@ -579,13 +597,12 @@ class BinlexMilvus:
                 "file_sha256": search_result.get('sha256'),
                 "address": search_result.get('address'),
                 "functions_called": search_result.get('functions_called'),
-                "extra_attributes": search_result.get('extra_attributes'),
                 "data": data
             })
         
         return results
-        
-    
+
+
     def _validate_search_vector_params(self, partition_names: List[str], offset: int, limit: int):
         """
         Validate parameters for the search_vector method.
@@ -698,6 +715,68 @@ class BinlexMilvus:
                 if 'sha256' in attribute:
                     return attribute['sha256']
         return None
+    
+    @staticmethod
+    def _restore_extra_attributes(data: dict, entity: dict) -> None:
+        """
+        Restore extra attributes, functions called and addresses for returned Binlex JSON from MinIO.
+
+        Parameters:
+            data (dict): The dictionary from MinIO without extra attributes.
+            entity (dict): The dictionary with data stored in Milvus database. 
+
+        Returns:
+            None: The function modifies data dictionary.
+        """
+        if data['type'] == "function":
+            # restoring function attributes
+            extra_attributes = entity.get('extra_attributes').get('function', {})
+            fcn_adr = entity.get('address')
+            data.update(
+                {
+                    "functions": entity.get('functions_called'),
+                    "address": fcn_adr,
+                    "entropy": extra_attributes.get('entropy'),
+                    "sha256": extra_attributes.get('sha256'),
+                    "minhash": extra_attributes.get('minhash'),
+                    "tlsh": extra_attributes.get('tlsh')
+                }
+            )
+            # restoring each block's attributes in the function
+            extra_attributes = entity.get('extra_attributes').get('blocks', {})
+            for i, block in enumerate(data['blocks']):
+                block.update(extra_attributes[i])
+                if block["next"]:
+                    block["next"] = block["next"] + fcn_adr
+                for list_addr in ["to", "blocks"]:
+                    block[list_addr] = [adr + fcn_adr for adr in block[list_addr]]
+        elif data['type'] == "block":
+            extra_attributes = entity.get('extra_attributes').get('block', {})
+            bb_adr = entity.get('address')
+            data.update(
+                {
+                    "functions": entity.get('functions_called'),
+                    "address": bb_adr,
+                    "entropy": extra_attributes.get('entropy'),
+                    "sha256": extra_attributes.get('sha256'),
+                    "minhash": extra_attributes.get('minhash'),
+                    "tlsh": extra_attributes.get('tlsh')
+                }
+            )
+            if data["next"]:
+                data["next"] = data["next"] + bb_adr
+            for list_addr in ["to", "blocks"]:
+                data[list_addr] = [adr + bb_adr for adr in data[list_addr]]
+        
+        # restore attributes for file        
+        extra_attributes = entity.get('extra_attributes').get('file', {})
+        if extra_attributes:
+            data["attributes"].append(
+                {
+                    "type": "file",
+                    **extra_attributes
+                }
+            )
     
     @staticmethod
     def _get_file_attributes(data: dict) -> dict:
