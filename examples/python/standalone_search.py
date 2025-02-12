@@ -205,7 +205,7 @@ def main(args):
         sys.exit(1)
     
     # Search using just an address and SHA256 of the sample as a query usage example
-    query = f"file_sha256 == '{pe.sha256()}' and address == {args.address}"
+    query = f"file_attributes['sha256'] == '{pe.sha256()}' and address == {args.address}"
     status, search_addr_results = client.query(
                 database=args.database,
                 collection="function",
@@ -230,14 +230,14 @@ def main(args):
                 partition=pe.architecture(),
                 offset=0,
                 limit=limit, # Maximum number of results to return
-                query=f"file_sha256 != '{pe.sha256()}'", # An example query to go with vector search
+                query=f"file_attributes['sha256'] != '{pe.sha256()}'", # An example query to go with vector search
                 threshold=gnn_similarity_threshold,
                 vector=vector
             )
 
+
     vector_results = []
     for search_result in search_vector_results:
-
         # Ignore functions without manually set names
         if len(search_result['name']) == 0:
             continue
@@ -254,26 +254,28 @@ def main(args):
             continue
 
         minhash_score = comparison.score.minhash()
+
         if minhash_score is None or minhash_score < minhash_score_threshold:
             continue
-
+        
         combined_score = (search_result['score'] + minhash_score) / 2.0
         if combined_score < combined_ratio_threshold:
             continue
 
+        data = search_result['data']
         vector_results.append( 
             {
                 "id": search_result['id'],
                 "name": search_result['name'],
                 "timestamp": search_result['timestamp'],
                 "username": search_result['username'],
-                "sha256": search_result['file_sha256'],
-                "address": str(search_result['data']['address']),
-                "cyclomatic_complexity": str(search_result['object_stat']['cyclomatic_complexity']),
-                "number_of_instructions": str(search_result['object_stat']['number_of_instructions']),
-                "entropy": str(search_result['object_stat']['entropy']),
-                "average_instructions_per_block": str(search_result['object_stat']['average_instructions_per_block']),
-                "size": str(search_result['object_stat']['size']),
+                "sha256": search_result['file_attributes']['sha256'],
+                "address": str(data['address']),
+                "cyclomatic_complexity": str(data['cyclomatic_complexity']),
+                "number_of_instructions": str(data['number_of_instructions']),
+                "entropy": str(data['entropy']),
+                "average_instructions_per_block": str(data['average_instructions_per_block']),
+                "size": str(data['size']),
                 "gnn_similarity": str(search_result['score']),
                 "minhash_score": str(minhash_score),
                 "combined_score": str(combined_score),
