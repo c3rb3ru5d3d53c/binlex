@@ -66,7 +66,8 @@ def process(
             if len(search_result['name']) == 0:
                 continue
 
-            rhs_function = FunctionJsonDeserializer(json.dumps(search_result['data']), config)
+            result_data = search_result['data']
+            rhs_function = FunctionJsonDeserializer(json.dumps(result_data), config)
 
             size_ratio = calculate_size_ratio(lhs_function.size(), rhs_function.size())
             if size_ratio < size_ratio_threshold:
@@ -89,15 +90,15 @@ def process(
                 str(search_result['score']),
                 str(minhash_score),
                 str(combined_score),
-                str(search_result['size']),
+                str(result_data['size']),
                 str(size_ratio),
-                str(search_result['object_stat']['number_of_instructions']),
-                str(search_result['object_stat']['entropy']),
-                str(search_result['object_stat']['average_instructions_per_block']),
-                str(search_result['object_stat']['cyclomatic_complexity']),
+                str(result_data['number_of_instructions']),
+                str(result_data['entropy']),
+                str(result_data['average_instructions_per_block']),
+                str(result_data['cyclomatic_complexity']),
                 function_names[lhs_function.address()],
                 search_result['name'],
-                search_result['file_sha256'],
+                search_result['file_attributes']['sha256'],
                 datetime.fromtimestamp(search_result['timestamp']).isoformat(),
                 search_result['username'],
                 str(lhs_vector),

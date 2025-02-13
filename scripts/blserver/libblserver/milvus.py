@@ -746,7 +746,7 @@ class BinlexMilvus:
                     for list_addr in ["to", "blocks"]:
                         block[list_addr] = [adr + fcn_adr for adr in block[list_addr]]
         elif data['type'] == "block":
-            if extra_attributes:
+            if attributes:
                 bb_adr = entity.get('address')
                 data.update(
                     {
