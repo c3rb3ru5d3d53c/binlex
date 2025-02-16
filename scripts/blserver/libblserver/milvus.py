@@ -353,7 +353,7 @@ class BinlexMilvus:
                         "function": {attr: data[attr] for attr in {"entropy", "sha256", "minhash", "tlsh"} if attr in data},
                         "blocks": [
                             {
-                                attr: data[attr] for attr in {"address", "functions", "entropy", "sha256", "minhash", "tlsh"} if attr in data
+                                attr: block[attr] for attr in {"address", "functions", "entropy", "sha256", "minhash", "tlsh"} if attr in block
                             } for block in data['blocks']
                         ]
                     }
