@@ -164,39 +164,40 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-use binlex::io::Stderr;
-use binlex::Architecture;
-use rayon::ThreadPoolBuilder;
-use binlex::formats::pe::PE;
-use binlex::disassemblers::capstone::x86::Disassembler;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use serde_json::json;
-use std::collections::BTreeMap;
-use std::process;
-use std::fs::File;
-use std::io::Write;
-use std::collections::BTreeSet;
-use std::collections::HashSet;
-use binlex::controlflow::Graph;
-use binlex::controlflow::Instruction;
+use binlex::controlflow::Attributes;
 use binlex::controlflow::Block;
 use binlex::controlflow::Function;
-use binlex::types::LZ4String;
-use binlex::io::Stdout;
-use binlex::io::JSON;
+use binlex::controlflow::Graph;
+use binlex::controlflow::Instruction;
 use binlex::controlflow::Symbol;
-use clap::Parser;
-use binlex::Config;
-use binlex::VERSION;
-use binlex::AUTHOR;
-use binlex::controlflow::Attributes;
 use binlex::controlflow::Tag;
-use binlex::Format;
+//use binlex::disassemblers::capstone::x86::Disassembler;
+use binlex::disassemblers::capstone::Disassembler;
+use binlex::disassemblers::custom::cil::Disassembler as CILDisassembler;
+use binlex::formats::pe::PE;
 use binlex::formats::File as BLFile;
 use binlex::formats::ELF;
 use binlex::formats::MACHO;
+use binlex::io::Stderr;
 use binlex::io::Stdin;
-use binlex::disassemblers::custom::cil::Disassembler as CILDisassembler;
+use binlex::io::Stdout;
+use binlex::io::JSON;
+use binlex::types::LZ4String;
+use binlex::Architecture;
+use binlex::Config;
+use binlex::Format;
+use binlex::AUTHOR;
+use binlex::VERSION;
+use clap::Parser;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use rayon::ThreadPoolBuilder;
+use serde_json::json;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::collections::HashSet;
+use std::fs::File;
+use std::io::Write;
+use std::process;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -241,7 +242,6 @@ pub struct Args {
 }
 
 fn validate_args(args: &Args) {
-
     if let Some(tags) = &args.tags {
         let mut unique_tags = HashSet::new();
         for tag in tags {
@@ -251,13 +251,14 @@ fn validate_args(args: &Args) {
             }
         }
     }
-
 }
 
 fn get_elf_function_symbols(elf: &ELF) -> BTreeMap<u64, Symbol> {
     let mut symbols = BTreeMap::<u64, Symbol>::new();
 
-    if Stdin::is_terminal() { return symbols; }
+    if Stdin::is_terminal() {
+        return symbols;
+    }
 
     let json = JSON::from_stdin_with_filter(|value| {
         let obj = match value.as_object_mut() {
@@ -266,7 +267,10 @@ fn get_elf_function_symbols(elf: &ELF) -> BTreeMap<u64, Symbol> {
         };
 
         let obj_type = obj.get("type").and_then(|v| v.as_str()).map(String::from);
-        let symbol_type = obj.get("symbol_type").and_then(|v| v.as_str()).map(String::from);
+        let symbol_type = obj
+            .get("symbol_type")
+            .and_then(|v| v.as_str())
+            .map(String::from);
         let file_offset = obj.get("file_offset").and_then(|v| v.as_u64());
         let relative_virtual_address = obj.get("relative_virtual_address").and_then(|v| v.as_u64());
         let mut virtual_address = obj.get("virtual_address").and_then(|v| v.as_u64());
@@ -279,7 +283,8 @@ fn get_elf_function_symbols(elf: &ELF) -> BTreeMap<u64, Symbol> {
             return false;
         }
 
-        if file_offset.is_none() && relative_virtual_address.is_none() && virtual_address.is_none() {
+        if file_offset.is_none() && relative_virtual_address.is_none() && virtual_address.is_none()
+        {
             return false;
         }
 
@@ -304,7 +309,6 @@ fn get_elf_function_symbols(elf: &ELF) -> BTreeMap<u64, Symbol> {
         }
 
         false
-
     });
 
     if json.is_ok() {
@@ -312,14 +316,21 @@ fn get_elf_function_symbols(elf: &ELF) -> BTreeMap<u64, Symbol> {
             let address = value.get("virtual_address").and_then(|v| v.as_u64());
             let name = value.get("name").and_then(|v| v.as_str());
             let symbol_type = value.get("symbol_type").and_then(|v| v.as_str());
-            if address.is_none() { continue; }
-            if name.is_none() { continue; }
-            if symbol_type.is_none() { continue; }
+            if address.is_none() {
+                continue;
+            }
+            if name.is_none() {
+                continue;
+            }
+            if symbol_type.is_none() {
+                continue;
+            }
             let symbol = Symbol::new(
                 address.unwrap(),
                 symbol_type.unwrap().to_string(),
-                name.unwrap().to_string());
-            symbols.insert(address.unwrap(),symbol);
+                name.unwrap().to_string(),
+            );
+            symbols.insert(address.unwrap(), symbol);
         }
     }
 
@@ -329,7 +340,9 @@ fn get_elf_function_symbols(elf: &ELF) -> BTreeMap<u64, Symbol> {
 fn get_macho_function_symbols(macho: &MACHO) -> BTreeMap<u64, Symbol> {
     let mut symbols = BTreeMap::<u64, Symbol>::new();
 
-    if Stdin::is_terminal() { return symbols; }
+    if Stdin::is_terminal() {
+        return symbols;
+    }
 
     let json = JSON::from_stdin_with_filter(|value| {
         let obj = match value.as_object_mut() {
@@ -338,7 +351,10 @@ fn get_macho_function_symbols(macho: &MACHO) -> BTreeMap<u64, Symbol> {
         };
 
         let obj_type = obj.get("type").and_then(|v| v.as_str()).map(String::from);
-        let symbol_type = obj.get("symbol_type").and_then(|v| v.as_str()).map(String::from);
+        let symbol_type = obj
+            .get("symbol_type")
+            .and_then(|v| v.as_str())
+            .map(String::from);
         let file_offset = obj.get("file_offset").and_then(|v| v.as_u64());
         let relative_virtual_address = obj.get("relative_virtual_address").and_then(|v| v.as_u64());
         let mut virtual_address = obj.get("virtual_address").and_then(|v| v.as_u64());
@@ -358,7 +374,8 @@ fn get_macho_function_symbols(macho: &MACHO) -> BTreeMap<u64, Symbol> {
             return false;
         }
 
-        if file_offset.is_none() && relative_virtual_address.is_none() && virtual_address.is_none() {
+        if file_offset.is_none() && relative_virtual_address.is_none() && virtual_address.is_none()
+        {
             return false;
         }
 
@@ -369,7 +386,9 @@ fn get_macho_function_symbols(macho: &MACHO) -> BTreeMap<u64, Symbol> {
         if virtual_address.is_none() {
             if let Some(rva) = relative_virtual_address {
                 let va = macho.relative_virtual_address_to_virtual_address(rva, slice);
-                if va.is_none() { return false; }
+                if va.is_none() {
+                    return false;
+                }
                 virtual_address = Some(va.unwrap());
             }
             if let Some(offset) = file_offset {
@@ -385,7 +404,6 @@ fn get_macho_function_symbols(macho: &MACHO) -> BTreeMap<u64, Symbol> {
         }
 
         false
-
     });
 
     if json.is_ok() {
@@ -393,14 +411,21 @@ fn get_macho_function_symbols(macho: &MACHO) -> BTreeMap<u64, Symbol> {
             let address = value.get("virtual_address").and_then(|v| v.as_u64());
             let name = value.get("name").and_then(|v| v.as_str());
             let symbol_type = value.get("symbol_type").and_then(|v| v.as_str());
-            if address.is_none() { continue; }
-            if name.is_none() { continue; }
-            if symbol_type.is_none() { continue; }
+            if address.is_none() {
+                continue;
+            }
+            if name.is_none() {
+                continue;
+            }
+            if symbol_type.is_none() {
+                continue;
+            }
             let symbol = Symbol::new(
                 address.unwrap(),
                 symbol_type.unwrap().to_string(),
-                name.unwrap().to_string());
-            symbols.insert(address.unwrap(),symbol);
+                name.unwrap().to_string(),
+            );
+            symbols.insert(address.unwrap(), symbol);
         }
     }
 
@@ -410,7 +435,9 @@ fn get_macho_function_symbols(macho: &MACHO) -> BTreeMap<u64, Symbol> {
 fn get_pe_function_symbols(pe: &PE) -> BTreeMap<u64, Symbol> {
     let mut symbols = BTreeMap::<u64, Symbol>::new();
 
-    if Stdin::is_terminal() { return symbols; }
+    if Stdin::is_terminal() {
+        return symbols;
+    }
 
     let json = JSON::from_stdin_with_filter(|value| {
         let obj = match value.as_object_mut() {
@@ -419,7 +446,10 @@ fn get_pe_function_symbols(pe: &PE) -> BTreeMap<u64, Symbol> {
         };
 
         let obj_type = obj.get("type").and_then(|v| v.as_str()).map(String::from);
-        let symbol_type = obj.get("symbol_type").and_then(|v| v.as_str()).map(String::from);
+        let symbol_type = obj
+            .get("symbol_type")
+            .and_then(|v| v.as_str())
+            .map(String::from);
         let file_offset = obj.get("file_offset").and_then(|v| v.as_u64());
         let relative_virtual_address = obj.get("relative_virtual_address").and_then(|v| v.as_u64());
         let mut virtual_address = obj.get("virtual_address").and_then(|v| v.as_u64());
@@ -432,7 +462,8 @@ fn get_pe_function_symbols(pe: &PE) -> BTreeMap<u64, Symbol> {
             return false;
         }
 
-        if file_offset.is_none() && relative_virtual_address.is_none() && virtual_address.is_none() {
+        if file_offset.is_none() && relative_virtual_address.is_none() && virtual_address.is_none()
+        {
             return false;
         }
 
@@ -457,7 +488,6 @@ fn get_pe_function_symbols(pe: &PE) -> BTreeMap<u64, Symbol> {
         }
 
         false
-
     });
 
     if json.is_ok() {
@@ -465,26 +495,39 @@ fn get_pe_function_symbols(pe: &PE) -> BTreeMap<u64, Symbol> {
             let address = value.get("virtual_address").and_then(|v| v.as_u64());
             let name = value.get("name").and_then(|v| v.as_str());
             let symbol_type = value.get("symbol_type").and_then(|v| v.as_str());
-            if address.is_none() { continue; }
-            if name.is_none() { continue; }
-            if symbol_type.is_none() { continue; }
+            if address.is_none() {
+                continue;
+            }
+            if name.is_none() {
+                continue;
+            }
+            if symbol_type.is_none() {
+                continue;
+            }
             let symbol = Symbol::new(
                 address.unwrap(),
                 symbol_type.unwrap().to_string(),
-                name.unwrap().to_string());
-            symbols.insert(address.unwrap(),symbol);
+                name.unwrap().to_string(),
+            );
+            symbols.insert(address.unwrap(), symbol);
         }
     }
 
     return symbols;
 }
 
-fn process_output(output: Option<String>, cfg: &Graph, attributes: &Attributes, function_symbols: &BTreeMap<u64, Symbol>) {
-
+fn process_output(
+    output: Option<String>,
+    cfg: &Graph,
+    attributes: &Attributes,
+    function_symbols: &BTreeMap<u64, Symbol>,
+) {
     let mut instructions = Vec::<LZ4String>::new();
 
     if cfg.config.instructions.enabled {
-        instructions = cfg.instructions.valid()
+        instructions = cfg
+            .instructions
+            .valid()
             .iter()
             .map(|entry| *entry)
             .collect::<Vec<u64>>()
@@ -492,14 +535,16 @@ fn process_output(output: Option<String>, cfg: &Graph, attributes: &Attributes, 
             .filter_map(|address| Instruction::new(*address, &cfg).ok())
             .filter_map(|instruction| {
                 let mut instruction_attributes = Attributes::new();
-                let symbol= function_symbols.get(&instruction.address);
+                let symbol = function_symbols.get(&instruction.address);
                 if symbol.is_some() {
                     instruction_attributes.push(symbol.unwrap().attribute());
                 }
                 for attribute in &attributes.values {
                     instruction_attributes.push(attribute.clone());
                 }
-                instruction.json_with_attributes(instruction_attributes.clone()).ok()
+                instruction
+                    .json_with_attributes(instruction_attributes.clone())
+                    .ok()
             })
             .map(|js| LZ4String::new(&js))
             .collect();
@@ -508,7 +553,9 @@ fn process_output(output: Option<String>, cfg: &Graph, attributes: &Attributes, 
     let mut blocks = Vec::<LZ4String>::new();
 
     if cfg.config.blocks.enabled {
-        blocks = cfg.blocks.valid()
+        blocks = cfg
+            .blocks
+            .valid()
             .iter()
             .map(|entry| *entry)
             .collect::<Vec<u64>>()
@@ -516,7 +563,7 @@ fn process_output(output: Option<String>, cfg: &Graph, attributes: &Attributes, 
             .filter_map(|address| Block::new(*address, &cfg).ok())
             .filter_map(|block| {
                 let mut block_attributes = Attributes::new();
-                let symbol= function_symbols.get(&block.address);
+                let symbol = function_symbols.get(&block.address);
                 if symbol.is_some() {
                     block_attributes.push(symbol.unwrap().attribute());
                 }
@@ -532,7 +579,9 @@ fn process_output(output: Option<String>, cfg: &Graph, attributes: &Attributes, 
     let mut functions = Vec::<LZ4String>::new();
 
     if cfg.config.functions.enabled {
-        functions = cfg.functions.valid()
+        functions = cfg
+            .functions
+            .valid()
             .iter()
             .map(|entry| *entry)
             .collect::<Vec<u64>>()
@@ -540,7 +589,7 @@ fn process_output(output: Option<String>, cfg: &Graph, attributes: &Attributes, 
             .filter_map(|address| Function::new(*address, &cfg).ok())
             .filter_map(|function| {
                 let mut function_attributes = Attributes::new();
-                let symbol= function_symbols.get(&function.address);
+                let symbol = function_symbols.get(&function.address);
                 if symbol.is_some() {
                     function_attributes.push(symbol.unwrap().attribute());
                 }
@@ -554,7 +603,6 @@ fn process_output(output: Option<String>, cfg: &Graph, attributes: &Attributes, 
     }
 
     if output.is_none() {
-
         instructions.iter().for_each(|result| {
             Stdout::print(result);
         });
@@ -568,7 +616,7 @@ fn process_output(output: Option<String>, cfg: &Graph, attributes: &Attributes, 
         });
     }
 
-     if let Some(output_file) = output {
+    if let Some(output_file) = output {
         let mut file = match File::create(output_file) {
             Ok(file) => file,
             Err(error) => {
@@ -599,7 +647,6 @@ fn process_output(output: Option<String>, cfg: &Graph, attributes: &Attributes, 
                 std::process::exit(1);
             }
         }
-
     }
 }
 
@@ -618,7 +665,7 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
         Architecture::UNKNOWN => {
             eprintln!("unsupported pe architecture");
             process::exit(1);
-        },
+        }
         _ => {}
     }
 
@@ -638,14 +685,17 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
     //     attributes.push(Attribute::Symbol(symbol.process().clone()));
     // }
 
-    let mut mapped_file = pe.image()
-        .unwrap_or_else(|error| { eprintln!("failed to map pe image: {}", error); process::exit(1)});
+    let mut mapped_file = pe.image().unwrap_or_else(|error| {
+        eprintln!("failed to map pe image: {}", error);
+        process::exit(1)
+    });
 
     Stderr::print_debug(config.clone(), "mapped pe image");
 
-    let image = mapped_file
-        .mmap()
-        .unwrap_or_else(|error| { eprintln!("failed to get pe virtual image: {}", error); process::exit(1); });
+    let image = mapped_file.mmap().unwrap_or_else(|error| {
+        eprintln!("failed to get pe virtual image: {}", error);
+        process::exit(1);
+    });
 
     Stderr::print_debug(config.clone(), "obtained mapped image pointer");
 
@@ -656,7 +706,7 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
 
     let mut entrypoints = BTreeSet::<u64>::new();
 
-    match pe.is_dotnet(){
+    match pe.is_dotnet() {
         true => entrypoints.extend(pe.dotnet_entrypoint_virtual_addresses()),
         _ => entrypoints.extend(pe.entrypoint_virtual_addresses()),
     }
@@ -668,7 +718,12 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
     if !pe.is_dotnet() {
         Stderr::print_debug(config.clone(), "starting pe disassembler");
 
-        let disassembler = match Disassembler::new(pe.architecture(), &image, executable_address_ranges.clone(), config.clone()) {
+        let disassembler = match Disassembler::new(
+            pe.architecture(),
+            &image,
+            executable_address_ranges.clone(),
+            config.clone(),
+        ) {
             Ok(disassembler) => disassembler,
             Err(error) => {
                 eprintln!("{}", error);
@@ -676,7 +731,8 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
             }
         };
 
-        disassembler.disassemble_controlflow(entrypoints.clone(), &mut cfg)
+        disassembler
+            .disassemble_controlflow(entrypoints.clone(), &mut cfg)
             .unwrap_or_else(|error| {
                 eprintln!("{}", error);
                 process::exit(1);
@@ -684,7 +740,13 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
     } else if pe.is_dotnet() {
         Stderr::print_debug(config.clone(), "starting pe dotnet disassembler");
 
-        let disassembler = match CILDisassembler::new(pe.architecture(), &image, pe.dotnet_metadata_token_virtual_addresses().clone(), executable_address_ranges.clone(), config.clone()) {
+        let disassembler = match CILDisassembler::new(
+            pe.architecture(),
+            &image,
+            pe.dotnet_metadata_token_virtual_addresses().clone(),
+            executable_address_ranges.clone(),
+            config.clone(),
+        ) {
             Ok(disassembler) => disassembler,
             Err(error) => {
                 eprintln!("{}", error);
@@ -692,7 +754,8 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
             }
         };
 
-        disassembler.disassemble_controlflow(entrypoints.clone(), &mut cfg)
+        disassembler
+            .disassemble_controlflow(entrypoints.clone(), &mut cfg)
             .unwrap_or_else(|error| {
                 eprintln!("{}", error);
                 process::exit(1);
@@ -717,7 +780,7 @@ fn process_elf(input: String, config: Config, tags: Option<Vec<String>>, output:
         Architecture::UNKNOWN => {
             eprintln!("unsupported pe architecture");
             process::exit(1);
-        },
+        }
         _ => {}
     }
 
@@ -737,12 +800,15 @@ fn process_elf(input: String, config: Config, tags: Option<Vec<String>>, output:
     //     attributes.push(Attribute::Symbol(symbol.process().clone()));
     // }
 
-    let mut mapped_file = elf.image()
-        .unwrap_or_else(|error| { eprintln!("{}", error); process::exit(1)});
+    let mut mapped_file = elf.image().unwrap_or_else(|error| {
+        eprintln!("{}", error);
+        process::exit(1)
+    });
 
-    let image = mapped_file
-        .mmap()
-        .unwrap_or_else(|error| { eprintln!("{}", error); process::exit(1); });
+    let image = mapped_file.mmap().unwrap_or_else(|error| {
+        eprintln!("{}", error);
+        process::exit(1);
+    });
 
     let executable_address_ranges = elf.executable_virtual_address_ranges();
 
@@ -752,7 +818,12 @@ fn process_elf(input: String, config: Config, tags: Option<Vec<String>>, output:
 
     let mut cfg = Graph::new(elf.architecture(), config.clone());
 
-    let disassembler = match Disassembler::new(elf.architecture(), &image, executable_address_ranges.clone(), config.clone()) {
+    let disassembler = match Disassembler::new(
+        elf.architecture(),
+        &image,
+        executable_address_ranges.clone(),
+        config.clone(),
+    ) {
         Ok(disassembler) => disassembler,
         Err(error) => {
             eprintln!("{}", error);
@@ -760,7 +831,8 @@ fn process_elf(input: String, config: Config, tags: Option<Vec<String>>, output:
         }
     };
 
-    disassembler.disassemble_controlflow(entrypoints, &mut cfg)
+    disassembler
+        .disassemble_controlflow(entrypoints, &mut cfg)
         .unwrap_or_else(|error| {
             eprintln!("{}", error);
             process::exit(1);
@@ -776,11 +848,10 @@ fn process_code(input: String, config: Config, architecture: Architecture, outpu
         eprintln!("{}", error);
         process::exit(1);
     });
-    file.read()
-        .unwrap_or_else(|error| {
-            eprintln!("{}", error);
-            process::exit(1);
-        });
+    file.read().unwrap_or_else(|error| {
+        eprintln!("{}", error);
+        process::exit(1);
+    });
 
     let mut cfg = Graph::new(architecture, config.clone());
 
@@ -793,7 +864,12 @@ fn process_code(input: String, config: Config, architecture: Architecture, outpu
 
     match architecture {
         Architecture::AMD64 | Architecture::I386 => {
-            let disassembler = match Disassembler::new(architecture, &file.data, executable_address_ranges.clone(), config.clone()) {
+            let disassembler = match Disassembler::new(
+                architecture,
+                &file.data,
+                executable_address_ranges.clone(),
+                config.clone(),
+            ) {
                 Ok(disassembler) => disassembler,
                 Err(error) => {
                     eprintln!("{}", error);
@@ -801,14 +877,21 @@ fn process_code(input: String, config: Config, architecture: Architecture, outpu
                 }
             };
 
-            disassembler.disassemble_controlflow(entrypoints, &mut cfg)
-            .unwrap_or_else(|error| {
-                eprintln!("{}", error);
-                process::exit(1);
-            });
-        },
+            disassembler
+                .disassemble_controlflow(entrypoints, &mut cfg)
+                .unwrap_or_else(|error| {
+                    eprintln!("{}", error);
+                    process::exit(1);
+                });
+        }
         Architecture::CIL => {
-            let disassembler = match CILDisassembler::new(architecture, &file.data, BTreeMap::<u64, u64>::new(), executable_address_ranges.clone(), config.clone()) {
+            let disassembler = match CILDisassembler::new(
+                architecture,
+                &file.data,
+                BTreeMap::<u64, u64>::new(),
+                executable_address_ranges.clone(),
+                config.clone(),
+            ) {
                 Ok(disassembler) => disassembler,
                 Err(error) => {
                     eprintln!("{}", error);
@@ -816,13 +899,14 @@ fn process_code(input: String, config: Config, architecture: Architecture, outpu
                 }
             };
 
-            disassembler.disassemble_controlflow(entrypoints, &mut cfg)
-            .unwrap_or_else(|error| {
-                eprintln!("{}", error);
-                process::exit(1);
-            });
-        },
-        _ => {},
+            disassembler
+                .disassemble_controlflow(entrypoints, &mut cfg)
+                .unwrap_or_else(|error| {
+                    eprintln!("{}", error);
+                    process::exit(1);
+                });
+        }
+        _ => {}
     }
 
     attributes.push(file.attribute());
@@ -842,9 +926,13 @@ fn process_macho(input: String, config: Config, tags: Option<Vec<String>>, outpu
 
     for slice in 0..macho.number_of_slices() {
         let architecture = macho.architecture(slice);
-        if architecture.is_none() { continue; }
+        if architecture.is_none() {
+            continue;
+        }
         let architecture = architecture.unwrap();
-        if architecture == Architecture::UNKNOWN { continue; }
+        if architecture == Architecture::UNKNOWN {
+            continue;
+        }
 
         let tags = tags.clone();
 
@@ -864,12 +952,15 @@ fn process_macho(input: String, config: Config, tags: Option<Vec<String>>, outpu
         //     attributes.push(Attribute::Symbol(symbol.process().clone()));
         // }
 
-        let mut mapped_file = macho.image(slice)
-        .unwrap_or_else(|error| { eprintln!("{}", error); process::exit(1)});
+        let mut mapped_file = macho.image(slice).unwrap_or_else(|error| {
+            eprintln!("{}", error);
+            process::exit(1)
+        });
 
-        let image = mapped_file
-            .mmap()
-            .unwrap_or_else(|error| { eprintln!("{}", error); process::exit(1); });
+        let image = mapped_file.mmap().unwrap_or_else(|error| {
+            eprintln!("{}", error);
+            process::exit(1);
+        });
 
         let executable_address_ranges = macho.executable_virtual_address_ranges(slice);
 
@@ -879,7 +970,12 @@ fn process_macho(input: String, config: Config, tags: Option<Vec<String>>, outpu
 
         let mut cfg = Graph::new(architecture, config.clone());
 
-        let disassembler = match Disassembler::new(architecture, &image, executable_address_ranges.clone(), config.clone()) {
+        let disassembler = match Disassembler::new(
+            architecture,
+            &image,
+            executable_address_ranges.clone(),
+            config.clone(),
+        ) {
             Ok(disassembler) => disassembler,
             Err(error) => {
                 eprintln!("{}", error);
@@ -887,18 +983,18 @@ fn process_macho(input: String, config: Config, tags: Option<Vec<String>>, outpu
             }
         };
 
-        disassembler.disassemble_controlflow(entrypoints, &mut cfg)
-        .unwrap_or_else(|error| {
-            eprintln!("{}", error);
-            process::exit(1);
-        });
+        disassembler
+            .disassemble_controlflow(entrypoints, &mut cfg)
+            .unwrap_or_else(|error| {
+                eprintln!("{}", error);
+                process::exit(1);
+            });
 
         process_output(output.clone(), &cfg, &attributes, &function_symbols);
     }
 }
 
 fn main() {
-
     let args = Args::parse();
 
     validate_args(&args);
@@ -911,7 +1007,7 @@ fn main() {
         match Config::from_file(&args.config.unwrap().to_string()) {
             Ok(result) => {
                 config = result;
-            },
+            }
             Err(error) => {
                 eprintln!("{}", error);
                 process::exit(1);
@@ -968,7 +1064,10 @@ fn main() {
         config.functions.blocks.enabled = !args.disable_function_blocks;
     }
 
-    Stderr::print_debug(config.clone(), "finished reading arguments and configuration");
+    Stderr::print_debug(
+        config.clone(),
+        "finished reading arguments and configuration",
+    );
 
     ThreadPoolBuilder::new()
         .num_threads(config.general.threads)
@@ -979,20 +1078,19 @@ fn main() {
         });
 
     if args.architecture.is_none() {
-        let format = Format::from_file(args.input.clone())
-            .unwrap_or_else(|error| {
-                eprintln!("{}", error);
-                process::exit(1);
-            });
+        let format = Format::from_file(args.input.clone()).unwrap_or_else(|error| {
+            eprintln!("{}", error);
+            process::exit(1);
+        });
         match format {
             Format::PE => {
                 Stderr::print_debug(config.clone(), "processing pe");
                 process_pe(args.input, config, args.tags, args.output);
-            },
+            }
             Format::ELF => {
                 Stderr::print_debug(config.clone(), "processing elf");
                 process_elf(args.input, config, args.tags, args.output);
-            },
+            }
             Format::MACHO => {
                 Stderr::print_debug(config.clone(), "processing macho");
                 process_macho(args.input, config, args.tags, args.output);
@@ -1008,7 +1106,7 @@ fn main() {
             Architecture::AMD64 | Architecture::I386 | Architecture::CIL => {
                 Stderr::print_debug(config.clone(), "processing code");
                 process_code(args.input, config, architecture, args.output);
-            },
+            }
             _ => {
                 eprintln!("unsupported architecture");
                 process::exit(1);
@@ -1017,5 +1115,4 @@ fn main() {
     }
 
     process::exit(0);
-
 }
