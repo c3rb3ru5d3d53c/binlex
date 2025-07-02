@@ -30,7 +30,7 @@
 
 This hierarchical breakdown allows **binlex** to analyze and compare malware binaries by treating their code structure like a "DNA fingerprint," making it easier to detect patterns, similarities, and variations across samples.
 
-Unlike tools relying on **pure Python**, which can be slow 🐢, Binlex is designed for speed, simplicity, and flexibility. Its **command-line interface** helps analysts search for patterns across **hundreds or thousands of malware samples**, saving **time** ⏳ and **resources** 💰.
+Unlike tools relying on **pure Python**, which can be slow 🐢, **binlex** is designed for speed, simplicity, and flexibility. Its **command-line interface** helps analysts search for patterns across **hundreds or thousands of malware samples**, saving **time** ⏳ and **resources** 💰.
 
 For malware analysts and reverse engineers, **binlex** includes a IDA plugin and a vector database (**binlex** server) designed to identify similar functions.
 
