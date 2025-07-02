@@ -165,51 +165,49 @@
 // Library.
 
 extern crate capstone;
+use crate::binary::Binary;
+use crate::controlflow::graph::Graph;
+use crate::controlflow::instruction::Instruction;
+use crate::io::Stderr;
+use crate::Architecture;
+use crate::Config;
 use arch::x86::X86OpMem;
-use arch::x86::X86Reg::{
-    X86_REG_RSP,
-    X86_REG_RBP,
-    X86_REG_ESP,
-    X86_REG_EBP,
-    X86_REG_RIP,
-};
-use capstone::prelude::*;
+use arch::x86::X86Reg::{X86_REG_EBP, X86_REG_ESP, X86_REG_RBP, X86_REG_RIP, X86_REG_RSP};
 use capstone::arch::x86::X86Insn;
 use capstone::arch::x86::X86OperandType;
 use capstone::arch::ArchOperand;
+use capstone::prelude::*;
 use capstone::Insn;
 use capstone::InsnId;
 use capstone::Instructions;
-use std::io::Error;
-use std::io::ErrorKind;
-use std::collections::{BTreeMap, BTreeSet};
-use crate::binary::Binary;
-use crate::Architecture;
-use crate::controlflow::instruction::Instruction;
-use crate::controlflow::graph::Graph;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
-use crate::io::Stderr;
-use crate::Config;
+use std::collections::{BTreeMap, BTreeSet};
+use std::io::Error;
+use std::io::ErrorKind;
 
 pub struct Disassembler<'disassembler> {
     cs: Capstone,
-    image: &'disassembler[u8],
+    image: &'disassembler [u8],
     machine: Architecture,
     executable_address_ranges: BTreeMap<u64, u64>,
     config: Config,
 }
 
 impl<'disassembler> Disassembler<'disassembler> {
-
-    pub fn new(machine: Architecture, image: &'disassembler[u8], executable_address_ranges: BTreeMap<u64, u64>, config: Config) -> Result<Self, Error> {
+    pub fn new(
+        machine: Architecture,
+        image: &'disassembler [u8],
+        executable_address_ranges: BTreeMap<u64, u64>,
+        config: Config,
+    ) -> Result<Self, Error> {
         let cs = Disassembler::cs_new(machine, true)?;
-        Ok(Self{
-            cs: cs,
-            image: image,
-            machine: machine,
-            executable_address_ranges: executable_address_ranges,
-            config: config,
+        Ok(Self {
+            cs,
+            image,
+            machine,
+            executable_address_ranges,
+            config,
         })
     }
 
@@ -221,7 +219,6 @@ impl<'disassembler> Disassembler<'disassembler> {
 
     #[allow(dead_code)]
     pub fn disassemble_sweep(&self) -> BTreeSet<u64> {
-
         let valid_jump_threshold: usize = 2;
         let valid_instruction_threshold: usize = 4;
 
@@ -238,11 +235,12 @@ impl<'disassembler> Disassembler<'disassembler> {
                         valid_instructions = 0;
                         valid_jumps = 0;
                         continue;
-                    },
+                    }
                 };
                 let instruction = instructions.iter().next().unwrap();
                 if Disassembler::is_privilege_instruction(instruction)
-                    || Disassembler::is_trap_instruction(instruction) {
+                    || Disassembler::is_trap_instruction(instruction)
+                {
                     pc += instruction.bytes().len() as u64;
                     continue;
                 }
@@ -258,7 +256,8 @@ impl<'disassembler> Disassembler<'disassembler> {
                 }
                 if let Some(imm) = self.get_call_immutable(instruction) {
                     if valid_jumps >= valid_jump_threshold
-                        && valid_instructions >= valid_instruction_threshold {
+                        && valid_instructions >= valid_instruction_threshold
+                    {
                         if self.is_executable_address(imm) {
                             functions.insert(imm);
                         } else {
@@ -273,12 +272,15 @@ impl<'disassembler> Disassembler<'disassembler> {
                 pc += instruction.bytes().len() as u64;
             }
         }
-        return functions;
+        functions
     }
 
     #[allow(dead_code)]
-    pub fn disassemble_controlflow<'a>(&'a self, addresses: BTreeSet<u64>, cfg: &'a mut Graph) -> Result<(), Error> {
-
+    pub fn disassemble_controlflow<'a>(
+        &'a self,
+        addresses: BTreeSet<u64>,
+        cfg: &'a mut Graph,
+    ) -> Result<(), Error> {
         let pool = ThreadPoolBuilder::new()
             .num_threads(cfg.config.general.threads)
             .build()
@@ -301,7 +303,8 @@ impl<'disassembler> Disassembler<'disassembler> {
         pool.install(|| {
             while !cfg.functions.queue.is_empty() {
                 let function_addresses = cfg.functions.dequeue_all();
-                cfg.functions.insert_processed_extend(function_addresses.clone());
+                cfg.functions
+                    .insert_processed_extend(function_addresses.clone());
                 let graphs: Vec<Graph> = function_addresses
                     .par_iter()
                     .map(|address| {
@@ -309,7 +312,12 @@ impl<'disassembler> Disassembler<'disassembler> {
                         let executable_address_ranges = external_executable_address_ranges.clone();
                         let image = external_image;
                         let mut graph = Graph::new(machine, cfg.config.clone());
-                        if let Ok(disasm) = Disassembler::new(machine, image, executable_address_ranges, external_config.clone()) {
+                        if let Ok(disasm) = Disassembler::new(
+                            machine,
+                            image,
+                            executable_address_ranges,
+                            external_config.clone(),
+                        ) {
                             let _ = disasm.disassemble_function(*address, &mut graph);
                         }
                         graph
@@ -321,16 +329,22 @@ impl<'disassembler> Disassembler<'disassembler> {
             }
         });
 
-        return Ok(());
+        Ok(())
     }
 
-    pub fn disassemble_function<'a>(&'a self, address: u64, cfg: &'a mut Graph) -> Result<u64, Error> {
-
+    pub fn disassemble_function<'a>(
+        &'a self,
+        address: u64,
+        cfg: &'a mut Graph,
+    ) -> Result<u64, Error> {
         cfg.functions.insert_processed(address);
 
         if !self.is_executable_address(address) {
             cfg.functions.insert_invalid(address);
-            let error_message = format!("Function -> 0x{:x}: it is not in executable memory", address);
+            let error_message = format!(
+                "Function -> 0x{:x}: it is not in executable memory",
+                address
+            );
             Stderr::print_debug(cfg.config.clone(), &error_message);
             return Err(Error::new(ErrorKind::Other, error_message));
         }
@@ -338,17 +352,16 @@ impl<'disassembler> Disassembler<'disassembler> {
         cfg.blocks.enqueue(address);
 
         while let Some(block_start_address) = cfg.blocks.dequeue() {
-
             if cfg.blocks.is_processed(block_start_address) {
                 continue;
             }
 
-            let block_end_address = self
-                .disassemble_block(block_start_address, cfg)
-                .map_err(|error| {
-                    cfg.functions.insert_invalid(address);
-                    error
-                })?;
+            let block_end_address =
+                self.disassemble_block(block_start_address, cfg)
+                    .map_err(|error| {
+                        cfg.functions.insert_invalid(address);
+                        error
+                    })?;
 
             if block_start_address == address {
                 if let Some(mut instruction) = cfg.get_instruction(block_start_address) {
@@ -367,8 +380,11 @@ impl<'disassembler> Disassembler<'disassembler> {
         Ok(address)
     }
 
-    pub fn disassemble_instruction<'a>(&'a self, address: u64, cfg: &'a mut Graph) -> Result<u64, Error> {
-
+    pub fn disassemble_instruction<'a>(
+        &'a self,
+        address: u64,
+        cfg: &'a mut Graph,
+    ) -> Result<u64, Error> {
         cfg.instructions.insert_processed(address);
 
         if let Some(instruction) = cfg.get_instruction(address) {
@@ -377,7 +393,10 @@ impl<'disassembler> Disassembler<'disassembler> {
 
         if !self.is_executable_address(address) {
             cfg.instructions.insert_invalid(address);
-            let error = format!("Instruction -> 0x{:x}: it is not in executable memory", address);
+            let error = format!(
+                "Instruction -> 0x{:x}: it is not in executable memory",
+                address
+            );
             Stderr::print_debug(cfg.config.clone(), error.clone());
             return Err(Error::new(ErrorKind::Other, error));
         }
@@ -391,7 +410,8 @@ impl<'disassembler> Disassembler<'disassembler> {
 
         let instruction_signature = self.get_instruction_pattern(&instruction)?;
 
-        let mut blinstruction = Instruction::create(instruction.address(), cfg.architecture, cfg.config.clone());
+        let mut blinstruction =
+            Instruction::create(instruction.address(), cfg.architecture, cfg.config.clone());
 
         blinstruction.is_jump = Disassembler::is_jump_instruction(instruction);
         blinstruction.is_call = Disassembler::is_call_instruction(instruction);
@@ -399,7 +419,8 @@ impl<'disassembler> Disassembler<'disassembler> {
         blinstruction.is_trap = Disassembler::is_trap_instruction(instruction);
 
         if blinstruction.is_jump {
-            blinstruction.is_conditional = Disassembler::is_conditional_jump_instruction(instruction);
+            blinstruction.is_conditional =
+                Disassembler::is_conditional_jump_instruction(instruction);
         }
 
         blinstruction.edges = self.get_instruction_edges(instruction);
@@ -429,7 +450,7 @@ impl<'disassembler> Disassembler<'disassembler> {
                 instruction.mnemonic().unwrap(),
                 blinstruction.next(),
                 blinstruction.to()
-            )
+            ),
         );
 
         cfg.insert_instruction(blinstruction);
@@ -441,7 +462,6 @@ impl<'disassembler> Disassembler<'disassembler> {
 
     #[allow(dead_code)]
     pub fn disassemble_block<'a>(&'a self, address: u64, cfg: &'a mut Graph) -> Result<u64, Error> {
-
         cfg.blocks.insert_processed(address);
 
         if !self.is_executable_address(address) {
@@ -459,7 +479,10 @@ impl<'disassembler> Disassembler<'disassembler> {
                 Some(instr) => instr,
                 None => {
                     cfg.blocks.insert_invalid(address);
-                    return Err(Error::new(ErrorKind::Other, "failed to disassemble instruction"));
+                    return Err(Error::new(
+                        ErrorKind::Other,
+                        "failed to disassemble instruction",
+                    ));
                 }
             };
 
@@ -476,7 +499,8 @@ impl<'disassembler> Disassembler<'disassembler> {
 
             let is_block_start = instruction.address != address && instruction.is_block_start;
 
-            if instruction.is_trap || instruction.is_return || instruction.is_jump || is_block_start {
+            if instruction.is_trap || instruction.is_return || instruction.is_jump || is_block_start
+            {
                 break;
             }
 
@@ -492,38 +516,66 @@ impl<'disassembler> Disassembler<'disassembler> {
     }
 
     pub fn is_function_prologue(&self, address: u64) -> bool {
-
         // Starting Instructions
         if let Ok(instructions) = self.disassemble_instructions(address, 2) {
             match self.machine {
                 Architecture::AMD64 => {
                     if instructions[0].id() == InsnId(X86Insn::X86_INS_PUSH as u32)
-                        && self.instruction_has_register_operand(&instructions[0], 0, RegId(X86_REG_RBP as u16))
+                        && self.instruction_has_register_operand(
+                            &instructions[0],
+                            0,
+                            RegId(X86_REG_RBP as u16),
+                        )
                         && instructions[1].id() != InsnId(X86Insn::X86_INS_MOV as u32)
-                        && self.instruction_has_register_operand(&instructions[1], 0, RegId(X86_REG_RBP as u16))
-                        && self.instruction_has_register_operand(&instructions[1], 1, RegId(X86_REG_RSP as u16))
-                        {
-                            return true;
-                        }
-                },
+                        && self.instruction_has_register_operand(
+                            &instructions[1],
+                            0,
+                            RegId(X86_REG_RBP as u16),
+                        )
+                        && self.instruction_has_register_operand(
+                            &instructions[1],
+                            1,
+                            RegId(X86_REG_RSP as u16),
+                        )
+                    {
+                        return true;
+                    }
+                }
                 Architecture::I386 => {
                     if instructions[0].id() == InsnId(X86Insn::X86_INS_PUSH as u32)
-                        && self.instruction_has_register_operand(&instructions[0], 0, RegId(X86_REG_EBP as u16))
+                        && self.instruction_has_register_operand(
+                            &instructions[0],
+                            0,
+                            RegId(X86_REG_EBP as u16),
+                        )
                         && instructions[1].id() != InsnId(X86Insn::X86_INS_MOV as u32)
-                        && self.instruction_has_register_operand(&instructions[1], 0, RegId(X86_REG_EBP as u16))
-                        && self.instruction_has_register_operand(&instructions[1], 1, RegId(X86_REG_ESP as u16))
-                        {
-                            return true;
-                        }
-                },
+                        && self.instruction_has_register_operand(
+                            &instructions[1],
+                            0,
+                            RegId(X86_REG_EBP as u16),
+                        )
+                        && self.instruction_has_register_operand(
+                            &instructions[1],
+                            1,
+                            RegId(X86_REG_ESP as u16),
+                        )
+                    {
+                        return true;
+                    }
+                }
                 _ => {}
             }
         }
 
-        return false;
+        false
     }
 
-    fn instruction_has_register_operand(&self, instruction: &Insn, index: usize, register_id: RegId) -> bool {
+    fn instruction_has_register_operand(
+        &self,
+        instruction: &Insn,
+        index: usize,
+        register_id: RegId,
+    ) -> bool {
         let operands = match self.get_instruction_operands(instruction) {
             Ok(operands) => operands,
             Err(_) => return false,
@@ -536,7 +588,7 @@ impl<'disassembler> Disassembler<'disassembler> {
                 }
             }
         }
-        return false;
+        false
     }
 
     #[allow(dead_code)]
@@ -557,11 +609,16 @@ impl<'disassembler> Disassembler<'disassembler> {
             match operand {
                 ArchOperand::X86Operand(op) => {
                     result += op.size as usize;
-                },
-                _ => return Err(Error::new(ErrorKind::Other, "unsupported operand architecture")),
+                }
+                _ => {
+                    return Err(Error::new(
+                        ErrorKind::Other,
+                        "unsupported operand architecture",
+                    ))
+                }
             }
         }
-        return Ok(result);
+        Ok(result)
     }
 
     pub fn instruction_contains_memory_operand(&self, instruction: &Insn) -> bool {
@@ -572,9 +629,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         for operand in operands {
             if let ArchOperand::X86Operand(op) = operand {
                 match op.op_type {
-                    X86OperandType::Mem(_) => {
-                        return true
-                    },
+                    X86OperandType::Mem(_) => return true,
                     _ => continue,
                 };
             }
@@ -600,7 +655,6 @@ impl<'disassembler> Disassembler<'disassembler> {
 
     #[allow(dead_code)]
     pub fn get_instruction_pattern(&self, instruction: &Insn) -> Result<String, Error> {
-
         if Disassembler::is_unsupported_pattern_instruction(instruction) {
             return Ok(Binary::to_hex(instruction.bytes()));
         }
@@ -610,7 +664,8 @@ impl<'disassembler> Disassembler<'disassembler> {
         }
 
         if !self.instruction_contains_immutable_operand(instruction)
-            && !self.instruction_contains_memory_operand(instruction) {
+            && !self.instruction_contains_memory_operand(instruction)
+        {
             return Ok(Binary::to_hex(instruction.bytes()));
         }
 
@@ -618,7 +673,13 @@ impl<'disassembler> Disassembler<'disassembler> {
 
         let mut wildcarded = vec![false; instruction_size];
 
-        let instruction_trailing_null_size = instruction.bytes().iter().rev().take_while(|&&b| b == 0).count() * 8;
+        let instruction_trailing_null_size = instruction
+            .bytes()
+            .iter()
+            .rev()
+            .take_while(|&&b| b == 0)
+            .count()
+            * 8;
 
         let operands = self.get_instruction_operands(instruction)?;
 
@@ -633,23 +694,27 @@ impl<'disassembler> Disassembler<'disassembler> {
         let is_immutable_signature = self.is_immutable_instruction_to_pattern(instruction);
 
         if total_operand_size <= 0 && operands.len() > 0 {
-           return Err(Error::new(ErrorKind::Other, format!("Instruction -> 0x{:x}: instruction has operands but missing operand sizes", instruction.address())));
+            return Err(Error::new(
+                ErrorKind::Other,
+                format!(
+                    "Instruction -> 0x{:x}: instruction has operands but missing operand sizes",
+                    instruction.address()
+                ),
+            ));
         }
 
         for operand in operands {
             if let ArchOperand::X86Operand(op) = operand {
                 let should_wildcard = match op.op_type {
                     X86OperandType::Imm(_) => is_immutable_signature,
-                    X86OperandType::Mem(mem) => {
-                        mem.index() == RegId(0)
-                    },
+                    X86OperandType::Mem(mem) => mem.index() == RegId(0),
                     _ => false,
                 };
 
                 let displacement_size = match op.op_type {
                     X86OperandType::Mem(op_mem) => {
                         Disassembler::get_displacement_size(op_mem.disp() as u64) * 8
-                    },
+                    }
                     _ => 0,
                 };
 
@@ -685,7 +750,13 @@ impl<'disassembler> Disassembler<'disassembler> {
         let instruction_hex = Binary::to_hex(instruction.bytes());
 
         if instruction_hex.len() % 2 != 0 {
-            return Err(Error::new(ErrorKind::Other, format!("Instruction -> 0x{:x}: instruction hex string length is not even", instruction.address())));
+            return Err(Error::new(
+                ErrorKind::Other,
+                format!(
+                    "Instruction -> 0x{:x}: instruction hex string length is not even",
+                    instruction.address()
+                ),
+            ));
         }
 
         let signature: String = instruction_hex
@@ -694,7 +765,7 @@ impl<'disassembler> Disassembler<'disassembler> {
             .map(|(index, ch)| {
                 let start = index * 4;
                 let end = start + 4;
-                if start >= instruction_trailing_null_offset  && is_immutable_signature {
+                if start >= instruction_trailing_null_offset && is_immutable_signature {
                     '?'
                 } else if wildcarded[start..end].iter().all(|&x| x) {
                     '?'
@@ -705,15 +776,26 @@ impl<'disassembler> Disassembler<'disassembler> {
             .collect();
 
         if signature.len() % 2 != 0 {
-            return Err(Error::new(ErrorKind::Other, format!("Instruction -> 0x{:x}: wildcarded hex string length is not even", instruction.address())));
+            return Err(Error::new(
+                ErrorKind::Other,
+                format!(
+                    "Instruction -> 0x{:x}: wildcarded hex string length is not even",
+                    instruction.address()
+                ),
+            ));
         }
 
         if instruction_hex.len() != signature.len() {
-            return Err(Error::new(ErrorKind::Other, format!("Instruction -> 0x{:x}: instruction hex length not same as wildcard hex length", instruction.address())));
+            return Err(Error::new(
+                ErrorKind::Other,
+                format!(
+                    "Instruction -> 0x{:x}: instruction hex length not same as wildcard hex length",
+                    instruction.address()
+                ),
+            ));
         }
 
         return Ok(signature);
-
     }
 
     fn get_displacement_size(displacement: u64) -> usize {
@@ -773,11 +855,22 @@ impl<'disassembler> Disassembler<'disassembler> {
         for operand in operands {
             if let ArchOperand::X86Operand(operand) = operand {
                 if let X86OperandType::Mem(mem) = operand.op_type {
-                    if mem.base() != RegId(X86_REG_RIP as u16) { continue; }
-                    if mem.index() != RegId(0) { continue; }
-                    let address: u64 = (instruction.address() as i64 + mem.disp() + instruction.bytes().len() as i64) as u64;
-                    if !self.is_executable_address(address) { continue; }
-                    if self.disassemble_instructions(address, 1).is_err() { continue; }
+                    if mem.base() != RegId(X86_REG_RIP as u16) {
+                        continue;
+                    }
+                    if mem.index() != RegId(0) {
+                        continue;
+                    }
+                    let address: u64 = (instruction.address() as i64
+                        + mem.disp()
+                        + instruction.bytes().len() as i64)
+                        as u64;
+                    if !self.is_executable_address(address) {
+                        continue;
+                    }
+                    if self.disassemble_instructions(address, 1).is_err() {
+                        continue;
+                    }
                     return Some(address);
                 }
             }
@@ -811,21 +904,35 @@ impl<'disassembler> Disassembler<'disassembler> {
     pub fn get_instruction_operands(&self, instruction: &Insn) -> Result<Vec<ArchOperand>, Error> {
         let detail = match self.cs.insn_detail(&instruction) {
             Ok(detail) => detail,
-            Err(_error) => return Err(Error::new(ErrorKind::Other, "failed to get instruction detail")),
+            Err(_error) => {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "failed to get instruction detail",
+                ))
+            }
         };
         let arch = detail.arch_detail();
         return Ok(arch.operands());
     }
 
     #[allow(dead_code)]
-    pub fn get_instruction_operand(&self, instruction: &Insn, index: usize) -> Result<ArchOperand, Error> {
+    pub fn get_instruction_operand(
+        &self,
+        instruction: &Insn,
+        index: usize,
+    ) -> Result<ArchOperand, Error> {
         let operands = match self.get_instruction_operands(instruction) {
             Ok(operands) => operands,
             Err(error) => return Err(error),
         };
         let operand = match operands.get(index) {
             Some(operand) => operand.clone(),
-            None => return Err(Error::new(ErrorKind::Other, "failed to get instruction operand"))
+            None => {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "failed to get instruction operand",
+                ))
+            }
         };
         return Ok(operand);
     }
@@ -845,20 +952,21 @@ impl<'disassembler> Disassembler<'disassembler> {
         if Disassembler::is_return_instruction(instruction) {
             return 1;
         }
-        if Disassembler::is_conditional_jump_instruction(instruction){
+        if Disassembler::is_conditional_jump_instruction(instruction) {
             return 2;
         }
-        return 0;
+        0
     }
 
     #[allow(dead_code)]
     pub fn is_immutable_instruction_to_pattern(&self, instruction: &Insn) -> bool {
-
         if !self.instruction_contains_immutable_operand(instruction) {
             return false;
         }
 
-        if Disassembler::is_call_instruction(instruction) || Disassembler::is_jump_instruction(instruction) {
+        if Disassembler::is_call_instruction(instruction)
+            || Disassembler::is_jump_instruction(instruction)
+        {
             return true;
         }
 
@@ -879,7 +987,9 @@ impl<'disassembler> Disassembler<'disassembler> {
             for operand in operands {
                 if let ArchOperand::X86Operand(op) = operand {
                     if let X86OperandType::Reg(register_id) = op.op_type {
-                        if [X86_REG_RSP, X86_REG_RBP, X86_REG_ESP, X86_REG_EBP].contains(&(register_id.0 as u32)) {
+                        if [X86_REG_RSP, X86_REG_RBP, X86_REG_ESP, X86_REG_EBP]
+                            .contains(&(register_id.0 as u32))
+                        {
                             return true;
                         }
                     }
@@ -887,7 +997,7 @@ impl<'disassembler> Disassembler<'disassembler> {
             }
         }
 
-        return false;
+        false
     }
 
     #[allow(dead_code)]
@@ -897,7 +1007,8 @@ impl<'disassembler> Disassembler<'disassembler> {
             InsnId(X86Insn::X86_INS_MOVAPS as u32),
             InsnId(X86Insn::X86_INS_XORPS as u32),
             InsnId(X86Insn::X86_INS_SHUFPS as u32),
-        ].contains(&instruction.id())
+        ]
+        .contains(&instruction.id())
     }
 
     #[allow(dead_code)]
@@ -909,7 +1020,8 @@ impl<'disassembler> Disassembler<'disassembler> {
             InsnId(X86Insn::X86_INS_IRET as u32),
             InsnId(X86Insn::X86_INS_IRETD as u32),
             InsnId(X86Insn::X86_INS_IRETQ as u32),
-        ].contains(&instruction.id())
+        ]
+        .contains(&instruction.id())
     }
 
     #[allow(dead_code)]
@@ -936,13 +1048,14 @@ impl<'disassembler> Disassembler<'disassembler> {
             InsnId(X86Insn::X86_INS_INVD as u32),
             InsnId(X86Insn::X86_INS_INVLPG as u32),
             InsnId(X86Insn::X86_INS_WBINVD as u32),
-        ].contains(&instruction.id())
+        ]
+        .contains(&instruction.id())
     }
 
     #[allow(dead_code)]
     pub fn is_wildcard_instruction(instruction: &Insn) -> bool {
         Disassembler::is_nop_instruction(instruction)
-        || Disassembler::is_trap_instruction(instruction)
+            || Disassembler::is_trap_instruction(instruction)
     }
 
     #[allow(dead_code)]
@@ -950,7 +1063,8 @@ impl<'disassembler> Disassembler<'disassembler> {
         vec![
             InsnId(X86Insn::X86_INS_NOP as u32),
             InsnId(X86Insn::X86_INS_FNOP as u32),
-        ].contains(&instruction.id())
+        ]
+        .contains(&instruction.id())
     }
 
     #[allow(dead_code)]
@@ -960,25 +1074,24 @@ impl<'disassembler> Disassembler<'disassembler> {
             InsnId(X86Insn::X86_INS_UD2 as u32),
             InsnId(X86Insn::X86_INS_INT1 as u32),
             InsnId(X86Insn::X86_INS_INTO as u32),
-        ].contains(&instruction.id())
+        ]
+        .contains(&instruction.id())
     }
 
     #[allow(dead_code)]
     pub fn is_jump_instruction(instruction: &Insn) -> bool {
-        if Disassembler::is_conditional_jump_instruction(instruction){
+        if Disassembler::is_conditional_jump_instruction(instruction) {
             return true;
         }
-        if Disassembler::is_unconditional_jump_instruction(instruction){
+        if Disassembler::is_unconditional_jump_instruction(instruction) {
             return true;
         }
-        return false;
+        false
     }
 
     #[allow(dead_code)]
     pub fn is_load_address_instruction(instruction: &Insn) -> bool {
-        vec![
-            InsnId(X86Insn::X86_INS_LEA as u32),
-        ].contains(&instruction.id())
+        vec![InsnId(X86Insn::X86_INS_LEA as u32)].contains(&instruction.id())
     }
 
     #[allow(dead_code)]
@@ -986,14 +1099,13 @@ impl<'disassembler> Disassembler<'disassembler> {
         vec![
             InsnId(X86Insn::X86_INS_CALL as u32),
             InsnId(X86Insn::X86_INS_LCALL as u32),
-        ].contains(&instruction.id())
+        ]
+        .contains(&instruction.id())
     }
 
     #[allow(dead_code)]
     pub fn is_unconditional_jump_instruction(instruction: &Insn) -> bool {
-        vec![
-            InsnId(X86Insn::X86_INS_JMP as u32),
-        ].contains(&instruction.id())
+        vec![InsnId(X86Insn::X86_INS_JMP as u32)].contains(&instruction.id())
     }
 
     #[allow(dead_code)]
@@ -1020,7 +1132,8 @@ impl<'disassembler> Disassembler<'disassembler> {
             InsnId(X86Insn::X86_INS_JS as u32),
             InsnId(X86Insn::X86_INS_LOOPE as u32),
             InsnId(X86Insn::X86_INS_LOOPNE as u32),
-        ].contains(&instruction.id())
+        ]
+        .contains(&instruction.id())
     }
 
     pub fn print_instruction(instruction: &Insn) {
@@ -1038,7 +1151,11 @@ impl<'disassembler> Disassembler<'disassembler> {
         );
     }
 
-    pub fn disassemble_instructions(&self, address: u64, count: u64) -> Result<Instructions<'_>, Error> {
+    pub fn disassemble_instructions(
+        &self,
+        address: u64,
+        count: u64,
+    ) -> Result<Instructions<'_>, Error> {
         if (address as usize) >= self.image.len() {
             return Err(Error::new(ErrorKind::Other, "address out of bounds"));
         }
@@ -1054,25 +1171,21 @@ impl<'disassembler> Disassembler<'disassembler> {
 
     fn cs_new(machine: Architecture, detail: bool) -> Result<Capstone, Error> {
         match machine {
-            Architecture::AMD64 => {
-                Capstone::new()
-                    .x86()
-                    .mode(arch::x86::ArchMode::Mode64)
-                    .syntax(arch::x86::ArchSyntax::Intel)
-                    .detail(detail)
-                    .build()
-                    .map_err(|e| Error::new(ErrorKind::Other, format!("capstone error: {:?}", e)))
-            },
-            Architecture::I386 => {
-                Capstone::new()
-                    .x86()
-                    .mode(arch::x86::ArchMode::Mode32)
-                    .syntax(arch::x86::ArchSyntax::Intel)
-                    .detail(detail)
-                    .build()
-                    .map_err(|e| Error::new(ErrorKind::Other, format!("capstone error: {:?}", e)))
-            },
-            _ => Err(Error::new(ErrorKind::Other, "unsupported architecture"))
+            Architecture::AMD64 => Capstone::new()
+                .x86()
+                .mode(arch::x86::ArchMode::Mode64)
+                .syntax(arch::x86::ArchSyntax::Intel)
+                .detail(detail)
+                .build()
+                .map_err(|e| Error::new(ErrorKind::Other, format!("capstone error: {:?}", e))),
+            Architecture::I386 => Capstone::new()
+                .x86()
+                .mode(arch::x86::ArchMode::Mode32)
+                .syntax(arch::x86::ArchSyntax::Intel)
+                .detail(detail)
+                .build()
+                .map_err(|e| Error::new(ErrorKind::Other, format!("capstone error: {:?}", e))),
+            _ => Err(Error::new(ErrorKind::Other, "unsupported architecture")),
         }
     }
 }

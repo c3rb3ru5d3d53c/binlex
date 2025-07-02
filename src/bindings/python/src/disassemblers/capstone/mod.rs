@@ -164,17 +164,19 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-pub mod x86;
+pub mod disassembler;
 
-use crate::disassemblers::capstone::x86::capstone_x86_init;
+use crate::disassemblers::capstone::disassembler::disassembler_init;
+use disassembler::Disassembler;
 
 use pyo3::{prelude::*, wrap_pymodule};
 
 #[pymodule]
 #[pyo3(name = "capstone")]
 pub fn capstone_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_wrapped(wrap_pymodule!(capstone_x86_init))?;
-     py.import_bound("sys")?
+    m.add_wrapped(wrap_pymodule!(disassembler_init))?;
+    m.add_class::<Disassembler>()?;
+    py.import_bound("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.disassemblers.capstone", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.disassemblers.capstone")?;
