@@ -445,11 +445,13 @@ impl<'disassembler> Disassembler<'disassembler> {
         Stderr::print_debug(
             cfg.config.clone(),
             format!(
-                "0x{:x}: mnemonic: {:?}, next: {:?}, to: {:?}",
+                "0x{:x}: mnemonic: {:?}, next: {:?}, to: {:?}, is_conditional: {:?}, is_jump: {:?}",
                 blinstruction.address,
                 instruction.mnemonic().unwrap(),
                 blinstruction.next(),
-                blinstruction.to()
+                blinstruction.to(),
+                blinstruction.is_conditional,
+                blinstruction.is_jump,
             ),
         );
 

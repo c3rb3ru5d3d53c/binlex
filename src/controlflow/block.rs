@@ -164,9 +164,21 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-use crate::Architecture;
+use crate::binary::Binary;
+use crate::controlflow::graph::Graph;
+use crate::controlflow::Attributes;
 use crate::controlflow::Instruction;
 use crate::controlflow::InstructionJson;
+use crate::genetics::Chromosome;
+use crate::genetics::ChromosomeJson;
+use crate::genetics::ChromosomeSimilarity;
+use crate::hashing::MinHash32;
+use crate::hashing::SHA256;
+use crate::hashing::TLSH;
+use crate::Architecture;
+use crate::Config;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use rayon::ThreadPoolBuilder;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Value;
@@ -174,18 +186,6 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::io::Error;
 use std::io::ErrorKind;
-use crate::binary::Binary;
-use crate::controlflow::graph::Graph;
-use crate::genetics::Chromosome;
-use crate::genetics::ChromosomeJson;
-use crate::hashing::SHA256;
-use crate::hashing::TLSH;
-use crate::hashing::MinHash32;
-use crate::controlflow::Attributes;
-use crate::genetics::ChromosomeSimilarity;
-use crate::Config;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use rayon::ThreadPoolBuilder;
 
 /// Represents the JSON-serializable structure of a control flow block.
 #[derive(Serialize, Deserialize, Clone)]
@@ -248,7 +248,10 @@ impl BlockJsonDeserializer {
         let json: BlockJson = serde_json::from_str(&string)
             .map_err(|error| Error::new(ErrorKind::Other, format!("{}", error)))?;
         if json.type_ != "block" {
-            return Err(Error::new(ErrorKind::Other, format!("Deserialized JSON is not a function type")));
+            return Err(Error::new(
+                ErrorKind::Other,
+                format!("Deserialized JSON is not a function type"),
+            ));
         }
         Ok(Self {
             json,
@@ -268,7 +271,10 @@ impl BlockJsonDeserializer {
     }
 
     #[allow(dead_code)]
-    pub fn compare_many(&self, rhs_blocks: Vec<BlockJsonDeserializer>) -> Result<BTreeMap<u64, ChromosomeSimilarity>, Error> {
+    pub fn compare_many(
+        &self,
+        rhs_blocks: Vec<BlockJsonDeserializer>,
+    ) -> Result<BTreeMap<u64, ChromosomeSimilarity>, Error> {
         let pool = ThreadPoolBuilder::new()
             .num_threads(self.config.general.threads)
             .build()
@@ -378,7 +384,7 @@ impl BlockJsonDeserializer {
 
 /// Represents a control flow block within a graph.
 #[derive(Clone)]
-pub struct Block <'block>{
+pub struct Block<'block> {
     /// The starting address of the block.
     pub address: u64,
     /// The control flow graph this block belongs to.
@@ -400,32 +406,42 @@ impl<'block> Block<'block> {
     /// Returns `Ok(Block)` if the block is valid and contiguous; otherwise,
     /// returns an `Err` with an appropriate error message.
     pub fn new(address: u64, cfg: &'block Graph) -> Result<Self, Error> {
-
         if !cfg.blocks.is_valid(address) {
-            return Err(Error::new(ErrorKind::Other, format!("Block -> 0x{:x}: is not valid", address)));
+            return Err(Error::new(
+                ErrorKind::Other,
+                format!("Block -> 0x{:x}: is not valid", address),
+            ));
         }
 
         let mut terminator: Option<Instruction> = None;
 
-        let previous_address: Option<u64> = None;
-        for entry in cfg.listing.range(address..){
+        let mut previous_address: Option<u64> = None;
+        for entry in cfg.listing.range(address..) {
             let instruction = entry.value();
-            if let Some(prev_addr) = previous_address{
+            if let Some(prev_addr) = previous_address {
                 if instruction.address != prev_addr {
-                    return Err(Error::new(ErrorKind::Other, format!("Block -> 0x{:x}: is not contiguous", address)));
+                    return Err(Error::new(
+                        ErrorKind::Other,
+                        format!("Block -> 0x{:x}: is not contiguous", address),
+                    ));
                 }
             }
+            previous_address = Some(instruction.address + instruction.size() as u64);
             if instruction.is_jump
                 || instruction.is_trap
                 || instruction.is_return
-                || (address != instruction.address && instruction.is_block_start) {
+                || (address != instruction.address && instruction.is_block_start)
+            {
                 terminator = Some(instruction.clone());
                 break;
             }
         }
 
         if terminator.is_none() {
-            return Err(Error::new(ErrorKind::Other, format!("Block -> 0x{:x}: has no end instruction", address)));
+            return Err(Error::new(
+                ErrorKind::Other,
+                format!("Block -> 0x{:x}: has no end instruction", address),
+            ));
         }
 
         return Ok(Self {
@@ -468,7 +484,10 @@ impl<'block> Block<'block> {
     /// # Returns
     ///
     /// Returns `Vec<ChromosomeSimilarity>` representing the similarity between this block to other blocks.
-    pub fn compare_many(&self, rhs_blocks: Vec<Block>) -> Result<BTreeMap<u64, ChromosomeSimilarity>, Error> {
+    pub fn compare_many(
+        &self,
+        rhs_blocks: Vec<Block>,
+    ) -> Result<BTreeMap<u64, ChromosomeSimilarity>, Error> {
         let pool = ThreadPoolBuilder::new()
             .num_threads(self.cfg.config.general.threads)
             .build()
@@ -549,10 +568,12 @@ impl<'block> Block<'block> {
         let mut result = Vec::<Instruction>::new();
         for entry in self.cfg.listing.range(self.address..) {
             let address = *entry.key();
-            let instruction = Instruction::new(*entry.key(), self.cfg)
-                .expect("failed to retrieve instruction");
+            let instruction =
+                Instruction::new(*entry.key(), self.cfg).expect("failed to retrieve instruction");
             result.push(instruction);
-            if address >= self.terminator.address { break; }
+            if address >= self.terminator.address {
+                break;
+            }
         }
         result
     }
@@ -564,8 +585,10 @@ impl<'block> Block<'block> {
     /// Returns a `Vec<InstructionJson>` representing the instructions associated with a block.
     pub fn instructions_json(&self) -> Vec<InstructionJson> {
         let mut result = Vec::<InstructionJson>::new();
-        if !self.cfg.config.blocks.instructions.enabled { return result; }
-        for entry in self.cfg.listing.range(self.address..){
+        if !self.cfg.config.blocks.instructions.enabled {
+            return result;
+        }
+        for entry in self.cfg.listing.range(self.address..) {
             let instruction = entry.value();
             result.push(instruction.process());
             if instruction.address >= self.terminator.address {
@@ -573,7 +596,6 @@ impl<'block> Block<'block> {
             }
         }
         result
-
     }
 
     /// Processes the block into its JSON-serializable representation including `Attributes`.
@@ -593,7 +615,7 @@ impl<'block> Block<'block> {
     ///
     /// Returns `true` if the block starts with a prologue; otherwise, `false`.
     pub fn prologue(&self) -> bool {
-        if let Some(entry) =  self.cfg.listing.get(&self.address) {
+        if let Some(entry) = self.cfg.listing.get(&self.address) {
             return entry.value().is_prologue;
         }
         return false;
@@ -615,11 +637,21 @@ impl<'block> Block<'block> {
     /// Returns `Some(u64)` containing the address of the next block if it is
     /// conditional or has specific ending conditions. Returns `None` otherwise.
     pub fn next(&self) -> Option<u64> {
-        if !self.terminator.is_conditional { return None; }
-        if self.terminator.address == self.address { return None; }
-        if self.terminator.is_block_start { return Some(self.terminator.address); }
-        if self.terminator.is_return { return None; }
-        if self.terminator.is_trap { return None; }
+        if !self.terminator.is_conditional {
+            return None;
+        }
+        if self.terminator.address == self.address {
+            return None;
+        }
+        if self.terminator.is_block_start {
+            return Some(self.terminator.address);
+        }
+        if self.terminator.is_return {
+            return None;
+        }
+        if self.terminator.is_trap {
+            return None;
+        }
         if self.terminator.is_block_start {
             return Some(self.terminator.address);
         }
@@ -637,7 +669,12 @@ impl<'block> Block<'block> {
 
     pub fn blocks(&self) -> BTreeSet<u64> {
         let mut result = BTreeSet::new();
-        for item in self.to().iter().map(|ref_multi| *ref_multi).chain(self.next()) {
+        for item in self
+            .to()
+            .iter()
+            .map(|ref_multi| *ref_multi)
+            .chain(self.next())
+        {
             result.insert(item);
         }
         result
@@ -659,7 +696,9 @@ impl<'block> Block<'block> {
     ///
     /// Returns a `SignatureJson` representing the block's signature.
     pub fn chromosome_json(&self) -> ChromosomeJson {
-        Chromosome::new(self.pattern(), self.cfg.config.clone()).unwrap().process()
+        Chromosome::new(self.pattern(), self.cfg.config.clone())
+            .unwrap()
+            .process()
     }
 
     /// Retrieves the pattern string representation of the chromosome.
@@ -669,7 +708,11 @@ impl<'block> Block<'block> {
     /// Returns a `Option<String>` containing the pattern representation of the chromosome.
     pub fn pattern(&self) -> String {
         let mut result = String::new();
-        for entry in self.cfg.listing.range(self.address..self.address + self.size() as u64) {
+        for entry in self
+            .cfg
+            .listing
+            .range(self.address..self.address + self.size() as u64)
+        {
             let instruction = entry.value();
             result += instruction.pattern.as_str();
         }
@@ -684,7 +727,7 @@ impl<'block> Block<'block> {
     /// and each value is the address of the function containing that instruction.
     pub fn functions(&self) -> BTreeMap<u64, u64> {
         let mut result = BTreeMap::<u64, u64>::new();
-        for entry in self.cfg.listing.range(self.address..self.end()){
+        for entry in self.cfg.listing.range(self.address..self.end()) {
             let instruction = entry.value();
             for function_address in instruction.functions.clone() {
                 result.insert(instruction.address, function_address);
@@ -699,7 +742,9 @@ impl<'block> Block<'block> {
     ///
     /// Returns `Some(f64)` containing the entropy, or `None` if entropy calculation is disabled.
     pub fn entropy(&self) -> Option<f64> {
-        if !self.cfg.config.blocks.heuristics.entropy.enabled { return None; }
+        if !self.cfg.config.blocks.heuristics.entropy.enabled {
+            return None;
+        }
         return Binary::entropy(&self.bytes());
     }
 
@@ -709,8 +754,14 @@ impl<'block> Block<'block> {
     ///
     /// Returns `Some(String)` containing the TLSH, or `None` if TLSH is disabled or the block size is too small.
     pub fn tlsh(&self) -> Option<String> {
-        if !self.cfg.config.blocks.hashing.tlsh.enabled { return None; }
-        return TLSH::new(&self.bytes(), self.cfg.config.blocks.hashing.tlsh.minimum_byte_size).hexdigest();
+        if !self.cfg.config.blocks.hashing.tlsh.enabled {
+            return None;
+        }
+        return TLSH::new(
+            &self.bytes(),
+            self.cfg.config.blocks.hashing.tlsh.minimum_byte_size,
+        )
+        .hexdigest();
     }
 
     /// Computes the MinHash of the block's bytes, if enabled.
@@ -719,17 +770,28 @@ impl<'block> Block<'block> {
     ///
     /// Returns `Some(String)` containing the MinHash, or `None` if MinHash is disabled or the block's size exceeds the configured maximum.
     pub fn minhash(&self) -> Option<String> {
-        if !self.cfg.config.blocks.hashing.minhash.enabled { return None; }
+        if !self.cfg.config.blocks.hashing.minhash.enabled {
+            return None;
+        }
         if self.bytes().len() > self.cfg.config.blocks.hashing.minhash.maximum_byte_size
-            && self.cfg.config.blocks.hashing.minhash.maximum_byte_size_enabled == true {
+            && self
+                .cfg
+                .config
+                .blocks
+                .hashing
+                .minhash
+                .maximum_byte_size_enabled
+                == true
+        {
             return None;
         }
         return MinHash32::new(
             &self.bytes(),
             self.cfg.config.blocks.hashing.minhash.number_of_hashes,
             self.cfg.config.blocks.hashing.minhash.shingle_size,
-            self.cfg.config.blocks.hashing.minhash.seed
-        ).hexdigest();
+            self.cfg.config.blocks.hashing.minhash.seed,
+        )
+        .hexdigest();
     }
 
     /// Computes the SHA-256 hash of the block's bytes, if enabled.
@@ -738,7 +800,9 @@ impl<'block> Block<'block> {
     ///
     /// Returns `Some(String)` containing the hash, or `None` if SHA-256 is disabled.
     pub fn sha256(&self) -> Option<String> {
-        if !self.cfg.config.blocks.hashing.sha256.enabled { return None; }
+        if !self.cfg.config.blocks.hashing.sha256.enabled {
+            return None;
+        }
         return SHA256::new(&self.bytes()).hexdigest();
     }
 
@@ -758,7 +822,7 @@ impl<'block> Block<'block> {
     /// Returns a `Vec<u8>` containing the bytes of the block.
     pub fn bytes(&self) -> Vec<u8> {
         let mut result = Vec::<u8>::new();
-        for entry in self.cfg.listing.range(self.address..self.end()){
+        for entry in self.cfg.listing.range(self.address..self.end()) {
             let instruction = entry.value();
             result.extend(instruction.bytes.clone());
         }
@@ -772,7 +836,11 @@ impl<'block> Block<'block> {
     /// Returns the number of instructions as a `usize`.
     pub fn number_of_instructions(&self) -> usize {
         let mut result: usize = 0;
-        for _ in self.cfg.listing.range(self.address..=self.terminator.address){
+        for _ in self
+            .cfg
+            .listing
+            .range(self.address..=self.terminator.address)
+        {
             result += 1;
         }
         return result;
@@ -785,12 +853,21 @@ impl<'block> Block<'block> {
     /// Returns the address as a `u64`.
     #[allow(dead_code)]
     pub fn end(&self) -> u64 {
-        if self.terminator.is_jump { return self.terminator.address + self.terminator.size() as u64; }
-        if self.address == self.terminator.address { return self.terminator.address + self.terminator.size() as u64; }
-        if self.terminator.is_block_start {return self.terminator.address; }
-        if self.terminator.is_return { return self.terminator.address + self.terminator.size() as u64; }
-        if let Some(next)= self.next() { return next; }
+        if self.terminator.is_jump {
+            return self.terminator.address + self.terminator.size() as u64;
+        }
+        if self.address == self.terminator.address {
+            return self.terminator.address + self.terminator.size() as u64;
+        }
+        if self.terminator.is_block_start {
+            return self.terminator.address;
+        }
+        if self.terminator.is_return {
+            return self.terminator.address + self.terminator.size() as u64;
+        }
+        if let Some(next) = self.next() {
+            return next;
+        }
         return self.terminator.address;
     }
-
 }
