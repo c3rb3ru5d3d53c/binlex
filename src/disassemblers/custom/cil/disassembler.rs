@@ -389,7 +389,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         let pool = ThreadPoolBuilder::new()
             .num_threads(cfg.config.general.threads)
             .build()
-            .map_err(|error| Error::new(ErrorKind::Other, format!("{}", error)))?;
+            .map_err(|error| Error::other(format!("{}", error)))?;
 
         cfg.functions.enqueue_extend(addresses);
 

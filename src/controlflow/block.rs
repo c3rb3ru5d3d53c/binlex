@@ -245,13 +245,10 @@ pub struct BlockJsonDeserializer {
 impl BlockJsonDeserializer {
     #[allow(dead_code)]
     pub fn new(string: String, config: Config) -> Result<Self, Error> {
-        let json: BlockJson = serde_json::from_str(&string)
-            .map_err(|error| Error::new(ErrorKind::Other, format!("{}", error)))?;
+        let json: BlockJson =
+            serde_json::from_str(&string).map_err(|error| Error::other(format!("{}", error)))?;
         if json.type_ != "block" {
-            return Err(Error::new(
-                ErrorKind::Other,
-                "deserialized JSON is not a function type",
-            ));
+            return Err(Error::other("deserialized JSON is not a function type"));
         }
         Ok(Self {
             json,
@@ -278,7 +275,7 @@ impl BlockJsonDeserializer {
         let pool = ThreadPoolBuilder::new()
             .num_threads(self.config.general.threads)
             .build()
-            .map_err(|error| Error::new(ErrorKind::Other, format!("{}", error)))?;
+            .map_err(|error| Error::other(format!("{}", error)))?;
         pool.install(|| {
             let result = rhs_blocks
                 .par_iter()
@@ -404,10 +401,10 @@ impl<'block> Block<'block> {
     /// returns an `Err` with an appropriate error message.
     pub fn new(address: u64, cfg: &'block Graph) -> Result<Self, Error> {
         if !cfg.blocks.is_valid(address) {
-            return Err(Error::new(
-                ErrorKind::Other,
-                format!("Block -> 0x{:x}: is not valid", address),
-            ));
+            return Err(Error::other(format!(
+                "Block -> 0x{:x}: is not valid",
+                address
+            )));
         }
 
         let mut terminator: Option<Instruction> = None;
@@ -417,10 +414,10 @@ impl<'block> Block<'block> {
             let instruction = entry.value();
             if let Some(prev_addr) = previous_address {
                 if instruction.address != prev_addr {
-                    return Err(Error::new(
-                        ErrorKind::Other,
-                        format!("Block -> 0x{:x}: is not contiguous", address),
-                    ));
+                    return Err(Error::other(format!(
+                        "Block -> 0x{:x}: is not contiguous",
+                        address
+                    )));
                 }
             }
             previous_address = Some(instruction.address + instruction.size() as u64);
@@ -435,10 +432,10 @@ impl<'block> Block<'block> {
         }
 
         if terminator.is_none() {
-            return Err(Error::new(
-                ErrorKind::Other,
-                format!("Block -> 0x{:x}: has no end instruction", address),
-            ));
+            return Err(Error::other(format!(
+                "Block -> 0x{:x}: has no end instruction",
+                address
+            )));
         }
 
         Ok(Self {
@@ -488,7 +485,7 @@ impl<'block> Block<'block> {
         let pool = ThreadPoolBuilder::new()
             .num_threads(self.cfg.config.general.threads)
             .build()
-            .map_err(|error| Error::new(ErrorKind::Other, format!("{}", error)))?;
+            .map_err(|error| Error::other(format!("{}", error)))?;
         pool.install(|| {
             let result = rhs_blocks
                 .par_iter()

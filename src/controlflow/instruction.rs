@@ -175,7 +175,6 @@ use crate::Config;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Value;
-use std::io::ErrorKind;
 use std::{collections::BTreeSet, io::Error};
 
 /// Represents a single instruction in disassembled binary code.
@@ -315,7 +314,7 @@ impl Instruction {
     pub fn new(address: u64, cfg: &Graph) -> Result<Instruction, Error> {
         let instruction = cfg.get_instruction(address);
         if instruction.is_none() {
-            return Err(Error::new(ErrorKind::Other, "instruction does not exist"));
+            return Err(Error::other("instruction does not exist"));
         }
         Ok(instruction.unwrap())
     }

@@ -164,36 +164,36 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-use lief::generic::Section;
-use lief::Binary;
-use lief::pe::section::Characteristics;
-use std::io::{Cursor, Error, ErrorKind};
-use std::collections::BTreeSet;
-use std::collections::HashMap;
-use std::path::PathBuf;
-use lief::pe::headers::MachineType;
-use crate::Architecture;
-use crate::formats::File;
-use std::collections::BTreeMap;
-use lief::pe::debug::Entries;
-use crate::types::MemoryMappedFile;
-use crate::Config;
-use lief::pe::data_directory::Type as DATA_DIRECTORY;
 use crate::formats::cli::Cor20Header;
-use crate::formats::cli::StorageHeader;
-use crate::formats::cli::StorageSignature;
-use crate::formats::cli::StreamHeader;
-use crate::formats::cli::MetadataTable;
 use crate::formats::cli::Entry;
+use crate::formats::cli::FatHeader;
+use crate::formats::cli::FieldEntry;
+use crate::formats::cli::MetadataTable;
 use crate::formats::cli::MetadataToken;
 use crate::formats::cli::MethodDefEntry;
 use crate::formats::cli::MethodHeader;
 use crate::formats::cli::ModuleEntry;
-use crate::formats::cli::TypeRefEntry;
-use crate::formats::cli::FieldEntry;
+use crate::formats::cli::StorageHeader;
+use crate::formats::cli::StorageSignature;
+use crate::formats::cli::StreamHeader;
 use crate::formats::cli::TinyHeader;
-use crate::formats::cli::FatHeader;
 use crate::formats::cli::TypeDefEntry;
+use crate::formats::cli::TypeRefEntry;
+use crate::formats::File;
+use crate::types::MemoryMappedFile;
+use crate::Architecture;
+use crate::Config;
+use lief::generic::Section;
+use lief::pe::data_directory::Type as DATA_DIRECTORY;
+use lief::pe::debug::Entries;
+use lief::pe::headers::MachineType;
+use lief::pe::section::Characteristics;
+use lief::Binary;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::collections::HashMap;
+use std::io::{Cursor, Error, ErrorKind};
+use std::path::PathBuf;
 
 /// Represents a PE (Portable Executable) file, encapsulating the `lief::pe::Binary` and associated metadata.
 pub struct PE {
@@ -219,13 +219,9 @@ impl PE {
             }
         };
         if let Some(Binary::PE(pe)) = Binary::parse(&path) {
-            return Ok(Self {
-                pe: pe,
-                file: file,
-                config: config,
-            });
+            return Ok(Self { pe, file, config });
         }
-        return Err(Error::new(ErrorKind::InvalidInput, "invalid pe file"));
+        Err(Error::new(ErrorKind::InvalidInput, "invalid pe file"))
     }
 
     /// Converts a relative virtual address to a file offset
@@ -234,7 +230,7 @@ impl PE {
     /// The file offset as a `Option<u64>`.
     pub fn relative_virtual_address_to_file_offset(&self, rva: u64) -> Option<u64> {
         for section in self.pe.sections() {
-            let section_start_rva = section.virtual_address() as u64;
+            let section_start_rva = section.virtual_address();
             let section_end_rva = section_start_rva + section.virtual_size() as u64;
             if rva >= section_start_rva && rva < section_end_rva {
                 let section_offset = rva - section_start_rva;
@@ -258,12 +254,19 @@ impl PE {
     ///   * A reference to the parsed `Cor20Header` structure.
     /// * `None` - If the file is not a .NET executable or the header cannot be parsed.
     fn dotnet_parse_cor20_header(&self) -> Option<(u64, &Cor20Header)> {
-        if !self.is_dotnet() { return None; }
-        if let Some(clr_runtime_header) = self.pe.data_directory_by_type(DATA_DIRECTORY::CLR_RUNTIME_HEADER) {
-            if let Some(start) = self.relative_virtual_address_to_file_offset(clr_runtime_header.rva() as u64) {
+        if !self.is_dotnet() {
+            return None;
+        }
+        if let Some(clr_runtime_header) = self
+            .pe
+            .data_directory_by_type(DATA_DIRECTORY::CLR_RUNTIME_HEADER)
+        {
+            if let Some(start) =
+                self.relative_virtual_address_to_file_offset(clr_runtime_header.rva() as u64)
+            {
                 let end = start + clr_runtime_header.size() as u64;
                 let data = &self.file.data[start as usize..end as usize];
-                let header = &Cor20Header::from_bytes(&data)?;
+                let header = &Cor20Header::from_bytes(data)?;
                 return Some((start, header));
             }
         }
@@ -305,7 +308,7 @@ impl PE {
         let start = self.relative_virtual_address_to_file_offset(rva)? as usize;
         let end = start + StorageSignature::size();
         let data = &self.file.data[start..end];
-        let header = StorageSignature::from_bytes(&data)?;
+        let header = StorageSignature::from_bytes(data)?;
         Some((start as u64, header))
     }
 
@@ -342,8 +345,8 @@ impl PE {
         let (mut start, cor20_storage_signaure_header) = self.dotnet_parse_storage_signature()?;
         start += StorageSignature::size() as u64;
         start += cor20_storage_signaure_header.version_string_size as u64;
-        start -= 4 as u64;
-        let end = start as usize + StorageHeader::size() as usize;
+        start -= 4;
+        let end = start as usize + StorageHeader::size();
         let data = &self.file.data[start as usize..end];
         let header = StorageHeader::from_bytes(data)?;
         Some((start, header))
@@ -380,16 +383,17 @@ impl PE {
         if !self.is_dotnet() {
             return None;
         }
-        let (cor20_storage_header_offset, cor20_storage_header) = self.dotnet_parse_storage_header()?;
+        let (cor20_storage_header_offset, cor20_storage_header) =
+            self.dotnet_parse_storage_header()?;
         let mut offset = cor20_storage_header_offset as usize + StorageHeader::size();
         let mut result = BTreeMap::<u64, &StreamHeader>::new();
-        for _ in 0.. cor20_storage_header.number_of_streams {
+        for _ in 0..cor20_storage_header.number_of_streams {
             let data = &self.file.data[offset..offset + StreamHeader::size()];
             let header = StreamHeader::from_bytes(data)?;
             result.insert(offset as u64, header);
             offset += StreamHeader::size() + header.name().len();
         }
-        if result.len() <= 0 {
+        if result.is_empty() {
             return None;
         }
         Some(result)
@@ -409,7 +413,9 @@ impl PE {
     pub fn dotnet_stream_headers(&self) -> Vec<&StreamHeader> {
         let mut result = Vec::<&StreamHeader>::new();
         let headers = self.dotnet_parse_stream_headers();
-        if headers.is_none() { return result; }
+        if headers.is_none() {
+            return result;
+        }
         for (_, header) in headers.unwrap() {
             result.push(header);
         }
@@ -481,7 +487,8 @@ impl PE {
             return None;
         }
 
-        let (cor20_metadata_table_offset, cor20_metadata_table) = self.dotnet_parse_metadata_table()?;
+        let (cor20_metadata_table_offset, cor20_metadata_table) =
+            self.dotnet_parse_metadata_table()?;
 
         let mut offset: usize = cor20_metadata_table_offset as usize
             + MetadataTable::size()
@@ -491,18 +498,18 @@ impl PE {
 
         let mut entries = Vec::<Entry>::new();
 
-        for i in 0..64 as usize {
-
-            let entry_offset = cor20_metadata_table_offset as usize
-                + MetadataTable::size()
-                + (valid_index * 4);
+        for i in 0..64 {
+            let entry_offset =
+                cor20_metadata_table_offset as usize + MetadataTable::size() + (valid_index * 4);
 
             if entry_offset + 4 > self.file.data.len() {
                 return None;
             }
 
             let entry_count = u32::from_le_bytes(
-                self.file.data[entry_offset..entry_offset + 4].try_into().unwrap(),
+                self.file.data[entry_offset..entry_offset + 4]
+                    .try_into()
+                    .unwrap(),
             ) as usize;
 
             match i {
@@ -510,7 +517,8 @@ impl PE {
                     for _ in 0..entry_count {
                         let entry = ModuleEntry::from_bytes(
                             &self.file.data[offset..],
-                            cor20_metadata_table.heap_sizes)?;
+                            cor20_metadata_table.heap_sizes,
+                        )?;
                         offset += entry.size();
                         entries.push(Entry::Module(entry));
                     }
@@ -520,7 +528,8 @@ impl PE {
                     for _ in 0..entry_count {
                         let entry = TypeRefEntry::from_bytes(
                             &self.file.data[offset..],
-                            cor20_metadata_table.heap_sizes)?;
+                            cor20_metadata_table.heap_sizes,
+                        )?;
                         offset += entry.size();
                         entries.push(Entry::TypeRef(entry));
                     }
@@ -552,7 +561,8 @@ impl PE {
                     for _ in 0..entry_count {
                         let entry = MethodDefEntry::from_bytes(
                             &self.file.data[offset..],
-                            cor20_metadata_table.heap_sizes)?;
+                            cor20_metadata_table.heap_sizes,
+                        )?;
                         offset += entry.size();
                         entries.push(Entry::MethodDef(entry));
                     }
@@ -564,7 +574,6 @@ impl PE {
         Some(entries)
     }
 
-
     /// Computes a .NET metadata token from a given table index and entry index.
     ///
     /// # Parameters
@@ -575,7 +584,7 @@ impl PE {
     /// A `u64` value representing the metadata token. The calculation is based on the formula:
     /// `(0x01000000 * table_index) + (entry_index * 1)`.
     pub fn dotnet_metadata_token_from_index(table_index: u64, entry_index: u64) -> u64 {
-        return (0x01000000 * table_index) + (entry_index * 1);
+        (0x01000000 * table_index) + entry_index
     }
 
     /// Constructs a map of metadata tokens to their corresponding virtual addresses.
@@ -591,35 +600,38 @@ impl PE {
     /// - The value is the corresponding virtual address.
     pub fn dotnet_metadata_token_virtual_addresses(&self) -> BTreeMap<u64, u64> {
         let mut result = BTreeMap::<u64, u64>::new();
-        if !self.is_dotnet() { return result; }
+        if !self.is_dotnet() {
+            return result;
+        }
         let entries = match self.dotnet_metadata_table_entries() {
             Some(entries) => entries,
             None => {
                 return result;
-            },
+            }
         };
 
         let mut i: u64 = 0;
+
         for entry in entries {
-            match entry {
-                Entry::MethodDef(entry) => {
-                    let token: u64 = PE::dotnet_metadata_token_from_index(6, i);
-                    i += 1;
-                    if entry.rva <= 0 { continue; }
-                    let mut va = self.relative_virtual_address_to_virtual_address(entry.rva as u64);
-                    let method_header = match self.dotnet_method_header(va) {
-                        Ok(method_header) => method_header,
-                        Err(_) => {
-                            continue;
-                        }
-                    };
-                    if method_header.size().is_none() {
-                        continue;
-                    }
-                    va += method_header.size().unwrap() as u64;
+            if let Entry::MethodDef(entry) = entry {
+                let token: u64 = PE::dotnet_metadata_token_from_index(6, i);
+                i += 1;
+
+                if entry.rva == 0 {
+                    continue;
+                }
+
+                let mut va = self.relative_virtual_address_to_virtual_address(entry.rva as u64);
+
+                let method_header = match self.dotnet_method_header(va) {
+                    Ok(h) => h,
+                    Err(_) => continue,
+                };
+
+                if let Some(size) = method_header.size() {
+                    va += size as u64;
                     result.insert(token, va);
-                },
-                _ => {},
+                }
             }
         }
         result
@@ -637,7 +649,7 @@ impl PE {
     /// # Returns
     ///
     /// * `u64` - The relative virtual address (RVA).
-    pub fn virtual_address_to_relative_virtual_address(&self, address: u64) -> u64{
+    pub fn virtual_address_to_relative_virtual_address(&self, address: u64) -> u64 {
         address - self.imagebase()
     }
 
@@ -677,10 +689,14 @@ impl PE {
     ///   * `Ok(MethodHeader)` - The parsed method header as either `Tiny` or `Fat`.
     ///   * `Err(Error)` - If the virtual address is invalid or the data is not a valid method header.
     pub fn dotnet_method_header(&self, address: u64) -> Result<MethodHeader, Error> {
-
         let offset = self.virtual_address_to_file_offset(address);
 
-        if offset.is_none() { return Err(Error::new(ErrorKind::InvalidInput, "failed to convert virtual address to file offset")); }
+        if offset.is_none() {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "failed to convert virtual address to file offset",
+            ));
+        }
 
         let bytes = &self.file.data[offset.unwrap() as usize..offset.unwrap() as usize + 12];
 
@@ -693,7 +709,7 @@ impl PE {
             let fat_header = FatHeader::from_bytes(bytes)?;
             return Ok(MethodHeader::Fat(fat_header));
         }
-        return Err(Error::new(ErrorKind::InvalidData, "invalid method header"));
+        Err(Error::new(ErrorKind::InvalidData, "invalid method header"))
     }
 
     /// Checks if the PE file is a .NET assembly.
@@ -709,8 +725,13 @@ impl PE {
     #[allow(dead_code)]
     pub fn is_dotnet(&self) -> bool {
         self.pe.imports().any(|import| {
-            matches!(import.name().to_lowercase().as_str(), "mscorelib.dll" | "mscoree.dll")
-                && self.pe.data_directory_by_type(DATA_DIRECTORY::CLR_RUNTIME_HEADER).is_some()
+            matches!(
+                import.name().to_lowercase().as_str(),
+                "mscorelib.dll" | "mscoree.dll"
+            ) && self
+                .pe
+                .data_directory_by_type(DATA_DIRECTORY::CLR_RUNTIME_HEADER)
+                .is_some()
         })
     }
 
@@ -726,13 +747,9 @@ impl PE {
         let file = File::from_bytes(bytes, config.clone());
         let mut cursor = Cursor::new(&file.data);
         if let Some(Binary::PE(pe)) = Binary::from(&mut cursor) {
-            return Ok(Self{
-                pe: pe,
-                file: file,
-                config: config,
-            })
+            return Ok(Self { pe, file, config });
         }
-        return Err(Error::new(ErrorKind::InvalidInput, "invalid pe file"));
+        Err(Error::new(ErrorKind::InvalidInput, "invalid pe file"))
     }
 
     /// Returns the architecture of the PE file based on its machine type.
@@ -768,13 +785,13 @@ impl PE {
         }
         let entries = match self.dotnet_metadata_table_entries() {
             Some(entries) => entries,
-            None => {
-                return result
-            },
+            None => return result,
         };
 
         for entry in entries {
-            let Entry::MethodDef(entry) = entry else { continue };
+            let Entry::MethodDef(entry) = entry else {
+                continue;
+            };
 
             if entry.rva == 0 {
                 continue;
@@ -797,7 +814,10 @@ impl PE {
                 None => continue,
             };
 
-            result.insert( va + header_size as u64, va + header_size as u64 + code_size as u64);
+            result.insert(
+                va + header_size as u64,
+                va + header_size as u64 + code_size as u64,
+            );
         }
         result
     }
@@ -814,7 +834,9 @@ impl PE {
     pub fn vtable_executable_virtual_addresses(&self) -> BTreeSet<u64> {
         let mut result = BTreeSet::<u64>::new();
 
-        if self.is_dotnet() { return result; }
+        if self.is_dotnet() {
+            return result;
+        }
 
         let executable_virtual_address_ranges = self.executable_virtual_address_ranges();
 
@@ -826,7 +848,9 @@ impl PE {
                 continue;
             }
 
-            let start_offset = match self.relative_virtual_address_to_file_offset(section.pointerto_raw_data() as u64) {
+            let start_offset = match self
+                .relative_virtual_address_to_file_offset(section.pointerto_raw_data() as u64)
+            {
                 Some(offset) => offset,
                 None => continue,
             };
@@ -840,11 +864,14 @@ impl PE {
                     break;
                 }
 
-                let virtual_address = self.imagebase() + u32::from_le_bytes(self.file.data[offset..offset + 4].try_into().unwrap()) as u64;
+                let virtual_address = self.imagebase()
+                    + u32::from_le_bytes(self.file.data[offset..offset + 4].try_into().unwrap())
+                        as u64;
 
                 if executable_virtual_address_ranges
                     .iter()
-                    .any(|(start, end)| virtual_address >= *start && virtual_address <= *end) {
+                    .any(|(start, end)| virtual_address >= *start && virtual_address <= *end)
+                {
                     consecutive_addresses.push(virtual_address);
 
                     if consecutive_addresses.len() >= 6 {
@@ -869,39 +896,46 @@ impl PE {
     #[allow(dead_code)]
     pub fn executable_virtual_address_ranges(&self) -> BTreeMap<u64, u64> {
         let mut result = BTreeMap::<u64, u64>::new();
-        if self.is_dotnet() { return result; }
+        if self.is_dotnet() {
+            return result;
+        }
         for section in self.pe.sections() {
-            if (section.characteristics().bits() & u64::from(Characteristics::MEM_EXECUTE)) == 0 { continue; }
-            if section.virtual_size() == 0 { continue; }
-            if section.sizeof_raw_data() == 0 { continue; }
+            if (section.characteristics().bits() & u64::from(Characteristics::MEM_EXECUTE)) == 0 {
+                continue;
+            }
+            if section.virtual_size() == 0 {
+                continue;
+            }
+            if section.sizeof_raw_data() == 0 {
+                continue;
+            }
             let section_virtual_adddress = PE::align_section_virtual_address(
                 self.imagebase() + section.pointerto_raw_data() as u64,
                 self.section_alignment(),
-                self.file_alignment());
+                self.file_alignment(),
+            );
             result.insert(
                 section_virtual_adddress,
-                section_virtual_adddress + section.virtual_size() as u64);
+                section_virtual_adddress + section.virtual_size() as u64,
+            );
         }
-        return result;
+        result
     }
 
     /// Returns a map of Pogo (debug) entries found in the PE file, keyed by their start RVA (Relative Virtual Address).
     ///
     /// # Returns
     /// A `HashMap` where the key is the RVA of the start of the Pogo entry and the value is the name of the entry.
+    ///
     #[allow(dead_code)]
     pub fn pogo_virtual_addresses(&self) -> HashMap<u64, String> {
         let mut result = HashMap::<u64, String>::new();
         for entry in self.pe.debug() {
-            match entry {
-                Entries::Pogo(pogos) => {
-                    for pogo in pogos.entries() {
-                        result.insert(self.imagebase() + pogo.start_rva() as u64, pogo.name());
-                    }
-                },
-                _ => {}
+            if let Entries::Pogo(pogos) = entry {
+                for pogo in pogos.entries() {
+                    result.insert(self.imagebase() + pogo.start_rva() as u64, pogo.name());
+                }
             }
-
         }
         result
     }
@@ -915,7 +949,8 @@ impl PE {
     /// # Returns
     /// A `BTreeSet<u64>` containing the addresses of the TLS callback functions.
     pub fn tlscallback_virtual_addresses(&self) -> BTreeSet<u64> {
-        self.pe.tls()
+        self.pe
+            .tls()
             .into_iter()
             .flat_map(|tls| tls.callbacks())
             .collect()
@@ -927,35 +962,32 @@ impl PE {
     /// A `BTreeSet` of function addresses in the PE file.
     pub fn dotnet_entrypoint_virtual_addresses(&self) -> BTreeSet<u64> {
         let mut addresses = BTreeSet::<u64>::new();
-        if !self.is_dotnet() { return addresses; }
+        if !self.is_dotnet() {
+            return addresses;
+        }
         let entries = match self.dotnet_metadata_table_entries() {
             Some(entries) => entries,
             None => {
                 return addresses;
-            },
+            }
         };
         for entry in entries {
-            match entry {
-                Entry::MethodDef(header) => {
-                    if header.rva <= 0 { continue; }
-                    let mut va = self.relative_virtual_address_to_virtual_address(header.rva as u64);
-                    let method_header = match self.dotnet_method_header(va) {
-                        Ok(method_header) => method_header,
-                        Err(_) => {
-                            continue;
-                        }
-                    };
-                    if method_header.size().is_none() {
-                        continue;
-                    }
-                    va += method_header.size().unwrap() as u64;
-                    addresses.insert(va);
+            if let Entry::MethodDef(header) = entry {
+                if header.rva == 0 {
+                    continue;
+                }
 
-                },
-                _ => {},
-            };
+                let mut va = self.relative_virtual_address_to_virtual_address(header.rva as u64);
+
+                if let Ok(method_header) = self.dotnet_method_header(va) {
+                    if let Some(size) = method_header.size() {
+                        va += size as u64;
+                        addresses.insert(va);
+                    }
+                }
+            }
         }
-        return addresses;
+        addresses
     }
 
     /// Returns a set of function addresses (entry point, exports, TLS callbacks, and Pogo entries) in the PE file.
@@ -970,7 +1002,7 @@ impl PE {
         addresses.extend(self.tlscallback_virtual_addresses());
         addresses.extend(self.pogo_virtual_addresses().keys().cloned());
         addresses.extend(self.vtable_executable_virtual_addresses());
-        return addresses;
+        addresses
     }
 
     /// Returns the entry point address of the PE file.
@@ -1001,14 +1033,18 @@ impl PE {
     /// # Returns
     /// The aligned virtual address.
     #[allow(dead_code)]
-    pub fn align_section_virtual_address(value: u64, mut section_alignment: u64, file_alignment: u64) -> u64 {
+    pub fn align_section_virtual_address(
+        value: u64,
+        mut section_alignment: u64,
+        file_alignment: u64,
+    ) -> u64 {
         if section_alignment < 0x1000 {
             section_alignment = file_alignment;
         }
         if section_alignment != 0 && (value % section_alignment) != 0 {
-            return section_alignment * ((value + section_alignment - 1) / section_alignment);
+            return value.div_ceil(section_alignment) * section_alignment;
         }
-        return value;
+        value
     }
 
     /// Returns the section alignment used in the PE file.
@@ -1034,7 +1070,10 @@ impl PE {
     /// # Returns
     /// The virtual address as a `u64`.
     #[allow(dead_code)]
-    pub fn relative_virtual_address_to_virtual_address(&self, relative_virtual_address: u64) -> u64 {
+    pub fn relative_virtual_address_to_virtual_address(
+        &self,
+        relative_virtual_address: u64,
+    ) -> u64 {
         self.imagebase() + relative_virtual_address
     }
 
@@ -1053,8 +1092,11 @@ impl PE {
         for section in self.pe.sections() {
             let section_raw_data_offset = section.pointerto_raw_data() as u64;
             let section_raw_data_size = section.sizeof_raw_data() as u64;
-            if file_offset >= section_raw_data_offset && file_offset < section_raw_data_offset + section_raw_data_size {
-                let section_virtual_address = self.imagebase() + section.pointerto_raw_data() as u64;
+            if file_offset >= section_raw_data_offset
+                && file_offset < section_raw_data_offset + section_raw_data_size
+            {
+                let section_virtual_address =
+                    self.imagebase() + section.pointerto_raw_data() as u64;
                 let section_offset = file_offset - section_raw_data_offset;
                 let virtual_address = section_virtual_address + section_offset;
                 return Some(virtual_address);
@@ -1074,49 +1116,54 @@ impl PE {
     pub fn image(&self) -> Result<MemoryMappedFile, Error> {
         let pathbuf = PathBuf::from(self.config.mmap.directory.clone())
             .join(self.file.sha256_no_config().unwrap());
-        let mut tempmap = match MemoryMappedFile::new(pathbuf, self.config.mmap.cache.enabled) {
-            Ok(tempmmap) => tempmmap,
-            Err(error) => return Err(error),
-        };
+        let mut tempmap = MemoryMappedFile::new(pathbuf, self.config.mmap.cache.enabled)?;
         if tempmap.is_cached() {
             return Ok(tempmap);
         }
         tempmap.seek_to_end()?;
-        tempmap.write(&self.file.data[0..self.sizeofheaders() as usize]).map_err(|error| Error::new(
-            ErrorKind::Other,
-            format!(
-                "failed to write headers to memory-mapped pe file: {}",
-                error
-            )
-        ))?;
+        tempmap
+            .write(&self.file.data[0..self.sizeofheaders() as usize])
+            .map_err(|error| {
+                Error::other(format!(
+                    "failed to write headers to memory-mapped pe file: {}",
+                    error
+                ))
+            })?;
         for section in self.pe.sections() {
-            if section.virtual_size() == 0 { continue; }
-            if section.sizeof_raw_data() == 0 { continue; }
+            if section.virtual_size() == 0 {
+                continue;
+            }
+            if section.sizeof_raw_data() == 0 {
+                continue;
+            }
             let section_virtual_adddress = PE::align_section_virtual_address(
                 self.imagebase() + section.pointerto_raw_data() as u64,
                 self.section_alignment(),
-                self.file_alignment());
-            if section_virtual_adddress > tempmap.size().unwrap() as u64 {
-                let padding_length = section_virtual_adddress - tempmap.size().unwrap() as u64;
+                self.file_alignment(),
+            );
+            if section_virtual_adddress > tempmap.size().unwrap() {
+                let padding_length = section_virtual_adddress - tempmap.size().unwrap();
                 tempmap.seek_to_end()?;
-                tempmap.write_padding(padding_length as usize).map_err(|error| Error::new(
-                    ErrorKind::Other,
-                    format!(
-                        "write padding to pe memory-mapped pe file: {}",
-                        error
-                    )
-                ))?;
+                tempmap
+                    .write_padding(padding_length as usize)
+                    .map_err(|error| {
+                        Error::other(format!(
+                            "write padding to pe memory-mapped pe file: {}",
+                            error
+                        ))
+                    })?;
             }
             let pointerto_raw_data = section.pointerto_raw_data() as usize;
             let sizeof_raw_data = section.sizeof_raw_data() as usize;
             tempmap.seek_to_end()?;
-            tempmap.write(&self.file.data[pointerto_raw_data..pointerto_raw_data + sizeof_raw_data]).map_err(|error| Error::new(
-                ErrorKind::Other,
-                format!(
-                    "failed to write section to memory-mapped pe file: {}",
-                    error
-                )
-            ))?;
+            tempmap
+                .write(&self.file.data[pointerto_raw_data..pointerto_raw_data + sizeof_raw_data])
+                .map_err(|error| {
+                    Error::other(format!(
+                        "failed to write section to memory-mapped pe file: {}",
+                        error
+                    ))
+                })?;
         }
         Ok(tempmap)
     }
@@ -1182,16 +1229,16 @@ impl PE {
     #[allow(dead_code)]
     pub fn export_virtual_addresses(&self) -> BTreeSet<u64> {
         let mut addresses = BTreeSet::<u64>::new();
-        let export = match self.pe.export(){
+        let export = match self.pe.export() {
             Some(export) => export,
             None => {
                 return addresses;
             }
         };
-        for entry in export.entries(){
+        for entry in export.entries() {
             let address = entry.address() as u64 + self.imagebase();
             addresses.insert(address);
         }
-        return addresses;
+        addresses
     }
 }
