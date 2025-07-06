@@ -164,10 +164,10 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-use serde_json::json;
-use crate::formats::file::FileJson;
 use crate::controlflow::SymbolJson;
 use crate::controlflow::TagJson;
+use crate::formats::file::FileJson;
+use serde_json::json;
 use serde_json::Value;
 use std::io::Error;
 
@@ -181,12 +181,11 @@ pub enum Attribute {
 impl Attribute {
     pub fn to_json_value(&self) -> serde_json::Value {
         match self {
-            Attribute::File(file_json) => serde_json::to_value(file_json)
-                .unwrap_or(json!({})),
-            Attribute::Symbol(symbol_json) => serde_json::to_value(symbol_json)
-            .unwrap_or(json!({})),
-            Attribute::Tag(tag_json) => serde_json::to_value(tag_json)
-            .unwrap_or(json!({})),
+            Attribute::File(file_json) => serde_json::to_value(file_json).unwrap_or(json!({})),
+            Attribute::Symbol(symbol_json) => {
+                serde_json::to_value(symbol_json).unwrap_or(json!({}))
+            }
+            Attribute::Tag(tag_json) => serde_json::to_value(tag_json).unwrap_or(json!({})),
         }
     }
 }
@@ -209,6 +208,10 @@ impl Attributes {
 
     pub fn pop(&mut self) -> Option<Attribute> {
         self.values.pop()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.values.is_empty()
     }
 
     pub fn len(&self) -> usize {
@@ -236,5 +239,10 @@ impl Attributes {
             println!("{}", json);
         }
     }
+}
 
+impl Default for Attributes {
+    fn default() -> Self {
+        Self::new()
+    }
 }

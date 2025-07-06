@@ -164,19 +164,19 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-use std::{collections::BTreeSet, io::Error};
 use crate::binary::Binary;
+use crate::controlflow::Attributes;
+use crate::controlflow::Graph;
+use crate::genetics::Chromosome;
+use crate::genetics::ChromosomeJson;
+use crate::genetics::ChromosomeSimilarity;
+use crate::Architecture;
+use crate::Config;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Value;
 use std::io::ErrorKind;
-use crate::controlflow::Graph;
-use crate::controlflow::Attributes;
-use crate::genetics::Chromosome;
-use crate::genetics::ChromosomeJson;
-use crate::genetics::ChromosomeSimilarity;
-use crate::Config;
-use crate::Architecture;
+use std::{collections::BTreeSet, io::Error};
 
 /// Represents a single instruction in disassembled binary code.
 ///
@@ -288,7 +288,7 @@ impl Instruction {
     #[allow(dead_code)]
     pub fn create(address: u64, architecture: Architecture, config: Config) -> Self {
         Self {
-            address: address,
+            address,
             is_prologue: false,
             is_block_start: false,
             is_function_start: false,
@@ -302,8 +302,8 @@ impl Instruction {
             to: BTreeSet::<u64>::new(),
             edges: 0,
             is_trap: false,
-            architecture: architecture,
-            config: config,
+            architecture,
+            config,
         }
     }
 
@@ -314,7 +314,9 @@ impl Instruction {
     /// Returns a `Result<Instruction, Error>` containing the `Instruction`.
     pub fn new(address: u64, cfg: &Graph) -> Result<Instruction, Error> {
         let instruction = cfg.get_instruction(address);
-        if  instruction.is_none() { return Err(Error::new(ErrorKind::Other, format!("instruction does not exist"))); }
+        if instruction.is_none() {
+            return Err(Error::new(ErrorKind::Other, "instruction does not exist"));
+        }
         Ok(instruction.unwrap())
     }
 
@@ -325,8 +327,10 @@ impl Instruction {
     /// Returns a `BTreeSet<u64>` containing the block addresses.
     pub fn blocks(&self) -> BTreeSet<u64> {
         let mut result = BTreeSet::new();
-        if !self.is_jump { return result; }
-        for item in self.to.iter().map(|ref_multi| *ref_multi).chain(self.next()) {
+        if !self.is_jump {
+            return result;
+        }
+        for item in self.to.iter().copied().chain(self.next()) {
             result.insert(item);
         }
         result
@@ -348,9 +352,15 @@ impl Instruction {
     /// Returns `Some(u64)` containing the address of the next instruction, or `None`
     /// if the current instruction is a return or trap instruction.
     pub fn next(&self) -> Option<u64> {
-        if self.is_jump && !self.is_conditional { return None; }
-        if self.is_return { return None; }
-        if self.is_trap { return None; }
+        if self.is_jump && !self.is_conditional {
+            return None;
+        }
+        if self.is_return {
+            return None;
+        }
+        if self.is_trap {
+            return None;
+        }
         Some(self.address + self.size() as u64)
     }
 
@@ -361,7 +371,7 @@ impl Instruction {
     /// Returns the size of the instruction as a `usize`.
     #[allow(dead_code)]
     pub fn size(&self) -> usize {
-        return self.bytes.len();
+        self.bytes.len()
     }
 
     /// Converts the `Instruction` into its JSON-serializable representation.
@@ -416,8 +426,8 @@ impl Instruction {
     /// Returns a `ChromosomeJson` representing the instruction.
     pub fn chromosome_json(&self) -> ChromosomeJson {
         Chromosome::new(self.pattern.clone(), self.config.clone())
-        .expect("failed to parse instruction chromosome")
-        .process()
+            .expect("failed to parse instruction chromosome")
+            .process()
     }
 
     /// Retrieves the set of addresses this instruction may jump or branch to.
@@ -426,7 +436,7 @@ impl Instruction {
     ///
     /// Returns a `BTreeSet<u64>` containing the target addresses.
     pub fn to(&self) -> BTreeSet<u64> {
-       return self.to.clone();
+        self.to.clone()
     }
 
     /// Retrieves the set of functions this instruction may belong to.
@@ -435,7 +445,7 @@ impl Instruction {
     ///
     /// Returns a `BTreeSet<u64>` containing the function addresses.
     pub fn functions(&self) -> BTreeSet<u64> {
-        return self.functions.clone();
+        self.functions.clone()
     }
 
     /// Converts the instruction into a JSON string representation including `Attributes`.
@@ -457,7 +467,7 @@ impl Instruction {
     pub fn process_with_attributes(&self, attributes: Attributes) -> InstructionJson {
         let mut result = self.process();
         result.attributes = Some(attributes.process());
-        return result;
+        result
     }
 
     /// Converts the `Instruction` into a JSON string representation.

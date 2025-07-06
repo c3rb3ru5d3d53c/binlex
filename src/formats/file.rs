@@ -164,16 +164,16 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-use std::fs::File as StdFile;
-use std::io::{Read, SeekFrom, Seek, Error, Cursor};
+use crate::controlflow::Attribute;
 use crate::hashing::sha256::SHA256;
 use crate::hashing::tlsh::TLSH;
 use crate::Binary;
-use std::io::ErrorKind;
+use crate::Config;
 use serde::{Deserialize, Serialize};
 use serde_json;
-use crate::controlflow::Attribute;
-use crate::Config;
+use std::fs::File as StdFile;
+use std::io::ErrorKind;
+use std::io::{Cursor, Error, Read, Seek, SeekFrom};
 
 #[cfg(windows)]
 use std::os::windows::fs::OpenOptionsExt;
@@ -182,7 +182,7 @@ use std::os::windows::fs::OpenOptionsExt;
 use std::fs::OpenOptions;
 
 #[cfg(windows)]
-use winapi::um::winnt::{FILE_SHARE_READ};
+use winapi::um::winnt::FILE_SHARE_READ;
 
 pub trait FileHandle: Read + Seek + Send {}
 
@@ -232,7 +232,7 @@ impl File {
                 .read(true)
                 .write(false)
                 .share_mode(FILE_SHARE_READ)
-                .open(&path)?
+                .open(&path)?,
         ) as Box<dyn FileHandle>;
         #[cfg(not(windows))]
         let handle = Box::new(StdFile::open(&path)?) as Box<dyn FileHandle>;
@@ -272,8 +272,12 @@ impl File {
     /// or `None` if the file's size is zero or less.
     #[allow(dead_code)]
     pub fn tlsh(&self) -> Option<String> {
-        if !self.config.formats.file.hashing.tlsh.enabled { return None; }
-        if self.size() <= 0 { return None; }
+        if !self.config.formats.file.hashing.tlsh.enabled {
+            return None;
+        }
+        if self.size() == 0 {
+            return None;
+        }
         TLSH::new(&self.data, 50).hexdigest()
     }
 
@@ -285,8 +289,12 @@ impl File {
     /// or `None` if the file's size is zero or less.
     #[allow(dead_code)]
     pub fn sha256(&self) -> Option<String> {
-        if !self.config.formats.file.hashing.sha256.enabled { return None; }
-        if self.size() <= 0 { return None; }
+        if !self.config.formats.file.hashing.sha256.enabled {
+            return None;
+        }
+        if self.size() == 0 {
+            return None;
+        }
         SHA256::new(&self.data).hexdigest()
     }
 
@@ -298,7 +306,9 @@ impl File {
     /// or `None` if the file's size is zero or less.
     #[allow(dead_code)]
     pub fn sha256_no_config(&self) -> Option<String> {
-        if self.size() <= 0 { return None; }
+        if self.size() == 0 {
+            return None;
+        }
         SHA256::new(&self.data).hexdigest()
     }
 
@@ -335,7 +345,7 @@ impl File {
     ///
     /// A `Result<u64, Error>` with the current cursor position.
     pub fn current_position(&mut self) -> Result<u64, Error> {
-        let position = self.handle.seek(SeekFrom::Current(0))?;
+        let position = self.handle.stream_position()?;
         Ok(position)
     }
 
@@ -350,8 +360,12 @@ impl File {
     ///
     /// Returns an error if the file path is missing or the file cannot be opened or read.
     pub fn read(&mut self) -> Result<(), Error> {
-        if self.path.is_none() { return Err(Error::new(ErrorKind::InvalidInput, "missing file path to read")); }
-        let mut file = StdFile::open(&self.path.clone().unwrap())?;
+        let path = self
+            .path
+            .as_ref()
+            .ok_or_else(|| Error::new(ErrorKind::InvalidInput, "missing file path to read"))?;
+
+        let mut file = StdFile::open(path)?;
         file.read_to_end(&mut self.data)?;
         Ok(())
     }
@@ -380,7 +394,9 @@ impl File {
     }
 
     pub fn entropy(&self) -> Option<f64> {
-        if !self.config.formats.file.heuristics.entropy.enabled { return None; }
+        if !self.config.formats.file.heuristics.entropy.enabled {
+            return None;
+        }
         Binary::entropy(&self.data)
     }
 
@@ -404,5 +420,4 @@ impl File {
         let result = serde_json::to_string(&raw)?;
         Ok(result)
     }
-
 }

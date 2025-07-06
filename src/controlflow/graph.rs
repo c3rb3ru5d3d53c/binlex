@@ -164,15 +164,15 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-use std::collections::BTreeSet;
-use crate::Architecture;
-use crate::controlflow::Instruction;
-use crate::controlflow::Function;
 use crate::controlflow::Block;
+use crate::controlflow::Function;
+use crate::controlflow::Instruction;
+use crate::Architecture;
+use crate::Config;
 use crossbeam::queue::SegQueue;
 use crossbeam_skiplist::SkipMap;
 use crossbeam_skiplist::SkipSet;
-use crate::Config;
+use std::collections::BTreeSet;
 
 /// Queue structure used within `Graph` for managing addresses in processing stages.
 pub struct GraphQueue {
@@ -233,7 +233,7 @@ impl GraphQueue {
     ///
     /// Returns a new `GraphQueue` instance with empty sets and queues.
     pub fn new() -> Self {
-        return Self {
+        Self {
             queue: SegQueue::<u64>::new(),
             processed: SkipSet::<u64>::new(),
             valid: SkipSet::<u64>::new(),
@@ -248,10 +248,8 @@ impl GraphQueue {
     ///
     /// * `address` - The address to mark as invalid.
     pub fn insert_invalid(&mut self, address: u64) {
-        if !self.is_invalid(address) {
-            if !self.is_valid(address) {
-                self.invalid.insert(address);
-            }
+        if !self.is_invalid(address) && !self.is_valid(address) {
+            self.invalid.insert(address);
         }
     }
 
@@ -271,7 +269,7 @@ impl GraphQueue {
     /// Returns a reference to the `SkipSet` containing invalid addresses.
     #[allow(dead_code)]
     pub fn invalid(&self) -> &SkipSet<u64> {
-        return &self.invalid;
+        &self.invalid
     }
 
     /// Retrieves a reference to the valid address set.
@@ -280,7 +278,7 @@ impl GraphQueue {
     ///
     /// Returns a reference to the `SkipSet` containing valid addresses.
     pub fn valid(&self) -> &SkipSet<u64> {
-        return &self.valid;
+        &self.valid
     }
 
     /// Collects valid addresses in a set
@@ -328,7 +326,7 @@ impl GraphQueue {
     ///
     /// Returns a reference to the `SkipSet` containing processed addresses.
     pub fn processed(&self) -> &SkipSet<u64> {
-        return &self.processed;
+        &self.processed
     }
 
     /// Checks if an address is marked as valid.
@@ -397,11 +395,15 @@ impl GraphQueue {
     ///
     /// Returns `true` if the address was enqueued, otherwise `false`.
     pub fn enqueue(&mut self, address: u64) -> bool {
-        if self.is_processed(address) { return false; }
-        if self.pending.contains(&address) { return false; }
+        if self.is_processed(address) {
+            return false;
+        }
+        if self.pending.contains(&address) {
+            return false;
+        }
         self.pending.insert(address);
         self.queue.push(address);
-        return true;
+        true
     }
 
     /// Removes an address from the processing queue.
@@ -432,6 +434,12 @@ impl GraphQueue {
     }
 }
 
+impl Default for GraphQueue {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Represents a control flow graph with instructions, blocks, and functions.
 pub struct Graph {
     /// The Instruction Architecture
@@ -455,22 +463,24 @@ impl Graph {
     ///
     /// Returns a `Graph` instance with empty instructions, blocks, and functions.
     #[allow(dead_code)]
-    pub fn new(architecture: Architecture, config: Config) -> Self  {
-        return Self{
-            architecture: architecture,
+    pub fn new(architecture: Architecture, config: Config) -> Self {
+        Self {
+            architecture,
             listing: SkipMap::<u64, Instruction>::new(),
             blocks: GraphQueue::new(),
             functions: GraphQueue::new(),
             instructions: GraphQueue::new(),
-            config: config,
-        };
+            config,
+        }
     }
 
     pub fn instructions(&self) -> Vec<Instruction> {
         let mut result = Vec::<Instruction>::new();
         for address in self.instructions.valid_addresses() {
-            let instruction = Instruction::new(address, &self).ok();
-            if instruction.is_none() { continue; }
+            let instruction = Instruction::new(address, self).ok();
+            if instruction.is_none() {
+                continue;
+            }
             result.push(instruction.unwrap());
         }
         result
@@ -479,8 +489,10 @@ impl Graph {
     pub fn blocks(&self) -> Vec<Block> {
         let mut result = Vec::<Block>::new();
         for address in self.blocks.valid_addresses() {
-            let block = Block::new(address, &self).ok();
-            if block.is_none() { continue; }
+            let block = Block::new(address, self).ok();
+            if block.is_none() {
+                continue;
+            }
             result.push(block.unwrap());
         }
         result
@@ -489,8 +501,10 @@ impl Graph {
     pub fn functions(&self) -> Vec<Function> {
         let mut result = Vec::<Function>::new();
         for address in self.functions.valid_addresses() {
-            let function = Function::new(address, &self).ok();
-            if function.is_none() { continue; }
+            let function = Function::new(address, self).ok();
+            if function.is_none() {
+                continue;
+            }
             result.push(function.unwrap());
         }
         result
@@ -505,13 +519,15 @@ impl Graph {
     }
 
     pub fn listing(&self) -> &SkipMap<u64, Instruction> {
-        return &self.listing;
+        &self.listing
     }
 
     pub fn set_function(&mut self, address: u64) -> bool {
         let mut instruction = match self.get_instruction(address) {
             Some(instruction) => instruction,
-            None => { return false; }
+            None => {
+                return false;
+            }
         };
         self.functions.insert_processed(address);
         self.functions.insert_valid(address);
@@ -524,7 +540,9 @@ impl Graph {
     pub fn set_block(&mut self, address: u64) -> bool {
         let mut instruction = match self.get_instruction(address) {
             Some(instruction) => instruction,
-            None => { return false; }
+            None => {
+                return false;
+            }
         };
         self.blocks.insert_processed(address);
         self.blocks.insert_valid(address);
@@ -536,7 +554,9 @@ impl Graph {
     pub fn extend_instruction_edges(&mut self, address: u64, addresses: BTreeSet<u64>) -> bool {
         let mut instruction = match self.get_instruction(address) {
             Some(instruction) => instruction,
-            None => { return false; }
+            None => {
+                return false;
+            }
         };
         instruction.to.extend(addresses);
         self.update_instruction(instruction);
@@ -550,7 +570,9 @@ impl Graph {
     }
 
     pub fn update_instruction(&mut self, instruction: Instruction) {
-        if !self.is_instruction_address(instruction.address) { return }
+        if !self.is_instruction_address(instruction.address) {
+            return;
+        }
         self.listing.insert(instruction.address, instruction);
     }
 
@@ -559,56 +581,56 @@ impl Graph {
     }
 
     pub fn get_instruction(&self, address: u64) -> Option<Instruction> {
-        self.listing.get(&address).map(|entry|entry.value().clone())
+        self.listing
+            .get(&address)
+            .map(|entry| entry.value().clone())
     }
     pub fn absorb(&mut self, graph: &mut Graph) {
-
         for entry in graph.listing() {
             self.insert_instruction(entry.value().clone());
         }
 
         for entry in graph.instructions.processed() {
-            self.instructions.insert_processed(entry.value().clone());
+            self.instructions.insert_processed(*entry.value());
         }
 
-        self.instructions.enqueue_extend(graph.instructions.dequeue_all());
+        self.instructions
+            .enqueue_extend(graph.instructions.dequeue_all());
 
         for entry in graph.blocks.processed() {
-            self.blocks.insert_processed(entry.value().clone());
+            self.blocks.insert_processed(*entry.value());
         }
 
         self.blocks.enqueue_extend(graph.blocks.dequeue_all());
 
         for entry in graph.functions.processed() {
-            self.functions.insert_processed(entry.value().clone());
+            self.functions.insert_processed(*entry.value());
         }
 
         self.functions.enqueue_extend(graph.functions.dequeue_all());
 
         for entry in graph.instructions.valid() {
-            self.instructions.insert_valid(entry.value().clone());
+            self.instructions.insert_valid(*entry.value());
         }
 
         for entry in graph.instructions.invalid() {
-            self.instructions.insert_invalid(entry.value().clone());
+            self.instructions.insert_invalid(*entry.value());
         }
 
         for entry in graph.blocks.valid() {
-            self.blocks.insert_valid(entry.value().clone());
+            self.blocks.insert_valid(*entry.value());
         }
 
         for entry in graph.blocks.invalid() {
-            self.blocks.insert_invalid(entry.value().clone());
+            self.blocks.insert_invalid(*entry.value());
         }
 
         for entry in graph.functions.valid() {
-            self.functions.insert_valid(entry.value().clone());
+            self.functions.insert_valid(*entry.value());
         }
 
         for entry in graph.functions.invalid() {
-            self.functions.insert_invalid(entry.value().clone());
+            self.functions.insert_invalid(*entry.value());
         }
-
     }
-
 }

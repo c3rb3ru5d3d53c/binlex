@@ -188,7 +188,7 @@ pub enum DisassemblerBackend<'a> {
     X86(X86Disassembler<'a>),
 }
 
-impl<'a> ArchDisassembler for DisassemblerBackend<'a> {
+impl ArchDisassembler for DisassemblerBackend<'_> {
     fn disassemble_sweep(&self) -> BTreeSet<u64> {
         match self {
             DisassemblerBackend::X86(d) => d.disassemble_sweep(),

@@ -250,7 +250,7 @@ impl BlockJsonDeserializer {
         if json.type_ != "block" {
             return Err(Error::new(
                 ErrorKind::Other,
-                format!("Deserialized JSON is not a function type"),
+                "deserialized JSON is not a function type",
             ));
         }
         Ok(Self {
@@ -310,13 +310,10 @@ impl BlockJsonDeserializer {
 
     #[allow(dead_code)]
     pub fn architecture(&self) -> Result<Architecture, Error> {
-        let result = match Architecture::from_string(&self.json.architecture) {
+        match Architecture::from_string(&self.json.architecture) {
             Ok(result) => Ok(result),
-            Err(error) => {
-                return Err(Error::new(ErrorKind::Unsupported, format!("{}", error)));
-            }
-        };
-        result
+            Err(error) => Err(Error::new(ErrorKind::Unsupported, format!("{}", error))),
+        }
     }
 
     #[allow(dead_code)]
@@ -444,11 +441,11 @@ impl<'block> Block<'block> {
             ));
         }
 
-        return Ok(Self {
-            address: address,
-            cfg: cfg,
+        Ok(Self {
+            address,
+            cfg,
             terminator: terminator.unwrap(),
-        });
+        })
     }
 
     /// Gets the address of the block.
@@ -606,7 +603,7 @@ impl<'block> Block<'block> {
     pub fn process_with_attributes(&self, attributes: Attributes) -> BlockJson {
         let mut result = self.process();
         result.attributes = Some(attributes.process());
-        return result;
+        result
     }
 
     /// Determines whether the block starts with a function prologue.
@@ -618,7 +615,7 @@ impl<'block> Block<'block> {
         if let Some(entry) = self.cfg.listing.get(&self.address) {
             return entry.value().is_prologue;
         }
-        return false;
+        false
     }
 
     /// Retrieves the number of edges (connections) this block has.
@@ -627,7 +624,7 @@ impl<'block> Block<'block> {
     ///
     /// Returns the number of edges as a `usize`.
     pub fn edges(&self) -> usize {
-        return self.terminator.edges;
+        self.terminator.edges
     }
 
     /// Retrieves the address of the next sequential block, if any.
@@ -669,12 +666,7 @@ impl<'block> Block<'block> {
 
     pub fn blocks(&self) -> BTreeSet<u64> {
         let mut result = BTreeSet::new();
-        for item in self
-            .to()
-            .iter()
-            .map(|ref_multi| *ref_multi)
-            .chain(self.next())
-        {
+        for item in self.to().iter().copied().chain(self.next()) {
             result.insert(item);
         }
         result
@@ -716,7 +708,7 @@ impl<'block> Block<'block> {
             let instruction = entry.value();
             result += instruction.pattern.as_str();
         }
-        return result;
+        result
     }
 
     /// Retrieves the function addresses associated with this block.
@@ -733,7 +725,7 @@ impl<'block> Block<'block> {
                 result.insert(instruction.address, function_address);
             }
         }
-        return result;
+        result
     }
 
     /// Computes the entropy of the block's bytes, if enabled.
@@ -745,7 +737,7 @@ impl<'block> Block<'block> {
         if !self.cfg.config.blocks.heuristics.entropy.enabled {
             return None;
         }
-        return Binary::entropy(&self.bytes());
+        Binary::entropy(&self.bytes())
     }
 
     /// Computes the TLSH of the block's bytes, if enabled.
@@ -757,11 +749,11 @@ impl<'block> Block<'block> {
         if !self.cfg.config.blocks.hashing.tlsh.enabled {
             return None;
         }
-        return TLSH::new(
+        TLSH::new(
             &self.bytes(),
             self.cfg.config.blocks.hashing.tlsh.minimum_byte_size,
         )
-        .hexdigest();
+        .hexdigest()
     }
 
     /// Computes the MinHash of the block's bytes, if enabled.
@@ -781,17 +773,16 @@ impl<'block> Block<'block> {
                 .hashing
                 .minhash
                 .maximum_byte_size_enabled
-                == true
         {
             return None;
         }
-        return MinHash32::new(
+        MinHash32::new(
             &self.bytes(),
             self.cfg.config.blocks.hashing.minhash.number_of_hashes,
             self.cfg.config.blocks.hashing.minhash.shingle_size,
             self.cfg.config.blocks.hashing.minhash.seed,
         )
-        .hexdigest();
+        .hexdigest()
     }
 
     /// Computes the SHA-256 hash of the block's bytes, if enabled.
@@ -803,7 +794,7 @@ impl<'block> Block<'block> {
         if !self.cfg.config.blocks.hashing.sha256.enabled {
             return None;
         }
-        return SHA256::new(&self.bytes()).hexdigest();
+        SHA256::new(&self.bytes()).hexdigest()
     }
 
     /// Retrieves the size of the block in bytes.
@@ -826,7 +817,7 @@ impl<'block> Block<'block> {
             let instruction = entry.value();
             result.extend(instruction.bytes.clone());
         }
-        return result;
+        result
     }
 
     /// Counts the number of instructions in the block.
@@ -843,7 +834,7 @@ impl<'block> Block<'block> {
         {
             result += 1;
         }
-        return result;
+        result
     }
 
     /// Retrieves the address of the block's last instruction.
@@ -868,6 +859,6 @@ impl<'block> Block<'block> {
         if let Some(next) = self.next() {
             return next;
         }
-        return self.terminator.address;
+        self.terminator.address
     }
 }

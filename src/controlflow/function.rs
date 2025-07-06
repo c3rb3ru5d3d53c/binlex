@@ -164,30 +164,29 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-
+use super::block::BlockJsonDeserializer;
+use crate::binary::Binary;
+use crate::controlflow::Attributes;
+use crate::controlflow::Block;
+use crate::controlflow::BlockJson;
+use crate::controlflow::Graph;
+use crate::controlflow::GraphQueue;
 use crate::genetics::chromosome::ChromosomeSimilarityScore;
+use crate::genetics::chromosome::HomologousChromosome;
+use crate::genetics::Chromosome;
+use crate::genetics::ChromosomeJson;
 use crate::genetics::ChromosomeSimilarity;
+use crate::hashing::MinHash32;
+use crate::hashing::SHA256;
+use crate::hashing::TLSH;
 use crate::Architecture;
+use crate::Config;
 use serde::{Deserialize, Serialize};
 use serde_json;
+use serde_json::Value;
 use std::collections::BTreeMap;
 use std::io::Error;
 use std::io::ErrorKind;
-use crate::binary::Binary;
-use crate::controlflow::Graph;
-use crate::controlflow::GraphQueue;
-use crate::controlflow::Block;
-use crate::genetics::Chromosome;
-use crate::genetics::ChromosomeJson;
-use crate::controlflow::Attributes;
-use crate::hashing::SHA256;
-use crate::hashing::TLSH;
-use crate::hashing::MinHash32;
-use serde_json::Value;
-use crate::controlflow::BlockJson;
-use crate::genetics::chromosome::HomologousChromosome;
-use crate::Config;
-use super::block::BlockJsonDeserializer;
 
 /// Represents a JSON-serializable structure containing metadata about a function.
 #[derive(Serialize, Deserialize, Clone)]
@@ -256,7 +255,10 @@ impl FunctionJsonDeserializer {
         let json: FunctionJson = serde_json::from_str(&string)
             .map_err(|error| Error::new(ErrorKind::Other, format!("{}", error)))?;
         if json.type_ != "function" {
-            return Err(Error::new(ErrorKind::Other, format!("feserialized json is not a function type")));
+            return Err(Error::new(
+                ErrorKind::Other,
+                "feserialized json is not a function type",
+            ));
         }
         Ok(Self {
             json,
@@ -283,7 +285,7 @@ impl FunctionJsonDeserializer {
 
     #[allow(dead_code)]
     pub fn bytes(&self) -> Option<Vec<u8>> {
-        if self.json.bytes.is_none() { return None; }
+        self.json.bytes.as_ref()?;
         Binary::from_hex(&self.json.bytes.clone().unwrap()).ok()
     }
 
@@ -362,11 +364,16 @@ impl FunctionJsonDeserializer {
         self.json.contiguous
     }
 
-    pub fn compare(&self, rhs: &FunctionJsonDeserializer) -> Result<Option<ChromosomeSimilarity>, Error> {
+    pub fn compare(
+        &self,
+        rhs: &FunctionJsonDeserializer,
+    ) -> Result<Option<ChromosomeSimilarity>, Error> {
         if self.contiguous() && rhs.contiguous() {
             let lhs_chromosome = self.chromosome();
             let rhs_chromosome = rhs.chromosome();
-            if lhs_chromosome.is_none() && rhs_chromosome.is_none() { return Ok(None); }
+            if lhs_chromosome.is_none() && rhs_chromosome.is_none() {
+                return Ok(None);
+            }
             return Ok(self
                 .chromosome()
                 .unwrap()
@@ -414,19 +421,27 @@ impl FunctionJsonDeserializer {
         if !minhashes.is_empty() || !tls_values.is_empty() {
             let minhash_average = {
                 let avg = minhashes.iter().sum::<f64>() / minhashes.len() as f64;
-                if avg > 0.0 { Some(avg) } else { None }
+                if avg > 0.0 {
+                    Some(avg)
+                } else {
+                    None
+                }
             };
 
             let tlsh_average = {
-                let avg = tls_values.iter().sum::<f64>() as f64 / tls_values.len() as f64;
-                if avg > 0.0 { Some(avg) } else { None }
+                let avg = tls_values.iter().sum::<f64>() / tls_values.len() as f64;
+                if avg > 0.0 {
+                    Some(avg)
+                } else {
+                    None
+                }
             };
 
             if minhash_average.is_none() && tlsh_average.is_none() {
                 return Ok(None);
             }
 
-            return Ok(Some(ChromosomeSimilarity{
+            return Ok(Some(ChromosomeSimilarity {
                 score: ChromosomeSimilarityScore {
                     minhash: minhash_average,
                     tlsh: tlsh_average,
@@ -438,15 +453,16 @@ impl FunctionJsonDeserializer {
         Ok(None)
     }
 
-    pub fn compare_many(&self, rhs_functions: Vec<FunctionJsonDeserializer>) -> Result<BTreeMap<u64, ChromosomeSimilarity>, Error> {
+    pub fn compare_many(
+        &self,
+        rhs_functions: Vec<FunctionJsonDeserializer>,
+    ) -> Result<BTreeMap<u64, ChromosomeSimilarity>, Error> {
         rhs_functions
             .iter()
-            .filter_map(|function| {
-                match self.compare(function) {
-                    Ok(Some(similarity)) => Some(Ok((function.address(), similarity))),
-                    Ok(None) => None,
-                    Err(e) => Some(Err(e)),
-                }
+            .filter_map(|function| match self.compare(function) {
+                Ok(Some(similarity)) => Some(Ok((function.address(), similarity))),
+                Ok(None) => None,
+                Err(e) => Some(Err(e)),
             })
             .collect()
     }
@@ -459,7 +475,7 @@ impl FunctionJsonDeserializer {
     #[allow(dead_code)]
     pub fn chromosome(&self) -> Option<Chromosome> {
         let chromosome = self.json.chromosome.clone();
-        if chromosome.is_none() { return None; }
+        chromosome.as_ref()?;
         Chromosome::new(chromosome.unwrap().pattern.clone(), self.config.clone()).ok()
     }
 
@@ -489,7 +505,7 @@ impl FunctionJsonDeserializer {
 
 /// Represents a control flow function within a graph.
 #[derive(Clone)]
-pub struct Function <'function>{
+pub struct Function<'function> {
     /// The starting address of the function.
     pub address: u64,
     /// The control flow graph this function belongs to.
@@ -511,9 +527,11 @@ impl<'function> Function<'function> {
     /// Returns `Ok(Function)` if the function is valid; otherwise,
     /// returns an `Err` with an appropriate error message.
     pub fn new(address: u64, cfg: &'function Graph) -> Result<Self, Error> {
-
         if !cfg.functions.is_valid(address) {
-            return Err(Error::new(ErrorKind::Other, format!("Function -> 0x{:x}: is not valid", address)));
+            return Err(Error::new(
+                ErrorKind::Other,
+                format!("Function -> 0x{:x}: is not valid", address),
+            ));
         }
 
         let mut blocks = BTreeMap::<u64, Block>::new();
@@ -525,19 +543,25 @@ impl<'function> Function<'function> {
         while let Some(block_address) = queue.dequeue() {
             queue.insert_processed(block_address);
             if cfg.blocks.is_invalid(block_address) {
-                return Err(Error::new(ErrorKind::Other, format!("Function -> 0x{:x} -> Block -> 0x{:x}: is invalid", address, block_address)));
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    format!(
+                        "Function -> 0x{:x} -> Block -> 0x{:x}: is invalid",
+                        address, block_address
+                    ),
+                ));
             }
-            if let Ok(block) = Block::new(block_address, &cfg) {
+            if let Ok(block) = Block::new(block_address, cfg) {
                 queue.enqueue_extend(block.blocks());
                 blocks.insert(block_address, block);
             }
         }
 
-        return Ok(Self {
-            address: address,
-            cfg: cfg,
-            blocks: blocks,
-        });
+        Ok(Self {
+            address,
+            cfg,
+            blocks,
+        })
     }
 
     pub fn address(&self) -> u64 {
@@ -567,7 +591,9 @@ impl<'function> Function<'function> {
         let nodes = self.blocks.len();
         let edges = self.edges();
         let components = 1;
-        if edges < nodes { return 0; }
+        if edges < nodes {
+            return 0;
+        }
         edges - nodes + 2 * components
     }
 
@@ -614,7 +640,9 @@ impl<'function> Function<'function> {
         if self.contiguous() && rhs.contiguous() {
             let lhs_chromosome = self.chromosome();
             let rhs_chromosome = rhs.chromosome();
-            if lhs_chromosome.is_none() && rhs_chromosome.is_none() { return Ok(None); }
+            if lhs_chromosome.is_none() && rhs_chromosome.is_none() {
+                return Ok(None);
+            }
             return Ok(self
                 .chromosome()
                 .unwrap()
@@ -662,19 +690,27 @@ impl<'function> Function<'function> {
         if !minhashes.is_empty() || !tls_values.is_empty() {
             let minhash_average = {
                 let avg = minhashes.iter().sum::<f64>() / minhashes.len() as f64;
-                if avg > 0.0 { Some(avg) } else { None }
+                if avg > 0.0 {
+                    Some(avg)
+                } else {
+                    None
+                }
             };
 
             let tlsh_average = {
-                let avg = tls_values.iter().sum::<f64>() as f64 / tls_values.len() as f64;
-                if avg > 0.0 { Some(avg) } else { None }
+                let avg = tls_values.iter().sum::<f64>() / tls_values.len() as f64;
+                if avg > 0.0 {
+                    Some(avg)
+                } else {
+                    None
+                }
             };
 
             if minhash_average.is_none() && tlsh_average.is_none() {
                 return Ok(None);
             }
 
-            return Ok(Some(ChromosomeSimilarity{
+            return Ok(Some(ChromosomeSimilarity {
                 score: ChromosomeSimilarityScore {
                     minhash: minhash_average,
                     tlsh: tlsh_average,
@@ -686,15 +722,16 @@ impl<'function> Function<'function> {
         Ok(None)
     }
 
-    pub fn compare_many(&self, rhs_functions: Vec<Function>) -> Result<BTreeMap<u64, ChromosomeSimilarity>, Error> {
+    pub fn compare_many(
+        &self,
+        rhs_functions: Vec<Function>,
+    ) -> Result<BTreeMap<u64, ChromosomeSimilarity>, Error> {
         let result: Result<BTreeMap<u64, ChromosomeSimilarity>, Error> = rhs_functions
             .iter()
-            .filter_map(|function| {
-                match self.compare(function) {
-                    Ok(Some(similarity)) => Some(Ok((function.address(), similarity))),
-                    Ok(None) => None,
-                    Err(e) => Some(Err(e)),
-                }
+            .filter_map(|function| match self.compare(function) {
+                Ok(Some(similarity)) => Some(Ok((function.address(), similarity))),
+                Ok(None) => None,
+                Err(e) => Some(Err(e)),
             })
             .collect();
 
@@ -702,39 +739,55 @@ impl<'function> Function<'function> {
     }
 
     pub fn chromosome_tlsh_ratio(&self) -> f64 {
-        if self.contiguous() { return 1.0; }
+        if self.contiguous() {
+            return 1.0;
+        }
         let mut tlsh_size: usize = 0;
         for block in self.blocks() {
-            if block.chromosome().tlsh().is_some() { tlsh_size += block.size(); }
+            if block.chromosome().tlsh().is_some() {
+                tlsh_size += block.size();
+            }
         }
-        return tlsh_size as f64 / self.size() as f64;
+        tlsh_size as f64 / self.size() as f64
     }
 
     pub fn chromosome_minhash_ratio(&self) -> f64 {
-        if self.contiguous() { return 1.0; }
+        if self.contiguous() {
+            return 1.0;
+        }
         let mut minhash_size: usize = 0;
         for block in self.blocks() {
-            if block.chromosome().minhash().is_some() { minhash_size += block.size(); }
+            if block.chromosome().minhash().is_some() {
+                minhash_size += block.size();
+            }
         }
-        return minhash_size as f64 / self.size() as f64;
+        minhash_size as f64 / self.size() as f64
     }
 
     pub fn tlsh_ratio(&self) -> f64 {
-        if self.contiguous() { return 1.0; }
+        if self.contiguous() {
+            return 1.0;
+        }
         let mut tlsh_size: usize = 0;
         for block in self.blocks() {
-            if block.tlsh().is_some() { tlsh_size += block.size(); }
+            if block.tlsh().is_some() {
+                tlsh_size += block.size();
+            }
         }
-        return tlsh_size as f64 / self.size() as f64;
+        tlsh_size as f64 / self.size() as f64
     }
 
     pub fn minhash_ratio(&self) -> f64 {
-        if self.contiguous() { return 1.0; }
+        if self.contiguous() {
+            return 1.0;
+        }
         let mut minhash_size: usize = 0;
         for block in self.blocks() {
-            if block.minhash().is_some() { minhash_size += block.size(); }
+            if block.minhash().is_some() {
+                minhash_size += block.size();
+            }
         }
-        return minhash_size as f64 / self.size() as f64;
+        minhash_size as f64 / self.size() as f64
     }
 
     /// Retrives the number of blocks in the function.
@@ -754,7 +807,7 @@ impl<'function> Function<'function> {
     pub fn process_with_attributes(&self, attributes: Attributes) -> FunctionJson {
         let mut result = self.process();
         result.attributes = Some(attributes.process());
-        return result;
+        result
     }
 
     /// Prints the JSON representation of the function to standard output.
@@ -793,12 +846,14 @@ impl<'function> Function<'function> {
     ///
     /// Returns `Some(Chromosome)` if the function is contiguous; otherwise, `None`.
     pub fn chromosome(&self) -> Option<Chromosome> {
-        if !self.contiguous() { return None; }
+        if !self.contiguous() {
+            return None;
+        }
         let bytes = self.bytes();
-        if bytes.is_none() { return None; }
+        bytes.as_ref()?;
         let pattern = self.pattern()?;
         let chromosome = Chromosome::new(pattern, self.cfg.config.clone()).ok()?;
-        return Some(chromosome)
+        Some(chromosome)
     }
 
     /// Generates the function's chromosome JSON if the function is contiguous.
@@ -807,12 +862,14 @@ impl<'function> Function<'function> {
     ///
     /// Returns `Some(ChromosomeJson)` if the function is contiguous; otherwise, `None`.
     pub fn chromosome_json(&self) -> Option<ChromosomeJson> {
-        if !self.contiguous() { return None; }
+        if !self.contiguous() {
+            return None;
+        }
         let bytes = self.bytes();
-        if bytes.is_none() { return None; }
+        bytes.as_ref()?;
         let pattern = self.pattern()?;
         let chromosome = Chromosome::new(pattern, self.cfg.config.clone()).ok()?;
-        return Some(chromosome.process());
+        Some(chromosome.process())
     }
 
     /// Retrieves the pattern string representation of the chromosome.
@@ -821,13 +878,19 @@ impl<'function> Function<'function> {
     ///
     /// Returns a `Option<String>` containing the pattern representation of the chromosome.
     pub fn pattern(&self) -> Option<String> {
-        if !self.contiguous() { return None; }
+        if !self.contiguous() {
+            return None;
+        }
         let mut result = String::new();
-        for entry in self.cfg.listing.range(self.address..self.address + self.size() as u64) {
+        for entry in self
+            .cfg
+            .listing
+            .range(self.address..self.address + self.size() as u64)
+        {
             let instruction = entry.value();
             result += instruction.pattern.as_str();
         }
-        return Some(result);
+        Some(result)
     }
 
     /// Retrieves the total number of instructions in the function.
@@ -836,11 +899,10 @@ impl<'function> Function<'function> {
     ///
     /// Returns the number of instructions as a `usize`.
     pub fn number_of_instructions(&self) -> usize {
-        let mut result: usize = 0;
-        for (_, block) in &self.blocks {
-            result += block.number_of_instructions();
-        }
-        result
+        self.blocks
+            .values()
+            .map(|block| block.number_of_instructions())
+            .sum()
     }
 
     /// Indicates whether this function starts with a prologue.
@@ -852,7 +914,7 @@ impl<'function> Function<'function> {
         if let Some((_, block)) = self.blocks.iter().next() {
             return block.prologue();
         }
-        return false;
+        false
     }
 
     /// Retrieves the blocks associated with this function.
@@ -861,15 +923,13 @@ impl<'function> Function<'function> {
     ///
     /// Returns a `Vec<Block>` representing the blocks associated with this function.
     pub fn blocks(&self) -> Vec<Block> {
-        let mut result = Vec::<Block>::new();
-        if !self.cfg.config.functions.blocks.enabled { return result; }
-        for (block_address, _) in &self.blocks {
-            let block = Block::new(*block_address, &self.cfg)
-                .expect("failed to get block associated with function");
-            result.push(block)
-
+        if !self.cfg.config.functions.blocks.enabled {
+            return Vec::new();
         }
-        result
+        self.blocks
+            .keys()
+            .filter_map(|&block_address| Block::new(block_address, self.cfg).ok())
+            .collect()
     }
 
     /// Retrieves the blocks associated with this function.
@@ -879,12 +939,13 @@ impl<'function> Function<'function> {
     /// Returns a `Vec<BlockJson>` representing the blocks associated with this function.
     pub fn blocks_json(&self) -> Vec<BlockJson> {
         let mut result = Vec::<BlockJson>::new();
-        if !self.cfg.config.functions.blocks.enabled { return result; }
-        for (block_address, _) in &self.blocks {
-            let block = Block::new(*block_address, &self.cfg)
+        if !self.cfg.config.functions.blocks.enabled {
+            return result;
+        }
+        for block_address in self.blocks.keys() {
+            let block = Block::new(*block_address, self.cfg)
                 .expect("failed to get block associated with function");
-            result.push(block.process())
-
+            result.push(block.process());
         }
         result
     }
@@ -895,11 +956,7 @@ impl<'function> Function<'function> {
     ///
     /// Returns the number of edges as a `usize`.
     pub fn edges(&self) -> usize {
-        let mut result: usize = 0;
-        for (_, block) in &self.blocks {
-            result += block.edges();
-        }
-        result
+        self.blocks.values().map(|block| block.edges()).sum()
     }
 
     /// Converts the function's bytes to a hexadecimal string, if available.
@@ -911,7 +968,7 @@ impl<'function> Function<'function> {
         if let Some(bytes) = self.bytes() {
             return Some(Binary::to_hex(&bytes));
         }
-        return None;
+        None
     }
 
     /// Retrieves the size of the function in bytes, if contiguous.
@@ -920,11 +977,7 @@ impl<'function> Function<'function> {
     ///
     /// Returns `Some(usize)` if the function is contiguous; otherwise, `None`.
     pub fn size(&self) -> usize {
-        let mut result: usize = 0;
-        for (_, block) in &self.blocks {
-            result += block.size();
-        }
-        result
+        self.blocks.values().map(|block| block.size()).sum()
     }
 
     /// Retrieves the address of the function's last instruction, if contiguous.
@@ -933,7 +986,9 @@ impl<'function> Function<'function> {
     ///
     /// Returns `Some(u64)` containing the address, or `None` if the function is not contiguous.
     pub fn end(&self) -> Option<u64> {
-        if !self.contiguous() { return None; }
+        if !self.contiguous() {
+            return None;
+        }
         if let Some((_, block)) = self.blocks.iter().last() {
             return Some(block.end());
         }
@@ -946,12 +1001,16 @@ impl<'function> Function<'function> {
     ///
     /// Returns `Some(Vec<u8>)` containing the bytes, or `None` if the function is not contiguous.
     pub fn bytes(&self) -> Option<Vec<u8>> {
-        if !self.contiguous() { return None; }
+        if !self.contiguous() {
+            return None;
+        }
         let mut bytes = Vec::<u8>::new();
         let mut block_previous_end: Option<u64> = None;
         for (block_start_address, block) in &self.blocks {
             bytes.extend(block.bytes());
-            if block.terminator.is_return { break; }
+            if block.terminator.is_return {
+                break;
+            }
             if let Some(previous_end) = block_previous_end {
                 if previous_end != *block_start_address {
                     return None;
@@ -968,12 +1027,16 @@ impl<'function> Function<'function> {
     ///
     /// Returns `Some(String)` containing the hash, or `None` if SHA-256 is disabled or the function is not contiguous.
     pub fn sha256(&self) -> Option<String> {
-        if !self.cfg.config.functions.hashing.sha256.enabled { return None; }
-        if !self.contiguous() { return None; }
+        if !self.cfg.config.functions.hashing.sha256.enabled {
+            return None;
+        }
+        if !self.contiguous() {
+            return None;
+        }
         if let Some(bytes) = self.bytes() {
             return SHA256::new(&bytes).hexdigest();
         }
-        return None;
+        None
     }
 
     /// Computes the entropy of the function's bytes, if enabled and contiguous.
@@ -982,21 +1045,25 @@ impl<'function> Function<'function> {
     ///
     /// Returns `Some(f64)` containing the entropy, or `None` if entropy calculation is disabled or the function is not contiguous.
     pub fn entropy(&self) -> Option<f64> {
-        if !self.cfg.config.functions.heuristics.entropy.enabled { return None; }
-        if self.contiguous() {
-            if let Some(bytes) = self.bytes() {
-                return Binary::entropy(&bytes);
-            }
+        if !self.cfg.config.functions.heuristics.entropy.enabled {
             return None;
         }
-        let mut entropi = Vec::<f64>::new();
-        for (_, block) in &self.blocks {
-            if let Some(entropy) = block.entropy() {
-                entropi.push(entropy);
-            }
+
+        if self.contiguous() {
+            return self.bytes().and_then(|bytes| Binary::entropy(&bytes));
         }
-        if entropi.is_empty() { return Some(0.0); }
-        Some(entropi.iter().sum::<f64>() / entropi.len() as f64)
+
+        let entropi: Vec<f64> = self
+            .blocks
+            .values()
+            .filter_map(|block| block.entropy())
+            .collect();
+
+        if entropi.is_empty() {
+            Some(0.0)
+        } else {
+            Some(entropi.iter().sum::<f64>() / entropi.len() as f64)
+        }
     }
 
     /// Computes the TLSH of the function's bytes, if enabled and contiguous.
@@ -1005,12 +1072,20 @@ impl<'function> Function<'function> {
     ///
     /// Returns `Some(String)` containing the TLSH, or `None` if TLSH is disabled or the function is not contiguous.
     pub fn tlsh(&self) -> Option<String> {
-        if !self.cfg.config.functions.hashing.tlsh.enabled { return None; }
-        if !self.contiguous() { return None; }
-        if let Some(bytes) = self.bytes() {
-            return TLSH::new(&bytes, self.cfg.config.functions.hashing.tlsh.minimum_byte_size).hexdigest();
+        if !self.cfg.config.functions.hashing.tlsh.enabled {
+            return None;
         }
-        return None;
+        if !self.contiguous() {
+            return None;
+        }
+        if let Some(bytes) = self.bytes() {
+            return TLSH::new(
+                &bytes,
+                self.cfg.config.functions.hashing.tlsh.minimum_byte_size,
+            )
+            .hexdigest();
+        }
+        None
     }
 
     /// Computes the MinHash of the function's bytes, if enabled and contiguous.
@@ -1019,20 +1094,33 @@ impl<'function> Function<'function> {
     ///
     /// Returns `Some(String)` containing the MinHash, or `None` if MinHash is disabled or the function is not contiguous.
     pub fn minhash(&self) -> Option<String> {
-        if !self.cfg.config.functions.hashing.minhash.enabled { return None; }
-        if !self.contiguous() { return None; }
+        if !self.cfg.config.functions.hashing.minhash.enabled {
+            return None;
+        }
+        if !self.contiguous() {
+            return None;
+        }
         if let Some(bytes) = self.bytes() {
             if bytes.len() > self.cfg.config.functions.hashing.minhash.maximum_byte_size
-                && self.cfg.config.functions.hashing.minhash.maximum_byte_size_enabled == true {
+                && self
+                    .cfg
+                    .config
+                    .functions
+                    .hashing
+                    .minhash
+                    .maximum_byte_size_enabled
+            {
                 return None;
             }
             return MinHash32::new(
                 &bytes,
                 self.cfg.config.functions.hashing.minhash.number_of_hashes,
                 self.cfg.config.functions.hashing.minhash.shingle_size,
-                self.cfg.config.functions.hashing.minhash.seed).hexdigest();
+                self.cfg.config.functions.hashing.minhash.seed,
+            )
+            .hexdigest();
         }
-        return None;
+        None
     }
 
     /// Retrieves the functions associated with this function.
@@ -1041,11 +1129,10 @@ impl<'function> Function<'function> {
     ///
     /// Returns a `BTreeMap<u64, u64>` containing function addresses.
     pub fn functions(&self) -> BTreeMap<u64, u64> {
-        let mut result = BTreeMap::<u64, u64>::new();
-        for (_, block) in &self.blocks {
-            result.extend(block.functions());
-        }
-        result
+        self.blocks
+            .values()
+            .flat_map(|block| block.functions())
+            .collect()
     }
 
     /// Checks whether the function is contiguous in memory.
@@ -1063,6 +1150,6 @@ impl<'function> Function<'function> {
             }
             block_previous_end = Some(block.address + block.size() as u64);
         }
-        return true;
+        true
     }
 }
