@@ -164,17 +164,17 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
+use binlex::hashing::SHA256;
+use binlex::io::Stdout;
+use binlex::AUTHOR;
+use binlex::VERSION;
+use clap::Parser;
+use clap::ValueEnum;
+use std::collections::BTreeMap;
+use std::fmt;
 use std::fs::File;
 use std::io::Read;
 use std::process;
-use clap::Parser;
-use binlex::AUTHOR;
-use binlex::VERSION;
-use clap::ValueEnum;
-use std::fmt;
-use binlex::io::Stdout;
-use std::collections::BTreeMap;
-use binlex::hashing::SHA256;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -218,20 +218,19 @@ impl fmt::Display for ColorMap {
 }
 
 impl ColorMap {
-
     pub fn map_byte(&self, byte: u8) -> String {
         match self {
             ColorMap::Grayscale => format!("rgb({},{},{})", byte, byte, byte),
             ColorMap::Heatmap => {
                 let r = (byte as f32 * 1.2).min(255.0) as u8;
-                let g = (255 - byte).max(0) as u8;
+                let g = 255 - byte;
                 let b = (byte as f32 * 0.5).min(255.0) as u8;
                 format!("rgb({},{},{})", r, g, b)
             }
             ColorMap::Bluegreen => {
                 let r = (byte as f32 * 0.2).min(255.0) as u8;
                 let g = (byte as f32 * 0.8).min(255.0) as u8;
-                let b = (255 - byte).max(0) as u8;
+                let b = 255 - byte;
                 format!("rgb({},{},{})", r, g, b)
             }
             ColorMap::Redblack => {
@@ -245,7 +244,6 @@ impl ColorMap {
 }
 
 fn main() {
-
     let args = Args::parse();
 
     let colormap = ColorMap::from_str(&args.color.to_string(), false).unwrap_or_else(|error| {
@@ -267,7 +265,10 @@ fn main() {
         });
 
         let mut metadata = BTreeMap::<String, String>::new();
-        metadata.insert("Hash".to_string(), "sha256:".to_string() + &SHA256::new(&byte_data).hexdigest().unwrap());
+        metadata.insert(
+            "Hash".to_string(),
+            "sha256:".to_string() + &SHA256::new(&byte_data).hexdigest().unwrap(),
+        );
 
         let svg_content = bytes_to_svg(&byte_data, args.shape_size, &colormap, metadata);
 
@@ -289,7 +290,10 @@ fn main() {
         });
 
         let mut metadata = BTreeMap::<String, String>::new();
-        metadata.insert("Hash".to_string(), "sha256:".to_string() + &SHA256::new(&byte_data).hexdigest().unwrap());
+        metadata.insert(
+            "Hash".to_string(),
+            "sha256:".to_string() + &SHA256::new(&byte_data).hexdigest().unwrap(),
+        );
 
         let svg_content = bytes_to_svg(&byte_data, args.shape_size, &colormap, metadata);
         Stdout::print(svg_content);
@@ -298,8 +302,7 @@ fn main() {
     process::exit(0);
 }
 
-
-fn map_to_svg_metadata(metadata: BTreeMap::<String, String>) -> String {
+fn map_to_svg_metadata(metadata: BTreeMap<String, String>) -> String {
     let mut svg = String::new();
     for (key, value) in metadata {
         svg.push_str(r#"<metadata>\n"#);
@@ -316,7 +319,12 @@ fn map_to_svg_metadata(metadata: BTreeMap::<String, String>) -> String {
 /// * `byte_data` - A slice of bytes to visualize.
 /// * `shape_size` - The size of each rectangle in the grid (in pixels).
 /// * `colormap` - The colormap to use for color mapping.
-fn bytes_to_svg(byte_data: &[u8], shape_size: usize, colormap: &ColorMap, metadata: BTreeMap::<String, String>) -> String {
+fn bytes_to_svg(
+    byte_data: &[u8],
+    shape_size: usize,
+    colormap: &ColorMap,
+    metadata: BTreeMap<String, String>,
+) -> String {
     let num_bytes = byte_data.len();
     let grid_size = (num_bytes as f64).sqrt().ceil() as usize;
 

@@ -170,14 +170,14 @@ use tlsh;
 ///
 /// This struct provides functionality for creating TLSH hashes from a slice of bytes with a minimum
 /// byte size requirement, which ensures only sufficiently large data is hashed.
-pub struct TLSH <'tlsh> {
+pub struct TLSH<'tlsh> {
     /// The slice of bytes to be hashed.
     pub bytes: &'tlsh [u8],
     /// The minimum required byte size for hashing.
     pub mininum_byte_size: usize,
 }
 
-impl <'tlsh> TLSH <'tlsh> {
+impl<'tlsh> TLSH<'tlsh> {
     /// Creates a new `TLSH` instance with the provided bytes and minimum byte size.
     ///
     /// # Arguments
@@ -191,11 +191,10 @@ impl <'tlsh> TLSH <'tlsh> {
     #[allow(dead_code)]
     pub fn new(bytes: &'tlsh [u8], mininum_byte_size: usize) -> Self {
         Self {
-            bytes: bytes,
-            mininum_byte_size: mininum_byte_size,
+            bytes,
+            mininum_byte_size,
         }
     }
-
 
     /// Compares two hexdigests and get the simialrity score between 0 and 1 where 0 is not similar and 1 is the same.
     ///
@@ -216,8 +215,9 @@ impl <'tlsh> TLSH <'tlsh> {
     /// length is greater than or equal to `mininum_byte_size`. Returns `None` otherwise.
     #[allow(dead_code)]
     pub fn hexdigest(&self) -> Option<String> {
-        if self.bytes.len() < self.mininum_byte_size { return None; }
-        tlsh::hash_buf(&self.bytes).ok().map(|h| h.to_string())
+        if self.bytes.len() < self.mininum_byte_size {
+            return None;
+        }
+        tlsh::hash_buf(self.bytes).ok().map(|h| h.to_string())
     }
-
 }

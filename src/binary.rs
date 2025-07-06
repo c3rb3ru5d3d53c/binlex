@@ -167,11 +167,9 @@
 use std::collections::HashMap;
 
 /// A struct representing a binary, used for various binary-related utilities.
-
 pub struct Binary;
 
 impl Binary {
-
     /// Calculates the entropy of the given byte slice.
     ///
     /// This method computes the Shannon entropy, which is a measure of the randomness
@@ -230,7 +228,8 @@ impl Binary {
         hex.as_bytes()
             .chunks(2)
             .map(|chunk| {
-                let hex_str = std::str::from_utf8(chunk).map_err(|_| "invalid UTF-8 in hex string")?;
+                let hex_str =
+                    std::str::from_utf8(chunk).map_err(|_| "invalid UTF-8 in hex string")?;
                 u8::from_str_radix(hex_str, 16).map_err(|_| format!("invalid hex: {}", hex_str))
             })
             .collect()
@@ -264,7 +263,13 @@ impl Binary {
             result.push_str(&padding);
             let ascii_values: String = chunk
                 .iter()
-                .map(|&byte| if byte.is_ascii_graphic() || byte == b' ' { byte as char } else { '.' })
+                .map(|&byte| {
+                    if byte.is_ascii_graphic() || byte == b' ' {
+                        byte as char
+                    } else {
+                        '.'
+                    }
+                })
                 .collect();
             result.push('|');
             result.push_str(&ascii_values);

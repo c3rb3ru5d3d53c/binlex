@@ -164,12 +164,12 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
+use crate::genetics::Gene;
+use binlex::genetics::AllelePair as InnerAllelePair;
 use pyo3::prelude::*;
 use pyo3::Py;
-use binlex::genetics::AllelePair as InnerAllelePair;
 use std::sync::Arc;
 use std::sync::Mutex;
-use crate::genetics::Gene;
 
 #[pyclass]
 pub struct AllelePair {
@@ -186,7 +186,7 @@ impl AllelePair {
         let low_binding = low.borrow(py);
         let low_inner = low_binding.inner.lock().unwrap().clone();
         let inner = InnerAllelePair::new(high_inner, low_inner);
-        Ok(Self{
+        Ok(Self {
             inner: Arc::new(Mutex::new(inner)),
         })
     }
@@ -218,7 +218,7 @@ impl AllelePair {
     pub fn from_string(pair: String) -> PyResult<Self> {
         let inner = InnerAllelePair::from_string(pair)?;
         Ok(Self {
-            inner: Arc::new(Mutex::new(inner))
+            inner: Arc::new(Mutex::new(inner)),
         })
     }
 
@@ -226,7 +226,7 @@ impl AllelePair {
     pub fn low(&self) -> Gene {
         let low = self.inner.lock().unwrap().low;
         return Gene {
-            inner: Arc::new(Mutex::new(low))
+            inner: Arc::new(Mutex::new(low)),
         };
     }
 
@@ -234,13 +234,14 @@ impl AllelePair {
     pub fn high(&self) -> Gene {
         let high = self.inner.lock().unwrap().high;
         return Gene {
-            inner: Arc::new(Mutex::new(high))
+            inner: Arc::new(Mutex::new(high)),
         };
     }
 
     #[pyo3(text_signature = "($self)")]
     pub fn print(&self) {
-        self.inner.lock().unwrap().print();
+        println!("{}", self.inner.lock().unwrap().to_string());
+        //self.inner.lock().unwrap().print();
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -253,12 +254,11 @@ impl AllelePair {
     }
 }
 
-
 #[pymodule]
 #[pyo3(name = "allelepair")]
 pub fn allelepair_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<AllelePair>()?;
-     py.import_bound("sys")?
+    py.import_bound("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.genetics.allelepair", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.genetics.allelepair")?;

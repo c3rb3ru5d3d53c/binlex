@@ -165,12 +165,12 @@
 // Library.
 
 use dirs;
-use std::{fs, path::PathBuf};
+use serde;
+use serde::{Deserialize, Serialize};
+use std::env;
 use std::io::Error;
 use std::io::ErrorKind;
-use std::env;
-use serde::{Deserialize, Serialize};
-use serde;
+use std::{fs, path::PathBuf};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const AUTHOR: &str = "@c3rb3ru5d3d53c";
@@ -188,7 +188,6 @@ pub const FILE_NAME: &str = "binlex.toml";
 //     pub enabled: bool,
 //     pub threshold: f64,
 // }
-
 
 // #[derive(Serialize, Deserialize, Clone)]
 // pub struct ConfigHomologuesHashing {
@@ -355,9 +354,7 @@ impl Config {
             formats: ConfigFormats {
                 file: ConfigFile {
                     hashing: ConfigHashing {
-                        sha256: ConfigSHA256 {
-                            enabled: true,
-                        },
+                        sha256: ConfigSHA256 { enabled: true },
                         tlsh: ConfigTLSH {
                             enabled: true,
                             minimum_byte_size: 50,
@@ -369,24 +366,18 @@ impl Config {
                             maximum_byte_size_enabled: false,
                             maximum_byte_size: 50,
                             seed: 0,
-                        }
+                        },
                     },
                     heuristics: ConfigHeuristics {
-                        features: ConfigHeuristicFeatures {
-                            enabled: true,
-                        },
-                        entropy: ConfigHeuristicEntropy {
-                            enabled: true,
-                        }
-                    }
-                }
+                        features: ConfigHeuristicFeatures { enabled: true },
+                        entropy: ConfigHeuristicEntropy { enabled: true },
+                    },
+                },
             },
             instructions: ConfigInstructions {
                 enabled: false,
                 hashing: ConfigHashing {
-                    sha256: ConfigSHA256 {
-                        enabled: true,
-                    },
+                    sha256: ConfigSHA256 { enabled: true },
                     tlsh: ConfigTLSH {
                         enabled: true,
                         minimum_byte_size: 50,
@@ -398,26 +389,18 @@ impl Config {
                         maximum_byte_size_enabled: false,
                         maximum_byte_size: 50,
                         seed: 0,
-                    }
+                    },
                 },
                 heuristics: ConfigHeuristics {
-                    features: ConfigHeuristicFeatures {
-                        enabled: true,
-                    },
-                    entropy: ConfigHeuristicEntropy {
-                        enabled: true,
-                    }
-                }
+                    features: ConfigHeuristicFeatures { enabled: true },
+                    entropy: ConfigHeuristicEntropy { enabled: true },
+                },
             },
             blocks: ConfigBlocks {
                 enabled: true,
-                instructions: ConfigBlockInstructions {
-                    enabled: false,
-                },
+                instructions: ConfigBlockInstructions { enabled: false },
                 hashing: ConfigHashing {
-                    sha256: ConfigSHA256 {
-                        enabled: true,
-                    },
+                    sha256: ConfigSHA256 { enabled: true },
                     tlsh: ConfigTLSH {
                         enabled: true,
                         minimum_byte_size: 50,
@@ -429,26 +412,18 @@ impl Config {
                         maximum_byte_size_enabled: false,
                         maximum_byte_size: 50,
                         seed: 0,
-                    }
+                    },
                 },
                 heuristics: ConfigHeuristics {
-                    features: ConfigHeuristicFeatures {
-                        enabled: true,
-                    },
-                    entropy: ConfigHeuristicEntropy {
-                        enabled: true,
-                    }
-                }
+                    features: ConfigHeuristicFeatures { enabled: true },
+                    entropy: ConfigHeuristicEntropy { enabled: true },
+                },
             },
             functions: ConfigFunctions {
                 enabled: true,
-                blocks: ConfigFunctionBlocks {
-                    enabled: true,
-                },
+                blocks: ConfigFunctionBlocks { enabled: true },
                 hashing: ConfigHashing {
-                    sha256: ConfigSHA256 {
-                        enabled: true,
-                    },
+                    sha256: ConfigSHA256 { enabled: true },
                     tlsh: ConfigTLSH {
                         enabled: true,
                         minimum_byte_size: 50,
@@ -460,25 +435,20 @@ impl Config {
                         maximum_byte_size_enabled: false,
                         maximum_byte_size: 50,
                         seed: 0,
-                    }
+                    },
                 },
                 heuristics: ConfigHeuristics {
-                    features: ConfigHeuristicFeatures {
-                        enabled: true,
-                    },
-                    entropy: ConfigHeuristicEntropy {
-                        enabled: true,
-                    }
-                }
+                    features: ConfigHeuristicFeatures { enabled: true },
+                    entropy: ConfigHeuristicEntropy { enabled: true },
+                },
             },
             chromosomes: ConfigChromosomes {
                 hashing: ConfigHashing {
-                    sha256: ConfigSHA256 {
-                        enabled: true,
-                    },
+                    sha256: ConfigSHA256 { enabled: true },
                     tlsh: ConfigTLSH {
                         enabled: true,
-                        minimum_byte_size: 50,                    },
+                        minimum_byte_size: 50,
+                    },
                     minhash: ConfigMinhash {
                         enabled: true,
                         number_of_hashes: 64,
@@ -486,32 +456,24 @@ impl Config {
                         maximum_byte_size_enabled: false,
                         maximum_byte_size: 50,
                         seed: 0,
-                    }
+                    },
                 },
                 heuristics: ConfigHeuristics {
-                    features: ConfigHeuristicFeatures {
-                        enabled: true,
-                    },
-                    entropy: ConfigHeuristicEntropy {
-                        enabled: true,
-                    }
+                    features: ConfigHeuristicFeatures { enabled: true },
+                    entropy: ConfigHeuristicEntropy { enabled: true },
                 },
                 homologues: ConfigHomologues {
                     enabled: true,
                     maximum: 4,
-                }
+                },
             },
             mmap: ConfigMmap {
                 directory: Config::default_file_mapping_directory(),
-                cache: ConfigMmapCache {
-                    enabled: false,
-                }
+                cache: ConfigMmapCache { enabled: false },
             },
             disassembler: ConfigDisassembler {
-                sweep: ConfigDisassemblerSweep {
-                    enabled: true,
-                }
-            }
+                sweep: ConfigDisassemblerSweep { enabled: true },
+            },
         }
     }
 
@@ -536,13 +498,13 @@ impl Config {
         self.chromosomes.heuristics.features.enabled = false;
     }
 
-    pub fn disable_instruction_hashing(&mut self){
+    pub fn disable_instruction_hashing(&mut self) {
         self.instructions.hashing.sha256.enabled = false;
         self.instructions.hashing.tlsh.enabled = false;
         self.instructions.hashing.minhash.enabled = false;
     }
 
-    pub fn disable_block_hashing(&mut self){
+    pub fn disable_block_hashing(&mut self) {
         self.blocks.hashing.sha256.enabled = false;
         self.blocks.hashing.tlsh.enabled = false;
         self.blocks.hashing.minhash.enabled = false;
@@ -610,23 +572,32 @@ impl Config {
     }
 
     /// Convert Config to a TOML String
+    ///
     #[allow(dead_code)]
     pub fn to_string(&self) -> Result<String, Error> {
-        toml::to_string_pretty(self).map_err(|e| Error::new(ErrorKind::Other, e))
+        toml::to_string_pretty(self).map_err(Error::other)
     }
 
     /// Reads the Configuration TOML from a File Path
     pub fn from_file(file_path: &str) -> Result<Config, Error> {
         let toml_string = fs::read_to_string(file_path)?;
-        let config: Config = toml::from_str(&toml_string)
-            .map_err(|error| Error::new(ErrorKind::InvalidData, format!("failed to read configuration file {}\n\n{}", file_path, error)))?;
+        let config: Config = toml::from_str(&toml_string).map_err(|error| {
+            Error::new(
+                ErrorKind::InvalidData,
+                format!(
+                    "failed to read configuration file {}\n\n{}",
+                    file_path, error
+                ),
+            )
+        })?;
         Ok(config)
     }
 
     /// Write the configuration TOML to a file
     #[allow(dead_code)]
     pub fn write_to_file(&self, file_path: &str) -> Result<(), Error> {
-        let toml_string = self.to_string()
+        let toml_string = self
+            .to_string()
             .expect("failed to serialize binlex configration to toml format");
         fs::write(file_path, toml_string)?;
         Ok(())
@@ -636,35 +607,47 @@ impl Config {
     #[allow(dead_code)]
     pub fn write_default(&self) -> Result<(), Error> {
         if let Some(config_directory) = dirs::config_dir() {
-            let config_file_path: PathBuf = config_directory.join(format!("{}/{}", DIRECTORY, FILE_NAME));
+            let config_file_path: PathBuf =
+                config_directory.join(format!("{}/{}", DIRECTORY, FILE_NAME));
             if let Some(parent_directory) = config_file_path.parent() {
                 if !parent_directory.exists() {
-                    fs::create_dir_all(parent_directory).expect("failed to create binlex configuration directory");
+                    fs::create_dir_all(parent_directory)
+                        .expect("failed to create binlex configuration directory");
                 }
             }
             if !config_file_path.exists() {
                 return self.write_to_file(config_file_path.to_str().unwrap());
             }
         }
-        return Err(Error::new(ErrorKind::Other, format!("default configuration already exists")));
+        Err(Error::other("default configuration already exists"))
     }
 
     /// Reads the default TOML Configuration File
     #[allow(dead_code)]
     pub fn from_default(&mut self) -> Result<(), Error> {
         if let Some(config_directory) = dirs::config_dir() {
-            let config_file_path: PathBuf = config_directory.join(format!("{}/{}", DIRECTORY, FILE_NAME));
+            let config_file_path: PathBuf =
+                config_directory.join(format!("{}/{}", DIRECTORY, FILE_NAME));
             if config_file_path.exists() {
                 match Config::from_file(config_file_path.to_str().unwrap()) {
-                    Ok(config) => return {
-                        *self = config;
-                        Ok(())
-                    },
+                    Ok(config) => {
+                        return {
+                            *self = config;
+                            Ok(())
+                        }
+                    }
                     Err(error) => return Err(error),
                 }
             }
         }
-        return Err(Error::new(ErrorKind::Other, format!("unable to read binlex default configuration file")));
+        Err(Error::other(
+            "unable to read binlex default configuration file",
+        ))
     }
+}
 
+impl Default for Config {
+    fn default() -> Self {
+        Config::new()
+    }
 }

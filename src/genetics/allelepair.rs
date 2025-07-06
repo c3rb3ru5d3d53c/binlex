@@ -165,6 +165,7 @@
 // Library.
 
 use crate::genetics::Gene;
+use std::fmt;
 use std::io::Error;
 use std::io::ErrorKind;
 
@@ -180,8 +181,8 @@ pub struct AllelePair {
 impl AllelePair {
     pub fn new(high: Gene, low: Gene) -> Self {
         Self {
-            high: high,
-            low: low,
+            high,
+            low,
             number_mutations: 0,
         }
     }
@@ -196,15 +197,15 @@ impl AllelePair {
     }
 
     pub fn genes(&self) -> Vec<Gene> {
-        let mut result = Vec::<Gene>::new();
-        result.push(self.low);
-        result.push(self.high);
-        result
+        vec![self.low, self.high]
     }
 
     pub fn from_string(pair: String) -> Result<Self, Error> {
         if pair.len() != 2 {
-            return Err(Error::new(ErrorKind::InvalidData, "allele pair string must have a length of 2"))
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "allele pair string must have a length of 2",
+            ));
         }
 
         let mut chars = pair.chars();
@@ -214,18 +215,16 @@ impl AllelePair {
         let high = Gene::from_char(high_char)?;
         let low = Gene::from_char(low_char)?;
 
-        Ok(Self{
-            high: high,
-            low: low,
+        Ok(Self {
+            high,
+            low,
             number_mutations: 0,
         })
     }
+}
 
-    pub fn print(&self) {
-        println!("{}", self.to_string());
-    }
-
-    pub fn to_string(&self) -> String {
-        format!("{}{}", self.high.to_char(), self.low.to_char())
+impl fmt::Display for AllelePair {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}{}", self.high.to_char(), self.low.to_char())
     }
 }
