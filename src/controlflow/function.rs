@@ -252,13 +252,10 @@ pub struct FunctionJsonDeserializer {
 impl FunctionJsonDeserializer {
     #[allow(dead_code)]
     pub fn new(string: String, config: Config) -> Result<Self, Error> {
-        let json: FunctionJson = serde_json::from_str(&string)
-            .map_err(|error| Error::new(ErrorKind::Other, format!("{}", error)))?;
+        let json: FunctionJson =
+            serde_json::from_str(&string).map_err(|error| Error::other(format!("{}", error)))?;
         if json.type_ != "function" {
-            return Err(Error::new(
-                ErrorKind::Other,
-                "feserialized json is not a function type",
-            ));
+            return Err(Error::other("feserialized json is not a function type"));
         }
         Ok(Self {
             json,
@@ -528,10 +525,10 @@ impl<'function> Function<'function> {
     /// returns an `Err` with an appropriate error message.
     pub fn new(address: u64, cfg: &'function Graph) -> Result<Self, Error> {
         if !cfg.functions.is_valid(address) {
-            return Err(Error::new(
-                ErrorKind::Other,
-                format!("Function -> 0x{:x}: is not valid", address),
-            ));
+            return Err(Error::other(format!(
+                "Function -> 0x{:x}: is not valid",
+                address
+            )));
         }
 
         let mut blocks = BTreeMap::<u64, Block>::new();
@@ -543,13 +540,10 @@ impl<'function> Function<'function> {
         while let Some(block_address) = queue.dequeue() {
             queue.insert_processed(block_address);
             if cfg.blocks.is_invalid(block_address) {
-                return Err(Error::new(
-                    ErrorKind::Other,
-                    format!(
-                        "Function -> 0x{:x} -> Block -> 0x{:x}: is invalid",
-                        address, block_address
-                    ),
-                ));
+                return Err(Error::other(format!(
+                    "Function -> 0x{:x} -> Block -> 0x{:x}: is invalid",
+                    address, block_address
+                )));
             }
             if let Ok(block) = Block::new(block_address, cfg) {
                 queue.enqueue_extend(block.blocks());

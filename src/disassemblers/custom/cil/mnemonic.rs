@@ -836,7 +836,7 @@ impl Mnemonic {
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
         if bytes.is_empty() {
-            return Err(Error::new(ErrorKind::Other, "not enough bytes to parse mnemonic"));
+            return Err(Error::other("not enough bytes to parse mnemonic"));
         }
 
         let value = bytes[0] as u16;
@@ -848,7 +848,7 @@ impl Mnemonic {
 
         if bytes[0] == 0xfe {
             if bytes.len() < 2 {
-                return Err(Error::new(ErrorKind::Other, "not enough bytes for prefix instruction"));
+                return Err(Error::other("not enough bytes for prefix instruction"));
             }
             let value = u16::from_be_bytes([bytes[0], bytes[1]]);
             for &mnemonic in Self::all_variants() {
@@ -858,7 +858,9 @@ impl Mnemonic {
             }
         }
 
-        Err(Error::new(ErrorKind::NotFound, "0x{:x}: no matching mnemonic found"))
+        Err(Error::new(
+            ErrorKind::NotFound,
+            "0x{:x}: no matching mnemonic found",
+        ))
     }
-
 }

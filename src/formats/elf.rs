@@ -207,7 +207,7 @@ impl ELF {
         if let Some(Binary::ELF(elf)) = binary {
             return Ok(Self { elf, file, config });
         }
-        return Err(Error::new(ErrorKind::InvalidInput, "invalid elf file"));
+        Err(Error::new(ErrorKind::InvalidInput, "invalid elf file"))
     }
 
     /// Creates a new `ELF` instance from a byte vector containing ELF file data.
@@ -224,7 +224,7 @@ impl ELF {
         if let Some(Binary::ELF(elf)) = Binary::from(&mut cursor) {
             return Ok(Self { elf, file, config });
         }
-        return Err(Error::new(ErrorKind::InvalidInput, "invalid elf file"));
+        Err(Error::new(ErrorKind::InvalidInput, "invalid elf file"))
     }
 
     pub fn architecture(&self) -> Architecture {
@@ -306,10 +306,7 @@ impl ELF {
     pub fn image(&self) -> Result<MemoryMappedFile, Error> {
         let pathbuf = PathBuf::from(self.config.mmap.directory.clone())
             .join(self.file.sha256_no_config().unwrap());
-        let mut tempmap = match MemoryMappedFile::new(pathbuf, self.config.mmap.cache.enabled) {
-            Ok(tempmmap) => tempmmap,
-            Err(error) => return Err(error),
-        };
+        let mut tempmap = MemoryMappedFile::new(pathbuf, self.config.mmap.cache.enabled)?;
 
         if tempmap.is_cached() {
             return Ok(tempmap);
@@ -321,8 +318,8 @@ impl ELF {
         for segment in self.elf.segments() {
             let segment_virtual_address = self.imagebase() + segment.virtual_address();
 
-            if segment_virtual_address > tempmap.size()? as u64 {
-                let padding_length = segment_virtual_address - tempmap.size()? as u64;
+            if segment_virtual_address > tempmap.size()? {
+                let padding_length = segment_virtual_address - tempmap.size()?;
                 tempmap.seek_to_end()?;
                 tempmap.write_padding(padding_length as usize)?;
             }
