@@ -164,8 +164,8 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-use std::convert::From;
 use lz4::block::{compress, decompress};
+use std::convert::From;
 
 /// A structure representing a compressed string using the LZ4 compression algorithm.
 pub struct LZ4String {
@@ -176,7 +176,6 @@ pub struct LZ4String {
 }
 
 impl LZ4String {
-
     /// Creates a new `LZ4String` from a given string slice.
     ///
     /// # Arguments
@@ -192,7 +191,8 @@ impl LZ4String {
     /// This function will panic if the compression operation fails.
     #[allow(dead_code)]
     pub fn new(data: &str) -> Self {
-        let compressed = compress(data.as_bytes(), None, false).expect("lz4string compression failed");
+        let compressed =
+            compress(data.as_bytes(), None, false).expect("lz4string compression failed");
         LZ4String {
             compressed_data: compressed,
             uncompressed_size: data.len(),
@@ -209,7 +209,7 @@ impl LZ4String {
     ///
     /// This function will panic if the decompression operation fails or if the decompressed data is not valid UTF-8.
     #[allow(dead_code)]
-    pub fn to_string(&self) -> String {
+    pub fn decompress_to_string(&self) -> String {
         let decompressed = decompress(&self.compressed_data, Some(self.uncompressed_size as i32))
             .expect("lz4string decompression failed");
         String::from_utf8(decompressed).expect("lz4string invalid utf8")
@@ -231,7 +231,8 @@ impl From<String> for LZ4String {
     ///
     /// This function will panic if the compression operation fails.
     fn from(data: String) -> Self {
-        let compressed = compress(data.as_bytes(), None, false).expect("lz4string compression failed");
+        let compressed =
+            compress(data.as_bytes(), None, false).expect("lz4string compression failed");
         LZ4String {
             compressed_data: compressed,
             uncompressed_size: data.len(),
@@ -254,7 +255,7 @@ impl std::fmt::Display for LZ4String {
     ///
     /// This method will panic if the decompression operation fails or if the decompressed data is not valid UTF-8.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = self.to_string();
+        let s = self.decompress_to_string();
         write!(f, "{}", s)
     }
 }

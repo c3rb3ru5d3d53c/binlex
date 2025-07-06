@@ -164,7 +164,6 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-
 use memmap2::{Mmap, MmapMut};
 use std::fs::OpenOptions;
 use std::io::{self, Error, Read, Seek, SeekFrom, Write};
@@ -183,7 +182,7 @@ use std::os::windows::io::AsRawHandle;
 use std::os::windows::fs::OpenOptionsExt;
 
 #[cfg(windows)]
-use winapi::um::winnt::{FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_SHARE_DELETE};
+use winapi::um::winnt::{FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE};
 
 /// A `MemoryMappedFile` struct that provides a memory-mapped file interface,
 /// enabling file read/write operations with optional disk caching,
@@ -203,7 +202,6 @@ pub struct MemoryMappedFile {
 }
 
 impl MemoryMappedFile {
-
     pub fn new(path: PathBuf, cache: bool) -> Result<Self, Error> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -252,13 +250,12 @@ impl MemoryMappedFile {
         })
     }
 
-
     pub fn seek_from_current(&mut self, offset: i64) -> Result<u64, io::Error> {
         if let Some(ref mut handle) = self.handle {
             let pos = handle.seek(SeekFrom::Current(offset))?;
             Ok(pos)
         } else {
-            Err(io::Error::new(io::ErrorKind::Other, "file handle is closed"))
+            Err(io::Error::other("file handle is closed"))
         }
     }
 
@@ -267,7 +264,7 @@ impl MemoryMappedFile {
             let pos = handle.seek(SeekFrom::Start(offset))?;
             Ok(pos)
         } else {
-            Err(io::Error::new(io::ErrorKind::Other, "file handle is closed"))
+            Err(io::Error::other("file handle is closed"))
         }
     }
 
@@ -276,7 +273,7 @@ impl MemoryMappedFile {
             let pos = handle.seek(SeekFrom::End(0))?;
             Ok(pos)
         } else {
-            Err(io::Error::new(io::ErrorKind::Other, "File handle is closed"))
+            Err(io::Error::other("File handle is closed"))
         }
     }
 
@@ -301,14 +298,14 @@ impl MemoryMappedFile {
     pub fn write<R: Read>(&mut self, mut reader: R) -> Result<u64, Error> {
         if let Some(ref mut handle) = self.handle {
             if handle.metadata()?.permissions().readonly() {
-                return Err(Error::new(io::ErrorKind::Other, "File is read-only"));
+                return Err(Error::other("File is read-only"));
             }
 
             let bytes_written = io::copy(&mut reader, handle)?;
             handle.flush()?;
             Ok(bytes_written)
         } else {
-            Err(Error::new(io::ErrorKind::Other, "File handle is closed"))
+            Err(Error::other("File handle is closed"))
         }
     }
 
@@ -322,7 +319,7 @@ impl MemoryMappedFile {
             handle.seek(SeekFrom::Start(new_size))?;
             Ok(())
         } else {
-            Err(Error::new(io::ErrorKind::Other, "File handle is closed"))
+            Err(Error::other("File handle is closed"))
         }
     }
 
@@ -331,12 +328,12 @@ impl MemoryMappedFile {
             if let Some(ref handle) = self.handle {
                 self.mmap_mut = Some(unsafe { MmapMut::map_mut(handle)? });
             } else {
-                return Err(Error::new(io::ErrorKind::Other, "File handle is closed"));
+                return Err(Error::other("File handle is closed"));
             }
         }
-        self.mmap_mut.as_mut().ok_or_else(|| {
-            Error::new(io::ErrorKind::Other, "Failed to create mutable memory map")
-        })
+        self.mmap_mut
+            .as_mut()
+            .ok_or_else(|| Error::other("Failed to create mutable memory map"))
     }
 
     pub fn mmap(&mut self) -> Result<&Mmap, Error> {
@@ -344,12 +341,12 @@ impl MemoryMappedFile {
             if let Some(ref handle) = self.handle {
                 self.mmap = Some(unsafe { Mmap::map(handle)? });
             } else {
-                return Err(Error::new(io::ErrorKind::Other, "File handle is closed"));
+                return Err(Error::other("File handle is closed"));
             }
         }
-        self.mmap.as_ref().ok_or_else(|| {
-            Error::new(io::ErrorKind::Other, "Failed to create memory map")
-        })
+        self.mmap
+            .as_ref()
+            .ok_or_else(|| Error::other("Failed to create memory map"))
     }
 
     pub fn unmap(&mut self) {
@@ -362,15 +359,13 @@ impl MemoryMappedFile {
         if let Some(ref handle) = self.handle {
             Ok(handle.metadata()?.len())
         } else {
-            Err(Error::new(io::ErrorKind::Other, "File handle is closed"))
+            Err(Error::other("File handle is closed"))
         }
     }
-
 }
 
 impl Drop for MemoryMappedFile {
     fn drop(&mut self) {
-
         self.unmap();
 
         // Ensure the file handle is dropped

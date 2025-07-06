@@ -183,19 +183,12 @@ pub enum GeneKind {
 
 #[allow(dead_code)]
 impl Gene {
-
     pub fn is_wildcard(&self) -> bool {
-        match self.kind {
-            GeneKind::Wildcard => true,
-            _ => false,
-        }
+        matches!(self.kind, GeneKind::Wildcard)
     }
 
     pub fn is_value(&self) -> bool {
-        match self.kind {
-            GeneKind::Value => true,
-            _ => false,
-        }
+        matches!(self.kind, GeneKind::Value)
     }
 
     pub fn from_wildcard() -> Self {
@@ -208,19 +201,15 @@ impl Gene {
 
     pub fn wildcard(&self) -> Option<String> {
         match self.kind {
-            GeneKind::Wildcard => {
-                return Some("?".to_string());
-            }
-            _ => { return None; }
+            GeneKind::Wildcard => Some("?".to_string()),
+            _ => None,
         }
     }
 
     pub fn value(&self) -> Option<u8> {
         match self.kind {
-            GeneKind::Value => {
-                return self.value;
-            }
-            _ => { return None; }
+            GeneKind::Value => self.value,
+            _ => None,
         }
     }
 
@@ -238,17 +227,18 @@ impl Gene {
                 self.kind = GeneKind::Wildcard;
                 self.value = None;
                 self.number_of_mutations += 1;
-                return Ok(());
-            },
+                Ok(())
+            }
             '0'..='9' | 'a'..='f' | 'A'..='F' => {
                 self.kind = GeneKind::Value;
                 self.value = c.to_digit(16).map(|v| v as u8);
                 self.number_of_mutations += 1;
-                return Ok(());
-            },
-            _ => {
-                return Err(Error::new(ErrorKind::InvalidData, "invaid data to mutate gene"));
-            },
+                Ok(())
+            }
+            _ => Err(Error::new(
+                ErrorKind::InvalidData,
+                "invaid data to mutate gene",
+            )),
         }
     }
 
@@ -272,11 +262,11 @@ impl Gene {
     pub fn from_char(c: char) -> Result<Self, std::io::Error> {
         match c {
             '?' => Ok(Self::from_wildcard()),
-            '0'..='9' | 'a'..='f' | 'A'..='F' => c.to_digit(16)
+            '0'..='9' | 'a'..='f' | 'A'..='F' => c
+                .to_digit(16)
                 .map(|v| Self::from_value(v as u8))
                 .ok_or_else(|| Error::new(ErrorKind::InvalidData, "invalid hexadecimal digit")),
             _ => Err(Error::new(ErrorKind::InvalidInput, "invalid character")),
         }
     }
-
 }

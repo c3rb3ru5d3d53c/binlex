@@ -164,10 +164,10 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-use rand::{Rng, SeedableRng};
 use rand::rngs::SmallRng;
-use twox_hash::XxHash32;
+use rand::{Rng, SeedableRng};
 use std::hash::{Hash, Hasher};
+use twox_hash::XxHash32;
 
 const PRIME_MODULUS: u32 = 4294967291;
 
@@ -175,7 +175,7 @@ const PRIME_MODULUS: u32 = 4294967291;
 ///
 /// This struct provides methods to compute MinHash signatures for a given set of shingles (substrings of fixed size)
 /// from a byte slice and to calculate the Jaccard similarity between two MinHash signatures.
-pub struct MinHash32 <'minhash32> {
+pub struct MinHash32<'minhash32> {
     /// Coefficients for the linear hash functions used in MinHash.
     a_coefficients: Vec<u32>,
     /// Intercept coefficients for the linear hash functions used in MinHash.
@@ -188,7 +188,7 @@ pub struct MinHash32 <'minhash32> {
     bytes: &'minhash32 [u8],
 }
 
-impl <'minhash32> MinHash32 <'minhash32> {
+impl<'minhash32> MinHash32<'minhash32> {
     /// Creates a new `MinHash32` instance with the provided parameters.
     ///
     /// # Arguments
@@ -214,11 +214,11 @@ impl <'minhash32> MinHash32 <'minhash32> {
         }
 
         Self {
-            a_coefficients: a_coefficients,
-            b_coefficients: b_coefficients,
-            num_hashes: num_hashes,
-            shingle_size: shingle_size,
-            bytes: bytes,
+            a_coefficients,
+            b_coefficients,
+            num_hashes,
+            shingle_size,
+            bytes,
         }
     }
 
@@ -232,18 +232,23 @@ impl <'minhash32> MinHash32 <'minhash32> {
     /// Returns `Some(Vec<u32>)` containing the MinHash signature if the byte slice is large enough
     /// to generate shingles of the specified size. Returns `None` otherwise.
     pub fn hash(&self) -> Option<Vec<u32>> {
-        if self.bytes.len() < self.shingle_size { return None; }
+        if self.bytes.len() < self.shingle_size {
+            return None;
+        }
         let mut min_hashes = vec![u32::MAX; self.num_hashes];
         for shingle in self.bytes.windows(self.shingle_size) {
             let mut hasher = XxHash32::default();
             shingle.hash(&mut hasher);
             let shingle_hash = hasher.finish() as u32;
-            for i in 0..self.num_hashes {
-                let a = self.a_coefficients[i];
-                let b = self.b_coefficients[i];
-                let hash_value = (a.wrapping_mul(shingle_hash).wrapping_add(b)) % PRIME_MODULUS;
-                if hash_value < min_hashes[i] {
-                    min_hashes[i] = hash_value;
+            for ((a, b), min) in self
+                .a_coefficients
+                .iter()
+                .zip(&self.b_coefficients)
+                .zip(&mut min_hashes)
+            {
+                let hash_value = (a.wrapping_mul(shingle_hash).wrapping_add(*b)) % PRIME_MODULUS;
+                if hash_value < *min {
+                    *min = hash_value;
                 }
             }
         }
@@ -275,7 +280,7 @@ impl <'minhash32> MinHash32 <'minhash32> {
         let hash1 = hash1.unwrap();
         let hash2 = hash2.unwrap();
 
-        return Self::jaccard_similarity(&hash1, &hash2);
+        Self::jaccard_similarity(&hash1, &hash2)
     }
 
     /// Computes the Jaccard similarity between two MinHash signatures.
@@ -294,7 +299,9 @@ impl <'minhash32> MinHash32 <'minhash32> {
     /// If the signatures have different lengths, it returns `0.0`.
     #[allow(dead_code)]
     pub fn jaccard_similarity(hash1: &[u32], hash2: &[u32]) -> f64 {
-        if hash1.len() != hash2.len() { return 0.0; }
+        if hash1.len() != hash2.len() {
+            return 0.0;
+        }
         let mut intersection = 0;
         for i in 0..hash1.len() {
             if hash1[i] == hash2[i] {
@@ -326,10 +333,7 @@ impl <'minhash32> MinHash32 <'minhash32> {
     /// Returns `Some(String)` containing the hexadecimal representation of the MinHash signature
     /// if the byte slice is large enough to generate shingles. Returns `None` otherwise.
     pub fn hexdigest(&self) -> Option<String> {
-        self.hash().map(|minhash| {
-            minhash.iter()
-                .map(|hash| format!("{:08x}", hash))
-                .collect()
-        })
+        self.hash()
+            .map(|minhash| minhash.iter().map(|hash| format!("{:08x}", hash)).collect())
     }
 }

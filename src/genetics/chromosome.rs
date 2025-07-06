@@ -164,18 +164,18 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
+use crate::binary::Binary;
+use crate::genetics::AllelePair;
+use crate::genetics::Gene;
+use crate::hashing::MinHash32;
+use crate::hashing::SHA256;
+use crate::hashing::TLSH;
+use crate::lcs::FuzzyLCS;
+use crate::Config;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::io::Error;
 use std::io::ErrorKind;
-use crate::binary::Binary;
-use crate::hashing::SHA256;
-use crate::hashing::TLSH;
-use crate::hashing::MinHash32;
-use crate::genetics::AllelePair;
-use crate::genetics::Gene;
-use crate::Config;
-use crate::lcs::FuzzyLCS;
 
 #[derive(Clone)]
 pub struct HomologousChromosome {
@@ -198,16 +198,16 @@ impl HomologousChromosome {
     #[allow(dead_code)]
     pub fn json(&self) -> Result<String, Error> {
         let raw = self.process();
-        let result =  serde_json::to_string(&raw)?;
+        let result = serde_json::to_string(&raw)?;
         Ok(result)
     }
 
     #[allow(dead_code)]
-     pub fn print(&self) {
-         if let Ok(json) = self.json() {
-             println!("{}", json);
-         }
-     }
+    pub fn print(&self) {
+        if let Ok(json) = self.json() {
+            println!("{}", json);
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -241,16 +241,16 @@ impl ChromosomeSimilarityScore {
     #[allow(dead_code)]
     pub fn json(&self) -> Result<String, Error> {
         let raw = self.process();
-        let result =  serde_json::to_string(&raw)?;
+        let result = serde_json::to_string(&raw)?;
         Ok(result)
     }
 
     #[allow(dead_code)]
-     pub fn print(&self) {
-         if let Ok(json) = self.json() {
-             println!("{}", json);
-         }
-     }
+    pub fn print(&self) {
+        if let Ok(json) = self.json() {
+            println!("{}", json);
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -266,7 +266,6 @@ pub struct ChromosomeSimilarity {
 }
 
 impl ChromosomeSimilarity {
-
     pub fn homologues(&self) -> Vec<HomologousChromosome> {
         self.homologues.clone()
     }
@@ -286,24 +285,23 @@ impl ChromosomeSimilarity {
         }
     }
 
-    pub fn score(&self) -> ChromosomeSimilarityScore{
+    pub fn score(&self) -> ChromosomeSimilarityScore {
         self.score.clone()
     }
 
     #[allow(dead_code)]
     pub fn json(&self) -> Result<String, Error> {
         let raw = self.process();
-        let result =  serde_json::to_string(&raw)?;
+        let result = serde_json::to_string(&raw)?;
         Ok(result)
     }
 
     #[allow(dead_code)]
-     pub fn print(&self) {
-         if let Ok(json) = self.json() {
-             println!("{}", json);
-         }
-     }
-
+    pub fn print(&self) {
+        if let Ok(json) = self.json() {
+            println!("{}", json);
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -346,9 +344,9 @@ impl Chromosome {
     pub fn new(pattern: String, config: Config) -> Result<Self, Error> {
         let allelepairs = Self::parse_pairs(pattern)?;
         Ok(Self {
-            allelepairs: allelepairs,
+            allelepairs,
             number_of_mutations: 0,
-            config: config,
+            config,
         })
     }
 
@@ -365,14 +363,21 @@ impl Chromosome {
     #[allow(dead_code)]
     fn parse_pairs(pattern: String) -> Result<Vec<AllelePair>, Error> {
         if pattern.len() % 2 != 0 {
-            return Err(Error::new(ErrorKind::InvalidData, format!("pattern length must be even")));
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "pattern length must be even",
+            ));
         }
         let mut parsed = Vec::new();
         let chars: Vec<char> = pattern.chars().collect();
         for chunk in chars.chunks(2) {
             let high = Self::parse_gene(chunk[0])?;
             let low = Self::parse_gene(chunk[1])?;
-            parsed.push(AllelePair { high: high, low: low, number_mutations: 0});
+            parsed.push(AllelePair {
+                high,
+                low,
+                number_mutations: 0,
+            });
         }
         Ok(parsed)
     }
@@ -382,7 +387,7 @@ impl Chromosome {
     }
 
     pub fn allelepairs(&self) -> Vec<AllelePair> {
-        return self.allelepairs.clone();
+        self.allelepairs.clone()
     }
 
     pub fn pattern(&self) -> String {
@@ -429,7 +434,9 @@ impl Chromosome {
     /// Returns a `Vec<u8>` containing the feature vector, or an empty vector if feature extraction is disabled.
     pub fn feature(&self) -> Vec<u8> {
         let mut result = Vec::<u8>::new();
-        if !self.config.chromosomes.heuristics.features.enabled { return result; }
+        if !self.config.chromosomes.heuristics.features.enabled {
+            return result;
+        }
         for allelepair in &self.allelepairs {
             if let Some(high) = allelepair.high.value() {
                 result.push(high);
@@ -447,8 +454,14 @@ impl Chromosome {
     ///
     /// Returns `Some(String)` containing the TLSH, or `None` if TLSH is disabled.
     pub fn tlsh(&self) -> Option<String> {
-        if !self.config.chromosomes.hashing.tlsh.enabled { return None; }
-        return TLSH::new(&self.normalized(), self.config.chromosomes.hashing.tlsh.minimum_byte_size).hexdigest();
+        if !self.config.chromosomes.hashing.tlsh.enabled {
+            return None;
+        }
+        TLSH::new(
+            &self.normalized(),
+            self.config.chromosomes.hashing.tlsh.minimum_byte_size,
+        )
+        .hexdigest()
     }
 
     /// Computes the MinHash of the normalized signature, if enabled.
@@ -458,16 +471,26 @@ impl Chromosome {
     /// Returns `Some(String)` containing the MinHash, or `None` if MinHash is disabled.
     #[allow(dead_code)]
     pub fn minhash(&self) -> Option<String> {
-        if !self.config.chromosomes.hashing.minhash.enabled { return None; }
-        if self.normalized().len() > self.config.chromosomes.hashing.minhash.maximum_byte_size
-            && self.config.chromosomes.hashing.minhash.maximum_byte_size_enabled == true {
+        if !self.config.chromosomes.hashing.minhash.enabled {
             return None;
         }
-        return MinHash32::new(
+        if self.normalized().len() > self.config.chromosomes.hashing.minhash.maximum_byte_size
+            && self
+                .config
+                .chromosomes
+                .hashing
+                .minhash
+                .maximum_byte_size_enabled
+        {
+            return None;
+        }
+        MinHash32::new(
             &self.normalized(),
             self.config.chromosomes.hashing.minhash.number_of_hashes,
             self.config.chromosomes.hashing.minhash.shingle_size,
-            self.config.chromosomes.hashing.minhash.seed).hexdigest();
+            self.config.chromosomes.hashing.minhash.seed,
+        )
+        .hexdigest()
     }
 
     /// Computes the SHA-256 hash of the normalized chromosome, if enabled.
@@ -476,7 +499,9 @@ impl Chromosome {
     ///
     /// Returns `Some(String)` containing the SHA-256 hash, or `None` if SHA-256 is disabled.
     pub fn sha256(&self) -> Option<String> {
-        if !self.config.chromosomes.hashing.sha256.enabled { return None; }
+        if !self.config.chromosomes.hashing.sha256.enabled {
+            return None;
+        }
         SHA256::new(&self.normalized()).hexdigest()
     }
 
@@ -486,7 +511,9 @@ impl Chromosome {
     ///
     /// Returns `Some(f64)` containing the entropy, or `None` if entropy calculation is disabled.
     pub fn entropy(&self) -> Option<f64> {
-        if !self.config.chromosomes.heuristics.entropy.enabled { return None; }
+        if !self.config.chromosomes.heuristics.entropy.enabled {
+            return None;
+        }
         Binary::entropy(&self.normalized())
     }
 
@@ -516,7 +543,10 @@ impl Chromosome {
         let rhs_minhash = rhs.minhash();
         let mut minhash: Option<f64> = None;
         if lhs_minhash.is_some() && rhs_minhash.is_some() {
-            minhash = Some(MinHash32::compare(&lhs_minhash.unwrap(), &rhs_minhash.unwrap()))
+            minhash = Some(MinHash32::compare(
+                &lhs_minhash.unwrap(),
+                &rhs_minhash.unwrap(),
+            ))
         }
         let lhs_tlsh = self.tlsh();
         let rhs_tlsh = rhs.tlsh();
@@ -525,13 +555,16 @@ impl Chromosome {
             tlsh = TLSH::compare(lhs_tlsh.unwrap(), rhs_tlsh.unwrap());
         }
 
-        if minhash.is_none() && tlsh.is_none() { return None; }
+        if minhash.is_none() && tlsh.is_none() {
+            return None;
+        }
 
         let mut homologues = Vec::<HomologousChromosome>::new();
         if self.config.chromosomes.homologues.enabled {
             let lhs_pattern = self.pattern();
             let rhs_pattern = rhs.pattern();
-            for (score, (_, _), homologue) in lhs_pattern.fuzzy_find_subyara_all(rhs_pattern, 0.25) {
+            for (score, (_, _), homologue) in lhs_pattern.fuzzy_find_subyara_all(rhs_pattern, 0.25)
+            {
                 if let Ok(c) = Chromosome::new(homologue.to_string().clone(), self.config.clone()) {
                     let homologous_chromosome = HomologousChromosome {
                         score: score as f64,
@@ -542,11 +575,8 @@ impl Chromosome {
             }
         }
         Some(ChromosomeSimilarity {
-            score: ChromosomeSimilarityScore {
-                minhash: minhash,
-                tlsh: tlsh,
-            },
-            homologues: homologues,
+            score: ChromosomeSimilarityScore { minhash, tlsh },
+            homologues,
         })
     }
 
@@ -559,16 +589,15 @@ impl Chromosome {
     #[allow(dead_code)]
     pub fn json(&self) -> Result<String, Error> {
         let raw = self.process();
-        let result =  serde_json::to_string(&raw)?;
+        let result = serde_json::to_string(&raw)?;
         Ok(result)
     }
 
-     /// Prints the JSON representation of the chromosome to standard output.
-     #[allow(dead_code)]
-     pub fn print(&self) {
-         if let Ok(json) = self.json() {
-             println!("{}", json);
-         }
-     }
-
+    /// Prints the JSON representation of the chromosome to standard output.
+    #[allow(dead_code)]
+    pub fn print(&self) {
+        if let Ok(json) = self.json() {
+            println!("{}", json);
+        }
+    }
 }

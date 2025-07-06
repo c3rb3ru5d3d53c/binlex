@@ -164,16 +164,16 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-use std::process;
+use binlex::controlflow::Symbol;
 use binlex::controlflow::SymbolIoJson;
+use binlex::io::Stdin;
+use binlex::io::Stdout;
+use binlex::AUTHOR;
+use binlex::VERSION;
 use clap::Parser;
 use pdb::FallibleIterator;
 use std::fs::File;
-use binlex::io::Stdin;
-use binlex::io::Stdout;
-use binlex::controlflow::Symbol;
-use binlex::AUTHOR;
-use binlex::VERSION;
+use std::process;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -188,7 +188,7 @@ struct Cli {
     #[arg(short, long)]
     output: Option<String>,
     #[arg(long, default_value_t = false)]
-    demangle_msvc_names: bool
+    demangle_msvc_names: bool,
 }
 
 fn main() -> pdb::Result<()> {
@@ -210,10 +210,10 @@ fn main() -> pdb::Result<()> {
                 if cli.demangle_msvc_names {
                     name = Symbol::demangle_msvc_name(&name);
                 }
-                results.push(SymbolIoJson{
+                results.push(SymbolIoJson {
                     type_: "symbol".to_string(),
                     symbol_type: "function".to_string(),
-                    name: name,
+                    name,
                     file_offset: None,
                     relative_virtual_address: Some(rva.0 as u64),
                     virtual_address: None,
@@ -227,7 +227,7 @@ fn main() -> pdb::Result<()> {
     Stdin::passthrough();
 
     for result in results {
-        if let Ok(json_string) = serde_json::to_string(&result){
+        if let Ok(json_string) = serde_json::to_string(&result) {
             Stdout::print(json_string);
         }
     }

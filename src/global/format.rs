@@ -164,12 +164,12 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-
-use std::io::Error;
-use std::str::FromStr;
 use std::fmt;
 use std::fs::File;
+use std::io::Error;
+use std::io::ErrorKind;
 use std::io::{Read, Seek, SeekFrom};
+use std::str::FromStr;
 
 #[repr(u16)]
 #[derive(Copy, Clone, PartialEq, Debug)]
@@ -215,11 +215,14 @@ impl Format {
         let mut buffer = [0u8; 4];
         file.seek(SeekFrom::Start(0x00))?;
         file.read_exact(&mut buffer)?;
-        if buffer == [0xCE, 0xFA, 0xED, 0xFE] || buffer == [0xCF, 0xFA, 0xED, 0xFE] || buffer == [0xBE, 0xBA, 0xFE, 0xCA] {
+        if buffer == [0xCE, 0xFA, 0xED, 0xFE]
+            || buffer == [0xCF, 0xFA, 0xED, 0xFE]
+            || buffer == [0xBE, 0xBA, 0xFE, 0xCA]
+        {
             return Ok(Format::MACHO);
         }
 
-        return Ok(Format::UNKNOWN);
+        Ok(Format::UNKNOWN)
     }
 }
 
@@ -237,7 +240,8 @@ impl fmt::Display for Format {
 }
 
 impl FromStr for Format {
-    type Err = String;
+    type Err = std::io::Error;
+
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "code" => Ok(Format::CODE),
@@ -245,7 +249,10 @@ impl FromStr for Format {
             "elf" => Ok(Format::ELF),
             "macho" => Ok(Format::MACHO),
             "unknown" => Ok(Format::UNKNOWN),
-            _ => Err(format!("invalid format")),
+            _ => Err(Error::new(
+                ErrorKind::InvalidInput,
+                format!("invalid format: '{}'", s),
+            )),
         }
     }
 }

@@ -164,10 +164,10 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-use std::str::FromStr;
 use std::fmt;
 use std::io::Error;
 use std::io::ErrorKind;
+use std::str::FromStr;
 
 /// Represents the different architectures of a binary.
 #[repr(u16)]
@@ -180,7 +180,7 @@ pub enum Architecture {
     /// CIL
     CIL = 0x02,
     /// Unknown architecture.
-    UNKNOWN= 0x03,
+    UNKNOWN = 0x03,
 }
 
 impl Architecture {
@@ -231,7 +231,11 @@ impl FromStr for Architecture {
             "amd64" => Ok(Architecture::AMD64),
             "i386" => Ok(Architecture::I386),
             "cil" => Ok(Architecture::CIL),
-            _ => Err(format!("invalid architecutre")),
+            _ => Err(Error::new(
+                ErrorKind::InvalidInput,
+                format!("invalid or unsupported architecture: {}", s),
+            )
+            .to_string()),
         }
     }
 }
