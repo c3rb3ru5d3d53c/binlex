@@ -164,10 +164,10 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-use std::io::Error;
+use crate::controlflow::Attribute;
 use serde::{Deserialize, Serialize};
 use serde_json;
-use crate::controlflow::Attribute;
+use std::io::Error;
 
 /// Represents a JSON-serializable structure containing metadata about a function symbol.
 #[derive(Serialize, Deserialize)]
@@ -209,7 +209,7 @@ pub struct SymbolJson {
 pub struct Symbol {
     /// Names associated with the function symbol.
     pub name: String,
-     /// The virtual address of the function symbol.
+    /// The virtual address of the function symbol.
     pub address: u64,
     /// The type of symbol
     pub symbol_type: String,
@@ -217,11 +217,11 @@ pub struct Symbol {
 
 impl Symbol {
     #[allow(dead_code)]
-    pub fn new(address: u64, symbol_type: String, name: String) -> Self{
+    pub fn new(address: u64, symbol_type: String, name: String) -> Self {
         Self {
-            name: name,
-            address: address,
-            symbol_type: symbol_type,
+            name,
+            address,
+            symbol_type,
         }
     }
 
@@ -248,24 +248,24 @@ impl Symbol {
         Attribute::Symbol(self.process())
     }
 
-     /// Prints the JSON representation of the function symbol to standard output.
-     #[allow(dead_code)]
-     pub fn print(&self) {
-         if let Ok(json) = self.json() {
-             println!("{}", json);
-         }
-     }
+    /// Prints the JSON representation of the function symbol to standard output.
+    #[allow(dead_code)]
+    pub fn print(&self) {
+        if let Ok(json) = self.json() {
+            println!("{}", json);
+        }
+    }
 
-     /// Converts the function symbol metadata into a JSON string representation.
-     ///
-     /// # Returns
-     ///
-     /// Returns `Ok(String)` containing the JSON representation, or an `Err` if serialization fails.
-     pub fn json(&self) -> Result<String, Error> {
-         let raw = self.process();
-         let result = serde_json::to_string(&raw)?;
-         Ok(result)
-     }
+    /// Converts the function symbol metadata into a JSON string representation.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(String)` containing the JSON representation, or an `Err` if serialization fails.
+    pub fn json(&self) -> Result<String, Error> {
+        let raw = self.process();
+        let result = serde_json::to_string(&raw)?;
+        Ok(result)
+    }
 
     /// Demangles a Microsoft Visual C++ (MSVC) mangled symbol name.
     ///
@@ -281,16 +281,20 @@ impl Symbol {
     #[allow(dead_code)]
     pub fn demangle_msvc_name(mangled_name: &str) -> String {
         if !mangled_name.starts_with('?') {
-            return mangled_name.to_string();
+            return mangled_name.to_owned();
         }
-        let parts: Vec<&str> = mangled_name.trim_start_matches('?').split('@').collect();
-        let function_name = parts.get(0).unwrap_or(&mangled_name);
-        let mut namespaces: Vec<&str> = parts.iter().skip(1).take_while(|&&s| s != "").map(|&s| s).collect();
+        let parts = mangled_name
+            .trim_start_matches('?')
+            .split('@')
+            .collect::<Vec<_>>();
+        let function_name = parts.first().copied().unwrap_or(mangled_name);
+        let mut namespaces: Vec<_> = parts
+            .iter()
+            .skip(1)
+            .take_while(|s| !s.is_empty())
+            .copied()
+            .collect();
         namespaces.reverse();
-        format!(
-            "{}::{}",
-            namespaces.join("::"),
-            function_name
-        )
+        format!("{}::{}", namespaces.join("::"), function_name)
     }
 }

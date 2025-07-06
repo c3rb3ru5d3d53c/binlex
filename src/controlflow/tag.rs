@@ -164,9 +164,9 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-use std::io::Error;
-use serde::{Deserialize, Serialize};
 use crate::controlflow::Attribute;
+use serde::{Deserialize, Serialize};
+use std::io::Error;
 
 /// Represents a JSON-serializable structure containing metadata about a tag.
 #[derive(Serialize, Deserialize, Clone)]
@@ -185,10 +185,8 @@ pub struct Tag {
 
 impl Tag {
     #[allow(dead_code)]
-    pub fn new(tag: String) -> Self{
-        Self {
-            tag: tag,
-        }
+    pub fn new(tag: String) -> Self {
+        Self { tag }
     }
 
     /// Processes the function signature into its JSON-serializable representation.
@@ -212,23 +210,22 @@ impl Tag {
         Attribute::Tag(self.process())
     }
 
-     /// Prints the JSON representation of the function symbol to standard output.
-     #[allow(dead_code)]
-     pub fn print(&self) {
-         if let Ok(json) = self.json() {
-             println!("{}", json);
-         }
-     }
+    /// Prints the JSON representation of the function symbol to standard output.
+    #[allow(dead_code)]
+    pub fn print(&self) {
+        if let Ok(json) = self.json() {
+            println!("{}", json);
+        }
+    }
 
-     /// Converts the function symbol metadata into a JSON string representation.
-     ///
-     /// # Returns
-     ///
-     /// Returns `Ok(String)` containing the JSON representation, or an `Err` if serialization fails.
-     pub fn json(&self) -> Result<String, Error> {
-         let raw = self.process();
-         let result = serde_json::to_string(&raw)?;
-         Ok(result)
-     }
-
+    /// Converts the function symbol metadata into a JSON string representation.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(String)` containing the JSON representation, or an `Err` if serialization fails.
+    pub fn json(&self) -> Result<String, Error> {
+        let raw = self.process();
+        let result = serde_json::to_string(&raw)?;
+        Ok(result)
+    }
 }

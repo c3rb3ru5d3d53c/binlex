@@ -164,20 +164,20 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
+use crate::controlflow::Symbol as BlSymbol;
+use crate::formats::File;
+use crate::types::MemoryMappedFile;
+use crate::Architecture;
+use crate::Config;
+use lief::elf::section::Flags;
+use lief::elf::segment::Type as SegmentType;
+use lief::elf::symbol::Type as ElfSymbolType;
 use lief::generic::{Section, Symbol};
 use lief::Binary;
-use lief::elf::segment::Type as SegmentType;
-use std::io::{Cursor, Error, ErrorKind};
-use std::collections::BTreeSet;
-use std::path::PathBuf;
-use crate::Architecture;
-use crate::formats::File;
 use std::collections::BTreeMap;
-use crate::types::MemoryMappedFile;
-use lief::elf::section::Flags;
-use crate::Config;
-use lief::elf::symbol::Type as ElfSymbolType;
-use crate::controlflow::Symbol as BlSymbol;
+use std::collections::BTreeSet;
+use std::io::{Cursor, Error, ErrorKind};
+use std::path::PathBuf;
 
 pub const DEFAULT_IMAGEBASE: u64 = 0x100000;
 
@@ -205,11 +205,7 @@ impl ELF {
         };
         let binary = Binary::parse(&path);
         if let Some(Binary::ELF(elf)) = binary {
-            return Ok(Self {
-                elf: elf,
-                file: file,
-                config: config,
-            });
+            return Ok(Self { elf, file, config });
         }
         return Err(Error::new(ErrorKind::InvalidInput, "invalid elf file"));
     }
@@ -226,11 +222,7 @@ impl ELF {
         let file = File::from_bytes(bytes, config.clone());
         let mut cursor = Cursor::new(&file.data);
         if let Some(Binary::ELF(elf)) = Binary::from(&mut cursor) {
-            return Ok(Self{
-                elf: elf,
-                file: file,
-                config: config,
-            })
+            return Ok(Self { elf, file, config });
         }
         return Err(Error::new(ErrorKind::InvalidInput, "invalid elf file"));
     }
@@ -274,25 +266,28 @@ impl ELF {
 
     pub fn symbols(&self) -> BTreeMap<u64, BlSymbol> {
         self.elf
-        .dynamic_symbols()
-        .chain(self.elf.exported_symbols())
-        .chain(self.elf.imported_symbols())
-        .chain(self.elf.symtab_symbols())
-        .filter(|symbol| symbol.get_type() == ElfSymbolType::FUNC)
-        .map(|symbol| {
-            (
-                (self.imagebase() + symbol.value()) as u64,
-                BlSymbol {
-                    symbol_type: "function".to_string(),
-                    name: symbol.name(),
-                    address: self.imagebase() + symbol.value(),
-                },
-            )
-        })
-        .collect()
+            .dynamic_symbols()
+            .chain(self.elf.exported_symbols())
+            .chain(self.elf.imported_symbols())
+            .chain(self.elf.symtab_symbols())
+            .filter(|symbol| symbol.get_type() == ElfSymbolType::FUNC)
+            .map(|symbol| {
+                (
+                    (self.imagebase() + symbol.value()),
+                    BlSymbol {
+                        symbol_type: "function".to_string(),
+                        name: symbol.name(),
+                        address: self.imagebase() + symbol.value(),
+                    },
+                )
+            })
+            .collect()
     }
 
-    pub fn relative_virtual_address_to_virtual_address(&self, relative_virtual_address: u64) -> u64 {
+    pub fn relative_virtual_address_to_virtual_address(
+        &self,
+        relative_virtual_address: u64,
+    ) -> u64 {
         self.imagebase() + relative_virtual_address
     }
 
@@ -302,7 +297,7 @@ impl ELF {
             let end = start + segment.physical_size();
             if file_offset >= start && file_offset < end {
                 let segment_virtual_address = self.imagebase() + segment.virtual_address();
-                return Some(segment_virtual_address + (file_offset - start))
+                return Some(segment_virtual_address + (file_offset - start));
             }
         }
         None
@@ -311,12 +306,10 @@ impl ELF {
     pub fn image(&self) -> Result<MemoryMappedFile, Error> {
         let pathbuf = PathBuf::from(self.config.mmap.directory.clone())
             .join(self.file.sha256_no_config().unwrap());
-            let mut tempmap = match MemoryMappedFile::new(
-                pathbuf,
-                self.config.mmap.cache.enabled) {
-                Ok(tempmmap) => tempmmap,
-                Err(error) => return Err(error),
-            };
+        let mut tempmap = match MemoryMappedFile::new(pathbuf, self.config.mmap.cache.enabled) {
+            Ok(tempmmap) => tempmmap,
+            Err(error) => return Err(error),
+        };
 
         if tempmap.is_cached() {
             return Ok(tempmap);
@@ -340,7 +333,9 @@ impl ELF {
 
                 if segment_file_offset + segment_size <= self.file.data.len() {
                     tempmap.seek_to_end()?;
-                    tempmap.write(&self.file.data[segment_file_offset..segment_file_offset + segment_size])?;
+                    tempmap.write(
+                        &self.file.data[segment_file_offset..segment_file_offset + segment_size],
+                    )?;
                 } else {
                     return Err(Error::new(
                         ErrorKind::InvalidData,
@@ -398,5 +393,4 @@ impl ELF {
         }
         result
     }
-
 }

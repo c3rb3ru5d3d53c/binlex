@@ -164,20 +164,20 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-use std::io::Error;
-use std::io::ErrorKind;
-use crate::Architecture;
-use std::collections::BTreeMap;
 use crate::controlflow::Graph;
 use crate::controlflow::Instruction as CFGInstruction;
 use crate::disassemblers::custom::cil::Instruction;
+use crate::io::Stderr;
+use crate::Architecture;
+use crate::Config;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use crate::io::Stderr;
-use crate::Config;
+use std::io::Error;
+use std::io::ErrorKind;
 
-pub struct Disassembler <'disassembler> {
+pub struct Disassembler<'disassembler> {
     pub architecture: Architecture,
     pub metadata_token_addresses: BTreeMap<u64, u64>,
     pub executable_address_ranges: BTreeMap<u64, u64>,
@@ -185,20 +185,29 @@ pub struct Disassembler <'disassembler> {
     config: Config,
 }
 
-impl <'disassembler> Disassembler <'disassembler> {
-    pub fn new(architecture: Architecture, image: &'disassembler[u8], metadata_token_addresses: BTreeMap<u64, u64>, executable_address_ranges: BTreeMap<u64, u64>, config: Config) -> Result<Self, Error> {
+impl<'disassembler> Disassembler<'disassembler> {
+    pub fn new(
+        architecture: Architecture,
+        image: &'disassembler [u8],
+        metadata_token_addresses: BTreeMap<u64, u64>,
+        executable_address_ranges: BTreeMap<u64, u64>,
+        config: Config,
+    ) -> Result<Self, Error> {
         match architecture {
-            Architecture::CIL => {},
+            Architecture::CIL => {}
             _ => {
-                return Err(Error::new(ErrorKind::Unsupported, "unsupported architecture"));
+                return Err(Error::new(
+                    ErrorKind::Unsupported,
+                    "unsupported architecture",
+                ));
             }
         }
         Ok(Self {
-            architecture: architecture,
-            metadata_token_addresses: metadata_token_addresses,
-            executable_address_ranges: executable_address_ranges,
-            image: image,
-            config: config,
+            architecture,
+            metadata_token_addresses,
+            executable_address_ranges,
+            image,
+            config,
         })
     }
 
@@ -211,31 +220,43 @@ impl <'disassembler> Disassembler <'disassembler> {
     fn get_instruction_functions(&self, instruction: &Instruction) -> BTreeSet<u64> {
         let mut result = BTreeSet::<u64>::new();
         let call_metadata_token = instruction.get_call_metadata_token();
-        if call_metadata_token.is_none() { return result; }
-        let call_address = self.metadata_token_addresses.get(&(call_metadata_token.unwrap() as u64));
-        if call_address.is_none() { return result; }
+        if call_metadata_token.is_none() {
+            return result;
+        }
+        let call_address = self
+            .metadata_token_addresses
+            .get(&(call_metadata_token.unwrap() as u64));
+        if call_address.is_none() {
+            return result;
+        }
         result.insert(*call_address.unwrap());
         result
     }
 
     pub fn disassemble_instruction(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error> {
-
         cfg.instructions.insert_processed(address);
 
-        if self.is_executable_address(address) == false {
+        if !self.is_executable_address(address) {
             cfg.instructions.insert_invalid(address);
-            return Err(Error::new(ErrorKind::InvalidData, format!("0x{:x}: instruction address is not executable", address)));
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                format!("0x{:x}: instruction address is not executable", address),
+            ));
         }
 
         let instruction = match Instruction::new(&self.image[address as usize..], address) {
             Ok(instruction) => instruction,
             Err(_) => {
                 cfg.instructions.insert_invalid(address);
-                return Err(Error::new(ErrorKind::Unsupported, format!("0x{:x}: failed to disassemble instruction", address)));
+                return Err(Error::new(
+                    ErrorKind::Unsupported,
+                    format!("0x{:x}: failed to disassemble instruction", address),
+                ));
             }
         };
 
-        let mut cfginstruction = CFGInstruction::create(address, self.architecture, cfg.config.clone());
+        let mut cfginstruction =
+            CFGInstruction::create(address, self.architecture, cfg.config.clone());
 
         cfginstruction.bytes = instruction.bytes();
         cfginstruction.is_call = instruction.is_call();
@@ -274,8 +295,11 @@ impl <'disassembler> Disassembler <'disassembler> {
     pub fn disassemble_block(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error> {
         cfg.blocks.insert_processed(address);
 
-        if self.is_executable_address(address) == false {
-            return Err(Error::new(ErrorKind::InvalidData, format!("0x{:x}: block address is not executable", address)));
+        if !self.is_executable_address(address) {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                format!("0x{:x}: block address is not executable", address),
+            ));
         }
 
         let mut pc = address;
@@ -290,7 +314,10 @@ impl <'disassembler> Disassembler <'disassembler> {
                 Some(instruction) => instruction,
                 None => {
                     cfg.blocks.insert_invalid(address);
-                    return Err(Error::new(ErrorKind::InvalidData, format!("0x{:x}: failed to disassemble instruction", pc)));
+                    return Err(Error::new(
+                        ErrorKind::InvalidData,
+                        format!("0x{:x}: failed to disassemble instruction", pc),
+                    ));
                 }
             };
 
@@ -301,7 +328,8 @@ impl <'disassembler> Disassembler <'disassembler> {
 
             let is_block_start = instruction.address != address && instruction.is_block_start;
 
-            if instruction.is_trap || instruction.is_return || instruction.is_jump || is_block_start {
+            if instruction.is_trap || instruction.is_return || instruction.is_jump || is_block_start
+            {
                 break;
             }
 
@@ -316,20 +344,24 @@ impl <'disassembler> Disassembler <'disassembler> {
     pub fn disassemble_function(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error> {
         cfg.functions.insert_processed(address);
 
-        if self.is_executable_address(address) == false {
-            return Err(Error::new(ErrorKind::InvalidData, format!("0x{:x}: function address is not executable", address)));
+        if !self.is_executable_address(address) {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                format!("0x{:x}: function address is not executable", address),
+            ));
         }
 
         cfg.blocks.enqueue(address);
 
         while let Some(block_start_address) = cfg.blocks.dequeue() {
-            if cfg.blocks.is_processed(block_start_address) { continue; }
+            if cfg.blocks.is_processed(block_start_address) {
+                continue;
+            }
 
             let block_end_address = self
                 .disassemble_block(block_start_address, cfg)
-                .map_err(|error| {
+                .inspect_err(|_| {
                     cfg.functions.insert_invalid(address);
-                    error
                 })?;
 
             if block_start_address == address {
@@ -349,8 +381,11 @@ impl <'disassembler> Disassembler <'disassembler> {
         Ok(address)
     }
 
-    pub fn disassemble_controlflow<'a>(&'a self, addresses: BTreeSet<u64>, cfg: &'a mut Graph) -> Result<(), Error> {
-
+    pub fn disassemble_controlflow<'a>(
+        &'a self,
+        addresses: BTreeSet<u64>,
+        cfg: &'a mut Graph,
+    ) -> Result<(), Error> {
         let pool = ThreadPoolBuilder::new()
             .num_threads(cfg.config.general.threads)
             .build()
@@ -360,7 +395,7 @@ impl <'disassembler> Disassembler <'disassembler> {
 
         let external_image = self.image;
 
-        let external_machine = self.architecture.clone();
+        let external_machine = self.architecture;
 
         let external_executable_address_ranges = self.executable_address_ranges.clone();
 
@@ -371,16 +406,23 @@ impl <'disassembler> Disassembler <'disassembler> {
         pool.install(|| {
             while !cfg.functions.queue.is_empty() {
                 let function_addresses = cfg.functions.dequeue_all();
-                cfg.functions.insert_processed_extend(function_addresses.clone());
+                cfg.functions
+                    .insert_processed_extend(function_addresses.clone());
                 let graphs: Vec<Graph> = function_addresses
                     .par_iter()
                     .map(|address| {
-                        let machine = external_machine.clone();
+                        let machine = external_machine;
                         let executable_address_ranges = external_executable_address_ranges.clone();
                         let metadata_token_addresses = external_metadata_token_addresses.clone();
                         let image = external_image;
                         let mut graph = Graph::new(machine, cfg.config.clone());
-                        if let Ok(disasm) = Disassembler::new(machine, image, metadata_token_addresses, executable_address_ranges, external_config.clone()) {
+                        if let Ok(disasm) = Disassembler::new(
+                            machine,
+                            image,
+                            metadata_token_addresses,
+                            executable_address_ranges,
+                            external_config.clone(),
+                        ) {
                             let _ = disasm.disassemble_function(*address, &mut graph);
                         }
                         graph
@@ -392,6 +434,6 @@ impl <'disassembler> Disassembler <'disassembler> {
             }
         });
 
-        return Ok(());
+        Ok(())
     }
 }

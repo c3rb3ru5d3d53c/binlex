@@ -294,7 +294,7 @@ impl<'disassembler> Disassembler<'disassembler> {
 
         let external_image = self.image;
 
-        let external_machine = self.machine.clone();
+        let external_machine = self.machine;
 
         let external_executable_address_ranges = self.executable_address_ranges.clone();
 
@@ -308,7 +308,7 @@ impl<'disassembler> Disassembler<'disassembler> {
                 let graphs: Vec<Graph> = function_addresses
                     .par_iter()
                     .map(|address| {
-                        let machine = external_machine.clone();
+                        let machine = external_machine;
                         let executable_address_ranges = external_executable_address_ranges.clone();
                         let image = external_image;
                         let mut graph = Graph::new(machine, cfg.config.clone());
@@ -356,12 +356,11 @@ impl<'disassembler> Disassembler<'disassembler> {
                 continue;
             }
 
-            let block_end_address =
-                self.disassemble_block(block_start_address, cfg)
-                    .map_err(|error| {
-                        cfg.functions.insert_invalid(address);
-                        error
-                    })?;
+            let block_end_address = self
+                .disassemble_block(block_start_address, cfg)
+                .inspect_err(|_| {
+                    cfg.functions.insert_invalid(address);
+                })?;
 
             if block_start_address == address {
                 if let Some(mut instruction) = cfg.get_instruction(block_start_address) {
@@ -408,7 +407,7 @@ impl<'disassembler> Disassembler<'disassembler> {
             Error::new(ErrorKind::Other, error)
         })?;
 
-        let instruction_signature = self.get_instruction_pattern(&instruction)?;
+        let instruction_signature = self.get_instruction_pattern(instruction)?;
 
         let mut blinstruction =
             Instruction::create(instruction.address(), cfg.architecture, cfg.config.clone());
@@ -476,7 +475,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         let mut pc = address;
         let mut has_prologue = false;
 
-        while let Ok(_) = self.disassemble_instruction(pc, cfg) {
+        while self.disassemble_instruction(pc, cfg).is_ok() {
             let mut instruction = match cfg.get_instruction(pc) {
                 Some(instr) => instr,
                 None => {
@@ -636,7 +635,7 @@ impl<'disassembler> Disassembler<'disassembler> {
                 };
             }
         }
-        return false;
+        false
     }
 
     pub fn instruction_contains_immutable_operand(&self, instruction: &Insn) -> bool {
@@ -652,7 +651,7 @@ impl<'disassembler> Disassembler<'disassembler> {
                 };
             }
         }
-        return false;
+        false
     }
 
     #[allow(dead_code)]
@@ -695,7 +694,7 @@ impl<'disassembler> Disassembler<'disassembler> {
 
         let is_immutable_signature = self.is_immutable_instruction_to_pattern(instruction);
 
-        if total_operand_size <= 0 && operands.len() > 0 {
+        if total_operand_size == 0 && !operands.is_empty() {
             return Err(Error::new(
                 ErrorKind::Other,
                 format!(
@@ -738,7 +737,7 @@ impl<'disassembler> Disassembler<'disassembler> {
                 let operand_offset = instruction_size - op_size;
 
                 if should_wildcard {
-                    for i in 0..op_size as usize {
+                    for i in 0..op_size {
                         if operand_offset + i > wildcarded.len() {
                             Disassembler::print_instruction(instruction);
                             return Err(Error::new(ErrorKind::Other, format!("Instruction -> 0x{:x}: instruction wildcard index is out of bounds", instruction.address())));
@@ -767,9 +766,9 @@ impl<'disassembler> Disassembler<'disassembler> {
             .map(|(index, ch)| {
                 let start = index * 4;
                 let end = start + 4;
-                if start >= instruction_trailing_null_offset && is_immutable_signature {
-                    '?'
-                } else if wildcarded[start..end].iter().all(|&x| x) {
+                if (start >= instruction_trailing_null_offset && is_immutable_signature)
+                    || wildcarded[start..end].iter().all(|&x| x)
+                {
                     '?'
                 } else {
                     ch
@@ -797,7 +796,7 @@ impl<'disassembler> Disassembler<'disassembler> {
             ));
         }
 
-        return Ok(signature);
+        Ok(signature)
     }
 
     fn get_displacement_size(displacement: u64) -> usize {
@@ -904,7 +903,8 @@ impl<'disassembler> Disassembler<'disassembler> {
 
     #[allow(dead_code)]
     pub fn get_instruction_operands(&self, instruction: &Insn) -> Result<Vec<ArchOperand>, Error> {
-        let detail = match self.cs.insn_detail(&instruction) {
+        #[allow(clippy::let_and_return)]
+        let detail = match self.cs.insn_detail(instruction) {
             Ok(detail) => detail,
             Err(_error) => {
                 return Err(Error::new(
@@ -914,7 +914,7 @@ impl<'disassembler> Disassembler<'disassembler> {
             }
         };
         let arch = detail.arch_detail();
-        return Ok(arch.operands());
+        Ok(arch.operands())
     }
 
     #[allow(dead_code)]
@@ -923,10 +923,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         instruction: &Insn,
         index: usize,
     ) -> Result<ArchOperand, Error> {
-        let operands = match self.get_instruction_operands(instruction) {
-            Ok(operands) => operands,
-            Err(error) => return Err(error),
-        };
+        let operands = self.get_instruction_operands(instruction)?;
         let operand = match operands.get(index) {
             Some(operand) => operand.clone(),
             None => {
@@ -936,13 +933,13 @@ impl<'disassembler> Disassembler<'disassembler> {
                 ))
             }
         };
-        return Ok(operand);
+        Ok(operand)
     }
 
     #[allow(dead_code)]
     pub fn print_instructions(instructions: &Instructions) {
         for instruction in instructions.iter() {
-            Disassembler::print_instruction(&instruction);
+            Disassembler::print_instruction(instruction);
         }
     }
 
@@ -1004,54 +1001,54 @@ impl<'disassembler> Disassembler<'disassembler> {
 
     #[allow(dead_code)]
     pub fn is_unsupported_pattern_instruction(instruction: &Insn) -> bool {
-        vec![
-            InsnId(X86Insn::X86_INS_MOVUPS as u32),
-            InsnId(X86Insn::X86_INS_MOVAPS as u32),
-            InsnId(X86Insn::X86_INS_XORPS as u32),
-            InsnId(X86Insn::X86_INS_SHUFPS as u32),
-        ]
-        .contains(&instruction.id())
+        static MNEMONICS: &[u32] = &[
+            X86Insn::X86_INS_MOVUPS as u32,
+            X86Insn::X86_INS_MOVAPS as u32,
+            X86Insn::X86_INS_XORPS as u32,
+            X86Insn::X86_INS_SHUFPS as u32,
+        ];
+        MNEMONICS.contains(&instruction.id().0)
     }
 
     #[allow(dead_code)]
-    pub fn is_return_instruction(instruction: &Insn) -> bool {
-        vec![
-            InsnId(X86Insn::X86_INS_RET as u32),
-            InsnId(X86Insn::X86_INS_RETF as u32),
-            InsnId(X86Insn::X86_INS_RETFQ as u32),
-            InsnId(X86Insn::X86_INS_IRET as u32),
-            InsnId(X86Insn::X86_INS_IRETD as u32),
-            InsnId(X86Insn::X86_INS_IRETQ as u32),
-        ]
-        .contains(&instruction.id())
+    pub fn is_return_instruction(insn: &Insn) -> bool {
+        static RETURN_OPCODES: &[u32] = &[
+            X86Insn::X86_INS_RET as u32,
+            X86Insn::X86_INS_RETF as u32,
+            X86Insn::X86_INS_RETFQ as u32,
+            X86Insn::X86_INS_IRET as u32,
+            X86Insn::X86_INS_IRETD as u32,
+            X86Insn::X86_INS_IRETQ as u32,
+        ];
+        RETURN_OPCODES.contains(&insn.id().0)
     }
 
     #[allow(dead_code)]
     pub fn is_privilege_instruction(instruction: &Insn) -> bool {
-        vec![
-            InsnId(X86Insn::X86_INS_HLT as u32),
-            InsnId(X86Insn::X86_INS_IN as u32),
-            InsnId(X86Insn::X86_INS_INSB as u32),
-            InsnId(X86Insn::X86_INS_INSW as u32),
-            InsnId(X86Insn::X86_INS_INSD as u32),
-            InsnId(X86Insn::X86_INS_OUT as u32),
-            InsnId(X86Insn::X86_INS_OUTSB as u32),
-            InsnId(X86Insn::X86_INS_OUTSW as u32),
-            InsnId(X86Insn::X86_INS_OUTSD as u32),
-            InsnId(X86Insn::X86_INS_RDMSR as u32),
-            InsnId(X86Insn::X86_INS_WRMSR as u32),
-            InsnId(X86Insn::X86_INS_RDPMC as u32),
-            InsnId(X86Insn::X86_INS_RDTSC as u32),
-            InsnId(X86Insn::X86_INS_LGDT as u32),
-            InsnId(X86Insn::X86_INS_LLDT as u32),
-            InsnId(X86Insn::X86_INS_LTR as u32),
-            InsnId(X86Insn::X86_INS_LMSW as u32),
-            InsnId(X86Insn::X86_INS_CLTS as u32),
-            InsnId(X86Insn::X86_INS_INVD as u32),
-            InsnId(X86Insn::X86_INS_INVLPG as u32),
-            InsnId(X86Insn::X86_INS_WBINVD as u32),
-        ]
-        .contains(&instruction.id())
+        static MNEMONICS: &[u32] = &[
+            X86Insn::X86_INS_HLT as u32,
+            X86Insn::X86_INS_IN as u32,
+            X86Insn::X86_INS_INSB as u32,
+            X86Insn::X86_INS_INSW as u32,
+            X86Insn::X86_INS_INSD as u32,
+            X86Insn::X86_INS_OUT as u32,
+            X86Insn::X86_INS_OUTSB as u32,
+            X86Insn::X86_INS_OUTSW as u32,
+            X86Insn::X86_INS_OUTSD as u32,
+            X86Insn::X86_INS_RDMSR as u32,
+            X86Insn::X86_INS_WRMSR as u32,
+            X86Insn::X86_INS_RDPMC as u32,
+            X86Insn::X86_INS_RDTSC as u32,
+            X86Insn::X86_INS_LGDT as u32,
+            X86Insn::X86_INS_LLDT as u32,
+            X86Insn::X86_INS_LTR as u32,
+            X86Insn::X86_INS_LMSW as u32,
+            X86Insn::X86_INS_CLTS as u32,
+            X86Insn::X86_INS_INVD as u32,
+            X86Insn::X86_INS_INVLPG as u32,
+            X86Insn::X86_INS_WBINVD as u32,
+        ];
+        MNEMONICS.contains(&instruction.id().0)
     }
 
     #[allow(dead_code)]
@@ -1062,22 +1059,19 @@ impl<'disassembler> Disassembler<'disassembler> {
 
     #[allow(dead_code)]
     pub fn is_nop_instruction(instruction: &Insn) -> bool {
-        vec![
-            InsnId(X86Insn::X86_INS_NOP as u32),
-            InsnId(X86Insn::X86_INS_FNOP as u32),
-        ]
-        .contains(&instruction.id())
+        static MNEMONICS: &[u32] = &[X86Insn::X86_INS_NOP as u32, X86Insn::X86_INS_FNOP as u32];
+        MNEMONICS.contains(&instruction.id().0)
     }
 
     #[allow(dead_code)]
     pub fn is_trap_instruction(instruction: &Insn) -> bool {
-        vec![
-            InsnId(X86Insn::X86_INS_INT3 as u32),
-            InsnId(X86Insn::X86_INS_UD2 as u32),
-            InsnId(X86Insn::X86_INS_INT1 as u32),
-            InsnId(X86Insn::X86_INS_INTO as u32),
-        ]
-        .contains(&instruction.id())
+        static MNEMONICS: &[u32] = &[
+            X86Insn::X86_INS_INT3 as u32,
+            X86Insn::X86_INS_UD2 as u32,
+            X86Insn::X86_INS_INT1 as u32,
+            X86Insn::X86_INS_INTO as u32,
+        ];
+        MNEMONICS.contains(&instruction.id().0)
     }
 
     #[allow(dead_code)]
@@ -1093,49 +1087,49 @@ impl<'disassembler> Disassembler<'disassembler> {
 
     #[allow(dead_code)]
     pub fn is_load_address_instruction(instruction: &Insn) -> bool {
-        vec![InsnId(X86Insn::X86_INS_LEA as u32)].contains(&instruction.id())
+        static MNEMONICS: &[u32] = &[X86Insn::X86_INS_LEA as u32];
+        MNEMONICS.contains(&instruction.id().0)
     }
 
     #[allow(dead_code)]
     pub fn is_call_instruction(instruction: &Insn) -> bool {
-        vec![
-            InsnId(X86Insn::X86_INS_CALL as u32),
-            InsnId(X86Insn::X86_INS_LCALL as u32),
-        ]
-        .contains(&instruction.id())
+        static MNEMONICS: &[u32] = &[X86Insn::X86_INS_CALL as u32, X86Insn::X86_INS_LCALL as u32];
+        MNEMONICS.contains(&instruction.id().0)
     }
 
     #[allow(dead_code)]
     pub fn is_unconditional_jump_instruction(instruction: &Insn) -> bool {
-        vec![InsnId(X86Insn::X86_INS_JMP as u32)].contains(&instruction.id())
+        static MNEMONICS: &[u32] = &[X86Insn::X86_INS_JMP as u32];
+        MNEMONICS.contains(&instruction.id().0)
     }
 
     #[allow(dead_code)]
     pub fn is_conditional_jump_instruction(instruction: &Insn) -> bool {
-        vec![
-            InsnId(X86Insn::X86_INS_JNE as u32),
-            InsnId(X86Insn::X86_INS_JNO as u32),
-            InsnId(X86Insn::X86_INS_JNP as u32),
-            InsnId(X86Insn::X86_INS_JL as u32),
-            InsnId(X86Insn::X86_INS_JLE as u32),
-            InsnId(X86Insn::X86_INS_JG as u32),
-            InsnId(X86Insn::X86_INS_JGE as u32),
-            InsnId(X86Insn::X86_INS_JE as u32),
-            InsnId(X86Insn::X86_INS_JECXZ as u32),
-            InsnId(X86Insn::X86_INS_JCXZ as u32),
-            InsnId(X86Insn::X86_INS_JB as u32),
-            InsnId(X86Insn::X86_INS_JBE as u32),
-            InsnId(X86Insn::X86_INS_JA as u32),
-            InsnId(X86Insn::X86_INS_JAE as u32),
-            InsnId(X86Insn::X86_INS_JNS as u32),
-            InsnId(X86Insn::X86_INS_JO as u32),
-            InsnId(X86Insn::X86_INS_JP as u32),
-            InsnId(X86Insn::X86_INS_JRCXZ as u32),
-            InsnId(X86Insn::X86_INS_JS as u32),
-            InsnId(X86Insn::X86_INS_LOOPE as u32),
-            InsnId(X86Insn::X86_INS_LOOPNE as u32),
-        ]
-        .contains(&instruction.id())
+        static MNEMONICS: &[u32] = &[
+            X86Insn::X86_INS_JNE as u32,
+            X86Insn::X86_INS_JNO as u32,
+            X86Insn::X86_INS_JNP as u32,
+            X86Insn::X86_INS_JL as u32,
+            X86Insn::X86_INS_JLE as u32,
+            X86Insn::X86_INS_JG as u32,
+            X86Insn::X86_INS_JGE as u32,
+            X86Insn::X86_INS_JE as u32,
+            X86Insn::X86_INS_JECXZ as u32,
+            X86Insn::X86_INS_JCXZ as u32,
+            X86Insn::X86_INS_JB as u32,
+            X86Insn::X86_INS_JBE as u32,
+            X86Insn::X86_INS_JA as u32,
+            X86Insn::X86_INS_JAE as u32,
+            X86Insn::X86_INS_JNS as u32,
+            X86Insn::X86_INS_JO as u32,
+            X86Insn::X86_INS_JP as u32,
+            X86Insn::X86_INS_JRCXZ as u32,
+            X86Insn::X86_INS_JS as u32,
+            X86Insn::X86_INS_LOOPE as u32,
+            X86Insn::X86_INS_LOOPNE as u32,
+            X86Insn::X86_INS_LOOP as u32,
+        ];
+        MNEMONICS.contains(&instruction.id().0)
     }
 
     pub fn print_instruction(instruction: &Insn) {
@@ -1165,7 +1159,7 @@ impl<'disassembler> Disassembler<'disassembler> {
             .cs
             .disasm_count(&self.image[address as usize..], address, count as usize)
             .map_err(|_| Error::new(ErrorKind::Other, "failed to disassemble instructions"))?;
-        if instructions.len() <= 0 {
+        if instructions.len() == 0 {
             return Err(Error::new(ErrorKind::Other, "no instructions found"));
         }
         Ok(instructions)
