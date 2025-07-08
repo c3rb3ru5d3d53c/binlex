@@ -189,7 +189,7 @@ impl Architecture {
 
     #[staticmethod]
     #[pyo3(text_signature = "(s)")]
-    pub fn from_str(s: String) -> PyResult<Self> {
+    pub fn from_string(s: String) -> PyResult<Self> {
         let inner = InnerArchitecture::from_string(&s).map_err(|err| {
             PyValueError::new_err(format!(
                 "invalid or unsupported binary architecture: {}",

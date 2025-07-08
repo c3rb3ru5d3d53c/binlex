@@ -182,10 +182,10 @@ impl MinHash32 {
     #[pyo3(text_signature = "(bytes, num_hashes, shingle_size, seed)")]
     pub fn new(bytes: Vec<u8>, num_hashes: usize, shingle_size: usize, seed: u64) -> Self {
         Self {
-            bytes: bytes,
-            num_hashes: num_hashes,
-            shingle_size: shingle_size,
-            seed: seed,
+            bytes,
+            num_hashes,
+            shingle_size,
+            seed,
         }
     }
 
@@ -200,7 +200,6 @@ impl MinHash32 {
         InnerMinHash32::compare(&lhs, &rhs)
     }
 }
-
 
 #[pymodule]
 #[pyo3(name = "minhash")]

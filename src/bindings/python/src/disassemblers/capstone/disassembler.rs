@@ -164,9 +164,6 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-// PyResult Clippy False Positive for Useless Conversion
-#![expect(clippy::useless_conversion)]
-
 use crate::controlflow::Graph;
 use crate::Architecture;
 use crate::Config;
