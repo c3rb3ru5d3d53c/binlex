@@ -242,7 +242,7 @@ impl<'a> Disassembler<'a> {
                     executable_address_ranges.clone(),
                     config.clone(),
                 )
-                .map_err(|_| Error::new(ErrorKind::Other, "failed to create X86 disassembler"))?;
+                .map_err(|_| Error::other("failed to create X86 disassembler"))?;
                 DisassemblerBackend::X86(disasm)
             }
             _ => {

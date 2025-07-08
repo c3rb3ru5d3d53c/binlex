@@ -164,6 +164,9 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
+// PyResult Clippy False Positive for Useless Conversion
+#![expect(clippy::useless_conversion)]
+
 use crate::controlflow::Graph;
 use crate::Architecture;
 use crate::Config;
@@ -252,7 +255,7 @@ impl Disassembler {
         let cfg_ref = &mut cfg.borrow_mut(py);
         let result =
             disassembler.disassemble_instruction(address, &mut cfg_ref.inner.lock().unwrap())?;
-        return Ok(result);
+        Ok(result)
     }
 
     #[pyo3(text_signature = "($self, address, cfg)")]
@@ -274,7 +277,7 @@ impl Disassembler {
         let cfg_ref = &mut cfg.borrow_mut(py);
         let result =
             disassembler.disassemble_function(address, &mut cfg_ref.inner.lock().unwrap())?;
-        return Ok(result);
+        Ok(result)
     }
 
     #[pyo3(text_signature = "($self, address, cfg)")]
@@ -295,7 +298,7 @@ impl Disassembler {
         )?;
         let cfg_ref = &mut cfg.borrow_mut(py);
         let result = disassembler.disassemble_block(address, &mut cfg_ref.inner.lock().unwrap())?;
-        return Ok(result);
+        Ok(result)
     }
 
     #[pyo3(text_signature = "($self, addresses, cfg)")]

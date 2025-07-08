@@ -164,15 +164,18 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
+// PyResult Clippy False Positive for Useless Conversion
+#![expect(clippy::useless_conversion)]
+
+use crate::types::memorymappedfile::MemoryMappedFile;
+use crate::Architecture;
+use crate::Config;
+use binlex::formats::MACHO as InnerMACHO;
 use pyo3::prelude::*;
-use std::io::Error;
+use pyo3::types::PyType;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use pyo3::types::PyType;
-use binlex::formats::MACHO as InnerMACHO;
-use crate::Architecture;
-use crate::types::memorymappedfile::MemoryMappedFile;
-use crate::Config;
+use std::io::Error;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -188,27 +191,44 @@ impl MACHO {
     pub fn new(py: Python, path: String, config: Py<Config>) -> Result<Self, Error> {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
         let inner = InnerMACHO::new(path, inner_config)?;
-        Ok(Self{
+        Ok(Self {
             inner: Arc::new(Mutex::new(inner)),
         })
     }
 
     #[classmethod]
     #[pyo3(text_signature = "(bytes, config)")]
-    pub fn from_bytes(_: &Bound<'_, PyType>, py: Python, bytes: Vec<u8>, config: Py<Config>) -> PyResult<Self> {
+    pub fn from_bytes(
+        _: &Bound<'_, PyType>,
+        py: Python,
+        bytes: Vec<u8>,
+        config: Py<Config>,
+    ) -> PyResult<Self> {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
         let inner = InnerMACHO::from_bytes(bytes, inner_config)?;
-        Ok(Self { inner: Arc::new(Mutex::new(inner)) })
+        Ok(Self {
+            inner: Arc::new(Mutex::new(inner)),
+        })
     }
 
     #[pyo3(text_signature = "($self, relative_virtual_address, slice)")]
-    pub fn relative_virtual_address_to_virtual_address(&self, relative_virtual_address: u64, slice: usize) -> Option<u64> {
-        self.inner.lock().unwrap().relative_virtual_address_to_virtual_address(relative_virtual_address, slice)
+    pub fn relative_virtual_address_to_virtual_address(
+        &self,
+        relative_virtual_address: u64,
+        slice: usize,
+    ) -> Option<u64> {
+        self.inner
+            .lock()
+            .unwrap()
+            .relative_virtual_address_to_virtual_address(relative_virtual_address, slice)
     }
 
     #[pyo3(text_signature = "($self, file_offset, slice)")]
     pub fn file_offset_to_virtual_address(&self, file_offset: u64, slice: usize) -> Option<u64> {
-        self.inner.lock().unwrap().file_offset_to_virtual_address(file_offset, slice)
+        self.inner
+            .lock()
+            .unwrap()
+            .file_offset_to_virtual_address(file_offset, slice)
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -234,13 +254,18 @@ impl MACHO {
     #[pyo3(text_signature = "($self, slice)")]
     pub fn architecture(&self, slice: usize) -> Option<Architecture> {
         let architecture = self.inner.lock().unwrap().architecture(slice);
-        if architecture.is_none() { return None; }
-        Some(Architecture{inner: architecture.unwrap()})
+        architecture.as_ref()?;
+        Some(Architecture {
+            inner: architecture.unwrap(),
+        })
     }
 
     #[pyo3(text_signature = "($self, slice)")]
     pub fn entrypoint_virtual_addresses(&self, slice: usize) -> BTreeSet<u64> {
-        self.inner.lock().unwrap().entrypoint_virtual_addresses(slice)
+        self.inner
+            .lock()
+            .unwrap()
+            .entrypoint_virtual_addresses(slice)
     }
 
     #[pyo3(text_signature = "($self, slice)")]
@@ -250,15 +275,21 @@ impl MACHO {
 
     #[pyo3(text_signature = "($self, slice)")]
     pub fn executable_virtual_address_ranges(&self, slice: usize) -> BTreeMap<u64, u64> {
-        self.inner.lock().unwrap().executable_virtual_address_ranges(slice)
+        self.inner
+            .lock()
+            .unwrap()
+            .executable_virtual_address_ranges(slice)
     }
 
     #[pyo3(text_signature = "($self)")]
     pub fn image(&self, py: Python<'_>, slice: usize) -> PyResult<Py<MemoryMappedFile>> {
-        let result = self.inner.lock().unwrap().image(slice).map_err(|e| {
-            pyo3::exceptions::PyIOError::new_err(e.to_string())
-        })?;
-        let py_memory_mapped_file = Py::new(py, MemoryMappedFile { inner: result})?;
+        let result = self
+            .inner
+            .lock()
+            .unwrap()
+            .image(slice)
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        let py_memory_mapped_file = Py::new(py, MemoryMappedFile { inner: result })?;
         Ok(py_memory_mapped_file)
     }
 
@@ -284,7 +315,11 @@ impl MACHO {
 
     #[pyo3(text_signature = "($self)")]
     pub fn file_json(&self) -> PyResult<String> {
-        self.inner.lock().unwrap().file_json().map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+        self.inner
+            .lock()
+            .unwrap()
+            .file_json()
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
     }
 }
 
@@ -292,7 +327,7 @@ impl MACHO {
 #[pyo3(name = "macho")]
 pub fn macho_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<MACHO>()?;
-     py.import_bound("sys")?
+    py.import_bound("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.formats.macho", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.formats.macho")?;

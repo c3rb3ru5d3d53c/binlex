@@ -164,15 +164,18 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-use pyo3::prelude::*;
-use std::collections::BTreeSet;
-use binlex::controlflow::Instruction as InnerInstruction;
+// PyResult Clippy False Positive for Useless Conversion
+#![expect(clippy::useless_conversion)]
+
 use crate::controlflow::Graph;
-use crate::Config;
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeSimilarity;
-use std::sync::Mutex;
+use crate::Config;
+use binlex::controlflow::Instruction as InnerInstruction;
+use pyo3::prelude::*;
+use std::collections::BTreeSet;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 #[pyclass]
 pub struct Instruction {
@@ -191,15 +194,15 @@ impl Instruction {
         if cache.is_none() {
             let binding = self.cfg.borrow(py);
             let inner = binding.inner.lock().unwrap();
-
             #[allow(mutable_transmutes)]
+            #[allow(clippy::all)]
             let inner_ref: _ = unsafe { std::mem::transmute(&*inner) };
             let inner_instruction = InnerInstruction::new(self.address, inner_ref);
             if inner_instruction.is_err() {
                 return Err(pyo3::exceptions::PyRuntimeError::new_err(
                     "instruction does not exist",
                 ));
-             }
+            }
             *cache = Some(inner_instruction.unwrap());
         }
 
@@ -232,12 +235,16 @@ impl Instruction {
     pub fn chromosome(&self, py: Python) -> PyResult<Option<Chromosome>> {
         self.with_inner_instruction(py, |instruction| {
             let inner_config = self.cfg.borrow(py).inner.lock().unwrap().config.clone();
-            let config = Py::new(py, Config {
-                inner: Arc::new(Mutex::new(inner_config))
-            }).unwrap();
+            let config = Py::new(
+                py,
+                Config {
+                    inner: Arc::new(Mutex::new(inner_config)),
+                },
+            )
+            .unwrap();
             let pattern = instruction.pattern();
             let chromosome = Chromosome::new(py, pattern, config).ok();
-            return Ok(chromosome);
+            Ok(chromosome)
         })
     }
 
@@ -247,55 +254,52 @@ impl Instruction {
     /// # Returns
     ///
     /// Returns an `Option<ChromosomeSimilarity>` reprenting the similarity between this instruction and another.
-    pub fn compare(&self, py: Python, rhs: Py<Instruction>) -> PyResult<Option<ChromosomeSimilarity>> {
+    pub fn compare(
+        &self,
+        py: Python,
+        rhs: Py<Instruction>,
+    ) -> PyResult<Option<ChromosomeSimilarity>> {
         self.with_inner_instruction(py, |instruction| {
-            let rhs_address = rhs.borrow(py).address.clone();
+            let rhs_address = rhs.borrow(py).address;
             let rhs_binding_0 = rhs.borrow(py);
             let rhs_binding_1 = rhs_binding_0.cfg.borrow(py);
             let rhs_cfg = rhs_binding_1.inner.lock().unwrap();
-            let rhs_inner = InnerInstruction::new(rhs_address, &rhs_cfg).expect("rhs instruction is invalid");
+            let rhs_inner =
+                InnerInstruction::new(rhs_address, &rhs_cfg).expect("rhs instruction is invalid");
             let inner = instruction.compare(&rhs_inner);
-            if inner.is_none() { return Ok(None); }
+            if inner.is_none() {
+                return Ok(None);
+            }
             let similarity = ChromosomeSimilarity {
                 inner: Arc::new(Mutex::new(inner.unwrap())),
             };
-            return Ok(Some(similarity));
+            Ok(Some(similarity))
         })
     }
 
     #[pyo3(text_signature = "($self)")]
     pub fn blocks(&self, py: Python) -> PyResult<BTreeSet<u64>> {
-        self.with_inner_instruction(py, |instruction| {
-            Ok(instruction.blocks())
-        })
+        self.with_inner_instruction(py, |instruction| Ok(instruction.blocks()))
     }
 
     #[pyo3(text_signature = "($self)")]
     pub fn next(&self, py: Python) -> PyResult<Option<u64>> {
-        self.with_inner_instruction(py, |instruction| {
-            Ok(instruction.next())
-        })
+        self.with_inner_instruction(py, |instruction| Ok(instruction.next()))
     }
 
     #[pyo3(text_signature = "($self)")]
     pub fn to(&self, py: Python) -> PyResult<BTreeSet<u64>> {
-        self.with_inner_instruction(py, |instruction| {
-            Ok(instruction.to())
-        })
+        self.with_inner_instruction(py, |instruction| Ok(instruction.to()))
     }
 
     #[pyo3(text_signature = "($self)")]
     pub fn functions(&self, py: Python) -> PyResult<BTreeSet<u64>> {
-        self.with_inner_instruction(py, |instruction| {
-            Ok(instruction.functions())
-        })
+        self.with_inner_instruction(py, |instruction| Ok(instruction.functions()))
     }
 
     #[pyo3(text_signature = "($self)")]
     pub fn size(&self, py: Python) -> PyResult<usize> {
-        self.with_inner_instruction(py, |instruction| {
-            Ok(instruction.size())
-        })
+        self.with_inner_instruction(py, |instruction| Ok(instruction.size()))
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -309,7 +313,9 @@ impl Instruction {
     #[pyo3(text_signature = "($self)")]
     pub fn json(&self, py: Python) -> PyResult<String> {
         self.with_inner_instruction(py, |instruction| {
-            instruction.json().map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+            instruction
+                .json()
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
         })
     }
 
@@ -319,7 +325,10 @@ impl Instruction {
 
     #[pyo3(text_signature = "($self)")]
     pub fn print(&self, py: Python) -> PyResult<()> {
-        self.with_inner_instruction(py, |instruction| Ok(instruction.print()))
+        self.with_inner_instruction(py, |instruction| {
+            instruction.print();
+            Ok(())
+        })
     }
 }
 
