@@ -1,10 +1,10 @@
-use pyo3::prelude::*;
 use binlex::imaging::colormap::ColorMap as InnerColorMap;
 use binlex::imaging::colormap::ColorMapType as InnerColorMapType;
+use pyo3::exceptions::PyRuntimeError;
+use pyo3::prelude::*;
+use pyo3::types::PyBytes;
 use std::sync::Arc;
 use std::sync::Mutex;
-use pyo3::exceptions::PyRuntimeError;
-use pyo3::types::PyBytes;
 
 #[pyclass]
 pub struct ColorMapType {
@@ -15,9 +15,10 @@ pub struct ColorMapType {
 impl ColorMapType {
     #[staticmethod]
     pub fn from_string(string: String) -> PyResult<Self> {
-        let inner = InnerColorMapType::from_string(&string).map_err(|e| PyErr::new::<PyRuntimeError, _>(e.to_string()))?;
+        let inner = InnerColorMapType::from_string(&string)
+            .map_err(|e| PyErr::new::<PyRuntimeError, _>(e.to_string()))?;
         Ok(Self {
-            inner: Arc::new(Mutex::new(inner))
+            inner: Arc::new(Mutex::new(inner)),
         })
     }
 }
@@ -33,18 +34,13 @@ impl ColorMap {
     #[pyo3(text_signature = "()")]
     pub fn new() -> Self {
         Self {
-            inner: Arc::new(Mutex::new(InnerColorMap::new()))
+            inner: Arc::new(Mutex::new(InnerColorMap::new())),
         }
     }
 
     #[pyo3(text_signature = "($self, color_map_type)")]
     pub fn set_color_map_type(&mut self, py: Python, color_map_type: Py<ColorMapType>) {
-        let inner_color_map_type = color_map_type
-            .borrow(py)
-            .inner
-            .lock()
-            .unwrap()
-            .clone();
+        let inner_color_map_type = color_map_type.borrow(py).inner.lock().unwrap().clone();
         self.inner
             .lock()
             .unwrap()
@@ -77,6 +73,7 @@ impl ColorMap {
         self.inner.lock().unwrap().to_svg_string()
     }
 
+    #[allow(clippy::useless_conversion)]
     #[pyo3(text_signature = "($self, file_path)")]
     pub fn write(&self, file_path: String) -> PyResult<()> {
         self.inner

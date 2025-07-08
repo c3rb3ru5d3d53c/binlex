@@ -164,25 +164,28 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
+// PyResult Clippy False Positive for Useless Conversion
+#![expect(clippy::useless_conversion)]
+
+use crate::controlflow::Block;
 use crate::controlflow::BlockJsonDeserializer;
-use binlex::controlflow::BlockJsonDeserializer as InnerBlockJsonDeserializer;
-use pyo3::prelude::*;
-use pyo3::Py;
-use std::collections::BTreeMap;
-use binlex::controlflow::Function as InnerFunction;
-use binlex::controlflow::Graph as InnerGraph;
-use binlex::controlflow::FunctionJsonDeserializer as InnerFunctionJsonDeserializer;
+use crate::controlflow::Graph;
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeSimilarity;
+use crate::Architecture;
 use crate::Config;
-use crate::controlflow::Graph;
+use binlex::controlflow::BlockJsonDeserializer as InnerBlockJsonDeserializer;
+use binlex::controlflow::Function as InnerFunction;
+use binlex::controlflow::FunctionJsonDeserializer as InnerFunctionJsonDeserializer;
+use binlex::controlflow::Graph as InnerGraph;
+use binlex::Binary as InnerBinary;
+use pyo3::prelude::*;
+use pyo3::types::PyBytes;
+use pyo3::types::PyList;
+use pyo3::Py;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::Mutex;
-use pyo3::types::PyBytes;
-use crate::controlflow::Block;
-use pyo3::types::PyList;
-use crate::Architecture;
-use binlex::Binary as InnerBinary;
 
 #[pyclass]
 pub struct FunctionJsonDeserializer {
@@ -197,7 +200,7 @@ impl FunctionJsonDeserializer {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
         let inner = InnerFunctionJsonDeserializer::new(string, inner_config)?;
         Ok(Self {
-           inner: Arc::new(Mutex::new(inner)),
+            inner: Arc::new(Mutex::new(inner)),
         })
     }
 
@@ -235,37 +238,51 @@ impl FunctionJsonDeserializer {
 
     #[pyo3(text_signature = "($self)")]
     pub fn architecture(&self) -> PyResult<Architecture> {
-        let inner = self.inner.lock().unwrap().architecture()
+        let inner = self
+            .inner
+            .lock()
+            .unwrap()
+            .architecture()
             .map_err(|err| pyo3::exceptions::PyRuntimeError::new_err(format!("{}", err)))?;
-        Ok(Architecture {
-            inner: inner
-        })
+        Ok(Architecture { inner })
     }
 
     #[pyo3(text_signature = "($self)")]
     pub fn bytes(&self, py: Python) -> PyResult<Option<Py<PyBytes>>> {
         let binding = self.inner.lock().unwrap();
         let string = binding.json.bytes.clone();
-        if string.is_none() { return Ok(None); }
+        if string.is_none() {
+            return Ok(None);
+        }
         let bytes = InnerBinary::from_hex(&string.unwrap())
-            .map_err(|err| pyo3::exceptions::PyRuntimeError::new_err(format!("{}", err)))?;
+            .map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
         let result = PyBytes::new_bound(py, &bytes);
         Ok(Some(result.into()))
     }
 
     #[pyo3(text_signature = "($self, rhs)")]
-    pub fn compare(&self, py: Python, rhs: Py<FunctionJsonDeserializer>) -> PyResult<Option<ChromosomeSimilarity>> {
+    pub fn compare(
+        &self,
+        py: Python,
+        rhs: Py<FunctionJsonDeserializer>,
+    ) -> PyResult<Option<ChromosomeSimilarity>> {
         let binding = rhs.borrow(py);
         let rhs_inner = binding.inner.lock().unwrap();
         let similarity = self.inner.lock().unwrap().compare(&rhs_inner)?;
-        if similarity.is_none() { return Ok(None); }
+        if similarity.is_none() {
+            return Ok(None);
+        }
         Ok(Some(ChromosomeSimilarity {
-            inner: Arc::new(Mutex::new(similarity.unwrap()))
+            inner: Arc::new(Mutex::new(similarity.unwrap())),
         }))
     }
 
     #[pyo3(text_signature = "($self, rhs_functions)")]
-    pub fn compare_many(&self, py: Python, rhs_functions: Py<PyList>) -> PyResult<BTreeMap<u64, ChromosomeSimilarity>> {
+    pub fn compare_many(
+        &self,
+        py: Python,
+        rhs_functions: Py<PyList>,
+    ) -> PyResult<BTreeMap<u64, ChromosomeSimilarity>> {
         // Initialize the function deserializer
         let function = InnerFunctionJsonDeserializer::new(
             self.json()?,
@@ -294,7 +311,8 @@ impl FunctionJsonDeserializer {
             let rhs: Option<Py<FunctionJsonDeserializer>> = py_item.extract().ok();
             if let Some(rhs_binding) = rhs {
                 let rhs_borrowed = rhs_binding.borrow(py);
-                let task: InnerFunctionJsonDeserializer = rhs_borrowed.inner.lock().unwrap().clone();
+                let task: InnerFunctionJsonDeserializer =
+                    rhs_borrowed.inner.lock().unwrap().clone();
                 tasks.push(task);
             }
         }
@@ -389,7 +407,7 @@ impl FunctionJsonDeserializer {
     pub fn chromosome(&self) -> Chromosome {
         let inner_chromosome = self.inner.lock().unwrap().chromosome();
         Chromosome {
-            inner: Arc::new(Mutex::new(inner_chromosome.unwrap()))
+            inner: Arc::new(Mutex::new(inner_chromosome.unwrap())),
         }
     }
 
@@ -412,10 +430,7 @@ impl FunctionJsonDeserializer {
 
     #[pyo3(text_signature = "($self)")]
     pub fn print(&self) {
-        self.inner
-            .lock()
-            .unwrap()
-            .print()
+        self.inner.lock().unwrap().print()
     }
 
     pub fn __str__(&self) -> PyResult<String> {
@@ -482,7 +497,7 @@ impl Function {
     pub fn architecture(&self, py: Python) -> PyResult<Architecture> {
         self.with_inner_function(py, |function| {
             Ok(Architecture {
-                inner: function.architecture()
+                inner: function.architecture(),
             })
         })
     }
@@ -495,13 +510,19 @@ impl Function {
     pub fn chromosome(&self, py: Python) -> PyResult<Option<Chromosome>> {
         self.with_inner_function(py, |function| {
             let inner_config = self.cfg.borrow(py).inner.lock().unwrap().config.clone();
-            let config = Py::new(py, Config {
-                inner: Arc::new(Mutex::new(inner_config))
-            }).unwrap();
+            let config = Py::new(
+                py,
+                Config {
+                    inner: Arc::new(Mutex::new(inner_config)),
+                },
+            )
+            .unwrap();
             let pattern = function.pattern();
-            if pattern.is_none() { return Ok(None); }
+            if pattern.is_none() {
+                return Ok(None);
+            }
             let chromosome = Chromosome::new(py, pattern.unwrap(), config).ok();
-            return Ok(chromosome);
+            Ok(chromosome)
         })
     }
 
@@ -513,18 +534,22 @@ impl Function {
     /// Returns an `Option<ChromosomeSimilarity>` reprenting the similarity between this block and another.
     pub fn compare(&self, py: Python, rhs: Py<Function>) -> PyResult<Option<ChromosomeSimilarity>> {
         self.with_inner_function(py, |function| {
-            let rhs_address = rhs.borrow(py).address.clone();
+            let rhs_address = rhs.borrow(py).address;
             let rhs_binding_0 = rhs.borrow(py);
             let rhs_binding_1 = rhs_binding_0.cfg.borrow(py);
             let rhs_cfg = rhs_binding_1.inner.lock().unwrap();
             let rhs_inner = InnerFunction::new(rhs_address, &rhs_cfg).ok();
-            if rhs_inner.is_none() { return Ok(None); }
+            if rhs_inner.is_none() {
+                return Ok(None);
+            }
             let inner = function.compare(&rhs_inner.unwrap())?;
-            if inner.is_none() { return Ok(None); }
+            if inner.is_none() {
+                return Ok(None);
+            }
             let similarity = ChromosomeSimilarity {
                 inner: Arc::new(Mutex::new(inner.unwrap())),
             };
-            return Ok(Some(similarity));
+            Ok(Some(similarity))
         })
     }
 
@@ -599,44 +624,32 @@ impl Function {
 
     #[pyo3(text_signature = "($self)")]
     pub fn chromosome_minhash_ratio(&self, py: Python) -> PyResult<f64> {
-        self.with_inner_function(py, |function| {
-            Ok(function.chromosome_minhash_ratio())
-        })
+        self.with_inner_function(py, |function| Ok(function.chromosome_minhash_ratio()))
     }
 
     #[pyo3(text_signature = "($self)")]
     pub fn chromosome_tlsh_ratio(&self, py: Python) -> PyResult<f64> {
-        self.with_inner_function(py, |function| {
-            Ok(function.chromosome_tlsh_ratio())
-        })
+        self.with_inner_function(py, |function| Ok(function.chromosome_tlsh_ratio()))
     }
 
     #[pyo3(text_signature = "($self)")]
     pub fn minhash_ratio(&self, py: Python) -> PyResult<f64> {
-        self.with_inner_function(py, |function| {
-            Ok(function.minhash_ratio())
-        })
+        self.with_inner_function(py, |function| Ok(function.minhash_ratio()))
     }
 
     #[pyo3(text_signature = "($self)")]
     pub fn tlsh_ratio(&self, py: Python) -> PyResult<f64> {
-        self.with_inner_function(py, |function| {
-            Ok(function.tlsh_ratio())
-        })
+        self.with_inner_function(py, |function| Ok(function.tlsh_ratio()))
     }
 
     #[pyo3(text_signature = "($self)")]
     pub fn cyclomatic_complexity(&self, py: Python) -> PyResult<usize> {
-        self.with_inner_function(py, |function| {
-            Ok(function.cyclomatic_complexity())
-        })
+        self.with_inner_function(py, |function| Ok(function.cyclomatic_complexity()))
     }
 
     #[pyo3(text_signature = "($self)")]
     pub fn average_instructions_per_block(&self, py: Python) -> PyResult<f64> {
-        self.with_inner_function(py, |function| {
-            Ok(function.average_instructions_per_block())
-        })
+        self.with_inner_function(py, |function| Ok(function.average_instructions_per_block()))
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -647,12 +660,12 @@ impl Function {
     pub fn blocks(&self, py: Python) -> PyResult<Vec<Block>> {
         self.with_inner_function(py, |function| {
             let mut result = Vec::<Block>::new();
-            for (block_address, _) in &function.blocks {
+            for block_address in function.blocks.keys() {
                 let block = Block::new(*block_address, self.cfg.clone_ref(py))
                     .expect("failed to get block");
                 result.push(block);
             }
-            return Ok(result);
+            Ok(result)
         })
     }
 
@@ -786,7 +799,10 @@ impl Function {
     /// # Returns
     /// - `()` (unit): Output is sent to stdout.
     pub fn print(&self, py: Python) -> PyResult<()> {
-        self.with_inner_function(py, |function| Ok(function.print()))
+        self.with_inner_function(py, |function| {
+            function.print();
+            Ok(())
+        })
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -808,7 +824,9 @@ impl Function {
     /// - `str`: JSON string representing the function.
     pub fn json(&self, py: Python) -> PyResult<String> {
         self.with_inner_function(py, |function| {
-            function.json().map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+            function
+                .json()
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
         })
     }
 

@@ -164,11 +164,13 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-use pyo3::prelude::*;
+// PyResult Clippy False Positive for Useless Conversion
+#![expect(clippy::useless_conversion)]
 
-use std::io::Error;
-use binlex::formats::file::File as InnerFile;
 use crate::Config;
+use binlex::formats::file::File as InnerFile;
+use pyo3::prelude::*;
+use std::io::Error;
 
 #[pyclass]
 pub struct File {
@@ -183,10 +185,7 @@ impl File {
     pub fn new(py: Python, path: String, config: Py<Config>) -> PyResult<Self> {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
         let inner = InnerFile::new(path, inner_config)?;
-        Ok(Self {
-            inner: inner,
-            config: config,
-        })
+        Ok(Self { inner, config })
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -211,7 +210,9 @@ impl File {
 
     #[pyo3(text_signature = "($self)")]
     pub fn json(&self) -> PyResult<String> {
-        self.inner.json().map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+        self.inner
+            .json()
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
     }
 }
 
@@ -219,7 +220,7 @@ impl File {
 #[pyo3(name = "file")]
 pub fn file_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<File>()?;
-     py.import_bound("sys")?
+    py.import_bound("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.formats.file", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.formats.file")?;

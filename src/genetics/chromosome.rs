@@ -383,7 +383,7 @@ impl Chromosome {
     }
 
     fn parse_gene(c: char) -> Result<Gene, Error> {
-        Ok(Gene::from_char(c)?)
+        Gene::from_char(c)
     }
 
     pub fn allelepairs(&self) -> Vec<AllelePair> {

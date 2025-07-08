@@ -164,9 +164,9 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-use pyo3::prelude::*;
-use pyo3::exceptions::PyValueError;
 use binlex::Architecture as InnerArchitecture;
+use pyo3::exceptions::PyValueError;
+use pyo3::prelude::*;
 
 #[pyclass(eq)]
 #[derive(PartialEq)]
@@ -190,17 +190,13 @@ impl Architecture {
     #[staticmethod]
     #[pyo3(text_signature = "(s)")]
     pub fn from_str(s: String) -> PyResult<Self> {
-        let inner = InnerArchitecture::from_string(&s)
-        .map_err(|err| PyValueError::new_err(format!(
-            "invalid or unsupported binary architecture: {}",
-            err
-        )))?;
+        let inner = InnerArchitecture::from_string(&s).map_err(|err| {
+            PyValueError::new_err(format!(
+                "invalid or unsupported binary architecture: {}",
+                err
+            ))
+        })?;
         Ok(Architecture { inner })
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    pub fn to_string(&self) -> String {
-        self.inner.to_string()
     }
 
     pub fn __str__(&self) -> String {

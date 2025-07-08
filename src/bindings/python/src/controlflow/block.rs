@@ -164,26 +164,29 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-use pyo3::prelude::*;
-use pyo3::Py;
-use std::collections::{BTreeMap, BTreeSet};
-use binlex::controlflow::Block as InnerBlock;
-use binlex::controlflow::BlockJsonDeserializer as InnerBlockJsonDeserializer;
-use binlex::controlflow::Graph as InnerGraph;
+// PyResult Clippy False Positive for Useless Conversion
+#![expect(clippy::useless_conversion)]
+
+use crate::controlflow::graph::Graph;
 use crate::controlflow::Instruction;
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeSimilarity;
-use crate::controlflow::graph::Graph;
+use crate::Architecture;
 use crate::Config;
-use std::sync::Arc;
-use std::sync::Mutex;
+use binlex::controlflow::Block as InnerBlock;
+use binlex::controlflow::BlockJsonDeserializer as InnerBlockJsonDeserializer;
+use binlex::controlflow::Graph as InnerGraph;
+use binlex::Architecture as InnerArchitecture;
+use binlex::Binary as InnerBinary;
+use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::types::PyList;
+use pyo3::Py;
 use rayon::prelude::*;
 use rayon::ThreadPoolBuilder;
-use binlex::Binary as InnerBinary;
-use binlex::Architecture as InnerArchitecture;
-use crate::Architecture;
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
+use std::sync::Mutex;
 
 #[pyclass]
 pub struct BlockJsonDeserializer {
@@ -198,7 +201,7 @@ impl BlockJsonDeserializer {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
         let inner = InnerBlockJsonDeserializer::new(string, inner_config)?;
         Ok(Self {
-           inner: Arc::new(Mutex::new(inner)),
+            inner: Arc::new(Mutex::new(inner)),
         })
     }
 
@@ -210,34 +213,43 @@ impl BlockJsonDeserializer {
     #[pyo3(text_signature = "($self)")]
     pub fn architecture(&self) -> PyResult<Architecture> {
         let inner = InnerArchitecture::from_string(&self.inner.lock().unwrap().json.architecture)
-            .map_err(|err| pyo3::exceptions::PyRuntimeError::new_err(format!("{}", err)))?;
-        Ok(Architecture {
-            inner: inner
-        })
+            .map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
+        Ok(Architecture { inner })
     }
 
     #[pyo3(text_signature = "($self)")]
     pub fn bytes(&self, py: Python) -> PyResult<Py<PyBytes>> {
         let bytes = InnerBinary::from_hex(&self.inner.lock().unwrap().json.bytes)
-            .map_err(|err| pyo3::exceptions::PyRuntimeError::new_err(format!("{}", err)))?;
+            .map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
         let result = PyBytes::new_bound(py, &bytes);
         Ok(result.into())
     }
 
     #[pyo3(text_signature = "($self, rhs)")]
-    pub fn compare(&self, py: Python, rhs: Py<BlockJsonDeserializer>) -> Option<ChromosomeSimilarity> {
+    pub fn compare(
+        &self,
+        py: Python,
+        rhs: Py<BlockJsonDeserializer>,
+    ) -> Option<ChromosomeSimilarity> {
         let binding = rhs.borrow(py);
         let rhs_inner = binding.inner.lock().unwrap();
         let similarity = self.inner.lock().unwrap().compare(&rhs_inner);
-        if similarity.is_none() { return None; }
+        similarity.as_ref()?;
         Some(ChromosomeSimilarity {
-            inner: Arc::new(Mutex::new(similarity.unwrap()))
+            inner: Arc::new(Mutex::new(similarity.unwrap())),
         })
     }
 
     #[pyo3(text_signature = "($self, rhs_blocks)")]
-    pub fn compare_many(&self, py: Python, rhs_blocks: Py<PyList>) -> PyResult<BTreeMap<u64, ChromosomeSimilarity>> {
-        let block = InnerBlockJsonDeserializer::new(self.json()?, self.inner.lock().unwrap().config.clone())?;
+    pub fn compare_many(
+        &self,
+        py: Python,
+        rhs_blocks: Py<PyList>,
+    ) -> PyResult<BTreeMap<u64, ChromosomeSimilarity>> {
+        let block = InnerBlockJsonDeserializer::new(
+            self.json()?,
+            self.inner.lock().unwrap().config.clone(),
+        )?;
 
         let inner_config = self.inner.lock().unwrap().config.clone();
 
@@ -255,12 +267,14 @@ impl BlockJsonDeserializer {
                 ));
             }
             let rhs: Option<Py<BlockJsonDeserializer>> = py_item.extract().ok();
-            if rhs.is_none() { continue; }
+            if rhs.is_none() {
+                continue;
+            }
             let rhs_binding_0 = rhs.unwrap();
             let rhs_binding_1 = rhs_binding_0.borrow(py);
             let a = rhs_binding_1.inner.lock().unwrap().clone();
             tasks.push(a);
-        };
+        }
 
         let pool = ThreadPoolBuilder::new()
             .num_threads(inner_config.general.threads)
@@ -271,7 +285,7 @@ impl BlockJsonDeserializer {
             tasks
                 .par_iter()
                 .filter_map(|rhs_block| {
-                    block.compare(&rhs_block).map(|similarity| {
+                    block.compare(rhs_block).map(|similarity| {
                         (
                             rhs_block.address(),
                             ChromosomeSimilarity {
@@ -349,7 +363,7 @@ impl BlockJsonDeserializer {
     pub fn chromosome(&self) -> Chromosome {
         let inner_chromosome = self.inner.lock().unwrap().chromosome();
         Chromosome {
-            inner: Arc::new(Mutex::new(inner_chromosome))
+            inner: Arc::new(Mutex::new(inner_chromosome)),
         }
     }
 
@@ -372,17 +386,13 @@ impl BlockJsonDeserializer {
 
     #[pyo3(text_signature = "($self)")]
     pub fn print(&self) {
-        self.inner
-            .lock()
-            .unwrap()
-            .print()
+        self.inner.lock().unwrap().print()
     }
 
     pub fn __str__(&self) -> PyResult<String> {
         self.json()
     }
 }
-
 
 /// A class representing a control flow block in the binary analysis.
 #[pyclass]
@@ -443,7 +453,7 @@ impl Block {
     pub fn architecture(&self, py: Python) -> PyResult<Architecture> {
         self.with_inner_block(py, |block| {
             Ok(Architecture {
-                inner: block.architecture()
+                inner: block.architecture(),
             })
         })
     }
@@ -456,17 +466,19 @@ impl Block {
     /// Returns an `Option<ChromosomeSimilarity>` reprenting the similarity between this block and another.
     pub fn compare(&self, py: Python, rhs: Py<Block>) -> PyResult<Option<ChromosomeSimilarity>> {
         self.with_inner_block(py, |block| {
-            let rhs_address = rhs.borrow(py).address.clone();
+            let rhs_address = rhs.borrow(py).address;
             let rhs_binding_0 = rhs.borrow(py);
             let rhs_binding_1 = rhs_binding_0.cfg.borrow(py);
             let rhs_cfg = rhs_binding_1.inner.lock().unwrap();
             let rhs_inner = InnerBlock::new(rhs_address, &rhs_cfg).expect("rhs block is invalid");
             let inner = block.compare(&rhs_inner);
-            if inner.is_none() { return Ok(None); }
+            if inner.is_none() {
+                return Ok(None);
+            }
             let similarity = ChromosomeSimilarity {
                 inner: Arc::new(Mutex::new(inner.unwrap())),
             };
-            return Ok(Some(similarity));
+            Ok(Some(similarity))
         })
     }
 
@@ -476,7 +488,11 @@ impl Block {
     /// # Returns
     ///
     /// Returns an `PyResult<BTreeMap<u64, ChromosomeSimilarity>>` reprenting the similarity between this block and many others.
-    pub fn compare_many(&self, py: Python, rhs_blocks: Py<PyList>) -> PyResult<BTreeMap<u64, ChromosomeSimilarity>> {
+    pub fn compare_many(
+        &self,
+        py: Python,
+        rhs_blocks: Py<PyList>,
+    ) -> PyResult<BTreeMap<u64, ChromosomeSimilarity>> {
         self.with_inner_block(py, |block| {
             let mut tasks = Vec::<(u64, Arc<Mutex<InnerGraph>>)>::new();
 
@@ -492,13 +508,15 @@ impl Block {
                     ));
                 }
                 let rhs: Option<Py<Block>> = py_item.extract().ok();
-                if rhs.is_none() { continue; }
+                if rhs.is_none() {
+                    continue;
+                }
                 let rhs_binding_0 = rhs.unwrap();
                 let rhs_binding_1 = rhs_binding_0.borrow(py);
                 let address = rhs_binding_1.address();
                 let rhs_cfg = Arc::clone(&rhs_binding_1.cfg.borrow(py).inner);
                 tasks.push((address, rhs_cfg));
-            };
+            }
 
             let pool = ThreadPoolBuilder::new()
                 .num_threads(block.cfg.config.general.threads)
@@ -534,12 +552,16 @@ impl Block {
     pub fn chromosome(&self, py: Python) -> PyResult<Option<Chromosome>> {
         self.with_inner_block(py, |block| {
             let inner_config = self.cfg.borrow(py).inner.lock().unwrap().config.clone();
-            let config = Py::new(py, Config {
-                inner: Arc::new(Mutex::new(inner_config))
-            }).unwrap();
+            let config = Py::new(
+                py,
+                Config {
+                    inner: Arc::new(Mutex::new(inner_config)),
+                },
+            )
+            .unwrap();
             let pattern = block.pattern();
             let chromosome = Chromosome::new(py, pattern, config).ok();
-            return Ok(chromosome);
+            Ok(chromosome)
         })
     }
 
@@ -556,7 +578,7 @@ impl Block {
                     .expect("failed to get instruction");
                 result.push(instruction);
             }
-            return Ok(result);
+            Ok(result)
         })
     }
 
@@ -650,7 +672,10 @@ impl Block {
     #[pyo3(text_signature = "($self)")]
     /// Prints a human-readable representation of the block.
     pub fn print(&self, py: Python) -> PyResult<()> {
-        self.with_inner_block(py, |block| Ok(block.print()))
+        self.with_inner_block(py, |block| {
+            block.print();
+            Ok(())
+        })
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -666,7 +691,9 @@ impl Block {
     /// Converts the block to a JSON string.
     pub fn json(&self, py: Python) -> PyResult<String> {
         self.with_inner_block(py, |block| {
-            block.json().map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+            block
+                .json()
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
         })
     }
 

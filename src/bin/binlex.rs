@@ -334,7 +334,7 @@ fn get_elf_function_symbols(elf: &ELF) -> BTreeMap<u64, Symbol> {
         }
     }
 
-    return symbols;
+    symbols
 }
 
 fn get_macho_function_symbols(macho: &MACHO) -> BTreeMap<u64, Symbol> {
@@ -429,7 +429,7 @@ fn get_macho_function_symbols(macho: &MACHO) -> BTreeMap<u64, Symbol> {
         }
     }
 
-    return symbols;
+    symbols
 }
 
 fn get_pe_function_symbols(pe: &PE) -> BTreeMap<u64, Symbol> {
@@ -513,7 +513,7 @@ fn get_pe_function_symbols(pe: &PE) -> BTreeMap<u64, Symbol> {
         }
     }
 
-    return symbols;
+    symbols
 }
 
 fn process_output(
@@ -532,12 +532,12 @@ fn process_output(
             .map(|entry| *entry)
             .collect::<Vec<u64>>()
             .par_iter()
-            .filter_map(|address| Instruction::new(*address, &cfg).ok())
+            .filter_map(|address| Instruction::new(*address, cfg).ok())
             .filter_map(|instruction| {
                 let mut instruction_attributes = Attributes::new();
                 let symbol = function_symbols.get(&instruction.address);
-                if symbol.is_some() {
-                    instruction_attributes.push(symbol.unwrap().attribute());
+                if let Some(symbol) = symbol {
+                    instruction_attributes.push(symbol.attribute());
                 }
                 for attribute in &attributes.values {
                     instruction_attributes.push(attribute.clone());
@@ -560,12 +560,12 @@ fn process_output(
             .map(|entry| *entry)
             .collect::<Vec<u64>>()
             .par_iter()
-            .filter_map(|address| Block::new(*address, &cfg).ok())
+            .filter_map(|address| Block::new(*address, cfg).ok())
             .filter_map(|block| {
                 let mut block_attributes = Attributes::new();
                 let symbol = function_symbols.get(&block.address);
-                if symbol.is_some() {
-                    block_attributes.push(symbol.unwrap().attribute());
+                if let Some(symbol) = symbol {
+                    block_attributes.push(symbol.attribute());
                 }
                 for attribute in &attributes.values {
                     block_attributes.push(attribute.clone());
@@ -586,12 +586,12 @@ fn process_output(
             .map(|entry| *entry)
             .collect::<Vec<u64>>()
             .par_iter()
-            .filter_map(|address| Function::new(*address, &cfg).ok())
+            .filter_map(|address| Function::new(*address, cfg).ok())
             .filter_map(|function| {
                 let mut function_attributes = Attributes::new();
                 let symbol = function_symbols.get(&function.address);
-                if symbol.is_some() {
-                    function_attributes.push(symbol.unwrap().attribute());
+                if let Some(symbol) = symbol {
+                    function_attributes.push(symbol.attribute());
                 }
                 for attribute in &attributes.values {
                     function_attributes.push(attribute.clone());
@@ -661,12 +661,9 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
         }
     };
 
-    match pe.architecture() {
-        Architecture::UNKNOWN => {
-            eprintln!("unsupported pe architecture");
-            process::exit(1);
-        }
-        _ => {}
+    if pe.architecture() == Architecture::UNKNOWN {
+        eprintln!("unsupported pe architecture");
+        process::exit(1);
     }
 
     if !config.general.minimal {
@@ -720,7 +717,7 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
 
         let disassembler = match Disassembler::new(
             pe.architecture(),
-            &image,
+            image,
             executable_address_ranges.clone(),
             config.clone(),
         ) {
@@ -742,7 +739,7 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
 
         let disassembler = match CILDisassembler::new(
             pe.architecture(),
-            &image,
+            image,
             pe.dotnet_metadata_token_virtual_addresses().clone(),
             executable_address_ranges.clone(),
             config.clone(),
@@ -776,12 +773,9 @@ fn process_elf(input: String, config: Config, tags: Option<Vec<String>>, output:
         process::exit(1);
     });
 
-    match elf.architecture() {
-        Architecture::UNKNOWN => {
-            eprintln!("unsupported pe architecture");
-            process::exit(1);
-        }
-        _ => {}
+    if elf.architecture() == Architecture::UNKNOWN {
+        eprintln!("unsupported elf architecture");
+        process::exit(1);
     }
 
     if !config.general.minimal {
@@ -820,7 +814,7 @@ fn process_elf(input: String, config: Config, tags: Option<Vec<String>>, output:
 
     let disassembler = match Disassembler::new(
         elf.architecture(),
-        &image,
+        image,
         executable_address_ranges.clone(),
         config.clone(),
     ) {
@@ -972,7 +966,7 @@ fn process_macho(input: String, config: Config, tags: Option<Vec<String>>, outpu
 
         let disassembler = match Disassembler::new(
             architecture,
-            &image,
+            image,
             executable_address_ranges.clone(),
             config.clone(),
         ) {
@@ -1013,14 +1007,12 @@ fn main() {
                 process::exit(1);
             }
         }
-    } else {
-        if let Err(error) = config.from_default() {
-            eprintln!("failed to read default config: {}", error);
-            process::exit(1);
-        }
+    } else if let Err(error) = config.from_default() {
+        eprintln!("failed to read default config: {}", error);
+        process::exit(1);
     }
 
-    if args.debug != false {
+    if args.debug {
         config.general.debug = args.debug;
     }
 
@@ -1028,11 +1020,11 @@ fn main() {
         config.general.threads = args.threads.unwrap();
     }
 
-    if args.disable_heuristics == true {
+    if args.disable_heuristics {
         config.disable_heuristics();
     }
 
-    if args.disable_hashing == true {
+    if args.disable_hashing {
         config.disable_hashing();
     }
 
@@ -1040,27 +1032,27 @@ fn main() {
         config.mmap.directory = args.mmap_directory.unwrap();
     }
 
-    if args.enable_mmap_cache != false {
+    if args.enable_mmap_cache {
         config.mmap.cache.enabled = args.enable_mmap_cache;
     }
 
-    if args.disable_disassembler_sweep == true {
+    if args.disable_disassembler_sweep {
         config.disassembler.sweep.enabled = false;
     }
 
-    if args.minimal == true || config.general.minimal == true {
+    if args.minimal || config.general.minimal {
         config.enable_minimal();
     }
 
-    if args.enable_instructions != false {
+    if args.enable_instructions {
         config.instructions.enabled = args.enable_instructions;
     }
 
-    if args.enable_block_instructions != false {
+    if args.enable_block_instructions {
         config.blocks.instructions.enabled = args.enable_block_instructions;
     }
 
-    if args.disable_function_blocks != false {
+    if args.disable_function_blocks {
         config.functions.blocks.enabled = !args.disable_function_blocks;
     }
 
