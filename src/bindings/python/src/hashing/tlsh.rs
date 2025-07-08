@@ -164,8 +164,8 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-use pyo3::prelude::*;
 use binlex::hashing::tlsh::TLSH as InnerTLSH;
+use pyo3::prelude::*;
 
 #[pyclass]
 pub struct TLSH {
@@ -177,9 +177,7 @@ impl TLSH {
     #[new]
     #[pyo3(text_signature = "(bytes)")]
     pub fn new(bytes: Vec<u8>) -> Self {
-        Self {
-            bytes: bytes,
-        }
+        Self { bytes }
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -192,9 +190,7 @@ impl TLSH {
     pub fn compare(lhs: String, rhs: String) -> Option<f64> {
         InnerTLSH::compare(lhs, rhs)
     }
-
 }
-
 
 #[pymodule]
 #[pyo3(name = "tlsh")]

@@ -182,8 +182,10 @@ impl AllelePair {
     #[pyo3(text_signature = "(low, high)")]
     pub fn new(py: Python, low: Py<Gene>, high: Py<Gene>) -> PyResult<Self> {
         let high_binding = high.borrow(py);
+        #[allow(clippy::all)]
         let high_inner = high_binding.inner.lock().unwrap().clone();
         let low_binding = low.borrow(py);
+        #[allow(clippy::all)]
         let low_inner = low_binding.inner.lock().unwrap().clone();
         let inner = InnerAllelePair::new(high_inner, low_inner);
         Ok(Self {
@@ -199,18 +201,17 @@ impl AllelePair {
     #[pyo3(text_signature = "($self, low, high)")]
     pub fn mutate(&mut self, py: Python, low: Py<Gene>, high: Py<Gene>) {
         let high_binding = high.borrow(py);
+        #[allow(clippy::all)]
         let high_inner = high_binding.inner.lock().unwrap().clone();
         let low_binding = low.borrow(py);
+        #[allow(clippy::all)]
         let low_inner = low_binding.inner.lock().unwrap().clone();
         self.inner.lock().unwrap().mutate(high_inner, low_inner);
     }
 
     #[pyo3(text_signature = "($self)")]
     pub fn genes(&self) -> Vec<Gene> {
-        let mut result = Vec::<Gene>::new();
-        result.push(self.low());
-        result.push(self.low());
-        result
+        vec![self.low(), self.low()]
     }
 
     #[staticmethod]
@@ -225,32 +226,26 @@ impl AllelePair {
     #[pyo3(text_signature = "($self)")]
     pub fn low(&self) -> Gene {
         let low = self.inner.lock().unwrap().low;
-        return Gene {
+        Gene {
             inner: Arc::new(Mutex::new(low)),
-        };
+        }
     }
 
     #[pyo3(text_signature = "($self)")]
     pub fn high(&self) -> Gene {
         let high = self.inner.lock().unwrap().high;
-        return Gene {
+        Gene {
             inner: Arc::new(Mutex::new(high)),
-        };
+        }
     }
 
     #[pyo3(text_signature = "($self)")]
     pub fn print(&self) {
-        println!("{}", self.inner.lock().unwrap().to_string());
-        //self.inner.lock().unwrap().print();
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    pub fn to_string(&self) -> String {
-        self.inner.lock().unwrap().to_string()
+        println!("{}", self.inner.lock().unwrap());
     }
 
     pub fn __str__(&self) -> String {
-        self.to_string()
+        self.inner.lock().unwrap().to_string()
     }
 }
 

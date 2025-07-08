@@ -164,8 +164,8 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-use pyo3::prelude::*;
 use binlex::types::LZ4String as InnerLZ4String;
+use pyo3::prelude::*;
 
 #[pyclass]
 pub struct LZ4String {
@@ -178,19 +178,13 @@ impl LZ4String {
     #[pyo3(text_signature = "(string)")]
     pub fn new(string: String) -> Self {
         Self {
-            inner: InnerLZ4String::new(&string)
+            inner: InnerLZ4String::new(&string),
         }
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    pub fn to_string(&self) -> String {
-        self.inner.to_string()
     }
 
     fn __str__(&self) -> PyResult<String> {
         Ok(format!("{}", self.inner))
     }
-
 }
 
 #[pymodule]

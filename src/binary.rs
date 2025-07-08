@@ -165,6 +165,7 @@
 // Library.
 
 use std::collections::HashMap;
+use std::fmt::Write;
 
 /// A struct representing a binary, used for various binary-related utilities.
 pub struct Binary;
@@ -215,9 +216,11 @@ impl Binary {
     ///
     /// A `String` containing the hexadecimal representation of the byte data.
     pub fn to_hex(data: &[u8]) -> String {
-        data.iter()
-            .map(|byte| format!("{:02x}", byte))
-            .collect::<String>()
+        let mut result = String::with_capacity(data.len() * 2);
+        for byte in data {
+            write!(result, "{:02x}", byte).unwrap();
+        }
+        result
     }
 
     pub fn from_hex(hex: &str) -> Result<Vec<u8>, String> {
@@ -257,7 +260,14 @@ impl Binary {
             let current_address = address as usize + i * BYTES_PER_LINE;
             let hex_repr = format!("{:08x}: ", current_address);
             result.push_str(&hex_repr);
-            let hex_values: String = chunk.iter().map(|byte| format!("{:02x} ", byte)).collect();
+            let hex_values = {
+                let mut s = String::new();
+                for byte in chunk {
+                    let _ = write!(s, "{:02x} ", byte);
+                }
+                s
+            };
+            //let hex_values: String = chunk.iter().map(|byte| format!("{:02x} ", byte)).collect();
             result.push_str(&hex_values);
             let padding = "   ".repeat(BYTES_PER_LINE - chunk.len());
             result.push_str(&padding);

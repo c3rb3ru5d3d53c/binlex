@@ -164,17 +164,17 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-use pyo3::prelude::*;
-use pyo3::Py;
+use crate::genetics::AllelePair;
+use crate::Config;
+use binlex::genetics::chromosome::HomologousChromosome as InnerHomologousChromosome;
 use binlex::genetics::Chromosome as InnerChromosome;
 use binlex::genetics::ChromosomeSimilarity as InnerChromosomeSimilarity;
-use crate::genetics::AllelePair;
+use pyo3::exceptions::PyRuntimeError;
+use pyo3::prelude::*;
+use pyo3::types::PyBytes;
+use pyo3::Py;
 use std::sync::Arc;
 use std::sync::Mutex;
-use crate::Config;
-use pyo3::types::PyBytes;
-use pyo3::exceptions::PyRuntimeError;
-use binlex::genetics::chromosome::HomologousChromosome as InnerHomologousChromosome;
 
 #[pyclass]
 pub struct ChromosomeSimilarityScore {
@@ -183,23 +183,14 @@ pub struct ChromosomeSimilarityScore {
 
 #[pymethods]
 impl ChromosomeSimilarityScore {
-
     #[pyo3(text_signature = "($self)")]
     pub fn minhash(&self) -> Option<f64> {
-        self.inner
-            .lock()
-            .unwrap()
-            .score()
-            .minhash()
+        self.inner.lock().unwrap().score().minhash()
     }
 
     #[pyo3(text_signature = "($self)")]
     pub fn tlsh(&self) -> Option<f64> {
-        self.inner
-            .lock()
-            .unwrap()
-            .score()
-            .tlsh()
+        self.inner.lock().unwrap().score().tlsh()
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -230,11 +221,11 @@ impl HomologousChromosome {
         let binding = chromosome.borrow(py);
         let inner_chromosome = binding.inner.lock().unwrap().clone();
         let inner_homologous_chromosome = InnerHomologousChromosome {
-            score: score,
+            score,
             chromosome: inner_chromosome,
         };
         Ok(Self {
-            inner: Arc::new(Mutex::new(inner_homologous_chromosome))
+            inner: Arc::new(Mutex::new(inner_homologous_chromosome)),
         })
     }
 
@@ -279,17 +270,14 @@ impl ChromosomeSimilarity {
 
     #[getter]
     pub fn score(&self) -> ChromosomeSimilarityScore {
-        ChromosomeSimilarityScore{
-            inner: Arc::clone(&self.inner)
+        ChromosomeSimilarityScore {
+            inner: Arc::clone(&self.inner),
         }
     }
 
     #[pyo3(text_signature = "($self)")]
     pub fn print(&self) {
-        self.inner
-            .lock()
-            .unwrap()
-            .print();
+        self.inner.lock().unwrap().print();
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -325,9 +313,9 @@ impl Chromosome {
     #[pyo3(text_signature = "($self)")]
     pub fn allelepairs(&self) -> Vec<AllelePair> {
         let mut result = Vec::<AllelePair>::new();
-        for allelepair in self.inner.lock().unwrap().allelepairs(){
-            result.push(AllelePair{
-                inner: Arc::new(Mutex::new(allelepair))
+        for allelepair in self.inner.lock().unwrap().allelepairs() {
+            result.push(AllelePair {
+                inner: Arc::new(Mutex::new(allelepair)),
             });
         }
         result
@@ -352,11 +340,9 @@ impl Chromosome {
         let rhs_inner = rhs.borrow(py).inner.lock().unwrap().clone();
         let lhs_inner = self.inner.lock().unwrap().clone();
         let similarity = lhs_inner.compare(&rhs_inner)?;
-        Some(
-            ChromosomeSimilarity {
-                inner: Arc::new(Mutex::new(similarity)),
-            }
-        )
+        Some(ChromosomeSimilarity {
+            inner: Arc::new(Mutex::new(similarity)),
+        })
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -396,10 +382,7 @@ impl Chromosome {
 
     #[pyo3(text_signature = "($self)")]
     pub fn print(&self) {
-        self.inner
-            .lock()
-            .unwrap()
-            .print();
+        self.inner.lock().unwrap().print();
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -428,7 +411,7 @@ impl Chromosome {
 #[pyo3(name = "chromosome")]
 pub fn chromosome_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Chromosome>()?;
-     py.import_bound("sys")?
+    py.import_bound("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.genetics.chromosome", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.genetics.chromosome")?;

@@ -333,7 +333,12 @@ impl<'minhash32> MinHash32<'minhash32> {
     /// Returns `Some(String)` containing the hexadecimal representation of the MinHash signature
     /// if the byte slice is large enough to generate shingles. Returns `None` otherwise.
     pub fn hexdigest(&self) -> Option<String> {
-        self.hash()
-            .map(|minhash| minhash.iter().map(|hash| format!("{:08x}", hash)).collect())
+        self.hash().map(|minhash| {
+            minhash
+                .iter()
+                .map(|h| format!("{:08x}", h))
+                .collect::<Vec<_>>()
+                .join("")
+        })
     }
 }

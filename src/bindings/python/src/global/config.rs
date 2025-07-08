@@ -164,9 +164,9 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
+use binlex::Config as InnerConfig;
 use pyo3::prelude::*;
 use std::sync::{Arc, Mutex};
-use binlex::Config as InnerConfig;
 
 #[pyclass]
 pub struct ConfigHomologues {
@@ -174,7 +174,7 @@ pub struct ConfigHomologues {
 }
 
 #[pymethods]
-impl  ConfigHomologues {
+impl ConfigHomologues {
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
@@ -199,7 +199,6 @@ impl  ConfigHomologues {
         inner.chromosomes.homologues.maximum = value;
     }
 }
-
 
 #[pyclass]
 pub struct ConfigBlockInstructions {
@@ -247,24 +246,24 @@ pub struct ConfigChromosomes {
 }
 
 #[pymethods]
-impl  ConfigChromosomes {
+impl ConfigChromosomes {
     #[getter]
     pub fn get_hashing(&self) -> ConfigChromosomesHashing {
         ConfigChromosomesHashing {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
     #[getter]
     pub fn get_heuristics(&self) -> ConfigChromosomesHeuristics {
         ConfigChromosomesHeuristics {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 
     #[getter]
     pub fn homologues(&self) -> ConfigHomologues {
         ConfigHomologues {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 }
@@ -279,18 +278,17 @@ impl ConfigChromosomesHeuristics {
     #[getter]
     pub fn get_features(&self) -> ConfigChromosomesHeuristicsFeatures {
         ConfigChromosomesHeuristicsFeatures {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 
     #[getter]
     pub fn get_entropy(&self) -> ConfigChromosomesHeuristicsEntropy {
         ConfigChromosomesHeuristicsEntropy {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 }
-
 
 #[pyclass]
 pub struct ConfigChromosomesHashing {
@@ -302,25 +300,24 @@ impl ConfigChromosomesHashing {
     #[getter]
     pub fn get_sha256(&self) -> ConfigChromosomesHashingSHA256 {
         ConfigChromosomesHashingSHA256 {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 
     #[getter]
     pub fn get_tlsh(&self) -> ConfigChromosomesHashingTLSH {
         ConfigChromosomesHashingTLSH {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 
     #[getter]
     pub fn get_minhash(&self) -> ConfigChromosomesHashingMinhash {
         ConfigChromosomesHashingMinhash {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 }
-
 
 #[pyclass]
 pub struct ConfigChromosomesHeuristicsEntropy {
@@ -414,7 +411,6 @@ impl ConfigChromosomesHashingTLSH {
     }
 }
 
-
 #[pyclass]
 pub struct ConfigChromosomesHashingMinhash {
     pub inner: Arc<Mutex<InnerConfig>>,
@@ -503,7 +499,6 @@ pub struct ConfigFunctions {
 
 #[pymethods]
 impl ConfigFunctions {
-
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
@@ -519,21 +514,21 @@ impl ConfigFunctions {
     #[getter]
     pub fn get_blocks(&self) -> ConfigFunctionBlocks {
         ConfigFunctionBlocks {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 
     #[getter]
     pub fn get_hashing(&self) -> ConfigFunctionsHashing {
         ConfigFunctionsHashing {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 
     #[getter]
     pub fn get_heuristics(&self) -> ConfigFunctionsHeuristics {
         ConfigFunctionsHeuristics {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 }
@@ -548,18 +543,17 @@ impl ConfigFunctionsHeuristics {
     #[getter]
     pub fn get_features(&self) -> ConfigFunctionsHeuristicsFeatures {
         ConfigFunctionsHeuristicsFeatures {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 
     #[getter]
     pub fn get_entropy(&self) -> ConfigFunctionsHeuristicsEntropy {
         ConfigFunctionsHeuristicsEntropy {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 }
-
 
 #[pyclass]
 pub struct ConfigFunctionsHashing {
@@ -571,25 +565,24 @@ impl ConfigFunctionsHashing {
     #[getter]
     pub fn get_sha256(&self) -> ConfigFunctionsHashingSHA256 {
         ConfigFunctionsHashingSHA256 {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 
     #[getter]
     pub fn get_tlsh(&self) -> ConfigFunctionsHashingTLSH {
         ConfigFunctionsHashingTLSH {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 
     #[getter]
     pub fn get_minhash(&self) -> ConfigFunctionsHashingMinhash {
         ConfigFunctionsHashingMinhash {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 }
-
 
 #[pyclass]
 pub struct ConfigFunctionsHeuristicsEntropy {
@@ -682,7 +675,6 @@ impl ConfigFunctionsHashingTLSH {
         inner.functions.hashing.tlsh.minimum_byte_size = value;
     }
 }
-
 
 #[pyclass]
 pub struct ConfigFunctionsHashingMinhash {
@@ -787,25 +779,24 @@ impl ConfigBlocks {
     #[getter]
     pub fn get_instructions(&self) -> ConfigBlockInstructions {
         ConfigBlockInstructions {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 
     #[getter]
     pub fn get_hashing(&self) -> ConfigBlocksHashing {
         ConfigBlocksHashing {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 
     #[getter]
     pub fn get_heuristics(&self) -> ConfigBlocksHeuristics {
         ConfigBlocksHeuristics {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 }
-
 
 #[pyclass]
 pub struct ConfigInstructions {
@@ -829,14 +820,14 @@ impl ConfigInstructions {
     #[getter]
     pub fn get_hashing(&self) -> ConfigInstructionsHashing {
         ConfigInstructionsHashing {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 
     #[getter]
     pub fn get_heuristics(&self) -> ConfigInstructionsHeuristics {
         ConfigInstructionsHeuristics {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 }
@@ -851,14 +842,14 @@ impl ConfigInstructionsHeuristics {
     #[getter]
     pub fn get_features(&self) -> ConfigInstructionsHeuristicsFeatures {
         ConfigInstructionsHeuristicsFeatures {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 
     #[getter]
     pub fn get_entropy(&self) -> ConfigInstructionsHeuristicsEntropy {
         ConfigInstructionsHeuristicsEntropy {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 }
@@ -873,14 +864,14 @@ impl ConfigBlocksHeuristics {
     #[getter]
     pub fn get_features(&self) -> ConfigBlocksHeuristicsFeatures {
         ConfigBlocksHeuristicsFeatures {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 
     #[getter]
     pub fn get_entropy(&self) -> ConfigBlocksHeuristicsEntropy {
         ConfigBlocksHeuristicsEntropy {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 }
@@ -895,25 +886,24 @@ impl ConfigInstructionsHashing {
     #[getter]
     pub fn get_sha256(&self) -> ConfigInstructionsHashingSHA256 {
         ConfigInstructionsHashingSHA256 {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 
     #[getter]
     pub fn get_tlsh(&self) -> ConfigInstructionsHashingTLSH {
         ConfigInstructionsHashingTLSH {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 
     #[getter]
     pub fn get_minhash(&self) -> ConfigInstructionsHashingMinhash {
         ConfigInstructionsHashingMinhash {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 }
-
 
 #[pyclass]
 pub struct ConfigBlocksHashing {
@@ -925,21 +915,21 @@ impl ConfigBlocksHashing {
     #[getter]
     pub fn get_sha256(&self) -> ConfigBlocksHashingSHA256 {
         ConfigBlocksHashingSHA256 {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 
     #[getter]
     pub fn get_tlsh(&self) -> ConfigBlocksHashingTLSH {
         ConfigBlocksHashingTLSH {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 
     #[getter]
     pub fn get_minhash(&self) -> ConfigBlocksHashingMinhash {
         ConfigBlocksHashingMinhash {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 }
@@ -1228,7 +1218,6 @@ impl ConfigBlocksHashingTLSH {
     }
 }
 
-
 #[pyclass]
 pub struct ConfigBlocksHashingMinhash {
     pub inner: Arc<Mutex<InnerConfig>>,
@@ -1309,7 +1298,6 @@ impl ConfigBlocksHashingMinhash {
     }
 }
 
-
 /// stop
 
 #[pyclass]
@@ -1318,11 +1306,11 @@ pub struct ConfigFormats {
 }
 
 #[pymethods]
-impl  ConfigFormats {
+impl ConfigFormats {
     #[getter]
     pub fn get_file(&self) -> ConfigFormatsFile {
         ConfigFormatsFile {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 }
@@ -1333,17 +1321,17 @@ pub struct ConfigFormatsFile {
 }
 
 #[pymethods]
-impl  ConfigFormatsFile {
+impl ConfigFormatsFile {
     #[getter]
     pub fn get_hashing(&self) -> ConfigFormatsFileHashing {
         ConfigFormatsFileHashing {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
     #[getter]
     pub fn get_heuristics(&self) -> ConfigFormatsFileHeuristics {
         ConfigFormatsFileHeuristics {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 }
@@ -1358,18 +1346,17 @@ impl ConfigFormatsFileHeuristics {
     #[getter]
     pub fn get_features(&self) -> ConfigFormatsFileHeuristicsFeatures {
         ConfigFormatsFileHeuristicsFeatures {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 
     #[getter]
     pub fn get_entropy(&self) -> ConfigFormatsFileHeuristicsEntropy {
         ConfigFormatsFileHeuristicsEntropy {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 }
-
 
 #[pyclass]
 pub struct ConfigFormatsFileHashing {
@@ -1381,25 +1368,24 @@ impl ConfigFormatsFileHashing {
     #[getter]
     pub fn get_sha256(&self) -> ConfigFormatsFileHashingSHA256 {
         ConfigFormatsFileHashingSHA256 {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 
     #[getter]
     pub fn get_tlsh(&self) -> ConfigFormatsFileHashingTLSH {
         ConfigFormatsFileHashingTLSH {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 
     #[getter]
     pub fn get_minhash(&self) -> ConfigFormatsFileHashingMinhash {
         ConfigFormatsFileHashingMinhash {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 }
-
 
 #[pyclass]
 pub struct ConfigFormatsFileHeuristicsEntropy {
@@ -1492,7 +1478,6 @@ impl ConfigFormatsFileHashingTLSH {
         inner.formats.file.hashing.tlsh.minimum_byte_size = value;
     }
 }
-
 
 #[pyclass]
 pub struct ConfigFormatsFileHashingMinhash {
@@ -1739,6 +1724,12 @@ impl Config {
     }
 }
 
+impl Default for Config {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[pyclass]
 pub struct ConfigDisassembler {
     pub inner: Arc<Mutex<InnerConfig>>,
@@ -1749,7 +1740,7 @@ impl ConfigDisassembler {
     #[getter]
     pub fn get_sweep(&self) -> ConfigDisassemblerSweep {
         ConfigDisassemblerSweep {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 }
@@ -1773,7 +1764,6 @@ impl ConfigDisassemblerSweep {
     }
 }
 
-
 #[pyclass]
 pub struct ConfigMmap {
     pub inner: Arc<Mutex<InnerConfig>>,
@@ -1796,7 +1786,7 @@ impl ConfigMmap {
     #[getter]
     pub fn get_cache(&self) -> ConfigMmapCache {
         ConfigMmapCache {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 }
@@ -1862,7 +1852,6 @@ impl ConfigGeneral {
         let mut inner = self.inner.lock().unwrap();
         inner.general.debug = value;
     }
-
 }
 
 #[pymodule]

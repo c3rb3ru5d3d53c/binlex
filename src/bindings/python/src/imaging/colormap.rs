@@ -84,6 +84,12 @@ impl ColorMap {
     }
 }
 
+impl Default for ColorMap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[pymodule]
 #[pyo3(name = "colormap")]
 pub fn colormap_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {

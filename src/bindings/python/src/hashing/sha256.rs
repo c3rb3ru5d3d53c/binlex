@@ -170,7 +170,7 @@ use binlex::hashing::sha256::SHA256 as InnerSHA256;
 
 #[pyclass]
 pub struct SHA256 {
-    pub bytes: Vec<u8>
+    pub bytes: Vec<u8>,
 }
 
 #[pymethods]
@@ -178,16 +178,13 @@ impl SHA256 {
     #[new]
     #[pyo3(text_signature = "(bytes)")]
     pub fn new(bytes: Vec<u8>) -> Self {
-        Self {
-            bytes: bytes,
-        }
+        Self { bytes }
     }
 
     #[pyo3(text_signature = "($self)")]
     pub fn hexdigest(&self) -> Option<String> {
         InnerSHA256::new(&self.bytes).hexdigest()
     }
-
 }
 
 #[pymodule]

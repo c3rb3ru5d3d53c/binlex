@@ -164,9 +164,6 @@
 // permanent authorization for you to choose that version for the
 // Library.
 
-// PyResult Clippy False Positive for Useless Conversion
-#![expect(clippy::useless_conversion)]
-
 use crate::Config;
 use binlex::formats::file::File as InnerFile;
 use pyo3::prelude::*;
