@@ -38,4 +38,10 @@ fn test_full_function_disassembly() {
     let func = Function::new(0, &graph).expect("function");
     assert_eq!(graph.listing.len(), 62, "incorrect instruction count");
     assert_eq!(func.blocks.len(), 14, "incorrect block count");
+    let mut collected = Vec::<u8>::new();
+    for addr in graph.instruction_addresses().iter().copied() {
+        let instr = graph.get_instruction(addr).unwrap();
+        collected.extend(instr.bytes);
+    }
+    assert_eq!(Binary::to_hex(&collected), hex, "function bytes mismatch");
 }
