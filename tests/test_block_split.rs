@@ -43,5 +43,9 @@ fn test_full_function_disassembly() {
         let instr = graph.get_instruction(addr).unwrap();
         collected.extend(instr.bytes);
     }
-    assert_eq!(Binary::to_hex(&collected), hex, "function bytes mismatch");
+    assert_eq!(Binary::to_hex(&collected), hex, "listing bytes mismatch");
+
+    // ensure that the bytes returned by Function::bytes() match the input
+    let func_bytes = func.bytes().expect("function bytes");
+    assert_eq!(Binary::to_hex(&func_bytes), hex, "function bytes mismatch");
 }
