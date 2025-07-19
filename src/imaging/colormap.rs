@@ -1,6 +1,7 @@
 use clap::ValueEnum;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::fmt::Write;
 use std::io::Error;
 use std::io::ErrorKind;
 
@@ -127,18 +128,12 @@ impl ColorMap {
     fn generate_metadata(&self) -> String {
         let mut metadata_section = String::new();
         for (key, value) in &self.metadata_entries {
-            metadata_section.push_str(
-                r#"<metadata>
-"#,
-            );
-            metadata_section.push_str(&format!(
-                r#"<{}>{}</{}>
-"#,
-                key, value, key
-            ));
-            metadata_section.push_str(
-                r#"</metadata>
-"#,
+            let _ = write!(
+                metadata_section,
+                r#"<metadata>\n<{}>{}</{}>\n</metadata>\n"#,
+                key,
+                value,
+                key,
             );
         }
         metadata_section
@@ -150,11 +145,14 @@ impl ColorMap {
             * self.cell_size;
 
         let mut svg_content = String::new();
-        svg_content.push_str(&format!(
-            r#"<svg xmlns="http://www.w3.org/2000/svg" width="{}" height="{}" viewBox="0 0 {} {}">
-"#,
-            total_width, total_height, total_width, total_height
-        ));
+        let _ = write!(
+            svg_content,
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="{}" height="{}" viewBox="0 0 {} {}">\n"#,
+            total_width,
+            total_height,
+            total_width,
+            total_height,
+        );
 
         svg_content.push_str(&self.generate_metadata());
 

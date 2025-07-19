@@ -197,7 +197,7 @@ fn main() -> pdb::Result<()> {
     let config = Config::new();
 
     let macho = MACHO::new(args.input, config).unwrap_or_else(|error| {
-        eprintln!("{}", error);
+        eprintln!("{error}");
         process::exit(1);
     });
 
@@ -229,13 +229,13 @@ fn main() -> pdb::Result<()> {
         let mut file = match File::create(args.output.unwrap()) {
             Ok(file) => file,
             Err(error) => {
-                eprintln!("{}", error);
+                eprintln!("{error}");
                 std::process::exit(1);
             }
         };
         for symbol in symbols {
             if let Err(error) = writeln!(file, "{}", symbol) {
-                eprintln!("{}", error);
+                eprintln!("{error}");
                 std::process::exit(1);
             }
         }

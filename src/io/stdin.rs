@@ -197,7 +197,7 @@ impl Stdin {
                         Stdout::print(line);
                     },
                     Err(error) => {
-                        eprintln!("{}", error);
+                        eprintln!("{error}");
                         process::exit(1);
                     },
                 }
@@ -219,7 +219,7 @@ impl Stdin {
             if e.kind() == ErrorKind::BrokenPipe {
                 std::process::exit(0);
             } else {
-                eprintln!("error writing to stdout: {}", e);
+                eprintln!("error writing to stdout: {e}");
                 std::process::exit(1);
             }
         });

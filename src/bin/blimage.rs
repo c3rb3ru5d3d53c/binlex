@@ -247,20 +247,20 @@ fn main() {
     let args = Args::parse();
 
     let colormap = ColorMap::from_str(&args.color.to_string(), false).unwrap_or_else(|error| {
-        eprintln!("{}", error);
+        eprintln!("{error}");
         process::exit(1);
     });
 
     if args.output.is_some() {
         let mut file = File::open(args.input).unwrap_or_else(|error| {
-            eprintln!("{}", error);
+            eprintln!("{error}");
             process::exit(1);
         });
 
         let mut byte_data = Vec::new();
 
         file.read_to_end(&mut byte_data).unwrap_or_else(|error| {
-            eprintln!("{}", error);
+            eprintln!("{error}");
             process::exit(1);
         });
 
@@ -273,19 +273,19 @@ fn main() {
         let svg_content = bytes_to_svg(&byte_data, args.shape_size, &colormap, metadata);
 
         std::fs::write(args.output.unwrap(), svg_content).unwrap_or_else(|error| {
-            eprintln!("{}", error);
+            eprintln!("{error}");
             process::exit(1);
         });
     } else {
         let mut file = File::open(args.input).unwrap_or_else(|error| {
-            eprintln!("{}", error);
+            eprintln!("{error}");
             process::exit(1);
         });
 
         let mut byte_data = Vec::new();
 
         file.read_to_end(&mut byte_data).unwrap_or_else(|error| {
-            eprintln!("{}", error);
+            eprintln!("{error}");
             process::exit(1);
         });
 

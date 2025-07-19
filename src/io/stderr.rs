@@ -188,7 +188,7 @@ impl Stderr {
             if e.kind() == ErrorKind::BrokenPipe {
                 std::process::exit(0);
             } else {
-                eprintln!("error writing to stdout: {}", e);
+                eprintln!("error writing to stdout: {e}");
                 std::process::exit(1);
             }
         });

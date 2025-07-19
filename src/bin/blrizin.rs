@@ -233,14 +233,14 @@ fn main() {
         let mut file = match File::create(args.output.unwrap()) {
             Ok(file) => file,
             Err(error) => {
-                eprintln!("{}", error);
+                eprintln!("{error}");
                 std::process::exit(1);
             }
         };
         for value in json.unwrap().values() {
             if let Ok(string) = process_value(value) {
                 if let Err(error) = writeln!(file, "{}", string) {
-                    eprintln!("{}", error);
+                    eprintln!("{error}");
                     std::process::exit(1);
                 }
             }

@@ -170,7 +170,6 @@ use crate::genetics::Gene;
 use crate::hashing::MinHash32;
 use crate::hashing::SHA256;
 use crate::hashing::TLSH;
-use crate::lcs::FuzzyLCS;
 use crate::Config;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -205,7 +204,7 @@ impl HomologousChromosome {
     #[allow(dead_code)]
     pub fn print(&self) {
         if let Ok(json) = self.json() {
-            println!("{}", json);
+            println!("{json}");
         }
     }
 }
@@ -248,7 +247,7 @@ impl ChromosomeSimilarityScore {
     #[allow(dead_code)]
     pub fn print(&self) {
         if let Ok(json) = self.json() {
-            println!("{}", json);
+            println!("{json}");
         }
     }
 }
@@ -299,7 +298,7 @@ impl ChromosomeSimilarity {
     #[allow(dead_code)]
     pub fn print(&self) {
         if let Ok(json) = self.json() {
-            println!("{}", json);
+            println!("{json}");
         }
     }
 }
@@ -559,21 +558,7 @@ impl Chromosome {
             return None;
         }
 
-        let mut homologues = Vec::<HomologousChromosome>::new();
-        if self.config.chromosomes.homologues.enabled {
-            let lhs_pattern = self.pattern();
-            let rhs_pattern = rhs.pattern();
-            for (score, (_, _), homologue) in lhs_pattern.fuzzy_find_subyara_all(rhs_pattern, 0.25)
-            {
-                if let Ok(c) = Chromosome::new(homologue.to_string().clone(), self.config.clone()) {
-                    let homologous_chromosome = HomologousChromosome {
-                        score: score as f64,
-                        chromosome: c.clone(),
-                    };
-                    homologues.push(homologous_chromosome);
-                }
-            }
-        }
+        let homologues = Vec::<HomologousChromosome>::new();
         Some(ChromosomeSimilarity {
             score: ChromosomeSimilarityScore { minhash, tlsh },
             homologues,
@@ -597,7 +582,7 @@ impl Chromosome {
     #[allow(dead_code)]
     pub fn print(&self) {
         if let Ok(json) = self.json() {
-            println!("{}", json);
+            println!("{json}");
         }
     }
 }

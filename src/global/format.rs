@@ -235,7 +235,7 @@ impl fmt::Display for Format {
             Format::MACHO => "macho",
             Format::UNKNOWN => "unknown",
         };
-        write!(f, "{}", format)
+        write!(f, "{format}")
     }
 }
 

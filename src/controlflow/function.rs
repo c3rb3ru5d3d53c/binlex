@@ -495,7 +495,7 @@ impl FunctionJsonDeserializer {
     #[allow(dead_code)]
     pub fn print(&self) {
         if let Ok(json) = self.json() {
-            println!("{}", json);
+            println!("{json}");
         }
     }
 }
@@ -808,7 +808,7 @@ impl<'function> Function<'function> {
     #[allow(dead_code)]
     pub fn print(&self) {
         if let Ok(json) = self.json() {
-            println!("{}", json);
+            println!("{json}");
         }
     }
 
@@ -1016,10 +1016,7 @@ impl<'function> Function<'function> {
         let mut bytes = Vec::<u8>::new();
         let mut pc = self.address;
         while pc < end {
-            let instruction = match self.cfg.get_instruction(pc) {
-                Some(i) => i,
-                None => return None,
-            };
+            let instruction = self.cfg.get_instruction(pc)?;
             bytes.extend(&instruction.bytes);
             pc += instruction.size() as u64;
         }

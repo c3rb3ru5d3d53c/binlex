@@ -1125,8 +1125,7 @@ impl PE {
             .write(&self.file.data[0..self.sizeofheaders() as usize])
             .map_err(|error| {
                 Error::other(format!(
-                    "failed to write headers to memory-mapped pe file: {}",
-                    error
+                    "failed to write headers to memory-mapped pe file: {error}"
                 ))
             })?;
         for section in self.pe.sections() {
@@ -1148,8 +1147,7 @@ impl PE {
                     .write_padding(padding_length as usize)
                     .map_err(|error| {
                         Error::other(format!(
-                            "write padding to pe memory-mapped pe file: {}",
-                            error
+                            "write padding to pe memory-mapped pe file: {error}"
                         ))
                     })?;
             }
@@ -1160,8 +1158,7 @@ impl PE {
                 .write(&self.file.data[pointerto_raw_data..pointerto_raw_data + sizeof_raw_data])
                 .map_err(|error| {
                     Error::other(format!(
-                        "failed to write section to memory-mapped pe file: {}",
-                        error
+                        "failed to write section to memory-mapped pe file: {error}"
                     ))
                 })?;
         }
