@@ -406,6 +406,15 @@ impl GraphQueue {
         true
     }
 
+    /// Checks if an address is currently pending in the queue.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` if the address is pending processing, otherwise `false`.
+    pub fn is_pending(&self, address: u64) -> bool {
+        self.pending.contains(&address)
+    }
+
     /// Removes an address from the processing queue.
     ///
     /// # Returns
