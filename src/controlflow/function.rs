@@ -495,7 +495,7 @@ impl FunctionJsonDeserializer {
     #[allow(dead_code)]
     pub fn print(&self) {
         if let Ok(json) = self.json() {
-            println!("{}", json);
+            println!("{json}");
         }
     }
 }
@@ -808,7 +808,7 @@ impl<'function> Function<'function> {
     #[allow(dead_code)]
     pub fn print(&self) {
         if let Ok(json) = self.json() {
-            println!("{}", json);
+            println!("{json}");
         }
     }
 

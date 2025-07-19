@@ -256,6 +256,6 @@ impl std::fmt::Display for LZ4String {
     /// This method will panic if the decompression operation fails or if the decompressed data is not valid UTF-8.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = self.decompress_to_string();
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }

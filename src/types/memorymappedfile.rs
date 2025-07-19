@@ -374,7 +374,7 @@ impl Drop for MemoryMappedFile {
         // Remove the file if caching is disabled
         if !self.cache {
             if let Err(error) = std::fs::remove_file(&self.path) {
-                eprintln!("Failed to remove file {}: {}", self.path, error);
+                eprintln!("Failed to remove file {}: {error}", self.path);
             }
         }
     }

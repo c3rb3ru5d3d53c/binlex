@@ -204,7 +204,7 @@ impl HomologousChromosome {
     #[allow(dead_code)]
     pub fn print(&self) {
         if let Ok(json) = self.json() {
-            println!("{}", json);
+            println!("{json}");
         }
     }
 }
@@ -247,7 +247,7 @@ impl ChromosomeSimilarityScore {
     #[allow(dead_code)]
     pub fn print(&self) {
         if let Ok(json) = self.json() {
-            println!("{}", json);
+            println!("{json}");
         }
     }
 }
@@ -298,7 +298,7 @@ impl ChromosomeSimilarity {
     #[allow(dead_code)]
     pub fn print(&self) {
         if let Ok(json) = self.json() {
-            println!("{}", json);
+            println!("{json}");
         }
     }
 }
@@ -582,7 +582,7 @@ impl Chromosome {
     #[allow(dead_code)]
     pub fn print(&self) {
         if let Ok(json) = self.json() {
-            println!("{}", json);
+            println!("{json}");
         }
     }
 }

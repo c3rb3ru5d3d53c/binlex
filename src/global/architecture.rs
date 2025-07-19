@@ -220,7 +220,7 @@ impl fmt::Display for Architecture {
             Architecture::CIL => "cil",
             Architecture::UNKNOWN => "unknown",
         };
-        write!(f, "{}", architecture)
+        write!(f, "{architecture}")
     }
 }
 

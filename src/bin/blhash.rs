@@ -218,12 +218,12 @@ fn main () {
     let args = Args::parse();
 
     let mut file = File::new(args.input, config).unwrap_or_else(|error| {
-        eprintln!("{}", error);
+        eprintln!("{error}");
         process::exit(1);
     });
 
     file.read().unwrap_or_else(|error| {
-        eprintln!("{}", error);
+        eprintln!("{error}");
         process::exit(1);
     });
 

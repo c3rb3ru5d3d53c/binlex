@@ -371,7 +371,7 @@ impl BlockJsonDeserializer {
     #[allow(dead_code)]
     pub fn print(&self) {
         if let Ok(json) = self.json() {
-            println!("{}", json);
+            println!("{json}");
         }
     }
 }
@@ -460,7 +460,7 @@ impl<'block> Block<'block> {
     #[allow(dead_code)]
     pub fn print(&self) {
         if let Ok(json) = self.json() {
-            println!("{}", json);
+            println!("{json}");
         }
     }
 

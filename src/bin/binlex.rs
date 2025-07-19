@@ -620,7 +620,7 @@ fn process_output(
         let mut file = match File::create(output_file) {
             Ok(file) => file,
             Err(error) => {
-                eprintln!("{}", error);
+                eprintln!("{error}");
                 std::process::exit(1);
             }
         };
@@ -628,7 +628,7 @@ fn process_output(
         if cfg.config.instructions.enabled {
             for instruction in instructions {
                 if let Err(error) = writeln!(file, "{}", instruction) {
-                    eprintln!("{}", error);
+                    eprintln!("{error}");
                     std::process::exit(1);
                 }
             }
@@ -636,14 +636,14 @@ fn process_output(
 
         for block in blocks {
             if let Err(error) = writeln!(file, "{}", block) {
-                eprintln!("{}", error);
+                eprintln!("{error}");
                 std::process::exit(1);
             }
         }
 
         for function in functions {
             if let Err(error) = writeln!(file, "{}", function) {
-                eprintln!("{}", error);
+                eprintln!("{error}");
                 std::process::exit(1);
             }
         }
@@ -723,7 +723,7 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
         ) {
             Ok(disassembler) => disassembler,
             Err(error) => {
-                eprintln!("{}", error);
+                eprintln!("{error}");
                 process::exit(1);
             }
         };
@@ -731,7 +731,7 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
         disassembler
             .disassemble_controlflow(entrypoints.clone(), &mut cfg)
             .unwrap_or_else(|error| {
-                eprintln!("{}", error);
+                eprintln!("{error}");
                 process::exit(1);
             });
     } else if pe.is_dotnet() {
@@ -746,7 +746,7 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
         ) {
             Ok(disassembler) => disassembler,
             Err(error) => {
-                eprintln!("{}", error);
+                eprintln!("{error}");
                 process::exit(1);
             }
         };
@@ -754,7 +754,7 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
         disassembler
             .disassemble_controlflow(entrypoints.clone(), &mut cfg)
             .unwrap_or_else(|error| {
-                eprintln!("{}", error);
+                eprintln!("{error}");
                 process::exit(1);
             });
     } else {
@@ -769,7 +769,7 @@ fn process_elf(input: String, config: Config, tags: Option<Vec<String>>, output:
     let mut attributes = Attributes::new();
 
     let elf = ELF::new(input, config.clone()).unwrap_or_else(|error| {
-        eprintln!("{}", error);
+        eprintln!("{error}");
         process::exit(1);
     });
 
@@ -795,12 +795,12 @@ fn process_elf(input: String, config: Config, tags: Option<Vec<String>>, output:
     // }
 
     let mut mapped_file = elf.image().unwrap_or_else(|error| {
-        eprintln!("{}", error);
+        eprintln!("{error}");
         process::exit(1)
     });
 
     let image = mapped_file.mmap().unwrap_or_else(|error| {
-        eprintln!("{}", error);
+        eprintln!("{error}");
         process::exit(1);
     });
 
@@ -820,7 +820,7 @@ fn process_elf(input: String, config: Config, tags: Option<Vec<String>>, output:
     ) {
         Ok(disassembler) => disassembler,
         Err(error) => {
-            eprintln!("{}", error);
+            eprintln!("{error}");
             process::exit(1);
         }
     };
@@ -828,7 +828,7 @@ fn process_elf(input: String, config: Config, tags: Option<Vec<String>>, output:
     disassembler
         .disassemble_controlflow(entrypoints, &mut cfg)
         .unwrap_or_else(|error| {
-            eprintln!("{}", error);
+            eprintln!("{error}");
             process::exit(1);
         });
 
@@ -839,11 +839,11 @@ fn process_code(input: String, config: Config, architecture: Architecture, outpu
     let mut attributes = Attributes::new();
 
     let mut file = BLFile::new(input, config.clone()).unwrap_or_else(|error| {
-        eprintln!("{}", error);
+        eprintln!("{error}");
         process::exit(1);
     });
     file.read().unwrap_or_else(|error| {
-        eprintln!("{}", error);
+        eprintln!("{error}");
         process::exit(1);
     });
 
@@ -866,7 +866,7 @@ fn process_code(input: String, config: Config, architecture: Architecture, outpu
             ) {
                 Ok(disassembler) => disassembler,
                 Err(error) => {
-                    eprintln!("{}", error);
+                    eprintln!("{error}");
                     process::exit(1);
                 }
             };
@@ -874,7 +874,7 @@ fn process_code(input: String, config: Config, architecture: Architecture, outpu
             disassembler
                 .disassemble_controlflow(entrypoints, &mut cfg)
                 .unwrap_or_else(|error| {
-                    eprintln!("{}", error);
+                    eprintln!("{error}");
                     process::exit(1);
                 });
         }
@@ -888,7 +888,7 @@ fn process_code(input: String, config: Config, architecture: Architecture, outpu
             ) {
                 Ok(disassembler) => disassembler,
                 Err(error) => {
-                    eprintln!("{}", error);
+                    eprintln!("{error}");
                     process::exit(1);
                 }
             };
@@ -896,7 +896,7 @@ fn process_code(input: String, config: Config, architecture: Architecture, outpu
             disassembler
                 .disassemble_controlflow(entrypoints, &mut cfg)
                 .unwrap_or_else(|error| {
-                    eprintln!("{}", error);
+                    eprintln!("{error}");
                     process::exit(1);
                 });
         }
@@ -914,7 +914,7 @@ fn process_macho(input: String, config: Config, tags: Option<Vec<String>>, outpu
     let mut attributes = Attributes::new();
 
     let macho = MACHO::new(input, config.clone()).unwrap_or_else(|error| {
-        eprintln!("{}", error);
+        eprintln!("{error}");
         process::exit(1);
     });
 
@@ -947,12 +947,12 @@ fn process_macho(input: String, config: Config, tags: Option<Vec<String>>, outpu
         // }
 
         let mut mapped_file = macho.image(slice).unwrap_or_else(|error| {
-            eprintln!("{}", error);
+            eprintln!("{error}");
             process::exit(1)
         });
 
         let image = mapped_file.mmap().unwrap_or_else(|error| {
-            eprintln!("{}", error);
+            eprintln!("{error}");
             process::exit(1);
         });
 
@@ -972,7 +972,7 @@ fn process_macho(input: String, config: Config, tags: Option<Vec<String>>, outpu
         ) {
             Ok(disassembler) => disassembler,
             Err(error) => {
-                eprintln!("{}", error);
+                eprintln!("{error}");
                 process::exit(1);
             }
         };
@@ -980,7 +980,7 @@ fn process_macho(input: String, config: Config, tags: Option<Vec<String>>, outpu
         disassembler
             .disassemble_controlflow(entrypoints, &mut cfg)
             .unwrap_or_else(|error| {
-                eprintln!("{}", error);
+                eprintln!("{error}");
                 process::exit(1);
             });
 
@@ -1003,7 +1003,7 @@ fn main() {
                 config = result;
             }
             Err(error) => {
-                eprintln!("{}", error);
+                eprintln!("{error}");
                 process::exit(1);
             }
         }
@@ -1065,13 +1065,13 @@ fn main() {
         .num_threads(config.general.threads)
         .build_global()
         .unwrap_or_else(|error| {
-            eprintln!("{}", error);
+            eprintln!("{error}");
             process::exit(1);
         });
 
     if args.architecture.is_none() {
         let format = Format::from_file(args.input.clone()).unwrap_or_else(|error| {
-            eprintln!("{}", error);
+            eprintln!("{error}");
             process::exit(1);
         });
         match format {
