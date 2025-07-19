@@ -474,6 +474,7 @@ impl<'disassembler> Disassembler<'disassembler> {
 
         let mut pc = address;
         let mut has_prologue = false;
+        let mut terminator = address;
 
         while self.disassemble_instruction(pc, cfg).is_ok() {
             let mut instruction = match cfg.get_instruction(pc) {
@@ -498,6 +499,8 @@ impl<'disassembler> Disassembler<'disassembler> {
                 cfg.update_instruction(instruction.clone());
             }
 
+            terminator = instruction.address;
+
             let is_block_start = instruction.address != address && instruction.is_block_start;
 
             if instruction.is_trap || instruction.is_return || instruction.is_jump || is_block_start
@@ -506,6 +509,10 @@ impl<'disassembler> Disassembler<'disassembler> {
             }
 
             pc += instruction.size() as u64;
+
+            if cfg.blocks.is_pending(pc) || cfg.blocks.is_processed(pc) || cfg.blocks.is_valid(pc) {
+                break;
+            }
         }
 
         if has_prologue {
@@ -513,7 +520,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         }
         cfg.blocks.insert_valid(address);
 
-        Ok(pc)
+        Ok(terminator)
     }
 
     pub fn is_function_prologue(&self, address: u64) -> bool {

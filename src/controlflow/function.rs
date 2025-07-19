@@ -971,7 +971,16 @@ impl<'function> Function<'function> {
     ///
     /// Returns `Some(usize)` if the function is contiguous; otherwise, `None`.
     pub fn size(&self) -> usize {
-        self.blocks.values().map(|block| block.size()).sum()
+        if self.blocks.is_empty() {
+            return 0;
+        }
+        let end = self
+            .blocks
+            .values()
+            .map(|b| b.address + b.size() as u64)
+            .max()
+            .unwrap_or(self.address);
+        (end - self.address) as usize
     }
 
     /// Retrieves the address of the function's last instruction, if contiguous.
@@ -995,22 +1004,24 @@ impl<'function> Function<'function> {
     ///
     /// Returns `Some(Vec<u8>)` containing the bytes, or `None` if the function is not contiguous.
     pub fn bytes(&self) -> Option<Vec<u8>> {
-        if !self.contiguous() {
+        if self.blocks.is_empty() {
             return None;
         }
+        let end = self
+            .blocks
+            .values()
+            .map(|b| b.address + b.size() as u64)
+            .max()
+            .unwrap_or(self.address);
         let mut bytes = Vec::<u8>::new();
-        let mut block_previous_end: Option<u64> = None;
-        for (block_start_address, block) in &self.blocks {
-            bytes.extend(block.bytes());
-            if block.terminator.is_return {
-                break;
-            }
-            if let Some(previous_end) = block_previous_end {
-                if previous_end != *block_start_address {
-                    return None;
-                }
-            }
-            block_previous_end = Some(block.address + block.size() as u64);
+        let mut pc = self.address;
+        while pc < end {
+            let instruction = match self.cfg.get_instruction(pc) {
+                Some(i) => i,
+                None => return None,
+            };
+            bytes.extend(&instruction.bytes);
+            pc += instruction.size() as u64;
         }
         Some(bytes)
     }
@@ -1135,14 +1146,21 @@ impl<'function> Function<'function> {
     ///
     /// Returns `true` if the function is contiguous; otherwise, `false`.
     pub fn contiguous(&self) -> bool {
-        let mut block_previous_end: Option<u64> = None;
-        for (block_start_address, block) in &self.blocks {
-            if let Some(previous_end) = block_previous_end {
-                if previous_end != *block_start_address {
-                    return false;
-                }
+        if self.blocks.is_empty() {
+            return false;
+        }
+        let end = self
+            .blocks
+            .values()
+            .map(|b| b.address + b.size() as u64)
+            .max()
+            .unwrap_or(self.address);
+        let mut pc = self.address;
+        while pc < end {
+            match self.cfg.get_instruction(pc) {
+                Some(instr) => pc += instr.size() as u64,
+                None => return false,
             }
-            block_previous_end = Some(block.address + block.size() as u64);
         }
         true
     }
