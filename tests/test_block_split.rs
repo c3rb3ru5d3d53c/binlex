@@ -1,8 +1,27 @@
 use binlex::binary::Binary;
-use binlex::controlflow::{Graph, Function};
+use binlex::controlflow::{Function, Graph};
 use binlex::disassemblers::capstone::Disassembler;
 use binlex::{Architecture, Config};
 use std::collections::BTreeMap;
+
+fn pattern_matches_bytes(pattern: &str, bytes: &[u8]) -> bool {
+    if pattern.len() != bytes.len() * 2 {
+        return false;
+    }
+    for (i, byte) in bytes.iter().enumerate() {
+        let chunk = &pattern[i * 2..i * 2 + 2];
+        let hex = format!("{:02x}", byte);
+        let b0 = chunk.as_bytes()[0];
+        let b1 = chunk.as_bytes()[1];
+        if b0 != b'?' && b0.to_ascii_lowercase() != hex.as_bytes()[0] {
+            return false;
+        }
+        if b1 != b'?' && b1.to_ascii_lowercase() != hex.as_bytes()[1] {
+            return false;
+        }
+    }
+    true
+}
 
 #[test]
 fn test_block_split_pending() {
@@ -11,15 +30,22 @@ fn test_block_split_pending() {
     let mut ranges = BTreeMap::new();
     ranges.insert(0u64, bytes.len() as u64);
     let config = Config::new();
-    let disasm = Disassembler::new(Architecture::I386, &bytes, ranges.clone(), config.clone()).expect("disasm");
+    let disasm = Disassembler::new(Architecture::I386, &bytes, ranges.clone(), config.clone())
+        .expect("disasm");
     let mut graph = Graph::new(Architecture::I386, config.clone());
     // pre-mark address 2 as a block start
     graph.blocks.enqueue(2);
-    disasm.disassemble_function(0, &mut graph).expect("disassemble");
+    disasm
+        .disassemble_function(0, &mut graph)
+        .expect("disassemble");
     let func = Function::new(0, &graph).expect("function");
     let mut blocks = func.blocks.iter();
     let first = blocks.next().unwrap().1;
-    assert_eq!(Binary::to_hex(&first.bytes()), "7402", "first block incorrect");
+    assert_eq!(
+        Binary::to_hex(&first.bytes()),
+        "7402",
+        "first block incorrect"
+    );
 }
 
 #[test]
@@ -32,9 +58,12 @@ fn test_full_function_disassembly() {
     let mut ranges = BTreeMap::new();
     ranges.insert(0u64, bytes.len() as u64);
     let config = Config::new();
-    let disasm = Disassembler::new(Architecture::I386, &bytes, ranges.clone(), config.clone()).expect("disasm");
+    let disasm = Disassembler::new(Architecture::I386, &bytes, ranges.clone(), config.clone())
+        .expect("disasm");
     let mut graph = Graph::new(Architecture::I386, config.clone());
-    disasm.disassemble_function(0, &mut graph).expect("disassemble");
+    disasm
+        .disassemble_function(0, &mut graph)
+        .expect("disassemble");
     let func = Function::new(0, &graph).expect("function");
     assert_eq!(graph.listing.len(), 62, "incorrect instruction count");
     assert_eq!(func.blocks.len(), 14, "incorrect block count");
@@ -48,6 +77,14 @@ fn test_full_function_disassembly() {
     // ensure that the bytes returned by Function::bytes() match the input
     let func_bytes = func.bytes().expect("function bytes");
     assert_eq!(Binary::to_hex(&func_bytes), hex, "function bytes mismatch");
+
+    // verify chromosome pattern length and matching
+    let pattern = func.pattern().expect("pattern");
+    assert_eq!(pattern.len(), hex.len(), "pattern length mismatch");
+    assert!(
+        pattern_matches_bytes(&pattern, &func_bytes),
+        "pattern does not match bytes"
+    );
 
     // verify the function is contiguous
     assert!(func.contiguous(), "function should be contiguous");
