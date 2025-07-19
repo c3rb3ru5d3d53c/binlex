@@ -101,6 +101,14 @@ make wheel # Make Python Wheel
 
 The resulting packages will be in the `target/` directory.
 
+### Linting
+
+Run Clippy to ensure the code compiles without warnings.
+
+```bash
+cargo clippy --all-targets --all-features -- -D warnings
+```
+
 ### IDA Plugin
 
 Installing the IDA plugin is easy to install, just make sure you installed the Python bindings in the Python environment for IDA.
