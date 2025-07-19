@@ -19,7 +19,8 @@ enabled = true
 [minio]
 host = 'minio'
 port = 9000
-bucket = 'binlex'
+object_bucket = 'binlex-objects'
+attributes_bucket = 'binlex-attributes'
 secure = false
 
 [minio.keys]
