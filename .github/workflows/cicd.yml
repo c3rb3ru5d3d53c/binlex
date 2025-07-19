@@ -220,6 +220,9 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install setuptools wheel virtualenv
 
+      - name: Run Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
       - name: Run Unit Tests
         run: cargo test
 
@@ -356,6 +359,10 @@ jobs:
       - name: Build Project (Arch Linux)
         run: |
           sudo -u builder bash -c 'cd /home/builder/repo/ && . /home/builder/.cargo/env && make zst'
+
+      - name: Run Clippy
+        run: |
+          sudo -u builder bash -c 'cd /home/builder/repo/ && . /home/builder/.cargo/env && cargo clippy --all-targets --all-features -- -D warnings'
 
       - name: Run Unit Tests
         run: |

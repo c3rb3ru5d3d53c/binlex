@@ -184,7 +184,6 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Error;
-use std::io::ErrorKind;
 
 pub struct Disassembler<'disassembler> {
     cs: Capstone,
@@ -284,7 +283,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         let pool = ThreadPoolBuilder::new()
             .num_threads(cfg.config.general.threads)
             .build()
-            .map_err(|error| Error::new(ErrorKind::Other, format!("{}", error)))?;
+            .map_err(|error| Error::other(format!("{}", error)))?;
 
         if cfg.config.disassembler.sweep.enabled {
             cfg.functions.enqueue_extend(self.disassemble_sweep());
@@ -346,7 +345,7 @@ impl<'disassembler> Disassembler<'disassembler> {
                 address
             );
             Stderr::print_debug(cfg.config.clone(), &error_message);
-            return Err(Error::new(ErrorKind::Other, error_message));
+            return Err(Error::other(error_message));
         }
 
         cfg.blocks.enqueue(address);
@@ -397,14 +396,14 @@ impl<'disassembler> Disassembler<'disassembler> {
                 address
             );
             Stderr::print_debug(cfg.config.clone(), error.clone());
-            return Err(Error::new(ErrorKind::Other, error));
+            return Err(Error::other(error));
         }
 
         let instruction_container = self.disassemble_instructions(address, 1)?;
         let instruction = instruction_container.iter().next().ok_or_else(|| {
             cfg.instructions.insert_invalid(address);
             let error = format!("0x{:x}: failed to disassemble instruction", address);
-            Error::new(ErrorKind::Other, error)
+            Error::other(error)
         })?;
 
         let instruction_signature = self.get_instruction_pattern(instruction)?;
@@ -469,7 +468,7 @@ impl<'disassembler> Disassembler<'disassembler> {
             cfg.functions.insert_invalid(address);
             let error_message = format!("Block -> 0x{:x}: it is not in executable memory", address);
             Stderr::print_debug(cfg.config.clone(), error_message.clone());
-            return Err(Error::new(ErrorKind::Other, error_message));
+            return Err(Error::other(error_message));
         }
 
         let mut pc = address;
@@ -481,10 +480,7 @@ impl<'disassembler> Disassembler<'disassembler> {
                 Some(instr) => instr,
                 None => {
                     cfg.blocks.insert_invalid(address);
-                    return Err(Error::new(
-                        ErrorKind::Other,
-                        "failed to disassemble instruction",
-                    ));
+                    return Err(Error::other("failed to disassemble instruction"));
                 }
             };
 
@@ -589,11 +585,9 @@ impl<'disassembler> Disassembler<'disassembler> {
             Err(_) => return false,
         };
 
-        if let Some(operand) = operands.get(index) {
-            if let ArchOperand::X86Operand(op) = operand {
-                if let X86OperandType::Reg(reg_id) = op.op_type {
-                    return reg_id == register_id;
-                }
+        if let Some(ArchOperand::X86Operand(op)) = operands.get(index) {
+            if let X86OperandType::Reg(reg_id) = op.op_type {
+                return reg_id == register_id;
             }
         }
         false
@@ -619,8 +613,7 @@ impl<'disassembler> Disassembler<'disassembler> {
                     result += op.size as usize;
                 }
                 _ => {
-                    return Err(Error::new(
-                        ErrorKind::Other,
+                    return Err(Error::other(
                         "unsupported operand architecture",
                     ))
                 }
@@ -702,13 +695,10 @@ impl<'disassembler> Disassembler<'disassembler> {
         let is_immutable_signature = self.is_immutable_instruction_to_pattern(instruction);
 
         if total_operand_size == 0 && !operands.is_empty() {
-            return Err(Error::new(
-                ErrorKind::Other,
-                format!(
-                    "Instruction -> 0x{:x}: instruction has operands but missing operand sizes",
-                    instruction.address()
-                ),
-            ));
+            return Err(Error::other(format!(
+                "Instruction -> 0x{:x}: instruction has operands but missing operand sizes",
+                instruction.address()
+            )));
         }
 
         for operand in operands {
@@ -738,7 +728,10 @@ impl<'disassembler> Disassembler<'disassembler> {
 
                 if op_size > instruction_size {
                     Disassembler::print_instruction(instruction);
-                    return Err(Error::new(ErrorKind::Other, format!("Instruction -> 0x{:x}: instruction operand size exceeds instruction size", instruction.address())));
+                    return Err(Error::other(format!(
+                        "Instruction -> 0x{:x}: instruction operand size exceeds instruction size",
+                        instruction.address()
+                    )));
                 }
 
                 let operand_offset = instruction_size - op_size;
@@ -747,7 +740,10 @@ impl<'disassembler> Disassembler<'disassembler> {
                     for i in 0..op_size {
                         if operand_offset + i > wildcarded.len() {
                             Disassembler::print_instruction(instruction);
-                            return Err(Error::new(ErrorKind::Other, format!("Instruction -> 0x{:x}: instruction wildcard index is out of bounds", instruction.address())));
+                            return Err(Error::other(format!(
+                                "Instruction -> 0x{:x}: instruction wildcard index is out of bounds",
+                                instruction.address()
+                            )));
                         }
                         wildcarded[operand_offset + i] = true;
                     }
@@ -758,13 +754,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         let instruction_hex = Binary::to_hex(instruction.bytes());
 
         if instruction_hex.len() % 2 != 0 {
-            return Err(Error::new(
-                ErrorKind::Other,
-                format!(
-                    "Instruction -> 0x{:x}: instruction hex string length is not even",
-                    instruction.address()
-                ),
-            ));
+            return Err(Error::other(format!("Instruction -> 0x{:x}: instruction hex string length is not even", instruction.address())));
         }
 
         let signature: String = instruction_hex
@@ -784,23 +774,11 @@ impl<'disassembler> Disassembler<'disassembler> {
             .collect();
 
         if signature.len() % 2 != 0 {
-            return Err(Error::new(
-                ErrorKind::Other,
-                format!(
-                    "Instruction -> 0x{:x}: wildcarded hex string length is not even",
-                    instruction.address()
-                ),
-            ));
+            return Err(Error::other(format!("Instruction -> 0x{:x}: wildcarded hex string length is not even", instruction.address())));
         }
 
         if instruction_hex.len() != signature.len() {
-            return Err(Error::new(
-                ErrorKind::Other,
-                format!(
-                    "Instruction -> 0x{:x}: instruction hex length not same as wildcard hex length",
-                    instruction.address()
-                ),
-            ));
+            return Err(Error::other(format!("Instruction -> 0x{:x}: instruction hex length not same as wildcard hex length", instruction.address())));
         }
 
         Ok(signature)
@@ -914,8 +892,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         let detail = match self.cs.insn_detail(instruction) {
             Ok(detail) => detail,
             Err(_error) => {
-                return Err(Error::new(
-                    ErrorKind::Other,
+                return Err(Error::other(
                     "failed to get instruction detail",
                 ))
             }
@@ -934,8 +911,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         let operand = match operands.get(index) {
             Some(operand) => operand.clone(),
             None => {
-                return Err(Error::new(
-                    ErrorKind::Other,
+                return Err(Error::other(
                     "failed to get instruction operand",
                 ))
             }
@@ -1160,14 +1136,14 @@ impl<'disassembler> Disassembler<'disassembler> {
         count: u64,
     ) -> Result<Instructions<'_>, Error> {
         if (address as usize) >= self.image.len() {
-            return Err(Error::new(ErrorKind::Other, "address out of bounds"));
+            return Err(Error::other("address out of bounds"));
         }
         let instructions = self
             .cs
             .disasm_count(&self.image[address as usize..], address, count as usize)
-            .map_err(|_| Error::new(ErrorKind::Other, "failed to disassemble instructions"))?;
-        if instructions.len() == 0 {
-            return Err(Error::new(ErrorKind::Other, "no instructions found"));
+            .map_err(|_| Error::other("failed to disassemble instructions"))?;
+        if instructions.is_empty() {
+            return Err(Error::other("no instructions found"));
         }
         Ok(instructions)
     }
@@ -1180,15 +1156,15 @@ impl<'disassembler> Disassembler<'disassembler> {
                 .syntax(arch::x86::ArchSyntax::Intel)
                 .detail(detail)
                 .build()
-                .map_err(|e| Error::new(ErrorKind::Other, format!("capstone error: {:?}", e))),
+                .map_err(|e| Error::other(format!("capstone error: {:?}", e))),
             Architecture::I386 => Capstone::new()
                 .x86()
                 .mode(arch::x86::ArchMode::Mode32)
                 .syntax(arch::x86::ArchSyntax::Intel)
                 .detail(detail)
                 .build()
-                .map_err(|e| Error::new(ErrorKind::Other, format!("capstone error: {:?}", e))),
-            _ => Err(Error::new(ErrorKind::Other, "unsupported architecture")),
+                .map_err(|e| Error::other(format!("capstone error: {:?}", e))),
+            _ => Err(Error::other("unsupported architecture")),
         }
     }
 }
