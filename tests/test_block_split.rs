@@ -48,4 +48,7 @@ fn test_full_function_disassembly() {
     // ensure that the bytes returned by Function::bytes() match the input
     let func_bytes = func.bytes().expect("function bytes");
     assert_eq!(Binary::to_hex(&func_bytes), hex, "function bytes mismatch");
+
+    // verify the function is contiguous
+    assert!(func.contiguous(), "function should be contiguous");
 }
