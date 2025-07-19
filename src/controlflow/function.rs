@@ -971,7 +971,16 @@ impl<'function> Function<'function> {
     ///
     /// Returns `Some(usize)` if the function is contiguous; otherwise, `None`.
     pub fn size(&self) -> usize {
-        self.blocks.values().map(|block| block.size()).sum()
+        if self.blocks.is_empty() {
+            return 0;
+        }
+        let end = self
+            .blocks
+            .values()
+            .map(|b| b.address + b.size() as u64)
+            .max()
+            .unwrap_or(self.address);
+        (end - self.address) as usize
     }
 
     /// Retrieves the address of the function's last instruction, if contiguous.
