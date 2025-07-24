@@ -1,189 +1,45 @@
-//                    GNU LESSER GENERAL PUBLIC LICENSE
-//                        Version 3, 29 June 2007
+// MIT License
 //
-//  Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
-//  Everyone is permitted to copy and distribute verbatim copies
-//  of this license document, but changing it is not allowed.
+// Copyright (c) [2025] [c3rb3ru5d3d53c]
 //
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-//   This version of the GNU Lesser General Public License incorporates
-// the terms and conditions of version 3 of the GNU General Public
-// License, supplemented by the additional permissions listed below.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-//   0. Additional Definitions.
-//
-//   As used herein, "this License" refers to version 3 of the GNU Lesser
-// General Public License, and the "GNU GPL" refers to version 3 of the GNU
-// General Public License.
-//
-//   "The Library" refers to a covered work governed by this License,
-// other than an Application or a Combined Work as defined below.
-//
-//   An "Application" is any work that makes use of an interface provided
-// by the Library, but which is not otherwise based on the Library.
-// Defining a subclass of a class defined by the Library is deemed a mode
-// of using an interface provided by the Library.
-//
-//   A "Combined Work" is a work produced by combining or linking an
-// Application with the Library.  The particular version of the Library
-// with which the Combined Work was made is also called the "Linked
-// Version".
-//
-//   The "Minimal Corresponding Source" for a Combined Work means the
-// Corresponding Source for the Combined Work, excluding any source code
-// for portions of the Combined Work that, considered in isolation, are
-// based on the Application, and not on the Linked Version.
-//
-//   The "Corresponding Application Code" for a Combined Work means the
-// object code and/or source code for the Application, including any data
-// and utility programs needed for reproducing the Combined Work from the
-// Application, but excluding the System Libraries of the Combined Work.
-//
-//   1. Exception to Section 3 of the GNU GPL.
-//
-//   You may convey a covered work under sections 3 and 4 of this License
-// without being bound by section 3 of the GNU GPL.
-//
-//   2. Conveying Modified Versions.
-//
-//   If you modify a copy of the Library, and, in your modifications, a
-// facility refers to a function or data to be supplied by an Application
-// that uses the facility (other than as an argument passed when the
-// facility is invoked), then you may convey a copy of the modified
-// version:
-//
-//    a) under this License, provided that you make a good faith effort to
-//    ensure that, in the event an Application does not supply the
-//    function or data, the facility still operates, and performs
-//    whatever part of its purpose remains meaningful, or
-//
-//    b) under the GNU GPL, with none of the additional permissions of
-//    this License applicable to that copy.
-//
-//   3. Object Code Incorporating Material from Library Header Files.
-//
-//   The object code form of an Application may incorporate material from
-// a header file that is part of the Library.  You may convey such object
-// code under terms of your choice, provided that, if the incorporated
-// material is not limited to numerical parameters, data structure
-// layouts and accessors, or small macros, inline functions and templates
-// (ten or fewer lines in length), you do both of the following:
-//
-//    a) Give prominent notice with each copy of the object code that the
-//    Library is used in it and that the Library and its use are
-//    covered by this License.
-//
-//    b) Accompany the object code with a copy of the GNU GPL and this license
-//    document.
-//
-//   4. Combined Works.
-//
-//   You may convey a Combined Work under terms of your choice that,
-// taken together, effectively do not restrict modification of the
-// portions of the Library contained in the Combined Work and reverse
-// engineering for debugging such modifications, if you also do each of
-// the following:
-//
-//    a) Give prominent notice with each copy of the Combined Work that
-//    the Library is used in it and that the Library and its use are
-//    covered by this License.
-//
-//    b) Accompany the Combined Work with a copy of the GNU GPL and this license
-//    document.
-//
-//    c) For a Combined Work that displays copyright notices during
-//    execution, include the copyright notice for the Library among
-//    these notices, as well as a reference directing the user to the
-//    copies of the GNU GPL and this license document.
-//
-//    d) Do one of the following:
-//
-//        0) Convey the Minimal Corresponding Source under the terms of this
-//        License, and the Corresponding Application Code in a form
-//        suitable for, and under terms that permit, the user to
-//        recombine or relink the Application with a modified version of
-//        the Linked Version to produce a modified Combined Work, in the
-//        manner specified by section 6 of the GNU GPL for conveying
-//        Corresponding Source.
-//
-//        1) Use a suitable shared library mechanism for linking with the
-//        Library.  A suitable mechanism is one that (a) uses at run time
-//        a copy of the Library already present on the user's computer
-//        system, and (b) will operate properly with a modified version
-//        of the Library that is interface-compatible with the Linked
-//        Version.
-//
-//    e) Provide Installation Information, but only if you would otherwise
-//    be required to provide such information under section 6 of the
-//    GNU GPL, and only to the extent that such information is
-//    necessary to install and execute a modified version of the
-//    Combined Work produced by recombining or relinking the
-//    Application with a modified version of the Linked Version. (If
-//    you use option 4d0, the Installation Information must accompany
-//    the Minimal Corresponding Source and Corresponding Application
-//    Code. If you use option 4d1, you must provide the Installation
-//    Information in the manner specified by section 6 of the GNU GPL
-//    for conveying Corresponding Source.)
-//
-//   5. Combined Libraries.
-//
-//   You may place library facilities that are a work based on the
-// Library side by side in a single library together with other library
-// facilities that are not Applications and are not covered by this
-// License, and convey such a combined library under terms of your
-// choice, if you do both of the following:
-//
-//    a) Accompany the combined library with a copy of the same work based
-//    on the Library, uncombined with any other library facilities,
-//    conveyed under the terms of this License.
-//
-//    b) Give prominent notice with the combined library that part of it
-//    is a work based on the Library, and explaining where to find the
-//    accompanying uncombined form of the same work.
-//
-//   6. Revised Versions of the GNU Lesser General Public License.
-//
-//   The Free Software Foundation may publish revised and/or new versions
-// of the GNU Lesser General Public License from time to time. Such new
-// versions will be similar in spirit to the present version, but may
-// differ in detail to address new problems or concerns.
-//
-//   Each version is given a distinguishing version number. If the
-// Library as you received it specifies that a certain numbered version
-// of the GNU Lesser General Public License "or any later version"
-// applies to it, you have the option of following the terms and
-// conditions either of that published version or of any later version
-// published by the Free Software Foundation. If the Library as you
-// received it does not specify a version number of the GNU Lesser
-// General Public License, you may choose any version of the GNU Lesser
-// General Public License ever published by the Free Software Foundation.
-//
-//   If the Library as you received it specifies that a proxy can decide
-// whether future versions of the GNU Lesser General Public License shall
-// apply, that proxy's public statement of acceptance of any version is
-// permanent authorization for you to choose that version for the
-// Library.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-use pyo3::prelude::*;
-use pyo3::Py;
-use std::collections::{BTreeMap, BTreeSet};
-use binlex::controlflow::Block as InnerBlock;
-use binlex::controlflow::BlockJsonDeserializer as InnerBlockJsonDeserializer;
-use binlex::controlflow::Graph as InnerGraph;
+use crate::controlflow::graph::Graph;
 use crate::controlflow::Instruction;
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeSimilarity;
-use crate::controlflow::graph::Graph;
+use crate::Architecture;
 use crate::Config;
-use std::sync::Arc;
-use std::sync::Mutex;
+use binlex::controlflow::Block as InnerBlock;
+use binlex::controlflow::BlockJsonDeserializer as InnerBlockJsonDeserializer;
+use binlex::controlflow::Graph as InnerGraph;
+use binlex::Architecture as InnerArchitecture;
+use binlex::Binary as InnerBinary;
+use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::types::PyList;
+use pyo3::Py;
 use rayon::prelude::*;
 use rayon::ThreadPoolBuilder;
-use binlex::Binary as InnerBinary;
-use binlex::Architecture as InnerArchitecture;
-use crate::Architecture;
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
+use std::sync::Mutex;
 
 #[pyclass]
 pub struct BlockJsonDeserializer {
@@ -198,7 +54,7 @@ impl BlockJsonDeserializer {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
         let inner = InnerBlockJsonDeserializer::new(string, inner_config)?;
         Ok(Self {
-           inner: Arc::new(Mutex::new(inner)),
+            inner: Arc::new(Mutex::new(inner)),
         })
     }
 
@@ -210,34 +66,43 @@ impl BlockJsonDeserializer {
     #[pyo3(text_signature = "($self)")]
     pub fn architecture(&self) -> PyResult<Architecture> {
         let inner = InnerArchitecture::from_string(&self.inner.lock().unwrap().json.architecture)
-            .map_err(|err| pyo3::exceptions::PyRuntimeError::new_err(format!("{}", err)))?;
-        Ok(Architecture {
-            inner: inner
-        })
+            .map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
+        Ok(Architecture { inner })
     }
 
     #[pyo3(text_signature = "($self)")]
     pub fn bytes(&self, py: Python) -> PyResult<Py<PyBytes>> {
         let bytes = InnerBinary::from_hex(&self.inner.lock().unwrap().json.bytes)
-            .map_err(|err| pyo3::exceptions::PyRuntimeError::new_err(format!("{}", err)))?;
+            .map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
         let result = PyBytes::new_bound(py, &bytes);
         Ok(result.into())
     }
 
     #[pyo3(text_signature = "($self, rhs)")]
-    pub fn compare(&self, py: Python, rhs: Py<BlockJsonDeserializer>) -> Option<ChromosomeSimilarity> {
+    pub fn compare(
+        &self,
+        py: Python,
+        rhs: Py<BlockJsonDeserializer>,
+    ) -> Option<ChromosomeSimilarity> {
         let binding = rhs.borrow(py);
         let rhs_inner = binding.inner.lock().unwrap();
         let similarity = self.inner.lock().unwrap().compare(&rhs_inner);
-        if similarity.is_none() { return None; }
+        similarity.as_ref()?;
         Some(ChromosomeSimilarity {
-            inner: Arc::new(Mutex::new(similarity.unwrap()))
+            inner: Arc::new(Mutex::new(similarity.unwrap())),
         })
     }
 
     #[pyo3(text_signature = "($self, rhs_blocks)")]
-    pub fn compare_many(&self, py: Python, rhs_blocks: Py<PyList>) -> PyResult<BTreeMap<u64, ChromosomeSimilarity>> {
-        let block = InnerBlockJsonDeserializer::new(self.json()?, self.inner.lock().unwrap().config.clone())?;
+    pub fn compare_many(
+        &self,
+        py: Python,
+        rhs_blocks: Py<PyList>,
+    ) -> PyResult<BTreeMap<u64, ChromosomeSimilarity>> {
+        let block = InnerBlockJsonDeserializer::new(
+            self.json()?,
+            self.inner.lock().unwrap().config.clone(),
+        )?;
 
         let inner_config = self.inner.lock().unwrap().config.clone();
 
@@ -255,12 +120,14 @@ impl BlockJsonDeserializer {
                 ));
             }
             let rhs: Option<Py<BlockJsonDeserializer>> = py_item.extract().ok();
-            if rhs.is_none() { continue; }
+            if rhs.is_none() {
+                continue;
+            }
             let rhs_binding_0 = rhs.unwrap();
             let rhs_binding_1 = rhs_binding_0.borrow(py);
             let a = rhs_binding_1.inner.lock().unwrap().clone();
             tasks.push(a);
-        };
+        }
 
         let pool = ThreadPoolBuilder::new()
             .num_threads(inner_config.general.threads)
@@ -271,7 +138,7 @@ impl BlockJsonDeserializer {
             tasks
                 .par_iter()
                 .filter_map(|rhs_block| {
-                    block.compare(&rhs_block).map(|similarity| {
+                    block.compare(rhs_block).map(|similarity| {
                         (
                             rhs_block.address(),
                             ChromosomeSimilarity {
@@ -349,7 +216,7 @@ impl BlockJsonDeserializer {
     pub fn chromosome(&self) -> Chromosome {
         let inner_chromosome = self.inner.lock().unwrap().chromosome();
         Chromosome {
-            inner: Arc::new(Mutex::new(inner_chromosome))
+            inner: Arc::new(Mutex::new(inner_chromosome)),
         }
     }
 
@@ -372,17 +239,13 @@ impl BlockJsonDeserializer {
 
     #[pyo3(text_signature = "($self)")]
     pub fn print(&self) {
-        self.inner
-            .lock()
-            .unwrap()
-            .print()
+        self.inner.lock().unwrap().print()
     }
 
     pub fn __str__(&self) -> PyResult<String> {
         self.json()
     }
 }
-
 
 /// A class representing a control flow block in the binary analysis.
 #[pyclass]
@@ -443,7 +306,7 @@ impl Block {
     pub fn architecture(&self, py: Python) -> PyResult<Architecture> {
         self.with_inner_block(py, |block| {
             Ok(Architecture {
-                inner: block.architecture()
+                inner: block.architecture(),
             })
         })
     }
@@ -456,17 +319,19 @@ impl Block {
     /// Returns an `Option<ChromosomeSimilarity>` reprenting the similarity between this block and another.
     pub fn compare(&self, py: Python, rhs: Py<Block>) -> PyResult<Option<ChromosomeSimilarity>> {
         self.with_inner_block(py, |block| {
-            let rhs_address = rhs.borrow(py).address.clone();
+            let rhs_address = rhs.borrow(py).address;
             let rhs_binding_0 = rhs.borrow(py);
             let rhs_binding_1 = rhs_binding_0.cfg.borrow(py);
             let rhs_cfg = rhs_binding_1.inner.lock().unwrap();
             let rhs_inner = InnerBlock::new(rhs_address, &rhs_cfg).expect("rhs block is invalid");
             let inner = block.compare(&rhs_inner);
-            if inner.is_none() { return Ok(None); }
+            if inner.is_none() {
+                return Ok(None);
+            }
             let similarity = ChromosomeSimilarity {
                 inner: Arc::new(Mutex::new(inner.unwrap())),
             };
-            return Ok(Some(similarity));
+            Ok(Some(similarity))
         })
     }
 
@@ -476,7 +341,11 @@ impl Block {
     /// # Returns
     ///
     /// Returns an `PyResult<BTreeMap<u64, ChromosomeSimilarity>>` reprenting the similarity between this block and many others.
-    pub fn compare_many(&self, py: Python, rhs_blocks: Py<PyList>) -> PyResult<BTreeMap<u64, ChromosomeSimilarity>> {
+    pub fn compare_many(
+        &self,
+        py: Python,
+        rhs_blocks: Py<PyList>,
+    ) -> PyResult<BTreeMap<u64, ChromosomeSimilarity>> {
         self.with_inner_block(py, |block| {
             let mut tasks = Vec::<(u64, Arc<Mutex<InnerGraph>>)>::new();
 
@@ -492,13 +361,15 @@ impl Block {
                     ));
                 }
                 let rhs: Option<Py<Block>> = py_item.extract().ok();
-                if rhs.is_none() { continue; }
+                if rhs.is_none() {
+                    continue;
+                }
                 let rhs_binding_0 = rhs.unwrap();
                 let rhs_binding_1 = rhs_binding_0.borrow(py);
                 let address = rhs_binding_1.address();
                 let rhs_cfg = Arc::clone(&rhs_binding_1.cfg.borrow(py).inner);
                 tasks.push((address, rhs_cfg));
-            };
+            }
 
             let pool = ThreadPoolBuilder::new()
                 .num_threads(block.cfg.config.general.threads)
@@ -534,12 +405,16 @@ impl Block {
     pub fn chromosome(&self, py: Python) -> PyResult<Option<Chromosome>> {
         self.with_inner_block(py, |block| {
             let inner_config = self.cfg.borrow(py).inner.lock().unwrap().config.clone();
-            let config = Py::new(py, Config {
-                inner: Arc::new(Mutex::new(inner_config))
-            }).unwrap();
+            let config = Py::new(
+                py,
+                Config {
+                    inner: Arc::new(Mutex::new(inner_config)),
+                },
+            )
+            .unwrap();
             let pattern = block.pattern();
             let chromosome = Chromosome::new(py, pattern, config).ok();
-            return Ok(chromosome);
+            Ok(chromosome)
         })
     }
 
@@ -556,7 +431,7 @@ impl Block {
                     .expect("failed to get instruction");
                 result.push(instruction);
             }
-            return Ok(result);
+            Ok(result)
         })
     }
 
@@ -650,7 +525,10 @@ impl Block {
     #[pyo3(text_signature = "($self)")]
     /// Prints a human-readable representation of the block.
     pub fn print(&self, py: Python) -> PyResult<()> {
-        self.with_inner_block(py, |block| Ok(block.print()))
+        self.with_inner_block(py, |block| {
+            block.print();
+            Ok(())
+        })
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -666,7 +544,9 @@ impl Block {
     /// Converts the block to a JSON string.
     pub fn json(&self, py: Python) -> PyResult<String> {
         self.with_inner_block(py, |block| {
-            block.json().map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+            block
+                .json()
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
         })
     }
 

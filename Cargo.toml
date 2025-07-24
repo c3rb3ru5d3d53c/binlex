@@ -1,8 +1,8 @@
 [package]
 name = "binlex"
 version = "2.0.0"
-edition = "2021"
-license = "LGPL"
+edition = "2024"
+license = "MIT"
 description = "A Binary Genetic Trait Lexer Framework"
 authors = ["c3rb3ru5d3d53c"]
 
@@ -30,6 +30,7 @@ dirs = "6.0.0"
 toml = "0.8.19"
 glob = "0.3.2"
 indexmap = "2.7.1"
+cxx = "=1.0.138"
 
 [workspace]
 members = [

@@ -30,7 +30,7 @@
 
 This hierarchical breakdown allows **binlex** to analyze and compare malware binaries by treating their code structure like a "DNA fingerprint," making it easier to detect patterns, similarities, and variations across samples.
 
-Unlike tools relying on **pure Python**, which can be slow 🐢, Binlex is designed for speed, simplicity, and flexibility. Its **command-line interface** helps analysts search for patterns across **hundreds or thousands of malware samples**, saving **time** ⏳ and **resources** 💰.
+Unlike tools relying on **pure Python**, which can be slow 🐢, **binlex** is designed for speed, simplicity, and flexibility. Its **command-line interface** helps analysts search for patterns across **hundreds or thousands of malware samples**, saving **time** ⏳ and **resources** 💰.
 
 For malware analysts and reverse engineers, **binlex** includes a IDA plugin and a vector database (**binlex** server) designed to identify similar functions.
 
@@ -931,7 +931,7 @@ ida.close_database()
 
 ```python
 from binlex.formats import PE
-from binlex.disassemblers.capstone import Disassembler
+from binlex.disassemblers.capstone.x86 import Disassembler
 from binlex.controlflow import Graph
 from binlex import Config
 
@@ -1001,7 +1001,7 @@ disassembler.disassemble_controlflow(pe.dotnet_entrypoint_virtual_addresses(), c
 
 ```python
 from binlex.formats import ELF
-from binlex.disassemblers.capstone import Disassembler
+from binlex.disassemblers.capstone.x86 import Disassembler
 from binlex.controlflow import Graph
 from binlex import Config
 
@@ -1034,7 +1034,7 @@ disassembler.disassemble_controlflow(elf.entrypoint_virtual_addresses(), cfg)
 
 ```python
 from binlex.formats import MACHO
-from binlex.disassemblers.capstone import Disassembler
+from binlex.disassemblers.capstone.x86 import Disassembler
 from binlex.controlflow import Graph
 from binlex import Config
 
