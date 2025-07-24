@@ -1,6 +1,28 @@
+// MIT License
+//
+// Copyright (c) [2025] [c3rb3ru5d3d53c]
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 use clap::ValueEnum;
-use std::fmt;
 use std::collections::BTreeMap;
+use std::fmt;
 use std::io::Error;
 use std::io::ErrorKind;
 
@@ -28,7 +50,6 @@ impl fmt::Display for ColorMapType {
 }
 
 impl ColorMapType {
-
     pub fn from_string(s: &str) -> Result<Self, Error> {
         match s.trim().to_lowercase().as_str() {
             "grayscale" => Ok(ColorMapType::Grayscale),
@@ -47,14 +68,14 @@ impl ColorMapType {
             ColorMapType::Grayscale => format!("rgb({},{},{})", byte, byte, byte),
             ColorMapType::Heatmap => {
                 let r = (byte as f32 * 1.2).min(255.0) as u8;
-                let g = (255 - byte).max(0) as u8;
+                let g = 255 - byte;
                 let b = (byte as f32 * 0.5).min(255.0) as u8;
                 format!("rgb({},{},{})", r, g, b)
             }
             ColorMapType::Bluegreen => {
                 let r = (byte as f32 * 0.2).min(255.0) as u8;
                 let g = (byte as f32 * 0.8).min(255.0) as u8;
-                let b = (255 - byte).max(0) as u8;
+                let b = 255 - byte;
                 format!("rgb({},{},{})", r, g, b)
             }
             ColorMapType::Redblack => {
@@ -128,28 +149,33 @@ impl ColorMap {
     fn generate_metadata(&self) -> String {
         let mut metadata_section = String::new();
         for (key, value) in &self.metadata_entries {
-            metadata_section.push_str(r#"<metadata>
-"#);
-            metadata_section.push_str(&format!(r#"<{}>{}</{}>
-"#, key, value, key));
-            metadata_section.push_str(r#"</metadata>
-"#);
+            metadata_section.push_str(
+                r#"<metadata>
+"#,
+            );
+            metadata_section.push_str(&format!(
+                r#"<{}>{}</{}>
+"#,
+                key, value, key
+            ));
+            metadata_section.push_str(
+                r#"</metadata>
+"#,
+            );
         }
         metadata_section
     }
 
     pub fn to_svg_string(&self) -> String {
         let total_width = self.fixed_width * self.cell_size;
-        let total_height = ((self.total_cells as f64) / (self.fixed_width as f64)).ceil() as usize * self.cell_size;
+        let total_height = ((self.total_cells as f64) / (self.fixed_width as f64)).ceil() as usize
+            * self.cell_size;
 
         let mut svg_content = String::new();
         svg_content.push_str(&format!(
             r#"<svg xmlns="http://www.w3.org/2000/svg" width="{}" height="{}" viewBox="0 0 {} {}">
 "#,
-            total_width,
-            total_height,
-            total_width,
-            total_height
+            total_width, total_height, total_width, total_height
         ));
 
         svg_content.push_str(&self.generate_metadata());
@@ -166,5 +192,11 @@ impl ColorMap {
 
     pub fn write(&self, file_path: &str) -> Result<(), std::io::Error> {
         std::fs::write(file_path, self.to_svg_string())
+    }
+}
+
+impl Default for ColorMap {
+    fn default() -> Self {
+        Self::new()
     }
 }

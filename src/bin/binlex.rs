@@ -1,202 +1,59 @@
-//                    GNU LESSER GENERAL PUBLIC LICENSE
-//                        Version 3, 29 June 2007
+// MIT License
 //
-//  Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
-//  Everyone is permitted to copy and distribute verbatim copies
-//  of this license document, but changing it is not allowed.
+// Copyright (c) [2025] [c3rb3ru5d3d53c]
 //
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-//   This version of the GNU Lesser General Public License incorporates
-// the terms and conditions of version 3 of the GNU General Public
-// License, supplemented by the additional permissions listed below.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-//   0. Additional Definitions.
-//
-//   As used herein, "this License" refers to version 3 of the GNU Lesser
-// General Public License, and the "GNU GPL" refers to version 3 of the GNU
-// General Public License.
-//
-//   "The Library" refers to a covered work governed by this License,
-// other than an Application or a Combined Work as defined below.
-//
-//   An "Application" is any work that makes use of an interface provided
-// by the Library, but which is not otherwise based on the Library.
-// Defining a subclass of a class defined by the Library is deemed a mode
-// of using an interface provided by the Library.
-//
-//   A "Combined Work" is a work produced by combining or linking an
-// Application with the Library.  The particular version of the Library
-// with which the Combined Work was made is also called the "Linked
-// Version".
-//
-//   The "Minimal Corresponding Source" for a Combined Work means the
-// Corresponding Source for the Combined Work, excluding any source code
-// for portions of the Combined Work that, considered in isolation, are
-// based on the Application, and not on the Linked Version.
-//
-//   The "Corresponding Application Code" for a Combined Work means the
-// object code and/or source code for the Application, including any data
-// and utility programs needed for reproducing the Combined Work from the
-// Application, but excluding the System Libraries of the Combined Work.
-//
-//   1. Exception to Section 3 of the GNU GPL.
-//
-//   You may convey a covered work under sections 3 and 4 of this License
-// without being bound by section 3 of the GNU GPL.
-//
-//   2. Conveying Modified Versions.
-//
-//   If you modify a copy of the Library, and, in your modifications, a
-// facility refers to a function or data to be supplied by an Application
-// that uses the facility (other than as an argument passed when the
-// facility is invoked), then you may convey a copy of the modified
-// version:
-//
-//    a) under this License, provided that you make a good faith effort to
-//    ensure that, in the event an Application does not supply the
-//    function or data, the facility still operates, and performs
-//    whatever part of its purpose remains meaningful, or
-//
-//    b) under the GNU GPL, with none of the additional permissions of
-//    this License applicable to that copy.
-//
-//   3. Object Code Incorporating Material from Library Header Files.
-//
-//   The object code form of an Application may incorporate material from
-// a header file that is part of the Library.  You may convey such object
-// code under terms of your choice, provided that, if the incorporated
-// material is not limited to numerical parameters, data structure
-// layouts and accessors, or small macros, inline functions and templates
-// (ten or fewer lines in length), you do both of the following:
-//
-//    a) Give prominent notice with each copy of the object code that the
-//    Library is used in it and that the Library and its use are
-//    covered by this License.
-//
-//    b) Accompany the object code with a copy of the GNU GPL and this license
-//    document.
-//
-//   4. Combined Works.
-//
-//   You may convey a Combined Work under terms of your choice that,
-// taken together, effectively do not restrict modification of the
-// portions of the Library contained in the Combined Work and reverse
-// engineering for debugging such modifications, if you also do each of
-// the following:
-//
-//    a) Give prominent notice with each copy of the Combined Work that
-//    the Library is used in it and that the Library and its use are
-//    covered by this License.
-//
-//    b) Accompany the Combined Work with a copy of the GNU GPL and this license
-//    document.
-//
-//    c) For a Combined Work that displays copyright notices during
-//    execution, include the copyright notice for the Library among
-//    these notices, as well as a reference directing the user to the
-//    copies of the GNU GPL and this license document.
-//
-//    d) Do one of the following:
-//
-//        0) Convey the Minimal Corresponding Source under the terms of this
-//        License, and the Corresponding Application Code in a form
-//        suitable for, and under terms that permit, the user to
-//        recombine or relink the Application with a modified version of
-//        the Linked Version to produce a modified Combined Work, in the
-//        manner specified by section 6 of the GNU GPL for conveying
-//        Corresponding Source.
-//
-//        1) Use a suitable shared library mechanism for linking with the
-//        Library.  A suitable mechanism is one that (a) uses at run time
-//        a copy of the Library already present on the user's computer
-//        system, and (b) will operate properly with a modified version
-//        of the Library that is interface-compatible with the Linked
-//        Version.
-//
-//    e) Provide Installation Information, but only if you would otherwise
-//    be required to provide such information under section 6 of the
-//    GNU GPL, and only to the extent that such information is
-//    necessary to install and execute a modified version of the
-//    Combined Work produced by recombining or relinking the
-//    Application with a modified version of the Linked Version. (If
-//    you use option 4d0, the Installation Information must accompany
-//    the Minimal Corresponding Source and Corresponding Application
-//    Code. If you use option 4d1, you must provide the Installation
-//    Information in the manner specified by section 6 of the GNU GPL
-//    for conveying Corresponding Source.)
-//
-//   5. Combined Libraries.
-//
-//   You may place library facilities that are a work based on the
-// Library side by side in a single library together with other library
-// facilities that are not Applications and are not covered by this
-// License, and convey such a combined library under terms of your
-// choice, if you do both of the following:
-//
-//    a) Accompany the combined library with a copy of the same work based
-//    on the Library, uncombined with any other library facilities,
-//    conveyed under the terms of this License.
-//
-//    b) Give prominent notice with the combined library that part of it
-//    is a work based on the Library, and explaining where to find the
-//    accompanying uncombined form of the same work.
-//
-//   6. Revised Versions of the GNU Lesser General Public License.
-//
-//   The Free Software Foundation may publish revised and/or new versions
-// of the GNU Lesser General Public License from time to time. Such new
-// versions will be similar in spirit to the present version, but may
-// differ in detail to address new problems or concerns.
-//
-//   Each version is given a distinguishing version number. If the
-// Library as you received it specifies that a certain numbered version
-// of the GNU Lesser General Public License "or any later version"
-// applies to it, you have the option of following the terms and
-// conditions either of that published version or of any later version
-// published by the Free Software Foundation. If the Library as you
-// received it does not specify a version number of the GNU Lesser
-// General Public License, you may choose any version of the GNU Lesser
-// General Public License ever published by the Free Software Foundation.
-//
-//   If the Library as you received it specifies that a proxy can decide
-// whether future versions of the GNU Lesser General Public License shall
-// apply, that proxy's public statement of acceptance of any version is
-// permanent authorization for you to choose that version for the
-// Library.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-use binlex::io::Stderr;
-use binlex::Architecture;
-use rayon::ThreadPoolBuilder;
-use binlex::formats::pe::PE;
-use binlex::disassemblers::capstone::Disassembler;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use serde_json::json;
-use std::collections::BTreeMap;
-use std::process;
-use std::fs::File;
-use std::io::Write;
-use std::collections::BTreeSet;
-use std::collections::HashSet;
-use binlex::controlflow::Graph;
-use binlex::controlflow::Instruction;
+use binlex::controlflow::Attributes;
 use binlex::controlflow::Block;
 use binlex::controlflow::Function;
-use binlex::types::LZ4String;
-use binlex::io::Stdout;
-use binlex::io::JSON;
+use binlex::controlflow::Graph;
+use binlex::controlflow::Instruction;
 use binlex::controlflow::Symbol;
-use clap::Parser;
-use binlex::Config;
-use binlex::VERSION;
-use binlex::AUTHOR;
-use binlex::controlflow::Attributes;
 use binlex::controlflow::Tag;
-use binlex::Format;
+//use binlex::disassemblers::capstone::x86::Disassembler;
+use binlex::disassemblers::capstone::Disassembler;
+use binlex::disassemblers::custom::cil::Disassembler as CILDisassembler;
+use binlex::formats::pe::PE;
 use binlex::formats::File as BLFile;
 use binlex::formats::ELF;
 use binlex::formats::MACHO;
+use binlex::io::Stderr;
 use binlex::io::Stdin;
-use binlex::disassemblers::custom::cil::Disassembler as CILDisassembler;
+use binlex::io::Stdout;
+use binlex::io::JSON;
+use binlex::types::LZ4String;
+use binlex::Architecture;
+use binlex::Config;
+use binlex::Format;
+use binlex::AUTHOR;
+use binlex::VERSION;
+use clap::Parser;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use rayon::ThreadPoolBuilder;
+use serde_json::json;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::collections::HashSet;
+use std::fs::File;
+use std::io::Write;
+use std::process;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -241,7 +98,6 @@ pub struct Args {
 }
 
 fn validate_args(args: &Args) {
-
     if let Some(tags) = &args.tags {
         let mut unique_tags = HashSet::new();
         for tag in tags {
@@ -251,13 +107,14 @@ fn validate_args(args: &Args) {
             }
         }
     }
-
 }
 
 fn get_elf_function_symbols(elf: &ELF) -> BTreeMap<u64, Symbol> {
     let mut symbols = BTreeMap::<u64, Symbol>::new();
 
-    if Stdin::is_terminal() { return symbols; }
+    if Stdin::is_terminal() {
+        return symbols;
+    }
 
     let json = JSON::from_stdin_with_filter(|value| {
         let obj = match value.as_object_mut() {
@@ -266,7 +123,10 @@ fn get_elf_function_symbols(elf: &ELF) -> BTreeMap<u64, Symbol> {
         };
 
         let obj_type = obj.get("type").and_then(|v| v.as_str()).map(String::from);
-        let symbol_type = obj.get("symbol_type").and_then(|v| v.as_str()).map(String::from);
+        let symbol_type = obj
+            .get("symbol_type")
+            .and_then(|v| v.as_str())
+            .map(String::from);
         let file_offset = obj.get("file_offset").and_then(|v| v.as_u64());
         let relative_virtual_address = obj.get("relative_virtual_address").and_then(|v| v.as_u64());
         let mut virtual_address = obj.get("virtual_address").and_then(|v| v.as_u64());
@@ -279,7 +139,8 @@ fn get_elf_function_symbols(elf: &ELF) -> BTreeMap<u64, Symbol> {
             return false;
         }
 
-        if file_offset.is_none() && relative_virtual_address.is_none() && virtual_address.is_none() {
+        if file_offset.is_none() && relative_virtual_address.is_none() && virtual_address.is_none()
+        {
             return false;
         }
 
@@ -304,7 +165,6 @@ fn get_elf_function_symbols(elf: &ELF) -> BTreeMap<u64, Symbol> {
         }
 
         false
-
     });
 
     if json.is_ok() {
@@ -312,24 +172,33 @@ fn get_elf_function_symbols(elf: &ELF) -> BTreeMap<u64, Symbol> {
             let address = value.get("virtual_address").and_then(|v| v.as_u64());
             let name = value.get("name").and_then(|v| v.as_str());
             let symbol_type = value.get("symbol_type").and_then(|v| v.as_str());
-            if address.is_none() { continue; }
-            if name.is_none() { continue; }
-            if symbol_type.is_none() { continue; }
+            if address.is_none() {
+                continue;
+            }
+            if name.is_none() {
+                continue;
+            }
+            if symbol_type.is_none() {
+                continue;
+            }
             let symbol = Symbol::new(
                 address.unwrap(),
                 symbol_type.unwrap().to_string(),
-                name.unwrap().to_string());
-            symbols.insert(address.unwrap(),symbol);
+                name.unwrap().to_string(),
+            );
+            symbols.insert(address.unwrap(), symbol);
         }
     }
 
-    return symbols;
+    symbols
 }
 
 fn get_macho_function_symbols(macho: &MACHO) -> BTreeMap<u64, Symbol> {
     let mut symbols = BTreeMap::<u64, Symbol>::new();
 
-    if Stdin::is_terminal() { return symbols; }
+    if Stdin::is_terminal() {
+        return symbols;
+    }
 
     let json = JSON::from_stdin_with_filter(|value| {
         let obj = match value.as_object_mut() {
@@ -338,7 +207,10 @@ fn get_macho_function_symbols(macho: &MACHO) -> BTreeMap<u64, Symbol> {
         };
 
         let obj_type = obj.get("type").and_then(|v| v.as_str()).map(String::from);
-        let symbol_type = obj.get("symbol_type").and_then(|v| v.as_str()).map(String::from);
+        let symbol_type = obj
+            .get("symbol_type")
+            .and_then(|v| v.as_str())
+            .map(String::from);
         let file_offset = obj.get("file_offset").and_then(|v| v.as_u64());
         let relative_virtual_address = obj.get("relative_virtual_address").and_then(|v| v.as_u64());
         let mut virtual_address = obj.get("virtual_address").and_then(|v| v.as_u64());
@@ -358,7 +230,8 @@ fn get_macho_function_symbols(macho: &MACHO) -> BTreeMap<u64, Symbol> {
             return false;
         }
 
-        if file_offset.is_none() && relative_virtual_address.is_none() && virtual_address.is_none() {
+        if file_offset.is_none() && relative_virtual_address.is_none() && virtual_address.is_none()
+        {
             return false;
         }
 
@@ -369,7 +242,9 @@ fn get_macho_function_symbols(macho: &MACHO) -> BTreeMap<u64, Symbol> {
         if virtual_address.is_none() {
             if let Some(rva) = relative_virtual_address {
                 let va = macho.relative_virtual_address_to_virtual_address(rva, slice);
-                if va.is_none() { return false; }
+                if va.is_none() {
+                    return false;
+                }
                 virtual_address = Some(va.unwrap());
             }
             if let Some(offset) = file_offset {
@@ -385,7 +260,6 @@ fn get_macho_function_symbols(macho: &MACHO) -> BTreeMap<u64, Symbol> {
         }
 
         false
-
     });
 
     if json.is_ok() {
@@ -393,24 +267,33 @@ fn get_macho_function_symbols(macho: &MACHO) -> BTreeMap<u64, Symbol> {
             let address = value.get("virtual_address").and_then(|v| v.as_u64());
             let name = value.get("name").and_then(|v| v.as_str());
             let symbol_type = value.get("symbol_type").and_then(|v| v.as_str());
-            if address.is_none() { continue; }
-            if name.is_none() { continue; }
-            if symbol_type.is_none() { continue; }
+            if address.is_none() {
+                continue;
+            }
+            if name.is_none() {
+                continue;
+            }
+            if symbol_type.is_none() {
+                continue;
+            }
             let symbol = Symbol::new(
                 address.unwrap(),
                 symbol_type.unwrap().to_string(),
-                name.unwrap().to_string());
-            symbols.insert(address.unwrap(),symbol);
+                name.unwrap().to_string(),
+            );
+            symbols.insert(address.unwrap(), symbol);
         }
     }
 
-    return symbols;
+    symbols
 }
 
 fn get_pe_function_symbols(pe: &PE) -> BTreeMap<u64, Symbol> {
     let mut symbols = BTreeMap::<u64, Symbol>::new();
 
-    if Stdin::is_terminal() { return symbols; }
+    if Stdin::is_terminal() {
+        return symbols;
+    }
 
     let json = JSON::from_stdin_with_filter(|value| {
         let obj = match value.as_object_mut() {
@@ -419,7 +302,10 @@ fn get_pe_function_symbols(pe: &PE) -> BTreeMap<u64, Symbol> {
         };
 
         let obj_type = obj.get("type").and_then(|v| v.as_str()).map(String::from);
-        let symbol_type = obj.get("symbol_type").and_then(|v| v.as_str()).map(String::from);
+        let symbol_type = obj
+            .get("symbol_type")
+            .and_then(|v| v.as_str())
+            .map(String::from);
         let file_offset = obj.get("file_offset").and_then(|v| v.as_u64());
         let relative_virtual_address = obj.get("relative_virtual_address").and_then(|v| v.as_u64());
         let mut virtual_address = obj.get("virtual_address").and_then(|v| v.as_u64());
@@ -432,7 +318,8 @@ fn get_pe_function_symbols(pe: &PE) -> BTreeMap<u64, Symbol> {
             return false;
         }
 
-        if file_offset.is_none() && relative_virtual_address.is_none() && virtual_address.is_none() {
+        if file_offset.is_none() && relative_virtual_address.is_none() && virtual_address.is_none()
+        {
             return false;
         }
 
@@ -457,7 +344,6 @@ fn get_pe_function_symbols(pe: &PE) -> BTreeMap<u64, Symbol> {
         }
 
         false
-
     });
 
     if json.is_ok() {
@@ -465,41 +351,56 @@ fn get_pe_function_symbols(pe: &PE) -> BTreeMap<u64, Symbol> {
             let address = value.get("virtual_address").and_then(|v| v.as_u64());
             let name = value.get("name").and_then(|v| v.as_str());
             let symbol_type = value.get("symbol_type").and_then(|v| v.as_str());
-            if address.is_none() { continue; }
-            if name.is_none() { continue; }
-            if symbol_type.is_none() { continue; }
+            if address.is_none() {
+                continue;
+            }
+            if name.is_none() {
+                continue;
+            }
+            if symbol_type.is_none() {
+                continue;
+            }
             let symbol = Symbol::new(
                 address.unwrap(),
                 symbol_type.unwrap().to_string(),
-                name.unwrap().to_string());
-            symbols.insert(address.unwrap(),symbol);
+                name.unwrap().to_string(),
+            );
+            symbols.insert(address.unwrap(), symbol);
         }
     }
 
-    return symbols;
+    symbols
 }
 
-fn process_output(output: Option<String>, cfg: &Graph, attributes: &Attributes, function_symbols: &BTreeMap<u64, Symbol>) {
-
+fn process_output(
+    output: Option<String>,
+    cfg: &Graph,
+    attributes: &Attributes,
+    function_symbols: &BTreeMap<u64, Symbol>,
+) {
     let mut instructions = Vec::<LZ4String>::new();
 
     if cfg.config.instructions.enabled {
-        instructions = cfg.instructions.valid()
+        instructions = cfg
+            .instructions
+            .valid()
             .iter()
             .map(|entry| *entry)
             .collect::<Vec<u64>>()
             .par_iter()
-            .filter_map(|address| Instruction::new(*address, &cfg).ok())
+            .filter_map(|address| Instruction::new(*address, cfg).ok())
             .filter_map(|instruction| {
                 let mut instruction_attributes = Attributes::new();
-                let symbol= function_symbols.get(&instruction.address);
-                if symbol.is_some() {
-                    instruction_attributes.push(symbol.unwrap().attribute());
+                let symbol = function_symbols.get(&instruction.address);
+                if let Some(symbol) = symbol {
+                    instruction_attributes.push(symbol.attribute());
                 }
                 for attribute in &attributes.values {
                     instruction_attributes.push(attribute.clone());
                 }
-                instruction.json_with_attributes(instruction_attributes.clone()).ok()
+                instruction
+                    .json_with_attributes(instruction_attributes.clone())
+                    .ok()
             })
             .map(|js| LZ4String::new(&js))
             .collect();
@@ -508,17 +409,19 @@ fn process_output(output: Option<String>, cfg: &Graph, attributes: &Attributes, 
     let mut blocks = Vec::<LZ4String>::new();
 
     if cfg.config.blocks.enabled {
-        blocks = cfg.blocks.valid()
+        blocks = cfg
+            .blocks
+            .valid()
             .iter()
             .map(|entry| *entry)
             .collect::<Vec<u64>>()
             .par_iter()
-            .filter_map(|address| Block::new(*address, &cfg).ok())
+            .filter_map(|address| Block::new(*address, cfg).ok())
             .filter_map(|block| {
                 let mut block_attributes = Attributes::new();
-                let symbol= function_symbols.get(&block.address);
-                if symbol.is_some() {
-                    block_attributes.push(symbol.unwrap().attribute());
+                let symbol = function_symbols.get(&block.address);
+                if let Some(symbol) = symbol {
+                    block_attributes.push(symbol.attribute());
                 }
                 for attribute in &attributes.values {
                     block_attributes.push(attribute.clone());
@@ -532,17 +435,19 @@ fn process_output(output: Option<String>, cfg: &Graph, attributes: &Attributes, 
     let mut functions = Vec::<LZ4String>::new();
 
     if cfg.config.functions.enabled {
-        functions = cfg.functions.valid()
+        functions = cfg
+            .functions
+            .valid()
             .iter()
             .map(|entry| *entry)
             .collect::<Vec<u64>>()
             .par_iter()
-            .filter_map(|address| Function::new(*address, &cfg).ok())
+            .filter_map(|address| Function::new(*address, cfg).ok())
             .filter_map(|function| {
                 let mut function_attributes = Attributes::new();
-                let symbol= function_symbols.get(&function.address);
-                if symbol.is_some() {
-                    function_attributes.push(symbol.unwrap().attribute());
+                let symbol = function_symbols.get(&function.address);
+                if let Some(symbol) = symbol {
+                    function_attributes.push(symbol.attribute());
                 }
                 for attribute in &attributes.values {
                     function_attributes.push(attribute.clone());
@@ -554,7 +459,6 @@ fn process_output(output: Option<String>, cfg: &Graph, attributes: &Attributes, 
     }
 
     if output.is_none() {
-
         instructions.iter().for_each(|result| {
             Stdout::print(result);
         });
@@ -568,7 +472,7 @@ fn process_output(output: Option<String>, cfg: &Graph, attributes: &Attributes, 
         });
     }
 
-     if let Some(output_file) = output {
+    if let Some(output_file) = output {
         let mut file = match File::create(output_file) {
             Ok(file) => file,
             Err(error) => {
@@ -599,7 +503,6 @@ fn process_output(output: Option<String>, cfg: &Graph, attributes: &Attributes, 
                 std::process::exit(1);
             }
         }
-
     }
 }
 
@@ -614,12 +517,9 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
         }
     };
 
-    match pe.architecture() {
-        Architecture::UNKNOWN => {
-            eprintln!("unsupported pe architecture");
-            process::exit(1);
-        },
-        _ => {}
+    if pe.architecture() == Architecture::UNKNOWN {
+        eprintln!("unsupported pe architecture");
+        process::exit(1);
     }
 
     if !config.general.minimal {
@@ -638,14 +538,17 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
     //     attributes.push(Attribute::Symbol(symbol.process().clone()));
     // }
 
-    let mut mapped_file = pe.image()
-        .unwrap_or_else(|error| { eprintln!("failed to map pe image: {}", error); process::exit(1)});
+    let mut mapped_file = pe.image().unwrap_or_else(|error| {
+        eprintln!("failed to map pe image: {}", error);
+        process::exit(1)
+    });
 
     Stderr::print_debug(config.clone(), "mapped pe image");
 
-    let image = mapped_file
-        .mmap()
-        .unwrap_or_else(|error| { eprintln!("failed to get pe virtual image: {}", error); process::exit(1); });
+    let image = mapped_file.mmap().unwrap_or_else(|error| {
+        eprintln!("failed to get pe virtual image: {}", error);
+        process::exit(1);
+    });
 
     Stderr::print_debug(config.clone(), "obtained mapped image pointer");
 
@@ -656,7 +559,7 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
 
     let mut entrypoints = BTreeSet::<u64>::new();
 
-    match pe.is_dotnet(){
+    match pe.is_dotnet() {
         true => entrypoints.extend(pe.dotnet_entrypoint_virtual_addresses()),
         _ => entrypoints.extend(pe.entrypoint_virtual_addresses()),
     }
@@ -668,7 +571,12 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
     if !pe.is_dotnet() {
         Stderr::print_debug(config.clone(), "starting pe disassembler");
 
-        let disassembler = match Disassembler::new(pe.architecture(), &image, executable_address_ranges.clone(), config.clone()) {
+        let disassembler = match Disassembler::new(
+            pe.architecture(),
+            image,
+            executable_address_ranges.clone(),
+            config.clone(),
+        ) {
             Ok(disassembler) => disassembler,
             Err(error) => {
                 eprintln!("{}", error);
@@ -676,7 +584,8 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
             }
         };
 
-        disassembler.disassemble_controlflow(entrypoints.clone(), &mut cfg)
+        disassembler
+            .disassemble_controlflow(entrypoints.clone(), &mut cfg)
             .unwrap_or_else(|error| {
                 eprintln!("{}", error);
                 process::exit(1);
@@ -684,7 +593,13 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
     } else if pe.is_dotnet() {
         Stderr::print_debug(config.clone(), "starting pe dotnet disassembler");
 
-        let disassembler = match CILDisassembler::new(pe.architecture(), &image, pe.dotnet_metadata_token_virtual_addresses().clone(), executable_address_ranges.clone(), config.clone()) {
+        let disassembler = match CILDisassembler::new(
+            pe.architecture(),
+            image,
+            pe.dotnet_metadata_token_virtual_addresses().clone(),
+            executable_address_ranges.clone(),
+            config.clone(),
+        ) {
             Ok(disassembler) => disassembler,
             Err(error) => {
                 eprintln!("{}", error);
@@ -692,7 +607,8 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
             }
         };
 
-        disassembler.disassemble_controlflow(entrypoints.clone(), &mut cfg)
+        disassembler
+            .disassemble_controlflow(entrypoints.clone(), &mut cfg)
             .unwrap_or_else(|error| {
                 eprintln!("{}", error);
                 process::exit(1);
@@ -713,12 +629,9 @@ fn process_elf(input: String, config: Config, tags: Option<Vec<String>>, output:
         process::exit(1);
     });
 
-    match elf.architecture() {
-        Architecture::UNKNOWN => {
-            eprintln!("unsupported pe architecture");
-            process::exit(1);
-        },
-        _ => {}
+    if elf.architecture() == Architecture::UNKNOWN {
+        eprintln!("unsupported elf architecture");
+        process::exit(1);
     }
 
     if !config.general.minimal {
@@ -737,12 +650,15 @@ fn process_elf(input: String, config: Config, tags: Option<Vec<String>>, output:
     //     attributes.push(Attribute::Symbol(symbol.process().clone()));
     // }
 
-    let mut mapped_file = elf.image()
-        .unwrap_or_else(|error| { eprintln!("{}", error); process::exit(1)});
+    let mut mapped_file = elf.image().unwrap_or_else(|error| {
+        eprintln!("{}", error);
+        process::exit(1)
+    });
 
-    let image = mapped_file
-        .mmap()
-        .unwrap_or_else(|error| { eprintln!("{}", error); process::exit(1); });
+    let image = mapped_file.mmap().unwrap_or_else(|error| {
+        eprintln!("{}", error);
+        process::exit(1);
+    });
 
     let executable_address_ranges = elf.executable_virtual_address_ranges();
 
@@ -752,7 +668,12 @@ fn process_elf(input: String, config: Config, tags: Option<Vec<String>>, output:
 
     let mut cfg = Graph::new(elf.architecture(), config.clone());
 
-    let disassembler = match Disassembler::new(elf.architecture(), &image, executable_address_ranges.clone(), config.clone()) {
+    let disassembler = match Disassembler::new(
+        elf.architecture(),
+        image,
+        executable_address_ranges.clone(),
+        config.clone(),
+    ) {
         Ok(disassembler) => disassembler,
         Err(error) => {
             eprintln!("{}", error);
@@ -760,7 +681,8 @@ fn process_elf(input: String, config: Config, tags: Option<Vec<String>>, output:
         }
     };
 
-    disassembler.disassemble_controlflow(entrypoints, &mut cfg)
+    disassembler
+        .disassemble_controlflow(entrypoints, &mut cfg)
         .unwrap_or_else(|error| {
             eprintln!("{}", error);
             process::exit(1);
@@ -776,11 +698,10 @@ fn process_code(input: String, config: Config, architecture: Architecture, outpu
         eprintln!("{}", error);
         process::exit(1);
     });
-    file.read()
-        .unwrap_or_else(|error| {
-            eprintln!("{}", error);
-            process::exit(1);
-        });
+    file.read().unwrap_or_else(|error| {
+        eprintln!("{}", error);
+        process::exit(1);
+    });
 
     let mut cfg = Graph::new(architecture, config.clone());
 
@@ -793,7 +714,12 @@ fn process_code(input: String, config: Config, architecture: Architecture, outpu
 
     match architecture {
         Architecture::AMD64 | Architecture::I386 => {
-            let disassembler = match Disassembler::new(architecture, &file.data, executable_address_ranges.clone(), config.clone()) {
+            let disassembler = match Disassembler::new(
+                architecture,
+                &file.data,
+                executable_address_ranges.clone(),
+                config.clone(),
+            ) {
                 Ok(disassembler) => disassembler,
                 Err(error) => {
                     eprintln!("{}", error);
@@ -801,14 +727,21 @@ fn process_code(input: String, config: Config, architecture: Architecture, outpu
                 }
             };
 
-            disassembler.disassemble_controlflow(entrypoints, &mut cfg)
-            .unwrap_or_else(|error| {
-                eprintln!("{}", error);
-                process::exit(1);
-            });
-        },
+            disassembler
+                .disassemble_controlflow(entrypoints, &mut cfg)
+                .unwrap_or_else(|error| {
+                    eprintln!("{}", error);
+                    process::exit(1);
+                });
+        }
         Architecture::CIL => {
-            let disassembler = match CILDisassembler::new(architecture, &file.data, BTreeMap::<u64, u64>::new(), executable_address_ranges.clone(), config.clone()) {
+            let disassembler = match CILDisassembler::new(
+                architecture,
+                &file.data,
+                BTreeMap::<u64, u64>::new(),
+                executable_address_ranges.clone(),
+                config.clone(),
+            ) {
                 Ok(disassembler) => disassembler,
                 Err(error) => {
                     eprintln!("{}", error);
@@ -816,13 +749,14 @@ fn process_code(input: String, config: Config, architecture: Architecture, outpu
                 }
             };
 
-            disassembler.disassemble_controlflow(entrypoints, &mut cfg)
-            .unwrap_or_else(|error| {
-                eprintln!("{}", error);
-                process::exit(1);
-            });
-        },
-        _ => {},
+            disassembler
+                .disassemble_controlflow(entrypoints, &mut cfg)
+                .unwrap_or_else(|error| {
+                    eprintln!("{}", error);
+                    process::exit(1);
+                });
+        }
+        _ => {}
     }
 
     attributes.push(file.attribute());
@@ -842,9 +776,13 @@ fn process_macho(input: String, config: Config, tags: Option<Vec<String>>, outpu
 
     for slice in 0..macho.number_of_slices() {
         let architecture = macho.architecture(slice);
-        if architecture.is_none() { continue; }
+        if architecture.is_none() {
+            continue;
+        }
         let architecture = architecture.unwrap();
-        if architecture == Architecture::UNKNOWN { continue; }
+        if architecture == Architecture::UNKNOWN {
+            continue;
+        }
 
         let tags = tags.clone();
 
@@ -864,12 +802,15 @@ fn process_macho(input: String, config: Config, tags: Option<Vec<String>>, outpu
         //     attributes.push(Attribute::Symbol(symbol.process().clone()));
         // }
 
-        let mut mapped_file = macho.image(slice)
-        .unwrap_or_else(|error| { eprintln!("{}", error); process::exit(1)});
+        let mut mapped_file = macho.image(slice).unwrap_or_else(|error| {
+            eprintln!("{}", error);
+            process::exit(1)
+        });
 
-        let image = mapped_file
-            .mmap()
-            .unwrap_or_else(|error| { eprintln!("{}", error); process::exit(1); });
+        let image = mapped_file.mmap().unwrap_or_else(|error| {
+            eprintln!("{}", error);
+            process::exit(1);
+        });
 
         let executable_address_ranges = macho.executable_virtual_address_ranges(slice);
 
@@ -879,7 +820,12 @@ fn process_macho(input: String, config: Config, tags: Option<Vec<String>>, outpu
 
         let mut cfg = Graph::new(architecture, config.clone());
 
-        let disassembler = match Disassembler::new(architecture, &image, executable_address_ranges.clone(), config.clone()) {
+        let disassembler = match Disassembler::new(
+            architecture,
+            image,
+            executable_address_ranges.clone(),
+            config.clone(),
+        ) {
             Ok(disassembler) => disassembler,
             Err(error) => {
                 eprintln!("{}", error);
@@ -887,18 +833,18 @@ fn process_macho(input: String, config: Config, tags: Option<Vec<String>>, outpu
             }
         };
 
-        disassembler.disassemble_controlflow(entrypoints, &mut cfg)
-        .unwrap_or_else(|error| {
-            eprintln!("{}", error);
-            process::exit(1);
-        });
+        disassembler
+            .disassemble_controlflow(entrypoints, &mut cfg)
+            .unwrap_or_else(|error| {
+                eprintln!("{}", error);
+                process::exit(1);
+            });
 
         process_output(output.clone(), &cfg, &attributes, &function_symbols);
     }
 }
 
 fn main() {
-
     let args = Args::parse();
 
     validate_args(&args);
@@ -911,20 +857,18 @@ fn main() {
         match Config::from_file(&args.config.unwrap().to_string()) {
             Ok(result) => {
                 config = result;
-            },
+            }
             Err(error) => {
                 eprintln!("{}", error);
                 process::exit(1);
             }
         }
-    } else {
-        if let Err(error) = config.from_default() {
-            eprintln!("failed to read default config: {}", error);
-            process::exit(1);
-        }
+    } else if let Err(error) = config.from_default() {
+        eprintln!("failed to read default config: {}", error);
+        process::exit(1);
     }
 
-    if args.debug != false {
+    if args.debug {
         config.general.debug = args.debug;
     }
 
@@ -932,11 +876,11 @@ fn main() {
         config.general.threads = args.threads.unwrap();
     }
 
-    if args.disable_heuristics == true {
+    if args.disable_heuristics {
         config.disable_heuristics();
     }
 
-    if args.disable_hashing == true {
+    if args.disable_hashing {
         config.disable_hashing();
     }
 
@@ -944,31 +888,34 @@ fn main() {
         config.mmap.directory = args.mmap_directory.unwrap();
     }
 
-    if args.enable_mmap_cache != false {
+    if args.enable_mmap_cache {
         config.mmap.cache.enabled = args.enable_mmap_cache;
     }
 
-    if args.disable_disassembler_sweep == true {
+    if args.disable_disassembler_sweep {
         config.disassembler.sweep.enabled = false;
     }
 
-    if args.minimal == true || config.general.minimal == true {
+    if args.minimal || config.general.minimal {
         config.enable_minimal();
     }
 
-    if args.enable_instructions != false {
+    if args.enable_instructions {
         config.instructions.enabled = args.enable_instructions;
     }
 
-    if args.enable_block_instructions != false {
+    if args.enable_block_instructions {
         config.blocks.instructions.enabled = args.enable_block_instructions;
     }
 
-    if args.disable_function_blocks != false {
+    if args.disable_function_blocks {
         config.functions.blocks.enabled = !args.disable_function_blocks;
     }
 
-    Stderr::print_debug(config.clone(), "finished reading arguments and configuration");
+    Stderr::print_debug(
+        config.clone(),
+        "finished reading arguments and configuration",
+    );
 
     ThreadPoolBuilder::new()
         .num_threads(config.general.threads)
@@ -979,20 +926,19 @@ fn main() {
         });
 
     if args.architecture.is_none() {
-        let format = Format::from_file(args.input.clone())
-            .unwrap_or_else(|error| {
-                eprintln!("{}", error);
-                process::exit(1);
-            });
+        let format = Format::from_file(args.input.clone()).unwrap_or_else(|error| {
+            eprintln!("{}", error);
+            process::exit(1);
+        });
         match format {
             Format::PE => {
                 Stderr::print_debug(config.clone(), "processing pe");
                 process_pe(args.input, config, args.tags, args.output);
-            },
+            }
             Format::ELF => {
                 Stderr::print_debug(config.clone(), "processing elf");
                 process_elf(args.input, config, args.tags, args.output);
-            },
+            }
             Format::MACHO => {
                 Stderr::print_debug(config.clone(), "processing macho");
                 process_macho(args.input, config, args.tags, args.output);
@@ -1008,7 +954,7 @@ fn main() {
             Architecture::AMD64 | Architecture::I386 | Architecture::CIL => {
                 Stderr::print_debug(config.clone(), "processing code");
                 process_code(args.input, config, architecture, args.output);
-            },
+            }
             _ => {
                 eprintln!("unsupported architecture");
                 process::exit(1);
@@ -1017,5 +963,4 @@ fn main() {
     }
 
     process::exit(0);
-
 }
