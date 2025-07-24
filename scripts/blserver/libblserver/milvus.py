@@ -30,6 +30,7 @@ import uuid
 import struct
 from typing import List, Optional, Dict, Any, Union
 import sys
+from copy import deepcopy
 
 from pymilvus import (
     connections,
@@ -103,8 +104,9 @@ class BinlexMilvus:
         if missing_auth_keys:
             raise KeyError(f"Missing Milvus authentication keys: {', '.join(missing_auth_keys)}")
 
-        if 'bucket' not in self.config.get('minio', {}):
-            raise KeyError("Missing MinIO configuration key: 'bucket'")
+        for bucket_key in {'object_bucket', 'attributes_bucket'}:
+            if bucket_key not in self.config.get('minio', {}):
+                raise KeyError(f"Missing MinIO configuration key: {bucket_key}")
 
     def connect(self, database: Optional[str] = None):
         """
@@ -157,23 +159,20 @@ class BinlexMilvus:
         """
         fields = [
             FieldSchema(name='id', dtype=DataType.VARCHAR, max_length=36, is_primary=True),
+            FieldSchema(name='name', dtype=DataType.VARCHAR, max_length=65535),
             FieldSchema(name='timestamp', dtype=DataType.INT64),
-            FieldSchema(name='size', dtype=DataType.INT64),
-            FieldSchema(name='entropy', dtype=DataType.FLOAT),
-            FieldSchema(name='number_of_instructions', dtype=DataType.INT64),
-            FieldSchema(name='number_of_blocks', dtype=DataType.INT64),
-            FieldSchema(name='edges', dtype=DataType.INT64),
-            FieldSchema(name='cyclomatic_complexity', dtype=DataType.INT64),
-            FieldSchema(name='average_instructions_per_block', dtype=DataType.FLOAT),
             FieldSchema(name='username', dtype=DataType.VARCHAR, max_length=512),
             FieldSchema(name='object', dtype=DataType.VARCHAR, max_length=64),
-            FieldSchema(name='sha256', dtype=DataType.VARCHAR, max_length=64),
+            FieldSchema(name='object_stat', dtype=DataType.JSON),
+            FieldSchema(name='address', dtype=DataType.INT64),
+            FieldSchema(name='functions_called', dtype=DataType.JSON),
+            FieldSchema(name='file_attributes', dtype=DataType.JSON),
+            FieldSchema(name='extra_attributes', dtype=DataType.JSON),
             FieldSchema(
                 name='vector',
                 dtype=DataType.FLOAT_VECTOR,
                 dim=self.config['blserver']['gnn']['output']
             ),
-            FieldSchema(name='name', dtype=DataType.VARCHAR, max_length=65535),
         ]
         return CollectionSchema(
             fields=fields,
@@ -287,7 +286,9 @@ class BinlexMilvus:
         sha256 = self._get_file_sha256(data)
         if sha256 is None:
             return None
-
+        
+        virtual_address = data["address"]
+        
         names = self._get_symbol_names(data)
 
         primary_collection = self.load_collection(collection_name)
@@ -298,20 +299,53 @@ class BinlexMilvus:
         )
 
         if not existing_object:
-            minio_client.upload(
-                self.config['minio']['bucket'],
-                data,
-                _object,
+            minio_data = deepcopy(data)
+            if minio_data["type"] == "block":
+                if minio_data["next"]:
+                    minio_data["next"] = minio_data["next"] - minio_data["address"]
+                for set_adr in {"to", "blocks"}:
+                    minio_data[set_adr] = [adr - minio_data["address"] for adr in minio_data[set_adr]]
+            if minio_data['type'] == "function":
+                for block in minio_data["blocks"]:
+                    if block["next"]:
+                        block["next"] = block["next"] - minio_data["address"]
+                    for set_adr in {"to", "blocks"}:
+                        block[set_adr] = [adr - minio_data["address"] for adr in block[set_adr]]
+                    block["address"] = block["address"] - minio_data["address"]
+                    for key in {"functions", "entropy", "sha256", "minhash", "tlsh"}:
+                        block.pop(key, None)
+                    if block["attributes"]:
+                        for i, attribute in enumerate(block["attributes"]):
+                            if attribute["type"] == "file":
+                                del block["attributes"][i]
+            
+            minio_data["address"] = 0
+            if minio_data["attributes"]:
+                indexes_to_remove = [
+                    i for i, attribute in enumerate(minio_data["attributes"]) 
+                    if attribute["type"] in {"file", "symbol"}
+                ]
+                for i in reversed(indexes_to_remove):
+                    del minio_data["attributes"][i]
+
+            for key in ["functions", "entropy", "sha256", "minhash", "tlsh"]:
+                minio_data.pop(key, None)
+            
+            self._upload_to_minio(
+                minio_client=minio_client,
+                bucket='object_bucket',
+                data=minio_data,
+                object_name=_object,
                 content_type='application/json'
             )
 
         results = []
-
+        
         if len(names) == 0:
             names.append('')
 
         for name in names:
-            _uuid = self._derive_uuid([sha256, _object, name])
+            _uuid = self._derive_uuid([str(virtual_address), sha256, _object, name])
 
             existing_uuid = primary_collection.query(
                 expr=f"id == '{_uuid}'",
@@ -321,29 +355,61 @@ class BinlexMilvus:
                 continue
 
             try:
+                object_stat = {
+                    "size": data['size'], 
+                    "number_of_instructions": data['number_of_instructions'], 
+                    "edges": data['edges'], 
+                    "entropy": data['entropy']
+                }
                 if data['type'] == 'block':
-                    average_instructions_per_block = data['number_of_instructions']
-                    cyclomatic_complexity = 0
-                    number_of_blocks = 1
+                    extra_attributes = {attr: data[attr] for attr in {"entropy", "sha256", "minhash", "tlsh"} if attr in data}
                 if data['type'] == 'function':
-                    average_instructions_per_block = data['average_instructions_per_block']
-                    cyclomatic_complexity = data['cyclomatic_complexity']
-                    number_of_blocks = len(data['blocks'])
+                    object_stat.update(
+                        {
+                            "number_of_blocks": len(data['blocks']),
+                            "cyclomatic_complexity": data['cyclomatic_complexity'],
+                            "average_instructions_per_block": data['average_instructions_per_block']
+                        }
+                    )
+                    extra_attributes = {
+                        "function": {attr: data[attr] for attr in {"entropy", "sha256", "minhash", "tlsh"} if attr in data},
+                        "blocks": [
+                            {
+                                attr: block[attr] for attr in {"address", "functions", "entropy", "sha256", "minhash", "tlsh"} if attr in block
+                            } for block in data['blocks']
+                        ]
+                    }
+                
+                extra_attributes_sha256 = hashlib.sha256(json.dumps(extra_attributes).encode('utf-8')).hexdigest()
+                
+                existing_attr_object = primary_collection.query(
+                    expr=f"extra_attributes['minio'] == '{extra_attributes_sha256}'",
+                    output_fields=["extra_attributes"]
+                )
+                
+                if not existing_attr_object:
+                    self._upload_to_minio(
+                        minio_client=minio_client,
+                        bucket='attributes_bucket',
+                        data=extra_attributes,
+                        object_name=extra_attributes_sha256,
+                        content_type='application/json'
+                )
+                
+                user_attributes = self._get_user_attributes(data)
+                
                 insert_data = {
                     "id": _uuid,
+                    "name": name,
                     "timestamp": int(time.time()),
-                    "size": data['size'],
-                    "number_of_instructions": data['number_of_instructions'],
-                    "number_of_blocks": number_of_blocks,
-                    "entropy": data['entropy'],
-                    "edges": data['edges'],
-                    "cyclomatic_complexity": cyclomatic_complexity,
-                    "average_instructions_per_block": average_instructions_per_block,
                     "username": username,
                     "object": _object,
-                    "sha256": sha256,
+                    "object_stat": object_stat,
+                    "address": virtual_address,
+                    "functions_called": data['functions'],
+                    "file_attributes": self._get_file_attributes(data),
+                    "extra_attributes": ({"minio": extra_attributes_sha256, **user_attributes}),
                     "vector": vector,
-                    "name": name,
                 }
                 primary_collection.insert(insert_data, partition_name=partition_name)
                 results.append(insert_data)
@@ -360,9 +426,10 @@ class BinlexMilvus:
         collection_name: str,
         partition_names: List[str],
         float_vector: List[float],
+        query: str = None,
         threshold: float = 0.75,
         offset: int = 0,
-        limit: int = 10,
+        limit: int = 10
     ) -> List[dict]:
         """
         Search vectors in a specified collection by COSINE similarity.
@@ -373,6 +440,7 @@ class BinlexMilvus:
             collection_name (str): Collection to search in.
             partition_names (List[str]): List of partition names to search within.
             float_vector (List[float]): Query vector for similarity search.
+            query (str): Search query to filter restults further.
             similarity_threshold (float): Minimum COSINE similarity in [-1, 1].
             offset (int): Offset for pagination.
             limit (int): Maximum number of results to return.
@@ -406,22 +474,19 @@ class BinlexMilvus:
             anns_field="vector",
             param=search_params,
             limit=top_k,
-            expr=None,
+            expr=query,
             output_fields=[
                 "id",
-                "object",
-                "vector",
                 "name",
-                "username",
                 "timestamp",
-                "sha256",
-                "edges",
-                "entropy",
-                "cyclomatic_complexity",
-                "average_instructions_per_block",
-                "size",
-                "number_of_instructions",
-                "number_of_blocks",
+                "username",
+                "object",
+                "object_stat",
+                "address",
+                "functions_called",
+                "file_attributes",
+                "extra_attributes",
+                "vector"
             ],
             partition_names=partition_names
         )
@@ -447,10 +512,12 @@ class BinlexMilvus:
 
             if not id_val or not object_name:
                 continue
-
-            data = self._retrieve_data_from_minio(minio_client, object_name)
+            
+            data = self._retrieve_data_from_minio(minio_client, 'object_bucket', object_name)
             if data is None:
                 continue
+            
+            self._restore_extra_attributes(minio_client, data, entity)
 
             results.append({
                 "id": id_val,
@@ -458,19 +525,95 @@ class BinlexMilvus:
                 "vector": entity.get('vector'),
                 "name": entity.get('name'),
                 "username": entity.get('username'),
-                "edges": entity.get('edges'),
-                "entropy": entity.get('entropy'),
-                "size": entity.get('size'),
-                "cyclomatic_complexity": entity.get('cyclomatic_complexity'),
-                "average_instructions_per_block": entity.get('average_instructions_per_block'),
-                "number_of_instructions": entity.get('number_of_instructions'),
-                "number_of_blocks": entity.get('number_of_blocks'),
                 "timestamp": entity.get('timestamp'),
-                "sha256": entity.get('sha256'),
+                "file_attributes": entity.get('file_attributes'),
                 "data": data
             })
 
         return results
+
+    def query(
+        self,
+        minio_client,
+        database: str,
+        collection_name: str,
+        partition_names: List[str],
+        query: str,
+        offset: int = 0,
+        limit: int = 10,
+    ) -> List[dict]:
+        """
+        Search database using the specified query.
+
+        Parameters:
+            minio_client: MinIO client instance.
+            database (str): Database name.
+            collection_name (str): Collection to search in.
+            partition_names (List[str]): List of partition names to search within.
+            query (str): Search query.
+            offset (int): Offset for pagination.
+            limit (int): Maximum number of results to return.
+
+        Returns:
+            List[dict]: Search results for the query.
+                        Each dictionary contains:
+                            - uuid: Unique identifier of the hit (the "id" field).
+                            - vector: The retrieved vector.
+                            - data: The associated data from MinIO.
+        """
+        self.connect(database=database)
+        collection = self.load_collection(collection_name)
+        
+
+        search_results = collection.query(
+            expr=query,
+            offset=offset,
+            limit=limit,
+            output_fields=[
+                "id",
+                "name",
+                "timestamp",
+                "username",
+                "object",
+                "object_stat",
+                "address",
+                "functions_called",
+                "file_attributes",
+                "extra_attributes",
+                "vector"
+            ],
+            partition_names=partition_names
+        )
+        
+        if not search_results or not search_results[0]:
+            return []
+        
+        results = []
+        for search_result in search_results:
+            id_val = search_result.get('id')
+            object_name = search_result.get('object')
+            
+            if not id_val or not object_name:
+                continue
+            
+            data = self._retrieve_data_from_minio(minio_client, 'object_bucket', object_name)
+            if data is None:
+                continue
+            
+            self._restore_extra_attributes(minio_client, data, search_result)
+            
+            results.append({
+                "id": id_val,
+                "vector": list(map(float, search_result.get('vector'))),
+                "name": search_result.get('name'),
+                "username": search_result.get('username'),
+                "timestamp": search_result.get('timestamp'),
+                "file_attributes": search_result.get('file_attributes'),
+                "data": data
+            })
+        
+        return results
+
 
     def _validate_search_vector_params(self, partition_names: List[str], offset: int, limit: int):
         """
@@ -490,12 +633,13 @@ class BinlexMilvus:
                 f"Got offset={offset}, limit={limit}, sum={offset + limit}."
             )
 
-    def _retrieve_data_from_minio(self, minio_client, object_name: str) -> Optional[Dict[str, Any]]:
+    def _retrieve_data_from_minio(self, minio_client, bucket: str, object_name: str) -> Optional[Dict[str, Any]]:
         """
         Retrieve and parse data from MinIO.
 
         Parameters:
             minio_client: MinIO client instance.
+            bucket (str): Bucket from MinIO which contains the requested object.
             object_name (str): Name of the object to retrieve.
 
         Returns:
@@ -503,7 +647,7 @@ class BinlexMilvus:
         """
         try:
             object_bytes = minio_client.download(
-                bucket_name=self.config["minio"]["bucket"],
+                bucket_name=self.config["minio"][bucket],
                 object_name=object_name
             )
             return json.loads(object_bytes.decode("utf-8"))
@@ -527,23 +671,25 @@ class BinlexMilvus:
             return hashlib.sha256(json.dumps(data).encode()).hexdigest()
         return None
 
-    def _upload_to_minio(self, minio_client, data: Union[dict, bytes]) -> Optional[str]:
+    def _upload_to_minio(self, minio_client, bucket: str, data: Union[dict, bytes], object_name: str, content_type: str) -> Optional[str]:
         """
         Upload data to MinIO and return the object name.
 
         Parameters:
             minio_client: MinIO client instance.
+            bucket (str): MinIO bucket to which the object is uploaded.
             data (Union[dict, bytes]): Data to be uploaded.
 
         Returns:
             Optional[str]: The name of the uploaded object or None if upload failed.
         """
         try:
-            if isinstance(data, dict):
-                data_bytes = json.dumps(data).encode('utf-8')
-            else:
-                data_bytes = data
-            object_name = minio_client.upload(self.config['minio']['bucket'], data_bytes)
+            object_name = minio_client.upload(
+                bucket_name=self.config['minio'][bucket], 
+                data=data, 
+                object_name=object_name, 
+                content_type=content_type
+            )
             return object_name
         except Exception as e:
             print(f"Failed to upload data to MinIO: {e}")
@@ -584,3 +730,101 @@ class BinlexMilvus:
                 if 'sha256' in attribute:
                     return attribute['sha256']
         return None
+    
+    def _restore_extra_attributes(self, minio_client, data: dict, entity: dict) -> None:
+        """
+        Restore extra attributes, functions called and addresses for returned Binlex JSON from MinIO.
+
+        Parameters:
+            data (dict): The dictionary from MinIO without extra attributes.
+            entity (dict): The dictionary with data stored in Milvus database. 
+
+        Returns:
+            None: The function modifies data dictionary.
+        """
+        attributes = self._retrieve_data_from_minio(minio_client, 'attributes_bucket', entity.get('extra_attributes').get('minio'))
+        if data['type'] == "function":
+            # restoring function attributes
+            extra_attributes = attributes.get('function', {})
+            if extra_attributes:
+                fcn_adr = entity.get('address')
+                data.update(
+                    {
+                        "functions": entity.get('functions_called'),
+                        "address": fcn_adr,
+                        "entropy": extra_attributes.get('entropy', None),
+                        "sha256": extra_attributes.get('sha256', None),
+                        "minhash": extra_attributes.get('minhash', None),
+                        "tlsh": extra_attributes.get('tlsh', None)
+                    }
+                )
+            # restoring each block's attributes in the function
+            extra_attributes = attributes.get('blocks', {})
+            if extra_attributes:
+                for i, block in enumerate(data['blocks']):
+                    block.update(extra_attributes[i])
+                    if block["next"]:
+                        block["next"] = block["next"] + fcn_adr
+                    for list_addr in ["to", "blocks"]:
+                        block[list_addr] = [adr + fcn_adr for adr in block[list_addr]]
+        elif data['type'] == "block":
+            if attributes:
+                bb_adr = entity.get('address')
+                data.update(
+                    {
+                        "functions": entity.get('functions_called'),
+                        "address": bb_adr,
+                        "entropy": attributes.get('entropy', None),
+                        "sha256": attributes.get('sha256', None),
+                        "minhash": attributes.get('minhash', None),
+                        "tlsh": attributes.get('tlsh', None)
+                    }
+                )
+            if data["next"]:
+                data["next"] = data["next"] + bb_adr
+            for list_addr in ["to", "blocks"]:
+                data[list_addr] = [adr + bb_adr for adr in data[list_addr]]
+    
+    @staticmethod
+    def _get_file_attributes(data: dict) -> dict:
+        """
+        Extract the file entropy, sha256, size, tlsh from 'attributes' item in the provided dict.
+
+        Parameters:
+            data (dict): The data containing attributes.
+
+        Returns:
+            dict: The dictionary containing found file attributes that are not None, else {}.
+        """
+        if 'attributes' not in data:
+            return {}
+        file_attributes = {}
+        file_attrs = {'entropy', 'sha256', 'size', 'tlsh', 'minhash'}
+        for attribute in data['attributes']:
+            if attribute.get('type') == 'file':
+                file_attributes.update(
+                    {
+                        attr: attribute[attr] for attr in file_attrs if attr in attribute and attribute[attr]
+                    }
+                )
+        return file_attributes
+        
+    @staticmethod
+    def _get_user_attributes(data: dict) -> dict:
+        """
+        Extract all the user attributes from 'attributes' item in the provided dict. By default, user attributes are identified by the same type of the object (function/block).
+
+        Parameters:
+            data (dict): The data containing attributes.
+
+        Returns:
+            dict: The dictionary containing found user attributes, else {}.
+        """
+        if 'attributes' not in data:
+            return {}
+        for sub_attribute in data['attributes']:
+            if sub_attribute.get('type') == data['type']:
+                user_attributes = sub_attribute.copy()
+                user_attributes.pop('type')
+                return user_attributes
+        return {}
