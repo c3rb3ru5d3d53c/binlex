@@ -13,4 +13,3 @@ pkg/
 *.tar.gz
 *.pkg.tar.zst
 *.zip
-*.json
