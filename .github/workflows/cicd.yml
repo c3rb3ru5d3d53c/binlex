@@ -65,7 +65,18 @@ jobs:
         if: startsWith(matrix.os, 'macos-')
         run: |
           brew update
-          brew install openssl
+          brew install openssl automake
+
+      - name: Install MSYS2 and Automake (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          install: >-
+            automake
+            autoconf
+            make
+            libtool
 
       - name: Enable Developer Command Prompt (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
@@ -89,6 +100,7 @@ jobs:
 
       - name: Build Project (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
+        shell: msys2 {0}
         run: cargo build --release
 
       - name: Build Python Wheels (Ubuntu)
