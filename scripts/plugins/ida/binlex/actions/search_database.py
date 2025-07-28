@@ -88,11 +88,8 @@ def process(
             if len(search_result['name']) == 0:
                 continue
 
-            gnn_similarity = min(search_result['score'], 1.0)
-            if gnn_similarity < gnn_similarity_threshold:
-                continue
-
-            rhs_function = FunctionJsonDeserializer(json.dumps(search_result['data']), config)
+            result_data = search_result['data']
+            rhs_function = FunctionJsonDeserializer(json.dumps(result_data), config)
 
             size_ratio = calculate_size_ratio(lhs_function.size(), rhs_function.size())
             if size_ratio < size_ratio_threshold:
@@ -106,24 +103,24 @@ def process(
             if minhash_score is None or minhash_score < minhash_score_threshold:
                 continue
 
-            combined_score = (gnn_similarity + minhash_score) / 2.0
+            combined_score = (search_result['score'] + minhash_score) / 2.0
             if combined_score < combined_ratio_threshold:
                 continue
 
             row = [
                 str(hex(lhs_function.address())),
-                str(gnn_similarity),
+                str(search_result['score']),
                 str(minhash_score),
                 str(combined_score),
-                str(search_result['size']),
+                str(result_data['size']),
                 str(size_ratio),
-                str(search_result['number_of_instructions']),
-                str(search_result['entropy']),
-                str(search_result['average_instructions_per_block']),
-                str(search_result['cyclomatic_complexity']),
+                str(result_data['number_of_instructions']),
+                str(result_data['entropy']),
+                str(result_data['average_instructions_per_block']),
+                str(result_data['cyclomatic_complexity']),
                 function_names[lhs_function.address()],
                 search_result['name'],
-                search_result['sha256'],
+                search_result['file_attributes']['sha256'],
                 datetime.fromtimestamp(search_result['timestamp']).isoformat(),
                 search_result['username'],
                 str(lhs_vector),
