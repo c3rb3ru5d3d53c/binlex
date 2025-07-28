@@ -100,6 +100,20 @@ def create_app(config: str) -> Flask:
                 required=True,
                 description='A list of float values representing the embedding vector to search',
                 example=[0.1, 0.2, 0.3, 0.4]
+            ),
+            'query': fields.String(
+                description='Query to send to Milvus database to filter results',
+                example="file_sha256 != '2d66d000874a77e4c81f5ab34674fbc0bf5e28aac86ce07e5fd99aee1b84d244'"
+            )
+        }
+    )
+    
+    embedding_query_database = api.model(
+        'EmbeddingQueryDatabase',
+        {
+            'query': fields.String(
+                description='Query to send to Milvus database',
+                example="file_sha256 == '2d66d000874a77e4c81f5ab34674fbc0bf5e28aac86ce07e5fd99aee1b84d244' and address == 4411523"
             )
         }
     )
@@ -175,7 +189,7 @@ def create_app(config: str) -> Flask:
                 gnn.train(epochs=server_config['blserver']['gnn']['epochs'])
 
                 embedding = gnn.to_embedding()
-
+                
                 result = milvus_client.index_vector(
                     minio_client=minio_client,
                     database=database,
@@ -192,6 +206,53 @@ def create_app(config: str) -> Flask:
                 return json.dumps(result), 200
             except Exception as e:
                 return {'error': str(e)}, 500
+
+    @api.route('/embeddings/<string:database>/<string:collection>/<string:partitions>/query/<int:offset>/<int:limit>')
+    class BinlexServerEmbeddingsQuery(Resource):
+        @require_user_api_key
+        @api.expect(embedding_query_database, validate=True)
+        @api.response(200, 'Success', fields.List(
+            fields.Raw(
+                description='List of search results from the query sent'
+            )
+        ))
+        @api.response(400, 'Invalid Input', error_response_model)
+        @api.response(500, 'Internal Server Error', error_response_model)
+        @api.doc(description='Search Embeddings')
+        def post(self, database, collection, partitions, offset, limit):
+            try:
+
+                partitions = partitions.split('||')
+
+                request_data = json.loads(request.data)
+
+                if not isinstance(request_data, str):
+                    return json.dumps({'error': 'expected a string'}), 400
+                
+                if database not in milvus_client.list_databases():
+                    return json.dumps({'error': 'database does not exist'}), 404
+
+                if collection not in milvus_client.get_collection_names(database=database):
+                    return json.dumps({'error': 'unsupported collection'}), 404
+                
+                for partition in partitions:
+                    if partition not in milvus_client.get_partition_names(database=database, collection_name='function'):
+                        return json.dumps({'error': f'{partition} is an unsupported partition or architecture'}), 404
+
+                results = milvus_client.query(
+                    minio_client=minio_client,
+                    database=database,
+                    collection_name=collection,
+                    partition_names=partitions,
+                    query=request_data,
+                    offset=offset,
+                    limit=limit
+                )
+                return json.dumps(results), 200
+            except json.JSONDecodeError:
+                return json.dumps({'error': 'Invalid JSON input'}), 400
+            except Exception as e:
+                return json.dumps({'error': str(e)}), 500
 
     @api.route('/embeddings/<string:database>/<string:collection>/<string:partitions>/search/<int:offset>/<int:limit>/<float:threshold>')
     class BinlexServerEmbeddingsSearch(Resource):
@@ -212,7 +273,7 @@ def create_app(config: str) -> Flask:
 
                 request_data = json.loads(request.data)
 
-                if not isinstance(request_data, list) or not all(isinstance(x, (int, float)) for x in request_data):
+                if not isinstance(request_data["vector"], list) or not all(isinstance(x, (int, float)) for x in request_data["vector"]):
                     return json.dumps({'error': 'expected a list of float values'}), 400
 
                 if database not in milvus_client.list_databases():
@@ -231,7 +292,8 @@ def create_app(config: str) -> Flask:
                     collection_name=collection,
                     partition_names=partitions,
                     threshold=threshold,
-                    float_vector=request_data,
+                    float_vector=request_data["vector"],
+                    query=request_data["query"],
                     offset=offset,
                     limit=limit
                 )
