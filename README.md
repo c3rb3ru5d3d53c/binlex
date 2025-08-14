@@ -501,7 +501,7 @@ binlex -i sample.dll --threads 16 | jq -r 'select(.size >= 16 and .size <= 32 an
 After sending the patterns to `uniq`, you can also send them through this `awk` command to collapse blocks and functions into single patterns.
 
 ```bash
-awk 'NR==1{n=length($0);first=$0;delete a;delete lock;split(tolower($0),a,"");cnt=1;next}{L=length($0);if(L==n){split(tolower($0),b,"");for(i=1;i<=n;i++){c=b[i];if(c=="?")continue;if(!(i in a)||a[i]==""){a[i]=c}else if(a[i]=="?"&&!lock[i]){a[i]=c}else if(a[i]!=c){a[i]="?";lock[i]=1}};cnt++}else{if(cnt==1)print first;else{out="";for(i=1;i<=n;i++)out=out a[i];print out};n=L;first=$0;delete a;delete lock;split(tolower($0),a,"");cnt=1}}END{if(NR){if(cnt==1)print first;else{out="";for(i=1;i<=n;i++)out=out a[i];print out}}}'
+awk 'NR==1{n=length($0);first=$0;delete v;split(tolower($0),v,"");cnt=1;next}{L=length($0);if(L==n){split(tolower($0),b,"");for(i=1;i<=n;i++){c=b[i];if(c=="?"){v[i]="?";next}if(!(i in v)||v[i]==""){v[i]=c}else if(v[i]!="?"&&v[i]!=c){v[i]="?"}};cnt++}else{if(cnt==1)print first;else{out="";for(i=1;i<=n;i++)out=out (i in v?v[i]:"?");print out};n=L;first=$0;delete v;split(tolower($0),v,"");cnt=1}}END{if(NR){if(cnt==1)print first;else{out="";for(i=1;i<=n;i++)out=out (i in v?v[i]:"?");print out}}}'
 ```
 
 This takes output like the following:
@@ -519,7 +519,7 @@ And merges patterns of the same length:
 
 ```text
 4883ec??ff15????????85c079??8bc84883c4??48ff25????????33c04883c4??c3
-4883ec??ff15????????85c079??8bc8e8?b??f???33c0eb??b8010000004883c4??c3
+4883ec??ff15????????85c079??8bc8e80b2cfd??33c0eb??b8010000004883c4??c3
 4883ec??ff15????????85c079??8bc8ff15????????33c0eb??b8010000004883c4??c3
 ```
 
