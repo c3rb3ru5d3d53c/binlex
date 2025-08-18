@@ -31,6 +31,7 @@ toml = "0.8.19"
 glob = "0.3.2"
 indexmap = "2.7.1"
 cxx = "=1.0.138"
+libvex = { git = "https://github.com/pwnslinger/libvex-rs.git", branch = "feat/libvex-macos-sonoma-support" }
 
 [workspace]
 members = [
@@ -69,7 +70,6 @@ path = "src/bin/blhash.rs"
 [[bin]]
 name = "blelfsym"
 path = "src/bin/blelfsym.rs"
-
 
 [[bin]]
 name = "blmachosym"
