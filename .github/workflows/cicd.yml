@@ -111,6 +111,7 @@ jobs:
           python -m pip install setuptools wheel virtualenv
 
       - name: Run Unit Tests
+        shell: bash
         run: |
           for attempt in 1 2 3; do
             cargo test && break
