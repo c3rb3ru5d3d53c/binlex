@@ -8,11 +8,18 @@ fn test_graph() -> Graph {
     Graph::new(Architecture::AMD64, Config::default())
 }
 
+fn padded_buffer(code: &[u8]) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(code.len() + 64);
+    buf.extend_from_slice(code);
+    buf.resize(code.len() + 64, 0);
+    buf
+}
+
 #[test]
 fn test_lift_bytes_ret() {
     let lifter = VexLifter::new();
-    let code = [0xC3u8]; // x86_64 "ret"
-    let mut vta = libvex::TranslateArgs::new(lifter.arch, lifter.arch, lifter.endness);
+    let code = padded_buffer(&[0xC3u8]); // x86_64 "ret"
+    let mut vta = libvex::TranslateArgs::new(lifter.guest_arch, lifter.host_arch, lifter.endness);
     let irsb = vta.front_end(code.as_ptr(), 0x1000).ok();
     assert!(irsb.is_some());
     if let Some(irsb) = irsb {
@@ -42,8 +49,9 @@ fn test_lift_instruction() {
         edges: 0,
     };
     let lifter = VexLifter::new();
-    let mut vta = libvex::TranslateArgs::new(lifter.arch, lifter.arch, lifter.endness);
-    let irsb = vta.front_end(instruction.bytes.as_ptr(), instruction.address).ok();
+    let code = padded_buffer(&instruction.bytes);
+    let mut vta = libvex::TranslateArgs::new(lifter.guest_arch, lifter.host_arch, lifter.endness);
+    let irsb = vta.front_end(code.as_ptr(), instruction.address).ok();
     assert!(irsb.is_some());
     if let Some(irsb) = irsb {
         println!("IRSB for instruction: {:?}", irsb);
@@ -72,7 +80,6 @@ fn test_lift_block() {
         to: BTreeSet::new(),
         edges: 0,
     };
-    // Insert the instruction into the graph's listing at 0x3000
     graph.listing.insert(0x3000, instruction.clone());
     let block = Block {
         address: 0x3000,
@@ -80,8 +87,9 @@ fn test_lift_block() {
         terminator: instruction,
     };
     let lifter = VexLifter::new();
-    let mut vta = libvex::TranslateArgs::new(lifter.arch, lifter.arch, lifter.endness);
-    let irsb = vta.front_end(block.bytes().as_ptr(), block.address).ok();
+    let code = padded_buffer(&block.bytes());
+    let mut vta = libvex::TranslateArgs::new(lifter.guest_arch, lifter.host_arch, lifter.endness);
+    let irsb = vta.front_end(code.as_ptr(), block.address).ok();
     assert!(irsb.is_some());
     if let Some(irsb) = irsb {
         println!("IRSB for block: {:?}", irsb);
@@ -136,13 +144,13 @@ fn test_extract_block_addresses() {
 fn test_lift_binlex_block_split_example() {
     let lifter = VexLifter::new();
     // Block: jz 0x4; nop; nop; ret
-    let block_bytes = [0x74, 0x02, 0x90, 0x90, 0xc3];
-    let block_address = 0x0u64;
-    let mut vta = libvex::TranslateArgs::new(lifter.arch, lifter.arch, lifter.endness);
+    let block_bytes = padded_buffer(&[0x74, 0x02, 0x90, 0x90, 0xc3]);
+    let block_address = 0x1000u64;
+    let mut vta = libvex::TranslateArgs::new(lifter.guest_arch, lifter.host_arch, lifter.endness);
     let irsb = vta.front_end(block_bytes.as_ptr(), block_address).ok();
     assert!(irsb.is_some());
     if let Some(irsb) = irsb {
         println!("IRSB for binlex block split example: {:?}", irsb);
         drop(irsb);
     }
-} 
+}

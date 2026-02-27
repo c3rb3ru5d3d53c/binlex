@@ -59,13 +59,13 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libssl-dev make
+          sudo apt-get install -y build-essential pkg-config libssl-dev make automake autoconf libtool
 
       - name: Install Dependencies (macOS)
         if: startsWith(matrix.os, 'macos-')
         run: |
           brew update
-          brew install openssl automake
+          brew install openssl automake autoconf libtool
 
       - name: Install MSYS2 and Automake (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
@@ -81,6 +81,18 @@ jobs:
       - name: Enable Developer Command Prompt (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
         uses: ilammy/msvc-dev-cmd@v1.7.0
+
+      - name: Setup VEX Dependencies (macOS)
+        if: startsWith(matrix.os, 'macos-')
+        run: |
+          bash scripts/setup-vex.sh
+          bash scripts/setup-vex.sh --env >> $GITHUB_ENV
+
+      - name: Setup VEX Dependencies (Ubuntu)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: |
+          bash scripts/setup-vex.sh
+          bash scripts/setup-vex.sh --env >> $GITHUB_ENV
 
       - name: Install Python Build Tools
         run: |
@@ -221,13 +233,17 @@ jobs:
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
 
+      - name: Setup VEX Dependencies (Arch Linux)
+        run: |
+          sudo -u builder bash -c 'cd /home/builder/repo/ && . /home/builder/.cargo/env && bash scripts/setup-vex.sh'
+
       - name: Build Project (Arch Linux)
         run: |
-          sudo -u builder bash -c 'cd /home/builder/repo/ && . /home/builder/.cargo/env && make zst'
+          sudo -u builder bash -c 'cd /home/builder/repo/ && . /home/builder/.cargo/env && eval "$(bash scripts/setup-vex.sh --env)" && make zst'
 
       - name: Run Unit Tests
         run: |
-          sudo -u builder bash -c 'cd /home/builder/repo/ && . /home/builder/.cargo/env && cargo test'
+          sudo -u builder bash -c 'cd /home/builder/repo/ && . /home/builder/.cargo/env && eval "$(bash scripts/setup-vex.sh --env)" && cargo test'
 
       - name: Copy Binary (Arch Linux)
         run: |
