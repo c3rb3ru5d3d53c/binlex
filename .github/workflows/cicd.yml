@@ -215,7 +215,7 @@ jobs:
       - name: Install Arch Dependencies
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm base-devel curl git zip
+          pacman -S --noconfirm base-devel curl git zip clang
           echo '%wheel ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
           useradd -m -G wheel builder
           echo 'builder ALL=(ALL) NOPASSWD: /usr/bin/make' >> /etc/sudoers
