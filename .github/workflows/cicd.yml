@@ -110,7 +110,8 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install setuptools wheel virtualenv
 
-      - name: Run Unit Tests
+      - name: Run Unit Tests (Unix)
+        if: ${{ matrix.os != 'windows-latest' }}
         shell: bash
         run: |
           for attempt in 1 2 3; do
@@ -118,6 +119,10 @@ jobs:
             echo "Attempt $attempt failed, retrying in 15s..."
             sleep 15
           done
+
+      - name: Run Unit Tests (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: cargo test
 
       - name: Build Project (Ubuntu)
         if: ${{ matrix.os == 'ubuntu-latest' }}
