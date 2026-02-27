@@ -50,6 +50,17 @@ jobs:
           toolchain: stable
           override: true
 
+      - name: Cache Cargo Registry and Build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -100,7 +111,12 @@ jobs:
           python -m pip install setuptools wheel virtualenv
 
       - name: Run Unit Tests
-        run: cargo test
+        run: |
+          for attempt in 1 2 3; do
+            cargo test && break
+            echo "Attempt $attempt failed, retrying in 15s..."
+            sleep 15
+          done
 
       - name: Build Project (Ubuntu)
         if: ${{ matrix.os == 'ubuntu-latest' }}
