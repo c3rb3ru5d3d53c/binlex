@@ -230,8 +230,10 @@ jobs:
         run: |
           sudo -u builder mkdir -p /home/builder/repo
           sudo -u builder bash -c "git clone https://github.com/${GITHUB_REPOSITORY}.git /home/builder/repo"
+          sudo -u builder bash -c "cd /home/builder/repo && git fetch origin ${GITHUB_REF} && git checkout FETCH_HEAD"
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REF: ${{ github.ref }}
 
       - name: Setup VEX Dependencies (Arch Linux)
         run: |
