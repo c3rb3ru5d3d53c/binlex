@@ -58,7 +58,12 @@ build_vex() {
     ./autogen.sh
 
     echo "[setup-vex] Running configure..."
-    ./configure
+    CONFIGURE_FLAGS=""
+    if [[ "$(uname -m)" == "arm64" || "$(uname -m)" == "aarch64" ]]; then
+        CONFIGURE_FLAGS="--enable-only64bit"
+        export I_ACKNOWLEDGE_THIS_MIGHT_CRASH_OR_DAMAGE_MY_COMPUTER=yes
+    fi
+    ./configure $CONFIGURE_FLAGS
 
     echo "[setup-vex] Building VEX..."
     cd "$VEX_DIR"
