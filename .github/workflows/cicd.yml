@@ -93,6 +93,12 @@ jobs:
         if: ${{ matrix.os == 'windows-latest' }}
         uses: ilammy/msvc-dev-cmd@v1.7.0
 
+      - name: Reduce Windows Cargo Path Lengths
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: pwsh
+        run: |
+          "CARGO_TARGET_DIR=D:/t" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Setup VEX Dependencies (macOS)
         if: startsWith(matrix.os, 'macos-')
         run: |
