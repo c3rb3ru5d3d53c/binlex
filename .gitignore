@@ -1,6 +1,7 @@
 venv/
 dist/
 target/
+deps/
 Cargo.lock
 samples/
 *.yara

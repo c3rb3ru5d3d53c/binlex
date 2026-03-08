@@ -27,9 +27,10 @@ pub mod formats;
 pub mod genetics;
 pub mod global;
 pub mod hashing;
-pub mod imaging;
 pub mod io;
 pub mod lcs;
+pub mod imaging;
+pub mod lifters;
 pub mod types;
 
 pub use binary::Binary;
