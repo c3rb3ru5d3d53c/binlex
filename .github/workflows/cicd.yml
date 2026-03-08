@@ -83,11 +83,15 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           update: true
+          msystem: MINGW64
           install: >-
+            git
             automake
             autoconf
             make
             libtool
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-binutils
 
       - name: Enable Developer Command Prompt (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
