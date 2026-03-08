@@ -37,15 +37,24 @@ check_prerequisites() {
 clone_libvex() {
     if [ -d "${LIBVEX_DIR}" ]; then
         echo "[setup-vex-windows] libvex-rs already cloned at ${LIBVEX_DIR}"
+        if [ ! -d "${LIBVEX_DIR}/libvex-sys/valgrind/VEX" ]; then
+            echo "[setup-vex-windows] Initializing missing submodules..."
+            git -C "${LIBVEX_DIR}" submodule update --init --recursive
+        fi
         return
     fi
     echo "[setup-vex-windows] Cloning libvex-rs..."
     mkdir -p "${DEPS_DIR}"
-    git clone --depth 1 --branch "${LIBVEX_BRANCH}" "${LIBVEX_REPO}" "${LIBVEX_DIR}"
+    git clone --depth 1 --branch "${LIBVEX_BRANCH}" --recurse-submodules "${LIBVEX_REPO}" "${LIBVEX_DIR}"
 }
 
 build_vex() {
     local target_lib="${VALGRIND_VEX_DIR}/libvex-amd64-windows.a"
+    if [ ! -d "${VALGRIND_VEX_DIR}" ]; then
+        echo "ERROR: expected VEX directory does not exist: ${VALGRIND_VEX_DIR}" >&2
+        echo "This usually means git submodules were not fetched." >&2
+        exit 1
+    fi
     if [ -f "${target_lib}" ]; then
         echo "[setup-vex-windows] VEX library already built at ${target_lib}"
         return
