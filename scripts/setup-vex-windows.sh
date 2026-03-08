@@ -7,6 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 DEPS_DIR="${PROJECT_DIR}/deps"
 LIBVEX_DIR="${DEPS_DIR}/libvex-rs"
+VALGRIND_DIR="${LIBVEX_DIR}/libvex-sys/valgrind"
 VALGRIND_VEX_DIR="${LIBVEX_DIR}/libvex-sys/valgrind/VEX"
 
 print_env() {
@@ -58,6 +59,20 @@ build_vex() {
     if [ -f "${target_lib}" ]; then
         echo "[setup-vex-windows] VEX library already built at ${target_lib}"
         return
+    fi
+
+    echo "[setup-vex-windows] Bootstrapping valgrind config headers..."
+    cd "${VALGRIND_DIR}"
+    if [ ! -f "./configure" ]; then
+        ./autogen.sh
+    fi
+    if [ ! -f "./config.h" ]; then
+        if ! ./configure --enable-only64bit --host=x86_64-w64-mingw32; then
+            ./configure --enable-only64bit
+        fi
+    fi
+    if [ -f "./config.h" ]; then
+        cp ./config.h "${VALGRIND_VEX_DIR}/pub/config.h"
     fi
 
     echo "[setup-vex-windows] Building VEX static library..."
