@@ -1,3 +1,5 @@
+#![cfg(not(target_os = "windows"))]
+
 use binlex::lifters::vex::lifter::VexLifter;
 use binlex::controlflow::{Instruction, Block, Function};
 use binlex::global::{Architecture, Config};

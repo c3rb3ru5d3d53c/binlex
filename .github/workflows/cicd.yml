@@ -83,15 +83,11 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           update: true
-          msystem: MINGW64
           install: >-
-            git
             automake
             autoconf
             make
             libtool
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-binutils
 
       - name: Enable Developer Command Prompt (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
@@ -115,13 +111,6 @@ jobs:
           bash scripts/setup-vex.sh
           bash scripts/setup-vex.sh --env >> $GITHUB_ENV
 
-      - name: Setup VEX Dependencies (Windows)
-        if: ${{ matrix.os == 'windows-latest' }}
-        shell: msys2 {0}
-        run: |
-          bash scripts/setup-vex-windows.sh
-          bash scripts/setup-vex-windows.sh --env >> $GITHUB_ENV
-
       - name: Install Python Build Tools
         run: |
           python -m pip install --upgrade pip
@@ -139,7 +128,6 @@ jobs:
 
       - name: Run Unit Tests (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
-        shell: msys2 {0}
         run: cargo test
 
       - name: Build Project (Ubuntu)
