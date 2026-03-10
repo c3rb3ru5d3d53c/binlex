@@ -67,7 +67,9 @@ pub enum ConstEnum {
     U16(u16),
     U32(u32),
     U64(u64),
+    U128(U128),
     F32(f32),
+    F16i(u16),
     F32i(u32),
     F64(f64),
     F64i(u64),
@@ -80,30 +82,44 @@ wrapper!(Const, IRConst);
 impl Const<'_> {
     pub fn as_enum(&self) -> ConstEnum {
         let co = unsafe { &*self.0 };
-        match co.tag {
-            IRConstTag::Ico_U1 => ConstEnum::U1(unsafe { co.Ico.U1 != 0 }),
-            IRConstTag::Ico_U8 => ConstEnum::U8(unsafe { co.Ico.U8 }),
-            IRConstTag::Ico_U16 => ConstEnum::U16(unsafe { co.Ico.U16 }),
-            IRConstTag::Ico_U32 => ConstEnum::U32(unsafe { co.Ico.U32 }),
-            IRConstTag::Ico_U64 => ConstEnum::U64(unsafe { co.Ico.U64 }),
-            IRConstTag::Ico_F32 => ConstEnum::F32(unsafe { co.Ico.F32 }),
-            IRConstTag::Ico_F32i => ConstEnum::F32i(unsafe { co.Ico.F32i }),
-            IRConstTag::Ico_F64 => ConstEnum::F64(unsafe { co.Ico.F64 }),
-            IRConstTag::Ico_F64i => ConstEnum::F64i(unsafe { co.Ico.F64i }),
-            IRConstTag::Ico_V128 => {
+        let tag = co.tag as u32;
+
+        if tag == IRConstTag::Ico_U1 as u32 {
+            ConstEnum::U1(unsafe { co.Ico.U1 != 0 })
+        } else if tag == IRConstTag::Ico_U8 as u32 {
+            ConstEnum::U8(unsafe { co.Ico.U8 })
+        } else if tag == IRConstTag::Ico_U16 as u32 {
+            ConstEnum::U16(unsafe { co.Ico.U16 })
+        } else if tag == IRConstTag::Ico_U32 as u32 {
+            ConstEnum::U32(unsafe { co.Ico.U32 })
+        } else if tag == IRConstTag::Ico_U64 as u32 {
+            ConstEnum::U64(unsafe { co.Ico.U64 })
+        } else if tag == 4869 {
+            ConstEnum::U128(unsafe { *(&co.Ico as *const _ as *const U128) })
+        } else if tag == IRConstTag::Ico_F32 as u32 {
+            ConstEnum::F32(unsafe { co.Ico.F32 })
+        } else if tag == 4870 {
+            ConstEnum::F16i(unsafe { *(&co.Ico as *const _ as *const UShort) })
+        } else if tag == IRConstTag::Ico_F32i as u32 {
+            ConstEnum::F32i(unsafe { co.Ico.F32i })
+        } else if tag == IRConstTag::Ico_F64 as u32 {
+            ConstEnum::F64(unsafe { co.Ico.F64 })
+        } else if tag == IRConstTag::Ico_F64i as u32 {
+            ConstEnum::F64i(unsafe { co.Ico.F64i })
+        } else if tag == IRConstTag::Ico_V128 as u32 {
                 let val = unsafe { co.Ico.V128 };
                 let vec = V128 {
                     w16: [val, val, val, val, val, val, val, val],
                 };
-                ConstEnum::V128(vec)
-            }
-            IRConstTag::Ico_V256 => {
-                let val = unsafe { co.Ico.V256 };
-                let vec = V256 {
-                    w32: [val, val, val, val, val, val, val, val],
-                };
-                ConstEnum::V256(vec)
-            }
+            ConstEnum::V128(vec)
+        } else if tag == IRConstTag::Ico_V256 as u32 {
+            let val = unsafe { co.Ico.V256 };
+            let vec = V256 {
+                w32: [val, val, val, val, val, val, val, val],
+            };
+            ConstEnum::V256(vec)
+        } else {
+            panic!("Unimplemented IRConstTag variant value: {}", tag)
         }
     }
 
