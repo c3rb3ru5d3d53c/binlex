@@ -1,0 +1,34 @@
+[package]
+name = "vex-sys"
+version = "0.3.1"
+authors = ["Noam Kleinburd <noam93k@gmail.com>"]
+edition = "2018"
+description = "Bindings for valgrind's LibVEX."
+repository = "https://github.com/noam93k/libvex-sys"
+readme = "README.md"
+keywords = ["valgrind", "bindings", "vex", "ir"]
+categories = ["external-ffi-bindings"]
+license = "MIT"
+include = [
+    "/build.rs",
+    "/wrapper.h",
+    "/src/**.rs",
+    "/valgrind/autogen.sh",
+    "/valgrind/**/*.ac",
+    "/valgrind/**/*.am",
+    "/valgrind/**/*.in",
+    "/valgrind/**/*.c",
+    "/valgrind/**/*.h",
+    "/valgrind/VEX",
+]
+
+[dependencies]
+libc = "0.2.85"
+
+[build-dependencies]
+fs_extra = "1.2"
+bindgen = "0.69"
+
+[features]
+default = []
+pic = []
