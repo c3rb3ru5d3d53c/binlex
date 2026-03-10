@@ -1,0 +1,26 @@
+diff --git a/VEX/priv/guest_x86_helpers.c b/VEX/priv/guest_x86_helpers.c
+index c0a4d33ed..31637f64a 100644
+--- a/VEX/priv/guest_x86_helpers.c
++++ b/VEX/priv/guest_x86_helpers.c
+@@ -2903,8 +2903,6 @@ void LibVEX_GuestX86_initialise ( /*OUT*/VexGuestX86State* vex_state )
+    vex_state->guest_IP_AT_SYSCALL = 0;
+ 
+    vex_state->padding1 = 0;
+-   vex_state->padding2 = 0;
+-   vex_state->padding3 = 0;
+ }
+ 
+ 
+diff --git a/VEX/pub/libvex_guest_x86.h b/VEX/pub/libvex_guest_x86.h
+index fabafe113..dd62c1cd6 100644
+--- a/VEX/pub/libvex_guest_x86.h
++++ b/VEX/pub/libvex_guest_x86.h
+@@ -221,8 +221,6 @@ typedef
+ 
+       /* Padding to make it have an 16-aligned size */
+       UInt padding1;
+-      UInt padding2;
+-      UInt padding3;
+    }
+    VexGuestX86State;
+ 

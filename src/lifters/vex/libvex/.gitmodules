@@ -1,0 +1,3 @@
+[submodule "valgrind"]
+	path = libvex-sys/valgrind
+	url = git://sourceware.org/git/valgrind.git

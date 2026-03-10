@@ -10,7 +10,7 @@ authors = ["c3rb3ru5d3d53c"]
 winapi = { version = "0.3.9", features = ["winnt", "fileapi", "ioapiset", "winioctl"] }
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
-libvex = { git = "https://github.com/pwnslinger/libvex-rs.git", branch = "feat/libvex-macos-sonoma-support" }
+libvex = { path = "src/lifters/vex/libvex/libvex-rs" }
 
 [dependencies]
 clap = { version = "4.5.27", features = ["derive"] }

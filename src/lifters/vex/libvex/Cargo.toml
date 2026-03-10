@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "libvex-rs",
+    "libvex-macros",
+    "libvex-sys",
+]
