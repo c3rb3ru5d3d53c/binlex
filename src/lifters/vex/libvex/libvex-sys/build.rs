@@ -93,7 +93,11 @@ fn target_os() -> Result<String> {
     let mut parts = triple.split('-');
     let _arch = parts.next();
     let _vendor = parts.next();
-    Ok(parts.next().ok_or("missing target os")?.to_string())
+    let os = parts.next().ok_or("missing target os")?;
+    Ok(match os {
+        "darwin" => "macos".to_string(),
+        other => other.to_string(),
+    })
 }
 
 fn target_arch_and_platform() -> Result<(String, String)> {
