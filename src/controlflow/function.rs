@@ -20,20 +20,15 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use super::block::BlockJsonDeserializer;
 use crate::Architecture;
 use crate::Config;
 use crate::binary::Binary;
 use crate::controlflow::Attributes;
 use crate::controlflow::Block;
-use crate::controlflow::BlockJson;
 use crate::controlflow::Graph;
 use crate::controlflow::GraphQueue;
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeJson;
-use crate::genetics::ChromosomeSimilarity;
-use crate::genetics::chromosome::ChromosomeSimilarityScore;
-use crate::genetics::chromosome::HomologousChromosome;
 use crate::hashing::MinHash32;
 use crate::hashing::SHA256;
 use crate::hashing::TLSH;
@@ -42,7 +37,6 @@ use serde_json;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::io::Error;
-use std::io::ErrorKind;
 
 /// Represents a JSON-serializable structure containing metadata about a function.
 #[derive(Serialize, Deserialize, Clone)]
@@ -74,8 +68,8 @@ pub struct FunctionJson {
     pub bytes: Option<String>,
     /// A map of functions associated with the function.
     pub functions: BTreeMap<u64, u64>,
-    /// The set of blocks contained within the function.
-    pub blocks: Vec<BlockJson>,
+    /// The set of block addresses contained within the function.
+    pub blocks: Vec<u64>,
     /// The number of instructions in the function.
     pub number_of_instructions: usize,
     /// Number of blocks
@@ -124,16 +118,8 @@ impl FunctionJsonDeserializer {
         self.json.address
     }
 
-    pub fn blocks(&self) -> Vec<BlockJsonDeserializer> {
-        let mut result = Vec::<BlockJsonDeserializer>::new();
-        for block in &self.json.blocks {
-            let block_json_seserializer = BlockJsonDeserializer {
-                json: block.clone(),
-                config: self.config.clone(),
-            };
-            result.push(block_json_seserializer);
-        }
-        result
+    pub fn blocks(&self) -> Vec<u64> {
+        self.json.blocks.clone()
     }
 
     #[allow(dead_code)]
@@ -215,101 +201,6 @@ impl FunctionJsonDeserializer {
     #[allow(dead_code)]
     pub fn contiguous(&self) -> bool {
         self.json.contiguous
-    }
-
-    pub fn compare(
-        &self,
-        rhs: &FunctionJsonDeserializer,
-    ) -> Result<Option<ChromosomeSimilarity>, Error> {
-        if self.contiguous() && rhs.contiguous() {
-            let lhs_chromosome = self.chromosome();
-            let rhs_chromosome = rhs.chromosome();
-            if lhs_chromosome.is_none() && rhs_chromosome.is_none() {
-                return Ok(None);
-            }
-            return Ok(self
-                .chromosome()
-                .unwrap()
-                .compare(&rhs.chromosome().unwrap()));
-        }
-
-        let mut minhashes = Vec::<f64>::new();
-        let mut tls_values = Vec::<f64>::new();
-
-        for lhs_block in self.blocks() {
-            let mut best_minhash: Option<f64> = None;
-            let mut best_tls: Option<f64> = None;
-
-            let results = match lhs_block.compare_many(rhs.blocks()) {
-                Ok(results) => results,
-                Err(error) => {
-                    return Err(Error::new(ErrorKind::InvalidData, format!("{}", error)));
-                }
-            };
-
-            for (_, similarity) in results {
-                let minhash = similarity.score().minhash();
-                let tlsh = similarity.score.minhash();
-                if minhash.is_none() && tlsh.is_none() {
-                    continue;
-                }
-                if let Some(mh) = minhash {
-                    best_minhash = Some(best_minhash.map_or(mh, |prev| prev.max(mh)));
-                }
-
-                if let Some(t) = tlsh {
-                    best_tls = Some(best_tls.map_or(t, |prev| prev.min(t)));
-                }
-            }
-
-            if let Some(mh) = best_minhash {
-                minhashes.push(mh);
-            }
-
-            if let Some(t) = best_tls {
-                tls_values.push(t);
-            }
-        }
-
-        if !minhashes.is_empty() || !tls_values.is_empty() {
-            let minhash_average = {
-                let avg = minhashes.iter().sum::<f64>() / minhashes.len() as f64;
-                if avg > 0.0 { Some(avg) } else { None }
-            };
-
-            let tlsh_average = {
-                let avg = tls_values.iter().sum::<f64>() / tls_values.len() as f64;
-                if avg > 0.0 { Some(avg) } else { None }
-            };
-
-            if minhash_average.is_none() && tlsh_average.is_none() {
-                return Ok(None);
-            }
-
-            return Ok(Some(ChromosomeSimilarity {
-                score: ChromosomeSimilarityScore {
-                    minhash: minhash_average,
-                    tlsh: tlsh_average,
-                },
-                homologues: Vec::<HomologousChromosome>::new(),
-            }));
-        }
-
-        Ok(None)
-    }
-
-    pub fn compare_many(
-        &self,
-        rhs_functions: Vec<FunctionJsonDeserializer>,
-    ) -> Result<BTreeMap<u64, ChromosomeSimilarity>, Error> {
-        rhs_functions
-            .iter()
-            .filter_map(|function| match self.compare(function) {
-                Ok(Some(similarity)) => Some(Ok((function.address(), similarity))),
-                Ok(None) => None,
-                Err(e) => Some(Err(e)),
-            })
-            .collect()
     }
 
     #[allow(dead_code)]
@@ -458,7 +349,7 @@ impl<'function> Function<'function> {
             bytes: self.bytes_to_hex(),
             size: self.size(),
             functions: self.functions(),
-            blocks: self.blocks_json(),
+            blocks: self.block_addresses(),
             number_of_blocks: self.number_of_blocks(),
             number_of_instructions: self.number_of_instructions(),
             cyclomatic_complexity: self.cyclomatic_complexity(),
@@ -471,105 +362,6 @@ impl<'function> Function<'function> {
             architecture: self.architecture().to_string(),
             attributes: None,
         }
-    }
-
-    /// Compares this block to another for similarity.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Option<ChromosomeSimilarity>` representing the similarity between this block to another.
-    pub fn compare(&self, rhs: &Function) -> Result<Option<ChromosomeSimilarity>, Error> {
-        if self.contiguous() && rhs.contiguous() {
-            let lhs_chromosome = self.chromosome();
-            let rhs_chromosome = rhs.chromosome();
-            if lhs_chromosome.is_none() && rhs_chromosome.is_none() {
-                return Ok(None);
-            }
-            return Ok(self
-                .chromosome()
-                .unwrap()
-                .compare(&rhs.chromosome().unwrap()));
-        }
-
-        let mut minhashes = Vec::<f64>::new();
-        let mut tls_values = Vec::<f64>::new();
-
-        for lhs_block in self.blocks() {
-            let mut best_minhash: Option<f64> = None;
-            let mut best_tls: Option<f64> = None;
-
-            let results = match lhs_block.compare_many(rhs.blocks()) {
-                Ok(results) => results,
-                Err(error) => {
-                    return Err(Error::new(ErrorKind::InvalidData, format!("{}", error)));
-                }
-            };
-
-            for (_, similarity) in results {
-                let minhash = similarity.score().minhash();
-                let tlsh = similarity.score.minhash();
-                if minhash.is_none() && tlsh.is_none() {
-                    continue;
-                }
-                if let Some(mh) = minhash {
-                    best_minhash = Some(best_minhash.map_or(mh, |prev| prev.max(mh)));
-                }
-
-                if let Some(t) = tlsh {
-                    best_tls = Some(best_tls.map_or(t, |prev| prev.min(t)));
-                }
-            }
-
-            if let Some(mh) = best_minhash {
-                minhashes.push(mh);
-            }
-
-            if let Some(t) = best_tls {
-                tls_values.push(t);
-            }
-        }
-
-        if !minhashes.is_empty() || !tls_values.is_empty() {
-            let minhash_average = {
-                let avg = minhashes.iter().sum::<f64>() / minhashes.len() as f64;
-                if avg > 0.0 { Some(avg) } else { None }
-            };
-
-            let tlsh_average = {
-                let avg = tls_values.iter().sum::<f64>() / tls_values.len() as f64;
-                if avg > 0.0 { Some(avg) } else { None }
-            };
-
-            if minhash_average.is_none() && tlsh_average.is_none() {
-                return Ok(None);
-            }
-
-            return Ok(Some(ChromosomeSimilarity {
-                score: ChromosomeSimilarityScore {
-                    minhash: minhash_average,
-                    tlsh: tlsh_average,
-                },
-                homologues: Vec::<HomologousChromosome>::new(),
-            }));
-        }
-
-        Ok(None)
-    }
-
-    pub fn compare_many(
-        &self,
-        rhs_functions: Vec<Function>,
-    ) -> Result<BTreeMap<u64, ChromosomeSimilarity>, Error> {
-        let result: Result<BTreeMap<u64, ChromosomeSimilarity>, Error> = rhs_functions
-            .iter()
-            .filter_map(|function| match self.compare(function) {
-                Ok(Some(similarity)) => Some(Ok((function.address(), similarity))),
-                Ok(None) => None,
-                Err(e) => Some(Err(e)),
-            })
-            .collect();
-
-        result
     }
 
     pub fn chromosome_tlsh_ratio(&self) -> f64 {
@@ -770,17 +562,13 @@ impl<'function> Function<'function> {
     ///
     /// # Returns
     ///
-    /// Returns a `Vec<BlockJson>` representing the blocks associated with this function.
-    pub fn blocks_json(&self) -> Vec<BlockJson> {
-        let mut result = Vec::<BlockJson>::new();
+    /// Returns a `Vec<u64>` representing the block addresses associated with this function.
+    pub fn block_addresses(&self) -> Vec<u64> {
+        let mut result = Vec::<u64>::new();
         if !self.cfg.config.functions.blocks.enabled {
             return result;
         }
-        for block_address in self.blocks.keys() {
-            let block = Block::new(*block_address, self.cfg)
-                .expect("failed to get block associated with function");
-            result.push(block.process());
-        }
+        result.extend(self.blocks.keys().copied());
         result
     }
 

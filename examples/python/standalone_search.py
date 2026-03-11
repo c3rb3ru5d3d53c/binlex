@@ -104,12 +104,9 @@ def main(args):
         if size_ratio < size_ratio_threshold:
             continue
         
-        comparison = FunctionJsonDeserializer(bl_func.json(),config).compare(rhs_function) 
-
-        if comparison is None:
-            continue
-
-        minhash_score = comparison.score.minhash()
+        lhs_minhash = json.loads(bl_func.json()).get("minhash")
+        rhs_minhash = json.loads(rhs_function.json()).get("minhash")
+        minhash_score = None if lhs_minhash != rhs_minhash else 1.0
 
         if minhash_score is None or minhash_score < minhash_score_threshold:
             continue

@@ -23,7 +23,6 @@
 use crate::controlflow::graph::Graph;
 use crate::controlflow::Instruction;
 use crate::genetics::Chromosome;
-use crate::genetics::ChromosomeSimilarity;
 use crate::Architecture;
 use crate::Config;
 use binlex::controlflow::Block as InnerBlock;
@@ -33,10 +32,7 @@ use binlex::Architecture as InnerArchitecture;
 use binlex::Binary as InnerBinary;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
-use pyo3::types::PyList;
 use pyo3::Py;
-use rayon::prelude::*;
-use rayon::ThreadPoolBuilder;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -76,80 +72,6 @@ impl BlockJsonDeserializer {
             .map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
         let result = PyBytes::new_bound(py, &bytes);
         Ok(result.into())
-    }
-
-    #[pyo3(text_signature = "($self, rhs)")]
-    pub fn compare(
-        &self,
-        py: Python,
-        rhs: Py<BlockJsonDeserializer>,
-    ) -> Option<ChromosomeSimilarity> {
-        let binding = rhs.borrow(py);
-        let rhs_inner = binding.inner.lock().unwrap();
-        let similarity = self.inner.lock().unwrap().compare(&rhs_inner);
-        similarity.as_ref()?;
-        Some(ChromosomeSimilarity {
-            inner: Arc::new(Mutex::new(similarity.unwrap())),
-        })
-    }
-
-    #[pyo3(text_signature = "($self, rhs_blocks)")]
-    pub fn compare_many(
-        &self,
-        py: Python,
-        rhs_blocks: Py<PyList>,
-    ) -> PyResult<BTreeMap<u64, ChromosomeSimilarity>> {
-        let block = InnerBlockJsonDeserializer::new(
-            self.json()?,
-            self.inner.lock().unwrap().config.clone(),
-        )?;
-
-        let inner_config = self.inner.lock().unwrap().config.clone();
-
-        let mut tasks = Vec::<InnerBlockJsonDeserializer>::new();
-
-        let list = rhs_blocks.bind(py);
-
-        let items: Vec<Py<PyAny>> = list.iter().map(|item| item.into()).collect();
-
-        for item in items {
-            let py_item = item.bind(py);
-            if !py_item.is_instance_of::<BlockJsonDeserializer>() {
-                return Err(pyo3::exceptions::PyTypeError::new_err(
-                    "all items in rhs_blocks must be instances of BlockJsonDeserializer",
-                ));
-            }
-            let rhs: Option<Py<BlockJsonDeserializer>> = py_item.extract().ok();
-            if rhs.is_none() {
-                continue;
-            }
-            let rhs_binding_0 = rhs.unwrap();
-            let rhs_binding_1 = rhs_binding_0.borrow(py);
-            let a = rhs_binding_1.inner.lock().unwrap().clone();
-            tasks.push(a);
-        }
-
-        let pool = ThreadPoolBuilder::new()
-            .num_threads(inner_config.general.threads)
-            .build()
-            .map_err(|err| pyo3::exceptions::PyRuntimeError::new_err(format!("{}", err)))?;
-
-        let results: BTreeMap<u64, ChromosomeSimilarity> = pool.install(|| {
-            tasks
-                .par_iter()
-                .filter_map(|rhs_block| {
-                    block.compare(rhs_block).map(|similarity| {
-                        (
-                            rhs_block.address(),
-                            ChromosomeSimilarity {
-                                inner: Arc::new(Mutex::new(similarity)),
-                            },
-                        )
-                    })
-                })
-                .collect()
-        });
-        Ok(results)
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -308,92 +230,6 @@ impl Block {
             Ok(Architecture {
                 inner: block.architecture(),
             })
-        })
-    }
-
-    #[pyo3(text_signature = "($self, rhs)")]
-    /// Compares this block with another returning the similarity.
-    ///
-    /// # Returns
-    ///
-    /// Returns an `Option<ChromosomeSimilarity>` reprenting the similarity between this block and another.
-    pub fn compare(&self, py: Python, rhs: Py<Block>) -> PyResult<Option<ChromosomeSimilarity>> {
-        self.with_inner_block(py, |block| {
-            let rhs_address = rhs.borrow(py).address;
-            let rhs_binding_0 = rhs.borrow(py);
-            let rhs_binding_1 = rhs_binding_0.cfg.borrow(py);
-            let rhs_cfg = rhs_binding_1.inner.lock().unwrap();
-            let rhs_inner = InnerBlock::new(rhs_address, &rhs_cfg).expect("rhs block is invalid");
-            let inner = block.compare(&rhs_inner);
-            if inner.is_none() {
-                return Ok(None);
-            }
-            let similarity = ChromosomeSimilarity {
-                inner: Arc::new(Mutex::new(inner.unwrap())),
-            };
-            Ok(Some(similarity))
-        })
-    }
-
-    #[pyo3(text_signature = "($self, rhs_blocks)")]
-    /// Compares this block with many othe rblocks returning the similarity.
-    ///
-    /// # Returns
-    ///
-    /// Returns an `PyResult<BTreeMap<u64, ChromosomeSimilarity>>` reprenting the similarity between this block and many others.
-    pub fn compare_many(
-        &self,
-        py: Python,
-        rhs_blocks: Py<PyList>,
-    ) -> PyResult<BTreeMap<u64, ChromosomeSimilarity>> {
-        self.with_inner_block(py, |block| {
-            let mut tasks = Vec::<(u64, Arc<Mutex<InnerGraph>>)>::new();
-
-            let list = rhs_blocks.bind(py);
-
-            let items: Vec<Py<PyAny>> = list.iter().map(|item| item.into()).collect();
-
-            for item in items {
-                let py_item = item.bind(py);
-                if !py_item.is_instance_of::<Block>() {
-                    return Err(pyo3::exceptions::PyTypeError::new_err(
-                        "all items in rhs_blocks must be instances of Block",
-                    ));
-                }
-                let rhs: Option<Py<Block>> = py_item.extract().ok();
-                if rhs.is_none() {
-                    continue;
-                }
-                let rhs_binding_0 = rhs.unwrap();
-                let rhs_binding_1 = rhs_binding_0.borrow(py);
-                let address = rhs_binding_1.address();
-                let rhs_cfg = Arc::clone(&rhs_binding_1.cfg.borrow(py).inner);
-                tasks.push((address, rhs_cfg));
-            }
-
-            let pool = ThreadPoolBuilder::new()
-                .num_threads(block.cfg.config.general.threads)
-                .build()
-                .map_err(|err| pyo3::exceptions::PyRuntimeError::new_err(format!("{}", err)))?;
-
-            let results: BTreeMap<u64, ChromosomeSimilarity> = pool.install(|| {
-                tasks
-                    .par_iter()
-                    .filter_map(|(address, inner_cfg)| {
-                        let c = inner_cfg.lock().unwrap();
-                        let rhs_block = InnerBlock::new(*address, &c).ok()?;
-                        block.compare(&rhs_block).map(|similarity| {
-                            (
-                                *address,
-                                ChromosomeSimilarity {
-                                    inner: Arc::new(Mutex::new(similarity)),
-                                },
-                            )
-                        })
-                    })
-                    .collect()
-            });
-            Ok(results)
         })
     }
 

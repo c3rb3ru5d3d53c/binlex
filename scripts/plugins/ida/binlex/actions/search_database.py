@@ -31,6 +31,18 @@ from lib import IDA
 from datetime import datetime
 from gui import OkayCancelDialog
 
+def compare_minhash(lhs_minhash: str | None, rhs_minhash: str | None) -> float | None:
+    if lhs_minhash is None or rhs_minhash is None:
+        return None
+    if len(lhs_minhash) != len(rhs_minhash) or len(lhs_minhash) % 8 != 0:
+        return None
+    lhs_chunks = [lhs_minhash[i:i + 8] for i in range(0, len(lhs_minhash), 8)]
+    rhs_chunks = [rhs_minhash[i:i + 8] for i in range(0, len(rhs_minhash), 8)]
+    if not lhs_chunks:
+        return None
+    matches = sum(1 for lhs, rhs in zip(lhs_chunks, rhs_chunks) if lhs == rhs)
+    return matches / len(lhs_chunks)
+
 def process(
     cfg,
     function_addresses,
@@ -95,11 +107,10 @@ def process(
             if size_ratio < size_ratio_threshold:
                 continue
 
-            comparison = lhs_function.compare(rhs_function)
-            if comparison is None:
-                continue
-
-            minhash_score = comparison.score.minhash()
+            minhash_score = compare_minhash(
+                json.loads(lhs_function.json()).get('minhash'),
+                result_data.get('minhash'),
+            )
             if minhash_score is None or minhash_score < minhash_score_threshold:
                 continue
 

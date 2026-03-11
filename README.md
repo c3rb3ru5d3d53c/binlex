@@ -545,9 +545,7 @@ rule example {
 
 For even better results if you exported the **genomes** using the **binlex** IDA plugin or by other means you can filter for function starting prefixes like `mw::`, for `malware`, which is pretty common.
 
-```bash
-cat dump.json | jq -r 'select(.type == "function" and .size > 32 and (.attributes[] | .type == "symbol" and (.name | startswith("mw::")))) | .blocks[] | select(.size > 32) | .chromosome.pattern' | blyara -n example
-```
+Function JSON now stores `blocks` as a list of block addresses rather than embedded block objects. If you need block metadata, consume the standalone block entries from the same JSON stream and join them by address.
 
 ### Using Ghidra with Binlex
 
@@ -1156,28 +1154,7 @@ for function in cfg.functions():
 
 #### Comparing Function Similarity
 
-One of the most powerful tools you can use in **binlex** is to compare functions, blocks, and instructions using similarity hashing.
-
-To perform these comparisons is as simple as calling the `compare` method.
-
-```python
-for lhs in lhs_cfg.functions():
-  for rhs in rhs_cfg.functions():
-    similarity = lhs.compare(rhs)
-    similarity.print()
-
-for lhs in lhs_cfg.blocks():
-  for rhs in rhs_cfg.blocks():
-    similarity = lhs.compare(rhs)
-    similarity.print()
-
-for lhs in lhs_cfg.instructions():
-  for rhs in rhs_cfg.instructions():
-    similarity = lhs.compare(rhs)
-    similarity.print()
-```
-
-Any supported similarity hashing algorithms will be calcualted if they are enabled with your configuration.
+`binlex` now emits hashes and related metadata, but does not provide built-in comparison APIs. Consumers are expected to compare emitted `minhash`, `tlsh`, `sha256`, or other fields themselves according to their own scoring logic.
 
 Although it can be challenging, **binlex** supports performing similarity analysis on non-contiguous functions using its own algorithm to find the best similarity matches.
 

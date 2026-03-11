@@ -27,7 +27,6 @@ use crate::controlflow::Attributes;
 use crate::controlflow::Graph;
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeJson;
-use crate::genetics::ChromosomeSimilarity;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Value;
@@ -196,15 +195,6 @@ impl Instruction {
             result.insert(item);
         }
         result
-    }
-
-    /// Compares this instruction to another for similarity.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Option<ChromosomeSimilarity>` representing the similarity between this instruction to another.
-    pub fn compare(&self, rhs: &Instruction) -> Option<ChromosomeSimilarity> {
-        self.chromosome().compare(&rhs.chromosome())
     }
 
     /// Retrieves the address of the next sequential instruction.
