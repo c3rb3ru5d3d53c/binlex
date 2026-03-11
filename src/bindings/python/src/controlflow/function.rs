@@ -21,20 +21,16 @@
 // SOFTWARE.
 
 use crate::controlflow::Block;
-use crate::controlflow::BlockJsonDeserializer;
 use crate::controlflow::Graph;
 use crate::genetics::Chromosome;
-use crate::genetics::ChromosomeSimilarity;
 use crate::Architecture;
 use crate::Config;
-use binlex::controlflow::BlockJsonDeserializer as InnerBlockJsonDeserializer;
 use binlex::controlflow::Function as InnerFunction;
 use binlex::controlflow::FunctionJsonDeserializer as InnerFunctionJsonDeserializer;
 use binlex::controlflow::Graph as InnerGraph;
 use binlex::Binary as InnerBinary;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
-use pyo3::types::PyList;
 use pyo3::Py;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -58,20 +54,8 @@ impl FunctionJsonDeserializer {
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn blocks(&self) -> Vec<BlockJsonDeserializer> {
-        let mut result = Vec::<BlockJsonDeserializer>::new();
-        let blocks = self.inner.lock().unwrap().json.blocks.clone();
-        let inner_config = self.inner.lock().unwrap().config.clone();
-        for block_json in blocks {
-            let block_json_deserializer = BlockJsonDeserializer {
-                inner: Arc::new(Mutex::new(InnerBlockJsonDeserializer {
-                    json: block_json,
-                    config: inner_config.clone(),
-                })),
-            };
-            result.push(block_json_deserializer)
-        }
-        result
+    pub fn blocks(&self) -> Vec<u64> {
+        self.inner.lock().unwrap().blocks()
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -111,79 +95,6 @@ impl FunctionJsonDeserializer {
             .map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
         let result = PyBytes::new_bound(py, &bytes);
         Ok(Some(result.into()))
-    }
-
-    #[pyo3(text_signature = "($self, rhs)")]
-    pub fn compare(
-        &self,
-        py: Python,
-        rhs: Py<FunctionJsonDeserializer>,
-    ) -> PyResult<Option<ChromosomeSimilarity>> {
-        let binding = rhs.borrow(py);
-        let rhs_inner = binding.inner.lock().unwrap();
-        let similarity = self.inner.lock().unwrap().compare(&rhs_inner)?;
-        if similarity.is_none() {
-            return Ok(None);
-        }
-        Ok(Some(ChromosomeSimilarity {
-            inner: Arc::new(Mutex::new(similarity.unwrap())),
-        }))
-    }
-
-    #[pyo3(text_signature = "($self, rhs_functions)")]
-    pub fn compare_many(
-        &self,
-        py: Python,
-        rhs_functions: Py<PyList>,
-    ) -> PyResult<BTreeMap<u64, ChromosomeSimilarity>> {
-        // Initialize the function deserializer
-        let function = InnerFunctionJsonDeserializer::new(
-            self.json()?,
-            self.inner.lock().unwrap().config.clone(),
-        )?;
-
-        // Prepare a vector to hold tasks (deserializers)
-        let mut tasks = Vec::<InnerFunctionJsonDeserializer>::new();
-
-        // Bind the Python list
-        let list = rhs_functions.bind(py);
-
-        // Collect items from the Python list
-        let items: Vec<Py<PyAny>> = list.iter().map(|item| item.into()).collect();
-
-        // Iterate over each item to deserialize and collect tasks
-        for item in items {
-            let py_item = item.bind(py);
-            if !py_item.is_instance_of::<FunctionJsonDeserializer>() {
-                return Err(pyo3::exceptions::PyTypeError::new_err(
-                    "All items in rhs_functions must be instances of FunctionJsonDeserializer",
-                ));
-            }
-
-            // Attempt to extract the deserializer
-            let rhs: Option<Py<FunctionJsonDeserializer>> = py_item.extract().ok();
-            if let Some(rhs_binding) = rhs {
-                let rhs_borrowed = rhs_binding.borrow(py);
-                let task: InnerFunctionJsonDeserializer =
-                    rhs_borrowed.inner.lock().unwrap().clone();
-                tasks.push(task);
-            }
-        }
-
-        // Perform the comparisons sequentially
-        let mut results = BTreeMap::new();
-        for rhs_function in tasks.iter() {
-            if let Ok(Some(similarity)) = function.compare(rhs_function) {
-                results.insert(
-                    rhs_function.address(),
-                    ChromosomeSimilarity {
-                        inner: Arc::new(Mutex::new(similarity)),
-                    },
-                );
-            }
-        }
-
-        Ok(results)
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -376,102 +287,6 @@ impl Function {
             }
             let chromosome = Chromosome::new(py, pattern.unwrap(), config).ok();
             Ok(chromosome)
-        })
-    }
-
-    #[pyo3(text_signature = "($self, rhs)")]
-    /// Compares this block with another returning the similarity.
-    ///
-    /// # Returns
-    ///
-    /// Returns an `Option<ChromosomeSimilarity>` reprenting the similarity between this block and another.
-    pub fn compare(&self, py: Python, rhs: Py<Function>) -> PyResult<Option<ChromosomeSimilarity>> {
-        self.with_inner_function(py, |function| {
-            let rhs_address = rhs.borrow(py).address;
-            let rhs_binding_0 = rhs.borrow(py);
-            let rhs_binding_1 = rhs_binding_0.cfg.borrow(py);
-            let rhs_cfg = rhs_binding_1.inner.lock().unwrap();
-            let rhs_inner = InnerFunction::new(rhs_address, &rhs_cfg).ok();
-            if rhs_inner.is_none() {
-                return Ok(None);
-            }
-            let inner = function.compare(&rhs_inner.unwrap())?;
-            if inner.is_none() {
-                return Ok(None);
-            }
-            let similarity = ChromosomeSimilarity {
-                inner: Arc::new(Mutex::new(inner.unwrap())),
-            };
-            Ok(Some(similarity))
-        })
-    }
-
-    #[pyo3(text_signature = "($self, rhs_functions)")]
-    pub fn compare_many(
-        &self,
-        py: Python,
-        rhs_functions: Py<PyList>,
-    ) -> PyResult<BTreeMap<u64, ChromosomeSimilarity>> {
-        self.with_inner_function(py, |function| {
-            let mut tasks = Vec::<(u64, Arc<Mutex<InnerGraph>>)>::new();
-
-            // Bind the PyList to access its items
-            let list = rhs_functions.bind(py);
-
-            // Collect items into a Rust Vec for processing
-            let items: Vec<Py<PyAny>> = list.iter().map(|item| item.into()).collect();
-
-            // Iterate over each item to validate and collect necessary data
-            for item in items {
-                let py_item = item.bind(py);
-
-                // Ensure the item is an instance of `Function`
-                if !py_item.is_instance_of::<Function>() {
-                    return Err(pyo3::exceptions::PyTypeError::new_err(
-                        "all items in rhs_functions must be instances of Function",
-                    ));
-                }
-
-                // Attempt to extract the `Function` instance
-                let rhs: Option<Py<Function>> = py_item.extract().ok();
-                if let Some(rhs_binding) = rhs {
-                    let rhs_borrowed = rhs_binding.borrow(py);
-                    let address = rhs_borrowed.address();
-                    let rhs_cfg = Arc::clone(&rhs_borrowed.cfg.borrow(py).inner);
-                    tasks.push((address, rhs_cfg));
-                }
-            }
-
-            // Initialize the results map
-            let mut results: BTreeMap<u64, ChromosomeSimilarity> = BTreeMap::new();
-
-            // Sequentially process each task
-            for (address, inner_cfg) in tasks.iter() {
-                // Lock the inner configuration
-                let c = inner_cfg.lock().map_err(|e| {
-                    pyo3::exceptions::PyRuntimeError::new_err(format!(
-                        "Failed to lock InnerGraph: {}",
-                        e
-                    ))
-                })?;
-
-                // Create a new InnerFunction instance
-                if let Ok(rhs_function) = InnerFunction::new(*address, &c) {
-                    // Compare the functions to get similarity
-                    if let Ok(Some(similarity)) = function.compare(&rhs_function) {
-                        // Insert the similarity result into the map
-                        results.insert(
-                            *address,
-                            ChromosomeSimilarity {
-                                inner: Arc::new(Mutex::new(similarity)),
-                            },
-                        );
-                    }
-                }
-            }
-
-            // Return the collected results
-            Ok(results)
         })
     }
 

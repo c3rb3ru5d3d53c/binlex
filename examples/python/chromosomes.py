@@ -180,6 +180,7 @@ config.chromosomes.homologues.maximum = 2
 lhs = Chromosome('deadbeef', config)
 rhs = Chromosome('fedeadbeeffe', config)
 
-delta = lhs.compare(rhs)
-
-print(json.dumps(json.loads(delta.json())))
+print(json.dumps({
+    "lhs": json.loads(lhs.json()),
+    "rhs": json.loads(rhs.json()),
+}))

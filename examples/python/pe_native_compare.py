@@ -247,7 +247,6 @@ rhs_disassembler.disassemble_controlflow(rhs_pe.entrypoint_virtual_addresses(), 
 # rhs_blocks = rhs_cfg.blocks()
 # lhs_block = lhs_blocks[0]
 
-# results = lhs_block.compare_many(rhs_blocks)
 
 # for k, v in results.items():
 #     v = json.loads(v.json())
@@ -263,7 +262,7 @@ print(f'rhs_functions: {len(rhs_functions)}')
 
 for lhs_function in lhs_functions:
     print(f'lhs_function: {lhs_function.address()}')
-    lhs_function.compare_many(rhs_functions)
+    print('function comparison API removed; compare emitted hashes in consumer code instead')
 
 # lhs_filtered = []
 # rhs_filtered = []
@@ -283,10 +282,7 @@ for lhs_function in lhs_functions:
 # for lhs in lhs_filtered:
 #   for rhs in rhs_filtered:
 #     if abs(lhs.size() - rhs.size()) > 32: continue
-#     similarity = lhs.compare(rhs)
 #     if similarity is None: continue
 #     if similarity.minhash() is None: continue
 #     if similarity.minhash() < 0.25: continue
 #     print(f'lhs[{hex(lhs.address)}] vs. rhs[{hex(rhs.address)}] -> similarity: {similarity.minhash()}')
-
-

@@ -21,6 +21,7 @@
 # SOFTWARE.
 
 import idaapi
+import tlsh
 from PyQt5.QtWidgets import QDialog
 from lib import IDA
 from binlex.hashing import TLSH
@@ -37,7 +38,7 @@ def process(rhs_tlsh, num_bytes, threshold, addresses, config) -> list:
         lhs_tlsh = TLSH(data).hexdigest(50)
         if lhs_tlsh is None: continue
 
-        similarity = TLSH.compare(lhs_tlsh, rhs_tlsh)
+        similarity = tlsh.diff(lhs_tlsh, rhs_tlsh)
         if similarity is not None and similarity < threshold:
             table.append([
                 str(hex(addr)),

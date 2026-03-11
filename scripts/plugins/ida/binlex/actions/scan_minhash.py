@@ -29,6 +29,16 @@ from gui import GradientTable
 from gui import ScanMinHashInputDialog
 from lib import Worker
 
+def compare_minhash(lhs_minhash: str, rhs_minhash: str) -> float:
+    if len(lhs_minhash) != len(rhs_minhash) or len(lhs_minhash) % 8 != 0:
+        return 0.0
+    lhs_chunks = [lhs_minhash[i:i + 8] for i in range(0, len(lhs_minhash), 8)]
+    rhs_chunks = [rhs_minhash[i:i + 8] for i in range(0, len(rhs_minhash), 8)]
+    if not lhs_chunks:
+        return 0.0
+    matches = sum(1 for lhs, rhs in zip(lhs_chunks, rhs_chunks) if lhs == rhs)
+    return matches / len(lhs_chunks)
+
 def process(rhs_minhash, num_bytes, threshold, addresses, config):
     print(f'[-] processing minhash scan...')
     table = []
@@ -40,7 +50,7 @@ def process(rhs_minhash, num_bytes, threshold, addresses, config):
             config.instructions.hashing.minhash.shingle_size,
             config.instructions.hashing.minhash.seed
         ).hexdigest()
-        similarity = MinHash32.compare(lhs_minhash, rhs_minhash)
+        similarity = compare_minhash(lhs_minhash, rhs_minhash)
         if similarity is not None and similarity > threshold:
             row = [
                 str(hex(addr)),

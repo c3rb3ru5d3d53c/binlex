@@ -29,7 +29,6 @@ pub mod global;
 pub mod hashing;
 pub mod imaging;
 pub mod io;
-pub mod lcs;
 pub mod lifters;
 pub mod types;
 

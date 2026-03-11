@@ -542,8 +542,9 @@ if __name__ == "__main__":
     for similarity, function in bl.query_vector(query_vector=lhs_fv.vector, table_name='functions', top_k=3):
         if similarity < 0.75: continue
         rhs_fn = FunctionJsonDeserializer(function, config)
-        delta = lhs_fn.compare(rhs_fn)
-        minhash_score = delta.score.minhash()
+        lhs_data = json.loads(lhs_fn.json())
+        rhs_data = json.loads(rhs_fn.json())
+        minhash_score = 1.0 if lhs_data.get('minhash') == rhs_data.get('minhash') else None
         if minhash_score is None: continue
         combined = (similarity + minhash_score) / 2
         print('---')

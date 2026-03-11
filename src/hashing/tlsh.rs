@@ -52,17 +52,6 @@ impl<'tlsh> TLSH<'tlsh> {
         }
     }
 
-    /// Compares two hexdigests and get the simialrity score between 0 and 1 where 0 is not similar and 1 is the same.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `Result<u32, Error>` where the `u32` is the similarity score and `Error` if compare fails.
-    pub fn compare(lhs: String, rhs: String) -> Option<f64> {
-        tlsh::compare(&lhs, &rhs)
-            .map(|value| value as f64) // Convert the u32 to f64
-            .ok()
-    }
-
     /// Computes the TLSH hash of the byte slice if it meets the minimum size requirement.
     ///
     /// # Returns
