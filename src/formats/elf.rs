@@ -20,16 +20,16 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use crate::Architecture;
+use crate::Config;
 use crate::controlflow::Symbol as BlSymbol;
 use crate::formats::File;
 use crate::types::MemoryMappedFile;
-use crate::Architecture;
-use crate::Config;
+use lief::Binary;
 use lief::elf::section::Flags;
 use lief::elf::segment::Type as SegmentType;
 use lief::elf::symbol::Type as ElfSymbolType;
 use lief::generic::{Section, Symbol};
-use lief::Binary;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::io::{Cursor, Error, ErrorKind};

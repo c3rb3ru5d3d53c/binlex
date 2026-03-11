@@ -20,18 +20,18 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::process;
+use binlex::AUTHOR;
+use binlex::Config;
+use binlex::VERSION;
+use binlex::controlflow::SymbolIoJson;
+use binlex::formats::ELF;
+use binlex::io::Stdin;
+use binlex::io::Stdout;
+use binlex::types::LZ4String;
+use clap::Parser;
 use std::fs::File;
 use std::io::Write;
-use binlex::io::Stdout;
-use clap::Parser;
-use binlex::AUTHOR;
-use binlex::VERSION;
-use binlex::formats::ELF;
-use binlex::Config;
-use binlex::controlflow::SymbolIoJson;
-use binlex::io::Stdin;
-use binlex::types::LZ4String;
+use std::process;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -59,7 +59,7 @@ fn main() -> pdb::Result<()> {
 
     let mut symbols = Vec::<LZ4String>::new();
     for (_, symbol) in elf.symbols() {
-        let symbol = SymbolIoJson{
+        let symbol = SymbolIoJson {
             type_: "symbol".to_string(),
             symbol_type: "function".to_string(),
             name: symbol.name,

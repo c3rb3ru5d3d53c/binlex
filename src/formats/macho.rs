@@ -20,16 +20,16 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use crate::Architecture;
+use crate::Config;
 use crate::controlflow::Symbol as BlSymbol;
 use crate::formats::File;
 use crate::types::MemoryMappedFile;
-use crate::Architecture;
-use crate::Config;
+use lief::Binary;
 use lief::generic::{Section, Symbol};
 use lief::macho::commands::{Command, LoadCommandTypes};
 use lief::macho::header::CpuType as MachoCpuType;
 use lief::macho::section::Flags as SectionFlags;
-use lief::Binary;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Cursor, Error, ErrorKind};
 use std::path::PathBuf;

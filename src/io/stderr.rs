@@ -20,10 +20,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use crate::Config;
+use std::fmt::Display;
 use std::io::ErrorKind;
 use std::io::{self, Write};
-use std::fmt::Display;
-use crate::Config;
 
 /// Represents a wrapper for standard error operations.
 pub struct Stderr;

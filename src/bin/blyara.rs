@@ -20,14 +20,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use binlex::AUTHOR;
+use binlex::VERSION;
+use binlex::io::Stdout;
 use clap::Parser;
 use serde_json::{Map, Value};
 use std::fs::File;
 use std::io::{self, BufRead, Write};
 use std::process;
-use binlex::AUTHOR;
-use binlex::VERSION;
-use binlex::io::Stdout;
 
 #[derive(Parser, Debug)]
 #[command(

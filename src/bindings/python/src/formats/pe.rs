@@ -20,16 +20,16 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use crate::types::memorymappedfile::MemoryMappedFile;
+use crate::Architecture;
+use crate::Config;
+use binlex::formats::pe::PE as InnerPe;
 use pyo3::prelude::*;
-use std::io::Error;
+use pyo3::types::PyType;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
-use binlex::formats::pe::PE as InnerPe;
-use crate::Architecture;
-use crate::types::memorymappedfile::MemoryMappedFile;
-use pyo3::types::PyType;
-use crate::Config;
+use std::io::Error;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -45,17 +45,24 @@ impl PE {
     pub fn new(py: Python, path: String, config: Py<Config>) -> Result<Self, Error> {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
         let inner = InnerPe::new(path, inner_config)?;
-        Ok(Self{
+        Ok(Self {
             inner: Arc::new(Mutex::new(inner)),
         })
     }
 
     #[classmethod]
     #[pyo3(text_signature = "(bytes, config)")]
-    pub fn from_bytes(_: &Bound<'_, PyType>, py: Python, bytes: Vec<u8>, config: Py<Config>) -> PyResult<Self> {
+    pub fn from_bytes(
+        _: &Bound<'_, PyType>,
+        py: Python,
+        bytes: Vec<u8>,
+        config: Py<Config>,
+    ) -> PyResult<Self> {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
         let inner = InnerPe::from_bytes(bytes, inner_config)?;
-        Ok(Self { inner: Arc::new(Mutex::new(inner)) })
+        Ok(Self {
+            inner: Arc::new(Mutex::new(inner)),
+        })
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -65,22 +72,37 @@ impl PE {
 
     #[pyo3(text_signature = "($self, virtual_address)")]
     pub fn virtual_address_to_relative_virtual_address(&self, virtual_address: u64) -> u64 {
-        self.inner.lock().unwrap().virtual_address_to_relative_virtual_address(virtual_address)
+        self.inner
+            .lock()
+            .unwrap()
+            .virtual_address_to_relative_virtual_address(virtual_address)
     }
 
     #[pyo3(text_signature = "($self, virtual_address)")]
     pub fn virtual_address_to_file_offset(&self, virtual_address: u64) -> Option<u64> {
-        self.inner.lock().unwrap().virtual_address_to_file_offset(virtual_address)
+        self.inner
+            .lock()
+            .unwrap()
+            .virtual_address_to_file_offset(virtual_address)
     }
 
     #[pyo3(text_signature = "($self, relative_virtual_address)")]
-    pub fn relative_virtual_address_to_virtual_address(&self, relative_virtual_address: u64) -> u64 {
-        self.inner.lock().unwrap().relative_virtual_address_to_virtual_address(relative_virtual_address)
+    pub fn relative_virtual_address_to_virtual_address(
+        &self,
+        relative_virtual_address: u64,
+    ) -> u64 {
+        self.inner
+            .lock()
+            .unwrap()
+            .relative_virtual_address_to_virtual_address(relative_virtual_address)
     }
 
     #[pyo3(text_signature = "($self, offset)")]
     pub fn file_offset_to_virtual_address(&self, file_offset: u64) -> Option<u64> {
-        self.inner.lock().unwrap().file_offset_to_virtual_address(file_offset)
+        self.inner
+            .lock()
+            .unwrap()
+            .file_offset_to_virtual_address(file_offset)
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -90,17 +112,26 @@ impl PE {
 
     #[pyo3(text_signature = "($self)")]
     pub fn dotnet_metadata_token_virtual_addresses(&self) -> BTreeMap<u64, u64> {
-        self.inner.lock().unwrap().dotnet_metadata_token_virtual_addresses()
+        self.inner
+            .lock()
+            .unwrap()
+            .dotnet_metadata_token_virtual_addresses()
     }
 
     #[pyo3(text_signature = "($self)")]
     pub fn dotnet_executable_virtual_address_ranges(&self) -> BTreeMap<u64, u64> {
-        self.inner.lock().unwrap().dotnet_executable_virtual_address_ranges()
+        self.inner
+            .lock()
+            .unwrap()
+            .dotnet_executable_virtual_address_ranges()
     }
 
     #[pyo3(text_signature = "($self)")]
     pub fn executable_virtual_address_ranges(&self) -> BTreeMap<u64, u64> {
-        self.inner.lock().unwrap().executable_virtual_address_ranges()
+        self.inner
+            .lock()
+            .unwrap()
+            .executable_virtual_address_ranges()
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -115,7 +146,10 @@ impl PE {
 
     #[pyo3(text_signature = "($self)")]
     pub fn dotnet_entrypoint_virtual_addresses(&self) -> BTreeSet<u64> {
-        self.inner.lock().unwrap().dotnet_entrypoint_virtual_addresses()
+        self.inner
+            .lock()
+            .unwrap()
+            .dotnet_entrypoint_virtual_addresses()
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -124,7 +158,7 @@ impl PE {
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn entrypoint_virtual_address(&self) -> u64  {
+    pub fn entrypoint_virtual_address(&self) -> u64 {
         self.inner.lock().unwrap().entrypoint_virtual_address()
     }
 
@@ -135,10 +169,13 @@ impl PE {
 
     #[pyo3(text_signature = "($self)")]
     pub fn image(&self, py: Python<'_>) -> PyResult<Py<MemoryMappedFile>> {
-        let result = self.inner.lock().unwrap().image().map_err(|e| {
-            pyo3::exceptions::PyIOError::new_err(e.to_string())
-        })?;
-        let py_memory_mapped_file = Py::new(py, MemoryMappedFile { inner: result})?;
+        let result = self
+            .inner
+            .lock()
+            .unwrap()
+            .image()
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        let py_memory_mapped_file = Py::new(py, MemoryMappedFile { inner: result })?;
         Ok(py_memory_mapped_file)
     }
 
@@ -148,7 +185,11 @@ impl PE {
     }
 
     #[staticmethod]
-    pub fn align_section_virtual_address(value: u64, section_alignment: u64, file_alignment: u64) -> u64 {
+    pub fn align_section_virtual_address(
+        value: u64,
+        section_alignment: u64,
+        file_alignment: u64,
+    ) -> u64 {
         InnerPe::align_section_virtual_address(value, section_alignment, file_alignment)
     }
 
@@ -174,7 +215,11 @@ impl PE {
 
     #[pyo3(text_signature = "($self)")]
     pub fn file_json(&self) -> PyResult<String> {
-        self.inner.lock().unwrap().file_json().map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+        self.inner
+            .lock()
+            .unwrap()
+            .file_json()
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -197,7 +242,7 @@ impl PE {
 #[pyo3(name = "pe")]
 pub fn pe_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PE>()?;
-     py.import_bound("sys")?
+    py.import_bound("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.formats.pe", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.formats.pe")?;

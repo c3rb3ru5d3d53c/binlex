@@ -1,10 +1,10 @@
 #![cfg(not(target_os = "windows"))]
 
-use binlex::lifters::Vex;
-use binlex::controlflow::{Instruction, Block, Function};
-use binlex::global::{Architecture, Config};
 use binlex::controlflow::graph::Graph;
-use std::collections::{BTreeSet, BTreeMap};
+use binlex::controlflow::{Block, Function, Instruction};
+use binlex::global::{Architecture, Config};
+use binlex::lifters::Vex;
+use std::collections::{BTreeMap, BTreeSet};
 
 fn test_graph() -> Graph {
     Graph::new(Architecture::AMD64, Config::default())

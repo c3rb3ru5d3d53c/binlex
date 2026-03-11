@@ -21,22 +21,22 @@
 // SOFTWARE.
 
 use super::block::BlockJsonDeserializer;
+use crate::Architecture;
+use crate::Config;
 use crate::binary::Binary;
 use crate::controlflow::Attributes;
 use crate::controlflow::Block;
 use crate::controlflow::BlockJson;
 use crate::controlflow::Graph;
 use crate::controlflow::GraphQueue;
-use crate::genetics::chromosome::ChromosomeSimilarityScore;
-use crate::genetics::chromosome::HomologousChromosome;
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeJson;
 use crate::genetics::ChromosomeSimilarity;
+use crate::genetics::chromosome::ChromosomeSimilarityScore;
+use crate::genetics::chromosome::HomologousChromosome;
 use crate::hashing::MinHash32;
 use crate::hashing::SHA256;
 use crate::hashing::TLSH;
-use crate::Architecture;
-use crate::Config;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Value;
@@ -274,20 +274,12 @@ impl FunctionJsonDeserializer {
         if !minhashes.is_empty() || !tls_values.is_empty() {
             let minhash_average = {
                 let avg = minhashes.iter().sum::<f64>() / minhashes.len() as f64;
-                if avg > 0.0 {
-                    Some(avg)
-                } else {
-                    None
-                }
+                if avg > 0.0 { Some(avg) } else { None }
             };
 
             let tlsh_average = {
                 let avg = tls_values.iter().sum::<f64>() / tls_values.len() as f64;
-                if avg > 0.0 {
-                    Some(avg)
-                } else {
-                    None
-                }
+                if avg > 0.0 { Some(avg) } else { None }
             };
 
             if minhash_average.is_none() && tlsh_average.is_none() {
@@ -540,20 +532,12 @@ impl<'function> Function<'function> {
         if !minhashes.is_empty() || !tls_values.is_empty() {
             let minhash_average = {
                 let avg = minhashes.iter().sum::<f64>() / minhashes.len() as f64;
-                if avg > 0.0 {
-                    Some(avg)
-                } else {
-                    None
-                }
+                if avg > 0.0 { Some(avg) } else { None }
             };
 
             let tlsh_average = {
                 let avg = tls_values.iter().sum::<f64>() / tls_values.len() as f64;
-                if avg > 0.0 {
-                    Some(avg)
-                } else {
-                    None
-                }
+                if avg > 0.0 { Some(avg) } else { None }
             };
 
             if minhash_average.is_none() && tlsh_average.is_none() {

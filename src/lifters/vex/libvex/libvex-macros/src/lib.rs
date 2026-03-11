@@ -1,10 +1,9 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{braced, parenthesized, parse_macro_input, token, Ident, LitInt, Result, Token};
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::token::Brace;
-
+use syn::{braced, parenthesized, parse_macro_input, token, Ident, LitInt, Result, Token};
 
 struct ImportArgs {
     arch: Ident,
@@ -24,7 +23,6 @@ impl Parse for ImportArgs {
         })
     }
 }
-
 
 #[proc_macro]
 pub fn import_offsets(item: TokenStream) -> TokenStream {
@@ -46,7 +44,8 @@ pub fn import_offsets(item: TokenStream) -> TokenStream {
         pub mod offset {
             #output
         }
-    ).into()
+    )
+    .into()
 }
 
 #[proc_macro]
@@ -65,7 +64,8 @@ pub fn import_hwcaps(item: TokenStream) -> TokenStream {
         pub mod hwcap {
             #output
         }
-    ).into()
+    )
+    .into()
 }
 
 struct TypeEnv {
@@ -78,9 +78,7 @@ impl Parse for TypeEnv {
         while input.peek(Ident) && input.peek2(Token![:]) {
             tmps.push((input.parse()?, input.parse()?, input.parse()?));
         }
-        Ok(TypeEnv {
-            tmps,
-        })
+        Ok(TypeEnv { tmps })
     }
 }
 
@@ -233,7 +231,7 @@ impl Parse for ExprLoad {
             _colon: input.parse()?,
             ty: input.parse()?,
             _paren: parenthesized!(addr in input),
-            addr: addr.parse()?
+            addr: addr.parse()?,
         })
     }
 }
@@ -292,7 +290,7 @@ impl quote::ToTokens for ExprOp {
         }
     }
 }
-        
+
 impl quote::ToTokens for ExprLoad {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let (end, addr) = (&self.end, &self.addr);
@@ -300,7 +298,7 @@ impl quote::ToTokens for ExprLoad {
         tokens.extend(quote!(Expr::load(#end, Type::#ty, #addr)))
     }
 }
-        
+
 impl quote::ToTokens for ExprConst {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         tokens.extend(match self.ty.to_string().as_str() {
@@ -308,7 +306,7 @@ impl quote::ToTokens for ExprConst {
                 Ok(0) => quote!(Expr::const_(Const::u1(false))),
                 Ok(1) => quote!(Expr::const_(Const::u1(true))),
                 _ => quote!(compile_error!("Const of type I1 must be 0 or 1")),
-            }
+            },
             "I8" => {
                 let co = &self.co;
                 quote!(Expr::const_(Const::u8(#co)))
@@ -329,7 +327,7 @@ impl quote::ToTokens for ExprConst {
         });
     }
 }
-        
+
 enum Stmt {
     NoOp,
     IMark(StmtIMark),
@@ -366,7 +364,7 @@ struct StmtWrTmp {
 struct StmtPut {
     _put: kw::PUT,
     _paren: token::Paren,
-    offset: LitInt,    
+    offset: LitInt,
     _eq: Token![=],
     data: Expr,
 }
@@ -418,13 +416,12 @@ impl Parse for StmtIMark {
         let res = Self {
             _imark: input.parse()?,
             _paren: parenthesized!(info in input),
-            info: info.parse_terminated(LitInt::parse)?
+            info: info.parse_terminated(LitInt::parse)?,
         };
         while input.parse::<Token![-]>().is_ok() {}
         Ok(res)
     }
 }
-
 
 enum AbiArg {
     Expr(Expr),
@@ -447,7 +444,6 @@ impl AbiArg {
     }
 }
 
-
 impl Parse for AbiArg {
     fn parse(input: ParseStream) -> Result<Self> {
         let lookahead = input.lookahead1();
@@ -458,7 +454,6 @@ impl Parse for AbiArg {
         }
     }
 }
-
 
 impl Parse for StmtAbiHint {
     fn parse(input: ParseStream) -> Result<Self> {
@@ -537,11 +532,7 @@ impl quote::ToTokens for StmtIMark {
 
 impl quote::ToTokens for StmtAbiHint {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        let StmtAbiHint {
-            base,
-            len,
-            nia,
-        } = self;
+        let StmtAbiHint { base, len, nia } = self;
         tokens.extend(quote!(Stmt::abi_hint(#base, #len, #nia)))
     }
 }
@@ -601,7 +592,7 @@ impl Parse for IRSB {
         Ok(IRSB {
             ty_env,
             stmts,
-            exit: input.parse()?
+            exit: input.parse()?,
         })
     }
 }
@@ -612,30 +603,34 @@ pub fn IRSB(item: TokenStream) -> TokenStream {
     let irsb = parse_macro_input!(item as IRSB);
 
     let (ip_offset, next, stmts) = match irsb.stmts.split_last() {
-        Some((Stmt::Put(StmtPut { offset, data, .. }), stmts)) => {
-            (offset, data, stmts)
-        }
+        Some((Stmt::Put(StmtPut { offset, data, .. }), stmts)) => (offset, data, stmts),
         Some(_) => {
-            return quote!(compile_error!("The last statement is not a valid 'next' statement (PUT(ip_offset) = Expr)")).into();
+            return quote!(compile_error!(
+                "The last statement is not a valid 'next' statement (PUT(ip_offset) = Expr)"
+            ))
+            .into();
         }
         None => {
-            return quote!(compile_error!("No statements found! (There must be at least the 'next' statement.)")).into();
+            return quote!(compile_error!(
+                "No statements found! (There must be at least the 'next' statement.)"
+            ))
+            .into();
         }
     };
     let jk = format_ident!("Ijk_{}", &irsb.exit.kind);
-    let mut output = quote!{
+    let mut output = quote! {
         use libvex::ir::{Const, Expr, IREndness, IRSB, JumpKind, Op, Stmt, Type};
         let mut irsb = IRSB::new();
     };
     for (tmp, _colon, ty) in irsb.ty_env.tmps.iter() {
         let ty = format_ident!("Ity_{}", ty);
-        output = quote!{
+        output = quote! {
             #output
             let #tmp = irsb.type_env().new_tmp(Type::#ty);
         };
     }
     for stmt in stmts {
-        output = quote!{
+        output = quote! {
             #output
             irsb.add_stmt(#stmt);
         };
@@ -646,5 +641,6 @@ pub fn IRSB(item: TokenStream) -> TokenStream {
         irsb.set_offs_ip(#ip_offset);
         irsb.set_jump_kind(JumpKind::#jk);
         irsb
-    }).into()
+    })
+    .into()
 }

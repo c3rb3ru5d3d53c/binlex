@@ -20,14 +20,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::process;
-use clap::Parser;
 use binlex::AUTHOR;
+use binlex::Config;
 use binlex::VERSION;
+use binlex::formats::File;
+use clap::Parser;
 use clap::ValueEnum;
 use std::fmt;
-use binlex::Config;
-use binlex::formats::File;
+use std::process;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -42,7 +42,6 @@ struct Args {
     #[arg(long, value_enum, default_value = "tlsh")]
     hashtype: HashType,
 }
-
 
 #[derive(Debug, Clone, ValueEnum)]
 pub enum HashType {
@@ -63,8 +62,7 @@ impl fmt::Display for HashType {
     }
 }
 
-fn main () {
-
+fn main() {
     let mut config = Config::new();
 
     config.formats.file.hashing.tlsh.enabled = true;
@@ -84,13 +82,9 @@ fn main () {
     });
 
     let hash = match args.hashtype.to_string().as_str() {
-        "sha256" => {
-            file.sha256()
-        },
-        "tlsh" => {
-            file.tlsh()
-        },
-        _ => { None }
+        "sha256" => file.sha256(),
+        "tlsh" => file.tlsh(),
+        _ => None,
     };
 
     if hash.is_some() {

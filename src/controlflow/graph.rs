@@ -20,11 +20,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use crate::Architecture;
+use crate::Config;
 use crate::controlflow::Block;
 use crate::controlflow::Function;
 use crate::controlflow::Instruction;
-use crate::Architecture;
-use crate::Config;
 use crossbeam::queue::SegQueue;
 use crossbeam_skiplist::SkipMap;
 use crossbeam_skiplist::SkipSet;
@@ -429,9 +429,14 @@ impl Graph {
     }
 
     pub fn insert_instruction(&mut self, instruction: Instruction) {
-        if !self.is_instruction_address(instruction.address) {
-            self.listing.insert(instruction.address, instruction);
+        if let Some(existing) = self.get_instruction(instruction.address) {
+            self.listing.insert(
+                instruction.address,
+                Graph::merge_instruction(existing, instruction),
+            );
+            return;
         }
+        self.listing.insert(instruction.address, instruction);
     }
 
     pub fn update_instruction(&mut self, instruction: Instruction) {
@@ -450,6 +455,29 @@ impl Graph {
             .get(&address)
             .map(|entry| entry.value().clone())
     }
+
+    fn merge_instruction(mut existing: Instruction, incoming: Instruction) -> Instruction {
+        existing.is_prologue |= incoming.is_prologue;
+        existing.is_block_start |= incoming.is_block_start;
+        existing.is_function_start |= incoming.is_function_start;
+        existing.is_return |= incoming.is_return;
+        existing.is_call |= incoming.is_call;
+        existing.is_jump |= incoming.is_jump;
+        existing.is_conditional |= incoming.is_conditional;
+        existing.is_trap |= incoming.is_trap;
+        existing.has_indirect_target |= incoming.has_indirect_target;
+        existing.edges = existing.edges.max(incoming.edges);
+        existing.to.extend(incoming.to);
+        existing.functions.extend(incoming.functions);
+        if existing.bytes.is_empty() {
+            existing.bytes = incoming.bytes;
+        }
+        if existing.pattern.is_empty() {
+            existing.pattern = incoming.pattern;
+        }
+        existing
+    }
+
     pub fn absorb(&mut self, graph: &mut Graph) {
         for entry in graph.listing() {
             self.insert_instruction(entry.value().clone());

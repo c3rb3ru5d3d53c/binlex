@@ -408,7 +408,9 @@ impl ModuleEntry {
     /// * `Some(ModuleEntry)` - The parsed `ModuleEntry` if the byte slice is valid.
     /// * `None` - If the byte slice is invalid or does not contain enough data.
     pub fn from_bytes(bytes: &[u8], heap_size: u8) -> Option<Self> {
-        if bytes.len() < 2 { return None; }
+        if bytes.len() < 2 {
+            return None;
+        }
         let generation = u16::from_le_bytes(bytes[0..2].try_into().unwrap());
         let mut offset: usize = mem::size_of::<u16>();
         let name = StringHeapIndex::from_bytes(&bytes[offset..], heap_size)?;
@@ -541,7 +543,9 @@ impl TypeDefEntry {
     /// * `Some(TypeDefEntry)` - The parsed `TypeDefEntry` if the byte slice is valid.
     /// * `None` - If the byte slice is invalid or does not contain enough data.
     pub fn from_bytes(bytes: &[u8], heap_size: u8) -> Option<Self> {
-        if bytes.len() < 4 { return None; }
+        if bytes.len() < 4 {
+            return None;
+        }
         let flags = u32::from_le_bytes(bytes[0..4].try_into().unwrap());
         let mut offset: usize = mem::size_of::<u32>();
         let name = StringHeapIndex::from_bytes(&bytes[offset..], heap_size)?;
@@ -612,7 +616,9 @@ impl FieldEntry {
     /// * `Some(FieldEntry)` - The parsed `FieldEntry` if the byte slice is valid.
     /// * `None` - If the byte slice is invalid or does not contain enough data.
     pub fn from_bytes(bytes: &[u8], heap_size: u8) -> Option<Self> {
-        if bytes.len() < 2 { return None; }
+        if bytes.len() < 2 {
+            return None;
+        }
         let flags = u16::from_le_bytes(bytes[0..2].try_into().unwrap());
         let mut offset: usize = mem::size_of::<u16>();
         let name: StringHeapIndex = StringHeapIndex::from_bytes(&bytes[offset..], heap_size)?;
@@ -687,7 +693,7 @@ impl MethodDefEntry {
         let signature = BlobHeapIndex::from_bytes(&bytes[offset..], heap_size)?;
         offset += signature.size();
         let param_list = SimpleTableIndex::from_bytes(&bytes[offset..], heap_size)?;
-        Some(Self{
+        Some(Self {
             rva,
             impl_flags,
             flags,
@@ -751,10 +757,7 @@ impl SimpleTableIndex {
             _ => return None,
         };
 
-        Some(Self {
-            offset,
-            size,
-        })
+        Some(Self { offset, size })
     }
 
     /// Returns the size of the referenced entry in the table.
@@ -804,10 +807,7 @@ impl StringHeapIndex {
             _ => return None,
         };
 
-        Some(Self {
-            offset,
-            size,
-        })
+        Some(Self { offset, size })
     }
 
     /// Returns the size of the referenced data in the String heap.
@@ -857,10 +857,7 @@ impl GuidHeapIndex {
             _ => return None,
         };
 
-        Some(Self {
-            offset,
-            size,
-        })
+        Some(Self { offset, size })
     }
 
     /// Returns the size of the referenced data in the GUID heap.
@@ -910,10 +907,7 @@ impl ResolutionScopeIndex {
             _ => return None,
         };
 
-        Some(Self {
-            offset,
-            size,
-        })
+        Some(Self { offset, size })
     }
 
     /// Returns the size of the referenced data in the ResolutionScope table.
@@ -964,10 +958,7 @@ impl TypeDefOrRefIndex {
             _ => return None,
         };
 
-        Some(Self {
-            offset,
-            size,
-        })
+        Some(Self { offset, size })
     }
 
     /// Returns the size of the referenced data in the TypeDef or TypeRef table.
@@ -1022,10 +1013,7 @@ impl BlobHeapIndex {
             _ => return None,
         };
 
-        Some(Self {
-            offset,
-            size,
-        })
+        Some(Self { offset, size })
     }
 
     /// Returns the size of the referenced data in the Blob heap.
@@ -1173,7 +1161,10 @@ impl FatHeader {
     /// Returns an error if the byte slice does not contain enough data to parse a valid `FatHeader`.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, std::io::Error> {
         if bytes.len() < 12 {
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Not enough bytes for FatHeader"));
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Not enough bytes for FatHeader",
+            ));
         }
 
         Ok(Self {

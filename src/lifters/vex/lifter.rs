@@ -1,7 +1,7 @@
 use std::fmt;
 use std::io::{Error, ErrorKind};
 
-use libvex::{ir::IRSB, Arch, TranslateArgs, TranslateError, VexEndness};
+use libvex::{Arch, TranslateArgs, TranslateError, VexEndness, ir::IRSB};
 
 use crate::global::Architecture;
 

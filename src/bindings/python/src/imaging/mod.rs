@@ -22,9 +22,9 @@
 
 pub mod colormap;
 
+use crate::imaging::colormap::colormap_init;
 pub use colormap::ColorMap;
 pub use colormap::ColorMapType;
-use crate::imaging::colormap::colormap_init;
 
 use pyo3::{prelude::*, wrap_pymodule};
 

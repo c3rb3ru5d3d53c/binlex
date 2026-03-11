@@ -20,9 +20,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+pub mod allelepair;
 pub mod chromosome;
 pub mod gene;
-pub mod allelepair;
 
 pub use crate::genetics::chromosome::chromosome_init;
 pub use crate::genetics::chromosome::Chromosome;
@@ -46,7 +46,7 @@ pub fn genitics_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pymodule!(chromosome_init))?;
     m.add_class::<Chromosome>()?;
     m.add_class::<ChromosomeSimilarity>()?;
-     py.import_bound("sys")?
+    py.import_bound("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.genetics", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.genetics")?;

@@ -20,11 +20,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use crate::Binary;
+use crate::Config;
 use crate::controlflow::Attribute;
 use crate::hashing::sha256::SHA256;
 use crate::hashing::tlsh::TLSH;
-use crate::Binary;
-use crate::Config;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::fs::File as StdFile;

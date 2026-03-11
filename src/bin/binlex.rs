@@ -28,25 +28,25 @@ use binlex::controlflow::Instruction;
 use binlex::controlflow::Symbol;
 use binlex::controlflow::Tag;
 //use binlex::disassemblers::capstone::x86::Disassembler;
-use binlex::disassemblers::capstone::Disassembler;
-use binlex::disassemblers::custom::cil::Disassembler as CILDisassembler;
-use binlex::formats::pe::PE;
-use binlex::formats::File as BLFile;
-use binlex::formats::ELF;
-use binlex::formats::MACHO;
-use binlex::io::Stderr;
-use binlex::io::Stdin;
-use binlex::io::Stdout;
-use binlex::io::JSON;
-use binlex::types::LZ4String;
+use binlex::AUTHOR;
 use binlex::Architecture;
 use binlex::Config;
 use binlex::Format;
-use binlex::AUTHOR;
 use binlex::VERSION;
+use binlex::disassemblers::capstone::Disassembler;
+use binlex::disassemblers::custom::cil::Disassembler as CILDisassembler;
+use binlex::formats::ELF;
+use binlex::formats::File as BLFile;
+use binlex::formats::MACHO;
+use binlex::formats::pe::PE;
+use binlex::io::JSON;
+use binlex::io::Stderr;
+use binlex::io::Stdin;
+use binlex::io::Stdout;
+use binlex::types::LZ4String;
 use clap::Parser;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -67,7 +67,11 @@ pub struct Args {
     pub input: String,
     #[arg(short, long)]
     pub output: Option<String>,
-    #[arg(long, default_value_t = false, help = "Read symbol JSON from standard input")]
+    #[arg(
+        long,
+        default_value_t = false,
+        help = "Read symbol JSON from standard input"
+    )]
     pub stdin: bool,
     #[arg(short, long, help = format!("[{}]", Architecture::to_list()))]
     pub architecture: Option<Architecture>,

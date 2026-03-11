@@ -265,7 +265,7 @@ fn score(b: &str, a: &str, tsh: Option<f32>) -> (f32, usize, usize) {
 pub fn find_subyara_matches(
     b: &str,
     a: &str,
-    threshold: f32
+    threshold: f32,
 ) -> Vec<(f32, (usize, usize), String)> {
     let vb: Vec<char> = b.chars().collect();
     let va: Vec<char> = a.chars().collect();
@@ -306,7 +306,7 @@ pub fn find_subyara_matches(
             //    matched_count / alignment_len
             // final score = product of both => in [0,1].
             let frac_pattern = matched_count as f32 / na as f32;
-            let frac_dense   = matched_count as f32 / alignment_len as f32;
+            let frac_dense = matched_count as f32 / alignment_len as f32;
             let score = frac_pattern * frac_dense;
 
             if score >= threshold {
@@ -328,8 +328,6 @@ pub fn find_subyara_matches(
     results
 }
 
-
-
 //
 // ======================================================
 // 4) Example extension of the FuzzyLCS trait to gather
@@ -341,11 +339,7 @@ pub trait FuzzyLCS<T: AsRef<str>>: AsRef<str> {
     /// Old single best-match function
     fn fuzzy_find_pos(&self, s: T, tsh: f32) -> Option<(f32, usize, usize)> {
         let s = score(self.as_ref(), s.as_ref(), Some(tsh));
-        if s.0 > tsh {
-            Some(s)
-        } else {
-            None
-        }
+        if s.0 > tsh { Some(s) } else { None }
     }
 
     /// Old single best-match substring
@@ -362,9 +356,7 @@ pub trait FuzzyLCS<T: AsRef<str>>: AsRef<str> {
     // ================================
     // NEW: get multiple sub-YARA–style matches
     // ================================
-    fn fuzzy_find_subyara_all(&self, pat: T, tsh: f32)
-        -> Vec<(f32, (usize, usize), String)>
-    {
+    fn fuzzy_find_subyara_all(&self, pat: T, tsh: f32) -> Vec<(f32, (usize, usize), String)> {
         find_subyara_matches(self.as_ref(), pat.as_ref(), tsh)
     }
 }

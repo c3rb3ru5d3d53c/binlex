@@ -20,6 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use crate::Config;
 use crate::binary::Binary;
 use crate::genetics::AllelePair;
 use crate::genetics::Gene;
@@ -27,7 +28,6 @@ use crate::hashing::MinHash32;
 use crate::hashing::SHA256;
 use crate::hashing::TLSH;
 use crate::lcs::FuzzyLCS;
-use crate::Config;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::io::Error;

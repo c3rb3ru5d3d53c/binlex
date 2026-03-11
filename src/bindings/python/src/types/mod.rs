@@ -20,14 +20,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod memorymappedfile;
 pub mod lz4string;
+pub mod memorymappedfile;
 
-use crate::types::memorymappedfile::memorymappedfile_init;
 use crate::types::lz4string::lz4string_init;
+use crate::types::memorymappedfile::memorymappedfile_init;
 
-pub use crate::types::memorymappedfile::MemoryMappedFile;
 pub use crate::types::lz4string::LZ4String;
+pub use crate::types::memorymappedfile::MemoryMappedFile;
 
 use pyo3::{prelude::*, wrap_pymodule};
 

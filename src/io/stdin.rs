@@ -20,17 +20,16 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::io::{stdin, ErrorKind};
-use std::io::{self, BufRead, IsTerminal, Write};
-use std::fmt::Display;
-use std::process;
 use crate::io::Stdout;
+use std::fmt::Display;
+use std::io::{self, BufRead, IsTerminal, Write};
+use std::io::{ErrorKind, stdin};
+use std::process;
 
 /// Represents a wrapper for standard input operations.
 pub struct Stdin;
 
 impl Stdin {
-
     #[allow(dead_code)]
     pub fn is_terminal() -> bool {
         stdin().is_terminal()
@@ -51,11 +50,11 @@ impl Stdin {
                 match line {
                     Ok(line) => {
                         Stdout::print(line);
-                    },
+                    }
                     Err(error) => {
                         eprintln!("{}", error);
                         process::exit(1);
-                    },
+                    }
                 }
             }
         }
@@ -80,5 +79,4 @@ impl Stdin {
             }
         });
     }
-
 }

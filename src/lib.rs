@@ -27,15 +27,15 @@ pub mod formats;
 pub mod genetics;
 pub mod global;
 pub mod hashing;
+pub mod imaging;
 pub mod io;
 pub mod lcs;
-pub mod imaging;
 pub mod lifters;
 pub mod types;
 
 pub use binary::Binary;
+pub use global::AUTHOR;
 pub use global::Architecture;
 pub use global::Config;
 pub use global::Format;
-pub use global::AUTHOR;
 pub use global::VERSION;

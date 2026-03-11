@@ -20,23 +20,23 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod graph;
-pub mod instruction;
 pub mod block;
 pub mod function;
+pub mod graph;
+pub mod instruction;
 
-pub use crate::controlflow::graph::Graph;
-pub use crate::controlflow::graph::GraphQueue;
 pub use crate::controlflow::block::Block;
 pub use crate::controlflow::block::BlockJsonDeserializer;
 pub use crate::controlflow::function::Function;
 pub use crate::controlflow::function::FunctionJsonDeserializer;
+pub use crate::controlflow::graph::Graph;
+pub use crate::controlflow::graph::GraphQueue;
 pub use crate::controlflow::instruction::Instruction;
 
-use crate::controlflow::graph::graph_init;
-use crate::controlflow::instruction::instruction_init;
 use crate::controlflow::block::block_init;
 use crate::controlflow::function::function_init;
+use crate::controlflow::graph::graph_init;
+use crate::controlflow::instruction::instruction_init;
 
 use pyo3::{prelude::*, wrap_pymodule};
 
