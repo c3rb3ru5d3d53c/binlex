@@ -70,7 +70,7 @@ impl<'disassembler> Disassembler<'disassembler> {
     pub fn is_executable_address(&self, address: u64) -> bool {
         self.executable_address_ranges
             .iter()
-            .any(|(start, end)| address >= *start && address <= *end)
+            .any(|(start, end)| address >= *start && address < *end)
     }
 
     #[allow(dead_code)]
@@ -294,8 +294,10 @@ impl<'disassembler> Disassembler<'disassembler> {
             }
         }
         if let Some(addr) = self.get_call_immutable(instruction) {
-            cfg.functions.enqueue(addr);
-            blinstruction.functions.insert(addr);
+            if self.is_executable_address(addr) && self.disassemble_instructions(addr, 1).is_ok() {
+                cfg.functions.enqueue(addr);
+                blinstruction.functions.insert(addr);
+            }
         }
         if let Some(addr) = self.get_indirect_controlflow_target(instruction) {
             if blinstruction.is_jump {
@@ -916,7 +918,7 @@ impl<'disassembler> Disassembler<'disassembler> {
             return 1;
         }
         if Disassembler::is_return_instruction(instruction) {
-            return 1;
+            return 0;
         }
         if Disassembler::is_conditional_jump_instruction(instruction) {
             return 2;
