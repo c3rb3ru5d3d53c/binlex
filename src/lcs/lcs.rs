@@ -174,7 +174,7 @@ impl Alcs {
     }
 
     /// Returns an iterator yielding the LCS length for all substrings starting from position `i`
-    pub fn suffix(&self, pos: usize) -> AlcsIterator {
+    pub fn suffix(&self, pos: usize) -> AlcsIterator<'_> {
         AlcsIterator::new(self, pos)
     }
 }

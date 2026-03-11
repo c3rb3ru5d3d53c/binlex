@@ -234,11 +234,11 @@ impl Get<'_> {
 wrapper!(GetI, IRGetI);
 
 impl GetI<'_> {
-    pub fn descr(&self) -> RegArray {
+    pub fn descr(&self) -> RegArray<'_> {
         unsafe { (*self.0).descr }.into()
     }
 
-    pub fn ix(&mut self) -> Expr {
+    pub fn ix(&mut self) -> Expr<'_> {
         unsafe { (*self.0).ix }.into()
     }
 
@@ -266,19 +266,19 @@ impl Qop<'_> {
         unsafe { (*self.0).op }
     }
 
-    pub fn arg1(&self) -> Expr {
+    pub fn arg1(&self) -> Expr<'_> {
         unsafe { (*self.0).arg1 }.into()
     }
 
-    pub fn arg2(&self) -> Expr {
+    pub fn arg2(&self) -> Expr<'_> {
         unsafe { (*self.0).arg2 }.into()
     }
 
-    pub fn arg3(&self) -> Expr {
+    pub fn arg3(&self) -> Expr<'_> {
         unsafe { (*self.0).arg3 }.into()
     }
 
-    pub fn arg4(&self) -> Expr {
+    pub fn arg4(&self) -> Expr<'_> {
         unsafe { (*self.0).arg4 }.into()
     }
 }
@@ -290,15 +290,15 @@ impl Triop<'_> {
         unsafe { (*self.0).op }
     }
 
-    pub fn arg1(&self) -> Expr {
+    pub fn arg1(&self) -> Expr<'_> {
         unsafe { (*self.0).arg1 }.into()
     }
 
-    pub fn arg2(&self) -> Expr {
+    pub fn arg2(&self) -> Expr<'_> {
         unsafe { (*self.0).arg2 }.into()
     }
 
-    pub fn arg3(&self) -> Expr {
+    pub fn arg3(&self) -> Expr<'_> {
         unsafe { (*self.0).arg3 }.into()
     }
 }
@@ -310,11 +310,11 @@ impl Binop<'_> {
         unsafe { (*self.0).op }
     }
 
-    pub fn arg1(&self) -> Expr {
+    pub fn arg1(&self) -> Expr<'_> {
         unsafe { (*self.0).arg1 }.into()
     }
 
-    pub fn arg2(&self) -> Expr {
+    pub fn arg2(&self) -> Expr<'_> {
         unsafe { (*self.0).arg2 }.into()
     }
 }
@@ -326,7 +326,7 @@ impl Unop<'_> {
         unsafe { (*self.0).op }
     }
 
-    pub fn arg(&self) -> Expr {
+    pub fn arg(&self) -> Expr<'_> {
         unsafe { (*self.0).arg }.into()
     }
 }
@@ -342,7 +342,7 @@ impl Load<'_> {
         unsafe { (*self.0).ty }
     }
 
-    pub fn addr(&self) -> Expr {
+    pub fn addr(&self) -> Expr<'_> {
         unsafe { (*self.0).addr }.into()
     }
 }
@@ -350,7 +350,7 @@ impl Load<'_> {
 wrapper!(CCall, IRCCall);
 
 impl CCall<'_> {
-    pub fn callee(&self) -> Callee {
+    pub fn callee(&self) -> Callee<'_> {
         unsafe { (*self.0).cee }.into()
     }
 
@@ -358,7 +358,7 @@ impl CCall<'_> {
         unsafe { (*self.0).retty }
     }
 
-    pub fn args(&self) -> ExprVec {
+    pub fn args(&self) -> ExprVec<'_> {
         unsafe { (*self.0).args }.into()
     }
 }
@@ -366,15 +366,15 @@ impl CCall<'_> {
 wrapper!(ITE, IRITE);
 
 impl ITE<'_> {
-    pub fn cond(&self) -> Expr {
+    pub fn cond(&self) -> Expr<'_> {
         unsafe { (*self.0).cond }.into()
     }
 
-    pub fn if_true(&self) -> Expr {
+    pub fn if_true(&self) -> Expr<'_> {
         unsafe { (*self.0).iftrue }.into()
     }
 
-    pub fn if_false(&self) -> Expr {
+    pub fn if_false(&self) -> Expr<'_> {
         unsafe { (*self.0).iffalse }.into()
     }
 }
@@ -494,7 +494,7 @@ impl Display for Expr<'_> {
 }
 
 impl Expr<'_> {
-    pub fn as_enum(&self) -> ExprEnum {
+    pub fn as_enum(&self) -> ExprEnum<'_> {
         let this = unsafe { &mut *self.0 };
         match this.tag {
             // Note: Binder expressions should never be returned by VEX, but we do allow
@@ -617,7 +617,7 @@ impl Stmt<'_> {
         (unsafe { isFlatIRStmt(self.0) }) != 0
     }
 
-    pub fn as_enum(&mut self) -> StmtEnum {
+    pub fn as_enum(&mut self) -> StmtEnum<'_> {
         let (tag, st) = unsafe { ((*self.0).tag, &mut (*self.0).Ist) };
         match tag {
             IRStmtTag::Ist_NoOp => StmtEnum::NoOp,
@@ -703,7 +703,7 @@ impl Put<'_> {
         unsafe { *self.0 }.offset
     }
 
-    pub fn data(&self) -> Expr {
+    pub fn data(&self) -> Expr<'_> {
         Expr(unsafe { (*self.0).data }, PhantomData)
     }
 }
@@ -717,7 +717,7 @@ impl WrTmp<'_> {
         unsafe { (*self.0).tmp }
     }
 
-    pub fn data(&self) -> Expr {
+    pub fn data(&self) -> Expr<'_> {
         unsafe { (*self.0).data }.into()
     }
 }
@@ -725,11 +725,11 @@ impl WrTmp<'_> {
 wrapper!(Store, IRStore);
 
 impl Store<'_> {
-    pub fn addr(&self) -> Expr {
+    pub fn addr(&self) -> Expr<'_> {
         unsafe { (*self.0).addr }.into()
     }
 
-    pub fn data(&self) -> Expr {
+    pub fn data(&self) -> Expr<'_> {
         unsafe { (*self.0).data }.into()
     }
 }
@@ -741,15 +741,15 @@ impl StoreG<'_> {
         unsafe { (*self.0).end }
     }
 
-    pub fn addr(&self) -> Expr {
+    pub fn addr(&self) -> Expr<'_> {
         unsafe { (*self.0).addr }.into()
     }
 
-    pub fn data(&self) -> Expr {
+    pub fn data(&self) -> Expr<'_> {
         unsafe { (*self.0).data }.into()
     }
 
-    pub fn guard(&self) -> Expr {
+    pub fn guard(&self) -> Expr<'_> {
         unsafe { (*self.0).guard }.into()
     }
 }
@@ -769,15 +769,15 @@ impl LoadG<'_> {
         unsafe { (*self.0).dst }
     }
 
-    pub fn addr(&self) -> Expr {
+    pub fn addr(&self) -> Expr<'_> {
         unsafe { (*self.0).addr }.into()
     }
 
-    pub fn alt(&self) -> Expr {
+    pub fn alt(&self) -> Expr<'_> {
         unsafe { (*self.0).alt }.into()
     }
 
-    pub fn guard(&self) -> Expr {
+    pub fn guard(&self) -> Expr<'_> {
         unsafe { (*self.0).guard }.into()
     }
 }
@@ -793,11 +793,11 @@ wrapper!(MBE, IRMBE);
 wrapper!(Exit, IRExit);
 
 impl Exit<'_> {
-    pub fn guard(&self) -> Expr {
+    pub fn guard(&self) -> Expr<'_> {
         unsafe { (*self.0).guard }.into()
     }
 
-    pub fn dst(&self) -> Const {
+    pub fn dst(&self) -> Const<'_> {
         unsafe { (*self.0).dst }.into()
     }
 
@@ -875,11 +875,11 @@ impl IRSB<'_> {
         Self::default()
     }
 
-    pub fn type_env(&self) -> TypeEnv {
+    pub fn type_env(&self) -> TypeEnv<'_> {
         unsafe { (*self.inner).tyenv }.into()
     }
 
-    pub fn iter_stmts(&self) -> impl Iterator<Item = Stmt> {
+    pub fn iter_stmts(&self) -> impl Iterator<Item = Stmt<'_>> {
         unsafe { slice::from_raw_parts((*self.inner).stmts, (*self.inner).stmts_used as usize) }
             .iter()
             .map(|stmt| (*stmt).into())
@@ -889,7 +889,7 @@ impl IRSB<'_> {
         unsafe { addStmtToIRSB(self.inner, stmt.0) }
     }
 
-    pub fn next(&self) -> Expr {
+    pub fn next(&self) -> Expr<'_> {
         unsafe { (*self.inner).next }.into()
     }
 

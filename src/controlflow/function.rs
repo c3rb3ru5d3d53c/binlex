@@ -772,7 +772,7 @@ impl<'function> Function<'function> {
     /// # Returns
     ///
     /// Returns a `Vec<Block>` representing the blocks associated with this function.
-    pub fn blocks(&self) -> Vec<Block> {
+    pub fn blocks(&self) -> Vec<Block<'_>> {
         if !self.cfg.config.functions.blocks.enabled {
             return Vec::new();
         }
