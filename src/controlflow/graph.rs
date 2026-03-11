@@ -351,7 +351,7 @@ impl Graph {
         result
     }
 
-    pub fn blocks(&self) -> Vec<Block> {
+    pub fn blocks(&self) -> Vec<Block<'_>> {
         let mut result = Vec::<Block>::new();
         for address in self.blocks.valid_addresses() {
             let block = Block::new(address, self).ok();
@@ -363,7 +363,7 @@ impl Graph {
         result
     }
 
-    pub fn functions(&self) -> Vec<Function> {
+    pub fn functions(&self) -> Vec<Function<'_>> {
         let mut result = Vec::<Function>::new();
         for address in self.functions.valid_addresses() {
             let function = Function::new(address, self).ok();

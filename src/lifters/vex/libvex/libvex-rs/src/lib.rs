@@ -178,7 +178,7 @@ impl TranslateArgs {
         &mut self,
         guest_bytes: *const u8,
         guest_bytes_addr: u64,
-    ) -> TranslateResult<ir::IRSB> {
+    ) -> TranslateResult<ir::IRSB<'_>> {
         use std::mem::MaybeUninit;
         init();
 
@@ -271,7 +271,7 @@ impl LiftLock {
         Self(ReentrantMutex::new(RefCell::new(0)))
     }
 
-    fn exclusive_lock(&self) -> Result<LiftGuard, LockError> {
+    fn exclusive_lock(&self) -> Result<LiftGuard<'_>, LockError> {
         let guard = self.0.lock();
         if *guard.borrow() != 0 {
             return Err(LockError::AlreadyAllocated);
@@ -280,7 +280,7 @@ impl LiftLock {
         Ok(LiftGuard(guard))
     }
 
-    fn lock(&self) -> LiftGuard {
+    fn lock(&self) -> LiftGuard<'_> {
         let guard = self.0.lock();
         *guard.borrow_mut() += 1;
         LiftGuard(guard)
