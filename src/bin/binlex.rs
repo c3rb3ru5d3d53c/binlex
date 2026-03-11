@@ -67,6 +67,8 @@ pub struct Args {
     pub input: String,
     #[arg(short, long)]
     pub output: Option<String>,
+    #[arg(long, default_value_t = false, help = "Read symbol JSON from standard input")]
+    pub stdin: bool,
     #[arg(short, long, help = format!("[{}]", Architecture::to_list()))]
     pub architecture: Option<Architecture>,
     #[arg(short, long)]
@@ -107,12 +109,17 @@ fn validate_args(args: &Args) {
             }
         }
     }
+
+    if args.stdin && Stdin::is_terminal() {
+        eprintln!("--stdin requires piped standard input");
+        process::exit(1);
+    }
 }
 
-fn get_elf_function_symbols(elf: &ELF) -> BTreeMap<u64, Symbol> {
+fn get_elf_function_symbols(elf: &ELF, read_stdin: bool) -> BTreeMap<u64, Symbol> {
     let mut symbols = BTreeMap::<u64, Symbol>::new();
 
-    if Stdin::is_terminal() {
+    if !read_stdin {
         return symbols;
     }
 
@@ -193,10 +200,10 @@ fn get_elf_function_symbols(elf: &ELF) -> BTreeMap<u64, Symbol> {
     symbols
 }
 
-fn get_macho_function_symbols(macho: &MACHO) -> BTreeMap<u64, Symbol> {
+fn get_macho_function_symbols(macho: &MACHO, read_stdin: bool) -> BTreeMap<u64, Symbol> {
     let mut symbols = BTreeMap::<u64, Symbol>::new();
 
-    if Stdin::is_terminal() {
+    if !read_stdin {
         return symbols;
     }
 
@@ -288,10 +295,10 @@ fn get_macho_function_symbols(macho: &MACHO) -> BTreeMap<u64, Symbol> {
     symbols
 }
 
-fn get_pe_function_symbols(pe: &PE) -> BTreeMap<u64, Symbol> {
+fn get_pe_function_symbols(pe: &PE, read_stdin: bool) -> BTreeMap<u64, Symbol> {
     let mut symbols = BTreeMap::<u64, Symbol>::new();
 
-    if Stdin::is_terminal() {
+    if !read_stdin {
         return symbols;
     }
 
@@ -506,7 +513,13 @@ fn process_output(
     }
 }
 
-fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: Option<String>) {
+fn process_pe(
+    input: String,
+    config: Config,
+    tags: Option<Vec<String>>,
+    output: Option<String>,
+    read_stdin: bool,
+) {
     let mut attributes = Attributes::new();
 
     let pe = match PE::new(input, config.clone()) {
@@ -532,7 +545,7 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
         attributes.push(file_attribute);
     }
 
-    let function_symbols = get_pe_function_symbols(&pe);
+    let function_symbols = get_pe_function_symbols(&pe, read_stdin);
 
     // for (_, symbol) in &function_symbols {
     //     attributes.push(Attribute::Symbol(symbol.process().clone()));
@@ -621,7 +634,13 @@ fn process_pe(input: String, config: Config, tags: Option<Vec<String>>, output: 
     process_output(output, &cfg, &attributes, &function_symbols);
 }
 
-fn process_elf(input: String, config: Config, tags: Option<Vec<String>>, output: Option<String>) {
+fn process_elf(
+    input: String,
+    config: Config,
+    tags: Option<Vec<String>>,
+    output: Option<String>,
+    read_stdin: bool,
+) {
     let mut attributes = Attributes::new();
 
     let elf = ELF::new(input, config.clone()).unwrap_or_else(|error| {
@@ -644,7 +663,7 @@ fn process_elf(input: String, config: Config, tags: Option<Vec<String>>, output:
         attributes.push(file_attribute);
     }
 
-    let function_symbols = get_elf_function_symbols(&elf);
+    let function_symbols = get_elf_function_symbols(&elf, read_stdin);
 
     // for (_, symbol) in &function_symbols {
     //     attributes.push(Attribute::Symbol(symbol.process().clone()));
@@ -766,7 +785,13 @@ fn process_code(input: String, config: Config, architecture: Architecture, outpu
     process_output(output, &cfg, &attributes, &function_symbols);
 }
 
-fn process_macho(input: String, config: Config, tags: Option<Vec<String>>, output: Option<String>) {
+fn process_macho(
+    input: String,
+    config: Config,
+    tags: Option<Vec<String>>,
+    output: Option<String>,
+    read_stdin: bool,
+) {
     let mut attributes = Attributes::new();
 
     let macho = MACHO::new(input, config.clone()).unwrap_or_else(|error| {
@@ -796,7 +821,7 @@ fn process_macho(input: String, config: Config, tags: Option<Vec<String>>, outpu
             attributes.push(file_attribute);
         }
 
-        let function_symbols = get_macho_function_symbols(&macho);
+        let function_symbols = get_macho_function_symbols(&macho, read_stdin);
 
         // for (_, symbol) in &function_symbols {
         //     attributes.push(Attribute::Symbol(symbol.process().clone()));
@@ -933,15 +958,15 @@ fn main() {
         match format {
             Format::PE => {
                 Stderr::print_debug(config.clone(), "processing pe");
-                process_pe(args.input, config, args.tags, args.output);
+                process_pe(args.input, config, args.tags, args.output, args.stdin);
             }
             Format::ELF => {
                 Stderr::print_debug(config.clone(), "processing elf");
-                process_elf(args.input, config, args.tags, args.output);
+                process_elf(args.input, config, args.tags, args.output, args.stdin);
             }
             Format::MACHO => {
                 Stderr::print_debug(config.clone(), "processing macho");
-                process_macho(args.input, config, args.tags, args.output);
+                process_macho(args.input, config, args.tags, args.output, args.stdin);
             }
             _ => {
                 eprintln!("unable to identify file format");

@@ -561,7 +561,7 @@ To leverage function names and virtual addresses from your `Ghidra` projects and
   <project-name> \
   -process sample.dll \
   -noanalysis \
-  -postscript blghidra.py 2>/dev/null |  grep -P "^{\"type" | binlex -i sample.dll
+  -postscript blghidra.py 2>/dev/null |  grep -P "^{\"type" | binlex -i sample.dll --stdin
 ```
 
 Please note that `analyzeHeadless` prints log messages to `stdout` and other log output to `stderr` that is of no use interoperability with other command-line utilities.
@@ -582,7 +582,7 @@ You can then do any parsing as you generally would using `jq`, in this example w
 rizin -c 'aaa;aflj;' -q sample.dll | \
   blrizin | \
   blpdb -i sample.pdb | \
-  binlex -i sample.dll | \
+  binlex -i sample.dll --stdin | \
   jq 'select(.type == "function") | .address' | wc -l
 ```
 
