@@ -20,14 +20,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use crate::Architecture;
+use crate::Config;
 use crate::controlflow::Graph;
 use crate::controlflow::Instruction as CFGInstruction;
 use crate::disassemblers::custom::cil::Instruction;
 use crate::io::Stderr;
-use crate::Architecture;
-use crate::Config;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::io::Error;
@@ -138,7 +138,7 @@ impl<'disassembler> Disassembler<'disassembler> {
                 instruction.next(),
                 instruction.to(),
                 cfginstruction.blocks(),
-            )
+            ),
         );
 
         cfg.insert_instruction(cfginstruction);

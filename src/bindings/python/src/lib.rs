@@ -20,29 +20,29 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+pub mod binary;
+pub mod controlflow;
+pub mod disassemblers;
 pub mod formats;
-pub mod types;
+pub mod genetics;
 pub mod global;
 pub mod hashing;
-pub mod binary;
-pub mod disassemblers;
-pub mod controlflow;
-pub mod genetics;
 pub mod imaging;
+pub mod types;
 
 pub use binary::Binary;
-pub use global::Config;
 pub use global::Architecture;
+pub use global::Config;
 
-use crate::formats::formats_init;
-use crate::types::types_init;
 use crate::binary::binary_init;
-use crate::disassemblers::disassemblers_init;
 use crate::controlflow::controlflow_init;
+use crate::disassemblers::disassemblers_init;
+use crate::formats::formats_init;
 use crate::genetics::genitics_init;
 use crate::global::global_init;
 use crate::hashing::hashing_init;
 use crate::imaging::imaging_init;
+use crate::types::types_init;
 
 use pyo3::{prelude::*, wrap_pymodule};
 

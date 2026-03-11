@@ -21,23 +21,23 @@
 // SOFTWARE.
 
 extern crate capstone;
+use crate::Architecture;
+use crate::Config;
 use crate::binary::Binary;
 use crate::controlflow::graph::Graph;
 use crate::controlflow::instruction::Instruction;
 use crate::io::Stderr;
-use crate::Architecture;
-use crate::Config;
 use arch::x86::X86OpMem;
 use arch::x86::X86Reg::{X86_REG_EBP, X86_REG_ESP, X86_REG_RBP, X86_REG_RIP, X86_REG_RSP};
-use capstone::arch::x86::X86Insn;
-use capstone::arch::x86::X86OperandType;
-use capstone::arch::ArchOperand;
-use capstone::prelude::*;
 use capstone::Insn;
 use capstone::InsnId;
 use capstone::Instructions;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use capstone::arch::ArchOperand;
+use capstone::arch::x86::X86Insn;
+use capstone::arch::x86::X86OperandType;
+use capstone::prelude::*;
 use rayon::ThreadPoolBuilder;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Error;
 use std::io::ErrorKind;
@@ -281,16 +281,31 @@ impl<'disassembler> Disassembler<'disassembler> {
         blinstruction.edges = self.get_instruction_edges(instruction);
         blinstruction.bytes = instruction.bytes().to_vec();
         blinstruction.pattern = instruction_signature;
+        blinstruction.has_indirect_target = self.has_indirect_controlflow_target(instruction);
 
         if let Some(addr) = self.get_conditional_jump_immutable(instruction) {
             blinstruction.to.insert(addr);
         }
         if let Some(addr) = self.get_unconditional_jump_immutable(instruction) {
             blinstruction.to.insert(addr);
+            if self.is_executable_address(addr) && self.disassemble_instructions(addr, 1).is_ok() {
+                cfg.functions.enqueue(addr);
+                blinstruction.functions.insert(addr);
+            }
         }
         if let Some(addr) = self.get_call_immutable(instruction) {
             cfg.functions.enqueue(addr);
             blinstruction.functions.insert(addr);
+        }
+        if let Some(addr) = self.get_indirect_controlflow_target(instruction) {
+            if blinstruction.is_jump {
+                blinstruction.to.insert(addr);
+            }
+            if blinstruction.is_call || Disassembler::is_unconditional_jump_instruction(instruction)
+            {
+                cfg.functions.enqueue(addr);
+                blinstruction.functions.insert(addr);
+            }
         }
         if let Some(addr) = self.get_instruction_executable_addresses(instruction) {
             cfg.functions.enqueue(addr);
@@ -331,6 +346,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         let mut pc = address;
         let mut has_prologue = false;
         let mut terminator = address;
+        let mut split_successor: Option<u64> = None;
 
         while self.disassemble_instruction(pc, cfg).is_ok() {
             let mut instruction = match cfg.get_instruction(pc) {
@@ -367,8 +383,13 @@ impl<'disassembler> Disassembler<'disassembler> {
             pc += instruction.size() as u64;
 
             if cfg.blocks.is_pending(pc) || cfg.blocks.is_processed(pc) || cfg.blocks.is_valid(pc) {
+                split_successor = Some(pc);
                 break;
             }
+        }
+
+        if let Some(successor) = split_successor {
+            cfg.extend_instruction_edges(terminator, BTreeSet::from([successor]));
         }
 
         if has_prologue {
@@ -390,7 +411,7 @@ impl<'disassembler> Disassembler<'disassembler> {
                             0,
                             RegId(X86_REG_RBP as u16),
                         )
-                        && instructions[1].id() != InsnId(X86Insn::X86_INS_MOV as u32)
+                        && instructions[1].id() == InsnId(X86Insn::X86_INS_MOV as u32)
                         && self.instruction_has_register_operand(
                             &instructions[1],
                             0,
@@ -412,7 +433,7 @@ impl<'disassembler> Disassembler<'disassembler> {
                             0,
                             RegId(X86_REG_EBP as u16),
                         )
-                        && instructions[1].id() != InsnId(X86Insn::X86_INS_MOV as u32)
+                        && instructions[1].id() == InsnId(X86Insn::X86_INS_MOV as u32)
                         && self.instruction_has_register_operand(
                             &instructions[1],
                             0,
@@ -478,7 +499,7 @@ impl<'disassembler> Disassembler<'disassembler> {
                     return Err(Error::new(
                         ErrorKind::Other,
                         "unsupported operand architecture",
-                    ))
+                    ));
                 }
             }
         }
@@ -577,7 +598,7 @@ impl<'disassembler> Disassembler<'disassembler> {
 
                 let displacement_size = match op.op_type {
                     X86OperandType::Mem(op_mem) => {
-                        Disassembler::get_displacement_size(op_mem.disp() as u64) * 8
+                        Disassembler::get_displacement_size(op_mem.disp().unsigned_abs()) * 8
                     }
                     _ => 0,
                 };
@@ -594,7 +615,13 @@ impl<'disassembler> Disassembler<'disassembler> {
 
                 if op_size > instruction_size {
                     Disassembler::print_instruction(instruction);
-                    return Err(Error::new(ErrorKind::Other, format!("Instruction -> 0x{:x}: instruction operand size exceeds instruction size", instruction.address())));
+                    return Err(Error::new(
+                        ErrorKind::Other,
+                        format!(
+                            "Instruction -> 0x{:x}: instruction operand size exceeds instruction size",
+                            instruction.address()
+                        ),
+                    ));
                 }
 
                 let operand_offset = instruction_size - op_size;
@@ -603,7 +630,13 @@ impl<'disassembler> Disassembler<'disassembler> {
                     for i in 0..op_size {
                         if operand_offset + i > wildcarded.len() {
                             Disassembler::print_instruction(instruction);
-                            return Err(Error::new(ErrorKind::Other, format!("Instruction -> 0x{:x}: instruction wildcard index is out of bounds", instruction.address())));
+                            return Err(Error::new(
+                                ErrorKind::Other,
+                                format!(
+                                    "Instruction -> 0x{:x}: instruction wildcard index is out of bounds",
+                                    instruction.address()
+                                ),
+                            ));
                         }
                         wildcarded[operand_offset + i] = true;
                     }
@@ -742,6 +775,77 @@ impl<'disassembler> Disassembler<'disassembler> {
         None
     }
 
+    fn has_indirect_controlflow_target(&self, instruction: &Insn) -> bool {
+        if !Disassembler::is_call_instruction(instruction)
+            && !Disassembler::is_jump_instruction(instruction)
+        {
+            return false;
+        }
+        let operand = match self.get_instruction_operand(instruction, 0) {
+            Ok(operand) => operand,
+            Err(_) => return false,
+        };
+        matches!(
+            operand,
+            ArchOperand::X86Operand(op)
+                if matches!(op.op_type, X86OperandType::Reg(_) | X86OperandType::Mem(_))
+        )
+    }
+
+    fn get_indirect_controlflow_target(&self, instruction: &Insn) -> Option<u64> {
+        if !self.has_indirect_controlflow_target(instruction) {
+            return None;
+        }
+        let operand = match self.get_instruction_operand(instruction, 0) {
+            Ok(operand) => operand,
+            Err(_) => return None,
+        };
+        if let ArchOperand::X86Operand(op) = operand {
+            if let X86OperandType::Mem(mem) = op.op_type {
+                return self.resolve_memory_operand_target(instruction, mem);
+            }
+        }
+        None
+    }
+
+    fn resolve_memory_operand_target(&self, instruction: &Insn, mem: X86OpMem) -> Option<u64> {
+        if mem.base() != RegId(X86_REG_RIP as u16) || mem.index() != RegId(0) {
+            return None;
+        }
+
+        let pointer_address =
+            (instruction.address() as i64 + mem.disp() + instruction.bytes().len() as i64) as u64;
+        let target = self.read_pointer(pointer_address)?;
+        if !self.is_executable_address(target) {
+            return None;
+        }
+        if self.disassemble_instructions(target, 1).is_err() {
+            return None;
+        }
+        Some(target)
+    }
+
+    fn read_pointer(&self, address: u64) -> Option<u64> {
+        let pointer_size = match self.machine {
+            Architecture::AMD64 => 8,
+            Architecture::I386 => 4,
+            _ => return None,
+        };
+
+        let start = address as usize;
+        let end = start.checked_add(pointer_size)?;
+        if end > self.image.len() {
+            return None;
+        }
+
+        let bytes = &self.image[start..end];
+        Some(match self.machine {
+            Architecture::AMD64 => u64::from_le_bytes(bytes.try_into().ok()?),
+            Architecture::I386 => u32::from_le_bytes(bytes.try_into().ok()?) as u64,
+            _ => return None,
+        })
+    }
+
     #[allow(dead_code)]
     pub fn get_call_immutable(&self, instruction: &Insn) -> Option<u64> {
         if Disassembler::is_call_instruction(instruction) {
@@ -773,7 +877,7 @@ impl<'disassembler> Disassembler<'disassembler> {
                 return Err(Error::new(
                     ErrorKind::Other,
                     "failed to get instruction detail",
-                ))
+                ));
             }
         };
         let arch = detail.arch_detail();
@@ -793,7 +897,7 @@ impl<'disassembler> Disassembler<'disassembler> {
                 return Err(Error::new(
                     ErrorKind::Other,
                     "failed to get instruction operand",
-                ))
+                ));
             }
         };
         Ok(operand)

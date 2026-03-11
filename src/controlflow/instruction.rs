@@ -20,14 +20,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use crate::Architecture;
+use crate::Config;
 use crate::binary::Binary;
 use crate::controlflow::Attributes;
 use crate::controlflow::Graph;
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeJson;
 use crate::genetics::ChromosomeSimilarity;
-use crate::Architecture;
-use crate::Config;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Value;
@@ -67,6 +67,8 @@ pub struct Instruction {
     pub is_conditional: bool,
     /// Indicates whether this instruction is a trap instruction.
     pub is_trap: bool,
+    /// Indicates whether this instruction uses an indirect control-flow target.
+    pub has_indirect_target: bool,
     /// A set of addresses this instruction may jump or branch to.
     pub to: BTreeSet<u64>,
     /// The number of edges (connections) for this instruction.
@@ -96,7 +98,11 @@ pub struct InstructionJson {
     /// Indicates whether this instruction is a jump instruction.
     pub is_jump: bool,
     /// Indicates whether this instruction is a trap instruction.
+    #[serde(default)]
     pub is_trap: bool,
+    /// Indicates whether this instruction uses an indirect control-flow target.
+    #[serde(default)]
+    pub has_indirect_target: bool,
     /// Indicates whether this instruction is conditional.
     pub is_conditional: bool,
     /// The number of edges (connections) for this instruction.
@@ -154,6 +160,7 @@ impl Instruction {
             functions: BTreeSet::<u64>::new(),
             is_conditional: false,
             is_jump: false,
+            has_indirect_target: false,
             to: BTreeSet::<u64>::new(),
             edges: 0,
             is_trap: false,
@@ -182,7 +189,7 @@ impl Instruction {
     /// Returns a `BTreeSet<u64>` containing the block addresses.
     pub fn blocks(&self) -> BTreeSet<u64> {
         let mut result = BTreeSet::new();
-        if !self.is_jump {
+        if !self.is_jump && self.to.is_empty() {
             return result;
         }
         for item in self.to.iter().copied().chain(self.next()) {
@@ -248,6 +255,7 @@ impl Instruction {
             is_trap: self.is_trap,
             is_call: self.is_call,
             is_jump: self.is_jump,
+            has_indirect_target: self.has_indirect_target,
             is_conditional: self.is_conditional,
             is_function_start: self.is_function_start,
             is_prologue: self.is_prologue,
@@ -292,6 +300,11 @@ impl Instruction {
     /// Returns a `BTreeSet<u64>` containing the target addresses.
     pub fn to(&self) -> BTreeSet<u64> {
         self.to.clone()
+    }
+
+    /// Indicates whether this instruction uses an indirect control-flow target.
+    pub fn has_indirect_target(&self) -> bool {
+        self.has_indirect_target
     }
 
     /// Retrieves the set of functions this instruction may belong to.

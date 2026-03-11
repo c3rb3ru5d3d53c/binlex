@@ -827,9 +827,9 @@ static DATA: &[u8] = &[
 mod tests {
 
     use super::DATA;
-    use binlex::formats::PE;
     use binlex::Architecture;
     use binlex::Config;
+    use binlex::formats::PE;
     use std::collections::BTreeMap;
     use std::collections::BTreeSet;
     use std::io::Read;

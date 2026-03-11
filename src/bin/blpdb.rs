@@ -20,12 +20,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use binlex::AUTHOR;
+use binlex::VERSION;
 use binlex::controlflow::Symbol;
 use binlex::controlflow::SymbolIoJson;
 use binlex::io::Stdin;
 use binlex::io::Stdout;
-use binlex::AUTHOR;
-use binlex::VERSION;
 use clap::Parser;
 use pdb::FallibleIterator;
 use std::fs::File;

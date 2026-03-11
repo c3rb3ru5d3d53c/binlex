@@ -21,10 +21,10 @@
 // SOFTWARE.
 
 extern crate capstone;
-use crate::controlflow::Graph;
-use crate::disassemblers::capstone::x86::Disassembler as X86Disassembler;
 use crate::Architecture;
 use crate::Config;
+use crate::controlflow::Graph;
+use crate::disassemblers::capstone::x86::Disassembler as X86Disassembler;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Error, ErrorKind};
 

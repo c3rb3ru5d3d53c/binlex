@@ -20,11 +20,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use pyo3::prelude::*;
-use pyo3::exceptions;
-use pyo3::types::PyMemoryView;
 use binlex::types::MemoryMappedFile as InnerMemoryMappedFile;
+use pyo3::exceptions;
 use pyo3::ffi;
+use pyo3::prelude::*;
+use pyo3::types::PyMemoryView;
 use std::os::raw::c_char;
 
 #[pyclass]
@@ -138,4 +138,3 @@ pub fn memorymappedfile_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResul
     m.setattr("__name__", "binlex_bindings.binlex.types.memorymappedfile")?;
     Ok(())
 }
-

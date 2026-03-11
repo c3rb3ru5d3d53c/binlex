@@ -20,10 +20,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::io::{self, Read, BufRead, BufReader, IsTerminal, Write};
-use std::fs::File;
-use serde_json::{Value, Deserializer};
+use serde_json::{Deserializer, Value};
 use std::fmt;
+use std::fs::File;
+use std::io::{self, BufRead, BufReader, IsTerminal, Read, Write};
 
 #[derive(Debug)]
 pub enum JSONError {
@@ -40,7 +40,9 @@ impl fmt::Display for JSONError {
             JSONError::FileOpenError(path) => write!(f, "failed to open file: {}", path),
             JSONError::StdinReadError => write!(f, "failed to read from standard input"),
             JSONError::JSONParseError(err) => write!(f, "failed parsing json: {}", err),
-            JSONError::JSONToStringError(err) => write!(f, "error converting json value to string: {}", err),
+            JSONError::JSONToStringError(err) => {
+                write!(f, "error converting json value to string: {}", err)
+            }
             JSONError::FileWriteError(path) => write!(f, "failed to write to file: {}", path),
         }
     }
@@ -140,7 +142,10 @@ impl JSON {
 
     /// Constructs a `JSON` instance from a file path or standard input with filtering and in-place modification.
     #[allow(dead_code)]
-    pub fn from_file_or_stdin_with_filter<F>(path: Option<String>, filter: F) -> Result<Self, JSONError>
+    pub fn from_file_or_stdin_with_filter<F>(
+        path: Option<String>,
+        filter: F,
+    ) -> Result<Self, JSONError>
     where
         F: Fn(&mut Value) -> bool,
     {
@@ -151,16 +156,22 @@ impl JSON {
     }
 
     #[allow(dead_code)]
-    pub fn from_file_or_stdin_as_array<F>(path: Option<String>, filter: F) -> Result<Self, JSONError>
+    pub fn from_file_or_stdin_as_array<F>(
+        path: Option<String>,
+        filter: F,
+    ) -> Result<Self, JSONError>
     where
         F: Fn(&Value) -> bool,
     {
         // Read the JSON input from file or stdin
         let input = match path {
-            Some(ref file_path) => { // Use `ref` to avoid moving `file_path`
-                let mut file = File::open(file_path).map_err(|_| JSONError::FileOpenError(file_path.clone()))?;
+            Some(ref file_path) => {
+                // Use `ref` to avoid moving `file_path`
+                let mut file = File::open(file_path)
+                    .map_err(|_| JSONError::FileOpenError(file_path.clone()))?;
                 let mut buffer = String::new();
-                file.read_to_string(&mut buffer).map_err(|_| JSONError::FileOpenError(file_path.clone()))?;
+                file.read_to_string(&mut buffer)
+                    .map_err(|_| JSONError::FileOpenError(file_path.clone()))?;
                 buffer
             }
             None => {
@@ -176,7 +187,8 @@ impl JSON {
         };
 
         // Parse the input as JSON
-        let parsed_json: Value = serde_json::from_str(&input).map_err(|e| JSONError::JSONParseError(e.to_string()))?;
+        let parsed_json: Value =
+            serde_json::from_str(&input).map_err(|e| JSONError::JSONParseError(e.to_string()))?;
 
         // Ensure the input is an array
         let array = parsed_json
@@ -219,10 +231,12 @@ impl JSON {
     pub fn write_to_file(&self, file_path: &str) -> Result<(), JSONError> {
         let strings = self.values_as_strings();
 
-        let mut file = File::create(file_path).map_err(|_| JSONError::FileWriteError(file_path.to_string()))?;
+        let mut file = File::create(file_path)
+            .map_err(|_| JSONError::FileWriteError(file_path.to_string()))?;
 
         for line in strings {
-            writeln!(file, "{}", line).map_err(|_| JSONError::FileWriteError(file_path.to_string()))?;
+            writeln!(file, "{}", line)
+                .map_err(|_| JSONError::FileWriteError(file_path.to_string()))?;
         }
 
         Ok(())

@@ -21,9 +21,9 @@
 // SOFTWARE.
 
 pub mod disassembler;
-pub mod mnemonic;
 pub mod instruction;
+pub mod mnemonic;
 
 pub use disassembler::Disassembler;
-pub use mnemonic::Mnemonic;
 pub use instruction::Instruction;
+pub use mnemonic::Mnemonic;

@@ -2,7 +2,6 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 
-
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 #[repr(C)]
@@ -13,10 +12,7 @@ fn bindgen_test_layout__IRStmt__bindgen_ty_1__bindgen_ty_1() {
     assert_eq!(
         ::std::mem::size_of::<_IRStmt__bindgen_ty_1__bindgen_ty_1>(),
         0usize,
-        concat!(
-            "Size of: ",
-            stringify!(_IRStmt__bindgen_ty_1__bindgen_ty_1)
-        )
+        concat!("Size of: ", stringify!(_IRStmt__bindgen_ty_1__bindgen_ty_1))
     );
     assert_eq!(
         ::std::mem::align_of::<_IRStmt__bindgen_ty_1__bindgen_ty_1>(),
@@ -46,8 +42,8 @@ mod test {
 
     #[cfg(log_bytes)]
     unsafe extern "C" fn log_bytes(chars: *const c_char, nbytes: u64) {
-        use std::ffi::CString;
         use libc::printf;
+        use std::ffi::CString;
 
         let format = CString::new("%*s").unwrap();
         printf(format.as_ptr(), nbytes, chars);
@@ -93,12 +89,8 @@ mod test {
         let va: VexArch = VexArch::VexArchAMD64;
         let ve: VexEndness = VexEndness::VexEndnessLE;
 
-        let mut vta: VexTranslateArgs = unsafe {
-            MaybeUninit::zeroed().assume_init()
-        };
-        let mut vge: VexGuestExtents = unsafe {
-            MaybeUninit::zeroed().assume_init()
-        };
+        let mut vta: VexTranslateArgs = unsafe { MaybeUninit::zeroed().assume_init() };
+        let mut vge: VexGuestExtents = unsafe { MaybeUninit::zeroed().assume_init() };
         unsafe {
             LibVEX_default_VexArchInfo(&mut vta.archinfo_guest);
             LibVEX_default_VexArchInfo(&mut vta.archinfo_host);

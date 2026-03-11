@@ -20,18 +20,18 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use binlex::AUTHOR;
+use binlex::VERSION;
+use binlex::controlflow::SymbolIoJson;
+use binlex::io::JSON;
+use binlex::io::Stdout;
+use binlex::types::LZ4String;
 use clap::Parser;
 use serde_json::Value;
 use std::fs::File;
 use std::io::Error;
 use std::io::Write;
 use std::process;
-use binlex::types::LZ4String;
-use binlex::AUTHOR;
-use binlex::VERSION;
-use binlex::io::Stdout;
-use binlex::io::JSON;
-use binlex::controlflow::SymbolIoJson;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -71,7 +71,10 @@ fn main() {
             None => return false,
         };
         let virtual_address = object.get("offset").and_then(|v| v.as_u64());
-        let function_name = object.get("name").and_then(|v| v.as_str()).map(String::from);
+        let function_name = object
+            .get("name")
+            .and_then(|v| v.as_str())
+            .map(String::from);
 
         if virtual_address.is_none() || function_name.is_none() {
             return false;
@@ -79,7 +82,7 @@ fn main() {
         true
     });
 
-    if args.output.is_none() && json.is_ok(){
+    if args.output.is_none() && json.is_ok() {
         for value in json.unwrap().values() {
             if let Ok(string) = process_value(value) {
                 Stdout::print(string);
@@ -104,5 +107,4 @@ fn main() {
     }
 
     process::exit(0);
-
 }

@@ -146,6 +146,11 @@ impl Instruction {
     }
 
     #[pyo3(text_signature = "($self)")]
+    pub fn has_indirect_target(&self, py: Python) -> PyResult<bool> {
+        self.with_inner_instruction(py, |instruction| Ok(instruction.has_indirect_target()))
+    }
+
+    #[pyo3(text_signature = "($self)")]
     pub fn functions(&self, py: Python) -> PyResult<BTreeSet<u64>> {
         self.with_inner_instruction(py, |instruction| Ok(instruction.functions()))
     }

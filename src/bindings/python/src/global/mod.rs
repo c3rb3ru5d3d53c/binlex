@@ -20,13 +20,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod config;
 pub mod architecture;
+pub mod config;
 
-use crate::global::config::config_init;
-pub use crate::global::config::Config;
 use crate::global::architecture::architecture_init;
 pub use crate::global::architecture::Architecture;
+use crate::global::config::config_init;
+pub use crate::global::config::Config;
 
 use pyo3::{prelude::*, wrap_pymodule};
 

@@ -107,10 +107,10 @@ impl Const<'_> {
         } else if tag == IRConstTag::Ico_F64i as u32 {
             ConstEnum::F64i(unsafe { co.Ico.F64i })
         } else if tag == IRConstTag::Ico_V128 as u32 {
-                let val = unsafe { co.Ico.V128 };
-                let vec = V128 {
-                    w16: [val, val, val, val, val, val, val, val],
-                };
+            let val = unsafe { co.Ico.V128 };
+            let vec = V128 {
+                w16: [val, val, val, val, val, val, val, val],
+            };
             ConstEnum::V128(vec)
         } else if tag == IRConstTag::Ico_V256 as u32 {
             let val = unsafe { co.Ico.V256 };

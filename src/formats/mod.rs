@@ -20,13 +20,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod file;
-pub mod pe;
-pub mod elf;
-pub mod macho;
 pub mod cli;
+pub mod elf;
+pub mod file;
+pub mod macho;
+pub mod pe;
 
-pub use pe::PE;
-pub use file::File;
 pub use elf::ELF;
+pub use file::File;
 pub use macho::MACHO;
+pub use pe::PE;

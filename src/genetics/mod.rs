@@ -20,12 +20,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod chromosome;
 pub mod allelepair;
+pub mod chromosome;
 pub mod gene;
 
+pub use allelepair::AllelePair;
 pub use chromosome::Chromosome;
 pub use chromosome::ChromosomeJson;
 pub use chromosome::ChromosomeSimilarity;
-pub use allelepair::AllelePair;
 pub use gene::Gene;

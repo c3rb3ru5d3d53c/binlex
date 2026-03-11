@@ -490,7 +490,7 @@ impl Config {
                         return {
                             *self = config;
                             Ok(())
-                        }
+                        };
                     }
                     Err(error) => return Err(error),
                 }

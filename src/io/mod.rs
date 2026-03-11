@@ -20,12 +20,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+pub mod json;
+pub mod stderr;
 pub mod stdin;
 pub mod stdout;
-pub mod stderr;
-pub mod json;
 
+pub use json::JSON;
+pub use stderr::Stderr;
 pub use stdin::Stdin;
 pub use stdout::Stdout;
-pub use stderr::Stderr;
-pub use json::JSON;

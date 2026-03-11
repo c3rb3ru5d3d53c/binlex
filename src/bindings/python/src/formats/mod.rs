@@ -20,19 +20,19 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod file;
-pub mod pe;
 pub mod elf;
+pub mod file;
 pub mod macho;
+pub mod pe;
 
 use crate::formats::file::file_init;
-use crate::formats::pe::pe_init;
 use crate::formats::macho::macho_init;
+use crate::formats::pe::pe_init;
 
-pub use crate::formats::pe::PE;
-pub use crate::formats::file::File;
 pub use crate::formats::elf::ELF;
+pub use crate::formats::file::File;
 pub use crate::formats::macho::MACHO;
+pub use crate::formats::pe::PE;
 
 use pyo3::{prelude::*, wrap_pymodule};
 
@@ -46,7 +46,7 @@ pub fn formats_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<File>()?;
     m.add_class::<ELF>()?;
     m.add_class::<MACHO>()?;
-     py.import_bound("sys")?
+    py.import_bound("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.formats", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.formats")?;

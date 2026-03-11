@@ -20,8 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::disassemblers::custom::cil::Mnemonic;
 use crate::Binary;
+use crate::disassemblers::custom::cil::Mnemonic;
 use std::collections::BTreeSet;
 use std::io::Error;
 

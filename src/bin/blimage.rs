@@ -20,10 +20,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use binlex::hashing::SHA256;
-use binlex::io::Stdout;
 use binlex::AUTHOR;
 use binlex::VERSION;
+use binlex::hashing::SHA256;
+use binlex::io::Stdout;
 use clap::Parser;
 use clap::ValueEnum;
 use std::collections::BTreeMap;

@@ -23,8 +23,8 @@
 use crate::controlflow::SymbolJson;
 use crate::controlflow::TagJson;
 use crate::formats::file::FileJson;
-use serde_json::json;
 use serde_json::Value;
+use serde_json::json;
 use std::io::Error;
 
 #[derive(Clone)]

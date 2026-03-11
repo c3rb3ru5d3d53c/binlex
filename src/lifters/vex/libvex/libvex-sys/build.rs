@@ -329,7 +329,12 @@ fn compile_vex() -> Result<PathBuf> {
     }
     let status = command.status()?;
     if !status.success() {
-        return Err(format!("`make` failed in {} with status {}", src_dir.display(), status).into());
+        return Err(format!(
+            "`make` failed in {} with status {}",
+            src_dir.display(),
+            status
+        )
+        .into());
     }
 
     Ok(src_dir)
@@ -340,9 +345,7 @@ fn ensure_lib() -> Result<PathBuf> {
     match env::var("VEX_LIBS") {
         Ok(path) => Ok(PathBuf::from(path)),
         Err(VarError::NotUnicode(path)) => Ok(PathBuf::from(path)),
-        Err(VarError::NotPresent) if is_macos => {
-            bootstrap_macos_vex()
-        }
+        Err(VarError::NotPresent) if is_macos => bootstrap_macos_vex(),
         Err(VarError::NotPresent) => compile_vex(),
     }
 }

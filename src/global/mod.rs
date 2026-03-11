@@ -20,12 +20,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod format;
 pub mod architecture;
 pub mod config;
+pub mod format;
 
 pub use architecture::Architecture;
-pub use format::Format;
-pub use config::Config;
 pub use config::AUTHOR;
+pub use config::Config;
 pub use config::VERSION;
+pub use format::Format;

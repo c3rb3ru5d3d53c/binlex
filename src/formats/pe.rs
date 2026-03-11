@@ -20,6 +20,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use crate::Architecture;
+use crate::Config;
+use crate::formats::File;
 use crate::formats::cli::Cor20Header;
 use crate::formats::cli::Entry;
 use crate::formats::cli::FatHeader;
@@ -35,16 +38,13 @@ use crate::formats::cli::StreamHeader;
 use crate::formats::cli::TinyHeader;
 use crate::formats::cli::TypeDefEntry;
 use crate::formats::cli::TypeRefEntry;
-use crate::formats::File;
 use crate::types::MemoryMappedFile;
-use crate::Architecture;
-use crate::Config;
+use lief::Binary;
 use lief::generic::Section;
 use lief::pe::data_directory::Type as DATA_DIRECTORY;
 use lief::pe::debug::Entries;
 use lief::pe::headers::MachineType;
 use lief::pe::section::Characteristics;
-use lief::Binary;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;

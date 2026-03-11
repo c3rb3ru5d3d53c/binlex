@@ -20,9 +20,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use std::fmt::Display;
 use std::io::ErrorKind;
 use std::io::{self, Write};
-use std::fmt::Display;
 /// Represents a wrapper for standard output operations.
 pub struct Stdout;
 

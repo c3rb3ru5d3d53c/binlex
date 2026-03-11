@@ -20,21 +20,21 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use crate::Architecture;
+use crate::Config;
 use crate::binary::Binary;
-use crate::controlflow::graph::Graph;
 use crate::controlflow::Attributes;
 use crate::controlflow::Instruction;
 use crate::controlflow::InstructionJson;
+use crate::controlflow::graph::Graph;
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeJson;
 use crate::genetics::ChromosomeSimilarity;
 use crate::hashing::MinHash32;
 use crate::hashing::SHA256;
 use crate::hashing::TLSH;
-use crate::Architecture;
-use crate::Config;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Value;
