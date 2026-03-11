@@ -30,6 +30,9 @@ on:
     branches:
       - master
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   build:
     strategy:
@@ -72,8 +75,10 @@ jobs:
       - name: Install Dependencies (macOS)
         if: startsWith(matrix.os, 'macos-')
         run: |
-          brew update
-          brew install openssl automake autoconf libtool
+          brew list openssl@3 >/dev/null 2>&1 || brew install openssl@3
+          brew list automake >/dev/null 2>&1 || brew install automake
+          brew list autoconf >/dev/null 2>&1 || brew install autoconf
+          brew list libtool >/dev/null 2>&1 || brew install libtool
 
       - name: Install MSYS2 and Automake (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
@@ -88,7 +93,9 @@ jobs:
 
       - name: Enable Developer Command Prompt (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
-        uses: ilammy/msvc-dev-cmd@v1.7.0
+        uses: TheMrMilchmann/setup-msvc-dev@v4
+        with:
+          arch: x64
 
       - name: Install Python Build Tools
         run: |
