@@ -111,3 +111,87 @@ fn test_full_function_disassembly() {
     // verify the function is contiguous
     assert!(func.contiguous(), "function should be contiguous");
 }
+
+#[test]
+fn test_direct_call_outside_executable_range_is_not_enqueued_as_function() {
+    // assembly: call 0xa; ret
+    let bytes = vec![0xe8, 0x05, 0x00, 0x00, 0x00, 0xc3];
+    let mut ranges = BTreeMap::new();
+    ranges.insert(0u64, bytes.len() as u64);
+    let config = Config::new();
+    let disasm =
+        Disassembler::new(Architecture::I386, &bytes, ranges, config.clone()).expect("disasm");
+    let mut graph = Graph::new(Architecture::I386, config);
+
+    disasm
+        .disassemble_instruction(0, &mut graph)
+        .expect("disassemble");
+
+    let instruction = graph.get_instruction(0).expect("instruction");
+    assert!(
+        instruction.is_call,
+        "instruction should be identified as call"
+    );
+    assert!(
+        instruction.functions.is_empty(),
+        "out-of-range call target should not be tracked as a function"
+    );
+    assert!(
+        graph.functions.dequeue_all().is_empty(),
+        "out-of-range call target should not be enqueued"
+    );
+}
+
+#[test]
+fn test_executable_address_end_is_exclusive() {
+    let bytes = vec![0x90, 0xc3];
+    let mut ranges = BTreeMap::new();
+    ranges.insert(0u64, bytes.len() as u64);
+    let config = Config::new();
+    let disasm =
+        Disassembler::new(Architecture::I386, &bytes, ranges, config.clone()).expect("disasm");
+    let mut graph = Graph::new(Architecture::I386, config);
+
+    disasm
+        .disassemble_instruction(0, &mut graph)
+        .expect("decode at start should succeed");
+    disasm
+        .disassemble_instruction(1, &mut graph)
+        .expect("decode inside range should succeed");
+    assert!(
+        disasm
+            .disassemble_instruction(bytes.len() as u64, &mut graph)
+            .is_err(),
+        "decoding at the exclusive end should fail"
+    );
+}
+
+#[test]
+fn test_return_instruction_has_zero_edges() {
+    let bytes = vec![0xc3];
+    let mut ranges = BTreeMap::new();
+    ranges.insert(0u64, bytes.len() as u64);
+    let config = Config::new();
+    let disasm =
+        Disassembler::new(Architecture::I386, &bytes, ranges, config.clone()).expect("disasm");
+    let mut graph = Graph::new(Architecture::I386, config);
+
+    disasm
+        .disassemble_instruction(0, &mut graph)
+        .expect("disassemble");
+
+    let instruction = graph.get_instruction(0).expect("instruction");
+    assert!(
+        instruction.is_return,
+        "instruction should be identified as return"
+    );
+    assert_eq!(
+        instruction.edges, 0,
+        "return should not report outgoing edges"
+    );
+    assert_eq!(
+        instruction.next(),
+        None,
+        "return should not have fallthrough"
+    );
+}
