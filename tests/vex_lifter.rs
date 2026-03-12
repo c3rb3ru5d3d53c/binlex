@@ -12,8 +12,8 @@ fn test_graph() -> Graph {
 
 #[test]
 fn test_lift_bytes_ret() {
-    let mut vex = Vex::new(Architecture::AMD64).unwrap();
-    let irsb = vex.ir(&[0xC3u8], 0x1000).ok(); // x86_64 "ret"
+    let mut vex = Vex::new(Architecture::AMD64, &[0xC3u8], 0x1000).unwrap();
+    let irsb = vex.ir().ok(); // x86_64 "ret"
     assert!(irsb.is_some());
     if let Some(irsb) = irsb {
         println!("IRSB for ret: {:?}", irsb);
@@ -42,8 +42,8 @@ fn test_lift_instruction() {
         to: BTreeSet::new(),
         edges: 0,
     };
-    let mut vex = Vex::new(Architecture::AMD64).unwrap();
-    let irsb = vex.ir(&instruction.bytes, instruction.address).ok();
+    let mut vex = Vex::new(Architecture::AMD64, &instruction.bytes, instruction.address).unwrap();
+    let irsb = vex.ir().ok();
     assert!(irsb.is_some());
     if let Some(irsb) = irsb {
         println!("IRSB for instruction: {:?}", irsb);
@@ -79,8 +79,9 @@ fn test_lift_block() {
         cfg: &graph,
         terminator: instruction,
     };
-    let mut vex = Vex::new(Architecture::AMD64).unwrap();
-    let irsb = vex.ir(&block.bytes(), block.address).ok();
+    let block_bytes = block.bytes();
+    let mut vex = Vex::new(Architecture::AMD64, &block_bytes, block.address).unwrap();
+    let irsb = vex.ir().ok();
     assert!(irsb.is_some());
     if let Some(irsb) = irsb {
         println!("IRSB for block: {:?}", irsb);
@@ -134,11 +135,11 @@ fn test_extract_block_addresses() {
 
 #[test]
 fn test_lift_binlex_block_split_example() {
-    let mut vex = Vex::new(Architecture::AMD64).unwrap();
     // Block: jz 0x4; nop; nop; ret
     let block_bytes = [0x74, 0x02, 0x90, 0x90, 0xc3];
     let block_address = 0x1000u64;
-    let irsb = vex.ir(&block_bytes, block_address).ok();
+    let mut vex = Vex::new(Architecture::AMD64, &block_bytes, block_address).unwrap();
+    let irsb = vex.ir().ok();
     assert!(irsb.is_some());
     if let Some(irsb) = irsb {
         println!("IRSB for binlex block split example: {:?}", irsb);

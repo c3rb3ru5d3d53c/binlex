@@ -9,10 +9,12 @@ const BUFFER_PADDING: usize = 64;
 
 pub struct Vex {
     translator: TranslateArgs,
+    guest_bytes: Vec<u8>,
+    guest_address: u64,
 }
 
 impl Vex {
-    pub fn new(architecture: Architecture) -> Result<Self, Error> {
+    pub fn new(architecture: Architecture, bytes: &[u8], address: u64) -> Result<Self, Error> {
         let guest_arch = match architecture {
             Architecture::AMD64 => Arch::VexArchAMD64,
             Architecture::I386 => Arch::VexArchX86,
@@ -28,16 +30,19 @@ impl Vex {
         } else {
             Arch::VexArchAMD64
         };
-        Ok(Self {
-            translator: TranslateArgs::new(guest_arch, host_arch, VexEndness::VexEndnessLE),
-        })
-    }
-
-    pub fn ir(&mut self, bytes: &[u8], address: u64) -> Result<IRSB<'_>, TranslateError> {
         let mut guest_bytes = Vec::with_capacity(bytes.len() + BUFFER_PADDING);
         guest_bytes.extend_from_slice(bytes);
         guest_bytes.resize(bytes.len() + BUFFER_PADDING, 0);
-        self.translator.front_end(guest_bytes.as_ptr(), address)
+        Ok(Self {
+            translator: TranslateArgs::new(guest_arch, host_arch, VexEndness::VexEndnessLE),
+            guest_bytes,
+            guest_address: address,
+        })
+    }
+
+    pub fn ir(&mut self) -> Result<IRSB<'_>, TranslateError> {
+        self.translator
+            .front_end(self.guest_bytes.as_ptr(), self.guest_address)
     }
 }
 
