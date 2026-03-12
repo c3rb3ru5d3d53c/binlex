@@ -55,7 +55,6 @@ def process(
     size_ratio_threshold: float = 0.75,
     combined_ratio_threshold: float = 0.75,
     mininum_size: int = 32,
-    chromosome_minhash_ratio_threshold: float = 0.75,
     limit: int = 3,
     exclude_named_functions: bool = False,
 ):
@@ -74,9 +73,6 @@ def process(
             continue
 
         if lhs_function.size() < mininum_size:
-            continue
-
-        if lhs_function.chromosome_minhash_ratio() < chromosome_minhash_ratio_threshold:
             continue
 
         status, lhs_vector = client.inference(lhs_function.to_dict())
@@ -278,7 +274,6 @@ def execute(parent):
         minhash_score_threshold,
         mininum_size,
         size_ratio_threshold,
-        chromosome_minhash_ratio_threshold,
         combined_ratio_threshold,
         gnn_similarity_threshold,
         url,
@@ -308,7 +303,6 @@ def execute(parent):
             size_ratio_threshold,
             combined_ratio_threshold,
             mininum_size,
-            chromosome_minhash_ratio_threshold,
             limit,
             exclude_named_functions,
         ),

@@ -270,12 +270,10 @@ for lhs_function in lhs_functions:
 # # Filter by Size and Hashed Ratio
 # for lhs in lhs_cfg.functions():
 #     if lhs.size() < 128: continue
-#     if lhs.minhash_ratio() < 0.75: continue
 #     lhs_filtered.append(lhs)
 
 # for rhs in rhs_cfg.functions():
 #     if rhs.size() < 128: continue
-#     if rhs.minhash_ratio() < 0.75: continue
 #     rhs_filtered.append(rhs)
 
 # # Hunt Similar Functions with Size Tolerance

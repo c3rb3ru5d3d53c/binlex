@@ -42,6 +42,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::Error;
 use std::io::ErrorKind;
 
+#[derive(Clone)]
+struct DecodedInstruction {
+    address: u64,
+    id: InsnId,
+    bytes: Vec<u8>,
+    operands: Vec<ArchOperand>,
+}
+
 pub struct Disassembler<'disassembler> {
     cs: Capstone,
     image: &'disassembler [u8],
@@ -299,11 +307,12 @@ impl<'disassembler> Disassembler<'disassembler> {
                 blinstruction.functions.insert(addr);
             }
         }
-        if let Some(addr) = self.get_indirect_controlflow_target(instruction) {
-            if blinstruction.is_jump {
-                blinstruction.to.insert(addr);
-            }
-            if blinstruction.is_call {
+        let indirect_targets = self.get_indirect_controlflow_targets(instruction, cfg);
+        if blinstruction.is_jump {
+            blinstruction.to.extend(indirect_targets.clone());
+        }
+        if blinstruction.is_call {
+            for addr in indirect_targets {
                 cfg.functions.enqueue(addr);
                 blinstruction.functions.insert(addr);
             }
@@ -311,6 +320,10 @@ impl<'disassembler> Disassembler<'disassembler> {
         if let Some(addr) = self.get_instruction_executable_addresses(instruction) {
             cfg.functions.enqueue(addr);
             blinstruction.functions.insert(addr);
+        }
+
+        if blinstruction.is_jump || blinstruction.is_return || blinstruction.is_trap {
+            blinstruction.edges = blinstruction.blocks().len();
         }
 
         Stderr::print_debug(
@@ -866,6 +879,449 @@ impl<'disassembler> Disassembler<'disassembler> {
         None
     }
 
+    fn get_indirect_controlflow_targets(&self, instruction: &Insn, cfg: &Graph) -> BTreeSet<u64> {
+        let mut targets = BTreeSet::new();
+
+        if let Some(target) = self.get_indirect_controlflow_target(instruction) {
+            targets.insert(target);
+        }
+
+        if !Disassembler::is_unconditional_jump_instruction(instruction) {
+            return targets;
+        }
+
+        let operand = match self.get_instruction_operand(instruction, 0) {
+            Ok(operand) => operand,
+            Err(_) => return targets,
+        };
+
+        let history = self.get_recent_decoded_instructions(instruction.address(), cfg, 6);
+
+        if let ArchOperand::X86Operand(op) = operand {
+            match op.op_type {
+                X86OperandType::Mem(mem) if mem.index() != RegId(0) => {
+                    targets.extend(self.resolve_jump_table_memory_targets(
+                        instruction,
+                        mem,
+                        op.size as usize,
+                        &history,
+                    ));
+                }
+                X86OperandType::Reg(reg) => {
+                    targets.extend(self.resolve_register_jump_table_targets(reg, &history));
+                }
+                _ => {}
+            }
+        }
+
+        targets
+    }
+
+    fn get_recent_decoded_instructions(
+        &self,
+        address: u64,
+        cfg: &Graph,
+        max_count: usize,
+    ) -> Vec<DecodedInstruction> {
+        let mut addresses = Vec::new();
+        for entry in cfg.listing.range(..address) {
+            addresses.push(*entry.key());
+        }
+        let start = addresses.len().saturating_sub(max_count);
+        let mut decoded = Vec::new();
+        for address in &addresses[start..] {
+            let Ok(insns) = self.disassemble_instructions(*address, 1) else {
+                continue;
+            };
+            let Some(insn) = insns.iter().next() else {
+                continue;
+            };
+            let Ok(operands) = self.get_instruction_operands(insn) else {
+                continue;
+            };
+            decoded.push(DecodedInstruction {
+                address: insn.address(),
+                id: insn.id(),
+                bytes: insn.bytes().to_vec(),
+                operands,
+            });
+        }
+        decoded
+    }
+
+    fn resolve_jump_table_memory_targets(
+        &self,
+        instruction: &Insn,
+        mem: X86OpMem,
+        operand_size: usize,
+        history: &[DecodedInstruction],
+    ) -> BTreeSet<u64> {
+        let mut result = BTreeSet::new();
+        let Some(table_base) = self.resolve_jump_table_base(instruction, mem, history) else {
+            return result;
+        };
+        let Some(case_count) = self.find_jump_table_case_count(mem.index(), history) else {
+            return result;
+        };
+
+        let entry_size = self.get_jump_table_entry_size(mem.scale() as usize, operand_size);
+        if entry_size == 0 {
+            return result;
+        }
+
+        for i in 0..case_count {
+            let entry_address = match table_base.checked_add((i * entry_size) as u64) {
+                Some(address) => address,
+                None => break,
+            };
+            let Some(target) = self.read_pointer_sized(entry_address, entry_size) else {
+                break;
+            };
+            if !self.is_executable_address(target) {
+                break;
+            }
+            result.insert(target);
+        }
+
+        result
+    }
+
+    fn resolve_register_jump_table_targets(
+        &self,
+        jump_register: RegId,
+        history: &[DecodedInstruction],
+    ) -> BTreeSet<u64> {
+        let mut result = BTreeSet::new();
+        if history.is_empty() {
+            return result;
+        }
+
+        let Some(load_index) =
+            history.iter().rposition(|insn| self.is_register_jump_table_load(insn, jump_register))
+        else {
+            return result;
+        };
+
+        let load = &history[load_index];
+        let Some((mem, operand_size)) = self.get_memory_source(load) else {
+            return result;
+        };
+        let Some(case_count) = self.find_jump_table_case_count(mem.index(), history) else {
+            return result;
+        };
+
+        if load.id == InsnId(X86Insn::X86_INS_MOV as u32) {
+            let Some(table_base) = self.resolve_jump_table_base_from_history(mem, history) else {
+                return result;
+            };
+            let entry_size = self.get_jump_table_entry_size(mem.scale() as usize, operand_size);
+            if entry_size == 0 {
+                return result;
+            }
+            for i in 0..case_count {
+                let Some(entry_address) = table_base.checked_add((i * entry_size) as u64) else {
+                    break;
+                };
+                let Some(target) = self.read_pointer_sized(entry_address, entry_size) else {
+                    break;
+                };
+                if !self.is_executable_address(target) {
+                    break;
+                }
+                result.insert(target);
+            }
+            return result;
+        }
+
+        if load.id != InsnId(X86Insn::X86_INS_MOVSXD as u32) {
+            return result;
+        }
+
+        let Some(add_index) = history.iter().rposition(|insn| {
+            self.is_add_same_register(insn, jump_register) && insn.address > load.address
+        }) else {
+            return result;
+        };
+
+        let Some(base_register) = self.get_add_rhs_register(&history[add_index], jump_register) else {
+            return result;
+        };
+        let Some(table_base) = self.resolve_register_value_from_history(base_register, history) else {
+            return result;
+        };
+
+        for i in 0..case_count {
+            let Some(entry_address) = table_base.checked_add((i * 4) as u64) else {
+                break;
+            };
+            let Some(offset) = self.read_i32(entry_address) else {
+                break;
+            };
+            let target = (table_base as i64 + offset as i64) as u64;
+            if !self.is_executable_address(target) {
+                break;
+            }
+            result.insert(target);
+        }
+
+        result
+    }
+
+    fn is_register_jump_table_load(&self, instruction: &DecodedInstruction, register: RegId) -> bool {
+        if instruction.operands.len() < 2 {
+            return false;
+        }
+        if instruction.id != InsnId(X86Insn::X86_INS_MOV as u32)
+            && instruction.id != InsnId(X86Insn::X86_INS_MOVSXD as u32)
+        {
+            return false;
+        }
+
+        matches!(
+            (&instruction.operands[0], &instruction.operands[1]),
+            (
+                ArchOperand::X86Operand(dst),
+                ArchOperand::X86Operand(src)
+            ) if matches!(dst.op_type, X86OperandType::Reg(reg) if self.registers_match(reg, register))
+                && matches!(src.op_type, X86OperandType::Mem(mem) if mem.index() != RegId(0))
+        )
+    }
+
+    fn get_memory_source(&self, instruction: &DecodedInstruction) -> Option<(X86OpMem, usize)> {
+        if instruction.operands.len() < 2 {
+            return None;
+        }
+        match (&instruction.operands[0], &instruction.operands[1]) {
+            (ArchOperand::X86Operand(_), ArchOperand::X86Operand(src)) => match src.op_type {
+                X86OperandType::Mem(mem) => Some((mem, src.size as usize)),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    fn is_add_same_register(&self, instruction: &DecodedInstruction, register: RegId) -> bool {
+        if instruction.id != InsnId(X86Insn::X86_INS_ADD as u32) || instruction.operands.len() < 2 {
+            return false;
+        }
+        matches!(
+            &instruction.operands[0],
+            ArchOperand::X86Operand(dst)
+                if matches!(dst.op_type, X86OperandType::Reg(reg) if self.registers_match(reg, register))
+        )
+    }
+
+    fn get_add_rhs_register(&self, instruction: &DecodedInstruction, lhs: RegId) -> Option<RegId> {
+        if !self.is_add_same_register(instruction, lhs) {
+            return None;
+        }
+        match &instruction.operands[1] {
+            ArchOperand::X86Operand(op) => match op.op_type {
+                X86OperandType::Reg(reg) => Some(reg),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    fn find_jump_table_case_count(
+        &self,
+        index_register: RegId,
+        history: &[DecodedInstruction],
+    ) -> Option<usize> {
+        for instruction in history.iter().rev() {
+            if instruction.id != InsnId(X86Insn::X86_INS_CMP as u32) || instruction.operands.len() < 2 {
+                continue;
+            }
+            let lhs_matches = matches!(
+                &instruction.operands[0],
+                ArchOperand::X86Operand(op)
+                    if matches!(op.op_type, X86OperandType::Reg(reg) if self.registers_match(reg, index_register))
+            );
+            if !lhs_matches {
+                continue;
+            }
+            if let ArchOperand::X86Operand(rhs) = &instruction.operands[1] {
+                if let X86OperandType::Imm(imm) = rhs.op_type {
+                    let count = (imm + 1).max(0) as usize;
+                    if (1..=256).contains(&count) {
+                        return Some(count);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    fn resolve_jump_table_base(
+        &self,
+        instruction: &Insn,
+        mem: X86OpMem,
+        history: &[DecodedInstruction],
+    ) -> Option<u64> {
+        if mem.base() == RegId(0) {
+            return Some(mem.disp() as u64);
+        }
+        if mem.base() == RegId(X86_REG_RIP as u16) {
+            return Some(
+                (instruction.address() as i64 + mem.disp() + instruction.bytes().len() as i64) as u64,
+            );
+        }
+        self.resolve_register_value_from_history(mem.base(), history)
+    }
+
+    fn resolve_jump_table_base_from_history(
+        &self,
+        mem: X86OpMem,
+        history: &[DecodedInstruction],
+    ) -> Option<u64> {
+        if mem.base() == RegId(0) {
+            return Some(mem.disp() as u64);
+        }
+        self.resolve_register_value_from_history(mem.base(), history)
+            .and_then(|base| base.checked_add(mem.disp() as u64))
+    }
+
+    fn resolve_register_value_from_history(
+        &self,
+        register: RegId,
+        history: &[DecodedInstruction],
+    ) -> Option<u64> {
+        for instruction in history.iter().rev() {
+            if instruction.id != InsnId(X86Insn::X86_INS_LEA as u32) || instruction.operands.len() < 2 {
+                continue;
+            }
+            let dst_matches = matches!(
+                &instruction.operands[0],
+                ArchOperand::X86Operand(dst)
+                    if matches!(dst.op_type, X86OperandType::Reg(reg) if self.registers_match(reg, register))
+            );
+            if !dst_matches {
+                continue;
+            }
+            if let ArchOperand::X86Operand(src) = &instruction.operands[1] {
+                if let X86OperandType::Mem(mem) = src.op_type {
+                    if mem.base() == RegId(X86_REG_RIP as u16) {
+                        return Some(
+                            (instruction.address as i64
+                                + mem.disp()
+                                + instruction.bytes.len() as i64) as u64,
+                        );
+                    }
+                    if mem.base() == RegId(0) {
+                        return Some(mem.disp() as u64);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    fn get_jump_table_entry_size(&self, scale: usize, operand_size: usize) -> usize {
+        let pointer_size = match self.machine {
+            Architecture::AMD64 => 8,
+            Architecture::I386 => 4,
+            _ => return 0,
+        };
+
+        if operand_size == pointer_size || operand_size == 4 {
+            return operand_size;
+        }
+        if scale == pointer_size || scale == 4 {
+            return scale;
+        }
+        0
+    }
+
+    fn registers_match(&self, lhs: RegId, rhs: RegId) -> bool {
+        self.normalize_register(lhs) == self.normalize_register(rhs)
+    }
+
+    fn normalize_register(&self, register: RegId) -> u16 {
+        let value = register.0 as u32;
+        if [
+            capstone::arch::x86::X86Reg::X86_REG_AL as u32,
+            capstone::arch::x86::X86Reg::X86_REG_AH as u32,
+            capstone::arch::x86::X86Reg::X86_REG_AX as u32,
+            capstone::arch::x86::X86Reg::X86_REG_EAX as u32,
+            capstone::arch::x86::X86Reg::X86_REG_RAX as u32,
+        ]
+        .contains(&value)
+        {
+            return capstone::arch::x86::X86Reg::X86_REG_RAX as u16;
+        }
+        if [
+            capstone::arch::x86::X86Reg::X86_REG_CL as u32,
+            capstone::arch::x86::X86Reg::X86_REG_CH as u32,
+            capstone::arch::x86::X86Reg::X86_REG_CX as u32,
+            capstone::arch::x86::X86Reg::X86_REG_ECX as u32,
+            capstone::arch::x86::X86Reg::X86_REG_RCX as u32,
+        ]
+        .contains(&value)
+        {
+            return capstone::arch::x86::X86Reg::X86_REG_RCX as u16;
+        }
+        if [
+            capstone::arch::x86::X86Reg::X86_REG_DL as u32,
+            capstone::arch::x86::X86Reg::X86_REG_DH as u32,
+            capstone::arch::x86::X86Reg::X86_REG_DX as u32,
+            capstone::arch::x86::X86Reg::X86_REG_EDX as u32,
+            capstone::arch::x86::X86Reg::X86_REG_RDX as u32,
+        ]
+        .contains(&value)
+        {
+            return capstone::arch::x86::X86Reg::X86_REG_RDX as u16;
+        }
+        if [
+            capstone::arch::x86::X86Reg::X86_REG_BL as u32,
+            capstone::arch::x86::X86Reg::X86_REG_BH as u32,
+            capstone::arch::x86::X86Reg::X86_REG_BX as u32,
+            capstone::arch::x86::X86Reg::X86_REG_EBX as u32,
+            capstone::arch::x86::X86Reg::X86_REG_RBX as u32,
+        ]
+        .contains(&value)
+        {
+            return capstone::arch::x86::X86Reg::X86_REG_RBX as u16;
+        }
+        if [
+            capstone::arch::x86::X86Reg::X86_REG_SI as u32,
+            capstone::arch::x86::X86Reg::X86_REG_ESI as u32,
+            capstone::arch::x86::X86Reg::X86_REG_RSI as u32,
+        ]
+        .contains(&value)
+        {
+            return capstone::arch::x86::X86Reg::X86_REG_RSI as u16;
+        }
+        if [
+            capstone::arch::x86::X86Reg::X86_REG_DI as u32,
+            capstone::arch::x86::X86Reg::X86_REG_EDI as u32,
+            capstone::arch::x86::X86Reg::X86_REG_RDI as u32,
+        ]
+        .contains(&value)
+        {
+            return capstone::arch::x86::X86Reg::X86_REG_RDI as u16;
+        }
+        if [
+            capstone::arch::x86::X86Reg::X86_REG_BP as u32,
+            capstone::arch::x86::X86Reg::X86_REG_EBP as u32,
+            capstone::arch::x86::X86Reg::X86_REG_RBP as u32,
+        ]
+        .contains(&value)
+        {
+            return capstone::arch::x86::X86Reg::X86_REG_RBP as u16;
+        }
+        if [
+            capstone::arch::x86::X86Reg::X86_REG_SP as u32,
+            capstone::arch::x86::X86Reg::X86_REG_ESP as u32,
+            capstone::arch::x86::X86Reg::X86_REG_RSP as u32,
+        ]
+        .contains(&value)
+        {
+            return capstone::arch::x86::X86Reg::X86_REG_RSP as u16;
+        }
+        register.0
+    }
+
     fn resolve_memory_operand_target(&self, instruction: &Insn, mem: X86OpMem) -> Option<u64> {
         let pointer_address = self.resolve_memory_operand_address(instruction, mem)?;
         let target = self.read_pointer(pointer_address)?;
@@ -913,6 +1369,30 @@ impl<'disassembler> Disassembler<'disassembler> {
             Architecture::I386 => u32::from_le_bytes(bytes.try_into().ok()?) as u64,
             _ => return None,
         })
+    }
+
+    fn read_pointer_sized(&self, address: u64, size: usize) -> Option<u64> {
+        let start = address as usize;
+        let end = start.checked_add(size)?;
+        if end > self.image.len() {
+            return None;
+        }
+        let bytes = &self.image[start..end];
+        match size {
+            4 => Some(u32::from_le_bytes(bytes.try_into().ok()?) as u64),
+            8 => Some(u64::from_le_bytes(bytes.try_into().ok()?)),
+            _ => None,
+        }
+    }
+
+    fn read_i32(&self, address: u64) -> Option<i32> {
+        let start = address as usize;
+        let end = start.checked_add(4)?;
+        if end > self.image.len() {
+            return None;
+        }
+        let bytes = &self.image[start..end];
+        Some(i32::from_le_bytes(bytes.try_into().ok()?))
     }
 
     #[allow(dead_code)]

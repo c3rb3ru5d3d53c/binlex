@@ -141,26 +141,6 @@ impl FunctionJsonDeserializer {
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn tlsh_ratio(&self) -> f64 {
-        self.inner.lock().unwrap().tlsh_ratio()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    pub fn minhash_ratio(&self) -> f64 {
-        self.inner.lock().unwrap().minhash_ratio()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    pub fn chromosome_minhash_ratio(&self) -> f64 {
-        self.inner.lock().unwrap().chromosome_minhash_ratio()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    pub fn chromosome_tlsh_ratio(&self) -> f64 {
-        self.inner.lock().unwrap().chromosome_tlsh_ratio()
-    }
-
-    #[pyo3(text_signature = "($self)")]
     pub fn prologue(&self) -> bool {
         self.inner.lock().unwrap().prologue()
     }
@@ -286,26 +266,6 @@ impl Function {
             let chromosome = Chromosome::new(py, pattern.unwrap(), config).ok();
             Ok(chromosome)
         })
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    pub fn chromosome_minhash_ratio(&self, py: Python) -> PyResult<f64> {
-        self.with_inner_function(py, |function| Ok(function.chromosome_minhash_ratio()))
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    pub fn chromosome_tlsh_ratio(&self, py: Python) -> PyResult<f64> {
-        self.with_inner_function(py, |function| Ok(function.chromosome_tlsh_ratio()))
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    pub fn minhash_ratio(&self, py: Python) -> PyResult<f64> {
-        self.with_inner_function(py, |function| Ok(function.minhash_ratio()))
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    pub fn tlsh_ratio(&self, py: Python) -> PyResult<f64> {
-        self.with_inner_function(py, |function| Ok(function.tlsh_ratio()))
     }
 
     #[pyo3(text_signature = "($self)")]

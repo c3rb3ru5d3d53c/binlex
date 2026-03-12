@@ -108,14 +108,6 @@ class SearchDatabaseDialog(QDialog):
         layout.addWidget(self.size_ratio_label)
         layout.addWidget(self.size_ratio)
 
-        self.chromosome_minhash_ratio_threshold_label = QLabel('Chromosome MinHash Ratio Threshold')
-        self.chromosome_minhash_ratio_threshold = QDoubleSpinBox()
-        self.chromosome_minhash_ratio_threshold.setRange(0.0, 1.0)
-        self.chromosome_minhash_ratio_threshold.setSingleStep(0.01)
-        self.chromosome_minhash_ratio_threshold.setValue(0.75)
-        layout.addWidget(self.chromosome_minhash_ratio_threshold_label)
-        layout.addWidget(self.chromosome_minhash_ratio_threshold)
-
         self.combined_ratio_threshold_label = QLabel('Combined Ratio Threshold')
         self.combined_ratio_threshold_input = QDoubleSpinBox()
         self.combined_ratio_threshold_input.setRange(0.0, 1.0)
@@ -161,7 +153,6 @@ class SearchDatabaseDialog(QDialog):
             self.minhash_score_threshold.value(),
             self.mininum_size.value(),
             self.size_ratio.value(),
-            self.chromosome_minhash_ratio_threshold.value(),
             self.combined_ratio_threshold_input.value(),
             self.gnn_similarity_threshold_input.value(),
             self.url_input.text(),
