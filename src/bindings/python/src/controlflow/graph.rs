@@ -20,11 +20,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use crate::Architecture;
+use crate::Config;
 use crate::controlflow::Block;
 use crate::controlflow::Function;
 use crate::controlflow::Instruction;
-use crate::Architecture;
-use crate::Config;
 use binlex::controlflow::Graph as InnerGraph;
 use binlex::controlflow::GraphQueue as InnerGraphQueue;
 use pyo3::prelude::*;
@@ -293,11 +293,16 @@ impl Graph {
     }
 
     #[pyo3(text_signature = "($self, cfg)")]
-    pub fn absorb(&mut self, py: Python, cfg: Py<Self>) {
+    pub fn merge(&mut self, py: Python, cfg: Py<Self>) {
         self.inner
             .lock()
             .unwrap()
-            .absorb(&mut cfg.borrow_mut(py).inner.lock().unwrap());
+            .merge(&mut cfg.borrow_mut(py).inner.lock().unwrap());
+    }
+
+    #[pyo3(text_signature = "($self, cfg)")]
+    pub fn absorb(&mut self, py: Python, cfg: Py<Self>) {
+        self.merge(py, cfg);
     }
 }
 

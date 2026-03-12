@@ -285,7 +285,7 @@ impl<'disassembler> Disassembler<'disassembler> {
                     })
                     .collect();
                 for mut graph in graphs {
-                    cfg.absorb(&mut graph);
+                    cfg.merge(&mut graph);
                 }
             }
         });
