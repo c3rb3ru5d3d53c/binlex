@@ -424,6 +424,7 @@ impl Graph {
             }
         };
         instruction.to.extend(addresses);
+        instruction.edges = instruction.blocks().len();
         self.update_instruction(instruction);
         true
     }
