@@ -25,7 +25,6 @@ use crate::controlflow::TagJson;
 use crate::formats::file::FileJson;
 use serde_json::Value;
 use serde_json::json;
-use std::io::Error;
 
 #[derive(Clone)]
 pub enum Attribute {
@@ -62,18 +61,6 @@ impl Attributes {
         self.values.push(attribute);
     }
 
-    pub fn pop(&mut self) -> Option<Attribute> {
-        self.values.pop()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.values.is_empty()
-    }
-
-    pub fn len(&self) -> usize {
-        self.values.len()
-    }
-
     pub fn process(&self) -> Value {
         let json_list: Vec<Value> = self
             .values
@@ -81,19 +68,6 @@ impl Attributes {
             .map(|attribute| attribute.to_json_value())
             .collect();
         json!(json_list)
-    }
-
-    pub fn json(&self) -> Result<String, Error> {
-        let raw = self.process();
-        let result = serde_json::to_string(&raw)?;
-        Ok(result)
-    }
-
-    #[allow(dead_code)]
-    pub fn print(&self) {
-        if let Ok(json) = self.json() {
-            println!("{}", json);
-        }
     }
 }
 

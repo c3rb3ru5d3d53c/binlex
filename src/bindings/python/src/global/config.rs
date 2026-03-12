@@ -25,38 +25,6 @@ use pyo3::prelude::*;
 use std::sync::{Arc, Mutex};
 
 #[pyclass]
-pub struct ConfigHomologues {
-    inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigHomologues {
-    #[getter]
-    pub fn get_enabled(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
-        inner.chromosomes.homologues.enabled
-    }
-
-    #[setter]
-    pub fn set_enabled(&mut self, value: bool) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.homologues.enabled = value;
-    }
-
-    #[getter]
-    pub fn get_maximum(&self) -> usize {
-        let inner = self.inner.lock().unwrap();
-        inner.chromosomes.homologues.maximum
-    }
-
-    #[setter]
-    pub fn set_maximum(&mut self, value: usize) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.homologues.maximum = value;
-    }
-}
-
-#[pyclass]
 pub struct ConfigBlockInstructions {
     pub inner: Arc<Mutex<InnerConfig>>,
 }
@@ -116,12 +84,6 @@ impl ConfigChromosomes {
         }
     }
 
-    #[getter]
-    pub fn homologues(&self) -> ConfigHomologues {
-        ConfigHomologues {
-            inner: Arc::clone(&self.inner),
-        }
-    }
 }
 
 #[pyclass]
