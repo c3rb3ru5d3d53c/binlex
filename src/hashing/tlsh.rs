@@ -52,6 +52,11 @@ impl<'tlsh> TLSH<'tlsh> {
         }
     }
 
+    /// Compares two TLSH digests.
+    pub fn compare(lhs: String, rhs: String) -> Option<f64> {
+        tlsh::compare(&lhs, &rhs).map(|value| value as f64).ok()
+    }
+
     /// Computes the TLSH hash of the byte slice if it meets the minimum size requirement.
     ///
     /// # Returns

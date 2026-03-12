@@ -40,6 +40,12 @@ impl TLSH {
     pub fn hexdigest(&self, mininum_byte_size: usize) -> Option<String> {
         InnerTLSH::new(&self.bytes, mininum_byte_size).hexdigest()
     }
+
+    #[staticmethod]
+    #[pyo3(text_signature = "(lhs, rhs)")]
+    pub fn compare(lhs: String, rhs: String) -> Option<f64> {
+        InnerTLSH::compare(lhs, rhs)
+    }
 }
 
 #[pymodule]
