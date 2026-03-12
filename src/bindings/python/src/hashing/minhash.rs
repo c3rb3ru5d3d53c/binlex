@@ -49,6 +49,12 @@ impl MinHash32 {
     pub fn hexdigest(&self) -> Option<String> {
         InnerMinHash32::new(&self.bytes, self.num_hashes, self.shingle_size, self.seed).hexdigest()
     }
+
+    #[staticmethod]
+    #[pyo3(text_signature = "(lhs, rhs)")]
+    pub fn compare(lhs: String, rhs: String) -> f64 {
+        InnerMinHash32::compare(&lhs, &rhs)
+    }
 }
 
 #[pymodule]

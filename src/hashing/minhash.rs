@@ -111,6 +111,49 @@ impl<'minhash32> MinHash32<'minhash32> {
         Some(min_hashes)
     }
 
+    /// Computes similarity between two MinHash digests.
+    pub fn compare(hexdigest1: &str, hexdigest2: &str) -> f64 {
+        let hash1 = Self::parse_hexdigest(hexdigest1);
+        let hash2 = Self::parse_hexdigest(hexdigest2);
+
+        if hash1.is_none() || hash2.is_none() {
+            return 0.0;
+        }
+
+        let hash1 = hash1.unwrap();
+        let hash2 = hash2.unwrap();
+
+        Self::jaccard_similarity(&hash1, &hash2)
+    }
+
+    fn jaccard_similarity(hash1: &[u32], hash2: &[u32]) -> f64 {
+        if hash1.len() != hash2.len() {
+            return 0.0;
+        }
+        let mut intersection = 0;
+        for i in 0..hash1.len() {
+            if hash1[i] == hash2[i] {
+                intersection += 1;
+            }
+        }
+        intersection as f64 / hash1.len() as f64
+    }
+
+    fn parse_hexdigest(hexdigest: &str) -> Option<Vec<u32>> {
+        if hexdigest.len() % 8 != 0 {
+            return None;
+        }
+
+        let mut result = Vec::new();
+        for chunk in hexdigest.as_bytes().chunks(8) {
+            let chunk_str = std::str::from_utf8(chunk).ok()?;
+            let value = u32::from_str_radix(chunk_str, 16).ok()?;
+            result.push(value);
+        }
+
+        Some(result)
+    }
+
     /// Computes the MinHash signature and returns it as a hexadecimal string.
     ///
     /// # Returns
