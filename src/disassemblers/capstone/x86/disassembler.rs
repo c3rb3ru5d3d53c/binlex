@@ -292,10 +292,6 @@ impl<'disassembler> Disassembler<'disassembler> {
         }
         if let Some(addr) = self.get_unconditional_jump_immutable(instruction) {
             blinstruction.to.insert(addr);
-            if self.is_executable_address(addr) {
-                cfg.functions.enqueue(addr);
-                blinstruction.functions.insert(addr);
-            }
         }
         if let Some(addr) = self.get_call_immutable(instruction) {
             if self.is_executable_address(addr) {
@@ -307,8 +303,7 @@ impl<'disassembler> Disassembler<'disassembler> {
             if blinstruction.is_jump {
                 blinstruction.to.insert(addr);
             }
-            if blinstruction.is_call || Disassembler::is_unconditional_jump_instruction(instruction)
-            {
+            if blinstruction.is_call {
                 cfg.functions.enqueue(addr);
                 blinstruction.functions.insert(addr);
             }
@@ -377,12 +372,16 @@ impl<'disassembler> Disassembler<'disassembler> {
                 cfg.update_instruction(instruction.clone());
             }
 
-            terminator = instruction.address;
-
             let is_block_start = instruction.address != address && instruction.is_block_start;
 
-            if instruction.is_trap || instruction.is_return || instruction.is_jump || is_block_start
-            {
+            if is_block_start {
+                split_successor = Some(instruction.address);
+                break;
+            }
+
+            terminator = instruction.address;
+
+            if instruction.is_trap || instruction.is_return || instruction.is_jump {
                 break;
             }
 

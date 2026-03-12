@@ -240,6 +240,7 @@ impl<'block> Block<'block> {
         let mut terminator: Option<Instruction> = None;
 
         let mut previous_address: Option<u64> = None;
+        let mut previous_instruction: Option<Instruction> = None;
         for entry in cfg.listing.range(address..) {
             let instruction = entry.value();
             if let Some(prev_addr) = previous_address {
@@ -250,15 +251,16 @@ impl<'block> Block<'block> {
                     )));
                 }
             }
+            if address != instruction.address && instruction.is_block_start {
+                terminator = previous_instruction.clone();
+                break;
+            }
             previous_address = Some(instruction.address + instruction.size() as u64);
-            if instruction.is_jump
-                || instruction.is_trap
-                || instruction.is_return
-                || (address != instruction.address && instruction.is_block_start)
-            {
+            if instruction.is_jump || instruction.is_trap || instruction.is_return {
                 terminator = Some(instruction.clone());
                 break;
             }
+            previous_instruction = Some(instruction.clone());
         }
 
         if terminator.is_none() {

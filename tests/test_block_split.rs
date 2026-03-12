@@ -143,6 +143,74 @@ fn test_direct_call_outside_executable_range_is_not_enqueued_as_function() {
 }
 
 #[test]
+fn test_direct_jump_inside_executable_range_is_not_enqueued_as_function() {
+    // assembly: jmp 0x2; ret
+    let bytes = vec![0xeb, 0x00, 0xc3];
+    let mut ranges = BTreeMap::new();
+    ranges.insert(0u64, bytes.len() as u64);
+    let config = Config::new();
+    let disasm =
+        Disassembler::new(Architecture::I386, &bytes, ranges, config.clone()).expect("disasm");
+    let mut graph = Graph::new(Architecture::I386, config);
+
+    disasm
+        .disassemble_instruction(0, &mut graph)
+        .expect("disassemble");
+
+    let instruction = graph.get_instruction(0).expect("instruction");
+    assert!(
+        instruction.is_jump,
+        "instruction should be identified as jump"
+    );
+    assert_eq!(instruction.to, [2u64].into_iter().collect());
+    assert!(
+        instruction.functions.is_empty(),
+        "direct jump target should not be tracked as a function"
+    );
+    assert!(
+        graph.functions.dequeue_all().is_empty(),
+        "direct jump target should not be enqueued as a function"
+    );
+}
+
+#[test]
+fn test_block_split_keeps_predecessor_terminator_metadata() {
+    // assembly: nop; nop; ret
+    let bytes = vec![0x90, 0x90, 0xc3];
+    let mut ranges = BTreeMap::new();
+    ranges.insert(0u64, bytes.len() as u64);
+    let config = Config::new();
+    let disasm =
+        Disassembler::new(Architecture::I386, &bytes, ranges, config.clone()).expect("disasm");
+    let mut graph = Graph::new(Architecture::I386, config);
+
+    graph.blocks.enqueue(1);
+    disasm
+        .disassemble_function(0, &mut graph)
+        .expect("disassemble");
+
+    let func = Function::new(0, &graph).expect("function");
+    let first = func.blocks.get(&0).expect("first block");
+
+    assert_eq!(
+        Binary::to_hex(&first.bytes()),
+        "90",
+        "first block bytes incorrect"
+    );
+    assert_eq!(
+        first.number_of_instructions(),
+        1,
+        "first block should not include the next block's first instruction"
+    );
+    assert_eq!(
+        first.edges(),
+        1,
+        "split block should have one outgoing edge"
+    );
+    assert_eq!(first.blocks(), [1u64].into_iter().collect());
+}
+
+#[test]
 fn test_executable_address_end_is_exclusive() {
     let bytes = vec![0x90, 0xc3];
     let mut ranges = BTreeMap::new();
