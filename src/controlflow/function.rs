@@ -54,14 +54,6 @@ pub struct FunctionJson {
     pub prologue: bool,
     /// The chromosome of the function in JSON format.
     pub chromosome: Option<ChromosomeJson>,
-    /// Chromosome MinHash Ratio
-    pub chromosome_minhash_ratio: f64,
-    /// Chromosome TLSH Ratio
-    pub chromosome_tlsh_ratio: f64,
-    /// Minhash Ratio
-    pub minhash_ratio: f64,
-    /// TLSH ratio
-    pub tlsh_ratio: f64,
     /// The size of the function in bytes, if available.
     pub size: usize,
     /// The raw bytes of the function in hexadecimal format, if available.
@@ -144,28 +136,8 @@ impl FunctionJsonDeserializer {
     }
 
     #[allow(dead_code)]
-    pub fn tlsh_ratio(&self) -> f64 {
-        self.json.tlsh_ratio
-    }
-
-    #[allow(dead_code)]
-    pub fn minhash_ratio(&self) -> f64 {
-        self.json.minhash_ratio
-    }
-
-    #[allow(dead_code)]
     pub fn functions(&self) -> BTreeMap<u64, u64> {
         self.json.functions.clone()
-    }
-
-    #[allow(dead_code)]
-    pub fn chromosome_tlsh_ratio(&self) -> f64 {
-        self.json.chromosome_tlsh_ratio
-    }
-
-    #[allow(dead_code)]
-    pub fn chromosome_minhash_ratio(&self) -> f64 {
-        self.json.chromosome_minhash_ratio
     }
 
     #[allow(dead_code)]
@@ -414,10 +386,6 @@ impl<'function> Function<'function> {
             edges: self.edges(),
             prologue: self.prologue(),
             chromosome,
-            chromosome_minhash_ratio: self.chromosome_minhash_ratio(),
-            chromosome_tlsh_ratio: self.chromosome_tlsh_ratio(),
-            minhash_ratio: self.minhash_ratio(),
-            tlsh_ratio: self.tlsh_ratio(),
             bytes: bytes_hex,
             size,
             functions: self.functions(),
@@ -434,58 +402,6 @@ impl<'function> Function<'function> {
             architecture: self.architecture().to_string(),
             attributes: None,
         }
-    }
-
-    pub fn chromosome_tlsh_ratio(&self) -> f64 {
-        if self.contiguous() {
-            return 1.0;
-        }
-        let mut tlsh_size: usize = 0;
-        for block in self.blocks.values() {
-            if block.chromosome().tlsh().is_some() {
-                tlsh_size += block.size();
-            }
-        }
-        tlsh_size as f64 / self.size() as f64
-    }
-
-    pub fn chromosome_minhash_ratio(&self) -> f64 {
-        if self.contiguous() {
-            return 1.0;
-        }
-        let mut minhash_size: usize = 0;
-        for block in self.blocks.values() {
-            if block.chromosome().minhash().is_some() {
-                minhash_size += block.size();
-            }
-        }
-        minhash_size as f64 / self.size() as f64
-    }
-
-    pub fn tlsh_ratio(&self) -> f64 {
-        if self.contiguous() {
-            return 1.0;
-        }
-        let mut tlsh_size: usize = 0;
-        for block in self.blocks.values() {
-            if block.tlsh().is_some() {
-                tlsh_size += block.size();
-            }
-        }
-        tlsh_size as f64 / self.size() as f64
-    }
-
-    pub fn minhash_ratio(&self) -> f64 {
-        if self.contiguous() {
-            return 1.0;
-        }
-        let mut minhash_size: usize = 0;
-        for block in self.blocks.values() {
-            if block.minhash().is_some() {
-                minhash_size += block.size();
-            }
-        }
-        minhash_size as f64 / self.size() as f64
     }
 
     /// Retrives the number of blocks in the function.

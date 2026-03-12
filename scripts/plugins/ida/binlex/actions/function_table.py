@@ -38,9 +38,7 @@ def process(function_names, functions: list):
             function.number_of_blocks(),
             function.cyclomatic_complexity(),
             function.average_instructions_per_block(),
-            function.chromosome_minhash_ratio() or '',
             chromosome.minhash() if chromosome else '',
-            function.chromosome_tlsh_ratio() or '',
             chromosome.tlsh() if chromosome else '',
             chromosome.pattern() if chromosome else '',
         ]
@@ -60,9 +58,7 @@ def complete(data: list):
             'Number of Blocks',
             'Cyclomatic Complexity',
             'Average Instructions Per Block',
-            'Minhash Chromosome Ratio',
             'Chromosome Minhash',
-            'TLSH Chromosome Ratio',
             'Chromosome TLSH',
             'Chromosome Pattern'
         ],
