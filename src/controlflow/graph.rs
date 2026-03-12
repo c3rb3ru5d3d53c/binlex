@@ -479,7 +479,7 @@ impl Graph {
         existing
     }
 
-    pub fn absorb(&mut self, graph: &mut Graph) {
+    pub fn merge(&mut self, graph: &mut Graph) {
         for entry in graph.listing() {
             self.insert_instruction(entry.value().clone());
         }
@@ -526,5 +526,9 @@ impl Graph {
         for entry in graph.functions.invalid() {
             self.functions.insert_invalid(*entry.value());
         }
+    }
+
+    pub fn absorb(&mut self, graph: &mut Graph) {
+        self.merge(graph);
     }
 }
