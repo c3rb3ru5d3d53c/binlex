@@ -37,7 +37,7 @@ pub fn global_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pymodule!(architecture_init))?;
     m.add_class::<Config>()?;
     m.add_class::<Architecture>()?;
-    py.import_bound("sys")?
+    py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex._global", m)?;
     m.setattr("__name__", "binlex_bindings.binlex._global")?;

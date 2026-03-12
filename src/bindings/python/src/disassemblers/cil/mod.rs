@@ -20,4 +20,21 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod cil;
+pub mod disassembler;
+
+use disassembler::binlex_cil_disassembler_init;
+use disassembler::Disassembler;
+
+use pyo3::{prelude::*, wrap_pymodule};
+
+#[pymodule]
+#[pyo3(name = "cil")]
+pub fn cil_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_wrapped(wrap_pymodule!(binlex_cil_disassembler_init))?;
+    m.add_class::<Disassembler>()?;
+    py.import("sys")?
+        .getattr("modules")?
+        .set_item("binlex_bindings.binlex.disassemblers.cil", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.disassemblers.cil")?;
+    Ok(())
+}

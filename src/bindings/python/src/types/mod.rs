@@ -38,7 +38,7 @@ pub fn types_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pymodule!(lz4string_init))?;
     m.add_class::<MemoryMappedFile>()?;
     m.add_class::<LZ4String>()?;
-    py.import_bound("sys")?
+    py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.types", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.types")?;

@@ -44,7 +44,7 @@ pub fn genitics_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<AllelePair>()?;
     m.add_wrapped(wrap_pymodule!(chromosome_init))?;
     m.add_class::<Chromosome>()?;
-    py.import_bound("sys")?
+    py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.genetics", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.genetics")?;

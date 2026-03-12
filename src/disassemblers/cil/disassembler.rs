@@ -24,7 +24,7 @@ use crate::Architecture;
 use crate::Config;
 use crate::controlflow::Graph;
 use crate::controlflow::Instruction as CFGInstruction;
-use crate::disassemblers::custom::cil::Instruction;
+use crate::disassemblers::cil::Instruction;
 use crate::io::Stderr;
 use rayon::ThreadPoolBuilder;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};

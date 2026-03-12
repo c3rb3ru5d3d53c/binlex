@@ -167,7 +167,7 @@
 
 
 from binlex.formats import PE
-from binlex.disassemblers.custom.cil import Disassembler
+from binlex.disassemblers.cil import Disassembler
 from binlex.controlflow import Graph
 from binlex import Config
 import argparse

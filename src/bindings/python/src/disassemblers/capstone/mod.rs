@@ -32,7 +32,7 @@ use pyo3::{prelude::*, wrap_pymodule};
 pub fn capstone_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pymodule!(disassembler_init))?;
     m.add_class::<Disassembler>()?;
-    py.import_bound("sys")?
+    py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.disassemblers.capstone", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.disassemblers.capstone")?;

@@ -47,7 +47,7 @@ impl Binary {
 #[pyo3(name = "binary")]
 pub fn binary_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Binary>()?;
-    py.import_bound("sys")?
+    py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.binary", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.binary")?;

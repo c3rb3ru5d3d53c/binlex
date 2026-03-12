@@ -1714,7 +1714,7 @@ impl ConfigGeneral {
 #[pyo3(name = "config")]
 pub fn config_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Config>()?;
-    py.import_bound("sys")?
+    py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex._global.config", m)?;
     m.setattr("__name__", "binlex_bindings.binlex._global.config")?;

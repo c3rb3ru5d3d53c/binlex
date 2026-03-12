@@ -133,7 +133,7 @@ impl Instruction {
     #[pyo3(text_signature = "($self)")]
     pub fn to_dict(&self, py: Python) -> PyResult<Py<PyAny>> {
         let json_str = self.json(py)?;
-        let json_module = py.import_bound("json")?;
+        let json_module = py.import("json")?;
         let py_dict = json_module.call_method1("loads", (json_str,))?;
         Ok(py_dict.into())
     }
@@ -164,7 +164,7 @@ impl Instruction {
 #[pyo3(name = "instruction")]
 pub fn instruction_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Instruction>()?;
-    py.import_bound("sys")?
+    py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.controlflow.instruction", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.controlflow.instruction")?;

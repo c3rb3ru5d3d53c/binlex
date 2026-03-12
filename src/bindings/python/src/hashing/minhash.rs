@@ -61,7 +61,7 @@ impl MinHash32 {
 #[pyo3(name = "minhash")]
 pub fn minhash_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<MinHash32>()?;
-    py.import_bound("sys")?
+    py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.hashing.minhash", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.hashing.minhash")?;

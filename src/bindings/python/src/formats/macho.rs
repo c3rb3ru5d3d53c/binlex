@@ -180,7 +180,7 @@ impl MACHO {
 #[pyo3(name = "macho")]
 pub fn macho_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<MACHO>()?;
-    py.import_bound("sys")?
+    py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.formats.macho", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.formats.macho")?;

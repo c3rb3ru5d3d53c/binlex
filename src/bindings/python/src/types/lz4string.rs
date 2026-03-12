@@ -47,7 +47,7 @@ impl LZ4String {
 #[pyo3(name = "lz4string")]
 pub fn lz4string_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<LZ4String>()?;
-    py.import_bound("sys")?
+    py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.types.lz4string", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.types.lz4string")?;

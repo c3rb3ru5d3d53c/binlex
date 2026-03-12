@@ -47,7 +47,7 @@ impl SHA256 {
 #[pyo3(name = "sha256")]
 pub fn sha256_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<SHA256>()?;
-    py.import_bound("sys")?
+    py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.hashing.sha256", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.hashing.sha256")?;

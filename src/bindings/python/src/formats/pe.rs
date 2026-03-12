@@ -242,7 +242,7 @@ impl PE {
 #[pyo3(name = "pe")]
 pub fn pe_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PE>()?;
-    py.import_bound("sys")?
+    py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.formats.pe", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.formats.pe")?;

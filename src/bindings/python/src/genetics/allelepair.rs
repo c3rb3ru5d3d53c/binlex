@@ -109,7 +109,7 @@ impl AllelePair {
 #[pyo3(name = "allelepair")]
 pub fn allelepair_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<AllelePair>()?;
-    py.import_bound("sys")?
+    py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.genetics.allelepair", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.genetics.allelepair")?;

@@ -25,7 +25,7 @@ use binlex::formats::file::File as InnerFile;
 use pyo3::prelude::*;
 use std::io::Error;
 
-#[pyclass]
+#[pyclass(unsendable)]
 pub struct File {
     pub inner: InnerFile,
     pub config: Py<Config>,
@@ -73,7 +73,7 @@ impl File {
 #[pyo3(name = "file")]
 pub fn file_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<File>()?;
-    py.import_bound("sys")?
+    py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.formats.file", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.formats.file")?;

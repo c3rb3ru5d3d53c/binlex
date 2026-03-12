@@ -117,7 +117,7 @@ impl Default for ColorMap {
 pub fn colormap_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<ColorMap>()?;
     m.add_class::<ColorMapType>()?;
-    py.import_bound("sys")?
+    py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.imaging.colormap", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.imaging.colormap")?;

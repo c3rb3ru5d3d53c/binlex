@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 use crate::Binary;
-use crate::disassemblers::custom::cil::Mnemonic;
+use crate::disassemblers::cil::Mnemonic;
 use std::collections::BTreeSet;
 use std::io::Error;
 

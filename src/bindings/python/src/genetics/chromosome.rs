@@ -104,7 +104,7 @@ impl Chromosome {
 
     #[pyo3(text_signature = "($self)")]
     pub fn normalized(&self, py: Python) -> Py<PyBytes> {
-        PyBytes::new_bound(py, &self.inner.lock().unwrap().normalized()).into()
+        PyBytes::new(py, &self.inner.lock().unwrap().normalized()).unbind()
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -115,7 +115,7 @@ impl Chromosome {
     #[pyo3(text_signature = "($self)")]
     pub fn to_dict(&self, py: Python) -> PyResult<Py<PyAny>> {
         let json_str = self.json(py)?;
-        let json_module = py.import_bound("json")?;
+        let json_module = py.import("json")?;
         let py_dict = json_module.call_method1("loads", (json_str,))?;
         Ok(py_dict.into())
     }
@@ -138,7 +138,7 @@ impl Chromosome {
 #[pyo3(name = "chromosome")]
 pub fn chromosome_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Chromosome>()?;
-    py.import_bound("sys")?
+    py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.genetics.chromosome", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.genetics.chromosome")?;

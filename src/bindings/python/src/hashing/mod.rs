@@ -43,7 +43,7 @@ pub fn hashing_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<SHA256>()?;
     m.add_class::<MinHash32>()?;
     m.add_class::<TLSH>()?;
-    py.import_bound("sys")?
+    py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.hashing", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.hashing")?;

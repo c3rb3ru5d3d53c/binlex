@@ -34,7 +34,7 @@ use binlex::Config;
 use binlex::Format;
 use binlex::VERSION;
 use binlex::disassemblers::capstone::Disassembler;
-use binlex::disassemblers::custom::cil::Disassembler as CILDisassembler;
+use binlex::disassemblers::cil::Disassembler as CILDisassembler;
 use binlex::formats::ELF;
 use binlex::formats::File as BLFile;
 use binlex::formats::MACHO;
