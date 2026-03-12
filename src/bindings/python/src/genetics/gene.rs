@@ -26,7 +26,7 @@ use pyo3::prelude::*;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[derive(Debug, Clone)]
 pub struct Gene {
     pub inner: Arc<Mutex<InnerGene>>,
@@ -104,7 +104,7 @@ impl Gene {
 #[pyo3(name = "gene")]
 pub fn gene_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Gene>()?;
-    py.import_bound("sys")?
+    py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.genetics.gene", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.genetics.gene")?;

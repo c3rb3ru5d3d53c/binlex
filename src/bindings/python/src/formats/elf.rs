@@ -157,7 +157,7 @@ impl ELF {
 #[pyo3(name = "elf")]
 pub fn elf_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<ELF>()?;
-    py.import_bound("sys")?
+    py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.formats.elf", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.formats.elf")?;

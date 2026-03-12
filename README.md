@@ -719,7 +719,7 @@ disassembler.disassemble_controlflow(pe.entrypoint_virtual_addresses(), &mut cfg
 use std::process;
 use binlex::Config;
 use binlex::formats::PE;
-use binlex::disassemblers::custom::cil::Disassembler;
+use binlex::disassemblers::cil::Disassembler;
 use binlex::controlflow::Graph;
 
 // Get Default Configuration
@@ -772,7 +772,7 @@ disassembler.disassemble_controlflow(pe.dotnet_entrypoint_virtual_addresses(), &
 use std::process;
 use binlex::Config;
 use binlex::formats::ELF;
-use binlex::disassemblers::custom::cil::Disassembler;
+use binlex::disassemblers::cil::Disassembler;
 use binlex::controlflow::Graph;
 
 // Get Default Configuration
@@ -823,7 +823,7 @@ disassembler.disassemble_controlflow(elf.entrypoint_virtual_addresses(), &mut cf
 use std::process;
 use binlex::Config;
 use binlex::formats::MACHO;
-use binlex::disassemblers::custom::cil::Disassembler;
+use binlex::disassemblers::cil::Disassembler;
 use binlex::controlflow::Graph;
 
 // Get Default Configuration
@@ -988,7 +988,7 @@ disassembler.disassemble_controlflow(pe.entrypoint_virtual_addresses(), cfg)
 #### .NET (MSIL/CIL) PE
 ```python
 from binlex.formats import PE
-from binlex.disassemblers.custom.cil import Disassembler
+from binlex.disassemblers.cil import Disassembler
 from binlex.controlflow import Graph
 from binlex import Config
 

@@ -20,11 +20,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::Architecture;
-use crate::Config;
 use crate::controlflow::Block;
 use crate::controlflow::Function;
 use crate::controlflow::Instruction;
+use crate::Architecture;
+use crate::Config;
 use binlex::controlflow::Graph as InnerGraph;
 use binlex::controlflow::GraphQueue as InnerGraphQueue;
 use pyo3::prelude::*;
@@ -311,7 +311,7 @@ impl Graph {
 pub fn graph_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<GraphQueue>()?;
     m.add_class::<Graph>()?;
-    py.import_bound("sys")?
+    py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.controlflow.graph", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.controlflow.graph")?;

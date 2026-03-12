@@ -23,7 +23,7 @@
 use crate::controlflow::Graph;
 use crate::Architecture;
 use crate::Config;
-use binlex::disassemblers::custom::cil::Disassembler as InnerDisassembler;
+use binlex::disassemblers::cil::Disassembler as InnerDisassembler;
 use pyo3::buffer::PyBuffer;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
@@ -68,12 +68,12 @@ impl Disassembler {
     fn get_image_data<'py>(&'py self, py: Python<'py>) -> PyResult<&'py [u8]> {
         let image_ref = self.image.borrow();
 
-        if let Ok(bytes) = image_ref.downcast_bound::<PyBytes>(py) {
+        if let Ok(bytes) = image_ref.cast_bound::<PyBytes>(py) {
             return Ok(bytes.as_bytes());
         }
 
-        if let Ok(memory_view) = image_ref.downcast_bound::<PyMemoryView>(py) {
-            let buffer = PyBuffer::<u8>::get_bound(memory_view)?;
+        if let Ok(memory_view) = image_ref.cast_bound::<PyMemoryView>(py) {
+            let buffer = PyBuffer::<u8>::get(memory_view.as_any())?;
 
             if !buffer.is_c_contiguous() {
                 return Err(PyTypeError::new_err("the memoryview is not c-contiguous"));
@@ -187,12 +187,9 @@ impl Disassembler {
 #[pyo3(name = "binlex_cil_disassembler")]
 pub fn binlex_cil_disassembler_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Disassembler>()?;
-    py.import_bound("sys")?
+    py.import("sys")?
         .getattr("modules")?
-        .set_item("binlex_bindings.binlex.disassemblers.custom.cil", m)?;
-    m.setattr(
-        "__name__",
-        "binlex_bindings.binlex.disassemblers.custom.cil",
-    )?;
+        .set_item("binlex_bindings.binlex.disassemblers.cil", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.disassemblers.cil")?;
     Ok(())
 }

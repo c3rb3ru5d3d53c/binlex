@@ -27,7 +27,6 @@ use crate::Architecture;
 use crate::Config;
 use binlex::controlflow::Function as InnerFunction;
 use binlex::controlflow::FunctionJsonDeserializer as InnerFunctionJsonDeserializer;
-use binlex::controlflow::Graph as InnerGraph;
 use binlex::Binary as InnerBinary;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
@@ -93,8 +92,7 @@ impl FunctionJsonDeserializer {
         }
         let bytes = InnerBinary::from_hex(&string.unwrap())
             .map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
-        let result = PyBytes::new_bound(py, &bytes);
-        Ok(Some(result.into()))
+        Ok(Some(PyBytes::new(py, &bytes).unbind()))
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -178,7 +176,7 @@ impl FunctionJsonDeserializer {
     #[pyo3(text_signature = "($self)")]
     pub fn to_dict(&self, py: Python) -> PyResult<Py<PyAny>> {
         let json_str = self.json()?;
-        let json_module = py.import_bound("json")?;
+        let json_module = py.import("json")?;
         let py_dict = json_module.call_method1("loads", (json_str,))?;
         Ok(py_dict.into())
     }
@@ -345,8 +343,7 @@ impl Function {
     pub fn bytes(&self, py: Python) -> PyResult<Option<Py<PyBytes>>> {
         self.with_inner_function(py, |function| {
             if let Some(raw_bytes) = function.bytes() {
-                let bytes = PyBytes::new_bound(py, &raw_bytes);
-                Ok(Some(bytes.into()))
+                Ok(Some(PyBytes::new(py, &raw_bytes).unbind()))
             } else {
                 Ok(None)
             }
@@ -480,7 +477,7 @@ impl Function {
     /// - `dict`: A Python dictionary representation of the function.
     pub fn to_dict(&self, py: Python) -> PyResult<Py<PyAny>> {
         let json_str = self.json(py)?;
-        let json_module = py.import_bound("json")?;
+        let json_module = py.import("json")?;
         let py_dict = json_module.call_method1("loads", (json_str,))?;
         Ok(py_dict.into())
     }
@@ -509,7 +506,7 @@ impl Function {
 pub fn function_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Function>()?;
     m.add_class::<FunctionJsonDeserializer>()?;
-    py.import_bound("sys")?
+    py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.controlflow.function", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.controlflow.function")?;

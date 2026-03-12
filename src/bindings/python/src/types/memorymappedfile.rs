@@ -103,7 +103,10 @@ impl MemoryMappedFile {
             if memview_ptr.is_null() {
                 Err(PyErr::fetch(py))
             } else {
-                Ok(Py::from_owned_ptr(py, memview_ptr))
+                let memview = Bound::from_owned_ptr(py, memview_ptr)
+                    .cast_into::<PyMemoryView>()
+                    .map_err(PyErr::from)?;
+                Ok(memview.unbind())
             }
         }
     }
@@ -122,7 +125,10 @@ impl MemoryMappedFile {
             if memview_ptr.is_null() {
                 Err(PyErr::fetch(py))
             } else {
-                Ok(Py::from_owned_ptr(py, memview_ptr))
+                let memview = Bound::from_owned_ptr(py, memview_ptr)
+                    .cast_into::<PyMemoryView>()
+                    .map_err(PyErr::from)?;
+                Ok(memview.unbind())
             }
         }
     }
@@ -132,7 +138,7 @@ impl MemoryMappedFile {
 #[pyo3(name = "memorymappedfile")]
 pub fn memorymappedfile_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<MemoryMappedFile>()?;
-    py.import_bound("sys")?
+    py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.types.memorymappedfile", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.types.memorymappedfile")?;

@@ -46,7 +46,7 @@ pub fn formats_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<File>()?;
     m.add_class::<ELF>()?;
     m.add_class::<MACHO>()?;
-    py.import_bound("sys")?
+    py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.formats", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.formats")?;

@@ -21,4 +21,4 @@
 // SOFTWARE.
 
 pub mod capstone;
-pub mod custom;
+pub mod cil;

@@ -54,7 +54,7 @@ pub fn controlflow_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<BlockJsonDeserializer>()?;
     m.add_class::<Function>()?;
     m.add_class::<FunctionJsonDeserializer>()?;
-    py.import_bound("sys")?
+    py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.controlflow", m)?;
     m.setattr("__name__", "binlex_bindings.binlex.controlflow")?;
