@@ -322,6 +322,54 @@ impl<'block> Block<'block> {
     ///
     /// Returns a `BlockJson` instance containing the block's metadata and related information.
     pub fn process(&self) -> BlockJson {
+        let bytes = self.bytes();
+        let pattern = self.pattern();
+        let chromosome = Chromosome::new(pattern, self.cfg.config.clone())
+            .expect("failed to parse block chromosome");
+        let size = bytes.len();
+        let instructions = self.instructions_json();
+        let functions = self.functions();
+        let blocks = self.blocks();
+        let entropy = if self.cfg.config.blocks.heuristics.entropy.enabled {
+            Binary::entropy(&bytes)
+        } else {
+            None
+        };
+        let sha256 = if self.cfg.config.blocks.hashing.sha256.enabled {
+            SHA256::new(&bytes).hexdigest()
+        } else {
+            None
+        };
+        let minhash = if self.cfg.config.blocks.hashing.minhash.enabled
+            && !(bytes.len() > self.cfg.config.blocks.hashing.minhash.maximum_byte_size
+                && self
+                    .cfg
+                    .config
+                    .blocks
+                    .hashing
+                    .minhash
+                    .maximum_byte_size_enabled)
+        {
+            MinHash32::new(
+                &bytes,
+                self.cfg.config.blocks.hashing.minhash.number_of_hashes,
+                self.cfg.config.blocks.hashing.minhash.shingle_size,
+                self.cfg.config.blocks.hashing.minhash.seed,
+            )
+            .hexdigest()
+        } else {
+            None
+        };
+        let tlsh = if self.cfg.config.blocks.hashing.tlsh.enabled {
+            TLSH::new(
+                &bytes,
+                self.cfg.config.blocks.hashing.tlsh.minimum_byte_size,
+            )
+            .hexdigest()
+        } else {
+            None
+        };
+
         BlockJson {
             type_: "block".to_string(),
             address: self.address,
@@ -329,19 +377,19 @@ impl<'block> Block<'block> {
             next: self.next(),
             to: self.terminator.to(),
             edges: self.edges(),
-            chromosome: self.chromosome_json(),
+            chromosome: chromosome.process(),
             prologue: self.prologue(),
             conditional: self.terminator.is_conditional,
-            size: self.size(),
-            bytes: Binary::to_hex(&self.bytes()),
+            size,
+            bytes: Binary::to_hex(&bytes),
             number_of_instructions: self.number_of_instructions(),
-            instructions: self.instructions_json(),
-            functions: self.functions(),
-            blocks: self.blocks(),
-            entropy: self.entropy(),
-            sha256: self.sha256(),
-            minhash: self.minhash(),
-            tlsh: self.tlsh(),
+            instructions,
+            functions,
+            blocks,
+            entropy,
+            sha256,
+            minhash,
+            tlsh,
             contiguous: true,
             attributes: None,
         }

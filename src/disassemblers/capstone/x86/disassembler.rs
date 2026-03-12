@@ -155,6 +155,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         let external_executable_address_ranges = self.executable_address_ranges.clone();
 
         let external_config = self.config.clone();
+        let graph_config = cfg.config.clone();
 
         pool.install(|| {
             while !cfg.functions.queue.is_empty() {
@@ -163,21 +164,24 @@ impl<'disassembler> Disassembler<'disassembler> {
                     .insert_processed_extend(function_addresses.clone());
                 let graphs: Vec<Graph> = function_addresses
                     .par_iter()
-                    .map(|address| {
-                        let machine = external_machine;
-                        let executable_address_ranges = external_executable_address_ranges.clone();
-                        let image = external_image;
-                        let mut graph = Graph::new(machine, cfg.config.clone());
-                        if let Ok(disasm) = Disassembler::new(
-                            machine,
-                            image,
-                            executable_address_ranges,
-                            external_config.clone(),
-                        ) {
-                            let _ = disasm.disassemble_function(*address, &mut graph);
-                        }
-                        graph
-                    })
+                    .map_init(
+                        || {
+                            Disassembler::new(
+                                external_machine,
+                                external_image,
+                                external_executable_address_ranges.clone(),
+                                external_config.clone(),
+                            )
+                            .ok()
+                        },
+                        |disasm, address| {
+                            let mut graph = Graph::new(external_machine, graph_config.clone());
+                            if let Some(disasm) = disasm.as_ref() {
+                                let _ = disasm.disassemble_function(*address, &mut graph);
+                            }
+                            graph
+                        },
+                    )
                     .collect();
                 for mut graph in graphs {
                     cfg.absorb(&mut graph);
@@ -288,13 +292,13 @@ impl<'disassembler> Disassembler<'disassembler> {
         }
         if let Some(addr) = self.get_unconditional_jump_immutable(instruction) {
             blinstruction.to.insert(addr);
-            if self.is_executable_address(addr) && self.disassemble_instructions(addr, 1).is_ok() {
+            if self.is_executable_address(addr) {
                 cfg.functions.enqueue(addr);
                 blinstruction.functions.insert(addr);
             }
         }
         if let Some(addr) = self.get_call_immutable(instruction) {
-            if self.is_executable_address(addr) && self.disassemble_instructions(addr, 1).is_ok() {
+            if self.is_executable_address(addr) {
                 cfg.functions.enqueue(addr);
                 blinstruction.functions.insert(addr);
             }
@@ -491,21 +495,7 @@ impl<'disassembler> Disassembler<'disassembler> {
     #[allow(dead_code)]
     pub fn get_instruction_total_operand_size(&self, instruction: &Insn) -> Result<usize, Error> {
         let operands = self.get_instruction_operands(instruction)?;
-        let mut result: usize = 0;
-        for operand in operands {
-            match operand {
-                ArchOperand::X86Operand(op) => {
-                    result += op.size as usize;
-                }
-                _ => {
-                    return Err(Error::new(
-                        ErrorKind::Other,
-                        "unsupported operand architecture",
-                    ));
-                }
-            }
-        }
-        Ok(result)
+        Disassembler::get_total_operand_size(&operands)
     }
 
     pub fn instruction_contains_memory_operand(&self, instruction: &Insn) -> bool {
@@ -540,6 +530,64 @@ impl<'disassembler> Disassembler<'disassembler> {
         false
     }
 
+    fn get_total_operand_size(operands: &[ArchOperand]) -> Result<usize, Error> {
+        let mut result: usize = 0;
+        for operand in operands {
+            match operand {
+                ArchOperand::X86Operand(op) => {
+                    result += op.size as usize;
+                }
+                _ => {
+                    return Err(Error::new(
+                        ErrorKind::Other,
+                        "unsupported operand architecture",
+                    ));
+                }
+            }
+        }
+        Ok(result)
+    }
+
+    fn is_immutable_instruction_to_pattern_with_operands(
+        instruction: &Insn,
+        operands: &[ArchOperand],
+        has_immutable_operand: bool,
+    ) -> bool {
+        if !has_immutable_operand {
+            return false;
+        }
+
+        if Disassembler::is_call_instruction(instruction)
+            || Disassembler::is_jump_instruction(instruction)
+        {
+            return true;
+        }
+
+        const STACK_INSTRUCTIONS: [InsnId; 5] = [
+            InsnId(X86Insn::X86_INS_MOV as u32),
+            InsnId(X86Insn::X86_INS_SUB as u32),
+            InsnId(X86Insn::X86_INS_ADD as u32),
+            InsnId(X86Insn::X86_INS_INC as u32),
+            InsnId(X86Insn::X86_INS_DEC as u32),
+        ];
+
+        if STACK_INSTRUCTIONS.contains(&instruction.id()) {
+            for operand in operands {
+                if let ArchOperand::X86Operand(op) = operand {
+                    if let X86OperandType::Reg(register_id) = op.op_type {
+                        if [X86_REG_RSP, X86_REG_RBP, X86_REG_ESP, X86_REG_EBP]
+                            .contains(&(register_id.0 as u32))
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
     #[allow(dead_code)]
     pub fn get_instruction_pattern(&self, instruction: &Insn) -> Result<String, Error> {
         if Disassembler::is_unsupported_pattern_instruction(instruction) {
@@ -550,9 +598,21 @@ impl<'disassembler> Disassembler<'disassembler> {
             return Ok("??".repeat(instruction.bytes().len()));
         }
 
-        if !self.instruction_contains_immutable_operand(instruction)
-            && !self.instruction_contains_memory_operand(instruction)
-        {
+        let operands = self.get_instruction_operands(instruction)?;
+        let has_immutable_operand = operands.iter().any(|operand| {
+            matches!(
+                operand,
+                ArchOperand::X86Operand(op) if matches!(op.op_type, X86OperandType::Imm(_))
+            )
+        });
+        let has_memory_operand = operands.iter().any(|operand| {
+            matches!(
+                operand,
+                ArchOperand::X86Operand(op) if matches!(op.op_type, X86OperandType::Mem(_))
+            )
+        });
+
+        if !has_immutable_operand && !has_memory_operand {
             return Ok(Binary::to_hex(instruction.bytes()));
         }
 
@@ -568,9 +628,7 @@ impl<'disassembler> Disassembler<'disassembler> {
             .count()
             * 8;
 
-        let operands = self.get_instruction_operands(instruction)?;
-
-        let total_operand_size = self.get_instruction_total_operand_size(instruction)?;
+        let total_operand_size = Disassembler::get_total_operand_size(&operands)?;
 
         if total_operand_size > instruction_size {
             return Ok(Binary::to_hex(instruction.bytes()));
@@ -578,7 +636,12 @@ impl<'disassembler> Disassembler<'disassembler> {
 
         let instruction_trailing_null_offset = instruction_size - instruction_trailing_null_size;
 
-        let is_immutable_signature = self.is_immutable_instruction_to_pattern(instruction);
+        let is_immutable_signature =
+            Disassembler::is_immutable_instruction_to_pattern_with_operands(
+                instruction,
+                &operands,
+                has_immutable_operand,
+            );
 
         if total_operand_size == 0 && !operands.is_empty() {
             return Err(Error::new(
@@ -767,9 +830,6 @@ impl<'disassembler> Disassembler<'disassembler> {
                     if !self.is_executable_address(address) {
                         continue;
                     }
-                    if self.disassemble_instructions(address, 1).is_err() {
-                        continue;
-                    }
                     return Some(address);
                 }
             }
@@ -819,9 +879,6 @@ impl<'disassembler> Disassembler<'disassembler> {
             (instruction.address() as i64 + mem.disp() + instruction.bytes().len() as i64) as u64;
         let target = self.read_pointer(pointer_address)?;
         if !self.is_executable_address(target) {
-            return None;
-        }
-        if self.disassemble_instructions(target, 1).is_err() {
             return None;
         }
         Some(target)
@@ -928,44 +985,15 @@ impl<'disassembler> Disassembler<'disassembler> {
 
     #[allow(dead_code)]
     pub fn is_immutable_instruction_to_pattern(&self, instruction: &Insn) -> bool {
-        if !self.instruction_contains_immutable_operand(instruction) {
-            return false;
-        }
-
-        if Disassembler::is_call_instruction(instruction)
-            || Disassembler::is_jump_instruction(instruction)
-        {
-            return true;
-        }
-
-        const STACK_INSTRUCTIONS: [InsnId; 5] = [
-            InsnId(X86Insn::X86_INS_MOV as u32),
-            InsnId(X86Insn::X86_INS_SUB as u32),
-            InsnId(X86Insn::X86_INS_ADD as u32),
-            InsnId(X86Insn::X86_INS_INC as u32),
-            InsnId(X86Insn::X86_INS_DEC as u32),
-        ];
-
-        if STACK_INSTRUCTIONS.contains(&instruction.id()) {
-            let operands = match self.get_instruction_operands(instruction) {
-                Ok(operands) => operands,
-                Err(_) => return false,
-            };
-
-            for operand in operands {
-                if let ArchOperand::X86Operand(op) = operand {
-                    if let X86OperandType::Reg(register_id) = op.op_type {
-                        if [X86_REG_RSP, X86_REG_RBP, X86_REG_ESP, X86_REG_EBP]
-                            .contains(&(register_id.0 as u32))
-                        {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-
-        false
+        let operands = match self.get_instruction_operands(instruction) {
+            Ok(operands) => operands,
+            Err(_) => return false,
+        };
+        Disassembler::is_immutable_instruction_to_pattern_with_operands(
+            instruction,
+            &operands,
+            self.instruction_contains_immutable_operand(instruction),
+        )
     }
 
     #[allow(dead_code)]
