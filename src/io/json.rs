@@ -23,7 +23,7 @@
 use serde_json::{Deserializer, Value};
 use std::fmt;
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, IsTerminal, Read, Write};
+use std::io::{self, BufRead, BufReader, IsTerminal, Read};
 
 #[derive(Debug)]
 pub enum JSONError {
@@ -53,48 +53,7 @@ pub struct JSON {
 }
 
 impl JSON {
-    /// Constructs a `JSON` instance from a file path.
-    #[allow(dead_code)]
-    pub fn from_file(path: &str) -> Result<Self, JSONError> {
-        let file = File::open(path).map_err(|_| JSONError::FileOpenError(path.to_string()))?;
-        let reader = BufReader::new(file);
-        Self::deserialize(reader)
-    }
-
-    /// Constructs a `JSON` instance from standard input.
-    #[allow(dead_code)]
-    pub fn from_stdin() -> Result<Self, JSONError> {
-        if io::stdin().is_terminal() {
-            return Err(JSONError::StdinReadError);
-        }
-
-        let reader = BufReader::new(io::stdin());
-        Self::deserialize(reader)
-    }
-
-    /// Constructs a `JSON` instance from a file path or standard input.
-    /// If the file path is `None`, reads from standard input.
-    #[allow(dead_code)]
-    pub fn from_file_or_stdin(path: Option<String>) -> Result<Self, JSONError> {
-        match path {
-            Some(file_path) => Self::from_file(&file_path),
-            None => Self::from_stdin(),
-        }
-    }
-
-    /// Private method to deserialize JSON from a given reader.
-    #[allow(dead_code)]
-    fn deserialize<R: BufRead>(reader: R) -> Result<Self, JSONError> {
-        let values: Vec<Value> = Deserializer::from_reader(reader)
-            .into_iter::<Value>()
-            .map(|value| value.map_err(|e| JSONError::JSONParseError(e.to_string())))
-            .collect::<Result<_, _>>()?;
-
-        Ok(JSON { values })
-    }
-
     /// Private method to deserialize JSON with filtering and in-place modification.
-    #[allow(dead_code)]
     fn deserialize_with_filter<R, F>(reader: R, filter: F) -> Result<Self, JSONError>
     where
         R: BufRead,
@@ -116,17 +75,6 @@ impl JSON {
         Ok(JSON { values })
     }
 
-    /// Constructs a `JSON` instance from a file path with filtering and in-place modification.
-    #[allow(dead_code)]
-    pub fn from_file_with_filter<F>(path: &str, filter: F) -> Result<Self, JSONError>
-    where
-        F: Fn(&mut Value) -> bool,
-    {
-        let file = File::open(path).map_err(|_| JSONError::FileOpenError(path.to_string()))?;
-        let reader = BufReader::new(file);
-        Self::deserialize_with_filter(reader, filter)
-    }
-
     /// Constructs a `JSON` instance from standard input with filtering and in-place modification.
     pub fn from_stdin_with_filter<F>(filter: F) -> Result<Self, JSONError>
     where
@@ -138,21 +86,6 @@ impl JSON {
 
         let reader = BufReader::new(io::stdin());
         Self::deserialize_with_filter(reader, filter)
-    }
-
-    /// Constructs a `JSON` instance from a file path or standard input with filtering and in-place modification.
-    #[allow(dead_code)]
-    pub fn from_file_or_stdin_with_filter<F>(
-        path: Option<String>,
-        filter: F,
-    ) -> Result<Self, JSONError>
-    where
-        F: Fn(&mut Value) -> bool,
-    {
-        match path {
-            Some(file_path) => Self::from_file_with_filter(&file_path, filter),
-            None => Self::from_stdin_with_filter(filter),
-        }
     }
 
     #[allow(dead_code)]
@@ -206,39 +139,7 @@ impl JSON {
     }
 
     /// Returns a reference to the parsed JSON values.
-    #[allow(dead_code)]
     pub fn values(&self) -> &Vec<Value> {
         &self.values
-    }
-
-    /// Converts a `serde_json::Value` to a `String`.
-    #[allow(dead_code)]
-    pub fn value_to_string(value: &Value) -> Result<String, JSONError> {
-        serde_json::to_string(value).map_err(|e| JSONError::JSONToStringError(e.to_string()))
-    }
-
-    /// Converts all `serde_json::Value`s into a `Vec<String>`.
-    #[allow(dead_code)]
-    pub fn values_as_strings(&self) -> Vec<String> {
-        self.values
-            .iter()
-            .filter_map(|value| Self::value_to_string(value).ok())
-            .collect()
-    }
-
-    /// Writes all JSON values as single-line strings to a file.
-    #[allow(dead_code)]
-    pub fn write_to_file(&self, file_path: &str) -> Result<(), JSONError> {
-        let strings = self.values_as_strings();
-
-        let mut file = File::create(file_path)
-            .map_err(|_| JSONError::FileWriteError(file_path.to_string()))?;
-
-        for line in strings {
-            writeln!(file, "{}", line)
-                .map_err(|_| JSONError::FileWriteError(file_path.to_string()))?;
-        }
-
-        Ok(())
     }
 }

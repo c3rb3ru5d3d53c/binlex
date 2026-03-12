@@ -175,8 +175,6 @@ from binlex import Config
 
 config = Config()
 
-config.chromosomes.homologues.maximum = 2
-
 lhs = Chromosome('deadbeef', config)
 rhs = Chromosome('fedeadbeeffe', config)
 

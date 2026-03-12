@@ -33,30 +33,6 @@ pub const AUTHOR: &str = "@c3rb3ru5d3d53c";
 pub const DIRECTORY: &str = "binlex";
 pub const FILE_NAME: &str = "binlex.toml";
 
-// #[derive(Serialize, Deserialize, Clone)]
-// pub struct ConfigHomologuesMinhash {
-//     pub enabled: bool,
-//     pub threshold: f64,
-// }
-
-// #[derive(Serialize, Deserialize, Clone)]
-// pub struct ConfigHomologuesTLSH {
-//     pub enabled: bool,
-//     pub threshold: f64,
-// }
-
-// #[derive(Serialize, Deserialize, Clone)]
-// pub struct ConfigHomologuesHashing {
-//     pub minhash: ConfigHomologuesMinhash,
-//     pub tlsh: ConfigHomologuesTLSH,
-// }
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigHomologues {
-    pub enabled: bool,
-    pub maximum: usize,
-}
-
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigBlockInstructions {
     pub enabled: bool,
@@ -86,7 +62,6 @@ pub struct ConfigBlocks {
 pub struct ConfigChromosomes {
     pub hashing: ConfigHashing,
     pub heuristics: ConfigHeuristics,
-    pub homologues: ConfigHomologues,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -317,10 +292,6 @@ impl Config {
                 heuristics: ConfigHeuristics {
                     features: ConfigHeuristicFeatures { enabled: true },
                     entropy: ConfigHeuristicEntropy { enabled: true },
-                },
-                homologues: ConfigHomologues {
-                    enabled: true,
-                    maximum: 4,
                 },
             },
             mmap: ConfigMmap {

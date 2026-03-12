@@ -456,10 +456,6 @@ enabled = true
 [chromosomes.heuristics.entropy]
 enabled = true
 
-[chromosomes.homologues]
-enabled = true
-maximum = 4
-
 [mmap]
 directory = "/tmp/binlex"
 
