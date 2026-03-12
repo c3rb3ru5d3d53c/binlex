@@ -336,29 +336,101 @@ impl<'function> Function<'function> {
     ///
     /// Returns a `FunctionJson` struct containing metadata about the function.
     pub fn process(&self) -> FunctionJson {
+        let contiguous = self.contiguous();
+        let size = self.size();
+        let bytes = if contiguous { self.bytes() } else { None };
+        let bytes_hex = bytes.as_ref().map(|bytes| Binary::to_hex(bytes));
+        let chromosome = if contiguous {
+            self.pattern().and_then(|pattern| {
+                Chromosome::new(pattern, self.cfg.config.clone())
+                    .ok()
+                    .map(|chromosome| chromosome.process())
+            })
+        } else {
+            None
+        };
+        let entropy = if !self.cfg.config.functions.heuristics.entropy.enabled {
+            None
+        } else if contiguous {
+            bytes.as_ref().and_then(|bytes| Binary::entropy(bytes))
+        } else {
+            let entropi: Vec<f64> = self
+                .blocks
+                .values()
+                .filter_map(|block| block.entropy())
+                .collect();
+            if entropi.is_empty() {
+                Some(0.0)
+            } else {
+                Some(entropi.iter().sum::<f64>() / entropi.len() as f64)
+            }
+        };
+        let sha256 = if self.cfg.config.functions.hashing.sha256.enabled && contiguous {
+            bytes
+                .as_ref()
+                .and_then(|bytes| SHA256::new(bytes).hexdigest())
+        } else {
+            None
+        };
+        let tlsh = if self.cfg.config.functions.hashing.tlsh.enabled && contiguous {
+            bytes.as_ref().and_then(|bytes| {
+                TLSH::new(
+                    bytes,
+                    self.cfg.config.functions.hashing.tlsh.minimum_byte_size,
+                )
+                .hexdigest()
+            })
+        } else {
+            None
+        };
+        let minhash = if self.cfg.config.functions.hashing.minhash.enabled && contiguous {
+            bytes.as_ref().and_then(|bytes| {
+                if bytes.len() > self.cfg.config.functions.hashing.minhash.maximum_byte_size
+                    && self
+                        .cfg
+                        .config
+                        .functions
+                        .hashing
+                        .minhash
+                        .maximum_byte_size_enabled
+                {
+                    return None;
+                }
+                MinHash32::new(
+                    bytes,
+                    self.cfg.config.functions.hashing.minhash.number_of_hashes,
+                    self.cfg.config.functions.hashing.minhash.shingle_size,
+                    self.cfg.config.functions.hashing.minhash.seed,
+                )
+                .hexdigest()
+            })
+        } else {
+            None
+        };
+
         FunctionJson {
             address: self.address,
             type_: "function".to_string(),
             edges: self.edges(),
             prologue: self.prologue(),
-            chromosome: self.chromosome_json(),
+            chromosome,
             chromosome_minhash_ratio: self.chromosome_minhash_ratio(),
             chromosome_tlsh_ratio: self.chromosome_tlsh_ratio(),
             minhash_ratio: self.minhash_ratio(),
             tlsh_ratio: self.tlsh_ratio(),
-            bytes: self.bytes_to_hex(),
-            size: self.size(),
+            bytes: bytes_hex,
+            size,
             functions: self.functions(),
             blocks: self.block_addresses(),
             number_of_blocks: self.number_of_blocks(),
             number_of_instructions: self.number_of_instructions(),
             cyclomatic_complexity: self.cyclomatic_complexity(),
             average_instructions_per_block: self.average_instructions_per_block(),
-            entropy: self.entropy(),
-            sha256: self.sha256(),
-            minhash: self.minhash(),
-            tlsh: self.tlsh(),
-            contiguous: self.contiguous(),
+            entropy,
+            sha256,
+            minhash,
+            tlsh,
+            contiguous,
             architecture: self.architecture().to_string(),
             attributes: None,
         }
@@ -369,7 +441,7 @@ impl<'function> Function<'function> {
             return 1.0;
         }
         let mut tlsh_size: usize = 0;
-        for block in self.blocks() {
+        for block in self.blocks.values() {
             if block.chromosome().tlsh().is_some() {
                 tlsh_size += block.size();
             }
@@ -382,7 +454,7 @@ impl<'function> Function<'function> {
             return 1.0;
         }
         let mut minhash_size: usize = 0;
-        for block in self.blocks() {
+        for block in self.blocks.values() {
             if block.chromosome().minhash().is_some() {
                 minhash_size += block.size();
             }
@@ -395,7 +467,7 @@ impl<'function> Function<'function> {
             return 1.0;
         }
         let mut tlsh_size: usize = 0;
-        for block in self.blocks() {
+        for block in self.blocks.values() {
             if block.tlsh().is_some() {
                 tlsh_size += block.size();
             }
@@ -408,7 +480,7 @@ impl<'function> Function<'function> {
             return 1.0;
         }
         let mut minhash_size: usize = 0;
-        for block in self.blocks() {
+        for block in self.blocks.values() {
             if block.minhash().is_some() {
                 minhash_size += block.size();
             }
@@ -579,18 +651,6 @@ impl<'function> Function<'function> {
     /// Returns the number of edges as a `usize`.
     pub fn edges(&self) -> usize {
         self.blocks.values().map(|block| block.edges()).sum()
-    }
-
-    /// Converts the function's bytes to a hexadecimal string, if available.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Some(String)` containing the hexadecimal representation of the bytes, or `None` if unavailable.
-    fn bytes_to_hex(&self) -> Option<String> {
-        if let Some(bytes) = self.bytes() {
-            return Some(Binary::to_hex(&bytes));
-        }
-        None
     }
 
     /// Retrieves the size of the function in bytes, if contiguous.
