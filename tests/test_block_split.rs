@@ -174,6 +174,115 @@ fn test_direct_jump_inside_executable_range_is_not_enqueued_as_function() {
 }
 
 #[test]
+fn test_i386_indirect_call_absolute_memory_resolves_function_target() {
+    // assembly:
+    //   call dword ptr [0x8]
+    //   ret
+    //   db 0x90
+    //   dd 0x0c
+    //   ret
+    let bytes = vec![
+        0xff, 0x15, 0x08, 0x00, 0x00, 0x00, 0xc3, 0x90, 0x0c, 0x00, 0x00, 0x00, 0xc3,
+    ];
+    let mut ranges = BTreeMap::new();
+    ranges.insert(0u64, bytes.len() as u64);
+    let config = Config::new();
+    let disasm =
+        Disassembler::new(Architecture::I386, &bytes, ranges, config.clone()).expect("disasm");
+    let mut graph = Graph::new(Architecture::I386, config);
+
+    disasm
+        .disassemble_instruction(0, &mut graph)
+        .expect("disassemble");
+
+    let instruction = graph.get_instruction(0).expect("instruction");
+    assert!(
+        instruction.is_call,
+        "instruction should be identified as call"
+    );
+    assert_eq!(
+        instruction.functions,
+        [12u64].into_iter().collect(),
+        "indirect call target should be tracked as a function"
+    );
+    assert_eq!(
+        graph.functions.dequeue_all(),
+        [12u64].into_iter().collect(),
+        "indirect call target should be enqueued as a function"
+    );
+}
+
+#[test]
+fn test_i386_indirect_jump_absolute_memory_resolves_block_target_only() {
+    // assembly:
+    //   jmp dword ptr [0x8]
+    //   ret
+    //   db 0x90
+    //   dd 0x0c
+    //   ret
+    let bytes = vec![
+        0xff, 0x25, 0x08, 0x00, 0x00, 0x00, 0xc3, 0x90, 0x0c, 0x00, 0x00, 0x00, 0xc3,
+    ];
+    let mut ranges = BTreeMap::new();
+    ranges.insert(0u64, bytes.len() as u64);
+    let config = Config::new();
+    let disasm =
+        Disassembler::new(Architecture::I386, &bytes, ranges, config.clone()).expect("disasm");
+    let mut graph = Graph::new(Architecture::I386, config);
+
+    disasm
+        .disassemble_instruction(0, &mut graph)
+        .expect("disassemble");
+
+    let instruction = graph.get_instruction(0).expect("instruction");
+    assert!(
+        instruction.is_jump,
+        "instruction should be identified as jump"
+    );
+    assert_eq!(
+        instruction.to,
+        [12u64].into_iter().collect(),
+        "indirect jump target should be tracked as a control-flow target"
+    );
+    assert!(
+        instruction.functions.is_empty(),
+        "indirect jump target should not be tracked as a function"
+    );
+    assert!(
+        graph.functions.dequeue_all().is_empty(),
+        "indirect jump target should not be enqueued as a function"
+    );
+}
+
+#[test]
+fn test_i386_lea_absolute_memory_resolves_executable_address() {
+    // assembly: lea eax, [0x6]; ret
+    let bytes = vec![0x8d, 0x05, 0x06, 0x00, 0x00, 0x00, 0xc3];
+    let mut ranges = BTreeMap::new();
+    ranges.insert(0u64, bytes.len() as u64);
+    let config = Config::new();
+    let disasm =
+        Disassembler::new(Architecture::I386, &bytes, ranges, config.clone()).expect("disasm");
+    let mut graph = Graph::new(Architecture::I386, config);
+
+    disasm
+        .disassemble_instruction(0, &mut graph)
+        .expect("disassemble");
+
+    let instruction = graph.get_instruction(0).expect("instruction");
+    assert_eq!(
+        instruction.functions,
+        [6u64].into_iter().collect(),
+        "lea should recover the executable absolute address on i386"
+    );
+    assert_eq!(
+        graph.functions.dequeue_all(),
+        [6u64].into_iter().collect(),
+        "lea-discovered executable address should be enqueued"
+    );
+}
+
+#[test]
 fn test_block_split_keeps_predecessor_terminator_metadata() {
     // assembly: nop; nop; ret
     let bytes = vec![0x90, 0x90, 0xc3];

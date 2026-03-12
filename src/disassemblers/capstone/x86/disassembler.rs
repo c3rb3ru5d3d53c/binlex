@@ -816,16 +816,13 @@ impl<'disassembler> Disassembler<'disassembler> {
         for operand in operands {
             if let ArchOperand::X86Operand(operand) = operand {
                 if let X86OperandType::Mem(mem) = operand.op_type {
-                    if mem.base() != RegId(X86_REG_RIP as u16) {
-                        continue;
-                    }
                     if mem.index() != RegId(0) {
                         continue;
                     }
-                    let address: u64 = (instruction.address() as i64
-                        + mem.disp()
-                        + instruction.bytes().len() as i64)
-                        as u64;
+                    let address = match self.resolve_memory_operand_address(instruction, mem) {
+                        Some(address) => address,
+                        None => continue,
+                    };
                     if !self.is_executable_address(address) {
                         continue;
                     }
@@ -870,17 +867,31 @@ impl<'disassembler> Disassembler<'disassembler> {
     }
 
     fn resolve_memory_operand_target(&self, instruction: &Insn, mem: X86OpMem) -> Option<u64> {
-        if mem.base() != RegId(X86_REG_RIP as u16) || mem.index() != RegId(0) {
-            return None;
-        }
-
-        let pointer_address =
-            (instruction.address() as i64 + mem.disp() + instruction.bytes().len() as i64) as u64;
+        let pointer_address = self.resolve_memory_operand_address(instruction, mem)?;
         let target = self.read_pointer(pointer_address)?;
         if !self.is_executable_address(target) {
             return None;
         }
         Some(target)
+    }
+
+    fn resolve_memory_operand_address(&self, instruction: &Insn, mem: X86OpMem) -> Option<u64> {
+        if mem.index() != RegId(0) {
+            return None;
+        }
+
+        if mem.base() == RegId(X86_REG_RIP as u16) {
+            return Some(
+                (instruction.address() as i64 + mem.disp() + instruction.bytes().len() as i64)
+                    as u64,
+            );
+        }
+
+        if self.machine == Architecture::I386 && mem.base() == RegId(0) {
+            return Some(mem.disp() as u64);
+        }
+
+        None
     }
 
     fn read_pointer(&self, address: u64) -> Option<u64> {
