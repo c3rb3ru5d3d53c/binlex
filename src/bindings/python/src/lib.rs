@@ -28,6 +28,7 @@ pub mod genetics;
 pub mod global;
 pub mod hashing;
 pub mod imaging;
+#[cfg(not(target_os = "windows"))]
 pub mod lifters;
 pub mod types;
 
@@ -43,6 +44,7 @@ use crate::genetics::genitics_init;
 use crate::global::global_init;
 use crate::hashing::hashing_init;
 use crate::imaging::imaging_init;
+#[cfg(not(target_os = "windows"))]
 use crate::lifters::lifters_init;
 use crate::types::types_init;
 
@@ -59,6 +61,7 @@ fn binlex(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pymodule!(genitics_init))?;
     m.add_wrapped(wrap_pymodule!(hashing_init))?;
     m.add_wrapped(wrap_pymodule!(imaging_init))?;
+    #[cfg(not(target_os = "windows"))]
     m.add_wrapped(wrap_pymodule!(lifters_init))?;
     m.add_class::<Binary>()?;
     m.add_class::<Architecture>()?;
