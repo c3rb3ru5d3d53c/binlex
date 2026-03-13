@@ -20,8 +20,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+mod image;
 pub mod palette;
 pub mod svg;
+pub mod terminal;
 
 pub use palette::Palette;
 pub use svg::SVG;
+pub use terminal::Terminal;

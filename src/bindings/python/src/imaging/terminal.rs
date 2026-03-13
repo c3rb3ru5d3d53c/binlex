@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 use crate::imaging::palette::Palette;
-use binlex::imaging::SVG as InnerSVG;
+use binlex::imaging::Terminal as InnerTerminal;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
@@ -29,12 +29,12 @@ use pyo3::Py;
 use std::sync::{Arc, Mutex};
 
 #[pyclass]
-pub struct SVG {
-    inner: Arc<Mutex<InnerSVG>>,
+pub struct Terminal {
+    inner: Arc<Mutex<InnerTerminal>>,
 }
 
 #[pymethods]
-impl SVG {
+impl Terminal {
     #[new]
     #[pyo3(signature = (data, palette, cell_size=1, fixed_width=16))]
     #[pyo3(text_signature = "(data, palette, cell_size=1, fixed_width=16)")]
@@ -48,7 +48,7 @@ impl SVG {
         let inner_data = data.bind(py).as_bytes();
         let inner_palette = palette.borrow(py).inner.lock().unwrap().clone();
         Self {
-            inner: Arc::new(Mutex::new(InnerSVG::new_with_options(
+            inner: Arc::new(Mutex::new(InnerTerminal::new_with_options(
                 inner_data,
                 inner_palette,
                 cell_size,
@@ -57,45 +57,29 @@ impl SVG {
         }
     }
 
-    #[pyo3(text_signature = "($self, key, value)")]
-    pub fn add_metadata(&mut self, key: String, value: String) {
-        self.inner.lock().unwrap().add_metadata(key, value)
-    }
-
     #[pyo3(text_signature = "($self)")]
-    pub fn to_string(&self) -> String {
-        self.inner.lock().unwrap().to_string()
-    }
-
-    #[allow(clippy::useless_conversion)]
-    #[pyo3(text_signature = "($self, file_path)")]
-    pub fn write(&self, file_path: String) -> PyResult<()> {
+    pub fn print(&self) -> PyResult<()> {
         self.inner
             .lock()
             .unwrap()
-            .write(&file_path)
+            .print()
             .map_err(|e| PyErr::new::<PyRuntimeError, _>(e.to_string()))
     }
 
-    #[pyo3(text_signature = "($self)")]
-    pub fn print(&self) -> PyResult<()> {
-        let rendered = self.inner.lock().unwrap().to_string();
-        print!("{}", rendered);
-        Ok(())
-    }
-
-    pub fn __str__(&self) -> String {
-        self.to_string()
+    #[staticmethod]
+    #[pyo3(text_signature = "(r, g, b)")]
+    pub fn rgb_to_ansi256(r: u8, g: u8, b: u8) -> u8 {
+        InnerTerminal::rgb_to_ansi256(r, g, b)
     }
 }
 
 #[pymodule]
-#[pyo3(name = "svg")]
-pub fn svg_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<SVG>()?;
+#[pyo3(name = "terminal")]
+pub fn terminal_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<Terminal>()?;
     py.import("sys")?
         .getattr("modules")?
-        .set_item("binlex_bindings.binlex.imaging.svg", m)?;
-    m.setattr("__name__", "binlex_bindings.binlex.imaging.svg")?;
+        .set_item("binlex_bindings.binlex.imaging.terminal", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.imaging.terminal")?;
     Ok(())
 }

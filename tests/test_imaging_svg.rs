@@ -20,31 +20,26 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod palette;
-pub mod svg;
-pub mod terminal;
+use binlex::imaging::{Palette, SVG};
 
-use crate::imaging::palette::palette_init;
-use crate::imaging::svg::svg_init;
-use crate::imaging::terminal::terminal_init;
-pub use palette::Palette;
-pub use svg::SVG;
-pub use terminal::Terminal;
+#[test]
+fn display_renders_metadata_and_cells() {
+    let mut svg = SVG::new_with_options(&[0x10], Palette::Redblack, 3, 4);
+    svg.add_metadata("Hash".to_string(), "sha256:test".to_string());
 
-use pyo3::{prelude::*, wrap_pymodule};
+    let output = svg.to_string();
 
-#[pymodule]
-#[pyo3(name = "imaging")]
-pub fn imaging_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_wrapped(wrap_pymodule!(palette_init))?;
-    m.add_wrapped(wrap_pymodule!(svg_init))?;
-    m.add_wrapped(wrap_pymodule!(terminal_init))?;
-    m.add_class::<SVG>()?;
-    m.add_class::<Terminal>()?;
-    m.add_class::<Palette>()?;
-    py.import("sys")?
-        .getattr("modules")?
-        .set_item("binlex_bindings.binlex.imaging", m)?;
-    m.setattr("__name__", "binlex_bindings.binlex.imaging")?;
-    Ok(())
+    assert!(output.contains("<metadata>"));
+    assert!(output.contains("fill=\"rgb(16,0,0)\""));
+    assert!(output.contains("width=\"12\" height=\"3\""));
+}
+
+#[test]
+fn svg_string_is_a_document() {
+    let svg = SVG::new_with_options(&[0x10], Palette::Redblack, 3, 4);
+
+    let output = svg.to_string();
+
+    assert!(output.starts_with("<svg "));
+    assert!(output.ends_with("</svg>\n"));
 }
