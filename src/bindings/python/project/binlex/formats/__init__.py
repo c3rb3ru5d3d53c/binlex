@@ -21,11 +21,23 @@
 # SOFTWARE.
 
 from binlex_bindings.binlex.formats import ELF
-from binlex_bindings.binlex.formats import File
+from binlex_bindings.binlex.formats import File as _FileBinding
 from binlex_bindings.binlex.formats import MACHO
 from binlex_bindings.binlex.formats import PE as _PEBinding
 
 from binlex.architecture import Architecture
+from binlex.magic import Magic
+
+
+class File:
+    def __init__(self, path, config):
+        self._inner = _FileBinding(path, config)
+
+    def magic(self):
+        return Magic.from_binding(self._inner.magic())
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
 
 
 class PE:

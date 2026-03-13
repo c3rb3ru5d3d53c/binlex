@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 use crate::Config;
+use crate::Magic;
 use binlex::formats::file::File as InnerFile;
 use pyo3::prelude::*;
 use std::io::Error;
@@ -54,6 +55,13 @@ impl File {
     #[pyo3(text_signature = "($self)")]
     pub fn size(&self) -> u64 {
         self.inner.size()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn magic(&self) -> Magic {
+        Magic {
+            inner: self.inner.magic(),
+        }
     }
 
     #[pyo3(text_signature = "($self)")]

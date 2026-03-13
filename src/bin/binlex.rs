@@ -31,7 +31,7 @@ use binlex::controlflow::Tag;
 use binlex::AUTHOR;
 use binlex::Architecture;
 use binlex::Config;
-use binlex::Format;
+use binlex::Magic;
 use binlex::VERSION;
 use binlex::disassemblers::capstone::Disassembler;
 use binlex::disassemblers::cil::Disassembler as CILDisassembler;
@@ -955,20 +955,20 @@ fn main() {
         });
 
     if args.architecture.is_none() {
-        let format = Format::from_file(args.input.clone()).unwrap_or_else(|error| {
+        let format = Magic::from_file(args.input.clone()).unwrap_or_else(|error| {
             eprintln!("{}", error);
             process::exit(1);
         });
         match format {
-            Format::PE => {
+            Magic::PE => {
                 Stderr::print_debug(config.clone(), "processing pe");
                 process_pe(args.input, config, args.tags, args.output, args.stdin);
             }
-            Format::ELF => {
+            Magic::ELF => {
                 Stderr::print_debug(config.clone(), "processing elf");
                 process_elf(args.input, config, args.tags, args.output, args.stdin);
             }
-            Format::MACHO => {
+            Magic::MACHO => {
                 Stderr::print_debug(config.clone(), "processing macho");
                 process_macho(args.input, config, args.tags, args.output, args.stdin);
             }
