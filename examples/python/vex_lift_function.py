@@ -6,6 +6,7 @@ from binlex.controlflow import Graph
 from binlex.disassemblers.capstone import Disassembler
 from binlex.formats import PE
 from binlex.lifters.vex import Lifter
+from binlex.imaging import SVG, Palette
 
 # Create shared configuration
 config = Config()
@@ -44,4 +45,7 @@ lifter = Lifter(
 )
 
 print(lifter.ir())
+
+svg = SVG(function.bytes(), Palette.GRAYSCALE)
+svg.write('test3.svg')
 

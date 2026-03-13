@@ -20,7 +20,18 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from .palette import Palette
-from .svg import SVG
+from enum import Enum
 
-__all__ = ["Palette", "SVG"]
+from binlex_bindings.binlex.imaging import Palette as _PaletteBinding
+
+
+class Palette(str, Enum):
+    GRAYSCALE = "grayscale"
+    HEATMAP = "heatmap"
+    BLUEGREEN = "bluegreen"
+    REDBLACK = "redblack"
+
+    def to_binding(self) -> _PaletteBinding:
+        return _PaletteBinding.from_string(self.value)
+
+__all__ = ["Palette"]

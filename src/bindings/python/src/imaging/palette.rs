@@ -20,26 +20,35 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod palette;
-pub mod svg;
+use binlex::imaging::Palette as InnerPalette;
+use pyo3::exceptions::PyRuntimeError;
+use pyo3::prelude::*;
+use std::sync::{Arc, Mutex};
 
-use crate::imaging::palette::palette_init;
-use crate::imaging::svg::svg_init;
-pub use palette::Palette;
-pub use svg::SVG;
+#[pyclass]
+pub struct Palette {
+    pub inner: Arc<Mutex<InnerPalette>>,
+}
 
-use pyo3::{prelude::*, wrap_pymodule};
+#[pymethods]
+impl Palette {
+    #[staticmethod]
+    pub fn from_string(string: String) -> PyResult<Self> {
+        let inner = InnerPalette::from_string(&string)
+            .map_err(|e| PyErr::new::<PyRuntimeError, _>(e.to_string()))?;
+        Ok(Self {
+            inner: Arc::new(Mutex::new(inner)),
+        })
+    }
+}
 
 #[pymodule]
-#[pyo3(name = "imaging")]
-pub fn imaging_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_wrapped(wrap_pymodule!(palette_init))?;
-    m.add_wrapped(wrap_pymodule!(svg_init))?;
-    m.add_class::<SVG>()?;
+#[pyo3(name = "palette")]
+pub fn palette_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Palette>()?;
     py.import("sys")?
         .getattr("modules")?
-        .set_item("binlex_bindings.binlex.imaging", m)?;
-    m.setattr("__name__", "binlex_bindings.binlex.imaging")?;
+        .set_item("binlex_bindings.binlex.imaging.palette", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.imaging.palette")?;
     Ok(())
 }
