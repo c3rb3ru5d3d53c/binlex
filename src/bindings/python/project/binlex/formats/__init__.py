@@ -23,6 +23,25 @@
 from binlex_bindings.binlex.formats import ELF
 from binlex_bindings.binlex.formats import File
 from binlex_bindings.binlex.formats import MACHO
-from binlex_bindings.binlex.formats import PE
+from binlex_bindings.binlex.formats import PE as _PEBinding
+
+from binlex.architecture import Architecture
+
+
+class PE:
+    def __init__(self, path, config):
+        self._inner = _PEBinding(path, config)
+
+    @classmethod
+    def from_bytes(cls, bytes, config):
+        result = cls.__new__(cls)
+        result._inner = _PEBinding.from_bytes(bytes, config)
+        return result
+
+    def architecture(self):
+        return Architecture.from_binding(self._inner.architecture())
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
 
 __all__ = ["ELF", "File", "MACHO", "PE"]

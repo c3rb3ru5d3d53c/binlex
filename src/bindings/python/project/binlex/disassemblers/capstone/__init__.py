@@ -20,6 +20,36 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from binlex_bindings.binlex.disassemblers.capstone import Disassembler
+from binlex_bindings.binlex.disassemblers.capstone import Disassembler as _DisassemblerBinding
+
+from binlex.architecture import _coerce_architecture
+
+
+class Disassembler:
+    def __init__(self, machine, image, executable_address_ranges, config):
+        self._inner = _DisassemblerBinding(
+            _coerce_architecture(machine),
+            image,
+            executable_address_ranges,
+            config,
+        )
+
+    def disassemble_instruction(self, address, cfg):
+        return self._inner.disassemble_instruction(address, cfg._inner)
+
+    def disassemble_function(self, address, cfg):
+        return self._inner.disassemble_function(address, cfg._inner)
+
+    def disassemble_block(self, address, cfg):
+        return self._inner.disassemble_block(address, cfg._inner)
+
+    def disassemble_controlflow(self, addresses, cfg):
+        return self._inner.disassemble_controlflow(addresses, cfg._inner)
+
+    def disassemble_sweep(self):
+        return self._inner.disassemble_sweep()
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
 
 __all__ = ["Disassembler"]

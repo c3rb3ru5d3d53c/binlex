@@ -7,6 +7,7 @@ from binlex.disassemblers.capstone import Disassembler
 from binlex.formats import PE
 from binlex.lifters.vex import Lifter
 from binlex.imaging import SVG, Palette
+from binlex import Architecture
 
 # Create shared configuration
 config = Config()
@@ -18,14 +19,14 @@ image = mapped_file.mmap()
 
 # Disassemble control flow
 disassembler = Disassembler(
-    pe.architecture(),
+    Architecture.AMD64,
     image,
     pe.executable_virtual_address_ranges(),
     config,
 )
 
 # Create Controlflow Graph
-cfg = Graph(pe.architecture(), config)
+cfg = Graph(Architecture.AMD64, config)
 
 # Disassemble the PE
 disassembler.disassemble_controlflow(
@@ -38,7 +39,7 @@ function = cfg.functions()[0]
 
 # Lift function bytes to VEX IR
 lifter = Lifter(
-    pe.architecture(),
+    Architecture.AMD64,
     function.bytes(),
     function.address(),
     config,
@@ -47,5 +48,5 @@ lifter = Lifter(
 print(lifter.ir())
 
 svg = SVG(function.bytes(), Palette.GRAYSCALE)
-svg.write('test3.svg')
+svg.write('test.svg')
 
