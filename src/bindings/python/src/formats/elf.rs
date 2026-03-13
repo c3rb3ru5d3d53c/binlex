@@ -23,6 +23,7 @@
 use crate::types::memorymappedfile::MemoryMappedFile;
 use crate::Architecture;
 use crate::Config;
+use crate::formats::File;
 use binlex::formats::ELF as InnerELF;
 use pyo3::prelude::*;
 use pyo3::types::PyType;
@@ -144,12 +145,21 @@ impl ELF {
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn file_json(&self) -> PyResult<String> {
-        self.inner
-            .lock()
-            .unwrap()
-            .file_json()
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+    pub fn file(&self, py: Python<'_>) -> PyResult<Py<File>> {
+        let config = self.inner.lock().unwrap().config.clone();
+        let file = self.inner.lock().unwrap().file().clone();
+        Py::new(
+            py,
+            File {
+                inner: file,
+                config: Py::new(
+                    py,
+                    Config {
+                        inner: Arc::new(Mutex::new(config)),
+                    },
+                )?,
+            },
+        )
     }
 }
 

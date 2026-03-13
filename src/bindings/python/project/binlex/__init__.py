@@ -24,7 +24,7 @@ from binlex_bindings.binlex import Config
 from binlex_bindings.binlex.binary import Binary
 from .architecture import Architecture
 from .magic import Magic
-from . import controlflow, disassemblers, formats, lifters
+from . import controlflow, disassemblers, formats, lifters, types
 
 __all__ = [
     "Architecture",
@@ -35,4 +35,5 @@ __all__ = [
     "disassemblers",
     "formats",
     "lifters",
+    "types",
 ]

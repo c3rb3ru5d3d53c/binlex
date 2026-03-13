@@ -287,3 +287,31 @@ impl File {
         Ok(result)
     }
 }
+
+impl Clone for File {
+    fn clone(&self) -> Self {
+        let handle = if let Some(path) = &self.path {
+            #[cfg(windows)]
+            let handle = Box::new(
+                OpenOptions::new()
+                    .read(true)
+                    .write(false)
+                    .share_mode(FILE_SHARE_READ)
+                    .open(path)
+                    .unwrap_or_else(|_| StdFile::open(path).unwrap()),
+            ) as Box<dyn FileHandle>;
+            #[cfg(not(windows))]
+            let handle = Box::new(StdFile::open(path).unwrap()) as Box<dyn FileHandle>;
+            handle
+        } else {
+            Box::new(Cursor::new(self.data.clone())) as Box<dyn FileHandle>
+        };
+
+        Self {
+            data: self.data.clone(),
+            path: self.path.clone(),
+            config: self.config.clone(),
+            handle,
+        }
+    }
+}

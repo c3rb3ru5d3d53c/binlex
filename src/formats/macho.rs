@@ -395,12 +395,12 @@ impl MACHO {
         self.file.sha256()
     }
 
-    /// Returns the File JSON associated with the PE
+    /// Returns the underlying file metadata helper associated with the Mach-O.
     ///
     /// # Returns
-    /// An `Result<String, Error>` containing the File JSON.
+    /// A borrowed [`File`] reference for the Mach-O input.
     #[allow(dead_code)]
-    pub fn file_json(&self) -> Result<String, Error> {
-        self.file.json()
+    pub fn file(&self) -> &File {
+        &self.file
     }
 }
