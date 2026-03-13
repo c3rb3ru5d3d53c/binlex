@@ -190,6 +190,9 @@ fn default_patch_dir() -> Result<PathBuf> {
 }
 
 fn apply_configured_patches(valgrind_dir: &Path) -> Result<()> {
+    if target_os()? == "macos" {
+        return Ok(());
+    }
     apply_patches(valgrind_dir, &default_patch_dir()?)?;
     match env::var("VEX_PATCHES") {
         Ok(path) => apply_patches(valgrind_dir, Path::new(&path))?,
