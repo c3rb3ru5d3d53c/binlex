@@ -20,10 +20,31 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from .palette import Palette
-from .png import PNG
-from .render import Render, RenderCell
-from .svg import SVG
-from .terminal import Terminal
+from binlex_bindings.binlex.imaging import PNG as _PNGBinding
 
-__all__ = ["Palette", "PNG", "Render", "RenderCell", "SVG", "Terminal"]
+from .palette import Palette
+
+
+class PNG:
+    def __init__(
+        self,
+        data: bytes,
+        palette: Palette,
+        cell_size: int = 1,
+        fixed_width: int = 16,
+    ) -> None:
+        self._inner = _PNGBinding(
+            data,
+            palette.to_binding(),
+            cell_size,
+            fixed_width,
+        )
+
+    def bytes(self) -> bytes:
+        return self._inner.bytes()
+
+    def write(self, file_path: str) -> None:
+        self._inner.write(file_path)
+
+
+__all__ = ["PNG"]

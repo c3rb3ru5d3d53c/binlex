@@ -23,6 +23,7 @@
 use binlex::AUTHOR;
 use binlex::VERSION;
 use binlex::hashing::SHA256;
+use binlex::imaging::PNG;
 use binlex::imaging::Palette;
 use binlex::imaging::SVG;
 use binlex::imaging::Terminal;
@@ -68,16 +69,24 @@ fn main() {
     });
 
     if let Some(output) = args.output {
-        let mut svg = build_svg(&byte_data, args.color, args.cell_size, args.fixed_width);
+        if output.to_ascii_lowercase().ends_with(".png") {
+            let png = build_png(&byte_data, args.color, args.cell_size, args.fixed_width);
+            png.write(&output).unwrap_or_else(|error| {
+                eprintln!("{}", error);
+                process::exit(1);
+            });
+        } else {
+            let mut svg = build_svg(&byte_data, args.color, args.cell_size, args.fixed_width);
 
-        for (key, value) in metadata(&byte_data) {
-            svg.add_metadata(key, value);
+            for (key, value) in metadata(&byte_data) {
+                svg.add_metadata(key, value);
+            }
+
+            svg.write(&output).unwrap_or_else(|error| {
+                eprintln!("{}", error);
+                process::exit(1);
+            });
         }
-
-        svg.write(&output).unwrap_or_else(|error| {
-            eprintln!("{}", error);
-            process::exit(1);
-        });
     } else {
         let terminal = build_terminal(&byte_data, args.color, args.cell_size, args.fixed_width);
 
@@ -114,4 +123,8 @@ fn build_terminal(
     fixed_width: usize,
 ) -> Terminal {
     Terminal::new_with_options(byte_data, palette, cell_size, fixed_width)
+}
+
+fn build_png(byte_data: &[u8], palette: Palette, cell_size: usize, fixed_width: usize) -> PNG {
+    PNG::new_with_options(byte_data, palette, cell_size, fixed_width)
 }

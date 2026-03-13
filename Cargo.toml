@@ -34,6 +34,7 @@ toml = "0.8.19"
 glob = "0.3.2"
 indexmap = "2.7.1"
 cxx = "=1.0.138"
+image = { version = "0.25.8", default-features = false, features = ["png"] }
 
 [workspace]
 members = [

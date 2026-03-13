@@ -20,43 +20,21 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::imaging::Palette;
+use binlex::imaging::{Palette, Render};
 
-pub(crate) struct Cell {
-    pub(crate) index: usize,
-    pub(crate) address: u64,
-    pub(crate) rgb: (u8, u8, u8),
-}
+#[test]
+fn render_computes_dimensions_and_cells() {
+    let render = Render::new_with_options(&[0x00, 0x10, 0xff], Palette::Redblack, 3, 2);
 
-pub(crate) struct Image {
-    pub(crate) cells: Vec<Cell>,
-    pub(crate) total_cells: usize,
-    pub(crate) cell_size: usize,
-    pub(crate) fixed_width: usize,
-}
+    assert_eq!(render.total_width(), 6);
+    assert_eq!(render.total_height(), 6);
+    assert_eq!(render.total_cells(), 3);
+    assert_eq!(render.fixed_width(), 2);
 
-impl Image {
-    pub(crate) fn new(data: &[u8], palette: Palette, cell_size: usize, fixed_width: usize) -> Self {
-        let fixed_width = fixed_width.max(1);
-        let mut cells = Vec::with_capacity(data.len());
-
-        for (i, &byte) in data.iter().enumerate() {
-            cells.push(Cell {
-                index: i,
-                address: i as u64,
-                rgb: palette.map_byte_rgb(byte),
-            });
-        }
-
-        Self {
-            cells,
-            total_cells: data.len(),
-            cell_size,
-            fixed_width,
-        }
-    }
-
-    pub(crate) fn total_height(&self) -> usize {
-        self.total_cells.div_ceil(self.fixed_width) * self.cell_size
-    }
+    let cells = render.cells();
+    assert_eq!(cells.len(), 3);
+    assert_eq!(cells[0].x(), 0);
+    assert_eq!(cells[1].x(), 3);
+    assert_eq!(cells[2].y(), 3);
+    assert_eq!(cells[1].rgb(), (16, 0, 0));
 }

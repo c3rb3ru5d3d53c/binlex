@@ -21,13 +21,13 @@
 // SOFTWARE.
 
 use crate::imaging::Palette;
-use crate::imaging::image::Image;
+use crate::imaging::render::Render;
 use std::fmt;
 use std::io::{self, Write};
 
 pub struct SVG {
     metadata_entries: Vec<(String, String)>,
-    image: Image,
+    render: Render,
 }
 
 impl SVG {
@@ -41,9 +41,18 @@ impl SVG {
         cell_size: usize,
         fixed_width: usize,
     ) -> Self {
+        Self::from_render(Render::new_with_options(
+            data,
+            palette,
+            cell_size,
+            fixed_width,
+        ))
+    }
+
+    pub(crate) fn from_render(render: Render) -> Self {
         Self {
             metadata_entries: Vec::new(),
-            image: Image::new(data, palette, cell_size, fixed_width),
+            render,
         }
     }
 
@@ -78,8 +87,8 @@ impl SVG {
 
 impl fmt::Display for SVG {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let total_width = self.image.fixed_width * self.image.cell_size;
-        let total_height = self.image.total_height();
+        let total_width = self.render.total_width();
+        let total_height = self.render.total_height();
 
         write!(
             f,
@@ -90,18 +99,22 @@ impl fmt::Display for SVG {
 
         write!(f, "{}", self.generate_metadata())?;
 
-        for cell in &self.image.cells {
-            let row = cell.index / self.image.fixed_width;
-            let col = cell.index % self.image.fixed_width;
-            let x = col * self.image.cell_size;
-            let y = row * self.image.cell_size;
-            let (r, g, b) = cell.rgb;
+        for cell in self.render.cells() {
+            let (r, g, b) = cell.rgb();
 
             write!(
                 f,
                 r#"<rect x="{}" y="{}" width="{}" height="{}" fill="rgb({},{},{})" cell-index="{}" address="{}"/>
 "#,
-                x, y, self.image.cell_size, self.image.cell_size, r, g, b, cell.index, cell.address
+                cell.x(),
+                cell.y(),
+                cell.width(),
+                cell.height(),
+                r,
+                g,
+                b,
+                cell.index(),
+                cell.address()
             )?;
         }
 
