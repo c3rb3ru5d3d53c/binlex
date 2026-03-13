@@ -22,11 +22,14 @@
 
 pub mod architecture;
 pub mod config;
+pub mod magic;
 
 use crate::global::architecture::architecture_init;
 pub use crate::global::architecture::Architecture;
 use crate::global::config::config_init;
 pub use crate::global::config::Config;
+use crate::global::magic::magic_init;
+pub use crate::global::magic::Magic;
 
 use pyo3::{prelude::*, wrap_pymodule};
 
@@ -35,8 +38,10 @@ use pyo3::{prelude::*, wrap_pymodule};
 pub fn global_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pymodule!(config_init))?;
     m.add_wrapped(wrap_pymodule!(architecture_init))?;
+    m.add_wrapped(wrap_pymodule!(magic_init))?;
     m.add_class::<Config>()?;
     m.add_class::<Architecture>()?;
+    m.add_class::<Magic>()?;
     py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex._global", m)?;

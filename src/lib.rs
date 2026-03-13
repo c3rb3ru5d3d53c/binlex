@@ -36,5 +36,5 @@ pub use binary::Binary;
 pub use global::AUTHOR;
 pub use global::Architecture;
 pub use global::Config;
-pub use global::Format;
+pub use global::Magic;
 pub use global::VERSION;

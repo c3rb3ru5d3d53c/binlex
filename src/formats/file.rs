@@ -22,6 +22,7 @@
 
 use crate::Binary;
 use crate::Config;
+use crate::Magic;
 use crate::controlflow::Attribute;
 use crate::hashing::sha256::SHA256;
 use crate::hashing::tlsh::TLSH;
@@ -49,6 +50,8 @@ pub struct FileJson {
     #[serde(rename = "type")]
     /// The type always `file`
     pub type_: String,
+    /// The identified file magic.
+    pub magic: String,
     /// The SHA-256 hash of the file, if available.
     pub sha256: Option<String>,
     /// The TLSH (Trend Micro Locality Sensitive Hash) of the file, if available.
@@ -178,6 +181,12 @@ impl File {
         self.data.len() as u64
     }
 
+    /// Identifies the file type from the loaded file bytes.
+    #[allow(dead_code)]
+    pub fn magic(&self) -> Magic {
+        Magic::from_bytes(&self.data)
+    }
+
     /// Seeks to a specific offset in the file.
     ///
     /// # Arguments
@@ -242,6 +251,7 @@ impl File {
     pub fn process(&self) -> FileJson {
         FileJson {
             type_: "file".to_string(),
+            magic: self.magic().to_string(),
             sha256: self.sha256(),
             tlsh: self.tlsh(),
             size: Some(self.size()),

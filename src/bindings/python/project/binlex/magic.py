@@ -20,19 +20,39 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from binlex_bindings.binlex import Config
-from binlex_bindings.binlex.binary import Binary
-from .architecture import Architecture
-from .magic import Magic
-from . import controlflow, disassemblers, formats, lifters
+from enum import Enum
 
-__all__ = [
-    "Architecture",
-    "Binary",
-    "Config",
-    "Magic",
-    "controlflow",
-    "disassemblers",
-    "formats",
-    "lifters",
-]
+from binlex_bindings.binlex import Magic as _MagicBinding
+
+
+class Magic(str, Enum):
+    CODE = "code"
+    PE = "pe"
+    ELF = "elf"
+    MACHO = "macho"
+    PNG = "png"
+    UNKNOWN = "unknown"
+
+    def to_binding(self) -> _MagicBinding:
+        return _MagicBinding.from_string(self.value)
+
+    @classmethod
+    def from_binding(cls, magic: _MagicBinding) -> "Magic":
+        return cls(str(magic))
+
+    @classmethod
+    def from_file(cls, path: str) -> "Magic":
+        return cls.from_binding(_MagicBinding.from_file(path))
+
+    @classmethod
+    def from_bytes(cls, bytes: bytes) -> "Magic":
+        return cls.from_binding(_MagicBinding.from_bytes(bytes))
+
+
+def _coerce_magic(magic: Magic | _MagicBinding) -> _MagicBinding:
+    if isinstance(magic, Magic):
+        return magic.to_binding()
+    return magic
+
+
+__all__ = ["Magic"]

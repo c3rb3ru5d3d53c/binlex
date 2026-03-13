@@ -35,6 +35,7 @@ pub mod types;
 pub use binary::Binary;
 pub use global::Architecture;
 pub use global::Config;
+pub use global::Magic;
 
 use crate::binary::binary_init;
 use crate::controlflow::controlflow_init;
@@ -66,5 +67,6 @@ fn binlex(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Binary>()?;
     m.add_class::<Architecture>()?;
     m.add_class::<Config>()?;
+    m.add_class::<Magic>()?;
     Ok(())
 }
