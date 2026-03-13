@@ -20,7 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod colormap;
+pub mod palette;
+pub mod svg;
 
-pub use colormap::ColorMap;
-pub use colormap::ColorMapType;
+pub use palette::Palette;
+pub use svg::SVG;

@@ -20,7 +20,36 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from .palette import Palette
-from .svg import SVG
+from binlex_bindings.binlex.imaging import SVG as _SVGBinding
 
-__all__ = ["Palette", "SVG"]
+from .palette import Palette
+
+
+class SVG:
+    def __init__(
+        self,
+        data: bytes,
+        palette: Palette,
+        cell_size: int = 1,
+        fixed_width: int = 16,
+    ) -> None:
+        self._inner = _SVGBinding(
+            data,
+            palette.to_binding(),
+            cell_size,
+            fixed_width,
+        )
+
+    def add_metadata(self, key: str, value: str) -> None:
+        self._inner.add_metadata(key, value)
+
+    def to_string(self) -> str:
+        return self._inner.to_string()
+
+    def write(self, file_path: str) -> None:
+        self._inner.write(file_path)
+
+    def __str__(self) -> str:
+        return self.to_string()
+
+__all__ = ["SVG"]
