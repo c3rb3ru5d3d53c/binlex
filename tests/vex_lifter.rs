@@ -3,7 +3,7 @@
 use binlex::controlflow::graph::Graph;
 use binlex::controlflow::{Block, Function, Instruction};
 use binlex::global::{Architecture, Config};
-use binlex::lifters::vex::Lifter;
+use binlex::lifters::vex::{Lifter, LifterJsonDeserializer};
 use std::collections::{BTreeMap, BTreeSet};
 
 fn test_graph() -> Graph {
@@ -26,7 +26,30 @@ fn test_lifter_process() {
     let mut lifter =
         Lifter::new(Architecture::AMD64, &[0xC3u8], 0x1000, Config::default()).unwrap();
     let json = lifter.process().unwrap();
+    assert_eq!(json.architecture, "amd64");
+    assert_eq!(json.address, 0x1000);
+    assert_eq!(json.bytes, "c3");
     assert!(!json.ir.is_empty());
+}
+
+#[test]
+fn test_vex_json_deserializer_round_trip() {
+    let config = Config::default();
+    let mut lifter = Lifter::new(Architecture::AMD64, &[0xC3u8], 0x1000, config.clone()).unwrap();
+    let serialized = serde_json::to_string(&lifter.process().unwrap()).unwrap();
+    let deserialized = LifterJsonDeserializer::new(serialized, config).unwrap();
+    assert_eq!(deserialized.architecture().unwrap(), Architecture::AMD64);
+    assert_eq!(deserialized.address(), 0x1000);
+    assert_eq!(deserialized.bytes().unwrap(), vec![0xC3]);
+    assert!(!deserialized.ir().unwrap().is_empty());
+    assert_eq!(deserialized.process().unwrap().bytes, "c3");
+}
+
+#[test]
+fn test_lifter_json_deserializer_rejects_unsupported_architecture() {
+    let json = r#"{"architecture":"cil","address":4096,"bytes":"c3","ir":"ignored"}"#;
+    let result = LifterJsonDeserializer::new(json.to_string(), Config::default());
+    assert!(result.is_err());
 }
 
 #[test]

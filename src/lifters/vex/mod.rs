@@ -1,2 +1,2 @@
 pub mod lifter;
-pub use lifter::{Lifter, LifterJson};
+pub use lifter::{Lifter, LifterJson, LifterJsonDeserializer};
