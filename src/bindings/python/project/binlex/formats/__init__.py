@@ -20,4 +20,9 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from binlex_bindings.binlex.formats import *
+from binlex_bindings.binlex.formats import ELF
+from binlex_bindings.binlex.formats import File
+from binlex_bindings.binlex.formats import MACHO
+from binlex_bindings.binlex.formats import PE
+
+__all__ = ["ELF", "File", "MACHO", "PE"]

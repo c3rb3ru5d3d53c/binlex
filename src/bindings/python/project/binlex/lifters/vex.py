@@ -20,4 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from binlex_bindings.binlex.lifters.vex import *
+from binlex_bindings.binlex.lifters.vex import Lifter
+from binlex_bindings.binlex.lifters.vex import LifterJsonDeserializer
+
+__all__ = ["Lifter", "LifterJsonDeserializer"]
