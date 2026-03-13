@@ -61,27 +61,47 @@ impl Palette {
         }
     }
 
-    pub fn map_byte(&self, byte: u8) -> String {
+    pub fn map_byte_rgb(&self, byte: u8) -> (u8, u8, u8) {
         match self {
-            Palette::Grayscale => format!("rgb({},{},{})", byte, byte, byte),
+            Palette::Grayscale => (byte, byte, byte),
             Palette::Heatmap => {
                 let r = (byte as f32 * 1.2).min(255.0) as u8;
                 let g = 255 - byte;
                 let b = (byte as f32 * 0.5).min(255.0) as u8;
-                format!("rgb({},{},{})", r, g, b)
+                (r, g, b)
             }
             Palette::Bluegreen => {
                 let r = (byte as f32 * 0.2).min(255.0) as u8;
                 let g = (byte as f32 * 0.8).min(255.0) as u8;
                 let b = 255 - byte;
-                format!("rgb({},{},{})", r, g, b)
+                (r, g, b)
             }
-            Palette::Redblack => {
-                let r = byte;
-                let g = 0;
-                let b = 0;
-                format!("rgb({},{},{})", r, g, b)
-            }
+            Palette::Redblack => (byte, 0, 0),
+        }
+    }
+
+    pub fn map_byte(&self, byte: u8) -> String {
+        let (r, g, b) = self.map_byte_rgb(byte);
+        format!("rgb({},{},{})", r, g, b)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Palette;
+
+    #[test]
+    fn map_byte_rgb_matches_string_output() {
+        let palettes = [
+            Palette::Grayscale,
+            Palette::Heatmap,
+            Palette::Bluegreen,
+            Palette::Redblack,
+        ];
+
+        for palette in palettes {
+            let (r, g, b) = palette.map_byte_rgb(0x80);
+            assert_eq!(palette.map_byte(0x80), format!("rgb({},{},{})", r, g, b));
         }
     }
 }

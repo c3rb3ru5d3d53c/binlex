@@ -64,5 +64,4 @@ impl Tag {
     pub fn attribute(&self) -> Attribute {
         Attribute::Tag(self.process())
     }
-
 }

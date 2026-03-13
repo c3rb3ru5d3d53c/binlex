@@ -117,8 +117,13 @@ fn test_lift_block() {
         terminator: instruction,
     };
     let block_bytes = block.bytes();
-    let mut vex =
-        Lifter::new(Architecture::AMD64, &block_bytes, block.address, Config::default()).unwrap();
+    let mut vex = Lifter::new(
+        Architecture::AMD64,
+        &block_bytes,
+        block.address,
+        Config::default(),
+    )
+    .unwrap();
     let irsb = vex.ir().ok();
     assert!(irsb.is_some());
     if let Some(irsb) = irsb {
@@ -176,8 +181,13 @@ fn test_lift_binlex_block_split_example() {
     // Block: jz 0x4; nop; nop; ret
     let block_bytes = [0x74, 0x02, 0x90, 0x90, 0xc3];
     let block_address = 0x1000u64;
-    let mut vex =
-        Lifter::new(Architecture::AMD64, &block_bytes, block_address, Config::default()).unwrap();
+    let mut vex = Lifter::new(
+        Architecture::AMD64,
+        &block_bytes,
+        block_address,
+        Config::default(),
+    )
+    .unwrap();
     let irsb = vex.ir().ok();
     assert!(irsb.is_some());
     if let Some(irsb) = irsb {

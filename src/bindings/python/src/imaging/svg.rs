@@ -77,6 +77,15 @@ impl SVG {
             .map_err(|e| PyErr::new::<PyRuntimeError, _>(e.to_string()))
     }
 
+    #[pyo3(text_signature = "($self)")]
+    pub fn print(&self) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .print()
+            .map_err(|e| PyErr::new::<PyRuntimeError, _>(e.to_string()))
+    }
+
     pub fn __str__(&self) -> String {
         self.to_string()
     }

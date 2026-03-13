@@ -21,8 +21,8 @@
 // SOFTWARE.
 
 use crate::io::Stdout;
-use std::io::{self, BufRead, IsTerminal};
 use std::io::stdin;
+use std::io::{self, BufRead, IsTerminal};
 use std::process;
 
 /// Represents a wrapper for standard input operations.

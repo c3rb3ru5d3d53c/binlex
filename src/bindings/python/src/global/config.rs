@@ -83,7 +83,6 @@ impl ConfigChromosomes {
             inner: Arc::clone(&self.inner),
         }
     }
-
 }
 
 #[pyclass]
