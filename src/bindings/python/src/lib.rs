@@ -28,6 +28,7 @@ pub mod genetics;
 pub mod global;
 pub mod hashing;
 pub mod imaging;
+pub mod lifters;
 pub mod types;
 
 pub use binary::Binary;
@@ -42,6 +43,7 @@ use crate::genetics::genitics_init;
 use crate::global::global_init;
 use crate::hashing::hashing_init;
 use crate::imaging::imaging_init;
+use crate::lifters::lifters_init;
 use crate::types::types_init;
 
 use pyo3::{prelude::*, wrap_pymodule};
@@ -57,6 +59,7 @@ fn binlex(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pymodule!(genitics_init))?;
     m.add_wrapped(wrap_pymodule!(hashing_init))?;
     m.add_wrapped(wrap_pymodule!(imaging_init))?;
+    m.add_wrapped(wrap_pymodule!(lifters_init))?;
     m.add_class::<Binary>()?;
     m.add_class::<Architecture>()?;
     m.add_class::<Config>()?;

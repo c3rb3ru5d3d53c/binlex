@@ -20,7 +20,4 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from binlex_bindings.binlex import Config
-from binlex_bindings.binlex import Architecture
-from binlex_bindings.binlex.binary import Binary
-from . import lifters
+from binlex_bindings.binlex.lifters.vex import *

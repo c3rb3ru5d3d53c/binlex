@@ -113,8 +113,9 @@ mod test {
         vta.archinfo_host.endness = ve;
         vta.archinfo_host.hwcaps = 0;
         vta.callback_opaque = 0 as *mut c_void;
-        vta.guest_bytes = sanity as *const u8;
-        vta.guest_bytes_addr = sanity as Addr;
+        let sanity_ptr = sanity as usize;
+        vta.guest_bytes = sanity_ptr as *const u8;
+        vta.guest_bytes_addr = sanity_ptr as Addr;
         vta.chase_into_ok = Some(return_false);
         vta.host_bytes = host_bytes.as_mut_ptr();
         vta.host_bytes_size = host_bytes.len() as i32;
