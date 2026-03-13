@@ -67,7 +67,6 @@ fn main() {
 
     config.formats.file.hashing.tlsh.enabled = true;
     config.formats.file.hashing.sha256.enabled = true;
-    config.formats.file.hashing.minhash.enabled = true;
 
     let args = Args::parse();
 
