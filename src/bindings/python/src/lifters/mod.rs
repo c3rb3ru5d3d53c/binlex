@@ -20,8 +20,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#[cfg(not(target_os = "windows"))]
 pub mod vex;
 
+#[cfg(not(target_os = "windows"))]
 use crate::lifters::vex::vex_init;
 
 use pyo3::{prelude::*, wrap_pymodule};
@@ -29,6 +31,7 @@ use pyo3::{prelude::*, wrap_pymodule};
 #[pymodule]
 #[pyo3(name = "lifters")]
 pub fn lifters_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    #[cfg(not(target_os = "windows"))]
     m.add_wrapped(wrap_pymodule!(vex_init))?;
     py.import("sys")?
         .getattr("modules")?
