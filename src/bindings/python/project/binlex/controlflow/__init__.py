@@ -20,4 +20,20 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from binlex_bindings.binlex.controlflow import *
+from binlex_bindings.binlex.controlflow import Block
+from binlex_bindings.binlex.controlflow import BlockJsonDeserializer
+from binlex_bindings.binlex.controlflow import Function
+from binlex_bindings.binlex.controlflow import FunctionJsonDeserializer
+from binlex_bindings.binlex.controlflow import Graph
+from binlex_bindings.binlex.controlflow import GraphQueue
+from binlex_bindings.binlex.controlflow import Instruction
+
+__all__ = [
+    "Block",
+    "BlockJsonDeserializer",
+    "Function",
+    "FunctionJsonDeserializer",
+    "Graph",
+    "GraphQueue",
+    "Instruction",
+]
