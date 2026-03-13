@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 
 use crate::Binary;
-use crate::global::Architecture;
 use crate::Config;
+use crate::global::Architecture;
 
 const BUFFER_PADDING: usize = 64;
 

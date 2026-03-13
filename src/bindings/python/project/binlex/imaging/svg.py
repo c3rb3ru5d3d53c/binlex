@@ -49,6 +49,9 @@ class SVG:
     def write(self, file_path: str) -> None:
         self._inner.write(file_path)
 
+    def print(self) -> None:
+        self._inner.print()
+
     def __str__(self) -> str:
         return self.to_string()
 

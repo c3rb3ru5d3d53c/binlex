@@ -996,8 +996,9 @@ impl<'disassembler> Disassembler<'disassembler> {
             return result;
         }
 
-        let Some(load_index) =
-            history.iter().rposition(|insn| self.is_register_jump_table_load(insn, jump_register))
+        let Some(load_index) = history
+            .iter()
+            .rposition(|insn| self.is_register_jump_table_load(insn, jump_register))
         else {
             return result;
         };
@@ -1043,10 +1044,12 @@ impl<'disassembler> Disassembler<'disassembler> {
             return result;
         };
 
-        let Some(base_register) = self.get_add_rhs_register(&history[add_index], jump_register) else {
+        let Some(base_register) = self.get_add_rhs_register(&history[add_index], jump_register)
+        else {
             return result;
         };
-        let Some(table_base) = self.resolve_register_value_from_history(base_register, history) else {
+        let Some(table_base) = self.resolve_register_value_from_history(base_register, history)
+        else {
             return result;
         };
 
@@ -1067,7 +1070,11 @@ impl<'disassembler> Disassembler<'disassembler> {
         result
     }
 
-    fn is_register_jump_table_load(&self, instruction: &DecodedInstruction, register: RegId) -> bool {
+    fn is_register_jump_table_load(
+        &self,
+        instruction: &DecodedInstruction,
+        register: RegId,
+    ) -> bool {
         if instruction.operands.len() < 2 {
             return false;
         }
@@ -1130,7 +1137,9 @@ impl<'disassembler> Disassembler<'disassembler> {
         history: &[DecodedInstruction],
     ) -> Option<usize> {
         for instruction in history.iter().rev() {
-            if instruction.id != InsnId(X86Insn::X86_INS_CMP as u32) || instruction.operands.len() < 2 {
+            if instruction.id != InsnId(X86Insn::X86_INS_CMP as u32)
+                || instruction.operands.len() < 2
+            {
                 continue;
             }
             let lhs_matches = matches!(
@@ -1164,7 +1173,8 @@ impl<'disassembler> Disassembler<'disassembler> {
         }
         if mem.base() == RegId(X86_REG_RIP as u16) {
             return Some(
-                (instruction.address() as i64 + mem.disp() + instruction.bytes().len() as i64) as u64,
+                (instruction.address() as i64 + mem.disp() + instruction.bytes().len() as i64)
+                    as u64,
             );
         }
         self.resolve_register_value_from_history(mem.base(), history)
@@ -1188,7 +1198,9 @@ impl<'disassembler> Disassembler<'disassembler> {
         history: &[DecodedInstruction],
     ) -> Option<u64> {
         for instruction in history.iter().rev() {
-            if instruction.id != InsnId(X86Insn::X86_INS_LEA as u32) || instruction.operands.len() < 2 {
+            if instruction.id != InsnId(X86Insn::X86_INS_LEA as u32)
+                || instruction.operands.len() < 2
+            {
                 continue;
             }
             let dst_matches = matches!(
@@ -1205,7 +1217,8 @@ impl<'disassembler> Disassembler<'disassembler> {
                         return Some(
                             (instruction.address as i64
                                 + mem.disp()
-                                + instruction.bytes.len() as i64) as u64,
+                                + instruction.bytes.len() as i64)
+                                as u64,
                         );
                     }
                     if mem.base() == RegId(0) {
