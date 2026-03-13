@@ -11,6 +11,7 @@ categories = ["external-ffi-bindings"]
 license = "MIT"
 include = [
     "/build.rs",
+    "/patches/**",
     "/wrapper.h",
     "/src/**.rs",
     "/valgrind/autogen.sh",

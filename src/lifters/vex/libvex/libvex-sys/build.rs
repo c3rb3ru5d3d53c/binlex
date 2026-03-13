@@ -1,7 +1,6 @@
 use std::env::{self, VarError};
 use std::error::Error;
 use std::ffi::OsStr;
-use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -120,31 +119,82 @@ fn cpu_count() -> String {
         .unwrap_or_else(|_| "1".to_string())
 }
 
+fn patch_is_already_applied(valgrind_dir: &Path, patch_path: &Path) -> Result<bool> {
+    let status = Command::new("patch")
+        .args(["--dry-run", "-R", "-p1", "-i"])
+        .arg(patch_path)
+        .current_dir(valgrind_dir)
+        .status()?;
+    Ok(status.success())
+}
+
+fn patch_can_be_applied(valgrind_dir: &Path, patch_path: &Path) -> Result<bool> {
+    let status = Command::new("patch")
+        .args(["--dry-run", "-p1", "-i"])
+        .arg(patch_path)
+        .current_dir(valgrind_dir)
+        .status()?;
+    Ok(status.success())
+}
+
+fn apply_patch_file(valgrind_dir: &Path, patch_path: &Path) -> Result<()> {
+    if patch_is_already_applied(valgrind_dir, patch_path)? {
+        return Ok(());
+    }
+
+    if !patch_can_be_applied(valgrind_dir, patch_path)? {
+        return Err(format!("patch {} cannot be applied cleanly", patch_path.display()).into());
+    }
+
+    let status = Command::new("patch")
+        .args(["-p1", "-i"])
+        .arg(patch_path)
+        .current_dir(valgrind_dir)
+        .status()?;
+    if status.success() {
+        return Ok(());
+    }
+
+    Err(format!(
+        "failed to apply patch {} with status {}",
+        patch_path.display(),
+        status
+    )
+    .into())
+}
+
 fn apply_patches(valgrind_dir: &Path, patch_dir: &Path) -> Result<()> {
+    if !patch_dir.exists() {
+        return Ok(());
+    }
+
+    println!("cargo:rerun-if-changed={}", patch_dir.display());
     let mut entries = patch_dir
         .read_dir()?
         .collect::<std::result::Result<Vec<_>, _>>()?;
     entries.sort_by_key(|entry| entry.file_name());
     for entry in entries {
         let patch_path = entry.path();
-        if patch_path.extension() != Some(OsStr::new("patch")) {
+        let extension = patch_path.extension();
+        if extension != Some(OsStr::new("patch")) && extension != Some(OsStr::new("diff")) {
             continue;
         }
 
-        let patch_file = File::open(&patch_path)?;
-        let status = Command::new("patch")
-            .arg("-p1")
-            .stdin(patch_file)
-            .current_dir(valgrind_dir)
-            .status()?;
-        if !status.success() {
-            return Err(format!(
-                "failed to apply patch {} with status {}",
-                patch_path.display(),
-                status
-            )
-            .into());
-        }
+        apply_patch_file(valgrind_dir, &patch_path)?;
+    }
+    Ok(())
+}
+
+fn default_patch_dir() -> Result<PathBuf> {
+    Ok(PathBuf::from(env::var("CARGO_MANIFEST_DIR")?).join("patches"))
+}
+
+fn apply_configured_patches(valgrind_dir: &Path) -> Result<()> {
+    apply_patches(valgrind_dir, &default_patch_dir()?)?;
+    match env::var("VEX_PATCHES") {
+        Ok(path) => apply_patches(valgrind_dir, Path::new(&path))?,
+        Err(VarError::NotUnicode(path)) => apply_patches(valgrind_dir, Path::new(&path))?,
+        Err(VarError::NotPresent) => {}
     }
     Ok(())
 }
@@ -155,13 +205,7 @@ fn copy_valgrind(out_dir: &Path, valgrind_dir_name: &str) -> Result<()> {
     let source_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?).join(valgrind_dir_name);
     copy(&source_dir, out_dir, &options)?;
     println!("cargo:rerun-if-changed={}", source_dir.display());
-    match env::var("VEX_PATCHES") {
-        Ok(path) => apply_patches(&out_dir.join(valgrind_dir_name), Path::new(&path))?,
-        Err(VarError::NotUnicode(path)) => {
-            apply_patches(&out_dir.join(valgrind_dir_name), Path::new(&path))?
-        }
-        Err(VarError::NotPresent) => {}
-    }
+    apply_configured_patches(&out_dir.join(valgrind_dir_name))?;
     Ok(())
 }
 
@@ -198,6 +242,7 @@ fn bootstrap_macos_vex() -> Result<PathBuf> {
     }
 
     println!("cargo:rerun-if-changed={}", valgrind_dir.display());
+    apply_configured_patches(&valgrind_dir)?;
 
     if !valgrind_dir.join("configure").exists() {
         run_checked("./autogen.sh", &[], &valgrind_dir)?;
@@ -260,6 +305,7 @@ fn fetch_valgrind_source(out_dir: &Path) -> Result<PathBuf> {
         }
     }
     println!("cargo:rerun-if-changed={}", valgrind_dir.display());
+    apply_configured_patches(&valgrind_dir)?;
     Ok(valgrind_dir)
 }
 
