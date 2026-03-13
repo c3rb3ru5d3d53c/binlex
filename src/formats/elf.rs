@@ -218,13 +218,13 @@ impl ELF {
         self.file.entropy()
     }
 
-    /// Returns the File JSON associated with the ELF
+    /// Returns the underlying file metadata helper associated with the ELF.
     ///
     /// # Returns
-    /// An `Result<String, Error>` containing the `File` JSON.
+    /// A borrowed [`File`] reference for the ELF input.
     #[allow(dead_code)]
-    pub fn file_json(&self) -> Result<String, Error> {
-        self.file.json()
+    pub fn file(&self) -> &File {
+        &self.file
     }
 
     pub fn entrypoint_virtual_addresses(&self) -> BTreeSet<u64> {

@@ -1060,13 +1060,13 @@ impl PE {
         self.file.sha256()
     }
 
-    /// Returns the File JSON associated with the PE
+    /// Returns the underlying file metadata helper associated with the PE.
     ///
     /// # Returns
-    /// An `Result<String, Error>` containing the File JSON.
+    /// A borrowed [`File`] reference for the PE input.
     #[allow(dead_code)]
-    pub fn file_json(&self) -> Result<String, Error> {
-        self.file.json()
+    pub fn file(&self) -> &File {
+        &self.file
     }
 
     /// Returns the base address (image base) of the PE file.

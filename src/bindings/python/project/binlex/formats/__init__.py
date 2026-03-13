@@ -33,6 +33,12 @@ class File:
     def __init__(self, path, config):
         self._inner = _FileBinding(path, config)
 
+    @classmethod
+    def from_binding(cls, binding):
+        result = cls.__new__(cls)
+        result._inner = binding
+        return result
+
     def magic(self):
         return Magic.from_binding(self._inner.magic())
 
@@ -52,6 +58,9 @@ class PE:
 
     def architecture(self):
         return Architecture.from_binding(self._inner.architecture())
+
+    def file(self):
+        return File.from_binding(self._inner.file())
 
     def __getattr__(self, name):
         return getattr(self._inner, name)

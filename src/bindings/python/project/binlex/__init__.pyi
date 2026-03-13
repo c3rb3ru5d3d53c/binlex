@@ -4,7 +4,7 @@ from binlex.architecture import Architecture
 from binlex._global import Config
 from binlex.binary import Binary
 from binlex.magic import Magic
-from . import controlflow, disassemblers, formats, lifters
+from . import controlflow, disassemblers, formats, lifters, types
 
 __all__ = [
     "Architecture",
@@ -15,4 +15,5 @@ __all__ = [
     "disassemblers",
     "formats",
     "lifters",
+    "types",
 ]
