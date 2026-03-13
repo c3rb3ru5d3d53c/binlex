@@ -6,10 +6,12 @@ from binlex.controlflow import Graph
 from binlex.disassemblers.capstone import Disassembler
 from binlex.formats import PE
 from binlex.lifters.vex import Lifter
-from binlex.imaging import SVG, Palette
+from binlex.imaging import Palette, Terminal
 
 # Create shared configuration
 config = Config()
+
+config.general.threads = 16
 
 # Load PE and map image
 pe = PE(sys.argv[1], config)
@@ -46,6 +48,6 @@ lifter = Lifter(
 
 print(lifter.ir())
 
-svg = SVG(function.bytes(), Palette.REDBLACK)
-svg.print()
+terminal = Terminal(function.bytes(), Palette.HEATMAP)
+terminal.print()
 

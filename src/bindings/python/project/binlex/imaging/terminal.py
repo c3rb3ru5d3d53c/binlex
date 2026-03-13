@@ -20,8 +20,32 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from .palette import Palette
-from .svg import SVG
-from .terminal import Terminal
+from binlex_bindings.binlex.imaging import Terminal as _TerminalBinding
 
-__all__ = ["Palette", "SVG", "Terminal"]
+from .palette import Palette
+
+
+class Terminal:
+    def __init__(
+        self,
+        data: bytes,
+        palette: Palette,
+        cell_size: int = 1,
+        fixed_width: int = 16,
+    ) -> None:
+        self._inner = _TerminalBinding(
+            data,
+            palette.to_binding(),
+            cell_size,
+            fixed_width,
+        )
+
+    def print(self) -> None:
+        self._inner.print()
+
+    @staticmethod
+    def rgb_to_ansi256(r: int, g: int, b: int) -> int:
+        return _TerminalBinding.rgb_to_ansi256(r, g, b)
+
+
+__all__ = ["Terminal"]

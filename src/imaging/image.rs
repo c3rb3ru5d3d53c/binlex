@@ -20,31 +20,43 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod palette;
-pub mod svg;
-pub mod terminal;
+use crate::imaging::Palette;
 
-use crate::imaging::palette::palette_init;
-use crate::imaging::svg::svg_init;
-use crate::imaging::terminal::terminal_init;
-pub use palette::Palette;
-pub use svg::SVG;
-pub use terminal::Terminal;
+pub(crate) struct Cell {
+    pub(crate) index: usize,
+    pub(crate) address: u64,
+    pub(crate) rgb: (u8, u8, u8),
+}
 
-use pyo3::{prelude::*, wrap_pymodule};
+pub(crate) struct Image {
+    pub(crate) cells: Vec<Cell>,
+    pub(crate) total_cells: usize,
+    pub(crate) cell_size: usize,
+    pub(crate) fixed_width: usize,
+}
 
-#[pymodule]
-#[pyo3(name = "imaging")]
-pub fn imaging_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_wrapped(wrap_pymodule!(palette_init))?;
-    m.add_wrapped(wrap_pymodule!(svg_init))?;
-    m.add_wrapped(wrap_pymodule!(terminal_init))?;
-    m.add_class::<SVG>()?;
-    m.add_class::<Terminal>()?;
-    m.add_class::<Palette>()?;
-    py.import("sys")?
-        .getattr("modules")?
-        .set_item("binlex_bindings.binlex.imaging", m)?;
-    m.setattr("__name__", "binlex_bindings.binlex.imaging")?;
-    Ok(())
+impl Image {
+    pub(crate) fn new(data: &[u8], palette: Palette, cell_size: usize, fixed_width: usize) -> Self {
+        let fixed_width = fixed_width.max(1);
+        let mut cells = Vec::with_capacity(data.len());
+
+        for (i, &byte) in data.iter().enumerate() {
+            cells.push(Cell {
+                index: i,
+                address: i as u64,
+                rgb: palette.map_byte_rgb(byte),
+            });
+        }
+
+        Self {
+            cells,
+            total_cells: data.len(),
+            cell_size,
+            fixed_width,
+        }
+    }
+
+    pub(crate) fn total_height(&self) -> usize {
+        self.total_cells.div_ceil(self.fixed_width) * self.cell_size
+    }
 }

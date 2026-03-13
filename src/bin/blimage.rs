@@ -25,6 +25,7 @@ use binlex::VERSION;
 use binlex::hashing::SHA256;
 use binlex::imaging::Palette;
 use binlex::imaging::SVG;
+use binlex::imaging::Terminal;
 use clap::Parser;
 use std::collections::BTreeMap;
 use std::fs::File;
@@ -66,19 +67,21 @@ fn main() {
         process::exit(1);
     });
 
-    let mut svg = build_svg(&byte_data, args.color, args.cell_size, args.fixed_width);
-
-    for (key, value) in metadata(&byte_data) {
-        svg.add_metadata(key, value);
-    }
-
     if let Some(output) = args.output {
+        let mut svg = build_svg(&byte_data, args.color, args.cell_size, args.fixed_width);
+
+        for (key, value) in metadata(&byte_data) {
+            svg.add_metadata(key, value);
+        }
+
         svg.write(&output).unwrap_or_else(|error| {
             eprintln!("{}", error);
             process::exit(1);
         });
     } else {
-        svg.print().unwrap_or_else(|error| {
+        let terminal = build_terminal(&byte_data, args.color, args.cell_size, args.fixed_width);
+
+        terminal.print().unwrap_or_else(|error| {
             if error.kind() == ErrorKind::BrokenPipe {
                 process::exit(0);
             }
@@ -102,4 +105,13 @@ fn metadata(byte_data: &[u8]) -> BTreeMap<String, String> {
 
 fn build_svg(byte_data: &[u8], palette: Palette, cell_size: usize, fixed_width: usize) -> SVG {
     SVG::new_with_options(byte_data, palette, cell_size, fixed_width)
+}
+
+fn build_terminal(
+    byte_data: &[u8],
+    palette: Palette,
+    cell_size: usize,
+    fixed_width: usize,
+) -> Terminal {
+    Terminal::new_with_options(byte_data, palette, cell_size, fixed_width)
 }
