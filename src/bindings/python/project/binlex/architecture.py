@@ -20,7 +20,28 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from binlex_bindings.binlex import Config
-from binlex_bindings.binlex.binary import Binary
-from .architecture import Architecture
-from . import lifters
+from enum import Enum
+
+from binlex_bindings.binlex import Architecture as _ArchitectureBinding
+
+
+class Architecture(str, Enum):
+    AMD64 = "amd64"
+    I386 = "i386"
+    CIL = "cil"
+
+    def to_binding(self) -> _ArchitectureBinding:
+        return _ArchitectureBinding.from_string(self.value)
+
+    @classmethod
+    def from_binding(cls, architecture: _ArchitectureBinding) -> "Architecture":
+        return cls(str(architecture))
+
+
+def _coerce_architecture(architecture: Architecture | _ArchitectureBinding) -> _ArchitectureBinding:
+    if isinstance(architecture, Architecture):
+        return architecture.to_binding()
+    return architecture
+
+
+__all__ = ["Architecture"]
