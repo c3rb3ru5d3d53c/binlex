@@ -332,48 +332,12 @@ enabled = true
 [formats.file.hashing.tlsh]
 enabled = true
 minimum_byte_size = 50
-threshold = 200
-
-[formats.file.hashing.minhash]
-enabled = true
-number_of_hashes = 64
-shingle_size = 4
-maximum_byte_size_enabled = false
-maximum_byte_size = 50
-seed = 0
-threshold = 0.75
-
-[formats.file.heuristics.features]
-enabled = true
 
 [formats.file.heuristics.entropy]
 enabled = true
 
 [instructions]
 enabled = false
-
-[instructions.hashing.sha256]
-enabled = true
-
-[instructions.hashing.tlsh]
-enabled = true
-minimum_byte_size = 50
-threshold = 200
-
-[instructions.hashing.minhash]
-enabled = true
-number_of_hashes = 64
-shingle_size = 4
-maximum_byte_size_enabled = false
-maximum_byte_size = 50
-seed = 0
-threshold = 0.75
-
-[instructions.heuristics.features]
-enabled = true
-
-[instructions.heuristics.entropy]
-enabled = true
 
 [blocks]
 enabled = true
@@ -387,7 +351,6 @@ enabled = true
 [blocks.hashing.tlsh]
 enabled = true
 minimum_byte_size = 50
-threshold = 200
 
 [blocks.hashing.minhash]
 enabled = true
@@ -396,10 +359,6 @@ shingle_size = 4
 maximum_byte_size_enabled = false
 maximum_byte_size = 50
 seed = 0
-threshold = 0.75
-
-[blocks.heuristics.features]
-enabled = true
 
 [blocks.heuristics.entropy]
 enabled = true
@@ -416,7 +375,6 @@ enabled = true
 [functions.hashing.tlsh]
 enabled = true
 minimum_byte_size = 50
-threshold = 200
 
 [functions.hashing.minhash]
 enabled = true
@@ -425,10 +383,6 @@ shingle_size = 4
 maximum_byte_size_enabled = false
 maximum_byte_size = 50
 seed = 0
-threshold = 0.75
-
-[functions.heuristics.features]
-enabled = true
 
 [functions.heuristics.entropy]
 enabled = true
@@ -439,7 +393,6 @@ enabled = true
 [chromosomes.hashing.tlsh]
 enabled = true
 minimum_byte_size = 50
-threshold = 200
 
 [chromosomes.hashing.minhash]
 enabled = true
@@ -448,7 +401,6 @@ shingle_size = 4
 maximum_byte_size_enabled = false
 maximum_byte_size = 50
 seed = 0
-threshold = 0.75
 
 [chromosomes.heuristics.features]
 enabled = true
