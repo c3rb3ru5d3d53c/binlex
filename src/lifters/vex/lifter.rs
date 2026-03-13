@@ -2,19 +2,32 @@ use std::fmt;
 use std::io::{Error, ErrorKind};
 
 use libvex::{Arch, TranslateArgs, TranslateError, VexEndness, ir::IRSB};
+use serde::{Deserialize, Serialize};
 
 use crate::global::Architecture;
+use crate::Config;
 
 const BUFFER_PADDING: usize = 64;
 
-pub struct Vex {
+#[derive(Serialize, Deserialize)]
+pub struct LifterJson {
+    pub ir: String,
+}
+
+pub struct Lifter {
     translator: TranslateArgs,
     guest_bytes: Vec<u8>,
     guest_address: u64,
+    pub config: Config,
 }
 
-impl Vex {
-    pub fn new(architecture: Architecture, bytes: &[u8], address: u64) -> Result<Self, Error> {
+impl Lifter {
+    pub fn new(
+        architecture: Architecture,
+        bytes: &[u8],
+        address: u64,
+        config: Config,
+    ) -> Result<Self, Error> {
         let guest_arch = match architecture {
             Architecture::AMD64 => Arch::VexArchAMD64,
             Architecture::I386 => Arch::VexArchX86,
@@ -37,6 +50,7 @@ impl Vex {
             translator: TranslateArgs::new(guest_arch, host_arch, VexEndness::VexEndnessLE),
             guest_bytes,
             guest_address: address,
+            config,
         })
     }
 
@@ -44,12 +58,15 @@ impl Vex {
         self.translator
             .front_end(self.guest_bytes.as_ptr(), self.guest_address)
     }
+
+    pub fn process(&mut self) -> Result<LifterJson, TranslateError> {
+        let ir = self.ir()?.to_string();
+        Ok(LifterJson { ir })
+    }
 }
 
-pub type VexLifter = Vex;
-
-impl fmt::Display for Vex {
+impl fmt::Display for Lifter {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Vex")
+        write!(f, "Lifter")
     }
 }

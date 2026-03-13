@@ -3,7 +3,7 @@
 use binlex::controlflow::graph::Graph;
 use binlex::controlflow::{Block, Function, Instruction};
 use binlex::global::{Architecture, Config};
-use binlex::lifters::Vex;
+use binlex::lifters::vex::Lifter;
 use std::collections::{BTreeMap, BTreeSet};
 
 fn test_graph() -> Graph {
@@ -12,13 +12,21 @@ fn test_graph() -> Graph {
 
 #[test]
 fn test_lift_bytes_ret() {
-    let mut vex = Vex::new(Architecture::AMD64, &[0xC3u8], 0x1000).unwrap();
+    let mut vex = Lifter::new(Architecture::AMD64, &[0xC3u8], 0x1000, Config::default()).unwrap();
     let irsb = vex.ir().ok(); // x86_64 "ret"
     assert!(irsb.is_some());
     if let Some(irsb) = irsb {
         println!("IRSB for ret: {:?}", irsb);
         drop(irsb);
     }
+}
+
+#[test]
+fn test_lifter_process() {
+    let mut lifter =
+        Lifter::new(Architecture::AMD64, &[0xC3u8], 0x1000, Config::default()).unwrap();
+    let json = lifter.process().unwrap();
+    assert!(!json.ir.is_empty());
 }
 
 #[test]
@@ -42,7 +50,13 @@ fn test_lift_instruction() {
         to: BTreeSet::new(),
         edges: 0,
     };
-    let mut vex = Vex::new(Architecture::AMD64, &instruction.bytes, instruction.address).unwrap();
+    let mut vex = Lifter::new(
+        Architecture::AMD64,
+        &instruction.bytes,
+        instruction.address,
+        Config::default(),
+    )
+    .unwrap();
     let irsb = vex.ir().ok();
     assert!(irsb.is_some());
     if let Some(irsb) = irsb {
@@ -80,7 +94,8 @@ fn test_lift_block() {
         terminator: instruction,
     };
     let block_bytes = block.bytes();
-    let mut vex = Vex::new(Architecture::AMD64, &block_bytes, block.address).unwrap();
+    let mut vex =
+        Lifter::new(Architecture::AMD64, &block_bytes, block.address, Config::default()).unwrap();
     let irsb = vex.ir().ok();
     assert!(irsb.is_some());
     if let Some(irsb) = irsb {
@@ -138,7 +153,8 @@ fn test_lift_binlex_block_split_example() {
     // Block: jz 0x4; nop; nop; ret
     let block_bytes = [0x74, 0x02, 0x90, 0x90, 0xc3];
     let block_address = 0x1000u64;
-    let mut vex = Vex::new(Architecture::AMD64, &block_bytes, block_address).unwrap();
+    let mut vex =
+        Lifter::new(Architecture::AMD64, &block_bytes, block_address, Config::default()).unwrap();
     let irsb = vex.ir().ok();
     assert!(irsb.is_some());
     if let Some(irsb) = irsb {

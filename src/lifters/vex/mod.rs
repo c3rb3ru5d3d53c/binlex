@@ -1,2 +1,2 @@
 pub mod lifter;
-pub use lifter::{Vex, VexLifter};
+pub use lifter::{Lifter, LifterJson};
