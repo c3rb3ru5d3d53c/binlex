@@ -22,13 +22,17 @@
 
 use crate::imaging::Palette;
 use crate::imaging::render::Render;
-use std::io::{self, Write};
+use image::ColorType;
+use image::ImageEncoder;
+use image::RgbaImage;
+use image::codecs::png::PngEncoder;
+use std::io;
 
-pub struct Terminal {
+pub struct PNG {
     render: Render,
 }
 
-impl Terminal {
+impl PNG {
     pub fn new(data: &[u8], palette: Palette) -> Self {
         Self::new_with_options(data, palette, 1, 16)
     }
@@ -51,53 +55,43 @@ impl Terminal {
         Self { render }
     }
 
-    pub fn print(&self) -> io::Result<()> {
-        let stdout = io::stdout();
-        let mut stdout = stdout.lock();
-        self.write(&mut stdout)
+    pub fn bytes(&self) -> io::Result<Vec<u8>> {
+        let width = u32::try_from(self.render.total_width()).map_err(|_| {
+            io::Error::new(io::ErrorKind::InvalidInput, "png width exceeds u32 range")
+        })?;
+        let height = u32::try_from(self.render.total_height()).map_err(|_| {
+            io::Error::new(io::ErrorKind::InvalidInput, "png height exceeds u32 range")
+        })?;
+
+        if width == 0 || height == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "png output requires non-empty image dimensions",
+            ));
+        }
+
+        let mut rgba = RgbaImage::new(width, height);
+
+        for cell in self.render.cells() {
+            let (r, g, b) = cell.rgb();
+
+            for y in cell.y()..(cell.y() + cell.height()) {
+                for x in cell.x()..(cell.x() + cell.width()) {
+                    rgba.put_pixel(x as u32, y as u32, image::Rgba([r, g, b, 255]));
+                }
+            }
+        }
+
+        let mut encoded = Vec::new();
+        let encoder = PngEncoder::new(&mut encoded);
+        encoder
+            .write_image(rgba.as_raw(), width, height, ColorType::Rgba8.into())
+            .map_err(|error| io::Error::other(error.to_string()))?;
+
+        Ok(encoded)
     }
 
-    pub fn write<W: Write>(&self, writer: &mut W) -> io::Result<()> {
-        if self.render.total_cells() == 0 {
-            write!(writer, "\x1b[0m")?;
-            return Ok(());
-        }
-
-        let row_count = self
-            .render
-            .total_cells()
-            .div_ceil(self.render.fixed_width());
-
-        for row in 0..row_count {
-            let start = row * self.render.fixed_width();
-            let end = (start + self.render.fixed_width()).min(self.render.total_cells());
-
-            for cell in &self.render.cells()[start..end] {
-                let (r, g, b) = cell.rgb();
-                write!(writer, "\x1b[48;5;{}m  ", Self::rgb_to_ansi256(r, g, b))?;
-            }
-
-            writeln!(writer, "\x1b[0m")?;
-        }
-
-        write!(writer, "\x1b[0m")?;
-        writer.flush()
-    }
-
-    pub fn rgb_to_ansi256(r: u8, g: u8, b: u8) -> u8 {
-        if r == g && g == b {
-            if r < 8 {
-                return 16;
-            }
-            if r > 248 {
-                return 231;
-            }
-            return 232 + (((r as u16 - 8) * 24) / 247) as u8;
-        }
-
-        let red = ((r as f32 / 255.0) * 5.0).round() as u8;
-        let green = ((g as f32 / 255.0) * 5.0).round() as u8;
-        let blue = ((b as f32 / 255.0) * 5.0).round() as u8;
-        16 + (36 * red) + (6 * green) + blue
+    pub fn write(&self, file_path: &str) -> io::Result<()> {
+        std::fs::write(file_path, self.bytes()?)
     }
 }
