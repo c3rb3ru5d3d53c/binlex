@@ -24,7 +24,7 @@ use crate::Architecture;
 use crate::Config;
 use crate::controlflow::Symbol as BlSymbol;
 use crate::formats::File;
-use crate::types::MemoryMappedFile;
+use crate::formats::Image;
 use lief::Binary;
 use lief::generic::{Section, Symbol};
 use lief::macho::commands::{Command, LoadCommandTypes};
@@ -300,18 +300,18 @@ impl MACHO {
         result
     }
 
-    /// Caches the MachO file contents and returns a `MemoryMappedFile` object.
+    /// Caches the MachO file contents and returns an `Image` object.
     ///
     /// # Parameters
     /// - `slice`: The MachoO binary slice.
     ///
     /// # Returns
-    /// A `Result` containing the `MemoryMappedFile` object on success or an `Error` on failure.
-    pub fn image(&self, slice: usize) -> Result<MemoryMappedFile, Error> {
+    /// A `Result` containing the `Image` object on success or an `Error` on failure.
+    pub fn image(&self, slice: usize) -> Result<Image, Error> {
         let pathbuf = PathBuf::from(self.config.mmap.directory.clone())
             .join(self.file.sha256_no_config().unwrap());
 
-        let mut tempmap = MemoryMappedFile::new(pathbuf, self.config.mmap.cache.enabled)?;
+        let mut tempmap = Image::new(pathbuf, self.config.mmap.cache.enabled)?;
 
         if tempmap.is_cached() {
             return Ok(tempmap);

@@ -91,7 +91,9 @@ impl Magic {
     }
 
     fn is_elf(bytes: &[u8]) -> bool {
-        bytes.get(0x01..0x04).is_some_and(|magic| magic == [0x45, 0x4c, 0x46])
+        bytes
+            .get(0x01..0x04)
+            .is_some_and(|magic| magic == [0x45, 0x4c, 0x46])
     }
 
     fn is_macho(bytes: &[u8]) -> bool {

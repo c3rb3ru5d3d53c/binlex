@@ -15,13 +15,15 @@ config.general.threads = 16
 
 # Load PE and map image
 pe = PE(sys.argv[1], config)
-mapped_file = pe.image()
-image = mapped_file.mmap()
+
+image = pe.image()
+
+mmap = image.mmap()
 
 # Disassemble control flow
 disassembler = Disassembler(
     pe.architecture(),
-    image,
+    mmap,
     pe.executable_virtual_address_ranges(),
     config,
 )

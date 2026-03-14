@@ -22,6 +22,7 @@
 
 from binlex_bindings.binlex.formats import ELF
 from binlex_bindings.binlex.formats import File as _FileBinding
+from binlex_bindings.binlex.formats import Image
 from binlex_bindings.binlex.formats import MACHO
 from binlex_bindings.binlex.formats import PE as _PEBinding
 
@@ -65,4 +66,4 @@ class PE:
     def __getattr__(self, name):
         return getattr(self._inner, name)
 
-__all__ = ["ELF", "File", "MACHO", "PE"]
+__all__ = ["ELF", "File", "Image", "MACHO", "PE"]

@@ -40,10 +40,8 @@ use std::os::windows::fs::OpenOptionsExt;
 #[cfg(windows)]
 use winapi::um::winnt::{FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE};
 
-/// A `MemoryMappedFile` struct that provides a memory-mapped file interface,
-/// enabling file read/write operations with optional disk caching,
-/// and automatic file cleanup on object drop.
-pub struct MemoryMappedFile {
+/// Reconstructed binary image backed by a cached or temporary file with mmap access.
+pub struct Image {
     /// Path to the file as a `String`.
     pub path: String,
     /// Handle to the file as an optional open file descriptor.
@@ -57,7 +55,7 @@ pub struct MemoryMappedFile {
     mmap_mut: Option<MmapMut>,
 }
 
-impl MemoryMappedFile {
+impl Image {
     pub fn new(path: PathBuf, cache: bool) -> Result<Self, Error> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -133,24 +131,20 @@ impl MemoryMappedFile {
         }
     }
 
-    /// Explicitly closes the file handle.
     pub fn close(&mut self) {
         if let Some(file) = self.handle.take() {
-            drop(file); // Explicitly drop the file to close the handle
+            drop(file);
         }
     }
 
-    /// Checks if the file is cached (exists on disk).
     pub fn is_cached(&self) -> bool {
         self.is_cached
     }
 
-    /// Retrieves the file path as a `String`.
     pub fn path(&self) -> String {
         self.path.clone()
     }
 
-    /// Writes data from a reader to the file.
     pub fn write<R: Read>(&mut self, mut reader: R) -> Result<u64, Error> {
         if let Some(ref mut handle) = self.handle {
             if handle.metadata()?.permissions().readonly() {
@@ -165,7 +159,6 @@ impl MemoryMappedFile {
         }
     }
 
-    /// Adds symbolic padding (increases the file size without writing data) to the end of the file.
     pub fn write_padding(&mut self, length: usize) -> Result<(), Error> {
         if let Some(ref mut handle) = self.handle {
             let current_size = handle.metadata()?.len();
@@ -210,7 +203,6 @@ impl MemoryMappedFile {
         self.mmap_mut = None;
     }
 
-    /// Retrieves the size of the file in bytes.
     pub fn size(&self) -> Result<u64, Error> {
         if let Some(ref handle) = self.handle {
             Ok(handle.metadata()?.len())
@@ -220,14 +212,11 @@ impl MemoryMappedFile {
     }
 }
 
-impl Drop for MemoryMappedFile {
+impl Drop for Image {
     fn drop(&mut self) {
         self.unmap();
-
-        // Ensure the file handle is dropped
         self.close();
 
-        // Remove the file if caching is disabled
         if !self.cache {
             if let Err(error) = std::fs::remove_file(&self.path) {
                 eprintln!("Failed to remove file {}: {}", self.path, error);

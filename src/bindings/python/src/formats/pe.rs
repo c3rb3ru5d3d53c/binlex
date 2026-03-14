@@ -20,10 +20,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::types::memorymappedfile::MemoryMappedFile;
+use crate::formats::File;
+use crate::formats::Image;
 use crate::Architecture;
 use crate::Config;
-use crate::formats::File;
 use binlex::formats::pe::PE as InnerPe;
 use pyo3::prelude::*;
 use pyo3::types::PyType;
@@ -169,15 +169,14 @@ impl PE {
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn image(&self, py: Python<'_>) -> PyResult<Py<MemoryMappedFile>> {
+    pub fn image(&self, py: Python<'_>) -> PyResult<Py<Image>> {
         let result = self
             .inner
             .lock()
             .unwrap()
             .image()
             .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        let py_memory_mapped_file = Py::new(py, MemoryMappedFile { inner: result })?;
-        Ok(py_memory_mapped_file)
+        Py::new(py, Image { inner: result })
     }
 
     #[pyo3(text_signature = "($self)")]

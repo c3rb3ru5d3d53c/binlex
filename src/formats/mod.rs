@@ -23,10 +23,12 @@
 pub mod cli;
 pub mod elf;
 pub mod file;
+pub mod image;
 pub mod macho;
 pub mod pe;
 
 pub use elf::ELF;
 pub use file::File;
+pub use image::Image;
 pub use macho::MACHO;
 pub use pe::PE;

@@ -23,6 +23,7 @@
 use crate::Architecture;
 use crate::Config;
 use crate::formats::File;
+use crate::formats::Image;
 use crate::formats::cli::Cor20Header;
 use crate::formats::cli::Entry;
 use crate::formats::cli::FatHeader;
@@ -38,7 +39,6 @@ use crate::formats::cli::StreamHeader;
 use crate::formats::cli::TinyHeader;
 use crate::formats::cli::TypeDefEntry;
 use crate::formats::cli::TypeRefEntry;
-use crate::types::MemoryMappedFile;
 use lief::Binary;
 use lief::generic::Section;
 use lief::pe::data_directory::Type as DATA_DIRECTORY;
@@ -961,18 +961,18 @@ impl PE {
         None
     }
 
-    /// Caches the PE file contents and returns a `MemoryMappedFile` object.
+    /// Caches the PE file contents and returns an `Image` object.
     ///
     /// # Parameters
     /// - `path`: The base path to store the memory mapped file.
     /// - `cache`: Whether to cache the file or not.
     ///
     /// # Returns
-    /// A `Result` containing the `MemoryMappedFile` object on success or an `Error` on failure.
-    pub fn image(&self) -> Result<MemoryMappedFile, Error> {
+    /// A `Result` containing the `Image` object on success or an `Error` on failure.
+    pub fn image(&self) -> Result<Image, Error> {
         let pathbuf = PathBuf::from(self.config.mmap.directory.clone())
             .join(self.file.sha256_no_config().unwrap());
-        let mut tempmap = MemoryMappedFile::new(pathbuf, self.config.mmap.cache.enabled)?;
+        let mut tempmap = Image::new(pathbuf, self.config.mmap.cache.enabled)?;
         if tempmap.is_cached() {
             return Ok(tempmap);
         }
