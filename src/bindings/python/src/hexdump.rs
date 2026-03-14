@@ -20,22 +20,21 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod controlflow;
-pub mod disassemblers;
-pub mod entropy;
-pub mod formats;
-pub mod genetics;
-pub mod global;
-pub mod hashing;
-pub mod hex;
-pub mod hexdump;
-pub mod imaging;
-pub mod io;
-pub mod lifters;
-pub mod types;
+use pyo3::prelude::*;
 
-pub use global::AUTHOR;
-pub use global::Architecture;
-pub use global::Config;
-pub use global::Magic;
-pub use global::VERSION;
+#[pyfunction]
+#[pyo3(text_signature = "(bytes, address)")]
+pub fn hexdump(bytes: Vec<u8>, address: u64) -> String {
+    binlex::hexdump::hexdump(&bytes, address)
+}
+
+#[pymodule]
+#[pyo3(name = "hexdump")]
+pub fn hexdump_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(hexdump, m)?)?;
+    py.import("sys")?
+        .getattr("modules")?
+        .set_item("binlex_bindings.binlex.hexdump", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.hexdump")?;
+    Ok(())
+}

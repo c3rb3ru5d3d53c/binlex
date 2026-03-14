@@ -22,11 +22,11 @@
 
 use crate::Architecture;
 use crate::Config;
-use crate::binary::Binary;
 use crate::controlflow::Attributes;
 use crate::controlflow::Graph;
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeJson;
+use crate::hex;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Value;
@@ -227,7 +227,7 @@ impl Instruction {
             architecture: self.architecture.to_string(),
             address: self.address,
             is_block_start: self.is_block_start,
-            bytes: Binary::to_hex(&self.bytes),
+            bytes: hex::encode(&self.bytes),
             size: self.size(),
             chromosome: self.chromosome_json(),
             is_return: self.is_return,

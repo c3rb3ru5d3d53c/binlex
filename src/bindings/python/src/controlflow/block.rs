@@ -27,8 +27,8 @@ use crate::Architecture;
 use crate::Config;
 use binlex::controlflow::Block as InnerBlock;
 use binlex::controlflow::BlockJsonDeserializer as InnerBlockJsonDeserializer;
+use binlex::hex;
 use binlex::Architecture as InnerArchitecture;
-use binlex::Binary as InnerBinary;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::Py;
@@ -67,7 +67,7 @@ impl BlockJsonDeserializer {
 
     #[pyo3(text_signature = "($self)")]
     pub fn bytes(&self, py: Python) -> PyResult<Py<PyBytes>> {
-        let bytes = InnerBinary::from_hex(&self.inner.lock().unwrap().json.bytes)
+        let bytes = hex::decode(&self.inner.lock().unwrap().json.bytes)
             .map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
         Ok(PyBytes::new(py, &bytes).unbind())
     }

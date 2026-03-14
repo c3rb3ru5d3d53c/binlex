@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::binary::Binary;
+use crate::hex;
 use ring::digest;
 
 /// Represents a wrapper for computing SHA-256 hashes.
@@ -56,6 +56,6 @@ impl<'sha256> SHA256<'sha256> {
     #[allow(dead_code)]
     pub fn hexdigest(&self) -> Option<String> {
         let digest = digest::digest(&digest::SHA256, self.bytes);
-        Some(Binary::to_hex(digest.as_ref()))
+        Some(hex::encode(digest.as_ref()))
     }
 }

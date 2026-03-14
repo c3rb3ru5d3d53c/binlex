@@ -22,16 +22,17 @@
 
 use crate::Architecture;
 use crate::Config;
-use crate::binary::Binary;
 use crate::controlflow::Attributes;
 use crate::controlflow::Instruction;
 use crate::controlflow::InstructionJson;
 use crate::controlflow::graph::Graph;
+use crate::entropy;
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeJson;
 use crate::hashing::MinHash32;
 use crate::hashing::SHA256;
 use crate::hashing::TLSH;
+use crate::hex;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Value;
@@ -333,7 +334,7 @@ impl<'block> Block<'block> {
         let functions = self.functions();
         let blocks = self.blocks();
         let entropy = if self.cfg.config.blocks.heuristics.entropy.enabled {
-            Binary::entropy(&bytes)
+            entropy::shannon(&bytes)
         } else {
             None
         };
@@ -383,7 +384,7 @@ impl<'block> Block<'block> {
             prologue: self.prologue(),
             conditional: self.terminator.is_conditional,
             size,
-            bytes: Binary::to_hex(&bytes),
+            bytes: hex::encode(&bytes),
             number_of_instructions: self.number_of_instructions(),
             instructions,
             functions,
@@ -583,7 +584,7 @@ impl<'block> Block<'block> {
         if !self.cfg.config.blocks.heuristics.entropy.enabled {
             return None;
         }
-        Binary::entropy(&self.bytes())
+        entropy::shannon(&self.bytes())
     }
 
     /// Computes the TLSH of the block's bytes, if enabled.

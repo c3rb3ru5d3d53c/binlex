@@ -63,9 +63,9 @@ impl Magic {
     #[staticmethod]
     #[pyo3(text_signature = "(s)")]
     pub fn from_string(s: String) -> PyResult<Self> {
-        let inner = s
-            .parse::<InnerMagic>()
-            .map_err(|err| PyValueError::new_err(format!("invalid or unsupported magic: {}", err)))?;
+        let inner = s.parse::<InnerMagic>().map_err(|err| {
+            PyValueError::new_err(format!("invalid or unsupported magic: {}", err))
+        })?;
         Ok(Magic { inner })
     }
 

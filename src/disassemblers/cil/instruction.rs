@@ -20,8 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::Binary;
 use crate::disassemblers::cil::Mnemonic;
+use crate::hex;
 use std::collections::BTreeSet;
 use std::io::Error;
 
@@ -46,14 +46,14 @@ impl<'instruction> Instruction<'instruction> {
             return "??".repeat(self.size());
         }
         if self.is_metadata_token_wildcard_instruction() {
-            let mut pattern = Binary::to_hex(&self.mnemonic_bytes());
+            let mut pattern = hex::encode(&self.mnemonic_bytes());
             pattern.push_str(&"??".repeat(self.operand_size() - 1));
-            pattern.push_str(&Binary::to_hex(std::slice::from_ref(
+            pattern.push_str(&hex::encode(std::slice::from_ref(
                 self.operand_bytes().last().unwrap(),
             )));
             return pattern;
         }
-        let mut pattern = Binary::to_hex(&self.mnemonic_bytes());
+        let mut pattern = hex::encode(&self.mnemonic_bytes());
         pattern.push_str(&"??".repeat(self.operand_size()));
         pattern
     }

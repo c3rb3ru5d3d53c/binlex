@@ -23,9 +23,9 @@
 extern crate capstone;
 use crate::Architecture;
 use crate::Config;
-use crate::binary::Binary;
 use crate::controlflow::graph::Graph;
 use crate::controlflow::instruction::Instruction;
+use crate::hex;
 use crate::io::Stderr;
 use arch::x86::X86OpMem;
 use arch::x86::X86Reg::{X86_REG_EBP, X86_REG_ESP, X86_REG_RBP, X86_REG_RIP, X86_REG_RSP};
@@ -603,7 +603,7 @@ impl<'disassembler> Disassembler<'disassembler> {
     #[allow(dead_code)]
     pub fn get_instruction_pattern(&self, instruction: &Insn) -> Result<String, Error> {
         if Disassembler::is_unsupported_pattern_instruction(instruction) {
-            return Ok(Binary::to_hex(instruction.bytes()));
+            return Ok(hex::encode(instruction.bytes()));
         }
 
         if Disassembler::is_wildcard_instruction(instruction) {
@@ -625,7 +625,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         });
 
         if !has_immutable_operand && !has_memory_operand {
-            return Ok(Binary::to_hex(instruction.bytes()));
+            return Ok(hex::encode(instruction.bytes()));
         }
 
         let instruction_size = instruction.bytes().len() * 8;
@@ -643,7 +643,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         let total_operand_size = Disassembler::get_total_operand_size(&operands)?;
 
         if total_operand_size > instruction_size {
-            return Ok(Binary::to_hex(instruction.bytes()));
+            return Ok(hex::encode(instruction.bytes()));
         }
 
         let instruction_trailing_null_offset = instruction_size - instruction_trailing_null_size;
@@ -721,7 +721,7 @@ impl<'disassembler> Disassembler<'disassembler> {
             }
         }
 
-        let instruction_hex = Binary::to_hex(instruction.bytes());
+        let instruction_hex = hex::encode(instruction.bytes());
 
         if instruction_hex.len() % 2 != 0 {
             return Err(Error::new(

@@ -20,22 +20,16 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod controlflow;
-pub mod disassemblers;
-pub mod entropy;
-pub mod formats;
-pub mod genetics;
-pub mod global;
-pub mod hashing;
-pub mod hex;
-pub mod hexdump;
-pub mod imaging;
-pub mod io;
-pub mod lifters;
-pub mod types;
+pub fn decode(hex: &str) -> Result<Vec<u8>, String> {
+    if !hex.len().is_multiple_of(2) {
+        return Err("hex string has an odd length".to_string());
+    }
 
-pub use global::AUTHOR;
-pub use global::Architecture;
-pub use global::Config;
-pub use global::Magic;
-pub use global::VERSION;
+    hex.as_bytes()
+        .chunks(2)
+        .map(|chunk| {
+            let hex_str = std::str::from_utf8(chunk).map_err(|_| "invalid UTF-8 in hex string")?;
+            u8::from_str_radix(hex_str, 16).map_err(|_| format!("invalid hex: {}", hex_str))
+        })
+        .collect()
+}

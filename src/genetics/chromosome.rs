@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 use crate::Config;
-use crate::binary::Binary;
+use crate::entropy;
 use crate::genetics::AllelePair;
 use crate::genetics::Gene;
 use crate::hashing::MinHash32;
@@ -236,7 +236,7 @@ impl Chromosome {
         if !self.config.chromosomes.heuristics.entropy.enabled {
             return None;
         }
-        Binary::entropy(&self.normalized())
+        entropy::shannon(&self.normalized())
     }
 
     /// Processes the chromosome into its JSON-serializable representation.

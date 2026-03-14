@@ -27,7 +27,7 @@ use crate::Architecture;
 use crate::Config;
 use binlex::controlflow::Function as InnerFunction;
 use binlex::controlflow::FunctionJsonDeserializer as InnerFunctionJsonDeserializer;
-use binlex::Binary as InnerBinary;
+use binlex::hex;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::Py;
@@ -90,8 +90,8 @@ impl FunctionJsonDeserializer {
         if string.is_none() {
             return Ok(None);
         }
-        let bytes = InnerBinary::from_hex(&string.unwrap())
-            .map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
+        let bytes =
+            hex::decode(&string.unwrap()).map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
         Ok(Some(PyBytes::new(py, &bytes).unbind()))
     }
 

@@ -606,7 +606,6 @@ impl ConfigInstructions {
         let mut inner = self.inner.lock().unwrap();
         inner.instructions.enabled = value;
     }
-
 }
 
 #[pyclass]

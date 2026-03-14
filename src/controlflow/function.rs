@@ -22,16 +22,17 @@
 
 use crate::Architecture;
 use crate::Config;
-use crate::binary::Binary;
 use crate::controlflow::Attributes;
 use crate::controlflow::Block;
 use crate::controlflow::Graph;
 use crate::controlflow::GraphQueue;
+use crate::entropy;
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeJson;
 use crate::hashing::MinHash32;
 use crate::hashing::SHA256;
 use crate::hashing::TLSH;
+use crate::hex;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Value;
@@ -117,7 +118,7 @@ impl FunctionJsonDeserializer {
     #[allow(dead_code)]
     pub fn bytes(&self) -> Option<Vec<u8>> {
         self.json.bytes.as_ref()?;
-        Binary::from_hex(&self.json.bytes.clone().unwrap()).ok()
+        hex::decode(&self.json.bytes.clone().unwrap()).ok()
     }
 
     #[allow(dead_code)]
@@ -311,7 +312,7 @@ impl<'function> Function<'function> {
         let contiguous = self.contiguous();
         let size = self.size();
         let bytes = if contiguous { self.bytes() } else { None };
-        let bytes_hex = bytes.as_ref().map(|bytes| Binary::to_hex(bytes));
+        let bytes_hex = bytes.as_ref().map(|bytes| hex::encode(bytes));
         let chromosome = if contiguous {
             self.pattern().and_then(|pattern| {
                 Chromosome::new(pattern, self.cfg.config.clone())
@@ -324,7 +325,7 @@ impl<'function> Function<'function> {
         let entropy = if !self.cfg.config.functions.heuristics.entropy.enabled {
             None
         } else if contiguous {
-            bytes.as_ref().and_then(|bytes| Binary::entropy(bytes))
+            bytes.as_ref().and_then(|bytes| entropy::shannon(bytes))
         } else {
             let entropi: Vec<f64> = self
                 .blocks
@@ -659,7 +660,7 @@ impl<'function> Function<'function> {
         }
 
         if self.contiguous() {
-            return self.bytes().and_then(|bytes| Binary::entropy(&bytes));
+            return self.bytes().and_then(|bytes| entropy::shannon(&bytes));
         }
 
         let entropi: Vec<f64> = self

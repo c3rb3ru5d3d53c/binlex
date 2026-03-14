@@ -20,9 +20,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use binlex::binary::Binary;
 use binlex::controlflow::{Function, Graph};
 use binlex::disassemblers::capstone::Disassembler;
+use binlex::hex;
 use binlex::{Architecture, Config};
 use std::collections::BTreeMap;
 
@@ -63,11 +63,7 @@ fn test_block_split_pending() {
     let func = Function::new(0, &graph).expect("function");
     let mut blocks = func.blocks.iter();
     let first = blocks.next().unwrap().1;
-    assert_eq!(
-        Binary::to_hex(&first.bytes()),
-        "7402",
-        "first block incorrect"
-    );
+    assert_eq!(hex::encode(&first.bytes()), "7402", "first block incorrect");
 }
 
 #[test]
@@ -94,11 +90,11 @@ fn test_full_function_disassembly() {
         let instr = graph.get_instruction(addr).unwrap();
         collected.extend(instr.bytes);
     }
-    assert_eq!(Binary::to_hex(&collected), hex, "listing bytes mismatch");
+    assert_eq!(hex::encode(&collected), hex, "listing bytes mismatch");
 
     // ensure that the bytes returned by Function::bytes() match the input
     let func_bytes = func.bytes().expect("function bytes");
-    assert_eq!(Binary::to_hex(&func_bytes), hex, "function bytes mismatch");
+    assert_eq!(hex::encode(&func_bytes), hex, "function bytes mismatch");
 
     // verify chromosome pattern length and matching
     let pattern = func.pattern().expect("pattern");
@@ -443,7 +439,7 @@ fn test_block_split_keeps_predecessor_terminator_metadata() {
     let first = func.blocks.get(&0).expect("first block");
 
     assert_eq!(
-        Binary::to_hex(&first.bytes()),
+        hex::encode(&first.bytes()),
         "90",
         "first block bytes incorrect"
     );

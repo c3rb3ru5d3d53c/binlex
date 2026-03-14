@@ -5,9 +5,9 @@ use libvex::{Arch, TranslateArgs, TranslateError, VexEndness, ir::IRSB};
 use serde::{Deserialize, Serialize};
 use serde_json;
 
-use crate::Binary;
 use crate::Config;
 use crate::global::Architecture;
+use crate::hex;
 
 const BUFFER_PADDING: usize = 64;
 
@@ -46,7 +46,7 @@ impl LifterJsonDeserializer {
 
     #[allow(dead_code)]
     pub fn bytes(&self) -> Result<Vec<u8>, Error> {
-        Binary::from_hex(&self.json.bytes).map_err(Error::other)
+        hex::decode(&self.json.bytes).map_err(Error::other)
     }
 
     #[allow(dead_code)]
@@ -162,7 +162,7 @@ impl Lifter {
         Ok(LifterJson {
             architecture: self.architecture().to_string(),
             address: self.guest_address,
-            bytes: Binary::to_hex(&self.bytes()),
+            bytes: hex::encode(&self.bytes()),
             ir,
         })
     }

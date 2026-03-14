@@ -20,22 +20,31 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod controlflow;
-pub mod disassemblers;
-pub mod entropy;
-pub mod formats;
-pub mod genetics;
-pub mod global;
-pub mod hashing;
-pub mod hex;
-pub mod hexdump;
-pub mod imaging;
-pub mod io;
-pub mod lifters;
-pub mod types;
+use pyo3::exceptions::PyValueError;
+use pyo3::prelude::*;
+use pyo3::types::PyBytes;
 
-pub use global::AUTHOR;
-pub use global::Architecture;
-pub use global::Config;
-pub use global::Magic;
-pub use global::VERSION;
+#[pyfunction]
+#[pyo3(text_signature = "(bytes)")]
+pub fn encode(bytes: Vec<u8>) -> String {
+    binlex::hex::encode(&bytes)
+}
+
+#[pyfunction]
+#[pyo3(text_signature = "(value)")]
+pub fn decode(py: Python<'_>, value: &str) -> PyResult<Py<PyBytes>> {
+    let bytes = binlex::hex::decode(value).map_err(PyValueError::new_err)?;
+    Ok(PyBytes::new(py, &bytes).unbind())
+}
+
+#[pymodule]
+#[pyo3(name = "hex")]
+pub fn hex_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(encode, m)?)?;
+    m.add_function(wrap_pyfunction!(decode, m)?)?;
+    py.import("sys")?
+        .getattr("modules")?
+        .set_item("binlex_bindings.binlex.hex", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.hex")?;
+    Ok(())
+}
