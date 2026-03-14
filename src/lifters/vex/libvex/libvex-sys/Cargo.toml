@@ -28,7 +28,6 @@ libc = "0.2.85"
 
 [build-dependencies]
 fs_extra = "1.2"
-bindgen = "0.69"
 
 [features]
 default = []
