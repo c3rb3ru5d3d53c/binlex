@@ -20,6 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::io::Error;
 use std::io::ErrorKind;
@@ -27,7 +28,7 @@ use std::str::FromStr;
 
 /// Represents the different architectures of a binary.
 #[repr(u16)]
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum Architecture {
     /// 64-bit AMD architecture.
     AMD64 = 0x00,

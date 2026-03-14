@@ -28,10 +28,11 @@ pub mod genetics;
 pub mod global;
 pub mod hashing;
 pub mod hex;
-pub mod hexdump;
 pub mod imaging;
 pub mod io;
 pub mod lifters;
+pub mod processing;
+pub mod processors;
 pub mod types;
 
 pub use global::AUTHOR;
@@ -39,3 +40,5 @@ pub use global::Architecture;
 pub use global::Config;
 pub use global::Magic;
 pub use global::VERSION;
+pub use global::config::ConfigProcessors;
+pub use global::hexdump;

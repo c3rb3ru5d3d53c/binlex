@@ -1,21 +1,33 @@
-use std::fmt;
 use std::io::{Error, ErrorKind};
 
-use libvex::{Arch, TranslateArgs, TranslateError, VexEndness, ir::IRSB};
 use serde::{Deserialize, Serialize};
-use serde_json;
 
 use crate::Config;
 use crate::global::Architecture;
 use crate::hex;
-
-const BUFFER_PADDING: usize = 64;
+use crate::processors::vex::{VexProcessor, VexRequest, VexResponse};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct LifterJson {
     pub architecture: String,
     pub address: u64,
     pub bytes: String,
+    pub ir: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct VexLiftRequest {
+    pub architecture: Architecture,
+    pub address: u64,
+    pub bytes: Vec<u8>,
+    pub config: Config,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct VexLiftResponse {
+    pub architecture: Architecture,
+    pub address: u64,
+    pub bytes: Vec<u8>,
     pub ir: String,
 }
 
@@ -64,10 +76,7 @@ impl LifterJsonDeserializer {
         let architecture = self.architecture()?;
         let bytes = self.bytes()?;
         let mut lifter = Lifter::new(architecture, &bytes, self.address(), self.config.clone())?;
-        lifter
-            .ir()
-            .map(|irsb| irsb.to_string())
-            .map_err(|error| Error::other(format!("{:?}", error)))
+        lifter.ir()
     }
 
     #[allow(dead_code)]
@@ -75,9 +84,7 @@ impl LifterJsonDeserializer {
         let architecture = self.architecture()?;
         let bytes = self.bytes()?;
         let mut lifter = Lifter::new(architecture, &bytes, self.address(), self.config.clone())?;
-        lifter
-            .process()
-            .map_err(|error| Error::other(format!("{:?}", error)))
+        lifter.process()
     }
 
     #[allow(dead_code)]
@@ -95,11 +102,10 @@ impl LifterJsonDeserializer {
 }
 
 pub struct Lifter {
-    translator: TranslateArgs,
-    guest_architecture: Architecture,
-    guest_bytes: Vec<u8>,
-    guest_address: u64,
-    pub config: Config,
+    architecture: Architecture,
+    bytes: Vec<u8>,
+    address: u64,
+    config: Config,
 }
 
 impl Lifter {
@@ -109,67 +115,123 @@ impl Lifter {
         address: u64,
         config: Config,
     ) -> Result<Self, Error> {
-        let guest_arch = match architecture {
-            Architecture::AMD64 => Arch::VexArchAMD64,
-            Architecture::I386 => Arch::VexArchX86,
+        match architecture {
+            Architecture::AMD64 | Architecture::I386 => {}
             Architecture::CIL | Architecture::UNKNOWN => {
                 return Err(Error::new(
                     ErrorKind::InvalidInput,
                     format!("unsupported VEX architecture: {}", architecture),
                 ));
             }
-        };
-        let host_arch = if cfg!(target_arch = "aarch64") {
-            Arch::VexArchARM64
-        } else {
-            Arch::VexArchAMD64
-        };
-        let mut guest_bytes = Vec::with_capacity(bytes.len() + BUFFER_PADDING);
-        guest_bytes.extend_from_slice(bytes);
-        guest_bytes.resize(bytes.len() + BUFFER_PADDING, 0);
-        Ok(Self {
-            translator: TranslateArgs::new(guest_arch, host_arch, VexEndness::VexEndnessLE),
-            guest_architecture: architecture,
-            guest_bytes,
-            guest_address: address,
-            config,
-        })
+        }
+        #[cfg(target_os = "windows")]
+        {
+            let _ = bytes;
+            let _ = address;
+            let _ = config;
+            Err(Error::new(
+                ErrorKind::Unsupported,
+                "VEX worker backend is not supported on Windows",
+            ))
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            Ok(Self {
+                architecture,
+                bytes: bytes.to_vec(),
+                address,
+                config,
+            })
+        }
     }
 
-    pub fn ir(&mut self) -> Result<IRSB<'_>, TranslateError> {
-        self.translator
-            .front_end(self.guest_bytes.as_ptr(), self.guest_address)
+    pub fn ir(&mut self) -> Result<String, Error> {
+        #[cfg(target_os = "windows")]
+        {
+            Err(Error::new(
+                ErrorKind::Unsupported,
+                "VEX worker backend is not supported on Windows",
+            ))
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            Ok(self.execute()?.ir)
+        }
     }
 
     #[allow(dead_code)]
     pub fn address(&self) -> u64 {
-        self.guest_address
+        #[cfg(target_os = "windows")]
+        {
+            0
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            self.address
+        }
     }
 
     #[allow(dead_code)]
     pub fn architecture(&self) -> Architecture {
-        self.guest_architecture
+        #[cfg(target_os = "windows")]
+        {
+            Architecture::UNKNOWN
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            self.architecture
+        }
     }
 
     #[allow(dead_code)]
     pub fn bytes(&self) -> &[u8] {
-        let len = self.guest_bytes.len().saturating_sub(BUFFER_PADDING);
-        &self.guest_bytes[..len]
+        #[cfg(target_os = "windows")]
+        {
+            &[]
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            &self.bytes
+        }
     }
 
-    pub fn process(&mut self) -> Result<LifterJson, TranslateError> {
-        let ir = self.ir()?.to_string();
-        Ok(LifterJson {
-            architecture: self.architecture().to_string(),
-            address: self.guest_address,
-            bytes: hex::encode(&self.bytes()),
-            ir,
-        })
+    pub fn process(&mut self) -> Result<LifterJson, Error> {
+        #[cfg(target_os = "windows")]
+        {
+            Err(Error::new(
+                ErrorKind::Unsupported,
+                "VEX worker backend is not supported on Windows",
+            ))
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let response = self.execute()?;
+            Ok(LifterJson {
+                architecture: response.architecture.to_string(),
+                address: response.address,
+                bytes: hex::encode(&response.bytes),
+                ir: response.ir,
+            })
+        }
     }
-}
 
-impl fmt::Display for Lifter {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Lifter")
+    #[cfg(not(target_os = "windows"))]
+    fn execute(&self) -> Result<VexLiftResponse, Error> {
+        let pool = crate::processing::ProcessorPool::for_processor::<VexProcessor>(
+            &self.config.processors,
+        )
+        .map_err(|error| Error::other(error.to_string()))?;
+        let response = pool
+            .execute::<VexProcessor>(&VexRequest::Lift(VexLiftRequest {
+                architecture: self.architecture,
+                address: self.address,
+                bytes: self.bytes.clone(),
+                config: self.config.clone(),
+            }))
+            .map_err(|error: crate::processing::ProcessorError| Error::other(error.to_string()))?;
+
+        match response {
+            VexResponse::Lift(response) => Ok(response),
+        }
     }
 }

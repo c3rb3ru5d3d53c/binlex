@@ -22,10 +22,12 @@
 
 pub mod architecture;
 pub mod config;
+pub mod hexdump;
 pub mod magic;
 
 pub use architecture::Architecture;
 pub use config::AUTHOR;
 pub use config::Config;
 pub use config::VERSION;
+pub use hexdump::hexdump;
 pub use magic::Magic;

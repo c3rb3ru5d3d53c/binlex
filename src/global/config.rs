@@ -91,6 +91,20 @@ pub struct Config {
     pub chromosomes: ConfigChromosomes,
     pub mmap: ConfigMmap,
     pub disassembler: ConfigDisassembler,
+    #[serde(default)]
+    pub processors: ConfigProcessors,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+pub struct ConfigProcessors {
+    pub enabled: bool,
+    pub path: Option<String>,
+    pub processes: usize,
+    pub compression: bool,
+    pub restart_on_crash: bool,
+    pub max_payload_bytes: usize,
+    pub idle_timeout_ms: u64,
+    pub max_queue_depth: usize,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -272,6 +286,7 @@ impl Config {
             disassembler: ConfigDisassembler {
                 sweep: ConfigDisassemblerSweep { enabled: true },
             },
+            processors: ConfigProcessors::default(),
         }
     }
 
@@ -432,5 +447,20 @@ impl Config {
 impl Default for Config {
     fn default() -> Self {
         Config::new()
+    }
+}
+
+impl Default for ConfigProcessors {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            path: None,
+            processes: 2,
+            compression: true,
+            restart_on_crash: true,
+            max_payload_bytes: 4 * 1024 * 1024,
+            idle_timeout_ms: 30_000,
+            max_queue_depth: 2 * 64,
+        }
     }
 }
