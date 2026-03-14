@@ -17,7 +17,6 @@ fn test_lift_bytes_ret() {
     assert!(irsb.is_some());
     if let Some(irsb) = irsb {
         println!("IRSB for ret: {:?}", irsb);
-        drop(irsb);
     }
 }
 
@@ -84,7 +83,6 @@ fn test_lift_instruction() {
     assert!(irsb.is_some());
     if let Some(irsb) = irsb {
         println!("IRSB for instruction: {:?}", irsb);
-        drop(irsb);
     }
 }
 
@@ -128,7 +126,6 @@ fn test_lift_block() {
     assert!(irsb.is_some());
     if let Some(irsb) = irsb {
         println!("IRSB for block: {:?}", irsb);
-        drop(irsb);
     }
 }
 
@@ -192,6 +189,18 @@ fn test_lift_binlex_block_split_example() {
     assert!(irsb.is_some());
     if let Some(irsb) = irsb {
         println!("IRSB for binlex block split example: {:?}", irsb);
-        drop(irsb);
     }
+}
+
+#[test]
+fn test_worker_lifter_process() {
+    let mut config = Config::default();
+    config.processors.enabled = true;
+    config.processors.processes = 1;
+    config.processors.compression = true;
+    let mut lifter = Lifter::new(Architecture::AMD64, &[0xC3u8], 0x1000, config).unwrap();
+    let json = lifter.process().unwrap();
+    assert_eq!(json.architecture, "amd64");
+    assert_eq!(json.bytes, "c3");
+    assert!(!json.ir.is_empty());
 }

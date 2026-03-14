@@ -971,6 +971,13 @@ impl Config {
             inner: Arc::clone(&self.inner),
         })
     }
+
+    #[getter]
+    pub fn get_processors(&self) -> PyResult<ConfigProcessors> {
+        Ok(ConfigProcessors {
+            inner: Arc::clone(&self.inner),
+        })
+    }
     #[getter]
     pub fn get_formats(&self) -> PyResult<ConfigFormats> {
         Ok(ConfigFormats {
@@ -1234,6 +1241,110 @@ impl ConfigGeneral {
     pub fn set_debug(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
         inner.general.debug = value;
+    }
+}
+
+#[pyclass]
+pub struct ConfigProcessors {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigProcessors {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.processors.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.processors.enabled = value;
+    }
+
+    #[getter]
+    pub fn get_path(&self) -> Option<String> {
+        let inner = self.inner.lock().unwrap();
+        inner.processors.path.clone()
+    }
+
+    #[setter]
+    pub fn set_path(&mut self, value: Option<String>) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.processors.path = value;
+    }
+
+    #[getter]
+    pub fn get_processes(&self) -> usize {
+        let inner = self.inner.lock().unwrap();
+        inner.processors.processes
+    }
+
+    #[setter]
+    pub fn set_processes(&mut self, value: usize) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.processors.processes = value.max(1);
+    }
+
+    #[getter]
+    pub fn get_compression(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.processors.compression
+    }
+
+    #[setter]
+    pub fn set_compression(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.processors.compression = value;
+    }
+
+    #[getter]
+    pub fn get_restart_on_crash(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.processors.restart_on_crash
+    }
+
+    #[setter]
+    pub fn set_restart_on_crash(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.processors.restart_on_crash = value;
+    }
+
+    #[getter]
+    pub fn get_max_payload_bytes(&self) -> usize {
+        let inner = self.inner.lock().unwrap();
+        inner.processors.max_payload_bytes
+    }
+
+    #[setter]
+    pub fn set_max_payload_bytes(&mut self, value: usize) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.processors.max_payload_bytes = value;
+    }
+
+    #[getter]
+    pub fn get_idle_timeout_ms(&self) -> u64 {
+        let inner = self.inner.lock().unwrap();
+        inner.processors.idle_timeout_ms
+    }
+
+    #[setter]
+    pub fn set_idle_timeout_ms(&mut self, value: u64) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.processors.idle_timeout_ms = value;
+    }
+
+    #[getter]
+    pub fn get_max_queue_depth(&self) -> usize {
+        let inner = self.inner.lock().unwrap();
+        inner.processors.max_queue_depth
+    }
+
+    #[setter]
+    pub fn set_max_queue_depth(&mut self, value: usize) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.processors.max_queue_depth = value.max(1);
     }
 }
 

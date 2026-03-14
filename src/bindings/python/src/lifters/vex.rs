@@ -177,8 +177,7 @@ impl Lifter {
             .lock()
             .unwrap()
             .ir()
-            .map(|irsb| irsb.to_string())
-            .map_err(|err| PyRuntimeError::new_err(format!("{:?}", err)))
+            .map_err(|err| PyRuntimeError::new_err(err.to_string()))
     }
 
     #[pyo3(text_signature = "($self)")]
