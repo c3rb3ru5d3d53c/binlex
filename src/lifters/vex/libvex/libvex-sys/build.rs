@@ -13,21 +13,6 @@ const VALGRIND_REPO: &str = "https://sourceware.org/git/valgrind.git";
 const VALGRIND_REV: &str = "0062f2b519ea48b82164ae423fac58a59ee00f1a";
 const VEX_ENV_KEYS: [&str; 3] = ["VEX_SRC", "VEX_HEADERS", "VEX_LIBS"];
 
-fn vex_headers() -> Result<Vec<String>> {
-    match env::var("VEX_HEADERS") {
-        Ok(paths) => Ok(paths.split(':').map(String::from).collect()),
-        Err(VarError::NotPresent) => {
-            let mut vex = find_vex()?;
-            let mut res = Vec::with_capacity(2);
-            res.push(vex.to_string_lossy().into_owned());
-            vex.pop();
-            res.push(vex.to_string_lossy().into_owned());
-            Ok(res)
-        }
-        Err(err) => Err(err.into()),
-    }
-}
-
 fn run_checked(program: &str, args: &[&str], cwd: &Path) -> Result<()> {
     let status = Command::new(program).args(args).current_dir(cwd).status()?;
     if status.success() {
@@ -404,7 +389,6 @@ fn main() -> Result<()> {
         println!("cargo:rerun-if-env-changed={key}");
     }
 
-    let out_dir = PathBuf::from(env::var("OUT_DIR")?);
     let (arch, platform) = target_arch_and_platform()?;
 
     let vex_dir = ensure_lib()?;
@@ -415,15 +399,6 @@ fn main() -> Result<()> {
         println!("cargo:rustc-link-lib=static={multiarch_lib}");
     }
     println!("cargo:rustc-link-lib=static={singlearch_lib}");
-
-    let bindings = bindgen::Builder::default()
-        .header("wrapper.h")
-        .blocklist_type("_IRStmt__bindgen_ty_1__bindgen_ty_1")
-        .rustified_enum(".*")
-        .clang_args(vex_headers()?.into_iter().map(|dir| format!("-I{dir}")))
-        .generate()
-        .map_err(|_| "Unable to generate bindings")?;
-    bindings.write_to_file(out_dir.join("bindings.rs"))?;
 
     Ok(())
 }
