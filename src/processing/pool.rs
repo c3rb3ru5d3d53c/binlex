@@ -1,10 +1,14 @@
 use std::collections::HashMap;
+use std::io::ErrorKind;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::thread;
+use std::time::{Duration, Instant};
 
+use interprocess::local_socket::ListenerNonblockingMode;
 use interprocess::local_socket::Stream;
-use interprocess::local_socket::traits::Listener as _;
+use interprocess::local_socket::traits::{Listener as _, Stream as _};
 use once_cell::sync::Lazy;
 
 use crate::ConfigProcessors;
@@ -28,6 +32,8 @@ pub struct ProcessorPool {
     config: ConfigProcessors,
     binary_name: String,
     processor_name: &'static str,
+    processor_id: u16,
+    timeout: Duration,
     processors: Vec<Mutex<ProcessorHandle>>,
     next_request_id: AtomicU64,
     next_processor: AtomicUsize,
@@ -38,23 +44,29 @@ impl ProcessorPool {
         config: ConfigProcessors,
         binary_name: impl Into<String>,
         processor_name: &'static str,
+        processor_id: u16,
         spawn_path: impl AsRef<std::path::Path>,
     ) -> Result<Self, ProcessorError> {
         let binary_name = binary_name.into();
+        let timeout = timeout_for_config(&config);
         let process_count = config.processes.max(1);
         let mut processors = Vec::with_capacity(process_count);
         for _ in 0..process_count {
             processors.push(Mutex::new(Self::spawn_worker(
                 &binary_name,
                 processor_name,
+                processor_id,
                 spawn_path.as_ref(),
                 config.compression,
+                timeout,
             )?));
         }
         Ok(Self {
             config,
             binary_name,
             processor_name,
+            processor_id,
+            timeout,
             processors,
             next_request_id: AtomicU64::new(1),
             next_processor: AtomicUsize::new(0),
@@ -88,8 +100,10 @@ impl ProcessorPool {
                     *processor = Self::spawn_worker(
                         &self.binary_name,
                         self.processor_name,
+                        self.processor_id,
                         &path,
                         self.config.compression,
+                        self.timeout,
                     )?;
                 }
                 Err(error) => return Err(error),
@@ -110,7 +124,13 @@ impl ProcessorPool {
 
         let binary_name = P::filename();
         let path = P::path(config)?;
-        let pool = Arc::new(Self::new(config.clone(), binary_name, P::NAME, path)?);
+        let pool = Arc::new(Self::new(
+            config.clone(),
+            binary_name,
+            P::NAME,
+            P::ID,
+            path,
+        )?);
         pools.insert(key, Arc::clone(&pool));
         Ok(pool)
     }
@@ -148,8 +168,10 @@ impl ProcessorPool {
             request_id,
             payload,
             self.config.compression,
-        )?;
-        let frame = read_frame(&mut processor.stream)?;
+        )
+        .map_err(|error| map_timeout_error("send request", error))?;
+        let frame = read_frame(&mut processor.stream)
+            .map_err(|error| map_timeout_error("read response", error))?;
         if frame.header.request_id != request_id {
             return Err(ProcessorError::UnexpectedResponse(format!(
                 "request id mismatch, expected {}, got {}",
@@ -168,7 +190,7 @@ impl ProcessorPool {
             MessageKind::Response => Ok(postcard::from_bytes(&frame.payload)?),
             MessageKind::Error => {
                 let failure: ProcessorFailure = postcard::from_bytes(&frame.payload)?;
-                Err(ProcessorError::UnexpectedResponse(failure.message))
+                Err(ProcessorError::RemoteFailure(failure.message))
             }
             other => Err(ProcessorError::UnexpectedResponse(format!(
                 "unexpected processor message kind: {:?}",
@@ -180,10 +202,15 @@ impl ProcessorPool {
     fn spawn_worker(
         binary_name: &str,
         processor_name: &str,
+        processor_id: u16,
         spawn_path: &std::path::Path,
         compression: bool,
+        timeout: Duration,
     ) -> Result<ProcessorHandle, ProcessorError> {
         let (socket_name, listener) = transport::bind_listener(binary_name)?;
+        listener
+            .set_nonblocking(ListenerNonblockingMode::Accept)
+            .map_err(ProcessorError::Io)?;
         let mut child = Command::new(spawn_path)
             .arg("--socket")
             .arg(&socket_name)
@@ -196,15 +223,22 @@ impl ProcessorPool {
             .stderr(Stdio::null())
             .spawn()
             .map_err(|error| ProcessorError::Spawn(error.to_string()))?;
-        let mut stream = listener.accept()?;
-        let frame = read_frame(&mut stream)?;
+        let mut stream = accept_with_timeout(&listener, &mut child, timeout)?;
+        stream
+            .set_recv_timeout(Some(timeout))
+            .map_err(ProcessorError::Io)?;
+        stream
+            .set_send_timeout(Some(timeout))
+            .map_err(ProcessorError::Io)?;
+        let frame =
+            read_frame(&mut stream).map_err(|error| map_timeout_error("read hello", error))?;
         if frame.header.kind != MessageKind::HelloAck {
             return Err(ProcessorError::UnexpectedResponse(
                 "expected processor hello ack".to_string(),
             ));
         }
         let hello: Hello = postcard::from_bytes(&frame.payload)?;
-        let _ = child.try_wait()?;
+        validate_hello(&hello, binary_name, processor_name, processor_id)?;
         Ok(ProcessorHandle {
             child,
             stream,
@@ -219,8 +253,81 @@ fn is_retryable(error: &ProcessorError) -> bool {
         ProcessorError::Io(_)
             | ProcessorError::Protocol(_)
             | ProcessorError::Spawn(_)
+            | ProcessorError::Timeout(_)
             | ProcessorError::UnexpectedResponse(_)
     )
+}
+
+fn timeout_for_config(config: &ConfigProcessors) -> Duration {
+    Duration::from_millis(config.idle_timeout_ms.max(1))
+}
+
+fn map_timeout_error(context: &str, error: ProcessorError) -> ProcessorError {
+    match error {
+        ProcessorError::Io(error)
+            if matches!(error.kind(), ErrorKind::TimedOut | ErrorKind::WouldBlock) =>
+        {
+            ProcessorError::Timeout(format!("{} timed out", context))
+        }
+        other => other,
+    }
+}
+
+fn accept_with_timeout(
+    listener: &interprocess::local_socket::Listener,
+    child: &mut Child,
+    timeout: Duration,
+) -> Result<Stream, ProcessorError> {
+    let deadline = Instant::now() + timeout;
+    loop {
+        match listener.accept() {
+            Ok(stream) => return Ok(stream),
+            Err(error) if error.kind() == ErrorKind::WouldBlock => {
+                if let Some(status) = child.try_wait().map_err(ProcessorError::Io)? {
+                    return Err(ProcessorError::Spawn(format!(
+                        "processor exited before connecting: {}",
+                        status
+                    )));
+                }
+                if Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(ProcessorError::Timeout(
+                        "processor startup timed out waiting for connection".to_string(),
+                    ));
+                }
+                thread::sleep(Duration::from_millis(10));
+            }
+            Err(error) => return Err(ProcessorError::Io(error)),
+        }
+    }
+}
+
+fn validate_hello(
+    hello: &Hello,
+    binary_name: &str,
+    processor_name: &str,
+    processor_id: u16,
+) -> Result<(), ProcessorError> {
+    if hello.backend_name != binary_name {
+        return Err(ProcessorError::UnexpectedResponse(format!(
+            "processor backend mismatch, expected {}, got {}",
+            binary_name, hello.backend_name
+        )));
+    }
+    if hello.processor_name != processor_name {
+        return Err(ProcessorError::UnexpectedResponse(format!(
+            "processor name mismatch, expected {}, got {}",
+            processor_name, hello.processor_name
+        )));
+    }
+    if !hello.supported_ids.contains(&processor_id) {
+        return Err(ProcessorError::UnexpectedResponse(format!(
+            "processor id {} not advertised by {}",
+            processor_id, hello.processor_name
+        )));
+    }
+    Ok(())
 }
 
 impl Drop for ProcessorHandle {

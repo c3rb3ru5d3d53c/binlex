@@ -9,6 +9,7 @@ use crate::processing::protocol::{Hello, MessageKind, ProcessorFailure, read_fra
 pub fn run_child_loop(
     mut stream: Stream,
     backend_name: &str,
+    processor_name: &str,
     processors: Vec<Box<dyn ProcessorDispatch>>,
     compression_enabled: bool,
 ) -> Result<(), ProcessorError> {
@@ -20,6 +21,7 @@ pub fn run_child_loop(
     let hello = Hello {
         protocol_version: crate::processing::protocol::VERSION,
         backend_name: backend_name.to_string(),
+        processor_name: processor_name.to_string(),
         supported_ids: processor_map.keys().copied().collect(),
         pid: std::process::id(),
     };

@@ -9,6 +9,8 @@ pub enum ProcessorError {
     Compression(String),
     Spawn(String),
     BinaryNotFound(String),
+    RemoteFailure(String),
+    Timeout(String),
     UnexpectedResponse(String),
     RequestTooLarge(usize),
 }
@@ -24,6 +26,8 @@ impl fmt::Display for ProcessorError {
             ProcessorError::Compression(err) => write!(f, "processor compression error: {}", err),
             ProcessorError::Spawn(err) => write!(f, "processor spawn error: {}", err),
             ProcessorError::BinaryNotFound(err) => write!(f, "processor binary not found: {}", err),
+            ProcessorError::RemoteFailure(err) => write!(f, "processor remote failure: {}", err),
+            ProcessorError::Timeout(err) => write!(f, "processor timeout: {}", err),
             ProcessorError::UnexpectedResponse(err) => {
                 write!(f, "processor unexpected response: {}", err)
             }

@@ -43,7 +43,8 @@ fn main() {
 
     if run_child_loop(
         stream,
-        &format!("binlex-{}", processor_name),
+        "binlex-processor",
+        &processor_name,
         vec![processor],
         compression_enabled,
     )

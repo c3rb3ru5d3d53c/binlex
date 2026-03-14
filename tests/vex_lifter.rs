@@ -5,14 +5,30 @@ use binlex::controlflow::{Block, Function, Instruction};
 use binlex::global::{Architecture, Config};
 use binlex::lifters::vex::{Lifter, LifterJsonDeserializer};
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::PathBuf;
 
 fn test_graph() -> Graph {
-    Graph::new(Architecture::AMD64, Config::default())
+    Graph::new(Architecture::AMD64, test_config())
+}
+
+fn test_config() -> Config {
+    let mut config = Config::default();
+    let processor_dir = std::env::current_exe()
+        .expect("test binary should have a path")
+        .parent()
+        .and_then(|path| path.parent())
+        .map(PathBuf::from)
+        .expect("test binary should be in target/<profile>/deps");
+    config.processors.enabled = true;
+    config.processors.path = Some(processor_dir.to_string_lossy().into_owned());
+    config.processors.processes = 1;
+    config.processors.compression = true;
+    config
 }
 
 #[test]
 fn test_lift_bytes_ret() {
-    let mut vex = Lifter::new(Architecture::AMD64, &[0xC3u8], 0x1000, Config::default()).unwrap();
+    let mut vex = Lifter::new(Architecture::AMD64, &[0xC3u8], 0x1000, test_config()).unwrap();
     let irsb = vex.ir().ok(); // x86_64 "ret"
     assert!(irsb.is_some());
     if let Some(irsb) = irsb {
@@ -22,8 +38,7 @@ fn test_lift_bytes_ret() {
 
 #[test]
 fn test_lifter_process() {
-    let mut lifter =
-        Lifter::new(Architecture::AMD64, &[0xC3u8], 0x1000, Config::default()).unwrap();
+    let mut lifter = Lifter::new(Architecture::AMD64, &[0xC3u8], 0x1000, test_config()).unwrap();
     let json = lifter.process().unwrap();
     assert_eq!(json.architecture, "amd64");
     assert_eq!(json.address, 0x1000);
@@ -33,7 +48,7 @@ fn test_lifter_process() {
 
 #[test]
 fn test_vex_json_deserializer_round_trip() {
-    let config = Config::default();
+    let config = test_config();
     let mut lifter = Lifter::new(Architecture::AMD64, &[0xC3u8], 0x1000, config.clone()).unwrap();
     let serialized = serde_json::to_string(&lifter.process().unwrap()).unwrap();
     let deserialized = LifterJsonDeserializer::new(serialized, config).unwrap();
@@ -76,7 +91,7 @@ fn test_lift_instruction() {
         Architecture::AMD64,
         &instruction.bytes,
         instruction.address,
-        Config::default(),
+        test_config(),
     )
     .unwrap();
     let irsb = vex.ir().ok();
@@ -119,7 +134,7 @@ fn test_lift_block() {
         Architecture::AMD64,
         &block_bytes,
         block.address,
-        Config::default(),
+        test_config(),
     )
     .unwrap();
     let irsb = vex.ir().ok();
@@ -182,7 +197,7 @@ fn test_lift_binlex_block_split_example() {
         Architecture::AMD64,
         &block_bytes,
         block_address,
-        Config::default(),
+        test_config(),
     )
     .unwrap();
     let irsb = vex.ir().ok();
@@ -194,10 +209,7 @@ fn test_lift_binlex_block_split_example() {
 
 #[test]
 fn test_worker_lifter_process() {
-    let mut config = Config::default();
-    config.processors.enabled = true;
-    config.processors.processes = 1;
-    config.processors.compression = true;
+    let config = test_config();
     let mut lifter = Lifter::new(Architecture::AMD64, &[0xC3u8], 0x1000, config).unwrap();
     let json = lifter.process().unwrap();
     assert_eq!(json.architecture, "amd64");
