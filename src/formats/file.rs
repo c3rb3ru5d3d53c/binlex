@@ -20,10 +20,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::Binary;
 use crate::Config;
 use crate::Magic;
 use crate::controlflow::Attribute;
+use crate::entropy;
 use crate::hashing::sha256::SHA256;
 use crate::hashing::tlsh::TLSH;
 use serde::{Deserialize, Serialize};
@@ -263,7 +263,7 @@ impl File {
         if !self.config.formats.file.heuristics.entropy.enabled {
             return None;
         }
-        Binary::entropy(&self.data)
+        entropy::shannon(&self.data)
     }
 
     /// Gets attribute information about a file

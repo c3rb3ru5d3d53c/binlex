@@ -21,19 +21,23 @@
 # SOFTWARE.
 
 from binlex_bindings.binlex import Config
-from binlex_bindings.binlex.binary import Binary
 from .architecture import Architecture
+from . import entropy
+from . import hexdump
+from . import hex
 from .magic import Magic
 from . import controlflow, disassemblers, formats, lifters, types
 
 __all__ = [
     "Architecture",
-    "Binary",
     "Config",
     "Magic",
     "controlflow",
     "disassemblers",
+    "entropy",
     "formats",
+    "hexdump",
+    "hex",
     "lifters",
     "types",
 ]

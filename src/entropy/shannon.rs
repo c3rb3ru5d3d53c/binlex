@@ -20,22 +20,23 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod controlflow;
-pub mod disassemblers;
-pub mod entropy;
-pub mod formats;
-pub mod genetics;
-pub mod global;
-pub mod hashing;
-pub mod hex;
-pub mod hexdump;
-pub mod imaging;
-pub mod io;
-pub mod lifters;
-pub mod types;
+use std::collections::HashMap;
 
-pub use global::AUTHOR;
-pub use global::Architecture;
-pub use global::Config;
-pub use global::Magic;
-pub use global::VERSION;
+pub fn shannon(bytes: &[u8]) -> Option<f64> {
+    let mut frequency: HashMap<u8, usize> = HashMap::new();
+    for &byte in bytes {
+        *frequency.entry(byte).or_insert(0) += 1;
+    }
+
+    let data_len = bytes.len() as f64;
+    if data_len == 0.0 {
+        return None;
+    }
+
+    let entropy = frequency.values().fold(0.0, |entropy, &count| {
+        let probability = count as f64 / data_len;
+        entropy - probability * probability.log2()
+    });
+
+    Some(entropy)
+}

@@ -1,0 +1,3 @@
+from __future__ import annotations
+
+def hexdump(bytes: bytes, address: int) -> str: ...

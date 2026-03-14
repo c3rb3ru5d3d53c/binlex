@@ -20,22 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod controlflow;
-pub mod disassemblers;
-pub mod entropy;
-pub mod formats;
-pub mod genetics;
-pub mod global;
-pub mod hashing;
-pub mod hex;
-pub mod hexdump;
-pub mod imaging;
-pub mod io;
-pub mod lifters;
-pub mod types;
+pub mod decode;
+pub mod encode;
 
-pub use global::AUTHOR;
-pub use global::Architecture;
-pub use global::Config;
-pub use global::Magic;
-pub use global::VERSION;
+pub use decode::decode;
+pub use encode::encode;

@@ -20,22 +20,38 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod controlflow;
-pub mod disassemblers;
-pub mod entropy;
-pub mod formats;
-pub mod genetics;
-pub mod global;
-pub mod hashing;
-pub mod hex;
-pub mod hexdump;
-pub mod imaging;
-pub mod io;
-pub mod lifters;
-pub mod types;
+use std::fmt::Write;
 
-pub use global::AUTHOR;
-pub use global::Architecture;
-pub use global::Config;
-pub use global::Magic;
-pub use global::VERSION;
+pub fn hexdump(data: &[u8], address: u64) -> String {
+    const BYTES_PER_LINE: usize = 16;
+    let mut result = String::new();
+    for (i, chunk) in data.chunks(BYTES_PER_LINE).enumerate() {
+        let current_address = address as usize + i * BYTES_PER_LINE;
+        let hex_repr = format!("{:08x}: ", current_address);
+        result.push_str(&hex_repr);
+        let hex_values = {
+            let mut s = String::new();
+            for byte in chunk {
+                let _ = write!(s, "{:02x} ", byte);
+            }
+            s
+        };
+        result.push_str(&hex_values);
+        let padding = "   ".repeat(BYTES_PER_LINE - chunk.len());
+        result.push_str(&padding);
+        let ascii_values: String = chunk
+            .iter()
+            .map(|&byte| {
+                if byte.is_ascii_graphic() || byte == b' ' {
+                    byte as char
+                } else {
+                    '.'
+                }
+            })
+            .collect();
+        result.push('|');
+        result.push_str(&ascii_values);
+        result.push_str("|\n");
+    }
+    result
+}

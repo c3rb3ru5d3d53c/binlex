@@ -22,34 +22,19 @@
 
 use pyo3::prelude::*;
 
-use binlex::binary::Binary as InnerBinary;
-
-#[pyclass]
-pub struct Binary;
-
-#[pymethods]
-impl Binary {
-    #[staticmethod]
-    pub fn entropy(bytes: Vec<u8>) -> Option<f64> {
-        InnerBinary::entropy(&bytes)
-    }
-    #[staticmethod]
-    pub fn to_hex(bytes: Vec<u8>) -> String {
-        InnerBinary::to_hex(&bytes)
-    }
-    #[staticmethod]
-    pub fn hexdump(bytes: Vec<u8>, address: u64) -> String {
-        InnerBinary::hexdump(&bytes, address)
-    }
+#[pyfunction]
+#[pyo3(text_signature = "(bytes)")]
+pub fn shannon(bytes: Vec<u8>) -> Option<f64> {
+    binlex::entropy::shannon(&bytes)
 }
 
 #[pymodule]
-#[pyo3(name = "binary")]
-pub fn binary_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<Binary>()?;
+#[pyo3(name = "entropy")]
+pub fn entropy_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(shannon, m)?)?;
     py.import("sys")?
         .getattr("modules")?
-        .set_item("binlex_bindings.binlex.binary", m)?;
-    m.setattr("__name__", "binlex_bindings.binlex.binary")?;
+        .set_item("binlex_bindings.binlex.entropy", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.entropy")?;
     Ok(())
 }
