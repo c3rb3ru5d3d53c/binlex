@@ -199,9 +199,7 @@ impl Config {
                     },
                 },
             },
-            instructions: ConfigInstructions {
-                enabled: false,
-            },
+            instructions: ConfigInstructions { enabled: false },
             blocks: ConfigBlocks {
                 enabled: true,
                 instructions: ConfigBlockInstructions { enabled: false },

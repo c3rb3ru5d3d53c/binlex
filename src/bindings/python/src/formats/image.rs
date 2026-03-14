@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use binlex::types::MemoryMappedFile as InnerMemoryMappedFile;
+use binlex::formats::Image as InnerImage;
 use pyo3::exceptions;
 use pyo3::ffi;
 use pyo3::prelude::*;
@@ -28,19 +28,19 @@ use pyo3::types::PyMemoryView;
 use std::os::raw::c_char;
 
 #[pyclass]
-pub struct MemoryMappedFile {
-    pub inner: InnerMemoryMappedFile,
+pub struct Image {
+    pub inner: InnerImage,
 }
 
 #[pymethods]
-impl MemoryMappedFile {
+impl Image {
     #[new]
     #[pyo3(text_signature = "(path, cache)")]
     pub fn new(path: &str, cache: bool) -> PyResult<Self> {
         let path = std::path::PathBuf::from(path);
-        let inner = InnerMemoryMappedFile::new(path, cache)
+        let inner = InnerImage::new(path, cache)
             .map_err(|e| exceptions::PyIOError::new_err(e.to_string()))?;
-        Ok(MemoryMappedFile { inner })
+        Ok(Image { inner })
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -135,12 +135,12 @@ impl MemoryMappedFile {
 }
 
 #[pymodule]
-#[pyo3(name = "memorymappedfile")]
-pub fn memorymappedfile_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<MemoryMappedFile>()?;
+#[pyo3(name = "image")]
+pub fn image_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<Image>()?;
     py.import("sys")?
         .getattr("modules")?
-        .set_item("binlex_bindings.binlex.types.memorymappedfile", m)?;
-    m.setattr("__name__", "binlex_bindings.binlex.types.memorymappedfile")?;
+        .set_item("binlex_bindings.binlex.formats.image", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.formats.image")?;
     Ok(())
 }

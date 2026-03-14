@@ -38,7 +38,7 @@ from binlex_bindings.binlex.controlflow import (
 
 from binlex_bindings.binlex.disassemblers.capstone import Disassembler as CapstoneDisassembler
 
-from binlex_bindings.binlex.types import MemoryMappedFile
+from binlex_bindings.binlex.formats import Image
 
 from binlex_bindings.binlex import (
 	Architecture,
@@ -167,7 +167,7 @@ class IDA():
 		directory = os.path.join(tempfile.gettempdir(), 'binlex')
 		if not os.path.exists(directory): os.makedirs(directory)
 		file_path = os.path.join(directory, IDA().sha256())
-		mapped_file = MemoryMappedFile(file_path, False)
+		mapped_file = Image(file_path, False)
 		for segment in idautils.Segments():
 			start = idc.get_segm_start(segment)
 			end = idc.get_segm_end(segment)

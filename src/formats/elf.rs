@@ -24,7 +24,7 @@ use crate::Architecture;
 use crate::Config;
 use crate::controlflow::Symbol as BlSymbol;
 use crate::formats::File;
-use crate::types::MemoryMappedFile;
+use crate::formats::Image;
 use lief::Binary;
 use lief::elf::section::Flags;
 use lief::elf::segment::Type as SegmentType;
@@ -159,10 +159,10 @@ impl ELF {
         None
     }
 
-    pub fn image(&self) -> Result<MemoryMappedFile, Error> {
+    pub fn image(&self) -> Result<Image, Error> {
         let pathbuf = PathBuf::from(self.config.mmap.directory.clone())
             .join(self.file.sha256_no_config().unwrap());
-        let mut tempmap = MemoryMappedFile::new(pathbuf, self.config.mmap.cache.enabled)?;
+        let mut tempmap = Image::new(pathbuf, self.config.mmap.cache.enabled)?;
 
         if tempmap.is_cached() {
             return Ok(tempmap);
