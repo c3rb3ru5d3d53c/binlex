@@ -58,6 +58,7 @@ pub struct Frame {
 pub struct Hello {
     pub protocol_version: u16,
     pub backend_name: String,
+    pub processor_name: String,
     pub supported_ids: Vec<u16>,
     pub pid: u32,
 }
