@@ -6,8 +6,6 @@ from binlex import Config
 from binlex.controlflow import Graph
 from binlex.disassemblers.capstone import Disassembler
 from binlex.formats import PE
-from binlex.lifters.vex import Lifter
-from binlex.imaging import Palette, Terminal
 
 
 def main() -> int:
@@ -17,12 +15,11 @@ def main() -> int:
 
     config = Config()
     config.general.threads = 16
-
     config.processors.enabled = True
     config.processors.processes = 2
     config.processors.compression = True
-    config.processors.path = '/home/c3rb3ru5/Tools/binlex/target/release/'
-    config.processors.restart_on_crash = True
+    config.processors.vex.enabled = True
+    config.processors.vex.functions.enabled = True
 
     if len(sys.argv) >= 3:
         config.processors.path = sys.argv[2]
@@ -46,17 +43,7 @@ def main() -> int:
 
     function = cfg.functions()[0]
 
-    lifter = Lifter(
-        pe.architecture(),
-        function.bytes(),
-        function.address(),
-        config,
-    )
-
-    print(lifter.ir())
-
-    terminal = Terminal(function.bytes(), Palette.HEATMAP)
-    terminal.print()
+    print(function.to_dict())
 
     return 0
 

@@ -38,14 +38,19 @@ pub struct ChromosomeJson {
     /// The raw pattern string of the chromosome.
     pub pattern: String,
     /// The feature vector extracted from the chromosome.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub feature: Vec<u8>,
     /// The entropy of the normalized chromosome, if enabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub entropy: Option<f64>,
     /// The SHA-256 hash of the normalized chromosome, if enabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sha256: Option<String>,
     /// The MinHash of the normalized chromosome, if enabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub minhash: Option<String>,
     /// The TLSH (Locality Sensitive Hash) of the normalized chromosome, if enabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tlsh: Option<String>,
 }
 
@@ -156,7 +161,7 @@ impl Chromosome {
     /// Returns a `Vec<u8>` containing the feature vector, or an empty vector if feature extraction is disabled.
     pub fn feature(&self) -> Vec<u8> {
         let mut result = Vec::<u8>::new();
-        if !self.config.chromosomes.heuristics.features.enabled {
+        if !self.config.chromosomes.features.enabled {
             return result;
         }
         for allelepair in &self.allelepairs {
@@ -233,7 +238,7 @@ impl Chromosome {
     ///
     /// Returns `Some(f64)` containing the entropy, or `None` if entropy calculation is disabled.
     pub fn entropy(&self) -> Option<f64> {
-        if !self.config.chromosomes.heuristics.entropy.enabled {
+        if !self.config.chromosomes.entropy.enabled {
             return None;
         }
         entropy::shannon(&self.normalized())

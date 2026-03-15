@@ -39,6 +39,24 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::io::Error;
 
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct FunctionLiftersJson {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vex: Option<FunctionVexLifterJson>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct FunctionVexLifterJson {
+    pub ir: String,
+}
+
+#[cfg(not(target_os = "windows"))]
+impl From<crate::lifters::vex::LifterJson> for FunctionVexLifterJson {
+    fn from(value: crate::lifters::vex::LifterJson) -> Self {
+        Self { ir: value.ir }
+    }
+}
+
 /// Represents a JSON-serializable structure containing metadata about a function.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct FunctionJson {
@@ -54,14 +72,18 @@ pub struct FunctionJson {
     /// Indicates whether this function starts with a prologue.
     pub prologue: bool,
     /// The chromosome of the function in JSON format.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chromosome: Option<ChromosomeJson>,
     /// The size of the function in bytes, if available.
     pub size: usize,
     /// The raw bytes of the function in hexadecimal format, if available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bytes: Option<String>,
     /// A map of functions associated with the function.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub functions: BTreeMap<u64, u64>,
     /// The set of block addresses contained within the function.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub blocks: Vec<u64>,
     /// The number of instructions in the function.
     pub number_of_instructions: usize,
@@ -72,16 +94,24 @@ pub struct FunctionJson {
     /// Average Instructions per Block
     pub average_instructions_per_block: f64,
     /// The entropy of the function, if enabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub entropy: Option<f64>,
     /// The SHA-256 hash of the function, if enabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sha256: Option<String>,
     /// The MinHash of the function, if enabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub minhash: Option<String>,
     /// The TLSH of the function, if enabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tlsh: Option<String>,
     /// Indicates whether the function is contiguous.
     pub contiguous: bool,
+    /// Optional per-lifter outputs attached by processor post-processing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lifters: Option<FunctionLiftersJson>,
     /// Attributes
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attributes: Option<Value>,
 }
 
@@ -177,6 +207,11 @@ impl FunctionJsonDeserializer {
     }
 
     #[allow(dead_code)]
+    pub fn lift(&self) -> Option<FunctionLiftersJson> {
+        self.json.lifters.clone()
+    }
+
+    #[allow(dead_code)]
     pub fn edges(&self) -> usize {
         self.json.edges
     }
@@ -224,6 +259,33 @@ pub struct Function<'function> {
 }
 
 impl<'function> Function<'function> {
+    #[cfg(not(target_os = "windows"))]
+    fn lift(&self, json: &mut FunctionJson, bytes: &[u8]) {
+        if !self.cfg.config.processors.enabled
+            || !self.cfg.config.processors.vex.enabled
+            || !self.cfg.config.processors.vex.functions.enabled
+            || !json.contiguous
+        {
+            return;
+        }
+
+        if let Ok(mut lifter) = crate::lifters::vex::Lifter::new(
+            self.architecture(),
+            bytes,
+            self.address(),
+            self.cfg.config.clone(),
+        ) {
+            if let Ok(vex) = lifter.process() {
+                json.lifters
+                    .get_or_insert_with(FunctionLiftersJson::default)
+                    .vex = Some(vex.into());
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    fn lift(&self, _json: &mut FunctionJson, _bytes: &[u8]) {}
+
     /// Creates a new `Function` instance for the given address in the control flow graph.
     ///
     /// # Arguments
@@ -322,7 +384,7 @@ impl<'function> Function<'function> {
         } else {
             None
         };
-        let entropy = if !self.cfg.config.functions.heuristics.entropy.enabled {
+        let entropy = if !self.cfg.config.functions.entropy.enabled {
             None
         } else if contiguous {
             bytes.as_ref().and_then(|bytes| entropy::shannon(bytes))
@@ -381,7 +443,7 @@ impl<'function> Function<'function> {
             None
         };
 
-        FunctionJson {
+        let mut json = FunctionJson {
             address: self.address,
             type_: "function".to_string(),
             edges: self.edges(),
@@ -400,9 +462,16 @@ impl<'function> Function<'function> {
             minhash,
             tlsh,
             contiguous,
+            lifters: None,
             architecture: self.architecture().to_string(),
             attributes: None,
+        };
+
+        if let Some(bytes) = bytes.as_ref() {
+            self.lift(&mut json, bytes);
         }
+
+        json
     }
 
     /// Retrives the number of blocks in the function.
@@ -655,7 +724,7 @@ impl<'function> Function<'function> {
     ///
     /// Returns `Some(f64)` containing the entropy, or `None` if entropy calculation is disabled or the function is not contiguous.
     pub fn entropy(&self) -> Option<f64> {
-        if !self.cfg.config.functions.heuristics.entropy.enabled {
+        if !self.cfg.config.functions.entropy.enabled {
             return None;
         }
 

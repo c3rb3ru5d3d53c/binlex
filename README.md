@@ -333,7 +333,7 @@ enabled = true
 enabled = true
 minimum_byte_size = 50
 
-[formats.file.heuristics.entropy]
+[formats.file.entropy]
 enabled = true
 
 [instructions]
@@ -360,7 +360,7 @@ maximum_byte_size_enabled = false
 maximum_byte_size = 50
 seed = 0
 
-[blocks.heuristics.entropy]
+[blocks.entropy]
 enabled = true
 
 [functions]
@@ -384,7 +384,7 @@ maximum_byte_size_enabled = false
 maximum_byte_size = 50
 seed = 0
 
-[functions.heuristics.entropy]
+[functions.entropy]
 enabled = true
 
 [chromosomes.hashing.sha256]
@@ -402,10 +402,10 @@ maximum_byte_size_enabled = false
 maximum_byte_size = 50
 seed = 0
 
-[chromosomes.heuristics.features]
+[chromosomes.features]
 enabled = true
 
-[chromosomes.heuristics.entropy]
+[chromosomes.entropy]
 enabled = true
 
 [mmap]

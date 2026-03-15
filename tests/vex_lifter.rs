@@ -23,6 +23,8 @@ fn test_config() -> Config {
     config.processors.path = Some(processor_dir.to_string_lossy().into_owned());
     config.processors.processes = 1;
     config.processors.compression = true;
+    config.processors.vex.enabled = true;
+    config.processors.vex.functions.enabled = true;
     config
 }
 
@@ -215,4 +217,97 @@ fn test_worker_lifter_process() {
     assert_eq!(json.architecture, "amd64");
     assert_eq!(json.bytes, "c3");
     assert!(!json.ir.is_empty());
+}
+
+#[test]
+fn test_function_process_populates_vex_lifters() {
+    let graph = test_graph();
+    let instruction = Instruction {
+        architecture: Architecture::AMD64,
+        config: Config::default(),
+        address: 0x5000,
+        is_prologue: false,
+        is_block_start: false,
+        is_function_start: false,
+        bytes: vec![0xC3],
+        pattern: "c3".to_string(),
+        is_return: true,
+        is_call: false,
+        is_jump: false,
+        is_conditional: false,
+        is_trap: false,
+        has_indirect_target: false,
+        functions: BTreeSet::new(),
+        to: BTreeSet::new(),
+        edges: 0,
+    };
+    graph.listing.insert(0x5000, instruction.clone());
+    let block = Block {
+        address: 0x5000,
+        cfg: &graph,
+        terminator: instruction,
+    };
+    let mut blocks_map = BTreeMap::new();
+    blocks_map.insert(0x5000, block);
+    let function = Function {
+        address: 0x5000,
+        cfg: &graph,
+        blocks: blocks_map,
+    };
+
+    let json = function.process();
+    let lifters = json.lifters.expect("lifters should be populated");
+    let vex = lifters.vex.expect("vex lifter output should be present");
+
+    assert!(!vex.ir.is_empty());
+}
+
+#[test]
+fn test_function_json_omits_disabled_optional_keys() {
+    let mut config = test_config();
+    config.chromosomes.features.enabled = false;
+    config.functions.entropy.enabled = false;
+    let graph = Graph::new(Architecture::AMD64, config);
+    let instruction = Instruction {
+        architecture: Architecture::AMD64,
+        config: Config::default(),
+        address: 0x6000,
+        is_prologue: false,
+        is_block_start: false,
+        is_function_start: false,
+        bytes: vec![0xC3],
+        pattern: "c3".to_string(),
+        is_return: true,
+        is_call: false,
+        is_jump: false,
+        is_conditional: false,
+        is_trap: false,
+        has_indirect_target: false,
+        functions: BTreeSet::new(),
+        to: BTreeSet::new(),
+        edges: 0,
+    };
+    graph.listing.insert(0x6000, instruction.clone());
+    let block = Block {
+        address: 0x6000,
+        cfg: &graph,
+        terminator: instruction,
+    };
+    let mut blocks_map = BTreeMap::new();
+    blocks_map.insert(0x6000, block);
+    let function = Function {
+        address: 0x6000,
+        cfg: &graph,
+        blocks: blocks_map,
+    };
+
+    let value: serde_json::Value =
+        serde_json::from_str(&function.json().expect("function json should serialize"))
+            .expect("function json should parse");
+
+    assert!(value.get("entropy").is_none());
+    assert!(value
+        .get("chromosome")
+        .and_then(|chromosome| chromosome.get("feature"))
+        .is_none());
 }
