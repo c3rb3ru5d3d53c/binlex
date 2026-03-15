@@ -24,7 +24,6 @@ use crate::Architecture;
 use crate::Config;
 use crate::controlflow::Attributes;
 use crate::controlflow::Instruction;
-use crate::controlflow::InstructionJson;
 use crate::controlflow::graph::Graph;
 use crate::entropy;
 use crate::genetics::Chromosome;
@@ -75,9 +74,9 @@ pub struct BlockJson {
     pub blocks: BTreeSet<u64>,
     /// The number of instructions in this block.
     pub number_of_instructions: usize,
-    /// Instructions assocated with this block.
+    /// Instruction addresses associated with this block.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub instructions: Vec<InstructionJson>,
+    pub instructions: Vec<u64>,
     /// The entropy of the block, if enabled.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub entropy: Option<f64>,
@@ -346,7 +345,7 @@ impl<'block> Block<'block> {
         let chromosome = Chromosome::new(pattern, self.cfg.config.clone())
             .expect("failed to parse block chromosome");
         let size = bytes.len();
-        let instructions = self.instructions_json();
+        let instructions = self.instruction_addresses();
         let functions = self.functions();
         let blocks = self.blocks();
         let entropy = if self.cfg.config.blocks.entropy.enabled {
@@ -466,19 +465,16 @@ impl<'block> Block<'block> {
         result
     }
 
-    /// Retrives the instructions associated with the block.
+    /// Retrieves the instruction addresses associated with the block.
     ///
     /// # Returns
     ///
-    /// Returns a `Vec<InstructionJson>` representing the instructions associated with a block.
-    pub fn instructions_json(&self) -> Vec<InstructionJson> {
-        let mut result = Vec::<InstructionJson>::new();
-        if !self.cfg.config.blocks.instructions.enabled {
-            return result;
-        }
+    /// Returns a `Vec<u64>` representing the instruction addresses associated with a block.
+    pub fn instruction_addresses(&self) -> Vec<u64> {
+        let mut result = Vec::<u64>::new();
         for entry in self.cfg.listing.range(self.address..) {
             let instruction = entry.value();
-            result.push(instruction.process());
+            result.push(instruction.address);
             if instruction.address >= self.terminator.address {
                 break;
             }

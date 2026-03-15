@@ -576,9 +576,6 @@ impl<'function> Function<'function> {
     ///
     /// Returns a `Vec<Block>` representing the blocks associated with this function.
     pub fn blocks(&self) -> Vec<Block<'_>> {
-        if !self.cfg.config.functions.blocks.enabled {
-            return Vec::new();
-        }
         self.blocks
             .keys()
             .filter_map(|&block_address| Block::new(block_address, self.cfg).ok())
@@ -592,9 +589,6 @@ impl<'function> Function<'function> {
     /// Returns a `Vec<u64>` representing the block addresses associated with this function.
     pub fn block_addresses(&self) -> Vec<u64> {
         let mut result = Vec::<u64>::new();
-        if !self.cfg.config.functions.blocks.enabled {
-            return result;
-        }
         result.extend(self.blocks.keys().copied());
         result
     }

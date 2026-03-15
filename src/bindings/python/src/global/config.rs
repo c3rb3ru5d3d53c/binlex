@@ -25,46 +25,6 @@ use pyo3::prelude::*;
 use std::sync::{Arc, Mutex};
 
 #[pyclass]
-pub struct ConfigBlockInstructions {
-    pub inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigBlockInstructions {
-    #[getter]
-    pub fn get_enabled(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
-        inner.blocks.instructions.enabled
-    }
-
-    #[setter]
-    pub fn set_enabled(&mut self, value: bool) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.blocks.instructions.enabled = value;
-    }
-}
-
-#[pyclass]
-pub struct ConfigFunctionBlocks {
-    pub inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigFunctionBlocks {
-    #[getter]
-    pub fn get_enabled(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
-        inner.functions.blocks.enabled
-    }
-
-    #[setter]
-    pub fn set_enabled(&mut self, value: bool) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.functions.blocks.enabled = value;
-    }
-}
-
-#[pyclass]
 pub struct ConfigChromosomes {
     inner: Arc<Mutex<InnerConfig>>,
 }
@@ -314,13 +274,6 @@ impl ConfigFunctions {
     }
 
     #[getter]
-    pub fn get_blocks(&self) -> ConfigFunctionBlocks {
-        ConfigFunctionBlocks {
-            inner: Arc::clone(&self.inner),
-        }
-    }
-
-    #[getter]
     pub fn get_hashing(&self) -> ConfigFunctionsHashing {
         ConfigFunctionsHashing {
             inner: Arc::clone(&self.inner),
@@ -534,13 +487,6 @@ impl ConfigBlocks {
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
         inner.blocks.enabled = value;
-    }
-
-    #[getter]
-    pub fn get_instructions(&self) -> ConfigBlockInstructions {
-        ConfigBlockInstructions {
-            inner: Arc::clone(&self.inner),
-        }
     }
 
     #[getter]
