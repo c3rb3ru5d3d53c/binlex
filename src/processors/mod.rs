@@ -20,59 +20,41 @@ pub enum ProcessorTarget {
     Function,
 }
 
+pub trait EntityProcessor: Send + Sync {
+    fn name(&self) -> &'static str;
+    fn enabled_for_target(&self, config: &Config, target: ProcessorTarget) -> bool;
+    fn process_block(&self, _block: &Block<'_>) -> Option<Value> {
+        None
+    }
+    fn process_function(&self, _function: &Function<'_>) -> Option<Value> {
+        None
+    }
+}
+
 pub type ProcessorOutputs = Vec<(&'static str, Value)>;
 
 #[cfg(not(target_os = "windows"))]
 pub fn enabled_processors_for_target(
     config: &Config,
     target: ProcessorTarget,
-) -> Vec<&'static str> {
-    let mut processors = Vec::new();
-    if config.processors.enabled
-        && config.processors.vex.enabled
-        && match target {
-            ProcessorTarget::Instruction => config.processors.vex.instructions.enabled,
-            ProcessorTarget::Block => config.processors.vex.blocks.enabled,
-            ProcessorTarget::Function => config.processors.vex.functions.enabled,
-        }
-    {
-        processors.push("vex");
-    }
-    processors
+) -> Vec<&'static dyn EntityProcessor> {
+    available_entity_processors()
+        .into_iter()
+        .filter(|processor| processor.enabled_for_target(config, target))
+        .collect()
 }
 
 #[cfg(target_os = "windows")]
 pub fn enabled_processors_for_target(
     _config: &Config,
     _target: ProcessorTarget,
-) -> Vec<&'static str> {
+) -> Vec<&'static dyn EntityProcessor> {
     Vec::new()
 }
 
 #[cfg(not(target_os = "windows"))]
-pub fn process_block(block: &Block<'_>, processor_name: &str) -> Option<Value> {
-    match processor_name {
-        "vex" => vex::process_block(block),
-        _ => None,
-    }
-}
-
-#[cfg(target_os = "windows")]
-pub fn process_block(_block: &Block<'_>, _processor_name: &str) -> Option<Value> {
-    None
-}
-
-#[cfg(not(target_os = "windows"))]
-pub fn process_function(function: &Function<'_>, processor_name: &str) -> Option<Value> {
-    match processor_name {
-        "vex" => vex::process_function(function),
-        _ => None,
-    }
-}
-
-#[cfg(target_os = "windows")]
-pub fn process_function(_function: &Function<'_>, _processor_name: &str) -> Option<Value> {
-    None
+fn available_entity_processors() -> Vec<&'static dyn EntityProcessor> {
+    vec![&vex::VexProcessor]
 }
 
 pub fn apply_output(outputs: &mut BTreeMap<String, Value>, processor_name: &str, output: &Value) {

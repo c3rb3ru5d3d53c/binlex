@@ -8,6 +8,7 @@ use crate::controlflow::{Block, Function};
 use crate::lifters::vex::{VexLiftRequest, VexLiftResponse};
 use crate::processing::error::ProcessorError;
 use crate::processing::processor::Processor;
+use crate::processors::{EntityProcessor, ProcessorTarget};
 
 const BUFFER_PADDING: usize = 64;
 
@@ -73,32 +74,54 @@ impl VexProcessor {
             ir,
         })
     }
+
+    pub fn process_function(function: &Function<'_>) -> Option<Value> {
+        let bytes = function.bytes()?;
+        let mut lifter = crate::lifters::vex::Lifter::new(
+            function.architecture(),
+            &bytes,
+            function.address(),
+            function.cfg.config.clone(),
+        )
+        .ok()?;
+        let vex = lifter.process().ok()?;
+        Some(json!({ "ir": vex.ir }))
+    }
+
+    pub fn process_block(block: &Block<'_>) -> Option<Value> {
+        let bytes = block.bytes();
+        let mut lifter = crate::lifters::vex::Lifter::new(
+            block.architecture(),
+            &bytes,
+            block.address(),
+            block.cfg.config.clone(),
+        )
+        .ok()?;
+        let vex = lifter.process().ok()?;
+        Some(json!({ "ir": vex.ir }))
+    }
 }
 
-#[cfg(not(target_os = "windows"))]
-pub fn process_function(function: &Function<'_>) -> Option<Value> {
-    let bytes = function.bytes()?;
-    let mut lifter = crate::lifters::vex::Lifter::new(
-        function.architecture(),
-        &bytes,
-        function.address(),
-        function.cfg.config.clone(),
-    )
-    .ok()?;
-    let vex = lifter.process().ok()?;
-    Some(json!({ "ir": vex.ir }))
-}
+impl EntityProcessor for VexProcessor {
+    fn name(&self) -> &'static str {
+        Self::NAME
+    }
 
-#[cfg(not(target_os = "windows"))]
-pub fn process_block(block: &Block<'_>) -> Option<Value> {
-    let bytes = block.bytes();
-    let mut lifter = crate::lifters::vex::Lifter::new(
-        block.architecture(),
-        &bytes,
-        block.address(),
-        block.cfg.config.clone(),
-    )
-    .ok()?;
-    let vex = lifter.process().ok()?;
-    Some(json!({ "ir": vex.ir }))
+    fn enabled_for_target(&self, config: &crate::Config, target: ProcessorTarget) -> bool {
+        config.processors.enabled
+            && config.processors.vex.enabled
+            && match target {
+                ProcessorTarget::Instruction => config.processors.vex.instructions.enabled,
+                ProcessorTarget::Block => config.processors.vex.blocks.enabled,
+                ProcessorTarget::Function => config.processors.vex.functions.enabled,
+            }
+    }
+
+    fn process_block(&self, block: &Block<'_>) -> Option<Value> {
+        Self::process_block(block)
+    }
+
+    fn process_function(&self, function: &Function<'_>) -> Option<Value> {
+        Self::process_function(function)
+    }
 }
