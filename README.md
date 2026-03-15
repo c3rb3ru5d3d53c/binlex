@@ -103,15 +103,19 @@ The resulting packages will be in the `target/` directory.
 
 ### IDA Plugin
 
-Installing the IDA plugin is easy to install, just make sure you installed the Python bindings in the Python environment for IDA.
-
-Now copy the directory for the **binlex** plugin to your plugin directory.
+Install the Python bindings for **binlex** into the Python environment used by IDA first, then install the plugin from the repository package root at `plugins/ida`.
 
 ```bash
-mkdir -p ~/.idapro/plugins/
-cp -r scripts/plugins/ida/binlex/ ~/.idapro/plugins/
-cd ~/.idaapro/plugins/binlex/
-pip install -r requirements.txt
+cd plugins/ida/
+pip install .
+python -m plugin install
+```
+
+You can inspect or override the detected plugin target directory if needed.
+
+```bash
+python -m plugin print-target
+python -m plugin install --target ~/.config/idapro/plugins/
 ```
 
 You will also need to ensure the server is running, GPU hardware is recommended for faster GNN inference but not required.
