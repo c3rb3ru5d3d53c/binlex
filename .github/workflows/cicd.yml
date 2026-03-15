@@ -323,7 +323,7 @@ jobs:
           python -m pip install maturin
 
       - name: Build Rust API Docs
-        run: cargo doc --workspace --no-deps
+        run: cargo doc -p binlex --no-deps
 
       - name: Build Python API Docs
         run: |
