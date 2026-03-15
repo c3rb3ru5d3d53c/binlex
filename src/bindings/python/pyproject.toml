@@ -6,6 +6,13 @@ description = "A Binary Genetic Traits Lexer Framework"
 keywords = ["malware", "genomics", "binary similarity", "cybersecurity", "research"]
 classifiers = [
     "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Programming Language :: Rust",
     "Topic :: Security",
     "License :: OSI Approved :: MIT License"

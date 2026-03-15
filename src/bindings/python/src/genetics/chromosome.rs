@@ -59,8 +59,8 @@ impl Chromosome {
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn number_of_mutations(&self) -> usize {
-        self.inner.lock().unwrap().number_of_mutations()
+    pub fn mutations(&self) -> usize {
+        self.inner.lock().unwrap().mutations()
     }
 
     #[pyo3(text_signature = "($self, pattern)")]

@@ -77,7 +77,7 @@ impl Chromosome {
         })
     }
 
-    pub fn number_of_mutations(&self) -> usize {
+    pub fn mutations(&self) -> usize {
         self.number_of_mutations
     }
 

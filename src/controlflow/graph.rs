@@ -404,6 +404,10 @@ impl Graph {
         &self.listing
     }
 
+    pub fn mutations(&self) -> u64 {
+        self.revision.load(Ordering::SeqCst)
+    }
+
     pub fn set_function(&mut self, address: u64) -> bool {
         let mut instruction = match self.get_instruction(address) {
             Some(instruction) => instruction,

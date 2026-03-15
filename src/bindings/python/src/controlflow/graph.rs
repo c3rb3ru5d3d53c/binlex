@@ -256,6 +256,11 @@ impl Graph {
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
+    #[pyo3(text_signature = "($self)")]
+    pub fn mutations(&self) -> u64 {
+        self.inner.lock().unwrap().mutations()
+    }
+
     #[getter]
     pub fn get_queue_instructions(&self, py: Python) -> Py<GraphQueue> {
         Py::new(
