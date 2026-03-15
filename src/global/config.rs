@@ -34,16 +34,6 @@ pub const AUTHOR: &str = "@c3rb3ru5d3d53c";
 pub const DIRECTORY: &str = "binlex";
 pub const FILE_NAME: &str = "binlex.toml";
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigBlockInstructions {
-    pub enabled: bool,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigFunctionBlocks {
-    pub enabled: bool,
-}
-
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct ConfigProcessorTarget {
     pub enabled: bool,
@@ -70,7 +60,6 @@ pub struct ConfigInstructions {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigBlocks {
     pub enabled: bool,
-    pub instructions: ConfigBlockInstructions,
     pub hashing: ConfigHashing,
     pub entropy: ConfigHeuristicEntropy,
 }
@@ -85,7 +74,6 @@ pub struct ConfigChromosomes {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigFunctions {
     pub enabled: bool,
-    pub blocks: ConfigFunctionBlocks,
     pub hashing: ConfigHashing,
     pub entropy: ConfigHeuristicEntropy,
 }
@@ -235,7 +223,6 @@ impl Config {
             instructions: ConfigInstructions { enabled: false },
             blocks: ConfigBlocks {
                 enabled: true,
-                instructions: ConfigBlockInstructions { enabled: false },
                 hashing: ConfigHashing {
                     sha256: ConfigSHA256 { enabled: true },
                     tlsh: ConfigTLSH {
@@ -255,7 +242,6 @@ impl Config {
             },
             functions: ConfigFunctions {
                 enabled: true,
-                blocks: ConfigFunctionBlocks { enabled: true },
                 hashing: ConfigHashing {
                     sha256: ConfigSHA256 { enabled: true },
                     tlsh: ConfigTLSH {
@@ -307,9 +293,8 @@ impl Config {
         self.general.minimal = true;
         self.disable_heuristics();
         self.disable_hashing();
-        self.functions.blocks.enabled = false;
         self.instructions.enabled = false;
-        self.blocks.instructions.enabled = false;
+        self.disassembler.sweep.enabled = false;
     }
 
     pub fn disable_hashing(&mut self) {

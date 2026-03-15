@@ -91,20 +91,15 @@ pub struct Args {
     #[arg(long, default_value_t = false)]
     pub enable_instructions: bool,
     #[arg(long, default_value_t = false)]
-    pub enable_block_instructions: bool,
-    #[arg(long, default_value_t = false)]
-    pub disable_hashing: bool,
-    #[arg(long, default_value_t = false)]
-    pub disable_disassembler_sweep: bool,
-    #[arg(long, default_value_t = false)]
-    pub disable_function_blocks: bool,
-    #[arg(long, default_value_t = false)]
-    pub disable_heuristics: bool,
-    #[arg(long, default_value_t = false)]
     pub enable_mmap_cache: bool,
     #[arg(long)]
     pub mmap_directory: Option<String>,
-    #[arg(long, value_delimiter = ',')]
+    #[arg(
+        long,
+        value_delimiter = ',',
+        hide_possible_values = true,
+        help = format!("[{}]", ProcessorSelection::to_list())
+    )]
     pub processors: Option<Vec<ProcessorSelection>>,
 }
 
@@ -161,24 +156,12 @@ fn apply_cli_overrides(args: &Args, config: &mut Config) {
         }
     }
 
-    if args.disable_heuristics {
-        config.disable_heuristics();
-    }
-
-    if args.disable_hashing {
-        config.disable_hashing();
-    }
-
     if let Some(mmap_directory) = &args.mmap_directory {
         config.mmap.directory = mmap_directory.clone();
     }
 
     if args.enable_mmap_cache {
         config.mmap.cache.enabled = args.enable_mmap_cache;
-    }
-
-    if args.disable_disassembler_sweep {
-        config.disassembler.sweep.enabled = false;
     }
 
     if args.minimal || config.general.minimal {
@@ -189,13 +172,6 @@ fn apply_cli_overrides(args: &Args, config: &mut Config) {
         config.instructions.enabled = args.enable_instructions;
     }
 
-    if args.enable_block_instructions {
-        config.blocks.instructions.enabled = args.enable_block_instructions;
-    }
-
-    if args.disable_function_blocks {
-        config.functions.blocks.enabled = !args.disable_function_blocks;
-    }
 }
 
 fn get_elf_function_symbols(elf: &ELF, read_stdin: bool) -> BTreeMap<u64, Symbol> {
@@ -1103,11 +1079,6 @@ mod tests {
             minimal: false,
             debug: false,
             enable_instructions: false,
-            enable_block_instructions: false,
-            disable_hashing: false,
-            disable_disassembler_sweep: false,
-            disable_function_blocks: false,
-            disable_heuristics: false,
             enable_mmap_cache: false,
             mmap_directory: None,
             processors: None,

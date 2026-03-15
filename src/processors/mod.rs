@@ -44,6 +44,16 @@ pub enum ProcessorSelection {
     Vex,
 }
 
+impl ProcessorSelection {
+    pub fn to_vec() -> Vec<String> {
+        vec![ProcessorSelection::Vex.to_possible_value().unwrap().get_name().to_string()]
+    }
+
+    pub fn to_list() -> String {
+        ProcessorSelection::to_vec().join(", ")
+    }
+}
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum ProcessorTarget {
     Instruction,

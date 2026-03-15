@@ -286,10 +286,6 @@ Options:
       --minimal
   -d, --debug
       --enable-instructions
-      --enable-block-instructions
-      --disable-hashing
-      --disable-disassembler-sweep
-      --disable-heuristics
       --enable-mmap-cache
       --mmap-directory <MMAP_DIRECTORY>
   -h, --help                             Print help
@@ -342,9 +338,6 @@ enabled = false
 [blocks]
 enabled = true
 
-[blocks.instructions]
-enabled = false
-
 [blocks.hashing.sha256]
 enabled = true
 
@@ -364,9 +357,6 @@ seed = 0
 enabled = true
 
 [functions]
-enabled = true
-
-[functions.blocks]
 enabled = true
 
 [functions.hashing.sha256]
