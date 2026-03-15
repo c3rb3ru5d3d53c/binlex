@@ -418,6 +418,99 @@ binlex -c config.toml -i sample.dll
 
 When you run **binlex**, it uses the configuration file and overrides any settings when the respective command-line parameter is used.
 
+### Writing a Custom Processor
+
+If you want to attach your own analysis output to instructions, blocks, or functions, add a processor under `src/processors/` and register it in `src/processors/mod.rs`.
+
+The moving parts are:
+- A processor type implementing the `Processor` trait
+- Request and response enums that can be serialized with `serde`
+- Optional `process_instruction`, `process_block`, and `process_function` helpers that return JSON
+- A `crate::processor!(...)` registration block describing defaults and supported operating systems
+
+This is best for libraries that are poorly developed with error handling that call `abort()` for example without letting the developer choose when to properly exit, resulting in the termination of the processes using said library code.
+
+Below is a minimal skeleton you can use as a starting point.
+
+```rust
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+
+use crate::controlflow::{Block, Function, Instruction};
+use crate::processing::error::ProcessorError;
+use crate::processing::processor::Processor;
+
+#[derive(Serialize, Deserialize, Clone)]
+pub enum ExampleRequest {
+    Analyze { bytes: Vec<u8> },
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub enum ExampleResponse {
+    Analyze { score: u32 },
+}
+
+pub struct ExampleProcessor;
+
+impl Processor for ExampleProcessor {
+    const NAME: &'static str = "example";
+    type Request = ExampleRequest;
+    type Response = ExampleResponse;
+
+    fn process_request(&self, request: Self::Request) -> Result<Self::Response, ProcessorError> {
+        match request {
+            ExampleRequest::Analyze { bytes } => Ok(ExampleResponse::Analyze {
+                score: bytes.len() as u32,
+            }),
+        }
+    }
+}
+
+impl ExampleProcessor {
+    pub fn process_instruction(instruction: &Instruction) -> Option<Value> {
+        Some(json!({
+            "size": instruction.bytes.len(),
+            "address": instruction.address
+        }))
+    }
+
+    pub fn process_block(block: &Block<'_>) -> Option<Value> {
+        Some(json!({
+            "size": block.size(),
+            "instructions": block.instruction_addresses()
+        }))
+    }
+
+    pub fn process_function(function: &Function<'_>) -> Option<Value> {
+        Some(json!({
+            "blocks": function.block_addresses(),
+            "number_of_instructions": function.number_of_instructions()
+        }))
+    }
+}
+
+crate::processor!(ExampleProcessor {
+    os: [linux, macos],
+    enabled: false,
+    instructions: { enabled: false },
+    blocks: { enabled: false },
+    functions: { enabled: true },
+});
+```
+
+To wire it into the project:
+1. Create `src/processors/example.rs` with the skeleton above.
+2. Add `pub mod example;` to `src/processors/mod.rs`.
+3. Add the registration to `PROCESSOR_REGISTRATIONS`, for example `vec![vex::registration(), example::registration()]`.
+4. Extend `ProcessorSelection` with `Example` if you want it selectable from `binlex --processors`.
+5. Build `binlex` and `binlex-processor`, then enable the processor in config or with `--processors example`.
+
+Notes:
+- `Processor::process_request` is used by the out-of-process worker protocol.
+- The `process_instruction`, `process_block`, and `process_function` helpers define the JSON that gets attached under `.processors.<name>`.
+- Keep outputs compact; every emitted value is serialized into the JSON stream.
+- Use `config.processors.path` if your processor worker binary lives outside the default search path.
+
 ### Making a YARA Rule
 
 Here is a general workflow getting started with making YARA rules, where we get 10 unique wildcarded YARA hex strings from a given sample.
