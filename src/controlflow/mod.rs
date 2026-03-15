@@ -36,6 +36,8 @@ pub use block::BlockJsonDeserializer;
 pub use function::Function;
 pub use function::FunctionJson;
 pub use function::FunctionJsonDeserializer;
+pub use function::FunctionLiftersJson;
+pub use function::FunctionVexLifterJson;
 pub use graph::Graph;
 pub use graph::GraphQueue;
 pub use instruction::Instruction;

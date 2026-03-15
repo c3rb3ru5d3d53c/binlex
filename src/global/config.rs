@@ -43,6 +43,11 @@ pub struct ConfigFunctionBlocks {
     pub enabled: bool,
 }
 
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+pub struct ConfigProcessorTarget {
+    pub enabled: bool,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigInstructions {
     pub enabled: bool,
@@ -53,13 +58,14 @@ pub struct ConfigBlocks {
     pub enabled: bool,
     pub instructions: ConfigBlockInstructions,
     pub hashing: ConfigHashing,
-    pub heuristics: ConfigEntropyHeuristics,
+    pub entropy: ConfigHeuristicEntropy,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigChromosomes {
     pub hashing: ConfigHashing,
-    pub heuristics: ConfigChromosomeHeuristics,
+    pub features: ConfigHeuristicFeatures,
+    pub entropy: ConfigHeuristicEntropy,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -67,13 +73,13 @@ pub struct ConfigFunctions {
     pub enabled: bool,
     pub blocks: ConfigFunctionBlocks,
     pub hashing: ConfigHashing,
-    pub heuristics: ConfigEntropyHeuristics,
+    pub entropy: ConfigHeuristicEntropy,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigFile {
     pub hashing: ConfigFileHashing,
-    pub heuristics: ConfigEntropyHeuristics,
+    pub entropy: ConfigHeuristicEntropy,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -96,6 +102,14 @@ pub struct Config {
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+pub struct ConfigProcessorsVex {
+    pub enabled: bool,
+    pub instructions: ConfigProcessorTarget,
+    pub blocks: ConfigProcessorTarget,
+    pub functions: ConfigProcessorTarget,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct ConfigProcessors {
     pub enabled: bool,
     pub path: Option<String>,
@@ -105,6 +119,8 @@ pub struct ConfigProcessors {
     pub max_payload_bytes: usize,
     pub idle_timeout_ms: u64,
     pub max_queue_depth: usize,
+    #[serde(default)]
+    pub vex: ConfigProcessorsVex,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -115,17 +131,6 @@ pub struct ConfigDisassembler {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigDisassemblerSweep {
     pub enabled: bool,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigChromosomeHeuristics {
-    pub features: ConfigHeuristicFeatures,
-    pub entropy: ConfigHeuristicEntropy,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigEntropyHeuristics {
-    pub entropy: ConfigHeuristicEntropy,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -208,9 +213,7 @@ impl Config {
                             minimum_byte_size: 50,
                         },
                     },
-                    heuristics: ConfigEntropyHeuristics {
-                        entropy: ConfigHeuristicEntropy { enabled: true },
-                    },
+                    entropy: ConfigHeuristicEntropy { enabled: true },
                 },
             },
             instructions: ConfigInstructions { enabled: false },
@@ -232,9 +235,7 @@ impl Config {
                         seed: 0,
                     },
                 },
-                heuristics: ConfigEntropyHeuristics {
-                    entropy: ConfigHeuristicEntropy { enabled: true },
-                },
+                entropy: ConfigHeuristicEntropy { enabled: true },
             },
             functions: ConfigFunctions {
                 enabled: true,
@@ -254,9 +255,7 @@ impl Config {
                         seed: 0,
                     },
                 },
-                heuristics: ConfigEntropyHeuristics {
-                    entropy: ConfigHeuristicEntropy { enabled: true },
-                },
+                entropy: ConfigHeuristicEntropy { enabled: true },
             },
             chromosomes: ConfigChromosomes {
                 hashing: ConfigHashing {
@@ -274,10 +273,8 @@ impl Config {
                         seed: 0,
                     },
                 },
-                heuristics: ConfigChromosomeHeuristics {
-                    features: ConfigHeuristicFeatures { enabled: true },
-                    entropy: ConfigHeuristicEntropy { enabled: true },
-                },
+                features: ConfigHeuristicFeatures { enabled: false },
+                entropy: ConfigHeuristicEntropy { enabled: true },
             },
             mmap: ConfigMmap {
                 directory: Config::default_file_mapping_directory(),
@@ -307,8 +304,8 @@ impl Config {
     }
 
     pub fn disable_chromosome_heuristics(&mut self) {
-        self.chromosomes.heuristics.entropy.enabled = false;
-        self.chromosomes.heuristics.features.enabled = false;
+        self.chromosomes.entropy.enabled = false;
+        self.chromosomes.features.enabled = false;
     }
 
     pub fn disable_block_hashing(&mut self) {
@@ -323,7 +320,7 @@ impl Config {
     }
 
     pub fn disable_file_heuristics(&mut self) {
-        self.formats.file.heuristics.entropy.enabled = false;
+        self.formats.file.entropy.enabled = false;
     }
 
     pub fn disable_heuristics(&mut self) {
@@ -346,11 +343,11 @@ impl Config {
     }
 
     pub fn disable_block_heuristics(&mut self) {
-        self.blocks.heuristics.entropy.enabled = false;
+        self.blocks.entropy.enabled = false;
     }
 
     pub fn disable_function_heuristics(&mut self) {
-        self.functions.heuristics.entropy.enabled = false;
+        self.functions.entropy.enabled = false;
     }
 
     // Get Default File Mapping Directory
@@ -461,6 +458,18 @@ impl Default for ConfigProcessors {
             max_payload_bytes: 4 * 1024 * 1024,
             idle_timeout_ms: 30_000,
             max_queue_depth: 2 * 64,
+            vex: ConfigProcessorsVex::default(),
+        }
+    }
+}
+
+impl Default for ConfigProcessorsVex {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            instructions: ConfigProcessorTarget { enabled: false },
+            blocks: ConfigProcessorTarget { enabled: false },
+            functions: ConfigProcessorTarget { enabled: true },
         }
     }
 }

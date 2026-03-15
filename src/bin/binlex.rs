@@ -43,6 +43,7 @@ use binlex::io::JSON;
 use binlex::io::Stderr;
 use binlex::io::Stdin;
 use binlex::io::Stdout;
+use binlex::processors::ProcessorSelection;
 use binlex::types::LZ4String;
 use clap::Parser;
 use rayon::ThreadPoolBuilder;
@@ -55,7 +56,7 @@ use std::fs::File;
 use std::io::Write;
 use std::process;
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[command(
     name = "binlex",
     version = VERSION,
@@ -101,6 +102,8 @@ pub struct Args {
     pub enable_mmap_cache: bool,
     #[arg(long)]
     pub mmap_directory: Option<String>,
+    #[arg(long, value_delimiter = ',')]
+    pub processors: Option<Vec<ProcessorSelection>>,
 }
 
 fn validate_args(args: &Args) {
@@ -114,10 +117,74 @@ fn validate_args(args: &Args) {
         }
     }
 
+    if let Some(processors) = &args.processors {
+        let mut unique_processors = HashSet::new();
+        for processor in processors {
+            if !unique_processors.insert(*processor) {
+                eprintln!("processors must be unique");
+                process::exit(1);
+            }
+        }
+    }
+
     if args.stdin && Stdin::is_terminal() {
         eprintln!("--stdin requires piped standard input");
         process::exit(1);
     }
+}
+
+fn active_processors(args: &Args, config: &Config) -> HashSet<ProcessorSelection> {
+    if let Some(processors) = &args.processors {
+        return processors.iter().copied().collect();
+    }
+
+    if !config.processors.enabled {
+        return HashSet::new();
+    }
+
+    let mut active = HashSet::new();
+    if config.processors.vex.enabled {
+        active.insert(ProcessorSelection::Vex);
+    }
+    active
+}
+
+#[cfg(not(target_os = "windows"))]
+fn enrich_function_with_processors(
+    mut json: binlex::controlflow::function::FunctionJson,
+    function: &Function<'_>,
+    active_processors: &HashSet<ProcessorSelection>,
+) -> binlex::controlflow::function::FunctionJson {
+    if active_processors.contains(&ProcessorSelection::Vex)
+        && function.cfg.config.processors.vex.functions.enabled
+        && json.contiguous
+    {
+        if let Some(bytes) = function.bytes() {
+            if let Ok(mut lifter) = binlex::lifters::vex::Lifter::new(
+                function.architecture(),
+                &bytes,
+                function.address(),
+                function.cfg.config.clone(),
+            ) {
+                if let Ok(vex) = lifter.process() {
+                    json.lifters
+                        .get_or_insert_with(binlex::controlflow::function::FunctionLiftersJson::default)
+                        .vex = Some(vex.into());
+                }
+            }
+        }
+    }
+
+    json
+}
+
+#[cfg(target_os = "windows")]
+fn enrich_function_with_processors(
+    json: binlex::controlflow::function::FunctionJson,
+    _function: &Function<'_>,
+    _active_processors: &HashSet<ProcessorSelection>,
+) -> binlex::controlflow::function::FunctionJson {
+    json
 }
 
 fn get_elf_function_symbols(elf: &ELF, read_stdin: bool) -> BTreeMap<u64, Symbol> {
@@ -384,11 +451,13 @@ fn get_pe_function_symbols(pe: &PE, read_stdin: bool) -> BTreeMap<u64, Symbol> {
 }
 
 fn process_output(
+    args: &Args,
     output: Option<String>,
     cfg: &Graph,
     attributes: &Attributes,
     function_symbols: &BTreeMap<u64, Symbol>,
 ) {
+    let active_processors = active_processors(args, &cfg.config);
     let mut instructions = Vec::<LZ4String>::new();
 
     if cfg.config.instructions.enabled {
@@ -446,7 +515,7 @@ fn process_output(
     let mut functions = Vec::<LZ4String>::new();
 
     if cfg.config.functions.enabled {
-        functions = cfg
+        let function_outputs = cfg
             .functions
             .valid()
             .iter()
@@ -454,7 +523,7 @@ fn process_output(
             .collect::<Vec<u64>>()
             .par_iter()
             .filter_map(|address| Function::new(*address, cfg).ok())
-            .filter_map(|function| {
+            .map(|function| {
                 let mut function_attributes = Attributes::new();
                 let symbol = function_symbols.get(&function.address);
                 if let Some(symbol) = symbol {
@@ -463,9 +532,15 @@ fn process_output(
                 for attribute in &attributes.values {
                     function_attributes.push(attribute.clone());
                 }
-                function.json_with_attributes(function_attributes).ok()
+                let raw = function.process_with_attributes(function_attributes);
+                enrich_function_with_processors(raw, &function, &active_processors)
             })
-            .map(|js| LZ4String::new(&js))
+            .filter_map(|raw| serde_json::to_string(&raw).ok())
+            .collect::<Vec<String>>();
+
+        functions = function_outputs
+            .iter()
+            .map(|js| LZ4String::new(js))
             .collect();
     }
 
@@ -518,6 +593,7 @@ fn process_output(
 }
 
 fn process_pe(
+    args: &Args,
     input: String,
     config: Config,
     tags: Option<Vec<String>>,
@@ -635,10 +711,11 @@ fn process_pe(
         process::exit(1);
     }
 
-    process_output(output, &cfg, &attributes, &function_symbols);
+    process_output(args, output, &cfg, &attributes, &function_symbols);
 }
 
 fn process_elf(
+    args: &Args,
     input: String,
     config: Config,
     tags: Option<Vec<String>>,
@@ -711,10 +788,16 @@ fn process_elf(
             process::exit(1);
         });
 
-    process_output(output, &cfg, &attributes, &function_symbols);
+    process_output(args, output, &cfg, &attributes, &function_symbols);
 }
 
-fn process_code(input: String, config: Config, architecture: Architecture, output: Option<String>) {
+fn process_code(
+    args: &Args,
+    input: String,
+    config: Config,
+    architecture: Architecture,
+    output: Option<String>,
+) {
     let mut attributes = Attributes::new();
 
     let mut file = BLFile::new(input, config.clone()).unwrap_or_else(|error| {
@@ -786,10 +869,11 @@ fn process_code(input: String, config: Config, architecture: Architecture, outpu
 
     let function_symbols = BTreeMap::<u64, Symbol>::new();
 
-    process_output(output, &cfg, &attributes, &function_symbols);
+    process_output(args, output, &cfg, &attributes, &function_symbols);
 }
 
 fn process_macho(
+    args: &Args,
     input: String,
     config: Config,
     tags: Option<Vec<String>>,
@@ -869,7 +953,7 @@ fn process_macho(
                 process::exit(1);
             });
 
-        process_output(output.clone(), &cfg, &attributes, &function_symbols);
+        process_output(args, output.clone(), &cfg, &attributes, &function_symbols);
     }
 }
 
@@ -883,7 +967,7 @@ fn main() {
     let _ = config.write_default();
 
     if args.config.is_some() {
-        match Config::from_file(&args.config.unwrap().to_string()) {
+        match Config::from_file(&args.config.clone().unwrap().to_string()) {
             Ok(result) => {
                 config = result;
             }
@@ -914,7 +998,7 @@ fn main() {
     }
 
     if args.mmap_directory.is_some() {
-        config.mmap.directory = args.mmap_directory.unwrap();
+        config.mmap.directory = args.mmap_directory.clone().unwrap();
     }
 
     if args.enable_mmap_cache {
@@ -962,15 +1046,36 @@ fn main() {
         match format {
             Magic::PE => {
                 Stderr::print_debug(config.clone(), "processing pe");
-                process_pe(args.input, config, args.tags, args.output, args.stdin);
+                process_pe(
+                    &args,
+                    args.input.clone(),
+                    config,
+                    args.tags.clone(),
+                    args.output.clone(),
+                    args.stdin,
+                );
             }
             Magic::ELF => {
                 Stderr::print_debug(config.clone(), "processing elf");
-                process_elf(args.input, config, args.tags, args.output, args.stdin);
+                process_elf(
+                    &args,
+                    args.input.clone(),
+                    config,
+                    args.tags.clone(),
+                    args.output.clone(),
+                    args.stdin,
+                );
             }
             Magic::MACHO => {
                 Stderr::print_debug(config.clone(), "processing macho");
-                process_macho(args.input, config, args.tags, args.output, args.stdin);
+                process_macho(
+                    &args,
+                    args.input.clone(),
+                    config,
+                    args.tags.clone(),
+                    args.output.clone(),
+                    args.stdin,
+                );
             }
             _ => {
                 eprintln!("unable to identify file format");
@@ -982,7 +1087,13 @@ fn main() {
         match architecture {
             Architecture::AMD64 | Architecture::I386 | Architecture::CIL => {
                 Stderr::print_debug(config.clone(), "processing code");
-                process_code(args.input, config, architecture, args.output);
+                process_code(
+                    &args,
+                    args.input.clone(),
+                    config,
+                    architecture,
+                    args.output.clone(),
+                );
             }
             _ => {
                 eprintln!("unsupported architecture");

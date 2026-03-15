@@ -53,12 +53,16 @@ pub struct FileJson {
     /// The identified file magic.
     pub magic: String,
     /// The SHA-256 hash of the file, if available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sha256: Option<String>,
     /// The TLSH (Trend Micro Locality Sensitive Hash) of the file, if available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tlsh: Option<String>,
     /// The File Size,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub size: Option<u64>,
     // The File Entropy
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub entropy: Option<f64>,
 }
 
@@ -260,7 +264,7 @@ impl File {
     }
 
     pub fn entropy(&self) -> Option<f64> {
-        if !self.config.formats.file.heuristics.entropy.enabled {
+        if !self.config.formats.file.entropy.enabled {
             return None;
         }
         entropy::shannon(&self.data)

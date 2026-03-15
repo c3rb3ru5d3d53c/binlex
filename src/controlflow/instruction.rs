@@ -113,14 +113,19 @@ pub struct InstructionJson {
     /// The chromosome
     pub chromosome: ChromosomeJson,
     /// A set of functions that this instruction may belong to.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub functions: BTreeSet<u64>,
     /// A set of addresses for the blocks this instruction may branch to.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub blocks: BTreeSet<u64>,
     /// A set of addresses this instruction may jump or branch to.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub to: BTreeSet<u64>,
     /// The address of the next sequential instruction, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next: Option<u64>,
     /// Attributes
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attributes: Option<Value>,
 }
 

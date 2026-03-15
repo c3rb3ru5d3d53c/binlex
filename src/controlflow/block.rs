@@ -52,8 +52,10 @@ pub struct BlockJson {
     /// The starting address of the block.
     pub address: u64,
     /// The address of the next sequential block, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next: Option<u64>,
     /// A set of addresses this block may branch or jump to.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub to: BTreeSet<u64>,
     /// The number of edges (connections) this block has.
     pub edges: usize,
@@ -68,24 +70,32 @@ pub struct BlockJson {
     /// The raw bytes of the block in hexadecimal format.
     pub bytes: String,
     /// A map of function addresses related to this block.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub functions: BTreeMap<u64, u64>,
     // Blocks this blocks has as children.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub blocks: BTreeSet<u64>,
     /// The number of instructions in this block.
     pub number_of_instructions: usize,
     /// Instructions assocated with this block.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub instructions: Vec<InstructionJson>,
     /// The entropy of the block, if enabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub entropy: Option<f64>,
     /// The SHA-256 hash of the block, if enabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sha256: Option<String>,
     /// The MinHash of the block, if enabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub minhash: Option<String>,
     /// The TLSH of the block, if enabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tlsh: Option<String>,
     /// Indicates whether the block is contiguous.
     pub contiguous: bool,
     /// Attributes
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attributes: Option<Value>,
 }
 
@@ -333,7 +343,7 @@ impl<'block> Block<'block> {
         let instructions = self.instructions_json();
         let functions = self.functions();
         let blocks = self.blocks();
-        let entropy = if self.cfg.config.blocks.heuristics.entropy.enabled {
+        let entropy = if self.cfg.config.blocks.entropy.enabled {
             entropy::shannon(&bytes)
         } else {
             None
@@ -581,7 +591,7 @@ impl<'block> Block<'block> {
     ///
     /// Returns `Some(f64)` containing the entropy, or `None` if entropy calculation is disabled.
     pub fn entropy(&self) -> Option<f64> {
-        if !self.cfg.config.blocks.heuristics.entropy.enabled {
+        if !self.cfg.config.blocks.entropy.enabled {
             return None;
         }
         entropy::shannon(&self.bytes())

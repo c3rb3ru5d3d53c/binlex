@@ -78,21 +78,6 @@ impl ConfigChromosomes {
         }
     }
     #[getter]
-    pub fn get_heuristics(&self) -> ConfigChromosomesHeuristics {
-        ConfigChromosomesHeuristics {
-            inner: Arc::clone(&self.inner),
-        }
-    }
-}
-
-#[pyclass]
-pub struct ConfigChromosomesHeuristics {
-    pub inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigChromosomesHeuristics {
-    #[getter]
     pub fn get_features(&self) -> ConfigChromosomesHeuristicsFeatures {
         ConfigChromosomesHeuristicsFeatures {
             inner: Arc::clone(&self.inner),
@@ -146,13 +131,13 @@ impl ConfigChromosomesHeuristicsEntropy {
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.chromosomes.heuristics.entropy.enabled
+        inner.chromosomes.entropy.enabled
     }
 
     #[setter]
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.heuristics.entropy.enabled = value;
+        inner.chromosomes.entropy.enabled = value;
     }
 }
 
@@ -166,13 +151,13 @@ impl ConfigChromosomesHeuristicsFeatures {
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.chromosomes.heuristics.features.enabled
+        inner.chromosomes.features.enabled
     }
 
     #[setter]
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.heuristics.features.enabled = value;
+        inner.chromosomes.features.enabled = value;
     }
 }
 
@@ -343,21 +328,6 @@ impl ConfigFunctions {
     }
 
     #[getter]
-    pub fn get_heuristics(&self) -> ConfigFunctionsHeuristics {
-        ConfigFunctionsHeuristics {
-            inner: Arc::clone(&self.inner),
-        }
-    }
-}
-
-#[pyclass]
-pub struct ConfigFunctionsHeuristics {
-    pub inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigFunctionsHeuristics {
-    #[getter]
     pub fn get_entropy(&self) -> ConfigFunctionsHeuristicsEntropy {
         ConfigFunctionsHeuristicsEntropy {
             inner: Arc::clone(&self.inner),
@@ -404,13 +374,13 @@ impl ConfigFunctionsHeuristicsEntropy {
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.functions.heuristics.entropy.enabled
+        inner.functions.entropy.enabled
     }
 
     #[setter]
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.functions.heuristics.entropy.enabled = value;
+        inner.functions.entropy.enabled = value;
     }
 }
 
@@ -581,8 +551,8 @@ impl ConfigBlocks {
     }
 
     #[getter]
-    pub fn get_heuristics(&self) -> ConfigBlocksHeuristics {
-        ConfigBlocksHeuristics {
+    pub fn get_entropy(&self) -> ConfigBlocksHeuristicsEntropy {
+        ConfigBlocksHeuristicsEntropy {
             inner: Arc::clone(&self.inner),
         }
     }
@@ -605,21 +575,6 @@ impl ConfigInstructions {
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
         inner.instructions.enabled = value;
-    }
-}
-
-#[pyclass]
-pub struct ConfigBlocksHeuristics {
-    pub inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigBlocksHeuristics {
-    #[getter]
-    pub fn get_entropy(&self) -> ConfigBlocksHeuristicsEntropy {
-        ConfigBlocksHeuristicsEntropy {
-            inner: Arc::clone(&self.inner),
-        }
     }
 }
 
@@ -662,13 +617,13 @@ impl ConfigBlocksHeuristicsEntropy {
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.blocks.heuristics.entropy.enabled
+        inner.blocks.entropy.enabled
     }
 
     #[setter]
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.blocks.heuristics.entropy.enabled = value;
+        inner.blocks.entropy.enabled = value;
     }
 }
 
@@ -835,21 +790,6 @@ impl ConfigFormatsFile {
         }
     }
     #[getter]
-    pub fn get_heuristics(&self) -> ConfigFormatsFileHeuristics {
-        ConfigFormatsFileHeuristics {
-            inner: Arc::clone(&self.inner),
-        }
-    }
-}
-
-#[pyclass]
-pub struct ConfigFormatsFileHeuristics {
-    pub inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigFormatsFileHeuristics {
-    #[getter]
     pub fn get_entropy(&self) -> ConfigFormatsFileHeuristicsEntropy {
         ConfigFormatsFileHeuristicsEntropy {
             inner: Arc::clone(&self.inner),
@@ -889,13 +829,13 @@ impl ConfigFormatsFileHeuristicsEntropy {
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.formats.file.heuristics.entropy.enabled
+        inner.formats.file.entropy.enabled
     }
 
     #[setter]
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.formats.file.heuristics.entropy.enabled = value;
+        inner.formats.file.entropy.enabled = value;
     }
 }
 
@@ -1249,8 +1189,90 @@ pub struct ConfigProcessors {
     pub inner: Arc<Mutex<InnerConfig>>,
 }
 
+#[pyclass]
+pub struct ConfigProcessorsVex {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pyclass]
+pub struct ConfigProcessorTarget {
+    pub inner: Arc<Mutex<InnerConfig>>,
+    pub kind: &'static str,
+}
+
+#[pymethods]
+impl ConfigProcessorTarget {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        match self.kind {
+            "instructions" => inner.processors.vex.instructions.enabled,
+            "blocks" => inner.processors.vex.blocks.enabled,
+            "functions" => inner.processors.vex.functions.enabled,
+            _ => false,
+        }
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        match self.kind {
+            "instructions" => inner.processors.vex.instructions.enabled = value,
+            "blocks" => inner.processors.vex.blocks.enabled = value,
+            "functions" => inner.processors.vex.functions.enabled = value,
+            _ => {}
+        }
+    }
+}
+
+#[pymethods]
+impl ConfigProcessorsVex {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.processors.vex.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.processors.vex.enabled = value;
+    }
+
+    #[getter]
+    pub fn get_instructions(&self) -> ConfigProcessorTarget {
+        ConfigProcessorTarget {
+            inner: Arc::clone(&self.inner),
+            kind: "instructions",
+        }
+    }
+
+    #[getter]
+    pub fn get_blocks(&self) -> ConfigProcessorTarget {
+        ConfigProcessorTarget {
+            inner: Arc::clone(&self.inner),
+            kind: "blocks",
+        }
+    }
+
+    #[getter]
+    pub fn get_functions(&self) -> ConfigProcessorTarget {
+        ConfigProcessorTarget {
+            inner: Arc::clone(&self.inner),
+            kind: "functions",
+        }
+    }
+}
+
 #[pymethods]
 impl ConfigProcessors {
+    #[getter]
+    pub fn get_vex(&self) -> ConfigProcessorsVex {
+        ConfigProcessorsVex {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
@@ -1352,6 +1374,9 @@ impl ConfigProcessors {
 #[pyo3(name = "config")]
 pub fn config_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Config>()?;
+    m.add_class::<ConfigProcessorTarget>()?;
+    m.add_class::<ConfigProcessors>()?;
+    m.add_class::<ConfigProcessorsVex>()?;
     py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex._global.config", m)?;
