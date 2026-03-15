@@ -53,32 +53,32 @@ name = "binlex"
 path = "src/bin/binlex.rs"
 
 [[bin]]
-name = "blyara"
-path = "src/bin/blyara.rs"
+name = "binlex-yara"
+path = "src/bin/binlex-yara.rs"
 
 [[bin]]
-name = "blpdb"
-path = "src/bin/blpdb.rs"
+name = "binlex-pdb"
+path = "src/bin/binlex-pdb.rs"
 
 [[bin]]
-name = "blrizin"
-path = "src/bin/blrizin.rs"
+name = "binlex-rizin"
+path = "src/bin/binlex-rizin.rs"
 
 [[bin]]
-name = "blimage"
-path = "src/bin/blimage.rs"
+name = "binlex-image"
+path = "src/bin/binlex-image.rs"
 
 [[bin]]
-name = "blhash"
-path = "src/bin/blhash.rs"
+name = "binlex-hash"
+path = "src/bin/binlex-hash.rs"
 
 [[bin]]
-name = "blelfsym"
-path = "src/bin/blelfsym.rs"
+name = "binlex-elf-symbols"
+path = "src/bin/binlex-elf-symbols.rs"
 
 [[bin]]
-name = "blmachosym"
-path = "src/bin/blmachosym.rs"
+name = "binlex-macho-symbols"
+path = "src/bin/binlex-macho-symbols.rs"
 
 [[bin]]
 name = "binlex-processor"

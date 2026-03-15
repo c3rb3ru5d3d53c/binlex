@@ -263,6 +263,42 @@ fn test_function_process_populates_vex_lifters() {
 }
 
 #[test]
+fn test_block_process_populates_vex_lifters() {
+    let graph = test_graph();
+    let instruction = Instruction {
+        architecture: Architecture::AMD64,
+        config: Config::default(),
+        address: 0x5100,
+        is_prologue: false,
+        is_block_start: false,
+        is_function_start: false,
+        bytes: vec![0xC3],
+        pattern: "c3".to_string(),
+        is_return: true,
+        is_call: false,
+        is_jump: false,
+        is_conditional: false,
+        is_trap: false,
+        has_indirect_target: false,
+        functions: BTreeSet::new(),
+        to: BTreeSet::new(),
+        edges: 0,
+    };
+    graph.listing.insert(0x5100, instruction.clone());
+    let block = Block {
+        address: 0x5100,
+        cfg: &graph,
+        terminator: instruction,
+    };
+
+    let json = block.process();
+    let lifters = json.lifters.expect("lifters should be populated");
+    let vex = lifters.vex.expect("vex lifter output should be present");
+
+    assert!(!vex.ir.is_empty());
+}
+
+#[test]
 fn test_function_json_omits_disabled_optional_keys() {
     let mut config = test_config();
     config.chromosomes.features.enabled = false;
@@ -306,8 +342,10 @@ fn test_function_json_omits_disabled_optional_keys() {
             .expect("function json should parse");
 
     assert!(value.get("entropy").is_none());
-    assert!(value
-        .get("chromosome")
-        .and_then(|chromosome| chromosome.get("feature"))
-        .is_none());
+    assert!(
+        value
+            .get("chromosome")
+            .and_then(|chromosome| chromosome.get("feature"))
+            .is_none()
+    );
 }

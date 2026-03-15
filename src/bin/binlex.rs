@@ -80,6 +80,8 @@ pub struct Args {
     pub config: Option<String>,
     #[arg(short, long)]
     pub threads: Option<usize>,
+    #[arg(long)]
+    pub processes: Option<usize>,
     #[arg(long, value_delimiter = ',', default_value = None)]
     pub tags: Option<Vec<String>>,
     #[arg(long, default_value_t = false)]
@@ -127,64 +129,71 @@ fn validate_args(args: &Args) {
         }
     }
 
+    if args.processes == Some(0) {
+        eprintln!("processes must be greater than 0");
+        process::exit(1);
+    }
+
     if args.stdin && Stdin::is_terminal() {
         eprintln!("--stdin requires piped standard input");
         process::exit(1);
     }
 }
 
-fn active_processors(args: &Args, config: &Config) -> HashSet<ProcessorSelection> {
+fn apply_cli_overrides(args: &Args, config: &mut Config) {
+    if args.debug {
+        config.general.debug = args.debug;
+    }
+
+    if let Some(threads) = args.threads {
+        config.general.threads = threads;
+    }
+
+    if let Some(processes) = args.processes {
+        config.processors.processes = processes;
+    }
+
     if let Some(processors) = &args.processors {
-        return processors.iter().copied().collect();
+        let enabled_processors: HashSet<_> = processors.iter().copied().collect();
+        config.processors.enabled = !enabled_processors.is_empty();
+        config.processors.vex.enabled = enabled_processors.contains(&ProcessorSelection::Vex);
     }
 
-    if !config.processors.enabled {
-        return HashSet::new();
+    if args.disable_heuristics {
+        config.disable_heuristics();
     }
 
-    let mut active = HashSet::new();
-    if config.processors.vex.enabled {
-        active.insert(ProcessorSelection::Vex);
-    }
-    active
-}
-
-#[cfg(not(target_os = "windows"))]
-fn enrich_function_with_processors(
-    mut json: binlex::controlflow::function::FunctionJson,
-    function: &Function<'_>,
-    active_processors: &HashSet<ProcessorSelection>,
-) -> binlex::controlflow::function::FunctionJson {
-    if active_processors.contains(&ProcessorSelection::Vex)
-        && function.cfg.config.processors.vex.functions.enabled
-        && json.contiguous
-    {
-        if let Some(bytes) = function.bytes() {
-            if let Ok(mut lifter) = binlex::lifters::vex::Lifter::new(
-                function.architecture(),
-                &bytes,
-                function.address(),
-                function.cfg.config.clone(),
-            ) {
-                if let Ok(vex) = lifter.process() {
-                    json.lifters
-                        .get_or_insert_with(binlex::controlflow::function::FunctionLiftersJson::default)
-                        .vex = Some(vex.into());
-                }
-            }
-        }
+    if args.disable_hashing {
+        config.disable_hashing();
     }
 
-    json
-}
+    if let Some(mmap_directory) = &args.mmap_directory {
+        config.mmap.directory = mmap_directory.clone();
+    }
 
-#[cfg(target_os = "windows")]
-fn enrich_function_with_processors(
-    json: binlex::controlflow::function::FunctionJson,
-    _function: &Function<'_>,
-    _active_processors: &HashSet<ProcessorSelection>,
-) -> binlex::controlflow::function::FunctionJson {
-    json
+    if args.enable_mmap_cache {
+        config.mmap.cache.enabled = args.enable_mmap_cache;
+    }
+
+    if args.disable_disassembler_sweep {
+        config.disassembler.sweep.enabled = false;
+    }
+
+    if args.minimal || config.general.minimal {
+        config.enable_minimal();
+    }
+
+    if args.enable_instructions {
+        config.instructions.enabled = args.enable_instructions;
+    }
+
+    if args.enable_block_instructions {
+        config.blocks.instructions.enabled = args.enable_block_instructions;
+    }
+
+    if args.disable_function_blocks {
+        config.functions.blocks.enabled = !args.disable_function_blocks;
+    }
 }
 
 fn get_elf_function_symbols(elf: &ELF, read_stdin: bool) -> BTreeMap<u64, Symbol> {
@@ -451,13 +460,11 @@ fn get_pe_function_symbols(pe: &PE, read_stdin: bool) -> BTreeMap<u64, Symbol> {
 }
 
 fn process_output(
-    args: &Args,
     output: Option<String>,
     cfg: &Graph,
     attributes: &Attributes,
     function_symbols: &BTreeMap<u64, Symbol>,
 ) {
-    let active_processors = active_processors(args, &cfg.config);
     let mut instructions = Vec::<LZ4String>::new();
 
     if cfg.config.instructions.enabled {
@@ -497,7 +504,7 @@ fn process_output(
             .collect::<Vec<u64>>()
             .par_iter()
             .filter_map(|address| Block::new(*address, cfg).ok())
-            .filter_map(|block| {
+            .map(|block| {
                 let mut block_attributes = Attributes::new();
                 let symbol = function_symbols.get(&block.address);
                 if let Some(symbol) = symbol {
@@ -506,8 +513,9 @@ fn process_output(
                 for attribute in &attributes.values {
                     block_attributes.push(attribute.clone());
                 }
-                block.json_with_attributes(block_attributes.clone()).ok()
+                block.process_with_attributes(block_attributes)
             })
+            .filter_map(|raw| serde_json::to_string(&raw).ok())
             .map(|js| LZ4String::new(&js))
             .collect();
     }
@@ -532,8 +540,7 @@ fn process_output(
                 for attribute in &attributes.values {
                     function_attributes.push(attribute.clone());
                 }
-                let raw = function.process_with_attributes(function_attributes);
-                enrich_function_with_processors(raw, &function, &active_processors)
+                function.process_with_attributes(function_attributes)
             })
             .filter_map(|raw| serde_json::to_string(&raw).ok())
             .collect::<Vec<String>>();
@@ -593,7 +600,7 @@ fn process_output(
 }
 
 fn process_pe(
-    args: &Args,
+    _args: &Args,
     input: String,
     config: Config,
     tags: Option<Vec<String>>,
@@ -711,11 +718,11 @@ fn process_pe(
         process::exit(1);
     }
 
-    process_output(args, output, &cfg, &attributes, &function_symbols);
+    process_output(output, &cfg, &attributes, &function_symbols);
 }
 
 fn process_elf(
-    args: &Args,
+    _args: &Args,
     input: String,
     config: Config,
     tags: Option<Vec<String>>,
@@ -788,11 +795,11 @@ fn process_elf(
             process::exit(1);
         });
 
-    process_output(args, output, &cfg, &attributes, &function_symbols);
+    process_output(output, &cfg, &attributes, &function_symbols);
 }
 
 fn process_code(
-    args: &Args,
+    _args: &Args,
     input: String,
     config: Config,
     architecture: Architecture,
@@ -869,11 +876,11 @@ fn process_code(
 
     let function_symbols = BTreeMap::<u64, Symbol>::new();
 
-    process_output(args, output, &cfg, &attributes, &function_symbols);
+    process_output(output, &cfg, &attributes, &function_symbols);
 }
 
 fn process_macho(
-    args: &Args,
+    _args: &Args,
     input: String,
     config: Config,
     tags: Option<Vec<String>>,
@@ -953,7 +960,7 @@ fn process_macho(
                 process::exit(1);
             });
 
-        process_output(args, output.clone(), &cfg, &attributes, &function_symbols);
+        process_output(output.clone(), &cfg, &attributes, &function_symbols);
     }
 }
 
@@ -981,49 +988,7 @@ fn main() {
         process::exit(1);
     }
 
-    if args.debug {
-        config.general.debug = args.debug;
-    }
-
-    if args.threads.is_some() {
-        config.general.threads = args.threads.unwrap();
-    }
-
-    if args.disable_heuristics {
-        config.disable_heuristics();
-    }
-
-    if args.disable_hashing {
-        config.disable_hashing();
-    }
-
-    if args.mmap_directory.is_some() {
-        config.mmap.directory = args.mmap_directory.clone().unwrap();
-    }
-
-    if args.enable_mmap_cache {
-        config.mmap.cache.enabled = args.enable_mmap_cache;
-    }
-
-    if args.disable_disassembler_sweep {
-        config.disassembler.sweep.enabled = false;
-    }
-
-    if args.minimal || config.general.minimal {
-        config.enable_minimal();
-    }
-
-    if args.enable_instructions {
-        config.instructions.enabled = args.enable_instructions;
-    }
-
-    if args.enable_block_instructions {
-        config.blocks.instructions.enabled = args.enable_block_instructions;
-    }
-
-    if args.disable_function_blocks {
-        config.functions.blocks.enabled = !args.disable_function_blocks;
-    }
+    apply_cli_overrides(&args, &mut config);
 
     Stderr::print_debug(
         config.clone(),
@@ -1103,4 +1068,42 @@ fn main() {
     }
 
     process::exit(0);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Args, apply_cli_overrides};
+    use binlex::Config;
+
+    #[test]
+    fn cli_processes_overrides_processor_process_count() {
+        let args = Args {
+            input: "input.bin".to_string(),
+            output: None,
+            stdin: false,
+            architecture: None,
+            config: None,
+            threads: None,
+            processes: Some(8),
+            tags: None,
+            minimal: false,
+            debug: false,
+            enable_instructions: false,
+            enable_block_instructions: false,
+            disable_hashing: false,
+            disable_disassembler_sweep: false,
+            disable_function_blocks: false,
+            disable_heuristics: false,
+            enable_mmap_cache: false,
+            mmap_directory: None,
+            processors: None,
+        };
+
+        let mut config = Config::default();
+        config.processors.processes = 2;
+
+        apply_cli_overrides(&args, &mut config);
+
+        assert_eq!(config.processors.processes, 8);
+    }
 }

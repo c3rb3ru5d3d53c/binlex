@@ -57,7 +57,7 @@ The latest version of **binlex** provides the following amazing features!
 | ⚙️ **Customizable Performance** | Toggle features on/off to optimize for your use case                                           |
 | 📉 **JSON String Compression**  | Save memory with JSON compression                                                    |
 | 🧩 **Similarity Hashing**       | - 🔍 Minhash<br>- 🔒 TLSH<br>- 🔐 SHA256                                                        |
-| 🧩 **Function Symbols**         | - Pass function symbols to **binlex** as standard input using **blpdb**, **blelfsym** or **blmachosym** or your own tooling                        |
+| 🧩 **Function Symbols**         | - Pass function symbols to **binlex** as standard input using **binlex-pdb**, **binlex-elf-symbols** or **binlex-macho-symbols** or your own tooling                        |
 | 🏷️ **Tagging**                  | Tagging for easy organization                                                                  |
 | 🎯 **Wildcarding** | Perfect for generating YARA rules and now at a resolution of nibbles!                                                     |
 | **API** | - 🦀 Rust API<br>-Python API                                                         |
@@ -471,10 +471,10 @@ And merges patterns of the same length:
 4883ec??ff15????????85c079??8bc8ff15????????33c0eb??b8010000004883c4??c3
 ```
 
-To take this a step further you can run it through the `blyara` tool to make a quick YARA signature.
+To take this a step further you can run it through the `binlex-yara` tool to make a quick YARA signature.
 
 ```bash
-binlex -i sample.dll --threads 16 | jq -r 'select(.size >= 16 and .size <= 32 and .chromosome.pattern != null) | .chromosome.pattern' | sort | uniq | head -10 | blyara -n example
+binlex -i sample.dll --threads 16 | jq -r 'select(.size >= 16 and .size <= 32 and .chromosome.pattern != null) | .chromosome.pattern' | sort | uniq | head -10 | binlex-yara -n example
 rule example {
     strings:
         $trait_0 = {016b??8b4b??8bc74c6bd858433b4c0b2c0f83c5??????}
@@ -518,21 +518,21 @@ As such, to collect the output of the script it must be filtered with `2>/dev/nu
 
 To leverage the power of Rizin function detection and function naming in **binlex**, run `rizin` on your project using `aflj` to list the functions in JSON format.
 
-Then pipe this output to `blrizin`, which parses `rizin` JSON to a format **binlex** undestands.
+Then pipe this output to `binlex-rizin`, which parses `rizin` JSON to a format **binlex** undestands.
 
-Additionally, you can combine this with other tools like `blpdb` to parse PDB symbols to get function addresses and names.
+Additionally, you can combine this with other tools like `binlex-pdb` to parse PDB symbols to get function addresses and names.
 
 You can then do any parsing as you generally would using `jq`, in this example we count the functions processed by **binlex** to see if we are detecting more of them.
 
 ```bash
 rizin -c 'aaa;aflj;' -q sample.dll | \
-  blrizin | \
-  blpdb -i sample.pdb | \
+  binlex-rizin | \
+  binlex-pdb -i sample.pdb | \
   binlex -i sample.dll --stdin | \
   jq 'select(.type == "function") | .address' | wc -l
 ```
 
-**NOTE**: At this time `blrizin` is also compatiable with the output from `radare2` using `blrizin`.
+**NOTE**: At this time `binlex-rizin` is also compatiable with the output from `radare2` using `binlex-rizin`.
 
 ### Collecting Machine Learning Features
 

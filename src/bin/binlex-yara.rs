@@ -31,7 +31,7 @@ use std::process;
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "blyara",
+    name = "binlex-yara",
     version = VERSION,
     about = format!("A Binlex YARA Generation Tool\n\nVersion: {}", VERSION),
     after_help = format!("Author: {}", AUTHOR),

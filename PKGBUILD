@@ -12,10 +12,11 @@ build() {
 package() {
     local builddir="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
     install -Dm755 "$builddir/target/release/binlex" "$pkgdir/usr/bin/binlex"
-    install -Dm755 "$builddir/target/release/blhash" "$pkgdir/usr/bin/blhash"
-    install -Dm755 "$builddir/target/release/blimage" "$pkgdir/usr/bin/blimage"
-    install -Dm755 "$builddir/target/release/blmachosym" "$pkgdir/usr/bin/blmachosym"
-    install -Dm755 "$builddir/target/release/blpdb" "$pkgdir/usr/bin/blpdb"
-    install -Dm755 "$builddir/target/release/blrizin" "$pkgdir/usr/bin/blrizin"
-    install -Dm755 "$builddir/target/release/blyara" "$pkgdir/usr/bin/blyara"
+    install -Dm755 "$builddir/target/release/binlex-elf-symbols" "$pkgdir/usr/bin/binlex-elf-symbols"
+    install -Dm755 "$builddir/target/release/binlex-hash" "$pkgdir/usr/bin/binlex-hash"
+    install -Dm755 "$builddir/target/release/binlex-image" "$pkgdir/usr/bin/binlex-image"
+    install -Dm755 "$builddir/target/release/binlex-macho-symbols" "$pkgdir/usr/bin/binlex-macho-symbols"
+    install -Dm755 "$builddir/target/release/binlex-pdb" "$pkgdir/usr/bin/binlex-pdb"
+    install -Dm755 "$builddir/target/release/binlex-rizin" "$pkgdir/usr/bin/binlex-rizin"
+    install -Dm755 "$builddir/target/release/binlex-yara" "$pkgdir/usr/bin/binlex-yara"
 }
