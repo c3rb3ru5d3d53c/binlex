@@ -2,7 +2,9 @@ use std::io::{Error, ErrorKind};
 
 use libvex::{Arch, TranslateArgs, VexEndness};
 use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
 
+use crate::controlflow::{Block, Function};
 use crate::lifters::vex::{VexLiftRequest, VexLiftResponse};
 use crate::processing::error::ProcessorError;
 use crate::processing::processor::Processor;
@@ -71,4 +73,32 @@ impl VexProcessor {
             ir,
         })
     }
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn process_function(function: &Function<'_>) -> Option<Value> {
+    let bytes = function.bytes()?;
+    let mut lifter = crate::lifters::vex::Lifter::new(
+        function.architecture(),
+        &bytes,
+        function.address(),
+        function.cfg.config.clone(),
+    )
+    .ok()?;
+    let vex = lifter.process().ok()?;
+    Some(json!({ "ir": vex.ir }))
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn process_block(block: &Block<'_>) -> Option<Value> {
+    let bytes = block.bytes();
+    let mut lifter = crate::lifters::vex::Lifter::new(
+        block.architecture(),
+        &bytes,
+        block.address(),
+        block.cfg.config.clone(),
+    )
+    .ok()?;
+    let vex = lifter.process().ok()?;
+    Some(json!({ "ir": vex.ir }))
 }

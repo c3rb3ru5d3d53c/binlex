@@ -39,24 +39,6 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::io::Error;
 
-#[derive(Serialize, Deserialize, Clone, Default)]
-pub struct FunctionLiftersJson {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub vex: Option<FunctionVexLifterJson>,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct FunctionVexLifterJson {
-    pub ir: String,
-}
-
-#[cfg(not(target_os = "windows"))]
-impl From<crate::lifters::vex::LifterJson> for FunctionVexLifterJson {
-    fn from(value: crate::lifters::vex::LifterJson) -> Self {
-        Self { ir: value.ir }
-    }
-}
-
 /// Represents a JSON-serializable structure containing metadata about a function.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct FunctionJson {
@@ -69,8 +51,6 @@ pub struct FunctionJson {
     pub address: u64,
     /// The number of edges (connections) in the function.
     pub edges: usize,
-    /// Indicates whether this function starts with a prologue.
-    pub prologue: bool,
     /// The chromosome of the function in JSON format.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chromosome: Option<ChromosomeJson>,
@@ -107,9 +87,9 @@ pub struct FunctionJson {
     pub tlsh: Option<String>,
     /// Indicates whether the function is contiguous.
     pub contiguous: bool,
-    /// Optional per-lifter outputs attached by processor post-processing.
+    /// Optional processor outputs attached by post-processing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub lifters: Option<FunctionLiftersJson>,
+    pub processors: Option<BTreeMap<String, Value>>,
     /// Attributes
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attributes: Option<Value>,
@@ -172,11 +152,6 @@ impl FunctionJsonDeserializer {
     }
 
     #[allow(dead_code)]
-    pub fn prologue(&self) -> bool {
-        self.json.prologue
-    }
-
-    #[allow(dead_code)]
     pub fn architecture(&self) -> Result<Architecture, Error> {
         Architecture::from_string(&self.json.architecture)
     }
@@ -207,8 +182,8 @@ impl FunctionJsonDeserializer {
     }
 
     #[allow(dead_code)]
-    pub fn lift(&self) -> Option<FunctionLiftersJson> {
-        self.json.lifters.clone()
+    pub fn processors(&self) -> Option<BTreeMap<String, Value>> {
+        self.json.processors.clone()
     }
 
     #[allow(dead_code)]
@@ -259,33 +234,6 @@ pub struct Function<'function> {
 }
 
 impl<'function> Function<'function> {
-    #[cfg(not(target_os = "windows"))]
-    fn lift(&self, json: &mut FunctionJson, bytes: &[u8]) {
-        if !self.cfg.config.processors.enabled
-            || !self.cfg.config.processors.vex.enabled
-            || !self.cfg.config.processors.vex.functions.enabled
-            || !json.contiguous
-        {
-            return;
-        }
-
-        if let Ok(mut lifter) = crate::lifters::vex::Lifter::new(
-            self.architecture(),
-            bytes,
-            self.address(),
-            self.cfg.config.clone(),
-        ) {
-            if let Ok(vex) = lifter.process() {
-                json.lifters
-                    .get_or_insert_with(FunctionLiftersJson::default)
-                    .vex = Some(vex.into());
-            }
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    fn lift(&self, _json: &mut FunctionJson, _bytes: &[u8]) {}
-
     /// Creates a new `Function` instance for the given address in the control flow graph.
     ///
     /// # Arguments
@@ -447,7 +395,6 @@ impl<'function> Function<'function> {
             address: self.address,
             type_: "function".to_string(),
             edges: self.edges(),
-            prologue: self.prologue(),
             chromosome,
             bytes: bytes_hex,
             size,
@@ -462,13 +409,35 @@ impl<'function> Function<'function> {
             minhash,
             tlsh,
             contiguous,
-            lifters: None,
+            processors: None,
             architecture: self.architecture().to_string(),
             attributes: None,
         };
 
-        if let Some(bytes) = bytes.as_ref() {
-            self.lift(&mut json, bytes);
+        if let Some(outputs) = self
+            .cfg
+            .processor_outputs(crate::processors::ProcessorTarget::Function, self.address)
+        {
+            for (processor_name, output) in &outputs {
+                crate::processors::apply_output(
+                    json.processors.get_or_insert_with(Default::default),
+                    processor_name,
+                    output,
+                );
+            }
+        } else {
+            for processor_name in crate::processors::enabled_processors_for_target(
+                &self.cfg.config,
+                crate::processors::ProcessorTarget::Function,
+            ) {
+                if let Some(output) = crate::processors::process_function(self, processor_name) {
+                    crate::processors::apply_output(
+                        json.processors.get_or_insert_with(Default::default),
+                        processor_name,
+                        &output,
+                    );
+                }
+            }
         }
 
         json

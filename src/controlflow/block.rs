@@ -41,24 +41,6 @@ use std::collections::BTreeSet;
 use std::io::Error;
 use std::io::ErrorKind;
 
-#[derive(Serialize, Deserialize, Clone, Default)]
-pub struct BlockLiftersJson {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub vex: Option<BlockVexLifterJson>,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct BlockVexLifterJson {
-    pub ir: String,
-}
-
-#[cfg(not(target_os = "windows"))]
-impl From<crate::lifters::vex::LifterJson> for BlockVexLifterJson {
-    fn from(value: crate::lifters::vex::LifterJson) -> Self {
-        Self { ir: value.ir }
-    }
-}
-
 /// Represents the JSON-serializable structure of a control flow block.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct BlockJson {
@@ -77,8 +59,6 @@ pub struct BlockJson {
     pub to: BTreeSet<u64>,
     /// The number of edges (connections) this block has.
     pub edges: usize,
-    /// Indicates whether this block starts with a function prologue.
-    pub prologue: bool,
     /// Indicates whether this block contains a conditional instruction.
     pub conditional: bool,
     /// The chromosome of the block in JSON format.
@@ -112,9 +92,9 @@ pub struct BlockJson {
     pub tlsh: Option<String>,
     /// Indicates whether the block is contiguous.
     pub contiguous: bool,
-    /// Optional per-lifter outputs attached by processor post-processing.
+    /// Optional processor outputs attached by post-processing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub lifters: Option<BlockLiftersJson>,
+    pub processors: Option<BTreeMap<String, Value>>,
     /// Attributes
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attributes: Option<Value>,
@@ -216,8 +196,8 @@ impl BlockJsonDeserializer {
     }
 
     #[allow(dead_code)]
-    pub fn lift(&self) -> Option<BlockLiftersJson> {
-        self.json.lifters.clone()
+    pub fn processors(&self) -> Option<BTreeMap<String, Value>> {
+        self.json.processors.clone()
     }
     #[allow(dead_code)]
     pub fn sha256(&self) -> Option<String> {
@@ -255,33 +235,6 @@ pub struct Block<'block> {
 }
 
 impl<'block> Block<'block> {
-    #[cfg(not(target_os = "windows"))]
-    fn lift(&self, json: &mut BlockJson, bytes: &[u8]) {
-        if !self.cfg.config.processors.enabled
-            || !self.cfg.config.processors.vex.enabled
-            || !self.cfg.config.processors.vex.blocks.enabled
-            || !json.contiguous
-        {
-            return;
-        }
-
-        if let Ok(mut lifter) = crate::lifters::vex::Lifter::new(
-            self.architecture(),
-            bytes,
-            self.address(),
-            self.cfg.config.clone(),
-        ) {
-            if let Ok(vex) = lifter.process() {
-                json.lifters
-                    .get_or_insert_with(BlockLiftersJson::default)
-                    .vex = Some(vex.into());
-            }
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    fn lift(&self, _json: &mut BlockJson, _bytes: &[u8]) {}
-
     /// Creates a new `Block` instance for the given address in the control flow graph.
     ///
     /// # Arguments
@@ -444,7 +397,6 @@ impl<'block> Block<'block> {
             to: self.terminator.to(),
             edges: self.edges(),
             chromosome: chromosome.process(),
-            prologue: self.prologue(),
             conditional: self.terminator.is_conditional,
             size,
             bytes: hex::encode(&bytes),
@@ -457,11 +409,35 @@ impl<'block> Block<'block> {
             minhash,
             tlsh,
             contiguous: true,
-            lifters: None,
+            processors: None,
             attributes: None,
         };
 
-        self.lift(&mut json, &bytes);
+        if let Some(outputs) = self
+            .cfg
+            .processor_outputs(crate::processors::ProcessorTarget::Block, self.address)
+        {
+            for (processor_name, output) in &outputs {
+                crate::processors::apply_output(
+                    json.processors.get_or_insert_with(Default::default),
+                    processor_name,
+                    output,
+                );
+            }
+        } else {
+            for processor_name in crate::processors::enabled_processors_for_target(
+                &self.cfg.config,
+                crate::processors::ProcessorTarget::Block,
+            ) {
+                if let Some(output) = crate::processors::process_block(self, processor_name) {
+                    crate::processors::apply_output(
+                        json.processors.get_or_insert_with(Default::default),
+                        processor_name,
+                        &output,
+                    );
+                }
+            }
+        }
 
         json
     }

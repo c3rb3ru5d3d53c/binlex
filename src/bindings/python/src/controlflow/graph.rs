@@ -27,6 +27,7 @@ use crate::Architecture;
 use crate::Config;
 use binlex::controlflow::Graph as InnerGraph;
 use binlex::controlflow::GraphQueue as InnerGraphQueue;
+use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -226,6 +227,33 @@ impl Graph {
             result.push(function.unwrap());
         }
         result
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn process(&self) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .process()
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn process_blocks(&self) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .process_blocks()
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn process_functions(&self) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .process_functions()
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
     #[getter]
