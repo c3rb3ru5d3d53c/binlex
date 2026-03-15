@@ -77,6 +77,10 @@ impl Gene {
         }
     }
 
+    pub fn mutations(&self) -> usize {
+        self.number_of_mutations
+    }
+
     pub fn mutate(&mut self, c: char) -> Result<(), Error> {
         match c {
             '?' => {

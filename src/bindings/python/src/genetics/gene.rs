@@ -76,6 +76,11 @@ impl Gene {
     }
 
     #[pyo3(text_signature = "($self)")]
+    pub fn mutations(&self) -> usize {
+        self.inner.lock().unwrap().mutations()
+    }
+
+    #[pyo3(text_signature = "($self)")]
     pub fn is_wildcard(&self) -> bool {
         self.inner.lock().unwrap().is_wildcard()
     }

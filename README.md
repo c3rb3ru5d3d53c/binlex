@@ -1219,21 +1219,21 @@ for allelepair in chromosome.allelepairs():
 
 #### Performing Genetic Mutations
 
-If you are looking to perform genetic programming tasks you can also mutate chromosomes, allelepairs, and genes and they keep track of their own number of mutations.
+If you are looking to perform genetic programming tasks you can also mutate chromosomes, allelepairs, and genes and they keep track of their own mutation count.
 
 ```python
 chromosome = block.chromosome()
 chromosome.mutate('deadbe?f')
-chromosome.number_of_mutations()
+chromosome.mutations()
 chromosome.print()
 
 for allelepair in chromosome.allelepairs():
   allelepair.mutate('dead')
-  allelepair.number_of_mutations()
+  allelepair.mutations()
   allelepair.print()
   for gene in allelepair.genes():
     gene.mutate('d')
-    gene.number_of_mutations()
+    gene.mutations()
     gene.print()
 ```
 
