@@ -20,6 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+//! Python bindings for binary container and file-format helpers.
+
 pub mod elf;
 pub mod file;
 pub mod image;

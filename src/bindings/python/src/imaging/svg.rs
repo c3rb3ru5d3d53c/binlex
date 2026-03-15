@@ -28,6 +28,7 @@ use pyo3::types::PyBytes;
 use pyo3::Py;
 use std::sync::{Arc, Mutex};
 
+/// Render bytes into an SVG document.
 #[pyclass]
 pub struct SVG {
     inner: Arc<Mutex<InnerSVG>>,
@@ -38,6 +39,7 @@ impl SVG {
     #[new]
     #[pyo3(signature = (data, palette, cell_size=1, fixed_width=16))]
     #[pyo3(text_signature = "(data, palette, cell_size=1, fixed_width=16)")]
+    /// Create an SVG renderer for the provided bytes and palette.
     pub fn new(
         py: Python,
         data: Py<PyBytes>,
@@ -58,17 +60,20 @@ impl SVG {
     }
 
     #[pyo3(text_signature = "($self, key, value)")]
+    /// Attach a metadata entry to the SVG document.
     pub fn add_metadata(&mut self, key: String, value: String) {
         self.inner.lock().unwrap().add_metadata(key, value)
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the rendered SVG document as a string.
     pub fn to_string(&self) -> String {
         self.inner.lock().unwrap().to_string()
     }
 
     #[allow(clippy::useless_conversion)]
     #[pyo3(text_signature = "($self, file_path)")]
+    /// Write the rendered SVG document to `file_path`.
     pub fn write(&self, file_path: String) -> PyResult<()> {
         self.inner
             .lock()
@@ -78,12 +83,14 @@ impl SVG {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Print the SVG document to stdout.
     pub fn print(&self) -> PyResult<()> {
         let rendered = self.inner.lock().unwrap().to_string();
         print!("{}", rendered);
         Ok(())
     }
 
+    /// Return the SVG document when converted to a string.
     pub fn __str__(&self) -> String {
         self.to_string()
     }

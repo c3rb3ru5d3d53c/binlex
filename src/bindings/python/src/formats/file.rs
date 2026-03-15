@@ -26,6 +26,7 @@ use binlex::formats::file::File as InnerFile;
 use pyo3::prelude::*;
 use std::io::Error;
 
+/// Open a file through the native binlex format helpers.
 #[pyclass(unsendable)]
 pub struct File {
     pub inner: InnerFile,
@@ -36,6 +37,7 @@ pub struct File {
 impl File {
     #[new]
     #[pyo3(text_signature = "(path, config)")]
+    /// Open the file at `path` using the provided configuration.
     pub fn new(py: Python, path: String, config: Py<Config>) -> PyResult<Self> {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
         let inner = InnerFile::new(path, inner_config)?;
@@ -43,21 +45,25 @@ impl File {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the TLSH digest for the file, if available.
     pub fn tlsh(&self) -> Option<String> {
         self.inner.tlsh()
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the SHA-256 digest for the file, if available.
     pub fn sha256(&self) -> Option<String> {
         self.inner.sha256()
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the file size in bytes.
     pub fn size(&self) -> u64 {
         self.inner.size()
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the detected magic/file kind for the file.
     pub fn magic(&self) -> Magic {
         Magic {
             inner: self.inner.magic(),
@@ -65,11 +71,13 @@ impl File {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Read the file contents into the native file object.
     pub fn read(&mut self) -> Result<(), Error> {
         self.inner.read()
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the JSON representation of the file metadata.
     pub fn json(&self) -> PyResult<String> {
         self.inner
             .json()

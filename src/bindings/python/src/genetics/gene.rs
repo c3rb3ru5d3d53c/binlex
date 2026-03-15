@@ -26,6 +26,7 @@ use pyo3::prelude::*;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+/// Represent a single nibble value or wildcard in a chromosome pattern.
 #[pyclass(skip_from_py_object)]
 #[derive(Debug, Clone)]
 pub struct Gene {
@@ -36,6 +37,7 @@ pub struct Gene {
 impl Gene {
     #[staticmethod]
     #[pyo3(text_signature = "(c)")]
+    /// Create a gene from a hex character or wildcard symbol.
     pub fn from_char(c: char) -> PyResult<Self> {
         let inner = InnerGene::from_char(c)?;
         Ok(Self {
@@ -45,6 +47,7 @@ impl Gene {
 
     #[staticmethod]
     #[pyo3(text_signature = "(pattern, config)")]
+    /// Create a gene from its numeric nibble value.
     pub fn from_value(v: u8) -> PyResult<Self> {
         let inner = InnerGene::from_value(v);
         Ok(Self {
@@ -54,6 +57,7 @@ impl Gene {
 
     #[staticmethod]
     #[pyo3(text_signature = "()")]
+    /// Create a wildcard gene.
     pub fn from_wildcard() -> PyResult<Self> {
         let inner = InnerGene::from_wildcard();
         Ok(Self {
@@ -62,6 +66,7 @@ impl Gene {
     }
 
     #[pyo3(text_signature = "($self, c)")]
+    /// Mutate this gene to a new character value.
     pub fn mutate(&mut self, c: char) -> PyResult<()> {
         self.inner
             .lock()
@@ -71,35 +76,42 @@ impl Gene {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the wildcard representation, if this gene is a wildcard.
     pub fn wildcard(&self) -> Option<String> {
         self.inner.lock().unwrap().wildcard()
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the number of mutations applied to this gene.
     pub fn mutations(&self) -> usize {
         self.inner.lock().unwrap().mutations()
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return whether this gene is a wildcard.
     pub fn is_wildcard(&self) -> bool {
         self.inner.lock().unwrap().is_wildcard()
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return whether this gene stores a concrete nibble value.
     pub fn is_value(&self) -> bool {
         self.inner.lock().unwrap().is_value()
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the printable character form of the gene.
     pub fn to_char(&self) -> String {
         self.inner.lock().unwrap().to_char()
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Print the gene representation to stdout.
     pub fn print(&self) {
         self.inner.lock().unwrap().print();
     }
 
+    /// Return the character representation when converted to a string.
     pub fn __str__(&self) -> String {
         self.to_char()
     }

@@ -28,6 +28,7 @@ use pyo3::types::{PyBytes, PyBytesMethods};
 use pyo3::Py;
 use std::sync::{Arc, Mutex};
 
+/// Describe a single cell in a rendered binary grid.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct RenderCell {
@@ -37,41 +38,49 @@ pub struct RenderCell {
 #[pymethods]
 impl RenderCell {
     #[getter]
+    /// Return the zero-based cell index.
     pub fn index(&self) -> usize {
         self.inner.index()
     }
 
     #[getter]
+    /// Return the original byte address represented by this cell.
     pub fn address(&self) -> u64 {
         self.inner.address()
     }
 
     #[getter]
+    /// Return the x coordinate of the cell.
     pub fn x(&self) -> usize {
         self.inner.x()
     }
 
     #[getter]
+    /// Return the y coordinate of the cell.
     pub fn y(&self) -> usize {
         self.inner.y()
     }
 
     #[getter]
+    /// Return the cell width in pixels.
     pub fn width(&self) -> usize {
         self.inner.width()
     }
 
     #[getter]
+    /// Return the cell height in pixels.
     pub fn height(&self) -> usize {
         self.inner.height()
     }
 
     #[getter]
+    /// Return the RGB tuple assigned to the cell.
     pub fn rgb(&self) -> (u8, u8, u8) {
         self.inner.rgb()
     }
 }
 
+/// Render bytes into an in-memory grid of colored cells.
 #[pyclass]
 pub struct Render {
     inner: Arc<Mutex<InnerRender>>,
@@ -82,6 +91,7 @@ impl Render {
     #[new]
     #[pyo3(signature = (data, palette, cell_size=1, fixed_width=16))]
     #[pyo3(text_signature = "(data, palette, cell_size=1, fixed_width=16)")]
+    /// Create a render object for the provided bytes and palette.
     pub fn new(
         py: Python,
         data: Py<PyBytes>,
@@ -102,26 +112,31 @@ impl Render {
     }
 
     #[getter]
+    /// Return the total rendered width in pixels.
     pub fn total_width(&self) -> usize {
         self.inner.lock().unwrap().total_width()
     }
 
     #[getter]
+    /// Return the total rendered height in pixels.
     pub fn total_height(&self) -> usize {
         self.inner.lock().unwrap().total_height()
     }
 
     #[getter]
+    /// Return the total number of rendered cells.
     pub fn total_cells(&self) -> usize {
         self.inner.lock().unwrap().total_cells()
     }
 
     #[getter]
+    /// Return the fixed row width used for rendering.
     pub fn fixed_width(&self) -> usize {
         self.inner.lock().unwrap().fixed_width()
     }
 
     #[getter]
+    /// Return all rendered cells in row-major order.
     pub fn cells(&self) -> Vec<RenderCell> {
         self.inner
             .lock()

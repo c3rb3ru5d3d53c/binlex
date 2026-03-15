@@ -20,6 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+//! Python bindings for chromosome, allele-pair, and gene helpers.
+
 pub mod allelepair;
 pub mod chromosome;
 pub mod gene;

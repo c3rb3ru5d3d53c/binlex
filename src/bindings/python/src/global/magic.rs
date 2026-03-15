@@ -24,6 +24,7 @@ use binlex::Magic as InnerMagic;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
+/// Represent a detected file or content kind.
 #[pyclass(eq)]
 #[derive(PartialEq)]
 pub struct Magic {
@@ -34,6 +35,7 @@ pub struct Magic {
 impl Magic {
     #[staticmethod]
     #[pyo3(text_signature = "(path)")]
+    /// Detect the magic/file kind of a file on disk.
     pub fn from_file(path: String) -> PyResult<Self> {
         let inner = InnerMagic::from_file(path)
             .map_err(|err| PyValueError::new_err(format!("failed to detect magic: {}", err)))?;
@@ -42,12 +44,14 @@ impl Magic {
 
     #[staticmethod]
     #[pyo3(text_signature = "(bytes)")]
+    /// Detect the magic/file kind of raw bytes in memory.
     pub fn from_bytes(bytes: Vec<u8>) -> Self {
         let inner = InnerMagic::from_bytes(&bytes);
         Magic { inner }
     }
 
     #[staticmethod]
+    /// Construct a magic value from its numeric enum value.
     pub fn from_value(value: u16) -> Self {
         let inner = match value {
             0x00 => InnerMagic::CODE,
@@ -62,6 +66,7 @@ impl Magic {
 
     #[staticmethod]
     #[pyo3(text_signature = "(s)")]
+    /// Parse a magic value from its string name.
     pub fn from_string(s: String) -> PyResult<Self> {
         let inner = s.parse::<InnerMagic>().map_err(|err| {
             PyValueError::new_err(format!("invalid or unsupported magic: {}", err))
@@ -69,11 +74,13 @@ impl Magic {
         Ok(Magic { inner })
     }
 
+    /// Return the magic name when converted to a string.
     pub fn __str__(&self) -> String {
         self.inner.to_string()
     }
 
     #[getter]
+    /// Return the numeric enum value for this magic kind.
     pub fn get_value(&self) -> u16 {
         self.inner as u16
     }

@@ -20,4 +20,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+"""Global configuration and enum types exposed by the Python bindings."""
+
 from binlex_bindings.binlex._global import *

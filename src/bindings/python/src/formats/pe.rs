@@ -34,6 +34,7 @@ use std::io::Error;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+/// Parse and inspect a Portable Executable image.
 #[pyclass(unsendable)]
 pub struct PE {
     pub inner: Arc<Mutex<InnerPe>>,
@@ -43,6 +44,7 @@ pub struct PE {
 impl PE {
     #[new]
     #[pyo3(text_signature = "(path, config)")]
+    /// Open a PE image from `path`.
     pub fn new(py: Python, path: String, config: Py<Config>) -> Result<Self, Error> {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
         let inner = InnerPe::new(path, inner_config)?;
@@ -53,6 +55,7 @@ impl PE {
 
     #[classmethod]
     #[pyo3(text_signature = "(bytes, config)")]
+    /// Parse a PE image from raw bytes in memory.
     pub fn from_bytes(
         _: &Bound<'_, PyType>,
         py: Python,
@@ -67,11 +70,13 @@ impl PE {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return whether the image contains a .NET/CLI header.
     pub fn is_dotnet(&self) -> bool {
         self.inner.lock().unwrap().is_dotnet()
     }
 
     #[pyo3(text_signature = "($self, virtual_address)")]
+    /// Convert a virtual address to a relative virtual address.
     pub fn virtual_address_to_relative_virtual_address(&self, virtual_address: u64) -> u64 {
         self.inner
             .lock()
@@ -80,6 +85,7 @@ impl PE {
     }
 
     #[pyo3(text_signature = "($self, virtual_address)")]
+    /// Convert a virtual address to a file offset, if mapped.
     pub fn virtual_address_to_file_offset(&self, virtual_address: u64) -> Option<u64> {
         self.inner
             .lock()
@@ -88,6 +94,7 @@ impl PE {
     }
 
     #[pyo3(text_signature = "($self, relative_virtual_address)")]
+    /// Convert a relative virtual address to a virtual address.
     pub fn relative_virtual_address_to_virtual_address(
         &self,
         relative_virtual_address: u64,
@@ -99,6 +106,7 @@ impl PE {
     }
 
     #[pyo3(text_signature = "($self, offset)")]
+    /// Convert a file offset to a virtual address, if mapped.
     pub fn file_offset_to_virtual_address(&self, file_offset: u64) -> Option<u64> {
         self.inner
             .lock()
@@ -107,6 +115,7 @@ impl PE {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the architecture of the PE image.
     pub fn architecture(&self) -> Architecture {
         return Architecture::from_value(self.inner.lock().unwrap().architecture() as u16);
     }
@@ -128,6 +137,7 @@ impl PE {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the executable virtual address ranges for the image.
     pub fn executable_virtual_address_ranges(&self) -> BTreeMap<u64, u64> {
         self.inner
             .lock()
@@ -159,6 +169,7 @@ impl PE {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the image entrypoint virtual address.
     pub fn entrypoint_virtual_address(&self) -> u64 {
         self.inner.lock().unwrap().entrypoint_virtual_address()
     }
@@ -169,6 +180,7 @@ impl PE {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return an `Image` view over the PE contents.
     pub fn image(&self, py: Python<'_>) -> PyResult<Py<Image>> {
         let result = self
             .inner
@@ -180,11 +192,13 @@ impl PE {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the total size of the image.
     pub fn size(&self) -> u64 {
         self.inner.lock().unwrap().size()
     }
 
     #[staticmethod]
+    /// Align a section virtual address using PE alignment rules.
     pub fn align_section_virtual_address(
         value: u64,
         section_alignment: u64,
@@ -214,6 +228,7 @@ impl PE {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the associated `File` helper for this image.
     pub fn file(&self, py: Python<'_>) -> PyResult<Py<File>> {
         let config = self.inner.lock().unwrap().config.clone();
         let file = self.inner.lock().unwrap().file().clone();

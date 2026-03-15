@@ -24,6 +24,7 @@ use pyo3::prelude::*;
 
 use binlex::hashing::minhash::MinHash32 as InnerMinHash32;
 
+/// Compute and compare MinHash digests for byte sequences.
 #[pyclass]
 pub struct MinHash32 {
     num_hashes: usize,
@@ -36,6 +37,7 @@ pub struct MinHash32 {
 impl MinHash32 {
     #[new]
     #[pyo3(text_signature = "(bytes, num_hashes, shingle_size, seed)")]
+    /// Create a MinHash helper with the given hashing parameters.
     pub fn new(bytes: Vec<u8>, num_hashes: usize, shingle_size: usize, seed: u64) -> Self {
         Self {
             bytes,
@@ -46,12 +48,14 @@ impl MinHash32 {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the hexadecimal MinHash digest for the stored bytes.
     pub fn hexdigest(&self) -> Option<String> {
         InnerMinHash32::new(&self.bytes, self.num_hashes, self.shingle_size, self.seed).hexdigest()
     }
 
     #[staticmethod]
     #[pyo3(text_signature = "(lhs, rhs)")]
+    /// Compare two MinHash digests and return their similarity score.
     pub fn compare(lhs: String, rhs: String) -> f64 {
         InnerMinHash32::compare(&lhs, &rhs)
     }

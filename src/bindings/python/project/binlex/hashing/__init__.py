@@ -20,4 +20,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+"""Hashing primitives exposed by the Python bindings."""
+
 from binlex_bindings.binlex.hashing import *
