@@ -25,10 +25,15 @@ use crate::Config;
 use crate::controlflow::Block;
 use crate::controlflow::Function;
 use crate::controlflow::Instruction;
+use crate::processors::{ProcessorOutputs, ProcessorTarget};
 use crossbeam::queue::SegQueue;
 use crossbeam_skiplist::SkipMap;
 use crossbeam_skiplist::SkipSet;
 use std::collections::BTreeSet;
+use std::collections::HashMap;
+use std::io::Error;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Queue structure used within `Graph` for managing addresses in processing stages.
 pub struct GraphQueue {
@@ -306,6 +311,12 @@ impl Default for GraphQueue {
 }
 
 /// Represents a control flow graph with instructions, blocks, and functions.
+#[derive(Default)]
+struct GraphProcessorState {
+    revisions: HashMap<ProcessorTarget, u64>,
+    outputs: HashMap<ProcessorTarget, HashMap<u64, ProcessorOutputs>>,
+}
+
 pub struct Graph {
     /// The Instruction Architecture
     pub architecture: Architecture,
@@ -319,6 +330,8 @@ pub struct Graph {
     pub instructions: GraphQueue,
     /// Configuration
     pub config: Config,
+    revision: AtomicU64,
+    processor_state: Mutex<GraphProcessorState>,
 }
 
 impl Graph {
@@ -336,6 +349,8 @@ impl Graph {
             functions: GraphQueue::new(),
             instructions: GraphQueue::new(),
             config,
+            revision: AtomicU64::new(0),
+            processor_state: Mutex::new(GraphProcessorState::default()),
         }
     }
 
@@ -352,6 +367,7 @@ impl Graph {
     }
 
     pub fn blocks(&self) -> Vec<Block<'_>> {
+        let _ = self.process_blocks();
         let mut result = Vec::<Block>::new();
         for address in self.blocks.valid_addresses() {
             let block = Block::new(address, self).ok();
@@ -364,6 +380,7 @@ impl Graph {
     }
 
     pub fn functions(&self) -> Vec<Function<'_>> {
+        let _ = self.process_functions();
         let mut result = Vec::<Function>::new();
         for address in self.functions.valid_addresses() {
             let function = Function::new(address, self).ok();
@@ -399,6 +416,7 @@ impl Graph {
         instruction.is_function_start = true;
         instruction.is_block_start = true;
         self.update_instruction(instruction);
+        self.invalidate_processor_state();
         true
     }
 
@@ -413,6 +431,7 @@ impl Graph {
         self.blocks.insert_valid(address);
         instruction.is_block_start = true;
         self.update_instruction(instruction);
+        self.invalidate_processor_state();
         true
     }
 
@@ -426,10 +445,12 @@ impl Graph {
         instruction.to.extend(addresses);
         instruction.edges = instruction.blocks().len();
         self.update_instruction(instruction);
+        self.invalidate_processor_state();
         true
     }
 
     pub fn insert_instruction(&mut self, instruction: Instruction) {
+        self.invalidate_processor_state();
         if let Some(existing) = self.get_instruction(instruction.address) {
             self.listing.insert(
                 instruction.address,
@@ -441,6 +462,7 @@ impl Graph {
     }
 
     pub fn update_instruction(&mut self, instruction: Instruction) {
+        self.invalidate_processor_state();
         if !self.is_instruction_address(instruction.address) {
             return;
         }
@@ -480,6 +502,7 @@ impl Graph {
     }
 
     pub fn merge(&mut self, graph: &mut Graph) {
+        self.invalidate_processor_state();
         for entry in graph.listing() {
             self.insert_instruction(entry.value().clone());
         }
@@ -530,5 +553,101 @@ impl Graph {
 
     pub fn absorb(&mut self, graph: &mut Graph) {
         self.merge(graph);
+    }
+
+    pub fn process(&self) -> Result<(), Error> {
+        self.process_blocks()?;
+        self.process_functions()?;
+        Ok(())
+    }
+
+    pub fn process_blocks(&self) -> Result<(), Error> {
+        self.process_target(ProcessorTarget::Block)
+    }
+
+    pub fn process_functions(&self) -> Result<(), Error> {
+        self.process_target(ProcessorTarget::Function)
+    }
+
+    pub fn processor_outputs(
+        &self,
+        target: ProcessorTarget,
+        address: u64,
+    ) -> Option<ProcessorOutputs> {
+        self.processor_state
+            .lock()
+            .unwrap()
+            .outputs
+            .get(&target)?
+            .get(&address)
+            .cloned()
+    }
+
+    fn process_target(&self, target: ProcessorTarget) -> Result<(), Error> {
+        let enabled = crate::processors::enabled_processors_for_target(&self.config, target);
+        let revision = self.revision.load(Ordering::SeqCst);
+        {
+            let processor_state = self.processor_state.lock().unwrap();
+            if processor_state.revisions.get(&target) == Some(&revision) {
+                return Ok(());
+            }
+        }
+
+        let mut outputs = HashMap::new();
+        match target {
+            ProcessorTarget::Instruction => {}
+            ProcessorTarget::Block => {
+                for address in self.blocks.valid_addresses() {
+                    let block = match Block::new(address, self) {
+                        Ok(block) => block,
+                        Err(_) => continue,
+                    };
+                    let mut entity_outputs = Vec::new();
+                    for processor_name in &enabled {
+                        if let Some(output) =
+                            crate::processors::process_block(&block, processor_name)
+                        {
+                            entity_outputs.push((*processor_name, output));
+                        }
+                    }
+                    if !entity_outputs.is_empty() {
+                        outputs.insert(address, entity_outputs);
+                    }
+                }
+            }
+            ProcessorTarget::Function => {
+                for address in self.functions.valid_addresses() {
+                    let function = match Function::new(address, self) {
+                        Ok(function) => function,
+                        Err(_) => continue,
+                    };
+                    let mut entity_outputs = Vec::new();
+                    for processor_name in &enabled {
+                        if let Some(output) =
+                            crate::processors::process_function(&function, processor_name)
+                        {
+                            entity_outputs.push((*processor_name, output));
+                        }
+                    }
+                    if !entity_outputs.is_empty() {
+                        outputs.insert(address, entity_outputs);
+                    }
+                }
+            }
+        }
+
+        let mut processor_state = self.processor_state.lock().unwrap();
+        if self.revision.load(Ordering::SeqCst) == revision {
+            processor_state.outputs.insert(target, outputs);
+            processor_state.revisions.insert(target, revision);
+        }
+        Ok(())
+    }
+
+    fn invalidate_processor_state(&self) {
+        self.revision.fetch_add(1, Ordering::SeqCst);
+        let mut processor_state = self.processor_state.lock().unwrap();
+        processor_state.revisions.clear();
+        processor_state.outputs.clear();
     }
 }

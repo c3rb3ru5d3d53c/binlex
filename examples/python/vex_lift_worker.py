@@ -41,9 +41,10 @@ def main() -> int:
         cfg,
     )
 
-    function = cfg.functions()[0]
+    functions = cfg.functions()
 
-    print(function.to_dict())
+    print(functions[0].to_dict())
+
 
     return 0
 

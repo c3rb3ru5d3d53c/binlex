@@ -24,6 +24,7 @@ fn test_config() -> Config {
     config.processors.processes = 1;
     config.processors.compression = true;
     config.processors.vex.enabled = true;
+    config.processors.vex.blocks.enabled = true;
     config.processors.vex.functions.enabled = true;
     config
 }
@@ -256,10 +257,14 @@ fn test_function_process_populates_vex_lifters() {
     };
 
     let json = function.process();
-    let lifters = json.lifters.expect("lifters should be populated");
-    let vex = lifters.vex.expect("vex lifter output should be present");
+    let processors = json.processors.expect("processors should be populated");
+    let vex = processors.get("vex").expect("vex processor output should be present");
+    let ir = vex
+        .get("ir")
+        .and_then(|value| value.as_str())
+        .expect("vex processor output should include an ir string");
 
-    assert!(!vex.ir.is_empty());
+    assert!(!ir.is_empty());
 }
 
 #[test]
@@ -292,10 +297,14 @@ fn test_block_process_populates_vex_lifters() {
     };
 
     let json = block.process();
-    let lifters = json.lifters.expect("lifters should be populated");
-    let vex = lifters.vex.expect("vex lifter output should be present");
+    let processors = json.processors.expect("processors should be populated");
+    let vex = processors.get("vex").expect("vex processor output should be present");
+    let ir = vex
+        .get("ir")
+        .and_then(|value| value.as_str())
+        .expect("vex processor output should include an ir string");
 
-    assert!(!vex.ir.is_empty());
+    assert!(!ir.is_empty());
 }
 
 #[test]

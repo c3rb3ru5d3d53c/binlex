@@ -76,7 +76,7 @@ fn test_cli_processors_override_config_for_vex_function_ir() {
     );
     assert!(
         function
-            .get("lifters")
+            .get("processors")
             .and_then(|value| value.get("vex"))
             .and_then(|value| value.get("ir"))
             .and_then(|value| value.as_str())
@@ -144,7 +144,7 @@ fn test_cli_processors_respect_vex_function_target_config() {
         .find(|value| value.get("type").and_then(|value| value.as_str()) == Some("function"))
         .expect("function output should exist");
 
-    assert!(function.get("lifters").is_none());
+    assert!(function.get("processors").is_none());
 
     let _ = fs::remove_file(input_path);
     let _ = fs::remove_file(config_path);
