@@ -41,6 +41,24 @@ use std::collections::BTreeSet;
 use std::io::Error;
 use std::io::ErrorKind;
 
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct BlockLiftersJson {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vex: Option<BlockVexLifterJson>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct BlockVexLifterJson {
+    pub ir: String,
+}
+
+#[cfg(not(target_os = "windows"))]
+impl From<crate::lifters::vex::LifterJson> for BlockVexLifterJson {
+    fn from(value: crate::lifters::vex::LifterJson) -> Self {
+        Self { ir: value.ir }
+    }
+}
+
 /// Represents the JSON-serializable structure of a control flow block.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct BlockJson {
@@ -94,6 +112,9 @@ pub struct BlockJson {
     pub tlsh: Option<String>,
     /// Indicates whether the block is contiguous.
     pub contiguous: bool,
+    /// Optional per-lifter outputs attached by processor post-processing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lifters: Option<BlockLiftersJson>,
     /// Attributes
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attributes: Option<Value>,
@@ -193,6 +214,11 @@ impl BlockJsonDeserializer {
     pub fn contiguous(&self) -> bool {
         self.json.contiguous
     }
+
+    #[allow(dead_code)]
+    pub fn lift(&self) -> Option<BlockLiftersJson> {
+        self.json.lifters.clone()
+    }
     #[allow(dead_code)]
     pub fn sha256(&self) -> Option<String> {
         self.json.sha256.clone()
@@ -229,6 +255,33 @@ pub struct Block<'block> {
 }
 
 impl<'block> Block<'block> {
+    #[cfg(not(target_os = "windows"))]
+    fn lift(&self, json: &mut BlockJson, bytes: &[u8]) {
+        if !self.cfg.config.processors.enabled
+            || !self.cfg.config.processors.vex.enabled
+            || !self.cfg.config.processors.vex.blocks.enabled
+            || !json.contiguous
+        {
+            return;
+        }
+
+        if let Ok(mut lifter) = crate::lifters::vex::Lifter::new(
+            self.architecture(),
+            bytes,
+            self.address(),
+            self.cfg.config.clone(),
+        ) {
+            if let Ok(vex) = lifter.process() {
+                json.lifters
+                    .get_or_insert_with(BlockLiftersJson::default)
+                    .vex = Some(vex.into());
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    fn lift(&self, _json: &mut BlockJson, _bytes: &[u8]) {}
+
     /// Creates a new `Block` instance for the given address in the control flow graph.
     ///
     /// # Arguments
@@ -383,7 +436,7 @@ impl<'block> Block<'block> {
             None
         };
 
-        BlockJson {
+        let mut json = BlockJson {
             type_: "block".to_string(),
             address: self.address,
             architecture: self.architecture().to_string(),
@@ -404,8 +457,13 @@ impl<'block> Block<'block> {
             minhash,
             tlsh,
             contiguous: true,
+            lifters: None,
             attributes: None,
-        }
+        };
+
+        self.lift(&mut json, &bytes);
+
+        json
     }
 
     /// Blocks are contiguous.

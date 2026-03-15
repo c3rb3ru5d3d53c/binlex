@@ -21,70 +21,77 @@
 // SOFTWARE.
 
 use binlex::AUTHOR;
+use binlex::Config;
 use binlex::VERSION;
-use binlex::controlflow::Symbol;
 use binlex::controlflow::SymbolIoJson;
+use binlex::formats::ELF;
 use binlex::io::Stdin;
 use binlex::io::Stdout;
+use binlex::types::LZ4String;
 use clap::Parser;
-use pdb::FallibleIterator;
 use std::fs::File;
+use std::io::Write;
 use std::process;
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "blpdb",
+    name = "binlex-elf-symbols",
     version = VERSION,
-    about =  format!("A Binlex PDB Parsing Tool\n\nVersion: {}", VERSION),
+    about =  format!("A Binlex ELF Symbol Parsing Tool\n\nVersion: {}", VERSION),
     after_help = format!("Author: {}", AUTHOR),
 )]
-struct Cli {
+struct Args {
     #[arg(short, long, required = true)]
     input: String,
     #[arg(short, long)]
     output: Option<String>,
-    #[arg(long, default_value_t = false)]
-    demangle_msvc_names: bool,
 }
 
 fn main() -> pdb::Result<()> {
-    let cli = Cli::parse();
+    let args = Args::parse();
 
-    let file = File::open(cli.input)?;
-    let mut pdb = pdb::PDB::open(file)?;
+    let config = Config::new();
 
-    let symbol_table = pdb.global_symbols()?;
-    let address_map = pdb.address_map()?;
+    let elf = ELF::new(args.input, config).unwrap_or_else(|error| {
+        eprintln!("{}", error);
+        process::exit(1);
+    });
 
-    let mut results = Vec::<SymbolIoJson>::new();
-    let mut symbols = symbol_table.iter();
-    while let Some(symbol) = symbols.next()? {
-        match symbol.parse() {
-            Ok(pdb::SymbolData::Public(data)) if data.function => {
-                let rva = data.offset.to_rva(&address_map).unwrap_or_default();
-                let mut name = data.name.to_string().into_owned();
-                if cli.demangle_msvc_names {
-                    name = Symbol::demangle_msvc_name(&name);
-                }
-                results.push(SymbolIoJson {
-                    type_: "symbol".to_string(),
-                    symbol_type: "function".to_string(),
-                    name,
-                    file_offset: None,
-                    relative_virtual_address: Some(rva.0 as u64),
-                    virtual_address: None,
-                    slice: None,
-                });
-            }
-            _ => {}
+    let mut symbols = Vec::<LZ4String>::new();
+    for (_, symbol) in elf.symbols() {
+        let symbol = SymbolIoJson {
+            type_: "symbol".to_string(),
+            symbol_type: "function".to_string(),
+            name: symbol.name,
+            file_offset: None,
+            relative_virtual_address: None,
+            virtual_address: Some(symbol.address),
+            slice: None,
+        };
+        if let Ok(string) = serde_json::to_string(&symbol) {
+            symbols.push(LZ4String::new(&string));
         }
     }
 
     Stdin::passthrough();
 
-    for result in results {
-        if let Ok(json_string) = serde_json::to_string(&result) {
-            Stdout::print(json_string);
+    if args.output.is_none() {
+        for symbol in symbols {
+            Stdout::print(symbol);
+        }
+    } else {
+        let mut file = match File::create(args.output.unwrap()) {
+            Ok(file) => file,
+            Err(error) => {
+                eprintln!("{}", error);
+                std::process::exit(1);
+            }
+        };
+        for symbol in symbols {
+            if let Err(error) = writeln!(file, "{}", symbol) {
+                eprintln!("{}", error);
+                std::process::exit(1);
+            }
         }
     }
 

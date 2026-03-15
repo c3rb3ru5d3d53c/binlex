@@ -33,6 +33,8 @@ pub use attribute::Attributes;
 pub use block::Block;
 pub use block::BlockJson;
 pub use block::BlockJsonDeserializer;
+pub use block::BlockLiftersJson;
+pub use block::BlockVexLifterJson;
 pub use function::Function;
 pub use function::FunctionJson;
 pub use function::FunctionJsonDeserializer;

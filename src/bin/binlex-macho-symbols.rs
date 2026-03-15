@@ -24,7 +24,7 @@ use binlex::AUTHOR;
 use binlex::Config;
 use binlex::VERSION;
 use binlex::controlflow::SymbolIoJson;
-use binlex::formats::ELF;
+use binlex::formats::MACHO;
 use binlex::io::Stdin;
 use binlex::io::Stdout;
 use binlex::types::LZ4String;
@@ -35,9 +35,9 @@ use std::process;
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "blelfsym",
+    name = "binlex-macho-symbols",
     version = VERSION,
-    about =  format!("A Binlex ELF Symbol Parsing Tool\n\nVersion: {}", VERSION),
+    about =  format!("A Binlex MachO Symbol Parsing Tool\n\nVersion: {}", VERSION),
     after_help = format!("Author: {}", AUTHOR),
 )]
 struct Args {
@@ -52,24 +52,26 @@ fn main() -> pdb::Result<()> {
 
     let config = Config::new();
 
-    let elf = ELF::new(args.input, config).unwrap_or_else(|error| {
+    let macho = MACHO::new(args.input, config).unwrap_or_else(|error| {
         eprintln!("{}", error);
         process::exit(1);
     });
 
     let mut symbols = Vec::<LZ4String>::new();
-    for (_, symbol) in elf.symbols() {
-        let symbol = SymbolIoJson {
-            type_: "symbol".to_string(),
-            symbol_type: "function".to_string(),
-            name: symbol.name,
-            file_offset: None,
-            relative_virtual_address: None,
-            virtual_address: Some(symbol.address),
-            slice: None,
-        };
-        if let Ok(string) = serde_json::to_string(&symbol) {
-            symbols.push(LZ4String::new(&string));
+    for slice in 0..macho.number_of_slices() {
+        for (_, symbol) in macho.symbols(slice) {
+            let symbol = SymbolIoJson {
+                type_: "symbol".to_string(),
+                symbol_type: "function".to_string(),
+                name: symbol.name,
+                file_offset: None,
+                relative_virtual_address: None,
+                virtual_address: Some(symbol.address),
+                slice: Some(slice),
+            };
+            if let Ok(string) = serde_json::to_string(&symbol) {
+                symbols.push(LZ4String::new(&string));
+            }
         }
     }
 

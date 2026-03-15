@@ -36,7 +36,7 @@ use std::process;
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "blimage",
+    name = "binlex-image",
     version = VERSION,
     about =  format!("A Binlex Binary Visualization Tool\n\nVersion: {}", VERSION),
     after_help = format!("Author: {}", AUTHOR),

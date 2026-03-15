@@ -31,7 +31,7 @@ use std::process;
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "blhash",
+    name = "binlex-hash",
     version = VERSION,
     about =  format!("A Binlex File Hashing Tool\n\nVersion: {}", VERSION),
     after_help = format!("Author: {}", AUTHOR),

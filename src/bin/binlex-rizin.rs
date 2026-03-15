@@ -35,7 +35,7 @@ use std::process;
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "blrizin",
+    name = "binlex-rizin",
     version = VERSION,
     about =  format!("A Binlex Rizin Tool\n\nVersion: {}", VERSION),
     after_help = format!("Author: {}", AUTHOR),

@@ -162,39 +162,42 @@ jobs:
         if: ${{ matrix.os == 'windows-latest' }}
         run: |
           copy target\release\binlex.exe dist\
-          copy target\release\blyara.exe dist\
-          copy target\release\blpdb.exe dist\
-          copy target\release\blelfsym.exe dist\
-          copy target\release\blmachosym.exe dist\
-          copy target\release\blrizin.exe dist\
-          copy target\release\blimage.exe dist\
-          copy target\release\blhash.exe dist\
+          copy target\release\binlex-processor.exe dist\
+          copy target\release\binlex-yara.exe dist\
+          copy target\release\binlex-pdb.exe dist\
+          copy target\release\binlex-elf-symbols.exe dist\
+          copy target\release\binlex-macho-symbols.exe dist\
+          copy target\release\binlex-rizin.exe dist\
+          copy target\release\binlex-image.exe dist\
+          copy target\release\binlex-hash.exe dist\
           copy target\wheels\*.whl dist\
 
       - name: Copy Binary (macOS)
         if: startsWith(matrix.os, 'macos-')
         run: |
           cp target/release/binlex dist/
-          cp target/release/blyara dist/
-          cp target/release/blpdb dist/
-          cp target/release/blelfsym dist/
-          cp target/release/blmachosym dist/
-          cp target/release/blrizin dist/
-          cp target/release/blimage dist/
-          cp target/release/blhash dist/
+          cp target/release/binlex-processor dist/
+          cp target/release/binlex-yara dist/
+          cp target/release/binlex-pdb dist/
+          cp target/release/binlex-elf-symbols dist/
+          cp target/release/binlex-macho-symbols dist/
+          cp target/release/binlex-rizin dist/
+          cp target/release/binlex-image dist/
+          cp target/release/binlex-hash dist/
           cp target/wheels/*.whl dist/
 
       - name: Copy Binary (Ubuntu)
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
           cp target/release/binlex dist/
-          cp target/release/blyara dist/
-          cp target/release/blpdb dist/
-          cp target/release/blelfsym dist/
-          cp target/release/blmachosym dist/
-          cp target/release/blrizin dist/
-          cp target/release/blimage dist/
-          cp target/release/blhash dist/
+          cp target/release/binlex-processor dist/
+          cp target/release/binlex-yara dist/
+          cp target/release/binlex-pdb dist/
+          cp target/release/binlex-elf-symbols dist/
+          cp target/release/binlex-macho-symbols dist/
+          cp target/release/binlex-rizin dist/
+          cp target/release/binlex-image dist/
+          cp target/release/binlex-hash dist/
           cp target/debian/*.deb dist/
           cp target/wheels/*.whl dist/
 
@@ -260,13 +263,14 @@ jobs:
         run: |
           mkdir dist
           cp /home/builder/repo/target/release/binlex dist/
-          cp /home/builder/repo/target/release/blyara dist/
-          cp /home/builder/repo/target/release/blpdb dist/
-          cp /home/builder/repo/target/release/blelfsym dist/
-          cp /home/builder/repo/target/release/blmachosym dist/
-          cp /home/builder/repo/target/release/blrizin dist/
-          cp /home/builder/repo/target/release/blimage dist/
-          cp /home/builder/repo/target/release/blhash dist/
+          cp /home/builder/repo/target/release/binlex-processor dist/
+          cp /home/builder/repo/target/release/binlex-yara dist/
+          cp /home/builder/repo/target/release/binlex-pdb dist/
+          cp /home/builder/repo/target/release/binlex-elf-symbols dist/
+          cp /home/builder/repo/target/release/binlex-macho-symbols dist/
+          cp /home/builder/repo/target/release/binlex-rizin dist/
+          cp /home/builder/repo/target/release/binlex-image dist/
+          cp /home/builder/repo/target/release/binlex-hash dist/
           cp /home/builder/repo/target/zst/*.zst dist/
 
       - name: Create binlex-ida.zip
