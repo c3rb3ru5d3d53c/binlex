@@ -28,6 +28,7 @@ use pyo3::types::{PyBytes, PyBytesMethods};
 use pyo3::Py;
 use std::sync::{Arc, Mutex};
 
+/// Render bytes into a PNG image.
 #[pyclass]
 pub struct PNG {
     inner: Arc<Mutex<InnerPNG>>,
@@ -38,6 +39,7 @@ impl PNG {
     #[new]
     #[pyo3(signature = (data, palette, cell_size=1, fixed_width=16))]
     #[pyo3(text_signature = "(data, palette, cell_size=1, fixed_width=16)")]
+    /// Create a PNG renderer for the provided bytes and palette.
     pub fn new(
         py: Python,
         data: Py<PyBytes>,
@@ -59,6 +61,7 @@ impl PNG {
 
     #[allow(clippy::useless_conversion)]
     #[pyo3(text_signature = "($self, file_path)")]
+    /// Write the rendered PNG image to `file_path`.
     pub fn write(&self, file_path: String) -> PyResult<()> {
         self.inner
             .lock()
@@ -68,6 +71,7 @@ impl PNG {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the encoded PNG image bytes.
     pub fn bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
         let bytes = self
             .inner

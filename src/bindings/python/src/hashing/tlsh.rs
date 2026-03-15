@@ -23,6 +23,7 @@
 use binlex::hashing::tlsh::TLSH as InnerTLSH;
 use pyo3::prelude::*;
 
+/// Compute and compare TLSH similarity hashes.
 #[pyclass]
 pub struct TLSH {
     bytes: Vec<u8>,
@@ -32,17 +33,20 @@ pub struct TLSH {
 impl TLSH {
     #[new]
     #[pyo3(text_signature = "(bytes)")]
+    /// Create a TLSH helper for the provided bytes.
     pub fn new(bytes: Vec<u8>) -> Self {
         Self { bytes }
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the TLSH hexadecimal digest, if the byte sequence is large enough.
     pub fn hexdigest(&self, mininum_byte_size: usize) -> Option<String> {
         InnerTLSH::new(&self.bytes, mininum_byte_size).hexdigest()
     }
 
     #[staticmethod]
     #[pyo3(text_signature = "(lhs, rhs)")]
+    /// Compare two TLSH digests and return their similarity score.
     pub fn compare(lhs: String, rhs: String) -> Option<f64> {
         InnerTLSH::compare(lhs, rhs)
     }

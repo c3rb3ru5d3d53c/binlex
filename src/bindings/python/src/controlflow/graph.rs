@@ -33,6 +33,7 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+/// Manage the discovery state for instructions, blocks, or functions in a graph.
 #[pyclass]
 pub struct GraphQueue {
     inner_graph: Arc<Mutex<InnerGraph>>,
@@ -67,48 +68,56 @@ impl GraphQueue {
 #[pymethods]
 impl GraphQueue {
     #[pyo3(text_signature = "($self, address)")]
+    /// Mark an address as invalid for this queue.
     pub fn insert_invalid(&self, address: u64) {
         let mut inner = self.inner_graph.lock().unwrap();
         self.get_queue_mut(&mut inner).insert_invalid(address);
     }
 
     #[pyo3(text_signature = "($self, address)")]
+    /// Return whether an address is marked invalid.
     pub fn is_invalid(&self, address: u64) -> bool {
         let inner = self.inner_graph.lock().unwrap();
         self.get_queue(&inner).is_invalid(address)
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return all addresses currently marked valid.
     pub fn valid_addresses(&self) -> BTreeSet<u64> {
         let inner = self.inner_graph.lock().unwrap();
         self.get_queue(&inner).valid_addresses()
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return all addresses currently marked invalid.
     pub fn invalid_addresses(&self) -> BTreeSet<u64> {
         let inner = self.inner_graph.lock().unwrap();
         self.get_queue(&inner).invalid_addresses()
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return all addresses already processed by this queue.
     pub fn processed_addresses(&self) -> BTreeSet<u64> {
         let inner = self.inner_graph.lock().unwrap();
         self.get_queue(&inner).processed_addresses()
     }
 
     #[pyo3(text_signature = "($self, address)")]
+    /// Return whether an address is marked valid.
     pub fn is_valid(&self, address: u64) -> bool {
         let inner = self.inner_graph.lock().unwrap();
         self.get_queue(&inner).is_valid(address)
     }
 
     #[pyo3(text_signature = "($self, address)")]
+    /// Mark an address as valid for future processing.
     pub fn insert_valid(&self, address: u64) {
         let mut inner = self.inner_graph.lock().unwrap();
         self.get_queue_mut(&mut inner).insert_valid(address);
     }
 
     #[pyo3(text_signature = "($self, addresses)")]
+    /// Mark a set of addresses as processed.
     pub fn insert_processed_extend(&self, addresses: BTreeSet<u64>) {
         let mut inner = self.inner_graph.lock().unwrap();
         self.get_queue_mut(&mut inner)
@@ -116,42 +125,49 @@ impl GraphQueue {
     }
 
     #[pyo3(text_signature = "($self, address)")]
+    /// Mark a single address as processed.
     pub fn insert_processed(&self, address: u64) {
         let mut inner = self.inner_graph.lock().unwrap();
         self.get_queue_mut(&mut inner).insert_processed(address);
     }
 
     #[pyo3(text_signature = "($self, address)")]
+    /// Return whether an address has already been processed.
     pub fn is_processed(&self, address: u64) -> bool {
         let inner = self.inner_graph.lock().unwrap();
         self.get_queue(&inner).is_processed(address)
     }
 
     #[pyo3(text_signature = "($self, addresses)")]
+    /// Enqueue a set of addresses for later processing.
     pub fn enqueue_extend(&self, addresses: BTreeSet<u64>) {
         let mut inner = self.inner_graph.lock().unwrap();
         self.get_queue_mut(&mut inner).enqueue_extend(addresses);
     }
 
     #[pyo3(text_signature = "($self, address)")]
+    /// Enqueue a single address for later processing.
     pub fn enqueue(&self, address: u64) -> bool {
         let mut inner = self.inner_graph.lock().unwrap();
         self.get_queue_mut(&mut inner).enqueue(address)
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Dequeue the next pending address, if one exists.
     pub fn dequeue(&self) -> Option<u64> {
         let mut inner = self.inner_graph.lock().unwrap();
         self.get_queue_mut(&mut inner).dequeue()
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Dequeue and return all pending addresses.
     pub fn dequeue_all(&self) -> BTreeSet<u64> {
         let mut inner = self.inner_graph.lock().unwrap();
         self.get_queue_mut(&mut inner).dequeue_all()
     }
 }
 
+/// Represent a mutable control-flow graph used during analysis.
 #[pyclass]
 pub struct Graph {
     pub inner: Arc<Mutex<InnerGraph>>,
@@ -161,6 +177,7 @@ pub struct Graph {
 impl Graph {
     #[new]
     #[pyo3(text_signature = "(architecture, config)")]
+    /// Create a new graph for the supplied architecture and configuration.
     pub fn new(py: Python, architecture: Py<Architecture>, config: Py<Config>) -> Self {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
         let inner = InnerGraph::new(architecture.borrow(py).inner, inner_config);
@@ -170,6 +187,7 @@ impl Graph {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return all instructions currently materialized in the graph.
     pub fn instructions(&self, py: Python) -> Vec<Instruction> {
         let mut result = Vec::<Instruction>::new();
         for inner_instruction in self.inner.lock().unwrap().blocks() {
@@ -190,6 +208,7 @@ impl Graph {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return all blocks currently materialized in the graph.
     pub fn blocks(&self, py: Python) -> Vec<Block> {
         let mut result = Vec::<Block>::new();
         for inner_block in self.inner.lock().unwrap().blocks() {
@@ -210,6 +229,7 @@ impl Graph {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return all functions currently materialized in the graph.
     pub fn functions(&self, py: Python) -> Vec<Function> {
         let mut result = Vec::<Function>::new();
         for inner_function in self.inner.lock().unwrap().functions() {
@@ -230,6 +250,7 @@ impl Graph {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Process queued graph state for instructions, blocks, and functions.
     pub fn process(&self) -> PyResult<()> {
         self.inner
             .lock()
@@ -239,6 +260,7 @@ impl Graph {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Process only queued block state.
     pub fn process_blocks(&self) -> PyResult<()> {
         self.inner
             .lock()
@@ -248,6 +270,7 @@ impl Graph {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Process only queued function state.
     pub fn process_functions(&self) -> PyResult<()> {
         self.inner
             .lock()
@@ -257,11 +280,13 @@ impl Graph {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the number of graph mutations that have occurred.
     pub fn mutations(&self) -> u64 {
         self.inner.lock().unwrap().mutations()
     }
 
     #[getter]
+    /// Return the queue that tracks instruction discovery.
     pub fn get_queue_instructions(&self, py: Python) -> Py<GraphQueue> {
         Py::new(
             py,
@@ -274,6 +299,7 @@ impl Graph {
     }
 
     #[getter]
+    /// Return the queue that tracks block discovery.
     pub fn get_queue_blocks(&self, py: Python) -> Py<GraphQueue> {
         Py::new(
             py,
@@ -286,6 +312,7 @@ impl Graph {
     }
 
     #[getter]
+    /// Return the queue that tracks function discovery.
     pub fn get_queue_functions(&self, py: Python) -> Py<GraphQueue> {
         Py::new(
             py,
@@ -298,16 +325,19 @@ impl Graph {
     }
 
     #[pyo3(text_signature = "($self, address)")]
+    /// Mark an address as a block entrypoint.
     pub fn set_block(&self, address: u64) -> bool {
         self.inner.lock().unwrap().set_block(address)
     }
 
     #[pyo3(text_signature = "($self, address)")]
+    /// Mark an address as a function entrypoint.
     pub fn set_function(&self, address: u64) -> bool {
         self.inner.lock().unwrap().set_function(address)
     }
 
     #[pyo3(text_signature = "($self, address, addresses)")]
+    /// Attach successor addresses to an instruction in the graph.
     pub fn extend_instruction_edges(&self, address: u64, addresses: BTreeSet<u64>) -> bool {
         self.inner
             .lock()
@@ -316,6 +346,7 @@ impl Graph {
     }
 
     #[pyo3(text_signature = "($self, address)")]
+    /// Return the instruction at `address`, if it exists in the graph.
     pub fn get_instruction(&self, py: Python, address: u64) -> Option<Instruction> {
         let cfg = Graph {
             inner: Arc::clone(&self.inner),
@@ -326,6 +357,7 @@ impl Graph {
     }
 
     #[pyo3(text_signature = "($self, cfg)")]
+    /// Merge another graph into this graph in place.
     pub fn merge(&mut self, py: Python, cfg: Py<Self>) {
         self.inner
             .lock()

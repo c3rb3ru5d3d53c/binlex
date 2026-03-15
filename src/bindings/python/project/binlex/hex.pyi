@@ -1,4 +1,6 @@
 from __future__ import annotations
 
+"""Hexadecimal encoding and decoding helpers."""
+
 def encode(bytes: bytes) -> str: ...
 def decode(value: str) -> bytes: ...

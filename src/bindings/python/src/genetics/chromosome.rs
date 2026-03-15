@@ -30,6 +30,7 @@ use pyo3::Py;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+/// Represent a chromosome pattern and its derived similarity features.
 #[pyclass]
 pub struct Chromosome {
     pub inner: Arc<Mutex<InnerChromosome>>,
@@ -39,6 +40,7 @@ pub struct Chromosome {
 impl Chromosome {
     #[new]
     #[pyo3(text_signature = "(pattern, config)")]
+    /// Create a chromosome from a YARA-like pattern string.
     pub fn new(py: Python, pattern: String, config: Py<Config>) -> PyResult<Self> {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
         let inner = InnerChromosome::new(pattern, inner_config.clone())?;
@@ -48,6 +50,7 @@ impl Chromosome {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the allele pairs that compose the chromosome.
     pub fn allelepairs(&self) -> Vec<AllelePair> {
         let mut result = Vec::<AllelePair>::new();
         for allelepair in self.inner.lock().unwrap().allelepairs() {
@@ -59,11 +62,13 @@ impl Chromosome {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the number of mutations applied to the chromosome.
     pub fn mutations(&self) -> usize {
         self.inner.lock().unwrap().mutations()
     }
 
     #[pyo3(text_signature = "($self, pattern)")]
+    /// Mutate the chromosome using a replacement pattern string.
     pub fn mutate(&mut self, pattern: String) -> PyResult<()> {
         self.inner
             .lock()
@@ -73,46 +78,55 @@ impl Chromosome {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the normalized pattern string for the chromosome.
     pub fn pattern(&self) -> String {
         self.inner.lock().unwrap().pattern()
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the feature vector bytes derived from the chromosome.
     pub fn feature(&self) -> Vec<u8> {
         self.inner.lock().unwrap().feature()
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the TLSH digest for the chromosome, if available.
     pub fn tlsh(&self) -> Option<String> {
         self.inner.lock().unwrap().tlsh()
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the MinHash digest for the chromosome, if available.
     pub fn minhash(&self) -> Option<String> {
         self.inner.lock().unwrap().minhash()
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the SHA-256 digest for the chromosome, if available.
     pub fn sha256(&self) -> Option<String> {
         self.inner.lock().unwrap().sha256()
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the entropy of the chromosome bytes, if available.
     pub fn entropy(&self) -> Option<f64> {
         self.inner.lock().unwrap().entropy()
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the normalized chromosome bytes.
     pub fn normalized(&self, py: Python) -> Py<PyBytes> {
         PyBytes::new(py, &self.inner.lock().unwrap().normalized()).unbind()
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Print the chromosome representation to stdout.
     pub fn print(&self) {
         self.inner.lock().unwrap().print();
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Convert the chromosome to a Python dictionary.
     pub fn to_dict(&self, py: Python) -> PyResult<Py<PyAny>> {
         let json_str = self.json(py)?;
         let json_module = py.import("json")?;
@@ -121,6 +135,7 @@ impl Chromosome {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the JSON representation of the chromosome.
     pub fn json(&self, _py: Python) -> PyResult<String> {
         self.inner
             .lock()
@@ -129,6 +144,7 @@ impl Chromosome {
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
     }
 
+    /// Return the JSON representation when converted to a string.
     pub fn __str__(&self, py: Python) -> PyResult<String> {
         self.json(py)
     }

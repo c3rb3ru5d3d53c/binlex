@@ -24,6 +24,7 @@ use binlex::Architecture as InnerArchitecture;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
+/// Represent a supported binary architecture.
 #[pyclass(eq)]
 #[derive(PartialEq)]
 pub struct Architecture {
@@ -33,6 +34,7 @@ pub struct Architecture {
 #[pymethods]
 impl Architecture {
     #[staticmethod]
+    /// Construct an architecture from its numeric enum value.
     pub fn from_value(value: u16) -> Self {
         let inner = match value {
             0x00 => InnerArchitecture::AMD64,
@@ -45,6 +47,7 @@ impl Architecture {
 
     #[staticmethod]
     #[pyo3(text_signature = "(s)")]
+    /// Parse an architecture from its string name.
     pub fn from_string(s: String) -> PyResult<Self> {
         let inner = InnerArchitecture::from_string(&s).map_err(|err| {
             PyValueError::new_err(format!(
@@ -55,11 +58,13 @@ impl Architecture {
         Ok(Architecture { inner })
     }
 
+    /// Return the architecture name when converted to a string.
     pub fn __str__(&self) -> String {
         self.inner.to_string()
     }
 
     #[getter]
+    /// Return the numeric enum value for the architecture.
     pub fn get_value(&self) -> u16 {
         self.inner as u16
     }

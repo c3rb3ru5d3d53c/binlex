@@ -20,6 +20,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+"""Lifter interfaces for converting bytes into intermediate representations."""
+
 from . import vex
 
 __all__ = ["vex"]

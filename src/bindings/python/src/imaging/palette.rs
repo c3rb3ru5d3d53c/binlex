@@ -25,6 +25,7 @@ use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use std::sync::{Arc, Mutex};
 
+/// Represent a named color palette used for binary visualizations.
 #[pyclass]
 pub struct Palette {
     pub inner: Arc<Mutex<InnerPalette>>,
@@ -33,6 +34,7 @@ pub struct Palette {
 #[pymethods]
 impl Palette {
     #[staticmethod]
+    /// Parse a palette from its string name.
     pub fn from_string(string: String) -> PyResult<Self> {
         let inner = InnerPalette::from_string(&string)
             .map_err(|e| PyErr::new::<PyRuntimeError, _>(e.to_string()))?;

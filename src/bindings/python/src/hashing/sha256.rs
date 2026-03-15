@@ -24,6 +24,7 @@ use pyo3::prelude::*;
 
 use binlex::hashing::sha256::SHA256 as InnerSHA256;
 
+/// Compute SHA-256 digests for byte sequences.
 #[pyclass]
 pub struct SHA256 {
     pub bytes: Vec<u8>,
@@ -33,11 +34,13 @@ pub struct SHA256 {
 impl SHA256 {
     #[new]
     #[pyo3(text_signature = "(bytes)")]
+    /// Create a SHA-256 helper for the provided bytes.
     pub fn new(bytes: Vec<u8>) -> Self {
         Self { bytes }
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the hexadecimal SHA-256 digest for the stored bytes.
     pub fn hexdigest(&self) -> Option<String> {
         InnerSHA256::new(&self.bytes).hexdigest()
     }

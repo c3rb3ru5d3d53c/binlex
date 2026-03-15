@@ -33,6 +33,7 @@ use std::io::Error;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+/// Parse and inspect an ELF image.
 #[pyclass(unsendable)]
 pub struct ELF {
     pub inner: Arc<Mutex<InnerELF>>,
@@ -42,6 +43,7 @@ pub struct ELF {
 impl ELF {
     #[new]
     #[pyo3(text_signature = "(path, config)")]
+    /// Open an ELF image from `path`.
     pub fn new(py: Python, path: String, config: Py<Config>) -> Result<Self, Error> {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
         let inner = InnerELF::new(path, inner_config)?;
@@ -52,6 +54,7 @@ impl ELF {
 
     #[classmethod]
     #[pyo3(text_signature = "(bytes, config)")]
+    /// Parse an ELF image from raw bytes in memory.
     pub fn from_bytes(
         _: &Bound<'_, PyType>,
         py: Python,
@@ -66,11 +69,13 @@ impl ELF {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the architecture of the ELF image.
     pub fn architecture(&self) -> Architecture {
         return Architecture::from_value(self.inner.lock().unwrap().architecture() as u16);
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return executable virtual address ranges for the ELF image.
     pub fn executable_virtual_address_ranges(&self) -> BTreeMap<u64, u64> {
         self.inner
             .lock()
@@ -108,6 +113,7 @@ impl ELF {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return an `Image` view over the ELF contents.
     pub fn image(&self, py: Python<'_>) -> PyResult<Py<Image>> {
         let result = self
             .inner
@@ -144,6 +150,7 @@ impl ELF {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the associated `File` helper for this image.
     pub fn file(&self, py: Python<'_>) -> PyResult<Py<File>> {
         let config = self.inner.lock().unwrap().config.clone();
         let file = self.inner.lock().unwrap().file().clone();

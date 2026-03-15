@@ -27,6 +27,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyMemoryView;
 use std::os::raw::c_char;
 
+/// Represent a writable mapped binary image stored on disk.
 #[pyclass]
 pub struct Image {
     pub inner: InnerImage,
@@ -36,6 +37,7 @@ pub struct Image {
 impl Image {
     #[new]
     #[pyo3(text_signature = "(path, cache)")]
+    /// Open or create an image file at `path`.
     pub fn new(path: &str, cache: bool) -> PyResult<Self> {
         let path = std::path::PathBuf::from(path);
         let inner = InnerImage::new(path, cache)
@@ -44,16 +46,19 @@ impl Image {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return whether the image is backed by a cache file.
     pub fn is_cached(&self) -> bool {
         self.inner.is_cached()
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the filesystem path backing the image.
     pub fn path(&self) -> String {
         self.inner.path()
     }
 
     #[pyo3(text_signature = "($self, data)")]
+    /// Write raw bytes at the current file position.
     pub fn write(&mut self, data: &[u8]) -> PyResult<u64> {
         let mut reader = std::io::Cursor::new(data);
         self.inner
@@ -62,6 +67,7 @@ impl Image {
     }
 
     #[pyo3(text_signature = "($self, length)")]
+    /// Write `length` bytes of padding at the current file position.
     pub fn write_padding(&mut self, length: usize) -> PyResult<()> {
         self.inner
             .write_padding(length)
@@ -69,6 +75,7 @@ impl Image {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Seek to the end of the image and return the resulting offset.
     pub fn seek_to_end(&mut self) -> PyResult<u64> {
         self.inner
             .seek_to_end()
@@ -76,6 +83,7 @@ impl Image {
     }
 
     #[pyo3(text_signature = "($self, offset)")]
+    /// Seek to an absolute offset in the image.
     pub fn seek(&mut self, offset: u64) -> PyResult<u64> {
         self.inner
             .seek(offset)
@@ -83,6 +91,7 @@ impl Image {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the current size of the image in bytes.
     pub fn size(&self) -> PyResult<u64> {
         self.inner
             .size()
@@ -90,6 +99,7 @@ impl Image {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return a read-only memory view over the mapped image bytes.
     pub fn mmap<'py>(&'py mut self, py: Python<'py>) -> PyResult<Py<PyMemoryView>> {
         let mmap = self
             .inner
@@ -112,6 +122,7 @@ impl Image {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return a writable memory view over the mapped image bytes.
     pub fn mmap_mut<'py>(&'py mut self, py: Python<'py>) -> PyResult<Py<PyMemoryView>> {
         let mmap = self
             .inner

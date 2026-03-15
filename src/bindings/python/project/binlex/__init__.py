@@ -20,6 +20,12 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+"""Public Python entrypoints for the binlex bindings.
+
+The `binlex` package re-exports the primary enums, configuration objects,
+and higher-level subpackages that wrap the compiled Rust extension.
+"""
+
 from binlex_bindings.binlex import Config
 from .architecture import Architecture
 from . import entropy

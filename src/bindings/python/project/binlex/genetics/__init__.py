@@ -20,4 +20,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+"""Genetic-inspired pattern and similarity types exposed by binlex."""
+
 from binlex_bindings.binlex.genetics import *

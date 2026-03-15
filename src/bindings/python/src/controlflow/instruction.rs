@@ -29,6 +29,7 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+/// Represent a single instruction inside a control-flow graph.
 #[pyclass]
 pub struct Instruction {
     pub address: u64,
@@ -66,6 +67,7 @@ impl Instruction {
 impl Instruction {
     #[new]
     #[pyo3(text_signature = "(address, cfg)")]
+    /// Create an instruction wrapper for the instruction at `address` in `cfg`.
     pub fn new(address: u64, cfg: Py<Graph>) -> PyResult<Self> {
         Ok(Self {
             address,
@@ -75,6 +77,7 @@ impl Instruction {
     }
 
     #[getter]
+    /// Return the address of the instruction.
     pub fn get_address(&self) -> u64 {
         self.address
     }
@@ -101,36 +104,43 @@ impl Instruction {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the block addresses containing this instruction.
     pub fn blocks(&self, py: Python) -> PyResult<BTreeSet<u64>> {
         self.with_inner_instruction(py, |instruction| Ok(instruction.blocks()))
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the next linear instruction address, if known.
     pub fn next(&self, py: Python) -> PyResult<Option<u64>> {
         self.with_inner_instruction(py, |instruction| Ok(instruction.next()))
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the successor addresses targeted by this instruction.
     pub fn to(&self, py: Python) -> PyResult<BTreeSet<u64>> {
         self.with_inner_instruction(py, |instruction| Ok(instruction.to()))
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return whether this instruction has an indirect branch target.
     pub fn has_indirect_target(&self, py: Python) -> PyResult<bool> {
         self.with_inner_instruction(py, |instruction| Ok(instruction.has_indirect_target()))
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the function addresses associated with this instruction.
     pub fn functions(&self, py: Python) -> PyResult<BTreeSet<u64>> {
         self.with_inner_instruction(py, |instruction| Ok(instruction.functions()))
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the size of the instruction in bytes.
     pub fn size(&self, py: Python) -> PyResult<usize> {
         self.with_inner_instruction(py, |instruction| Ok(instruction.size()))
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Convert the instruction to a Python dictionary.
     pub fn to_dict(&self, py: Python) -> PyResult<Py<PyAny>> {
         let json_str = self.json(py)?;
         let json_module = py.import("json")?;
@@ -139,6 +149,7 @@ impl Instruction {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the JSON representation of the instruction.
     pub fn json(&self, py: Python) -> PyResult<String> {
         self.with_inner_instruction(py, |instruction| {
             instruction
@@ -147,11 +158,13 @@ impl Instruction {
         })
     }
 
+    /// Return the JSON representation when converted to a string.
     pub fn __str__(&self, py: Python) -> PyResult<String> {
         self.json(py)
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Print the instruction representation to stdout.
     pub fn print(&self, py: Python) -> PyResult<()> {
         self.with_inner_instruction(py, |instruction| {
             instruction.print();

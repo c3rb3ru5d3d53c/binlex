@@ -20,6 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+//! Python bindings for global configuration, architecture, and magic enums.
+
 pub mod architecture;
 pub mod config;
 pub mod magic;

@@ -20,17 +20,38 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+"""IDA Pro integration helpers for binlex disassembly workflows.
+
+This module is import-safe outside IDA so documentation tooling can inspect the
+package, but the runtime functionality requires the IDA Python environment.
+"""
+
 import os
-import re
 import tempfile
-import idapro
-import idc
-import ida_ida
-import ida_nalt
-import idaapi
-import idautils
-import ida_bytes
-import ida_ua
+from typing import List
+
+try:
+	import idapro
+	import idc
+	import ida_ida
+	import ida_nalt
+	import idaapi
+	import idautils
+	import ida_bytes
+	import ida_ua
+	IDA_AVAILABLE = True
+	IDA_IMPORT_ERROR = None
+except ModuleNotFoundError as exc:
+	idapro = None
+	idc = None
+	ida_ida = None
+	ida_nalt = None
+	idaapi = None
+	idautils = None
+	ida_bytes = None
+	ida_ua = None
+	IDA_AVAILABLE = False
+	IDA_IMPORT_ERROR = exc
 
 from binlex_bindings.binlex.controlflow import (
 	Graph,
@@ -45,19 +66,31 @@ from binlex_bindings.binlex import (
 	Config,
 )
 
-from typing import List
+
+def _require_ida() -> None:
+	if not IDA_AVAILABLE:
+		raise RuntimeError(
+			"The IDA disassembler integration requires the IDA Python runtime."
+		) from IDA_IMPORT_ERROR
 
 class IDACommon():
+	"""Shared helpers for objects backed by the active IDA database."""
 
 	@staticmethod
 	def architecture() -> Architecture:
+		"""Return the current IDA processor as a binlex architecture."""
+		_require_ida()
 		if ida_ida.inf_get_procname() == 'metapc':
 			if ida_ida.inf_is_32bit_exactly():
 				return Architecture.from_str('i386')
 			return Architecture.from_str('amd64')
 
 class IDAInstruction(IDACommon):
+	"""Lightweight view of an instruction decoded by IDA."""
+
 	def __init__(self, address: int):
+		"""Decode the instruction located at `address`."""
+		_require_ida()
 		instruction = ida_ua.insn_t()
 		ida_ua.decode_insn(instruction, address)
 		self.instruction = instruction
@@ -69,7 +102,11 @@ class IDAInstruction(IDACommon):
 		return self.instruction.size
 
 class IDABlock(IDACommon):
+	"""Basic-block wrapper exposing IDA flow-chart information."""
+
 	def __init__(self, block):
+		"""Wrap an IDA basic block object."""
+		_require_ida()
 		self.block = block
 
 	def address(self) -> int:
@@ -91,7 +128,11 @@ class IDABlock(IDACommon):
 		return set([self.address() for bb in self.block.succs()])
 
 class IDAFunction(IDACommon):
+	"""Function wrapper backed by IDA's database model."""
+
 	def __init__(self, address: int):
+		"""Look up and wrap the function containing `address`."""
+		_require_ida()
 		self.function = idaapi.get_func(address)
 
 	def address(self):
@@ -104,8 +145,10 @@ class IDAFunction(IDACommon):
 		return idc.get_func_name(self.address)
 
 class IDA():
+	"""High-level helpers for interrogating the active IDA session."""
+
 	def __init__(self):
-		pass
+		_require_ida()
 
 	def processor(self) -> str | None:
 		return ida_ida.inf_get_procname()
@@ -181,7 +224,11 @@ class IDA():
 		return mapped_file
 
 class Disassembler():
+	"""Bridge IDA database objects into binlex control-flow structures."""
+
 	def __init__(self, architecture: Architecture, image: bytes, executable_virtual_address_ranges: dict, config: Config):
+		"""Create a disassembler that uses IDA for traversal and Capstone for decode."""
+		_require_ida()
 		self.architecture = architecture
 		self.executable_virtual_address_ranges = executable_virtual_address_ranges
 		self.config = config
@@ -194,9 +241,11 @@ class Disassembler():
 		)
 
 	def disassemble_instruction(self, instruction: IDAInstruction, cfg: Graph):
+		"""Disassemble a decoded IDA instruction into the graph."""
 		self.disassembler.disassemble_instruction(instruction.address(), cfg)
 
 	def disassemble_block(self, block: IDABlock, cfg: Graph):
+		"""Disassemble every instruction in an IDA basic block."""
 		for instruction in block.instructions():
 			self.disassemble_instruction(instruction, cfg)
 			if IDA().is_function_address(instruction.address()):
@@ -207,9 +256,11 @@ class Disassembler():
 				cfg.extend_instruction_edges(instruction.address(), block.to())
 
 	def disassemble_function(self, function: IDAFunction, cfg: Graph):
+		"""Disassemble every block in an IDA function."""
 		for block in function.blocks():
 			self.disassemble_block(block, cfg)
 
 	def disassemble_controlflow(self, cfg: Graph):
+		"""Disassemble all functions discovered in the open IDA database."""
 		for function in IDA().functions():
 			self.disassemble_function(function, cfg)

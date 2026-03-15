@@ -20,12 +20,16 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+"""SVG rendering helpers for binary visualization output."""
+
 from binlex_bindings.binlex.imaging import SVG as _SVGBinding
 
 from .palette import Palette
 
 
 class SVG:
+    """Render binary data into an SVG image."""
+
     def __init__(
         self,
         data: bytes,
@@ -33,6 +37,7 @@ class SVG:
         cell_size: int = 1,
         fixed_width: int = 16,
     ) -> None:
+        """Create an SVG renderer for `data` using the given palette."""
         self._inner = _SVGBinding(
             data,
             palette.to_binding(),
@@ -41,15 +46,19 @@ class SVG:
         )
 
     def add_metadata(self, key: str, value: str) -> None:
+        """Attach an SVG metadata field to the generated document."""
         self._inner.add_metadata(key, value)
 
     def to_string(self) -> str:
+        """Return the generated SVG document as a string."""
         return self._inner.to_string()
 
     def write(self, file_path: str) -> None:
+        """Write the SVG document to `file_path`."""
         self._inner.write(file_path)
 
     def print(self) -> None:
+        """Print the generated SVG document to stdout."""
         self._inner.print()
 
     def __str__(self) -> str:

@@ -20,18 +20,23 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+"""Color palette definitions for binary visualizations."""
+
 from enum import Enum
 
 from binlex_bindings.binlex.imaging import Palette as _PaletteBinding
 
 
 class Palette(str, Enum):
+    """Named palettes used by PNG, SVG, terminal, and render helpers."""
+
     GRAYSCALE = "grayscale"
     HEATMAP = "heatmap"
     BLUEGREEN = "bluegreen"
     REDBLACK = "redblack"
 
     def to_binding(self) -> _PaletteBinding:
+        """Convert the enum value into the underlying Rust binding enum."""
         return _PaletteBinding.from_string(self.value)
 
 __all__ = ["Palette"]

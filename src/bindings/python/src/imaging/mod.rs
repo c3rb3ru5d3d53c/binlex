@@ -20,6 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+//! Python bindings for binary rendering helpers and palette types.
+
 pub mod palette;
 pub mod png;
 pub mod render;

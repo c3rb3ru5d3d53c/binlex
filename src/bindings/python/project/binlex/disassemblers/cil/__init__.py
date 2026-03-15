@@ -20,4 +20,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+"""CIL disassembly bindings for .NET instruction streams."""
+
 from binlex_bindings.binlex.disassemblers.cil import Disassembler

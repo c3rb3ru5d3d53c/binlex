@@ -837,6 +837,7 @@ impl ConfigFormatsFileHashingTLSH {
     }
 }
 
+/// Top-level mutable configuration object for binlex analysis behavior.
 #[pyclass]
 pub struct Config {
     pub inner: Arc<Mutex<InnerConfig>>,
@@ -845,6 +846,7 @@ pub struct Config {
 #[pymethods]
 impl Config {
     #[new]
+    /// Create a configuration object initialized with built-in defaults.
     pub fn new() -> Self {
         Self {
             inner: Arc::new(Mutex::new(InnerConfig::new())),
@@ -852,6 +854,7 @@ impl Config {
     }
 
     #[getter]
+    /// Return the general configuration group.
     pub fn get_general(&self) -> PyResult<ConfigGeneral> {
         Ok(ConfigGeneral {
             inner: Arc::clone(&self.inner),
@@ -859,12 +862,14 @@ impl Config {
     }
 
     #[getter]
+    /// Return the processor execution configuration group.
     pub fn get_processors(&self) -> PyResult<ConfigProcessors> {
         Ok(ConfigProcessors {
             inner: Arc::clone(&self.inner),
         })
     }
     #[getter]
+    /// Return the format parsing configuration group.
     pub fn get_formats(&self) -> PyResult<ConfigFormats> {
         Ok(ConfigFormats {
             inner: Arc::clone(&self.inner),
@@ -872,6 +877,7 @@ impl Config {
     }
 
     #[getter]
+    /// Return the block analysis configuration group.
     pub fn get_blocks(&self) -> PyResult<ConfigBlocks> {
         Ok(ConfigBlocks {
             inner: Arc::clone(&self.inner),
@@ -879,6 +885,7 @@ impl Config {
     }
 
     #[getter]
+    /// Return the instruction analysis configuration group.
     pub fn get_instructions(&self) -> PyResult<ConfigInstructions> {
         Ok(ConfigInstructions {
             inner: Arc::clone(&self.inner),
@@ -886,6 +893,7 @@ impl Config {
     }
 
     #[getter]
+    /// Return the function analysis configuration group.
     pub fn get_functions(&self) -> PyResult<ConfigFunctions> {
         Ok(ConfigFunctions {
             inner: Arc::clone(&self.inner),
@@ -893,6 +901,7 @@ impl Config {
     }
 
     #[getter]
+    /// Return the chromosome analysis configuration group.
     pub fn get_chromosomes(&self) -> PyResult<ConfigChromosomes> {
         Ok(ConfigChromosomes {
             inner: Arc::clone(&self.inner),
@@ -900,6 +909,7 @@ impl Config {
     }
 
     #[getter]
+    /// Return the memory-mapping configuration group.
     pub fn get_mmap(&self) -> PyResult<ConfigMmap> {
         Ok(ConfigMmap {
             inner: Arc::clone(&self.inner),
@@ -907,6 +917,7 @@ impl Config {
     }
 
     #[getter]
+    /// Return the disassembler configuration group.
     pub fn get_disassembler(&self) -> PyResult<ConfigDisassembler> {
         Ok(ConfigDisassembler {
             inner: Arc::clone(&self.inner),
@@ -914,51 +925,61 @@ impl Config {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Enable the minimal-analysis preset.
     pub fn enable_minimal(&mut self) {
         self.inner.lock().unwrap().enable_minimal();
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Disable configured hashing features where supported.
     pub fn disable_hashing(&mut self) {
         self.inner.lock().unwrap().disable_hashing();
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Disable heuristic features where supported.
     pub fn disable_heuristics(&mut self) {
         self.inner.lock().unwrap().disable_heuristics();
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Disable chromosome-specific heuristics.
     pub fn disable_chromosome_heuristics(&mut self) {
         self.inner.lock().unwrap().disable_chromosome_heuristics();
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Disable chromosome-specific hashing.
     pub fn disable_chromosome_hashing(&mut self) {
         self.inner.lock().unwrap().disable_chromosome_hashing();
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Disable block hashing features.
     pub fn disable_block_hashing(&mut self) {
         self.inner.lock().unwrap().disable_block_hashing();
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Disable function hashing features.
     pub fn disable_function_hashing(&mut self) {
         self.inner.lock().unwrap().disable_function_hashing();
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Disable function heuristics.
     pub fn disable_function_heuristics(&mut self) {
         self.inner.lock().unwrap().disable_function_heuristics();
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Disable block heuristics.
     pub fn disable_block_heuristics(&mut self) {
         self.inner.lock().unwrap().disable_block_heuristics();
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Load configuration values from the default config source.
     pub fn from_default(&mut self) -> PyResult<()> {
         self.inner
             .lock()
@@ -968,6 +989,7 @@ impl Config {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the serialized configuration text.
     pub fn to_string(&self) -> PyResult<String> {
         self.inner
             .lock()
@@ -977,6 +999,7 @@ impl Config {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Print the serialized configuration text to stdout.
     pub fn print(&self) {
         self.inner.lock().unwrap().print()
     }
@@ -1130,17 +1153,20 @@ impl ConfigGeneral {
     }
 }
 
+/// Access settings that control processor orchestration and worker behavior.
 #[pyclass]
 pub struct ConfigProcessors {
     pub inner: Arc<Mutex<InnerConfig>>,
 }
 
+/// Access settings for a single named processor backend.
 #[pyclass]
 pub struct ConfigProcessor {
     pub inner: Arc<Mutex<InnerConfig>>,
     pub name: String,
 }
 
+/// Access per-target enablement for processor-produced objects.
 #[pyclass]
 pub struct ConfigProcessorTarget {
     pub inner: Arc<Mutex<InnerConfig>>,
@@ -1151,6 +1177,7 @@ pub struct ConfigProcessorTarget {
 #[pymethods]
 impl ConfigProcessorTarget {
     #[getter]
+    /// Return whether this processor target type is enabled.
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
         inner
@@ -1165,6 +1192,7 @@ impl ConfigProcessorTarget {
     }
 
     #[setter]
+    /// Enable or disable this processor target type.
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
         if let Some(processor) = inner.processors.ensure_processor(&self.processor_name) {
@@ -1181,6 +1209,7 @@ impl ConfigProcessorTarget {
 #[pymethods]
 impl ConfigProcessor {
     #[getter]
+    /// Return whether this processor backend is enabled.
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
         inner
@@ -1190,6 +1219,7 @@ impl ConfigProcessor {
     }
 
     #[setter]
+    /// Enable or disable this processor backend.
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
         if let Some(processor) = inner.processors.ensure_processor(&self.name) {
@@ -1198,6 +1228,7 @@ impl ConfigProcessor {
     }
 
     #[getter]
+    /// Return settings for instruction outputs produced by this processor.
     pub fn get_instructions(&self) -> ConfigProcessorTarget {
         ConfigProcessorTarget {
             inner: Arc::clone(&self.inner),
@@ -1207,6 +1238,7 @@ impl ConfigProcessor {
     }
 
     #[getter]
+    /// Return settings for block outputs produced by this processor.
     pub fn get_blocks(&self) -> ConfigProcessorTarget {
         ConfigProcessorTarget {
             inner: Arc::clone(&self.inner),
@@ -1216,6 +1248,7 @@ impl ConfigProcessor {
     }
 
     #[getter]
+    /// Return settings for function outputs produced by this processor.
     pub fn get_functions(&self) -> ConfigProcessorTarget {
         ConfigProcessorTarget {
             inner: Arc::clone(&self.inner),
@@ -1227,6 +1260,7 @@ impl ConfigProcessor {
 
 #[pymethods]
 impl ConfigProcessors {
+    /// Return a processor configuration view by name.
     pub fn processor(&self, name: String) -> ConfigProcessor {
         ConfigProcessor {
             inner: Arc::clone(&self.inner),
@@ -1235,6 +1269,7 @@ impl ConfigProcessors {
     }
 
     #[getter]
+    /// Return the built-in VEX processor configuration.
     pub fn get_vex(&self) -> ConfigProcessor {
         ConfigProcessor {
             inner: Arc::clone(&self.inner),
@@ -1243,12 +1278,14 @@ impl ConfigProcessors {
     }
 
     #[getter]
+    /// Return whether processor orchestration is enabled.
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
         inner.processors.enabled
     }
 
     #[setter]
+    /// Enable or disable processor orchestration.
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
         inner.processors.enabled = value;

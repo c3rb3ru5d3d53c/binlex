@@ -20,6 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+//! Python bindings for hashing and similarity digest helpers.
+
 pub mod minhash;
 pub mod sha256;
 pub mod tlsh;

@@ -33,6 +33,7 @@ use std::io::Error;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+/// Parse and inspect a Mach-O image, including fat binaries with slices.
 #[pyclass(unsendable)]
 pub struct MACHO {
     pub inner: Arc<Mutex<InnerMACHO>>,
@@ -42,6 +43,7 @@ pub struct MACHO {
 impl MACHO {
     #[new]
     #[pyo3(text_signature = "(path, config)")]
+    /// Open a Mach-O image from `path`.
     pub fn new(py: Python, path: String, config: Py<Config>) -> Result<Self, Error> {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
         let inner = InnerMACHO::new(path, inner_config)?;
@@ -52,6 +54,7 @@ impl MACHO {
 
     #[classmethod]
     #[pyo3(text_signature = "(bytes, config)")]
+    /// Parse a Mach-O image from raw bytes in memory.
     pub fn from_bytes(
         _: &Bound<'_, PyType>,
         py: Python,
@@ -86,6 +89,7 @@ impl MACHO {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the number of slices in the Mach-O image.
     pub fn number_of_slices(&self) -> usize {
         self.inner.lock().unwrap().number_of_slices()
     }
@@ -106,6 +110,7 @@ impl MACHO {
     }
 
     #[pyo3(text_signature = "($self, slice)")]
+    /// Return the architecture for a given slice, if available.
     pub fn architecture(&self, slice: usize) -> Option<Architecture> {
         let architecture = self.inner.lock().unwrap().architecture(slice);
         architecture.as_ref()?;
@@ -136,6 +141,7 @@ impl MACHO {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return an `Image` view over the selected slice.
     pub fn image(&self, py: Python<'_>, slice: usize) -> PyResult<Py<Image>> {
         let result = self
             .inner
@@ -167,6 +173,7 @@ impl MACHO {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the associated `File` helper for this image.
     pub fn file(&self, py: Python<'_>) -> PyResult<Py<File>> {
         let config = self.inner.lock().unwrap().config.clone();
         let file = self.inner.lock().unwrap().file().clone();

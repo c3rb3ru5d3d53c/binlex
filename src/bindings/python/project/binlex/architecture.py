@@ -20,25 +20,32 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+"""Architecture enums used throughout the Python wrapper API."""
+
 from enum import Enum
 
 from binlex_bindings.binlex import Architecture as _ArchitectureBinding
 
 
 class Architecture(str, Enum):
+    """Supported CPU or bytecode architectures understood by binlex."""
+
     AMD64 = "amd64"
     I386 = "i386"
     CIL = "cil"
 
     def to_binding(self) -> _ArchitectureBinding:
+        """Convert the enum value into the underlying native binding enum."""
         return _ArchitectureBinding.from_string(self.value)
 
     @classmethod
     def from_binding(cls, architecture: _ArchitectureBinding) -> "Architecture":
+        """Convert a native binding enum into the Python `Architecture` enum."""
         return cls(str(architecture))
 
 
 def _coerce_architecture(architecture: Architecture | _ArchitectureBinding) -> _ArchitectureBinding:
+    """Normalize Python and native architecture enums into the native form."""
     if isinstance(architecture, Architecture):
         return architecture.to_binding()
     return architecture

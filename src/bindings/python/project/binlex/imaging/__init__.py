@@ -20,6 +20,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+"""Image rendering helpers for terminal, PNG, SVG, and palette output."""
+
 from .palette import Palette
 from .png import PNG
 from .render import Render, RenderCell

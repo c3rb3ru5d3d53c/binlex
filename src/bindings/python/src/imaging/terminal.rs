@@ -28,6 +28,7 @@ use pyo3::types::PyBytes;
 use pyo3::Py;
 use std::sync::{Arc, Mutex};
 
+/// Render bytes as ANSI-colored terminal output.
 #[pyclass]
 pub struct Terminal {
     inner: Arc<Mutex<InnerTerminal>>,
@@ -38,6 +39,7 @@ impl Terminal {
     #[new]
     #[pyo3(signature = (data, palette, cell_size=1, fixed_width=16))]
     #[pyo3(text_signature = "(data, palette, cell_size=1, fixed_width=16)")]
+    /// Create a terminal renderer for the provided bytes and palette.
     pub fn new(
         py: Python,
         data: Py<PyBytes>,
@@ -58,6 +60,7 @@ impl Terminal {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Print the rendered terminal output to stdout.
     pub fn print(&self) -> PyResult<()> {
         self.inner
             .lock()
@@ -68,6 +71,7 @@ impl Terminal {
 
     #[staticmethod]
     #[pyo3(text_signature = "(r, g, b)")]
+    /// Convert an RGB triplet into the nearest ANSI 256-color index.
     pub fn rgb_to_ansi256(r: u8, g: u8, b: u8) -> u8 {
         InnerTerminal::rgb_to_ansi256(r, g, b)
     }

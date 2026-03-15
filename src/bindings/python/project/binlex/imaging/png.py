@@ -20,12 +20,16 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+"""PNG rendering helpers for binary visualization output."""
+
 from binlex_bindings.binlex.imaging import PNG as _PNGBinding
 
 from .palette import Palette
 
 
 class PNG:
+    """Render binary data into a PNG image."""
+
     def __init__(
         self,
         data: bytes,
@@ -33,6 +37,7 @@ class PNG:
         cell_size: int = 1,
         fixed_width: int = 16,
     ) -> None:
+        """Create a PNG renderer for `data` using the given palette."""
         self._inner = _PNGBinding(
             data,
             palette.to_binding(),
@@ -41,9 +46,11 @@ class PNG:
         )
 
     def bytes(self) -> bytes:
+        """Return the encoded PNG image as raw bytes."""
         return self._inner.bytes()
 
     def write(self, file_path: str) -> None:
+        """Write the encoded PNG image to `file_path`."""
         self._inner.write(file_path)
 
 

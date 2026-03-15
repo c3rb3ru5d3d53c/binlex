@@ -20,4 +20,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+"""Common supporting types exposed by the Python bindings."""
+
 from binlex_bindings.binlex.types import *
