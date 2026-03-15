@@ -426,14 +426,14 @@ impl<'function> Function<'function> {
                 );
             }
         } else {
-            for processor_name in crate::processors::enabled_processors_for_target(
+            for processor in crate::processors::enabled_processors_for_target(
                 &self.cfg.config,
                 crate::processors::ProcessorTarget::Function,
             ) {
-                if let Some(output) = crate::processors::process_function(self, processor_name) {
+                if let Some(output) = processor.process_function(self) {
                     crate::processors::apply_output(
                         json.processors.get_or_insert_with(Default::default),
-                        processor_name,
+                        processor.name(),
                         &output,
                     );
                 }

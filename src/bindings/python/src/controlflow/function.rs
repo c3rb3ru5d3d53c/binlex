@@ -141,11 +141,6 @@ impl FunctionJsonDeserializer {
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn prologue(&self) -> bool {
-        self.inner.lock().unwrap().prologue()
-    }
-
-    #[pyo3(text_signature = "($self)")]
     pub fn chromosome(&self) -> Chromosome {
         let inner_chromosome = self.inner.lock().unwrap().chromosome();
         Chromosome {

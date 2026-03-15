@@ -603,11 +603,9 @@ impl Graph {
                         Err(_) => continue,
                     };
                     let mut entity_outputs = Vec::new();
-                    for processor_name in &enabled {
-                        if let Some(output) =
-                            crate::processors::process_block(&block, processor_name)
-                        {
-                            entity_outputs.push((*processor_name, output));
+                    for processor in &enabled {
+                        if let Some(output) = processor.process_block(&block) {
+                            entity_outputs.push((processor.name(), output));
                         }
                     }
                     if !entity_outputs.is_empty() {
@@ -622,11 +620,9 @@ impl Graph {
                         Err(_) => continue,
                     };
                     let mut entity_outputs = Vec::new();
-                    for processor_name in &enabled {
-                        if let Some(output) =
-                            crate::processors::process_function(&function, processor_name)
-                        {
-                            entity_outputs.push((*processor_name, output));
+                    for processor in &enabled {
+                        if let Some(output) = processor.process_function(&function) {
+                            entity_outputs.push((processor.name(), output));
                         }
                     }
                     if !entity_outputs.is_empty() {
