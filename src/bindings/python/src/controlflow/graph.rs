@@ -327,11 +327,6 @@ impl Graph {
             .unwrap()
             .merge(&mut cfg.borrow_mut(py).inner.lock().unwrap());
     }
-
-    #[pyo3(text_signature = "($self, cfg)")]
-    pub fn absorb(&mut self, py: Python, cfg: Py<Self>) {
-        self.merge(py, cfg);
-    }
 }
 
 #[pymodule]

@@ -4,11 +4,10 @@ use libvex::{Arch, TranslateArgs, VexEndness};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use crate::controlflow::{Block, Function};
+use crate::controlflow::{Block, Function, Instruction};
 use crate::lifters::vex::{VexLiftRequest, VexLiftResponse};
 use crate::processing::error::ProcessorError;
 use crate::processing::processor::Processor;
-use crate::processors::{EntityProcessor, ProcessorTarget};
 
 const BUFFER_PADDING: usize = 64;
 
@@ -25,7 +24,6 @@ pub enum VexResponse {
 pub struct VexProcessor;
 
 impl Processor for VexProcessor {
-    const ID: u16 = 1;
     const NAME: &'static str = "vex";
     type Request = VexRequest;
     type Response = VexResponse;
@@ -100,28 +98,24 @@ impl VexProcessor {
         let vex = lifter.process().ok()?;
         Some(json!({ "ir": vex.ir }))
     }
-}
 
-impl EntityProcessor for VexProcessor {
-    fn name(&self) -> &'static str {
-        Self::NAME
-    }
-
-    fn enabled_for_target(&self, config: &crate::Config, target: ProcessorTarget) -> bool {
-        config.processors.enabled
-            && config.processors.vex.enabled
-            && match target {
-                ProcessorTarget::Instruction => config.processors.vex.instructions.enabled,
-                ProcessorTarget::Block => config.processors.vex.blocks.enabled,
-                ProcessorTarget::Function => config.processors.vex.functions.enabled,
-            }
-    }
-
-    fn process_block(&self, block: &Block<'_>) -> Option<Value> {
-        Self::process_block(block)
-    }
-
-    fn process_function(&self, function: &Function<'_>) -> Option<Value> {
-        Self::process_function(function)
+    pub fn process_instruction(instruction: &Instruction) -> Option<Value> {
+        let mut lifter = crate::lifters::vex::Lifter::new(
+            instruction.architecture,
+            &instruction.bytes,
+            instruction.address,
+            instruction.config.clone(),
+        )
+        .ok()?;
+        let vex = lifter.process().ok()?;
+        Some(json!({ "ir": vex.ir }))
     }
 }
+
+crate::processor!(VexProcessor {
+    os: [linux, macos],
+    enabled: false,
+    instructions: { enabled: false },
+    blocks: { enabled: false },
+    functions: { enabled: true },
+});

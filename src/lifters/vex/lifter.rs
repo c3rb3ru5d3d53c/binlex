@@ -20,7 +20,6 @@ pub struct VexLiftRequest {
     pub architecture: Architecture,
     pub address: u64,
     pub bytes: Vec<u8>,
-    pub config: Config,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -226,7 +225,6 @@ impl Lifter {
                 architecture: self.architecture,
                 address: self.address,
                 bytes: self.bytes.clone(),
-                config: self.config.clone(),
             }))
             .map_err(|error: crate::processing::ProcessorError| Error::other(error.to_string()))?;
 

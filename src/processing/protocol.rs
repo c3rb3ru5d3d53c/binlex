@@ -5,7 +5,7 @@ use lz4::block::{compress, decompress};
 use crate::processing::error::ProcessorError;
 
 pub const MAGIC: [u8; 4] = *b"BLEX";
-pub const VERSION: u16 = 1;
+pub const VERSION: u16 = 2;
 
 pub const FLAG_COMPRESSED: u16 = 0x1;
 
@@ -55,11 +55,20 @@ pub struct Frame {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct HelloProcessor {
+    pub id: u16,
+    pub name: String,
+    pub os: Vec<crate::processors::ProcessorOs>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct Hello {
     pub protocol_version: u16,
     pub backend_name: String,
+    pub host_os: crate::processors::ProcessorOs,
     pub processor_name: String,
     pub supported_ids: Vec<u16>,
+    pub processors: Vec<HelloProcessor>,
     pub pid: u32,
 }
 

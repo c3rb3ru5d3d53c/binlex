@@ -23,6 +23,7 @@
 use dirs;
 use serde;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::env;
 use std::io::Error;
 use std::io::ErrorKind;
@@ -43,9 +44,22 @@ pub struct ConfigFunctionBlocks {
     pub enabled: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct ConfigProcessorTarget {
     pub enabled: bool,
+    #[serde(flatten, default)]
+    pub extra: BTreeMap<String, ConfigProcessorValue>,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum ConfigProcessorValue {
+    Bool(bool),
+    Integer(i64),
+    Float(f64),
+    String(String),
+    Array(Vec<ConfigProcessorValue>),
+    Table(BTreeMap<String, ConfigProcessorValue>),
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -101,15 +115,17 @@ pub struct Config {
     pub processors: ConfigProcessors,
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
-pub struct ConfigProcessorsVex {
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
+pub struct ConfigProcessor {
     pub enabled: bool,
     pub instructions: ConfigProcessorTarget,
     pub blocks: ConfigProcessorTarget,
     pub functions: ConfigProcessorTarget,
+    #[serde(flatten, default)]
+    pub extra: BTreeMap<String, ConfigProcessorValue>,
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct ConfigProcessors {
     pub enabled: bool,
     pub path: Option<String>,
@@ -119,8 +135,8 @@ pub struct ConfigProcessors {
     pub max_payload_bytes: usize,
     pub idle_timeout_ms: u64,
     pub max_queue_depth: usize,
-    #[serde(default)]
-    pub vex: ConfigProcessorsVex,
+    #[serde(flatten, default)]
+    pub processors: BTreeMap<String, ConfigProcessor>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -458,18 +474,25 @@ impl Default for ConfigProcessors {
             max_payload_bytes: 4 * 1024 * 1024,
             idle_timeout_ms: 30_000,
             max_queue_depth: 2 * 64,
-            vex: ConfigProcessorsVex::default(),
+            processors: crate::processors::default_processor_configs(),
         }
     }
 }
 
-impl Default for ConfigProcessorsVex {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            instructions: ConfigProcessorTarget { enabled: false },
-            blocks: ConfigProcessorTarget { enabled: false },
-            functions: ConfigProcessorTarget { enabled: true },
+impl ConfigProcessors {
+    pub fn processor(&self, name: &str) -> Option<&ConfigProcessor> {
+        self.processors.get(name)
+    }
+
+    pub fn processor_mut(&mut self, name: &str) -> Option<&mut ConfigProcessor> {
+        self.processors.get_mut(name)
+    }
+
+    pub fn ensure_processor(&mut self, name: &str) -> Option<&mut ConfigProcessor> {
+        if !self.processors.contains_key(name) {
+            let default = crate::processors::default_processor_config(name)?;
+            self.processors.insert(name.to_string(), default);
         }
+        self.processors.get_mut(name)
     }
 }

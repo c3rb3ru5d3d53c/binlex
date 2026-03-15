@@ -1,6 +1,6 @@
 #![cfg(not(target_os = "windows"))]
 
-use binlex::global::{Architecture, Config};
+use binlex::global::Architecture;
 use binlex::lifters::vex::VexLiftRequest;
 use binlex::processing::processor::Processor;
 use binlex::processors::vex::{VexProcessor, VexRequest, VexResponse};
@@ -12,7 +12,6 @@ fn test_vex_processor_handles_encoded_lift_request() {
         architecture: Architecture::AMD64,
         address: 0x1000,
         bytes: vec![0xC3],
-        config: Config::default(),
     }))
     .expect("request should serialize");
 

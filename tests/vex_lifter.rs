@@ -23,9 +23,13 @@ fn test_config() -> Config {
     config.processors.path = Some(processor_dir.to_string_lossy().into_owned());
     config.processors.processes = 1;
     config.processors.compression = true;
-    config.processors.vex.enabled = true;
-    config.processors.vex.blocks.enabled = true;
-    config.processors.vex.functions.enabled = true;
+    let vex = config
+        .processors
+        .ensure_processor("vex")
+        .expect("vex processor config should exist");
+    vex.enabled = true;
+    vex.blocks.enabled = true;
+    vex.functions.enabled = true;
     config
 }
 

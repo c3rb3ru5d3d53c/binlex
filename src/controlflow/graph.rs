@@ -551,14 +551,15 @@ impl Graph {
         }
     }
 
-    pub fn absorb(&mut self, graph: &mut Graph) {
-        self.merge(graph);
-    }
-
     pub fn process(&self) -> Result<(), Error> {
+        self.process_instructions()?;
         self.process_blocks()?;
         self.process_functions()?;
         Ok(())
+    }
+
+    pub fn process_instructions(&self) -> Result<(), Error> {
+        self.process_target(ProcessorTarget::Instruction)
     }
 
     pub fn process_blocks(&self) -> Result<(), Error> {
@@ -595,7 +596,23 @@ impl Graph {
 
         let mut outputs = HashMap::new();
         match target {
-            ProcessorTarget::Instruction => {}
+            ProcessorTarget::Instruction => {
+                for address in self.instructions.valid_addresses() {
+                    let instruction = match self.get_instruction(address) {
+                        Some(instruction) => instruction,
+                        None => continue,
+                    };
+                    let mut entity_outputs = Vec::new();
+                    for processor in &enabled {
+                        if let Some(output) = processor.process_instruction(&instruction) {
+                            entity_outputs.push((processor.name(), output));
+                        }
+                    }
+                    if !entity_outputs.is_empty() {
+                        outputs.insert(address, entity_outputs);
+                    }
+                }
+            }
             ProcessorTarget::Block => {
                 for address in self.blocks.valid_addresses() {
                     let block = match Block::new(address, self) {
