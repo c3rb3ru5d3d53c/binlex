@@ -156,7 +156,9 @@ fn apply_cli_overrides(args: &Args, config: &mut Config) {
     if let Some(processors) = &args.processors {
         let enabled_processors: HashSet<_> = processors.iter().copied().collect();
         config.processors.enabled = !enabled_processors.is_empty();
-        config.processors.vex.enabled = enabled_processors.contains(&ProcessorSelection::Vex);
+        if let Some(vex) = config.processors.ensure_processor("vex") {
+            vex.enabled = enabled_processors.contains(&ProcessorSelection::Vex);
+        }
     }
 
     if args.disable_heuristics {
@@ -468,6 +470,7 @@ fn process_output(
     let mut instructions = Vec::<LZ4String>::new();
 
     if cfg.config.instructions.enabled {
+        let _ = cfg.process_instructions();
         instructions = cfg
             .instructions
             .valid()
@@ -485,9 +488,20 @@ fn process_output(
                 for attribute in &attributes.values {
                     instruction_attributes.push(attribute.clone());
                 }
-                instruction
-                    .json_with_attributes(instruction_attributes.clone())
-                    .ok()
+                let mut raw = instruction.process_with_attributes(instruction_attributes.clone());
+                if let Some(outputs) = cfg.processor_outputs(
+                    binlex::processors::ProcessorTarget::Instruction,
+                    instruction.address,
+                ) {
+                    for (processor_name, output) in &outputs {
+                        binlex::processors::apply_output(
+                            raw.processors.get_or_insert_with(Default::default),
+                            processor_name,
+                            output,
+                        );
+                    }
+                }
+                serde_json::to_string(&raw).ok()
             })
             .map(|js| LZ4String::new(&js))
             .collect();

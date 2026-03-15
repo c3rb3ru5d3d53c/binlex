@@ -30,7 +30,7 @@ use crate::hex;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Value;
-use std::{collections::BTreeSet, io::Error};
+use std::{collections::BTreeMap, collections::BTreeSet, io::Error};
 
 /// Represents a single instruction in disassembled binary code.
 ///
@@ -124,6 +124,9 @@ pub struct InstructionJson {
     /// The address of the next sequential instruction, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next: Option<u64>,
+    /// Optional processor outputs attached by post-processing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub processors: Option<BTreeMap<String, Value>>,
     /// Attributes
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attributes: Option<Value>,
@@ -248,6 +251,7 @@ impl Instruction {
             blocks: self.blocks(),
             to: self.to(),
             next: self.next(),
+            processors: None,
             attributes: None,
         }
     }

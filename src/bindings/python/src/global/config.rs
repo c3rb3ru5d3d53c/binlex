@@ -1190,13 +1190,15 @@ pub struct ConfigProcessors {
 }
 
 #[pyclass]
-pub struct ConfigProcessorsVex {
+pub struct ConfigProcessor {
     pub inner: Arc<Mutex<InnerConfig>>,
+    pub name: String,
 }
 
 #[pyclass]
 pub struct ConfigProcessorTarget {
     pub inner: Arc<Mutex<InnerConfig>>,
+    pub processor_name: String,
     pub kind: &'static str,
 }
 
@@ -1205,44 +1207,55 @@ impl ConfigProcessorTarget {
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        match self.kind {
-            "instructions" => inner.processors.vex.instructions.enabled,
-            "blocks" => inner.processors.vex.blocks.enabled,
-            "functions" => inner.processors.vex.functions.enabled,
-            _ => false,
-        }
+        inner
+            .processors
+            .processor(&self.processor_name)
+            .is_some_and(|processor| match self.kind {
+                "instructions" => processor.instructions.enabled,
+                "blocks" => processor.blocks.enabled,
+                "functions" => processor.functions.enabled,
+                _ => false,
+            })
     }
 
     #[setter]
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        match self.kind {
-            "instructions" => inner.processors.vex.instructions.enabled = value,
-            "blocks" => inner.processors.vex.blocks.enabled = value,
-            "functions" => inner.processors.vex.functions.enabled = value,
-            _ => {}
+        if let Some(processor) = inner.processors.ensure_processor(&self.processor_name) {
+            match self.kind {
+                "instructions" => processor.instructions.enabled = value,
+                "blocks" => processor.blocks.enabled = value,
+                "functions" => processor.functions.enabled = value,
+                _ => {}
+            }
         }
     }
 }
 
 #[pymethods]
-impl ConfigProcessorsVex {
+impl ConfigProcessor {
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.processors.vex.enabled
+        inner
+            .processors
+            .processor(&self.name)
+            .is_some_and(|processor| processor.enabled)
     }
 
     #[setter]
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.processors.vex.enabled = value;
+        if let Some(processor) = inner.processors.ensure_processor(&self.name) {
+            processor.enabled = value;
+        }
     }
 
     #[getter]
     pub fn get_instructions(&self) -> ConfigProcessorTarget {
         ConfigProcessorTarget {
             inner: Arc::clone(&self.inner),
+            processor_name: self.name.clone(),
             kind: "instructions",
         }
     }
@@ -1251,6 +1264,7 @@ impl ConfigProcessorsVex {
     pub fn get_blocks(&self) -> ConfigProcessorTarget {
         ConfigProcessorTarget {
             inner: Arc::clone(&self.inner),
+            processor_name: self.name.clone(),
             kind: "blocks",
         }
     }
@@ -1259,6 +1273,7 @@ impl ConfigProcessorsVex {
     pub fn get_functions(&self) -> ConfigProcessorTarget {
         ConfigProcessorTarget {
             inner: Arc::clone(&self.inner),
+            processor_name: self.name.clone(),
             kind: "functions",
         }
     }
@@ -1266,10 +1281,18 @@ impl ConfigProcessorsVex {
 
 #[pymethods]
 impl ConfigProcessors {
-    #[getter]
-    pub fn get_vex(&self) -> ConfigProcessorsVex {
-        ConfigProcessorsVex {
+    pub fn processor(&self, name: String) -> ConfigProcessor {
+        ConfigProcessor {
             inner: Arc::clone(&self.inner),
+            name,
+        }
+    }
+
+    #[getter]
+    pub fn get_vex(&self) -> ConfigProcessor {
+        ConfigProcessor {
+            inner: Arc::clone(&self.inner),
+            name: "vex".to_string(),
         }
     }
 
@@ -1376,7 +1399,7 @@ pub fn config_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Config>()?;
     m.add_class::<ConfigProcessorTarget>()?;
     m.add_class::<ConfigProcessors>()?;
-    m.add_class::<ConfigProcessorsVex>()?;
+    m.add_class::<ConfigProcessor>()?;
     py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex._global.config", m)?;

@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 use crate::processing::error::ProcessorError;
 
 pub trait Processor: Send + Sync + 'static {
-    const ID: u16;
     const NAME: &'static str;
     type Request: Serialize + for<'de> Deserialize<'de>;
     type Response: Serialize + for<'de> Deserialize<'de>;
@@ -30,15 +29,10 @@ pub trait Processor: Send + Sync + 'static {
 }
 
 pub trait ProcessorDispatch: Send + Sync {
-    fn id(&self) -> u16;
     fn process(&self, payload: &[u8]) -> Result<Vec<u8>, ProcessorError>;
 }
 
 impl<T: Processor> ProcessorDispatch for T {
-    fn id(&self) -> u16 {
-        T::ID
-    }
-
     fn process(&self, payload: &[u8]) -> Result<Vec<u8>, ProcessorError> {
         Processor::process(self, payload)
     }

@@ -16,8 +16,9 @@ use crate::processing::error::ProcessorError;
 use crate::processing::processor::Processor;
 use crate::processing::protocol::{Hello, MessageKind, ProcessorFailure, read_frame, write_frame};
 use crate::processing::transport;
+use crate::processors::{self};
 
-type PoolKey = (&'static str, ConfigProcessors);
+type PoolKey = (&'static str, String);
 
 static POOLS: Lazy<Mutex<HashMap<PoolKey, Arc<ProcessorPool>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
@@ -114,7 +115,11 @@ impl ProcessorPool {
     pub fn for_processor<P: Processor>(
         config: &ConfigProcessors,
     ) -> Result<Arc<Self>, ProcessorError> {
-        let key = (P::NAME, config.clone());
+        let key = (
+            P::NAME,
+            toml::to_string(config)
+                .map_err(|error| ProcessorError::Protocol(error.to_string()))?,
+        );
         let mut pools = POOLS
             .lock()
             .map_err(|_| ProcessorError::Protocol("processor pool mutex poisoned".to_string()))?;
@@ -124,11 +129,13 @@ impl ProcessorPool {
 
         let binary_name = P::filename();
         let path = P::path(config)?;
+        let registration = processors::processor_registration_by_type::<P>()
+            .ok_or_else(|| ProcessorError::Protocol(format!("unregistered processor {}", P::NAME)))?;
         let pool = Arc::new(Self::new(
             config.clone(),
             binary_name,
             P::NAME,
-            P::ID,
+            registration.id,
             path,
         )?);
         pools.insert(key, Arc::clone(&pool));
@@ -164,7 +171,7 @@ impl ProcessorPool {
         write_frame(
             &mut processor.stream,
             MessageKind::Request,
-            P::ID,
+            self.processor_id,
             request_id,
             payload,
             self.config.compression,
@@ -178,10 +185,10 @@ impl ProcessorPool {
                 request_id, frame.header.request_id
             )));
         }
-        if frame.header.id != P::ID {
+        if frame.header.id != self.processor_id {
             return Err(ProcessorError::UnexpectedResponse(format!(
                 "processor id mismatch, expected {}, got {}",
-                P::ID,
+                self.processor_id,
                 frame.header.id
             )));
         }
@@ -309,6 +316,13 @@ fn validate_hello(
     processor_name: &str,
     processor_id: u16,
 ) -> Result<(), ProcessorError> {
+    if hello.protocol_version != crate::processing::protocol::VERSION {
+        return Err(ProcessorError::UnexpectedResponse(format!(
+            "processor protocol payload mismatch, expected {}, got {}",
+            crate::processing::protocol::VERSION,
+            hello.protocol_version
+        )));
+    }
     if hello.backend_name != binary_name {
         return Err(ProcessorError::UnexpectedResponse(format!(
             "processor backend mismatch, expected {}, got {}",
@@ -327,6 +341,28 @@ fn validate_hello(
             processor_id, hello.processor_name
         )));
     }
+    let processor = hello
+        .processors
+        .iter()
+        .find(|processor| processor.id == processor_id)
+        .ok_or_else(|| {
+            ProcessorError::UnexpectedResponse(format!(
+                "processor id {} metadata not advertised by {}",
+                processor_id, hello.processor_name
+            ))
+        })?;
+    if processor.name != processor_name {
+        return Err(ProcessorError::UnexpectedResponse(format!(
+            "processor metadata name mismatch for id {}, expected {}, got {}",
+            processor_id, processor_name, processor.name
+        )));
+    }
+    if !processor.os.contains(&hello.host_os) {
+        return Err(ProcessorError::UnexpectedResponse(format!(
+            "processor {} on host {:?} advertised unsupported os list {:?}",
+            processor.name, hello.host_os, processor.os
+        )));
+    }
     Ok(())
 }
 
@@ -335,5 +371,59 @@ impl Drop for ProcessorHandle {
         let _ = write_frame(&mut self.stream, MessageKind::Shutdown, 0, 0, &[], false);
         let _ = self.child.kill();
         let _ = self.child.wait();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_hello;
+    use crate::processing::protocol::{Hello, HelloProcessor, VERSION};
+    use crate::processors::ProcessorOs;
+
+    #[test]
+    fn validate_hello_accepts_matching_os_negotiation() {
+        let hello = Hello {
+            protocol_version: VERSION,
+            backend_name: "binlex-processor".to_string(),
+            host_os: ProcessorOs::current(),
+            processor_name: "vex".to_string(),
+            supported_ids: vec![1],
+            processors: vec![HelloProcessor {
+                id: 1,
+                name: "vex".to_string(),
+                os: vec![ProcessorOs::current()],
+            }],
+            pid: 1,
+        };
+
+        assert!(validate_hello(&hello, "binlex-processor", "vex", 1).is_ok());
+    }
+
+    #[test]
+    fn validate_hello_rejects_processor_os_mismatch() {
+        let unsupported = match ProcessorOs::current() {
+            ProcessorOs::Linux => ProcessorOs::Windows,
+            ProcessorOs::Macos => ProcessorOs::Windows,
+            ProcessorOs::Windows => ProcessorOs::Linux,
+        };
+        let hello = Hello {
+            protocol_version: VERSION,
+            backend_name: "binlex-processor".to_string(),
+            host_os: ProcessorOs::current(),
+            processor_name: "vex".to_string(),
+            supported_ids: vec![1],
+            processors: vec![HelloProcessor {
+                id: 1,
+                name: "vex".to_string(),
+                os: vec![unsupported],
+            }],
+            pid: 1,
+        };
+
+        let error = validate_hello(&hello, "binlex-processor", "vex", 1)
+            .expect_err("hello should be rejected when processor os metadata excludes host os");
+        assert!(error
+            .to_string()
+            .contains("advertised unsupported os list"));
     }
 }

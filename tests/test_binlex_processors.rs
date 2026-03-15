@@ -36,8 +36,12 @@ fn test_cli_processors_override_config_for_vex_function_ir() {
     config.processors.path = Some(binlex_dir.to_string_lossy().into_owned());
     config.processors.processes = 1;
     config.processors.compression = true;
-    config.processors.vex.enabled = false;
-    config.processors.vex.functions.enabled = true;
+    let vex = config
+        .processors
+        .ensure_processor("vex")
+        .expect("vex processor config should exist");
+    vex.enabled = false;
+    vex.functions.enabled = true;
 
     fs::write(
         &config_path,
@@ -110,8 +114,12 @@ fn test_cli_processors_respect_vex_function_target_config() {
     config.processors.path = Some(binlex_dir.to_string_lossy().into_owned());
     config.processors.processes = 1;
     config.processors.compression = true;
-    config.processors.vex.enabled = false;
-    config.processors.vex.functions.enabled = false;
+    let vex = config
+        .processors
+        .ensure_processor("vex")
+        .expect("vex processor config should exist");
+    vex.enabled = false;
+    vex.functions.enabled = false;
 
     fs::write(
         &config_path,
