@@ -20,6 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+pub mod clients;
 pub mod controlflow;
 pub mod disassemblers;
 pub mod entropy;
@@ -32,12 +33,14 @@ pub mod hexdump;
 pub mod imaging;
 #[cfg(not(target_os = "windows"))]
 pub mod lifters;
+pub mod math;
 pub mod types;
 
 pub use global::Architecture;
 pub use global::Config;
 pub use global::Magic;
 
+use crate::clients::clients_init;
 use crate::controlflow::controlflow_init;
 use crate::disassemblers::disassemblers_init;
 use crate::entropy::entropy_init;
@@ -50,6 +53,7 @@ use crate::hexdump::hexdump_init;
 use crate::imaging::imaging_init;
 #[cfg(not(target_os = "windows"))]
 use crate::lifters::lifters_init;
+use crate::math::math_init;
 use crate::types::types_init;
 
 use pyo3::{prelude::*, wrap_pymodule};
@@ -57,12 +61,14 @@ use pyo3::{prelude::*, wrap_pymodule};
 #[pymodule]
 fn binlex(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pymodule!(formats_init))?;
+    m.add_wrapped(wrap_pymodule!(clients_init))?;
     m.add_wrapped(wrap_pymodule!(controlflow_init))?;
     m.add_wrapped(wrap_pymodule!(types_init))?;
     m.add_wrapped(wrap_pymodule!(global_init))?;
     m.add_wrapped(wrap_pymodule!(hex_init))?;
     m.add_wrapped(wrap_pymodule!(entropy_init))?;
     m.add_wrapped(wrap_pymodule!(hexdump_init))?;
+    m.add_wrapped(wrap_pymodule!(math_init))?;
     m.add_wrapped(wrap_pymodule!(disassemblers_init))?;
     m.add_wrapped(wrap_pymodule!(genitics_init))?;
     m.add_wrapped(wrap_pymodule!(hashing_init))?;

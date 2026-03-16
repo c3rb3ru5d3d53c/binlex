@@ -117,8 +117,7 @@ impl ProcessorPool {
     ) -> Result<Arc<Self>, ProcessorError> {
         let key = (
             P::NAME,
-            toml::to_string(config)
-                .map_err(|error| ProcessorError::Protocol(error.to_string()))?,
+            toml::to_string(config).map_err(|error| ProcessorError::Protocol(error.to_string()))?,
         );
         let mut pools = POOLS
             .lock()
@@ -129,8 +128,9 @@ impl ProcessorPool {
 
         let binary_name = P::filename();
         let path = P::path(config)?;
-        let registration = processors::processor_registration_by_type::<P>()
-            .ok_or_else(|| ProcessorError::Protocol(format!("unregistered processor {}", P::NAME)))?;
+        let registration = processors::processor_registration_by_type::<P>().ok_or_else(|| {
+            ProcessorError::Protocol(format!("unregistered processor {}", P::NAME))
+        })?;
         let pool = Arc::new(Self::new(
             config.clone(),
             binary_name,
@@ -188,8 +188,7 @@ impl ProcessorPool {
         if frame.header.id != self.processor_id {
             return Err(ProcessorError::UnexpectedResponse(format!(
                 "processor id mismatch, expected {}, got {}",
-                self.processor_id,
-                frame.header.id
+                self.processor_id, frame.header.id
             )));
         }
 
@@ -422,8 +421,6 @@ mod tests {
 
         let error = validate_hello(&hello, "binlex-processor", "vex", 1)
             .expect_err("hello should be rejected when processor os metadata excludes host os");
-        assert!(error
-            .to_string()
-            .contains("advertised unsupported os list"));
+        assert!(error.to_string().contains("advertised unsupported os list"));
     }
 }
