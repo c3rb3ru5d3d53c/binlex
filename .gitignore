@@ -1,4 +1,5 @@
 venv/
+.env
 dist/
 target/
 deps/

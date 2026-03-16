@@ -598,6 +598,15 @@ impl Graph {
             }
         }
 
+        if enabled.is_empty() {
+            let mut processor_state = self.processor_state.lock().unwrap();
+            if self.revision.load(Ordering::SeqCst) == revision {
+                processor_state.outputs.insert(target, HashMap::new());
+                processor_state.revisions.insert(target, revision);
+            }
+            return Ok(());
+        }
+
         let mut outputs = HashMap::new();
         match target {
             ProcessorTarget::Instruction => {

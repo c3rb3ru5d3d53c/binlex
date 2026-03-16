@@ -38,7 +38,7 @@ pub const FILE_NAME: &str = "binlex.toml";
 pub struct ConfigProcessorTarget {
     pub enabled: bool,
     #[serde(flatten, default)]
-    pub extra: BTreeMap<String, ConfigProcessorValue>,
+    pub options: BTreeMap<String, ConfigProcessorValue>,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
@@ -110,7 +110,9 @@ pub struct ConfigProcessor {
     pub blocks: ConfigProcessorTarget,
     pub functions: ConfigProcessorTarget,
     #[serde(flatten, default)]
-    pub extra: BTreeMap<String, ConfigProcessorValue>,
+    pub options: BTreeMap<String, ConfigProcessorValue>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub server: BTreeMap<String, ConfigProcessorValue>,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
@@ -202,7 +204,7 @@ pub struct ConfigSHA256 {
 impl Config {
     #[allow(dead_code)]
     pub fn new() -> Self {
-        Config {
+        let config = Config {
             general: ConfigGeneral {
                 threads: 1,
                 minimal: false,
@@ -286,7 +288,9 @@ impl Config {
                 sweep: ConfigDisassemblerSweep { enabled: true },
             },
             processors: ConfigProcessors::default(),
-        }
+        };
+
+        config
     }
 
     pub fn enable_minimal(&mut self) {
@@ -479,5 +483,131 @@ impl ConfigProcessors {
             self.processors.insert(name.to_string(), default);
         }
         self.processors.get_mut(name)
+    }
+}
+
+impl ConfigProcessorValue {
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            Self::Bool(value) => Some(*value),
+            _ => None,
+        }
+    }
+
+    pub fn as_integer(&self) -> Option<i64> {
+        match self {
+            Self::Integer(value) => Some(*value),
+            _ => None,
+        }
+    }
+
+    pub fn as_string(&self) -> Option<&str> {
+        match self {
+            Self::String(value) => Some(value.as_str()),
+            _ => None,
+        }
+    }
+
+    pub fn as_table(&self) -> Option<&BTreeMap<String, ConfigProcessorValue>> {
+        match self {
+            Self::Table(value) => Some(value),
+            _ => None,
+        }
+    }
+}
+
+impl ConfigProcessor {
+    pub fn option_string(&self, key: &str) -> Option<&str> {
+        self.options.get(key)?.as_string()
+    }
+
+    pub fn option_integer(&self, key: &str) -> Option<i64> {
+        self.options.get(key)?.as_integer()
+    }
+
+    pub fn option_bool(&self, key: &str) -> Option<bool> {
+        self.options.get(key)?.as_bool()
+    }
+
+    pub fn server_string(&self, key: &str) -> Option<&str> {
+        self.server.get(key)?.as_string()
+    }
+
+    pub fn server_integer(&self, key: &str) -> Option<i64> {
+        self.server.get(key)?.as_integer()
+    }
+
+    pub fn server_bool(&self, key: &str) -> Option<bool> {
+        self.server.get(key)?.as_bool()
+    }
+
+    pub fn server_table(&self, key: &str) -> Option<&BTreeMap<String, ConfigProcessorValue>> {
+        self.server.get(key)?.as_table()
+    }
+}
+
+impl From<bool> for ConfigProcessorValue {
+    fn from(value: bool) -> Self {
+        Self::Bool(value)
+    }
+}
+
+impl From<i64> for ConfigProcessorValue {
+    fn from(value: i64) -> Self {
+        Self::Integer(value)
+    }
+}
+
+impl From<i32> for ConfigProcessorValue {
+    fn from(value: i32) -> Self {
+        Self::Integer(value as i64)
+    }
+}
+
+impl From<u64> for ConfigProcessorValue {
+    fn from(value: u64) -> Self {
+        Self::Integer(value as i64)
+    }
+}
+
+impl From<u32> for ConfigProcessorValue {
+    fn from(value: u32) -> Self {
+        Self::Integer(value as i64)
+    }
+}
+
+impl From<usize> for ConfigProcessorValue {
+    fn from(value: usize) -> Self {
+        Self::Integer(value as i64)
+    }
+}
+
+impl From<f64> for ConfigProcessorValue {
+    fn from(value: f64) -> Self {
+        Self::Float(value)
+    }
+}
+
+impl From<&str> for ConfigProcessorValue {
+    fn from(value: &str) -> Self {
+        Self::String(value.to_string())
+    }
+}
+
+impl From<String> for ConfigProcessorValue {
+    fn from(value: String) -> Self {
+        Self::String(value)
+    }
+}
+
+impl From<Vec<ConfigProcessorValue>> for ConfigProcessorValue {
+    fn from(value: Vec<ConfigProcessorValue>) -> Self {
+        Self::Array(value)
+    }
+}
+
+impl From<BTreeMap<String, ConfigProcessorValue>> for ConfigProcessorValue {
+    fn from(value: BTreeMap<String, ConfigProcessorValue>) -> Self {
+        Self::Table(value)
     }
 }
