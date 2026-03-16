@@ -24,7 +24,7 @@ const CALL_BUCKETS: usize = 8;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct EmbeddingsRequest {
-    pub data: Value,
+    pub data: String,
     #[serde(default)]
     pub dimensions: Option<usize>,
     #[serde(default)]
@@ -34,7 +34,6 @@ pub struct EmbeddingsRequest {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct EmbeddingsResponse {
     pub vector: Vec<f32>,
-    pub data: Value,
 }
 
 pub struct EmbeddingsProcessor;
@@ -787,15 +786,14 @@ impl Processor for EmbeddingsProcessor {
     type Response = EmbeddingsResponse;
 
     fn request(&self, request: Self::Request) -> Result<Self::Response, ProcessorError> {
+        let data: Value = serde_json::from_str(&request.data)
+            .map_err(|error| ProcessorError::Serialization(error.to_string()))?;
         let config = EmbeddingModelConfig {
             dimensions: request.dimensions.unwrap_or(DEFAULT_DIMENSIONS),
             device: parse_device(request.device.as_deref()),
         };
-        let vector = embed(&request.data, &config);
-        Ok(EmbeddingsResponse {
-            vector,
-            data: request.data,
-        })
+        let vector = embed(&data, &config);
+        Ok(EmbeddingsResponse { vector })
     }
 }
 
@@ -805,7 +803,8 @@ impl JsonProcessor for EmbeddingsProcessor {
         data: Value,
     ) -> Result<Self::Request, crate::server::error::ServerError> {
         Ok(EmbeddingsRequest {
-            data,
+            data: serde_json::to_string(&data)
+                .map_err(|error| crate::server::error::ServerError::Processor(error.to_string()))?,
             dimensions: Some(state.config.embeddings_dimensions()),
             device: Some(state.config.embeddings_device()),
         })

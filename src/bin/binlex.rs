@@ -650,7 +650,7 @@ fn process_pe(
         process::exit(1)
     });
 
-    Stderr::print_debug(config.clone(), "mapped pe image");
+    Stderr::print_debug(&config, "mapped pe image");
 
     let image = mapped_file.mmap().unwrap_or_else(|error| {
         eprintln!("failed to get pe virtual image: {}", error);
@@ -658,7 +658,7 @@ fn process_pe(
     });
     print_stage_timing(&config, "pe.image", image_started_at);
 
-    Stderr::print_debug(config.clone(), "obtained mapped image pointer");
+    Stderr::print_debug(&config, "obtained mapped image pointer");
 
     let executable_address_ranges = match pe.is_dotnet() {
         true => pe.dotnet_executable_virtual_address_ranges(),
@@ -677,7 +677,7 @@ fn process_pe(
     let mut cfg = Graph::new(pe.architecture(), config.clone());
 
     if !pe.is_dotnet() {
-        Stderr::print_debug(config.clone(), "starting pe disassembler");
+        Stderr::print_debug(&config, "starting pe disassembler");
         let disassembly_started_at = Instant::now();
 
         let disassembler = match Disassembler::new(
@@ -705,7 +705,7 @@ fn process_pe(
             disassembly_started_at,
         );
     } else if pe.is_dotnet() {
-        Stderr::print_debug(config.clone(), "starting pe dotnet disassembler");
+        Stderr::print_debug(&config, "starting pe dotnet disassembler");
         let disassembly_started_at = Instant::now();
 
         let disassembler = match CILDisassembler::new(
@@ -1061,10 +1061,7 @@ fn main() {
 
     apply_cli_overrides(&args, &mut config);
 
-    Stderr::print_debug(
-        config.clone(),
-        "finished reading arguments and configuration",
-    );
+    Stderr::print_debug(&config, "finished reading arguments and configuration");
 
     let thread_pool_started_at = Instant::now();
     ThreadPoolBuilder::new()
@@ -1085,7 +1082,7 @@ fn main() {
         print_stage_timing(&config, "magic.from_file", magic_started_at);
         match format {
             Magic::PE => {
-                Stderr::print_debug(config.clone(), "processing pe");
+                Stderr::print_debug(&config, "processing pe");
                 process_pe(
                     &args,
                     args.input.clone(),
@@ -1096,7 +1093,7 @@ fn main() {
                 );
             }
             Magic::ELF => {
-                Stderr::print_debug(config.clone(), "processing elf");
+                Stderr::print_debug(&config, "processing elf");
                 process_elf(
                     &args,
                     args.input.clone(),
@@ -1107,7 +1104,7 @@ fn main() {
                 );
             }
             Magic::MACHO => {
-                Stderr::print_debug(config.clone(), "processing macho");
+                Stderr::print_debug(&config, "processing macho");
                 process_macho(
                     &args,
                     args.input.clone(),
@@ -1126,7 +1123,7 @@ fn main() {
         let architecture = args.architecture.unwrap();
         match architecture {
             Architecture::AMD64 | Architecture::I386 | Architecture::CIL => {
-                Stderr::print_debug(config.clone(), "processing code");
+                Stderr::print_debug(&config, "processing code");
                 process_code(
                     &args,
                     args.input.clone(),

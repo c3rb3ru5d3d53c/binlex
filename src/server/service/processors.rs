@@ -10,5 +10,11 @@ pub fn execute(
     processor_name: &str,
     request: ProcessorHttpRequest,
 ) -> Result<Value, ServerError> {
+    if !state.processor_enabled(processor_name) {
+        return Err(ServerError::Processor(format!(
+            "processor {} is disabled on this server",
+            processor_name
+        )));
+    }
     processors::http_execute(state, processor_name, request.data)
 }

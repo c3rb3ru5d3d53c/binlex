@@ -10,6 +10,8 @@ pub const FILE_NAME: &str = "binlex-server.toml";
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct ServerSection {
     pub bind: String,
+    #[serde(default)]
+    pub debug: bool,
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -23,6 +25,7 @@ impl Default for ServerSection {
     fn default() -> Self {
         Self {
             bind: "127.0.0.1:5000".to_string(),
+            debug: false,
         }
     }
 }

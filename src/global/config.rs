@@ -27,6 +27,8 @@ use std::collections::BTreeMap;
 use std::env;
 use std::io::Error;
 use std::io::ErrorKind;
+use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
 use std::{fs, path::PathBuf};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -90,7 +92,7 @@ pub struct ConfigFormats {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct Config {
+pub struct ConfigData {
     pub general: ConfigGeneral,
     pub formats: ConfigFormats,
     pub instructions: ConfigInstructions,
@@ -102,6 +104,9 @@ pub struct Config {
     #[serde(default)]
     pub processors: ConfigProcessors,
 }
+
+#[derive(Clone)]
+pub struct Config(Arc<ConfigData>);
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct ConfigProcessor {
@@ -201,10 +206,46 @@ pub struct ConfigSHA256 {
     pub enabled: bool,
 }
 
+impl Serialize for Config {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Config {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        ConfigData::deserialize(deserializer).map(Self::from_data)
+    }
+}
+
+impl Deref for Config {
+    type Target = ConfigData;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.as_ref()
+    }
+}
+
+impl DerefMut for Config {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        Arc::make_mut(&mut self.0)
+    }
+}
+
 impl Config {
+    pub fn from_data(data: ConfigData) -> Self {
+        Self(Arc::new(data))
+    }
+
     #[allow(dead_code)]
     pub fn new() -> Self {
-        let config = Config {
+        Self::from_data(ConfigData {
             general: ConfigGeneral {
                 threads: 1,
                 minimal: false,
@@ -288,9 +329,7 @@ impl Config {
                 sweep: ConfigDisassemblerSweep { enabled: true },
             },
             processors: ConfigProcessors::default(),
-        };
-
-        config
+        })
     }
 
     pub fn enable_minimal(&mut self) {
@@ -381,7 +420,7 @@ impl Config {
     /// Reads the Configuration TOML from a File Path
     pub fn from_file(file_path: &str) -> Result<Config, Error> {
         let toml_string = fs::read_to_string(file_path)?;
-        let config: Config = toml::from_str(&toml_string).map_err(|error| {
+        let config: ConfigData = toml::from_str(&toml_string).map_err(|error| {
             Error::new(
                 ErrorKind::InvalidData,
                 format!(
@@ -390,7 +429,7 @@ impl Config {
                 ),
             )
         })?;
-        Ok(config)
+        Ok(Self::from_data(config))
     }
 
     /// Write the configuration TOML to a file

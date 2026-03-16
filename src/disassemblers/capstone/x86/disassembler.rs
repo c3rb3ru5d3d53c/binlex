@@ -213,7 +213,7 @@ impl<'disassembler> Disassembler<'disassembler> {
                 "Function -> 0x{:x}: it is not in executable memory",
                 address
             );
-            Stderr::print_debug(cfg.config.clone(), &error_message);
+            Stderr::print_debug(&cfg.config, &error_message);
             return Err(Error::new(ErrorKind::Other, error_message));
         }
 
@@ -264,7 +264,7 @@ impl<'disassembler> Disassembler<'disassembler> {
                 "Instruction -> 0x{:x}: it is not in executable memory",
                 address
             );
-            Stderr::print_debug(cfg.config.clone(), error.clone());
+            Stderr::print_debug(&cfg.config, error.clone());
             return Err(Error::new(ErrorKind::Other, error));
         }
 
@@ -327,7 +327,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         }
 
         Stderr::print_debug(
-            cfg.config.clone(),
+            &cfg.config,
             format!(
                 "0x{:x}: mnemonic: {:?}, next: {:?}, to: {:?}, is_conditional: {:?}, is_jump: {:?}",
                 blinstruction.address,
@@ -353,7 +353,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         if !self.is_executable_address(address) {
             cfg.functions.insert_invalid(address);
             let error_message = format!("Block -> 0x{:x}: it is not in executable memory", address);
-            Stderr::print_debug(cfg.config.clone(), error_message.clone());
+            Stderr::print_debug(&cfg.config, error_message.clone());
             return Err(Error::new(ErrorKind::Other, error_message));
         }
 
