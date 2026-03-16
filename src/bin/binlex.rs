@@ -171,7 +171,6 @@ fn apply_cli_overrides(args: &Args, config: &mut Config) {
     if args.enable_instructions {
         config.instructions.enabled = args.enable_instructions;
     }
-
 }
 
 fn get_elf_function_symbols(elf: &ELF, read_stdin: bool) -> BTreeMap<u64, Symbol> {
@@ -598,7 +597,6 @@ fn process_pe(
     read_stdin: bool,
 ) {
     let mut attributes = Attributes::new();
-
     let pe = match PE::new(input, config.clone()) {
         Ok(pe) => pe,
         Err(error) => {
@@ -633,14 +631,14 @@ fn process_pe(
         process::exit(1)
     });
 
-    Stderr::print_debug(config.clone(), "mapped pe image");
+    Stderr::print_debug(&config, "mapped pe image");
 
     let image = mapped_file.mmap().unwrap_or_else(|error| {
         eprintln!("failed to get pe virtual image: {}", error);
         process::exit(1);
     });
 
-    Stderr::print_debug(config.clone(), "obtained mapped image pointer");
+    Stderr::print_debug(&config, "obtained mapped image pointer");
 
     let executable_address_ranges = match pe.is_dotnet() {
         true => pe.dotnet_executable_virtual_address_ranges(),
@@ -656,16 +654,17 @@ fn process_pe(
 
     entrypoints.extend(function_symbols.keys());
 
-    let mut cfg = Graph::new(pe.architecture(), config.clone());
+    let runtime_config = config.clone();
+    let mut cfg = Graph::new(pe.architecture(), runtime_config.clone());
 
     if !pe.is_dotnet() {
-        Stderr::print_debug(config.clone(), "starting pe disassembler");
+        Stderr::print_debug(&config, "starting pe disassembler");
 
         let disassembler = match Disassembler::new(
             pe.architecture(),
             image,
             executable_address_ranges.clone(),
-            config.clone(),
+            runtime_config.clone(),
         ) {
             Ok(disassembler) => disassembler,
             Err(error) => {
@@ -681,14 +680,14 @@ fn process_pe(
                 process::exit(1);
             });
     } else if pe.is_dotnet() {
-        Stderr::print_debug(config.clone(), "starting pe dotnet disassembler");
+        Stderr::print_debug(&config, "starting pe dotnet disassembler");
 
         let disassembler = match CILDisassembler::new(
             pe.architecture(),
             image,
             pe.dotnet_metadata_token_virtual_addresses().clone(),
             executable_address_ranges.clone(),
-            config.clone(),
+            runtime_config.clone(),
         ) {
             Ok(disassembler) => disassembler,
             Err(error) => {
@@ -720,7 +719,6 @@ fn process_elf(
     read_stdin: bool,
 ) {
     let mut attributes = Attributes::new();
-
     let elf = ELF::new(input, config.clone()).unwrap_or_else(|error| {
         eprintln!("{}", error);
         process::exit(1);
@@ -763,13 +761,14 @@ fn process_elf(
 
     entrypoints.extend(elf.entrypoint_virtual_addresses());
 
-    let mut cfg = Graph::new(elf.architecture(), config.clone());
+    let runtime_config = config.clone();
+    let mut cfg = Graph::new(elf.architecture(), runtime_config.clone());
 
     let disassembler = match Disassembler::new(
         elf.architecture(),
         image,
         executable_address_ranges.clone(),
-        config.clone(),
+        runtime_config.clone(),
     ) {
         Ok(disassembler) => disassembler,
         Err(error) => {
@@ -796,7 +795,6 @@ fn process_code(
     output: Option<String>,
 ) {
     let mut attributes = Attributes::new();
-
     let mut file = BLFile::new(input, config.clone()).unwrap_or_else(|error| {
         eprintln!("{}", error);
         process::exit(1);
@@ -806,7 +804,8 @@ fn process_code(
         process::exit(1);
     });
 
-    let mut cfg = Graph::new(architecture, config.clone());
+    let runtime_config = config.clone();
+    let mut cfg = Graph::new(architecture, runtime_config.clone());
 
     let mut executable_address_ranges = BTreeMap::<u64, u64>::new();
     executable_address_ranges.insert(0, file.size());
@@ -821,7 +820,7 @@ fn process_code(
                 architecture,
                 &file.data,
                 executable_address_ranges.clone(),
-                config.clone(),
+                runtime_config.clone(),
             ) {
                 Ok(disassembler) => disassembler,
                 Err(error) => {
@@ -843,7 +842,7 @@ fn process_code(
                 &file.data,
                 BTreeMap::<u64, u64>::new(),
                 executable_address_ranges.clone(),
-                config.clone(),
+                runtime_config.clone(),
             ) {
                 Ok(disassembler) => disassembler,
                 Err(error) => {
@@ -878,7 +877,6 @@ fn process_macho(
     read_stdin: bool,
 ) {
     let mut attributes = Attributes::new();
-
     let macho = MACHO::new(input, config.clone()).unwrap_or_else(|error| {
         eprintln!("{}", error);
         process::exit(1);
@@ -928,13 +926,14 @@ fn process_macho(
 
         entrypoints.extend(macho.entrypoint_virtual_addresses(slice));
 
-        let mut cfg = Graph::new(architecture, config.clone());
+        let runtime_config = config.clone();
+        let mut cfg = Graph::new(architecture, runtime_config.clone());
 
         let disassembler = match Disassembler::new(
             architecture,
             image,
             executable_address_ranges.clone(),
-            config.clone(),
+            runtime_config.clone(),
         ) {
             Ok(disassembler) => disassembler,
             Err(error) => {
@@ -981,7 +980,7 @@ fn main() {
     apply_cli_overrides(&args, &mut config);
 
     Stderr::print_debug(
-        config.clone(),
+        &config,
         "finished reading arguments and configuration",
     );
 
@@ -1000,33 +999,33 @@ fn main() {
         });
         match format {
             Magic::PE => {
-                Stderr::print_debug(config.clone(), "processing pe");
+                Stderr::print_debug(&config, "processing pe");
                 process_pe(
                     &args,
                     args.input.clone(),
-                    config,
+                    config.clone(),
                     args.tags.clone(),
                     args.output.clone(),
                     args.stdin,
                 );
             }
             Magic::ELF => {
-                Stderr::print_debug(config.clone(), "processing elf");
+                Stderr::print_debug(&config, "processing elf");
                 process_elf(
                     &args,
                     args.input.clone(),
-                    config,
+                    config.clone(),
                     args.tags.clone(),
                     args.output.clone(),
                     args.stdin,
                 );
             }
             Magic::MACHO => {
-                Stderr::print_debug(config.clone(), "processing macho");
+                Stderr::print_debug(&config, "processing macho");
                 process_macho(
                     &args,
                     args.input.clone(),
-                    config,
+                    config.clone(),
                     args.tags.clone(),
                     args.output.clone(),
                     args.stdin,
@@ -1041,11 +1040,11 @@ fn main() {
         let architecture = args.architecture.unwrap();
         match architecture {
             Architecture::AMD64 | Architecture::I386 | Architecture::CIL => {
-                Stderr::print_debug(config.clone(), "processing code");
+                Stderr::print_debug(&config, "processing code");
                 process_code(
                     &args,
                     args.input.clone(),
-                    config,
+                    config.clone(),
                     architecture,
                     args.output.clone(),
                 );

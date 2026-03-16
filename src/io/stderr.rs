@@ -51,7 +51,7 @@ impl Stderr {
     }
 
     /// Prints a line to standard error if debug configuration is set.
-    pub fn print_debug<T: Display>(config: Config, line: T) {
+    pub fn print_debug<T: Display>(config: &Config, line: T) {
         if config.general.debug {
             Stderr::print(line);
         }

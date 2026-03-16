@@ -318,7 +318,7 @@ impl<'function> Function<'function> {
     /// # Returns
     ///
     /// Returns a `FunctionJson` struct containing metadata about the function.
-    pub fn process(&self) -> FunctionJson {
+    pub fn process_base(&self) -> FunctionJson {
         let contiguous = self.contiguous();
         let size = self.size();
         let bytes = if contiguous { self.bytes() } else { None };
@@ -391,7 +391,7 @@ impl<'function> Function<'function> {
             None
         };
 
-        let mut json = FunctionJson {
+        FunctionJson {
             address: self.address,
             type_: "function".to_string(),
             edges: self.edges(),
@@ -412,8 +412,11 @@ impl<'function> Function<'function> {
             processors: None,
             architecture: self.architecture().to_string(),
             attributes: None,
-        };
+        }
+    }
 
+    pub fn process(&self) -> FunctionJson {
+        let mut json = self.process_base();
         if let Some(outputs) = self
             .cfg
             .processor_outputs(crate::processors::ProcessorTarget::Function, self.address)
