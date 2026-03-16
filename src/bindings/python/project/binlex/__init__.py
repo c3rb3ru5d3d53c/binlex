@@ -28,9 +28,10 @@ and higher-level subpackages that wrap the compiled Rust extension.
 
 from binlex_bindings.binlex import Config
 from .architecture import Architecture
-from . import entropy
+from . import clients, entropy
 from . import hexdump
 from . import hex
+from . import math
 from .magic import Magic
 from . import controlflow, disassemblers, formats, lifters, types
 
@@ -38,6 +39,7 @@ __all__ = [
     "Architecture",
     "Config",
     "Magic",
+    "clients",
     "controlflow",
     "disassemblers",
     "entropy",
@@ -45,5 +47,6 @@ __all__ = [
     "hexdump",
     "hex",
     "lifters",
+    "math",
     "types",
 ]

@@ -118,26 +118,48 @@ python -m plugin print-target
 python -m plugin install --target ~/.config/idapro/plugins/
 ```
 
-You will also need to ensure the server is running, GPU hardware is recommended for faster GNN inference but not required.
+You will also need to ensure the server is running. The new layout uses the Rust `binlex-server` binary, which manages local `binlex-processor` workers over the internal `BLEX` protocol.
 
 ```bash
-cd scripts/blserver/
-make -C configs/
-docker-compose up -d
+cargo run --release --bin binlex-server
 ```
 
-Once completed the following services will be available.
+The Rust server is compute-only and currently exposes `/health` plus generic processor execution over `/processors/{processor}`.
 
+If you want a local Milvus + MinIO stack for embeddings persistence, the repository now ships a `docker-compose.yml` with `milvus`, `minio`, `etcd`, `attu`, and `binlex-server`.
 
-| **Service Name**             | **Description**                             | **URL**                                 |
-|------------------------------|---------------------------------------------|-----------------------------------------|
-| Binlex Server                | API Documentation                           | `https://127.0.0.1/swagger`             |
-| Attu Milvus Vector Database  | Attu Milvus Vector Database UI              | `https://127.0.0.1:8443`                |
-| MinIO                        | MinIO Object Store                          | `https://127.0.0.1:7443`                |
-| JupyterHub                   | JupyterHub Web GUI                          | `https://127.0.0.1:6443`                |
+```bash
+cp env.example .env
+docker compose up -d
+```
 
+`docker-compose.yml` expects those values to be present in `.env`, so copying `env.example` first is required.
 
-The default API key is `39248239c8ed937d6333a41874f1c8e310c5070703af30c06e67b0d308cb82c5`, which you can use with your IDA plugin.
+If you want `binlex-server` to run with GPU access, use the optional `gpu` profile:
+
+```bash
+cp env.example .env
+docker compose --profile gpu up -d etcd minio milvus attu binlex-server-gpu
+```
+
+That starts `binlex-server-gpu` instead of the default CPU-oriented `binlex-server`. You will still need to configure the processor itself to use a GPU device such as `cuda` or `vulkan`.
+
+The compose stack keeps persistent test data under the repository-local `data/` directory:
+- `data/etcd/`
+- `data/minio/`
+- `data/milvus/`
+- `data/attu/`
+- `data/binlex-server/`
+
+The default local endpoints are:
+- Milvus: `127.0.0.1:19530`
+- MinIO API: `127.0.0.1:9000`
+- MinIO Console: `http://127.0.0.1:9001`
+- Attu: `http://127.0.0.1:8000`
+- binlex-server: `http://127.0.0.1:5000`
+
+The container build for the server lives at `docker/binlex-server.Dockerfile`.
+By default the container just runs `binlex-server` with its normal defaults. If you want to force a specific config file, set `BINLEX_SERVER_CONFIG` and point it at something under `data/binlex-server/`.
 
 Once you open IDA, you should be greeted with the **binlex** welcome message.
 
@@ -409,6 +431,34 @@ directory = "/tmp/binlex"
 enabled = false
 
 [disassembler.sweep]
+enabled = true
+
+[processors]
+enabled = true
+processes = 2
+compression = true
+restart_on_crash = true
+max_payload_bytes = 4194304
+idle_timeout_ms = 30000
+max_queue_depth = 128
+
+[processors.embeddings]
+enabled = false
+dimensions = 64
+device = "cpu"
+mode = "ipc"
+url = "http://127.0.0.1:5000"
+
+# Valid device values currently accepted by the embeddings processor:
+# "cpu", "gpu", "cuda", "vulkan", "metal", "webgpu", "rocm"
+
+[processors.embeddings.instructions]
+enabled = true
+
+[processors.embeddings.blocks]
+enabled = true
+
+[processors.embeddings.functions]
 enabled = true
 ```
 
