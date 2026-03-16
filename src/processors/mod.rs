@@ -5,13 +5,20 @@ pub mod vex;
 use crate::Config;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::global::config::ConfigProcessor;
+use crate::io::stderr::Stderr;
 use crate::processing::processor::{Processor, ProcessorDispatch};
+use crate::server::dto::{
+    ErrorResponse, LZ4_CONTENT_ENCODING, OCTET_STREAM_CONTENT_TYPE, ProcessorHttpRequest,
+};
 use crate::server::error::ServerError;
 use crate::server::state::AppState;
 use clap::ValueEnum;
 use once_cell::sync::Lazy;
+use reqwest::blocking::Client;
+use reqwest::header::{ACCEPT, CONTENT_ENCODING, CONTENT_TYPE};
 use serde_json::Value;
 use std::collections::BTreeMap;
+use std::process;
 use std::sync::Arc;
 
 #[derive(serde::Serialize, serde::Deserialize, Copy, Clone, Debug, Eq, PartialEq, Hash)]
@@ -177,9 +184,18 @@ impl<'a> RegisteredProcessor<'a> {
             .registration
             .block_json
             .and_then(|serialize| serialize(block))
-            .and_then(|data| mode(self.name(), data, &block.cfg.config))
         {
-            return Some(data);
+            match mode(self.name(), data, &block.cfg.config) {
+                Ok(Some(data)) => return Some(data),
+                Ok(None) => {}
+                Err(error) => {
+                    if should_fail_http_mode(&error) {
+                        fail_http_mode(&block.cfg.config, self.name(), &error);
+                    }
+                    report_http_mode_error(&block.cfg.config, self.name(), &error);
+                    return None;
+                }
+            }
         }
         self.registration
             .process_block
@@ -191,9 +207,18 @@ impl<'a> RegisteredProcessor<'a> {
             .registration
             .instruction_json
             .and_then(|serialize| serialize(instruction))
-            .and_then(|data| mode(self.name(), data, &instruction.config))
         {
-            return Some(data);
+            match mode(self.name(), data, &instruction.config) {
+                Ok(Some(data)) => return Some(data),
+                Ok(None) => {}
+                Err(error) => {
+                    if should_fail_http_mode(&error) {
+                        fail_http_mode(&instruction.config, self.name(), &error);
+                    }
+                    report_http_mode_error(&instruction.config, self.name(), &error);
+                    return None;
+                }
+            }
         }
         self.registration
             .process_instruction
@@ -205,9 +230,18 @@ impl<'a> RegisteredProcessor<'a> {
             .registration
             .function_json
             .and_then(|serialize| serialize(function))
-            .and_then(|data| mode(self.name(), data, &function.cfg.config))
         {
-            return Some(data);
+            match mode(self.name(), data, &function.cfg.config) {
+                Ok(Some(data)) => return Some(data),
+                Ok(None) => {}
+                Err(error) => {
+                    if should_fail_http_mode(&error) {
+                        fail_http_mode(&function.cfg.config, self.name(), &error);
+                    }
+                    report_http_mode_error(&function.cfg.config, self.name(), &error);
+                    return None;
+                }
+            }
         }
         self.registration
             .process_function
@@ -477,19 +511,165 @@ pub fn apply_output(outputs: &mut BTreeMap<String, Value>, processor_name: &str,
     outputs.insert(processor_name.to_string(), output.clone());
 }
 
-pub fn mode(processor_name: &str, data: Value, config: &Config) -> Option<Value> {
-    let registration = processor_registration_by_name(processor_name)?;
-    if !registration.registration.supports_mode("http") {
-        return None;
+fn report_http_mode_error(config: &Config, processor_name: &str, error: &crate::processing::error::ProcessorError) {
+    if config.general.debug {
+        Stderr::print_debug(
+            config,
+            format!("processor {} http error: {}", processor_name, error),
+        );
+    }
+}
+
+fn fail_http_mode(
+    config: &Config,
+    processor_name: &str,
+    error: &crate::processing::error::ProcessorError,
+) -> ! {
+    report_http_mode_error(config, processor_name, error);
+    eprintln!("processor {} http error: {}", processor_name, error);
+    process::exit(1);
+}
+
+fn should_fail_http_mode(error: &crate::processing::error::ProcessorError) -> bool {
+    matches!(
+        error,
+        crate::processing::error::ProcessorError::Io(_)
+            | crate::processing::error::ProcessorError::Timeout(_)
+            | crate::processing::error::ProcessorError::Protocol(_)
+    )
+}
+
+fn processor_http_url(processor_name: &str, config: &ConfigProcessor) -> Result<String, crate::processing::error::ProcessorError> {
+    let base_url = config.option_string("url").ok_or_else(|| {
+        crate::processing::error::ProcessorError::Protocol(format!(
+            "processor {} http mode requires url option",
+            processor_name
+        ))
+    })?;
+    Ok(format!(
+        "{}/processors/{}",
+        base_url.trim_end_matches('/'),
+        processor_name
+    ))
+}
+
+fn processor_http_verify(config: &ConfigProcessor) -> bool {
+    config.option_bool("verify").unwrap_or(true)
+}
+
+fn encode_http_request(
+    request: &ProcessorHttpRequest,
+    compression_enabled: bool,
+) -> Result<(Vec<u8>, &'static str), crate::processing::error::ProcessorError> {
+    let json = serde_json::to_vec(request)
+        .map_err(|error| crate::processing::error::ProcessorError::Serialization(error.to_string()))?;
+    if !compression_enabled {
+        return Ok((json, "application/json"));
     }
 
-    let processor = config.processors.processor(processor_name)?;
-    if processor.option_string("mode")? != "http" {
-        return None;
+    let compressed = lz4::block::compress(&json, None, false)
+        .map_err(|error| crate::processing::error::ProcessorError::Compression(error.to_string()))?;
+    let mut payload = Vec::with_capacity(4 + compressed.len());
+    payload.extend_from_slice(&(json.len() as u32).to_le_bytes());
+    payload.extend_from_slice(&compressed);
+    Ok((payload, OCTET_STREAM_CONTENT_TYPE))
+}
+
+fn decode_http_response(
+    response: reqwest::blocking::Response,
+) -> Result<Value, crate::processing::error::ProcessorError> {
+    let status = response.status();
+    let headers = response.headers().clone();
+    let body = response
+        .bytes()
+        .map_err(|error| crate::processing::error::ProcessorError::Io(std::io::Error::other(error.to_string())))?;
+
+    if !status.is_success() {
+        if let Ok(error) = serde_json::from_slice::<ErrorResponse>(&body) {
+            return Err(crate::processing::error::ProcessorError::RemoteFailure(error.error));
+        }
+        return Err(crate::processing::error::ProcessorError::RemoteFailure(
+            String::from_utf8_lossy(&body).into_owned(),
+        ));
     }
-    let _ = data;
-    let _ = config;
-    None
+
+    let decoded = if headers
+        .get(CONTENT_ENCODING)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.eq_ignore_ascii_case(LZ4_CONTENT_ENCODING))
+    {
+        if body.len() < 4 {
+            return Err(crate::processing::error::ProcessorError::Compression(
+                "compressed response missing size prefix".to_string(),
+            ));
+        }
+        let uncompressed_len = u32::from_le_bytes([body[0], body[1], body[2], body[3]]) as i32;
+        lz4::block::decompress(&body[4..], Some(uncompressed_len))
+            .map_err(|error| crate::processing::error::ProcessorError::Compression(error.to_string()))?
+    } else {
+        body.to_vec()
+    };
+
+    serde_json::from_slice(&decoded)
+        .map_err(|error| crate::processing::error::ProcessorError::Serialization(error.to_string()))
+}
+
+fn execute_http_mode(
+    processor_name: &str,
+    data: Value,
+    config: &Config,
+    processor: &ConfigProcessor,
+) -> Result<Value, crate::processing::error::ProcessorError> {
+    let url = processor_http_url(processor_name, processor)?;
+    let verify = processor_http_verify(processor);
+    let client = Client::builder()
+        .danger_accept_invalid_certs(!verify)
+        .build()
+        .map_err(|error| crate::processing::error::ProcessorError::Protocol(error.to_string()))?;
+    let request = ProcessorHttpRequest { data };
+    let (body, content_type) = encode_http_request(&request, config.processors.compression)?;
+
+    let mut builder = client
+        .post(url)
+        .header(CONTENT_TYPE, content_type)
+        .header(ACCEPT, "application/json");
+
+    if config.processors.compression {
+        builder = builder
+            .header(CONTENT_ENCODING, LZ4_CONTENT_ENCODING)
+            .header(ACCEPT, OCTET_STREAM_CONTENT_TYPE);
+    }
+
+    let response = builder
+        .body(body)
+        .send()
+        .map_err(|error| crate::processing::error::ProcessorError::Io(std::io::Error::other(error.to_string())))?;
+
+    decode_http_response(response)
+}
+
+pub fn mode(
+    processor_name: &str,
+    data: Value,
+    config: &Config,
+) -> Result<Option<Value>, crate::processing::error::ProcessorError> {
+    let Some(registration) = processor_registration_by_name(processor_name) else {
+        return Ok(None);
+    };
+    if !registration.registration.supports_mode("http") {
+        return Ok(None);
+    }
+
+    let Some(processor) = config.processors.processor(processor_name) else {
+        return Ok(None);
+    };
+    let Some(mode) = processor.option_string("mode") else {
+        return Ok(None);
+    };
+    if mode != "http" {
+        return Ok(None);
+    }
+    execute_http_mode(processor_name, data, config, processor).map(Some)
 }
 
 pub fn http_execute(

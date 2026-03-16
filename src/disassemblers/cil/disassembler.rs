@@ -126,7 +126,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         cfginstruction.functions = self.get_instruction_functions(&instruction);
 
         Stderr::print_debug(
-            cfg.config.clone(),
+            &cfg.config,
             format!(
                 "0x{:x}: mnemonic: {:?}, mnemonic_size: {}, operand_size: {}, operand_bytes: {:?}, bytes: {:?}, next: {:?}, to: {:?}, blocks: {:?}",
                 instruction.address,

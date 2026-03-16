@@ -13,13 +13,27 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(config: ServerConfig) -> Result<Self, crate::processing::error::ProcessorError> {
+        let mut processor_pools = BTreeMap::new();
+        if !config.processors.enabled {
+            return Ok(Self {
+                config,
+                processor_pools,
+            });
+        }
+
         let processors = ConfigProcessors {
             enabled: true,
             ..config.processors.clone()
         };
-        let mut processor_pools = BTreeMap::new();
         for registration in crate::processors::registered_processor_registrations() {
             if !registration.supported_on_current_os() {
+                continue;
+            }
+            if !config
+                .processors
+                .processor(registration.name)
+                .is_some_and(|processor| processor.enabled)
+            {
                 continue;
             }
             let pool = (registration.make_pool)(&processors)?;
@@ -31,7 +45,26 @@ impl AppState {
         })
     }
 
+    pub fn debug_enabled(&self) -> bool {
+        self.config.server.debug
+    }
+
+    pub fn debug_log<T: std::fmt::Display>(&self, line: T) {
+        if self.debug_enabled() {
+            eprintln!("[binlex-server] {}", line);
+        }
+    }
+
     pub fn processor_pool(&self, name: &str) -> Option<Arc<ProcessorPool>> {
         self.processor_pools.get(name).cloned()
+    }
+
+    pub fn processor_enabled(&self, name: &str) -> bool {
+        self.config.processors.enabled
+            && self
+                .config
+                .processors
+                .processor(name)
+                .is_some_and(|processor| processor.enabled)
     }
 }

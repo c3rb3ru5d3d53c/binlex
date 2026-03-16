@@ -32,12 +32,60 @@ async fn processor_execute(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<impl IntoResponse, ServerError> {
+    state.debug_log(format!(
+        "request start processor={} bytes={} content_encoding={:?} accept={:?}",
+        processor,
+        body.len(),
+        headers
+            .get(CONTENT_ENCODING)
+            .and_then(|value| value.to_str().ok()),
+        headers.get(ACCEPT).and_then(|value| value.to_str().ok()),
+    ));
+
     if !auth::authorize(&headers) {
+        state.debug_log(format!("request unauthorized processor={}", processor));
         return Err(ServerError::Processor("unauthorized".to_string()));
     }
-    let request: ProcessorHttpRequest = decode_request(&headers, &body)?;
-    let response = crate::server::service::processors::execute(&state, &processor, request)?;
-    encode_response(state.config.processors.compression, &headers, &response)
+
+    let request: ProcessorHttpRequest = match decode_request(&headers, &body) {
+        Ok(request) => request,
+        Err(error) => {
+            state.debug_log(format!(
+                "request decode failed processor={} error={:?}",
+                processor, error
+            ));
+            return Err(error);
+        }
+    };
+
+    state.debug_log(format!("request decoded processor={}", processor));
+
+    let response = match crate::server::service::processors::execute(&state, &processor, request) {
+        Ok(response) => response,
+        Err(error) => {
+            state.debug_log(format!(
+                "processor execution failed processor={} error={:?}",
+                processor, error
+            ));
+            return Err(error);
+        }
+    };
+
+    state.debug_log(format!("processor execution complete processor={}", processor));
+
+    let encoded = match encode_response(state.config.processors.compression, &headers, &response) {
+        Ok(response) => response,
+        Err(error) => {
+            state.debug_log(format!(
+                "response encode failed processor={} error={:?}",
+                processor, error
+            ));
+            return Err(error);
+        }
+    };
+
+    state.debug_log(format!("request complete processor={}", processor));
+    Ok(encoded)
 }
 
 fn decode_request<T: serde::de::DeserializeOwned>(
