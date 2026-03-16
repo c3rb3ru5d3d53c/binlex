@@ -262,7 +262,9 @@ fn test_function_process_populates_vex_lifters() {
 
     let json = function.process();
     let processors = json.processors.expect("processors should be populated");
-    let vex = processors.get("vex").expect("vex processor output should be present");
+    let vex = processors
+        .get("vex")
+        .expect("vex processor output should be present");
     let ir = vex
         .get("ir")
         .and_then(|value| value.as_str())
@@ -302,7 +304,9 @@ fn test_block_process_populates_vex_lifters() {
 
     let json = block.process();
     let processors = json.processors.expect("processors should be populated");
-    let vex = processors.get("vex").expect("vex processor output should be present");
+    let vex = processors
+        .get("vex")
+        .expect("vex processor output should be present");
     let ir = vex
         .get("ir")
         .and_then(|value| value.as_str())

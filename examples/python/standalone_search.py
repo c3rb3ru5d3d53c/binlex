@@ -26,8 +26,7 @@ import json, argparse, sys
 from binlex.formats import PE
 from binlex.disassemblers.capstone import Disassembler
 from binlex.controlflow import Graph, Function, FunctionJsonDeserializer
-from blclient import BLClient
-from binlex import Config
+from binlex import BinlexClient, Config
 
 
 def calculate_size_ratio(len1: int, len2: int) -> float:
@@ -49,7 +48,7 @@ def main(args):
     
     bl_func = Function(int(args.address),cfg)
     
-    client = BLClient(url=args.url, api_key=args.api)
+    client = BinlexClient(url=args.url, api_key=args.api)
     status, databases = client.databases()
     
     if status != 200:

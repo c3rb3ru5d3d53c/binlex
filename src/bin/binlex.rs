@@ -55,6 +55,7 @@ use std::collections::HashSet;
 use std::fs::File;
 use std::io::Write;
 use std::process;
+use std::time::Instant;
 
 #[derive(Parser, Debug, Clone)]
 #[command(
@@ -151,6 +152,9 @@ fn apply_cli_overrides(args: &Args, config: &mut Config) {
     if let Some(processors) = &args.processors {
         let enabled_processors: HashSet<_> = processors.iter().copied().collect();
         config.processors.enabled = !enabled_processors.is_empty();
+        if let Some(embeddings) = config.processors.ensure_processor("embeddings") {
+            embeddings.enabled = enabled_processors.contains(&ProcessorSelection::Embeddings);
+        }
         if let Some(vex) = config.processors.ensure_processor("vex") {
             vex.enabled = enabled_processors.contains(&ProcessorSelection::Vex);
         }
@@ -171,7 +175,16 @@ fn apply_cli_overrides(args: &Args, config: &mut Config) {
     if args.enable_instructions {
         config.instructions.enabled = args.enable_instructions;
     }
+}
 
+fn print_stage_timing(config: &Config, stage: &str, started_at: Instant) {
+    if config.general.debug {
+        Stderr::print(format!(
+            "[timing] {}: {:.3} ms",
+            stage,
+            started_at.elapsed().as_secs_f64() * 1000.0
+        ));
+    }
 }
 
 fn get_elf_function_symbols(elf: &ELF, read_stdin: bool) -> BTreeMap<u64, Symbol> {
@@ -597,8 +610,10 @@ fn process_pe(
     output: Option<String>,
     read_stdin: bool,
 ) {
+    let process_started_at = Instant::now();
     let mut attributes = Attributes::new();
 
+    let pe_started_at = Instant::now();
     let pe = match PE::new(input, config.clone()) {
         Ok(pe) => pe,
         Err(error) => {
@@ -606,6 +621,7 @@ fn process_pe(
             process::exit(1);
         }
     };
+    print_stage_timing(&config, "pe.new", pe_started_at);
 
     if pe.architecture() == Architecture::UNKNOWN {
         eprintln!("unsupported pe architecture");
@@ -628,6 +644,7 @@ fn process_pe(
     //     attributes.push(Attribute::Symbol(symbol.process().clone()));
     // }
 
+    let image_started_at = Instant::now();
     let mut mapped_file = pe.image().unwrap_or_else(|error| {
         eprintln!("failed to map pe image: {}", error);
         process::exit(1)
@@ -639,6 +656,7 @@ fn process_pe(
         eprintln!("failed to get pe virtual image: {}", error);
         process::exit(1);
     });
+    print_stage_timing(&config, "pe.image", image_started_at);
 
     Stderr::print_debug(config.clone(), "obtained mapped image pointer");
 
@@ -660,6 +678,7 @@ fn process_pe(
 
     if !pe.is_dotnet() {
         Stderr::print_debug(config.clone(), "starting pe disassembler");
+        let disassembly_started_at = Instant::now();
 
         let disassembler = match Disassembler::new(
             pe.architecture(),
@@ -680,8 +699,14 @@ fn process_pe(
                 eprintln!("{}", error);
                 process::exit(1);
             });
+        print_stage_timing(
+            &config,
+            "pe.disassemble_controlflow",
+            disassembly_started_at,
+        );
     } else if pe.is_dotnet() {
         Stderr::print_debug(config.clone(), "starting pe dotnet disassembler");
+        let disassembly_started_at = Instant::now();
 
         let disassembler = match CILDisassembler::new(
             pe.architecture(),
@@ -703,12 +728,20 @@ fn process_pe(
                 eprintln!("{}", error);
                 process::exit(1);
             });
+        print_stage_timing(
+            &config,
+            "pe.dotnet.disassemble_controlflow",
+            disassembly_started_at,
+        );
     } else {
         eprintln!("invalid or unsupported pe file");
         process::exit(1);
     }
 
+    let output_started_at = Instant::now();
     process_output(output, &cfg, &attributes, &function_symbols);
+    print_stage_timing(&config, "pe.process_output", output_started_at);
+    print_stage_timing(&config, "pe.total", process_started_at);
 }
 
 fn process_elf(
@@ -719,12 +752,15 @@ fn process_elf(
     output: Option<String>,
     read_stdin: bool,
 ) {
+    let process_started_at = Instant::now();
     let mut attributes = Attributes::new();
 
+    let elf_started_at = Instant::now();
     let elf = ELF::new(input, config.clone()).unwrap_or_else(|error| {
         eprintln!("{}", error);
         process::exit(1);
     });
+    print_stage_timing(&config, "elf.new", elf_started_at);
 
     if elf.architecture() == Architecture::UNKNOWN {
         eprintln!("unsupported elf architecture");
@@ -747,6 +783,7 @@ fn process_elf(
     //     attributes.push(Attribute::Symbol(symbol.process().clone()));
     // }
 
+    let image_started_at = Instant::now();
     let mut mapped_file = elf.image().unwrap_or_else(|error| {
         eprintln!("{}", error);
         process::exit(1)
@@ -756,6 +793,7 @@ fn process_elf(
         eprintln!("{}", error);
         process::exit(1);
     });
+    print_stage_timing(&config, "elf.image", image_started_at);
 
     let executable_address_ranges = elf.executable_virtual_address_ranges();
 
@@ -765,6 +803,7 @@ fn process_elf(
 
     let mut cfg = Graph::new(elf.architecture(), config.clone());
 
+    let disassembly_started_at = Instant::now();
     let disassembler = match Disassembler::new(
         elf.architecture(),
         image,
@@ -784,8 +823,16 @@ fn process_elf(
             eprintln!("{}", error);
             process::exit(1);
         });
+    print_stage_timing(
+        &config,
+        "elf.disassemble_controlflow",
+        disassembly_started_at,
+    );
 
+    let output_started_at = Instant::now();
     process_output(output, &cfg, &attributes, &function_symbols);
+    print_stage_timing(&config, "elf.process_output", output_started_at);
+    print_stage_timing(&config, "elf.total", process_started_at);
 }
 
 fn process_code(
@@ -795,8 +842,10 @@ fn process_code(
     architecture: Architecture,
     output: Option<String>,
 ) {
+    let process_started_at = Instant::now();
     let mut attributes = Attributes::new();
 
+    let file_started_at = Instant::now();
     let mut file = BLFile::new(input, config.clone()).unwrap_or_else(|error| {
         eprintln!("{}", error);
         process::exit(1);
@@ -805,6 +854,7 @@ fn process_code(
         eprintln!("{}", error);
         process::exit(1);
     });
+    print_stage_timing(&config, "code.read", file_started_at);
 
     let mut cfg = Graph::new(architecture, config.clone());
 
@@ -817,6 +867,7 @@ fn process_code(
 
     match architecture {
         Architecture::AMD64 | Architecture::I386 => {
+            let disassembly_started_at = Instant::now();
             let disassembler = match Disassembler::new(
                 architecture,
                 &file.data,
@@ -836,8 +887,14 @@ fn process_code(
                     eprintln!("{}", error);
                     process::exit(1);
                 });
+            print_stage_timing(
+                &config,
+                "code.disassemble_controlflow",
+                disassembly_started_at,
+            );
         }
         Architecture::CIL => {
+            let disassembly_started_at = Instant::now();
             let disassembler = match CILDisassembler::new(
                 architecture,
                 &file.data,
@@ -858,6 +915,11 @@ fn process_code(
                     eprintln!("{}", error);
                     process::exit(1);
                 });
+            print_stage_timing(
+                &config,
+                "code.dotnet.disassemble_controlflow",
+                disassembly_started_at,
+            );
         }
         _ => {}
     }
@@ -866,7 +928,10 @@ fn process_code(
 
     let function_symbols = BTreeMap::<u64, Symbol>::new();
 
+    let output_started_at = Instant::now();
     process_output(output, &cfg, &attributes, &function_symbols);
+    print_stage_timing(&config, "code.process_output", output_started_at);
+    print_stage_timing(&config, "code.total", process_started_at);
 }
 
 fn process_macho(
@@ -877,12 +942,15 @@ fn process_macho(
     output: Option<String>,
     read_stdin: bool,
 ) {
+    let process_started_at = Instant::now();
     let mut attributes = Attributes::new();
 
+    let macho_started_at = Instant::now();
     let macho = MACHO::new(input, config.clone()).unwrap_or_else(|error| {
         eprintln!("{}", error);
         process::exit(1);
     });
+    print_stage_timing(&config, "macho.new", macho_started_at);
 
     for slice in 0..macho.number_of_slices() {
         let architecture = macho.architecture(slice);
@@ -912,6 +980,7 @@ fn process_macho(
         //     attributes.push(Attribute::Symbol(symbol.process().clone()));
         // }
 
+        let image_started_at = Instant::now();
         let mut mapped_file = macho.image(slice).unwrap_or_else(|error| {
             eprintln!("{}", error);
             process::exit(1)
@@ -921,6 +990,7 @@ fn process_macho(
             eprintln!("{}", error);
             process::exit(1);
         });
+        print_stage_timing(&config, "macho.image", image_started_at);
 
         let executable_address_ranges = macho.executable_virtual_address_ranges(slice);
 
@@ -930,6 +1000,7 @@ fn process_macho(
 
         let mut cfg = Graph::new(architecture, config.clone());
 
+        let disassembly_started_at = Instant::now();
         let disassembler = match Disassembler::new(
             architecture,
             image,
@@ -949,20 +1020,28 @@ fn process_macho(
                 eprintln!("{}", error);
                 process::exit(1);
             });
+        print_stage_timing(
+            &config,
+            "macho.disassemble_controlflow",
+            disassembly_started_at,
+        );
 
+        let output_started_at = Instant::now();
         process_output(output.clone(), &cfg, &attributes, &function_symbols);
+        print_stage_timing(&config, "macho.process_output", output_started_at);
     }
+    print_stage_timing(&config, "macho.total", process_started_at);
 }
 
 fn main() {
+    let startup_started_at = Instant::now();
     let args = Args::parse();
 
     validate_args(&args);
 
     let mut config = Config::new();
 
-    let _ = config.write_default();
-
+    let config_started_at = Instant::now();
     if args.config.is_some() {
         match Config::from_file(&args.config.clone().unwrap().to_string()) {
             Ok(result) => {
@@ -973,10 +1052,12 @@ fn main() {
                 process::exit(1);
             }
         }
-    } else if let Err(error) = config.from_default() {
-        eprintln!("failed to read default config: {}", error);
-        process::exit(1);
+    } else {
+        if config.from_default().is_err() {
+            let _ = config.write_default();
+        }
     }
+    print_stage_timing(&config, "config.load", config_started_at);
 
     apply_cli_overrides(&args, &mut config);
 
@@ -985,6 +1066,7 @@ fn main() {
         "finished reading arguments and configuration",
     );
 
+    let thread_pool_started_at = Instant::now();
     ThreadPoolBuilder::new()
         .num_threads(config.general.threads)
         .build_global()
@@ -992,19 +1074,22 @@ fn main() {
             eprintln!("{}", error);
             process::exit(1);
         });
+    print_stage_timing(&config, "thread_pool.build", thread_pool_started_at);
 
     if args.architecture.is_none() {
+        let magic_started_at = Instant::now();
         let format = Magic::from_file(args.input.clone()).unwrap_or_else(|error| {
             eprintln!("{}", error);
             process::exit(1);
         });
+        print_stage_timing(&config, "magic.from_file", magic_started_at);
         match format {
             Magic::PE => {
                 Stderr::print_debug(config.clone(), "processing pe");
                 process_pe(
                     &args,
                     args.input.clone(),
-                    config,
+                    config.clone(),
                     args.tags.clone(),
                     args.output.clone(),
                     args.stdin,
@@ -1015,7 +1100,7 @@ fn main() {
                 process_elf(
                     &args,
                     args.input.clone(),
-                    config,
+                    config.clone(),
                     args.tags.clone(),
                     args.output.clone(),
                     args.stdin,
@@ -1026,7 +1111,7 @@ fn main() {
                 process_macho(
                     &args,
                     args.input.clone(),
-                    config,
+                    config.clone(),
                     args.tags.clone(),
                     args.output.clone(),
                     args.stdin,
@@ -1045,7 +1130,7 @@ fn main() {
                 process_code(
                     &args,
                     args.input.clone(),
-                    config,
+                    config.clone(),
                     architecture,
                     args.output.clone(),
                 );
@@ -1056,6 +1141,8 @@ fn main() {
             }
         }
     }
+
+    print_stage_timing(&config, "binlex.total", startup_started_at);
 
     process::exit(0);
 }
