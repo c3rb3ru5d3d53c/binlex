@@ -96,7 +96,7 @@ impl<'a> Disassembler<'a> {
                     machine,
                     image,
                     executable_address_ranges.clone(),
-                    config.clone(),
+                    config,
                 )
                 .map_err(|_| Error::other("failed to create X86 disassembler"))?;
                 DisassemblerBackend::X86(disasm)

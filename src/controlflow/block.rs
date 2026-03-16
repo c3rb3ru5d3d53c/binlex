@@ -339,7 +339,7 @@ impl<'block> Block<'block> {
     /// # Returns
     ///
     /// Returns a `BlockJson` instance containing the block's metadata and related information.
-    pub fn process(&self) -> BlockJson {
+    pub fn process_base(&self) -> BlockJson {
         let bytes = self.bytes();
         let pattern = self.pattern();
         let chromosome = Chromosome::new(pattern, self.cfg.config.clone())
@@ -388,7 +388,7 @@ impl<'block> Block<'block> {
             None
         };
 
-        let mut json = BlockJson {
+        BlockJson {
             type_: "block".to_string(),
             address: self.address,
             architecture: self.architecture().to_string(),
@@ -410,8 +410,11 @@ impl<'block> Block<'block> {
             contiguous: true,
             processors: None,
             attributes: None,
-        };
+        }
+    }
 
+    pub fn process(&self) -> BlockJson {
+        let mut json = self.process_base();
         if let Some(outputs) = self
             .cfg
             .processor_outputs(crate::processors::ProcessorTarget::Block, self.address)

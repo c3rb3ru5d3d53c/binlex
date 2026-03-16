@@ -143,17 +143,18 @@ macro_rules! processor {
                 enabled: $processor_enabled,
                 instructions: $crate::global::config::ConfigProcessorTarget {
                     enabled: $instructions_enabled,
-                    extra: std::collections::BTreeMap::new(),
+                    options: std::collections::BTreeMap::new(),
                 },
                 blocks: $crate::global::config::ConfigProcessorTarget {
                     enabled: $blocks_enabled,
-                    extra: std::collections::BTreeMap::new(),
+                    options: std::collections::BTreeMap::new(),
                 },
                 functions: $crate::global::config::ConfigProcessorTarget {
                     enabled: $functions_enabled,
-                    extra: std::collections::BTreeMap::new(),
+                    options: std::collections::BTreeMap::new(),
                 },
-                extra: std::collections::BTreeMap::new(),
+                options: std::collections::BTreeMap::new(),
+                server: std::collections::BTreeMap::new(),
             }
         }
 
@@ -226,7 +227,8 @@ pub fn default_processor_configs() -> BTreeMap<String, ConfigProcessor> {
 }
 
 pub fn default_processor_config(name: &str) -> Option<ConfigProcessor> {
-    processor_registration_by_name(name).map(|registration| (registration.registration.config_default)())
+    processor_registration_by_name(name)
+        .map(|registration| (registration.registration.config_default)())
 }
 
 pub fn processor_registration_by_name(name: &str) -> Option<RegisteredProcessor<'static>> {
@@ -283,17 +285,18 @@ mod tests {
             enabled: false,
             instructions: ConfigProcessorTarget {
                 enabled: false,
-                extra: BTreeMap::new(),
+                options: BTreeMap::new(),
             },
             blocks: ConfigProcessorTarget {
                 enabled: false,
-                extra: BTreeMap::new(),
+                options: BTreeMap::new(),
             },
             functions: ConfigProcessorTarget {
                 enabled: false,
-                extra: BTreeMap::new(),
+                options: BTreeMap::new(),
             },
-            extra: BTreeMap::new(),
+            options: BTreeMap::new(),
+            server: BTreeMap::new(),
         }
     }
 
