@@ -11,7 +11,7 @@ pub trait Processor: Send + Sync + 'static {
     type Request: Serialize + for<'de> Deserialize<'de>;
     type Response: Serialize + for<'de> Deserialize<'de>;
 
-    fn process_request(&self, request: Self::Request) -> Result<Self::Response, ProcessorError>;
+    fn request(&self, request: Self::Request) -> Result<Self::Response, ProcessorError>;
 
     fn filename() -> String {
         "binlex-processor".to_string()
@@ -23,7 +23,7 @@ pub trait Processor: Send + Sync + 'static {
 
     fn process(&self, payload: &[u8]) -> Result<Vec<u8>, ProcessorError> {
         let request: Self::Request = postcard::from_bytes(payload)?;
-        let response = self.process_request(request)?;
+        let response = self.request(request)?;
         Ok(postcard::to_allocvec(&response)?)
     }
 }

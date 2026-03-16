@@ -1,14 +1,25 @@
+pub mod embeddings;
 #[cfg(not(target_os = "windows"))]
 pub mod vex;
 
 use crate::Config;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::global::config::ConfigProcessor;
+use crate::io::stderr::Stderr;
 use crate::processing::processor::{Processor, ProcessorDispatch};
+use crate::server::dto::{
+    ErrorResponse, LZ4_CONTENT_ENCODING, OCTET_STREAM_CONTENT_TYPE, ProcessorHttpRequest,
+};
+use crate::server::error::ServerError;
+use crate::server::state::AppState;
 use clap::ValueEnum;
 use once_cell::sync::Lazy;
+use reqwest::blocking::Client;
+use reqwest::header::{ACCEPT, CONTENT_ENCODING, CONTENT_TYPE};
 use serde_json::Value;
 use std::collections::BTreeMap;
+use std::process;
+use std::sync::Arc;
 
 #[derive(serde::Serialize, serde::Deserialize, Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum ProcessorOs {
@@ -41,12 +52,24 @@ impl ProcessorOs {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, ValueEnum)]
 pub enum ProcessorSelection {
+    Embeddings,
     Vex,
 }
 
 impl ProcessorSelection {
     pub fn to_vec() -> Vec<String> {
-        vec![ProcessorSelection::Vex.to_possible_value().unwrap().get_name().to_string()]
+        vec![
+            ProcessorSelection::Embeddings
+                .to_possible_value()
+                .unwrap()
+                .get_name()
+                .to_string(),
+            ProcessorSelection::Vex
+                .to_possible_value()
+                .unwrap()
+                .get_name()
+                .to_string(),
+        ]
     }
 
     pub fn to_list() -> String {
@@ -61,14 +84,86 @@ pub enum ProcessorTarget {
     Function,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum ProcessorMode {
+    Ipc,
+    Http,
+}
+
+impl ProcessorMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Ipc => "ipc",
+            Self::Http => "http",
+        }
+    }
+}
+
 pub type ProcessorOutputs = Vec<(&'static str, Value)>;
+
+pub trait GraphProcessor {
+    fn instruction_json(instruction: &Instruction) -> Option<Value> {
+        serde_json::to_value(instruction.process()).ok()
+    }
+
+    fn block_json(block: &Block<'_>) -> Option<Value> {
+        serde_json::to_value(block.process_base()).ok()
+    }
+
+    fn function_json(function: &Function<'_>) -> Option<Value> {
+        serde_json::to_value(function.process_base()).ok()
+    }
+
+    fn instruction(_: &Instruction) -> Option<Value> {
+        None
+    }
+
+    fn block(_: &Block<'_>) -> Option<Value> {
+        None
+    }
+
+    fn function(_: &Function<'_>) -> Option<Value> {
+        None
+    }
+}
+
+pub trait JsonProcessor: Processor {
+    fn request(state: &AppState, data: Value) -> Result<Self::Request, ServerError>;
+
+    fn response(response: Self::Response) -> Result<Value, ServerError>;
+
+    fn execute_value(state: &AppState, data: Value) -> Result<Value, ServerError>
+    where
+        Self: Sized,
+    {
+        let request = <Self as JsonProcessor>::request(state, data)?;
+        let pool = state.processor_pool(Self::NAME).ok_or_else(|| {
+            ServerError::Processor(format!("{} processor pool is unavailable", Self::NAME))
+        })?;
+        let response = pool.execute::<Self>(&request)?;
+        Self::response(response)
+    }
+}
 
 pub struct ProcessorRegistration {
     pub name: &'static str,
     pub os: &'static [ProcessorOs],
+    pub modes: &'static [ProcessorMode],
+    pub make_pool: fn(
+        &crate::ConfigProcessors,
+    ) -> Result<
+        Arc<crate::processing::pool::ProcessorPool>,
+        crate::processing::error::ProcessorError,
+    >,
     pub make_dispatch: fn() -> Box<dyn ProcessorDispatch>,
     pub config_default: fn() -> ConfigProcessor,
+    pub config_server_default:
+        fn() -> BTreeMap<String, crate::global::config::ConfigProcessorValue>,
     pub enabled_for_target: fn(&Config, ProcessorTarget) -> bool,
+    pub execute_value: Option<fn(&AppState, Value) -> Result<Value, ServerError>>,
+    pub instruction_json: Option<fn(&Instruction) -> Option<Value>>,
+    pub block_json: Option<fn(&Block<'_>) -> Option<Value>>,
+    pub function_json: Option<fn(&Function<'_>) -> Option<Value>>,
     pub process_instruction: Option<fn(&Instruction) -> Option<Value>>,
     pub process_block: Option<fn(&Block<'_>) -> Option<Value>>,
     pub process_function: Option<fn(&Function<'_>) -> Option<Value>>,
@@ -85,16 +180,69 @@ impl<'a> RegisteredProcessor<'a> {
     }
 
     pub fn process_block(&self, block: &Block<'_>) -> Option<Value> {
-        self.registration.process_block.and_then(|process| process(block))
+        if let Some(data) = self
+            .registration
+            .block_json
+            .and_then(|serialize| serialize(block))
+        {
+            match mode(self.name(), data, &block.cfg.config) {
+                Ok(Some(data)) => return Some(data),
+                Ok(None) => {}
+                Err(error) => {
+                    if should_fail_http_mode(&error) {
+                        fail_http_mode(&block.cfg.config, self.name(), &error);
+                    }
+                    report_http_mode_error(&block.cfg.config, self.name(), &error);
+                    return None;
+                }
+            }
+        }
+        self.registration
+            .process_block
+            .and_then(|process| process(block))
     }
 
     pub fn process_instruction(&self, instruction: &Instruction) -> Option<Value> {
+        if let Some(data) = self
+            .registration
+            .instruction_json
+            .and_then(|serialize| serialize(instruction))
+        {
+            match mode(self.name(), data, &instruction.config) {
+                Ok(Some(data)) => return Some(data),
+                Ok(None) => {}
+                Err(error) => {
+                    if should_fail_http_mode(&error) {
+                        fail_http_mode(&instruction.config, self.name(), &error);
+                    }
+                    report_http_mode_error(&instruction.config, self.name(), &error);
+                    return None;
+                }
+            }
+        }
         self.registration
             .process_instruction
             .and_then(|process| process(instruction))
     }
 
     pub fn process_function(&self, function: &Function<'_>) -> Option<Value> {
+        if let Some(data) = self
+            .registration
+            .function_json
+            .and_then(|serialize| serialize(function))
+        {
+            match mode(self.name(), data, &function.cfg.config) {
+                Ok(Some(data)) => return Some(data),
+                Ok(None) => {}
+                Err(error) => {
+                    if should_fail_http_mode(&error) {
+                        fail_http_mode(&function.cfg.config, self.name(), &error);
+                    }
+                    report_http_mode_error(&function.cfg.config, self.name(), &error);
+                    return None;
+                }
+            }
+        }
         self.registration
             .process_function
             .and_then(|process| process(function))
@@ -111,6 +259,12 @@ impl<'a> RegisteredProcessor<'a> {
 impl ProcessorRegistration {
     pub fn supported_on_current_os(&self) -> bool {
         self.os.contains(&ProcessorOs::current())
+    }
+
+    pub fn supports_mode(&self, mode: &str) -> bool {
+        self.modes
+            .iter()
+            .any(|supported| supported.as_str() == mode)
     }
 }
 
@@ -130,12 +284,42 @@ macro_rules! processor {
     (@supported_os windows) => {
         $crate::processors::ProcessorOs::Windows
     };
+    (@mode ipc) => {
+        $crate::processors::ProcessorMode::Ipc
+    };
+    (@mode http) => {
+        $crate::processors::ProcessorMode::Http
+    };
+    (@value { $($key:ident : $value:tt),* $(,)? }) => {
+        $crate::global::config::ConfigProcessorValue::Table(std::collections::BTreeMap::from([
+            $(
+                (
+                    stringify!($key).to_string(),
+                    $crate::processor!(@value $value),
+                )
+            ),*
+        ]))
+    };
+    (@value [ $($value:tt),* $(,)? ]) => {
+        $crate::global::config::ConfigProcessorValue::Array(vec![
+            $(
+                $crate::processor!(@value $value)
+            ),*
+        ])
+    };
+    (@value $value:expr) => {
+        $crate::global::config::ConfigProcessorValue::from($value)
+    };
     ($processor:path {
         os: [$($supported_os:ident),+ $(,)?],
         enabled: $processor_enabled:expr,
+        modes: [$($processor_mode:ident),+ $(,)?],
+        mode: $default_mode:ident,
         instructions: { enabled: $instructions_enabled:expr },
         blocks: { enabled: $blocks_enabled:expr },
-        functions: { enabled: $functions_enabled:expr }
+        functions: { enabled: $functions_enabled:expr },
+        options: { $($option_key:ident : $option_value:tt),* $(,)? },
+        server: { $($server_key:ident : $server_value:tt),* $(,)? }
         $(,)?
     }) => {
         pub(crate) fn config_default() -> $crate::global::config::ConfigProcessor {
@@ -153,17 +337,44 @@ macro_rules! processor {
                     enabled: $functions_enabled,
                     options: std::collections::BTreeMap::new(),
                 },
-                options: std::collections::BTreeMap::new(),
+                options: std::collections::BTreeMap::from([
+                    (
+                        "mode".to_string(),
+                        $crate::global::config::ConfigProcessorValue::String(
+                            $crate::processor!(@mode $default_mode).as_str().to_string(),
+                        ),
+                    ),
+                    $(
+                        (
+                            stringify!($option_key).to_string(),
+                            $crate::processor!(@value $option_value),
+                        )
+                    ),*
+                ]),
                 server: std::collections::BTreeMap::new(),
             }
+        }
+
+        pub(crate) fn config_server_default() -> std::collections::BTreeMap<String, $crate::global::config::ConfigProcessorValue> {
+            std::collections::BTreeMap::from([
+                $(
+                    (
+                        stringify!($server_key).to_string(),
+                        $crate::processor!(@value $server_value),
+                    )
+                ),*
+            ])
         }
 
         pub(crate) fn registration() -> $crate::processors::ProcessorRegistration {
             $crate::processors::ProcessorRegistration {
                 name: <$processor as $crate::processing::processor::Processor>::NAME,
                 os: &[$($crate::processor!(@supported_os $supported_os)),+],
+                modes: &[$($crate::processor!(@mode $processor_mode)),+],
+                make_pool: |config| $crate::processing::pool::ProcessorPool::for_processor::<$processor>(config),
                 make_dispatch: || Box::new($processor),
                 config_default,
+                config_server_default,
                 enabled_for_target: |config: &$crate::Config,
                                      target: $crate::processors::ProcessorTarget| {
                     config.processors.enabled
@@ -185,16 +396,29 @@ macro_rules! processor {
                                     }
                             })
                 },
+                execute_value: Some(<$processor as $crate::processors::JsonProcessor>::execute_value as fn(&$crate::server::state::AppState, serde_json::Value) -> Result<serde_json::Value, $crate::server::error::ServerError>),
+                instruction_json: Some(
+                    <$processor as $crate::processors::GraphProcessor>::instruction_json
+                        as fn(&$crate::controlflow::Instruction) -> Option<serde_json::Value>,
+                ),
+                block_json: Some(
+                    <$processor as $crate::processors::GraphProcessor>::block_json
+                        as fn(&$crate::controlflow::Block<'_>) -> Option<serde_json::Value>,
+                ),
+                function_json: Some(
+                    <$processor as $crate::processors::GraphProcessor>::function_json
+                        as fn(&$crate::controlflow::Function<'_>) -> Option<serde_json::Value>,
+                ),
                 process_instruction: Some(
-                    <$processor>::process_instruction
+                    <$processor as $crate::processors::GraphProcessor>::instruction
                         as fn(&$crate::controlflow::Instruction) -> Option<serde_json::Value>,
                 ),
                 process_block: Some(
-                    <$processor>::process_block
+                    <$processor as $crate::processors::GraphProcessor>::block
                         as fn(&$crate::controlflow::Block<'_>) -> Option<serde_json::Value>,
                 ),
                 process_function: Some(
-                    <$processor>::process_function
+                    <$processor as $crate::processors::GraphProcessor>::function
                         as fn(&$crate::controlflow::Function<'_>) -> Option<serde_json::Value>,
                 ),
             }
@@ -204,13 +428,17 @@ macro_rules! processor {
 
 #[cfg(not(target_os = "windows"))]
 static PROCESSOR_REGISTRATIONS: Lazy<Vec<ProcessorRegistration>> =
-    Lazy::new(|| vec![vex::registration()]);
+    Lazy::new(|| vec![vex::registration(), embeddings::registration()]);
 
 #[cfg(target_os = "windows")]
 static PROCESSOR_REGISTRATIONS: Lazy<Vec<ProcessorRegistration>> = Lazy::new(Vec::new);
 
 fn processor_registrations() -> &'static [ProcessorRegistration] {
     PROCESSOR_REGISTRATIONS.as_slice()
+}
+
+pub fn registered_processor_registrations() -> &'static [ProcessorRegistration] {
+    processor_registrations()
 }
 
 pub fn default_processor_configs() -> BTreeMap<String, ConfigProcessor> {
@@ -229,6 +457,19 @@ pub fn default_processor_configs() -> BTreeMap<String, ConfigProcessor> {
 pub fn default_processor_config(name: &str) -> Option<ConfigProcessor> {
     processor_registration_by_name(name)
         .map(|registration| (registration.registration.config_default)())
+}
+
+pub fn apply_server_defaults(config: &mut crate::ConfigProcessors) {
+    for registration in processor_registrations()
+        .iter()
+        .filter(|registration| registration.supported_on_current_os())
+    {
+        if let Some(processor) = config.ensure_processor(registration.name) {
+            for (key, value) in (registration.config_server_default)() {
+                processor.server.entry(key).or_insert(value);
+            }
+        }
+    }
 }
 
 pub fn processor_registration_by_name(name: &str) -> Option<RegisteredProcessor<'static>> {
@@ -270,15 +511,200 @@ pub fn apply_output(outputs: &mut BTreeMap<String, Value>, processor_name: &str,
     outputs.insert(processor_name.to_string(), output.clone());
 }
 
+fn report_http_mode_error(config: &Config, processor_name: &str, error: &crate::processing::error::ProcessorError) {
+    if config.general.debug {
+        Stderr::print_debug(
+            config,
+            format!("processor {} http error: {}", processor_name, error),
+        );
+    }
+}
+
+fn fail_http_mode(
+    config: &Config,
+    processor_name: &str,
+    error: &crate::processing::error::ProcessorError,
+) -> ! {
+    report_http_mode_error(config, processor_name, error);
+    eprintln!("processor {} http error: {}", processor_name, error);
+    process::exit(1);
+}
+
+fn should_fail_http_mode(error: &crate::processing::error::ProcessorError) -> bool {
+    matches!(
+        error,
+        crate::processing::error::ProcessorError::Io(_)
+            | crate::processing::error::ProcessorError::Timeout(_)
+            | crate::processing::error::ProcessorError::Protocol(_)
+    )
+}
+
+fn processor_http_url(processor_name: &str, config: &ConfigProcessor) -> Result<String, crate::processing::error::ProcessorError> {
+    let base_url = config.option_string("url").ok_or_else(|| {
+        crate::processing::error::ProcessorError::Protocol(format!(
+            "processor {} http mode requires url option",
+            processor_name
+        ))
+    })?;
+    Ok(format!(
+        "{}/processors/{}",
+        base_url.trim_end_matches('/'),
+        processor_name
+    ))
+}
+
+fn processor_http_verify(config: &ConfigProcessor) -> bool {
+    config.option_bool("verify").unwrap_or(true)
+}
+
+fn encode_http_request(
+    request: &ProcessorHttpRequest,
+    compression_enabled: bool,
+) -> Result<(Vec<u8>, &'static str), crate::processing::error::ProcessorError> {
+    let json = serde_json::to_vec(request)
+        .map_err(|error| crate::processing::error::ProcessorError::Serialization(error.to_string()))?;
+    if !compression_enabled {
+        return Ok((json, "application/json"));
+    }
+
+    let compressed = lz4::block::compress(&json, None, false)
+        .map_err(|error| crate::processing::error::ProcessorError::Compression(error.to_string()))?;
+    let mut payload = Vec::with_capacity(4 + compressed.len());
+    payload.extend_from_slice(&(json.len() as u32).to_le_bytes());
+    payload.extend_from_slice(&compressed);
+    Ok((payload, OCTET_STREAM_CONTENT_TYPE))
+}
+
+fn decode_http_response(
+    response: reqwest::blocking::Response,
+) -> Result<Value, crate::processing::error::ProcessorError> {
+    let status = response.status();
+    let headers = response.headers().clone();
+    let body = response
+        .bytes()
+        .map_err(|error| crate::processing::error::ProcessorError::Io(std::io::Error::other(error.to_string())))?;
+
+    if !status.is_success() {
+        if let Ok(error) = serde_json::from_slice::<ErrorResponse>(&body) {
+            return Err(crate::processing::error::ProcessorError::RemoteFailure(error.error));
+        }
+        return Err(crate::processing::error::ProcessorError::RemoteFailure(
+            String::from_utf8_lossy(&body).into_owned(),
+        ));
+    }
+
+    let decoded = if headers
+        .get(CONTENT_ENCODING)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.eq_ignore_ascii_case(LZ4_CONTENT_ENCODING))
+    {
+        if body.len() < 4 {
+            return Err(crate::processing::error::ProcessorError::Compression(
+                "compressed response missing size prefix".to_string(),
+            ));
+        }
+        let uncompressed_len = u32::from_le_bytes([body[0], body[1], body[2], body[3]]) as i32;
+        lz4::block::decompress(&body[4..], Some(uncompressed_len))
+            .map_err(|error| crate::processing::error::ProcessorError::Compression(error.to_string()))?
+    } else {
+        body.to_vec()
+    };
+
+    serde_json::from_slice(&decoded)
+        .map_err(|error| crate::processing::error::ProcessorError::Serialization(error.to_string()))
+}
+
+fn execute_http_mode(
+    processor_name: &str,
+    data: Value,
+    config: &Config,
+    processor: &ConfigProcessor,
+) -> Result<Value, crate::processing::error::ProcessorError> {
+    let url = processor_http_url(processor_name, processor)?;
+    let verify = processor_http_verify(processor);
+    let client = Client::builder()
+        .danger_accept_invalid_certs(!verify)
+        .build()
+        .map_err(|error| crate::processing::error::ProcessorError::Protocol(error.to_string()))?;
+    let request = ProcessorHttpRequest { data };
+    let (body, content_type) = encode_http_request(&request, config.processors.compression)?;
+
+    let mut builder = client
+        .post(url)
+        .header(CONTENT_TYPE, content_type)
+        .header(ACCEPT, "application/json");
+
+    if config.processors.compression {
+        builder = builder
+            .header(CONTENT_ENCODING, LZ4_CONTENT_ENCODING)
+            .header(ACCEPT, OCTET_STREAM_CONTENT_TYPE);
+    }
+
+    let response = builder
+        .body(body)
+        .send()
+        .map_err(|error| crate::processing::error::ProcessorError::Io(std::io::Error::other(error.to_string())))?;
+
+    decode_http_response(response)
+}
+
+pub fn mode(
+    processor_name: &str,
+    data: Value,
+    config: &Config,
+) -> Result<Option<Value>, crate::processing::error::ProcessorError> {
+    let Some(registration) = processor_registration_by_name(processor_name) else {
+        return Ok(None);
+    };
+    if !registration.registration.supports_mode("http") {
+        return Ok(None);
+    }
+
+    let Some(processor) = config.processors.processor(processor_name) else {
+        return Ok(None);
+    };
+    let Some(mode) = processor.option_string("mode") else {
+        return Ok(None);
+    };
+    if mode != "http" {
+        return Ok(None);
+    }
+    execute_http_mode(processor_name, data, config, processor).map(Some)
+}
+
+pub fn http_execute(
+    state: &AppState,
+    processor_name: &str,
+    data: Value,
+) -> Result<Value, ServerError> {
+    let registration = processor_registration_by_name(processor_name).ok_or_else(|| {
+        ServerError::Processor(format!("unsupported HTTP processor: {}", processor_name))
+    })?;
+    if !registration.registration.supports_mode("http") {
+        return Err(ServerError::Processor(format!(
+            "processor {} does not support HTTP mode",
+            processor_name
+        )));
+    }
+    let execute = registration.registration.execute_value.ok_or_else(|| {
+        ServerError::Processor(format!(
+            "processor {} does not implement value execution",
+            processor_name
+        ))
+    })?;
+    execute(state, data)
+}
+
 pub fn dispatch_by_name(name: &str) -> Option<RegisteredProcessorDispatch> {
     processor_registration_by_name(name).map(RegisteredProcessor::into_dispatch)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{ProcessorOs, ProcessorRegistration};
+    use super::{ProcessorMode, ProcessorOs, ProcessorRegistration};
     use crate::global::config::{ConfigProcessor, ConfigProcessorTarget};
     use std::collections::BTreeMap;
+    use std::sync::Arc;
 
     fn test_config_default() -> ConfigProcessor {
         ConfigProcessor {
@@ -295,13 +721,28 @@ mod tests {
                 enabled: false,
                 options: BTreeMap::new(),
             },
-            options: BTreeMap::new(),
+            options: BTreeMap::from([(
+                "mode".to_string(),
+                crate::global::config::ConfigProcessorValue::String("ipc".to_string()),
+            )]),
             server: BTreeMap::new(),
         }
     }
 
     fn test_make_dispatch() -> Box<dyn crate::processing::processor::ProcessorDispatch> {
         panic!("test dispatch should not be constructed")
+    }
+
+    fn test_config_server_default() -> BTreeMap<String, crate::global::config::ConfigProcessorValue>
+    {
+        BTreeMap::new()
+    }
+
+    fn test_make_pool(
+        _: &crate::ConfigProcessors,
+    ) -> Result<Arc<crate::processing::pool::ProcessorPool>, crate::processing::error::ProcessorError>
+    {
+        panic!("test pool should not be constructed")
     }
 
     #[test]
@@ -316,9 +757,16 @@ mod tests {
         let registration = ProcessorRegistration {
             name: "test",
             os: &SUPPORTED_OS,
+            modes: &[ProcessorMode::Ipc],
+            make_pool: test_make_pool,
             make_dispatch: test_make_dispatch,
             config_default: test_config_default,
+            config_server_default: test_config_server_default,
             enabled_for_target: |_, _| false,
+            execute_value: None,
+            instruction_json: None,
+            block_json: None,
+            function_json: None,
             process_instruction: None,
             process_block: None,
             process_function: None,
@@ -337,14 +785,53 @@ mod tests {
         let registration = ProcessorRegistration {
             name: "test",
             os: &UNSUPPORTED_OS,
+            modes: &[ProcessorMode::Ipc],
+            make_pool: test_make_pool,
             make_dispatch: test_make_dispatch,
             config_default: test_config_default,
+            config_server_default: test_config_server_default,
             enabled_for_target: |_, _| false,
+            execute_value: None,
+            instruction_json: None,
+            block_json: None,
+            function_json: None,
             process_instruction: None,
             process_block: None,
             process_function: None,
         };
 
         assert!(!registration.supported_on_current_os());
+    }
+
+    #[test]
+    fn registration_supports_declared_modes() {
+        #[cfg(target_os = "linux")]
+        static SUPPORTED_OS: [ProcessorOs; 1] = [ProcessorOs::Linux];
+        #[cfg(target_os = "macos")]
+        static SUPPORTED_OS: [ProcessorOs; 1] = [ProcessorOs::Macos];
+        #[cfg(target_os = "windows")]
+        static SUPPORTED_OS: [ProcessorOs; 1] = [ProcessorOs::Windows];
+
+        let registration = ProcessorRegistration {
+            name: "test",
+            os: &SUPPORTED_OS,
+            modes: &[ProcessorMode::Ipc, ProcessorMode::Http],
+            make_pool: test_make_pool,
+            make_dispatch: test_make_dispatch,
+            config_default: test_config_default,
+            config_server_default: test_config_server_default,
+            enabled_for_target: |_, _| false,
+            execute_value: None,
+            instruction_json: None,
+            block_json: None,
+            function_json: None,
+            process_instruction: None,
+            process_block: None,
+            process_function: None,
+        };
+
+        assert!(registration.supports_mode("ipc"));
+        assert!(registration.supports_mode("http"));
+        assert!(!registration.supports_mode("bogus"));
     }
 }
