@@ -20,6 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+pub mod clients;
 pub mod controlflow;
 pub mod disassemblers;
 pub mod entropy;
@@ -31,8 +32,10 @@ pub mod hex;
 pub mod imaging;
 pub mod io;
 pub mod lifters;
+pub mod math;
 pub mod processing;
 pub mod processors;
+pub mod server;
 pub mod types;
 
 pub use global::AUTHOR;

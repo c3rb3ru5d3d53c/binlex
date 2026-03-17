@@ -1,0 +1,24 @@
+FROM rust:1.88-bookworm AS builder
+
+WORKDIR /app
+
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+
+RUN cargo build --release --bin binlex-server --bin binlex-processor
+
+FROM debian:bookworm-slim
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates libgcc-s1 libstdc++6 \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /data/binlex-server
+
+WORKDIR /app
+
+COPY --from=builder /app/target/release/binlex-server /usr/local/bin/binlex-server
+COPY --from=builder /app/target/release/binlex-processor /usr/local/bin/binlex-processor
+
+EXPOSE 5000
+
+CMD ["sh", "-lc", "if [ -n \"${BINLEX_SERVER_CONFIG}\" ]; then exec binlex-server --config \"${BINLEX_SERVER_CONFIG}\"; else exec binlex-server; fi"]
