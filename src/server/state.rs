@@ -1,0 +1,70 @@
+use std::collections::BTreeMap;
+use std::sync::Arc;
+
+use crate::ConfigProcessors;
+use crate::processing::pool::ProcessorPool;
+use crate::server::config::ServerConfig;
+
+#[derive(Clone)]
+pub struct AppState {
+    pub config: ServerConfig,
+    pub processor_pools: BTreeMap<String, Arc<ProcessorPool>>,
+}
+
+impl AppState {
+    pub fn new(config: ServerConfig) -> Result<Self, crate::processing::error::ProcessorError> {
+        let mut processor_pools = BTreeMap::new();
+        if !config.processors.enabled {
+            return Ok(Self {
+                config,
+                processor_pools,
+            });
+        }
+
+        let processors = ConfigProcessors {
+            enabled: true,
+            ..config.processors.clone()
+        };
+        for registration in crate::processors::registered_processor_registrations() {
+            if !registration.supported_on_current_os() {
+                continue;
+            }
+            if !config
+                .processors
+                .processor(registration.name)
+                .is_some_and(|processor| processor.enabled)
+            {
+                continue;
+            }
+            let pool = (registration.make_pool)(&processors)?;
+            processor_pools.insert(registration.name.to_string(), pool);
+        }
+        Ok(Self {
+            config,
+            processor_pools,
+        })
+    }
+
+    pub fn debug_enabled(&self) -> bool {
+        self.config.server.debug
+    }
+
+    pub fn debug_log<T: std::fmt::Display>(&self, line: T) {
+        if self.debug_enabled() {
+            eprintln!("[binlex-server] {}", line);
+        }
+    }
+
+    pub fn processor_pool(&self, name: &str) -> Option<Arc<ProcessorPool>> {
+        self.processor_pools.get(name).cloned()
+    }
+
+    pub fn processor_enabled(&self, name: &str) -> bool {
+        self.config.processors.enabled
+            && self
+                .config
+                .processors
+                .processor(name)
+                .is_some_and(|processor| processor.enabled)
+    }
+}

@@ -80,6 +80,21 @@ jobs:
           brew list autoconf >/dev/null 2>&1 || brew install autoconf
           brew list libtool >/dev/null 2>&1 || brew install libtool
 
+      - name: Install Vulkan SDK (macOS)
+        if: startsWith(matrix.os, 'macos-')
+        uses: humbletim/install-vulkan-sdk@v1.2
+        with:
+          version: 1.4.309.0
+          cache: true
+
+      - name: Configure Vulkan Environment (macOS)
+        if: startsWith(matrix.os, 'macos-')
+        shell: bash
+        run: |
+          echo "DYLD_FALLBACK_LIBRARY_PATH=$VULKAN_SDK/lib${DYLD_FALLBACK_LIBRARY_PATH:+:$DYLD_FALLBACK_LIBRARY_PATH}" >> "$GITHUB_ENV"
+          echo "VK_ICD_FILENAMES=$VULKAN_SDK/share/vulkan/icd.d/MoltenVK_icd.json" >> "$GITHUB_ENV"
+          echo "VK_LAYER_PATH=$VULKAN_SDK/share/vulkan/explicit_layer.d" >> "$GITHUB_ENV"
+
       - name: Install MSYS2 and Automake (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
         uses: msys2/setup-msys2@v2
