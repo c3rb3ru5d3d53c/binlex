@@ -20,30 +20,22 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod compression;
-pub mod clients;
-pub mod controlflow;
-pub mod disassemblers;
-pub mod formats;
-pub mod genetics;
-pub mod global;
-pub mod hashing;
-pub mod hex;
-pub mod imaging;
-pub mod io;
-pub mod lifters;
-pub mod math;
-pub mod processing;
-pub mod processors;
-pub mod server;
+pub mod lz4;
 
-pub use math::entropy;
-pub use global::AUTHOR;
-pub use global::Architecture;
-pub use global::Config;
-pub use global::Magic;
-pub use global::OperatingSystem;
-pub use global::Transport;
-pub use global::VERSION;
-pub use global::config::ConfigProcessors;
-pub use global::hexdump;
+use crate::compression::lz4::lz4_init;
+
+pub use crate::compression::lz4::LZ4String;
+
+use pyo3::{prelude::*, wrap_pymodule};
+
+#[pymodule]
+#[pyo3(name = "compression")]
+pub fn compression_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_wrapped(wrap_pymodule!(lz4_init))?;
+    m.add_class::<LZ4String>()?;
+    py.import("sys")?
+        .getattr("modules")?
+        .set_item("binlex_bindings.binlex.compression", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.compression")?;
+    Ok(())
+}

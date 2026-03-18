@@ -21,6 +21,7 @@ use std::collections::BTreeMap;
 use std::process;
 use std::sync::Arc;
 
+pub use crate::global::Architecture as ProcessorArchitecture;
 pub use crate::global::OperatingSystem as ProcessorOs;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, ValueEnum)]
@@ -124,6 +125,9 @@ pub trait JsonProcessor: Processor {
     where
         Self: Sized,
     {
+        if let Some(registration) = crate::processors::processor_registration_by_type::<Self>() {
+            ensure_payload_architecture_supported(registration.registration, &data)?;
+        }
         let request = <Self as JsonProcessor>::request(context, data)?;
         let pool =
             crate::processing::pool::ProcessorPool::for_processor::<Self>(context.processors())?;
@@ -138,6 +142,9 @@ pub trait JsonProcessor: Processor {
     where
         Self: Sized,
     {
+        if let Some(registration) = crate::processors::processor_registration_by_type::<Self>() {
+            ensure_payload_architecture_supported(registration.registration, &data)?;
+        }
         let request = <Self as JsonProcessor>::request(context, data)?;
         let response = Self::execute(request)?;
         Self::response(response)
@@ -157,6 +164,7 @@ pub trait JsonProcessor: Processor {
         let registration = processor_registration_by_name(Self::NAME).ok_or_else(|| {
             ServerError::Processor(format!("{} processor is not registered", Self::NAME))
         })?;
+        ensure_payload_architecture_supported_server(registration.registration, &data)?;
         match configured_server_execution_mode(processor, registration.registration.modes)? {
             ProcessorMode::Inline => {
                 <Self as JsonProcessor>::execute_local_value(&state.config, data)
@@ -183,7 +191,8 @@ pub trait JsonProcessor: Processor {
 
 pub struct ProcessorRegistration {
     pub name: &'static str,
-    pub os: &'static [ProcessorOs],
+    pub operating_systems: &'static [ProcessorOs],
+    pub architectures: &'static [ProcessorArchitecture],
     pub modes: &'static [ProcessorMode],
     pub make_pool: fn(
         &crate::ConfigProcessors,
@@ -220,6 +229,9 @@ impl<'a> RegisteredProcessor<'a> {
     }
 
     pub fn process_block(&self, block: &Block<'_>) -> Option<Value> {
+        if !self.registration.supports_architecture(block.architecture()) {
+            return None;
+        }
         if let Some(data) = self
             .registration
             .block_json
@@ -243,6 +255,12 @@ impl<'a> RegisteredProcessor<'a> {
     }
 
     pub fn process_instruction(&self, instruction: &Instruction) -> Option<Value> {
+        if !self
+            .registration
+            .supports_architecture(instruction.architecture)
+        {
+            return None;
+        }
         if let Some(data) = self
             .registration
             .instruction_json
@@ -266,6 +284,9 @@ impl<'a> RegisteredProcessor<'a> {
     }
 
     pub fn process_function(&self, function: &Function<'_>) -> Option<Value> {
+        if !self.registration.supports_architecture(function.architecture()) {
+            return None;
+        }
         if let Some(data) = self
             .registration
             .function_json
@@ -298,7 +319,11 @@ impl<'a> RegisteredProcessor<'a> {
 
 impl ProcessorRegistration {
     pub fn supported_on_current_os(&self) -> bool {
-        self.os.contains(&ProcessorOs::current())
+        self.operating_systems.contains(&ProcessorOs::current())
+    }
+
+    pub fn supports_architecture(&self, architecture: ProcessorArchitecture) -> bool {
+        self.architectures.contains(&architecture)
     }
 
     pub fn supports_mode(&self, mode: &str) -> bool {
@@ -392,7 +417,8 @@ macro_rules! processor {
         $crate::global::config::ConfigProcessorValue::from($value)
     };
     ($processor:path {
-        systems: [$($supported_os:expr),+ $(,)?],
+        operating_systems: [$($supported_os:expr),+ $(,)?],
+        architectures: [$($supported_architecture:expr),+ $(,)?],
         enabled: $processor_enabled:expr,
         transports: [$($processor_mode:expr),+ $(,)?],
         instructions: { enabled: $instructions_enabled:expr },
@@ -413,7 +439,8 @@ macro_rules! processor {
         $(,)?
     }) => {
         $crate::processor!($processor {
-            systems: [$($supported_os),+],
+            operating_systems: [$($supported_os),+],
+            architectures: [$($supported_architecture),+],
             enabled: $processor_enabled,
             transports: [$($processor_mode),+],
             instructions: { enabled: $instructions_enabled },
@@ -435,7 +462,8 @@ macro_rules! processor {
         });
     };
     ($processor:path {
-        systems: [$($supported_os:expr),+ $(,)?],
+        operating_systems: [$($supported_os:expr),+ $(,)?],
+        architectures: [$($supported_architecture:expr),+ $(,)?],
         enabled: $processor_enabled:expr,
         transports: [$($processor_mode:expr),+ $(,)?],
         instructions: { enabled: $instructions_enabled:expr },
@@ -524,7 +552,8 @@ macro_rules! processor {
         pub(crate) fn registration() -> $crate::processors::ProcessorRegistration {
             $crate::processors::ProcessorRegistration {
                 name: <$processor as $crate::processing::processor::Processor>::NAME,
-                os: &[$($supported_os),+],
+                operating_systems: &[$($supported_os),+],
+                architectures: &[$($supported_architecture),+],
                 modes: &[$($processor_mode),+],
                 make_pool: |config| $crate::processing::pool::ProcessorPool::for_processor::<$processor>(config),
                 make_dispatch: || Box::new($processor),
@@ -580,7 +609,8 @@ macro_rules! processor {
         }
     };
     ($processor:path {
-        systems: [$($supported_os:expr),+ $(,)?],
+        operating_systems: [$($supported_os:expr),+ $(,)?],
+        architectures: [$($supported_architecture:expr),+ $(,)?],
         enabled: $processor_enabled:expr,
         transports: [$($processor_mode:expr),+ $(,)?],
         instructions: { enabled: $instructions_enabled:expr },
@@ -596,7 +626,8 @@ macro_rules! processor {
         $(,)?
     }) => {
         $crate::processor!($processor {
-            systems: [$($supported_os),+],
+            operating_systems: [$($supported_os),+],
+            architectures: [$($supported_architecture),+],
             enabled: $processor_enabled,
             transports: [$($processor_mode),+],
             instructions: { enabled: $instructions_enabled },
@@ -866,6 +897,7 @@ fn execute_graph_mode(
     data: Value,
     config: &Config,
 ) -> Result<Option<Value>, crate::processing::error::ProcessorError> {
+    ensure_payload_architecture_supported(registration, &data)?;
     match configured_graph_mode(registration, config)? {
         ProcessorMode::Inline => Ok(None),
         ProcessorMode::Ipc => {
@@ -906,6 +938,7 @@ pub fn http_execute(
             processor_name
         )));
     }
+    ensure_payload_architecture_supported_server(registration.registration, &data)?;
     let execute = registration.registration.execute_value.ok_or_else(|| {
         ServerError::Processor(format!(
             "processor {} does not implement value execution",
@@ -919,9 +952,45 @@ pub fn dispatch_by_name(name: &str) -> Option<RegisteredProcessorDispatch> {
     processor_registration_by_name(name).map(RegisteredProcessor::into_dispatch)
 }
 
+fn payload_architecture(
+    data: &Value,
+) -> Result<Option<ProcessorArchitecture>, crate::processing::error::ProcessorError> {
+    let Some(architecture) = data.get("architecture").and_then(Value::as_str) else {
+        return Ok(None);
+    };
+    ProcessorArchitecture::from_string(architecture)
+        .map(Some)
+        .map_err(|error| crate::processing::error::ProcessorError::Protocol(error.to_string()))
+}
+
+fn ensure_payload_architecture_supported(
+    registration: &ProcessorRegistration,
+    data: &Value,
+) -> Result<(), crate::processing::error::ProcessorError> {
+    let Some(architecture) = payload_architecture(data)? else {
+        return Ok(());
+    };
+    if registration.supports_architecture(architecture) {
+        return Ok(());
+    }
+    Err(crate::processing::error::ProcessorError::Protocol(
+        format!(
+            "processor {} does not support architecture {}",
+            registration.name, architecture
+        ),
+    ))
+}
+
+fn ensure_payload_architecture_supported_server(
+    registration: &ProcessorRegistration,
+    data: &Value,
+) -> Result<(), ServerError> {
+    ensure_payload_architecture_supported(registration, data).map_err(ServerError::from)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{ProcessorMode, ProcessorOs, ProcessorRegistration};
+    use super::{ProcessorArchitecture, ProcessorMode, ProcessorOs, ProcessorRegistration};
     use crate::global::config::{ConfigProcessor, ConfigProcessorTarget};
     use std::collections::BTreeMap;
     use std::sync::Arc;
@@ -979,7 +1048,8 @@ mod tests {
 
         let registration = ProcessorRegistration {
             name: "test",
-            os: &SUPPORTED_OS,
+            operating_systems: &SUPPORTED_OS,
+            architectures: &[ProcessorArchitecture::AMD64],
             modes: &[ProcessorMode::Ipc],
             make_pool: test_make_pool,
             make_dispatch: test_make_dispatch,
@@ -1007,7 +1077,8 @@ mod tests {
 
         let registration = ProcessorRegistration {
             name: "test",
-            os: &UNSUPPORTED_OS,
+            operating_systems: &UNSUPPORTED_OS,
+            architectures: &[ProcessorArchitecture::AMD64],
             modes: &[ProcessorMode::Ipc],
             make_pool: test_make_pool,
             make_dispatch: test_make_dispatch,
@@ -1037,7 +1108,8 @@ mod tests {
 
         let registration = ProcessorRegistration {
             name: "test",
-            os: &SUPPORTED_OS,
+            operating_systems: &SUPPORTED_OS,
+            architectures: &[ProcessorArchitecture::AMD64],
             modes: &[
                 ProcessorMode::Inline,
                 ProcessorMode::Ipc,
@@ -1061,5 +1133,38 @@ mod tests {
         assert!(registration.supports_mode("ipc"));
         assert!(registration.supports_mode("http"));
         assert!(!registration.supports_mode("bogus"));
+    }
+
+    #[test]
+    fn registration_supports_declared_architectures() {
+        #[cfg(target_os = "linux")]
+        static SUPPORTED_OS: [ProcessorOs; 1] = [ProcessorOs::Linux];
+        #[cfg(target_os = "macos")]
+        static SUPPORTED_OS: [ProcessorOs; 1] = [ProcessorOs::Macos];
+        #[cfg(target_os = "windows")]
+        static SUPPORTED_OS: [ProcessorOs; 1] = [ProcessorOs::Windows];
+
+        let registration = ProcessorRegistration {
+            name: "test",
+            operating_systems: &SUPPORTED_OS,
+            architectures: &[ProcessorArchitecture::AMD64, ProcessorArchitecture::I386],
+            modes: &[ProcessorMode::Ipc],
+            make_pool: test_make_pool,
+            make_dispatch: test_make_dispatch,
+            config_default: test_config_default,
+            enabled_for_target: |_, _| false,
+            execute_graph_value: None,
+            execute_value: None,
+            instruction_json: None,
+            block_json: None,
+            function_json: None,
+            process_instruction: None,
+            process_block: None,
+            process_function: None,
+        };
+
+        assert!(registration.supports_architecture(ProcessorArchitecture::AMD64));
+        assert!(registration.supports_architecture(ProcessorArchitecture::I386));
+        assert!(!registration.supports_architecture(ProcessorArchitecture::CIL));
     }
 }

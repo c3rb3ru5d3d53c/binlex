@@ -27,7 +27,7 @@ use binlex::controlflow::SymbolIoJson;
 use binlex::formats::MACHO;
 use binlex::io::Stdin;
 use binlex::io::Stdout;
-use binlex::types::LZ4String;
+use binlex::compression::LZ4String;
 use clap::Parser;
 use std::fs::File;
 use std::io::Write;

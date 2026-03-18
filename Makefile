@@ -31,7 +31,7 @@ deb:
 wheel:
 	virtualenv -p python3 venv/
 	. venv/bin/activate && \
-		cd src/bindings/python/ && \
+		cd bindings/python/ && \
 		pip install maturin[patchelf] && \
 		maturin build --release
 

@@ -20,30 +20,36 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod compression;
-pub mod clients;
-pub mod controlflow;
-pub mod disassemblers;
-pub mod formats;
-pub mod genetics;
-pub mod global;
-pub mod hashing;
-pub mod hex;
-pub mod imaging;
-pub mod io;
-pub mod lifters;
-pub mod math;
-pub mod processing;
-pub mod processors;
-pub mod server;
+use binlex::compression::LZ4String as InnerLZ4String;
+use pyo3::prelude::*;
 
-pub use math::entropy;
-pub use global::AUTHOR;
-pub use global::Architecture;
-pub use global::Config;
-pub use global::Magic;
-pub use global::OperatingSystem;
-pub use global::Transport;
-pub use global::VERSION;
-pub use global::config::ConfigProcessors;
-pub use global::hexdump;
+#[pyclass]
+pub struct LZ4String {
+    pub inner: InnerLZ4String,
+}
+
+#[pymethods]
+impl LZ4String {
+    #[new]
+    #[pyo3(text_signature = "(string)")]
+    pub fn new(string: String) -> Self {
+        Self {
+            inner: InnerLZ4String::new(&string),
+        }
+    }
+
+    fn __str__(&self) -> PyResult<String> {
+        Ok(format!("{}", self.inner))
+    }
+}
+
+#[pymodule]
+#[pyo3(name = "lz4")]
+pub fn lz4_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<LZ4String>()?;
+    py.import("sys")?
+        .getattr("modules")?
+        .set_item("binlex_bindings.binlex.compression.lz4", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.compression.lz4")?;
+    Ok(())
+}
