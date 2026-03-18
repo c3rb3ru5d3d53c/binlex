@@ -20,30 +20,21 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod compression;
-pub mod clients;
-pub mod controlflow;
-pub mod disassemblers;
-pub mod formats;
-pub mod genetics;
-pub mod global;
-pub mod hashing;
-pub mod hex;
-pub mod imaging;
-pub mod io;
-pub mod lifters;
-pub mod math;
-pub mod processing;
-pub mod processors;
-pub mod server;
+use pyo3::prelude::*;
 
-pub use math::entropy;
-pub use global::AUTHOR;
-pub use global::Architecture;
-pub use global::Config;
-pub use global::Magic;
-pub use global::OperatingSystem;
-pub use global::Transport;
-pub use global::VERSION;
-pub use global::config::ConfigProcessors;
-pub use global::hexdump;
+#[pyfunction]
+#[pyo3(text_signature = "(bytes)")]
+pub fn shannon(bytes: Vec<u8>) -> Option<f64> {
+    binlex::math::entropy::shannon(&bytes)
+}
+
+#[pymodule]
+#[pyo3(name = "entropy")]
+pub fn entropy_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(shannon, m)?)?;
+    py.import("sys")?
+        .getattr("modules")?
+        .set_item("binlex_bindings.binlex.entropy", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.entropy")?;
+    Ok(())
+}

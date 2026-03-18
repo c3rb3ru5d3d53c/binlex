@@ -25,7 +25,7 @@ use binlex::VERSION;
 use binlex::controlflow::SymbolIoJson;
 use binlex::io::JSON;
 use binlex::io::Stdout;
-use binlex::types::LZ4String;
+use binlex::compression::LZ4String;
 use clap::Parser;
 use serde_json::Value;
 use std::fs::File;

@@ -33,7 +33,7 @@ pub fn run_child_loop(
                     (registration.id == *id).then(|| HelloProcessor {
                         id: *id,
                         name: registration.name().to_string(),
-                        os: registration.registration.os.to_vec(),
+                        os: registration.registration.operating_systems.to_vec(),
                     })
                 })
             })

@@ -80,7 +80,7 @@ cargo build --release
 
 ### Python Bindings
 ```bash
-cd src/bindings/python/
+cd bindings/python/
 virtualenv -p python3 venv/
 source venv/bin/activate
 pip install maturin[patchelf]
@@ -498,7 +498,7 @@ The moving parts are:
 - Request and response enums that can be serialized with `serde`
 - Optional `request` and `response` adapters for IPC and HTTP transport
 - Optional `process_instruction`, `process_block`, and `process_function` helpers that return JSON for `inline` execution
-- A `crate::processor!(...)` registration block describing defaults and supported operating systems
+- A `crate::processor!(...)` registration block describing defaults, supported operating systems, and supported architectures
 
 This is best for libraries that are poorly developed with error handling that call `abort()` for example without letting the developer choose when to properly exit, resulting in the termination of the processes using said library code.
 
@@ -578,7 +578,8 @@ impl GraphProcessor for ExampleProcessor {
 }
 
 crate::processor!(ExampleProcessor {
-    systems: [OperatingSystem::LINUX, OperatingSystem::MACOS],
+    operating_systems: [OperatingSystem::LINUX, OperatingSystem::MACOS],
+    architectures: [Architecture::AMD64, Architecture::I386],
     enabled: false,
     transports: [Transport::INLINE, Transport::IPC, Transport::HTTP],
     instructions: { enabled: false },

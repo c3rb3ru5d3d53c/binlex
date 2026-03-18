@@ -44,7 +44,7 @@ use binlex::io::Stderr;
 use binlex::io::Stdin;
 use binlex::io::Stdout;
 use binlex::processors::ProcessorSelection;
-use binlex::types::LZ4String;
+use binlex::compression::LZ4String;
 use clap::Parser;
 use rayon::ThreadPoolBuilder;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};

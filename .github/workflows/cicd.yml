@@ -148,7 +148,7 @@ jobs:
         run: |
           python -m venv venv
           . venv/bin/activate
-          cd src/bindings/python/
+          cd bindings/python/
           pip install maturin[patchelf]
           maturin build --release
 
@@ -157,7 +157,7 @@ jobs:
         run: |
           python -m venv venv
           . venv/bin/activate
-          cd src/bindings/python/
+          cd bindings/python/
           pip install maturin
           maturin build --release
 
@@ -166,7 +166,7 @@ jobs:
         run: |
           python -m venv venv
           .\venv\Scripts\activate
-          cd src/bindings/python/
+          cd bindings/python/
           pip install maturin
           maturin build --release
 
@@ -346,7 +346,7 @@ jobs:
 
       - name: Build Python API Docs
         run: |
-          cd src/bindings/python/
+          cd bindings/python/
           python -m pip install ".[docs]"
           python -m docs
 
@@ -360,4 +360,4 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: python-api-docs
-          path: src/bindings/python/docs/
+          path: bindings/python/docs/

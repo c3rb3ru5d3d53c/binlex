@@ -10,7 +10,7 @@ authors = ["c3rb3ru5d3d53c"]
 winapi = { version = "0.3.9", features = ["winnt", "fileapi", "ioapiset", "winioctl"] }
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
-libvex = { path = "src/lifters/vex/libvex/libvex-rs" }
+libvex = { path = "crates/libvex/libvex-rs" }
 
 [dependencies]
 clap = { version = "4.5.27", features = ["derive"] }
@@ -44,7 +44,7 @@ burn = { version = "0.21.0-pre.2", default-features = false, features = ["std", 
 
 [workspace]
 members = [
-    "src/bindings/python/",
+    "bindings/python/",
 ]
 
 [profile.release]

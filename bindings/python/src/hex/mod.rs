@@ -20,30 +20,19 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod compression;
-pub mod clients;
-pub mod controlflow;
-pub mod disassemblers;
-pub mod formats;
-pub mod genetics;
-pub mod global;
-pub mod hashing;
-pub mod hex;
-pub mod imaging;
-pub mod io;
-pub mod lifters;
-pub mod math;
-pub mod processing;
-pub mod processors;
-pub mod server;
+use pyo3::prelude::*;
 
-pub use math::entropy;
-pub use global::AUTHOR;
-pub use global::Architecture;
-pub use global::Config;
-pub use global::Magic;
-pub use global::OperatingSystem;
-pub use global::Transport;
-pub use global::VERSION;
-pub use global::config::ConfigProcessors;
-pub use global::hexdump;
+pub mod decode;
+pub mod encode;
+
+#[pymodule]
+#[pyo3(name = "hex")]
+pub fn hex_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(encode::encode, m)?)?;
+    m.add_function(wrap_pyfunction!(decode::decode, m)?)?;
+    py.import("sys")?
+        .getattr("modules")?
+        .set_item("binlex_bindings.binlex.hex", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.hex")?;
+    Ok(())
+}
