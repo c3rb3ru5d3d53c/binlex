@@ -1065,10 +1065,7 @@ fn main() {
 
     apply_cli_overrides(&args, &mut config);
 
-    Stderr::print_debug(
-        &config,
-        "finished reading arguments and configuration",
-    );
+    Stderr::print_debug(&config, "finished reading arguments and configuration");
 
     let thread_pool_started_at = Instant::now();
     ThreadPoolBuilder::new()

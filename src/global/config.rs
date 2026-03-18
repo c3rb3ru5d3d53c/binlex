@@ -44,6 +44,13 @@ pub struct ConfigProcessorTarget {
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
+pub struct ConfigProcessorTransport {
+    pub enabled: bool,
+    #[serde(flatten, default)]
+    pub options: BTreeMap<String, ConfigProcessorValue>,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum ConfigProcessorValue {
     Bool(bool),
@@ -94,6 +101,7 @@ pub struct ConfigFormats {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigData {
     pub general: ConfigGeneral,
+    pub server: ConfigServer,
     pub formats: ConfigFormats,
     pub instructions: ConfigInstructions,
     pub blocks: ConfigBlocks,
@@ -116,8 +124,9 @@ pub struct ConfigProcessor {
     pub functions: ConfigProcessorTarget,
     #[serde(flatten, default)]
     pub options: BTreeMap<String, ConfigProcessorValue>,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub server: BTreeMap<String, ConfigProcessorValue>,
+    pub inline: ConfigProcessorTransport,
+    pub ipc: ConfigProcessorTransport,
+    pub http: ConfigProcessorTransport,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
@@ -171,6 +180,13 @@ pub struct ConfigFileHashing {
 pub struct ConfigGeneral {
     pub threads: usize,
     pub minimal: bool,
+    pub debug: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigServer {
+    pub bind: String,
+    #[serde(default)]
     pub debug: bool,
 }
 
@@ -249,6 +265,10 @@ impl Config {
             general: ConfigGeneral {
                 threads: 1,
                 minimal: false,
+                debug: false,
+            },
+            server: ConfigServer {
+                bind: "127.0.0.1:5000".to_string(),
                 debug: false,
             },
             formats: ConfigFormats {
@@ -568,20 +588,28 @@ impl ConfigProcessor {
         self.options.get(key)?.as_bool()
     }
 
-    pub fn server_string(&self, key: &str) -> Option<&str> {
-        self.server.get(key)?.as_string()
+    pub fn transport(&self, mode: crate::processors::ProcessorMode) -> &ConfigProcessorTransport {
+        match mode {
+            crate::processors::ProcessorMode::Inline => &self.inline,
+            crate::processors::ProcessorMode::Ipc => &self.ipc,
+            crate::processors::ProcessorMode::Http => &self.http,
+        }
     }
 
-    pub fn server_integer(&self, key: &str) -> Option<i64> {
-        self.server.get(key)?.as_integer()
+    pub fn transport_string(
+        &self,
+        mode: crate::processors::ProcessorMode,
+        key: &str,
+    ) -> Option<&str> {
+        self.transport(mode).options.get(key)?.as_string()
     }
 
-    pub fn server_bool(&self, key: &str) -> Option<bool> {
-        self.server.get(key)?.as_bool()
-    }
-
-    pub fn server_table(&self, key: &str) -> Option<&BTreeMap<String, ConfigProcessorValue>> {
-        self.server.get(key)?.as_table()
+    pub fn transport_bool(
+        &self,
+        mode: crate::processors::ProcessorMode,
+        key: &str,
+    ) -> Option<bool> {
+        self.transport(mode).options.get(key)?.as_bool()
     }
 }
 

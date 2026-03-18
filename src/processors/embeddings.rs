@@ -12,6 +12,7 @@ use crate::genetics::ChromosomeJson;
 use crate::math::stats::{max_or_zero, normalize_l2, weighted_histogram, weighted_mean};
 use crate::processing::error::ProcessorError;
 use crate::processing::processor::Processor;
+use crate::global::{OperatingSystem, Transport};
 use crate::processors::{GraphProcessor, JsonProcessor};
 
 const DEFAULT_DIMENSIONS: usize = 64;
@@ -36,6 +37,7 @@ pub struct EmbeddingsResponse {
     pub vector: Vec<f32>,
 }
 
+#[derive(Default)]
 pub struct EmbeddingsProcessor;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -758,8 +760,27 @@ fn configured_dimensions(config: &crate::Config) -> usize {
         .unwrap_or(DEFAULT_DIMENSIONS)
 }
 
+fn configured_dimensions_from_context<C: crate::processors::ProcessorContext>(
+    context: &C,
+) -> usize {
+    context
+        .processor(EmbeddingsProcessor::NAME)
+        .and_then(|processor| processor.option_integer("dimensions"))
+        .and_then(|value| usize::try_from(value).ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(DEFAULT_DIMENSIONS)
+}
+
 fn configured_device(config: &crate::Config) -> EmbeddingDevice {
     parse_device(processor_config(config).and_then(|processor| processor.option_string("device")))
+}
+
+fn configured_device_from_context<C: crate::processors::ProcessorContext>(context: &C) -> String {
+    context
+        .processor(EmbeddingsProcessor::NAME)
+        .and_then(|processor| processor.option_string("device"))
+        .unwrap_or("cpu")
+        .to_string()
 }
 
 fn local_output(data: Value, config: &crate::Config) -> Value {
@@ -798,19 +819,22 @@ impl Processor for EmbeddingsProcessor {
 }
 
 impl JsonProcessor for EmbeddingsProcessor {
-    fn request(
-        state: &crate::server::state::AppState,
+    fn request<C: crate::processors::ProcessorContext>(
+        context: &C,
         data: Value,
-    ) -> Result<Self::Request, crate::server::error::ServerError> {
+    ) -> Result<Self::Request, crate::processing::error::ProcessorError> {
         Ok(EmbeddingsRequest {
-            data: serde_json::to_string(&data)
-                .map_err(|error| crate::server::error::ServerError::Processor(error.to_string()))?,
-            dimensions: Some(state.config.embeddings_dimensions()),
-            device: Some(state.config.embeddings_device()),
+            data: serde_json::to_string(&data).map_err(|error| {
+                crate::processing::error::ProcessorError::Serialization(error.to_string())
+            })?,
+            dimensions: Some(configured_dimensions_from_context(context)),
+            device: Some(configured_device_from_context(context)),
         })
     }
 
-    fn response(response: Self::Response) -> Result<Value, crate::server::error::ServerError> {
+    fn response(
+        response: Self::Response,
+    ) -> Result<Value, crate::processing::error::ProcessorError> {
         Ok(json!({
             "vector": response.vector,
         }))
@@ -885,37 +909,23 @@ fn function_embedding_input(function: &Function<'_>) -> Result<Value, serde_json
 }
 
 crate::processor!(EmbeddingsProcessor {
-    os: [linux, macos],
+    systems: [OperatingSystem::LINUX, OperatingSystem::MACOS],
     enabled: false,
-    modes: [http, ipc],
-    mode: ipc,
+    transports: [Transport::INLINE, Transport::HTTP, Transport::IPC],
     instructions: { enabled: true },
     blocks: { enabled: true },
     functions: { enabled: true },
     options: {
         dimensions: 64,
-        device: "cpu",
-        url: "http://127.0.0.1:5000",
-        verify: false
+        device: "cpu"
     },
-    server: {
-        milvus: {
-            enabled: false,
-            uri: "http://127.0.0.1:19530",
-            token: "",
-            upsert: true
-        },
-        minio: {
-            enabled: false,
-            endpoint: "127.0.0.1:9000",
-            bucket: "binlex",
-            region: "us-east-1",
-            access_key: "",
-            secret_key: "",
-            secure: false,
-            key_prefix: "embeddings/",
-            store_input: true,
-            store_output: true
+    inline: { enabled: false },
+    ipc: { enabled: true },
+    http: {
+        enabled: false,
+        options: {
+            url: "http://127.0.0.1:5000",
+            verify: false
         }
     },
 });

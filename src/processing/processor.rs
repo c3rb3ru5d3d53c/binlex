@@ -6,12 +6,19 @@ use serde::{Deserialize, Serialize};
 
 use crate::processing::error::ProcessorError;
 
-pub trait Processor: Send + Sync + 'static {
+pub trait Processor: Send + Sync + Default + 'static {
     const NAME: &'static str;
     type Request: Serialize + for<'de> Deserialize<'de>;
     type Response: Serialize + for<'de> Deserialize<'de>;
 
     fn request(&self, request: Self::Request) -> Result<Self::Response, ProcessorError>;
+
+    fn execute(request: Self::Request) -> Result<Self::Response, ProcessorError>
+    where
+        Self: Sized,
+    {
+        Self::default().request(request)
+    }
 
     fn filename() -> String {
         "binlex-processor".to_string()

@@ -29,6 +29,8 @@ use crate::processors::{ProcessorOutputs, ProcessorTarget};
 use crossbeam::queue::SegQueue;
 use crossbeam_skiplist::SkipMap;
 use crossbeam_skiplist::SkipSet;
+use rayon::ThreadPoolBuilder;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::io::Error;
@@ -608,6 +610,13 @@ impl Graph {
         }
 
         let mut outputs = HashMap::new();
+        let (local_processors, remote_processors): (Vec<_>, Vec<_>) = enabled
+            .into_iter()
+            .partition(|processor| processor.configured_mode(&self.config).is_local());
+        merge_processor_outputs(
+            &mut outputs,
+            self.process_local_target(target, &local_processors),
+        );
         match target {
             ProcessorTarget::Instruction => {
                 for address in self.instructions.valid_addresses() {
@@ -616,7 +625,7 @@ impl Graph {
                         None => continue,
                     };
                     let mut entity_outputs = Vec::new();
-                    for processor in &enabled {
+                    for processor in &remote_processors {
                         if let Some(output) = processor.process_instruction(&instruction) {
                             entity_outputs.push((processor.name(), output));
                         }
@@ -633,7 +642,7 @@ impl Graph {
                         Err(_) => continue,
                     };
                     let mut entity_outputs = Vec::new();
-                    for processor in &enabled {
+                    for processor in &remote_processors {
                         if let Some(output) = processor.process_block(&block) {
                             entity_outputs.push((processor.name(), output));
                         }
@@ -650,7 +659,7 @@ impl Graph {
                         Err(_) => continue,
                     };
                     let mut entity_outputs = Vec::new();
-                    for processor in &enabled {
+                    for processor in &remote_processors {
                         if let Some(output) = processor.process_function(&function) {
                             entity_outputs.push((processor.name(), output));
                         }
@@ -670,10 +679,108 @@ impl Graph {
         Ok(())
     }
 
+    fn process_local_target(
+        &self,
+        target: ProcessorTarget,
+        processors: &[crate::processors::RegisteredProcessor<'static>],
+    ) -> HashMap<u64, ProcessorOutputs> {
+        if processors.is_empty() {
+            return HashMap::new();
+        }
+
+        let pool = match ThreadPoolBuilder::new()
+            .num_threads(self.config.general.threads.max(1))
+            .build()
+        {
+            Ok(pool) => pool,
+            Err(_) => return HashMap::new(),
+        };
+
+        let outputs = pool.install(|| match target {
+            ProcessorTarget::Instruction => {
+                let addresses: Vec<_> = self.instructions.valid_addresses().into_iter().collect();
+                addresses
+                    .par_iter()
+                    .filter_map(|address| {
+                        let instruction = self.get_instruction(*address)?;
+                        let entity_outputs: ProcessorOutputs = processors
+                            .iter()
+                            .filter_map(|processor| {
+                                processor
+                                    .process_instruction(&instruction)
+                                    .map(|output| (processor.name(), output))
+                            })
+                            .collect();
+                        if entity_outputs.is_empty() {
+                            None
+                        } else {
+                            Some((*address, entity_outputs))
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            }
+            ProcessorTarget::Block => {
+                let addresses: Vec<_> = self.blocks.valid_addresses().into_iter().collect();
+                addresses
+                    .par_iter()
+                    .filter_map(|address| {
+                        let block = Block::new(*address, self).ok()?;
+                        let entity_outputs: ProcessorOutputs = processors
+                            .iter()
+                            .filter_map(|processor| {
+                                processor
+                                    .process_block(&block)
+                                    .map(|output| (processor.name(), output))
+                            })
+                            .collect();
+                        if entity_outputs.is_empty() {
+                            None
+                        } else {
+                            Some((*address, entity_outputs))
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            }
+            ProcessorTarget::Function => {
+                let addresses: Vec<_> = self.functions.valid_addresses().into_iter().collect();
+                addresses
+                    .par_iter()
+                    .filter_map(|address| {
+                        let function = Function::new(*address, self).ok()?;
+                        let entity_outputs: ProcessorOutputs = processors
+                            .iter()
+                            .filter_map(|processor| {
+                                processor
+                                    .process_function(&function)
+                                    .map(|output| (processor.name(), output))
+                            })
+                            .collect();
+                        if entity_outputs.is_empty() {
+                            None
+                        } else {
+                            Some((*address, entity_outputs))
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            }
+        });
+
+        outputs.into_iter().collect()
+    }
+
     fn invalidate_processor_state(&self) {
         self.revision.fetch_add(1, Ordering::SeqCst);
         let mut processor_state = self.processor_state.lock().unwrap();
         processor_state.revisions.clear();
         processor_state.outputs.clear();
+    }
+}
+
+fn merge_processor_outputs(
+    target: &mut HashMap<u64, ProcessorOutputs>,
+    source: HashMap<u64, ProcessorOutputs>,
+) {
+    for (address, outputs) in source {
+        target.entry(address).or_default().extend(outputs);
     }
 }

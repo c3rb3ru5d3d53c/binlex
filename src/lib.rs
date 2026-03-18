@@ -42,6 +42,8 @@ pub use global::AUTHOR;
 pub use global::Architecture;
 pub use global::Config;
 pub use global::Magic;
+pub use global::OperatingSystem;
+pub use global::Transport;
 pub use global::VERSION;
 pub use global::config::ConfigProcessors;
 pub use global::hexdump;

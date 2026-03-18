@@ -24,6 +24,7 @@ pub mod architecture;
 pub mod config;
 pub mod hexdump;
 pub mod magic;
+pub mod system;
 
 pub use architecture::Architecture;
 pub use config::AUTHOR;
@@ -31,3 +32,5 @@ pub use config::Config;
 pub use config::VERSION;
 pub use hexdump::hexdump;
 pub use magic::Magic;
+pub use system::OperatingSystem;
+pub use system::Transport;
