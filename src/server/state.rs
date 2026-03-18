@@ -36,6 +36,20 @@ impl AppState {
             {
                 continue;
             }
+            if config
+                .processors
+                .processor(registration.name)
+                .and_then(|processor| {
+                    crate::processors::configured_server_execution_mode(
+                        processor,
+                        registration.modes,
+                    )
+                    .ok()
+                })
+                != Some(crate::processors::ProcessorMode::Ipc)
+            {
+                continue;
+            }
             let pool = (registration.make_pool)(&processors)?;
             processor_pools.insert(registration.name.to_string(), pool);
         }

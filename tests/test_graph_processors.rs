@@ -42,6 +42,29 @@ fn build_single_return_graph() -> Graph {
     graph
 }
 
+fn build_single_return_graph_local_mode() -> Graph {
+    let mut config = Config::default();
+    config.general.threads = 2;
+    config.processors.enabled = true;
+    let embeddings = config
+        .processors
+        .ensure_processor("embeddings")
+        .expect("embeddings processor config should exist");
+    embeddings.enabled = true;
+    embeddings.blocks.enabled = true;
+    embeddings.inline.enabled = true;
+
+    let mut graph = Graph::new(Architecture::AMD64, config.clone());
+    let mut instruction = Instruction::create(0x1000, Architecture::AMD64, config);
+    instruction.bytes = vec![0xC3];
+    instruction.pattern = "c3".to_string();
+    instruction.is_return = true;
+    graph.insert_instruction(instruction);
+    assert!(graph.set_block(0x1000));
+    assert!(graph.set_function(0x1000));
+    graph
+}
+
 #[test]
 fn graph_functions_materialize_processor_results_on_first_access() {
     let graph = build_single_return_graph();
@@ -112,4 +135,19 @@ fn graph_mutation_invalidates_materialized_processor_results() {
             .processor_outputs(ProcessorTarget::Function, 0x1000)
             .is_some()
     );
+}
+
+#[test]
+fn graph_blocks_support_explicit_local_mode_without_processor_binary() {
+    let graph = build_single_return_graph_local_mode();
+
+    let outputs = graph
+        .blocks()
+        .into_iter()
+        .find(|block| block.address() == 0x1000)
+        .and_then(|_| graph.processor_outputs(ProcessorTarget::Block, 0x1000))
+        .expect("block processor outputs should exist");
+
+    assert_eq!(outputs.len(), 1);
+    assert_eq!(outputs[0].0, "embeddings");
 }

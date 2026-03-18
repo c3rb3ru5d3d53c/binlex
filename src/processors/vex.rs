@@ -10,6 +10,7 @@ use crate::hex;
 use crate::lifters::vex::{VexLiftRequest, VexLiftResponse};
 use crate::processing::error::ProcessorError;
 use crate::processing::processor::Processor;
+use crate::global::{OperatingSystem, Transport};
 use crate::processors::{GraphProcessor, JsonProcessor};
 
 const BUFFER_PADDING: usize = 64;
@@ -24,6 +25,7 @@ pub enum VexResponse {
     Lift(VexLiftResponse),
 }
 
+#[derive(Default)]
 pub struct VexProcessor;
 
 impl Processor for VexProcessor {
@@ -39,12 +41,12 @@ impl Processor for VexProcessor {
 }
 
 impl JsonProcessor for VexProcessor {
-    fn request(
-        _: &crate::server::state::AppState,
+    fn request<C: crate::processors::ProcessorContext>(
+        _: &C,
         data: Value,
-    ) -> Result<Self::Request, crate::server::error::ServerError> {
+    ) -> Result<Self::Request, crate::processing::error::ProcessorError> {
         let kind = data.get("type").and_then(Value::as_str).ok_or_else(|| {
-            crate::server::error::ServerError::Processor(
+            crate::processing::error::ProcessorError::Protocol(
                 "processor payload is missing type".to_string(),
             )
         })?;
@@ -53,61 +55,69 @@ impl JsonProcessor for VexProcessor {
             "instruction" => {
                 let json: crate::controlflow::InstructionJson = serde_json::from_value(data)
                     .map_err(|error| {
-                        crate::server::error::ServerError::Processor(error.to_string())
+                        crate::processing::error::ProcessorError::Serialization(error.to_string())
                     })?;
                 Ok(VexRequest::Lift(VexLiftRequest {
                     architecture: Architecture::from_string(&json.architecture).map_err(
-                        |error| crate::server::error::ServerError::Processor(error.to_string()),
+                        |error| {
+                            crate::processing::error::ProcessorError::Protocol(error.to_string())
+                        },
                     )?,
                     address: json.address,
                     bytes: hex::decode(&json.bytes).map_err(|error| {
-                        crate::server::error::ServerError::Processor(error.to_string())
+                        crate::processing::error::ProcessorError::Serialization(error.to_string())
                     })?,
                 }))
             }
             "block" => {
                 let json: crate::controlflow::BlockJson =
                     serde_json::from_value(data).map_err(|error| {
-                        crate::server::error::ServerError::Processor(error.to_string())
+                        crate::processing::error::ProcessorError::Serialization(error.to_string())
                     })?;
                 Ok(VexRequest::Lift(VexLiftRequest {
                     architecture: Architecture::from_string(&json.architecture).map_err(
-                        |error| crate::server::error::ServerError::Processor(error.to_string()),
+                        |error| {
+                            crate::processing::error::ProcessorError::Protocol(error.to_string())
+                        },
                     )?,
                     address: json.address,
                     bytes: hex::decode(&json.bytes).map_err(|error| {
-                        crate::server::error::ServerError::Processor(error.to_string())
+                        crate::processing::error::ProcessorError::Serialization(error.to_string())
                     })?,
                 }))
             }
             "function" => {
                 let json: crate::controlflow::FunctionJson =
                     serde_json::from_value(data).map_err(|error| {
-                        crate::server::error::ServerError::Processor(error.to_string())
+                        crate::processing::error::ProcessorError::Serialization(error.to_string())
                     })?;
                 let bytes = json.bytes.ok_or_else(|| {
-                    crate::server::error::ServerError::Processor(
+                    crate::processing::error::ProcessorError::Protocol(
                         "function payload does not contain bytes".to_string(),
                     )
                 })?;
                 Ok(VexRequest::Lift(VexLiftRequest {
                     architecture: Architecture::from_string(&json.architecture).map_err(
-                        |error| crate::server::error::ServerError::Processor(error.to_string()),
+                        |error| {
+                            crate::processing::error::ProcessorError::Protocol(error.to_string())
+                        },
                     )?,
                     address: json.address,
                     bytes: hex::decode(&bytes).map_err(|error| {
-                        crate::server::error::ServerError::Processor(error.to_string())
+                        crate::processing::error::ProcessorError::Serialization(error.to_string())
                     })?,
                 }))
             }
-            other => Err(crate::server::error::ServerError::Processor(format!(
+            other => Err(crate::processing::error::ProcessorError::Protocol(format!(
                 "unsupported processor payload type: {}",
                 other
             ))),
         }
     }
 
-    fn response(response: Self::Response) -> Result<Value, crate::server::error::ServerError> {
+    fn response(
+        response: Self::Response,
+    ) -> Result<Value, crate::processing::error::ProcessorError> {
         match response {
             VexResponse::Lift(response) => Ok(json!({ "ir": response.ir })),
         }
@@ -194,16 +204,19 @@ impl VexProcessor {
 }
 
 crate::processor!(VexProcessor {
-    os: [linux, macos],
+    systems: [OperatingSystem::LINUX, OperatingSystem::MACOS],
     enabled: false,
-    modes: [http, ipc],
-    mode: ipc,
+    transports: [Transport::INLINE, Transport::HTTP, Transport::IPC],
     instructions: { enabled: false },
     blocks: { enabled: false },
     functions: { enabled: true },
-    options: {
-        url: "http://127.0.0.1:5000",
-        verify: false
+    inline: { enabled: false },
+    ipc: { enabled: true },
+    http: {
+        enabled: false,
+        options: {
+            url: "http://127.0.0.1:5000",
+            verify: false
+        }
     },
-    server: {},
 });

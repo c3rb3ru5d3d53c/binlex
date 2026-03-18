@@ -3,31 +3,16 @@ use std::io::Error;
 use std::path::{Path, PathBuf};
 
 use crate::ConfigProcessors;
+use crate::global::config::ConfigServer;
 use crate::global::config::DIRECTORY;
 
-pub const FILE_NAME: &str = "binlex-server.toml";
-
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
-pub struct ServerSection {
-    pub bind: String,
-    #[serde(default)]
-    pub debug: bool,
-}
+pub const FILE_NAME: &str = crate::global::config::FILE_NAME;
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct ServerConfig {
-    pub server: ServerSection,
+    pub server: ConfigServer,
     #[serde(default)]
     pub processors: ConfigProcessors,
-}
-
-impl Default for ServerSection {
-    fn default() -> Self {
-        Self {
-            bind: "127.0.0.1:5000".to_string(),
-            debug: false,
-        }
-    }
 }
 
 impl ServerConfig {
@@ -51,11 +36,12 @@ impl ServerConfig {
 
 impl Default for ServerConfig {
     fn default() -> Self {
-        let mut processors = ConfigProcessors::default();
-        crate::processors::apply_server_defaults(&mut processors);
         Self {
-            server: ServerSection::default(),
-            processors,
+            server: ConfigServer {
+                bind: "127.0.0.1:5000".to_string(),
+                debug: false,
+            },
+            processors: ConfigProcessors::default(),
         }
     }
 }
@@ -79,7 +65,10 @@ impl ServerConfig {
             Error::other("unable to resolve default binlex-server configuration path")
         })?;
         if !path.exists() {
-            Self::default().write_to_file(&path)?;
+            crate::Config::default().write_to_file(
+                path.to_str()
+                    .ok_or_else(|| Error::other("invalid default configuration path"))?,
+            )?;
         }
         Ok(path)
     }
@@ -94,8 +83,8 @@ impl ServerConfig {
             }
         };
         let contents = fs::read_to_string(path)?;
-        let mut config: Self = toml::from_str(&contents)?;
-        crate::processors::apply_server_defaults(&mut config.processors);
-        Ok(config)
+        toml::from_str(&contents)
+            .map_err(Error::other)
+            .map_err(Into::into)
     }
 }

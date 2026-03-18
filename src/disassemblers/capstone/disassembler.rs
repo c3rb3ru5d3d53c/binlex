@@ -92,13 +92,9 @@ impl<'a> Disassembler<'a> {
     ) -> Result<Self, Error> {
         let backend = match machine {
             Architecture::AMD64 | Architecture::I386 => {
-                let disasm = X86Disassembler::new(
-                    machine,
-                    image,
-                    executable_address_ranges.clone(),
-                    config,
-                )
-                .map_err(|_| Error::other("failed to create X86 disassembler"))?;
+                let disasm =
+                    X86Disassembler::new(machine, image, executable_address_ranges.clone(), config)
+                        .map_err(|_| Error::other("failed to create X86 disassembler"))?;
                 DisassemblerBackend::X86(disasm)
             }
             _ => {

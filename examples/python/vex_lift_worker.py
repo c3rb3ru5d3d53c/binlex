@@ -6,6 +6,7 @@ from binlex import Config
 from binlex.controlflow import Graph
 from binlex.disassemblers.capstone import Disassembler
 from binlex.formats import PE
+from binlex.lifters.vex import Lifter
 
 
 def main() -> int:
@@ -14,12 +15,8 @@ def main() -> int:
         return 1
 
     config = Config()
+    
     config.general.threads = 16
-    config.processors.enabled = True
-    config.processors.processes = 2
-    config.processors.compression = True
-    config.processors.vex.enabled = True
-    config.processors.vex.functions.enabled = True
 
     if len(sys.argv) >= 3:
         config.processors.path = sys.argv[2]
@@ -43,7 +40,11 @@ def main() -> int:
 
     functions = cfg.functions()
 
-    print(functions[0].to_dict())
+    function = functions[0]
+
+    lifter = Lifter(pe.architecture(), function.bytes(), function.address(), config)
+
+    print(lifter.ir())
 
 
     return 0

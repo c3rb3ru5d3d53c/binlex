@@ -71,7 +71,10 @@ async fn processor_execute(
         }
     };
 
-    state.debug_log(format!("processor execution complete processor={}", processor));
+    state.debug_log(format!(
+        "processor execution complete processor={}",
+        processor
+    ));
 
     let encoded = match encode_response(state.config.processors.compression, &headers, &response) {
         Ok(response) => response,

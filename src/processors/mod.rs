@@ -4,7 +4,7 @@ pub mod vex;
 
 use crate::Config;
 use crate::controlflow::{Block, Function, Instruction};
-use crate::global::config::ConfigProcessor;
+use crate::global::config::{ConfigProcessor, ConfigProcessors};
 use crate::io::stderr::Stderr;
 use crate::processing::processor::{Processor, ProcessorDispatch};
 use crate::server::dto::{
@@ -21,34 +21,7 @@ use std::collections::BTreeMap;
 use std::process;
 use std::sync::Arc;
 
-#[derive(serde::Serialize, serde::Deserialize, Copy, Clone, Debug, Eq, PartialEq, Hash)]
-pub enum ProcessorOs {
-    Linux,
-    Macos,
-    Windows,
-}
-
-impl ProcessorOs {
-    pub const fn current() -> Self {
-        #[cfg(target_os = "linux")]
-        {
-            return Self::Linux;
-        }
-
-        #[cfg(target_os = "macos")]
-        {
-            return Self::Macos;
-        }
-
-        #[cfg(target_os = "windows")]
-        {
-            return Self::Windows;
-        }
-
-        #[allow(unreachable_code)]
-        Self::Linux
-    }
-}
+pub use crate::global::OperatingSystem as ProcessorOs;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, ValueEnum)]
 pub enum ProcessorSelection {
@@ -84,20 +57,7 @@ pub enum ProcessorTarget {
     Function,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Copy, Clone, Debug, Eq, PartialEq, Hash)]
-pub enum ProcessorMode {
-    Ipc,
-    Http,
-}
-
-impl ProcessorMode {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Ipc => "ipc",
-            Self::Http => "http",
-        }
-    }
-}
+pub use crate::global::Transport as ProcessorMode;
 
 pub type ProcessorOutputs = Vec<(&'static str, Value)>;
 
@@ -127,21 +87,97 @@ pub trait GraphProcessor {
     }
 }
 
+pub trait ProcessorContext {
+    fn processors(&self) -> &ConfigProcessors;
+
+    fn processor(&self, name: &str) -> Option<&ConfigProcessor> {
+        self.processors().processor(name)
+    }
+}
+
+impl ProcessorContext for Config {
+    fn processors(&self) -> &ConfigProcessors {
+        &self.processors
+    }
+}
+
+impl ProcessorContext for crate::server::config::ServerConfig {
+    fn processors(&self) -> &ConfigProcessors {
+        &self.processors
+    }
+}
+
 pub trait JsonProcessor: Processor {
-    fn request(state: &AppState, data: Value) -> Result<Self::Request, ServerError>;
+    fn request<C: ProcessorContext>(
+        context: &C,
+        data: Value,
+    ) -> Result<Self::Request, crate::processing::error::ProcessorError>;
 
-    fn response(response: Self::Response) -> Result<Value, ServerError>;
+    fn response(
+        response: Self::Response,
+    ) -> Result<Value, crate::processing::error::ProcessorError>;
 
-    fn execute_value(state: &AppState, data: Value) -> Result<Value, ServerError>
+    fn execute_ipc_value<C: ProcessorContext>(
+        context: &C,
+        data: Value,
+    ) -> Result<Value, crate::processing::error::ProcessorError>
     where
         Self: Sized,
     {
-        let request = <Self as JsonProcessor>::request(state, data)?;
-        let pool = state.processor_pool(Self::NAME).ok_or_else(|| {
-            ServerError::Processor(format!("{} processor pool is unavailable", Self::NAME))
-        })?;
+        let request = <Self as JsonProcessor>::request(context, data)?;
+        let pool =
+            crate::processing::pool::ProcessorPool::for_processor::<Self>(context.processors())?;
         let response = pool.execute::<Self>(&request)?;
         Self::response(response)
+    }
+
+    fn execute_local_value<C: ProcessorContext>(
+        context: &C,
+        data: Value,
+    ) -> Result<Value, crate::processing::error::ProcessorError>
+    where
+        Self: Sized,
+    {
+        let request = <Self as JsonProcessor>::request(context, data)?;
+        let response = Self::execute(request)?;
+        Self::response(response)
+    }
+
+    fn execute_server_value(state: &AppState, data: Value) -> Result<Value, ServerError>
+    where
+        Self: Sized,
+    {
+        let processor = state
+            .config
+            .processors
+            .processor(Self::NAME)
+            .ok_or_else(|| {
+                ServerError::Processor(format!("{} processor is not configured", Self::NAME))
+            })?;
+        let registration = processor_registration_by_name(Self::NAME).ok_or_else(|| {
+            ServerError::Processor(format!("{} processor is not registered", Self::NAME))
+        })?;
+        match configured_server_execution_mode(processor, registration.registration.modes)? {
+            ProcessorMode::Inline => {
+                <Self as JsonProcessor>::execute_local_value(&state.config, data)
+                    .map_err(ServerError::from)
+            }
+            ProcessorMode::Ipc => {
+                let response = if let Some(pool) = state.processor_pool(Self::NAME) {
+                    let request = <Self as JsonProcessor>::request(&state.config, data)
+                        .map_err(ServerError::from)?;
+                    let response = pool.execute::<Self>(&request).map_err(ServerError::from)?;
+                    <Self as JsonProcessor>::response(response)
+                } else {
+                    <Self as JsonProcessor>::execute_ipc_value(&state.config, data)
+                };
+                response.map_err(ServerError::from)
+            }
+            ProcessorMode::Http => Err(ServerError::Processor(format!(
+                "processor {} server mode cannot be http",
+                Self::NAME
+            ))),
+        }
     }
 }
 
@@ -157,9 +193,9 @@ pub struct ProcessorRegistration {
     >,
     pub make_dispatch: fn() -> Box<dyn ProcessorDispatch>,
     pub config_default: fn() -> ConfigProcessor,
-    pub config_server_default:
-        fn() -> BTreeMap<String, crate::global::config::ConfigProcessorValue>,
     pub enabled_for_target: fn(&Config, ProcessorTarget) -> bool,
+    pub execute_graph_value:
+        Option<fn(&Config, Value) -> Result<Value, crate::processing::error::ProcessorError>>,
     pub execute_value: Option<fn(&AppState, Value) -> Result<Value, ServerError>>,
     pub instruction_json: Option<fn(&Instruction) -> Option<Value>>,
     pub block_json: Option<fn(&Block<'_>) -> Option<Value>>,
@@ -179,20 +215,24 @@ impl<'a> RegisteredProcessor<'a> {
         self.registration.name
     }
 
+    pub fn configured_mode(&self, config: &Config) -> ProcessorMode {
+        configured_graph_mode(self.registration, config).unwrap_or(ProcessorMode::Inline)
+    }
+
     pub fn process_block(&self, block: &Block<'_>) -> Option<Value> {
         if let Some(data) = self
             .registration
             .block_json
             .and_then(|serialize| serialize(block))
         {
-            match mode(self.name(), data, &block.cfg.config) {
+            match execute_graph_mode(self.registration, data, &block.cfg.config) {
                 Ok(Some(data)) => return Some(data),
                 Ok(None) => {}
                 Err(error) => {
-                    if should_fail_http_mode(&error) {
-                        fail_http_mode(&block.cfg.config, self.name(), &error);
+                    if should_fail_transport_mode(&error) {
+                        fail_transport_mode(&block.cfg.config, self.name(), &error);
                     }
-                    report_http_mode_error(&block.cfg.config, self.name(), &error);
+                    report_transport_mode_error(&block.cfg.config, self.name(), &error);
                     return None;
                 }
             }
@@ -208,14 +248,14 @@ impl<'a> RegisteredProcessor<'a> {
             .instruction_json
             .and_then(|serialize| serialize(instruction))
         {
-            match mode(self.name(), data, &instruction.config) {
+            match execute_graph_mode(self.registration, data, &instruction.config) {
                 Ok(Some(data)) => return Some(data),
                 Ok(None) => {}
                 Err(error) => {
-                    if should_fail_http_mode(&error) {
-                        fail_http_mode(&instruction.config, self.name(), &error);
+                    if should_fail_transport_mode(&error) {
+                        fail_transport_mode(&instruction.config, self.name(), &error);
                     }
-                    report_http_mode_error(&instruction.config, self.name(), &error);
+                    report_transport_mode_error(&instruction.config, self.name(), &error);
                     return None;
                 }
             }
@@ -231,14 +271,14 @@ impl<'a> RegisteredProcessor<'a> {
             .function_json
             .and_then(|serialize| serialize(function))
         {
-            match mode(self.name(), data, &function.cfg.config) {
+            match execute_graph_mode(self.registration, data, &function.cfg.config) {
                 Ok(Some(data)) => return Some(data),
                 Ok(None) => {}
                 Err(error) => {
-                    if should_fail_http_mode(&error) {
-                        fail_http_mode(&function.cfg.config, self.name(), &error);
+                    if should_fail_transport_mode(&error) {
+                        fail_transport_mode(&function.cfg.config, self.name(), &error);
                     }
-                    report_http_mode_error(&function.cfg.config, self.name(), &error);
+                    report_transport_mode_error(&function.cfg.config, self.name(), &error);
                     return None;
                 }
             }
@@ -273,23 +313,64 @@ pub struct RegisteredProcessorDispatch {
     pub dispatch: Box<dyn ProcessorDispatch>,
 }
 
+pub fn default_transport_mode(
+    supported: &[ProcessorMode],
+    inline_enabled: bool,
+    ipc_enabled: bool,
+    http_enabled: bool,
+) -> ProcessorMode {
+    if inline_enabled && supported.contains(&ProcessorMode::Inline) {
+        return ProcessorMode::Inline;
+    }
+    if ipc_enabled && supported.contains(&ProcessorMode::Ipc) {
+        return ProcessorMode::Ipc;
+    }
+    if http_enabled && supported.contains(&ProcessorMode::Http) {
+        return ProcessorMode::Http;
+    }
+    supported.first().copied().unwrap_or(ProcessorMode::Inline)
+}
+
+fn configured_transport_mode(
+    processor: &ConfigProcessor,
+    supported: &[ProcessorMode],
+) -> Result<ProcessorMode, crate::processing::error::ProcessorError> {
+    let mode = default_transport_mode(
+        supported,
+        processor.inline.enabled,
+        processor.ipc.enabled,
+        processor.http.enabled,
+    );
+    if !supported.contains(&mode) {
+        return Err(crate::processing::error::ProcessorError::Protocol(
+            "processor has no supported enabled transport".to_string(),
+        ));
+    }
+    if !processor.transport(mode).enabled {
+        return Err(crate::processing::error::ProcessorError::Protocol(
+            "processor has no enabled transport".to_string(),
+        ));
+    }
+    Ok(mode)
+}
+
+fn configured_server_transport_mode(
+    processor: &ConfigProcessor,
+    supported: &[ProcessorMode],
+) -> Result<ProcessorMode, ServerError> {
+    if processor.inline.enabled && supported.contains(&ProcessorMode::Inline) {
+        return Ok(ProcessorMode::Inline);
+    }
+    if processor.ipc.enabled && supported.contains(&ProcessorMode::Ipc) {
+        return Ok(ProcessorMode::Ipc);
+    }
+    Err(ServerError::Processor(
+        "processor has no enabled server execution transport".to_string(),
+    ))
+}
+
 #[macro_export]
 macro_rules! processor {
-    (@supported_os linux) => {
-        $crate::processors::ProcessorOs::Linux
-    };
-    (@supported_os macos) => {
-        $crate::processors::ProcessorOs::Macos
-    };
-    (@supported_os windows) => {
-        $crate::processors::ProcessorOs::Windows
-    };
-    (@mode ipc) => {
-        $crate::processors::ProcessorMode::Ipc
-    };
-    (@mode http) => {
-        $crate::processors::ProcessorMode::Http
-    };
     (@value { $($key:ident : $value:tt),* $(,)? }) => {
         $crate::global::config::ConfigProcessorValue::Table(std::collections::BTreeMap::from([
             $(
@@ -311,15 +392,68 @@ macro_rules! processor {
         $crate::global::config::ConfigProcessorValue::from($value)
     };
     ($processor:path {
-        os: [$($supported_os:ident),+ $(,)?],
+        systems: [$($supported_os:expr),+ $(,)?],
         enabled: $processor_enabled:expr,
-        modes: [$($processor_mode:ident),+ $(,)?],
-        mode: $default_mode:ident,
+        transports: [$($processor_mode:expr),+ $(,)?],
+        instructions: { enabled: $instructions_enabled:expr },
+        blocks: { enabled: $blocks_enabled:expr },
+        functions: { enabled: $functions_enabled:expr },
+        inline: {
+            enabled: $inline_enabled:expr
+            $(, options: { $($inline_option_key:ident : $inline_option_value:tt),* $(,)? })?
+        },
+        ipc: {
+            enabled: $ipc_enabled:expr
+            $(, options: { $($ipc_option_key:ident : $ipc_option_value:tt),* $(,)? })?
+        },
+        http: {
+            enabled: $http_enabled:expr
+            $(, options: { $($http_option_key:ident : $http_option_value:tt),* $(,)? })?
+        }
+        $(,)?
+    }) => {
+        $crate::processor!($processor {
+            systems: [$($supported_os),+],
+            enabled: $processor_enabled,
+            transports: [$($processor_mode),+],
+            instructions: { enabled: $instructions_enabled },
+            blocks: { enabled: $blocks_enabled },
+            functions: { enabled: $functions_enabled },
+            options: {},
+            inline: {
+                enabled: $inline_enabled
+                $(, options: { $($inline_option_key : $inline_option_value),* })?
+            },
+            ipc: {
+                enabled: $ipc_enabled
+                $(, options: { $($ipc_option_key : $ipc_option_value),* })?
+            },
+            http: {
+                enabled: $http_enabled
+                $(, options: { $($http_option_key : $http_option_value),* })?
+            }
+        });
+    };
+    ($processor:path {
+        systems: [$($supported_os:expr),+ $(,)?],
+        enabled: $processor_enabled:expr,
+        transports: [$($processor_mode:expr),+ $(,)?],
         instructions: { enabled: $instructions_enabled:expr },
         blocks: { enabled: $blocks_enabled:expr },
         functions: { enabled: $functions_enabled:expr },
         options: { $($option_key:ident : $option_value:tt),* $(,)? },
-        server: { $($server_key:ident : $server_value:tt),* $(,)? }
+        inline: {
+            enabled: $inline_enabled:expr
+            $(, options: { $($inline_option_key:ident : $inline_option_value:tt),* $(,)? })?
+        },
+        ipc: {
+            enabled: $ipc_enabled:expr
+            $(, options: { $($ipc_option_key:ident : $ipc_option_value:tt),* $(,)? })?
+        },
+        http: {
+            enabled: $http_enabled:expr
+            $(, options: { $($http_option_key:ident : $http_option_value:tt),* $(,)? })?
+        }
         $(,)?
     }) => {
         pub(crate) fn config_default() -> $crate::global::config::ConfigProcessor {
@@ -338,12 +472,6 @@ macro_rules! processor {
                     options: std::collections::BTreeMap::new(),
                 },
                 options: std::collections::BTreeMap::from([
-                    (
-                        "mode".to_string(),
-                        $crate::global::config::ConfigProcessorValue::String(
-                            $crate::processor!(@mode $default_mode).as_str().to_string(),
-                        ),
-                    ),
                     $(
                         (
                             stringify!($option_key).to_string(),
@@ -351,30 +479,56 @@ macro_rules! processor {
                         )
                     ),*
                 ]),
-                server: std::collections::BTreeMap::new(),
+                inline: $crate::global::config::ConfigProcessorTransport {
+                    enabled: $inline_enabled,
+                    options: std::collections::BTreeMap::from([
+                        $(
+                            $(
+                                (
+                                    stringify!($inline_option_key).to_string(),
+                                    $crate::processor!(@value $inline_option_value),
+                                )
+                            ),*
+                        )?
+                    ]),
+                },
+                ipc: $crate::global::config::ConfigProcessorTransport {
+                    enabled: $ipc_enabled,
+                    options: std::collections::BTreeMap::from([
+                        $(
+                            $(
+                                (
+                                    stringify!($ipc_option_key).to_string(),
+                                    $crate::processor!(@value $ipc_option_value),
+                                )
+                            ),*
+                        )?
+                    ]),
+                },
+                http: $crate::global::config::ConfigProcessorTransport {
+                    enabled: $http_enabled,
+                    options: std::collections::BTreeMap::from([
+                        $(
+                            $(
+                                (
+                                    stringify!($http_option_key).to_string(),
+                                    $crate::processor!(@value $http_option_value),
+                                )
+                            ),*
+                        )?
+                    ]),
+                },
             }
-        }
-
-        pub(crate) fn config_server_default() -> std::collections::BTreeMap<String, $crate::global::config::ConfigProcessorValue> {
-            std::collections::BTreeMap::from([
-                $(
-                    (
-                        stringify!($server_key).to_string(),
-                        $crate::processor!(@value $server_value),
-                    )
-                ),*
-            ])
         }
 
         pub(crate) fn registration() -> $crate::processors::ProcessorRegistration {
             $crate::processors::ProcessorRegistration {
                 name: <$processor as $crate::processing::processor::Processor>::NAME,
-                os: &[$($crate::processor!(@supported_os $supported_os)),+],
-                modes: &[$($crate::processor!(@mode $processor_mode)),+],
+                os: &[$($supported_os),+],
+                modes: &[$($processor_mode),+],
                 make_pool: |config| $crate::processing::pool::ProcessorPool::for_processor::<$processor>(config),
                 make_dispatch: || Box::new($processor),
                 config_default,
-                config_server_default,
                 enabled_for_target: |config: &$crate::Config,
                                      target: $crate::processors::ProcessorTarget| {
                     config.processors.enabled
@@ -396,7 +550,8 @@ macro_rules! processor {
                                     }
                             })
                 },
-                execute_value: Some(<$processor as $crate::processors::JsonProcessor>::execute_value as fn(&$crate::server::state::AppState, serde_json::Value) -> Result<serde_json::Value, $crate::server::error::ServerError>),
+                execute_graph_value: Some(<$processor as $crate::processors::JsonProcessor>::execute_ipc_value as fn(&$crate::Config, serde_json::Value) -> Result<serde_json::Value, $crate::processing::error::ProcessorError>),
+                execute_value: Some(<$processor as $crate::processors::JsonProcessor>::execute_server_value as fn(&$crate::server::state::AppState, serde_json::Value) -> Result<serde_json::Value, $crate::server::error::ServerError>),
                 instruction_json: Some(
                     <$processor as $crate::processors::GraphProcessor>::instruction_json
                         as fn(&$crate::controlflow::Instruction) -> Option<serde_json::Value>,
@@ -423,6 +578,38 @@ macro_rules! processor {
                 ),
             }
         }
+    };
+    ($processor:path {
+        systems: [$($supported_os:expr),+ $(,)?],
+        enabled: $processor_enabled:expr,
+        transports: [$($processor_mode:expr),+ $(,)?],
+        instructions: { enabled: $instructions_enabled:expr },
+        blocks: { enabled: $blocks_enabled:expr },
+        functions: { enabled: $functions_enabled:expr },
+        options: { $($option_key:ident : $option_value:tt),* $(,)? },
+        inline: { enabled: $inline_enabled:expr },
+        ipc: { enabled: $ipc_enabled:expr },
+        http: {
+            enabled: $http_enabled:expr
+            $(, options: { $($http_option_key:ident : $http_option_value:tt),* $(,)? })?
+        }
+        $(,)?
+    }) => {
+        $crate::processor!($processor {
+            systems: [$($supported_os),+],
+            enabled: $processor_enabled,
+            transports: [$($processor_mode),+],
+            instructions: { enabled: $instructions_enabled },
+            blocks: { enabled: $blocks_enabled },
+            functions: { enabled: $functions_enabled },
+            options: { $($option_key : $option_value),* },
+            inline: { enabled: $inline_enabled },
+            ipc: { enabled: $ipc_enabled },
+            http: {
+                enabled: $http_enabled
+                $(, options: { $($http_option_key : $http_option_value),* })?
+            }
+        });
     };
 }
 
@@ -457,19 +644,6 @@ pub fn default_processor_configs() -> BTreeMap<String, ConfigProcessor> {
 pub fn default_processor_config(name: &str) -> Option<ConfigProcessor> {
     processor_registration_by_name(name)
         .map(|registration| (registration.registration.config_default)())
-}
-
-pub fn apply_server_defaults(config: &mut crate::ConfigProcessors) {
-    for registration in processor_registrations()
-        .iter()
-        .filter(|registration| registration.supported_on_current_os())
-    {
-        if let Some(processor) = config.ensure_processor(registration.name) {
-            for (key, value) in (registration.config_server_default)() {
-                processor.server.entry(key).or_insert(value);
-            }
-        }
-    }
 }
 
 pub fn processor_registration_by_name(name: &str) -> Option<RegisteredProcessor<'static>> {
@@ -511,41 +685,74 @@ pub fn apply_output(outputs: &mut BTreeMap<String, Value>, processor_name: &str,
     outputs.insert(processor_name.to_string(), output.clone());
 }
 
-fn report_http_mode_error(config: &Config, processor_name: &str, error: &crate::processing::error::ProcessorError) {
+fn report_transport_mode_error(
+    config: &Config,
+    processor_name: &str,
+    error: &crate::processing::error::ProcessorError,
+) {
     if config.general.debug {
         Stderr::print_debug(
             config,
-            format!("processor {} http error: {}", processor_name, error),
+            format!("processor {} transport error: {}", processor_name, error),
         );
     }
 }
 
-fn fail_http_mode(
+fn fail_transport_mode(
     config: &Config,
     processor_name: &str,
     error: &crate::processing::error::ProcessorError,
 ) -> ! {
-    report_http_mode_error(config, processor_name, error);
-    eprintln!("processor {} http error: {}", processor_name, error);
+    report_transport_mode_error(config, processor_name, error);
+    eprintln!("processor {} transport error: {}", processor_name, error);
     process::exit(1);
 }
 
-fn should_fail_http_mode(error: &crate::processing::error::ProcessorError) -> bool {
+fn should_fail_transport_mode(error: &crate::processing::error::ProcessorError) -> bool {
     matches!(
         error,
         crate::processing::error::ProcessorError::Io(_)
+            | crate::processing::error::ProcessorError::Spawn(_)
+            | crate::processing::error::ProcessorError::BinaryNotFound(_)
             | crate::processing::error::ProcessorError::Timeout(_)
             | crate::processing::error::ProcessorError::Protocol(_)
     )
 }
 
-fn processor_http_url(processor_name: &str, config: &ConfigProcessor) -> Result<String, crate::processing::error::ProcessorError> {
-    let base_url = config.option_string("url").ok_or_else(|| {
+fn configured_graph_mode(
+    registration: &ProcessorRegistration,
+    config: &Config,
+) -> Result<ProcessorMode, crate::processing::error::ProcessorError> {
+    let Some(processor) = config.processors.processor(registration.name) else {
+        return Ok(ProcessorMode::Inline);
+    };
+    configured_transport_mode(processor, registration.modes).map_err(|error| {
         crate::processing::error::ProcessorError::Protocol(format!(
-            "processor {} http mode requires url option",
-            processor_name
+            "processor {} transport selection failed: {}",
+            registration.name, error
         ))
-    })?;
+    })
+}
+
+pub(crate) fn configured_server_execution_mode(
+    processor: &ConfigProcessor,
+    supported: &[ProcessorMode],
+) -> Result<ProcessorMode, ServerError> {
+    configured_server_transport_mode(processor, supported)
+}
+
+fn processor_http_url(
+    processor_name: &str,
+    config: &ConfigProcessor,
+) -> Result<String, crate::processing::error::ProcessorError> {
+    let base_url = config
+        .transport_string(ProcessorMode::Http, "url")
+        .ok_or_else(|| {
+            crate::processing::error::ProcessorError::Protocol(format!(
+                "processor {} http mode requires url option",
+                processor_name
+            ))
+        })?;
     Ok(format!(
         "{}/processors/{}",
         base_url.trim_end_matches('/'),
@@ -554,21 +761,25 @@ fn processor_http_url(processor_name: &str, config: &ConfigProcessor) -> Result<
 }
 
 fn processor_http_verify(config: &ConfigProcessor) -> bool {
-    config.option_bool("verify").unwrap_or(true)
+    config
+        .transport_bool(ProcessorMode::Http, "verify")
+        .unwrap_or(true)
 }
 
 fn encode_http_request(
     request: &ProcessorHttpRequest,
     compression_enabled: bool,
 ) -> Result<(Vec<u8>, &'static str), crate::processing::error::ProcessorError> {
-    let json = serde_json::to_vec(request)
-        .map_err(|error| crate::processing::error::ProcessorError::Serialization(error.to_string()))?;
+    let json = serde_json::to_vec(request).map_err(|error| {
+        crate::processing::error::ProcessorError::Serialization(error.to_string())
+    })?;
     if !compression_enabled {
         return Ok((json, "application/json"));
     }
 
-    let compressed = lz4::block::compress(&json, None, false)
-        .map_err(|error| crate::processing::error::ProcessorError::Compression(error.to_string()))?;
+    let compressed = lz4::block::compress(&json, None, false).map_err(|error| {
+        crate::processing::error::ProcessorError::Compression(error.to_string())
+    })?;
     let mut payload = Vec::with_capacity(4 + compressed.len());
     payload.extend_from_slice(&(json.len() as u32).to_le_bytes());
     payload.extend_from_slice(&compressed);
@@ -580,13 +791,15 @@ fn decode_http_response(
 ) -> Result<Value, crate::processing::error::ProcessorError> {
     let status = response.status();
     let headers = response.headers().clone();
-    let body = response
-        .bytes()
-        .map_err(|error| crate::processing::error::ProcessorError::Io(std::io::Error::other(error.to_string())))?;
+    let body = response.bytes().map_err(|error| {
+        crate::processing::error::ProcessorError::Io(std::io::Error::other(error.to_string()))
+    })?;
 
     if !status.is_success() {
         if let Ok(error) = serde_json::from_slice::<ErrorResponse>(&body) {
-            return Err(crate::processing::error::ProcessorError::RemoteFailure(error.error));
+            return Err(crate::processing::error::ProcessorError::RemoteFailure(
+                error.error,
+            ));
         }
         return Err(crate::processing::error::ProcessorError::RemoteFailure(
             String::from_utf8_lossy(&body).into_owned(),
@@ -604,8 +817,9 @@ fn decode_http_response(
             ));
         }
         let uncompressed_len = u32::from_le_bytes([body[0], body[1], body[2], body[3]]) as i32;
-        lz4::block::decompress(&body[4..], Some(uncompressed_len))
-            .map_err(|error| crate::processing::error::ProcessorError::Compression(error.to_string()))?
+        lz4::block::decompress(&body[4..], Some(uncompressed_len)).map_err(|error| {
+            crate::processing::error::ProcessorError::Compression(error.to_string())
+        })?
     } else {
         body.to_vec()
     };
@@ -640,36 +854,42 @@ fn execute_http_mode(
             .header(ACCEPT, OCTET_STREAM_CONTENT_TYPE);
     }
 
-    let response = builder
-        .body(body)
-        .send()
-        .map_err(|error| crate::processing::error::ProcessorError::Io(std::io::Error::other(error.to_string())))?;
+    let response = builder.body(body).send().map_err(|error| {
+        crate::processing::error::ProcessorError::Io(std::io::Error::other(error.to_string()))
+    })?;
 
     decode_http_response(response)
 }
 
-pub fn mode(
-    processor_name: &str,
+fn execute_graph_mode(
+    registration: &ProcessorRegistration,
     data: Value,
     config: &Config,
 ) -> Result<Option<Value>, crate::processing::error::ProcessorError> {
-    let Some(registration) = processor_registration_by_name(processor_name) else {
-        return Ok(None);
-    };
-    if !registration.registration.supports_mode("http") {
-        return Ok(None);
+    match configured_graph_mode(registration, config)? {
+        ProcessorMode::Inline => Ok(None),
+        ProcessorMode::Ipc => {
+            let execute = registration.execute_graph_value.ok_or_else(|| {
+                crate::processing::error::ProcessorError::Protocol(format!(
+                    "processor {} does not implement graph IPC execution",
+                    registration.name
+                ))
+            })?;
+            execute(config, data).map(Some)
+        }
+        ProcessorMode::Http => {
+            let processor = config
+                .processors
+                .processor(registration.name)
+                .ok_or_else(|| {
+                    crate::processing::error::ProcessorError::Protocol(format!(
+                        "processor {} is not configured",
+                        registration.name
+                    ))
+                })?;
+            execute_http_mode(registration.name, data, config, processor).map(Some)
+        }
     }
-
-    let Some(processor) = config.processors.processor(processor_name) else {
-        return Ok(None);
-    };
-    let Some(mode) = processor.option_string("mode") else {
-        return Ok(None);
-    };
-    if mode != "http" {
-        return Ok(None);
-    }
-    execute_http_mode(processor_name, data, config, processor).map(Some)
 }
 
 pub fn http_execute(
@@ -721,21 +941,24 @@ mod tests {
                 enabled: false,
                 options: BTreeMap::new(),
             },
-            options: BTreeMap::from([(
-                "mode".to_string(),
-                crate::global::config::ConfigProcessorValue::String("ipc".to_string()),
-            )]),
-            server: BTreeMap::new(),
+            options: BTreeMap::new(),
+            inline: crate::global::config::ConfigProcessorTransport {
+                enabled: false,
+                options: BTreeMap::new(),
+            },
+            ipc: crate::global::config::ConfigProcessorTransport {
+                enabled: true,
+                options: BTreeMap::new(),
+            },
+            http: crate::global::config::ConfigProcessorTransport {
+                enabled: false,
+                options: BTreeMap::new(),
+            },
         }
     }
 
     fn test_make_dispatch() -> Box<dyn crate::processing::processor::ProcessorDispatch> {
         panic!("test dispatch should not be constructed")
-    }
-
-    fn test_config_server_default() -> BTreeMap<String, crate::global::config::ConfigProcessorValue>
-    {
-        BTreeMap::new()
     }
 
     fn test_make_pool(
@@ -761,8 +984,8 @@ mod tests {
             make_pool: test_make_pool,
             make_dispatch: test_make_dispatch,
             config_default: test_config_default,
-            config_server_default: test_config_server_default,
             enabled_for_target: |_, _| false,
+            execute_graph_value: None,
             execute_value: None,
             instruction_json: None,
             block_json: None,
@@ -789,8 +1012,8 @@ mod tests {
             make_pool: test_make_pool,
             make_dispatch: test_make_dispatch,
             config_default: test_config_default,
-            config_server_default: test_config_server_default,
             enabled_for_target: |_, _| false,
+            execute_graph_value: None,
             execute_value: None,
             instruction_json: None,
             block_json: None,
@@ -815,12 +1038,16 @@ mod tests {
         let registration = ProcessorRegistration {
             name: "test",
             os: &SUPPORTED_OS,
-            modes: &[ProcessorMode::Ipc, ProcessorMode::Http],
+            modes: &[
+                ProcessorMode::Inline,
+                ProcessorMode::Ipc,
+                ProcessorMode::Http,
+            ],
             make_pool: test_make_pool,
             make_dispatch: test_make_dispatch,
             config_default: test_config_default,
-            config_server_default: test_config_server_default,
             enabled_for_target: |_, _| false,
+            execute_graph_value: None,
             execute_value: None,
             instruction_json: None,
             block_json: None,
@@ -830,6 +1057,7 @@ mod tests {
             process_function: None,
         };
 
+        assert!(registration.supports_mode("inline"));
         assert!(registration.supports_mode("ipc"));
         assert!(registration.supports_mode("http"));
         assert!(!registration.supports_mode("bogus"));

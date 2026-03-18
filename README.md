@@ -118,7 +118,7 @@ python -m plugin print-target
 python -m plugin install --target ~/.config/idapro/plugins/
 ```
 
-You will also need to ensure the server is running. The new layout uses the Rust `binlex-server` binary, which manages local `binlex-processor` workers over the internal `BLEX` protocol.
+You will also need to ensure the server is running. The new layout uses the Rust `binlex-server` binary, which can execute processors in-process (`inline`) or manage `binlex-processor` workers over the internal `BLEX` protocol (`ipc`).
 
 ```bash
 cargo run --release --bin binlex-server
@@ -442,12 +442,24 @@ max_payload_bytes = 4194304
 idle_timeout_ms = 30000
 max_queue_depth = 128
 
+[server]
+bind = "127.0.0.1:5000"
+
 [processors.embeddings]
 enabled = false
 dimensions = 64
 device = "cpu"
-mode = "ipc"
+
+[processors.embeddings.inline]
+enabled = false
+
+[processors.embeddings.ipc]
+enabled = true
+
+[processors.embeddings.http]
+enabled = false
 url = "http://127.0.0.1:5000"
+verify = false
 
 # Valid device values currently accepted by the embeddings processor:
 # "cpu", "gpu", "cuda", "vulkan", "metal", "webgpu", "rocm"
@@ -464,6 +476,11 @@ enabled = true
 
 If the command-line options are not enough the configuration file provides the most granular control of all options.
 
+Processor modes are:
+- `inline`: execute the processor in-process. This uses the same thread budget as `binlex --threads`.
+- `ipc`: execute the processor out-of-process through `binlex-processor` workers. This uses `[processors].processes`.
+- `http`: execute the processor through `binlex-server` over HTTP.
+
 If you wish to override the default configuration file and specify another configuration file use the command-line parameter.
 
 ```bash
@@ -479,7 +496,8 @@ If you want to attach your own analysis output to instructions, blocks, or funct
 The moving parts are:
 - A processor type implementing the `Processor` trait
 - Request and response enums that can be serialized with `serde`
-- Optional `process_instruction`, `process_block`, and `process_function` helpers that return JSON
+- Optional `request` and `response` adapters for IPC and HTTP transport
+- Optional `process_instruction`, `process_block`, and `process_function` helpers that return JSON for `inline` execution
 - A `crate::processor!(...)` registration block describing defaults and supported operating systems
 
 This is best for libraries that are poorly developed with error handling that call `abort()` for example without letting the developer choose when to properly exit, resulting in the termination of the processes using said library code.
@@ -493,6 +511,7 @@ use serde_json::{json, Value};
 use crate::controlflow::{Block, Function, Instruction};
 use crate::processing::error::ProcessorError;
 use crate::processing::processor::Processor;
+use crate::processors::{GraphProcessor, JsonProcessor, ProcessorContext};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub enum ExampleRequest {
@@ -504,6 +523,7 @@ pub enum ExampleResponse {
     Analyze { score: u32 },
 }
 
+#[derive(Default)]
 pub struct ExampleProcessor;
 
 impl Processor for ExampleProcessor {
@@ -511,7 +531,7 @@ impl Processor for ExampleProcessor {
     type Request = ExampleRequest;
     type Response = ExampleResponse;
 
-    fn process_request(&self, request: Self::Request) -> Result<Self::Response, ProcessorError> {
+    fn request(&self, request: Self::Request) -> Result<Self::Response, ProcessorError> {
         match request {
             ExampleRequest::Analyze { bytes } => Ok(ExampleResponse::Analyze {
                 score: bytes.len() as u32,
@@ -520,22 +540,36 @@ impl Processor for ExampleProcessor {
     }
 }
 
-impl ExampleProcessor {
-    pub fn process_instruction(instruction: &Instruction) -> Option<Value> {
+impl JsonProcessor for ExampleProcessor {
+    fn request<C: ProcessorContext>(_: &C, data: Value) -> Result<Self::Request, ProcessorError> {
+        let bytes = serde_json::to_vec(&data)
+            .map_err(|error| ProcessorError::Serialization(error.to_string()))?;
+        Ok(ExampleRequest::Analyze { bytes })
+    }
+
+    fn response(response: Self::Response) -> Result<Value, ProcessorError> {
+        match response {
+            ExampleResponse::Analyze { score } => Ok(json!({ "score": score })),
+        }
+    }
+}
+
+impl GraphProcessor for ExampleProcessor {
+    fn instruction(instruction: &Instruction) -> Option<Value> {
         Some(json!({
             "size": instruction.bytes.len(),
             "address": instruction.address
         }))
     }
 
-    pub fn process_block(block: &Block<'_>) -> Option<Value> {
+    fn block(block: &Block<'_>) -> Option<Value> {
         Some(json!({
             "size": block.size(),
             "instructions": block.instruction_addresses()
         }))
     }
 
-    pub fn process_function(function: &Function<'_>) -> Option<Value> {
+    fn function(function: &Function<'_>) -> Option<Value> {
         Some(json!({
             "blocks": function.block_addresses(),
             "number_of_instructions": function.number_of_instructions()
@@ -544,11 +578,21 @@ impl ExampleProcessor {
 }
 
 crate::processor!(ExampleProcessor {
-    os: [linux, macos],
+    systems: [OperatingSystem::LINUX, OperatingSystem::MACOS],
     enabled: false,
+    transports: [Transport::INLINE, Transport::IPC, Transport::HTTP],
     instructions: { enabled: false },
     blocks: { enabled: false },
     functions: { enabled: true },
+    inline: { enabled: true },
+    ipc: { enabled: true },
+    http: {
+        enabled: false,
+        options: {
+            url: "http://127.0.0.1:5000",
+            verify: false
+        }
+    },
 });
 ```
 
@@ -560,9 +604,11 @@ To wire it into the project:
 5. Build `binlex` and `binlex-processor`, then enable the processor in config or with `--processors example`.
 
 Notes:
-- `Processor::process_request` is used by the out-of-process worker protocol.
-- The `process_instruction`, `process_block`, and `process_function` helpers define the JSON that gets attached under `.processors.<name>`.
+- `Processor::request` is the typed execution entrypoint used by `inline`, `ipc`, and `http`.
+- `JsonProcessor::request` and `JsonProcessor::response` adapt the typed request/response to IPC and HTTP transport.
+- `process_instruction`, `process_block`, and `process_function` define the JSON that gets attached under `.processors.<name>` for `inline` execution.
 - Keep outputs compact; every emitted value is serialized into the JSON stream.
+- `inline` uses `binlex --threads`, `ipc` uses `[processors].processes`, and `http` uses the server.
 - Use `config.processors.path` if your processor worker binary lives outside the default search path.
 
 ### Making a YARA Rule
