@@ -222,7 +222,14 @@ jobs:
           done
 
       - name: Build Project
-        run: make zst
+        shell: bash
+        run: |
+          cargo build --release
+          id -u builder >/dev/null 2>&1 || useradd --create-home --shell /bin/bash builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          runuser -u builder -- bash -lc "cd \"$GITHUB_WORKSPACE\" && makepkg"
+          mkdir -p target/zst
+          find "$GITHUB_WORKSPACE" -maxdepth 1 -name '*.pkg.tar.zst' -exec mv {} target/zst/ \;
 
       - name: Create Dist Directory
         run: mkdir dist
@@ -333,6 +340,7 @@ jobs:
         uses: pypa/cibuildwheel@v3.2.0
         env:
           CIBW_BUILD: cp39-* cp310-* cp311-* cp312-* cp313-* cp314-*
+          CIBW_ARCHS_WINDOWS: AMD64
           CIBW_BEFORE_ALL_LINUX: >-
             bash -lc 'if command -v dnf >/dev/null 2>&1; then
             dnf install -y pkg-config openssl-devel make automake autoconf libtool;
@@ -343,6 +351,7 @@ jobs:
             else
             echo "Unsupported package manager for cibuildwheel linux image" >&2; exit 1;
             fi'
+          CIBW_ENVIRONMENT_MACOS: MACOSX_DEPLOYMENT_TARGET=10.12
         with:
           package-dir: bindings/python
           output-dir: wheelhouse
