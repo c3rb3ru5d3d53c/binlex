@@ -13,3 +13,7 @@ lazy_static = "1.4"
 parking_lot = "0.11"
 vex-sys = { path = "../libvex-sys", version = "0.3.1" }
 libvex-macros = { path = "../libvex-macros" }
+
+[features]
+default = []
+pic = ["vex-sys/pic"]
