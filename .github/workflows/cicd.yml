@@ -181,6 +181,71 @@ jobs:
           name: ${{ matrix.os }}-native-artifacts
           path: dist/
 
+  archlinux-native-build:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Cache Cargo Registry and Build
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: archlinux-native-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            archlinux-native-cargo-
+
+      - name: Install Dependencies
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm --needed base-devel pkgconf openssl make automake autoconf libtool clang curl git
+
+      - name: Set Up Rust
+        shell: bash
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Run Unit Tests
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            cargo test && break
+            echo "Attempt $attempt failed, retrying in 15s..."
+            sleep 15
+          done
+
+      - name: Build Project
+        run: make zst
+
+      - name: Create Dist Directory
+        run: mkdir dist
+
+      - name: Copy Binary
+        run: |
+          cp target/release/binlex dist/
+          cp target/release/binlex-processor dist/
+          cp target/release/binlex-yara dist/
+          cp target/release/binlex-pdb dist/
+          cp target/release/binlex-elf-symbols dist/
+          cp target/release/binlex-macho-symbols dist/
+          cp target/release/binlex-rizin dist/
+          cp target/release/binlex-image dist/
+          cp target/release/binlex-hash dist/
+          cp target/zst/*.zst dist/
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: archlinux-native-artifacts
+          path: dist/
+
   python-wheels:
     strategy:
       fail-fast: false
@@ -268,6 +333,16 @@ jobs:
         uses: pypa/cibuildwheel@v3.2.0
         env:
           CIBW_BUILD: cp39-* cp310-* cp311-* cp312-* cp313-* cp314-*
+          CIBW_BEFORE_ALL_LINUX: >-
+            bash -lc 'if command -v dnf >/dev/null 2>&1; then
+            dnf install -y pkg-config openssl-devel make automake autoconf libtool;
+            elif command -v yum >/dev/null 2>&1; then
+            yum install -y pkg-config openssl-devel make automake autoconf libtool;
+            elif command -v apt-get >/dev/null 2>&1; then
+            apt-get update && apt-get install -y pkg-config libssl-dev make automake autoconf libtool;
+            else
+            echo "Unsupported package manager for cibuildwheel linux image" >&2; exit 1;
+            fi'
         with:
           package-dir: bindings/python
           output-dir: wheelhouse
@@ -278,88 +353,66 @@ jobs:
           name: ${{ matrix.os }}-python-wheels
           path: wheelhouse/
 
-  archlinux:
+  archlinux-python-wheels:
     runs-on: ubuntu-latest
     container:
       image: archlinux:latest
+
     steps:
-      - name: Install Arch Dependencies
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Cache Cargo Registry and Build
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: archlinux-wheels-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            archlinux-wheels-cargo-
+
+      - name: Install Dependencies
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm base-devel curl git zip clang python python-pip openssl zlib xz bzip2 libffi
-          echo '%wheel ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
-          useradd -m -G wheel builder
-          echo 'builder ALL=(ALL) NOPASSWD: /usr/bin/make' >> /etc/sudoers
+          pacman -S --noconfirm --needed base-devel pkgconf openssl make automake autoconf libtool clang curl git python python-pip
 
-      - name: Setup Rust
+      - name: Set Up Rust
+        shell: bash
         run: |
-          sudo -u builder bash -c 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y'
-          sudo -u builder bash -c 'echo "export PATH=\\"$PATH:/home/builder/.cargo/bin\\"" >> /home/builder/.bashrc'
-          sudo -u builder bash -c 'echo "source /home/builder/.cargo/env" >> /home/builder/.bashrc'
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
-      - name: Checkout Code to Builder Home
+      - name: Set Up Python Build Tools
+        shell: bash
         run: |
-          sudo -u builder mkdir -p /home/builder/repo
-          sudo -u builder bash -c "git clone https://github.com/${GITHUB_REPOSITORY}.git /home/builder/repo"
-          sudo -u builder bash -c "cd /home/builder/repo && git fetch origin ${GITHUB_REF} && git checkout FETCH_HEAD"
-        env:
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_REF: ${{ github.ref }}
+          python -m venv .wheel-tools
+          .wheel-tools/bin/pip install --upgrade pip
+          .wheel-tools/bin/pip install maturin uv
+          echo "$GITHUB_WORKSPACE/.wheel-tools/bin" >> "$GITHUB_PATH"
 
-      - name: Install Python Wheel Tooling (Arch Linux)
+      - name: Build Python Wheels
+        shell: bash
         run: |
-          sudo -u builder bash -lc '
-            python -m venv /home/builder/.wheel-tools
-            /home/builder/.wheel-tools/bin/pip install --upgrade pip uv maturin
-          '
+          mkdir -p wheelhouse
+          uv python install 3.9 3.10 3.11 3.12 3.13 3.14
+          python -m maturin build --release \
+            --manifest-path bindings/python/Cargo.toml \
+            --out wheelhouse \
+            --interpreter \
+              "$(uv python find 3.9)" \
+              "$(uv python find 3.10)" \
+              "$(uv python find 3.11)" \
+              "$(uv python find 3.12)" \
+              "$(uv python find 3.13)" \
+              "$(uv python find 3.14)"
 
-      - name: Build Project (Arch Linux)
-        run: |
-          sudo -u builder bash -c 'cd /home/builder/repo/ && . /home/builder/.cargo/env && make zst'
-
-      - name: Run Unit Tests
-        run: |
-          sudo -u builder bash -c 'cd /home/builder/repo/ && . /home/builder/.cargo/env && cargo test'
-
-      - name: Build Python Wheels (Arch Linux)
-        run: |
-          sudo -u builder bash -lc '
-            set -euo pipefail
-            export PATH="/home/builder/.wheel-tools/bin:$PATH"
-            cd /home/builder/repo/
-            . /home/builder/.cargo/env
-            uv python install 3.9 3.10 3.11 3.12 3.13 3.14
-            python -m maturin build --release \
-              --manifest-path bindings/python/Cargo.toml \
-              --interpreter \
-                "$(uv python find 3.9)" \
-                "$(uv python find 3.10)" \
-                "$(uv python find 3.11)" \
-                "$(uv python find 3.12)" \
-                "$(uv python find 3.13)" \
-                "$(uv python find 3.14)"
-          '
-
-      - name: Copy Binary (Arch Linux)
-        run: |
-          mkdir dist
-          cp /home/builder/repo/target/release/binlex dist/
-          cp /home/builder/repo/target/release/binlex-processor dist/
-          cp /home/builder/repo/target/release/binlex-yara dist/
-          cp /home/builder/repo/target/release/binlex-pdb dist/
-          cp /home/builder/repo/target/release/binlex-elf-symbols dist/
-          cp /home/builder/repo/target/release/binlex-macho-symbols dist/
-          cp /home/builder/repo/target/release/binlex-rizin dist/
-          cp /home/builder/repo/target/release/binlex-image dist/
-          cp /home/builder/repo/target/release/binlex-hash dist/
-          cp /home/builder/repo/target/zst/*.zst dist/
-          cp /home/builder/repo/target/wheels/*.whl dist/
-
-      - name: Upload Artifacts
+      - name: Upload Wheel Artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: archlinux-artifacts
-          path: dist/
+          name: archlinux-python-wheels
+          path: wheelhouse/
 
   ida-plugin:
     runs-on: ubuntu-latest
