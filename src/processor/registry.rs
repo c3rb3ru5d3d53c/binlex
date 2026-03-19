@@ -3,6 +3,7 @@ use crate::config::ConfigProcessor;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::io::stderr::Stderr;
 use crate::processor::{ProcessorArchitecture, ProcessorMode, ProcessorOs, ProcessorTarget};
+#[cfg(not(target_os = "windows"))]
 use crate::processors::embeddings;
 #[cfg(not(target_os = "windows"))]
 use crate::processors::vex;
@@ -741,6 +742,7 @@ mod tests {
 
         let registration = ProcessorRegistration {
             name: "test",
+            requires: ">=0.0.0",
             operating_systems: &SUPPORTED_OS,
             architectures: &[ProcessorArchitecture::AMD64],
             modes: &[ProcessorMode::Ipc],
@@ -770,6 +772,7 @@ mod tests {
 
         let registration = ProcessorRegistration {
             name: "test",
+            requires: ">=0.0.0",
             operating_systems: &UNSUPPORTED_OS,
             architectures: &[ProcessorArchitecture::AMD64],
             modes: &[ProcessorMode::Ipc],
@@ -801,6 +804,7 @@ mod tests {
 
         let registration = ProcessorRegistration {
             name: "test",
+            requires: ">=0.0.0",
             operating_systems: &SUPPORTED_OS,
             architectures: &[ProcessorArchitecture::AMD64],
             modes: &[
@@ -839,6 +843,7 @@ mod tests {
 
         let registration = ProcessorRegistration {
             name: "test",
+            requires: ">=0.0.0",
             operating_systems: &SUPPORTED_OS,
             architectures: &[ProcessorArchitecture::AMD64, ProcessorArchitecture::I386],
             modes: &[ProcessorMode::Ipc],
