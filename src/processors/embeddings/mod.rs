@@ -7,8 +7,8 @@ use std::hash::{Hash, Hasher};
 use std::sync::OnceLock;
 use twox_hash::XxHash64;
 
-use crate::controlflow::{Block, BlockJson, Function, FunctionJson, Instruction, InstructionJson};
 use crate::config::ConfigProcessor;
+use crate::controlflow::{Block, BlockJson, Function, FunctionJson, Instruction, InstructionJson};
 use crate::core::Architecture;
 use crate::core::{OperatingSystem, Transport};
 use crate::genetics::ChromosomeJson;

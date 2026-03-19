@@ -24,8 +24,8 @@ use crate::formats::File;
 use crate::formats::Image;
 use crate::Architecture;
 use crate::Config;
-use binlex::formats::MACHO as InnerMACHO;
 use binlex::formats::MachoSlice as InnerMachoSlice;
+use binlex::formats::MACHO as InnerMACHO;
 use pyo3::prelude::*;
 use pyo3::types::PyType;
 use std::collections::BTreeMap;
@@ -83,7 +83,7 @@ impl PyMachoSlice {
         self.with_slice(|slice: InnerMachoSlice<'_>| {
             slice.relative_virtual_address_to_virtual_address(relative_virtual_address)
         })
-            .flatten()
+        .flatten()
     }
 
     #[pyo3(text_signature = "($self, file_offset)")]
@@ -91,7 +91,7 @@ impl PyMachoSlice {
         self.with_slice(|slice: InnerMachoSlice<'_>| {
             slice.file_offset_to_virtual_address(file_offset)
         })
-            .flatten()
+        .flatten()
     }
 
     #[pyo3(text_signature = "($self)")]

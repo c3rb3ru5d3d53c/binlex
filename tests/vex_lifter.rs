@@ -2,8 +2,8 @@
 
 use binlex::controlflow::graph::Graph;
 use binlex::controlflow::{Block, Function, Instruction};
-use binlex::{Architecture, Config};
 use binlex::lifters::vex::{Lifter, LifterJsonDeserializer};
+use binlex::{Architecture, Config};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 

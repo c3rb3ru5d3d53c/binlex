@@ -81,7 +81,11 @@ struct RizinArgs {
     input: Option<String>,
     #[arg(short, long)]
     output: Option<String>,
-    #[arg(long, default_value_t = false, help = "Read the Rizin JSON array from standard input")]
+    #[arg(
+        long,
+        default_value_t = false,
+        help = "Read the Rizin JSON array from standard input"
+    )]
     stdin: bool,
 }
 
@@ -234,15 +238,12 @@ fn main() {
     let cli = Cli::parse();
 
     let result = match cli.command {
-        Command::Elf(args) => read_elf_symbols(&args.input).and_then(|symbols| {
-            emit_symbols(&symbols, args.output.as_deref())
-        }),
-        Command::Macho(args) => read_macho_symbols(&args.input).and_then(|symbols| {
-            emit_symbols(&symbols, args.output.as_deref())
-        }),
-        Command::Pdb(args) => read_pdb_symbols(&args.input, args.demangle_msvc_names).and_then(
-            |symbols| emit_symbols(&symbols, args.output.as_deref()),
-        ),
+        Command::Elf(args) => read_elf_symbols(&args.input)
+            .and_then(|symbols| emit_symbols(&symbols, args.output.as_deref())),
+        Command::Macho(args) => read_macho_symbols(&args.input)
+            .and_then(|symbols| emit_symbols(&symbols, args.output.as_deref())),
+        Command::Pdb(args) => read_pdb_symbols(&args.input, args.demangle_msvc_names)
+            .and_then(|symbols| emit_symbols(&symbols, args.output.as_deref())),
         Command::Rizin(args) => {
             if args.stdin && args.input.is_some() {
                 Err("use either --input or --stdin for rizin".to_string())
@@ -254,7 +255,8 @@ fn main() {
                 } else {
                     args.input.as_deref()
                 };
-                read_rizin_symbols(input).and_then(|symbols| emit_symbols(&symbols, args.output.as_deref()))
+                read_rizin_symbols(input)
+                    .and_then(|symbols| emit_symbols(&symbols, args.output.as_deref()))
             }
         }
     };

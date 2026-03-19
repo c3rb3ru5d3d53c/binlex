@@ -20,7 +20,8 @@ pub struct ProcessorRegistration {
     pub operating_systems: &'static [ProcessorOs],
     pub architectures: &'static [ProcessorArchitecture],
     pub modes: &'static [ProcessorMode],
-    pub make_pool: fn(&crate::config::ConfigProcessors) -> Result<Arc<ProcessorPool>, ProcessorError>,
+    pub make_pool:
+        fn(&crate::config::ConfigProcessors) -> Result<Arc<ProcessorPool>, ProcessorError>,
     pub make_dispatch: fn() -> Box<dyn ProcessorDispatch>,
     pub config_default: fn() -> ConfigProcessor,
     pub enabled_for_target: fn(&Config, ProcessorTarget) -> bool,

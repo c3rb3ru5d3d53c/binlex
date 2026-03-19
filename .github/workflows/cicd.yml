@@ -225,7 +225,7 @@ jobs:
       - name: Install Dependencies
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm --needed base-devel pkgconf openssl make automake autoconf libtool clang curl git
+          pacman -S --noconfirm --needed base-devel pkgconf openssl make automake autoconf libtool clang curl git python
 
       - name: Set Up Rust
         shell: bash

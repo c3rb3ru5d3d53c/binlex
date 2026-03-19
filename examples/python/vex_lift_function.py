@@ -7,6 +7,8 @@ from binlex.disassemblers.capstone import Disassembler
 from binlex.formats import PE
 from binlex.lifters.vex import Lifter
 from binlex.imaging import Palette, Terminal
+from binlex.imaging import PNG
+from binlex.hashing import PHash
 
 # Create shared configuration
 config = Config()
@@ -40,16 +42,6 @@ disassembler.disassemble_controlflow(
 # Get First Function
 function = cfg.functions()[0]
 
-# Lift function bytes to VEX IR
-lifter = Lifter(
-    pe.architecture(),
-    function.bytes(),
-    function.address(),
-    config,
-)
-
-print(lifter.ir())
-
-terminal = Terminal(function.bytes(), Palette.HEATMAP)
-terminal.print()
-
+png = PNG(function.chromosome().normalized(), Palette.GRAYSCALE)
+phash = PHash(png.bytes())
+print(phash.hexdigest())
