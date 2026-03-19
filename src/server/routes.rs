@@ -60,7 +60,7 @@ async fn processor_execute(
 
     state.debug_log(format!("request decoded processor={}", processor));
 
-    let response = match crate::server::service::processors::execute(&state, &processor, request) {
+    let response = match crate::server::processors::execute(&state, &processor, request) {
         Ok(response) => response,
         Err(error) => {
             state.debug_log(format!(

@@ -23,11 +23,11 @@
 use binlex::AUTHOR;
 use binlex::Config;
 use binlex::VERSION;
+use binlex::compression::LZ4String;
 use binlex::controlflow::SymbolIoJson;
 use binlex::formats::MACHO;
 use binlex::io::Stdin;
 use binlex::io::Stdout;
-use binlex::compression::LZ4String;
 use clap::Parser;
 use std::fs::File;
 use std::io::Write;

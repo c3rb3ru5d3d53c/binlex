@@ -25,7 +25,7 @@ use crate::Config;
 use crate::controlflow::Block;
 use crate::controlflow::Function;
 use crate::controlflow::Instruction;
-use crate::processors::{ProcessorOutputs, ProcessorTarget};
+use crate::processor::{ProcessorOutputs, ProcessorTarget};
 use crossbeam::queue::SegQueue;
 use crossbeam_skiplist::SkipMap;
 use crossbeam_skiplist::SkipSet;
@@ -591,7 +591,7 @@ impl Graph {
     }
 
     fn process_target(&self, target: ProcessorTarget) -> Result<(), Error> {
-        let enabled = crate::processors::enabled_processors_for_target(&self.config, target);
+        let enabled = crate::processor::enabled_processors_for_target(&self.config, target);
         let revision = self.revision.load(Ordering::SeqCst);
         {
             let processor_state = self.processor_state.lock().unwrap();
@@ -682,7 +682,7 @@ impl Graph {
     fn process_local_target(
         &self,
         target: ProcessorTarget,
-        processors: &[crate::processors::RegisteredProcessor<'static>],
+        processors: &[crate::processor::RegisteredProcessor<'static>],
     ) -> HashMap<u64, ProcessorOutputs> {
         if processors.is_empty() {
             return HashMap::new();

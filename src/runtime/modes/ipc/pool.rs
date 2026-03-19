@@ -11,12 +11,14 @@ use interprocess::local_socket::Stream;
 use interprocess::local_socket::traits::{Listener as _, Stream as _};
 use once_cell::sync::Lazy;
 
-use crate::ConfigProcessors;
-use crate::processing::error::ProcessorError;
-use crate::processing::processor::Processor;
-use crate::processing::protocol::{Hello, MessageKind, ProcessorFailure, read_frame, write_frame};
-use crate::processing::transport;
-use crate::processors::{self};
+use crate::config::ConfigProcessors;
+use crate::processor;
+use crate::runtime::dispatch::Processor;
+use crate::runtime::error::ProcessorError;
+use crate::runtime::modes::ipc::local;
+use crate::runtime::modes::ipc::protocol::{
+    Hello, MessageKind, ProcessorFailure, read_frame, write_frame,
+};
 
 type PoolKey = (&'static str, String);
 
@@ -128,7 +130,7 @@ impl ProcessorPool {
 
         let binary_name = P::filename();
         let path = P::path(config)?;
-        let registration = processors::processor_registration_by_type::<P>().ok_or_else(|| {
+        let registration = processor::processor_registration_by_type::<P>().ok_or_else(|| {
             ProcessorError::Protocol(format!("unregistered processor {}", P::NAME))
         })?;
         let pool = Arc::new(Self::new(
@@ -213,7 +215,7 @@ impl ProcessorPool {
         compression: bool,
         timeout: Duration,
     ) -> Result<ProcessorHandle, ProcessorError> {
-        let (socket_name, listener) = transport::bind_listener(binary_name)?;
+        let (socket_name, listener) = local::bind_listener(binary_name)?;
         listener
             .set_nonblocking(ListenerNonblockingMode::Accept)
             .map_err(ProcessorError::Io)?;
@@ -315,10 +317,10 @@ fn validate_hello(
     processor_name: &str,
     processor_id: u16,
 ) -> Result<(), ProcessorError> {
-    if hello.protocol_version != crate::processing::protocol::VERSION {
+    if hello.protocol_version != crate::runtime::modes::ipc::protocol::VERSION {
         return Err(ProcessorError::UnexpectedResponse(format!(
             "processor protocol payload mismatch, expected {}, got {}",
-            crate::processing::protocol::VERSION,
+            crate::runtime::modes::ipc::protocol::VERSION,
             hello.protocol_version
         )));
     }
@@ -376,8 +378,8 @@ impl Drop for ProcessorHandle {
 #[cfg(test)]
 mod tests {
     use super::validate_hello;
-    use crate::processing::protocol::{Hello, HelloProcessor, VERSION};
-    use crate::processors::ProcessorOs;
+    use crate::processor::ProcessorOs;
+    use crate::runtime::modes::ipc::protocol::{Hello, HelloProcessor, VERSION};
 
     #[test]
     fn validate_hello_accepts_matching_os_negotiation() {

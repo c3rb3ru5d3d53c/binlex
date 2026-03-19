@@ -1,7 +1,7 @@
 #![cfg(not(target_os = "windows"))]
 
 use binlex::controlflow::{Graph, Instruction};
-use binlex::processors::ProcessorTarget;
+use binlex::processor::ProcessorTarget;
 use binlex::{Architecture, Config};
 use std::path::PathBuf;
 

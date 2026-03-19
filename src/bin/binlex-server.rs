@@ -16,7 +16,7 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
-    let mut config = binlex::server::config::ServerConfig::load(args.config.as_deref())?;
+    let mut config = binlex::Config::load(args.config.as_deref())?;
     if args.debug {
         config.server.debug = true;
     }

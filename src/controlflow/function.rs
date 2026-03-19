@@ -419,22 +419,22 @@ impl<'function> Function<'function> {
         let mut json = self.process_base();
         if let Some(outputs) = self
             .cfg
-            .processor_outputs(crate::processors::ProcessorTarget::Function, self.address)
+            .processor_outputs(crate::processor::ProcessorTarget::Function, self.address)
         {
             for (processor_name, output) in &outputs {
-                crate::processors::apply_output(
+                crate::processor::apply_output(
                     json.processors.get_or_insert_with(Default::default),
                     processor_name,
                     output,
                 );
             }
         } else {
-            for processor in crate::processors::enabled_processors_for_target(
+            for processor in crate::processor::enabled_processors_for_target(
                 &self.cfg.config,
-                crate::processors::ProcessorTarget::Function,
+                crate::processor::ProcessorTarget::Function,
             ) {
                 if let Some(output) = processor.process_function(self) {
-                    crate::processors::apply_output(
+                    crate::processor::apply_output(
                         json.processors.get_or_insert_with(Default::default),
                         processor.name(),
                         &output,

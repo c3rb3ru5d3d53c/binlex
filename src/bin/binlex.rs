@@ -33,6 +33,7 @@ use binlex::Architecture;
 use binlex::Config;
 use binlex::Magic;
 use binlex::VERSION;
+use binlex::compression::LZ4String;
 use binlex::disassemblers::capstone::Disassembler;
 use binlex::disassemblers::cil::Disassembler as CILDisassembler;
 use binlex::formats::ELF;
@@ -43,8 +44,7 @@ use binlex::io::JSON;
 use binlex::io::Stderr;
 use binlex::io::Stdin;
 use binlex::io::Stdout;
-use binlex::processors::ProcessorSelection;
-use binlex::compression::LZ4String;
+use binlex::processor::ProcessorSelection;
 use clap::Parser;
 use rayon::ThreadPoolBuilder;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -479,11 +479,11 @@ fn process_output(
                 }
                 let mut raw = instruction.process_with_attributes(instruction_attributes.clone());
                 if let Some(outputs) = cfg.processor_outputs(
-                    binlex::processors::ProcessorTarget::Instruction,
+                    binlex::processor::ProcessorTarget::Instruction,
                     instruction.address,
                 ) {
                     for (processor_name, output) in &outputs {
-                        binlex::processors::apply_output(
+                        binlex::processor::apply_output(
                             raw.processors.get_or_insert_with(Default::default),
                             processor_name,
                             output,

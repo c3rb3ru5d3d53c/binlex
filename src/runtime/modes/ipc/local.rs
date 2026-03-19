@@ -6,7 +6,7 @@ use interprocess::local_socket::{
 };
 use rand::{RngCore, SeedableRng, rngs::SmallRng};
 
-use crate::processing::error::ProcessorError;
+use crate::runtime::error::ProcessorError;
 
 pub fn bind_listener(prefix: &str) -> Result<(String, Listener), ProcessorError> {
     let name = generated_name(prefix);

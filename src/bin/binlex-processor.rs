@@ -3,9 +3,9 @@ fn main() {
     use std::env;
     use std::process;
 
-    use binlex::processing::child::run_child_loop;
-    use binlex::processing::transport;
-    use binlex::processors::dispatch_by_name;
+    use binlex::processor::dispatch_by_name;
+    use binlex::runtime::child::run_child_loop;
+    use binlex::runtime::modes::ipc::local;
 
     let mut processor_name: Option<String> = None;
     let mut socket_name: Option<String> = None;
@@ -31,7 +31,7 @@ fn main() {
         None => process::exit(2),
     };
 
-    let stream = match transport::connect(&socket_name) {
+    let stream = match local::connect(&socket_name) {
         Ok(stream) => stream,
         Err(_) => process::exit(3),
     };
