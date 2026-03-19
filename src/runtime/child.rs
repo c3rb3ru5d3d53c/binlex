@@ -2,11 +2,50 @@ use std::collections::HashMap;
 
 use interprocess::local_socket::Stream;
 
-use crate::processor::{RegisteredProcessorDispatch, processor_registration_by_name};
+use crate::processor::{RegisteredProcessorDispatch, dispatch_by_name, processor_registration_by_name};
 use crate::runtime::error::ProcessorError;
+use crate::runtime::modes::ipc::local;
 use crate::runtime::modes::ipc::protocol::{
     Hello, HelloProcessor, MessageKind, ProcessorFailure, read_frame, write_frame,
 };
+
+#[derive(Debug)]
+pub enum ProcessorEntryError {
+    InvalidProcessor(String),
+    Connect(ProcessorError),
+    Runtime(ProcessorError),
+}
+
+impl std::fmt::Display for ProcessorEntryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidProcessor(processor) => write!(f, "unsupported processor {}", processor),
+            Self::Connect(error) => write!(f, "{}", error),
+            Self::Runtime(error) => write!(f, "{}", error),
+        }
+    }
+}
+
+impl std::error::Error for ProcessorEntryError {}
+
+pub fn run_processor_entry(
+    backend_name: &str,
+    processor_name: &str,
+    socket_name: &str,
+    compression_enabled: bool,
+) -> Result<(), ProcessorEntryError> {
+    let stream = local::connect(socket_name).map_err(ProcessorEntryError::Connect)?;
+    let processor = dispatch_by_name(processor_name)
+        .ok_or_else(|| ProcessorEntryError::InvalidProcessor(processor_name.to_string()))?;
+    run_child_loop(
+        stream,
+        backend_name,
+        processor_name,
+        vec![processor],
+        compression_enabled,
+    )
+    .map_err(ProcessorEntryError::Runtime)
+}
 
 pub fn run_child_loop(
     mut stream: Stream,

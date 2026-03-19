@@ -13,7 +13,7 @@ use once_cell::sync::Lazy;
 
 use crate::config::ConfigProcessors;
 use crate::processor;
-use crate::runtime::dispatch::Processor;
+use crate::runtime::dispatch::{Processor, WorkerLaunch};
 use crate::runtime::error::ProcessorError;
 use crate::runtime::modes::ipc::local;
 use crate::runtime::modes::ipc::protocol::{
@@ -34,6 +34,7 @@ struct ProcessorHandle {
 pub struct ProcessorPool {
     config: ConfigProcessors,
     binary_name: String,
+    launch: WorkerLaunch,
     processor_name: &'static str,
     processor_id: u16,
     timeout: Duration,
@@ -48,18 +49,27 @@ impl ProcessorPool {
         binary_name: impl Into<String>,
         processor_name: &'static str,
         processor_id: u16,
-        spawn_path: impl AsRef<std::path::Path>,
+        launches: Vec<WorkerLaunch>,
     ) -> Result<Self, ProcessorError> {
         let binary_name = binary_name.into();
         let timeout = timeout_for_config(&config);
         let process_count = config.processes.max(1);
+        let (launch, first_processor) = spawn_worker_with_fallback(
+            launches,
+            &binary_name,
+            processor_name,
+            processor_id,
+            config.compression,
+            timeout,
+        )?;
         let mut processors = Vec::with_capacity(process_count);
-        for _ in 0..process_count {
+        processors.push(Mutex::new(first_processor));
+        for _ in 1..process_count {
             processors.push(Mutex::new(Self::spawn_worker(
                 &binary_name,
                 processor_name,
                 processor_id,
-                spawn_path.as_ref(),
+                &launch,
                 config.compression,
                 timeout,
             )?));
@@ -67,6 +77,7 @@ impl ProcessorPool {
         Ok(Self {
             config,
             binary_name,
+            launch,
             processor_name,
             processor_id,
             timeout,
@@ -99,12 +110,11 @@ impl ProcessorPool {
             match response {
                 Ok(response) => return Ok(response),
                 Err(error) if attempts < max_attempts && is_retryable(&error) => {
-                    let path = P::path(&self.config)?;
                     *processor = Self::spawn_worker(
                         &self.binary_name,
                         self.processor_name,
                         self.processor_id,
-                        &path,
+                        &self.launch,
                         self.config.compression,
                         self.timeout,
                     )?;
@@ -129,7 +139,7 @@ impl ProcessorPool {
         }
 
         let binary_name = P::filename();
-        let path = P::path(config)?;
+        let launches = P::launches(config)?;
         let registration = processor::processor_registration_by_type::<P>().ok_or_else(|| {
             ProcessorError::Protocol(format!("unregistered processor {}", P::NAME))
         })?;
@@ -138,7 +148,7 @@ impl ProcessorPool {
             binary_name,
             P::NAME,
             registration.id,
-            path,
+            launches,
         )?);
         pools.insert(key, Arc::clone(&pool));
         Ok(pool)
@@ -211,7 +221,7 @@ impl ProcessorPool {
         binary_name: &str,
         processor_name: &str,
         processor_id: u16,
-        spawn_path: &std::path::Path,
+        launch: &WorkerLaunch,
         compression: bool,
         timeout: Duration,
     ) -> Result<ProcessorHandle, ProcessorError> {
@@ -219,7 +229,7 @@ impl ProcessorPool {
         listener
             .set_nonblocking(ListenerNonblockingMode::Accept)
             .map_err(ProcessorError::Io)?;
-        let mut child = Command::new(spawn_path)
+        let mut child = command_for_launch(launch)
             .arg("--socket")
             .arg(&socket_name)
             .arg("--processor")
@@ -252,6 +262,48 @@ impl ProcessorPool {
             stream,
             pid: hello.pid,
         })
+    }
+}
+
+fn spawn_worker_with_fallback(
+    launches: Vec<WorkerLaunch>,
+    binary_name: &str,
+    processor_name: &str,
+    processor_id: u16,
+    compression: bool,
+    timeout: Duration,
+) -> Result<(WorkerLaunch, ProcessorHandle), ProcessorError> {
+    let mut last_error = None;
+    for launch in launches {
+        match ProcessorPool::spawn_worker(
+            binary_name,
+            processor_name,
+            processor_id,
+            &launch,
+            compression,
+            timeout,
+        ) {
+            Ok(handle) => return Ok((launch, handle)),
+            Err(error) => last_error = Some(error),
+        }
+    }
+    Err(last_error.unwrap_or_else(|| {
+        ProcessorError::Spawn("no processor launch candidates were available".to_string())
+    }))
+}
+
+fn command_for_launch(launch: &WorkerLaunch) -> Command {
+    match launch {
+        WorkerLaunch::Binary(path) => Command::new(path),
+        WorkerLaunch::Command(command) => {
+            let mut iter = command.iter();
+            let executable = iter
+                .next()
+                .expect("worker command launch must include an executable");
+            let mut process = Command::new(executable);
+            process.args(iter);
+            process
+        }
     }
 }
 

@@ -215,6 +215,15 @@ fn checkout_repo_revision(dest: &Path, revision: &str) -> Result<()> {
     run_checked("git", &["checkout", revision], dest)
 }
 
+fn mark_git_safe_directory(repo_dir: &Path) -> Result<()> {
+    let repo = repo_dir.to_string_lossy().into_owned();
+    run_checked(
+        "git",
+        &["config", "--global", "--add", "safe.directory", repo.as_str()],
+        repo_dir,
+    )
+}
+
 fn bootstrap_macos_vex() -> Result<PathBuf> {
     let out_dir = PathBuf::from(env::var("OUT_DIR")?);
     let valgrind_dir = out_dir.join("valgrind-macos");
@@ -228,6 +237,7 @@ fn bootstrap_macos_vex() -> Result<PathBuf> {
     if !valgrind_dir.exists() {
         clone_repo(VALGRIND_MACOS_REPO, &valgrind_dir, true)?;
     }
+    mark_git_safe_directory(&valgrind_dir)?;
 
     println!("cargo:rerun-if-changed={}", valgrind_dir.display());
     apply_configured_patches(&valgrind_dir)?;
@@ -281,16 +291,15 @@ fn fetch_valgrind_source(out_dir: &Path) -> Result<PathBuf> {
     let valgrind_dir = out_dir.join("valgrind");
     if !valgrind_dir.exists() {
         clone_repo(VALGRIND_REPO, &valgrind_dir, false)?;
+    }
+    mark_git_safe_directory(&valgrind_dir)?;
+    let head = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(&valgrind_dir)
+        .output()?;
+    if !head.status.success() || String::from_utf8_lossy(&head.stdout).trim() != VALGRIND_REV {
+        run_checked("git", &["fetch", "origin", VALGRIND_REV], &valgrind_dir)?;
         checkout_repo_revision(&valgrind_dir, VALGRIND_REV)?;
-    } else {
-        let head = Command::new("git")
-            .args(["rev-parse", "HEAD"])
-            .current_dir(&valgrind_dir)
-            .output()?;
-        if !head.status.success() || String::from_utf8_lossy(&head.stdout).trim() != VALGRIND_REV {
-            run_checked("git", &["fetch", "origin", VALGRIND_REV], &valgrind_dir)?;
-            checkout_repo_revision(&valgrind_dir, VALGRIND_REV)?;
-        }
     }
     println!("cargo:rerun-if-changed={}", valgrind_dir.display());
     apply_configured_patches(&valgrind_dir)?;
