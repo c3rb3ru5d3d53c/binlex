@@ -22,9 +22,9 @@
 
 use crate::Architecture;
 use crate::Config;
-use crate::controlflow::Symbol as BlSymbol;
 use crate::formats::File;
 use crate::formats::Image;
+use crate::formats::Symbol as BlSymbol;
 use lief::Binary;
 use lief::generic::{Section, Symbol};
 use lief::macho::commands::{Command, LoadCommandTypes};
@@ -43,6 +43,66 @@ pub struct MACHO {
     macho: lief::macho::FatBinary,
     pub file: File,
     pub config: Config,
+}
+
+pub struct MachoSlice<'a> {
+    macho: &'a MACHO,
+    index: usize,
+}
+
+impl<'a> MachoSlice<'a> {
+    pub fn index(&self) -> usize {
+        self.index
+    }
+
+    pub fn relative_virtual_address_to_virtual_address(
+        &self,
+        relative_virtual_address: u64,
+    ) -> Option<u64> {
+        self.macho
+            .relative_virtual_address_to_virtual_address(relative_virtual_address, self.index)
+    }
+
+    pub fn file_offset_to_virtual_address(&self, file_offset: u64) -> Option<u64> {
+        self.macho
+            .file_offset_to_virtual_address(file_offset, self.index)
+    }
+
+    pub fn entrypoint_virtual_address(&self) -> Option<u64> {
+        self.macho.entrypoint_virtual_address(self.index)
+    }
+
+    pub fn imagebase(&self) -> Option<u64> {
+        self.macho.imagebase(self.index)
+    }
+
+    pub fn sizeofheaders(&self) -> Option<u64> {
+        self.macho.sizeofheaders(self.index)
+    }
+
+    pub fn architecture(&self) -> Option<Architecture> {
+        self.macho.architecture(self.index)
+    }
+
+    pub fn symbols(&self) -> BTreeMap<u64, BlSymbol> {
+        self.macho.symbols(self.index)
+    }
+
+    pub fn entrypoint_virtual_addresses(&self) -> BTreeSet<u64> {
+        self.macho.entrypoint_virtual_addresses(self.index)
+    }
+
+    pub fn export_virtual_addresses(&self) -> BTreeSet<u64> {
+        self.macho.export_virtual_addresses(self.index)
+    }
+
+    pub fn executable_virtual_address_ranges(&self) -> BTreeMap<u64, u64> {
+        self.macho.executable_virtual_address_ranges(self.index)
+    }
+
+    pub fn image(&self) -> Result<Image, Error> {
+        self.macho.image(self.index)
+    }
 }
 
 impl MACHO {
@@ -123,6 +183,17 @@ impl MACHO {
     /// A `usize` containing the number of binaries in the MachO binary.
     pub fn number_of_slices(&self) -> usize {
         self.macho.iter().count()
+    }
+
+    pub fn slice(&self, index: usize) -> Option<MachoSlice<'_>> {
+        if index >= self.number_of_slices() {
+            return None;
+        }
+        Some(MachoSlice { macho: self, index })
+    }
+
+    pub fn slices(&self) -> impl Iterator<Item = MachoSlice<'_>> {
+        (0..self.number_of_slices()).filter_map(move |index| self.slice(index))
     }
 
     /// Returns the entrypoint of the MachO binary by index.
@@ -309,7 +380,11 @@ impl MACHO {
     /// A `Result` containing the `Image` object on success or an `Error` on failure.
     pub fn image(&self, slice: usize) -> Result<Image, Error> {
         let pathbuf = PathBuf::from(self.config.mmap.directory.clone())
-            .join(self.file.sha256_no_config().unwrap());
+            .join(format!(
+                "{}.slice-{}",
+                self.file.sha256_no_config().unwrap(),
+                slice
+            ));
 
         let mut tempmap = Image::new(pathbuf, self.config.mmap.cache.enabled)?;
 

@@ -37,6 +37,7 @@ pub use crate::formats::elf::ELF;
 pub use crate::formats::file::File;
 pub use crate::formats::image::Image;
 pub use crate::formats::macho::MACHO;
+pub use crate::formats::macho::PyMachoSlice;
 pub use crate::formats::pe::PE;
 
 use pyo3::{prelude::*, wrap_pymodule};
@@ -53,6 +54,7 @@ pub fn formats_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Image>()?;
     m.add_class::<ELF>()?;
     m.add_class::<MACHO>()?;
+    m.add_class::<PyMachoSlice>()?;
     py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.formats", m)?;

@@ -20,9 +20,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::controlflow::SymbolJson;
-use crate::controlflow::TagJson;
-use crate::formats::file::FileJson;
+use crate::formats::FileJson;
+use crate::formats::SymbolJson;
+use crate::metadata::TagJson;
 use serde_json::Value;
 use serde_json::json;
 

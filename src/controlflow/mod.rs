@@ -20,16 +20,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod attribute;
 pub mod block;
 pub mod function;
 pub mod graph;
 pub mod instruction;
-pub mod symbol;
-pub mod tag;
-
-pub use attribute::Attribute;
-pub use attribute::Attributes;
 pub use block::Block;
 pub use block::BlockJson;
 pub use block::BlockJsonDeserializer;
@@ -40,8 +34,3 @@ pub use graph::Graph;
 pub use graph::GraphQueue;
 pub use instruction::Instruction;
 pub use instruction::InstructionJson;
-pub use symbol::Symbol;
-pub use symbol::SymbolIoJson;
-pub use symbol::SymbolJson;
-pub use tag::Tag;
-pub use tag::TagJson;

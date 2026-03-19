@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::controlflow::Attribute;
+use crate::metadata::Attribute;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::io::Error;

@@ -22,11 +22,11 @@
 
 use crate::Architecture;
 use crate::Config;
-use crate::controlflow::Attributes;
 use crate::controlflow::Graph;
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeJson;
 use crate::hex;
+use crate::metadata::Attributes;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Value;

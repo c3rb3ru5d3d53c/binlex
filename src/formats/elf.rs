@@ -22,9 +22,9 @@
 
 use crate::Architecture;
 use crate::Config;
-use crate::controlflow::Symbol as BlSymbol;
 use crate::formats::File;
 use crate::formats::Image;
+use crate::formats::Symbol as BlSymbol;
 use lief::Binary;
 use lief::elf::section::Flags;
 use lief::elf::segment::Type as SegmentType;

@@ -22,7 +22,6 @@
 
 use crate::Architecture;
 use crate::Config;
-use crate::controlflow::Attributes;
 use crate::controlflow::Instruction;
 use crate::controlflow::graph::Graph;
 use crate::entropy;
@@ -32,6 +31,7 @@ use crate::hashing::MinHash32;
 use crate::hashing::SHA256;
 use crate::hashing::TLSH;
 use crate::hex;
+use crate::metadata::Attributes;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Value;

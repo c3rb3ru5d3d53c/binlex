@@ -25,6 +25,7 @@ use crate::formats::Image;
 use crate::Architecture;
 use crate::Config;
 use binlex::formats::MACHO as InnerMACHO;
+use binlex::formats::MachoSlice as InnerMachoSlice;
 use pyo3::prelude::*;
 use pyo3::types::PyType;
 use std::collections::BTreeMap;
@@ -37,6 +38,115 @@ use std::sync::Mutex;
 #[pyclass(unsendable)]
 pub struct MACHO {
     pub inner: Arc<Mutex<InnerMACHO>>,
+}
+
+#[pyclass(name = "MachoSlice", unsendable)]
+pub struct PyMachoSlice {
+    pub inner: Arc<Mutex<InnerMACHO>>,
+    pub index: usize,
+}
+
+impl PyMachoSlice {
+    fn with_slice<T, F>(&self, func: F) -> Option<T>
+    where
+        F: FnOnce(InnerMachoSlice<'_>) -> T,
+    {
+        let guard = self.inner.lock().unwrap();
+        let slice = guard.slice(self.index)?;
+        Some(func(slice))
+    }
+
+    fn with_slice_result<T, F>(&self, func: F) -> Result<T, Error>
+    where
+        F: FnOnce(InnerMachoSlice<'_>) -> Result<T, Error>,
+    {
+        let guard = self.inner.lock().unwrap();
+        let Some(slice) = guard.slice(self.index) else {
+            return Err(Error::other("invalid Mach-O slice"));
+        };
+        func(slice)
+    }
+}
+
+#[pymethods]
+impl PyMachoSlice {
+    #[pyo3(text_signature = "($self)")]
+    pub fn index(&self) -> usize {
+        self.index
+    }
+
+    #[pyo3(text_signature = "($self, relative_virtual_address)")]
+    pub fn relative_virtual_address_to_virtual_address(
+        &self,
+        relative_virtual_address: u64,
+    ) -> Option<u64> {
+        self.with_slice(|slice: InnerMachoSlice<'_>| {
+            slice.relative_virtual_address_to_virtual_address(relative_virtual_address)
+        })
+            .flatten()
+    }
+
+    #[pyo3(text_signature = "($self, file_offset)")]
+    pub fn file_offset_to_virtual_address(&self, file_offset: u64) -> Option<u64> {
+        self.with_slice(|slice: InnerMachoSlice<'_>| {
+            slice.file_offset_to_virtual_address(file_offset)
+        })
+            .flatten()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn entrypoint_virtual_address(&self) -> Option<u64> {
+        self.with_slice(|slice: InnerMachoSlice<'_>| slice.entrypoint_virtual_address())
+            .flatten()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn imagebase(&self) -> Option<u64> {
+        self.with_slice(|slice: InnerMachoSlice<'_>| slice.imagebase())
+            .flatten()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn sizeofheaders(&self) -> Option<u64> {
+        self.with_slice(|slice: InnerMachoSlice<'_>| slice.sizeofheaders())
+            .flatten()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn architecture(&self) -> Option<Architecture> {
+        let architecture = self
+            .with_slice(|slice: InnerMachoSlice<'_>| slice.architecture())
+            .flatten()?;
+        Some(Architecture {
+            inner: architecture,
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn entrypoint_virtual_addresses(&self) -> BTreeSet<u64> {
+        self.with_slice(|slice: InnerMachoSlice<'_>| slice.entrypoint_virtual_addresses())
+            .unwrap_or_default()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn export_virtual_addresses(&self) -> BTreeSet<u64> {
+        self.with_slice(|slice: InnerMachoSlice<'_>| slice.export_virtual_addresses())
+            .unwrap_or_default()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn executable_virtual_address_ranges(&self) -> BTreeMap<u64, u64> {
+        self.with_slice(|slice: InnerMachoSlice<'_>| slice.executable_virtual_address_ranges())
+            .unwrap_or_default()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn image(&self, py: Python<'_>) -> PyResult<Py<Image>> {
+        let result = self
+            .with_slice_result(|slice: InnerMachoSlice<'_>| slice.image())
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        Py::new(py, Image { inner: result })
+    }
 }
 
 #[pymethods]
@@ -92,6 +202,36 @@ impl MACHO {
     /// Return the number of slices in the Mach-O image.
     pub fn number_of_slices(&self) -> usize {
         self.inner.lock().unwrap().number_of_slices()
+    }
+
+    #[pyo3(text_signature = "($self, index)")]
+    pub fn slice(&self, py: Python<'_>, index: usize) -> PyResult<Option<Py<PyMachoSlice>>> {
+        if self.inner.lock().unwrap().slice(index).is_none() {
+            return Ok(None);
+        }
+        Ok(Some(Py::new(
+            py,
+            PyMachoSlice {
+                inner: Arc::clone(&self.inner),
+                index,
+            },
+        )?))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn slices(&self, py: Python<'_>) -> PyResult<Vec<Py<PyMachoSlice>>> {
+        let count = self.inner.lock().unwrap().number_of_slices();
+        let mut slices = Vec::with_capacity(count);
+        for index in 0..count {
+            slices.push(Py::new(
+                py,
+                PyMachoSlice {
+                    inner: Arc::clone(&self.inner),
+                    index,
+                },
+            )?);
+        }
+        Ok(slices)
     }
 
     #[pyo3(text_signature = "($self, slice)")]
@@ -196,6 +336,7 @@ impl MACHO {
 #[pyo3(name = "macho")]
 pub fn macho_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<MACHO>()?;
+    m.add_class::<PyMachoSlice>()?;
     py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.formats.macho", m)?;
