@@ -172,6 +172,36 @@ jobs:
           name: ${{ matrix.os }}-native-artifacts
           path: dist/
 
+      - name: Summarize Native Artifacts
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+
+          dist = Path("dist")
+          files = sorted(path for path in dist.iterdir() if path.is_file())
+          summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
+
+          def sha256(path: Path) -> str:
+              digest = hashlib.sha256()
+              with path.open("rb") as handle:
+                  for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                      digest.update(chunk)
+              return digest.hexdigest()
+
+          with summary.open("a", encoding="utf-8") as handle:
+              handle.write("## Native Artifacts (${{ matrix.os }})\n\n")
+              handle.write("Artifact name: `${{ matrix.os }}-native-artifacts`\n\n")
+              handle.write("| File | Size | SHA-256 |\n")
+              handle.write("| --- | ---: | --- |\n")
+              for path in files:
+                  size = path.stat().st_size
+                  handle.write(f"| `{path.name}` | {size:,} bytes | `{sha256(path)}` |\n")
+              handle.write("\n")
+          PY
+
   archlinux-native-build:
     runs-on: ubuntu-latest
     container:
@@ -240,6 +270,36 @@ jobs:
         with:
           name: archlinux-native-artifacts
           path: dist/
+
+      - name: Summarize Native Artifacts
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+
+          dist = Path("dist")
+          files = sorted(path for path in dist.iterdir() if path.is_file())
+          summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
+
+          def sha256(path: Path) -> str:
+              digest = hashlib.sha256()
+              with path.open("rb") as handle:
+                  for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                      digest.update(chunk)
+              return digest.hexdigest()
+
+          with summary.open("a", encoding="utf-8") as handle:
+              handle.write("## Native Artifacts (archlinux)\n\n")
+              handle.write("Artifact name: `archlinux-native-artifacts`\n\n")
+              handle.write("| File | Size | SHA-256 |\n")
+              handle.write("| --- | ---: | --- |\n")
+              for path in files:
+                  size = path.stat().st_size
+                  handle.write(f"| `{path.name}` | {size:,} bytes | `{sha256(path)}` |\n")
+              handle.write("\n")
+          PY
 
   python-wheels:
     strategy:
@@ -328,6 +388,7 @@ jobs:
         uses: pypa/cibuildwheel@v3.2.0
         env:
           CIBW_BUILD: cp39-* cp310-* cp311-* cp312-* cp313-* cp314-*
+          CIBW_SKIP: "*-musllinux_*"
           CIBW_ARCHS_WINDOWS: AMD64
           CIBW_BEFORE_ALL_LINUX: >-
             if command -v apk >/dev/null 2>&1; then
@@ -346,7 +407,7 @@ jobs:
             else
             echo "Unsupported package manager for cibuildwheel linux image" >&2; exit 1;
             fi
-          CIBW_ENVIRONMENT_MACOS: MACOSX_DEPLOYMENT_TARGET=10.12
+          CIBW_ENVIRONMENT_MACOS: MACOSX_DEPLOYMENT_TARGET=11.0
         with:
           package-dir: bindings/python
           output-dir: wheelhouse
