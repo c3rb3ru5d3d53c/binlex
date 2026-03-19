@@ -44,11 +44,23 @@ impl DHash {
         InnerDHash::new(&self.bytes).hexdigest()
     }
 
+    #[pyo3(text_signature = "($self, other)")]
+    /// Compare this difference hash object against another difference hash object.
+    pub fn compare(&self, other: &Self) -> Option<f64> {
+        InnerDHash::new(&self.bytes).compare(&InnerDHash::new(&other.bytes))
+    }
+
+    #[pyo3(text_signature = "($self, other)")]
+    /// Compare this difference hash object against a difference hash digest.
+    pub fn compare_hexdigest(&self, other: String) -> Option<f64> {
+        InnerDHash::new(&self.bytes).compare_hexdigest(&other)
+    }
+
     #[staticmethod]
     #[pyo3(text_signature = "(lhs, rhs)")]
     /// Compare two difference hash digests and return their similarity score.
-    pub fn compare(lhs: String, rhs: String) -> Option<f64> {
-        InnerDHash::compare(&lhs, &rhs)
+    pub fn compare_hexdigests(lhs: String, rhs: String) -> Option<f64> {
+        InnerDHash::compare_hexdigests(&lhs, &rhs)
     }
 }
 

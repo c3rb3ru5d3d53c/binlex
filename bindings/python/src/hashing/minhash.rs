@@ -27,10 +27,10 @@ use binlex::hashing::minhash::MinHash32 as InnerMinHash32;
 /// Compute and compare MinHash digests for byte sequences.
 #[pyclass]
 pub struct MinHash32 {
-    num_hashes: usize,
-    shingle_size: usize,
-    seed: u64,
-    bytes: Vec<u8>,
+    pub(crate) num_hashes: usize,
+    pub(crate) shingle_size: usize,
+    pub(crate) seed: u64,
+    pub(crate) bytes: Vec<u8>,
 }
 
 #[pymethods]
@@ -53,11 +53,31 @@ impl MinHash32 {
         InnerMinHash32::new(&self.bytes, self.num_hashes, self.shingle_size, self.seed).hexdigest()
     }
 
+    #[pyo3(text_signature = "($self, other)")]
+    /// Compare this MinHash object against another MinHash object.
+    pub fn compare(&self, other: &Self) -> Option<f64> {
+        InnerMinHash32::new(&self.bytes, self.num_hashes, self.shingle_size, self.seed).compare(
+            &InnerMinHash32::new(
+                &other.bytes,
+                other.num_hashes,
+                other.shingle_size,
+                other.seed,
+            ),
+        )
+    }
+
+    #[pyo3(text_signature = "($self, other)")]
+    /// Compare this MinHash object against a MinHash digest.
+    pub fn compare_hexdigest(&self, other: String) -> Option<f64> {
+        InnerMinHash32::new(&self.bytes, self.num_hashes, self.shingle_size, self.seed)
+            .compare_hexdigest(&other)
+    }
+
     #[staticmethod]
     #[pyo3(text_signature = "(lhs, rhs)")]
     /// Compare two MinHash digests and return their similarity score.
-    pub fn compare(lhs: String, rhs: String) -> f64 {
-        InnerMinHash32::compare(&lhs, &rhs)
+    pub fn compare_hexdigests(lhs: String, rhs: String) -> Option<f64> {
+        InnerMinHash32::compare_hexdigests(&lhs, &rhs)
     }
 }
 

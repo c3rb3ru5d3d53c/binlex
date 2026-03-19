@@ -31,6 +31,7 @@ from binlex_bindings.binlex.controlflow import GraphQueue as _GraphQueueBinding
 from binlex_bindings.binlex.controlflow import Instruction as _InstructionBinding
 
 from binlex.architecture import _coerce_architecture
+from binlex.hashing import MinHash32, SHA256, TLSH
 
 
 class Instruction:
@@ -164,15 +165,15 @@ class Block:
         return self._inner.functions()
 
     def tlsh(self):
-        """Return the TLSH digest for this block, if available."""
+        """Return the TLSH object for this block, if available."""
         return self._inner.tlsh()
 
     def sha256(self):
-        """Return the SHA-256 digest for this block, if available."""
+        """Return the SHA-256 object for this block, if available."""
         return self._inner.sha256()
 
     def minhash(self):
-        """Return the MinHash digest for this block, if available."""
+        """Return the MinHash object for this block, if available."""
         return self._inner.minhash()
 
     def end(self):
@@ -267,15 +268,15 @@ class Function:
         return self._inner.functions()
 
     def tlsh(self):
-        """Return the TLSH digest for this function, if available."""
+        """Return the TLSH object for this function, if available."""
         return self._inner.tlsh()
 
     def sha256(self):
-        """Return the SHA-256 digest for this function, if available."""
+        """Return the SHA-256 object for this function, if available."""
         return self._inner.sha256()
 
     def minhash(self):
-        """Return the MinHash digest for this function, if available."""
+        """Return the MinHash object for this function, if available."""
         return self._inner.minhash()
 
     def size(self):

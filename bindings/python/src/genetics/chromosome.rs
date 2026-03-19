@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 use crate::genetics::AllelePair;
+use crate::hashing::{MinHash32, SHA256, TLSH};
 use crate::Config;
 use binlex::genetics::Chromosome as InnerChromosome;
 use pyo3::exceptions::PyRuntimeError;
@@ -34,6 +35,10 @@ use std::sync::Mutex;
 #[pyclass]
 pub struct Chromosome {
     pub inner: Arc<Mutex<InnerChromosome>>,
+    pub minhash_num_hashes: usize,
+    pub minhash_shingle_size: usize,
+    pub minhash_seed: u64,
+    pub tlsh_minimum_byte_size: usize,
 }
 
 #[pymethods]
@@ -46,6 +51,10 @@ impl Chromosome {
         let inner = InnerChromosome::new(pattern, inner_config.clone())?;
         Ok(Self {
             inner: Arc::new(Mutex::new(inner)),
+            minhash_num_hashes: inner_config.chromosomes.hashing.minhash.number_of_hashes,
+            minhash_shingle_size: inner_config.chromosomes.hashing.minhash.shingle_size,
+            minhash_seed: inner_config.chromosomes.hashing.minhash.seed,
+            tlsh_minimum_byte_size: inner_config.chromosomes.hashing.tlsh.minimum_byte_size,
         })
     }
 
@@ -90,21 +99,33 @@ impl Chromosome {
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return the TLSH digest for the chromosome, if available.
-    pub fn tlsh(&self) -> Option<String> {
-        self.inner.lock().unwrap().tlsh()
+    /// Return the TLSH helper for the chromosome, if available.
+    pub fn tlsh(&self) -> Option<TLSH> {
+        let chromosome = self.inner.lock().unwrap();
+        chromosome.tlsh().map(|_| TLSH {
+            bytes: chromosome.bytes(),
+        })
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return the MinHash digest for the chromosome, if available.
-    pub fn minhash(&self) -> Option<String> {
-        self.inner.lock().unwrap().minhash()
+    /// Return the MinHash helper for the chromosome, if available.
+    pub fn minhash(&self) -> Option<MinHash32> {
+        let chromosome = self.inner.lock().unwrap();
+        chromosome.minhash().map(|_| MinHash32 {
+            bytes: chromosome.bytes(),
+            num_hashes: self.minhash_num_hashes,
+            shingle_size: self.minhash_shingle_size,
+            seed: self.minhash_seed,
+        })
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return the SHA-256 digest for the chromosome, if available.
-    pub fn sha256(&self) -> Option<String> {
-        self.inner.lock().unwrap().sha256()
+    /// Return the SHA-256 helper for the chromosome, if available.
+    pub fn sha256(&self) -> Option<SHA256> {
+        let chromosome = self.inner.lock().unwrap();
+        chromosome.sha256().map(|_| SHA256 {
+            bytes: chromosome.bytes(),
+        })
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -114,9 +135,9 @@ impl Chromosome {
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return the normalized chromosome bytes.
-    pub fn normalized(&self, py: Python) -> Py<PyBytes> {
-        PyBytes::new(py, &self.inner.lock().unwrap().normalized()).unbind()
+    /// Return the chromosome bytes.
+    pub fn bytes(&self, py: Python) -> Py<PyBytes> {
+        PyBytes::new(py, &self.inner.lock().unwrap().bytes()).unbind()
     }
 
     #[pyo3(text_signature = "($self)")]

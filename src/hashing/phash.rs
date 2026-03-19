@@ -34,7 +34,18 @@ impl<'phash> PHash<'phash> {
         Self { bytes }
     }
 
-    pub fn compare(lhs: &str, rhs: &str) -> Option<f64> {
+    pub fn compare(&self, other: &Self) -> Option<f64> {
+        let lhs = self.hexdigest()?;
+        let rhs = other.hexdigest()?;
+        Self::compare_hexdigests(&lhs, &rhs)
+    }
+
+    pub fn compare_hexdigest(&self, other: &str) -> Option<f64> {
+        let lhs = self.hexdigest()?;
+        Self::compare_hexdigests(&lhs, other)
+    }
+
+    pub fn compare_hexdigests(lhs: &str, rhs: &str) -> Option<f64> {
         compare_hex_digests(lhs, rhs)
     }
 

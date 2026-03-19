@@ -23,6 +23,8 @@
 """Terminal rendering helpers for ANSI-colored binary output."""
 
 from binlex_bindings.binlex.imaging import Terminal as _TerminalBinding
+from binlex import Config
+from binlex.hashing import AHash, DHash, PHash
 
 from .palette import Palette
 
@@ -34,6 +36,7 @@ class Terminal:
         self,
         data: bytes,
         palette: Palette,
+        config: Config,
         cell_size: int = 1,
         fixed_width: int = 16,
     ) -> None:
@@ -41,6 +44,7 @@ class Terminal:
         self._inner = _TerminalBinding(
             data,
             palette.to_binding(),
+            config,
             cell_size,
             fixed_width,
         )
@@ -53,6 +57,24 @@ class Terminal:
     def rgb_to_ansi256(r: int, g: int, b: int) -> int:
         """Convert an RGB triplet into the nearest ANSI 256-color index."""
         return _TerminalBinding.rgb_to_ansi256(r, g, b)
+
+    def sha256(self) -> str | None:
+        return self._inner.sha256()
+
+    def tlsh(self) -> str | None:
+        return self._inner.tlsh()
+
+    def minhash(self) -> str | None:
+        return self._inner.minhash()
+
+    def ahash(self) -> AHash | None:
+        return self._inner.ahash()
+
+    def dhash(self) -> DHash | None:
+        return self._inner.dhash()
+
+    def phash(self) -> PHash | None:
+        return self._inner.phash()
 
 
 __all__ = ["Terminal"]

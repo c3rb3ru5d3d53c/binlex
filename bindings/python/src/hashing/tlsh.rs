@@ -26,7 +26,7 @@ use pyo3::prelude::*;
 /// Compute and compare TLSH similarity hashes.
 #[pyclass]
 pub struct TLSH {
-    bytes: Vec<u8>,
+    pub(crate) bytes: Vec<u8>,
 }
 
 #[pymethods]
@@ -44,11 +44,24 @@ impl TLSH {
         InnerTLSH::new(&self.bytes, mininum_byte_size).hexdigest()
     }
 
+    #[pyo3(text_signature = "($self, other, mininum_byte_size)")]
+    /// Compare this TLSH object against another TLSH object.
+    pub fn compare(&self, other: &Self, mininum_byte_size: usize) -> Option<f64> {
+        InnerTLSH::new(&self.bytes, mininum_byte_size)
+            .compare(&InnerTLSH::new(&other.bytes, mininum_byte_size))
+    }
+
+    #[pyo3(text_signature = "($self, other, mininum_byte_size)")]
+    /// Compare this TLSH object against a TLSH digest.
+    pub fn compare_hexdigest(&self, other: String, mininum_byte_size: usize) -> Option<f64> {
+        InnerTLSH::new(&self.bytes, mininum_byte_size).compare_hexdigest(&other)
+    }
+
     #[staticmethod]
     #[pyo3(text_signature = "(lhs, rhs)")]
     /// Compare two TLSH digests and return their similarity score.
-    pub fn compare(lhs: String, rhs: String) -> Option<f64> {
-        InnerTLSH::compare(lhs, rhs)
+    pub fn compare_hexdigests(lhs: String, rhs: String) -> Option<f64> {
+        InnerTLSH::compare_hexdigests(&lhs, &rhs)
     }
 }
 

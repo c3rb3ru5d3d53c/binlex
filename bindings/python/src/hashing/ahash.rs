@@ -44,11 +44,23 @@ impl AHash {
         InnerAHash::new(&self.bytes).hexdigest()
     }
 
+    #[pyo3(text_signature = "($self, other)")]
+    /// Compare this average hash object against another average hash object.
+    pub fn compare(&self, other: &Self) -> Option<f64> {
+        InnerAHash::new(&self.bytes).compare(&InnerAHash::new(&other.bytes))
+    }
+
+    #[pyo3(text_signature = "($self, other)")]
+    /// Compare this average hash object against an average hash digest.
+    pub fn compare_hexdigest(&self, other: String) -> Option<f64> {
+        InnerAHash::new(&self.bytes).compare_hexdigest(&other)
+    }
+
     #[staticmethod]
     #[pyo3(text_signature = "(lhs, rhs)")]
     /// Compare two average hash digests and return their similarity score.
-    pub fn compare(lhs: String, rhs: String) -> Option<f64> {
-        InnerAHash::compare(&lhs, &rhs)
+    pub fn compare_hexdigests(lhs: String, rhs: String) -> Option<f64> {
+        InnerAHash::compare_hexdigests(&lhs, &rhs)
     }
 }
 

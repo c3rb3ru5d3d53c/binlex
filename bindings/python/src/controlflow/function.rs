@@ -23,6 +23,7 @@
 use crate::controlflow::Block;
 use crate::controlflow::Graph;
 use crate::genetics::Chromosome;
+use crate::hashing::{MinHash32, SHA256, TLSH};
 use crate::Architecture;
 use crate::Config;
 use binlex::controlflow::Function as InnerFunction;
@@ -39,6 +40,10 @@ use std::sync::Mutex;
 #[pyclass]
 pub struct FunctionJsonDeserializer {
     pub inner: Arc<Mutex<InnerFunctionJsonDeserializer>>,
+    chromosome_minhash_num_hashes: usize,
+    chromosome_minhash_shingle_size: usize,
+    chromosome_minhash_seed: u64,
+    chromosome_tlsh_minimum_byte_size: usize,
 }
 
 #[pymethods]
@@ -48,9 +53,13 @@ impl FunctionJsonDeserializer {
     /// Create a deserializer from a serialized function JSON string.
     pub fn new(py: Python, string: String, config: Py<Config>) -> PyResult<Self> {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
-        let inner = InnerFunctionJsonDeserializer::new(string, inner_config)?;
+        let inner = InnerFunctionJsonDeserializer::new(string, inner_config.clone())?;
         Ok(Self {
             inner: Arc::new(Mutex::new(inner)),
+            chromosome_minhash_num_hashes: inner_config.chromosomes.hashing.minhash.number_of_hashes,
+            chromosome_minhash_shingle_size: inner_config.chromosomes.hashing.minhash.shingle_size,
+            chromosome_minhash_seed: inner_config.chromosomes.hashing.minhash.seed,
+            chromosome_tlsh_minimum_byte_size: inner_config.chromosomes.hashing.tlsh.minimum_byte_size,
         })
     }
 
@@ -163,6 +172,10 @@ impl FunctionJsonDeserializer {
         let inner_chromosome = self.inner.lock().unwrap().chromosome();
         Chromosome {
             inner: Arc::new(Mutex::new(inner_chromosome.unwrap())),
+            minhash_num_hashes: self.chromosome_minhash_num_hashes,
+            minhash_shingle_size: self.chromosome_minhash_shingle_size,
+            minhash_seed: self.chromosome_minhash_seed,
+            tlsh_minimum_byte_size: self.chromosome_tlsh_minimum_byte_size,
         }
     }
 
@@ -389,27 +402,48 @@ impl Function {
     /// Returns the TLSH (Trend Micro Locality Sensitive Hash) of the function.
     ///
     /// # Returns
-    /// - `Option<String>`: The TLSH hash, if available.
-    pub fn tlsh(&self, py: Python) -> PyResult<Option<String>> {
-        self.with_inner_function(py, |function| Ok(function.tlsh()))
+    /// - `Option<TLSH>`: The TLSH object, if available.
+    pub fn tlsh(&self, py: Python) -> PyResult<Option<TLSH>> {
+        self.with_inner_function(py, |function| {
+            Ok(function.tlsh().map(|hash| TLSH {
+                bytes: hash.bytes.into_owned(),
+            }))
+        })
     }
 
     #[pyo3(text_signature = "($self)")]
     /// Returns the SHA-256 hash of the function.
     ///
     /// # Returns
-    /// - `Option<String>`: The SHA-256 hash, if available.
-    pub fn sha256(&self, py: Python) -> PyResult<Option<String>> {
-        self.with_inner_function(py, |function| Ok(function.sha256()))
+    /// - `Option<SHA256>`: The SHA-256 hash object, if available.
+    pub fn sha256(&self, py: Python) -> PyResult<Option<SHA256>> {
+        self.with_inner_function(py, |function| {
+            Ok(function.sha256().map(|hash| SHA256 {
+                bytes: hash.bytes.into_owned(),
+            }))
+        })
     }
 
     #[pyo3(text_signature = "($self)")]
     /// Returns the MinHash of the function.
     ///
     /// # Returns
-    /// - `Option<String>`: The MinHash, if available.
-    pub fn minhash(&self, py: Python) -> PyResult<Option<String>> {
-        self.with_inner_function(py, |function| Ok(function.minhash()))
+    /// - `Option<MinHash32>`: The MinHash object, if available.
+    pub fn minhash(&self, py: Python) -> PyResult<Option<MinHash32>> {
+        self.with_inner_function(py, |function| {
+            Ok(function.minhash().map(|hash| MinHash32 {
+                bytes: hash.bytes.into_owned(),
+                num_hashes: function
+                    .cfg
+                    .config
+                    .functions
+                    .hashing
+                    .minhash
+                    .number_of_hashes,
+                shingle_size: function.cfg.config.functions.hashing.minhash.shingle_size,
+                seed: function.cfg.config.functions.hashing.minhash.seed,
+            }))
+        })
     }
 
     #[pyo3(text_signature = "($self)")]

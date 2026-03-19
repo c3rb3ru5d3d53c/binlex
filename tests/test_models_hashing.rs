@@ -139,18 +139,37 @@ mod tests {
     #[test]
     fn test_models_hashing_image_compare() {
         assert_eq!(
-            AHash::compare("ffffffffffffffff", "ffffffffffffffff"),
+            AHash::compare_hexdigests("ffffffffffffffff", "ffffffffffffffff"),
             Some(1.0)
         );
         assert_eq!(
-            DHash::compare("0000000000000000", "ffffffffffffffff"),
+            DHash::compare_hexdigests("0000000000000000", "ffffffffffffffff"),
             Some(0.0)
         );
         assert_eq!(
-            PHash::compare("0f0f0f0f0f0f0f0f", "0f0f0f0f0f0f0f0f"),
+            PHash::compare_hexdigests("0f0f0f0f0f0f0f0f", "0f0f0f0f0f0f0f0f"),
             Some(1.0)
         );
-        assert!(AHash::compare("zz", "00").is_none());
+        assert!(AHash::compare_hexdigests("zz", "00").is_none());
+    }
+
+    #[test]
+    fn test_models_hashing_compare_helpers() {
+        let lhs_image = grayscale_png(8, 8, vec![240; 64]);
+        let rhs_image = grayscale_png(8, 8, vec![240; 64]);
+        let lhs = AHash::new(&lhs_image);
+        let rhs = AHash::new(&rhs_image);
+
+        assert_eq!(lhs.compare(&rhs), Some(1.0));
+        assert_eq!(lhs.compare_hexdigest(&rhs.hexdigest().unwrap()), Some(1.0));
+
+        let minhash_data = vec![1u8, 2, 3, 4, 5, 6, 7, 8];
+        let lhs_minhash = MinHash32::new(&minhash_data, 16, 4, 0);
+        let rhs_minhash = MinHash32::new(&minhash_data, 16, 4, 0);
+        let rhs_hex = rhs_minhash.hexdigest().unwrap();
+
+        assert_eq!(lhs_minhash.compare(&rhs_minhash), Some(1.0));
+        assert_eq!(lhs_minhash.compare_hexdigest(&rhs_hex), Some(1.0));
     }
 
     #[test]

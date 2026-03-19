@@ -837,6 +837,263 @@ impl ConfigFormatsFileHashingTLSH {
     }
 }
 
+#[pyclass]
+pub struct ConfigImaging {
+    inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigImaging {
+    #[getter]
+    pub fn get_hashing(&self) -> ConfigImagingHashing {
+        ConfigImagingHashing {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+}
+
+#[pyclass]
+pub struct ConfigImagingHashing {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigImagingHashing {
+    #[getter]
+    pub fn get_sha256(&self) -> ConfigImagingHashingSHA256 {
+        ConfigImagingHashingSHA256 {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
+    pub fn get_tlsh(&self) -> ConfigImagingHashingTLSH {
+        ConfigImagingHashingTLSH {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
+    pub fn get_minhash(&self) -> ConfigImagingHashingMinhash {
+        ConfigImagingHashingMinhash {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
+    pub fn get_ahash(&self) -> ConfigImagingHashingAHash {
+        ConfigImagingHashingAHash {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
+    pub fn get_dhash(&self) -> ConfigImagingHashingDHash {
+        ConfigImagingHashingDHash {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
+    pub fn get_phash(&self) -> ConfigImagingHashingPHash {
+        ConfigImagingHashingPHash {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+}
+
+#[pyclass]
+pub struct ConfigImagingHashingSHA256 {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigImagingHashingSHA256 {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.imaging.hashing.sha256.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.imaging.hashing.sha256.enabled = value;
+    }
+}
+
+#[pyclass]
+pub struct ConfigImagingHashingTLSH {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigImagingHashingTLSH {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.imaging.hashing.tlsh.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.imaging.hashing.tlsh.enabled = value;
+    }
+
+    #[getter]
+    pub fn get_minimum_byte_size(&self) -> usize {
+        let inner = self.inner.lock().unwrap();
+        inner.imaging.hashing.tlsh.minimum_byte_size
+    }
+
+    #[setter]
+    pub fn set_minimum_byte_size(&mut self, value: usize) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.imaging.hashing.tlsh.minimum_byte_size = value;
+    }
+}
+
+#[pyclass]
+pub struct ConfigImagingHashingMinhash {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigImagingHashingMinhash {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.imaging.hashing.minhash.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.imaging.hashing.minhash.enabled = value;
+    }
+
+    #[getter]
+    pub fn get_number_of_hashes(&self) -> usize {
+        let inner = self.inner.lock().unwrap();
+        inner.imaging.hashing.minhash.number_of_hashes
+    }
+
+    #[setter]
+    pub fn set_number_of_hashes(&mut self, value: usize) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.imaging.hashing.minhash.number_of_hashes = value;
+    }
+
+    #[getter]
+    pub fn get_shingle_size(&self) -> usize {
+        let inner = self.inner.lock().unwrap();
+        inner.imaging.hashing.minhash.shingle_size
+    }
+
+    #[setter]
+    pub fn set_shingle_size(&mut self, value: usize) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.imaging.hashing.minhash.shingle_size = value;
+    }
+
+    #[getter]
+    pub fn get_maximum_byte_size_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.imaging.hashing.minhash.maximum_byte_size_enabled
+    }
+
+    #[setter]
+    pub fn set_maximum_byte_size_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.imaging.hashing.minhash.maximum_byte_size_enabled = value;
+    }
+
+    #[getter]
+    pub fn get_maximum_byte_size(&self) -> usize {
+        let inner = self.inner.lock().unwrap();
+        inner.imaging.hashing.minhash.maximum_byte_size
+    }
+
+    #[setter]
+    pub fn set_maximum_byte_size(&mut self, value: usize) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.imaging.hashing.minhash.maximum_byte_size = value;
+    }
+
+    #[getter]
+    pub fn get_seed(&self) -> u64 {
+        let inner = self.inner.lock().unwrap();
+        inner.imaging.hashing.minhash.seed
+    }
+
+    #[setter]
+    pub fn set_seed(&mut self, value: u64) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.imaging.hashing.minhash.seed = value;
+    }
+}
+
+#[pyclass]
+pub struct ConfigImagingHashingAHash {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigImagingHashingAHash {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.imaging.hashing.ahash.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.imaging.hashing.ahash.enabled = value;
+    }
+}
+
+#[pyclass]
+pub struct ConfigImagingHashingDHash {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigImagingHashingDHash {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.imaging.hashing.dhash.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.imaging.hashing.dhash.enabled = value;
+    }
+}
+
+#[pyclass]
+pub struct ConfigImagingHashingPHash {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigImagingHashingPHash {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.imaging.hashing.phash.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.imaging.hashing.phash.enabled = value;
+    }
+}
+
 /// Top-level mutable configuration object for binlex analysis behavior.
 #[pyclass]
 pub struct Config {
@@ -872,6 +1129,14 @@ impl Config {
     /// Return the format parsing configuration group.
     pub fn get_formats(&self) -> PyResult<ConfigFormats> {
         Ok(ConfigFormats {
+            inner: Arc::clone(&self.inner),
+        })
+    }
+
+    #[getter]
+    /// Return the imaging configuration group.
+    pub fn get_imaging(&self) -> PyResult<ConfigImaging> {
+        Ok(ConfigImaging {
             inner: Arc::clone(&self.inner),
         })
     }

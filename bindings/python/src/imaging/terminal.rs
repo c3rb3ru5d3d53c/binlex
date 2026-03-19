@@ -20,6 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use crate::global::Config;
+use crate::hashing::{AHash, DHash, PHash};
 use crate::imaging::palette::Palette;
 use binlex::imaging::Terminal as InnerTerminal;
 use pyo3::exceptions::PyRuntimeError;
@@ -37,24 +39,27 @@ pub struct Terminal {
 #[pymethods]
 impl Terminal {
     #[new]
-    #[pyo3(signature = (data, palette, cell_size=1, fixed_width=16))]
-    #[pyo3(text_signature = "(data, palette, cell_size=1, fixed_width=16)")]
+    #[pyo3(signature = (data, palette, config, cell_size=1, fixed_width=16))]
+    #[pyo3(text_signature = "(data, palette, config, cell_size=1, fixed_width=16)")]
     /// Create a terminal renderer for the provided bytes and palette.
     pub fn new(
         py: Python,
         data: Py<PyBytes>,
         palette: Py<Palette>,
+        config: Py<Config>,
         cell_size: usize,
         fixed_width: usize,
     ) -> Self {
         let inner_data = data.bind(py).as_bytes();
         let inner_palette = palette.borrow(py).inner.lock().unwrap().clone();
+        let inner_config = config.borrow(py).inner.lock().unwrap().clone();
         Self {
-            inner: Arc::new(Mutex::new(InnerTerminal::new_with_options(
+            inner: Arc::new(Mutex::new(InnerTerminal::with_options(
                 inner_data,
                 inner_palette,
                 cell_size,
                 fixed_width,
+                inner_config,
             ))),
         }
     }
@@ -74,6 +79,42 @@ impl Terminal {
     /// Convert an RGB triplet into the nearest ANSI 256-color index.
     pub fn rgb_to_ansi256(r: u8, g: u8, b: u8) -> u8 {
         InnerTerminal::rgb_to_ansi256(r, g, b)
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn sha256(&self) -> Option<String> {
+        self.inner.lock().unwrap().sha256()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn tlsh(&self) -> Option<String> {
+        self.inner.lock().unwrap().tlsh()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn minhash(&self) -> Option<String> {
+        self.inner.lock().unwrap().minhash()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn ahash(&self) -> Option<AHash> {
+        let inner = self.inner.lock().unwrap();
+        inner.ahash()?;
+        Some(AHash::new(inner.png_bytes().ok()?))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn dhash(&self) -> Option<DHash> {
+        let inner = self.inner.lock().unwrap();
+        inner.dhash()?;
+        Some(DHash::new(inner.png_bytes().ok()?))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn phash(&self) -> Option<PHash> {
+        let inner = self.inner.lock().unwrap();
+        inner.phash()?;
+        Some(PHash::new(inner.png_bytes().ok()?))
     }
 }
 
