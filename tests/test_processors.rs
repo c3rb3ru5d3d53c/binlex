@@ -1,9 +1,9 @@
 #![cfg(not(target_os = "windows"))]
 
-use binlex::global::Architecture;
+use binlex::Architecture;
 use binlex::lifters::vex::VexLiftRequest;
-use binlex::processing::processor::Processor;
 use binlex::processors::vex::{VexProcessor, VexRequest, VexResponse};
+use binlex::runtime::Processor;
 
 #[test]
 fn test_vex_processor_handles_encoded_lift_request() {

@@ -1,10 +1,10 @@
 use std::env;
 use std::path::PathBuf;
 
-use crate::ConfigProcessors;
+use crate::config::ConfigProcessors;
 use serde::{Deserialize, Serialize};
 
-use crate::processing::error::ProcessorError;
+use crate::runtime::error::ProcessorError;
 
 pub trait Processor: Send + Sync + Default + 'static {
     const NAME: &'static str;

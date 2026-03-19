@@ -1,18 +1,18 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use crate::ConfigProcessors;
-use crate::processing::pool::ProcessorPool;
-use crate::server::config::ServerConfig;
+use crate::Config;
+use crate::config::ConfigProcessors;
+use crate::runtime::ProcessorPool;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub config: ServerConfig,
+    pub config: Config,
     pub processor_pools: BTreeMap<String, Arc<ProcessorPool>>,
 }
 
 impl AppState {
-    pub fn new(config: ServerConfig) -> Result<Self, crate::processing::error::ProcessorError> {
+    pub fn new(config: Config) -> Result<Self, crate::runtime::error::ProcessorError> {
         let mut processor_pools = BTreeMap::new();
         if !config.processors.enabled {
             return Ok(Self {
@@ -25,7 +25,7 @@ impl AppState {
             enabled: true,
             ..config.processors.clone()
         };
-        for registration in crate::processors::registered_processor_registrations() {
+        for registration in crate::processor::registered_processor_registrations() {
             if !registration.supported_on_current_os() {
                 continue;
             }
@@ -40,13 +40,13 @@ impl AppState {
                 .processors
                 .processor(registration.name)
                 .and_then(|processor| {
-                    crate::processors::configured_server_execution_mode(
+                    crate::server::processors::configured_execution_mode(
                         processor,
                         registration.modes,
                     )
                     .ok()
                 })
-                != Some(crate::processors::ProcessorMode::Ipc)
+                != Some(crate::processor::ProcessorMode::Ipc)
             {
                 continue;
             }

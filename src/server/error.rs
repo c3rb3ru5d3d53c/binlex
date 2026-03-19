@@ -26,8 +26,8 @@ impl IntoResponse for ServerError {
     }
 }
 
-impl From<crate::processing::error::ProcessorError> for ServerError {
-    fn from(error: crate::processing::error::ProcessorError) -> Self {
+impl From<crate::runtime::error::ProcessorError> for ServerError {
+    fn from(error: crate::runtime::error::ProcessorError) -> Self {
         Self::Processor(error.to_string())
     }
 }

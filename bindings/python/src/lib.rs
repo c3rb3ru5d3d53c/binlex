@@ -20,8 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod compression;
 pub mod clients;
+pub mod compression;
 pub mod controlflow;
 pub mod disassemblers;
 pub mod formats;
@@ -39,8 +39,8 @@ pub use global::Architecture;
 pub use global::Config;
 pub use global::Magic;
 
-use crate::compression::compression_init;
 use crate::clients::clients_init;
+use crate::compression::compression_init;
 use crate::controlflow::controlflow_init;
 use crate::disassemblers::disassemblers_init;
 use crate::formats::formats_init;

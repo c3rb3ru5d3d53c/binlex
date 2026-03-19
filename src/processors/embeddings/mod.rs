@@ -8,13 +8,13 @@ use std::sync::OnceLock;
 use twox_hash::XxHash64;
 
 use crate::controlflow::{Block, BlockJson, Function, FunctionJson, Instruction, InstructionJson};
+use crate::config::ConfigProcessor;
+use crate::core::Architecture;
+use crate::core::{OperatingSystem, Transport};
 use crate::genetics::ChromosomeJson;
-use crate::global::Architecture;
 use crate::math::stats::{max_or_zero, normalize_l2, weighted_histogram, weighted_mean};
-use crate::processing::error::ProcessorError;
-use crate::processing::processor::Processor;
-use crate::global::{OperatingSystem, Transport};
-use crate::processors::{GraphProcessor, JsonProcessor};
+use crate::processor::{GraphProcessor, JsonProcessor};
+use crate::runtime::{Processor, ProcessorError};
 
 const DEFAULT_DIMENSIONS: usize = 64;
 const NIBBLE_BUCKETS: usize = 16;
@@ -749,7 +749,7 @@ fn embed(value: &Value, config: &EmbeddingModelConfig) -> Vec<f32> {
     vector
 }
 
-fn processor_config(config: &crate::Config) -> Option<&crate::global::config::ConfigProcessor> {
+fn processor_config(config: &crate::Config) -> Option<&ConfigProcessor> {
     config.processors.processor(EmbeddingsProcessor::NAME)
 }
 
@@ -761,9 +761,7 @@ fn configured_dimensions(config: &crate::Config) -> usize {
         .unwrap_or(DEFAULT_DIMENSIONS)
 }
 
-fn configured_dimensions_from_context<C: crate::processors::ProcessorContext>(
-    context: &C,
-) -> usize {
+fn configured_dimensions_from_context<C: crate::processor::ProcessorContext>(context: &C) -> usize {
     context
         .processor(EmbeddingsProcessor::NAME)
         .and_then(|processor| processor.option_integer("dimensions"))
@@ -776,7 +774,7 @@ fn configured_device(config: &crate::Config) -> EmbeddingDevice {
     parse_device(processor_config(config).and_then(|processor| processor.option_string("device")))
 }
 
-fn configured_device_from_context<C: crate::processors::ProcessorContext>(context: &C) -> String {
+fn configured_device_from_context<C: crate::processor::ProcessorContext>(context: &C) -> String {
     context
         .processor(EmbeddingsProcessor::NAME)
         .and_then(|processor| processor.option_string("device"))
@@ -820,22 +818,19 @@ impl Processor for EmbeddingsProcessor {
 }
 
 impl JsonProcessor for EmbeddingsProcessor {
-    fn request<C: crate::processors::ProcessorContext>(
+    fn request<C: crate::processor::ProcessorContext>(
         context: &C,
         data: Value,
-    ) -> Result<Self::Request, crate::processing::error::ProcessorError> {
+    ) -> Result<Self::Request, ProcessorError> {
         Ok(EmbeddingsRequest {
-            data: serde_json::to_string(&data).map_err(|error| {
-                crate::processing::error::ProcessorError::Serialization(error.to_string())
-            })?,
+            data: serde_json::to_string(&data)
+                .map_err(|error| ProcessorError::Serialization(error.to_string()))?,
             dimensions: Some(configured_dimensions_from_context(context)),
             device: Some(configured_device_from_context(context)),
         })
     }
 
-    fn response(
-        response: Self::Response,
-    ) -> Result<Value, crate::processing::error::ProcessorError> {
+    fn response(response: Self::Response) -> Result<Value, ProcessorError> {
         Ok(json!({
             "vector": response.vector,
         }))

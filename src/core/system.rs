@@ -33,7 +33,9 @@ impl OperatingSystem {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Copy, Clone, Debug, Eq, PartialEq, Hash, ValueEnum)]
+#[derive(
+    serde::Serialize, serde::Deserialize, Copy, Clone, Debug, Eq, PartialEq, Hash, ValueEnum,
+)]
 pub enum Transport {
     Inline,
     Ipc,

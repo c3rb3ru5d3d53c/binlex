@@ -2,7 +2,7 @@ use std::io::{Read, Write};
 
 use lz4::block::{compress, decompress};
 
-use crate::processing::error::ProcessorError;
+use crate::runtime::error::ProcessorError;
 
 pub const MAGIC: [u8; 4] = *b"BLEX";
 pub const VERSION: u16 = 2;
@@ -58,14 +58,14 @@ pub struct Frame {
 pub struct HelloProcessor {
     pub id: u16,
     pub name: String,
-    pub os: Vec<crate::processors::ProcessorOs>,
+    pub os: Vec<crate::processor::ProcessorOs>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct Hello {
     pub protocol_version: u16,
     pub backend_name: String,
-    pub host_os: crate::processors::ProcessorOs,
+    pub host_os: crate::processor::ProcessorOs,
     pub processor_name: String,
     pub supported_ids: Vec<u16>,
     pub processors: Vec<HelloProcessor>,

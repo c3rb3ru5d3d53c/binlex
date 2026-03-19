@@ -3,7 +3,7 @@ use std::io::{Error, ErrorKind};
 use serde::{Deserialize, Serialize};
 
 use crate::Config;
-use crate::global::Architecture;
+use crate::core::Architecture;
 use crate::hex;
 use crate::processors::vex::{VexProcessor, VexRequest, VexResponse};
 
@@ -216,17 +216,16 @@ impl Lifter {
 
     #[cfg(not(target_os = "windows"))]
     fn execute(&self) -> Result<VexLiftResponse, Error> {
-        let pool = crate::processing::ProcessorPool::for_processor::<VexProcessor>(
-            &self.config.processors,
-        )
-        .map_err(|error| Error::other(error.to_string()))?;
+        let pool =
+            crate::runtime::ProcessorPool::for_processor::<VexProcessor>(&self.config.processors)
+                .map_err(|error| Error::other(error.to_string()))?;
         let response = pool
             .execute::<VexProcessor>(&VexRequest::Lift(VexLiftRequest {
                 architecture: self.architecture,
                 address: self.address,
                 bytes: self.bytes.clone(),
             }))
-            .map_err(|error: crate::processing::ProcessorError| Error::other(error.to_string()))?;
+            .map_err(|error: crate::runtime::ProcessorError| Error::other(error.to_string()))?;
 
         match response {
             VexResponse::Lift(response) => Ok(response),

@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use interprocess::local_socket::Stream;
 
-use crate::processing::error::ProcessorError;
-use crate::processing::protocol::{
+use crate::processor::{RegisteredProcessorDispatch, processor_registration_by_name};
+use crate::runtime::error::ProcessorError;
+use crate::runtime::modes::ipc::protocol::{
     Hello, HelloProcessor, MessageKind, ProcessorFailure, read_frame, write_frame,
 };
-use crate::processors::{RegisteredProcessorDispatch, processor_registration_by_name};
 
 pub fn run_child_loop(
     mut stream: Stream,
@@ -21,9 +21,9 @@ pub fn run_child_loop(
         .collect::<HashMap<_, _>>();
 
     let hello = Hello {
-        protocol_version: crate::processing::protocol::VERSION,
+        protocol_version: crate::runtime::modes::ipc::protocol::VERSION,
         backend_name: backend_name.to_string(),
-        host_os: crate::processors::ProcessorOs::current(),
+        host_os: crate::processor::ProcessorOs::current(),
         processor_name: processor_name.to_string(),
         supported_ids: processor_map.keys().copied().collect(),
         processors: processor_map

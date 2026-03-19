@@ -20,30 +20,32 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod compression;
 pub mod clients;
+pub mod compression;
+pub mod config;
+pub mod core;
 pub mod controlflow;
 pub mod disassemblers;
 pub mod formats;
 pub mod genetics;
-pub mod global;
 pub mod hashing;
 pub mod hex;
 pub mod imaging;
 pub mod io;
 pub mod lifters;
 pub mod math;
-pub mod processing;
+pub mod processor;
 pub mod processors;
+pub mod runtime;
 pub mod server;
+pub mod util;
 
+pub use config::AUTHOR;
+pub use config::Config;
+pub use config::VERSION;
+pub use core::Architecture;
+pub use core::Magic;
+pub use core::OperatingSystem;
+pub use core::Transport;
 pub use math::entropy;
-pub use global::AUTHOR;
-pub use global::Architecture;
-pub use global::Config;
-pub use global::Magic;
-pub use global::OperatingSystem;
-pub use global::Transport;
-pub use global::VERSION;
-pub use global::config::ConfigProcessors;
-pub use global::hexdump;
+pub use util::hexdump;
