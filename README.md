@@ -505,7 +505,7 @@ The moving parts are:
 - Request and response enums that can be serialized with `serde`
 - Optional `request` and `response` adapters for IPC and HTTP transport
 - Optional `process_instruction`, `process_block`, and `process_function` helpers that return JSON for `inline` execution
-- A `crate::processor!(...)` registration block describing defaults, supported operating systems, and supported architectures
+- A `crate::processor!(...)` registration block describing defaults, supported operating systems, supported architectures, and a host version requirement
 
 This is best for libraries that are poorly developed with error handling that call `abort()` for example without letting the developer choose when to properly exit, resulting in the termination of the processes using said library code.
 
@@ -585,6 +585,7 @@ impl GraphProcessor for ExampleProcessor {
 }
 
 crate::processor!(ExampleProcessor {
+    requires: ">=2.0.0 <3.0.0",
     operating_systems: [OperatingSystem::LINUX, OperatingSystem::MACOS],
     architectures: [Architecture::AMD64, Architecture::I386],
     enabled: false,
@@ -615,6 +616,7 @@ Notes:
 - `Processor::request` is the typed execution entrypoint used by `inline`, `ipc`, and `http`.
 - `JsonProcessor::request` and `JsonProcessor::response` adapt the typed request/response to IPC and HTTP transport.
 - `process_instruction`, `process_block`, and `process_function` define the JSON that gets attached under `.processors.<name>` for `inline` execution.
+- `requires` is a semver requirement evaluated against the running `binlex::VERSION`.
 - Keep outputs compact; every emitted value is serialized into the JSON stream.
 - `inline` uses `binlex --threads`, `ipc` uses `[processors].processes`, and `http` uses the server.
 - Use `config.processors.path` if your processor worker binary lives outside the default search path. Explicitly setting this path overrides the Python module worker fallback.

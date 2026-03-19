@@ -58,6 +58,7 @@ pub struct Frame {
 pub struct HelloProcessor {
     pub id: u16,
     pub name: String,
+    pub requires: String,
     pub os: Vec<crate::processor::ProcessorOs>,
 }
 
@@ -65,6 +66,7 @@ pub struct HelloProcessor {
 pub struct Hello {
     pub protocol_version: u16,
     pub backend_name: String,
+    pub binlex_version: String,
     pub host_os: crate::processor::ProcessorOs,
     pub processor_name: String,
     pub supported_ids: Vec<u16>,

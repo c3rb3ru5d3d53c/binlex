@@ -10,6 +10,7 @@ use crate::runtime::{Processor, ProcessorDispatch, ProcessorError, ProcessorPool
 use crate::server::error::ServerError;
 use crate::server::state::AppState;
 use once_cell::sync::Lazy;
+use semver::{Version, VersionReq};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::process;
@@ -17,6 +18,7 @@ use std::sync::Arc;
 
 pub struct ProcessorRegistration {
     pub name: &'static str,
+    pub requires: &'static str,
     pub operating_systems: &'static [ProcessorOs],
     pub architectures: &'static [ProcessorArchitecture],
     pub modes: &'static [ProcessorMode],
@@ -229,6 +231,7 @@ macro_rules! processor {
         $crate::config::ConfigProcessorValue::from($value)
     };
     ($processor:path {
+        requires: $requires:expr,
         operating_systems: [$($supported_os:expr),+ $(,)?],
         architectures: [$($supported_architecture:expr),+ $(,)?],
         enabled: $processor_enabled:expr,
@@ -251,6 +254,7 @@ macro_rules! processor {
         $(,)?
     }) => {
         $crate::processor!($processor {
+            requires: $requires,
             operating_systems: [$($supported_os),+],
             architectures: [$($supported_architecture),+],
             enabled: $processor_enabled,
@@ -274,6 +278,7 @@ macro_rules! processor {
         });
     };
     ($processor:path {
+        requires: $requires:expr,
         operating_systems: [$($supported_os:expr),+ $(,)?],
         architectures: [$($supported_architecture:expr),+ $(,)?],
         enabled: $processor_enabled:expr,
@@ -364,6 +369,7 @@ macro_rules! processor {
         pub(crate) fn registration() -> $crate::processor::ProcessorRegistration {
             $crate::processor::ProcessorRegistration {
                 name: <$processor as $crate::runtime::dispatch::Processor>::NAME,
+                requires: $requires,
                 operating_systems: &[$($supported_os),+],
                 architectures: &[$($supported_architecture),+],
                 modes: &[$($processor_mode),+],
@@ -421,6 +427,7 @@ macro_rules! processor {
         }
     };
     ($processor:path {
+        requires: $requires:expr,
         operating_systems: [$($supported_os:expr),+ $(,)?],
         architectures: [$($supported_architecture:expr),+ $(,)?],
         enabled: $processor_enabled:expr,
@@ -438,6 +445,7 @@ macro_rules! processor {
         $(,)?
     }) => {
         $crate::processor!($processor {
+            requires: $requires,
             operating_systems: [$($supported_os),+],
             architectures: [$($supported_architecture),+],
             enabled: $processor_enabled,
@@ -454,6 +462,43 @@ macro_rules! processor {
             }
         });
     };
+}
+
+fn parse_version_requirement(requires: &str) -> Result<VersionReq, ProcessorError> {
+    VersionReq::parse(requires).or_else(|_| {
+        let normalized = requires.split_whitespace().collect::<Vec<_>>().join(", ");
+        VersionReq::parse(&normalized)
+    })
+    .map_err(|error| {
+        ProcessorError::Protocol(format!(
+            "invalid processor version requirement {}: {}",
+            requires, error
+        ))
+    })
+}
+
+pub fn version_matches_requirement(version: &str, requires: &str) -> Result<bool, ProcessorError> {
+    let version = Version::parse(version).map_err(|error| {
+        ProcessorError::Protocol(format!("invalid binlex version {}: {}", version, error))
+    })?;
+    let requirement = parse_version_requirement(requires)?;
+    Ok(requirement.matches(&version))
+}
+
+pub fn ensure_version_requirement(version: &str, requires: &str) -> Result<(), ProcessorError> {
+    if version_matches_requirement(version, requires)? {
+        return Ok(());
+    }
+    Err(ProcessorError::Protocol(format!(
+        "binlex version {} does not satisfy processor requirement {}",
+        version, requires
+    )))
+}
+
+pub fn ensure_registration_host_compatibility(
+    registration: &ProcessorRegistration,
+) -> Result<(), ProcessorError> {
+    ensure_version_requirement(crate::VERSION, registration.requires)
 }
 
 #[cfg(not(target_os = "windows"))]

@@ -369,6 +369,8 @@ fn validate_hello(
     processor_name: &str,
     processor_id: u16,
 ) -> Result<(), ProcessorError> {
+    let registration = processor::processor_registration_by_name(processor_name)
+        .ok_or_else(|| ProcessorError::Protocol(format!("unregistered processor {}", processor_name)))?;
     if hello.protocol_version != crate::runtime::modes::ipc::protocol::VERSION {
         return Err(ProcessorError::UnexpectedResponse(format!(
             "processor protocol payload mismatch, expected {}, got {}",
@@ -382,6 +384,10 @@ fn validate_hello(
             binary_name, hello.backend_name
         )));
     }
+    crate::processor::registry::ensure_version_requirement(
+        &hello.binlex_version,
+        registration.registration.requires,
+    )?;
     if hello.processor_name != processor_name {
         return Err(ProcessorError::UnexpectedResponse(format!(
             "processor name mismatch, expected {}, got {}",
@@ -410,6 +416,7 @@ fn validate_hello(
             processor_id, processor_name, processor.name
         )));
     }
+    crate::processor::registry::ensure_version_requirement(crate::VERSION, &processor.requires)?;
     if !processor.os.contains(&hello.host_os) {
         return Err(ProcessorError::UnexpectedResponse(format!(
             "processor {} on host {:?} advertised unsupported os list {:?}",
@@ -438,12 +445,14 @@ mod tests {
         let hello = Hello {
             protocol_version: VERSION,
             backend_name: "binlex-processor".to_string(),
+            binlex_version: crate::VERSION.to_string(),
             host_os: ProcessorOs::current(),
             processor_name: "vex".to_string(),
             supported_ids: vec![1],
             processors: vec![HelloProcessor {
                 id: 1,
                 name: "vex".to_string(),
+                requires: ">=2.0.0 <3.0.0".to_string(),
                 os: vec![ProcessorOs::current()],
             }],
             pid: 1,
@@ -462,12 +471,14 @@ mod tests {
         let hello = Hello {
             protocol_version: VERSION,
             backend_name: "binlex-processor".to_string(),
+            binlex_version: crate::VERSION.to_string(),
             host_os: ProcessorOs::current(),
             processor_name: "vex".to_string(),
             supported_ids: vec![1],
             processors: vec![HelloProcessor {
                 id: 1,
                 name: "vex".to_string(),
+                requires: ">=2.0.0 <3.0.0".to_string(),
                 os: vec![unsupported],
             }],
             pid: 1,
