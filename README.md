@@ -88,6 +88,14 @@ python
 >> import binlex
 ```
 
+When the Python bindings are imported, binlex registers the current Python runtime as the preferred IPC worker host. Wheel installs can then launch processor workers through:
+
+```bash
+python -m binlex._processor --socket ... --processor <name> --compression true
+```
+
+This internal entrypoint is preferred automatically before falling back to the standalone `binlex-processor` binary.
+
 ### Packaging
 
 To build packages for various platforms use the `Makefile`.
@@ -609,7 +617,7 @@ Notes:
 - `process_instruction`, `process_block`, and `process_function` define the JSON that gets attached under `.processors.<name>` for `inline` execution.
 - Keep outputs compact; every emitted value is serialized into the JSON stream.
 - `inline` uses `binlex --threads`, `ipc` uses `[processors].processes`, and `http` uses the server.
-- Use `config.processors.path` if your processor worker binary lives outside the default search path.
+- Use `config.processors.path` if your processor worker binary lives outside the default search path. Explicitly setting this path overrides the Python module worker fallback.
 
 ### Making a YARA Rule
 

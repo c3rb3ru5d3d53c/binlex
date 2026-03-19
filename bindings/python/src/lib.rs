@@ -53,11 +53,34 @@ use crate::imaging::imaging_init;
 #[cfg(not(target_os = "windows"))]
 use crate::lifters::lifters_init;
 use crate::math::{entropy_init, math_init};
+use ::binlex::runtime::{HostRuntime, ProcessorEntryError, child, register_host_runtime};
 
-use pyo3::{prelude::*, wrap_pymodule};
+use pyo3::{prelude::*, types::PyModule, wrap_pyfunction, wrap_pymodule};
+
+#[pyfunction]
+fn _run_processor_entry(
+    processor_name: String,
+    socket_name: String,
+    compression_enabled: bool,
+) -> i32 {
+    match child::run_processor_entry("binlex-processor", &processor_name, &socket_name, compression_enabled) {
+        Ok(()) => 0,
+        Err(ProcessorEntryError::InvalidProcessor(_)) => 2,
+        Err(ProcessorEntryError::Connect(_)) => 3,
+        Err(ProcessorEntryError::Runtime(_)) => 4,
+    }
+}
 
 #[pymodule]
 fn binlex(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    let sys = PyModule::import(m.py(), "sys")?;
+    let executable = sys.getattr("executable")?.extract::<std::path::PathBuf>()?;
+    register_host_runtime(HostRuntime::Python { executable }).map_err(
+        |error: ::binlex::runtime::HostRuntimeError| {
+            pyo3::exceptions::PyRuntimeError::new_err(error.to_string())
+        },
+    )?;
+
     m.add_wrapped(wrap_pymodule!(compression_init))?;
     m.add_wrapped(wrap_pymodule!(formats_init))?;
     m.add_wrapped(wrap_pymodule!(clients_init))?;
@@ -76,5 +99,6 @@ fn binlex(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Architecture>()?;
     m.add_class::<Config>()?;
     m.add_class::<Magic>()?;
+    m.add_function(wrap_pyfunction!(_run_processor_entry, m)?)?;
     Ok(())
 }

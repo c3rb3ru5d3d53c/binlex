@@ -37,18 +37,22 @@ disassembler.disassemble_controlflow(
     cfg,
 )
 
-# Get First Function
-function_lhs = cfg.functions()[0]
-function_rhs = cfg.functions()[4]
+function = cfg.functions()[0]
+lifter = Lifter(pe.architecture(), function.bytes(), function.address(), config)
+print(lifter.ir())
 
-png_lhs = PNG(function_lhs.bytes(), Palette.REDBLACK, config)
-print('lhs')
-png_lhs.print()
-png_rhs = PNG(function_rhs.bytes(), Palette.REDBLACK, config)
-print('rhs')
-png_rhs.print()
-
-result = png_lhs.phash().compare(png_rhs.phash())
-print(result)
-
-
+# # Get First Function
+# function_lhs = cfg.functions()[0]
+# function_rhs = cfg.functions()[4]
+#
+# png_lhs = PNG(function_lhs.bytes(), Palette.REDBLACK, config)
+# print('lhs')
+# png_lhs.print()
+# png_rhs = PNG(function_rhs.bytes(), Palette.REDBLACK, config)
+# print('rhs')
+# png_rhs.print()
+#
+# result = png_lhs.phash().compare(png_rhs.phash())
+# print(result)
+#
+#

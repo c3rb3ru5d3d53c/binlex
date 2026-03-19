@@ -1,11 +1,6 @@
-#[cfg(not(target_os = "windows"))]
 fn main() {
     use std::env;
     use std::process;
-
-    use binlex::processor::dispatch_by_name;
-    use binlex::runtime::child::run_child_loop;
-    use binlex::runtime::modes::ipc::local;
 
     let mut processor_name: Option<String> = None;
     let mut socket_name: Option<String> = None;
@@ -31,30 +26,15 @@ fn main() {
         None => process::exit(2),
     };
 
-    let stream = match local::connect(&socket_name) {
-        Ok(stream) => stream,
-        Err(_) => process::exit(3),
-    };
-
-    let processor = match dispatch_by_name(&processor_name) {
-        Some(processor) => processor,
-        None => process::exit(2),
-    };
-
-    if run_child_loop(
-        stream,
+    match binlex::runtime::child::run_processor_entry(
         "binlex-processor",
         &processor_name,
-        vec![processor],
+        &socket_name,
         compression_enabled,
-    )
-    .is_err()
-    {
-        process::exit(4);
+    ) {
+        Ok(()) => {}
+        Err(binlex::runtime::child::ProcessorEntryError::InvalidProcessor(_)) => process::exit(2),
+        Err(binlex::runtime::child::ProcessorEntryError::Connect(_)) => process::exit(3),
+        Err(binlex::runtime::child::ProcessorEntryError::Runtime(_)) => process::exit(4),
     }
-}
-
-#[cfg(target_os = "windows")]
-fn main() {
-    std::process::exit(1);
 }
