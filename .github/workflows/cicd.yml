@@ -308,7 +308,10 @@ jobs:
 
       - name: Install Python Wheel Tooling (Arch Linux)
         run: |
-          sudo -u builder bash -lc 'python -m pip install --user --upgrade pip uv maturin'
+          sudo -u builder bash -lc '
+            python -m venv /home/builder/.wheel-tools
+            /home/builder/.wheel-tools/bin/pip install --upgrade pip uv maturin
+          '
 
       - name: Build Project (Arch Linux)
         run: |
@@ -322,7 +325,7 @@ jobs:
         run: |
           sudo -u builder bash -lc '
             set -euo pipefail
-            export PATH="/home/builder/.local/bin:$PATH"
+            export PATH="/home/builder/.wheel-tools/bin:$PATH"
             cd /home/builder/repo/
             . /home/builder/.cargo/env
             uv python install 3.9 3.10 3.11 3.12 3.13 3.14
