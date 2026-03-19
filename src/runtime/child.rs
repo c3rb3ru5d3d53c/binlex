@@ -62,6 +62,7 @@ pub fn run_child_loop(
     let hello = Hello {
         protocol_version: crate::runtime::modes::ipc::protocol::VERSION,
         backend_name: backend_name.to_string(),
+        binlex_version: crate::VERSION.to_string(),
         host_os: crate::processor::ProcessorOs::current(),
         processor_name: processor_name.to_string(),
         supported_ids: processor_map.keys().copied().collect(),
@@ -72,6 +73,7 @@ pub fn run_child_loop(
                     (registration.id == *id).then(|| HelloProcessor {
                         id: *id,
                         name: registration.name().to_string(),
+                        requires: registration.registration.requires.to_string(),
                         os: registration.registration.operating_systems.to_vec(),
                     })
                 })

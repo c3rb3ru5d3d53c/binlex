@@ -187,6 +187,7 @@ impl VexProcessor {
 }
 
 crate::processor!(VexProcessor {
+    requires: ">=2.0.0 <2.1.0",
     operating_systems: [OperatingSystem::LINUX, OperatingSystem::MACOS],
     architectures: [Architecture::AMD64, Architecture::I386],
     enabled: false,

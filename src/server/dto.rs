@@ -5,6 +5,8 @@ pub const OCTET_STREAM_CONTENT_TYPE: &str = "application/octet-stream";
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ProcessorHttpRequest {
+    pub binlex_version: String,
+    pub requires: String,
     pub data: Value,
 }
 

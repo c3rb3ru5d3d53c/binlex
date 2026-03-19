@@ -1,6 +1,6 @@
 use crate::Config;
 use crate::config::ConfigProcessor;
-use crate::processor::ProcessorMode;
+use crate::processor::{ProcessorMode, processor_registration_by_name};
 use crate::runtime::ProcessorError;
 use crate::server::dto::{
     ErrorResponse, LZ4_CONTENT_ENCODING, OCTET_STREAM_CONTENT_TYPE, ProcessorHttpRequest,
@@ -96,12 +96,20 @@ pub fn execute(
     processor: &ConfigProcessor,
 ) -> Result<Value, ProcessorError> {
     let url = processor_http_url(processor_name, processor)?;
+    let registration = processor_registration_by_name(processor_name).ok_or_else(|| {
+        ProcessorError::Protocol(format!("processor {} is not registered", processor_name))
+    })?;
+    crate::processor::registry::ensure_registration_host_compatibility(registration.registration)?;
     let verify = processor_http_verify(processor);
     let client = Client::builder()
         .danger_accept_invalid_certs(!verify)
         .build()
         .map_err(|error| ProcessorError::Protocol(error.to_string()))?;
-    let request = ProcessorHttpRequest { data };
+    let request = ProcessorHttpRequest {
+        binlex_version: crate::VERSION.to_string(),
+        requires: registration.registration.requires.to_string(),
+        data,
+    };
     let (body, content_type) = encode_http_request(&request, config.processors.compression)?;
 
     let mut builder = client

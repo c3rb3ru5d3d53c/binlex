@@ -30,6 +30,8 @@ pub fn execute_value<P: JsonProcessor>(
     let registration = processor_registration_by_name(P::NAME).ok_or_else(|| {
         ServerError::Processor(format!("{} processor is not registered", P::NAME))
     })?;
+    crate::processor::registry::ensure_registration_host_compatibility(registration.registration)
+        .map_err(ServerError::from)?;
     crate::processor::registry::ensure_payload_architecture_supported_server(
         registration.registration,
         &data,
@@ -79,6 +81,15 @@ pub fn execute(
             processor_name
         )));
     }
+    crate::processor::registry::ensure_registration_host_compatibility(registration.registration)
+        .map_err(ServerError::from)?;
+    crate::processor::registry::ensure_version_requirement(
+        &request.binlex_version,
+        registration.registration.requires,
+    )
+    .map_err(ServerError::from)?;
+    crate::processor::registry::ensure_version_requirement(crate::VERSION, &request.requires)
+        .map_err(ServerError::from)?;
     crate::processor::registry::ensure_payload_architecture_supported_server(
         registration.registration,
         &request.data,
