@@ -61,14 +61,6 @@ name = "binlex-yara"
 path = "src/bin/binlex-yara.rs"
 
 [[bin]]
-name = "binlex-pdb"
-path = "src/bin/binlex-pdb.rs"
-
-[[bin]]
-name = "binlex-rizin"
-path = "src/bin/binlex-rizin.rs"
-
-[[bin]]
 name = "binlex-image"
 path = "src/bin/binlex-image.rs"
 
@@ -77,12 +69,8 @@ name = "binlex-hash"
 path = "src/bin/binlex-hash.rs"
 
 [[bin]]
-name = "binlex-elf-symbols"
-path = "src/bin/binlex-elf-symbols.rs"
-
-[[bin]]
-name = "binlex-macho-symbols"
-path = "src/bin/binlex-macho-symbols.rs"
+name = "binlex-symbols"
+path = "src/bin/binlex-symbols.rs"
 
 [[bin]]
 name = "binlex-processor"

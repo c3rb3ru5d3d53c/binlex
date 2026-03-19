@@ -20,13 +20,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use binlex::controlflow::Attributes;
 use binlex::controlflow::Block;
 use binlex::controlflow::Function;
 use binlex::controlflow::Graph;
 use binlex::controlflow::Instruction;
-use binlex::controlflow::Symbol;
-use binlex::controlflow::Tag;
 //use binlex::disassemblers::capstone::x86::Disassembler;
 use binlex::AUTHOR;
 use binlex::Architecture;
@@ -39,11 +36,14 @@ use binlex::disassemblers::cil::Disassembler as CILDisassembler;
 use binlex::formats::ELF;
 use binlex::formats::File as BLFile;
 use binlex::formats::MACHO;
+use binlex::formats::Symbol;
 use binlex::formats::pe::PE;
 use binlex::io::JSON;
 use binlex::io::Stderr;
 use binlex::io::Stdin;
 use binlex::io::Stdout;
+use binlex::metadata::Attributes;
+use binlex::metadata::Tag;
 use binlex::processor::ProcessorSelection;
 use clap::Parser;
 use rayon::ThreadPoolBuilder;
@@ -298,7 +298,10 @@ fn get_macho_function_symbols(macho: &MACHO, read_stdin: bool) -> BTreeMap<u64, 
             return false;
         }
 
-        let slice = slice.unwrap() as usize;
+        let slice = match macho.slice(slice.unwrap() as usize) {
+            Some(slice) => slice,
+            None => return false,
+        };
 
         if obj_type.as_deref() != Some("symbol") {
             return false;
@@ -319,14 +322,14 @@ fn get_macho_function_symbols(macho: &MACHO, read_stdin: bool) -> BTreeMap<u64, 
 
         if virtual_address.is_none() {
             if let Some(rva) = relative_virtual_address {
-                let va = macho.relative_virtual_address_to_virtual_address(rva, slice);
+                let va = slice.relative_virtual_address_to_virtual_address(rva);
                 if va.is_none() {
                     return false;
                 }
                 virtual_address = Some(va.unwrap());
             }
             if let Some(offset) = file_offset {
-                if let Some(va) = macho.file_offset_to_virtual_address(offset, slice) {
+                if let Some(va) = slice.file_offset_to_virtual_address(offset) {
                     virtual_address = Some(va);
                 }
             }
@@ -955,8 +958,8 @@ fn process_macho(
     });
     print_stage_timing(&config, "macho.new", macho_started_at);
 
-    for slice in 0..macho.number_of_slices() {
-        let architecture = macho.architecture(slice);
+    for slice in macho.slices() {
+        let architecture = slice.architecture();
         if architecture.is_none() {
             continue;
         }
@@ -984,7 +987,7 @@ fn process_macho(
         // }
 
         let image_started_at = Instant::now();
-        let mut mapped_file = macho.image(slice).unwrap_or_else(|error| {
+        let mut mapped_file = slice.image().unwrap_or_else(|error| {
             eprintln!("{}", error);
             process::exit(1)
         });
@@ -995,11 +998,11 @@ fn process_macho(
         });
         print_stage_timing(&config, "macho.image", image_started_at);
 
-        let executable_address_ranges = macho.executable_virtual_address_ranges(slice);
+        let executable_address_ranges = slice.executable_virtual_address_ranges();
 
         let mut entrypoints = BTreeSet::<u64>::new();
 
-        entrypoints.extend(macho.entrypoint_virtual_addresses(slice));
+        entrypoints.extend(slice.entrypoint_virtual_addresses());
 
         let runtime_config = config.clone();
         let mut cfg = Graph::new(architecture, runtime_config.clone());

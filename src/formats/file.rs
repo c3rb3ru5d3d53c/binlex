@@ -22,10 +22,10 @@
 
 use crate::Config;
 use crate::Magic;
-use crate::controlflow::Attribute;
 use crate::entropy;
 use crate::hashing::sha256::SHA256;
 use crate::hashing::tlsh::TLSH;
+use crate::metadata::Attribute;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::fs::File as StdFile;
