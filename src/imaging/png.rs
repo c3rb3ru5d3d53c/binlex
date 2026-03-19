@@ -20,78 +20,79 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use crate::config::{Config, ConfigImagingHashing};
 use crate::imaging::Palette;
+use crate::imaging::hash as render_hash;
 use crate::imaging::render::Render;
-use image::ColorType;
-use image::ImageEncoder;
-use image::RgbaImage;
-use image::codecs::png::PngEncoder;
-use std::io;
+use crate::imaging::terminal::write_render;
+use std::io::{self, Write};
 
 pub struct PNG {
+    hashing: ConfigImagingHashing,
     render: Render,
 }
 
 impl PNG {
-    pub fn new(data: &[u8], palette: Palette) -> Self {
-        Self::new_with_options(data, palette, 1, 16)
+    pub fn new(data: &[u8], palette: Palette, config: Config) -> Self {
+        Self::with_options(data, palette, 1, 16, config)
     }
 
-    pub fn new_with_options(
+    pub fn with_options(
         data: &[u8],
         palette: Palette,
         cell_size: usize,
         fixed_width: usize,
+        config: Config,
     ) -> Self {
-        Self::from_render(Render::new_with_options(
-            data,
-            palette,
-            cell_size,
-            fixed_width,
-        ))
+        Self::from_render(
+            Render::new_with_options(data, palette, cell_size, fixed_width),
+            config.imaging.hashing.clone(),
+        )
     }
 
-    pub(crate) fn from_render(render: Render) -> Self {
-        Self { render }
+    pub(crate) fn from_render(render: Render, hashing: ConfigImagingHashing) -> Self {
+        Self { hashing, render }
     }
 
     pub fn bytes(&self) -> io::Result<Vec<u8>> {
-        let width = u32::try_from(self.render.total_width()).map_err(|_| {
-            io::Error::new(io::ErrorKind::InvalidInput, "png width exceeds u32 range")
-        })?;
-        let height = u32::try_from(self.render.total_height()).map_err(|_| {
-            io::Error::new(io::ErrorKind::InvalidInput, "png height exceeds u32 range")
-        })?;
-
-        if width == 0 || height == 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "png output requires non-empty image dimensions",
-            ));
-        }
-
-        let mut rgba = RgbaImage::new(width, height);
-
-        for cell in self.render.cells() {
-            let (r, g, b) = cell.rgb();
-
-            for y in cell.y()..(cell.y() + cell.height()) {
-                for x in cell.x()..(cell.x() + cell.width()) {
-                    rgba.put_pixel(x as u32, y as u32, image::Rgba([r, g, b, 255]));
-                }
-            }
-        }
-
-        let mut encoded = Vec::new();
-        let encoder = PngEncoder::new(&mut encoded);
-        encoder
-            .write_image(rgba.as_raw(), width, height, ColorType::Rgba8.into())
-            .map_err(|error| io::Error::other(error.to_string()))?;
-
-        Ok(encoded)
+        render_hash::encode_png(&self.render)
     }
 
     pub fn write(&self, file_path: &str) -> io::Result<()> {
         std::fs::write(file_path, self.bytes()?)
+    }
+
+    pub fn print(&self) -> io::Result<()> {
+        let stdout = io::stdout();
+        let mut stdout = stdout.lock();
+        self.write_terminal(&mut stdout)
+    }
+
+    pub fn write_terminal<W: Write>(&self, writer: &mut W) -> io::Result<()> {
+        write_render(&self.render, writer)
+    }
+
+    pub fn sha256(&self) -> Option<String> {
+        render_hash::sha256(&self.render, &self.hashing)
+    }
+
+    pub fn tlsh(&self) -> Option<String> {
+        render_hash::tlsh(&self.render, &self.hashing)
+    }
+
+    pub fn minhash(&self) -> Option<String> {
+        render_hash::minhash(&self.render, &self.hashing)
+    }
+
+    pub fn ahash(&self) -> Option<String> {
+        render_hash::ahash(&self.render, &self.hashing)
+    }
+
+    pub fn dhash(&self) -> Option<String> {
+        render_hash::dhash(&self.render, &self.hashing)
+    }
+
+    pub fn phash(&self) -> Option<String> {
+        render_hash::phash(&self.render, &self.hashing)
     }
 }

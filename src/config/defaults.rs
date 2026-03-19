@@ -23,9 +23,9 @@
 use super::{
     Config, ConfigBlocks, ConfigChromosomes, ConfigData, ConfigDisassembler,
     ConfigDisassemblerSweep, ConfigFile, ConfigFileHashing, ConfigFormats, ConfigFunctions,
-    ConfigGeneral, ConfigHashing, ConfigHeuristicEntropy, ConfigHeuristicFeatures,
-    ConfigInstructions, ConfigMinhash, ConfigMmap, ConfigMmapCache, ConfigProcessors, ConfigSHA256,
-    ConfigServer, ConfigTLSH,
+    ConfigGeneral, ConfigHashEnabled, ConfigHashing, ConfigHeuristicEntropy,
+    ConfigHeuristicFeatures, ConfigImaging, ConfigImagingHashing, ConfigInstructions,
+    ConfigMinhash, ConfigMmap, ConfigMmapCache, ConfigProcessors, ConfigServer, ConfigTLSH,
 };
 use std::env;
 
@@ -54,7 +54,7 @@ impl Config {
             formats: ConfigFormats {
                 file: ConfigFile {
                     hashing: ConfigFileHashing {
-                        sha256: ConfigSHA256 { enabled: true },
+                        sha256: ConfigHashEnabled { enabled: true },
                         tlsh: ConfigTLSH {
                             enabled: true,
                             minimum_byte_size: 50,
@@ -63,11 +63,31 @@ impl Config {
                     entropy: ConfigHeuristicEntropy { enabled: true },
                 },
             },
+            imaging: ConfigImaging {
+                hashing: ConfigImagingHashing {
+                    sha256: ConfigHashEnabled { enabled: true },
+                    tlsh: ConfigTLSH {
+                        enabled: true,
+                        minimum_byte_size: 50,
+                    },
+                    minhash: ConfigMinhash {
+                        enabled: true,
+                        number_of_hashes: 64,
+                        shingle_size: 4,
+                        maximum_byte_size_enabled: false,
+                        maximum_byte_size: 50,
+                        seed: 0,
+                    },
+                    ahash: ConfigHashEnabled { enabled: true },
+                    dhash: ConfigHashEnabled { enabled: true },
+                    phash: ConfigHashEnabled { enabled: true },
+                },
+            },
             instructions: ConfigInstructions { enabled: false },
             blocks: ConfigBlocks {
                 enabled: true,
                 hashing: ConfigHashing {
-                    sha256: ConfigSHA256 { enabled: true },
+                    sha256: ConfigHashEnabled { enabled: true },
                     tlsh: ConfigTLSH {
                         enabled: true,
                         minimum_byte_size: 50,
@@ -86,7 +106,7 @@ impl Config {
             functions: ConfigFunctions {
                 enabled: true,
                 hashing: ConfigHashing {
-                    sha256: ConfigSHA256 { enabled: true },
+                    sha256: ConfigHashEnabled { enabled: true },
                     tlsh: ConfigTLSH {
                         enabled: true,
                         minimum_byte_size: 50,
@@ -104,7 +124,7 @@ impl Config {
             },
             chromosomes: ConfigChromosomes {
                 hashing: ConfigHashing {
-                    sha256: ConfigSHA256 { enabled: true },
+                    sha256: ConfigHashEnabled { enabled: true },
                     tlsh: ConfigTLSH {
                         enabled: true,
                         minimum_byte_size: 50,
@@ -141,10 +161,20 @@ impl Config {
     }
 
     pub fn disable_hashing(&mut self) {
+        self.disable_imaging_hashing();
         self.disable_block_hashing();
         self.disable_function_hashing();
         self.disable_chromosome_hashing();
         self.disable_file_hashing();
+    }
+
+    pub fn disable_imaging_hashing(&mut self) {
+        self.imaging.hashing.sha256.enabled = false;
+        self.imaging.hashing.tlsh.enabled = false;
+        self.imaging.hashing.minhash.enabled = false;
+        self.imaging.hashing.ahash.enabled = false;
+        self.imaging.hashing.dhash.enabled = false;
+        self.imaging.hashing.phash.enabled = false;
     }
 
     pub fn disable_chromosome_heuristics(&mut self) {

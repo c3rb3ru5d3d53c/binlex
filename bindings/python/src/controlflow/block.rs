@@ -23,6 +23,7 @@
 use crate::controlflow::graph::Graph;
 use crate::controlflow::Instruction;
 use crate::genetics::Chromosome;
+use crate::hashing::{MinHash32, SHA256, TLSH};
 use crate::Architecture;
 use crate::Config;
 use binlex::controlflow::Block as InnerBlock;
@@ -40,6 +41,10 @@ use std::sync::Mutex;
 #[pyclass]
 pub struct BlockJsonDeserializer {
     pub inner: Arc<Mutex<InnerBlockJsonDeserializer>>,
+    chromosome_minhash_num_hashes: usize,
+    chromosome_minhash_shingle_size: usize,
+    chromosome_minhash_seed: u64,
+    chromosome_tlsh_minimum_byte_size: usize,
 }
 
 #[pymethods]
@@ -49,9 +54,13 @@ impl BlockJsonDeserializer {
     /// Create a deserializer from a serialized block JSON string.
     pub fn new(py: Python, string: String, config: Py<Config>) -> PyResult<Self> {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
-        let inner = InnerBlockJsonDeserializer::new(string, inner_config)?;
+        let inner = InnerBlockJsonDeserializer::new(string, inner_config.clone())?;
         Ok(Self {
             inner: Arc::new(Mutex::new(inner)),
+            chromosome_minhash_num_hashes: inner_config.chromosomes.hashing.minhash.number_of_hashes,
+            chromosome_minhash_shingle_size: inner_config.chromosomes.hashing.minhash.shingle_size,
+            chromosome_minhash_seed: inner_config.chromosomes.hashing.minhash.seed,
+            chromosome_tlsh_minimum_byte_size: inner_config.chromosomes.hashing.tlsh.minimum_byte_size,
         })
     }
 
@@ -155,6 +164,10 @@ impl BlockJsonDeserializer {
         let inner_chromosome = self.inner.lock().unwrap().chromosome();
         Chromosome {
             inner: Arc::new(Mutex::new(inner_chromosome)),
+            minhash_num_hashes: self.chromosome_minhash_num_hashes,
+            minhash_shingle_size: self.chromosome_minhash_shingle_size,
+            minhash_seed: self.chromosome_minhash_seed,
+            tlsh_minimum_byte_size: self.chromosome_tlsh_minimum_byte_size,
         }
     }
 
@@ -349,20 +362,35 @@ impl Block {
 
     #[pyo3(text_signature = "($self)")]
     /// Retrieves the TLSH (Trend Micro Locality Sensitive Hash) of the block.
-    pub fn tlsh(&self, py: Python) -> PyResult<Option<String>> {
-        self.with_inner_block(py, |block| Ok(block.tlsh()))
+    pub fn tlsh(&self, py: Python) -> PyResult<Option<TLSH>> {
+        self.with_inner_block(py, |block| {
+            Ok(block.tlsh().map(|hash| TLSH {
+                bytes: hash.bytes.into_owned(),
+            }))
+        })
     }
 
     #[pyo3(text_signature = "($self)")]
     /// Retrieves the SHA-256 hash of the block.
-    pub fn sha256(&self, py: Python) -> PyResult<Option<String>> {
-        self.with_inner_block(py, |block| Ok(block.sha256()))
+    pub fn sha256(&self, py: Python) -> PyResult<Option<SHA256>> {
+        self.with_inner_block(py, |block| {
+            Ok(block.sha256().map(|hash| SHA256 {
+                bytes: hash.bytes.into_owned(),
+            }))
+        })
     }
 
     #[pyo3(text_signature = "($self)")]
     /// Retrieves the MinHash of the block.
-    pub fn minhash(&self, py: Python) -> PyResult<Option<String>> {
-        self.with_inner_block(py, |block| Ok(block.minhash()))
+    pub fn minhash(&self, py: Python) -> PyResult<Option<MinHash32>> {
+        self.with_inner_block(py, |block| {
+            Ok(block.minhash().map(|hash| MinHash32 {
+                bytes: hash.bytes.into_owned(),
+                num_hashes: block.cfg.config.blocks.hashing.minhash.number_of_hashes,
+                shingle_size: block.cfg.config.blocks.hashing.minhash.shingle_size,
+                seed: block.cfg.config.blocks.hashing.minhash.seed,
+            }))
+        })
     }
 
     #[pyo3(text_signature = "($self)")]

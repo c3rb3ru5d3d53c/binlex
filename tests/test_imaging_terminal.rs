@@ -20,11 +20,18 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use binlex::Config;
 use binlex::imaging::{Palette, Terminal};
 
 #[test]
 fn terminal_output_uses_rows_and_resets() {
-    let terminal = Terminal::new_with_options(&[0x00, 0x7f, 0xff], Palette::Grayscale, 1, 2);
+    let terminal = Terminal::with_options(
+        &[0x00, 0x7f, 0xff],
+        Palette::Grayscale,
+        1,
+        2,
+        Config::default(),
+    );
     let mut buffer = Vec::new();
 
     terminal.write(&mut buffer).unwrap();
@@ -37,7 +44,13 @@ fn terminal_output_uses_rows_and_resets() {
 
 #[test]
 fn terminal_output_maps_expected_ansi_colors() {
-    let terminal = Terminal::new_with_options(&[0x00, 0x80, 0xff], Palette::Grayscale, 1, 16);
+    let terminal = Terminal::with_options(
+        &[0x00, 0x80, 0xff],
+        Palette::Grayscale,
+        1,
+        16,
+        Config::default(),
+    );
     let mut buffer = Vec::new();
 
     terminal.write(&mut buffer).unwrap();

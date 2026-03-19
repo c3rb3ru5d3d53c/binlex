@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 use binlex::AUTHOR;
+use binlex::Config;
 use binlex::VERSION;
 use binlex::hashing::SHA256;
 use binlex::imaging::PNG;
@@ -113,7 +114,13 @@ fn metadata(byte_data: &[u8]) -> BTreeMap<String, String> {
 }
 
 fn build_svg(byte_data: &[u8], palette: Palette, cell_size: usize, fixed_width: usize) -> SVG {
-    SVG::new_with_options(byte_data, palette, cell_size, fixed_width)
+    SVG::with_options(
+        byte_data,
+        palette,
+        cell_size,
+        fixed_width,
+        Config::default(),
+    )
 }
 
 fn build_terminal(
@@ -122,9 +129,21 @@ fn build_terminal(
     cell_size: usize,
     fixed_width: usize,
 ) -> Terminal {
-    Terminal::new_with_options(byte_data, palette, cell_size, fixed_width)
+    Terminal::with_options(
+        byte_data,
+        palette,
+        cell_size,
+        fixed_width,
+        Config::default(),
+    )
 }
 
 fn build_png(byte_data: &[u8], palette: Palette, cell_size: usize, fixed_width: usize) -> PNG {
-    PNG::new_with_options(byte_data, palette, cell_size, fixed_width)
+    PNG::with_options(
+        byte_data,
+        palette,
+        cell_size,
+        fixed_width,
+        Config::default(),
+    )
 }

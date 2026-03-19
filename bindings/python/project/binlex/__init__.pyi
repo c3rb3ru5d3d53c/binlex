@@ -4,6 +4,7 @@ from binlex.architecture import Architecture
 from binlex._global import Config
 from . import clients
 from . import compression
+from . import genetics
 from . import hashing
 from . import hex, hexdump, math
 from binlex.magic import Magic
@@ -18,6 +19,7 @@ __all__ = [
     "controlflow",
     "disassemblers",
     "formats",
+    "genetics",
     "hashing",
     "hexdump",
     "hex",

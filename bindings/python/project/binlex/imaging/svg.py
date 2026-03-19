@@ -23,6 +23,8 @@
 """SVG rendering helpers for binary visualization output."""
 
 from binlex_bindings.binlex.imaging import SVG as _SVGBinding
+from binlex import Config
+from binlex.hashing import AHash, DHash, PHash
 
 from .palette import Palette
 
@@ -34,6 +36,7 @@ class SVG:
         self,
         data: bytes,
         palette: Palette,
+        config: Config,
         cell_size: int = 1,
         fixed_width: int = 16,
     ) -> None:
@@ -41,6 +44,7 @@ class SVG:
         self._inner = _SVGBinding(
             data,
             palette.to_binding(),
+            config,
             cell_size,
             fixed_width,
         )
@@ -58,8 +62,30 @@ class SVG:
         self._inner.write(file_path)
 
     def print(self) -> None:
-        """Print the generated SVG document to stdout."""
+        """Write the rendered terminal preview to stdout."""
         self._inner.print()
+
+    def print_svg(self) -> None:
+        """Print the generated SVG document to stdout."""
+        self._inner.print_svg()
+
+    def sha256(self) -> str | None:
+        return self._inner.sha256()
+
+    def tlsh(self) -> str | None:
+        return self._inner.tlsh()
+
+    def minhash(self) -> str | None:
+        return self._inner.minhash()
+
+    def ahash(self) -> AHash | None:
+        return self._inner.ahash()
+
+    def dhash(self) -> DHash | None:
+        return self._inner.dhash()
+
+    def phash(self) -> PHash | None:
+        return self._inner.phash()
 
     def __str__(self) -> str:
         return self.to_string()

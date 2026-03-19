@@ -125,12 +125,12 @@ impl Chromosome {
         result
     }
 
-    /// Retrieves the raw bytes within the address range of the chromosome.
+    /// Retrieves the normalized bytes produced by the chromosome pattern.
     ///
     /// # Returns
     ///
-    /// Returns a `Vec<u8>` containing the normalized bytes of the chromosome.
-    pub fn normalized(&self) -> Vec<u8> {
+    /// Returns a `Vec<u8>` containing the chromosome bytes.
+    pub fn bytes(&self) -> Vec<u8> {
         let mut result = Vec::new();
         let mut temp_byte: Option<u8> = None;
         for pair in &self.allelepairs {
@@ -185,7 +185,7 @@ impl Chromosome {
             return None;
         }
         TLSH::new(
-            &self.normalized(),
+            &self.bytes(),
             self.config.chromosomes.hashing.tlsh.minimum_byte_size,
         )
         .hexdigest()
@@ -201,7 +201,7 @@ impl Chromosome {
         if !self.config.chromosomes.hashing.minhash.enabled {
             return None;
         }
-        if self.normalized().len() > self.config.chromosomes.hashing.minhash.maximum_byte_size
+        if self.bytes().len() > self.config.chromosomes.hashing.minhash.maximum_byte_size
             && self
                 .config
                 .chromosomes
@@ -212,7 +212,7 @@ impl Chromosome {
             return None;
         }
         MinHash32::new(
-            &self.normalized(),
+            &self.bytes(),
             self.config.chromosomes.hashing.minhash.number_of_hashes,
             self.config.chromosomes.hashing.minhash.shingle_size,
             self.config.chromosomes.hashing.minhash.seed,
@@ -229,7 +229,7 @@ impl Chromosome {
         if !self.config.chromosomes.hashing.sha256.enabled {
             return None;
         }
-        SHA256::new(&self.normalized()).hexdigest()
+        SHA256::new(&self.bytes()).hexdigest()
     }
 
     /// Computes the entropy of the normalized chromosome, if enabled.
@@ -241,7 +241,7 @@ impl Chromosome {
         if !self.config.chromosomes.entropy.enabled {
             return None;
         }
-        entropy::shannon(&self.normalized())
+        entropy::shannon(&self.bytes())
     }
 
     /// Processes the chromosome into its JSON-serializable representation.

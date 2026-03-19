@@ -88,10 +88,16 @@ pub struct ConfigFormats {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigImaging {
+    pub hashing: ConfigImagingHashing,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigData {
     pub general: ConfigGeneral,
     pub server: ConfigServer,
     pub formats: ConfigFormats,
+    pub imaging: ConfigImaging,
     pub instructions: ConfigInstructions,
     pub blocks: ConfigBlocks,
     pub functions: ConfigFunctions,
@@ -154,15 +160,25 @@ pub struct ConfigHeuristicEntropy {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigHashing {
-    pub sha256: ConfigSHA256,
+    pub sha256: ConfigHashEnabled,
     pub tlsh: ConfigTLSH,
     pub minhash: ConfigMinhash,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigFileHashing {
-    pub sha256: ConfigSHA256,
+    pub sha256: ConfigHashEnabled,
     pub tlsh: ConfigTLSH,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigImagingHashing {
+    pub sha256: ConfigHashEnabled,
+    pub tlsh: ConfigTLSH,
+    pub minhash: ConfigMinhash,
+    pub ahash: ConfigHashEnabled,
+    pub dhash: ConfigHashEnabled,
+    pub phash: ConfigHashEnabled,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -207,7 +223,7 @@ pub struct ConfigTLSH {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigSHA256 {
+pub struct ConfigHashEnabled {
     pub enabled: bool,
 }
 

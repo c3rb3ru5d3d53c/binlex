@@ -6,9 +6,7 @@ from binlex.controlflow import Graph
 from binlex.disassemblers.capstone import Disassembler
 from binlex.formats import PE
 from binlex.lifters.vex import Lifter
-from binlex.imaging import Palette, Terminal
-from binlex.imaging import PNG
-from binlex.hashing import PHash
+from binlex.imaging import Palette, PNG
 
 # Create shared configuration
 config = Config()
@@ -40,8 +38,17 @@ disassembler.disassemble_controlflow(
 )
 
 # Get First Function
-function = cfg.functions()[0]
+function_lhs = cfg.functions()[0]
+function_rhs = cfg.functions()[4]
 
-png = PNG(function.chromosome().normalized(), Palette.GRAYSCALE)
-phash = PHash(png.bytes())
-print(phash.hexdigest())
+png_lhs = PNG(function_lhs.bytes(), Palette.REDBLACK, config)
+print('lhs')
+png_lhs.print()
+png_rhs = PNG(function_rhs.bytes(), Palette.REDBLACK, config)
+print('rhs')
+png_rhs.print()
+
+result = png_lhs.phash().compare(png_rhs.phash())
+print(result)
+
+

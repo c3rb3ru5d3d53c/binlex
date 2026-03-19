@@ -30,6 +30,7 @@ from binlex_bindings.binlex import Config
 from .architecture import Architecture
 from . import clients
 from . import compression
+from . import genetics
 from . import hexdump
 from . import hex
 from . import hashing
@@ -46,6 +47,7 @@ __all__ = [
     "controlflow",
     "disassemblers",
     "formats",
+    "genetics",
     "hashing",
     "hexdump",
     "hex",

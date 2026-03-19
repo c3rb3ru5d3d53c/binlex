@@ -20,6 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use std::borrow::Cow;
 use tlsh;
 
 /// Represents a wrapper around the TLSH (Trend Micro Locality Sensitive Hash) functionality.
@@ -28,7 +29,7 @@ use tlsh;
 /// byte size requirement, which ensures only sufficiently large data is hashed.
 pub struct TLSH<'tlsh> {
     /// The slice of bytes to be hashed.
-    pub bytes: &'tlsh [u8],
+    pub bytes: Cow<'tlsh, [u8]>,
     /// The minimum required byte size for hashing.
     pub mininum_byte_size: usize,
 }
@@ -47,14 +48,35 @@ impl<'tlsh> TLSH<'tlsh> {
     #[allow(dead_code)]
     pub fn new(bytes: &'tlsh [u8], mininum_byte_size: usize) -> Self {
         Self {
-            bytes,
+            bytes: Cow::Borrowed(bytes),
             mininum_byte_size,
         }
     }
 
+    #[allow(dead_code)]
+    pub fn from_bytes(bytes: Vec<u8>, mininum_byte_size: usize) -> TLSH<'static> {
+        TLSH {
+            bytes: Cow::Owned(bytes),
+            mininum_byte_size,
+        }
+    }
+
+    /// Compares this TLSH object against another TLSH object.
+    pub fn compare(&self, other: &Self) -> Option<f64> {
+        let lhs = self.hexdigest()?;
+        let rhs = other.hexdigest()?;
+        Self::compare_hexdigests(&lhs, &rhs)
+    }
+
+    /// Compares this TLSH object against a TLSH hexdigest.
+    pub fn compare_hexdigest(&self, other: &str) -> Option<f64> {
+        let lhs = self.hexdigest()?;
+        Self::compare_hexdigests(&lhs, other)
+    }
+
     /// Compares two TLSH digests.
-    pub fn compare(lhs: String, rhs: String) -> Option<f64> {
-        tlsh::compare(&lhs, &rhs).map(|value| value as f64).ok()
+    pub fn compare_hexdigests(lhs: &str, rhs: &str) -> Option<f64> {
+        tlsh::compare(lhs, rhs).map(|value| value as f64).ok()
     }
 
     /// Computes the TLSH hash of the byte slice if it meets the minimum size requirement.
@@ -68,6 +90,8 @@ impl<'tlsh> TLSH<'tlsh> {
         if self.bytes.len() < self.mininum_byte_size {
             return None;
         }
-        tlsh::hash_buf(self.bytes).ok().map(|h| h.to_string())
+        tlsh::hash_buf(self.bytes.as_ref())
+            .ok()
+            .map(|h| h.to_string())
     }
 }

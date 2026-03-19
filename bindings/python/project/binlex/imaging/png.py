@@ -23,6 +23,8 @@
 """PNG rendering helpers for binary visualization output."""
 
 from binlex_bindings.binlex.imaging import PNG as _PNGBinding
+from binlex import Config
+from binlex.hashing import AHash, DHash, PHash
 
 from .palette import Palette
 
@@ -34,6 +36,7 @@ class PNG:
         self,
         data: bytes,
         palette: Palette,
+        config: Config,
         cell_size: int = 1,
         fixed_width: int = 16,
     ) -> None:
@@ -41,6 +44,7 @@ class PNG:
         self._inner = _PNGBinding(
             data,
             palette.to_binding(),
+            config,
             cell_size,
             fixed_width,
         )
@@ -52,6 +56,28 @@ class PNG:
     def write(self, file_path: str) -> None:
         """Write the encoded PNG image to `file_path`."""
         self._inner.write(file_path)
+
+    def print(self) -> None:
+        """Write the rendered terminal preview to stdout."""
+        self._inner.print()
+
+    def sha256(self) -> str | None:
+        return self._inner.sha256()
+
+    def tlsh(self) -> str | None:
+        return self._inner.tlsh()
+
+    def minhash(self) -> str | None:
+        return self._inner.minhash()
+
+    def ahash(self) -> AHash | None:
+        return self._inner.ahash()
+
+    def dhash(self) -> DHash | None:
+        return self._inner.dhash()
+
+    def phash(self) -> PHash | None:
+        return self._inner.phash()
 
 
 __all__ = ["PNG"]

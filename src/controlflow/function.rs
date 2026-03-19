@@ -348,48 +348,9 @@ impl<'function> Function<'function> {
                 Some(entropi.iter().sum::<f64>() / entropi.len() as f64)
             }
         };
-        let sha256 = if self.cfg.config.functions.hashing.sha256.enabled && contiguous {
-            bytes
-                .as_ref()
-                .and_then(|bytes| SHA256::new(bytes).hexdigest())
-        } else {
-            None
-        };
-        let tlsh = if self.cfg.config.functions.hashing.tlsh.enabled && contiguous {
-            bytes.as_ref().and_then(|bytes| {
-                TLSH::new(
-                    bytes,
-                    self.cfg.config.functions.hashing.tlsh.minimum_byte_size,
-                )
-                .hexdigest()
-            })
-        } else {
-            None
-        };
-        let minhash = if self.cfg.config.functions.hashing.minhash.enabled && contiguous {
-            bytes.as_ref().and_then(|bytes| {
-                if bytes.len() > self.cfg.config.functions.hashing.minhash.maximum_byte_size
-                    && self
-                        .cfg
-                        .config
-                        .functions
-                        .hashing
-                        .minhash
-                        .maximum_byte_size_enabled
-                {
-                    return None;
-                }
-                MinHash32::new(
-                    bytes,
-                    self.cfg.config.functions.hashing.minhash.number_of_hashes,
-                    self.cfg.config.functions.hashing.minhash.shingle_size,
-                    self.cfg.config.functions.hashing.minhash.seed,
-                )
-                .hexdigest()
-            })
-        } else {
-            None
-        };
+        let sha256 = self.sha256().and_then(|hash| hash.hexdigest());
+        let tlsh = self.tlsh().and_then(|hash| hash.hexdigest());
+        let minhash = self.minhash().and_then(|hash| hash.hexdigest());
 
         FunctionJson {
             address: self.address,
@@ -670,18 +631,15 @@ impl<'function> Function<'function> {
     ///
     /// # Returns
     ///
-    /// Returns `Some(String)` containing the hash, or `None` if SHA-256 is disabled or the function is not contiguous.
-    pub fn sha256(&self) -> Option<String> {
+    /// Returns `Some(SHA256)` containing the hash object, or `None` if SHA-256 is disabled or the function is not contiguous.
+    pub fn sha256(&self) -> Option<SHA256<'static>> {
         if !self.cfg.config.functions.hashing.sha256.enabled {
             return None;
         }
         if !self.contiguous() {
             return None;
         }
-        if let Some(bytes) = self.bytes() {
-            return SHA256::new(&bytes).hexdigest();
-        }
-        None
+        self.bytes().map(SHA256::from_bytes)
     }
 
     /// Computes the entropy of the function's bytes, if enabled and contiguous.
@@ -715,30 +673,28 @@ impl<'function> Function<'function> {
     ///
     /// # Returns
     ///
-    /// Returns `Some(String)` containing the TLSH, or `None` if TLSH is disabled or the function is not contiguous.
-    pub fn tlsh(&self) -> Option<String> {
+    /// Returns `Some(TLSH)` containing the TLSH object, or `None` if TLSH is disabled or the function is not contiguous.
+    pub fn tlsh(&self) -> Option<TLSH<'static>> {
         if !self.cfg.config.functions.hashing.tlsh.enabled {
             return None;
         }
         if !self.contiguous() {
             return None;
         }
-        if let Some(bytes) = self.bytes() {
-            return TLSH::new(
-                &bytes,
+        self.bytes().map(|bytes| {
+            TLSH::from_bytes(
+                bytes,
                 self.cfg.config.functions.hashing.tlsh.minimum_byte_size,
             )
-            .hexdigest();
-        }
-        None
+        })
     }
 
     /// Computes the MinHash of the function's bytes, if enabled and contiguous.
     ///
     /// # Returns
     ///
-    /// Returns `Some(String)` containing the MinHash, or `None` if MinHash is disabled or the function is not contiguous.
-    pub fn minhash(&self) -> Option<String> {
+    /// Returns `Some(MinHash32)` containing the MinHash object, or `None` if MinHash is disabled or the function is not contiguous.
+    pub fn minhash(&self) -> Option<MinHash32<'static>> {
         if !self.cfg.config.functions.hashing.minhash.enabled {
             return None;
         }
@@ -757,13 +713,12 @@ impl<'function> Function<'function> {
             {
                 return None;
             }
-            return MinHash32::new(
-                &bytes,
+            return Some(MinHash32::from_bytes(
+                bytes,
                 self.cfg.config.functions.hashing.minhash.number_of_hashes,
                 self.cfg.config.functions.hashing.minhash.shingle_size,
                 self.cfg.config.functions.hashing.minhash.seed,
-            )
-            .hexdigest();
+            ));
         }
         None
     }

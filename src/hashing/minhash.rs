@@ -22,6 +22,7 @@
 
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
+use std::borrow::Cow;
 use std::hash::{Hash, Hasher};
 use twox_hash::XxHash32;
 
@@ -41,7 +42,7 @@ pub struct MinHash32<'minhash32> {
     /// The size of shingles (substrings) used to compute MinHash.
     shingle_size: usize,
     /// The byte slice to be hashed.
-    bytes: &'minhash32 [u8],
+    pub bytes: Cow<'minhash32, [u8]>,
 }
 
 impl<'minhash32> MinHash32<'minhash32> {
@@ -59,6 +60,24 @@ impl<'minhash32> MinHash32<'minhash32> {
     /// Returns a `MinHash32` instance initialized with the provided parameters and
     /// randomly generated coefficients for the hash functions.
     pub fn new(bytes: &'minhash32 [u8], num_hashes: usize, shingle_size: usize, seed: u64) -> Self {
+        Self::from_cow(Cow::Borrowed(bytes), num_hashes, shingle_size, seed)
+    }
+
+    pub fn from_bytes(
+        bytes: Vec<u8>,
+        num_hashes: usize,
+        shingle_size: usize,
+        seed: u64,
+    ) -> MinHash32<'static> {
+        MinHash32::from_cow(Cow::Owned(bytes), num_hashes, shingle_size, seed)
+    }
+
+    fn from_cow(
+        bytes: Cow<'minhash32, [u8]>,
+        num_hashes: usize,
+        shingle_size: usize,
+        seed: u64,
+    ) -> Self {
         let mut rng = SmallRng::seed_from_u64(seed);
         let max_hash: u32 = u32::MAX;
         let mut a_coefficients = Vec::with_capacity(num_hashes);
@@ -92,7 +111,7 @@ impl<'minhash32> MinHash32<'minhash32> {
             return None;
         }
         let mut min_hashes = vec![u32::MAX; self.num_hashes];
-        for shingle in self.bytes.windows(self.shingle_size) {
+        for shingle in self.bytes.as_ref().windows(self.shingle_size) {
             let mut hasher = XxHash32::default();
             shingle.hash(&mut hasher);
             let shingle_hash = hasher.finish() as u32;
@@ -111,19 +130,24 @@ impl<'minhash32> MinHash32<'minhash32> {
         Some(min_hashes)
     }
 
+    /// Computes similarity between this MinHash object and another MinHash object.
+    pub fn compare(&self, other: &Self) -> Option<f64> {
+        let lhs = self.hexdigest()?;
+        let rhs = other.hexdigest()?;
+        Self::compare_hexdigests(&lhs, &rhs)
+    }
+
+    /// Computes similarity between this MinHash object and a MinHash hexdigest.
+    pub fn compare_hexdigest(&self, other: &str) -> Option<f64> {
+        let lhs = self.hexdigest()?;
+        Self::compare_hexdigests(&lhs, other)
+    }
+
     /// Computes similarity between two MinHash digests.
-    pub fn compare(hexdigest1: &str, hexdigest2: &str) -> f64 {
-        let hash1 = Self::parse_hexdigest(hexdigest1);
-        let hash2 = Self::parse_hexdigest(hexdigest2);
-
-        if hash1.is_none() || hash2.is_none() {
-            return 0.0;
-        }
-
-        let hash1 = hash1.unwrap();
-        let hash2 = hash2.unwrap();
-
-        Self::jaccard_similarity(&hash1, &hash2)
+    pub fn compare_hexdigests(hexdigest1: &str, hexdigest2: &str) -> Option<f64> {
+        let hash1 = Self::parse_hexdigest(hexdigest1)?;
+        let hash2 = Self::parse_hexdigest(hexdigest2)?;
+        Some(Self::jaccard_similarity(&hash1, &hash2))
     }
 
     fn jaccard_similarity(hash1: &[u32], hash2: &[u32]) -> f64 {

@@ -22,13 +22,14 @@
 
 use crate::hex;
 use ring::digest;
+use std::borrow::Cow;
 
 /// Represents a wrapper for computing SHA-256 hashes.
 ///
 /// This struct provides functionality for hashing a byte slice using the SHA-256
 /// cryptographic hash algorithm and returning the hash as a hexadecimal string.
 pub struct SHA256<'sha256> {
-    pub bytes: &'sha256 [u8],
+    pub bytes: Cow<'sha256, [u8]>,
 }
 
 impl<'sha256> SHA256<'sha256> {
@@ -43,7 +44,16 @@ impl<'sha256> SHA256<'sha256> {
     /// Returns a `SHA256` instance initialized with the provided byte slice.
     #[allow(dead_code)]
     pub fn new(bytes: &'sha256 [u8]) -> Self {
-        Self { bytes }
+        Self {
+            bytes: Cow::Borrowed(bytes),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn from_bytes(bytes: Vec<u8>) -> SHA256<'static> {
+        SHA256 {
+            bytes: Cow::Owned(bytes),
+        }
     }
 
     /// Computes the SHA-256 hash of the byte slice and returns it as a hexadecimal string.
@@ -55,7 +65,7 @@ impl<'sha256> SHA256<'sha256> {
     /// designed to always succeed, as `ring::digest` does not fail under normal conditions.
     #[allow(dead_code)]
     pub fn hexdigest(&self) -> Option<String> {
-        let digest = digest::digest(&digest::SHA256, self.bytes);
+        let digest = digest::digest(&digest::SHA256, self.bytes.as_ref());
         Some(hex::encode(digest.as_ref()))
     }
 }
