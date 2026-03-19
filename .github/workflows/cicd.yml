@@ -34,12 +34,11 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
-  build:
+  native-build:
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-14, macos-15-intel, macos-15, windows-latest]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
 
     runs-on: ${{ matrix.os }}
 
@@ -61,10 +60,158 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
+      - name: Install Dependencies (Ubuntu)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libssl-dev make automake autoconf libtool
+
+      - name: Install Dependencies (macOS)
+        if: startsWith(matrix.os, 'macos-')
+        run: |
+          brew list openssl@3 >/dev/null 2>&1 || brew install openssl@3
+          brew list automake >/dev/null 2>&1 || brew install automake
+          brew list autoconf >/dev/null 2>&1 || brew install autoconf
+          brew list libtool >/dev/null 2>&1 || brew install libtool
+
+      - name: Install Vulkan SDK (macOS)
+        if: startsWith(matrix.os, 'macos-')
+        uses: humbletim/install-vulkan-sdk@v1.2
+        with:
+          version: 1.4.309.0
+          cache: true
+
+      - name: Configure Vulkan Environment (macOS)
+        if: startsWith(matrix.os, 'macos-')
+        shell: bash
+        run: |
+          echo "DYLD_FALLBACK_LIBRARY_PATH=$VULKAN_SDK/lib${DYLD_FALLBACK_LIBRARY_PATH:+:$DYLD_FALLBACK_LIBRARY_PATH}" >> "$GITHUB_ENV"
+          echo "VK_ICD_FILENAMES=$VULKAN_SDK/share/vulkan/icd.d/MoltenVK_icd.json" >> "$GITHUB_ENV"
+          echo "VK_LAYER_PATH=$VULKAN_SDK/share/vulkan/explicit_layer.d" >> "$GITHUB_ENV"
+
+      - name: Install MSYS2 and Automake (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          install: >-
+            automake
+            autoconf
+            make
+            libtool
+
+      - name: Enable Developer Command Prompt (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        uses: TheMrMilchmann/setup-msvc-dev@v4
+        with:
+          arch: x64
+
+      - name: Run Unit Tests (Unix)
+        if: ${{ matrix.os != 'windows-latest' }}
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            cargo test && break
+            echo "Attempt $attempt failed, retrying in 15s..."
+            sleep 15
+          done
+
+      - name: Run Unit Tests (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: cargo test
+
+      - name: Build Project (Ubuntu)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: make deb
+
+      - name: Build Project (macOS)
+        if: startsWith(matrix.os, 'macos-')
+        run: cargo build --release
+
+      - name: Build Project (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: cargo build --release
+
+      - name: Create Dist Directory
+        run: mkdir dist
+
+      - name: Copy Binary (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: |
+          copy target\release\binlex.exe dist\
+          copy target\release\binlex-processor.exe dist\
+          copy target\release\binlex-yara.exe dist\
+          copy target\release\binlex-pdb.exe dist\
+          copy target\release\binlex-elf-symbols.exe dist\
+          copy target\release\binlex-macho-symbols.exe dist\
+          copy target\release\binlex-rizin.exe dist\
+          copy target\release\binlex-image.exe dist\
+          copy target\release\binlex-hash.exe dist\
+
+      - name: Copy Binary (macOS)
+        if: startsWith(matrix.os, 'macos-')
+        run: |
+          cp target/release/binlex dist/
+          cp target/release/binlex-processor dist/
+          cp target/release/binlex-yara dist/
+          cp target/release/binlex-pdb dist/
+          cp target/release/binlex-elf-symbols dist/
+          cp target/release/binlex-macho-symbols dist/
+          cp target/release/binlex-rizin dist/
+          cp target/release/binlex-image dist/
+          cp target/release/binlex-hash dist/
+
+      - name: Copy Binary (Ubuntu)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: |
+          cp target/release/binlex dist/
+          cp target/release/binlex-processor dist/
+          cp target/release/binlex-yara dist/
+          cp target/release/binlex-pdb dist/
+          cp target/release/binlex-elf-symbols dist/
+          cp target/release/binlex-macho-symbols dist/
+          cp target/release/binlex-rizin dist/
+          cp target/release/binlex-image dist/
+          cp target/release/binlex-hash dist/
+          cp target/debian/*.deb dist/
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.os }}-native-artifacts
+          path: dist/
+
+  python-wheels:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, macos-15-intel, macos-15, windows-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo Registry and Build
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: wheels-${{ runner.os }}-${{ matrix.os }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            wheels-${{ runner.os }}-${{ matrix.os }}-cargo-
+            wheels-${{ runner.os }}-cargo-
+
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.13"
 
       - name: Install Dependencies (Ubuntu)
         if: ${{ matrix.os == 'ubuntu-latest' }}
@@ -115,112 +262,21 @@ jobs:
       - name: Install Python Build Tools
         run: |
           python -m pip install --upgrade pip
-          python -m pip install setuptools wheel virtualenv
+          python -m pip install cibuildwheel
 
-      - name: Run Unit Tests (Unix)
-        if: ${{ matrix.os != 'windows-latest' }}
-        shell: bash
-        run: |
-          for attempt in 1 2 3; do
-            cargo test && break
-            echo "Attempt $attempt failed, retrying in 15s..."
-            sleep 15
-          done
+      - name: Build Python Wheels
+        uses: pypa/cibuildwheel@v3.2.0
+        env:
+          CIBW_BUILD: cp39-* cp310-* cp311-* cp312-* cp313-* cp314-*
+        with:
+          package-dir: bindings/python
+          output-dir: wheelhouse
 
-      - name: Run Unit Tests (Windows)
-        if: ${{ matrix.os == 'windows-latest' }}
-        run: cargo test
-
-      - name: Build Project (Ubuntu)
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: make deb
-
-      - name: Build Project (macOS)
-        if: startsWith(matrix.os, 'macos-')
-        run: cargo build --release
-
-      - name: Build Project (Windows)
-        if: ${{ matrix.os == 'windows-latest' }}
-        run: cargo build --release
-
-      - name: Build Python Wheels (Ubuntu)
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: |
-          python -m venv venv
-          . venv/bin/activate
-          cd bindings/python/
-          pip install maturin[patchelf]
-          maturin build --release
-
-      - name: Build Python Wheels (MacOS)
-        if: startsWith(matrix.os, 'macos-')
-        run: |
-          python -m venv venv
-          . venv/bin/activate
-          cd bindings/python/
-          pip install maturin
-          maturin build --release
-
-      - name: Build Python Wheels (Windows)
-        if: ${{ matrix.os == 'windows-latest' }}
-        run: |
-          python -m venv venv
-          .\venv\Scripts\activate
-          cd bindings/python/
-          pip install maturin
-          maturin build --release
-
-      - name: Create Dist Directory
-        run: mkdir dist
-
-      - name: Copy Binary (Windows)
-        if: ${{ matrix.os == 'windows-latest' }}
-        run: |
-          copy target\release\binlex.exe dist\
-          copy target\release\binlex-processor.exe dist\
-          copy target\release\binlex-yara.exe dist\
-          copy target\release\binlex-pdb.exe dist\
-          copy target\release\binlex-elf-symbols.exe dist\
-          copy target\release\binlex-macho-symbols.exe dist\
-          copy target\release\binlex-rizin.exe dist\
-          copy target\release\binlex-image.exe dist\
-          copy target\release\binlex-hash.exe dist\
-          copy target\wheels\*.whl dist\
-
-      - name: Copy Binary (macOS)
-        if: startsWith(matrix.os, 'macos-')
-        run: |
-          cp target/release/binlex dist/
-          cp target/release/binlex-processor dist/
-          cp target/release/binlex-yara dist/
-          cp target/release/binlex-pdb dist/
-          cp target/release/binlex-elf-symbols dist/
-          cp target/release/binlex-macho-symbols dist/
-          cp target/release/binlex-rizin dist/
-          cp target/release/binlex-image dist/
-          cp target/release/binlex-hash dist/
-          cp target/wheels/*.whl dist/
-
-      - name: Copy Binary (Ubuntu)
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: |
-          cp target/release/binlex dist/
-          cp target/release/binlex-processor dist/
-          cp target/release/binlex-yara dist/
-          cp target/release/binlex-pdb dist/
-          cp target/release/binlex-elf-symbols dist/
-          cp target/release/binlex-macho-symbols dist/
-          cp target/release/binlex-rizin dist/
-          cp target/release/binlex-image dist/
-          cp target/release/binlex-hash dist/
-          cp target/debian/*.deb dist/
-          cp target/wheels/*.whl dist/
-
-      - name: Upload Artifacts
+      - name: Upload Wheel Artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: ${{ matrix.os }}-artifacts-${{ strategy.job-index }}
-          path: dist/
+          name: ${{ matrix.os }}-python-wheels
+          path: wheelhouse/
 
   archlinux:
     runs-on: ubuntu-latest
@@ -230,7 +286,7 @@ jobs:
       - name: Install Arch Dependencies
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm base-devel curl git zip clang
+          pacman -S --noconfirm base-devel curl git zip clang python python-pip openssl zlib xz bzip2 libffi
           echo '%wheel ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
           useradd -m -G wheel builder
           echo 'builder ALL=(ALL) NOPASSWD: /usr/bin/make' >> /etc/sudoers
@@ -250,6 +306,10 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_REF: ${{ github.ref }}
 
+      - name: Install Python Wheel Tooling (Arch Linux)
+        run: |
+          sudo -u builder bash -lc 'python -m pip install --user --upgrade pip uv maturin'
+
       - name: Build Project (Arch Linux)
         run: |
           sudo -u builder bash -c 'cd /home/builder/repo/ && . /home/builder/.cargo/env && make zst'
@@ -257,6 +317,25 @@ jobs:
       - name: Run Unit Tests
         run: |
           sudo -u builder bash -c 'cd /home/builder/repo/ && . /home/builder/.cargo/env && cargo test'
+
+      - name: Build Python Wheels (Arch Linux)
+        run: |
+          sudo -u builder bash -lc '
+            set -euo pipefail
+            export PATH="/home/builder/.local/bin:$PATH"
+            cd /home/builder/repo/
+            . /home/builder/.cargo/env
+            uv python install 3.9 3.10 3.11 3.12 3.13 3.14
+            python -m maturin build --release \
+              --manifest-path bindings/python/Cargo.toml \
+              --interpreter \
+                "$(uv python find 3.9)" \
+                "$(uv python find 3.10)" \
+                "$(uv python find 3.11)" \
+                "$(uv python find 3.12)" \
+                "$(uv python find 3.13)" \
+                "$(uv python find 3.14)"
+          '
 
       - name: Copy Binary (Arch Linux)
         run: |
@@ -271,6 +350,7 @@ jobs:
           cp /home/builder/repo/target/release/binlex-image dist/
           cp /home/builder/repo/target/release/binlex-hash dist/
           cp /home/builder/repo/target/zst/*.zst dist/
+          cp /home/builder/repo/target/wheels/*.whl dist/
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v6
