@@ -369,7 +369,7 @@ fn validate_hello(
     processor_name: &str,
     processor_id: u16,
 ) -> Result<(), ProcessorError> {
-    let registration = processor::processor_registration_by_name(processor_name)
+    let registration = processor::registry::processor_registration_by_name_unfiltered(processor_name)
         .ok_or_else(|| ProcessorError::Protocol(format!("unregistered processor {}", processor_name)))?;
     if hello.protocol_version != crate::runtime::modes::ipc::protocol::VERSION {
         return Err(ProcessorError::UnexpectedResponse(format!(
@@ -447,18 +447,18 @@ mod tests {
             backend_name: "binlex-processor".to_string(),
             binlex_version: crate::VERSION.to_string(),
             host_os: ProcessorOs::current(),
-            processor_name: "vex".to_string(),
+            processor_name: "embeddings".to_string(),
             supported_ids: vec![1],
             processors: vec![HelloProcessor {
                 id: 1,
-                name: "vex".to_string(),
+                name: "embeddings".to_string(),
                 requires: ">=2.0.0 <3.0.0".to_string(),
                 os: vec![ProcessorOs::current()],
             }],
             pid: 1,
         };
 
-        assert!(validate_hello(&hello, "binlex-processor", "vex", 1).is_ok());
+        assert!(validate_hello(&hello, "binlex-processor", "embeddings", 1).is_ok());
     }
 
     #[test]
@@ -473,18 +473,18 @@ mod tests {
             backend_name: "binlex-processor".to_string(),
             binlex_version: crate::VERSION.to_string(),
             host_os: ProcessorOs::current(),
-            processor_name: "vex".to_string(),
+            processor_name: "embeddings".to_string(),
             supported_ids: vec![1],
             processors: vec![HelloProcessor {
                 id: 1,
-                name: "vex".to_string(),
+                name: "embeddings".to_string(),
                 requires: ">=2.0.0 <3.0.0".to_string(),
                 os: vec![unsupported],
             }],
             pid: 1,
         };
 
-        let error = validate_hello(&hello, "binlex-processor", "vex", 1)
+        let error = validate_hello(&hello, "binlex-processor", "embeddings", 1)
             .expect_err("hello should be rejected when processor os metadata excludes host os");
         assert!(error.to_string().contains("advertised unsupported os list"));
     }

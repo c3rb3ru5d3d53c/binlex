@@ -3,7 +3,6 @@ use crate::config::ConfigProcessor;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::io::stderr::Stderr;
 use crate::processor::{ProcessorArchitecture, ProcessorMode, ProcessorOs, ProcessorTarget};
-#[cfg(not(target_os = "windows"))]
 use crate::processors::embeddings;
 #[cfg(not(target_os = "windows"))]
 use crate::processors::vex;
@@ -507,7 +506,8 @@ static PROCESSOR_REGISTRATIONS: Lazy<Vec<ProcessorRegistration>> =
     Lazy::new(|| vec![vex::registration(), embeddings::registration()]);
 
 #[cfg(target_os = "windows")]
-static PROCESSOR_REGISTRATIONS: Lazy<Vec<ProcessorRegistration>> = Lazy::new(Vec::new);
+static PROCESSOR_REGISTRATIONS: Lazy<Vec<ProcessorRegistration>> =
+    Lazy::new(|| vec![embeddings::registration()]);
 
 fn processor_registrations() -> &'static [ProcessorRegistration] {
     PROCESSOR_REGISTRATIONS.as_slice()
@@ -542,6 +542,19 @@ pub fn processor_registration_by_name(name: &str) -> Option<RegisteredProcessor<
         .find(|(_, registration)| {
             registration.name == name && registration.supported_on_current_os()
         })
+        .map(|(index, registration)| RegisteredProcessor {
+            id: (index + 1) as u16,
+            registration,
+        })
+}
+
+pub(crate) fn processor_registration_by_name_unfiltered(
+    name: &str,
+) -> Option<RegisteredProcessor<'static>> {
+    processor_registrations()
+        .iter()
+        .enumerate()
+        .find(|(_, registration)| registration.name == name)
         .map(|(index, registration)| RegisteredProcessor {
             id: (index + 1) as u16,
             registration,
