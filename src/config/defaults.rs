@@ -24,8 +24,8 @@ use super::{
     Config, ConfigBlocks, ConfigChromosomes, ConfigData, ConfigDisassembler,
     ConfigDisassemblerSweep, ConfigFile, ConfigFileHashing, ConfigFormats, ConfigFunctions,
     ConfigGeneral, ConfigHashing, ConfigHeuristicEntropy, ConfigHeuristicFeatures,
-    ConfigInstructions, ConfigMinhash, ConfigMmap, ConfigMmapCache, ConfigProcessors,
-    ConfigSHA256, ConfigServer, ConfigTLSH,
+    ConfigInstructions, ConfigMinhash, ConfigMmap, ConfigMmapCache, ConfigProcessors, ConfigSHA256,
+    ConfigServer, ConfigTLSH,
 };
 use std::env;
 

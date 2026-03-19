@@ -23,9 +23,23 @@
 #[cfg(test)]
 mod tests {
 
+    use binlex::hashing::AHash;
+    use binlex::hashing::DHash;
     use binlex::hashing::MinHash32;
+    use binlex::hashing::PHash;
     use binlex::hashing::SHA256;
     use binlex::hashing::TLSH;
+    use image::codecs::png::PngEncoder;
+    use image::{ExtendedColorType, GrayImage, ImageEncoder};
+
+    fn grayscale_png(width: u32, height: u32, pixels: Vec<u8>) -> Vec<u8> {
+        let image = GrayImage::from_raw(width, height, pixels).unwrap();
+        let mut bytes = Vec::new();
+        PngEncoder::new(&mut bytes)
+            .write_image(image.as_raw(), width, height, ExtendedColorType::L8)
+            .unwrap();
+        bytes
+    }
 
     #[test]
     fn test_models_hashing_sha256() {
@@ -71,5 +85,79 @@ mod tests {
             "00510c10037f0c85108b1886039fba0907d95f6f012c5a570358233b016873a000ba1ef80b1cf59f0675d519066afadd021ae2420147ed0b084c726703cb11900eb906aa040ec25d01001a10011889ab040e3b94000fec940b2506870538268300e5e9b50a7740d70858815105789e8a03f7296d00c77bc600e3a1b800717a8e02da37480096176f00b442c30463506c032f0efe08c1512c02c057d10c612b8e046f8c5a05f06c0317ac542c06254c91023009c60bccf3510c1a81ef01b1cfd6021ddf2f04e63b4a03884e2b079acef81622d85901db282d05d417c103ba54c40b19a64c0b6720f102125783033628850147997d06ae204c0835ee0a06b3b80b",
             "hexdigest does not match the expected value"
         );
+    }
+
+    #[test]
+    fn test_models_hashing_ahash() {
+        let pixels = (0..64)
+            .map(|index| if index < 32 { 16u8 } else { 240u8 })
+            .collect::<Vec<u8>>();
+        let image = grayscale_png(8, 8, pixels);
+        let hexdigest = AHash::new(&image).hexdigest();
+        assert!(hexdigest.is_some(), "hexdigest should not be none");
+        assert_eq!(
+            hexdigest.unwrap(),
+            "00000000ffffffff",
+            "hexdigest does not match the expected value"
+        );
+    }
+
+    #[test]
+    fn test_models_hashing_dhash() {
+        let mut pixels = Vec::new();
+        for _ in 0..8 {
+            pixels.extend_from_slice(&[0, 32, 64, 96, 128, 160, 192, 224, 255]);
+        }
+        let image = grayscale_png(9, 8, pixels);
+        let hexdigest = DHash::new(&image).hexdigest();
+        assert!(hexdigest.is_some(), "hexdigest should not be none");
+        assert_eq!(
+            hexdigest.unwrap(),
+            "ffffffffffffffff",
+            "hexdigest does not match the expected value"
+        );
+    }
+
+    #[test]
+    fn test_models_hashing_phash() {
+        let mut pixels = Vec::new();
+        for y in 0..32 {
+            for x in 0..32 {
+                pixels.push(((x * 8) ^ (y * 4)) as u8);
+            }
+        }
+        let image = grayscale_png(32, 32, pixels);
+        let hexdigest = PHash::new(&image).hexdigest();
+        assert!(hexdigest.is_some(), "hexdigest should not be none");
+        assert_eq!(
+            hexdigest.unwrap(),
+            "bbaefffaffeffffb",
+            "hexdigest does not match the expected value"
+        );
+    }
+
+    #[test]
+    fn test_models_hashing_image_compare() {
+        assert_eq!(
+            AHash::compare("ffffffffffffffff", "ffffffffffffffff"),
+            Some(1.0)
+        );
+        assert_eq!(
+            DHash::compare("0000000000000000", "ffffffffffffffff"),
+            Some(0.0)
+        );
+        assert_eq!(
+            PHash::compare("0f0f0f0f0f0f0f0f", "0f0f0f0f0f0f0f0f"),
+            Some(1.0)
+        );
+        assert!(AHash::compare("zz", "00").is_none());
+    }
+
+    #[test]
+    fn test_models_hashing_image_invalid_input() {
+        let data = b"not-a-png";
+        assert!(AHash::new(data).hexdigest().is_none());
+        assert!(DHash::new(data).hexdigest().is_none());
+        assert!(PHash::new(data).hexdigest().is_none());
     }
 }

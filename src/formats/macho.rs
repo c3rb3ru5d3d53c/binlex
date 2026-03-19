@@ -379,12 +379,11 @@ impl MACHO {
     /// # Returns
     /// A `Result` containing the `Image` object on success or an `Error` on failure.
     pub fn image(&self, slice: usize) -> Result<Image, Error> {
-        let pathbuf = PathBuf::from(self.config.mmap.directory.clone())
-            .join(format!(
-                "{}.slice-{}",
-                self.file.sha256_no_config().unwrap(),
-                slice
-            ));
+        let pathbuf = PathBuf::from(self.config.mmap.directory.clone()).join(format!(
+            "{}.slice-{}",
+            self.file.sha256_no_config().unwrap(),
+            slice
+        ));
 
         let mut tempmap = Image::new(pathbuf, self.config.mmap.cache.enabled)?;
 

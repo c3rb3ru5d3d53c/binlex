@@ -20,44 +20,45 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-//! Python bindings for binary container and file-format helpers.
+use binlex::hashing::ahash::AHash as InnerAHash;
+use pyo3::prelude::*;
 
-pub mod elf;
-pub mod file;
-pub mod image;
-pub mod macho;
-pub mod pe;
+/// Compute and compare average perceptual hashes for image bytes.
+#[pyclass]
+pub struct AHash {
+    bytes: Vec<u8>,
+}
 
-use crate::formats::file::file_init;
-use crate::formats::image::image_init;
-use crate::formats::macho::macho_init;
-use crate::formats::pe::pe_init;
+#[pymethods]
+impl AHash {
+    #[new]
+    #[pyo3(text_signature = "(bytes)")]
+    /// Create an average hash helper for the provided image bytes.
+    pub fn new(bytes: Vec<u8>) -> Self {
+        Self { bytes }
+    }
 
-pub use crate::formats::elf::ELF;
-pub use crate::formats::file::File;
-pub use crate::formats::image::Image;
-pub use crate::formats::macho::PyMachoSlice;
-pub use crate::formats::macho::MACHO;
-pub use crate::formats::pe::PE;
+    #[pyo3(text_signature = "($self)")]
+    /// Return the hexadecimal average hash digest for the stored image bytes.
+    pub fn hexdigest(&self) -> Option<String> {
+        InnerAHash::new(&self.bytes).hexdigest()
+    }
 
-use pyo3::{prelude::*, wrap_pymodule};
+    #[staticmethod]
+    #[pyo3(text_signature = "(lhs, rhs)")]
+    /// Compare two average hash digests and return their similarity score.
+    pub fn compare(lhs: String, rhs: String) -> Option<f64> {
+        InnerAHash::compare(&lhs, &rhs)
+    }
+}
 
 #[pymodule]
-#[pyo3(name = "formats")]
-pub fn formats_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_wrapped(wrap_pymodule!(file_init))?;
-    m.add_wrapped(wrap_pymodule!(image_init))?;
-    m.add_wrapped(wrap_pymodule!(pe_init))?;
-    m.add_wrapped(wrap_pymodule!(macho_init))?;
-    m.add_class::<PE>()?;
-    m.add_class::<File>()?;
-    m.add_class::<Image>()?;
-    m.add_class::<ELF>()?;
-    m.add_class::<MACHO>()?;
-    m.add_class::<PyMachoSlice>()?;
+#[pyo3(name = "ahash")]
+pub fn ahash_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<AHash>()?;
     py.import("sys")?
         .getattr("modules")?
-        .set_item("binlex_bindings.binlex.formats", m)?;
-    m.setattr("__name__", "binlex_bindings.binlex.formats")?;
+        .set_item("binlex_bindings.binlex.hashing.ahash", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.hashing.ahash")?;
     Ok(())
 }

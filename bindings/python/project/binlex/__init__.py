@@ -32,6 +32,7 @@ from . import clients
 from . import compression
 from . import hexdump
 from . import hex
+from . import hashing
 from . import math
 from .magic import Magic
 from . import controlflow, disassemblers, formats, lifters
@@ -45,6 +46,7 @@ __all__ = [
     "controlflow",
     "disassemblers",
     "formats",
+    "hashing",
     "hexdump",
     "hex",
     "lifters",

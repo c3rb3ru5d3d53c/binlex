@@ -23,8 +23,8 @@
 pub mod clients;
 pub mod compression;
 pub mod config;
-pub mod core;
 pub mod controlflow;
+pub mod core;
 pub mod disassemblers;
 pub mod formats;
 pub mod genetics;
