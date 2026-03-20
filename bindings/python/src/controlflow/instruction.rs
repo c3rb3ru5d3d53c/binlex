@@ -20,8 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::controlflow::Graph;
 use crate::controlflow::json_value_to_py;
+use crate::controlflow::Graph;
 use crate::genetics::Chromosome;
 use crate::Config;
 use binlex::controlflow::Instruction as InnerInstruction;
@@ -144,9 +144,8 @@ impl Instruction {
     /// Return all processor outputs attached to this instruction.
     pub fn processors(&self, py: Python) -> PyResult<Py<PyAny>> {
         self.with_inner_instruction(py, |instruction| {
-            let value = serde_json::to_value(instruction.processors()).map_err(|e| {
-                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
-            })?;
+            let value = serde_json::to_value(instruction.processors())
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
             json_value_to_py(py, &value)
         })
     }

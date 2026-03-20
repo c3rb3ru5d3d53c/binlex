@@ -29,12 +29,11 @@ config = Config()
 config.general.threads = 16
 config.processors.enabled = True
 config.processors.embeddings.enabled = True
+config.functions.hashing.minhash.enabled = False
 
 client = Client(config)
 
 cfg = client.analyze_file('/home/c3rb3ru5/Tools/binlex/samples/kernel32_0.dll')
 function = cfg.functions()[0]
-for k, v in function.processors().items():
-    if k == "embeddings":
-        print(v)
+print(function.minhash().hexdigest())
 

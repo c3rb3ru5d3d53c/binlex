@@ -366,3 +366,106 @@ fn test_function_json_omits_disabled_optional_keys() {
             .is_none()
     );
 }
+
+#[test]
+fn test_function_direct_accessors_ignore_serialization_flags() {
+    let mut config = Config::default();
+    config.functions.entropy.enabled = false;
+    config.functions.hashing.sha256.enabled = false;
+    config.functions.hashing.tlsh.enabled = false;
+    config.functions.hashing.minhash.enabled = false;
+    let graph = Graph::new(Architecture::AMD64, config);
+    let instruction = Instruction {
+        architecture: Architecture::AMD64,
+        config: Config::default(),
+        address: 0x6100,
+        is_prologue: false,
+        is_block_start: false,
+        is_function_start: false,
+        bytes: vec![0x3A, 0x7F, 0x92, 0x5C, 0xE4, 0xA1, 0xD8, 0x47, 0x29, 0xB3],
+        pattern: "3a7f925ce4a1d84729b3".to_string(),
+        is_return: true,
+        is_call: false,
+        is_jump: false,
+        is_conditional: false,
+        is_trap: false,
+        has_indirect_target: false,
+        functions: BTreeSet::new(),
+        to: BTreeSet::new(),
+        edges: 0,
+    };
+    graph.listing.insert(0x6100, instruction.clone());
+    let block = Block {
+        address: 0x6100,
+        cfg: &graph,
+        terminator: instruction,
+    };
+    let mut blocks_map = BTreeMap::new();
+    blocks_map.insert(0x6100, block);
+    let function = Function {
+        address: 0x6100,
+        cfg: &graph,
+        blocks: blocks_map,
+    };
+
+    assert!(function.entropy().is_some());
+    assert!(function.sha256().is_some());
+    assert!(function.tlsh().is_some());
+    assert!(function.minhash().is_some());
+
+    let value: serde_json::Value =
+        serde_json::from_str(&function.json().expect("function json should serialize"))
+            .expect("function json should parse");
+    assert!(value.get("entropy").is_none());
+    assert!(value.get("sha256").is_none());
+    assert!(value.get("tlsh").is_none());
+    assert!(value.get("minhash").is_none());
+}
+
+#[test]
+fn test_block_direct_accessors_ignore_serialization_flags() {
+    let mut config = Config::default();
+    config.blocks.entropy.enabled = false;
+    config.blocks.hashing.sha256.enabled = false;
+    config.blocks.hashing.tlsh.enabled = false;
+    config.blocks.hashing.minhash.enabled = false;
+    let graph = Graph::new(Architecture::AMD64, config);
+    let instruction = Instruction {
+        architecture: Architecture::AMD64,
+        config: Config::default(),
+        address: 0x6200,
+        is_prologue: false,
+        is_block_start: false,
+        is_function_start: false,
+        bytes: vec![0x3A, 0x7F, 0x92, 0x5C, 0xE4, 0xA1, 0xD8, 0x47, 0x29, 0xB3],
+        pattern: "3a7f925ce4a1d84729b3".to_string(),
+        is_return: true,
+        is_call: false,
+        is_jump: false,
+        is_conditional: false,
+        is_trap: false,
+        has_indirect_target: false,
+        functions: BTreeSet::new(),
+        to: BTreeSet::new(),
+        edges: 0,
+    };
+    graph.listing.insert(0x6200, instruction.clone());
+    let block = Block {
+        address: 0x6200,
+        cfg: &graph,
+        terminator: instruction,
+    };
+
+    assert!(block.entropy().is_some());
+    assert!(block.sha256().is_some());
+    assert!(block.tlsh().is_some());
+    assert!(block.minhash().is_some());
+
+    let value: serde_json::Value =
+        serde_json::from_str(&block.json().expect("block json should serialize"))
+            .expect("block json should parse");
+    assert!(value.get("entropy").is_none());
+    assert!(value.get("sha256").is_none());
+    assert!(value.get("tlsh").is_none());
+    assert!(value.get("minhash").is_none());
+}
