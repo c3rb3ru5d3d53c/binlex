@@ -337,17 +337,17 @@ impl<'function> Function<'function> {
         } else {
             None
         };
-        let sha256 = if self.cfg.config.functions.hashing.sha256.enabled {
+        let sha256 = if self.cfg.config.functions.sha256.enabled {
             self.sha256().and_then(|hash| hash.hexdigest())
         } else {
             None
         };
-        let tlsh = if self.cfg.config.functions.hashing.tlsh.enabled {
+        let tlsh = if self.cfg.config.functions.tlsh.enabled {
             self.tlsh().and_then(|hash| hash.hexdigest())
         } else {
             None
         };
-        let minhash = if self.cfg.config.functions.hashing.minhash.enabled {
+        let minhash = if self.cfg.config.functions.minhash.enabled {
             self.minhash().and_then(|hash| hash.hexdigest())
         } else {
             None
@@ -682,12 +682,8 @@ impl<'function> Function<'function> {
         if !self.contiguous() {
             return None;
         }
-        self.bytes().map(|bytes| {
-            TLSH::from_bytes(
-                bytes,
-                self.cfg.config.functions.hashing.tlsh.minimum_byte_size,
-            )
-        })
+        self.bytes()
+            .map(|bytes| TLSH::from_bytes(bytes, self.cfg.config.functions.tlsh.minimum_byte_size))
     }
 
     /// Computes the MinHash of the function's bytes, if contiguous.
@@ -700,22 +696,16 @@ impl<'function> Function<'function> {
             return None;
         }
         if let Some(bytes) = self.bytes() {
-            if bytes.len() > self.cfg.config.functions.hashing.minhash.maximum_byte_size
-                && self
-                    .cfg
-                    .config
-                    .functions
-                    .hashing
-                    .minhash
-                    .maximum_byte_size_enabled
+            if bytes.len() > self.cfg.config.functions.minhash.maximum_byte_size
+                && self.cfg.config.functions.minhash.maximum_byte_size_enabled
             {
                 return None;
             }
             return Some(MinHash32::from_bytes(
                 bytes,
-                self.cfg.config.functions.hashing.minhash.number_of_hashes,
-                self.cfg.config.functions.hashing.minhash.shingle_size,
-                self.cfg.config.functions.hashing.minhash.seed,
+                self.cfg.config.functions.minhash.number_of_hashes,
+                self.cfg.config.functions.minhash.shingle_size,
+                self.cfg.config.functions.minhash.seed,
             ));
         }
         None

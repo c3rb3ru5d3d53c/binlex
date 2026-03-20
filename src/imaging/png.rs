@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::config::{Config, ConfigImagingHashing};
+use crate::config::{Config, ConfigImaging};
 use crate::imaging::Palette;
 use crate::imaging::hash as render_hash;
 use crate::imaging::render::Render;
@@ -28,7 +28,7 @@ use crate::imaging::terminal::write_render;
 use std::io::{self, Write};
 
 pub struct PNG {
-    hashing: ConfigImagingHashing,
+    hashing: ConfigImaging,
     render: Render,
 }
 
@@ -46,11 +46,11 @@ impl PNG {
     ) -> Self {
         Self::from_render(
             Render::new_with_options(data, palette, cell_size, fixed_width),
-            config.imaging.hashing.clone(),
+            config.imaging.clone(),
         )
     }
 
-    pub(crate) fn from_render(render: Render, hashing: ConfigImagingHashing) -> Self {
+    pub(crate) fn from_render(render: Render, hashing: ConfigImaging) -> Self {
         Self { hashing, render }
     }
 

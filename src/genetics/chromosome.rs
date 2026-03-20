@@ -180,7 +180,7 @@ impl Chromosome {
     pub fn tlsh(&self) -> Option<String> {
         TLSH::new(
             &self.bytes(),
-            self.config.chromosomes.hashing.tlsh.minimum_byte_size,
+            self.config.chromosomes.tlsh.minimum_byte_size,
         )
         .hexdigest()
     }
@@ -192,21 +192,16 @@ impl Chromosome {
     /// Returns `Some(String)` containing the MinHash, or `None` if it cannot be computed.
     #[allow(dead_code)]
     pub fn minhash(&self) -> Option<String> {
-        if self.bytes().len() > self.config.chromosomes.hashing.minhash.maximum_byte_size
-            && self
-                .config
-                .chromosomes
-                .hashing
-                .minhash
-                .maximum_byte_size_enabled
+        if self.bytes().len() > self.config.chromosomes.minhash.maximum_byte_size
+            && self.config.chromosomes.minhash.maximum_byte_size_enabled
         {
             return None;
         }
         MinHash32::new(
             &self.bytes(),
-            self.config.chromosomes.hashing.minhash.number_of_hashes,
-            self.config.chromosomes.hashing.minhash.shingle_size,
-            self.config.chromosomes.hashing.minhash.seed,
+            self.config.chromosomes.minhash.number_of_hashes,
+            self.config.chromosomes.minhash.shingle_size,
+            self.config.chromosomes.minhash.seed,
         )
         .hexdigest()
     }
@@ -242,7 +237,7 @@ impl Chromosome {
             } else {
                 Vec::new()
             },
-            sha256: if self.config.chromosomes.hashing.sha256.enabled {
+            sha256: if self.config.chromosomes.sha256.enabled {
                 self.sha256()
             } else {
                 None
@@ -252,12 +247,12 @@ impl Chromosome {
             } else {
                 None
             },
-            minhash: if self.config.chromosomes.hashing.minhash.enabled {
+            minhash: if self.config.chromosomes.minhash.enabled {
                 self.minhash()
             } else {
                 None
             },
-            tlsh: if self.config.chromosomes.hashing.tlsh.enabled {
+            tlsh: if self.config.chromosomes.tlsh.enabled {
                 self.tlsh()
             } else {
                 None

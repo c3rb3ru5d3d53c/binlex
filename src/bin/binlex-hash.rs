@@ -65,8 +65,8 @@ impl fmt::Display for HashType {
 fn main() {
     let mut config = Config::new();
 
-    config.formats.file.hashing.tlsh.enabled = true;
-    config.formats.file.hashing.sha256.enabled = true;
+    config.formats.file.tlsh.enabled = true;
+    config.formats.file.sha256.enabled = true;
 
     let args = Args::parse();
 

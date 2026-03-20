@@ -355,10 +355,10 @@ threads = 16
 minimal = false
 debug = false
 
-[formats.file.hashing.sha256]
+[formats.file.sha256]
 enabled = true
 
-[formats.file.hashing.tlsh]
+[formats.file.tlsh]
 enabled = true
 minimum_byte_size = 50
 
@@ -371,14 +371,14 @@ enabled = false
 [blocks]
 enabled = true
 
-[blocks.hashing.sha256]
+[blocks.sha256]
 enabled = true
 
-[blocks.hashing.tlsh]
+[blocks.tlsh]
 enabled = true
 minimum_byte_size = 50
 
-[blocks.hashing.minhash]
+[blocks.minhash]
 enabled = true
 number_of_hashes = 64
 shingle_size = 4
@@ -392,14 +392,14 @@ enabled = true
 [functions]
 enabled = true
 
-[functions.hashing.sha256]
+[functions.sha256]
 enabled = true
 
-[functions.hashing.tlsh]
+[functions.tlsh]
 enabled = true
 minimum_byte_size = 50
 
-[functions.hashing.minhash]
+[functions.minhash]
 enabled = true
 number_of_hashes = 64
 shingle_size = 4
@@ -410,14 +410,14 @@ seed = 0
 [functions.entropy]
 enabled = true
 
-[chromosomes.hashing.sha256]
+[chromosomes.sha256]
 enabled = true
 
-[chromosomes.hashing.tlsh]
+[chromosomes.tlsh]
 enabled = true
 minimum_byte_size = 50
 
-[chromosomes.hashing.minhash]
+[chromosomes.minhash]
 enabled = true
 number_of_hashes = 64
 shingle_size = 4

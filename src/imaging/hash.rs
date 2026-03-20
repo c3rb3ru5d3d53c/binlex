@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::config::ConfigImagingHashing;
+use crate::config::ConfigImaging;
 use crate::hashing::{AHash, DHash, MinHash32, PHash, SHA256, TLSH};
 use crate::imaging::render::Render;
 use image::ColorType;
@@ -63,17 +63,17 @@ pub(crate) fn encode_png(render: &Render) -> io::Result<Vec<u8>> {
     Ok(encoded)
 }
 
-pub(crate) fn sha256(render: &Render, _config: &ConfigImagingHashing) -> Option<String> {
+pub(crate) fn sha256(render: &Render, _config: &ConfigImaging) -> Option<String> {
     let bytes = encode_png(render).ok()?;
     SHA256::new(&bytes).hexdigest()
 }
 
-pub(crate) fn tlsh(render: &Render, config: &ConfigImagingHashing) -> Option<String> {
+pub(crate) fn tlsh(render: &Render, config: &ConfigImaging) -> Option<String> {
     let bytes = encode_png(render).ok()?;
     TLSH::new(&bytes, config.tlsh.minimum_byte_size).hexdigest()
 }
 
-pub(crate) fn minhash(render: &Render, config: &ConfigImagingHashing) -> Option<String> {
+pub(crate) fn minhash(render: &Render, config: &ConfigImaging) -> Option<String> {
     let bytes = encode_png(render).ok()?;
     if config.minhash.maximum_byte_size_enabled && bytes.len() > config.minhash.maximum_byte_size {
         return None;
@@ -87,17 +87,17 @@ pub(crate) fn minhash(render: &Render, config: &ConfigImagingHashing) -> Option<
     .hexdigest()
 }
 
-pub(crate) fn ahash(render: &Render, _config: &ConfigImagingHashing) -> Option<String> {
+pub(crate) fn ahash(render: &Render, _config: &ConfigImaging) -> Option<String> {
     let bytes = encode_png(render).ok()?;
     AHash::new(&bytes).hexdigest()
 }
 
-pub(crate) fn dhash(render: &Render, _config: &ConfigImagingHashing) -> Option<String> {
+pub(crate) fn dhash(render: &Render, _config: &ConfigImaging) -> Option<String> {
     let bytes = encode_png(render).ok()?;
     DHash::new(&bytes).hexdigest()
 }
 
-pub(crate) fn phash(render: &Render, _config: &ConfigImagingHashing) -> Option<String> {
+pub(crate) fn phash(render: &Render, _config: &ConfigImaging) -> Option<String> {
     let bytes = encode_png(render).ok()?;
     PHash::new(&bytes).hexdigest()
 }

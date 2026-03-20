@@ -371,9 +371,9 @@ fn test_function_json_omits_disabled_optional_keys() {
 fn test_function_direct_accessors_ignore_serialization_flags() {
     let mut config = Config::default();
     config.functions.entropy.enabled = false;
-    config.functions.hashing.sha256.enabled = false;
-    config.functions.hashing.tlsh.enabled = false;
-    config.functions.hashing.minhash.enabled = false;
+    config.functions.sha256.enabled = false;
+    config.functions.tlsh.enabled = false;
+    config.functions.minhash.enabled = false;
     let graph = Graph::new(Architecture::AMD64, config);
     let instruction = Instruction {
         architecture: Architecture::AMD64,
@@ -426,9 +426,9 @@ fn test_function_direct_accessors_ignore_serialization_flags() {
 fn test_block_direct_accessors_ignore_serialization_flags() {
     let mut config = Config::default();
     config.blocks.entropy.enabled = false;
-    config.blocks.hashing.sha256.enabled = false;
-    config.blocks.hashing.tlsh.enabled = false;
-    config.blocks.hashing.minhash.enabled = false;
+    config.blocks.sha256.enabled = false;
+    config.blocks.tlsh.enabled = false;
+    config.blocks.minhash.enabled = false;
     let graph = Graph::new(Architecture::AMD64, config);
     let instruction = Instruction {
         architecture: Architecture::AMD64,

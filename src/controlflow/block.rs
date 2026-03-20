@@ -353,17 +353,17 @@ impl<'block> Block<'block> {
         } else {
             None
         };
-        let sha256 = if self.cfg.config.blocks.hashing.sha256.enabled {
+        let sha256 = if self.cfg.config.blocks.sha256.enabled {
             self.sha256().and_then(|hash| hash.hexdigest())
         } else {
             None
         };
-        let minhash = if self.cfg.config.blocks.hashing.minhash.enabled {
+        let minhash = if self.cfg.config.blocks.minhash.enabled {
             self.minhash().and_then(|hash| hash.hexdigest())
         } else {
             None
         };
-        let tlsh = if self.cfg.config.blocks.hashing.tlsh.enabled {
+        let tlsh = if self.cfg.config.blocks.tlsh.enabled {
             self.tlsh().and_then(|hash| hash.hexdigest())
         } else {
             None
@@ -626,7 +626,7 @@ impl<'block> Block<'block> {
     pub fn tlsh(&self) -> Option<TLSH<'static>> {
         Some(TLSH::from_bytes(
             self.bytes(),
-            self.cfg.config.blocks.hashing.tlsh.minimum_byte_size,
+            self.cfg.config.blocks.tlsh.minimum_byte_size,
         ))
     }
 
@@ -637,22 +637,16 @@ impl<'block> Block<'block> {
     /// Returns `Some(MinHash32)` containing the MinHash object, or `None` if the block's size exceeds the configured maximum.
     pub fn minhash(&self) -> Option<MinHash32<'static>> {
         let bytes = self.bytes();
-        if bytes.len() > self.cfg.config.blocks.hashing.minhash.maximum_byte_size
-            && self
-                .cfg
-                .config
-                .blocks
-                .hashing
-                .minhash
-                .maximum_byte_size_enabled
+        if bytes.len() > self.cfg.config.blocks.minhash.maximum_byte_size
+            && self.cfg.config.blocks.minhash.maximum_byte_size_enabled
         {
             return None;
         }
         Some(MinHash32::from_bytes(
             bytes,
-            self.cfg.config.blocks.hashing.minhash.number_of_hashes,
-            self.cfg.config.blocks.hashing.minhash.shingle_size,
-            self.cfg.config.blocks.hashing.minhash.seed,
+            self.cfg.config.blocks.minhash.number_of_hashes,
+            self.cfg.config.blocks.minhash.shingle_size,
+            self.cfg.config.blocks.minhash.seed,
         ))
     }
 

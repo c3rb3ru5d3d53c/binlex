@@ -32,11 +32,26 @@ pub struct ConfigChromosomes {
 #[pymethods]
 impl ConfigChromosomes {
     #[getter]
-    pub fn get_hashing(&self) -> ConfigChromosomesHashing {
-        ConfigChromosomesHashing {
+    pub fn get_sha256(&self) -> ConfigChromosomesHashingSHA256 {
+        ConfigChromosomesHashingSHA256 {
             inner: Arc::clone(&self.inner),
         }
     }
+
+    #[getter]
+    pub fn get_tlsh(&self) -> ConfigChromosomesHashingTLSH {
+        ConfigChromosomesHashingTLSH {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
+    pub fn get_minhash(&self) -> ConfigChromosomesHashingMinhash {
+        ConfigChromosomesHashingMinhash {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
     #[getter]
     pub fn get_features(&self) -> ConfigChromosomesHeuristicsFeatures {
         ConfigChromosomesHeuristicsFeatures {
@@ -131,13 +146,13 @@ impl ConfigChromosomesHashingSHA256 {
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.chromosomes.hashing.sha256.enabled
+        inner.chromosomes.sha256.enabled
     }
 
     #[setter]
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.hashing.sha256.enabled = value;
+        inner.chromosomes.sha256.enabled = value;
     }
 }
 
@@ -151,25 +166,25 @@ impl ConfigChromosomesHashingTLSH {
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.chromosomes.hashing.tlsh.enabled
+        inner.chromosomes.tlsh.enabled
     }
 
     #[setter]
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.hashing.tlsh.enabled = value;
+        inner.chromosomes.tlsh.enabled = value;
     }
 
     #[getter]
     pub fn get_minimum_byte_size(&self) -> usize {
         let inner = self.inner.lock().unwrap();
-        inner.chromosomes.hashing.tlsh.minimum_byte_size
+        inner.chromosomes.tlsh.minimum_byte_size
     }
 
     #[setter]
     pub fn set_minimum_byte_size(&mut self, value: usize) {
         let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.hashing.tlsh.minimum_byte_size = value;
+        inner.chromosomes.tlsh.minimum_byte_size = value;
     }
 }
 
@@ -183,72 +198,72 @@ impl ConfigChromosomesHashingMinhash {
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.chromosomes.hashing.minhash.enabled
+        inner.chromosomes.minhash.enabled
     }
 
     #[setter]
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.hashing.minhash.enabled = value;
+        inner.chromosomes.minhash.enabled = value;
     }
 
     #[getter]
     pub fn get_number_of_hashes(&self) -> usize {
         let inner = self.inner.lock().unwrap();
-        inner.chromosomes.hashing.minhash.number_of_hashes
+        inner.chromosomes.minhash.number_of_hashes
     }
 
     #[setter]
     pub fn set_number_of_hashes(&mut self, value: usize) {
         let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.hashing.minhash.number_of_hashes = value;
+        inner.chromosomes.minhash.number_of_hashes = value;
     }
 
     #[getter]
     pub fn get_shingle_size(&self) -> usize {
         let inner = self.inner.lock().unwrap();
-        inner.chromosomes.hashing.minhash.shingle_size
+        inner.chromosomes.minhash.shingle_size
     }
 
     #[setter]
     pub fn set_shingle_size(&mut self, value: usize) {
         let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.hashing.minhash.shingle_size = value;
+        inner.chromosomes.minhash.shingle_size = value;
     }
 
     #[getter]
     pub fn get_maximum_byte_size_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.chromosomes.hashing.minhash.maximum_byte_size_enabled
+        inner.chromosomes.minhash.maximum_byte_size_enabled
     }
 
     #[setter]
     pub fn set_maximum_byte_size_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.hashing.minhash.maximum_byte_size_enabled = value;
+        inner.chromosomes.minhash.maximum_byte_size_enabled = value;
     }
 
     #[getter]
     pub fn get_maximum_byte_size(&self) -> usize {
         let inner = self.inner.lock().unwrap();
-        inner.chromosomes.hashing.minhash.maximum_byte_size
+        inner.chromosomes.minhash.maximum_byte_size
     }
 
     #[setter]
     pub fn set_maximum_byte_size(&mut self, value: usize) {
         let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.hashing.minhash.maximum_byte_size = value;
+        inner.chromosomes.minhash.maximum_byte_size = value;
     }
     #[getter]
     pub fn get_seed(&self) -> u64 {
         let inner = self.inner.lock().unwrap();
-        inner.chromosomes.hashing.minhash.seed
+        inner.chromosomes.minhash.seed
     }
 
     #[setter]
     pub fn set_seed(&mut self, value: u64) {
         let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.hashing.minhash.seed = value;
+        inner.chromosomes.minhash.seed = value;
     }
 }
 
@@ -262,6 +277,27 @@ pub struct ConfigFunctions {
 #[pymethods]
 impl ConfigFunctions {
     #[getter]
+    pub fn get_sha256(&self) -> ConfigFunctionsHashingSHA256 {
+        ConfigFunctionsHashingSHA256 {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
+    pub fn get_tlsh(&self) -> ConfigFunctionsHashingTLSH {
+        ConfigFunctionsHashingTLSH {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
+    pub fn get_minhash(&self) -> ConfigFunctionsHashingMinhash {
+        ConfigFunctionsHashingMinhash {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
         inner.functions.enabled
@@ -271,13 +307,6 @@ impl ConfigFunctions {
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
         inner.functions.enabled = value;
-    }
-
-    #[getter]
-    pub fn get_hashing(&self) -> ConfigFunctionsHashing {
-        ConfigFunctionsHashing {
-            inner: Arc::clone(&self.inner),
-        }
     }
 
     #[getter]
@@ -347,13 +376,13 @@ impl ConfigFunctionsHashingSHA256 {
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.functions.hashing.sha256.enabled
+        inner.functions.sha256.enabled
     }
 
     #[setter]
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.functions.hashing.sha256.enabled = value;
+        inner.functions.sha256.enabled = value;
     }
 }
 
@@ -367,25 +396,25 @@ impl ConfigFunctionsHashingTLSH {
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.functions.hashing.tlsh.enabled
+        inner.functions.tlsh.enabled
     }
 
     #[setter]
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.functions.hashing.tlsh.enabled = value;
+        inner.functions.tlsh.enabled = value;
     }
 
     #[getter]
     pub fn get_minimum_byte_size(&self) -> usize {
         let inner = self.inner.lock().unwrap();
-        inner.functions.hashing.tlsh.minimum_byte_size
+        inner.functions.tlsh.minimum_byte_size
     }
 
     #[setter]
     pub fn set_minimum_byte_size(&mut self, value: usize) {
         let mut inner = self.inner.lock().unwrap();
-        inner.functions.hashing.tlsh.minimum_byte_size = value;
+        inner.functions.tlsh.minimum_byte_size = value;
     }
 }
 
@@ -399,72 +428,72 @@ impl ConfigFunctionsHashingMinhash {
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.functions.hashing.minhash.enabled
+        inner.functions.minhash.enabled
     }
 
     #[setter]
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.functions.hashing.minhash.enabled = value;
+        inner.functions.minhash.enabled = value;
     }
 
     #[getter]
     pub fn get_number_of_hashes(&self) -> usize {
         let inner = self.inner.lock().unwrap();
-        inner.functions.hashing.minhash.number_of_hashes
+        inner.functions.minhash.number_of_hashes
     }
 
     #[setter]
     pub fn set_number_of_hashes(&mut self, value: usize) {
         let mut inner = self.inner.lock().unwrap();
-        inner.functions.hashing.minhash.number_of_hashes = value;
+        inner.functions.minhash.number_of_hashes = value;
     }
 
     #[getter]
     pub fn get_shingle_size(&self) -> usize {
         let inner = self.inner.lock().unwrap();
-        inner.functions.hashing.minhash.shingle_size
+        inner.functions.minhash.shingle_size
     }
 
     #[setter]
     pub fn set_shingle_size(&mut self, value: usize) {
         let mut inner = self.inner.lock().unwrap();
-        inner.functions.hashing.minhash.shingle_size = value;
+        inner.functions.minhash.shingle_size = value;
     }
 
     #[getter]
     pub fn get_maximum_byte_size_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.functions.hashing.minhash.maximum_byte_size_enabled
+        inner.functions.minhash.maximum_byte_size_enabled
     }
 
     #[setter]
     pub fn set_maximum_byte_size_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.functions.hashing.minhash.maximum_byte_size_enabled = value;
+        inner.functions.minhash.maximum_byte_size_enabled = value;
     }
 
     #[getter]
     pub fn get_maximum_byte_size(&self) -> usize {
         let inner = self.inner.lock().unwrap();
-        inner.functions.hashing.minhash.maximum_byte_size
+        inner.functions.minhash.maximum_byte_size
     }
 
     #[setter]
     pub fn set_maximum_byte_size(&mut self, value: usize) {
         let mut inner = self.inner.lock().unwrap();
-        inner.functions.hashing.minhash.maximum_byte_size = value;
+        inner.functions.minhash.maximum_byte_size = value;
     }
     #[getter]
     pub fn get_seed(&self) -> u64 {
         let inner = self.inner.lock().unwrap();
-        inner.functions.hashing.minhash.seed
+        inner.functions.minhash.seed
     }
 
     #[setter]
     pub fn set_seed(&mut self, value: u64) {
         let mut inner = self.inner.lock().unwrap();
-        inner.functions.hashing.minhash.seed = value;
+        inner.functions.minhash.seed = value;
     }
 }
 
@@ -478,6 +507,27 @@ pub struct ConfigBlocks {
 #[pymethods]
 impl ConfigBlocks {
     #[getter]
+    pub fn get_sha256(&self) -> ConfigBlocksHashingSHA256 {
+        ConfigBlocksHashingSHA256 {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
+    pub fn get_tlsh(&self) -> ConfigBlocksHashingTLSH {
+        ConfigBlocksHashingTLSH {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
+    pub fn get_minhash(&self) -> ConfigBlocksHashingMinhash {
+        ConfigBlocksHashingMinhash {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
         inner.blocks.enabled
@@ -487,13 +537,6 @@ impl ConfigBlocks {
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
         inner.blocks.enabled = value;
-    }
-
-    #[getter]
-    pub fn get_hashing(&self) -> ConfigBlocksHashing {
-        ConfigBlocksHashing {
-            inner: Arc::clone(&self.inner),
-        }
     }
 
     #[getter]
@@ -583,13 +626,13 @@ impl ConfigBlocksHashingSHA256 {
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.blocks.hashing.sha256.enabled
+        inner.blocks.sha256.enabled
     }
 
     #[setter]
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.blocks.hashing.sha256.enabled = value;
+        inner.blocks.sha256.enabled = value;
     }
 }
 
@@ -603,25 +646,25 @@ impl ConfigBlocksHashingTLSH {
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.blocks.hashing.tlsh.enabled
+        inner.blocks.tlsh.enabled
     }
 
     #[setter]
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.blocks.hashing.tlsh.enabled = value;
+        inner.blocks.tlsh.enabled = value;
     }
 
     #[getter]
     pub fn get_minimum_byte_size(&self) -> usize {
         let inner = self.inner.lock().unwrap();
-        inner.blocks.hashing.tlsh.minimum_byte_size
+        inner.blocks.tlsh.minimum_byte_size
     }
 
     #[setter]
     pub fn set_minimum_byte_size(&mut self, value: usize) {
         let mut inner = self.inner.lock().unwrap();
-        inner.blocks.hashing.tlsh.minimum_byte_size = value;
+        inner.blocks.tlsh.minimum_byte_size = value;
     }
 }
 
@@ -635,73 +678,73 @@ impl ConfigBlocksHashingMinhash {
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.blocks.hashing.minhash.enabled
+        inner.blocks.minhash.enabled
     }
 
     #[setter]
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.blocks.hashing.minhash.enabled = value;
+        inner.blocks.minhash.enabled = value;
     }
 
     #[getter]
     pub fn get_number_of_hashes(&self) -> usize {
         let inner = self.inner.lock().unwrap();
-        inner.blocks.hashing.minhash.number_of_hashes
+        inner.blocks.minhash.number_of_hashes
     }
 
     #[setter]
     pub fn set_number_of_hashes(&mut self, value: usize) {
         let mut inner = self.inner.lock().unwrap();
-        inner.blocks.hashing.minhash.number_of_hashes = value;
+        inner.blocks.minhash.number_of_hashes = value;
     }
 
     #[getter]
     pub fn get_shingle_size(&self) -> usize {
         let inner = self.inner.lock().unwrap();
-        inner.blocks.hashing.minhash.shingle_size
+        inner.blocks.minhash.shingle_size
     }
 
     #[setter]
     pub fn set_shingle_size(&mut self, value: usize) {
         let mut inner = self.inner.lock().unwrap();
-        inner.blocks.hashing.minhash.shingle_size = value;
+        inner.blocks.minhash.shingle_size = value;
     }
 
     #[getter]
     pub fn get_maximum_byte_size_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.blocks.hashing.minhash.maximum_byte_size_enabled
+        inner.blocks.minhash.maximum_byte_size_enabled
     }
 
     #[setter]
     pub fn set_maximum_byte_size_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.blocks.hashing.minhash.maximum_byte_size_enabled = value;
+        inner.blocks.minhash.maximum_byte_size_enabled = value;
     }
 
     #[getter]
     pub fn get_maximum_byte_size(&self) -> usize {
         let inner = self.inner.lock().unwrap();
-        inner.blocks.hashing.minhash.maximum_byte_size
+        inner.blocks.minhash.maximum_byte_size
     }
 
     #[setter]
     pub fn set_maximum_byte_size(&mut self, value: usize) {
         let mut inner = self.inner.lock().unwrap();
-        inner.blocks.hashing.minhash.maximum_byte_size = value;
+        inner.blocks.minhash.maximum_byte_size = value;
     }
 
     #[getter]
     pub fn get_seed(&self) -> u64 {
         let inner = self.inner.lock().unwrap();
-        inner.blocks.hashing.minhash.seed
+        inner.blocks.minhash.seed
     }
 
     #[setter]
     pub fn set_seed(&mut self, value: u64) {
         let mut inner = self.inner.lock().unwrap();
-        inner.blocks.hashing.minhash.seed = value;
+        inner.blocks.minhash.seed = value;
     }
 }
 
@@ -730,11 +773,19 @@ pub struct ConfigFormatsFile {
 #[pymethods]
 impl ConfigFormatsFile {
     #[getter]
-    pub fn get_hashing(&self) -> ConfigFormatsFileHashing {
-        ConfigFormatsFileHashing {
+    pub fn get_sha256(&self) -> ConfigFormatsFileHashingSHA256 {
+        ConfigFormatsFileHashingSHA256 {
             inner: Arc::clone(&self.inner),
         }
     }
+
+    #[getter]
+    pub fn get_tlsh(&self) -> ConfigFormatsFileHashingTLSH {
+        ConfigFormatsFileHashingTLSH {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
     #[getter]
     pub fn get_entropy(&self) -> ConfigFormatsFileHeuristicsEntropy {
         ConfigFormatsFileHeuristicsEntropy {
@@ -795,13 +846,13 @@ impl ConfigFormatsFileHashingSHA256 {
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.formats.file.hashing.sha256.enabled
+        inner.formats.file.sha256.enabled
     }
 
     #[setter]
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.formats.file.hashing.sha256.enabled = value;
+        inner.formats.file.sha256.enabled = value;
     }
 }
 
@@ -815,25 +866,25 @@ impl ConfigFormatsFileHashingTLSH {
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.formats.file.hashing.tlsh.enabled
+        inner.formats.file.tlsh.enabled
     }
 
     #[setter]
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.formats.file.hashing.tlsh.enabled = value;
+        inner.formats.file.tlsh.enabled = value;
     }
 
     #[getter]
     pub fn get_minimum_byte_size(&self) -> usize {
         let inner = self.inner.lock().unwrap();
-        inner.formats.file.hashing.tlsh.minimum_byte_size
+        inner.formats.file.tlsh.minimum_byte_size
     }
 
     #[setter]
     pub fn set_minimum_byte_size(&mut self, value: usize) {
         let mut inner = self.inner.lock().unwrap();
-        inner.formats.file.hashing.tlsh.minimum_byte_size = value;
+        inner.formats.file.tlsh.minimum_byte_size = value;
     }
 }
 
@@ -845,11 +896,47 @@ pub struct ConfigImaging {
 #[pymethods]
 impl ConfigImaging {
     #[getter]
-    pub fn get_hashing(&self) -> ConfigImagingHashing {
-        ConfigImagingHashing {
+    pub fn get_sha256(&self) -> ConfigImagingHashingSHA256 {
+        ConfigImagingHashingSHA256 {
             inner: Arc::clone(&self.inner),
         }
     }
+
+    #[getter]
+    pub fn get_tlsh(&self) -> ConfigImagingHashingTLSH {
+        ConfigImagingHashingTLSH {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
+    pub fn get_minhash(&self) -> ConfigImagingHashingMinhash {
+        ConfigImagingHashingMinhash {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
+    pub fn get_ahash(&self) -> ConfigImagingHashingAHash {
+        ConfigImagingHashingAHash {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
+    pub fn get_dhash(&self) -> ConfigImagingHashingDHash {
+        ConfigImagingHashingDHash {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
+    pub fn get_phash(&self) -> ConfigImagingHashingPHash {
+        ConfigImagingHashingPHash {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
 }
 
 #[pyclass]
@@ -912,13 +999,13 @@ impl ConfigImagingHashingSHA256 {
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.imaging.hashing.sha256.enabled
+        inner.imaging.sha256.enabled
     }
 
     #[setter]
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.imaging.hashing.sha256.enabled = value;
+        inner.imaging.sha256.enabled = value;
     }
 }
 
@@ -932,25 +1019,25 @@ impl ConfigImagingHashingTLSH {
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.imaging.hashing.tlsh.enabled
+        inner.imaging.tlsh.enabled
     }
 
     #[setter]
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.imaging.hashing.tlsh.enabled = value;
+        inner.imaging.tlsh.enabled = value;
     }
 
     #[getter]
     pub fn get_minimum_byte_size(&self) -> usize {
         let inner = self.inner.lock().unwrap();
-        inner.imaging.hashing.tlsh.minimum_byte_size
+        inner.imaging.tlsh.minimum_byte_size
     }
 
     #[setter]
     pub fn set_minimum_byte_size(&mut self, value: usize) {
         let mut inner = self.inner.lock().unwrap();
-        inner.imaging.hashing.tlsh.minimum_byte_size = value;
+        inner.imaging.tlsh.minimum_byte_size = value;
     }
 }
 
@@ -964,73 +1051,73 @@ impl ConfigImagingHashingMinhash {
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.imaging.hashing.minhash.enabled
+        inner.imaging.minhash.enabled
     }
 
     #[setter]
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.imaging.hashing.minhash.enabled = value;
+        inner.imaging.minhash.enabled = value;
     }
 
     #[getter]
     pub fn get_number_of_hashes(&self) -> usize {
         let inner = self.inner.lock().unwrap();
-        inner.imaging.hashing.minhash.number_of_hashes
+        inner.imaging.minhash.number_of_hashes
     }
 
     #[setter]
     pub fn set_number_of_hashes(&mut self, value: usize) {
         let mut inner = self.inner.lock().unwrap();
-        inner.imaging.hashing.minhash.number_of_hashes = value;
+        inner.imaging.minhash.number_of_hashes = value;
     }
 
     #[getter]
     pub fn get_shingle_size(&self) -> usize {
         let inner = self.inner.lock().unwrap();
-        inner.imaging.hashing.minhash.shingle_size
+        inner.imaging.minhash.shingle_size
     }
 
     #[setter]
     pub fn set_shingle_size(&mut self, value: usize) {
         let mut inner = self.inner.lock().unwrap();
-        inner.imaging.hashing.minhash.shingle_size = value;
+        inner.imaging.minhash.shingle_size = value;
     }
 
     #[getter]
     pub fn get_maximum_byte_size_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.imaging.hashing.minhash.maximum_byte_size_enabled
+        inner.imaging.minhash.maximum_byte_size_enabled
     }
 
     #[setter]
     pub fn set_maximum_byte_size_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.imaging.hashing.minhash.maximum_byte_size_enabled = value;
+        inner.imaging.minhash.maximum_byte_size_enabled = value;
     }
 
     #[getter]
     pub fn get_maximum_byte_size(&self) -> usize {
         let inner = self.inner.lock().unwrap();
-        inner.imaging.hashing.minhash.maximum_byte_size
+        inner.imaging.minhash.maximum_byte_size
     }
 
     #[setter]
     pub fn set_maximum_byte_size(&mut self, value: usize) {
         let mut inner = self.inner.lock().unwrap();
-        inner.imaging.hashing.minhash.maximum_byte_size = value;
+        inner.imaging.minhash.maximum_byte_size = value;
     }
 
     #[getter]
     pub fn get_seed(&self) -> u64 {
         let inner = self.inner.lock().unwrap();
-        inner.imaging.hashing.minhash.seed
+        inner.imaging.minhash.seed
     }
 
     #[setter]
     pub fn set_seed(&mut self, value: u64) {
         let mut inner = self.inner.lock().unwrap();
-        inner.imaging.hashing.minhash.seed = value;
+        inner.imaging.minhash.seed = value;
     }
 }
 
@@ -1044,13 +1131,13 @@ impl ConfigImagingHashingAHash {
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.imaging.hashing.ahash.enabled
+        inner.imaging.ahash.enabled
     }
 
     #[setter]
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.imaging.hashing.ahash.enabled = value;
+        inner.imaging.ahash.enabled = value;
     }
 }
 
@@ -1064,13 +1151,13 @@ impl ConfigImagingHashingDHash {
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.imaging.hashing.dhash.enabled
+        inner.imaging.dhash.enabled
     }
 
     #[setter]
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.imaging.hashing.dhash.enabled = value;
+        inner.imaging.dhash.enabled = value;
     }
 }
 
@@ -1084,13 +1171,13 @@ impl ConfigImagingHashingPHash {
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.imaging.hashing.phash.enabled
+        inner.imaging.phash.enabled
     }
 
     #[setter]
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.imaging.hashing.phash.enabled = value;
+        inner.imaging.phash.enabled = value;
     }
 }
 

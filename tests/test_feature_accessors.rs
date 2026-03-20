@@ -6,8 +6,8 @@ use binlex::imaging::{PNG, Palette, SVG, Terminal};
 #[test]
 fn file_direct_accessors_ignore_serialization_flags() {
     let mut config = Config::default();
-    config.formats.file.hashing.sha256.enabled = false;
-    config.formats.file.hashing.tlsh.enabled = false;
+    config.formats.file.sha256.enabled = false;
+    config.formats.file.tlsh.enabled = false;
     config.formats.file.entropy.enabled = false;
 
     let file = File::from_bytes(
@@ -36,9 +36,9 @@ fn file_direct_accessors_ignore_serialization_flags() {
 fn chromosome_direct_accessors_ignore_serialization_flags() {
     let mut config = Config::default();
     config.chromosomes.features.enabled = false;
-    config.chromosomes.hashing.sha256.enabled = false;
-    config.chromosomes.hashing.tlsh.enabled = false;
-    config.chromosomes.hashing.minhash.enabled = false;
+    config.chromosomes.sha256.enabled = false;
+    config.chromosomes.tlsh.enabled = false;
+    config.chromosomes.minhash.enabled = false;
     config.chromosomes.entropy.enabled = false;
 
     let chromosome = Chromosome::new(
