@@ -63,8 +63,9 @@ fn _run_processor_entry(
     socket_name: String,
     compression_enabled: bool,
 ) -> i32 {
+    let backend_name = ::binlex::runtime::dispatch::processor_backend_filename(&processor_name);
     match child::run_processor_entry(
-        "binlex-processor",
+        &backend_name,
         &processor_name,
         &socket_name,
         compression_enabled,

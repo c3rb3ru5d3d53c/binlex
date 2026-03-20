@@ -18,8 +18,8 @@ fn main() {
     }
 
     let processor_name = match processor_name {
-        Some(processor_name) => processor_name,
-        None => process::exit(2),
+        Some(processor_name) if processor_name == "vex" => processor_name,
+        _ => process::exit(2),
     };
     let socket_name = match socket_name {
         Some(socket_name) => socket_name,
@@ -27,7 +27,7 @@ fn main() {
     };
 
     match binlex::runtime::child::run_processor_entry(
-        "binlex-processor",
+        "binlex-processor-vex",
         &processor_name,
         &socket_name,
         compression_enabled,
