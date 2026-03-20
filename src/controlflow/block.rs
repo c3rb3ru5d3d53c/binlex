@@ -349,13 +349,25 @@ impl<'block> Block<'block> {
         let functions = self.functions();
         let blocks = self.blocks();
         let entropy = if self.cfg.config.blocks.entropy.enabled {
-            entropy::shannon(&bytes)
+            self.entropy()
         } else {
             None
         };
-        let sha256 = self.sha256().and_then(|hash| hash.hexdigest());
-        let minhash = self.minhash().and_then(|hash| hash.hexdigest());
-        let tlsh = self.tlsh().and_then(|hash| hash.hexdigest());
+        let sha256 = if self.cfg.config.blocks.hashing.sha256.enabled {
+            self.sha256().and_then(|hash| hash.hexdigest())
+        } else {
+            None
+        };
+        let minhash = if self.cfg.config.blocks.hashing.minhash.enabled {
+            self.minhash().and_then(|hash| hash.hexdigest())
+        } else {
+            None
+        };
+        let tlsh = if self.cfg.config.blocks.hashing.tlsh.enabled {
+            self.tlsh().and_then(|hash| hash.hexdigest())
+        } else {
+            None
+        };
 
         BlockJson {
             type_: "block".to_string(),
@@ -597,42 +609,33 @@ impl<'block> Block<'block> {
         result
     }
 
-    /// Computes the entropy of the block's bytes, if enabled.
+    /// Computes the entropy of the block's bytes.
     ///
     /// # Returns
     ///
-    /// Returns `Some(f64)` containing the entropy, or `None` if entropy calculation is disabled.
+    /// Returns `Some(f64)` containing the entropy, or `None` if it cannot be computed.
     pub fn entropy(&self) -> Option<f64> {
-        if !self.cfg.config.blocks.entropy.enabled {
-            return None;
-        }
         entropy::shannon(&self.bytes())
     }
 
-    /// Computes the TLSH of the block's bytes, if enabled.
+    /// Computes the TLSH of the block's bytes.
     ///
     /// # Returns
     ///
-    /// Returns `Some(TLSH)` containing the TLSH object, or `None` if TLSH is disabled or the block size is too small.
+    /// Returns `Some(TLSH)` containing the TLSH object, or `None` if the block size is too small.
     pub fn tlsh(&self) -> Option<TLSH<'static>> {
-        if !self.cfg.config.blocks.hashing.tlsh.enabled {
-            return None;
-        }
         Some(TLSH::from_bytes(
             self.bytes(),
             self.cfg.config.blocks.hashing.tlsh.minimum_byte_size,
         ))
     }
 
-    /// Computes the MinHash of the block's bytes, if enabled.
+    /// Computes the MinHash of the block's bytes.
     ///
     /// # Returns
     ///
-    /// Returns `Some(MinHash32)` containing the MinHash object, or `None` if MinHash is disabled or the block's size exceeds the configured maximum.
+    /// Returns `Some(MinHash32)` containing the MinHash object, or `None` if the block's size exceeds the configured maximum.
     pub fn minhash(&self) -> Option<MinHash32<'static>> {
-        if !self.cfg.config.blocks.hashing.minhash.enabled {
-            return None;
-        }
         let bytes = self.bytes();
         if bytes.len() > self.cfg.config.blocks.hashing.minhash.maximum_byte_size
             && self
@@ -653,15 +656,12 @@ impl<'block> Block<'block> {
         ))
     }
 
-    /// Computes the SHA-256 hash of the block's bytes, if enabled.
+    /// Computes the SHA-256 hash of the block's bytes.
     ///
     /// # Returns
     ///
-    /// Returns `Some(SHA256)` containing the hash object, or `None` if SHA-256 is disabled.
+    /// Returns `Some(SHA256)` containing the hash object.
     pub fn sha256(&self) -> Option<SHA256<'static>> {
-        if !self.cfg.config.blocks.hashing.sha256.enabled {
-            return None;
-        }
         Some(SHA256::from_bytes(self.bytes()))
     }
 

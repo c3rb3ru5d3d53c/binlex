@@ -67,7 +67,7 @@ fn imaging_hashes_return_none_for_empty_images() {
 }
 
 #[test]
-fn imaging_hashes_respect_config() {
+fn imaging_hashes_ignore_config_for_direct_accessors() {
     let mut config = Config::default();
     config.disable_imaging_hashing();
 
@@ -75,24 +75,23 @@ fn imaging_hashes_respect_config() {
     let svg = SVG::new(&[0x00, 0x7f, 0xff], Palette::Grayscale, config.clone());
     let terminal = Terminal::new(&[0x00, 0x7f, 0xff], Palette::Grayscale, config);
 
-    assert!(png.sha256().is_none());
-    assert!(png.tlsh().is_none());
-    assert!(png.minhash().is_none());
-    assert!(png.ahash().is_none());
-    assert!(png.dhash().is_none());
-    assert!(png.phash().is_none());
+    assert!(png.sha256().is_some());
+    assert!(png.tlsh().is_some());
+    assert!(png.minhash().is_some());
+    assert!(png.ahash().is_some());
+    assert!(png.dhash().is_some());
+    assert!(png.phash().is_some());
 
-    assert!(svg.sha256().is_none());
-    assert!(svg.tlsh().is_none());
-    assert!(svg.minhash().is_none());
-    assert!(svg.ahash().is_none());
-    assert!(svg.dhash().is_none());
-    assert!(svg.phash().is_none());
-
-    assert!(terminal.sha256().is_none());
-    assert!(terminal.tlsh().is_none());
-    assert!(terminal.minhash().is_none());
-    assert!(terminal.ahash().is_none());
-    assert!(terminal.dhash().is_none());
-    assert!(terminal.phash().is_none());
+    assert_eq!(png.sha256(), svg.sha256());
+    assert_eq!(png.sha256(), terminal.sha256());
+    assert_eq!(png.tlsh(), svg.tlsh());
+    assert_eq!(png.tlsh(), terminal.tlsh());
+    assert_eq!(png.minhash(), svg.minhash());
+    assert_eq!(png.minhash(), terminal.minhash());
+    assert_eq!(png.ahash(), svg.ahash());
+    assert_eq!(png.ahash(), terminal.ahash());
+    assert_eq!(png.dhash(), svg.dhash());
+    assert_eq!(png.dhash(), terminal.dhash());
+    assert_eq!(png.phash(), svg.phash());
+    assert_eq!(png.phash(), terminal.phash());
 }

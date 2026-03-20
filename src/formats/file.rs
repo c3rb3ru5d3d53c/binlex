@@ -135,9 +135,6 @@ impl File {
     /// or `None` if the file's size is zero or less.
     #[allow(dead_code)]
     pub fn tlsh(&self) -> Option<String> {
-        if !self.config.formats.file.hashing.tlsh.enabled {
-            return None;
-        }
         if self.size() == 0 {
             return None;
         }
@@ -152,9 +149,6 @@ impl File {
     /// or `None` if the file's size is zero or less.
     #[allow(dead_code)]
     pub fn sha256(&self) -> Option<String> {
-        if !self.config.formats.file.hashing.sha256.enabled {
-            return None;
-        }
         if self.size() == 0 {
             return None;
         }
@@ -256,17 +250,26 @@ impl File {
         FileJson {
             type_: "file".to_string(),
             magic: self.magic().to_string(),
-            sha256: self.sha256(),
-            tlsh: self.tlsh(),
+            sha256: if self.config.formats.file.hashing.sha256.enabled {
+                self.sha256()
+            } else {
+                None
+            },
+            tlsh: if self.config.formats.file.hashing.tlsh.enabled {
+                self.tlsh()
+            } else {
+                None
+            },
             size: Some(self.size()),
-            entropy: self.entropy(),
+            entropy: if self.config.formats.file.entropy.enabled {
+                self.entropy()
+            } else {
+                None
+            },
         }
     }
 
     pub fn entropy(&self) -> Option<f64> {
-        if !self.config.formats.file.entropy.enabled {
-            return None;
-        }
         entropy::shannon(&self.data)
     }
 

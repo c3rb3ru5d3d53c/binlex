@@ -332,25 +332,26 @@ impl<'function> Function<'function> {
         } else {
             None
         };
-        let entropy = if !self.cfg.config.functions.entropy.enabled {
-            None
-        } else if contiguous {
-            bytes.as_ref().and_then(|bytes| entropy::shannon(bytes))
+        let entropy = if self.cfg.config.functions.entropy.enabled {
+            self.entropy()
         } else {
-            let entropi: Vec<f64> = self
-                .blocks
-                .values()
-                .filter_map(|block| block.entropy())
-                .collect();
-            if entropi.is_empty() {
-                Some(0.0)
-            } else {
-                Some(entropi.iter().sum::<f64>() / entropi.len() as f64)
-            }
+            None
         };
-        let sha256 = self.sha256().and_then(|hash| hash.hexdigest());
-        let tlsh = self.tlsh().and_then(|hash| hash.hexdigest());
-        let minhash = self.minhash().and_then(|hash| hash.hexdigest());
+        let sha256 = if self.cfg.config.functions.hashing.sha256.enabled {
+            self.sha256().and_then(|hash| hash.hexdigest())
+        } else {
+            None
+        };
+        let tlsh = if self.cfg.config.functions.hashing.tlsh.enabled {
+            self.tlsh().and_then(|hash| hash.hexdigest())
+        } else {
+            None
+        };
+        let minhash = if self.cfg.config.functions.hashing.minhash.enabled {
+            self.minhash().and_then(|hash| hash.hexdigest())
+        } else {
+            None
+        };
 
         FunctionJson {
             address: self.address,
@@ -637,31 +638,24 @@ impl<'function> Function<'function> {
         Some(bytes)
     }
 
-    /// Computes the SHA-256 hash of the function's bytes, if enabled and contiguous.
+    /// Computes the SHA-256 hash of the function's bytes, if contiguous.
     ///
     /// # Returns
     ///
-    /// Returns `Some(SHA256)` containing the hash object, or `None` if SHA-256 is disabled or the function is not contiguous.
+    /// Returns `Some(SHA256)` containing the hash object, or `None` if the function is not contiguous.
     pub fn sha256(&self) -> Option<SHA256<'static>> {
-        if !self.cfg.config.functions.hashing.sha256.enabled {
-            return None;
-        }
         if !self.contiguous() {
             return None;
         }
         self.bytes().map(SHA256::from_bytes)
     }
 
-    /// Computes the entropy of the function's bytes, if enabled and contiguous.
+    /// Computes the entropy of the function's bytes.
     ///
     /// # Returns
     ///
-    /// Returns `Some(f64)` containing the entropy, or `None` if entropy calculation is disabled or the function is not contiguous.
+    /// Returns `Some(f64)` containing the entropy, or `None` if it cannot be computed.
     pub fn entropy(&self) -> Option<f64> {
-        if !self.cfg.config.functions.entropy.enabled {
-            return None;
-        }
-
         if self.contiguous() {
             return self.bytes().and_then(|bytes| entropy::shannon(&bytes));
         }
@@ -679,15 +673,12 @@ impl<'function> Function<'function> {
         }
     }
 
-    /// Computes the TLSH of the function's bytes, if enabled and contiguous.
+    /// Computes the TLSH of the function's bytes, if contiguous.
     ///
     /// # Returns
     ///
-    /// Returns `Some(TLSH)` containing the TLSH object, or `None` if TLSH is disabled or the function is not contiguous.
+    /// Returns `Some(TLSH)` containing the TLSH object, or `None` if the function is not contiguous.
     pub fn tlsh(&self) -> Option<TLSH<'static>> {
-        if !self.cfg.config.functions.hashing.tlsh.enabled {
-            return None;
-        }
         if !self.contiguous() {
             return None;
         }
@@ -699,15 +690,12 @@ impl<'function> Function<'function> {
         })
     }
 
-    /// Computes the MinHash of the function's bytes, if enabled and contiguous.
+    /// Computes the MinHash of the function's bytes, if contiguous.
     ///
     /// # Returns
     ///
-    /// Returns `Some(MinHash32)` containing the MinHash object, or `None` if MinHash is disabled or the function is not contiguous.
+    /// Returns `Some(MinHash32)` containing the MinHash object, or `None` if the function is not contiguous.
     pub fn minhash(&self) -> Option<MinHash32<'static>> {
-        if !self.cfg.config.functions.hashing.minhash.enabled {
-            return None;
-        }
         if !self.contiguous() {
             return None;
         }

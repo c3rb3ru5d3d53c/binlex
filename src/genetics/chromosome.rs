@@ -158,12 +158,9 @@ impl Chromosome {
     ///
     /// # Returns
     ///
-    /// Returns a `Vec<u8>` containing the feature vector, or an empty vector if feature extraction is disabled.
+    /// Returns a `Vec<u8>` containing the feature vector.
     pub fn feature(&self) -> Vec<u8> {
         let mut result = Vec::<u8>::new();
-        if !self.config.chromosomes.features.enabled {
-            return result;
-        }
         for allelepair in &self.allelepairs {
             if let Some(high) = allelepair.high.value() {
                 result.push(high);
@@ -175,15 +172,12 @@ impl Chromosome {
         result
     }
 
-    /// Computes the TLSH (Locality Sensitive Hash) of the normalized chromosome, if enabled.
+    /// Computes the TLSH (Locality Sensitive Hash) of the normalized chromosome.
     ///
     /// # Returns
     ///
-    /// Returns `Some(String)` containing the TLSH, or `None` if TLSH is disabled.
+    /// Returns `Some(String)` containing the TLSH, or `None` if it cannot be computed.
     pub fn tlsh(&self) -> Option<String> {
-        if !self.config.chromosomes.hashing.tlsh.enabled {
-            return None;
-        }
         TLSH::new(
             &self.bytes(),
             self.config.chromosomes.hashing.tlsh.minimum_byte_size,
@@ -191,16 +185,13 @@ impl Chromosome {
         .hexdigest()
     }
 
-    /// Computes the MinHash of the normalized signature, if enabled.
+    /// Computes the MinHash of the normalized signature.
     ///
     /// # Returns
     ///
-    /// Returns `Some(String)` containing the MinHash, or `None` if MinHash is disabled.
+    /// Returns `Some(String)` containing the MinHash, or `None` if it cannot be computed.
     #[allow(dead_code)]
     pub fn minhash(&self) -> Option<String> {
-        if !self.config.chromosomes.hashing.minhash.enabled {
-            return None;
-        }
         if self.bytes().len() > self.config.chromosomes.hashing.minhash.maximum_byte_size
             && self
                 .config
@@ -220,27 +211,21 @@ impl Chromosome {
         .hexdigest()
     }
 
-    /// Computes the SHA-256 hash of the normalized chromosome, if enabled.
+    /// Computes the SHA-256 hash of the normalized chromosome.
     ///
     /// # Returns
     ///
-    /// Returns `Some(String)` containing the SHA-256 hash, or `None` if SHA-256 is disabled.
+    /// Returns `Some(String)` containing the SHA-256 hash, or `None` if it cannot be computed.
     pub fn sha256(&self) -> Option<String> {
-        if !self.config.chromosomes.hashing.sha256.enabled {
-            return None;
-        }
         SHA256::new(&self.bytes()).hexdigest()
     }
 
-    /// Computes the entropy of the normalized chromosome, if enabled.
+    /// Computes the entropy of the normalized chromosome.
     ///
     /// # Returns
     ///
-    /// Returns `Some(f64)` containing the entropy, or `None` if entropy calculation is disabled.
+    /// Returns `Some(f64)` containing the entropy, or `None` if it cannot be computed.
     pub fn entropy(&self) -> Option<f64> {
-        if !self.config.chromosomes.entropy.enabled {
-            return None;
-        }
         entropy::shannon(&self.bytes())
     }
 
@@ -252,11 +237,31 @@ impl Chromosome {
     pub fn process(&self) -> ChromosomeJson {
         ChromosomeJson {
             pattern: self.pattern(),
-            feature: self.feature(),
-            sha256: self.sha256(),
-            entropy: self.entropy(),
-            minhash: self.minhash(),
-            tlsh: self.tlsh(),
+            feature: if self.config.chromosomes.features.enabled {
+                self.feature()
+            } else {
+                Vec::new()
+            },
+            sha256: if self.config.chromosomes.hashing.sha256.enabled {
+                self.sha256()
+            } else {
+                None
+            },
+            entropy: if self.config.chromosomes.entropy.enabled {
+                self.entropy()
+            } else {
+                None
+            },
+            minhash: if self.config.chromosomes.hashing.minhash.enabled {
+                self.minhash()
+            } else {
+                None
+            },
+            tlsh: if self.config.chromosomes.hashing.tlsh.enabled {
+                self.tlsh()
+            } else {
+                None
+            },
         }
     }
 

@@ -373,9 +373,8 @@ impl Block {
     /// Return all processor outputs attached to this block.
     pub fn processors(&self, py: Python) -> PyResult<Py<PyAny>> {
         self.with_inner_block(py, |block| {
-            let value = serde_json::to_value(block.processors()).map_err(|e| {
-                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
-            })?;
+            let value = serde_json::to_value(block.processors())
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
             json_value_to_py(py, &value)
         })
     }

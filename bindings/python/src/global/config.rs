@@ -1631,7 +1631,9 @@ impl ConfigProcessor {
         if let Some(processor) = inner.processors.ensure_processor(&self.name) {
             match value {
                 Some(value) => {
-                    processor.options.insert("dimensions".to_string(), value.into());
+                    processor
+                        .options
+                        .insert("dimensions".to_string(), value.into());
                 }
                 None => {
                     processor.options.remove("dimensions");
