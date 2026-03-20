@@ -6,8 +6,8 @@ use binlex::{Architecture, Config};
 use std::path::PathBuf;
 
 fn test_config() -> Config {
-    let processor = option_env!("CARGO_BIN_EXE_binlex-processor")
-        .expect("binlex-processor binary should be built");
+    let processor = option_env!("CARGO_BIN_EXE_binlex-processor-vex")
+        .expect("binlex-processor-vex binary should be built");
     let processor_dir = PathBuf::from(processor)
         .parent()
         .expect("processor binary should have a parent directory")

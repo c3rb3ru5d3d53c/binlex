@@ -139,7 +139,9 @@ jobs:
         if: ${{ matrix.os == 'windows-latest' }}
         run: |
           copy target\release\binlex.exe dist\
-          copy target\release\binlex-processor.exe dist\
+          copy target\release\binlex-server.exe dist\
+          copy target\release\binlex-processor-vex.exe dist\
+          copy target\release\binlex-processor-embeddings.exe dist\
           copy target\release\binlex-yara.exe dist\
           copy target\release\binlex-symbols.exe dist\
           copy target\release\binlex-image.exe dist\
@@ -149,7 +151,9 @@ jobs:
         if: startsWith(matrix.os, 'macos-')
         run: |
           cp target/release/binlex dist/
-          cp target/release/binlex-processor dist/
+          cp target/release/binlex-server dist/
+          cp target/release/binlex-processor-vex dist/
+          cp target/release/binlex-processor-embeddings dist/
           cp target/release/binlex-yara dist/
           cp target/release/binlex-symbols dist/
           cp target/release/binlex-image dist/
@@ -159,7 +163,9 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
           cp target/release/binlex dist/
-          cp target/release/binlex-processor dist/
+          cp target/release/binlex-server dist/
+          cp target/release/binlex-processor-vex dist/
+          cp target/release/binlex-processor-embeddings dist/
           cp target/release/binlex-yara dist/
           cp target/release/binlex-symbols dist/
           cp target/release/binlex-image dist/
@@ -258,7 +264,9 @@ jobs:
       - name: Copy Binary
         run: |
           cp target/release/binlex dist/
-          cp target/release/binlex-processor dist/
+          cp target/release/binlex-server dist/
+          cp target/release/binlex-processor-vex dist/
+          cp target/release/binlex-processor-embeddings dist/
           cp target/release/binlex-yara dist/
           cp target/release/binlex-symbols dist/
           cp target/release/binlex-image dist/

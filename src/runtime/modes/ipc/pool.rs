@@ -446,7 +446,7 @@ mod tests {
     fn validate_hello_accepts_matching_os_negotiation() {
         let hello = Hello {
             protocol_version: VERSION,
-            backend_name: "binlex-processor".to_string(),
+            backend_name: "binlex-processor-embeddings".to_string(),
             binlex_version: crate::VERSION.to_string(),
             host_os: ProcessorOs::current(),
             processor_name: "embeddings".to_string(),
@@ -460,7 +460,7 @@ mod tests {
             pid: 1,
         };
 
-        assert!(validate_hello(&hello, "binlex-processor", "embeddings", 1).is_ok());
+        assert!(validate_hello(&hello, "binlex-processor-embeddings", "embeddings", 1).is_ok());
     }
 
     #[test]
@@ -472,7 +472,7 @@ mod tests {
         };
         let hello = Hello {
             protocol_version: VERSION,
-            backend_name: "binlex-processor".to_string(),
+            backend_name: "binlex-processor-embeddings".to_string(),
             binlex_version: crate::VERSION.to_string(),
             host_os: ProcessorOs::current(),
             processor_name: "embeddings".to_string(),
@@ -486,7 +486,7 @@ mod tests {
             pid: 1,
         };
 
-        let error = validate_hello(&hello, "binlex-processor", "embeddings", 1)
+        let error = validate_hello(&hello, "binlex-processor-embeddings", "embeddings", 1)
             .expect_err("hello should be rejected when processor os metadata excludes host os");
         assert!(error.to_string().contains("advertised unsupported os list"));
     }

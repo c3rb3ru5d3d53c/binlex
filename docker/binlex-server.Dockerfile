@@ -5,7 +5,10 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 
-RUN cargo build --release --bin binlex-server --bin binlex-processor
+RUN cargo build --release \
+    --bin binlex-server \
+    --bin binlex-processor-vex \
+    --bin binlex-processor-embeddings
 
 FROM debian:bookworm-slim
 
@@ -17,7 +20,8 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY --from=builder /app/target/release/binlex-server /usr/local/bin/binlex-server
-COPY --from=builder /app/target/release/binlex-processor /usr/local/bin/binlex-processor
+COPY --from=builder /app/target/release/binlex-processor-vex /usr/local/bin/binlex-processor-vex
+COPY --from=builder /app/target/release/binlex-processor-embeddings /usr/local/bin/binlex-processor-embeddings
 
 EXPOSE 5000
 

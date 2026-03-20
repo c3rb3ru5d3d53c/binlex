@@ -91,10 +91,10 @@ python
 When the Python bindings are imported, binlex registers the current Python runtime as the preferred IPC worker host. Wheel installs can then launch processor workers through:
 
 ```bash
-python -m binlex._processor --socket ... --processor <name> --compression true
+python -m binlex._ipc_processor --socket ... --processor <name> --compression true
 ```
 
-This internal entrypoint is preferred automatically before falling back to the standalone `binlex-processor` binary.
+This internal entrypoint is preferred automatically for wheel-hosted IPC execution.
 
 ### Packaging
 
@@ -125,7 +125,7 @@ python -m plugin print-target
 python -m plugin install --target ~/.config/idapro/plugins/
 ```
 
-You will also need to ensure the server is running. The new layout uses the Rust `binlex-server` binary, which can execute processors in-process (`inline`) or manage `binlex-processor` workers over the internal `BLEX` protocol (`ipc`).
+You will also need to ensure the server is running. The new layout uses the Rust `binlex-server` binary, which can execute processors in-process (`inline`) or manage dedicated `binlex-processor-<name>` workers over the internal `BLEX` protocol (`ipc`).
 
 ```bash
 cargo run --release --bin binlex-server
@@ -485,7 +485,7 @@ If the command-line options are not enough the configuration file provides the m
 
 Processor modes are:
 - `inline`: execute the processor in-process. This uses the same thread budget as `binlex --threads`.
-- `ipc`: execute the processor out-of-process through `binlex-processor` workers. This uses `[processors].processes`.
+- `ipc`: execute the processor out-of-process through `binlex-processor-<name>` workers. This uses `[processors].processes`.
 - `http`: execute the processor through `binlex-server` over HTTP.
 
 If you wish to override the default configuration file and specify another configuration file use the command-line parameter.
@@ -610,7 +610,7 @@ To wire it into the project:
 2. Add `pub mod example;` to `src/processors/mod.rs`.
 3. Add the registration to `PROCESSOR_REGISTRATIONS`, for example `vec![vex::registration(), example::registration()]`.
 4. Extend `ProcessorSelection` with `Example` if you want it selectable from `binlex --processors`.
-5. Build `binlex` and `binlex-processor`, then enable the processor in config or with `--processors example`.
+5. Build `binlex` and a dedicated worker binary such as `binlex-processor-example`, then enable the processor in config or with `--processors example`.
 
 Notes:
 - `Processor::request` is the typed execution entrypoint used by `inline`, `ipc`, and `http`.
@@ -619,7 +619,7 @@ Notes:
 - `requires` is a semver requirement evaluated against the running `binlex::VERSION`.
 - Keep outputs compact; every emitted value is serialized into the JSON stream.
 - `inline` uses `binlex --threads`, `ipc` uses `[processors].processes`, and `http` uses the server.
-- Use `config.processors.path` if your processor worker binary lives outside the default search path. Explicitly setting this path overrides the Python module worker fallback.
+- Use `config.processors.path` if your processor worker binary lives outside the default search path. Native IPC workers are resolved as `binlex-processor-<name>`.
 
 ### Making a YARA Rule
 

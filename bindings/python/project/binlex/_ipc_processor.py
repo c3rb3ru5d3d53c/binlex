@@ -4,7 +4,7 @@ from binlex_bindings.binlex import _run_processor_entry
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(prog="python -m binlex._processor")
+    parser = argparse.ArgumentParser(prog="python -m binlex._ipc_processor")
     parser.add_argument("--socket", required=True)
     parser.add_argument("--processor", required=True)
     parser.add_argument("--compression", default="false")

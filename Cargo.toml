@@ -75,8 +75,12 @@ name = "binlex-symbols"
 path = "src/bin/binlex-symbols.rs"
 
 [[bin]]
-name = "binlex-processor"
-path = "src/bin/binlex-processor.rs"
+name = "binlex-processor-embeddings"
+path = "src/bin/binlex-processor-embeddings.rs"
+
+[[bin]]
+name = "binlex-processor-vex"
+path = "src/bin/binlex-processor-vex.rs"
 
 [[bin]]
 name = "binlex-server"
