@@ -4,11 +4,14 @@ pkgrel=1
 pkgdesc="A Binary Genetic Trait Lexer Framework"
 arch=('x86_64')
 license=('MIT')
-makedepends=('rust')
+makedepends=('rust' 'pkgconf' 'clang' 'openssl' 'zstd')
 
 build() {
   local builddir="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
   cd "$builddir"
+  # Arch's makepkg injects --as-needed, which drops the transitive libzstd link
+  # emitted by zstd-sys during lief's build-script link step.
+  export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C link-arg=-Wl,--no-as-needed"
   cargo build --release
 }
 
