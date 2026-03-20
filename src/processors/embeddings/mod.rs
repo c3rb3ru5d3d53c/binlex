@@ -114,36 +114,36 @@ fn gpu_probe_candidates() -> &'static [EmbeddingDevice] {
     }
 }
 
-fn chromosome_histogram(feature: &[u8]) -> Vec<f32> {
+fn chromosome_histogram(vector: &[u8]) -> Vec<f32> {
     let mut histogram = vec![0.0f32; NIBBLE_BUCKETS];
-    if feature.is_empty() {
+    if vector.is_empty() {
         return histogram;
     }
 
-    for nibble in feature {
+    for nibble in vector {
         let bucket = (*nibble as usize) % NIBBLE_BUCKETS;
         histogram[bucket] += 1.0;
     }
 
-    let total = feature.len() as f32;
+    let total = vector.len() as f32;
     for value in &mut histogram {
         *value /= total;
     }
     histogram
 }
 
-fn chromosome_transitions(feature: &[u8]) -> Vec<f32> {
+fn chromosome_transitions(vector: &[u8]) -> Vec<f32> {
     let mut histogram = vec![0.0f32; TRANSITION_BUCKETS];
-    if feature.len() < 2 {
+    if vector.len() < 2 {
         return histogram;
     }
 
-    for window in feature.windows(2) {
+    for window in vector.windows(2) {
         let transition = ((window[0] << 4) | window[1]) as usize;
         histogram[transition % TRANSITION_BUCKETS] += 1.0;
     }
 
-    let total = (feature.len() - 1) as f32;
+    let total = (vector.len() - 1) as f32;
     for value in &mut histogram {
         *value /= total;
     }
@@ -153,9 +153,9 @@ fn chromosome_transitions(feature: &[u8]) -> Vec<f32> {
 fn chromosome_feature_vector(chromosome: Option<&ChromosomeJson>) -> Vec<f32> {
     let mut features = Vec::with_capacity(NIBBLE_BUCKETS + TRANSITION_BUCKETS + 4);
     if let Some(chromosome) = chromosome {
-        features.extend(chromosome_histogram(&chromosome.feature));
-        features.extend(chromosome_transitions(&chromosome.feature));
-        features.push((chromosome.feature.len() as f32 / 512.0).clamp(0.0, 1.0));
+        features.extend(chromosome_histogram(&chromosome.vector));
+        features.extend(chromosome_transitions(&chromosome.vector));
+        features.push((chromosome.vector.len() as f32 / 512.0).clamp(0.0, 1.0));
         features.push((chromosome.pattern.len() as f32 / 1024.0).clamp(0.0, 1.0));
         features.push((chromosome.entropy.unwrap_or_default() as f32 / 8.0).clamp(0.0, 1.0));
         features.push(1.0);
@@ -327,13 +327,13 @@ fn function_cfg_features(value: &Value) -> Vec<f32> {
 
     for block in &cfg_blocks {
         block_index.insert(block.address);
-        for (bucket, value) in chromosome_histogram(&block.chromosome.feature)
+        for (bucket, value) in chromosome_histogram(&block.chromosome.vector)
             .into_iter()
             .enumerate()
         {
             nibble[bucket] += value;
         }
-        for (bucket, value) in chromosome_transitions(&block.chromosome.feature)
+        for (bucket, value) in chromosome_transitions(&block.chromosome.vector)
             .into_iter()
             .enumerate()
         {
@@ -460,8 +460,8 @@ fn function_cfg_features(value: &Value) -> Vec<f32> {
     let weight_sum = weights.iter().sum::<f32>().max(1.0);
     for (block, weight) in cfg_blocks.iter().zip(weights.iter()) {
         let normalized_weight = *weight / weight_sum;
-        let block_histogram = chromosome_histogram(&block.chromosome.feature);
-        let block_transitions = chromosome_transitions(&block.chromosome.feature);
+        let block_histogram = chromosome_histogram(&block.chromosome.vector);
+        let block_transitions = chromosome_transitions(&block.chromosome.vector);
         for (bucket, value) in block_histogram.into_iter().enumerate() {
             features[bucket] += value * normalized_weight;
         }

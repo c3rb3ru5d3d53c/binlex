@@ -33,7 +33,15 @@ use std::sync::{Arc, Mutex};
 /// Render bytes into an SVG document.
 #[pyclass]
 pub struct SVG {
-    inner: Arc<Mutex<InnerSVG>>,
+    pub(crate) inner: Arc<Mutex<InnerSVG>>,
+}
+
+impl SVG {
+    pub(crate) fn from_inner(inner: InnerSVG) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(inner)),
+        }
+    }
 }
 
 #[pymethods]

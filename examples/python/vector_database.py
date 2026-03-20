@@ -280,7 +280,7 @@ class BinlexVectorDB:
             ]
             # Chromosome nibble histogram
             chromosome_feature_histogram = self.nibbles_to_histogram_vector(
-                block.chromosome().feature()
+                block.chromosome().vector()
             )
             feature.extend(chromosome_feature_histogram)
 

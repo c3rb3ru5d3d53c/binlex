@@ -23,6 +23,7 @@
 use crate::controlflow::json_value_to_py;
 use crate::controlflow::Graph;
 use crate::genetics::Chromosome;
+use crate::imaging::{PNG, SVG};
 use crate::Config;
 use binlex::controlflow::Instruction as InnerInstruction;
 use pyo3::prelude::*;
@@ -138,6 +139,18 @@ impl Instruction {
     /// Return the size of the instruction in bytes.
     pub fn size(&self, py: Python) -> PyResult<usize> {
         self.with_inner_instruction(py, |instruction| Ok(instruction.size()))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Render the instruction as a PNG image using default imaging settings.
+    pub fn png(&self, py: Python) -> PyResult<PNG> {
+        self.with_inner_instruction(py, |instruction| Ok(PNG::from_inner(instruction.png())))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Render the instruction as an SVG image using default imaging settings.
+    pub fn svg(&self, py: Python) -> PyResult<SVG> {
+        self.with_inner_instruction(py, |instruction| Ok(SVG::from_inner(instruction.svg())))
     }
 
     #[pyo3(text_signature = "($self)")]

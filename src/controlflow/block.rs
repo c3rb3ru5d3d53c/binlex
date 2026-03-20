@@ -31,6 +31,7 @@ use crate::hashing::MinHash32;
 use crate::hashing::SHA256;
 use crate::hashing::TLSH;
 use crate::hex;
+use crate::imaging::{PNG, Palette, SVG};
 use crate::metadata::Attributes;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -680,6 +681,16 @@ impl<'block> Block<'block> {
             result.extend(instruction.bytes.clone());
         }
         result
+    }
+
+    /// Renders the block bytes as a PNG image using default imaging settings.
+    pub fn png(&self) -> PNG {
+        PNG::new(&self.bytes(), Palette::Grayscale, self.cfg.config.clone())
+    }
+
+    /// Renders the block bytes as an SVG image using default imaging settings.
+    pub fn svg(&self) -> SVG {
+        SVG::new(&self.bytes(), Palette::Grayscale, self.cfg.config.clone())
     }
 
     /// Counts the number of instructions in the block.

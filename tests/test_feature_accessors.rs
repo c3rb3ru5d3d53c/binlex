@@ -35,7 +35,7 @@ fn file_direct_accessors_ignore_serialization_flags() {
 #[test]
 fn chromosome_direct_accessors_ignore_serialization_flags() {
     let mut config = Config::default();
-    config.chromosomes.features.enabled = false;
+    config.chromosomes.vector.enabled = false;
     config.chromosomes.sha256.enabled = false;
     config.chromosomes.tlsh.enabled = false;
     config.chromosomes.minhash.enabled = false;
@@ -47,16 +47,25 @@ fn chromosome_direct_accessors_ignore_serialization_flags() {
     )
     .expect("chromosome should parse");
 
-    assert!(!chromosome.feature().is_empty());
+    assert!(!chromosome.vector().is_empty());
     assert!(chromosome.sha256().is_some());
     assert!(chromosome.tlsh().is_some());
     assert!(chromosome.minhash().is_some());
     assert!(chromosome.entropy().is_some());
 
+    let png = chromosome.png();
+    let svg = chromosome.svg();
+    assert!(png.phash().is_some());
+    assert!(png.ahash().is_some());
+    assert!(png.dhash().is_some());
+    assert_eq!(png.phash(), svg.phash());
+    assert_eq!(png.ahash(), svg.ahash());
+    assert_eq!(png.dhash(), svg.dhash());
+
     let value: serde_json::Value =
         serde_json::from_str(&chromosome.json().expect("chromosome json should serialize"))
             .expect("chromosome json should parse");
-    assert!(value.get("feature").is_none());
+    assert!(value.get("vector").is_none());
     assert!(value.get("sha256").is_none());
     assert!(value.get("tlsh").is_none());
     assert!(value.get("minhash").is_none());

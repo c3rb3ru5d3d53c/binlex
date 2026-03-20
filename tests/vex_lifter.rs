@@ -318,7 +318,7 @@ fn test_block_process_populates_vex_lifters() {
 #[test]
 fn test_function_json_omits_disabled_optional_keys() {
     let mut config = test_config();
-    config.chromosomes.features.enabled = false;
+    config.chromosomes.vector.enabled = false;
     config.functions.entropy.enabled = false;
     let graph = Graph::new(Architecture::AMD64, config);
     let instruction = Instruction {
@@ -362,7 +362,7 @@ fn test_function_json_omits_disabled_optional_keys() {
     assert!(
         value
             .get("chromosome")
-            .and_then(|chromosome| chromosome.get("feature"))
+            .and_then(|chromosome| chromosome.get("vector"))
             .is_none()
     );
 }

@@ -33,7 +33,15 @@ use std::sync::{Arc, Mutex};
 /// Render bytes into a PNG image.
 #[pyclass]
 pub struct PNG {
-    inner: Arc<Mutex<InnerPNG>>,
+    pub(crate) inner: Arc<Mutex<InnerPNG>>,
+}
+
+impl PNG {
+    pub(crate) fn from_inner(inner: InnerPNG) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(inner)),
+        }
+    }
 }
 
 #[pymethods]

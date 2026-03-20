@@ -69,7 +69,7 @@ pub struct ConfigChromosomes {
     pub sha256: ConfigHashEnabled,
     pub tlsh: ConfigTLSH,
     pub minhash: ConfigMinhash,
-    pub features: ConfigHeuristicFeatures,
+    pub vector: ConfigHeuristicFeatures,
     pub entropy: ConfigHeuristicEntropy,
 }
 
