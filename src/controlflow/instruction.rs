@@ -26,6 +26,7 @@ use crate::controlflow::Graph;
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeJson;
 use crate::hex;
+use crate::imaging::{PNG, Palette, SVG};
 use crate::metadata::Attributes;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -221,6 +222,16 @@ impl Instruction {
     #[allow(dead_code)]
     pub fn size(&self) -> usize {
         self.bytes.len()
+    }
+
+    /// Renders the instruction bytes as a PNG image using default imaging settings.
+    pub fn png(&self) -> PNG {
+        PNG::new(&self.bytes, Palette::Grayscale, self.config.clone())
+    }
+
+    /// Renders the instruction bytes as an SVG image using default imaging settings.
+    pub fn svg(&self) -> SVG {
+        SVG::new(&self.bytes, Palette::Grayscale, self.config.clone())
     }
 
     /// Converts the `Instruction` into its JSON-serializable representation.

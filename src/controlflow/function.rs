@@ -32,6 +32,7 @@ use crate::hashing::MinHash32;
 use crate::hashing::SHA256;
 use crate::hashing::TLSH;
 use crate::hex;
+use crate::imaging::{PNG, Palette, SVG};
 use crate::metadata::Attributes;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -636,6 +637,18 @@ impl<'function> Function<'function> {
             pc += instruction.size() as u64;
         }
         Some(bytes)
+    }
+
+    /// Renders the function bytes as a PNG image using default imaging settings.
+    pub fn png(&self) -> Option<PNG> {
+        self.bytes()
+            .map(|bytes| PNG::new(&bytes, Palette::Grayscale, self.cfg.config.clone()))
+    }
+
+    /// Renders the function bytes as an SVG image using default imaging settings.
+    pub fn svg(&self) -> Option<SVG> {
+        self.bytes()
+            .map(|bytes| SVG::new(&bytes, Palette::Grayscale, self.cfg.config.clone()))
     }
 
     /// Computes the SHA-256 hash of the function's bytes, if contiguous.

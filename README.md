@@ -425,7 +425,7 @@ maximum_byte_size_enabled = false
 maximum_byte_size = 50
 seed = 0
 
-[chromosomes.features]
+[chromosomes.vector]
 enabled = true
 
 [chromosomes.entropy]

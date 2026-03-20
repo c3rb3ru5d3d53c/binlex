@@ -128,7 +128,7 @@ impl Config {
                     maximum_byte_size: 50,
                     seed: 0,
                 },
-                features: ConfigHeuristicFeatures { enabled: false },
+                vector: ConfigHeuristicFeatures { enabled: false },
                 entropy: ConfigHeuristicEntropy { enabled: true },
             },
             mmap: ConfigMmap {
@@ -169,7 +169,7 @@ impl Config {
 
     pub fn disable_chromosome_heuristics(&mut self) {
         self.chromosomes.entropy.enabled = false;
-        self.chromosomes.features.enabled = false;
+        self.chromosomes.vector.enabled = false;
     }
 
     pub fn disable_block_hashing(&mut self) {

@@ -27,6 +27,7 @@ use crate::genetics::Gene;
 use crate::hashing::MinHash32;
 use crate::hashing::SHA256;
 use crate::hashing::TLSH;
+use crate::imaging::{PNG, Palette, SVG};
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::io::Error;
@@ -37,9 +38,9 @@ use std::io::ErrorKind;
 pub struct ChromosomeJson {
     /// The raw pattern string of the chromosome.
     pub pattern: String,
-    /// The feature vector extracted from the chromosome.
+    /// The vector extracted from the chromosome.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub feature: Vec<u8>,
+    pub vector: Vec<u8>,
     /// The entropy of the normalized chromosome, if enabled.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub entropy: Option<f64>,
@@ -154,12 +155,22 @@ impl Chromosome {
         result
     }
 
-    /// Extracts the feature vector from the normalized chromosome, if enabled.
+    /// Renders the normalized chromosome bytes as a PNG image using default imaging settings.
+    pub fn png(&self) -> PNG {
+        PNG::new(&self.bytes(), Palette::Grayscale, self.config.clone())
+    }
+
+    /// Renders the normalized chromosome bytes as an SVG image using default imaging settings.
+    pub fn svg(&self) -> SVG {
+        SVG::new(&self.bytes(), Palette::Grayscale, self.config.clone())
+    }
+
+    /// Extracts the vector from the normalized chromosome, if enabled.
     ///
     /// # Returns
     ///
-    /// Returns a `Vec<u8>` containing the feature vector.
-    pub fn feature(&self) -> Vec<u8> {
+    /// Returns a `Vec<u8>` containing the vector.
+    pub fn vector(&self) -> Vec<u8> {
         let mut result = Vec::<u8>::new();
         for allelepair in &self.allelepairs {
             if let Some(high) = allelepair.high.value() {
@@ -232,8 +243,8 @@ impl Chromosome {
     pub fn process(&self) -> ChromosomeJson {
         ChromosomeJson {
             pattern: self.pattern(),
-            feature: if self.config.chromosomes.features.enabled {
-                self.feature()
+            vector: if self.config.chromosomes.vector.enabled {
+                self.vector()
             } else {
                 Vec::new()
             },

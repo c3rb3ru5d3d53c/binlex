@@ -22,6 +22,7 @@
 
 use crate::genetics::AllelePair;
 use crate::hashing::{MinHash32, SHA256, TLSH};
+use crate::imaging::{PNG, SVG};
 use crate::Config;
 use binlex::genetics::Chromosome as InnerChromosome;
 use pyo3::exceptions::PyRuntimeError;
@@ -93,9 +94,9 @@ impl Chromosome {
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return the feature vector bytes derived from the chromosome.
-    pub fn feature(&self) -> Vec<u8> {
-        self.inner.lock().unwrap().feature()
+    /// Return the vector bytes derived from the chromosome.
+    pub fn vector(&self) -> Vec<u8> {
+        self.inner.lock().unwrap().vector()
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -138,6 +139,18 @@ impl Chromosome {
     /// Return the chromosome bytes.
     pub fn bytes(&self, py: Python) -> Py<PyBytes> {
         PyBytes::new(py, &self.inner.lock().unwrap().bytes()).unbind()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Render the chromosome as a PNG image using default imaging settings.
+    pub fn png(&self) -> PNG {
+        PNG::from_inner(self.inner.lock().unwrap().png())
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Render the chromosome as an SVG image using default imaging settings.
+    pub fn svg(&self) -> SVG {
+        SVG::from_inner(self.inner.lock().unwrap().svg())
     }
 
     #[pyo3(text_signature = "($self)")]

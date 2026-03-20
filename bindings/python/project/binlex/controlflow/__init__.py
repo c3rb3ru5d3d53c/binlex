@@ -32,6 +32,7 @@ from binlex_bindings.binlex.controlflow import Instruction as _InstructionBindin
 
 from binlex.architecture import _coerce_architecture
 from binlex.hashing import MinHash32, SHA256, TLSH
+from binlex.imaging import PNG, SVG
 
 
 class Instruction:
@@ -80,6 +81,14 @@ class Instruction:
     def size(self):
         """Return the instruction size in bytes."""
         return self._inner.size()
+
+    def png(self):
+        """Render the instruction as a PNG image."""
+        return PNG.from_binding(self._inner.png())
+
+    def svg(self):
+        """Render the instruction as an SVG image."""
+        return SVG.from_binding(self._inner.svg())
 
     def processors(self):
         """Return all processor outputs attached to this instruction."""
@@ -139,6 +148,14 @@ class Block:
     def bytes(self):
         """Return the raw bytes for this block."""
         return self._inner.bytes()
+
+    def png(self):
+        """Render the block as a PNG image."""
+        return PNG.from_binding(self._inner.png())
+
+    def svg(self):
+        """Render the block as an SVG image."""
+        return SVG.from_binding(self._inner.svg())
 
     def prologue(self):
         """Return whether this block looks like a function prologue."""
@@ -258,6 +275,16 @@ class Function:
     def bytes(self):
         """Return the raw bytes for this function, if available."""
         return self._inner.bytes()
+
+    def png(self):
+        """Render the function as a PNG image, if contiguous."""
+        image = self._inner.png()
+        return None if image is None else PNG.from_binding(image)
+
+    def svg(self):
+        """Render the function as an SVG image, if contiguous."""
+        image = self._inner.svg()
+        return None if image is None else SVG.from_binding(image)
 
     def prologue(self):
         """Return whether this function starts with a prologue."""

@@ -32,6 +32,13 @@ from .palette import Palette
 class PNG:
     """Render binary data into a PNG image."""
 
+    @classmethod
+    def from_binding(cls, binding):
+        """Wrap an existing native PNG binding."""
+        result = cls.__new__(cls)
+        result._inner = binding
+        return result
+
     def __init__(
         self,
         data: bytes,

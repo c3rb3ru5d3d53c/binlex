@@ -237,8 +237,8 @@ if __name__ == "__main__":
 
     for function in functions:
         if function.get("type") == "function":
-            nibble_sequence = function["chromosome"]["feature"] if function.get("contiguous", True) else \
-                             [block["chromosome"]["feature"] for block in function.get("blocks", [])]
+            nibble_sequence = function["chromosome"]["vector"] if function.get("contiguous", True) else \
+                             [block["chromosome"]["vector"] for block in function.get("blocks", [])]
 
             contiguity_flag = function.get("contiguous", True)
 

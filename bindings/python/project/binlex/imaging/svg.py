@@ -32,6 +32,13 @@ from .palette import Palette
 class SVG:
     """Render binary data into an SVG image."""
 
+    @classmethod
+    def from_binding(cls, binding):
+        """Wrap an existing native SVG binding."""
+        result = cls.__new__(cls)
+        result._inner = binding
+        return result
+
     def __init__(
         self,
         data: bytes,

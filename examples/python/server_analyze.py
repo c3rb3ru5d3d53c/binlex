@@ -34,4 +34,4 @@ client = Client(config)
 
 cfg = client.analyze_file('/home/c3rb3ru5/Tools/binlex/samples/kernel32_0.dll')
 function = cfg.functions()[0]
-print(function.minhash().hexdigest())
+print(function.png().phash().hexdigest())

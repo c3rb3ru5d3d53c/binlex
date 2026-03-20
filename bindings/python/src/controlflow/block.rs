@@ -25,6 +25,7 @@ use crate::controlflow::json_value_to_py;
 use crate::controlflow::Instruction;
 use crate::genetics::Chromosome;
 use crate::hashing::{MinHash32, SHA256, TLSH};
+use crate::imaging::{PNG, SVG};
 use crate::Architecture;
 use crate::Config;
 use binlex::controlflow::Block as InnerBlock;
@@ -311,6 +312,18 @@ impl Block {
     /// Retrieves the raw bytes of the block.
     pub fn bytes(&self, py: Python) -> PyResult<Py<PyBytes>> {
         self.with_inner_block(py, |block| Ok(PyBytes::new(py, &block.bytes()).unbind()))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Render the block as a PNG image using default imaging settings.
+    pub fn png(&self, py: Python) -> PyResult<PNG> {
+        self.with_inner_block(py, |block| Ok(PNG::from_inner(block.png())))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Render the block as an SVG image using default imaging settings.
+    pub fn svg(&self, py: Python) -> PyResult<SVG> {
+        self.with_inner_block(py, |block| Ok(SVG::from_inner(block.svg())))
     }
 
     #[pyo3(text_signature = "($self)")]

@@ -53,8 +53,8 @@ impl ConfigChromosomes {
     }
 
     #[getter]
-    pub fn get_features(&self) -> ConfigChromosomesHeuristicsFeatures {
-        ConfigChromosomesHeuristicsFeatures {
+    pub fn get_vector(&self) -> ConfigChromosomesHeuristicsVector {
+        ConfigChromosomesHeuristicsVector {
             inner: Arc::clone(&self.inner),
         }
     }
@@ -117,22 +117,22 @@ impl ConfigChromosomesHeuristicsEntropy {
 }
 
 #[pyclass]
-pub struct ConfigChromosomesHeuristicsFeatures {
+pub struct ConfigChromosomesHeuristicsVector {
     pub inner: Arc<Mutex<InnerConfig>>,
 }
 
 #[pymethods]
-impl ConfigChromosomesHeuristicsFeatures {
+impl ConfigChromosomesHeuristicsVector {
     #[getter]
     pub fn get_enabled(&self) -> bool {
         let inner = self.inner.lock().unwrap();
-        inner.chromosomes.features.enabled
+        inner.chromosomes.vector.enabled
     }
 
     #[setter]
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.features.enabled = value;
+        inner.chromosomes.vector.enabled = value;
     }
 }
 
@@ -936,7 +936,6 @@ impl ConfigImaging {
             inner: Arc::clone(&self.inner),
         }
     }
-
 }
 
 #[pyclass]
