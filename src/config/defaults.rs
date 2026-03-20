@@ -22,10 +22,10 @@
 
 use super::{
     Config, ConfigBlocks, ConfigChromosomes, ConfigData, ConfigDisassembler,
-    ConfigDisassemblerSweep, ConfigFile, ConfigFileHashing, ConfigFormats, ConfigFunctions,
-    ConfigGeneral, ConfigHashEnabled, ConfigHashing, ConfigHeuristicEntropy,
-    ConfigHeuristicFeatures, ConfigImaging, ConfigImagingHashing, ConfigInstructions,
-    ConfigMinhash, ConfigMmap, ConfigMmapCache, ConfigProcessors, ConfigServer, ConfigTLSH,
+    ConfigDisassemblerSweep, ConfigFile, ConfigFormats, ConfigFunctions, ConfigGeneral,
+    ConfigHashEnabled, ConfigHeuristicEntropy, ConfigHeuristicFeatures, ConfigImaging,
+    ConfigInstructions, ConfigMinhash, ConfigMmap, ConfigMmapCache, ConfigProcessors, ConfigServer,
+    ConfigTLSH,
 };
 use std::env;
 
@@ -53,90 +53,80 @@ impl Config {
             },
             formats: ConfigFormats {
                 file: ConfigFile {
-                    hashing: ConfigFileHashing {
-                        sha256: ConfigHashEnabled { enabled: true },
-                        tlsh: ConfigTLSH {
-                            enabled: true,
-                            minimum_byte_size: 50,
-                        },
+                    sha256: ConfigHashEnabled { enabled: true },
+                    tlsh: ConfigTLSH {
+                        enabled: true,
+                        minimum_byte_size: 50,
                     },
                     entropy: ConfigHeuristicEntropy { enabled: true },
                 },
             },
             imaging: ConfigImaging {
-                hashing: ConfigImagingHashing {
-                    sha256: ConfigHashEnabled { enabled: true },
-                    tlsh: ConfigTLSH {
-                        enabled: true,
-                        minimum_byte_size: 50,
-                    },
-                    minhash: ConfigMinhash {
-                        enabled: true,
-                        number_of_hashes: 64,
-                        shingle_size: 4,
-                        maximum_byte_size_enabled: false,
-                        maximum_byte_size: 50,
-                        seed: 0,
-                    },
-                    ahash: ConfigHashEnabled { enabled: true },
-                    dhash: ConfigHashEnabled { enabled: true },
-                    phash: ConfigHashEnabled { enabled: true },
+                sha256: ConfigHashEnabled { enabled: true },
+                tlsh: ConfigTLSH {
+                    enabled: true,
+                    minimum_byte_size: 50,
                 },
+                minhash: ConfigMinhash {
+                    enabled: true,
+                    number_of_hashes: 64,
+                    shingle_size: 4,
+                    maximum_byte_size_enabled: false,
+                    maximum_byte_size: 50,
+                    seed: 0,
+                },
+                ahash: ConfigHashEnabled { enabled: true },
+                dhash: ConfigHashEnabled { enabled: true },
+                phash: ConfigHashEnabled { enabled: true },
             },
             instructions: ConfigInstructions { enabled: false },
             blocks: ConfigBlocks {
                 enabled: true,
-                hashing: ConfigHashing {
-                    sha256: ConfigHashEnabled { enabled: true },
-                    tlsh: ConfigTLSH {
-                        enabled: true,
-                        minimum_byte_size: 50,
-                    },
-                    minhash: ConfigMinhash {
-                        enabled: true,
-                        number_of_hashes: 64,
-                        shingle_size: 4,
-                        maximum_byte_size_enabled: false,
-                        maximum_byte_size: 50,
-                        seed: 0,
-                    },
+                sha256: ConfigHashEnabled { enabled: true },
+                tlsh: ConfigTLSH {
+                    enabled: true,
+                    minimum_byte_size: 50,
+                },
+                minhash: ConfigMinhash {
+                    enabled: true,
+                    number_of_hashes: 64,
+                    shingle_size: 4,
+                    maximum_byte_size_enabled: false,
+                    maximum_byte_size: 50,
+                    seed: 0,
                 },
                 entropy: ConfigHeuristicEntropy { enabled: true },
             },
             functions: ConfigFunctions {
                 enabled: true,
-                hashing: ConfigHashing {
-                    sha256: ConfigHashEnabled { enabled: true },
-                    tlsh: ConfigTLSH {
-                        enabled: true,
-                        minimum_byte_size: 50,
-                    },
-                    minhash: ConfigMinhash {
-                        enabled: true,
-                        number_of_hashes: 64,
-                        shingle_size: 4,
-                        maximum_byte_size_enabled: false,
-                        maximum_byte_size: 50,
-                        seed: 0,
-                    },
+                sha256: ConfigHashEnabled { enabled: true },
+                tlsh: ConfigTLSH {
+                    enabled: true,
+                    minimum_byte_size: 50,
+                },
+                minhash: ConfigMinhash {
+                    enabled: true,
+                    number_of_hashes: 64,
+                    shingle_size: 4,
+                    maximum_byte_size_enabled: false,
+                    maximum_byte_size: 50,
+                    seed: 0,
                 },
                 entropy: ConfigHeuristicEntropy { enabled: true },
             },
             chromosomes: ConfigChromosomes {
-                hashing: ConfigHashing {
-                    sha256: ConfigHashEnabled { enabled: true },
-                    tlsh: ConfigTLSH {
-                        enabled: true,
-                        minimum_byte_size: 50,
-                    },
-                    minhash: ConfigMinhash {
-                        enabled: true,
-                        number_of_hashes: 64,
-                        shingle_size: 4,
-                        maximum_byte_size_enabled: false,
-                        maximum_byte_size: 50,
-                        seed: 0,
-                    },
+                sha256: ConfigHashEnabled { enabled: true },
+                tlsh: ConfigTLSH {
+                    enabled: true,
+                    minimum_byte_size: 50,
+                },
+                minhash: ConfigMinhash {
+                    enabled: true,
+                    number_of_hashes: 64,
+                    shingle_size: 4,
+                    maximum_byte_size_enabled: false,
+                    maximum_byte_size: 50,
+                    seed: 0,
                 },
                 features: ConfigHeuristicFeatures { enabled: false },
                 entropy: ConfigHeuristicEntropy { enabled: true },
@@ -169,12 +159,12 @@ impl Config {
     }
 
     pub fn disable_imaging_hashing(&mut self) {
-        self.imaging.hashing.sha256.enabled = false;
-        self.imaging.hashing.tlsh.enabled = false;
-        self.imaging.hashing.minhash.enabled = false;
-        self.imaging.hashing.ahash.enabled = false;
-        self.imaging.hashing.dhash.enabled = false;
-        self.imaging.hashing.phash.enabled = false;
+        self.imaging.sha256.enabled = false;
+        self.imaging.tlsh.enabled = false;
+        self.imaging.minhash.enabled = false;
+        self.imaging.ahash.enabled = false;
+        self.imaging.dhash.enabled = false;
+        self.imaging.phash.enabled = false;
     }
 
     pub fn disable_chromosome_heuristics(&mut self) {
@@ -183,14 +173,14 @@ impl Config {
     }
 
     pub fn disable_block_hashing(&mut self) {
-        self.blocks.hashing.sha256.enabled = false;
-        self.blocks.hashing.tlsh.enabled = false;
-        self.blocks.hashing.minhash.enabled = false;
+        self.blocks.sha256.enabled = false;
+        self.blocks.tlsh.enabled = false;
+        self.blocks.minhash.enabled = false;
     }
 
     pub fn disable_file_hashing(&mut self) {
-        self.formats.file.hashing.sha256.enabled = false;
-        self.formats.file.hashing.tlsh.enabled = false;
+        self.formats.file.sha256.enabled = false;
+        self.formats.file.tlsh.enabled = false;
     }
 
     pub fn disable_file_heuristics(&mut self) {
@@ -205,15 +195,15 @@ impl Config {
     }
 
     pub fn disable_chromosome_hashing(&mut self) {
-        self.chromosomes.hashing.sha256.enabled = false;
-        self.chromosomes.hashing.tlsh.enabled = false;
-        self.chromosomes.hashing.minhash.enabled = false;
+        self.chromosomes.sha256.enabled = false;
+        self.chromosomes.tlsh.enabled = false;
+        self.chromosomes.minhash.enabled = false;
     }
 
     pub fn disable_function_hashing(&mut self) {
-        self.functions.hashing.sha256.enabled = false;
-        self.functions.hashing.tlsh.enabled = false;
-        self.functions.hashing.minhash.enabled = false;
+        self.functions.sha256.enabled = false;
+        self.functions.tlsh.enabled = false;
+        self.functions.minhash.enabled = false;
     }
 
     pub fn disable_block_heuristics(&mut self) {

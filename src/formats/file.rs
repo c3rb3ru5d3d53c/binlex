@@ -250,12 +250,12 @@ impl File {
         FileJson {
             type_: "file".to_string(),
             magic: self.magic().to_string(),
-            sha256: if self.config.formats.file.hashing.sha256.enabled {
+            sha256: if self.config.formats.file.sha256.enabled {
                 self.sha256()
             } else {
                 None
             },
-            tlsh: if self.config.formats.file.hashing.tlsh.enabled {
+            tlsh: if self.config.formats.file.tlsh.enabled {
                 self.tlsh()
             } else {
                 None

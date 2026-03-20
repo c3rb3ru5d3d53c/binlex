@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::config::{Config, ConfigImagingHashing};
+use crate::config::{Config, ConfigImaging};
 use crate::imaging::Palette;
 use crate::imaging::hash as render_hash;
 use crate::imaging::render::Render;
@@ -29,7 +29,7 @@ use std::fmt;
 use std::io::{self, Write};
 
 pub struct SVG {
-    hashing: ConfigImagingHashing,
+    hashing: ConfigImaging,
     metadata_entries: Vec<(String, String)>,
     render: Render,
 }
@@ -48,11 +48,11 @@ impl SVG {
     ) -> Self {
         Self::from_render(
             Render::new_with_options(data, palette, cell_size, fixed_width),
-            config.imaging.hashing.clone(),
+            config.imaging.clone(),
         )
     }
 
-    pub(crate) fn from_render(render: Render, hashing: ConfigImagingHashing) -> Self {
+    pub(crate) fn from_render(render: Render, hashing: ConfigImaging) -> Self {
         Self {
             hashing,
             metadata_entries: Vec::new(),

@@ -58,13 +58,17 @@ pub struct ConfigInstructions {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigBlocks {
     pub enabled: bool,
-    pub hashing: ConfigHashing,
+    pub sha256: ConfigHashEnabled,
+    pub tlsh: ConfigTLSH,
+    pub minhash: ConfigMinhash,
     pub entropy: ConfigHeuristicEntropy,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigChromosomes {
-    pub hashing: ConfigHashing,
+    pub sha256: ConfigHashEnabled,
+    pub tlsh: ConfigTLSH,
+    pub minhash: ConfigMinhash,
     pub features: ConfigHeuristicFeatures,
     pub entropy: ConfigHeuristicEntropy,
 }
@@ -72,13 +76,16 @@ pub struct ConfigChromosomes {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigFunctions {
     pub enabled: bool,
-    pub hashing: ConfigHashing,
+    pub sha256: ConfigHashEnabled,
+    pub tlsh: ConfigTLSH,
+    pub minhash: ConfigMinhash,
     pub entropy: ConfigHeuristicEntropy,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigFile {
-    pub hashing: ConfigFileHashing,
+    pub sha256: ConfigHashEnabled,
+    pub tlsh: ConfigTLSH,
     pub entropy: ConfigHeuristicEntropy,
 }
 
@@ -89,7 +96,12 @@ pub struct ConfigFormats {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigImaging {
-    pub hashing: ConfigImagingHashing,
+    pub sha256: ConfigHashEnabled,
+    pub tlsh: ConfigTLSH,
+    pub minhash: ConfigMinhash,
+    pub ahash: ConfigHashEnabled,
+    pub dhash: ConfigHashEnabled,
+    pub phash: ConfigHashEnabled,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -156,29 +168,6 @@ pub struct ConfigHeuristicFeatures {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigHeuristicEntropy {
     pub enabled: bool,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigHashing {
-    pub sha256: ConfigHashEnabled,
-    pub tlsh: ConfigTLSH,
-    pub minhash: ConfigMinhash,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigFileHashing {
-    pub sha256: ConfigHashEnabled,
-    pub tlsh: ConfigTLSH,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigImagingHashing {
-    pub sha256: ConfigHashEnabled,
-    pub tlsh: ConfigTLSH,
-    pub minhash: ConfigMinhash,
-    pub ahash: ConfigHashEnabled,
-    pub dhash: ConfigHashEnabled,
-    pub phash: ConfigHashEnabled,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

@@ -51,10 +51,10 @@ impl Chromosome {
         let inner = InnerChromosome::new(pattern, inner_config.clone())?;
         Ok(Self {
             inner: Arc::new(Mutex::new(inner)),
-            minhash_num_hashes: inner_config.chromosomes.hashing.minhash.number_of_hashes,
-            minhash_shingle_size: inner_config.chromosomes.hashing.minhash.shingle_size,
-            minhash_seed: inner_config.chromosomes.hashing.minhash.seed,
-            tlsh_minimum_byte_size: inner_config.chromosomes.hashing.tlsh.minimum_byte_size,
+            minhash_num_hashes: inner_config.chromosomes.minhash.number_of_hashes,
+            minhash_shingle_size: inner_config.chromosomes.minhash.shingle_size,
+            minhash_seed: inner_config.chromosomes.minhash.seed,
+            tlsh_minimum_byte_size: inner_config.chromosomes.tlsh.minimum_byte_size,
         })
     }
 
