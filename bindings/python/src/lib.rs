@@ -53,7 +53,7 @@ use crate::imaging::imaging_init;
 #[cfg(not(target_os = "windows"))]
 use crate::lifters::lifters_init;
 use crate::math::{entropy_init, math_init};
-use ::binlex::runtime::{HostRuntime, ProcessorEntryError, child, register_host_runtime};
+use ::binlex::runtime::{child, register_host_runtime, HostRuntime, ProcessorEntryError};
 
 use pyo3::{prelude::*, types::PyModule, wrap_pyfunction, wrap_pymodule};
 
@@ -63,7 +63,12 @@ fn _run_processor_entry(
     socket_name: String,
     compression_enabled: bool,
 ) -> i32 {
-    match child::run_processor_entry("binlex-processor", &processor_name, &socket_name, compression_enabled) {
+    match child::run_processor_entry(
+        "binlex-processor",
+        &processor_name,
+        &socket_name,
+        compression_enabled,
+    ) {
         Ok(()) => 0,
         Err(ProcessorEntryError::InvalidProcessor(_)) => 2,
         Err(ProcessorEntryError::Connect(_)) => 3,

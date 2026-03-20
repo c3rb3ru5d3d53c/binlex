@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 use crate::controlflow::graph::Graph;
+use crate::controlflow::json_value_to_py;
 use crate::controlflow::Instruction;
 use crate::genetics::Chromosome;
 use crate::hashing::{MinHash32, SHA256, TLSH};
@@ -57,10 +58,18 @@ impl BlockJsonDeserializer {
         let inner = InnerBlockJsonDeserializer::new(string, inner_config.clone())?;
         Ok(Self {
             inner: Arc::new(Mutex::new(inner)),
-            chromosome_minhash_num_hashes: inner_config.chromosomes.hashing.minhash.number_of_hashes,
+            chromosome_minhash_num_hashes: inner_config
+                .chromosomes
+                .hashing
+                .minhash
+                .number_of_hashes,
             chromosome_minhash_shingle_size: inner_config.chromosomes.hashing.minhash.shingle_size,
             chromosome_minhash_seed: inner_config.chromosomes.hashing.minhash.seed,
-            chromosome_tlsh_minimum_byte_size: inner_config.chromosomes.hashing.tlsh.minimum_byte_size,
+            chromosome_tlsh_minimum_byte_size: inner_config
+                .chromosomes
+                .hashing
+                .tlsh
+                .minimum_byte_size,
         })
     }
 
@@ -358,6 +367,28 @@ impl Block {
     /// Retrieves the functions referenced in the block as a map.
     pub fn functions(&self, py: Python) -> PyResult<BTreeMap<u64, u64>> {
         self.with_inner_block(py, |block| Ok(block.functions()))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return all processor outputs attached to this block.
+    pub fn processors(&self, py: Python) -> PyResult<Py<PyAny>> {
+        self.with_inner_block(py, |block| {
+            let value = serde_json::to_value(block.processors()).map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
+            })?;
+            json_value_to_py(py, &value)
+        })
+    }
+
+    #[pyo3(text_signature = "($self, name)")]
+    /// Return a single processor output attached to this block, if present.
+    pub fn processor(&self, py: Python, name: String) -> PyResult<Option<Py<PyAny>>> {
+        self.with_inner_block(py, |block| {
+            block
+                .processor(&name)
+                .map(|value| json_value_to_py(py, &value))
+                .transpose()
+        })
     }
 
     #[pyo3(text_signature = "($self)")]

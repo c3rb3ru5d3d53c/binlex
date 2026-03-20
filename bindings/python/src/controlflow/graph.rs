@@ -173,6 +173,14 @@ pub struct Graph {
     pub inner: Arc<Mutex<InnerGraph>>,
 }
 
+impl Graph {
+    pub fn from_inner(inner: InnerGraph) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(inner)),
+        }
+    }
+}
+
 #[pymethods]
 impl Graph {
     #[new]
@@ -190,7 +198,7 @@ impl Graph {
     /// Return all instructions currently materialized in the graph.
     pub fn instructions(&self, py: Python) -> Vec<Instruction> {
         let mut result = Vec::<Instruction>::new();
-        for inner_instruction in self.inner.lock().unwrap().blocks() {
+        for inner_instruction in self.inner.lock().unwrap().instructions() {
             let cfg = Graph {
                 inner: Arc::clone(&self.inner),
             };

@@ -10,7 +10,8 @@ use axum::routing::{get, post};
 
 use crate::server::auth;
 use crate::server::dto::{
-    HealthResponse, LZ4_CONTENT_ENCODING, OCTET_STREAM_CONTENT_TYPE, ProcessorHttpRequest,
+    AnalyzeRequest, HealthResponse, LZ4_CONTENT_ENCODING, OCTET_STREAM_CONTENT_TYPE,
+    ProcessorHttpRequest,
 };
 use crate::server::error::ServerError;
 use crate::server::state::AppState;
@@ -18,12 +19,39 @@ use crate::server::state::AppState;
 pub fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health))
+        .route("/analyze", post(analyze))
         .route("/processors/{processor}", post(processor_execute))
         .with_state(state)
 }
 
 async fn health() -> impl IntoResponse {
-    Json(HealthResponse { status: "ok" })
+    Json(HealthResponse {
+        status: "ok".to_string(),
+    })
+}
+
+async fn analyze(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<impl IntoResponse, ServerError> {
+    state.debug_log(format!(
+        "request start analyze bytes={} content_encoding={:?}",
+        body.len(),
+        headers
+            .get(CONTENT_ENCODING)
+            .and_then(|value| value.to_str().ok()),
+    ));
+
+    if !auth::authorize(&headers) {
+        state.debug_log("request unauthorized analyze".to_string());
+        return Err(ServerError::Processor("unauthorized".to_string()));
+    }
+
+    let request: AnalyzeRequest = decode_request(&headers, &body)?;
+    let response = crate::server::analyze::execute(&state.config, request)?;
+    let encoded = encode_response(state.config.processors.compression, &headers, &response)?;
+    Ok(encoded)
 }
 
 async fn processor_execute(
@@ -111,10 +139,10 @@ fn decode_request<T: serde::de::DeserializeOwned>(
     }
 }
 
-fn encode_response(
+fn encode_response<T: serde::Serialize>(
     compression_enabled: bool,
     headers: &HeaderMap,
-    value: &serde_json::Value,
+    value: &T,
 ) -> Result<Response, ServerError> {
     if compression_enabled && accepts_lz4(headers) {
         let json = serde_json::to_vec(value).map_err(ServerError::json)?;
@@ -135,7 +163,8 @@ fn encode_response(
         );
         Ok((StatusCode::OK, response_headers, payload).into_response())
     } else {
-        Ok((StatusCode::OK, Json(value.clone())).into_response())
+        let value = serde_json::to_value(value).map_err(ServerError::json)?;
+        Ok((StatusCode::OK, Json(value)).into_response())
     }
 }
 

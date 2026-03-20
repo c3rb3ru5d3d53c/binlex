@@ -32,5 +32,7 @@ pub use function::FunctionJson;
 pub use function::FunctionJsonDeserializer;
 pub use graph::Graph;
 pub use graph::GraphQueue;
+pub use graph::GraphQueueSnapshot;
+pub use graph::GraphSnapshot;
 pub use instruction::Instruction;
 pub use instruction::InstructionJson;

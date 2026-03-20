@@ -151,3 +151,42 @@ fn graph_blocks_support_explicit_local_mode_without_processor_binary() {
     assert_eq!(outputs.len(), 1);
     assert_eq!(outputs[0].0, "embeddings");
 }
+
+#[test]
+fn live_entities_expose_processor_outputs() {
+    let graph = build_single_return_graph_local_mode();
+
+    let instruction = graph
+        .get_instruction(0x1000)
+        .expect("instruction should exist");
+    let instruction_outputs = instruction.processors();
+    assert!(instruction_outputs.contains_key("embeddings"));
+    assert_eq!(
+        instruction.processor("embeddings"),
+        instruction_outputs.get("embeddings").cloned()
+    );
+
+    let block = graph
+        .blocks()
+        .into_iter()
+        .find(|block| block.address() == 0x1000)
+        .expect("block should exist");
+    let block_outputs = block.processors();
+    assert!(block_outputs.contains_key("embeddings"));
+    assert_eq!(
+        block.processor("embeddings"),
+        block_outputs.get("embeddings").cloned()
+    );
+
+    let function = graph
+        .functions()
+        .into_iter()
+        .find(|function| function.address() == 0x1000)
+        .expect("function should exist");
+    let function_outputs = function.processors();
+    assert!(function_outputs.contains_key("embeddings"));
+    assert_eq!(
+        function.processor("embeddings"),
+        function_outputs.get("embeddings").cloned()
+    );
+}

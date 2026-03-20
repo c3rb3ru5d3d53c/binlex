@@ -229,7 +229,7 @@ impl Instruction {
     ///
     /// Returns an `InstructionJson` struct containing the properties of the instruction.
     #[allow(dead_code)]
-    pub fn process(&self) -> InstructionJson {
+    pub fn process_base(&self) -> InstructionJson {
         InstructionJson {
             type_: "instruction".to_string(),
             architecture: self.architecture.to_string(),
@@ -254,6 +254,34 @@ impl Instruction {
             processors: None,
             attributes: None,
         }
+    }
+
+    pub fn process(&self) -> InstructionJson {
+        let mut json = self.process_base();
+        for processor in crate::processor::enabled_processors_for_target(
+            &self.config,
+            crate::processor::ProcessorTarget::Instruction,
+        ) {
+            if let Some(output) = processor.process_instruction(self) {
+                crate::processor::apply_output(
+                    json.processors.get_or_insert_with(Default::default),
+                    processor.name(),
+                    &output,
+                );
+            }
+        }
+
+        json
+    }
+
+    /// Return all processor outputs attached to this instruction.
+    pub fn processors(&self) -> BTreeMap<String, Value> {
+        self.process().processors.unwrap_or_default()
+    }
+
+    /// Return a single processor output by name, if present.
+    pub fn processor(&self, name: &str) -> Option<Value> {
+        self.processors().get(name).cloned()
     }
 
     pub fn pattern(&self) -> String {

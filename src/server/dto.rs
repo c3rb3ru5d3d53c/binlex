@@ -12,10 +12,23 @@ pub struct ProcessorHttpRequest {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct HealthResponse {
-    pub status: &'static str,
+    pub status: String,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ErrorResponse {
     pub error: String,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct AnalyzeRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    pub data: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub magic: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub architecture: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config: Option<crate::Config>,
 }

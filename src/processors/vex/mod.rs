@@ -100,6 +100,11 @@ impl JsonProcessor for VexProcessor {
 }
 
 impl GraphProcessor for VexProcessor {
+    fn function_json(function: &Function<'_>) -> Option<Value> {
+        function.bytes()?;
+        serde_json::to_value(function.process_base()).ok()
+    }
+
     fn function(function: &Function<'_>) -> Option<Value> {
         let bytes = function.bytes()?;
         let mut lifter = crate::lifters::vex::Lifter::new(

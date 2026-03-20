@@ -369,8 +369,10 @@ fn validate_hello(
     processor_name: &str,
     processor_id: u16,
 ) -> Result<(), ProcessorError> {
-    let registration = processor::registry::processor_registration_by_name_unfiltered(processor_name)
-        .ok_or_else(|| ProcessorError::Protocol(format!("unregistered processor {}", processor_name)))?;
+    let registration =
+        processor::registry::processor_registration_by_name_unfiltered(processor_name).ok_or_else(
+            || ProcessorError::Protocol(format!("unregistered processor {}", processor_name)),
+        )?;
     if hello.protocol_version != crate::runtime::modes::ipc::protocol::VERSION {
         return Err(ProcessorError::UnexpectedResponse(format!(
             "processor protocol payload mismatch, expected {}, got {}",

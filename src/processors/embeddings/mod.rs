@@ -843,7 +843,7 @@ impl GraphProcessor for EmbeddingsProcessor {
     }
 
     fn instruction(instruction: &Instruction) -> Option<Value> {
-        let data = serde_json::to_value(instruction.process()).ok()?;
+        let data = serde_json::to_value(instruction.process_base()).ok()?;
         process_value(data, &instruction.config)
     }
 

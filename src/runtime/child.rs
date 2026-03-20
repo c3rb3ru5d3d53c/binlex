@@ -2,7 +2,9 @@ use std::collections::HashMap;
 
 use interprocess::local_socket::Stream;
 
-use crate::processor::{RegisteredProcessorDispatch, dispatch_by_name, processor_registration_by_name};
+use crate::processor::{
+    RegisteredProcessorDispatch, dispatch_by_name, processor_registration_by_name,
+};
 use crate::runtime::error::ProcessorError;
 use crate::runtime::modes::ipc::local;
 use crate::runtime::modes::ipc::protocol::{
