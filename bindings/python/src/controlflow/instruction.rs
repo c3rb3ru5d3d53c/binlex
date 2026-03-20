@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 use crate::controlflow::Graph;
+use crate::controlflow::json_value_to_py;
 use crate::genetics::Chromosome;
 use crate::Config;
 use binlex::controlflow::Instruction as InnerInstruction;
@@ -137,6 +138,28 @@ impl Instruction {
     /// Return the size of the instruction in bytes.
     pub fn size(&self, py: Python) -> PyResult<usize> {
         self.with_inner_instruction(py, |instruction| Ok(instruction.size()))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return all processor outputs attached to this instruction.
+    pub fn processors(&self, py: Python) -> PyResult<Py<PyAny>> {
+        self.with_inner_instruction(py, |instruction| {
+            let value = serde_json::to_value(instruction.processors()).map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
+            })?;
+            json_value_to_py(py, &value)
+        })
+    }
+
+    #[pyo3(text_signature = "($self, name)")]
+    /// Return a single processor output attached to this instruction, if present.
+    pub fn processor(&self, py: Python, name: String) -> PyResult<Option<Py<PyAny>>> {
+        self.with_inner_instruction(py, |instruction| {
+            instruction
+                .processor(&name)
+                .map(|value| json_value_to_py(py, &value))
+                .transpose()
+        })
     }
 
     #[pyo3(text_signature = "($self)")]

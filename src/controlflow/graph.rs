@@ -31,11 +31,28 @@ use crossbeam_skiplist::SkipMap;
 use crossbeam_skiplist::SkipSet;
 use rayon::ThreadPoolBuilder;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::io::Error;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct GraphQueueSnapshot {
+    pub valid: BTreeSet<u64>,
+    pub invalid: BTreeSet<u64>,
+    pub processed: BTreeSet<u64>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct GraphSnapshot {
+    pub architecture: String,
+    pub instructions: Vec<crate::controlflow::InstructionJson>,
+    pub instruction_queue: GraphQueueSnapshot,
+    pub block_queue: GraphQueueSnapshot,
+    pub function_queue: GraphQueueSnapshot,
+}
 
 /// Queue structure used within `Graph` for managing addresses in processing stages.
 pub struct GraphQueue {
@@ -354,6 +371,61 @@ impl Graph {
             revision: AtomicU64::new(0),
             processor_state: Mutex::new(GraphProcessorState::default()),
         }
+    }
+
+    pub fn snapshot(&self) -> GraphSnapshot {
+        let instructions = self
+            .listing
+            .iter()
+            .map(|entry| entry.value().process())
+            .collect();
+
+        GraphSnapshot {
+            architecture: self.architecture.to_string(),
+            instructions,
+            instruction_queue: Self::snapshot_queue(&self.instructions),
+            block_queue: Self::snapshot_queue(&self.blocks),
+            function_queue: Self::snapshot_queue(&self.functions),
+        }
+    }
+
+    pub fn from_snapshot(snapshot: GraphSnapshot, config: Config) -> Result<Self, Error> {
+        let architecture = Architecture::from_string(&snapshot.architecture)?;
+        let mut graph = Self::new(architecture, config.clone());
+
+        for json in snapshot.instructions {
+            let instruction_architecture = Architecture::from_string(&json.architecture)?;
+            if instruction_architecture != architecture {
+                return Err(Error::other(format!(
+                    "snapshot instruction architecture mismatch: expected {}, got {}",
+                    architecture, instruction_architecture
+                )));
+            }
+
+            let mut instruction = Instruction::create(json.address, architecture, config.clone());
+            instruction.is_prologue = json.is_prologue;
+            instruction.is_block_start = json.is_block_start;
+            instruction.is_function_start = json.is_function_start;
+            instruction.is_return = json.is_return;
+            instruction.is_call = json.is_call;
+            instruction.is_jump = json.is_jump;
+            instruction.is_conditional = json.is_conditional;
+            instruction.is_trap = json.is_trap;
+            instruction.has_indirect_target = json.has_indirect_target;
+            instruction.edges = json.edges;
+            instruction.bytes =
+                crate::hex::decode(&json.bytes).map_err(|error| Error::other(error.to_string()))?;
+            instruction.pattern = json.chromosome.pattern;
+            instruction.functions = json.functions;
+            instruction.to = json.to;
+            graph.listing.insert(instruction.address, instruction);
+        }
+
+        Self::restore_queue(&mut graph.instructions, snapshot.instruction_queue);
+        Self::restore_queue(&mut graph.blocks, snapshot.block_queue);
+        Self::restore_queue(&mut graph.functions, snapshot.function_queue);
+
+        Ok(graph)
     }
 
     pub fn instructions(&self) -> Vec<Instruction> {
@@ -773,6 +845,26 @@ impl Graph {
         let mut processor_state = self.processor_state.lock().unwrap();
         processor_state.revisions.clear();
         processor_state.outputs.clear();
+    }
+
+    fn snapshot_queue(queue: &GraphQueue) -> GraphQueueSnapshot {
+        GraphQueueSnapshot {
+            valid: queue.valid_addresses(),
+            invalid: queue.invalid_addresses(),
+            processed: queue.processed_addresses(),
+        }
+    }
+
+    fn restore_queue(queue: &mut GraphQueue, snapshot: GraphQueueSnapshot) {
+        for address in snapshot.processed {
+            queue.insert_processed(address);
+        }
+        for address in snapshot.valid {
+            queue.insert_valid(address);
+        }
+        for address in snapshot.invalid {
+            queue.insert_invalid(address);
+        }
     }
 }
 

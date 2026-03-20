@@ -1431,12 +1431,133 @@ pub struct ConfigProcessor {
     pub name: String,
 }
 
+/// Access transport-specific settings for a single named processor backend.
+#[pyclass]
+pub struct ConfigProcessorTransport {
+    pub inner: Arc<Mutex<InnerConfig>>,
+    pub processor_name: String,
+    pub kind: &'static str,
+}
+
 /// Access per-target enablement for processor-produced objects.
 #[pyclass]
 pub struct ConfigProcessorTarget {
     pub inner: Arc<Mutex<InnerConfig>>,
     pub processor_name: String,
     pub kind: &'static str,
+}
+
+#[pymethods]
+impl ConfigProcessorTransport {
+    #[getter]
+    /// Return whether this processor transport is enabled.
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner
+            .processors
+            .processor(&self.processor_name)
+            .is_some_and(|processor| match self.kind {
+                "inline" => processor.inline.enabled,
+                "ipc" => processor.ipc.enabled,
+                "http" => processor.http.enabled,
+                _ => false,
+            })
+    }
+
+    #[setter]
+    /// Enable or disable this processor transport.
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        if let Some(processor) = inner.processors.ensure_processor(&self.processor_name) {
+            match self.kind {
+                "inline" => processor.inline.enabled = value,
+                "ipc" => processor.ipc.enabled = value,
+                "http" => processor.http.enabled = value,
+                _ => {}
+            }
+        }
+    }
+
+    #[getter]
+    /// Return the configured URL for this transport when supported.
+    pub fn get_url(&self) -> Option<String> {
+        let inner = self.inner.lock().unwrap();
+        inner
+            .processors
+            .processor(&self.processor_name)
+            .and_then(|processor| match self.kind {
+                "inline" => processor.inline.options.get("url"),
+                "ipc" => processor.ipc.options.get("url"),
+                "http" => processor.http.options.get("url"),
+                _ => None,
+            })
+            .and_then(|value| value.as_string())
+            .map(ToString::to_string)
+    }
+
+    #[setter]
+    /// Set or clear the configured URL for this transport when supported.
+    pub fn set_url(&mut self, value: Option<String>) {
+        let mut inner = self.inner.lock().unwrap();
+        if let Some(processor) = inner.processors.ensure_processor(&self.processor_name) {
+            let options = match self.kind {
+                "inline" => Some(&mut processor.inline.options),
+                "ipc" => Some(&mut processor.ipc.options),
+                "http" => Some(&mut processor.http.options),
+                _ => None,
+            };
+            if let Some(options) = options {
+                match value {
+                    Some(value) => {
+                        options.insert("url".to_string(), value.into());
+                    }
+                    None => {
+                        options.remove("url");
+                    }
+                }
+            }
+        }
+    }
+
+    #[getter]
+    /// Return certificate verification behavior for this transport when supported.
+    pub fn get_verify(&self) -> Option<bool> {
+        let inner = self.inner.lock().unwrap();
+        inner
+            .processors
+            .processor(&self.processor_name)
+            .and_then(|processor| match self.kind {
+                "inline" => processor.inline.options.get("verify"),
+                "ipc" => processor.ipc.options.get("verify"),
+                "http" => processor.http.options.get("verify"),
+                _ => None,
+            })
+            .and_then(|value| value.as_bool())
+    }
+
+    #[setter]
+    /// Set or clear certificate verification behavior for this transport when supported.
+    pub fn set_verify(&mut self, value: Option<bool>) {
+        let mut inner = self.inner.lock().unwrap();
+        if let Some(processor) = inner.processors.ensure_processor(&self.processor_name) {
+            let options = match self.kind {
+                "inline" => Some(&mut processor.inline.options),
+                "ipc" => Some(&mut processor.ipc.options),
+                "http" => Some(&mut processor.http.options),
+                _ => None,
+            };
+            if let Some(options) = options {
+                match value {
+                    Some(value) => {
+                        options.insert("verify".to_string(), value.into());
+                    }
+                    None => {
+                        options.remove("verify");
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[pymethods]
@@ -1493,6 +1614,60 @@ impl ConfigProcessor {
     }
 
     #[getter]
+    /// Return the configured vector dimensionality for this processor when supported.
+    pub fn get_dimensions(&self) -> Option<usize> {
+        let inner = self.inner.lock().unwrap();
+        inner
+            .processors
+            .processor(&self.name)
+            .and_then(|processor| processor.option_integer("dimensions"))
+            .and_then(|value| usize::try_from(value).ok())
+    }
+
+    #[setter]
+    /// Set or clear the configured vector dimensionality for this processor when supported.
+    pub fn set_dimensions(&mut self, value: Option<usize>) {
+        let mut inner = self.inner.lock().unwrap();
+        if let Some(processor) = inner.processors.ensure_processor(&self.name) {
+            match value {
+                Some(value) => {
+                    processor.options.insert("dimensions".to_string(), value.into());
+                }
+                None => {
+                    processor.options.remove("dimensions");
+                }
+            }
+        }
+    }
+
+    #[getter]
+    /// Return the configured device string for this processor when supported.
+    pub fn get_device(&self) -> Option<String> {
+        let inner = self.inner.lock().unwrap();
+        inner
+            .processors
+            .processor(&self.name)
+            .and_then(|processor| processor.option_string("device"))
+            .map(ToString::to_string)
+    }
+
+    #[setter]
+    /// Set or clear the configured device string for this processor when supported.
+    pub fn set_device(&mut self, value: Option<String>) {
+        let mut inner = self.inner.lock().unwrap();
+        if let Some(processor) = inner.processors.ensure_processor(&self.name) {
+            match value {
+                Some(value) => {
+                    processor.options.insert("device".to_string(), value.into());
+                }
+                None => {
+                    processor.options.remove("device");
+                }
+            }
+        }
+    }
+
+    #[getter]
     /// Return settings for instruction outputs produced by this processor.
     pub fn get_instructions(&self) -> ConfigProcessorTarget {
         ConfigProcessorTarget {
@@ -1521,6 +1696,36 @@ impl ConfigProcessor {
             kind: "functions",
         }
     }
+
+    #[getter]
+    /// Return settings for inline execution of this processor.
+    pub fn get_inline(&self) -> ConfigProcessorTransport {
+        ConfigProcessorTransport {
+            inner: Arc::clone(&self.inner),
+            processor_name: self.name.clone(),
+            kind: "inline",
+        }
+    }
+
+    #[getter]
+    /// Return settings for IPC execution of this processor.
+    pub fn get_ipc(&self) -> ConfigProcessorTransport {
+        ConfigProcessorTransport {
+            inner: Arc::clone(&self.inner),
+            processor_name: self.name.clone(),
+            kind: "ipc",
+        }
+    }
+
+    #[getter]
+    /// Return settings for HTTP execution of this processor.
+    pub fn get_http(&self) -> ConfigProcessorTransport {
+        ConfigProcessorTransport {
+            inner: Arc::clone(&self.inner),
+            processor_name: self.name.clone(),
+            kind: "http",
+        }
+    }
 }
 
 #[pymethods]
@@ -1539,6 +1744,15 @@ impl ConfigProcessors {
         ConfigProcessor {
             inner: Arc::clone(&self.inner),
             name: "vex".to_string(),
+        }
+    }
+
+    #[getter]
+    /// Return the built-in embeddings processor configuration.
+    pub fn get_embeddings(&self) -> ConfigProcessor {
+        ConfigProcessor {
+            inner: Arc::clone(&self.inner),
+            name: "embeddings".to_string(),
         }
     }
 
@@ -1646,6 +1860,7 @@ impl ConfigProcessors {
 pub fn config_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Config>()?;
     m.add_class::<ConfigProcessorTarget>()?;
+    m.add_class::<ConfigProcessorTransport>()?;
     m.add_class::<ConfigProcessors>()?;
     m.add_class::<ConfigProcessor>()?;
     py.import("sys")?

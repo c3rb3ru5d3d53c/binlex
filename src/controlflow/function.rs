@@ -407,6 +407,16 @@ impl<'function> Function<'function> {
         json
     }
 
+    /// Return all processor outputs attached to this function.
+    pub fn processors(&self) -> BTreeMap<String, Value> {
+        self.process().processors.unwrap_or_default()
+    }
+
+    /// Return a single processor output by name, if present.
+    pub fn processor(&self, name: &str) -> Option<Value> {
+        self.processors().get(name).cloned()
+    }
+
     /// Retrives the number of blocks in the function.
     ///
     /// # Returns

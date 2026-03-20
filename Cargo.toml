@@ -42,6 +42,7 @@ tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread", "signal"]
 reqwest = { version = "0.12.23", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 burn = { version = "0.21.0-pre.2", default-features = false, features = ["std", "dispatch", "ndarray", "cuda", "vulkan"] }
 semver = "1.0.27"
+base64 = "0.22.1"
 
 [workspace]
 members = [

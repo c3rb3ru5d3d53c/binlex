@@ -1,3 +1,3 @@
-from . import milvus, minio
+from . import milvus, minio, server
 
-__all__ = ["milvus", "minio"]
+__all__ = ["milvus", "minio", "server"]

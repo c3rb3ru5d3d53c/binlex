@@ -465,16 +465,17 @@ macro_rules! processor {
 }
 
 fn parse_version_requirement(requires: &str) -> Result<VersionReq, ProcessorError> {
-    VersionReq::parse(requires).or_else(|_| {
-        let normalized = requires.split_whitespace().collect::<Vec<_>>().join(", ");
-        VersionReq::parse(&normalized)
-    })
-    .map_err(|error| {
-        ProcessorError::Protocol(format!(
-            "invalid processor version requirement {}: {}",
-            requires, error
-        ))
-    })
+    VersionReq::parse(requires)
+        .or_else(|_| {
+            let normalized = requires.split_whitespace().collect::<Vec<_>>().join(", ");
+            VersionReq::parse(&normalized)
+        })
+        .map_err(|error| {
+            ProcessorError::Protocol(format!(
+                "invalid processor version requirement {}: {}",
+                requires, error
+            ))
+        })
 }
 
 pub fn version_matches_requirement(version: &str, requires: &str) -> Result<bool, ProcessorError> {

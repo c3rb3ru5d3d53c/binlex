@@ -203,7 +203,9 @@ fn find_in_directory(directory: PathBuf, filename: &str) -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use super::{HostRuntime, WorkerLaunch, preferred_worker_command, resolve_worker_launches_for_runtime};
+    use super::{
+        HostRuntime, WorkerLaunch, preferred_worker_command, resolve_worker_launches_for_runtime,
+    };
     use std::path::PathBuf;
 
     #[test]
@@ -230,10 +232,8 @@ mod tests {
 
     #[test]
     fn configured_directory_overrides_python_runtime_command() {
-        let tempdir = std::env::temp_dir().join(format!(
-            "binlex-dispatch-test-{}",
-            std::process::id()
-        ));
+        let tempdir =
+            std::env::temp_dir().join(format!("binlex-dispatch-test-{}", std::process::id()));
         std::fs::create_dir_all(&tempdir).expect("tempdir should exist");
         let processor = tempdir.join("binlex-processor");
         std::fs::write(&processor, b"stub").expect("processor stub should be written");

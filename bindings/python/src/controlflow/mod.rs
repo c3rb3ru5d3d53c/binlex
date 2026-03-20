@@ -39,6 +39,14 @@ use crate::controlflow::graph::graph_init;
 use crate::controlflow::instruction::instruction_init;
 
 use pyo3::{prelude::*, wrap_pymodule};
+use serde_json::Value;
+
+pub(crate) fn json_value_to_py(py: Python<'_>, value: &Value) -> PyResult<Py<PyAny>> {
+    let json_str = serde_json::to_string(value)
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+    let json_module = py.import("json")?;
+    Ok(json_module.call_method1("loads", (json_str,))?.into())
+}
 
 #[pymodule]
 #[pyo3(name = "controlflow")]

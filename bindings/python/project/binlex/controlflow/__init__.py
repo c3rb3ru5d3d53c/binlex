@@ -81,6 +81,14 @@ class Instruction:
         """Return the instruction size in bytes."""
         return self._inner.size()
 
+    def processors(self):
+        """Return all processor outputs attached to this instruction."""
+        return self._inner.processors()
+
+    def processor(self, name):
+        """Return a single processor output attached to this instruction, if present."""
+        return self._inner.processor(name)
+
     def to_dict(self):
         """Convert the instruction to a Python dictionary."""
         return self._inner.to_dict()
@@ -163,6 +171,14 @@ class Block:
     def functions(self):
         """Return a mapping of referenced function addresses and counts."""
         return self._inner.functions()
+
+    def processors(self):
+        """Return all processor outputs attached to this block."""
+        return self._inner.processors()
+
+    def processor(self, name):
+        """Return a single processor output attached to this block, if present."""
+        return self._inner.processor(name)
 
     def tlsh(self):
         """Return the TLSH object for this block, if available."""
@@ -266,6 +282,14 @@ class Function:
     def functions(self):
         """Return a mapping of referenced function addresses and counts."""
         return self._inner.functions()
+
+    def processors(self):
+        """Return all processor outputs attached to this function."""
+        return self._inner.processors()
+
+    def processor(self, name):
+        """Return a single processor output attached to this function, if present."""
+        return self._inner.processor(name)
 
     def tlsh(self):
         """Return the TLSH object for this function, if available."""
@@ -554,6 +578,13 @@ class Graph:
     def __init__(self, architecture, config):
         """Create a graph for the given architecture and configuration."""
         self._inner = _GraphBinding(_coerce_architecture(architecture), config)
+
+    @classmethod
+    def from_binding(cls, binding):
+        """Wrap an existing native graph binding."""
+        result = cls.__new__(cls)
+        result._inner = binding
+        return result
 
     def instructions(self):
         """Return all instructions currently tracked by the graph."""

@@ -219,7 +219,13 @@ fn mark_git_safe_directory(repo_dir: &Path) -> Result<()> {
     let repo = repo_dir.to_string_lossy().into_owned();
     run_checked(
         "git",
-        &["config", "--global", "--add", "safe.directory", repo.as_str()],
+        &[
+            "config",
+            "--global",
+            "--add",
+            "safe.directory",
+            repo.as_str(),
+        ],
         repo_dir,
     )
 }

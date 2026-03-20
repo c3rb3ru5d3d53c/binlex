@@ -6,7 +6,7 @@ pub type ProcessorOutputs = Vec<(&'static str, Value)>;
 
 pub trait GraphProcessor {
     fn instruction_json(instruction: &Instruction) -> Option<Value> {
-        serde_json::to_value(instruction.process()).ok()
+        serde_json::to_value(instruction.process_base()).ok()
     }
 
     fn block_json(block: &Block<'_>) -> Option<Value> {
