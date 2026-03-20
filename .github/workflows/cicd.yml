@@ -231,13 +231,7 @@ jobs:
       - name: Install Dependencies
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm --needed base-devel pkgconf openssl make automake autoconf libtool clang curl git python
-
-      - name: Set Up Rust
-        shell: bash
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          pacman -S --noconfirm --needed base-devel pkgconf openssl make automake autoconf libtool clang curl git python rust
 
       - name: Run Unit Tests
         shell: bash

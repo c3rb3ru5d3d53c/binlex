@@ -4,6 +4,7 @@ pkgrel=1
 pkgdesc="A Binary Genetic Trait Lexer Framework"
 arch=('x86_64')
 license=('MIT')
+makedepends=('rust')
 
 build() {
   local builddir="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
