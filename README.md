@@ -20,7 +20,7 @@
   </tr>
 </table>
 
-**Binlex** is a tool for malware analysts and researchers that extracts **instructions**, **basic blocks**, and **functions** from binary files and organizes them into a structured hierarchy of **genomes**, **chromosomes**, **allele pairs**, and **genes**. 🦠🔍
+**Binlex** is a tool for  malware analysts and researchers that extracts **instructions**, **basic blocks**, and **functions** from binary files and organizes them into a structured hierarchy of **genomes**, **chromosomes**, **allele pairs**, and **genes**. 🦠🔍
 
 - A **genome** represents an **instruction**, **block**, or **function** in the binary. 🧬
 - Each genome contains one or more **chromosomes**, which are **patterns** or **sequences** of data within the instruction, function, or block.
