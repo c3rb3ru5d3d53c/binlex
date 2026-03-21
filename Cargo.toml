@@ -44,9 +44,6 @@ burn = { version = "0.21.0-pre.2", default-features = false, features = ["std", 
 semver = "1.0.27"
 base64 = "0.22.1"
 object_store = { version = "0.13.1", features = ["fs"] }
-lancedb = "0.27.1"
-arrow-array = "57.0.0"
-arrow-schema = "57.0.0"
 futures = "0.3.31"
 
 [workspace]

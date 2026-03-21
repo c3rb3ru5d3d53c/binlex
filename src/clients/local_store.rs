@@ -1,5 +1,5 @@
 use crate::Config;
-use crate::clients::{lancedb, object_store};
+use crate::clients::object_store;
 use crate::controlflow::{Block, Function, Graph, GraphSnapshot, Instruction};
 use crate::metadata::Attributes;
 use crate::processor::GraphProcessor;
@@ -38,7 +38,6 @@ impl fmt::Display for Collection {
 pub struct Client {
     config: Config,
     object_store: object_store::Client,
-    lancedb: lancedb::Client,
 }
 
 #[derive(Debug)]
@@ -48,7 +47,6 @@ pub enum Error {
     Graph(String),
     NotFound(String),
     ObjectStore(String),
-    LanceDb(String),
 }
 
 impl fmt::Display for Error {
@@ -63,7 +61,6 @@ impl fmt::Display for Error {
             Self::Graph(message) => write!(f, "local store graph error: {}", message),
             Self::NotFound(message) => write!(f, "local store not found: {}", message),
             Self::ObjectStore(message) => write!(f, "local store object store error: {}", message),
-            Self::LanceDb(message) => write!(f, "local store lancedb error: {}", message),
         }
     }
 }
@@ -114,8 +111,6 @@ impl Client {
             config,
             object_store: object_store::Client::new(root.join("object_store"))
                 .map_err(|error| Error::ObjectStore(error.to_string()))?,
-            lancedb: lancedb::Client::new(root.join("lancedb"))
-                .map_err(|error| Error::LanceDb(error.to_string()))?,
         })
     }
 
@@ -212,19 +207,19 @@ impl Client {
         if corpus.trim().is_empty() {
             return Err(Error::InvalidConfiguration("corpus must not be empty"));
         }
-        let rows = self
-            .lancedb
-            .search(corpus, collection, &architecture.to_string(), vector, limit)
-            .map_err(|error| Error::LanceDb(error.to_string()))?;
+        let prefix = index_prefix(corpus, collection, &architecture.to_string());
+        let entries: Vec<IndexEntry> = self
+            .object_store
+            .list_json_prefix(&prefix)
+            .map_err(|error| Error::ObjectStore(error.to_string()))?;
         let mut hits = Vec::new();
-        for row in rows {
-            let occurrences: Vec<Occurrence> = serde_json::from_str(&row.occurrences_json)
-                .map_err(|error| Error::Serialization(error.to_string()))?;
-            let score = cosine_similarity(vector, &row.vector);
-            for occurrence in occurrences {
+        // Keep local-store search exact and self-contained by scanning the persisted JSON index.
+        for entry in entries {
+            let score = cosine_similarity(vector, &entry.vector);
+            for occurrence in entry.occurrences {
                 hits.push(SearchHit {
                     corpus: corpus.to_string(),
-                    object_id: row.object_id.clone(),
+                    object_id: entry.object_id.clone(),
                     collection,
                     architecture: architecture.to_string(),
                     sha256: occurrence.sha256,
@@ -338,19 +333,7 @@ impl Client {
 
         self.object_store
             .put_json(&key, &entry)
-            .map_err(|error| Error::ObjectStore(error.to_string()))?;
-        let occurrences_json = serde_json::to_string(&entry.occurrences)
-            .map_err(|error| Error::Serialization(error.to_string()))?;
-        self.lancedb
-            .upsert(
-                corpus,
-                collection,
-                architecture,
-                object_id,
-                &entry.vector,
-                &occurrences_json,
-            )
-            .map_err(|error| Error::LanceDb(error.to_string()))
+            .map_err(|error| Error::ObjectStore(error.to_string()))
     }
 }
 
@@ -487,4 +470,8 @@ fn index_entry_key(
         architecture,
         object_id
     )
+}
+
+fn index_prefix(corpus: &str, collection: Collection, architecture: &str) -> String {
+    format!("index/{}/{}/{}/", corpus, collection.as_str(), architecture)
 }

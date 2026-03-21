@@ -1,4 +1,3 @@
-pub mod lancedb;
 pub mod local_store;
 pub mod milvus;
 pub mod minio;

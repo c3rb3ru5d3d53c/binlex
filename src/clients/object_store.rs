@@ -115,6 +115,30 @@ impl Client {
         serde_json::from_slice(&payload).map_err(|error| Error::Serialization(error.to_string()))
     }
 
+    pub fn list_json_prefix<T: DeserializeOwned>(&self, prefix: &str) -> Result<Vec<T>, Error> {
+        let path = object_path(prefix)?;
+        let stream = self.store.list(Some(&path));
+        let objects = self
+            .runtime
+            .block_on(stream.try_collect::<Vec<_>>())
+            .map_err(|error| Error::Io(error.to_string()))?;
+        let mut values = Vec::with_capacity(objects.len());
+        for meta in objects {
+            let result = self
+                .runtime
+                .block_on(self.store.get(&meta.location))
+                .map_err(|error| Error::Io(error.to_string()))?;
+            let bytes = self
+                .runtime
+                .block_on(result.bytes())
+                .map_err(|error| Error::Io(error.to_string()))?;
+            let value = serde_json::from_slice(&bytes)
+                .map_err(|error| Error::Serialization(error.to_string()))?;
+            values.push(value);
+        }
+        Ok(values)
+    }
+
     pub fn delete_prefix(&self, prefix: &str) -> Result<(), Error> {
         let path = object_path(prefix)?;
         let stream = self.store.list(Some(&path));
