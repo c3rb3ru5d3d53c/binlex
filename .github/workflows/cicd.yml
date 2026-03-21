@@ -49,11 +49,6 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Set up Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          version: "31.1"
-
       - name: Cache Cargo Registry and Build
         uses: actions/cache@v5
         with:
@@ -112,6 +107,13 @@ jobs:
         uses: TheMrMilchmann/setup-msvc-dev@v4
         with:
           arch: x64
+
+      - name: Configure Protoc (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: bash
+        run: |
+          echo "C:/msys64/usr/bin" >> "$GITHUB_PATH"
+          echo "PROTOC=C:/msys64/usr/bin/protoc.exe" >> "$GITHUB_ENV"
 
       - name: Run Unit Tests (Unix)
         if: ${{ matrix.os != 'windows-latest' }}
@@ -342,11 +344,6 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Set up Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          version: "31.1"
-
       - name: Install Dependencies (Ubuntu)
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
@@ -395,6 +392,13 @@ jobs:
         with:
           arch: x64
 
+      - name: Configure Protoc (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: bash
+        run: |
+          echo "C:/msys64/usr/bin" >> "$GITHUB_PATH"
+          echo "PROTOC=C:/msys64/usr/bin/protoc.exe" >> "$GITHUB_ENV"
+
       - name: Install Python Build Tools
         run: |
           python -m pip install --upgrade pip
@@ -424,17 +428,8 @@ jobs:
             echo "Unsupported package manager for cibuildwheel linux image" >&2; exit 1;
             fi;
             PROTOC_VERSION=31.1;
-            ARCH="$(uname -m)";
-            if [ "$ARCH" = "x86_64" ]; then PROTOC_ARCH=x86_64; elif [ "$ARCH" = "aarch64" ]; then PROTOC_ARCH=aarch_64; else echo "Unsupported arch for protoc: $ARCH" >&2; exit 1; fi;
-            curl -fsSL -o /tmp/protoc.zip "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-${PROTOC_ARCH}.zip";
-            python - <<'PY'
-            import pathlib
-            import zipfile
-            out = pathlib.Path("/opt/protoc")
-            out.mkdir(parents=True, exist_ok=True)
-            with zipfile.ZipFile("/tmp/protoc.zip") as zf:
-                zf.extractall(out)
-            PY
+            export PROTOC_VERSION;
+            python -c 'import os, pathlib, platform, urllib.request, zipfile; version=os.environ["PROTOC_VERSION"]; arch_map={"x86_64":"x86_64","aarch64":"aarch_64"}; machine=platform.machine(); arch=arch_map.get(machine); assert arch, f"Unsupported arch for protoc: {machine}"; url=f"https://github.com/protocolbuffers/protobuf/releases/download/v{version}/protoc-{version}-linux-{arch}.zip"; pathlib.Path("/opt/protoc").mkdir(parents=True, exist_ok=True); urllib.request.urlretrieve(url, "/tmp/protoc.zip"); zipfile.ZipFile("/tmp/protoc.zip").extractall("/opt/protoc")';
             ln -sf /opt/protoc/bin/protoc /usr/local/bin/protoc
           CIBW_ENVIRONMENT_MACOS: MACOSX_DEPLOYMENT_TARGET=11.0
         with:
@@ -551,11 +546,6 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-
-      - name: Set up Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          version: "31.1"
 
       - name: Cache Cargo Registry and Build
         uses: actions/cache@v5
