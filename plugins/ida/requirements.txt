@@ -1,1 +1,1 @@
-requests==2.32.3
+# The runtime plugin only depends on IDA's bundled Python/Qt environment and binlex.

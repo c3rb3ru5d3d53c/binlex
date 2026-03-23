@@ -55,14 +55,13 @@ class Client:
         data: bytes,
         magic: Magic | None = None,
         architecture: Architecture | None = None,
-        name: str | None = None,
     ) -> Graph:
         native_magic = None if magic is None else str(_coerce_magic(magic))
         native_architecture = (
             None if architecture is None else str(_coerce_architecture(architecture))
         )
         return Graph.from_binding(
-            self._inner.analyze_bytes(data, native_magic, native_architecture, name)
+            self._inner.analyze_bytes(data, native_magic, native_architecture)
         )
 
 

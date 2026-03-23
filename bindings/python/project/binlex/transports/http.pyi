@@ -31,7 +31,6 @@ class Client:
         data: bytes,
         magic: Magic | None = None,
         architecture: Architecture | None = None,
-        name: str | None = None,
     ) -> Graph: ...
 
 __all__ = ["Client"]

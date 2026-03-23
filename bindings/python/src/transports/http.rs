@@ -69,20 +69,19 @@ impl Client {
         )
     }
 
-    #[pyo3(signature = (data, magic=None, architecture=None, name=None))]
+    #[pyo3(signature = (data, magic=None, architecture=None))]
     pub fn analyze_bytes(
         &self,
         py: Python<'_>,
         data: Vec<u8>,
         magic: Option<String>,
         architecture: Option<String>,
-        name: Option<String>,
     ) -> PyResult<Py<PyGraph>> {
         let magic = parse_magic(magic)?;
         let architecture = parse_architecture(architecture)?;
         let graph = self
             .inner
-            .analyze_bytes(&data, magic, architecture, name.as_deref())
+            .analyze_bytes(&data, magic, architecture)
             .map_err(map_client_error)?;
         Py::new(
             py,
