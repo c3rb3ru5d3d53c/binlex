@@ -22,6 +22,17 @@
 
 """Lifter interfaces for converting bytes into intermediate representations."""
 
-from . import vex
+from importlib import import_module
+
+_LAZY_SUBMODULES = {"vex"}
+
+
+def __getattr__(name):
+    """Load optional lifter backends on demand."""
+    if name in _LAZY_SUBMODULES:
+        module = import_module(f"{__name__}.{name}")
+        globals()[name] = module
+        return module
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __all__ = ["vex"]

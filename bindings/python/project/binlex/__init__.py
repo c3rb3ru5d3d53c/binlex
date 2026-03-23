@@ -26,19 +26,38 @@ The `binlex` package re-exports the primary enums, configuration objects,
 and higher-level subpackages that wrap the compiled Rust extension.
 """
 
+from importlib import import_module
+
 from binlex_bindings.binlex import Config
 from .architecture import Architecture
-from . import compression
-from . import genetics
-from . import hexdump
-from . import hex
-from . import hashing
-from . import index
-from . import indexing
-from . import math
-from . import metadata
 from .magic import Magic
-from . import controlflow, disassemblers, formats, lifters, storage, transports
+
+_LAZY_SUBMODULES = {
+    "compression",
+    "controlflow",
+    "disassemblers",
+    "formats",
+    "genetics",
+    "hashing",
+    "hexdump",
+    "hex",
+    "index",
+    "indexing",
+    "lifters",
+    "math",
+    "metadata",
+    "storage",
+    "transports",
+}
+
+
+def __getattr__(name):
+    """Load Python wrapper subpackages on first access."""
+    if name in _LAZY_SUBMODULES:
+        module = import_module(f"{__name__}.{name}")
+        globals()[name] = module
+        return module
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __all__ = [
     "Architecture",
