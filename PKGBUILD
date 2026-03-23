@@ -9,12 +9,29 @@ makedepends=('rust' 'pkgconf' 'clang' 'openssl' 'zstd')
 build() {
   local builddir="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
   cd "$builddir"
-  # Arch's makepkg injects --as-needed, which drops the transitive libzstd link
-  # emitted by zstd-sys during lief's build-script link step. Replace the
-  # injected linker flag before invoking cargo so the setting applies to the
-  # full link command rather than being appended after the libraries.
-  export LDFLAGS="${LDFLAGS/--as-needed/--no-as-needed}"
-  export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C link-arg=-Wl,--no-as-needed"
+  # Arch's makepkg injects -Wl,--as-needed into the linker driver flags.
+  # Appending --no-as-needed via RUSTFLAGS is too late because Cargo places
+  # those arguments at the end of the link line, after zstd's native linkage
+  # has already been discarded. Wrap the linker so the injected flag is
+  # rewritten before the final gcc invocation is assembled.
+  local linker_wrapper="$srcdir/binlex-arch-linker-wrapper"
+  cat > "$linker_wrapper" <<'EOF'
+#!/bin/bash
+set -euo pipefail
+
+args=()
+for arg in "$@"; do
+  if [[ "$arg" == "-Wl,--as-needed" ]]; then
+    args+=("-Wl,--no-as-needed")
+  else
+    args+=("$arg")
+  fi
+done
+
+exec x86_64-linux-gnu-gcc "${args[@]}"
+EOF
+  chmod +x "$linker_wrapper"
+  export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER="$linker_wrapper"
   cargo build --release
 }
 
