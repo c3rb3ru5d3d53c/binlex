@@ -10,7 +10,10 @@ build() {
   local builddir="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
   cd "$builddir"
   # Arch's makepkg injects --as-needed, which drops the transitive libzstd link
-  # emitted by zstd-sys during lief's build-script link step.
+  # emitted by zstd-sys during lief's build-script link step. Replace the
+  # injected linker flag before invoking cargo so the setting applies to the
+  # full link command rather than being appended after the libraries.
+  export LDFLAGS="${LDFLAGS/--as-needed/--no-as-needed}"
   export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C link-arg=-Wl,--no-as-needed"
   cargo build --release
 }
