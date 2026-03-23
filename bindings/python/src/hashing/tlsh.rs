@@ -44,6 +44,12 @@ impl TLSH {
         InnerTLSH::new(&self.bytes, mininum_byte_size).hexdigest()
     }
 
+    #[pyo3(text_signature = "($self, mininum_byte_size)")]
+    /// Return the TLSH digest as a normalized vector, if the byte sequence is large enough.
+    pub fn vector(&self, mininum_byte_size: usize) -> Option<Vec<f32>> {
+        InnerTLSH::new(&self.bytes, mininum_byte_size).vector()
+    }
+
     #[pyo3(text_signature = "($self, other, mininum_byte_size)")]
     /// Compare this TLSH object against another TLSH object.
     pub fn compare(&self, other: &Self, mininum_byte_size: usize) -> Option<f64> {

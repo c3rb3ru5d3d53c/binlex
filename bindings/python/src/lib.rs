@@ -20,7 +20,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod clients;
 pub mod compression;
 pub mod controlflow;
 pub mod disassemblers;
@@ -31,15 +30,19 @@ pub mod hashing;
 pub mod hex;
 pub mod hexdump;
 pub mod imaging;
+pub mod index;
+pub mod indexing;
 #[cfg(not(target_os = "windows"))]
 pub mod lifters;
 pub mod math;
+pub mod metadata;
+pub mod storage;
+pub mod transports;
 
 pub use global::Architecture;
 pub use global::Config;
 pub use global::Magic;
 
-use crate::clients::clients_init;
 use crate::compression::compression_init;
 use crate::controlflow::controlflow_init;
 use crate::disassemblers::disassemblers_init;
@@ -50,9 +53,14 @@ use crate::hashing::hashing_init;
 use crate::hex::hex_init;
 use crate::hexdump::hexdump_init;
 use crate::imaging::imaging_init;
+use crate::index::index_init;
+use crate::indexing::indexing_init;
 #[cfg(not(target_os = "windows"))]
 use crate::lifters::lifters_init;
 use crate::math::{entropy_init, math_init};
+use crate::metadata::metadata_init;
+use crate::storage::storage_init;
+use crate::transports::transports_init;
 use ::binlex::runtime::{child, register_host_runtime, HostRuntime, ProcessorEntryError};
 
 use pyo3::{prelude::*, types::PyModule, wrap_pyfunction, wrap_pymodule};
@@ -89,22 +97,26 @@ fn binlex(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add_wrapped(wrap_pymodule!(compression_init))?;
     m.add_wrapped(wrap_pymodule!(formats_init))?;
-    m.add_wrapped(wrap_pymodule!(clients_init))?;
     m.add_wrapped(wrap_pymodule!(controlflow_init))?;
     m.add_wrapped(wrap_pymodule!(global_init))?;
     m.add_wrapped(wrap_pymodule!(hex_init))?;
     m.add_wrapped(wrap_pymodule!(entropy_init))?;
     m.add_wrapped(wrap_pymodule!(hexdump_init))?;
     m.add_wrapped(wrap_pymodule!(math_init))?;
+    m.add_wrapped(wrap_pymodule!(metadata_init))?;
     m.add_wrapped(wrap_pymodule!(disassemblers_init))?;
     m.add_wrapped(wrap_pymodule!(genitics_init))?;
     m.add_wrapped(wrap_pymodule!(hashing_init))?;
     m.add_wrapped(wrap_pymodule!(imaging_init))?;
+    m.add_wrapped(wrap_pymodule!(index_init))?;
+    m.add_wrapped(wrap_pymodule!(indexing_init))?;
     #[cfg(not(target_os = "windows"))]
     m.add_wrapped(wrap_pymodule!(lifters_init))?;
     m.add_class::<Architecture>()?;
     m.add_class::<Config>()?;
     m.add_class::<Magic>()?;
+    m.add_wrapped(wrap_pymodule!(storage_init))?;
+    m.add_wrapped(wrap_pymodule!(transports_init))?;
     m.add_function(wrap_pyfunction!(_run_processor_entry, m)?)?;
     Ok(())
 }

@@ -40,6 +40,13 @@ pub struct ConfigProcessorTransport {
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
+pub struct ConfigProcessorTransports {
+    pub inline: ConfigProcessorTransport,
+    pub ipc: ConfigProcessorTransport,
+    pub http: ConfigProcessorTransport,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum ConfigProcessorValue {
     Bool(bool),
@@ -108,6 +115,8 @@ pub struct ConfigImaging {
 pub struct ConfigData {
     pub general: ConfigGeneral,
     pub server: ConfigServer,
+    #[serde(default)]
+    pub index: ConfigIndex,
     pub formats: ConfigFormats,
     pub imaging: ConfigImaging,
     pub instructions: ConfigInstructions,
@@ -131,9 +140,7 @@ pub struct ConfigProcessor {
     pub functions: ConfigProcessorTarget,
     #[serde(flatten, default)]
     pub options: BTreeMap<String, ConfigProcessorValue>,
-    pub inline: ConfigProcessorTransport,
-    pub ipc: ConfigProcessorTransport,
-    pub http: ConfigProcessorTransport,
+    pub transport: ConfigProcessorTransports,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
@@ -153,6 +160,17 @@ pub struct ConfigProcessors {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigDisassembler {
     pub sweep: ConfigDisassemblerSweep,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigIndex {
+    #[serde(default)]
+    pub local: ConfigIndexLocal,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigIndexLocal {
+    pub directory: String,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

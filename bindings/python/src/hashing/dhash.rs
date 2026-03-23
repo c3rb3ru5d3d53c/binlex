@@ -44,6 +44,12 @@ impl DHash {
         InnerDHash::new(&self.bytes).hexdigest()
     }
 
+    #[pyo3(text_signature = "($self)")]
+    /// Return the difference hash digest as a normalized vector.
+    pub fn vector(&self) -> Option<Vec<f32>> {
+        InnerDHash::new(&self.bytes).vector()
+    }
+
     #[pyo3(text_signature = "($self, other)")]
     /// Compare this difference hash object against another difference hash object.
     pub fn compare(&self, other: &Self) -> Option<f64> {

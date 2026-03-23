@@ -1,7 +1,8 @@
 pub mod child;
 pub mod dispatch;
 pub mod error;
-pub mod modes;
+pub mod execute;
+pub mod transports;
 
 pub use child::ProcessorEntryError;
 pub use dispatch::{
@@ -9,4 +10,4 @@ pub use dispatch::{
     register_host_runtime,
 };
 pub use error::ProcessorError;
-pub use modes::ipc::ProcessorPool;
+pub use transports::ipc::ProcessorPool;

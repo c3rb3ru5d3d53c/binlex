@@ -22,7 +22,7 @@
 # SOFTWARE.
 
 from binlex import Config
-from binlex.clients.server import Client
+from binlex.transports.http import Client
 
 
 config = Config()

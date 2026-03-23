@@ -50,6 +50,20 @@ impl<'ahash> AHash<'ahash> {
 
     #[allow(dead_code)]
     pub fn hexdigest(&self) -> Option<String> {
+        Some(hex::encode(&pack_bits(&self.bits()?)))
+    }
+
+    #[allow(dead_code)]
+    pub fn vector(&self) -> Option<Vec<f32>> {
+        Some(
+            self.bits()?
+                .into_iter()
+                .map(|bit| if bit { 1.0 } else { 0.0 })
+                .collect(),
+        )
+    }
+
+    fn bits(&self) -> Option<Vec<bool>> {
         let image = decode_grayscale(self.bytes, 8, 8)?;
         let mean = image
             .pixels()
@@ -57,12 +71,13 @@ impl<'ahash> AHash<'ahash> {
             .map(|&pixel| pixel as f64)
             .sum::<f64>()
             / 64.0;
-        let bits = image
-            .pixels()
-            .iter()
-            .map(|&pixel| (pixel as f64) > mean)
-            .collect::<Vec<bool>>();
-        Some(hex::encode(&pack_bits(&bits)))
+        Some(
+            image
+                .pixels()
+                .iter()
+                .map(|&pixel| (pixel as f64) > mean)
+                .collect(),
+        )
     }
 }
 

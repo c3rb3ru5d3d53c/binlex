@@ -44,6 +44,31 @@ impl SHA256 {
     pub fn hexdigest(&self) -> Option<String> {
         InnerSHA256::new(&self.bytes).hexdigest()
     }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the SHA-256 digest as a normalized vector.
+    pub fn vector(&self) -> Option<Vec<f32>> {
+        InnerSHA256::new(&self.bytes).vector()
+    }
+
+    #[pyo3(text_signature = "($self, other)")]
+    /// Compare this SHA-256 object against another SHA-256 object.
+    pub fn compare(&self, other: &Self) -> Option<f64> {
+        InnerSHA256::new(&self.bytes).compare(&InnerSHA256::new(&other.bytes))
+    }
+
+    #[pyo3(text_signature = "($self, other)")]
+    /// Compare this SHA-256 object against a SHA-256 digest.
+    pub fn compare_hexdigest(&self, other: String) -> Option<f64> {
+        InnerSHA256::new(&self.bytes).compare_hexdigest(&other)
+    }
+
+    #[staticmethod]
+    #[pyo3(text_signature = "(lhs, rhs)")]
+    /// Compare two SHA-256 digests and return their similarity score.
+    pub fn compare_hexdigests(lhs: String, rhs: String) -> Option<f64> {
+        InnerSHA256::compare_hexdigests(&lhs, &rhs)
+    }
 }
 
 #[pymodule]

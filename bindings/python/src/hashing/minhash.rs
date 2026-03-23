@@ -53,6 +53,12 @@ impl MinHash32 {
         InnerMinHash32::new(&self.bytes, self.num_hashes, self.shingle_size, self.seed).hexdigest()
     }
 
+    #[pyo3(text_signature = "($self)")]
+    /// Return the MinHash signature as a normalized vector.
+    pub fn vector(&self) -> Option<Vec<f32>> {
+        InnerMinHash32::new(&self.bytes, self.num_hashes, self.shingle_size, self.seed).vector()
+    }
+
     #[pyo3(text_signature = "($self, other)")]
     /// Compare this MinHash object against another MinHash object.
     pub fn compare(&self, other: &Self) -> Option<f64> {

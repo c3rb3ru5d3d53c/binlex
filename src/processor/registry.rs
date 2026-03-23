@@ -2,7 +2,7 @@ use crate::Config;
 use crate::config::ConfigProcessor;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::io::stderr::Stderr;
-use crate::processor::{ProcessorArchitecture, ProcessorMode, ProcessorOs, ProcessorTarget};
+use crate::processor::{ProcessorArchitecture, ProcessorOs, ProcessorTarget, ProcessorTransport};
 use crate::processors::embeddings;
 #[cfg(not(target_os = "windows"))]
 use crate::processors::vex;
@@ -21,7 +21,7 @@ pub struct ProcessorRegistration {
     pub requires: &'static str,
     pub operating_systems: &'static [ProcessorOs],
     pub architectures: &'static [ProcessorArchitecture],
-    pub modes: &'static [ProcessorMode],
+    pub transports: &'static [ProcessorTransport],
     pub make_pool:
         fn(&crate::config::ConfigProcessors) -> Result<Arc<ProcessorPool>, ProcessorError>,
     pub make_dispatch: fn() -> Box<dyn ProcessorDispatch>,
@@ -47,8 +47,8 @@ impl<'a> RegisteredProcessor<'a> {
         self.registration.name
     }
 
-    pub fn configured_mode(&self, config: &Config) -> ProcessorMode {
-        configured_graph_mode(self.registration, config).unwrap_or(ProcessorMode::Inline)
+    pub fn configured_transport(&self, config: &Config) -> ProcessorTransport {
+        configured_graph_transport(self.registration, config).unwrap_or(ProcessorTransport::Inline)
     }
 
     pub fn process_block(&self, block: &Block<'_>) -> Option<Value> {
@@ -63,14 +63,14 @@ impl<'a> RegisteredProcessor<'a> {
             .block_json
             .and_then(|serialize| serialize(block))
         {
-            match execute_graph_mode(self.registration, data, &block.cfg.config) {
+            match execute_graph_transport(self.registration, data, &block.cfg.config) {
                 Ok(Some(data)) => return Some(data),
                 Ok(None) => {}
                 Err(error) => {
-                    if should_fail_transport_mode(&error) {
-                        fail_transport_mode(&block.cfg.config, self.name(), &error);
+                    if should_fail_transport(&error) {
+                        fail_transport(&block.cfg.config, self.name(), &error);
                     }
-                    report_transport_mode_error(&block.cfg.config, self.name(), &error);
+                    report_transport_error(&block.cfg.config, self.name(), &error);
                     return None;
                 }
             }
@@ -92,14 +92,14 @@ impl<'a> RegisteredProcessor<'a> {
             .instruction_json
             .and_then(|serialize| serialize(instruction))
         {
-            match execute_graph_mode(self.registration, data, &instruction.config) {
+            match execute_graph_transport(self.registration, data, &instruction.config) {
                 Ok(Some(data)) => return Some(data),
                 Ok(None) => {}
                 Err(error) => {
-                    if should_fail_transport_mode(&error) {
-                        fail_transport_mode(&instruction.config, self.name(), &error);
+                    if should_fail_transport(&error) {
+                        fail_transport(&instruction.config, self.name(), &error);
                     }
-                    report_transport_mode_error(&instruction.config, self.name(), &error);
+                    report_transport_error(&instruction.config, self.name(), &error);
                     return None;
                 }
             }
@@ -121,14 +121,14 @@ impl<'a> RegisteredProcessor<'a> {
             .function_json
             .and_then(|serialize| serialize(function))
         {
-            match execute_graph_mode(self.registration, data, &function.cfg.config) {
+            match execute_graph_transport(self.registration, data, &function.cfg.config) {
                 Ok(Some(data)) => return Some(data),
                 Ok(None) => {}
                 Err(error) => {
-                    if should_fail_transport_mode(&error) {
-                        fail_transport_mode(&function.cfg.config, self.name(), &error);
+                    if should_fail_transport(&error) {
+                        fail_transport(&function.cfg.config, self.name(), &error);
                     }
-                    report_transport_mode_error(&function.cfg.config, self.name(), &error);
+                    report_transport_error(&function.cfg.config, self.name(), &error);
                     return None;
                 }
             }
@@ -155,10 +155,10 @@ impl ProcessorRegistration {
         self.architectures.contains(&architecture)
     }
 
-    pub fn supports_mode(&self, mode: &str) -> bool {
-        self.modes
+    pub fn supports_transport(&self, transport: &str) -> bool {
+        self.transports
             .iter()
-            .any(|supported| supported.as_str() == mode)
+            .any(|supported| supported.as_str() == transport)
     }
 }
 
@@ -167,45 +167,48 @@ pub struct RegisteredProcessorDispatch {
     pub dispatch: Box<dyn ProcessorDispatch>,
 }
 
-pub fn default_transport_mode(
-    supported: &[ProcessorMode],
+pub fn default_transport(
+    supported: &[ProcessorTransport],
     inline_enabled: bool,
     ipc_enabled: bool,
     http_enabled: bool,
-) -> ProcessorMode {
-    if inline_enabled && supported.contains(&ProcessorMode::Inline) {
-        return ProcessorMode::Inline;
+) -> ProcessorTransport {
+    if inline_enabled && supported.contains(&ProcessorTransport::Inline) {
+        return ProcessorTransport::Inline;
     }
-    if ipc_enabled && supported.contains(&ProcessorMode::Ipc) {
-        return ProcessorMode::Ipc;
+    if ipc_enabled && supported.contains(&ProcessorTransport::Ipc) {
+        return ProcessorTransport::Ipc;
     }
-    if http_enabled && supported.contains(&ProcessorMode::Http) {
-        return ProcessorMode::Http;
+    if http_enabled && supported.contains(&ProcessorTransport::Http) {
+        return ProcessorTransport::Http;
     }
-    supported.first().copied().unwrap_or(ProcessorMode::Inline)
+    supported
+        .first()
+        .copied()
+        .unwrap_or(ProcessorTransport::Inline)
 }
 
-fn configured_transport_mode(
+fn configured_transport(
     processor: &ConfigProcessor,
-    supported: &[ProcessorMode],
-) -> Result<ProcessorMode, ProcessorError> {
-    let mode = default_transport_mode(
+    supported: &[ProcessorTransport],
+) -> Result<ProcessorTransport, ProcessorError> {
+    let transport = default_transport(
         supported,
-        processor.inline.enabled,
-        processor.ipc.enabled,
-        processor.http.enabled,
+        processor.transport.inline.enabled,
+        processor.transport.ipc.enabled,
+        processor.transport.http.enabled,
     );
-    if !supported.contains(&mode) {
+    if !supported.contains(&transport) {
         return Err(ProcessorError::Protocol(
             "processor has no supported enabled transport".to_string(),
         ));
     }
-    if !processor.transport(mode).enabled {
+    if !processor.transport(transport).enabled {
         return Err(ProcessorError::Protocol(
             "processor has no enabled transport".to_string(),
         ));
     }
-    Ok(mode)
+    Ok(transport)
 }
 
 #[macro_export]
@@ -235,7 +238,7 @@ macro_rules! processor {
         operating_systems: [$($supported_os:expr),+ $(,)?],
         architectures: [$($supported_architecture:expr),+ $(,)?],
         enabled: $processor_enabled:expr,
-        transports: [$($processor_mode:expr),+ $(,)?],
+        transports: [$($processor_transport:expr),+ $(,)?],
         instructions: { enabled: $instructions_enabled:expr },
         blocks: { enabled: $blocks_enabled:expr },
         functions: { enabled: $functions_enabled:expr },
@@ -258,7 +261,7 @@ macro_rules! processor {
             operating_systems: [$($supported_os),+],
             architectures: [$($supported_architecture),+],
             enabled: $processor_enabled,
-            transports: [$($processor_mode),+],
+            transports: [$($processor_transport),+],
             instructions: { enabled: $instructions_enabled },
             blocks: { enabled: $blocks_enabled },
             functions: { enabled: $functions_enabled },
@@ -282,7 +285,7 @@ macro_rules! processor {
         operating_systems: [$($supported_os:expr),+ $(,)?],
         architectures: [$($supported_architecture:expr),+ $(,)?],
         enabled: $processor_enabled:expr,
-        transports: [$($processor_mode:expr),+ $(,)?],
+        transports: [$($processor_transport:expr),+ $(,)?],
         instructions: { enabled: $instructions_enabled:expr },
         blocks: { enabled: $blocks_enabled:expr },
         functions: { enabled: $functions_enabled:expr },
@@ -324,44 +327,46 @@ macro_rules! processor {
                         )
                     ),*
                 ]),
-                inline: $crate::config::ConfigProcessorTransport {
-                    enabled: $inline_enabled,
-                    options: std::collections::BTreeMap::from([
-                        $(
+                transport: $crate::config::ConfigProcessorTransports {
+                    inline: $crate::config::ConfigProcessorTransport {
+                        enabled: $inline_enabled,
+                        options: std::collections::BTreeMap::from([
                             $(
-                                (
-                                    stringify!($inline_option_key).to_string(),
-                                    $crate::processor!(@value $inline_option_value),
-                                )
-                            ),*
-                        )?
-                    ]),
-                },
-                ipc: $crate::config::ConfigProcessorTransport {
-                    enabled: $ipc_enabled,
-                    options: std::collections::BTreeMap::from([
-                        $(
+                                $(
+                                    (
+                                        stringify!($inline_option_key).to_string(),
+                                        $crate::processor!(@value $inline_option_value),
+                                    )
+                                ),*
+                            )?
+                        ]),
+                    },
+                    ipc: $crate::config::ConfigProcessorTransport {
+                        enabled: $ipc_enabled,
+                        options: std::collections::BTreeMap::from([
                             $(
-                                (
-                                    stringify!($ipc_option_key).to_string(),
-                                    $crate::processor!(@value $ipc_option_value),
-                                )
-                            ),*
-                        )?
-                    ]),
-                },
-                http: $crate::config::ConfigProcessorTransport {
-                    enabled: $http_enabled,
-                    options: std::collections::BTreeMap::from([
-                        $(
+                                $(
+                                    (
+                                        stringify!($ipc_option_key).to_string(),
+                                        $crate::processor!(@value $ipc_option_value),
+                                    )
+                                ),*
+                            )?
+                        ]),
+                    },
+                    http: $crate::config::ConfigProcessorTransport {
+                        enabled: $http_enabled,
+                        options: std::collections::BTreeMap::from([
                             $(
-                                (
-                                    stringify!($http_option_key).to_string(),
-                                    $crate::processor!(@value $http_option_value),
-                                )
-                            ),*
-                        )?
-                    ]),
+                                $(
+                                    (
+                                        stringify!($http_option_key).to_string(),
+                                        $crate::processor!(@value $http_option_value),
+                                    )
+                                ),*
+                            )?
+                        ]),
+                    },
                 },
             }
         }
@@ -372,8 +377,8 @@ macro_rules! processor {
                 requires: $requires,
                 operating_systems: &[$($supported_os),+],
                 architectures: &[$($supported_architecture),+],
-                modes: &[$($processor_mode),+],
-                make_pool: |config| $crate::runtime::modes::ipc::pool::ProcessorPool::for_processor::<$processor>(config),
+                transports: &[$($processor_transport),+],
+                make_pool: |config| $crate::runtime::transports::ipc::pool::ProcessorPool::for_processor::<$processor>(config),
                 make_dispatch: || Box::new($processor),
                 config_default,
                 enabled_for_target: |config: &$crate::Config,
@@ -431,7 +436,7 @@ macro_rules! processor {
         operating_systems: [$($supported_os:expr),+ $(,)?],
         architectures: [$($supported_architecture:expr),+ $(,)?],
         enabled: $processor_enabled:expr,
-        transports: [$($processor_mode:expr),+ $(,)?],
+        transports: [$($processor_transport:expr),+ $(,)?],
         instructions: { enabled: $instructions_enabled:expr },
         blocks: { enabled: $blocks_enabled:expr },
         functions: { enabled: $functions_enabled:expr },
@@ -449,7 +454,7 @@ macro_rules! processor {
             operating_systems: [$($supported_os),+],
             architectures: [$($supported_architecture),+],
             enabled: $processor_enabled,
-            transports: [$($processor_mode),+],
+            transports: [$($processor_transport),+],
             instructions: { enabled: $instructions_enabled },
             blocks: { enabled: $blocks_enabled },
             functions: { enabled: $functions_enabled },
@@ -584,7 +589,7 @@ pub fn enabled_processors_for_target(
         .collect()
 }
 
-fn report_transport_mode_error(config: &Config, processor_name: &str, error: &ProcessorError) {
+fn report_transport_error(config: &Config, processor_name: &str, error: &ProcessorError) {
     if config.general.debug {
         Stderr::print_debug(
             config,
@@ -593,13 +598,13 @@ fn report_transport_mode_error(config: &Config, processor_name: &str, error: &Pr
     }
 }
 
-fn fail_transport_mode(config: &Config, processor_name: &str, error: &ProcessorError) -> ! {
-    report_transport_mode_error(config, processor_name, error);
+fn fail_transport(config: &Config, processor_name: &str, error: &ProcessorError) -> ! {
+    report_transport_error(config, processor_name, error);
     eprintln!("processor {} transport error: {}", processor_name, error);
     process::exit(1);
 }
 
-fn should_fail_transport_mode(error: &ProcessorError) -> bool {
+fn should_fail_transport(error: &ProcessorError) -> bool {
     matches!(
         error,
         ProcessorError::Io(_)
@@ -610,14 +615,14 @@ fn should_fail_transport_mode(error: &ProcessorError) -> bool {
     )
 }
 
-fn configured_graph_mode(
+fn configured_graph_transport(
     registration: &ProcessorRegistration,
     config: &Config,
-) -> Result<ProcessorMode, ProcessorError> {
+) -> Result<ProcessorTransport, ProcessorError> {
     let Some(processor) = config.processors.processor(registration.name) else {
-        return Ok(ProcessorMode::Inline);
+        return Ok(ProcessorTransport::Inline);
     };
-    configured_transport_mode(processor, registration.modes).map_err(|error| {
+    configured_transport(processor, registration.transports).map_err(|error| {
         ProcessorError::Protocol(format!(
             "processor {} transport selection failed: {}",
             registration.name, error
@@ -625,15 +630,15 @@ fn configured_graph_mode(
     })
 }
 
-fn execute_graph_mode(
+fn execute_graph_transport(
     registration: &ProcessorRegistration,
     data: Value,
     config: &Config,
 ) -> Result<Option<Value>, ProcessorError> {
     ensure_payload_architecture_supported(registration, &data)?;
-    match configured_graph_mode(registration, config)? {
-        ProcessorMode::Inline => Ok(None),
-        ProcessorMode::Ipc => {
+    match configured_graph_transport(registration, config)? {
+        ProcessorTransport::Inline => Ok(None),
+        ProcessorTransport::Ipc => {
             let execute = registration.execute_graph_value.ok_or_else(|| {
                 ProcessorError::Protocol(format!(
                     "processor {} does not implement graph IPC execution",
@@ -642,7 +647,7 @@ fn execute_graph_mode(
             })?;
             execute(config, data).map(Some)
         }
-        ProcessorMode::Http => {
+        ProcessorTransport::Http => {
             let processor = config
                 .processors
                 .processor(registration.name)
@@ -652,7 +657,7 @@ fn execute_graph_mode(
                         registration.name
                     ))
                 })?;
-            crate::runtime::modes::http::execute(registration.name, data, config, processor)
+            crate::runtime::transports::http::execute(registration.name, data, config, processor)
                 .map(Some)
         }
     }
@@ -696,8 +701,10 @@ pub(crate) fn ensure_payload_architecture_supported_server(
 
 #[cfg(test)]
 mod tests {
-    use super::{ProcessorArchitecture, ProcessorMode, ProcessorOs, ProcessorRegistration};
-    use crate::config::{ConfigProcessor, ConfigProcessorTarget, ConfigProcessorTransport};
+    use super::{ProcessorArchitecture, ProcessorOs, ProcessorRegistration, ProcessorTransport};
+    use crate::config::{
+        ConfigProcessor, ConfigProcessorTarget, ConfigProcessorTransport, ConfigProcessorTransports,
+    };
     use std::collections::BTreeMap;
     use std::sync::Arc;
 
@@ -717,17 +724,19 @@ mod tests {
                 options: BTreeMap::new(),
             },
             options: BTreeMap::new(),
-            inline: ConfigProcessorTransport {
-                enabled: false,
-                options: BTreeMap::new(),
-            },
-            ipc: ConfigProcessorTransport {
-                enabled: true,
-                options: BTreeMap::new(),
-            },
-            http: ConfigProcessorTransport {
-                enabled: false,
-                options: BTreeMap::new(),
+            transport: ConfigProcessorTransports {
+                inline: ConfigProcessorTransport {
+                    enabled: false,
+                    options: BTreeMap::new(),
+                },
+                ipc: ConfigProcessorTransport {
+                    enabled: true,
+                    options: BTreeMap::new(),
+                },
+                http: ConfigProcessorTransport {
+                    enabled: false,
+                    options: BTreeMap::new(),
+                },
             },
         }
     }
@@ -739,7 +748,7 @@ mod tests {
     fn test_make_pool(
         _: &crate::config::ConfigProcessors,
     ) -> Result<
-        Arc<crate::runtime::modes::ipc::pool::ProcessorPool>,
+        Arc<crate::runtime::transports::ipc::pool::ProcessorPool>,
         crate::runtime::error::ProcessorError,
     > {
         panic!("test pool should not be constructed")
@@ -759,7 +768,7 @@ mod tests {
             requires: ">=0.0.0",
             operating_systems: &SUPPORTED_OS,
             architectures: &[ProcessorArchitecture::AMD64],
-            modes: &[ProcessorMode::Ipc],
+            transports: &[ProcessorTransport::Ipc],
             make_pool: test_make_pool,
             make_dispatch: test_make_dispatch,
             config_default: test_config_default,
@@ -789,7 +798,7 @@ mod tests {
             requires: ">=0.0.0",
             operating_systems: &UNSUPPORTED_OS,
             architectures: &[ProcessorArchitecture::AMD64],
-            modes: &[ProcessorMode::Ipc],
+            transports: &[ProcessorTransport::Ipc],
             make_pool: test_make_pool,
             make_dispatch: test_make_dispatch,
             config_default: test_config_default,
@@ -808,7 +817,7 @@ mod tests {
     }
 
     #[test]
-    fn registration_supports_declared_modes() {
+    fn registration_supports_declared_transports() {
         #[cfg(target_os = "linux")]
         static SUPPORTED_OS: [ProcessorOs; 1] = [ProcessorOs::Linux];
         #[cfg(target_os = "macos")]
@@ -821,10 +830,10 @@ mod tests {
             requires: ">=0.0.0",
             operating_systems: &SUPPORTED_OS,
             architectures: &[ProcessorArchitecture::AMD64],
-            modes: &[
-                ProcessorMode::Inline,
-                ProcessorMode::Ipc,
-                ProcessorMode::Http,
+            transports: &[
+                ProcessorTransport::Inline,
+                ProcessorTransport::Ipc,
+                ProcessorTransport::Http,
             ],
             make_pool: test_make_pool,
             make_dispatch: test_make_dispatch,
@@ -840,10 +849,10 @@ mod tests {
             process_function: None,
         };
 
-        assert!(registration.supports_mode("inline"));
-        assert!(registration.supports_mode("ipc"));
-        assert!(registration.supports_mode("http"));
-        assert!(!registration.supports_mode("bogus"));
+        assert!(registration.supports_transport("inline"));
+        assert!(registration.supports_transport("ipc"));
+        assert!(registration.supports_transport("http"));
+        assert!(!registration.supports_transport("bogus"));
     }
 
     #[test]
@@ -860,7 +869,7 @@ mod tests {
             requires: ">=0.0.0",
             operating_systems: &SUPPORTED_OS,
             architectures: &[ProcessorArchitecture::AMD64, ProcessorArchitecture::I386],
-            modes: &[ProcessorMode::Ipc],
+            transports: &[ProcessorTransport::Ipc],
             make_pool: test_make_pool,
             make_dispatch: test_make_dispatch,
             config_default: test_config_default,

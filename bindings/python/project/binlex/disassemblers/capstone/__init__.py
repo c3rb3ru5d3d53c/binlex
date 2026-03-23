@@ -25,13 +25,16 @@
 from binlex_bindings.binlex.disassemblers.capstone import Disassembler as _DisassemblerBinding
 
 from binlex.architecture import _coerce_architecture
+from binlex.formats import Image
 
 
 class Disassembler:
     """Disassemble native executable regions into a control-flow graph."""
 
     def __init__(self, machine, image, executable_address_ranges, config):
-        """Create a disassembler for the given architecture and image bytes."""
+        """Create a disassembler for the given architecture and image source."""
+        if isinstance(image, Image):
+            image = image._inner
         self._inner = _DisassemblerBinding(
             _coerce_architecture(machine),
             image,

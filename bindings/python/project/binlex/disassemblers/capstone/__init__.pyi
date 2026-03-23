@@ -4,12 +4,13 @@ from collections.abc import Mapping, Set
 
 from binlex import Architecture, Config
 from binlex.controlflow import Graph
+from binlex.formats import Image
 
 class Disassembler:
     def __init__(
         self,
         machine: Architecture,
-        image: bytes | memoryview,
+        image: Image | bytes,
         executable_address_ranges: dict[int, int],
         config: Config,
     ) -> None: ...

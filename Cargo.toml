@@ -44,6 +44,9 @@ burn = { version = "0.21.0-pre.2", default-features = false, features = ["std", 
 semver = "1.0.27"
 base64 = "0.22.1"
 object_store = { version = "0.13.1", features = ["fs"] }
+lancedb = { version = "0.27.1", default-features = false }
+arrow-array = { version = "57.0.0", default-features = false }
+arrow-schema = { version = "57.0.0", default-features = false }
 futures = "0.3.31"
 
 [workspace]
@@ -51,10 +54,16 @@ members = [
     "bindings/python/",
 ]
 
+[profile.dev]
+debug = 0
+
+[profile.test]
+debug = 0
+
 [profile.release]
 opt-level = 3
-lto = true
-codegen-units = 1
+lto = "thin"
+codegen-units = 16
 
 [[bin]]
 name = "binlex"

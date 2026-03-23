@@ -6,8 +6,8 @@ use crate::processor::{
     RegisteredProcessorDispatch, dispatch_by_name, processor_registration_by_name,
 };
 use crate::runtime::error::ProcessorError;
-use crate::runtime::modes::ipc::local;
-use crate::runtime::modes::ipc::protocol::{
+use crate::runtime::transports::ipc::local;
+use crate::runtime::transports::ipc::protocol::{
     Hello, HelloProcessor, MessageKind, ProcessorFailure, read_frame, write_frame,
 };
 
@@ -62,7 +62,7 @@ pub fn run_child_loop(
         .collect::<HashMap<_, _>>();
 
     let hello = Hello {
-        protocol_version: crate::runtime::modes::ipc::protocol::VERSION,
+        protocol_version: crate::runtime::transports::ipc::protocol::VERSION,
         backend_name: backend_name.to_string(),
         binlex_version: crate::VERSION.to_string(),
         host_os: crate::processor::ProcessorOs::current(),

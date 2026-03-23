@@ -40,13 +40,13 @@ impl AppState {
                 .processors
                 .processor(registration.name)
                 .and_then(|processor| {
-                    crate::server::processors::configured_execution_mode(
+                    crate::server::processors::configured_server_transport(
                         processor,
-                        registration.modes,
+                        registration.transports,
                     )
                     .ok()
                 })
-                != Some(crate::processor::ProcessorMode::Ipc)
+                != Some(crate::processor::ProcessorTransport::Ipc)
             {
                 continue;
             }

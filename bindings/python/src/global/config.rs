@@ -1211,6 +1211,14 @@ impl Config {
             inner: Arc::clone(&self.inner),
         })
     }
+
+    #[getter]
+    /// Return the index storage configuration group.
+    pub fn get_index(&self) -> PyResult<ConfigIndex> {
+        Ok(ConfigIndex {
+            inner: Arc::clone(&self.inner),
+        })
+    }
     #[getter]
     /// Return the format parsing configuration group.
     pub fn get_formats(&self) -> PyResult<ConfigFormats> {
@@ -1415,6 +1423,41 @@ impl ConfigDisassemblerSweep {
 }
 
 #[pyclass]
+pub struct ConfigIndex {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigIndex {
+    #[getter]
+    pub fn get_local(&self) -> ConfigIndexLocal {
+        ConfigIndexLocal {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+}
+
+#[pyclass]
+pub struct ConfigIndexLocal {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigIndexLocal {
+    #[getter]
+    pub fn get_directory(&self) -> String {
+        let inner = self.inner.lock().unwrap();
+        inner.index.local.directory.clone()
+    }
+
+    #[setter]
+    pub fn set_directory(&mut self, value: String) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.index.local.directory = value;
+    }
+}
+
+#[pyclass]
 pub struct ConfigMmap {
     pub inner: Arc<Mutex<InnerConfig>>,
 }
@@ -1525,6 +1568,13 @@ pub struct ConfigProcessorTransport {
     pub kind: &'static str,
 }
 
+/// Access all transport settings for a single named processor backend.
+#[pyclass]
+pub struct ConfigProcessorTransports {
+    pub inner: Arc<Mutex<InnerConfig>>,
+    pub processor_name: String,
+}
+
 /// Access per-target enablement for processor-produced objects.
 #[pyclass]
 pub struct ConfigProcessorTarget {
@@ -1543,9 +1593,9 @@ impl ConfigProcessorTransport {
             .processors
             .processor(&self.processor_name)
             .is_some_and(|processor| match self.kind {
-                "inline" => processor.inline.enabled,
-                "ipc" => processor.ipc.enabled,
-                "http" => processor.http.enabled,
+                "inline" => processor.transport.inline.enabled,
+                "ipc" => processor.transport.ipc.enabled,
+                "http" => processor.transport.http.enabled,
                 _ => false,
             })
     }
@@ -1556,9 +1606,9 @@ impl ConfigProcessorTransport {
         let mut inner = self.inner.lock().unwrap();
         if let Some(processor) = inner.processors.ensure_processor(&self.processor_name) {
             match self.kind {
-                "inline" => processor.inline.enabled = value,
-                "ipc" => processor.ipc.enabled = value,
-                "http" => processor.http.enabled = value,
+                "inline" => processor.transport.inline.enabled = value,
+                "ipc" => processor.transport.ipc.enabled = value,
+                "http" => processor.transport.http.enabled = value,
                 _ => {}
             }
         }
@@ -1572,9 +1622,9 @@ impl ConfigProcessorTransport {
             .processors
             .processor(&self.processor_name)
             .and_then(|processor| match self.kind {
-                "inline" => processor.inline.options.get("url"),
-                "ipc" => processor.ipc.options.get("url"),
-                "http" => processor.http.options.get("url"),
+                "inline" => processor.transport.inline.options.get("url"),
+                "ipc" => processor.transport.ipc.options.get("url"),
+                "http" => processor.transport.http.options.get("url"),
                 _ => None,
             })
             .and_then(|value| value.as_string())
@@ -1587,9 +1637,9 @@ impl ConfigProcessorTransport {
         let mut inner = self.inner.lock().unwrap();
         if let Some(processor) = inner.processors.ensure_processor(&self.processor_name) {
             let options = match self.kind {
-                "inline" => Some(&mut processor.inline.options),
-                "ipc" => Some(&mut processor.ipc.options),
-                "http" => Some(&mut processor.http.options),
+                "inline" => Some(&mut processor.transport.inline.options),
+                "ipc" => Some(&mut processor.transport.ipc.options),
+                "http" => Some(&mut processor.transport.http.options),
                 _ => None,
             };
             if let Some(options) = options {
@@ -1613,9 +1663,9 @@ impl ConfigProcessorTransport {
             .processors
             .processor(&self.processor_name)
             .and_then(|processor| match self.kind {
-                "inline" => processor.inline.options.get("verify"),
-                "ipc" => processor.ipc.options.get("verify"),
-                "http" => processor.http.options.get("verify"),
+                "inline" => processor.transport.inline.options.get("verify"),
+                "ipc" => processor.transport.ipc.options.get("verify"),
+                "http" => processor.transport.http.options.get("verify"),
                 _ => None,
             })
             .and_then(|value| value.as_bool())
@@ -1627,9 +1677,9 @@ impl ConfigProcessorTransport {
         let mut inner = self.inner.lock().unwrap();
         if let Some(processor) = inner.processors.ensure_processor(&self.processor_name) {
             let options = match self.kind {
-                "inline" => Some(&mut processor.inline.options),
-                "ipc" => Some(&mut processor.ipc.options),
-                "http" => Some(&mut processor.http.options),
+                "inline" => Some(&mut processor.transport.inline.options),
+                "ipc" => Some(&mut processor.transport.ipc.options),
+                "http" => Some(&mut processor.transport.http.options),
                 _ => None,
             };
             if let Some(options) = options {
@@ -1642,6 +1692,39 @@ impl ConfigProcessorTransport {
                     }
                 }
             }
+        }
+    }
+}
+
+#[pymethods]
+impl ConfigProcessorTransports {
+    #[getter]
+    /// Return settings for inline execution of this processor.
+    pub fn get_inline(&self) -> ConfigProcessorTransport {
+        ConfigProcessorTransport {
+            inner: Arc::clone(&self.inner),
+            processor_name: self.processor_name.clone(),
+            kind: "inline",
+        }
+    }
+
+    #[getter]
+    /// Return settings for IPC execution of this processor.
+    pub fn get_ipc(&self) -> ConfigProcessorTransport {
+        ConfigProcessorTransport {
+            inner: Arc::clone(&self.inner),
+            processor_name: self.processor_name.clone(),
+            kind: "ipc",
+        }
+    }
+
+    #[getter]
+    /// Return settings for HTTP execution of this processor.
+    pub fn get_http(&self) -> ConfigProcessorTransport {
+        ConfigProcessorTransport {
+            inner: Arc::clone(&self.inner),
+            processor_name: self.processor_name.clone(),
+            kind: "http",
         }
     }
 }
@@ -1786,32 +1869,11 @@ impl ConfigProcessor {
     }
 
     #[getter]
-    /// Return settings for inline execution of this processor.
-    pub fn get_inline(&self) -> ConfigProcessorTransport {
-        ConfigProcessorTransport {
+    /// Return transport settings for this processor.
+    pub fn get_transport(&self) -> ConfigProcessorTransports {
+        ConfigProcessorTransports {
             inner: Arc::clone(&self.inner),
             processor_name: self.name.clone(),
-            kind: "inline",
-        }
-    }
-
-    #[getter]
-    /// Return settings for IPC execution of this processor.
-    pub fn get_ipc(&self) -> ConfigProcessorTransport {
-        ConfigProcessorTransport {
-            inner: Arc::clone(&self.inner),
-            processor_name: self.name.clone(),
-            kind: "ipc",
-        }
-    }
-
-    #[getter]
-    /// Return settings for HTTP execution of this processor.
-    pub fn get_http(&self) -> ConfigProcessorTransport {
-        ConfigProcessorTransport {
-            inner: Arc::clone(&self.inner),
-            processor_name: self.name.clone(),
-            kind: "http",
         }
     }
 }
@@ -1948,6 +2010,7 @@ impl ConfigProcessors {
 pub fn config_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Config>()?;
     m.add_class::<ConfigProcessorTarget>()?;
+    m.add_class::<ConfigProcessorTransports>()?;
     m.add_class::<ConfigProcessorTransport>()?;
     m.add_class::<ConfigProcessors>()?;
     m.add_class::<ConfigProcessor>()?;

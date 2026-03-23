@@ -431,9 +431,12 @@ impl<'block> Block<'block> {
         self.process().processors.unwrap_or_default()
     }
 
-    /// Return a single processor output by name, if present.
-    pub fn processor(&self, name: &str) -> Option<Value> {
-        self.processors().get(name).cloned()
+    /// Return a single processor output by name or an empty object when absent.
+    pub fn processor(&self, name: &str) -> Value {
+        self.processors()
+            .get(name)
+            .cloned()
+            .unwrap_or_else(|| Value::Object(Default::default()))
     }
 
     /// Blocks are contiguous.

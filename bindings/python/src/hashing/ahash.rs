@@ -44,6 +44,12 @@ impl AHash {
         InnerAHash::new(&self.bytes).hexdigest()
     }
 
+    #[pyo3(text_signature = "($self)")]
+    /// Return the average hash digest as a normalized vector.
+    pub fn vector(&self) -> Option<Vec<f32>> {
+        InnerAHash::new(&self.bytes).vector()
+    }
+
     #[pyo3(text_signature = "($self, other)")]
     /// Compare this average hash object against another average hash object.
     pub fn compare(&self, other: &Self) -> Option<f64> {

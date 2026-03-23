@@ -16,5 +16,8 @@ fn test_config_serializes_flat_hash_paths() {
     assert!(toml.contains("[chromosomes.sha256]"));
     assert!(toml.contains("[chromosomes.tlsh]"));
     assert!(toml.contains("[chromosomes.minhash]"));
+    assert!(toml.contains("[processors.embeddings.transport.inline]"));
+    assert!(toml.contains("[processors.embeddings.transport.ipc]"));
+    assert!(toml.contains("[processors.embeddings.transport.http]"));
     assert!(!toml.contains(".hashing."));
 }

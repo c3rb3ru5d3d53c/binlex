@@ -2,7 +2,7 @@ use clap::ValueEnum;
 
 pub use crate::core::Architecture as ProcessorArchitecture;
 pub use crate::core::OperatingSystem as ProcessorOs;
-pub use crate::core::Transport as ProcessorMode;
+pub use crate::core::Transport as ProcessorTransport;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, ValueEnum)]
 pub enum ProcessorSelection {

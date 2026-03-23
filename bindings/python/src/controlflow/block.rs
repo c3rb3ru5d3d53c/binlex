@@ -385,13 +385,11 @@ impl Block {
     }
 
     #[pyo3(text_signature = "($self, name)")]
-    /// Return a single processor output attached to this block, if present.
-    pub fn processor(&self, py: Python, name: String) -> PyResult<Option<Py<PyAny>>> {
+    /// Return a single processor output attached to this block.
+    pub fn processor(&self, py: Python, name: String) -> PyResult<Py<PyAny>> {
         self.with_inner_block(py, |block| {
-            block
-                .processor(&name)
-                .map(|value| json_value_to_py(py, &value))
-                .transpose()
+            let value = block.processor(&name);
+            json_value_to_py(py, &value)
         })
     }
 
