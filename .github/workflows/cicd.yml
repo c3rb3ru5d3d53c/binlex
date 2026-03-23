@@ -221,16 +221,16 @@ jobs:
       - name: Set up sccache
         uses: mozilla-actions/sccache-action@v0.0.9
 
+      - name: Install Dependencies
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm --needed base-devel pkgconf openssl zstd make automake autoconf libtool clang curl git python rust protobuf
+
       - name: Cache Rust Build Artifacts
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: archlinux-native
           cache-provider: github
-
-      - name: Install Dependencies
-        run: |
-          pacman -Syu --noconfirm
-          pacman -S --noconfirm --needed base-devel pkgconf openssl zstd make automake autoconf libtool clang curl git python rust protobuf
 
       - name: Configure Arch Linker Wrapper
         shell: bash
@@ -265,7 +265,6 @@ jobs:
       - name: Build Project
         shell: bash
         run: |
-          cargo build --release
           id -u builder >/dev/null 2>&1 || useradd --create-home --shell /bin/bash builder
           chown -R builder:builder "$GITHUB_WORKSPACE"
           runuser -u builder -- bash -lc "cd \"$GITHUB_WORKSPACE\" && makepkg"
@@ -456,12 +455,6 @@ jobs:
       - name: Set up sccache
         uses: mozilla-actions/sccache-action@v0.0.9
 
-      - name: Cache Rust Build Artifacts
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: archlinux-wheels
-          cache-provider: github
-
       - name: Install Dependencies
         run: |
           pacman -Syu --noconfirm
@@ -472,6 +465,12 @@ jobs:
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Cache Rust Build Artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: archlinux-wheels
+          cache-provider: github
 
       - name: Set Up Python Build Tools
         shell: bash
@@ -486,7 +485,9 @@ jobs:
         run: |
           mkdir -p wheelhouse
           uv python install 3.13 3.14
+          # Arch-built wheels are intended as local Linux artifacts, not PyPI wheels.
           python -m maturin build --release \
+            --compatibility linux \
             --manifest-path bindings/python/Cargo.toml \
             --out wheelhouse \
             --interpreter \
@@ -534,6 +535,8 @@ jobs:
 
   docs:
     runs-on: ubuntu-latest
+    env:
+      RUSTC_WRAPPER: ""
 
     steps:
       - name: Checkout Code
