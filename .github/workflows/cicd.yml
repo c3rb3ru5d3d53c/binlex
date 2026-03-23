@@ -54,6 +54,7 @@ jobs:
         uses: arduino/setup-protoc@v3
         with:
           version: ${{ env.PROTOC_VERSION }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cache Cargo Registry and Build
         uses: actions/cache@v5
@@ -317,6 +318,7 @@ jobs:
         uses: arduino/setup-protoc@v3
         with:
           version: ${{ env.PROTOC_VERSION }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cache Cargo Registry and Build
         uses: actions/cache@v5
@@ -378,16 +380,16 @@ jobs:
       - name: Build Python Wheels
         uses: pypa/cibuildwheel@v3.2.0
         env:
-          CIBW_BUILD: cp39-* cp310-* cp311-* cp312-* cp313-* cp314-*
+          CIBW_BUILD: cp313-* cp314-*
           CIBW_SKIP: "*-musllinux_*"
           CIBW_ARCHS_WINDOWS: AMD64
-          CIBW_ENVIRONMENT_LINUX: PROTOC=/tmp/protoc/bin/protoc PATH=/tmp/protoc/bin:$PATH
+          CIBW_ENVIRONMENT_LINUX: PROTOC_VERSION=${{ env.PROTOC_VERSION }} PROTOC=/tmp/protoc/bin/protoc PATH=/tmp/protoc/bin:$PATH
           CIBW_BEFORE_ALL_LINUX: >-
             if command -v apk >/dev/null 2>&1; then
-            apk add --no-cache bash build-base pkgconf openssl-dev make automake autoconf libtool git curl;
+            apk add --no-cache bash build-base pkgconf openssl-dev make automake autoconf libtool git curl unzip;
             elif command -v microdnf >/dev/null 2>&1; then
-            microdnf install -y pkgconf-pkg-config openssl-devel make automake autoconf libtool git curl ||
-            microdnf install -y pkg-config openssl-devel make automake autoconf libtool git curl;
+            microdnf install -y pkgconf-pkg-config openssl-devel make automake autoconf libtool git curl unzip ||
+            microdnf install -y pkg-config openssl-devel make automake autoconf libtool git curl unzip;
             elif command -v dnf >/dev/null 2>&1; then
             dnf install -y pkgconf-pkg-config openssl-devel make automake autoconf libtool git curl unzip ||
             dnf install -y pkg-config openssl-devel make automake autoconf libtool git curl unzip;
@@ -456,15 +458,11 @@ jobs:
         shell: bash
         run: |
           mkdir -p wheelhouse
-          uv python install 3.9 3.10 3.11 3.12 3.13 3.14
+          uv python install 3.13 3.14
           python -m maturin build --release \
             --manifest-path bindings/python/Cargo.toml \
             --out wheelhouse \
             --interpreter \
-              "$(uv python find 3.9)" \
-              "$(uv python find 3.10)" \
-              "$(uv python find 3.11)" \
-              "$(uv python find 3.12)" \
               "$(uv python find 3.13)" \
               "$(uv python find 3.14)"
 
@@ -517,6 +515,7 @@ jobs:
         uses: arduino/setup-protoc@v3
         with:
           version: ${{ env.PROTOC_VERSION }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
