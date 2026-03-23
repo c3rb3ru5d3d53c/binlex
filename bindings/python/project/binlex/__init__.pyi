@@ -2,19 +2,20 @@ from __future__ import annotations
 
 from binlex.architecture import Architecture
 from binlex._global import Config
-from . import clients
 from . import compression
 from . import genetics
 from . import hashing
 from . import hex, hexdump, math
+from . import index
+from . import indexing
+from . import metadata
 from binlex.magic import Magic
-from . import controlflow, disassemblers, formats, lifters
+from . import controlflow, disassemblers, formats, lifters, storage, transports
 
 __all__ = [
     "Architecture",
     "Config",
     "Magic",
-    "clients",
     "compression",
     "controlflow",
     "disassemblers",
@@ -23,6 +24,11 @@ __all__ = [
     "hashing",
     "hexdump",
     "hex",
+    "index",
+    "indexing",
     "lifters",
     "math",
+    "metadata",
+    "storage",
+    "transports",
 ]

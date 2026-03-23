@@ -25,6 +25,7 @@ use crate::Architecture;
 use crate::Config;
 use crate::controlflow::Graph;
 use crate::disassemblers::capstone::x86::Disassembler as X86Disassembler;
+use crate::formats::Image;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Error, ErrorKind};
 
@@ -84,6 +85,25 @@ pub struct Disassembler<'a> {
 }
 
 impl<'a> Disassembler<'a> {
+    pub fn from_image(
+        machine: Architecture,
+        image: &'a mut Image,
+        executable_address_ranges: BTreeMap<u64, u64>,
+        config: Config,
+    ) -> Result<Self, Error> {
+        let bytes = image.mmap()?;
+        Self::new(machine, bytes, executable_address_ranges, config)
+    }
+
+    pub fn from_bytes(
+        machine: Architecture,
+        bytes: &'a [u8],
+        executable_address_ranges: BTreeMap<u64, u64>,
+        config: Config,
+    ) -> Result<Self, Error> {
+        Self::new(machine, bytes, executable_address_ranges, config)
+    }
+
     pub fn new(
         machine: Architecture,
         image: &'a [u8],

@@ -20,6 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use crate::hex;
 use std::borrow::Cow;
 use tlsh;
 
@@ -93,5 +94,19 @@ impl<'tlsh> TLSH<'tlsh> {
         tlsh::hash_buf(self.bytes.as_ref())
             .ok()
             .map(|h| h.to_string())
+    }
+
+    /// Computes the TLSH digest and returns it as a normalized vector.
+    #[allow(dead_code)]
+    pub fn vector(&self) -> Option<Vec<f32>> {
+        let digest = self.hexdigest()?;
+        let digest = digest.strip_prefix("T1").unwrap_or(&digest);
+        let bytes = hex::decode(digest).ok()?;
+        Some(
+            bytes
+                .into_iter()
+                .map(|byte| byte as f32 / u8::MAX as f32)
+                .collect(),
+        )
     }
 }

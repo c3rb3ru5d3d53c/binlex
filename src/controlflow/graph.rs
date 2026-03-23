@@ -32,6 +32,7 @@ use crossbeam_skiplist::SkipSet;
 use rayon::ThreadPoolBuilder;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::io::Error;
@@ -662,6 +663,20 @@ impl Graph {
             .cloned()
     }
 
+    pub fn processor_output(
+        &self,
+        target: ProcessorTarget,
+        address: u64,
+        processor_name: &str,
+    ) -> Option<Value> {
+        let processor_state = self.processor_state.lock().unwrap();
+        let outputs = processor_state.outputs.get(&target)?.get(&address)?;
+        outputs
+            .iter()
+            .find(|(name, _)| *name == processor_name)
+            .map(|(_, output)| output.clone())
+    }
+
     fn process_target(&self, target: ProcessorTarget) -> Result<(), Error> {
         let enabled = crate::processor::enabled_processors_for_target(&self.config, target);
         let revision = self.revision.load(Ordering::SeqCst);
@@ -684,7 +699,7 @@ impl Graph {
         let mut outputs = HashMap::new();
         let (local_processors, remote_processors): (Vec<_>, Vec<_>) = enabled
             .into_iter()
-            .partition(|processor| processor.configured_mode(&self.config).is_local());
+            .partition(|processor| processor.configured_transport(&self.config).is_local());
         merge_processor_outputs(
             &mut outputs,
             self.process_local_target(target, &local_processors),

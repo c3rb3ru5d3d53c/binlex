@@ -23,9 +23,9 @@
 use super::{
     Config, ConfigBlocks, ConfigChromosomes, ConfigData, ConfigDisassembler,
     ConfigDisassemblerSweep, ConfigFile, ConfigFormats, ConfigFunctions, ConfigGeneral,
-    ConfigHashEnabled, ConfigHeuristicEntropy, ConfigHeuristicFeatures, ConfigImaging,
-    ConfigInstructions, ConfigMinhash, ConfigMmap, ConfigMmapCache, ConfigProcessors, ConfigServer,
-    ConfigTLSH,
+    ConfigHashEnabled, ConfigHeuristicEntropy, ConfigHeuristicFeatures, ConfigImaging, ConfigIndex,
+    ConfigIndexLocal, ConfigInstructions, ConfigMinhash, ConfigMmap, ConfigMmapCache,
+    ConfigProcessors, ConfigServer, ConfigTLSH,
 };
 use std::env;
 
@@ -51,6 +51,7 @@ impl Config {
                 bind: "127.0.0.1:5000".to_string(),
                 debug: false,
             },
+            index: ConfigIndex::default(),
             formats: ConfigFormats {
                 file: ConfigFile {
                     sha256: ConfigHashEnabled { enabled: true },
@@ -222,10 +223,36 @@ impl Config {
             .expect("failed to convert file mapping directory to string")
             .to_owned()
     }
+
+    pub fn default_local_index_directory() -> String {
+        dirs::config_dir()
+            .unwrap_or_else(|| env::temp_dir())
+            .join(DIRECTORY)
+            .join("index")
+            .to_str()
+            .expect("failed to convert local index directory to string")
+            .to_owned()
+    }
 }
 
 impl Default for Config {
     fn default() -> Self {
         Config::new()
+    }
+}
+
+impl Default for ConfigIndex {
+    fn default() -> Self {
+        Self {
+            local: ConfigIndexLocal::default(),
+        }
+    }
+}
+
+impl Default for ConfigIndexLocal {
+    fn default() -> Self {
+        Self {
+            directory: Config::default_local_index_directory(),
+        }
     }
 }

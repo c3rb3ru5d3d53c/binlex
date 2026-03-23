@@ -56,6 +56,30 @@ impl<'sha256> SHA256<'sha256> {
         }
     }
 
+    /// Compares this SHA-256 object against another SHA-256 object.
+    pub fn compare(&self, other: &Self) -> Option<f64> {
+        let lhs = self.hexdigest()?;
+        let rhs = other.hexdigest()?;
+        Self::compare_hexdigests(&lhs, &rhs)
+    }
+
+    /// Compares this SHA-256 object against a SHA-256 hexdigest.
+    pub fn compare_hexdigest(&self, other: &str) -> Option<f64> {
+        let lhs = self.hexdigest()?;
+        Self::compare_hexdigests(&lhs, other)
+    }
+
+    /// Compares two SHA-256 digests.
+    pub fn compare_hexdigests(lhs: &str, rhs: &str) -> Option<f64> {
+        let lhs = hex::decode(lhs).ok()?;
+        let rhs = hex::decode(rhs).ok()?;
+        if lhs.len() != rhs.len() || lhs.is_empty() {
+            return None;
+        }
+
+        Some(if lhs == rhs { 1.0 } else { 0.0 })
+    }
+
     /// Computes the SHA-256 hash of the byte slice and returns it as a hexadecimal string.
     ///
     /// # Returns
@@ -65,7 +89,23 @@ impl<'sha256> SHA256<'sha256> {
     /// designed to always succeed, as `ring::digest` does not fail under normal conditions.
     #[allow(dead_code)]
     pub fn hexdigest(&self) -> Option<String> {
-        let digest = digest::digest(&digest::SHA256, self.bytes.as_ref());
-        Some(hex::encode(digest.as_ref()))
+        Some(hex::encode(&self.digest_bytes()))
+    }
+
+    /// Computes the SHA-256 hash of the byte slice and returns it as a normalized vector.
+    #[allow(dead_code)]
+    pub fn vector(&self) -> Option<Vec<f32>> {
+        Some(
+            self.digest_bytes()
+                .iter()
+                .map(|byte| *byte as f32 / u8::MAX as f32)
+                .collect(),
+        )
+    }
+
+    fn digest_bytes(&self) -> Vec<u8> {
+        digest::digest(&digest::SHA256, self.bytes.as_ref())
+            .as_ref()
+            .to_vec()
     }
 }

@@ -457,13 +457,13 @@ enabled = false
 dimensions = 64
 device = "cpu"
 
-[processors.embeddings.inline]
+[processors.embeddings.transport.inline]
 enabled = false
 
-[processors.embeddings.ipc]
+[processors.embeddings.transport.ipc]
 enabled = true
 
-[processors.embeddings.http]
+[processors.embeddings.transport.http]
 enabled = false
 url = "http://127.0.0.1:5000"
 verify = false
@@ -483,7 +483,7 @@ enabled = true
 
 If the command-line options are not enough the configuration file provides the most granular control of all options.
 
-Processor modes are:
+Processor transports are:
 - `inline`: execute the processor in-process. This uses the same thread budget as `binlex --threads`.
 - `ipc`: execute the processor out-of-process through `binlex-processor-<name>` workers. This uses `[processors].processes`.
 - `http`: execute the processor through `binlex-server` over HTTP.

@@ -95,7 +95,7 @@ class Instruction:
         return self._inner.processors()
 
     def processor(self, name):
-        """Return a single processor output attached to this instruction, if present."""
+        """Return a single processor output attached to this instruction."""
         return self._inner.processor(name)
 
     def to_dict(self):
@@ -194,7 +194,7 @@ class Block:
         return self._inner.processors()
 
     def processor(self, name):
-        """Return a single processor output attached to this block, if present."""
+        """Return a single processor output attached to this block."""
         return self._inner.processor(name)
 
     def tlsh(self):
@@ -315,7 +315,7 @@ class Function:
         return self._inner.processors()
 
     def processor(self, name):
-        """Return a single processor output attached to this function, if present."""
+        """Return a single processor output attached to this function."""
         return self._inner.processor(name)
 
     def tlsh(self):

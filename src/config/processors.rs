@@ -100,24 +100,31 @@ impl ConfigProcessor {
         self.options.get(key)?.as_bool()
     }
 
-    pub fn transport(&self, mode: crate::processor::ProcessorMode) -> &ConfigProcessorTransport {
-        match mode {
-            crate::processor::ProcessorMode::Inline => &self.inline,
-            crate::processor::ProcessorMode::Ipc => &self.ipc,
-            crate::processor::ProcessorMode::Http => &self.http,
+    pub fn transport(
+        &self,
+        transport: crate::processor::ProcessorTransport,
+    ) -> &ConfigProcessorTransport {
+        match transport {
+            crate::processor::ProcessorTransport::Inline => &self.transport.inline,
+            crate::processor::ProcessorTransport::Ipc => &self.transport.ipc,
+            crate::processor::ProcessorTransport::Http => &self.transport.http,
         }
     }
 
     pub fn transport_string(
         &self,
-        mode: crate::processor::ProcessorMode,
+        transport: crate::processor::ProcessorTransport,
         key: &str,
     ) -> Option<&str> {
-        self.transport(mode).options.get(key)?.as_string()
+        self.transport(transport).options.get(key)?.as_string()
     }
 
-    pub fn transport_bool(&self, mode: crate::processor::ProcessorMode, key: &str) -> Option<bool> {
-        self.transport(mode).options.get(key)?.as_bool()
+    pub fn transport_bool(
+        &self,
+        transport: crate::processor::ProcessorTransport,
+        key: &str,
+    ) -> Option<bool> {
+        self.transport(transport).options.get(key)?.as_bool()
     }
 }
 

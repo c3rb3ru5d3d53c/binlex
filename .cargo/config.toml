@@ -1,0 +1,10 @@
+[build]
+# Keep rustc/test target compilation from fanning out across many heavy crates
+# and integration-test binaries at once.
+jobs = 8
+
+[env]
+# Several integration tests exercise full disassembly/control-flow pipelines.
+# Running them concurrently under the default debug test harness can spike RAM
+# usage badly enough to make `cargo test` unstable on smaller machines.
+RUST_TEST_THREADS = "2"

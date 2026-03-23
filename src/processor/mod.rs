@@ -12,5 +12,5 @@ pub use registry::{
     registered_processor_registrations,
 };
 pub use selection::{
-    ProcessorArchitecture, ProcessorMode, ProcessorOs, ProcessorSelection, ProcessorTarget,
+    ProcessorArchitecture, ProcessorOs, ProcessorSelection, ProcessorTarget, ProcessorTransport,
 };

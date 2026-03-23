@@ -42,7 +42,7 @@ fn build_single_return_graph() -> Graph {
     graph
 }
 
-fn build_single_return_graph_local_mode() -> Graph {
+fn build_single_return_graph_local_transport() -> Graph {
     let mut config = Config::default();
     config.general.threads = 2;
     config.processors.enabled = true;
@@ -52,7 +52,7 @@ fn build_single_return_graph_local_mode() -> Graph {
         .expect("embeddings processor config should exist");
     embeddings.enabled = true;
     embeddings.blocks.enabled = true;
-    embeddings.inline.enabled = true;
+    embeddings.transport.inline.enabled = true;
 
     let mut graph = Graph::new(Architecture::AMD64, config.clone());
     let mut instruction = Instruction::create(0x1000, Architecture::AMD64, config);
@@ -139,7 +139,7 @@ fn graph_mutation_invalidates_materialized_processor_results() {
 
 #[test]
 fn graph_blocks_support_explicit_local_mode_without_processor_binary() {
-    let graph = build_single_return_graph_local_mode();
+    let graph = build_single_return_graph_local_transport();
 
     let outputs = graph
         .blocks()
@@ -154,7 +154,7 @@ fn graph_blocks_support_explicit_local_mode_without_processor_binary() {
 
 #[test]
 fn live_entities_expose_processor_outputs() {
-    let graph = build_single_return_graph_local_mode();
+    let graph = build_single_return_graph_local_transport();
 
     let instruction = graph
         .get_instruction(0x1000)

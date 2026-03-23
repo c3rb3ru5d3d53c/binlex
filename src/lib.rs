@@ -20,17 +20,18 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod clients;
 pub mod compression;
 pub mod config;
 pub mod controlflow;
 pub mod core;
+pub mod databases;
 pub mod disassemblers;
 pub mod formats;
 pub mod genetics;
 pub mod hashing;
 pub mod hex;
 pub mod imaging;
+pub mod index;
 pub mod io;
 pub mod lifters;
 pub mod math;
@@ -39,6 +40,8 @@ pub mod processor;
 pub mod processors;
 pub mod runtime;
 pub mod server;
+pub mod storage;
+pub mod transports;
 pub mod util;
 
 pub use config::AUTHOR;

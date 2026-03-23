@@ -50,6 +50,20 @@ impl<'dhash> DHash<'dhash> {
 
     #[allow(dead_code)]
     pub fn hexdigest(&self) -> Option<String> {
+        Some(hex::encode(&pack_bits(&self.bits()?)))
+    }
+
+    #[allow(dead_code)]
+    pub fn vector(&self) -> Option<Vec<f32>> {
+        Some(
+            self.bits()?
+                .into_iter()
+                .map(|bit| if bit { 1.0 } else { 0.0 })
+                .collect(),
+        )
+    }
+
+    fn bits(&self) -> Option<Vec<bool>> {
         let image = decode_grayscale(self.bytes, 9, 8)?;
         let mut bits = Vec::with_capacity(64);
 
@@ -59,7 +73,7 @@ impl<'dhash> DHash<'dhash> {
             }
         }
 
-        Some(hex::encode(&pack_bits(&bits)))
+        Some(bits)
     }
 }
 

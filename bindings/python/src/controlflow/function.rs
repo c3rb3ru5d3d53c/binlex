@@ -423,13 +423,11 @@ impl Function {
     }
 
     #[pyo3(text_signature = "($self, name)")]
-    /// Return a single processor output attached to this function, if present.
-    pub fn processor(&self, py: Python, name: String) -> PyResult<Option<Py<PyAny>>> {
+    /// Return a single processor output attached to this function.
+    pub fn processor(&self, py: Python, name: String) -> PyResult<Py<PyAny>> {
         self.with_inner_function(py, |function| {
-            function
-                .processor(&name)
-                .map(|value| json_value_to_py(py, &value))
-                .transpose()
+            let value = function.processor(&name);
+            json_value_to_py(py, &value)
         })
     }
 

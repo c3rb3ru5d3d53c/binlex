@@ -38,7 +38,7 @@ pub trait JsonProcessor: Processor {
                 &data,
             )?;
         }
-        crate::runtime::modes::ipc::execute::<Self, C>(context, data)
+        crate::runtime::transports::ipc::execute::<Self, C>(context, data)
     }
 
     fn execute_local_value<C: ProcessorContext>(
@@ -54,6 +54,6 @@ pub trait JsonProcessor: Processor {
                 &data,
             )?;
         }
-        crate::runtime::modes::inline::execute::<Self, C>(context, data)
+        crate::runtime::transports::inline::execute::<Self, C>(context, data)
     }
 }

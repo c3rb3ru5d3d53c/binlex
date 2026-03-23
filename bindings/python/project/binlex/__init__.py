@@ -28,21 +28,22 @@ and higher-level subpackages that wrap the compiled Rust extension.
 
 from binlex_bindings.binlex import Config
 from .architecture import Architecture
-from . import clients
 from . import compression
 from . import genetics
 from . import hexdump
 from . import hex
 from . import hashing
+from . import index
+from . import indexing
 from . import math
+from . import metadata
 from .magic import Magic
-from . import controlflow, disassemblers, formats, lifters
+from . import controlflow, disassemblers, formats, lifters, storage, transports
 
 __all__ = [
     "Architecture",
     "Config",
     "Magic",
-    "clients",
     "compression",
     "controlflow",
     "disassemblers",
@@ -51,6 +52,11 @@ __all__ = [
     "hashing",
     "hexdump",
     "hex",
+    "index",
+    "indexing",
     "lifters",
     "math",
+    "metadata",
+    "storage",
+    "transports",
 ]

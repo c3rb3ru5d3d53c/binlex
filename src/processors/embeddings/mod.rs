@@ -908,17 +908,17 @@ crate::processor!(EmbeddingsProcessor {
     requires: ">=2.0.0 <2.1.0",
     operating_systems: [OperatingSystem::LINUX, OperatingSystem::MACOS],
     architectures: [Architecture::AMD64, Architecture::I386, Architecture::CIL],
-    enabled: false,
+    enabled: true,
     transports: [Transport::INLINE, Transport::HTTP, Transport::IPC],
-    instructions: { enabled: true },
+    instructions: { enabled: false },
     blocks: { enabled: true },
     functions: { enabled: true },
     options: {
         dimensions: 64,
         device: "cpu"
     },
-    inline: { enabled: false },
-    ipc: { enabled: true },
+    inline: { enabled: true },
+    ipc: { enabled: false },
     http: {
         enabled: false,
         options: {

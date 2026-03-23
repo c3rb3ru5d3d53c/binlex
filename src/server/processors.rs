@@ -1,19 +1,19 @@
 use crate::config::ConfigProcessor;
-use crate::processor::{JsonProcessor, ProcessorMode, processor_registration_by_name};
+use crate::processor::{JsonProcessor, ProcessorTransport, processor_registration_by_name};
 use crate::server::dto::ProcessorHttpRequest;
 use crate::server::error::ServerError;
 use crate::server::state::AppState;
 use serde_json::Value;
 
-pub fn configured_execution_mode(
+pub fn configured_server_transport(
     processor: &ConfigProcessor,
-    supported: &[ProcessorMode],
-) -> Result<ProcessorMode, ServerError> {
-    if processor.inline.enabled && supported.contains(&ProcessorMode::Inline) {
-        return Ok(ProcessorMode::Inline);
+    supported: &[ProcessorTransport],
+) -> Result<ProcessorTransport, ServerError> {
+    if processor.transport.inline.enabled && supported.contains(&ProcessorTransport::Inline) {
+        return Ok(ProcessorTransport::Inline);
     }
-    if processor.ipc.enabled && supported.contains(&ProcessorMode::Ipc) {
-        return Ok(ProcessorMode::Ipc);
+    if processor.transport.ipc.enabled && supported.contains(&ProcessorTransport::Ipc) {
+        return Ok(ProcessorTransport::Ipc);
     }
     Err(ServerError::Processor(
         "processor has no enabled server execution transport".to_string(),
@@ -36,25 +36,25 @@ pub fn execute_value<P: JsonProcessor>(
         registration.registration,
         &data,
     )?;
-    match configured_execution_mode(processor, registration.registration.modes)? {
-        ProcessorMode::Inline => {
-            crate::runtime::modes::inline::execute::<P, crate::Config>(&state.config, data)
+    match configured_server_transport(processor, registration.registration.transports)? {
+        ProcessorTransport::Inline => {
+            crate::runtime::transports::inline::execute::<P, crate::Config>(&state.config, data)
                 .map_err(ServerError::from)
         }
-        ProcessorMode::Ipc => {
+        ProcessorTransport::Ipc => {
             let response = if let Some(pool) = state.processor_pool(P::NAME) {
-                crate::runtime::modes::ipc::execute_with_pool::<P, crate::Config>(
+                crate::runtime::transports::ipc::execute_with_pool::<P, crate::Config>(
                     &pool,
                     &state.config,
                     data,
                 )
             } else {
-                crate::runtime::modes::ipc::execute::<P, crate::Config>(&state.config, data)
+                crate::runtime::transports::ipc::execute::<P, crate::Config>(&state.config, data)
             };
             response.map_err(ServerError::from)
         }
-        ProcessorMode::Http => Err(ServerError::Processor(format!(
-            "processor {} server mode cannot be http",
+        ProcessorTransport::Http => Err(ServerError::Processor(format!(
+            "processor {} server transport cannot be http",
             P::NAME
         ))),
     }
@@ -75,7 +75,7 @@ pub fn execute(
     let registration = processor_registration_by_name(processor_name).ok_or_else(|| {
         ServerError::Processor(format!("unsupported HTTP processor: {}", processor_name))
     })?;
-    if !registration.registration.supports_mode("http") {
+    if !registration.registration.supports_transport("http") {
         return Err(ServerError::Processor(format!(
             "processor {} does not support HTTP mode",
             processor_name

@@ -193,4 +193,14 @@ impl<'minhash32> MinHash32<'minhash32> {
                 .join("")
         })
     }
+
+    /// Computes the MinHash signature and returns it as a normalized vector.
+    pub fn vector(&self) -> Option<Vec<f32>> {
+        self.hash().map(|minhash| {
+            minhash
+                .into_iter()
+                .map(|value| value as f32 / u32::MAX as f32)
+                .collect()
+        })
+    }
 }
