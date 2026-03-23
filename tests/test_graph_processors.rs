@@ -51,7 +51,9 @@ fn build_single_return_graph_local_transport() -> Graph {
         .ensure_processor("embeddings")
         .expect("embeddings processor config should exist");
     embeddings.enabled = true;
+    embeddings.instructions.enabled = true;
     embeddings.blocks.enabled = true;
+    embeddings.functions.enabled = true;
     embeddings.transport.inline.enabled = true;
 
     let mut graph = Graph::new(Architecture::AMD64, config.clone());
@@ -163,7 +165,7 @@ fn live_entities_expose_processor_outputs() {
     assert!(instruction_outputs.contains_key("embeddings"));
     assert_eq!(
         instruction.processor("embeddings"),
-        instruction_outputs.get("embeddings").cloned()
+        instruction_outputs.get("embeddings").cloned().unwrap()
     );
 
     let block = graph
@@ -175,7 +177,7 @@ fn live_entities_expose_processor_outputs() {
     assert!(block_outputs.contains_key("embeddings"));
     assert_eq!(
         block.processor("embeddings"),
-        block_outputs.get("embeddings").cloned()
+        block_outputs.get("embeddings").cloned().unwrap()
     );
 
     let function = graph
@@ -187,6 +189,6 @@ fn live_entities_expose_processor_outputs() {
     assert!(function_outputs.contains_key("embeddings"));
     assert_eq!(
         function.processor("embeddings"),
-        function_outputs.get("embeddings").cloned()
+        function_outputs.get("embeddings").cloned().unwrap()
     );
 }

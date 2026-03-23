@@ -22,8 +22,6 @@ pub struct ErrorResponse {
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct AnalyzeRequest {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
     pub data: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub magic: Option<String>,

@@ -16,9 +16,8 @@ RUNTIME_FILES = (
     "requirements.txt",
 )
 RUNTIME_DIRS = (
-    "actions",
-    "gui",
-    "lib",
+    "core",
+    "ui",
 )
 
 

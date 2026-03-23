@@ -8,9 +8,7 @@ version = "0.0.0"
 description = "Installer and packaging helpers for the Binlex IDA plugin"
 readme = "README.md"
 requires-python = ">=3.9"
-dependencies = [
-  "requests==2.32.3",
-]
+dependencies = []
 
 [project.scripts]
 binlex-ida-install = "plugin:main"

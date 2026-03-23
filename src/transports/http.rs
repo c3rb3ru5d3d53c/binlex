@@ -94,10 +94,7 @@ impl Client {
     ) -> Result<Graph, Error> {
         let path = path.as_ref();
         let data = std::fs::read(path).map_err(|error| Error::Io(error.to_string()))?;
-        let name = path
-            .file_name()
-            .map(|value| value.to_string_lossy().into_owned());
-        self.analyze_bytes(&data, magic, architecture, name.as_deref())
+        self.analyze_bytes(&data, magic, architecture)
     }
 
     pub fn analyze_bytes(
@@ -105,10 +102,8 @@ impl Client {
         data: &[u8],
         magic: Option<crate::Magic>,
         architecture: Option<crate::Architecture>,
-        name: Option<&str>,
     ) -> Result<Graph, Error> {
         let request = AnalyzeRequest {
-            name: name.map(ToString::to_string),
             data: base64::engine::general_purpose::STANDARD.encode(data),
             magic: magic.map(|value| value.to_string()),
             architecture: architecture.map(|value| value.to_string()),

@@ -1,6 +1,17 @@
 # Binlex IDA Plugin
 
-This directory is the package root for the Binlex IDA plugin.
+Minimal IDA frontend for `LocalIndex`.
+
+The plugin exposes:
+
+- batch actions from the main `Binlex` menu:
+  - `Index > Functions`
+  - `Compare > Functions`
+  - `Config`
+- context actions from right click in disassembly/listing and pseudocode:
+  - block/function indexing
+  - block/function comparison
+  - copy helpers for vector, hashes, hex, and pattern
 
 ## Install
 
@@ -10,7 +21,7 @@ pip install .
 python -m plugin install
 ```
 
-Use `python -m plugin print-target` to see the detected IDA plugins directory, or pass `--target` to install into a specific path.
+Use `python -m plugin print-target` to inspect the detected IDA plugins directory, or pass `--target`.
 
 ## Uninstall
 
