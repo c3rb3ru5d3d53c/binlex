@@ -229,6 +229,27 @@ jobs:
           pacman -Syu --noconfirm
           pacman -S --noconfirm --needed base-devel pkgconf openssl zstd make automake autoconf libtool clang curl git python rust protobuf
 
+      - name: Configure Arch Linker Wrapper
+        shell: bash
+        run: |
+          cat > "$GITHUB_WORKSPACE/binlex-arch-linker-wrapper" <<'EOF'
+          #!/bin/bash
+          set -euo pipefail
+
+          args=()
+          for arg in "$@"; do
+            if [[ "$arg" == "-Wl,--as-needed" ]]; then
+              args+=("-Wl,--no-as-needed")
+            else
+              args+=("$arg")
+            fi
+          done
+
+          exec x86_64-linux-gnu-gcc "${args[@]}"
+          EOF
+          chmod +x "$GITHUB_WORKSPACE/binlex-arch-linker-wrapper"
+          echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=$GITHUB_WORKSPACE/binlex-arch-linker-wrapper" >> "$GITHUB_ENV"
+
       - name: Run Unit Tests
         shell: bash
         run: |
