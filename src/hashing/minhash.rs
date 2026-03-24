@@ -38,9 +38,11 @@ pub struct MinHash32<'minhash32> {
     /// Intercept coefficients for the linear hash functions used in MinHash.
     b_coefficients: Vec<u32>,
     /// The number of hash functions to use for MinHash.
-    num_hashes: usize,
+    pub num_hashes: usize,
     /// The size of shingles (substrings) used to compute MinHash.
-    shingle_size: usize,
+    pub shingle_size: usize,
+    /// The seed used to deterministically generate hash coefficients.
+    pub seed: u64,
     /// The byte slice to be hashed.
     pub bytes: Cow<'minhash32, [u8]>,
 }
@@ -93,6 +95,7 @@ impl<'minhash32> MinHash32<'minhash32> {
             b_coefficients,
             num_hashes,
             shingle_size,
+            seed,
             bytes,
         }
     }

@@ -24,7 +24,6 @@ use crate::controlflow::json_value_to_py;
 use crate::controlflow::Graph;
 use crate::genetics::Chromosome;
 use crate::imaging::{PNG, SVG};
-use crate::Config;
 use binlex::controlflow::Instruction as InnerInstruction;
 use pyo3::prelude::*;
 use std::collections::BTreeSet;
@@ -91,17 +90,16 @@ impl Instruction {
     /// - `PyResult<Option<Chromosome>>`: The chromosome associated with this instruction.
     pub fn chromosome(&self, py: Python) -> PyResult<Option<Chromosome>> {
         self.with_inner_instruction(py, |instruction| {
-            let inner_config = self.cfg.borrow(py).inner.lock().unwrap().config.clone();
-            let config = Py::new(
-                py,
-                Config {
-                    inner: Arc::new(Mutex::new(inner_config)),
-                },
-            )
-            .unwrap();
-            let pattern = instruction.pattern();
-            let chromosome = Chromosome::new(py, pattern, config).ok();
-            Ok(chromosome)
+            let binding = self.cfg.borrow(py);
+            let inner_config = binding.inner.lock().unwrap().config.clone();
+            let inner_chromosome = instruction.chromosome();
+            Ok(Some(Chromosome {
+                inner: Arc::new(Mutex::new(inner_chromosome)),
+                minhash_num_hashes: inner_config.chromosomes.minhash.number_of_hashes,
+                minhash_shingle_size: inner_config.chromosomes.minhash.shingle_size,
+                minhash_seed: inner_config.chromosomes.minhash.seed,
+                tlsh_minimum_byte_size: inner_config.chromosomes.tlsh.minimum_byte_size,
+            }))
         })
     }
 

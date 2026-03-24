@@ -123,8 +123,13 @@ impl BlockJsonDeserializer {
 
     #[allow(dead_code)]
     pub fn chromosome(&self) -> Chromosome {
-        Chromosome::new(self.json.chromosome.pattern.clone(), self.config.clone())
-            .expect("invalid chromosome")
+        let bytes = hex::decode(&self.json.bytes).expect("invalid block bytes");
+        let mask = if self.json.chromosome.mask.is_empty() {
+            vec![0; bytes.len()]
+        } else {
+            hex::decode(&self.json.chromosome.mask).expect("invalid block chromosome mask")
+        };
+        Chromosome::new(bytes, mask, self.config.clone()).expect("invalid chromosome")
     }
 
     #[allow(dead_code)]
@@ -342,9 +347,7 @@ impl<'block> Block<'block> {
     /// Returns a `BlockJson` instance containing the block's metadata and related information.
     pub fn process_base(&self) -> BlockJson {
         let bytes = self.bytes();
-        let pattern = self.pattern();
-        let chromosome = Chromosome::new(pattern, self.cfg.config.clone())
-            .expect("failed to parse block chromosome");
+        let chromosome = self.chromosome();
         let size = bytes.len();
         let instructions = self.instruction_addresses();
         let functions = self.functions();
@@ -563,8 +566,23 @@ impl<'block> Block<'block> {
     ///
     /// Returns a `Chromosome` representing this block.
     pub fn chromosome(&self) -> Chromosome {
-        Chromosome::new(self.pattern(), self.cfg.config.clone())
-            .expect("failed to parse block chromosome")
+        let mut raw_bytes = Vec::new();
+        let mut wildcard_mask = Vec::new();
+        for entry in self
+            .cfg
+            .listing
+            .range(self.address..self.address + self.size() as u64)
+        {
+            let instruction = entry.value();
+            raw_bytes.extend_from_slice(&instruction.bytes);
+            if instruction.chromosome_mask.len() == instruction.bytes.len() {
+                wildcard_mask.extend_from_slice(&instruction.chromosome_mask);
+            } else {
+                wildcard_mask.extend(std::iter::repeat_n(0, instruction.bytes.len()));
+            }
+        }
+        Chromosome::new(raw_bytes, wildcard_mask, self.cfg.config.clone())
+            .expect("failed to build block chromosome")
     }
 
     /// Generates a signature for the block using its address range and control flow graph.
@@ -573,9 +591,7 @@ impl<'block> Block<'block> {
     ///
     /// Returns a `SignatureJson` representing the block's signature.
     pub fn chromosome_json(&self) -> ChromosomeJson {
-        Chromosome::new(self.pattern(), self.cfg.config.clone())
-            .unwrap()
-            .process()
+        self.chromosome().process()
     }
 
     /// Retrieves the pattern string representation of the chromosome.

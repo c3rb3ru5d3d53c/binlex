@@ -60,7 +60,7 @@ def main(args):
         sys.exit(1)
     
     # Search using just an address and SHA256 of the sample as a query usage example
-    query = f"file_attributes['sha256'] == '{pe.sha256()}' and address == {args.address}"
+    query = f"file_attributes['sha256'] == '{pe.sha256().hexdigest()}' and address == {args.address}"
     status, search_addr_results = client.query(
                 database=args.database,
                 collection="function",
@@ -85,7 +85,7 @@ def main(args):
                 partition=pe.architecture(),
                 offset=0,
                 limit=limit, # Maximum number of results to return
-                query=f"file_attributes['sha256'] != '{pe.sha256()}'", # An example query to go with vector search
+                query=f"file_attributes['sha256'] != '{pe.sha256().hexdigest()}'", # An example query to go with vector search
                 threshold=gnn_similarity_threshold,
                 vector=vector
             )

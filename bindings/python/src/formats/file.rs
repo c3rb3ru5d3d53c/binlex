@@ -22,6 +22,7 @@
 
 use crate::Config;
 use crate::Magic;
+use crate::hashing::{SHA256, TLSH};
 use binlex::formats::file::File as InnerFile;
 use pyo3::prelude::*;
 use std::io::Error;
@@ -45,15 +46,19 @@ impl File {
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return the TLSH digest for the file, if available.
-    pub fn tlsh(&self) -> Option<String> {
-        self.inner.tlsh()
+    /// Return the TLSH helper for the file, if available.
+    pub fn tlsh(&self) -> Option<TLSH> {
+        self.inner
+            .tlsh()
+            .map(|hash| TLSH { bytes: hash.bytes.into_owned() })
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return the SHA-256 digest for the file, if available.
-    pub fn sha256(&self) -> Option<String> {
-        self.inner.sha256()
+    /// Return the SHA-256 helper for the file, if available.
+    pub fn sha256(&self) -> Option<SHA256> {
+        self.inner.sha256().map(|hash| SHA256 {
+            bytes: hash.bytes.into_owned(),
+        })
     }
 
     #[pyo3(text_signature = "($self)")]

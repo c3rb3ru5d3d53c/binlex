@@ -53,6 +53,8 @@ pub struct Instruction {
     pub is_function_start: bool,
     /// The raw bytes of the instruction.
     pub bytes: Vec<u8>,
+    /// Bit-level wildcard mask for the instruction chromosome, one byte per instruction byte.
+    pub chromosome_mask: Vec<u8>,
     /// The signature pattern of the instruction.
     pub pattern: String,
     /// Indicates whether this instruction is a return instruction.
@@ -151,6 +153,7 @@ impl Instruction {
             is_block_start: false,
             is_function_start: false,
             bytes: Vec::<u8>::new(),
+            chromosome_mask: Vec::<u8>::new(),
             pattern: String::new(),
             is_call: false,
             is_return: false,
@@ -308,8 +311,13 @@ impl Instruction {
     ///
     /// Returns a `Chromosome` represnting the instruction.
     pub fn chromosome(&self) -> Chromosome {
-        Chromosome::new(self.pattern.clone(), self.config.clone())
-            .expect("failed to parse instruction chromosome")
+        let mask = if self.chromosome_mask.len() == self.bytes.len() {
+            self.chromosome_mask.clone()
+        } else {
+            vec![0; self.bytes.len()]
+        };
+        Chromosome::new(self.bytes.clone(), mask, self.config.clone())
+            .expect("failed to build instruction chromosome")
     }
 
     /// Retrieves the chromosome representing the instruction.
@@ -318,8 +326,13 @@ impl Instruction {
     ///
     /// Returns a `ChromosomeJson` representing the instruction.
     pub fn chromosome_json(&self) -> ChromosomeJson {
-        Chromosome::new(self.pattern.clone(), self.config.clone())
-            .expect("failed to parse instruction chromosome")
+        let mask = if self.chromosome_mask.len() == self.bytes.len() {
+            self.chromosome_mask.clone()
+        } else {
+            vec![0; self.bytes.len()]
+        };
+        Chromosome::new(self.bytes.clone(), mask, self.config.clone())
+            .expect("failed to build instruction chromosome")
             .process()
     }
 

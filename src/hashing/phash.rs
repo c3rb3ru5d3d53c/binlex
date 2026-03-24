@@ -22,16 +22,26 @@
 
 use crate::hex;
 use crate::imaging::normalize::{GrayscaleImage, decode_grayscale};
+use std::borrow::Cow;
 use std::f64::consts::PI;
 
 pub struct PHash<'phash> {
-    pub bytes: &'phash [u8],
+    pub bytes: Cow<'phash, [u8]>,
 }
 
 impl<'phash> PHash<'phash> {
     #[allow(dead_code)]
     pub fn new(bytes: &'phash [u8]) -> Self {
-        Self { bytes }
+        Self {
+            bytes: Cow::Borrowed(bytes),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn from_bytes(bytes: Vec<u8>) -> PHash<'static> {
+        PHash {
+            bytes: Cow::Owned(bytes),
+        }
     }
 
     pub fn compare(&self, other: &Self) -> Option<f64> {
@@ -65,7 +75,7 @@ impl<'phash> PHash<'phash> {
     }
 
     fn bits(&self) -> Option<Vec<bool>> {
-        let image = decode_grayscale(self.bytes, 32, 32)?;
+        let image = decode_grayscale(self.bytes.as_ref(), 32, 32)?;
         let dct = dct_2d(&image);
 
         let mut low_frequencies = Vec::with_capacity(64);

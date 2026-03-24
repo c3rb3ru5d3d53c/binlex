@@ -22,15 +22,25 @@
 
 use crate::hex;
 use crate::imaging::normalize::decode_grayscale;
+use std::borrow::Cow;
 
 pub struct AHash<'ahash> {
-    pub bytes: &'ahash [u8],
+    pub bytes: Cow<'ahash, [u8]>,
 }
 
 impl<'ahash> AHash<'ahash> {
     #[allow(dead_code)]
     pub fn new(bytes: &'ahash [u8]) -> Self {
-        Self { bytes }
+        Self {
+            bytes: Cow::Borrowed(bytes),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn from_bytes(bytes: Vec<u8>) -> AHash<'static> {
+        AHash {
+            bytes: Cow::Owned(bytes),
+        }
     }
 
     pub fn compare(&self, other: &Self) -> Option<f64> {
@@ -64,7 +74,7 @@ impl<'ahash> AHash<'ahash> {
     }
 
     fn bits(&self) -> Option<Vec<bool>> {
-        let image = decode_grayscale(self.bytes, 8, 8)?;
+        let image = decode_grayscale(self.bytes.as_ref(), 8, 8)?;
         let mean = image
             .pixels()
             .iter()

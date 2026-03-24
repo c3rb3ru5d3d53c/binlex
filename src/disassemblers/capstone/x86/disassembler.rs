@@ -25,7 +25,7 @@ use crate::Architecture;
 use crate::Config;
 use crate::controlflow::graph::Graph;
 use crate::controlflow::instruction::Instruction;
-use crate::hex;
+use crate::genetics::Chromosome;
 use crate::io::Stderr;
 use arch::x86::X86OpMem;
 use arch::x86::X86Reg::{X86_REG_EBP, X86_REG_ESP, X86_REG_RBP, X86_REG_RIP, X86_REG_RSP};
@@ -275,7 +275,13 @@ impl<'disassembler> Disassembler<'disassembler> {
             Error::new(ErrorKind::Other, error)
         })?;
 
-        let instruction_signature = self.get_instruction_pattern(instruction)?;
+        let instruction_mask = self.get_instruction_chromosome_mask(instruction)?;
+        let instruction_signature = Chromosome::new(
+            instruction.bytes().to_vec(),
+            instruction_mask.clone(),
+            cfg.config.clone(),
+        )?
+        .pattern();
 
         let mut blinstruction =
             Instruction::create(instruction.address(), cfg.architecture, cfg.config.clone());
@@ -292,6 +298,7 @@ impl<'disassembler> Disassembler<'disassembler> {
 
         blinstruction.edges = self.get_instruction_edges(instruction);
         blinstruction.bytes = instruction.bytes().to_vec();
+        blinstruction.chromosome_mask = instruction_mask;
         blinstruction.pattern = instruction_signature;
         blinstruction.has_indirect_target = self.has_indirect_controlflow_target(instruction);
 
@@ -602,12 +609,18 @@ impl<'disassembler> Disassembler<'disassembler> {
 
     #[allow(dead_code)]
     pub fn get_instruction_pattern(&self, instruction: &Insn) -> Result<String, Error> {
+        let mask = self.get_instruction_chromosome_mask(instruction)?;
+        Chromosome::new(instruction.bytes().to_vec(), mask, self.config.clone())
+            .map(|c| c.pattern())
+    }
+
+    pub fn get_instruction_chromosome_mask(&self, instruction: &Insn) -> Result<Vec<u8>, Error> {
         if Disassembler::is_unsupported_pattern_instruction(instruction) {
-            return Ok(hex::encode(instruction.bytes()));
+            return Ok(vec![0; instruction.bytes().len()]);
         }
 
         if Disassembler::is_wildcard_instruction(instruction) {
-            return Ok("??".repeat(instruction.bytes().len()));
+            return Ok(vec![0xFF; instruction.bytes().len()]);
         }
 
         let operands = self.get_instruction_operands(instruction)?;
@@ -625,7 +638,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         });
 
         if !has_immutable_operand && !has_memory_operand {
-            return Ok(hex::encode(instruction.bytes()));
+            return Ok(vec![0; instruction.bytes().len()]);
         }
 
         let instruction_size = instruction.bytes().len() * 8;
@@ -643,10 +656,8 @@ impl<'disassembler> Disassembler<'disassembler> {
         let total_operand_size = Disassembler::get_total_operand_size(&operands)?;
 
         if total_operand_size > instruction_size {
-            return Ok(hex::encode(instruction.bytes()));
+            return Ok(vec![0; instruction.bytes().len()]);
         }
-
-        let instruction_trailing_null_offset = instruction_size - instruction_trailing_null_size;
 
         let is_immutable_signature =
             Disassembler::is_immutable_instruction_to_pattern_with_operands(
@@ -721,55 +732,25 @@ impl<'disassembler> Disassembler<'disassembler> {
             }
         }
 
-        let instruction_hex = hex::encode(instruction.bytes());
-
-        if instruction_hex.len() % 2 != 0 {
-            return Err(Error::new(
-                ErrorKind::Other,
-                format!(
-                    "Instruction -> 0x{:x}: instruction hex string length is not even",
-                    instruction.address()
-                ),
-            ));
-        }
-
-        let signature: String = instruction_hex
-            .chars()
-            .enumerate()
-            .map(|(index, ch)| {
-                let start = index * 4;
-                let end = start + 4;
-                if (start >= instruction_trailing_null_offset && is_immutable_signature)
-                    || wildcarded[start..end].iter().all(|&x| x)
-                {
-                    '?'
-                } else {
-                    ch
+        let mut mask = vec![0u8; instruction.bytes().len()];
+        for (byte_index, chunk) in wildcarded.chunks(8).enumerate() {
+            let mut byte_mask = 0u8;
+            for (bit_index, wildcarded_bit) in chunk.iter().enumerate() {
+                if *wildcarded_bit {
+                    byte_mask |= 1 << (7 - bit_index);
                 }
-            })
-            .collect();
-
-        if signature.len() % 2 != 0 {
-            return Err(Error::new(
-                ErrorKind::Other,
-                format!(
-                    "Instruction -> 0x{:x}: wildcarded hex string length is not even",
-                    instruction.address()
-                ),
-            ));
+            }
+            mask[byte_index] = byte_mask;
         }
 
-        if instruction_hex.len() != signature.len() {
-            return Err(Error::new(
-                ErrorKind::Other,
-                format!(
-                    "Instruction -> 0x{:x}: instruction hex length not same as wildcard hex length",
-                    instruction.address()
-                ),
-            ));
+        if is_immutable_signature && instruction_trailing_null_size > 0 {
+            let trailing_start = instruction.bytes().len() - (instruction_trailing_null_size / 8);
+            for byte_mask in mask.iter_mut().skip(trailing_start) {
+                *byte_mask = 0xFF;
+            }
         }
 
-        Ok(signature)
+        Ok(mask)
     }
 
     fn get_displacement_size(displacement: u64) -> usize {

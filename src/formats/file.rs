@@ -131,28 +131,28 @@ impl File {
     ///
     /// # Returns
     ///
-    /// An `Option<String>` containing the hexadecimal representation of the TLSH,
+    /// An `Option<TLSH>` containing the TLSH helper,
     /// or `None` if the file's size is zero or less.
     #[allow(dead_code)]
-    pub fn tlsh(&self) -> Option<String> {
+    pub fn tlsh(&self) -> Option<TLSH<'_>> {
         if self.size() == 0 {
             return None;
         }
-        TLSH::new(&self.data, 50).hexdigest()
+        Some(TLSH::new(&self.data, 50))
     }
 
     /// Computes the SHA-256 hash of the file's data.
     ///
     /// # Returns
     ///
-    /// An `Option<String>` containing the hexadecimal representation of the SHA-256 hash,
+    /// An `Option<SHA256>` containing the SHA-256 helper,
     /// or `None` if the file's size is zero or less.
     #[allow(dead_code)]
-    pub fn sha256(&self) -> Option<String> {
+    pub fn sha256(&self) -> Option<SHA256<'_>> {
         if self.size() == 0 {
             return None;
         }
-        SHA256::new(&self.data).hexdigest()
+        Some(SHA256::new(&self.data))
     }
 
     /// Computes the SHA-256 hash of the file's data.
@@ -251,12 +251,12 @@ impl File {
             type_: "file".to_string(),
             magic: self.magic().to_string(),
             sha256: if self.config.formats.file.sha256.enabled {
-                self.sha256()
+                self.sha256().and_then(|hash| hash.hexdigest())
             } else {
                 None
             },
             tlsh: if self.config.formats.file.tlsh.enabled {
-                self.tlsh()
+                self.tlsh().and_then(|hash| hash.hexdigest())
             } else {
                 None
             },

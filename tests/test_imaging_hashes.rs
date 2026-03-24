@@ -30,23 +30,59 @@ fn imaging_hashes_match_across_renderers() {
     let svg = SVG::with_options(&data, Palette::Grayscale, 2, 4, Config::default());
     let terminal = Terminal::with_options(&data, Palette::Grayscale, 2, 4, Config::default());
 
-    assert_eq!(png.sha256(), svg.sha256());
-    assert_eq!(png.sha256(), terminal.sha256());
+    assert_eq!(
+        png.sha256().and_then(|hash| hash.hexdigest()),
+        svg.sha256().and_then(|hash| hash.hexdigest())
+    );
+    assert_eq!(
+        png.sha256().and_then(|hash| hash.hexdigest()),
+        terminal.sha256().and_then(|hash| hash.hexdigest())
+    );
 
-    assert_eq!(png.tlsh(), svg.tlsh());
-    assert_eq!(png.tlsh(), terminal.tlsh());
+    assert_eq!(
+        png.tlsh().and_then(|hash| hash.hexdigest()),
+        svg.tlsh().and_then(|hash| hash.hexdigest())
+    );
+    assert_eq!(
+        png.tlsh().and_then(|hash| hash.hexdigest()),
+        terminal.tlsh().and_then(|hash| hash.hexdigest())
+    );
 
-    assert_eq!(png.minhash(), svg.minhash());
-    assert_eq!(png.minhash(), terminal.minhash());
+    assert_eq!(
+        png.minhash().and_then(|hash| hash.hexdigest()),
+        svg.minhash().and_then(|hash| hash.hexdigest())
+    );
+    assert_eq!(
+        png.minhash().and_then(|hash| hash.hexdigest()),
+        terminal.minhash().and_then(|hash| hash.hexdigest())
+    );
 
-    assert_eq!(png.ahash(), svg.ahash());
-    assert_eq!(png.ahash(), terminal.ahash());
+    assert_eq!(
+        png.ahash().and_then(|hash| hash.hexdigest()),
+        svg.ahash().and_then(|hash| hash.hexdigest())
+    );
+    assert_eq!(
+        png.ahash().and_then(|hash| hash.hexdigest()),
+        terminal.ahash().and_then(|hash| hash.hexdigest())
+    );
 
-    assert_eq!(png.dhash(), svg.dhash());
-    assert_eq!(png.dhash(), terminal.dhash());
+    assert_eq!(
+        png.dhash().and_then(|hash| hash.hexdigest()),
+        svg.dhash().and_then(|hash| hash.hexdigest())
+    );
+    assert_eq!(
+        png.dhash().and_then(|hash| hash.hexdigest()),
+        terminal.dhash().and_then(|hash| hash.hexdigest())
+    );
 
-    assert_eq!(png.phash(), svg.phash());
-    assert_eq!(png.phash(), terminal.phash());
+    assert_eq!(
+        png.phash().and_then(|hash| hash.hexdigest()),
+        svg.phash().and_then(|hash| hash.hexdigest())
+    );
+    assert_eq!(
+        png.phash().and_then(|hash| hash.hexdigest()),
+        terminal.phash().and_then(|hash| hash.hexdigest())
+    );
 }
 
 #[test]
@@ -62,8 +98,14 @@ fn imaging_hashes_return_none_for_empty_images() {
     assert!(png.dhash().is_none());
     assert!(png.phash().is_none());
 
-    assert_eq!(png.sha256(), svg.sha256());
-    assert_eq!(png.sha256(), terminal.sha256());
+    assert_eq!(
+        png.sha256().and_then(|hash| hash.hexdigest()),
+        svg.sha256().and_then(|hash| hash.hexdigest())
+    );
+    assert_eq!(
+        png.sha256().and_then(|hash| hash.hexdigest()),
+        terminal.sha256().and_then(|hash| hash.hexdigest())
+    );
 }
 
 #[test]
@@ -82,16 +124,52 @@ fn imaging_hashes_ignore_config_for_direct_accessors() {
     assert!(png.dhash().is_some());
     assert!(png.phash().is_some());
 
-    assert_eq!(png.sha256(), svg.sha256());
-    assert_eq!(png.sha256(), terminal.sha256());
-    assert_eq!(png.tlsh(), svg.tlsh());
-    assert_eq!(png.tlsh(), terminal.tlsh());
-    assert_eq!(png.minhash(), svg.minhash());
-    assert_eq!(png.minhash(), terminal.minhash());
-    assert_eq!(png.ahash(), svg.ahash());
-    assert_eq!(png.ahash(), terminal.ahash());
-    assert_eq!(png.dhash(), svg.dhash());
-    assert_eq!(png.dhash(), terminal.dhash());
-    assert_eq!(png.phash(), svg.phash());
-    assert_eq!(png.phash(), terminal.phash());
+    assert_eq!(
+        png.sha256().and_then(|hash| hash.hexdigest()),
+        svg.sha256().and_then(|hash| hash.hexdigest())
+    );
+    assert_eq!(
+        png.sha256().and_then(|hash| hash.hexdigest()),
+        terminal.sha256().and_then(|hash| hash.hexdigest())
+    );
+    assert_eq!(
+        png.tlsh().and_then(|hash| hash.hexdigest()),
+        svg.tlsh().and_then(|hash| hash.hexdigest())
+    );
+    assert_eq!(
+        png.tlsh().and_then(|hash| hash.hexdigest()),
+        terminal.tlsh().and_then(|hash| hash.hexdigest())
+    );
+    assert_eq!(
+        png.minhash().and_then(|hash| hash.hexdigest()),
+        svg.minhash().and_then(|hash| hash.hexdigest())
+    );
+    assert_eq!(
+        png.minhash().and_then(|hash| hash.hexdigest()),
+        terminal.minhash().and_then(|hash| hash.hexdigest())
+    );
+    assert_eq!(
+        png.ahash().and_then(|hash| hash.hexdigest()),
+        svg.ahash().and_then(|hash| hash.hexdigest())
+    );
+    assert_eq!(
+        png.ahash().and_then(|hash| hash.hexdigest()),
+        terminal.ahash().and_then(|hash| hash.hexdigest())
+    );
+    assert_eq!(
+        png.dhash().and_then(|hash| hash.hexdigest()),
+        svg.dhash().and_then(|hash| hash.hexdigest())
+    );
+    assert_eq!(
+        png.dhash().and_then(|hash| hash.hexdigest()),
+        terminal.dhash().and_then(|hash| hash.hexdigest())
+    );
+    assert_eq!(
+        png.phash().and_then(|hash| hash.hexdigest()),
+        svg.phash().and_then(|hash| hash.hexdigest())
+    );
+    assert_eq!(
+        png.phash().and_then(|hash| hash.hexdigest()),
+        terminal.phash().and_then(|hash| hash.hexdigest())
+    );
 }

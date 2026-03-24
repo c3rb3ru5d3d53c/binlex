@@ -24,7 +24,7 @@
 
 from binlex_bindings.binlex.imaging import Terminal as _TerminalBinding
 from binlex import Config
-from binlex.hashing import AHash, DHash, PHash
+from binlex.hashing import AHash, DHash, MinHash32, PHash, SHA256, TLSH
 
 from .palette import Palette
 
@@ -58,13 +58,13 @@ class Terminal:
         """Convert an RGB triplet into the nearest ANSI 256-color index."""
         return _TerminalBinding.rgb_to_ansi256(r, g, b)
 
-    def sha256(self) -> str | None:
+    def sha256(self) -> SHA256 | None:
         return self._inner.sha256()
 
-    def tlsh(self) -> str | None:
+    def tlsh(self) -> TLSH | None:
         return self._inner.tlsh()
 
-    def minhash(self) -> str | None:
+    def minhash(self) -> MinHash32 | None:
         return self._inner.minhash()
 
     def ahash(self) -> AHash | None:

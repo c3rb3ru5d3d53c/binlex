@@ -416,6 +416,12 @@ impl Graph {
             instruction.edges = json.edges;
             instruction.bytes =
                 crate::hex::decode(&json.bytes).map_err(|error| Error::other(error.to_string()))?;
+            instruction.chromosome_mask = if json.chromosome.mask.is_empty() {
+                vec![0; instruction.bytes.len()]
+            } else {
+                crate::hex::decode(&json.chromosome.mask)
+                    .map_err(|error| Error::other(error.to_string()))?
+            };
             instruction.pattern = json.chromosome.pattern;
             instruction.functions = json.functions;
             instruction.to = json.to;
@@ -573,6 +579,9 @@ impl Graph {
         existing.functions.extend(incoming.functions);
         if existing.bytes.is_empty() {
             existing.bytes = incoming.bytes;
+        }
+        if existing.chromosome_mask.is_empty() {
+            existing.chromosome_mask = incoming.chromosome_mask;
         }
         if existing.pattern.is_empty() {
             existing.pattern = incoming.pattern;

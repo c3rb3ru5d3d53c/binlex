@@ -63,41 +63,40 @@ pub(crate) fn encode_png(render: &Render) -> io::Result<Vec<u8>> {
     Ok(encoded)
 }
 
-pub(crate) fn sha256(render: &Render, _config: &ConfigImaging) -> Option<String> {
+pub(crate) fn sha256(render: &Render, _config: &ConfigImaging) -> Option<SHA256<'static>> {
     let bytes = encode_png(render).ok()?;
-    SHA256::new(&bytes).hexdigest()
+    Some(SHA256::from_bytes(bytes))
 }
 
-pub(crate) fn tlsh(render: &Render, config: &ConfigImaging) -> Option<String> {
+pub(crate) fn tlsh(render: &Render, config: &ConfigImaging) -> Option<TLSH<'static>> {
     let bytes = encode_png(render).ok()?;
-    TLSH::new(&bytes, config.tlsh.minimum_byte_size).hexdigest()
+    Some(TLSH::from_bytes(bytes, config.tlsh.minimum_byte_size))
 }
 
-pub(crate) fn minhash(render: &Render, config: &ConfigImaging) -> Option<String> {
+pub(crate) fn minhash(render: &Render, config: &ConfigImaging) -> Option<MinHash32<'static>> {
     let bytes = encode_png(render).ok()?;
     if config.minhash.maximum_byte_size_enabled && bytes.len() > config.minhash.maximum_byte_size {
         return None;
     }
-    MinHash32::new(
-        &bytes,
+    Some(MinHash32::from_bytes(
+        bytes,
         config.minhash.number_of_hashes,
         config.minhash.shingle_size,
         config.minhash.seed,
-    )
-    .hexdigest()
+    ))
 }
 
-pub(crate) fn ahash(render: &Render, _config: &ConfigImaging) -> Option<String> {
+pub(crate) fn ahash(render: &Render, _config: &ConfigImaging) -> Option<AHash<'static>> {
     let bytes = encode_png(render).ok()?;
-    AHash::new(&bytes).hexdigest()
+    Some(AHash::from_bytes(bytes))
 }
 
-pub(crate) fn dhash(render: &Render, _config: &ConfigImaging) -> Option<String> {
+pub(crate) fn dhash(render: &Render, _config: &ConfigImaging) -> Option<DHash<'static>> {
     let bytes = encode_png(render).ok()?;
-    DHash::new(&bytes).hexdigest()
+    Some(DHash::from_bytes(bytes))
 }
 
-pub(crate) fn phash(render: &Render, _config: &ConfigImaging) -> Option<String> {
+pub(crate) fn phash(render: &Render, _config: &ConfigImaging) -> Option<PHash<'static>> {
     let bytes = encode_png(render).ok()?;
-    PHash::new(&bytes).hexdigest()
+    Some(PHash::from_bytes(bytes))
 }

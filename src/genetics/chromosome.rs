@@ -23,10 +23,10 @@
 use crate::Config;
 use crate::entropy;
 use crate::genetics::AllelePair;
-use crate::genetics::Gene;
 use crate::hashing::MinHash32;
 use crate::hashing::SHA256;
 use crate::hashing::TLSH;
+use crate::hex;
 use crate::imaging::{PNG, Palette, SVG};
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -36,21 +36,24 @@ use std::io::ErrorKind;
 /// Represents a JSON-serializable structure containing metadata about a chromosome.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ChromosomeJson {
-    /// The raw pattern string of the chromosome.
+    /// The rendered YARA-compatible pattern of the chromosome.
     pub pattern: String,
+    /// Hex-encoded wildcard mask for the chromosome, one byte per source byte.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub mask: String,
     /// The vector extracted from the chromosome.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub vector: Vec<u8>,
-    /// The entropy of the normalized chromosome, if enabled.
+    /// The entropy of the masked chromosome bytes, if enabled.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub entropy: Option<f64>,
-    /// The SHA-256 hash of the normalized chromosome, if enabled.
+    /// The SHA-256 hash of the masked chromosome bytes, if enabled.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sha256: Option<String>,
-    /// The MinHash of the normalized chromosome, if enabled.
+    /// The MinHash of the masked chromosome bytes, if enabled.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub minhash: Option<String>,
-    /// The TLSH (Locality Sensitive Hash) of the normalized chromosome, if enabled.
+    /// The TLSH (Locality Sensitive Hash) of the masked chromosome bytes, if enabled.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tlsh: Option<String>,
 }
@@ -58,198 +61,203 @@ pub struct ChromosomeJson {
 /// Represents a chromosome within a control flow graph.
 #[derive(Clone)]
 pub struct Chromosome {
-    pub allelepairs: Vec<AllelePair>,
-    pub number_of_mutations: usize,
+    raw_bytes: Vec<u8>,
+    wildcard_mask: Vec<u8>,
+    number_of_mutations: usize,
     config: Config,
 }
 
 impl Chromosome {
-    /// Creates a new `Chromosome` instance for a specified address range within a control flow graph.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Result<Chromosome, Error>`.
-    pub fn new(pattern: String, config: Config) -> Result<Self, Error> {
-        let allelepairs = Self::parse_pairs(pattern)?;
+    /// Creates a new chromosome from raw bytes and a per-byte wildcard mask.
+    pub fn new(raw_bytes: Vec<u8>, wildcard_mask: Vec<u8>, config: Config) -> Result<Self, Error> {
+        Self::validate_lengths(&raw_bytes, &wildcard_mask)?;
         Ok(Self {
-            allelepairs,
+            raw_bytes,
+            wildcard_mask,
             number_of_mutations: 0,
             config,
         })
     }
 
-    pub fn mutations(&self) -> usize {
-        self.number_of_mutations
+    /// Creates a chromosome from a YARA-style pattern. This path is inherently lossy.
+    pub fn from_pattern(pattern: String, config: Config) -> Result<Self, Error> {
+        let (raw_bytes, wildcard_mask) = Self::parse_pattern(pattern)?;
+        Self::new(raw_bytes, wildcard_mask, config)
     }
 
-    pub fn mutate(&mut self, pattern: String) -> Result<(), Error> {
-        self.allelepairs = Self::parse_pairs(pattern)?;
-        self.number_of_mutations += 1;
+    fn validate_lengths(raw_bytes: &[u8], wildcard_mask: &[u8]) -> Result<(), Error> {
+        if raw_bytes.len() != wildcard_mask.len() {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "raw bytes and wildcard mask must have the same length",
+            ));
+        }
         Ok(())
     }
 
-    #[allow(dead_code)]
-    fn parse_pairs(pattern: String) -> Result<Vec<AllelePair>, Error> {
+    fn parse_pattern(pattern: String) -> Result<(Vec<u8>, Vec<u8>), Error> {
         if pattern.len() % 2 != 0 {
             return Err(Error::new(
                 ErrorKind::InvalidData,
                 "pattern length must be even",
             ));
         }
-        let mut parsed = Vec::new();
+
+        let mut raw_bytes = Vec::with_capacity(pattern.len() / 2);
+        let mut wildcard_mask = Vec::with_capacity(pattern.len() / 2);
         let chars: Vec<char> = pattern.chars().collect();
+
         for chunk in chars.chunks(2) {
-            let high = Self::parse_gene(chunk[0])?;
-            let low = Self::parse_gene(chunk[1])?;
-            parsed.push(AllelePair {
-                high,
-                low,
-                number_mutations: 0,
-            });
+            let (high_value, high_mask) = Self::parse_pattern_nibble(chunk[0])?;
+            let (low_value, low_mask) = Self::parse_pattern_nibble(chunk[1])?;
+            raw_bytes.push((high_value << 4) | low_value);
+            wildcard_mask.push((high_mask << 4) | low_mask);
         }
-        Ok(parsed)
+
+        Ok((raw_bytes, wildcard_mask))
     }
 
-    fn parse_gene(c: char) -> Result<Gene, Error> {
-        Gene::from_char(c)
+    fn parse_pattern_nibble(c: char) -> Result<(u8, u8), Error> {
+        match c {
+            '?' => Ok((0, 0xF)),
+            '0'..='9' | 'a'..='f' | 'A'..='F' => c
+                .to_digit(16)
+                .map(|v| (v as u8, 0))
+                .ok_or_else(|| Error::new(ErrorKind::InvalidData, "invalid hexadecimal digit")),
+            _ => Err(Error::new(ErrorKind::InvalidInput, "invalid character")),
+        }
+    }
+
+    #[allow(dead_code)]
+    fn render_nibble(value: u8, mask: u8) -> char {
+        if mask != 0 {
+            '?'
+        } else {
+            char::from_digit(value as u32, 16).expect("valid nibble")
+        }
+    }
+
+    pub fn mutations(&self) -> usize {
+        self.number_of_mutations
+    }
+
+    pub fn mutate(&mut self, raw_bytes: Vec<u8>, wildcard_mask: Vec<u8>) -> Result<(), Error> {
+        Self::validate_lengths(&raw_bytes, &wildcard_mask)?;
+        self.raw_bytes = raw_bytes;
+        self.wildcard_mask = wildcard_mask;
+        self.number_of_mutations += 1;
+        Ok(())
+    }
+
+    pub fn mutate_pattern(&mut self, pattern: String) -> Result<(), Error> {
+        let (raw_bytes, wildcard_mask) = Self::parse_pattern(pattern)?;
+        self.mutate(raw_bytes, wildcard_mask)
+    }
+
+    pub fn bytes(&self) -> Vec<u8> {
+        self.raw_bytes.clone()
+    }
+
+    pub fn mask(&self) -> Vec<u8> {
+        self.wildcard_mask.clone()
     }
 
     pub fn allelepairs(&self) -> Vec<AllelePair> {
-        self.allelepairs.clone()
+        let pattern = self.pattern();
+        let mut result = Vec::with_capacity(pattern.len() / 2);
+        let chars: Vec<char> = pattern.chars().collect();
+        for chunk in chars.chunks(2) {
+            let pair = chunk.iter().collect::<String>();
+            result.push(AllelePair::from_string(pair).expect("rendered chromosome pair is valid"));
+        }
+        result
     }
 
     pub fn pattern(&self) -> String {
-        let mut result = String::new();
-        for pair in &self.allelepairs {
-            result += &pair.to_string();
+        let mut result = String::with_capacity(self.raw_bytes.len() * 2);
+        for (&value, &mask) in self.raw_bytes.iter().zip(&self.wildcard_mask) {
+            result.push(Self::render_nibble((value >> 4) & 0xF, (mask >> 4) & 0xF));
+            result.push(Self::render_nibble(value & 0xF, mask & 0xF));
         }
         result
     }
 
-    /// Retrieves the normalized bytes produced by the chromosome pattern.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `Vec<u8>` containing the chromosome bytes.
-    pub fn bytes(&self) -> Vec<u8> {
-        let mut result = Vec::new();
-        let mut temp_byte: Option<u8> = None;
-        for pair in &self.allelepairs {
-            if let Some(high) = pair.high.value() {
-                if let Some(low) = temp_byte {
-                    result.push((low << 4) | high);
-                    temp_byte = None;
-                } else {
-                    temp_byte = Some(high);
-                }
-            }
-            if let Some(low) = pair.low.value() {
-                if let Some(high) = temp_byte {
-                    result.push((high << 4) | low);
-                    temp_byte = None;
-                } else {
-                    temp_byte = Some(low);
-                }
-            }
-        }
-        result
+    /// Returns the masked bytes produced by applying the wildcard mask in place.
+    pub fn masked(&self) -> Vec<u8> {
+        self.raw_bytes
+            .iter()
+            .zip(&self.wildcard_mask)
+            .map(|(&value, &mask)| value & !mask)
+            .collect()
     }
 
-    /// Renders the normalized chromosome bytes as a PNG image using default imaging settings.
+    /// Renders the masked chromosome bytes as a PNG image using default imaging settings.
     pub fn png(&self) -> PNG {
-        PNG::new(&self.bytes(), Palette::Grayscale, self.config.clone())
+        PNG::new(&self.masked(), Palette::Grayscale, self.config.clone())
     }
 
-    /// Renders the normalized chromosome bytes as an SVG image using default imaging settings.
+    /// Renders the masked chromosome bytes as an SVG image using default imaging settings.
     pub fn svg(&self) -> SVG {
-        SVG::new(&self.bytes(), Palette::Grayscale, self.config.clone())
+        SVG::new(&self.masked(), Palette::Grayscale, self.config.clone())
     }
 
-    /// Extracts the vector from the normalized chromosome, if enabled.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `Vec<u8>` containing the vector.
+    /// Extracts the nibble vector from the masked chromosome bytes.
     pub fn vector(&self) -> Vec<u8> {
-        let mut result = Vec::<u8>::new();
-        for allelepair in &self.allelepairs {
-            if let Some(high) = allelepair.high.value() {
-                result.push(high);
-            }
-            if let Some(low) = allelepair.low.value() {
-                result.push(low);
-            }
+        let mut result = Vec::with_capacity(self.raw_bytes.len() * 2);
+        for value in self.masked() {
+            result.push((value >> 4) & 0xF);
+            result.push(value & 0xF);
         }
         result
     }
 
-    /// Computes the TLSH (Locality Sensitive Hash) of the normalized chromosome.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Some(String)` containing the TLSH, or `None` if it cannot be computed.
-    pub fn tlsh(&self) -> Option<String> {
-        TLSH::new(
-            &self.bytes(),
+    /// Computes the TLSH (Locality Sensitive Hash) of the masked chromosome.
+    pub fn tlsh(&self) -> Option<TLSH<'static>> {
+        Some(TLSH::from_bytes(
+            self.masked(),
             self.config.chromosomes.tlsh.minimum_byte_size,
-        )
-        .hexdigest()
+        ))
     }
 
-    /// Computes the MinHash of the normalized signature.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Some(String)` containing the MinHash, or `None` if it cannot be computed.
+    /// Computes the MinHash of the masked chromosome bytes.
     #[allow(dead_code)]
-    pub fn minhash(&self) -> Option<String> {
-        if self.bytes().len() > self.config.chromosomes.minhash.maximum_byte_size
+    pub fn minhash(&self) -> Option<MinHash32<'static>> {
+        let masked = self.masked();
+        if masked.len() > self.config.chromosomes.minhash.maximum_byte_size
             && self.config.chromosomes.minhash.maximum_byte_size_enabled
         {
             return None;
         }
-        MinHash32::new(
-            &self.bytes(),
+        Some(MinHash32::from_bytes(
+            masked,
             self.config.chromosomes.minhash.number_of_hashes,
             self.config.chromosomes.minhash.shingle_size,
             self.config.chromosomes.minhash.seed,
-        )
-        .hexdigest()
+        ))
     }
 
-    /// Computes the SHA-256 hash of the normalized chromosome.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Some(String)` containing the SHA-256 hash, or `None` if it cannot be computed.
-    pub fn sha256(&self) -> Option<String> {
-        SHA256::new(&self.bytes()).hexdigest()
+    /// Computes the SHA-256 hash of the masked chromosome bytes.
+    pub fn sha256(&self) -> Option<SHA256<'static>> {
+        Some(SHA256::from_bytes(self.masked()))
     }
 
-    /// Computes the entropy of the normalized chromosome.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Some(f64)` containing the entropy, or `None` if it cannot be computed.
+    /// Computes the entropy of the masked chromosome bytes.
     pub fn entropy(&self) -> Option<f64> {
-        entropy::shannon(&self.bytes())
+        entropy::shannon(&self.masked())
     }
 
     /// Processes the chromosome into its JSON-serializable representation.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `ChromosomeJson` struct containing metadata about the chromosome.
     pub fn process(&self) -> ChromosomeJson {
         ChromosomeJson {
             pattern: self.pattern(),
+            mask: hex::encode(&self.mask()),
             vector: if self.config.chromosomes.vector.enabled {
                 self.vector()
             } else {
                 Vec::new()
             },
             sha256: if self.config.chromosomes.sha256.enabled {
-                self.sha256()
+                self.sha256().and_then(|hash| hash.hexdigest())
             } else {
                 None
             },
@@ -259,12 +267,12 @@ impl Chromosome {
                 None
             },
             minhash: if self.config.chromosomes.minhash.enabled {
-                self.minhash()
+                self.minhash().and_then(|hash| hash.hexdigest())
             } else {
                 None
             },
             tlsh: if self.config.chromosomes.tlsh.enabled {
-                self.tlsh()
+                self.tlsh().and_then(|hash| hash.hexdigest())
             } else {
                 None
             },
@@ -272,11 +280,6 @@ impl Chromosome {
     }
 
     /// Converts the signature metadata into a JSON string representation.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(String)` containing the JSON representation of the signature,
-    /// or an `Err` if serialization fails.
     #[allow(dead_code)]
     pub fn json(&self) -> Result<String, Error> {
         let raw = self.process();

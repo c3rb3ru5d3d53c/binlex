@@ -48,6 +48,7 @@ _LAZY_SUBMODULES = {
     "metadata",
     "storage",
     "transports",
+    "util",
 }
 
 
@@ -78,4 +79,5 @@ __all__ = [
     "metadata",
     "storage",
     "transports",
+    "util",
 ]

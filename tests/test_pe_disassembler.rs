@@ -864,14 +864,14 @@ mod tests {
         let sha256_result = pe.sha256();
         assert!(sha256_result.is_some(), "sha256 of pe should not be none");
         assert_eq!(
-            sha256_result.unwrap(),
+            sha256_result.unwrap().hexdigest().unwrap(),
             "227f75802f50956a31c7623932fdc640706ae1b9f65b1f628ea3e6d8e759c7ec",
             "the pe sha256 does not match"
         );
         let tlsh_result = pe.tlsh();
         assert!(tlsh_result.is_some(), "tlsh of pe should not be none");
         assert_eq!(
-            tlsh_result.unwrap(),
+            tlsh_result.unwrap().hexdigest().unwrap(),
             "T1F682290A774B88E6D226923EC5638F18E272F51257626BCFA362439D0FB13D06D37D45",
             "the pe tlsh does not match"
         );

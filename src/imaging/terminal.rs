@@ -84,27 +84,27 @@ impl Terminal {
         16 + (36 * red) + (6 * green) + blue
     }
 
-    pub fn sha256(&self) -> Option<String> {
+    pub fn sha256(&self) -> Option<crate::hashing::SHA256<'static>> {
         render_hash::sha256(&self.render, &self.hashing)
     }
 
-    pub fn tlsh(&self) -> Option<String> {
+    pub fn tlsh(&self) -> Option<crate::hashing::TLSH<'static>> {
         render_hash::tlsh(&self.render, &self.hashing)
     }
 
-    pub fn minhash(&self) -> Option<String> {
+    pub fn minhash(&self) -> Option<crate::hashing::MinHash32<'static>> {
         render_hash::minhash(&self.render, &self.hashing)
     }
 
-    pub fn ahash(&self) -> Option<String> {
+    pub fn ahash(&self) -> Option<crate::hashing::AHash<'static>> {
         render_hash::ahash(&self.render, &self.hashing)
     }
 
-    pub fn dhash(&self) -> Option<String> {
+    pub fn dhash(&self) -> Option<crate::hashing::DHash<'static>> {
         render_hash::dhash(&self.render, &self.hashing)
     }
 
-    pub fn phash(&self) -> Option<String> {
+    pub fn phash(&self) -> Option<crate::hashing::PHash<'static>> {
         render_hash::phash(&self.render, &self.hashing)
     }
 }
