@@ -229,6 +229,15 @@ jobs:
           pacman -S --noconfirm --needed base-devel pkgconf openssl zstd make automake autoconf libtool clang curl git python rust protobuf
           id -u builder >/dev/null 2>&1 || useradd --create-home --shell /bin/bash builder
 
+      - name: Prepare Arch Build Workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/binlex-build
+          mkdir -p /tmp/binlex-build
+          cp -a "$GITHUB_WORKSPACE"/. /tmp/binlex-build/
+          chown -R builder:builder /tmp/binlex-build
+
       - name: Cache Rust Build Artifacts
         uses: Swatinem/rust-cache@v2
         with:
@@ -261,7 +270,7 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in 1 2 3; do
-            cargo test && break
+            runuser -u builder -- bash -lc "cd /tmp/binlex-build && cargo test" && break
             if [[ "$attempt" -eq 3 ]]; then
               exit 1
             fi
@@ -273,10 +282,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf /tmp/binlex-build
-          mkdir -p /tmp/binlex-build
-          cp -a "$GITHUB_WORKSPACE"/. /tmp/binlex-build/
-          chown -R builder:builder /tmp/binlex-build
           runuser -u builder -- bash -lc "cd /tmp/binlex-build && makepkg"
 
       - name: Create Dist Directory
