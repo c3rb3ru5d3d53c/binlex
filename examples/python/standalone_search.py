@@ -40,9 +40,8 @@ def main(args):
     config.general.threads = 16
     
     pe = PE(args.file, config)
-    img = pe.image()
-    mmap = img.mmap()
-    disasm = Disassembler(pe.architecture(), mmap, pe.executable_virtual_address_ranges(), config)
+    image = pe.image()
+    disasm = Disassembler(pe.architecture(), image, pe.executable_virtual_address_ranges(), config)
     cfg = Graph(pe.architecture(), config)
     disasm.disassemble_controlflow(pe.entrypoint_virtual_addresses(), cfg)
     

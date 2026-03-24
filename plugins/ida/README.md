@@ -18,27 +18,27 @@ The plugin exposes:
 ```bash
 cd plugins/ida
 pip install .
-python -m plugin install
+python -m binlex_ida install
 ```
 
-Use `python -m plugin print-target` to inspect the detected IDA plugins directory, or pass `--target`.
+Use `python -m binlex_ida print-target` to inspect the detected IDA plugins directory, or pass `--target`.
 
 `--source` is the plugin source tree that contains `main.py`, `ida-plugin.json`, `core/`, and `ui/`. It is not the IDA plugins directory.
 
 Windows example:
 
 ```powershell
-python -m plugin install --target "$env:APPDATA\Hex-Rays\IDA Pro\plugins"
+python -m binlex_ida install --target "$env:APPDATA\Hex-Rays\IDA Pro\plugins"
 ```
 
 ## Uninstall
 
 ```bash
-python -m plugin uninstall
+python -m binlex_ida uninstall
 ```
 
 ## Build Archive
 
 ```bash
-python -m plugin archive
+python -m binlex_ida archive
 ```

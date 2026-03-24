@@ -16,3 +16,5 @@ pkg/
 *.pkg.tar.zst
 *.zip
 perf.data
+__pycache__/
+*.pyc
