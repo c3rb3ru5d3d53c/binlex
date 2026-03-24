@@ -56,11 +56,22 @@ pub struct SearchResult {
 #[pymethods]
 impl LocalIndex {
     #[new]
-    #[pyo3(signature = (config, directory=None), text_signature = "(config, directory=None)")]
-    pub fn new(py: Python, config: Py<Config>, directory: Option<String>) -> PyResult<Self> {
+    #[pyo3(signature = (config, directory=None, dimensions=None), text_signature = "(config, directory=None, dimensions=None)")]
+    pub fn new(
+        py: Python,
+        config: Py<Config>,
+        directory: Option<String>,
+        dimensions: Option<usize>,
+    ) -> PyResult<Self> {
         let config = config.borrow(py).inner.lock().unwrap().clone();
-        let inner = InnerClient::new(config, directory.map(Into::into))
-            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        let inner = match (directory, dimensions) {
+            (None, None) => InnerClient::new(config)
+                .map_err(|error| PyValueError::new_err(error.to_string()))?,
+            (directory, dimensions) => {
+                InnerClient::with_options(config, directory.map(Into::into), dimensions)
+                    .map_err(|error| PyValueError::new_err(error.to_string()))?
+            }
+        };
         Ok(Self {
             inner: Arc::new(Mutex::new(inner)),
         })
@@ -88,7 +99,7 @@ impl LocalIndex {
     }
 
     #[pyo3(signature = (corpus, sha256, graph, attributes=None, selector=None, collections=None), text_signature = "($self, corpus, sha256, graph, attributes=None, selector=None, collections=None)")]
-    pub fn graph(
+    pub fn index_graph(
         &self,
         py: Python,
         corpus: String,
@@ -105,7 +116,7 @@ impl LocalIndex {
         self.inner
             .lock()
             .unwrap()
-            .graph(
+            .index_graph(
                 &corpus,
                 &sha256,
                 &inner_graph,
@@ -117,7 +128,7 @@ impl LocalIndex {
     }
 
     #[pyo3(signature = (corpora, sha256, graph, attributes=None, selector=None, collections=None), text_signature = "($self, corpora, sha256, graph, attributes=None, selector=None, collections=None)")]
-    pub fn graph_many(
+    pub fn index_graph_many(
         &self,
         py: Python,
         corpora: Vec<String>,
@@ -134,7 +145,7 @@ impl LocalIndex {
         self.inner
             .lock()
             .unwrap()
-            .graph_many(
+            .index_graph_many(
                 &corpora,
                 &sha256,
                 &inner_graph,
@@ -188,6 +199,87 @@ impl LocalIndex {
                 &vector,
                 &sha256,
                 address,
+            )
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    #[pyo3(signature = (corpora, architecture, vector, sha256, address, attributes=None), text_signature = "($self, corpora, architecture, vector, sha256, address, attributes=None)")]
+    pub fn index_instruction(
+        &self,
+        py: Python,
+        corpora: Vec<String>,
+        architecture: Py<Architecture>,
+        vector: Vec<f32>,
+        sha256: String,
+        address: u64,
+        attributes: Option<Vec<Py<PyAttribute>>>,
+    ) -> PyResult<()> {
+        let architecture = architecture.borrow(py).inner;
+        let attributes = py_to_attributes(py, attributes);
+        self.inner
+            .lock()
+            .unwrap()
+            .index_instruction(
+                &corpora,
+                architecture,
+                &vector,
+                &sha256,
+                address,
+                &attributes,
+            )
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    #[pyo3(signature = (corpora, architecture, vector, sha256, address, attributes=None), text_signature = "($self, corpora, architecture, vector, sha256, address, attributes=None)")]
+    pub fn index_block(
+        &self,
+        py: Python,
+        corpora: Vec<String>,
+        architecture: Py<Architecture>,
+        vector: Vec<f32>,
+        sha256: String,
+        address: u64,
+        attributes: Option<Vec<Py<PyAttribute>>>,
+    ) -> PyResult<()> {
+        let architecture = architecture.borrow(py).inner;
+        let attributes = py_to_attributes(py, attributes);
+        self.inner
+            .lock()
+            .unwrap()
+            .index_block(
+                &corpora,
+                architecture,
+                &vector,
+                &sha256,
+                address,
+                &attributes,
+            )
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    #[pyo3(signature = (corpora, architecture, vector, sha256, address, attributes=None), text_signature = "($self, corpora, architecture, vector, sha256, address, attributes=None)")]
+    pub fn index_function(
+        &self,
+        py: Python,
+        corpora: Vec<String>,
+        architecture: Py<Architecture>,
+        vector: Vec<f32>,
+        sha256: String,
+        address: u64,
+        attributes: Option<Vec<Py<PyAttribute>>>,
+    ) -> PyResult<()> {
+        let architecture = architecture.borrow(py).inner;
+        let attributes = py_to_attributes(py, attributes);
+        self.inner
+            .lock()
+            .unwrap()
+            .index_function(
+                &corpora,
+                architecture,
+                &vector,
+                &sha256,
+                address,
+                &attributes,
             )
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
@@ -308,6 +400,17 @@ impl SearchResult {
 
     pub fn object_id(&self) -> String {
         self.hit.object_id().to_string()
+    }
+
+    pub fn symbol(&self) -> Option<String> {
+        self.hit.symbol().map(ToString::to_string)
+    }
+
+    pub fn attributes(&self, py: Python) -> PyResult<Py<PyAny>> {
+        let json_module = py.import("json")?;
+        let value = serde_json::to_string(self.hit.attributes())
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(json_module.call_method1("loads", (value,))?.into())
     }
 
     pub fn architecture(&self) -> String {

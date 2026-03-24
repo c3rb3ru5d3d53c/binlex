@@ -1455,6 +1455,18 @@ impl ConfigIndexLocal {
         let mut inner = self.inner.lock().unwrap();
         inner.index.local.directory = value;
     }
+
+    #[getter]
+    pub fn get_dimensions(&self) -> Option<usize> {
+        let inner = self.inner.lock().unwrap();
+        inner.index.local.dimensions
+    }
+
+    #[setter]
+    pub fn set_dimensions(&mut self, value: Option<usize>) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.index.local.dimensions = value;
+    }
 }
 
 #[pyclass]

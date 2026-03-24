@@ -2,15 +2,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import idautils
 import ida_kernwin
 import idaapi
 import idc
 
-from binlex.disassemblers.ida import IDA
 from binlex.index import Collection, LocalIndex
 
 from .config import build_binlex_config, is_meaningful_name
 from .context import resolve_block_context, resolve_function_context, vector_for_context
+from .disassembly import disassemble_controlflow_graph
 from .metadata import MetadataStore
 
 
@@ -18,6 +19,26 @@ from .metadata import MetadataStore
 class CompareRequest:
     corpora: list[str]
     limit: int
+
+
+def _dedupe_rows(rows: list[dict]) -> list[dict]:
+    unique: list[dict] = []
+    seen: set[tuple] = set()
+    for row in rows:
+        key = (
+            int(row["local_address"]),
+            int(row["local_function_address"]),
+            int(row["match_address"]),
+            str(row["match_name"]),
+            str(row["sha256"]),
+            str(row["corpus"]),
+            str(row["collection"]),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(row)
+    return unique
 
 
 def _display_names(metadata: MetadataStore, *, corpus: str, collection: str, sha256: str, address: int) -> list[str]:
@@ -92,7 +113,7 @@ def compare_block(plugin_config, request: CompareRequest) -> list[dict]:
                     collection="block",
                 )
             )
-    return rows
+    return _dedupe_rows(rows)
 
 
 def compare_function(plugin_config, request: CompareRequest) -> list[dict]:
@@ -131,13 +152,12 @@ def compare_function(plugin_config, request: CompareRequest) -> list[dict]:
                     collection="function",
                 )
             )
-    return rows
+    return _dedupe_rows(rows)
 
 
 def compare_functions(plugin_config, request: CompareRequest) -> list[dict]:
     config = build_binlex_config(plugin_config)
-    ida = IDA()
-    graph = ida.disassemble_controlflow(config)
+    graph = disassemble_controlflow_graph(list(idautils.Functions()), config)
     store = LocalIndex(config, directory=plugin_config.index_root)
     metadata = MetadataStore(plugin_config.index_root)
     rows: list[dict] = []
@@ -176,7 +196,7 @@ def compare_functions(plugin_config, request: CompareRequest) -> list[dict]:
                         collection="function",
                     )
                 )
-    return rows
+    return _dedupe_rows(rows)
 
 
 def apply_match_rows(rows: list[dict]) -> tuple[int, list[str]]:

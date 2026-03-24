@@ -3,17 +3,22 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import ida_bytes
-import ida_funcs
 import ida_kernwin
 import ida_ua
-import idautils
 import idc
 
 from binlex.controlflow import Block, Function
-from binlex.disassemblers.ida import Disassembler as IdaDisassembler
-from binlex.disassemblers.ida import IDA, IDAInstruction
 from binlex.genetics import Chromosome
 from binlex.hashing import MinHash32, TLSH
+
+from .disassembly import (
+    build_disassembler,
+    build_graph,
+    current_block_address,
+    current_function_address,
+    disassemble_block_graph,
+    disassemble_function_graph,
+)
 
 
 @dataclass
@@ -70,15 +75,15 @@ def selection_bytes(selection: SelectionRange) -> bytes:
     return ida_bytes.get_bytes(selection.start, size) or b""
 
 
-def _transient_block_for_selection(ida: IDA, config, selection: SelectionRange):
+def _transient_block_for_selection(config, selection: SelectionRange):
     addresses = selected_instruction_addresses(selection)
     if not addresses:
         raise RuntimeError("no instructions are selected")
-    graph = ida.graph(config)
+    graph = build_graph(config)
     graph.set_block(addresses[0])
-    disassembler = ida.disassembler(config)
+    disassembler = build_disassembler(config)
     for address in addresses:
-        disassembler.disassemble_instruction(IDAInstruction(address), graph)
+        disassembler.disassemble_instruction(address, graph)
     for current, nxt in zip(addresses, addresses[1:]):
         graph.extend_instruction_edges(current, [nxt])
     block = Block(addresses[0], graph)
@@ -97,21 +102,19 @@ def _function_pattern(function) -> str:
 
 
 def resolve_function_context(config, widget=None) -> ResolvedContext:
-    ida = IDA()
-    address = ida_kernwin.get_screen_ea()
-    function = ida.function(address)
-    if function is None:
+    del widget
+    function_address = current_function_address()
+    if function_address is None:
         raise RuntimeError("the cursor is not inside a function")
-    graph = ida.graph(config)
-    ida.disassembler(config).disassemble_function(function, graph)
-    entity = Function(function.address(), graph)
-    function_name = idc.get_func_name(function.address()) or ""
+    graph = disassemble_function_graph(function_address, config)
+    entity = Function(function_address, graph)
+    function_name = idc.get_func_name(function_address) or ""
     bytes_data = entity.bytes() or b""
     pattern = _function_pattern(entity)
     return ResolvedContext(
         kind="function",
         address=entity.address(),
-        function_address=entity.address(),
+        function_address=function_address,
         function_name=function_name,
         selection=None,
         graph=graph,
@@ -122,34 +125,17 @@ def resolve_function_context(config, widget=None) -> ResolvedContext:
 
 
 def resolve_block_context(config, widget=None) -> ResolvedContext:
-    ida = IDA()
     selection = current_viewer_selection(widget)
     if selection is not None:
-        graph, entity, pattern = _transient_block_for_selection(ida, config, selection)
-        function = ida.function(selection.start)
-        function_address = function.address() if function is not None else None
-        function_name = idc.get_func_name(function_address) if function_address is not None else ""
-        return ResolvedContext(
-            kind="selection",
-            address=entity.address(),
-            function_address=function_address,
-            function_name=function_name or "",
-            selection=selection,
-            graph=graph,
-            entity=entity,
-            bytes_data=selection_bytes(selection),
-            pattern=pattern,
-        )
+        return resolve_selection_context(config, widget)
 
     address = ida_kernwin.get_screen_ea()
-    block = ida.block(address)
-    if block is None:
+    block_address = current_block_address(address)
+    if block_address is None:
         raise RuntimeError("the cursor is not inside a block")
-    graph = ida.graph(config)
-    ida.disassembler(config).disassemble_block(block, graph)
-    entity = Block(block.address(), graph)
-    function = ida.function(address)
-    function_address = function.address() if function is not None else None
+    graph = disassemble_block_graph(block_address, config)
+    entity = Block(block_address, graph)
+    function_address = current_function_address(address)
     function_name = idc.get_func_name(function_address) if function_address is not None else ""
     return ResolvedContext(
         kind="block",
@@ -161,6 +147,26 @@ def resolve_block_context(config, widget=None) -> ResolvedContext:
         entity=entity,
         bytes_data=entity.bytes() or b"",
         pattern=entity.chromosome().pattern(),
+    )
+
+
+def resolve_selection_context(config, widget=None) -> ResolvedContext:
+    selection = current_viewer_selection(widget)
+    if selection is None:
+        raise RuntimeError("no instruction selection is active")
+    graph, entity, pattern = _transient_block_for_selection(config, selection)
+    function_address = current_function_address(selection.start)
+    function_name = idc.get_func_name(function_address) if function_address is not None else ""
+    return ResolvedContext(
+        kind="selection",
+        address=entity.address(),
+        function_address=function_address,
+        function_name=function_name or "",
+        selection=selection,
+        graph=graph,
+        entity=entity,
+        bytes_data=selection_bytes(selection),
+        pattern=pattern,
     )
 
 

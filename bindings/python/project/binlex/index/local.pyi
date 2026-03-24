@@ -9,12 +9,17 @@ class Collection:
     Function: "Collection"
 
 
+Entity = Collection
+
+
 class SearchResult:
     def corpus(self) -> str: ...
     def score(self) -> float: ...
     def sha256(self) -> str: ...
     def address(self) -> int: ...
     def object_id(self) -> str: ...
+    def symbol(self) -> str | None: ...
+    def attributes(self) -> list[dict]: ...
     def architecture(self) -> str: ...
     def collection(self) -> Collection: ...
     def graph(self) -> Graph: ...
@@ -24,10 +29,15 @@ class SearchResult:
 
 
 class LocalIndex:
-    def __init__(self, config: object, directory: str | None = None) -> None: ...
+    def __init__(
+        self,
+        config: object,
+        directory: str | None = None,
+        dimensions: int | None = None,
+    ) -> None: ...
     def put(self, data: bytes) -> str: ...
     def get(self, sha256: str) -> bytes: ...
-    def graph(
+    def index_graph(
         self,
         sha256: str,
         graph: Graph,
@@ -35,7 +45,37 @@ class LocalIndex:
         corpora: list[str] | None = None,
         attributes: list[Attribute] | None = None,
         selector: str | None = None,
-        collections: list[Collection] = [Collection.Block, Collection.Function],
+        collections: list[Collection] | None = None,
+    ) -> None: ...
+    def index_instruction(
+        self,
+        architecture: Architecture,
+        vector: list[float],
+        sha256: str,
+        address: int,
+        attributes: list[Attribute] | None = None,
+        corpus: str | None = None,
+        corpora: list[str] | None = None,
+    ) -> None: ...
+    def index_block(
+        self,
+        architecture: Architecture,
+        vector: list[float],
+        sha256: str,
+        address: int,
+        attributes: list[Attribute] | None = None,
+        corpus: str | None = None,
+        corpora: list[str] | None = None,
+    ) -> None: ...
+    def index_function(
+        self,
+        architecture: Architecture,
+        vector: list[float],
+        sha256: str,
+        address: int,
+        attributes: list[Attribute] | None = None,
+        corpus: str | None = None,
+        corpora: list[str] | None = None,
     ) -> None: ...
     def vector(
         self,
@@ -57,10 +97,10 @@ class LocalIndex:
         self,
         corpora: list[str],
         vector: list[float],
-        collections: list[Collection] = [Collection.Block, Collection.Function],
+        collections: list[Collection] | None = None,
         architectures: list[Architecture] | None = None,
         limit: int = 10,
     ) -> list[SearchResult]: ...
 
 
-__all__ = ["Collection", "LocalIndex", "SearchResult"]
+__all__ = ["Collection", "Entity", "LocalIndex", "SearchResult"]

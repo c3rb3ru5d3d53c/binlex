@@ -23,6 +23,14 @@ python -m plugin install
 
 Use `python -m plugin print-target` to inspect the detected IDA plugins directory, or pass `--target`.
 
+`--source` is the plugin source tree that contains `main.py`, `ida-plugin.json`, `core/`, and `ui/`. It is not the IDA plugins directory.
+
+Windows example:
+
+```powershell
+python -m plugin install --target "$env:APPDATA\Hex-Rays\IDA Pro\plugins"
+```
+
 ## Uninstall
 
 ```bash

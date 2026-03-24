@@ -13,6 +13,8 @@ class Collection:
     Function = _CollectionBinding.Function
 
 
+Entity = Collection
+
 class SearchResult:
     def __init__(self, binding):
         self._inner = binding
@@ -31,6 +33,12 @@ class SearchResult:
 
     def object_id(self):
         return self._inner.object_id()
+
+    def symbol(self):
+        return self._inner.symbol()
+
+    def attributes(self):
+        return self._inner.attributes()
 
     def architecture(self):
         return self._inner.architecture()
@@ -55,8 +63,8 @@ class SearchResult:
 
 
 class LocalIndex:
-    def __init__(self, config, directory=None):
-        self._inner = _LocalIndexBinding(config, directory)
+    def __init__(self, config, directory=None, dimensions=None):
+        self._inner = _LocalIndexBinding(config, directory, dimensions)
 
     def put(self, data):
         return self._inner.put(data)
@@ -73,12 +81,20 @@ class LocalIndex:
             return [corpus], False
         raise ValueError("either corpus or corpora must be provided")
 
-    def graph(self, *args, **kwargs):
+    def _resolve_collections(self, collections=None, default=None):
+        if collections is not None:
+            return list(collections)
+        return list(default or ())
+
+    def index_graph(self, *args, **kwargs):
         sha256 = kwargs.pop("sha256", None)
         graph = kwargs.pop("graph", None)
         attributes = kwargs.pop("attributes", None)
         selector = kwargs.pop("selector", None)
-        collections = kwargs.pop("collections", (Collection.Block, Collection.Function))
+        collections = self._resolve_collections(
+            collections=kwargs.pop("collections", None),
+            default=(Collection.Block, Collection.Function),
+        )
         corpus = kwargs.pop("corpus", None)
         corpora = kwargs.pop("corpora", None)
         if kwargs:
@@ -93,25 +109,79 @@ class LocalIndex:
         elif len(args) == 0 and sha256 is not None and graph is not None:
             pass
         else:
-            raise TypeError("graph expects either (corpus, sha256, graph) or (sha256, graph)")
+            raise TypeError(
+                "index_graph expects either (corpus, sha256, graph) or (sha256, graph)"
+            )
 
         resolved_corpora, is_many = self._resolve_corpora(corpus=corpus, corpora=corpora)
         if is_many:
-            return self._inner.graph_many(
+            return self._inner.index_graph_many(
                 resolved_corpora,
                 sha256,
                 graph._inner,
                 attributes,
                 selector,
-                list(collections),
+                collections,
             )
-        return self._inner.graph(
+        return self._inner.index_graph(
             resolved_corpora[0],
             sha256,
             graph._inner,
             attributes,
             selector,
-            list(collections),
+            collections,
+        )
+
+    def index_instruction(self, *args, **kwargs):
+        return self._index_collection(Collection.Instruction, self._inner.index_instruction, *args, **kwargs)
+
+    def index_block(self, *args, **kwargs):
+        return self._index_collection(Collection.Block, self._inner.index_block, *args, **kwargs)
+
+    def index_function(self, *args, **kwargs):
+        return self._index_collection(Collection.Function, self._inner.index_function, *args, **kwargs)
+
+    def _index_collection(self, expected_collection, binding, *args, **kwargs):
+        collection = kwargs.pop("collection", expected_collection)
+        architecture = kwargs.pop("architecture", None)
+        vector = kwargs.pop("vector", None)
+        sha256 = kwargs.pop("sha256", None)
+        address = kwargs.pop("address", None)
+        attributes = kwargs.pop("attributes", None)
+        corpus = kwargs.pop("corpus", None)
+        corpora = kwargs.pop("corpora", None)
+        if kwargs:
+            raise TypeError(f"unexpected keyword arguments: {', '.join(kwargs)}")
+
+        if collection != expected_collection:
+            raise ValueError("collection does not match the indexing method")
+
+        if len(args) == 5:
+            architecture, vector, sha256, address, attributes = args
+        elif len(args) == 4:
+            architecture, vector, sha256, address = args
+        elif (
+            len(args) == 0
+            and architecture is not None
+            and vector is not None
+            and sha256 is not None
+            and address is not None
+        ):
+            pass
+        else:
+            raise TypeError(
+                "index method expects (architecture, vector, sha256, address[, attributes])"
+            )
+
+        resolved_corpora, _ = self._resolve_corpora(corpus=corpus, corpora=corpora)
+        architecture = _coerce_architecture(architecture)
+        return binding(
+            resolved_corpora,
+            architecture,
+            vector,
+            sha256,
+            address,
+            attributes,
         )
 
     def vector(self, *args, **kwargs):
@@ -187,12 +257,15 @@ class LocalIndex:
         self,
         corpora,
         vector,
-        collections=(Collection.Block, Collection.Function),
+        collections=None,
         architectures=None,
         limit=10,
     ):
         corpora = list(corpora)
-        collections = list(collections)
+        collections = self._resolve_collections(
+            collections=collections,
+            default=(Collection.Block, Collection.Function),
+        )
         architectures = [] if architectures is None else list(architectures)
         return [
             SearchResult(result)
@@ -206,4 +279,4 @@ class LocalIndex:
         ]
 
 
-__all__ = ["Collection", "LocalIndex", "SearchResult"]
+__all__ = ["Collection", "Entity", "LocalIndex", "SearchResult"]

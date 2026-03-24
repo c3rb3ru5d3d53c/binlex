@@ -21,9 +21,11 @@
 // SOFTWARE.
 
 pub mod attribute;
+pub mod symbol_type;
 pub mod tag;
 
 pub use attribute::Attribute;
 pub use attribute::Attributes;
+pub use symbol_type::SymbolType;
 pub use tag::Tag;
 pub use tag::TagJson;

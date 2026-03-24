@@ -222,9 +222,12 @@ jobs:
         uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: Install Dependencies
+        shell: bash
         run: |
+          set -euo pipefail
           pacman -Syu --noconfirm
           pacman -S --noconfirm --needed base-devel pkgconf openssl zstd make automake autoconf libtool clang curl git python rust protobuf
+          id -u builder >/dev/null 2>&1 || useradd --create-home --shell /bin/bash builder
 
       - name: Cache Rust Build Artifacts
         uses: Swatinem/rust-cache@v2
@@ -256,8 +259,12 @@ jobs:
       - name: Run Unit Tests
         shell: bash
         run: |
+          set -euo pipefail
           for attempt in 1 2 3; do
             cargo test && break
+            if [[ "$attempt" -eq 3 ]]; then
+              exit 1
+            fi
             echo "Attempt $attempt failed, retrying in 15s..."
             sleep 15
           done
@@ -265,26 +272,29 @@ jobs:
       - name: Build Project
         shell: bash
         run: |
-          id -u builder >/dev/null 2>&1 || useradd --create-home --shell /bin/bash builder
-          chown -R builder:builder "$GITHUB_WORKSPACE"
-          runuser -u builder -- bash -lc "cd \"$GITHUB_WORKSPACE\" && makepkg"
-          mkdir -p target/zst
-          find "$GITHUB_WORKSPACE" -maxdepth 1 -name '*.pkg.tar.zst' -exec mv {} target/zst/ \;
+          set -euo pipefail
+          rm -rf /tmp/binlex-build
+          mkdir -p /tmp/binlex-build
+          cp -a "$GITHUB_WORKSPACE"/. /tmp/binlex-build/
+          chown -R builder:builder /tmp/binlex-build
+          runuser -u builder -- bash -lc "cd /tmp/binlex-build && makepkg"
 
       - name: Create Dist Directory
-        run: mkdir dist
+        run: mkdir -p dist
 
       - name: Copy Binary
+        shell: bash
         run: |
-          cp target/release/binlex dist/
-          cp target/release/binlex-server dist/
-          cp target/release/binlex-processor-vex dist/
-          cp target/release/binlex-processor-embeddings dist/
-          cp target/release/binlex-yara dist/
-          cp target/release/binlex-symbols dist/
-          cp target/release/binlex-image dist/
-          cp target/release/binlex-hash dist/
-          cp target/zst/*.zst dist/
+          set -euo pipefail
+          cp /tmp/binlex-build/target/release/binlex dist/
+          cp /tmp/binlex-build/target/release/binlex-server dist/
+          cp /tmp/binlex-build/target/release/binlex-processor-vex dist/
+          cp /tmp/binlex-build/target/release/binlex-processor-embeddings dist/
+          cp /tmp/binlex-build/target/release/binlex-yara dist/
+          cp /tmp/binlex-build/target/release/binlex-symbols dist/
+          cp /tmp/binlex-build/target/release/binlex-image dist/
+          cp /tmp/binlex-build/target/release/binlex-hash dist/
+          cp /tmp/binlex-build/*.pkg.tar.zst dist/
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v6
@@ -437,67 +447,6 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.os }}-python-wheels
-          path: wheelhouse/
-
-      - name: Show sccache Statistics
-        if: always()
-        run: sccache --show-stats
-
-  archlinux-python-wheels:
-    runs-on: ubuntu-latest
-    container:
-      image: archlinux:latest
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v6
-
-      - name: Set up sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
-
-      - name: Install Dependencies
-        run: |
-          pacman -Syu --noconfirm
-          pacman -S --noconfirm --needed base-devel pkgconf openssl zstd make automake autoconf libtool clang curl git python python-pip protobuf
-
-      - name: Set Up Rust
-        shell: bash
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-
-      - name: Cache Rust Build Artifacts
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: archlinux-wheels
-          cache-provider: github
-
-      - name: Set Up Python Build Tools
-        shell: bash
-        run: |
-          python -m venv .wheel-tools
-          .wheel-tools/bin/pip install --upgrade pip
-          .wheel-tools/bin/pip install maturin uv
-          echo "$GITHUB_WORKSPACE/.wheel-tools/bin" >> "$GITHUB_PATH"
-
-      - name: Build Python Wheels
-        shell: bash
-        run: |
-          mkdir -p wheelhouse
-          uv python install 3.13 3.14
-          # Arch-built wheels are intended as local Linux artifacts, not PyPI wheels.
-          python -m maturin build --release \
-            --compatibility linux \
-            --manifest-path bindings/python/Cargo.toml \
-            --out wheelhouse \
-            --interpreter \
-              "$(uv python find 3.13)" \
-              "$(uv python find 3.14)"
-
-      - name: Upload Wheel Artifacts
-        uses: actions/upload-artifact@v6
-        with:
-          name: archlinux-python-wheels
           path: wheelhouse/
 
       - name: Show sccache Statistics

@@ -1,0 +1,6 @@
+include README.md
+include ida-plugin.json
+include main.py
+include requirements.txt
+recursive-include core *.py
+recursive-include ui *.py

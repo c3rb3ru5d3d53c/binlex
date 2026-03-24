@@ -1,6 +1,6 @@
 use crate::formats::File;
 use ::binlex::formats::SymbolJson;
-use ::binlex::metadata::{Attribute as InnerAttribute, TagJson};
+use ::binlex::metadata::{Attribute as InnerAttribute, SymbolType as InnerSymbolType, TagJson};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyType;
@@ -9,6 +9,37 @@ use pyo3::types::PyType;
 #[derive(Clone)]
 pub struct Attribute {
     pub inner: InnerAttribute,
+}
+
+#[pyclass(eq, skip_from_py_object)]
+#[derive(Clone, PartialEq)]
+pub struct SymbolType {
+    pub inner: InnerSymbolType,
+}
+
+#[pymethods]
+impl SymbolType {
+    #[allow(non_upper_case_globals)]
+    #[classattr]
+    pub const Instruction: Self = Self {
+        inner: InnerSymbolType::Instruction,
+    };
+
+    #[allow(non_upper_case_globals)]
+    #[classattr]
+    pub const Block: Self = Self {
+        inner: InnerSymbolType::Block,
+    };
+
+    #[allow(non_upper_case_globals)]
+    #[classattr]
+    pub const Function: Self = Self {
+        inner: InnerSymbolType::Function,
+    };
+
+    pub fn __str__(&self) -> String {
+        self.inner.to_string()
+    }
 }
 
 #[pymethods]
@@ -37,15 +68,17 @@ impl Attribute {
     #[pyo3(text_signature = "(cls, name, symbol_type, address)")]
     pub fn symbol(
         _cls: &Bound<'_, PyType>,
+        py: Python,
         name: String,
-        symbol_type: String,
+        symbol_type: Py<SymbolType>,
         address: u64,
     ) -> PyResult<Self> {
+        let symbol_type = symbol_type.borrow(py);
         Ok(Self {
             inner: InnerAttribute::Symbol(SymbolJson {
                 type_: "symbol".to_string(),
                 name,
-                symbol_type,
+                symbol_type: symbol_type.inner.to_string(),
                 address,
             }),
         })
@@ -67,6 +100,7 @@ impl Attribute {
 #[pyo3(name = "metadata")]
 pub fn metadata_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Attribute>()?;
+    m.add_class::<SymbolType>()?;
     py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.metadata", m)?;
