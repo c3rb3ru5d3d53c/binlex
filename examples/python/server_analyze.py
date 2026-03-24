@@ -21,17 +21,50 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import argparse
+
 from binlex import Config
 from binlex.transports.http import Client
 
 
-config = Config()
-config.general.threads = 16
-config.processors.enabled = True
-config.processors.embeddings.enabled = True
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        prog="server_analyze",
+        description="Analyze a binary through binlex-server and print the first function PNG pHash",
+    )
+    parser.add_argument("--input", required=True, help="Input binary path")
+    parser.add_argument(
+        "--url",
+        default="http://127.0.0.1:5000",
+        help="binlex-server base URL",
+    )
+    parser.add_argument(
+        "--threads",
+        type=int,
+        default=16,
+        help="Thread count for analysis configuration",
+    )
+    args = parser.parse_args()
 
-client = Client(config)
+    config = Config()
+    config.general.threads = args.threads
+    config.processors.enabled = True
+    config.processors.embeddings.enabled = True
+    config.processors.embeddings.transport.http.enabled = True
+    config.processors.embeddings.transport.http.url = args.url
 
-cfg = client.analyze_file('/home/c3rb3ru5/Tools/binlex/samples/kernel32_0.dll')
-function = cfg.functions()[0]
-print(function.png().phash().hexdigest())
+    client = Client(config)
+
+    cfg = client.analyze_file(args.input)
+    functions = cfg.functions()
+    if not functions:
+        print("no functions produced")
+        return 0
+
+    phash = functions[0].png().phash()
+    print(phash.hexdigest() if phash else "no phash")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

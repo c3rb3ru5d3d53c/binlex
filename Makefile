@@ -41,7 +41,7 @@ ida-plugin:
 		cd plugins/ida/ && \
 		pip install . build && \
 		python -m build && \
-		python -m plugin archive --output ../../target/binlex-ida.zip
+		python -m binlex_ida archive --output ../../target/binlex-ida.zip
 
 clean:
 	@rm -rf pkg/

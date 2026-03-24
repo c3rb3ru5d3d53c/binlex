@@ -96,3 +96,4 @@ path = "src/bin/binlex-processor-vex.rs"
 [[bin]]
 name = "binlex-server"
 path = "src/bin/binlex-server.rs"
+

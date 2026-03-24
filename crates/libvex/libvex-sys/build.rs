@@ -212,22 +212,35 @@ fn clone_repo(repo: &str, dest: &Path, shallow: bool) -> Result<()> {
 }
 
 fn checkout_repo_revision(dest: &Path, revision: &str) -> Result<()> {
-    run_checked("git", &["checkout", revision], dest)
+    run_git_checked_in_repo(dest, &["checkout", revision])
 }
 
-fn mark_git_safe_directory(repo_dir: &Path) -> Result<()> {
-    let repo = repo_dir.to_string_lossy().into_owned();
-    run_checked(
-        "git",
-        &[
-            "config",
-            "--global",
-            "--add",
-            "safe.directory",
-            repo.as_str(),
-        ],
-        repo_dir,
+fn git_command_in_repo(repo_dir: &Path) -> Command {
+    let mut command = Command::new("git");
+    command
+        .arg("-c")
+        .arg(format!("safe.directory={}", repo_dir.display()))
+        .current_dir(repo_dir);
+    command
+}
+
+fn run_git_checked_in_repo(repo_dir: &Path, args: &[&str]) -> Result<()> {
+    let status = git_command_in_repo(repo_dir).args(args).status()?;
+    if status.success() {
+        return Ok(());
+    }
+    Err(format!(
+        "`git -c safe.directory={} {}` failed in {} with status {}",
+        repo_dir.display(),
+        args.join(" "),
+        repo_dir.display(),
+        status
     )
+    .into())
+}
+
+fn git_output_in_repo(repo_dir: &Path, args: &[&str]) -> Result<std::process::Output> {
+    Ok(git_command_in_repo(repo_dir).args(args).output()?)
 }
 
 fn bootstrap_macos_vex() -> Result<PathBuf> {
@@ -243,7 +256,6 @@ fn bootstrap_macos_vex() -> Result<PathBuf> {
     if !valgrind_dir.exists() {
         clone_repo(VALGRIND_MACOS_REPO, &valgrind_dir, true)?;
     }
-    mark_git_safe_directory(&valgrind_dir)?;
 
     println!("cargo:rerun-if-changed={}", valgrind_dir.display());
     apply_configured_patches(&valgrind_dir)?;
@@ -298,13 +310,9 @@ fn fetch_valgrind_source(out_dir: &Path) -> Result<PathBuf> {
     if !valgrind_dir.exists() {
         clone_repo(VALGRIND_REPO, &valgrind_dir, false)?;
     }
-    mark_git_safe_directory(&valgrind_dir)?;
-    let head = Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .current_dir(&valgrind_dir)
-        .output()?;
+    let head = git_output_in_repo(&valgrind_dir, &["rev-parse", "HEAD"])?;
     if !head.status.success() || String::from_utf8_lossy(&head.stdout).trim() != VALGRIND_REV {
-        run_checked("git", &["fetch", "origin", VALGRIND_REV], &valgrind_dir)?;
+        run_git_checked_in_repo(&valgrind_dir, &["fetch", "origin", VALGRIND_REV])?;
         checkout_repo_revision(&valgrind_dir, VALGRIND_REV)?;
     }
     println!("cargo:rerun-if-changed={}", valgrind_dir.display());
