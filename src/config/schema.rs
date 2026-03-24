@@ -171,6 +171,7 @@ pub struct ConfigIndex {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigIndexLocal {
     pub directory: String,
+    pub dimensions: Option<usize>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

@@ -1,164 +1,233 @@
 from __future__ import annotations
 
-from dataclasses import asdict
-
-from PyQt5.QtWidgets import (
-    QCheckBox,
-    QDialog,
-    QDialogButtonBox,
-    QFormLayout,
-    QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QMessageBox,
-    QSpinBox,
-    QVBoxLayout,
-)
+import ida_kernwin
 
 from core.compare import CompareRequest
 from core.config import PluginConfig
 from core.indexing import IndexRequest
 
 
-class ConfigDialog(QDialog):
-    def __init__(self, plugin_config: PluginConfig, parent=None) -> None:
-        super().__init__(parent)
-        self.setWindowTitle("Binlex Config")
-        self.setMinimumWidth(480)
+def _parse_corpora(value: str) -> list[str]:
+    corpora = []
+    seen = set()
+    for item in value.split(","):
+        corpus = item.strip()
+        if not corpus or corpus in seen:
+            continue
+        corpora.append(corpus)
+        seen.add(corpus)
+    return corpora
 
-        self.index_root = QLineEdit(plugin_config.index_root)
-        self.default_corpus = QLineEdit(plugin_config.default_corpus)
 
-        self.default_threads = QSpinBox()
-        self.default_threads.setRange(1, 128)
-        self.default_threads.setValue(plugin_config.default_threads)
+def _ask_text(default: str, prompt: str) -> str | None:
+    return ida_kernwin.ask_str(default, 0, prompt)
 
-        self.default_dimensions = QSpinBox()
-        self.default_dimensions.setRange(1, 4096)
-        self.default_dimensions.setValue(plugin_config.default_embedding_dimensions)
 
-        self.default_compare_limit = QSpinBox()
-        self.default_compare_limit.setRange(1, 256)
-        self.default_compare_limit.setValue(plugin_config.default_compare_limit)
+def _ask_multiline(default: str, prompt: str) -> str | None:
+    ask_text = getattr(ida_kernwin, "ask_text", None)
+    if ask_text is not None:
+        return ask_text(65535, default, prompt)
+    return _ask_text(default.replace("\n", "; "), prompt)
 
-        self.default_index_blocks = QCheckBox("Index blocks when indexing functions")
-        self.default_index_blocks.setChecked(plugin_config.default_index_blocks_with_functions)
 
-        self.include_names = QCheckBox("Record meaningful function names")
-        self.include_names.setChecked(plugin_config.include_meaningful_names)
+def _ask_int(default: int, prompt: str, minimum: int, maximum: int) -> int | None:
+    value = ida_kernwin.ask_long(default, prompt)
+    if value is None:
+        return None
+    if value < minimum or value > maximum:
+        raise RuntimeError(f"value out of range for '{prompt}': expected {minimum}-{maximum}, got {value}")
+    return value
 
-        layout = QVBoxLayout(self)
-        form = QFormLayout()
-        form.addRow("Index Root", self.index_root)
-        form.addRow("Default Corpus", self.default_corpus)
-        form.addRow("Default Threads", self.default_threads)
-        form.addRow("Default Embedding Dimensions", self.default_dimensions)
-        form.addRow("Default Compare Limit", self.default_compare_limit)
-        form.addRow("", self.default_index_blocks)
-        form.addRow("", self.include_names)
-        layout.addLayout(form)
 
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+def _ask_bool(default: bool, prompt: str) -> bool | None:
+    button = ida_kernwin.ASKBTN_YES if default else ida_kernwin.ASKBTN_NO
+    result = ida_kernwin.ask_yn(button, prompt)
+    if result == ida_kernwin.ASKBTN_CANCEL:
+        return None
+    return result == ida_kernwin.ASKBTN_YES
 
-    def value(self) -> PluginConfig:
-        return PluginConfig(
-            index_root=self.index_root.text().strip(),
-            default_corpus=self.default_corpus.text().strip() or "default",
-            default_threads=self.default_threads.value(),
-            default_embedding_dimensions=self.default_dimensions.value(),
-            default_compare_limit=self.default_compare_limit.value(),
-            default_index_blocks_with_functions=self.default_index_blocks.isChecked(),
-            include_meaningful_names=self.include_names.isChecked(),
+
+def _parse_bool(value: str, key: str) -> bool:
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise RuntimeError(f"invalid boolean value for '{key}': {value}")
+
+
+def _parse_index_overrides(text: str, *, allow_index_blocks: bool) -> IndexRequest:
+    values: dict[str, str] = {}
+    for raw_line in text.replace(";", "\n").splitlines():
+        line = raw_line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        if "=" not in line:
+            raise RuntimeError(f"invalid override line: {raw_line}")
+        key, value = [part.strip() for part in line.split("=", 1)]
+        values[key.lower()] = value
+
+    corpora = _parse_corpora(values.get("corpora", "default")) or ["default"]
+    threads = int(values.get("threads", "4"))
+    dimensions = int(values.get("dimensions", "64"))
+    include_names = _parse_bool(values.get("include_names", "true"), "include_names")
+    index_blocks = False
+    if allow_index_blocks:
+        index_blocks = _parse_bool(values.get("index_blocks", "false"), "index_blocks")
+
+    if threads < 1 or threads > 128:
+        raise RuntimeError(f"threads out of range: {threads}")
+    if dimensions < 1 or dimensions > 4096:
+        raise RuntimeError(f"dimensions out of range: {dimensions}")
+
+    return IndexRequest(
+        corpora=corpora,
+        threads=threads,
+        dimensions=dimensions,
+        index_blocks=index_blocks,
+        include_names=include_names,
+    )
+
+
+def _prompt_index_form(title: str, plugin_config: PluginConfig, *, allow_index_blocks: bool) -> IndexRequest | None:
+    form_api = getattr(ida_kernwin, "Form", None)
+    if form_api is None:
+        return None
+    decimal_type = getattr(form_api, "FT_DEC", None)
+    numeric_kwargs = {"swidth": 10}
+    if decimal_type is not None:
+        numeric_kwargs["tp"] = decimal_type
+
+    controls = {
+        "corpora": form_api.StringInput(
+            value=plugin_config.default_corpus,
+            swidth=40,
+        ),
+        "threads": form_api.NumericInput(value=plugin_config.default_threads, **numeric_kwargs),
+        "dimensions": form_api.NumericInput(
+            value=plugin_config.default_embedding_dimensions,
+            **numeric_kwargs,
+        ),
+        "include_names": form_api.StringInput(
+            value="true" if plugin_config.include_meaningful_names else "false",
+            swidth=8,
+        ),
+    }
+
+    form_lines = [
+        "STARTITEM 0",
+        "BUTTON YES* OK",
+        "BUTTON CANCEL Cancel",
+        title,
+        "",
+        "<Corpora      :{corpora}>",
+        "<Threads      :{threads}>",
+        "<Dimensions   :{dimensions}>",
+    ]
+
+    if allow_index_blocks:
+        controls["index_blocks"] = form_api.StringInput(
+            value="true" if plugin_config.default_index_blocks_with_functions else "false",
+            swidth=8,
         )
+        form_lines.append("<Index blocks :{index_blocks}>")
 
+    form_lines.append("<Include names:{include_names}>")
 
-class IndexDialog(QDialog):
-    def __init__(self, title: str, plugin_config: PluginConfig, *, allow_index_blocks: bool, parent=None) -> None:
-        super().__init__(parent)
-        self.setWindowTitle(title)
-        self.setMinimumWidth(420)
-
-        self.corpus = QLineEdit(plugin_config.default_corpus)
-
-        self.threads = QSpinBox()
-        self.threads.setRange(1, 128)
-        self.threads.setValue(plugin_config.default_threads)
-
-        self.dimensions = QSpinBox()
-        self.dimensions.setRange(1, 4096)
-        self.dimensions.setValue(plugin_config.default_embedding_dimensions)
-
-        self.index_blocks = QCheckBox("Index blocks too")
-        self.index_blocks.setChecked(plugin_config.default_index_blocks_with_functions)
-        self.index_blocks.setEnabled(allow_index_blocks)
-
-        self.include_names = QCheckBox("Record meaningful function names")
-        self.include_names.setChecked(plugin_config.include_meaningful_names)
-
-        layout = QVBoxLayout(self)
-        form = QFormLayout()
-        form.addRow("Corpus", self.corpus)
-        form.addRow("Threads", self.threads)
-        form.addRow("Embedding Dimensions", self.dimensions)
+    form = form_api("\n".join(form_lines), controls)
+    form.Compile()
+    try:
+        result = form.Execute()
+        if result != 1:
+            return None
+        values = [
+            f"corpora = {form.corpora.value}",
+            f"threads = {form.threads.value}",
+            f"dimensions = {form.dimensions.value}",
+            f"include_names = {form.include_names.value}",
+        ]
         if allow_index_blocks:
-            form.addRow("", self.index_blocks)
-        form.addRow("", self.include_names)
-        layout.addLayout(form)
-
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
-
-    def value(self) -> IndexRequest:
-        return IndexRequest(
-            corpus=self.corpus.text().strip() or "default",
-            threads=self.threads.value(),
-            dimensions=self.dimensions.value(),
-            index_blocks=self.index_blocks.isChecked() and self.index_blocks.isEnabled(),
-            include_names=self.include_names.isChecked(),
-        )
+            values.append(f"index_blocks = {form.index_blocks.value}")
+        return _parse_index_overrides("\n".join(values), allow_index_blocks=allow_index_blocks)
+    finally:
+        form.Free()
 
 
-class CompareDialog(QDialog):
-    def __init__(self, title: str, plugin_config: PluginConfig, available_corpora: list[str], parent=None) -> None:
-        super().__init__(parent)
-        self.setWindowTitle(title)
-        self.setMinimumWidth(420)
+def prompt_config(plugin_config: PluginConfig) -> PluginConfig | None:
+    index_root = _ask_text(plugin_config.index_root, "Binlex config: index root")
+    if index_root is None:
+        return None
+    default_corpora = _ask_text(plugin_config.default_corpus, "Binlex config: default corpora (comma-separated)")
+    if default_corpora is None:
+        return None
+    default_threads = _ask_int(plugin_config.default_threads, "Binlex config: default threads", 1, 128)
+    if default_threads is None:
+        return None
+    default_dimensions = _ask_int(
+        plugin_config.default_embedding_dimensions,
+        "Binlex config: default embedding dimensions",
+        1,
+        4096,
+    )
+    if default_dimensions is None:
+        return None
+    default_compare_limit = _ask_int(
+        plugin_config.default_compare_limit,
+        "Binlex config: default compare result limit",
+        1,
+        256,
+    )
+    if default_compare_limit is None:
+        return None
+    default_index_blocks = _ask_bool(
+        plugin_config.default_index_blocks_with_functions,
+        "Index blocks when indexing functions?",
+    )
+    if default_index_blocks is None:
+        return None
+    include_names = _ask_bool(
+        plugin_config.include_meaningful_names,
+        "Record meaningful function names?",
+    )
+    if include_names is None:
+        return None
 
-        self.corpora = QLineEdit(plugin_config.default_corpus)
-        self.limit = QSpinBox()
-        self.limit.setRange(1, 256)
-        self.limit.setValue(plugin_config.default_compare_limit)
+    return PluginConfig(
+        index_root=index_root.strip(),
+        default_corpus=", ".join(_parse_corpora(default_corpora)) or "default",
+        default_threads=default_threads,
+        default_embedding_dimensions=default_dimensions,
+        default_compare_limit=default_compare_limit,
+        default_index_blocks_with_functions=default_index_blocks,
+        include_meaningful_names=include_names,
+    )
 
-        layout = QVBoxLayout(self)
-        if available_corpora:
-            layout.addWidget(QLabel(f"Available corpora: {', '.join(sorted(available_corpora))}"))
 
-        form = QFormLayout()
-        form.addRow("Corpora", self.corpora)
-        form.addRow("Result Limit", self.limit)
-        layout.addLayout(form)
+def prompt_index(title: str, plugin_config: PluginConfig, *, allow_index_blocks: bool) -> IndexRequest | None:
+    form_request = _prompt_index_form(title, plugin_config, allow_index_blocks=allow_index_blocks)
+    if form_request is None:
+        raise RuntimeError("IDA form API is not available for the Binlex indexing dialog")
+    return form_request
 
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
 
-    def value(self) -> CompareRequest:
-        corpora = [item.strip() for item in self.corpora.text().split(",") if item.strip()]
-        return CompareRequest(
-            corpora=corpora or ["default"],
-            limit=self.limit.value(),
-        )
+def prompt_compare(title: str, plugin_config: PluginConfig, available_corpora: list[str]) -> CompareRequest | None:
+    if available_corpora:
+        ida_kernwin.msg(f"[*] {title} available corpora: {', '.join(sorted(available_corpora))}\n")
+    corpora_text = _ask_text(plugin_config.default_corpus, f"{title}: corpus names (comma-separated)")
+    if corpora_text is None:
+        return None
+    limit = _ask_int(plugin_config.default_compare_limit, f"{title}: result limit", 1, 256)
+    if limit is None:
+        return None
+    corpora = _parse_corpora(corpora_text)
+    return CompareRequest(corpora=corpora or ["default"], limit=limit)
 
 
 def show_error(message: str, parent=None) -> None:
-    QMessageBox.critical(parent, "Binlex", message)
+    del parent
+    ida_kernwin.warning(message)
 
 
 def show_info(message: str, parent=None) -> None:
-    QMessageBox.information(parent, "Binlex", message)
+    del parent
+    ida_kernwin.msg(f"[*] {message}\n")

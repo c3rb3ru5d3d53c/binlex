@@ -56,7 +56,6 @@ pub struct SymbolJson {
     /// Names associated with the function symbol.
     pub name: String,
     /// The virtual address of the function symbol.
-    #[serde(skip)]
     pub address: u64,
 }
 

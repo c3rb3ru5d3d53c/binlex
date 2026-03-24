@@ -1,7 +1,10 @@
 use crate::Config;
 use crate::controlflow::{Block, Function, Graph, GraphSnapshot, Instruction};
 use crate::databases::lancedb;
+use crate::index::Collection;
+use crate::index::Entity;
 use crate::metadata::Attribute;
+use crate::metadata::SymbolType;
 use crate::processor::ProcessorTarget;
 use crate::storage::object_store;
 use ring::digest::{SHA256, digest};
@@ -11,30 +14,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Collection {
-    Instruction,
-    Block,
-    Function,
-}
-
-impl Collection {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Instruction => "instruction",
-            Self::Block => "block",
-            Self::Function => "function",
-        }
-    }
-}
-
-impl fmt::Display for Collection {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
 
 #[derive(Clone)]
 pub struct LocalIndex {
@@ -47,6 +26,7 @@ pub struct LocalIndex {
 #[derive(Debug)]
 pub enum Error {
     InvalidConfiguration(&'static str),
+    Validation(String),
     Serialization(String),
     Graph(String),
     NotFound(String),
@@ -58,6 +38,9 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidConfiguration(message) => {
+                write!(f, "local index configuration error: {}", message)
+            }
+            Self::Validation(message) => {
                 write!(f, "local index configuration error: {}", message)
             }
             Self::Serialization(message) => {
@@ -80,20 +63,22 @@ struct StoredGraphRecord {
     snapshot: GraphSnapshot,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-struct Occurrence {
-    sha256: String,
-    address: u64,
-    corpora: Vec<String>,
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+struct CorpusEntry {
+    corpus: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    attributes: Vec<Value>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct IndexEntry {
     object_id: String,
-    collection: Collection,
+    entity: Collection,
     architecture: String,
+    sha256: String,
+    address: u64,
     vector: Vec<f32>,
-    occurrences: Vec<Occurrence>,
+    corpora: Vec<CorpusEntry>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -116,10 +101,14 @@ const DEFAULT_INDEX_GRAPH_COLLECTIONS: &[Collection] = &[Collection::Block, Coll
 pub struct SearchResult {
     corpus: String,
     object_id: String,
-    collection: Collection,
+    entity: Collection,
     architecture: String,
     sha256: String,
     address: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    symbol: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    attributes: Vec<Value>,
     score: f32,
 }
 
@@ -133,7 +122,7 @@ impl SearchResult {
     }
 
     pub fn collection(&self) -> Collection {
-        self.collection
+        self.entity
     }
 
     pub fn architecture(&self) -> &str {
@@ -148,26 +137,100 @@ impl SearchResult {
         self.address
     }
 
+    pub fn symbol(&self) -> Option<&str> {
+        self.symbol.as_deref()
+    }
+
+    pub fn attributes(&self) -> &[Value] {
+        &self.attributes
+    }
+
     pub fn score(&self) -> f32 {
         self.score
     }
 }
 
 impl LocalIndex {
-    pub fn new(config: Config, directory: Option<PathBuf>) -> Result<Self, Error> {
+    pub fn new(config: Config) -> Result<Self, Error> {
+        Self::with_options(config, None, None)
+    }
+
+    pub fn with_options(
+        config: Config,
+        directory: Option<PathBuf>,
+        dimensions: Option<usize>,
+    ) -> Result<Self, Error> {
         let root = resolve_root(directory, &config)?;
-        Ok(Self {
+        let mut config = config;
+        if let Some(dimensions) = dimensions {
+            config.index.local.dimensions = Some(dimensions);
+        }
+        let object_store = object_store::ObjectStore::new(root.join("object_store"))
+            .map_err(|error| Error::ObjectStore(error.to_string()))?;
+        let lancedb = lancedb::LanceDB::new(root.join("lancedb"))
+            .map_err(|error| Error::LanceDb(error.to_string()))?;
+        let index = Self {
             config,
-            object_store: object_store::ObjectStore::new(root.join("object_store"))
-                .map_err(|error| Error::ObjectStore(error.to_string()))?,
-            lancedb: lancedb::LanceDB::new(root.join("lancedb"))
-                .map_err(|error| Error::LanceDb(error.to_string()))?,
+            object_store,
+            lancedb,
             pending: Arc::new(Mutex::new(PendingBatch::default())),
-        })
+        };
+        index.validate_configuration()?;
+        Ok(index)
     }
 
     pub fn config(&self) -> &Config {
         &self.config
+    }
+
+    fn validate_configuration(&self) -> Result<(), Error> {
+        if let Some(dimensions) = self.config.index.local.dimensions {
+            if dimensions == 0 {
+                return Err(Error::InvalidConfiguration(
+                    "index.local.dimensions must be greater than zero",
+                ));
+            }
+        }
+        self.validate_existing_table_dimensions()
+    }
+
+    fn validate_existing_table_dimensions(&self) -> Result<(), Error> {
+        let Some(expected_dimensions) = self.config.index.local.dimensions else {
+            return Ok(());
+        };
+        for table_name in self
+            .lancedb
+            .table_names()
+            .map_err(|error| Error::LanceDb(error.to_string()))?
+        {
+            let Some(actual_dimensions) = self
+                .lancedb
+                .table_dimensions_by_name(&table_name)
+                .map_err(|error| Error::LanceDb(error.to_string()))?
+            else {
+                continue;
+            };
+            if actual_dimensions != expected_dimensions {
+                return Err(Error::Validation(format!(
+                    "existing local index table {} uses dimensions {}, but index.local.dimensions is {}",
+                    table_name, actual_dimensions, expected_dimensions
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_vector_dimensions(&self, vector: &[f32]) -> Result<(), Error> {
+        if let Some(expected_dimensions) = self.config.index.local.dimensions {
+            if vector.len() != expected_dimensions {
+                return Err(Error::Validation(format!(
+                    "vector length {} does not match configured index.local.dimensions {}",
+                    vector.len(),
+                    expected_dimensions
+                )));
+            }
+        }
+        Ok(())
     }
 
     pub fn put(&self, data: &[u8]) -> Result<String, Error> {
@@ -195,7 +258,7 @@ impl LocalIndex {
             })
     }
 
-    pub fn graph(
+    pub fn index_graph(
         &self,
         corpus: &str,
         sha256: &str,
@@ -204,7 +267,7 @@ impl LocalIndex {
         selector: Option<&str>,
         collections: Option<&[Collection]>,
     ) -> Result<(), Error> {
-        self.graph_many(
+        self.index_graph_many(
             &[corpus.to_string()],
             sha256,
             graph,
@@ -214,7 +277,7 @@ impl LocalIndex {
         )
     }
 
-    pub fn graph_many(
+    pub fn index_graph_many(
         &self,
         corpora: &[String],
         sha256: &str,
@@ -228,6 +291,7 @@ impl LocalIndex {
             sha256,
             graph,
             process_attributes(attributes),
+            attributes,
             selector,
             collections,
         )
@@ -242,13 +306,14 @@ impl LocalIndex {
         sha256: &str,
         address: u64,
     ) -> Result<(), Error> {
-        self.vector_many(
+        self.index_many(
             &[corpus.to_string()],
             collection,
             architecture,
             vector,
             sha256,
             address,
+            &[],
         )
     }
 
@@ -261,14 +326,100 @@ impl LocalIndex {
         sha256: &str,
         address: u64,
     ) -> Result<(), Error> {
+        self.index_many(
+            corpora,
+            collection,
+            architecture,
+            vector,
+            sha256,
+            address,
+            &[],
+        )
+    }
+
+    pub fn index_instruction(
+        &self,
+        corpora: &[String],
+        architecture: crate::Architecture,
+        vector: &[f32],
+        sha256: &str,
+        address: u64,
+        attributes: &[Attribute],
+    ) -> Result<(), Error> {
+        self.index_many(
+            corpora,
+            Entity::Instruction,
+            architecture,
+            vector,
+            sha256,
+            address,
+            attributes,
+        )
+    }
+
+    pub fn index_block(
+        &self,
+        corpora: &[String],
+        architecture: crate::Architecture,
+        vector: &[f32],
+        sha256: &str,
+        address: u64,
+        attributes: &[Attribute],
+    ) -> Result<(), Error> {
+        self.index_many(
+            corpora,
+            Entity::Block,
+            architecture,
+            vector,
+            sha256,
+            address,
+            attributes,
+        )
+    }
+
+    pub fn index_function(
+        &self,
+        corpora: &[String],
+        architecture: crate::Architecture,
+        vector: &[f32],
+        sha256: &str,
+        address: u64,
+        attributes: &[Attribute],
+    ) -> Result<(), Error> {
+        self.index_many(
+            corpora,
+            Entity::Function,
+            architecture,
+            vector,
+            sha256,
+            address,
+            attributes,
+        )
+    }
+
+    fn index_many(
+        &self,
+        corpora: &[String],
+        collection: Collection,
+        architecture: crate::Architecture,
+        vector: &[f32],
+        sha256: &str,
+        address: u64,
+        attributes: &[Attribute],
+    ) -> Result<(), Error> {
         if vector.is_empty() {
             return Err(Error::InvalidConfiguration("vector must not be empty"));
         }
+        self.validate_vector_dimensions(vector)?;
         if sha256.trim().is_empty() {
             return Err(Error::InvalidConfiguration("sha256 must not be empty"));
         }
         let corpora = normalize_corpora(corpora)?;
         let object_id = manual_object_id(collection, &architecture.to_string(), sha256, address);
+        let attributes = attributes
+            .iter()
+            .map(Attribute::to_json_value)
+            .collect::<Vec<_>>();
         let mut pending = self.pending.lock().unwrap();
         accumulate_sample_membership(&mut pending.sample_memberships, sha256, &corpora);
         accumulate_entry(
@@ -277,12 +428,11 @@ impl LocalIndex {
             collection,
             &architecture.to_string(),
             object_id,
+            sha256,
+            address,
             vector.to_vec(),
-            Occurrence {
-                sha256: sha256.to_string(),
-                address,
-                corpora,
-            },
+            &corpora,
+            &attributes,
         );
         Ok(())
     }
@@ -311,30 +461,34 @@ impl LocalIndex {
                 .put_json(key, &membership)
                 .map_err(|error| Error::ObjectStore(error.to_string()))?;
         }
-        let mut grouped_rows = BTreeMap::<(Collection, String), Vec<lancedb::Row>>::new();
+        let mut grouped_rows = BTreeMap::<(Entity, String), Vec<lancedb::Row>>::new();
         for (key, staged) in &pending.entries {
             let mut entry = match self.object_store.get_json::<IndexEntry>(key) {
                 Ok(existing) => existing,
                 Err(object_store::Error::NotFound(_)) => IndexEntry {
                     object_id: staged.object_id.clone(),
-                    collection: staged.collection,
+                    entity: staged.entity,
                     architecture: staged.architecture.clone(),
+                    sha256: staged.sha256.clone(),
+                    address: staged.address,
                     vector: staged.vector.clone(),
-                    occurrences: Vec::new(),
+                    corpora: Vec::new(),
                 },
                 Err(error) => return Err(Error::ObjectStore(error.to_string())),
             };
-            for occurrence in &staged.occurrences {
-                merge_occurrence(&mut entry.occurrences, occurrence);
+            for corpus_entry in &staged.corpora {
+                merge_corpus_entry(&mut entry.corpora, corpus_entry);
             }
+            entry.sha256 = staged.sha256.clone();
+            entry.address = staged.address;
             entry.vector = staged.vector.clone();
             self.object_store
                 .put_json(key, &entry)
                 .map_err(|error| Error::ObjectStore(error.to_string()))?;
-            let occurrences_json = serde_json::to_string(&entry.occurrences)
+            let occurrences_json = serde_json::to_string(&entry.corpora)
                 .map_err(|error| Error::Serialization(error.to_string()))?;
             grouped_rows
-                .entry((entry.collection, entry.architecture.clone()))
+                .entry((entry.entity, entry.architecture.clone()))
                 .or_default()
                 .push(lancedb::Row {
                     object_id: entry.object_id.clone(),
@@ -366,6 +520,7 @@ impl LocalIndex {
         sha256: &str,
         graph: &Graph,
         attributes: Option<Value>,
+        entity_attributes: &[Attribute],
         selector: Option<&str>,
         collections: Option<&[Collection]>,
     ) -> Result<(), Error> {
@@ -389,6 +544,7 @@ impl LocalIndex {
                 &corpora,
                 sha256,
                 graph,
+                entity_attributes,
                 selector,
                 collections,
             )?;
@@ -428,6 +584,7 @@ impl LocalIndex {
         if vector.is_empty() {
             return Err(Error::InvalidConfiguration("vector must not be empty"));
         }
+        self.validate_vector_dimensions(vector)?;
         let collections = collections.unwrap_or(DEFAULT_INDEX_GRAPH_COLLECTIONS);
         if collections.is_empty() {
             return Err(Error::InvalidConfiguration("collections must not be empty"));
@@ -438,9 +595,9 @@ impl LocalIndex {
         let mut collections = collections.to_vec();
         collections.sort();
         collections.dedup();
-        for collection in &collections {
+        for entity in &collections {
             let target_architectures = if architectures.is_empty() {
-                self.collection_architectures(*collection)?
+                self.entity_architectures(*entity)?
             } else {
                 architectures
                     .iter()
@@ -448,31 +605,57 @@ impl LocalIndex {
                     .collect::<Vec<_>>()
             };
             for architecture in target_architectures {
-                let rows = match self
-                    .lancedb
-                    .search(*collection, &architecture, vector, limit)
-                {
+                let rows = match self.lancedb.search(*entity, &architecture, vector, limit) {
                     Ok(rows) => rows,
                     Err(error) if error.to_string().contains("not found") => continue,
                     Err(error) => return Err(Error::LanceDb(error.to_string())),
                 };
                 for row in rows {
-                    let occurrences: Vec<Occurrence> = serde_json::from_str(&row.occurrences_json)
-                        .map_err(|error| Error::Serialization(error.to_string()))?;
+                    let corpus_entries: Vec<CorpusEntry> =
+                        serde_json::from_str(&row.occurrences_json)
+                            .map_err(|error| Error::Serialization(error.to_string()))?;
                     let score = cosine_similarity(vector, &row.vector);
-                    for occurrence in occurrences {
-                        for corpus in occurrence
-                            .corpora
-                            .iter()
-                            .filter(|corpus| requested_corpora.contains(*corpus))
-                        {
+                    let entry = self
+                        .object_store
+                        .get_json::<IndexEntry>(&index_entry_key(
+                            *entity,
+                            &architecture,
+                            &row.object_id,
+                        ))
+                        .map_err(|error| Error::ObjectStore(error.to_string()))?;
+                    for corpus_entry in corpus_entries
+                        .iter()
+                        .filter(|corpus_entry| requested_corpora.contains(&corpus_entry.corpus))
+                    {
+                        let symbols = symbol_names_for_attributes(
+                            &corpus_entry.attributes,
+                            *entity,
+                            entry.address,
+                        );
+                        if symbols.is_empty() {
                             hits.push(SearchResult {
-                                corpus: corpus.clone(),
+                                corpus: corpus_entry.corpus.clone(),
                                 object_id: row.object_id.clone(),
-                                collection: *collection,
+                                entity: *entity,
                                 architecture: architecture.clone(),
-                                sha256: occurrence.sha256.clone(),
-                                address: occurrence.address,
+                                sha256: entry.sha256.clone(),
+                                address: entry.address,
+                                symbol: None,
+                                attributes: corpus_entry.attributes.clone(),
+                                score,
+                            });
+                            continue;
+                        }
+                        for symbol in symbols {
+                            hits.push(SearchResult {
+                                corpus: corpus_entry.corpus.clone(),
+                                object_id: row.object_id.clone(),
+                                entity: *entity,
+                                architecture: architecture.clone(),
+                                sha256: entry.sha256.clone(),
+                                address: entry.address,
+                                symbol: Some(symbol),
+                                attributes: corpus_entry.attributes.clone(),
                                 score,
                             });
                         }
@@ -531,18 +714,19 @@ impl LocalIndex {
         corpora: &[String],
         sha256: &str,
         graph: &Graph,
+        attributes: &[Attribute],
         selector: &str,
         collections: Option<&[Collection]>,
     ) -> Result<(), Error> {
         let selected = collections.unwrap_or(DEFAULT_INDEX_GRAPH_COLLECTIONS);
-        if selected.contains(&Collection::Instruction) {
-            self.stage_instructions(entries, corpora, sha256, graph, selector)?;
+        if selected.contains(&Entity::Instruction) {
+            self.stage_instructions(entries, corpora, sha256, graph, attributes, selector)?;
         }
-        if selected.contains(&Collection::Block) {
-            self.stage_blocks(entries, corpora, sha256, graph, selector)?;
+        if selected.contains(&Entity::Block) {
+            self.stage_blocks(entries, corpora, sha256, graph, attributes, selector)?;
         }
-        if selected.contains(&Collection::Function) {
-            self.stage_functions(entries, corpora, sha256, graph, selector)?;
+        if selected.contains(&Entity::Function) {
+            self.stage_functions(entries, corpora, sha256, graph, attributes, selector)?;
         }
         Ok(())
     }
@@ -553,6 +737,7 @@ impl LocalIndex {
         corpora: &[String],
         sha256: &str,
         graph: &Graph,
+        attributes: &[Attribute],
         selector: &str,
     ) -> Result<(), Error> {
         let processor_selector =
@@ -570,26 +755,32 @@ impl LocalIndex {
             else {
                 continue;
             };
-            let object_id = object_id_for_value(
-                Collection::Instruction,
-                &instruction_canonical_value(&instruction)?,
+            self.validate_vector_dimensions(&vector)?;
+            let object_id = manual_object_id(
+                Entity::Instruction,
+                &graph.architecture.to_string(),
+                sha256,
+                instruction.address,
             );
             accumulate_entry(
                 pending_entries,
                 index_entry_key(
-                    Collection::Instruction,
+                    Entity::Instruction,
                     &graph.architecture.to_string(),
                     &object_id,
                 ),
-                Collection::Instruction,
+                Entity::Instruction,
                 &graph.architecture.to_string(),
                 object_id,
+                sha256,
+                instruction.address,
                 vector,
-                Occurrence {
-                    sha256: sha256.to_string(),
-                    address: instruction.address,
-                    corpora: corpora.to_vec(),
-                },
+                corpora,
+                &attributes_for_entity_address(
+                    attributes,
+                    Entity::Instruction,
+                    instruction.address,
+                ),
             );
         }
         Ok(())
@@ -601,6 +792,7 @@ impl LocalIndex {
         corpora: &[String],
         sha256: &str,
         graph: &Graph,
+        attributes: &[Attribute],
         selector: &str,
     ) -> Result<(), Error> {
         let processor_selector =
@@ -617,23 +809,24 @@ impl LocalIndex {
             else {
                 continue;
             };
-            let object_id = object_id_for_value(Collection::Block, &block_canonical_value(&block)?);
+            self.validate_vector_dimensions(&vector)?;
+            let object_id = manual_object_id(
+                Entity::Block,
+                &graph.architecture.to_string(),
+                sha256,
+                block.address(),
+            );
             accumulate_entry(
                 pending_entries,
-                index_entry_key(
-                    Collection::Block,
-                    &graph.architecture.to_string(),
-                    &object_id,
-                ),
-                Collection::Block,
+                index_entry_key(Entity::Block, &graph.architecture.to_string(), &object_id),
+                Entity::Block,
                 &graph.architecture.to_string(),
                 object_id,
+                sha256,
+                block.address(),
                 vector,
-                Occurrence {
-                    sha256: sha256.to_string(),
-                    address: block.address(),
-                    corpora: corpora.to_vec(),
-                },
+                corpora,
+                &attributes_for_entity_address(attributes, Entity::Block, block.address()),
             );
         }
         Ok(())
@@ -645,6 +838,7 @@ impl LocalIndex {
         corpora: &[String],
         sha256: &str,
         graph: &Graph,
+        attributes: &[Attribute],
         selector: &str,
     ) -> Result<(), Error> {
         let processor_selector =
@@ -662,31 +856,35 @@ impl LocalIndex {
             else {
                 continue;
             };
-            let object_id =
-                object_id_for_value(Collection::Function, &function_canonical_value(&function)?);
+            self.validate_vector_dimensions(&vector)?;
+            let object_id = manual_object_id(
+                Entity::Function,
+                &graph.architecture.to_string(),
+                sha256,
+                function.address,
+            );
             accumulate_entry(
                 pending_entries,
                 index_entry_key(
-                    Collection::Function,
+                    Entity::Function,
                     &graph.architecture.to_string(),
                     &object_id,
                 ),
-                Collection::Function,
+                Entity::Function,
                 &graph.architecture.to_string(),
                 object_id,
+                sha256,
+                function.address,
                 vector,
-                Occurrence {
-                    sha256: sha256.to_string(),
-                    address: function.address,
-                    corpora: corpora.to_vec(),
-                },
+                corpora,
+                &attributes_for_entity_address(attributes, Entity::Function, function.address),
             );
         }
         Ok(())
     }
 
-    fn collection_architectures(&self, collection: Collection) -> Result<Vec<String>, Error> {
-        let prefix = format!("index/{}/", collection.as_str());
+    fn entity_architectures(&self, entity: Entity) -> Result<Vec<String>, Error> {
+        let prefix = format!("index/{}/", entity.as_str());
         let mut architectures = self
             .object_store
             .list_prefix(&prefix)
@@ -704,24 +902,23 @@ impl LocalIndex {
             .object_store
             .list_prefix("index/")
             .map_err(|error| Error::ObjectStore(error.to_string()))?;
-        let mut updated_rows = BTreeMap::<(Collection, String), Vec<lancedb::Row>>::new();
-        let mut deleted_rows = BTreeMap::<(Collection, String), Vec<String>>::new();
+        let mut updated_rows = BTreeMap::<(Entity, String), Vec<lancedb::Row>>::new();
+        let mut deleted_rows = BTreeMap::<(Entity, String), Vec<String>>::new();
         for key in keys {
             let mut entry = self
                 .object_store
                 .get_json::<IndexEntry>(&key)
                 .map_err(|error| Error::ObjectStore(error.to_string()))?;
-            let changed =
-                remove_corpus_from_occurrences(&mut entry.occurrences, sha256, Some(corpus));
+            let changed = remove_corpus_from_entry(&mut entry, sha256, Some(corpus));
             if !changed {
                 continue;
             }
-            if entry.occurrences.is_empty() {
+            if entry.corpora.is_empty() {
                 self.object_store
                     .delete(&key)
                     .map_err(|error| Error::ObjectStore(error.to_string()))?;
                 deleted_rows
-                    .entry((entry.collection, entry.architecture.clone()))
+                    .entry((entry.entity, entry.architecture.clone()))
                     .or_default()
                     .push(entry.object_id.clone());
                 continue;
@@ -730,11 +927,11 @@ impl LocalIndex {
                 .put_json(&key, &entry)
                 .map_err(|error| Error::ObjectStore(error.to_string()))?;
             updated_rows
-                .entry((entry.collection, entry.architecture.clone()))
+                .entry((entry.entity, entry.architecture.clone()))
                 .or_default()
                 .push(lancedb::Row {
                     object_id: entry.object_id.clone(),
-                    occurrences_json: serde_json::to_string(&entry.occurrences)
+                    occurrences_json: serde_json::to_string(&entry.corpora)
                         .map_err(|error| Error::Serialization(error.to_string()))?,
                     vector: entry.vector.clone(),
                 });
@@ -862,33 +1059,50 @@ fn expand_home_directory(path: PathBuf) -> Result<PathBuf, Error> {
 fn accumulate_entry(
     entries: &mut BTreeMap<String, IndexEntry>,
     key: String,
-    collection: Collection,
+    entity: Entity,
     architecture: &str,
     object_id: String,
+    sha256: &str,
+    address: u64,
     vector: Vec<f32>,
-    occurrence: Occurrence,
+    corpora: &[String],
+    attributes: &[Value],
 ) {
     let entry = entries.entry(key).or_insert_with(|| IndexEntry {
         object_id,
-        collection,
+        entity,
         architecture: architecture.to_string(),
+        sha256: sha256.to_string(),
+        address,
         vector: vector.clone(),
-        occurrences: Vec::new(),
+        corpora: Vec::new(),
     });
-    merge_occurrence(&mut entry.occurrences, &occurrence);
+    entry.entity = entity;
+    entry.sha256 = sha256.to_string();
+    entry.address = address;
+    for corpus in corpora {
+        merge_corpus_entry(
+            &mut entry.corpora,
+            &CorpusEntry {
+                corpus: corpus.clone(),
+                attributes: attributes.to_vec(),
+            },
+        );
+    }
     entry.vector = vector;
 }
 
-fn merge_occurrence(occurrences: &mut Vec<Occurrence>, occurrence: &Occurrence) {
-    if let Some(existing) = occurrences.iter_mut().find(|existing| {
-        existing.sha256 == occurrence.sha256 && existing.address == occurrence.address
-    }) {
-        existing.corpora = union_corpora(&existing.corpora, &occurrence.corpora);
+fn merge_corpus_entry(corpora: &mut Vec<CorpusEntry>, corpus_entry: &CorpusEntry) {
+    if let Some(existing) = corpora
+        .iter_mut()
+        .find(|existing| existing.corpus == corpus_entry.corpus)
+    {
+        merge_attribute_values(&mut existing.attributes, &corpus_entry.attributes);
         return;
     }
-    let mut occurrence = occurrence.clone();
-    occurrence.corpora = unique_corpora(&occurrence.corpora);
-    occurrences.push(occurrence);
+    let mut entry = corpus_entry.clone();
+    dedupe_attribute_values(&mut entry.attributes);
+    corpora.push(entry);
 }
 
 fn accumulate_sample_membership(
@@ -916,6 +1130,33 @@ fn process_attributes(attributes: &[Attribute]) -> Option<Value> {
             .map(Attribute::to_json_value)
             .collect::<Vec<_>>(),
     ))
+}
+
+fn attributes_for_entity_address(
+    attributes: &[Attribute],
+    entity: Entity,
+    address: u64,
+) -> Vec<Value> {
+    attributes
+        .iter()
+        .filter_map(|attribute| match attribute {
+            Attribute::Symbol(symbol)
+                if symbol.address == address
+                    && symbol_type_matches_collection(symbol.symbol_type.as_str(), entity) =>
+            {
+                Some(attribute.to_json_value())
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+fn symbol_type_matches_collection(symbol_type: &str, collection: Collection) -> bool {
+    match collection {
+        Collection::Instruction => symbol_type == SymbolType::Instruction.as_str(),
+        Collection::Block => symbol_type == SymbolType::Block.as_str(),
+        Collection::Function => symbol_type == SymbolType::Function.as_str(),
+    }
 }
 
 fn validate_corpus_sha256(corpus: &str, sha256: &str) -> Result<(), Error> {
@@ -979,35 +1220,26 @@ fn prune_pending_entries_for_sample(
     corpus: &str,
 ) {
     entries.retain(|_, entry| {
-        remove_corpus_from_occurrences(&mut entry.occurrences, sha256, Some(corpus));
-        !entry.occurrences.is_empty()
+        remove_corpus_from_entry(entry, sha256, Some(corpus));
+        !entry.corpora.is_empty()
     });
 }
 
 fn prune_pending_entries_for_corpus(entries: &mut BTreeMap<String, IndexEntry>, corpus: &str) {
     entries.retain(|_, entry| {
-        remove_corpus_from_occurrences(&mut entry.occurrences, "", Some(corpus));
-        !entry.occurrences.is_empty()
+        remove_corpus_from_entry(entry, "", Some(corpus));
+        !entry.corpora.is_empty()
     });
 }
 
-fn remove_corpus_from_occurrences(
-    occurrences: &mut Vec<Occurrence>,
-    sha256: &str,
-    corpus: Option<&str>,
-) -> bool {
-    let before = occurrences.clone();
-    for occurrence in occurrences.iter_mut() {
-        let sha_matches = sha256.is_empty() || occurrence.sha256 == sha256;
-        if !sha_matches {
-            continue;
-        }
+fn remove_corpus_from_entry(entry: &mut IndexEntry, sha256: &str, corpus: Option<&str>) -> bool {
+    let before = entry.corpora.clone();
+    if sha256.is_empty() || entry.sha256 == sha256 {
         if let Some(corpus) = corpus {
-            occurrence.corpora.retain(|existing| existing != corpus);
+            entry.corpora.retain(|existing| existing.corpus != corpus);
         }
     }
-    occurrences.retain(|occurrence| !(occurrence.corpora.is_empty()));
-    *occurrences != before
+    entry.corpora != before
 }
 
 fn cosine_similarity(lhs: &[f32], rhs: &[f32]) -> f32 {
@@ -1127,87 +1359,23 @@ fn selector_vector(value: &Value, selector: &str) -> Option<Vec<f32>> {
         .collect()
 }
 
-fn object_id_for_value(collection: Collection, value: &Value) -> String {
+fn object_id_for_value(entity: Entity, value: &Value) -> String {
     format!(
         "{}:{}",
-        collection.as_str(),
+        entity.as_str(),
         digest_hex(value.to_string().as_bytes())
     )
 }
 
-fn manual_object_id(
-    collection: Collection,
-    architecture: &str,
-    sha256: &str,
-    address: u64,
-) -> String {
+fn manual_object_id(entity: Entity, architecture: &str, sha256: &str, address: u64) -> String {
     object_id_for_value(
-        collection,
+        entity,
         &serde_json::json!({
             "architecture": architecture,
             "sha256": sha256,
             "address": address,
         }),
     )
-}
-
-fn instruction_canonical_value(instruction: &Instruction) -> Result<Value, Error> {
-    let mut value = serde_json::to_value(instruction.process_base())
-        .map_err(|error| Error::Serialization(error.to_string()))?;
-    normalize_instruction_value(&mut value);
-    Ok(value)
-}
-
-fn block_canonical_value(block: &Block<'_>) -> Result<Value, Error> {
-    let mut value = serde_json::to_value(block.process_base())
-        .map_err(|error| Error::Serialization(error.to_string()))?;
-    normalize_block_value(&mut value);
-    Ok(value)
-}
-
-fn function_canonical_value(function: &Function<'_>) -> Result<Value, Error> {
-    let mut value = serde_json::to_value(function.process_base())
-        .map_err(|error| Error::Serialization(error.to_string()))?;
-    normalize_function_value(&mut value);
-    Ok(value)
-}
-
-fn normalize_instruction_value(value: &mut Value) {
-    let Some(map) = value.as_object_mut() else {
-        return;
-    };
-    map.remove("address");
-    map.remove("functions");
-    map.remove("blocks");
-    map.remove("to");
-    map.remove("next");
-    map.remove("processors");
-    map.remove("attributes");
-}
-
-fn normalize_block_value(value: &mut Value) {
-    let Some(map) = value.as_object_mut() else {
-        return;
-    };
-    map.remove("address");
-    map.remove("next");
-    map.remove("to");
-    map.remove("functions");
-    map.remove("blocks");
-    map.remove("instructions");
-    map.remove("processors");
-    map.remove("attributes");
-}
-
-fn normalize_function_value(value: &mut Value) {
-    let Some(map) = value.as_object_mut() else {
-        return;
-    };
-    map.remove("address");
-    map.remove("functions");
-    map.remove("blocks");
-    map.remove("processors");
-    map.remove("attributes");
 }
 
 fn sample_key(sha256: &str) -> String {
@@ -1218,10 +1386,10 @@ fn graph_key(sha256: &str) -> String {
     format!("graphs/{}.json", sha256)
 }
 
-fn index_entry_key(collection: Collection, architecture: &str, object_id: &str) -> String {
+fn index_entry_key(entity: Entity, architecture: &str, object_id: &str) -> String {
     format!(
         "index/{}/{}/{}.json",
-        collection.as_str(),
+        entity.as_str(),
         architecture,
         object_id
     )
@@ -1258,10 +1426,48 @@ fn unique_samples(items: &[(String, String)]) -> Vec<(String, String)> {
     values
 }
 
+fn merge_attribute_values(existing: &mut Vec<Value>, updates: &[Value]) {
+    existing.extend_from_slice(updates);
+    dedupe_attribute_values(existing);
+}
+
+fn dedupe_attribute_values(values: &mut Vec<Value>) {
+    let mut seen = BTreeSet::new();
+    values.retain(|value| seen.insert(value.to_string()));
+}
+
+fn symbol_names_for_attributes(attributes: &[Value], entity: Entity, address: u64) -> Vec<String> {
+    let mut symbols = attributes
+        .iter()
+        .filter_map(|attribute| {
+            let object = attribute.as_object()?;
+            if object.get("type")?.as_str()? != "symbol" {
+                return None;
+            }
+            if object.get("name")?.as_str()?.is_empty() {
+                return None;
+            }
+            let symbol_type = object.get("symbol_type")?.as_str()?;
+            if !symbol_type_matches_collection(symbol_type, entity) {
+                return None;
+            }
+            let symbol_address = object.get("address")?.as_u64()?;
+            if symbol_address != address {
+                return None;
+            }
+            Some(object.get("name")?.as_str()?.to_string())
+        })
+        .collect::<Vec<_>>();
+    symbols.sort();
+    symbols.dedup();
+    symbols
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::controlflow::{Graph, Instruction};
+    use crate::formats::SymbolJson;
     use crate::{Architecture, Config};
 
     fn build_single_return_graph() -> Graph {
@@ -1289,6 +1495,35 @@ mod tests {
         graph
     }
 
+    fn symbol_attribute(name: &str, entity: Entity, address: u64) -> Attribute {
+        Attribute::Symbol(SymbolJson {
+            type_: "symbol".to_string(),
+            symbol_type: match entity {
+                Collection::Instruction => SymbolType::Instruction,
+                Collection::Block => SymbolType::Block,
+                Collection::Function => SymbolType::Function,
+            }
+            .to_string(),
+            name: name.to_string(),
+            address,
+        })
+    }
+
+    fn test_vector(primary: usize) -> Vec<f32> {
+        let mut vector = vec![0.0; 64];
+        if primary < vector.len() {
+            vector[primary] = 1.0;
+        }
+        vector
+    }
+
+    fn local_config_with_dimensions(root: &std::path::Path, dimensions: Option<usize>) -> Config {
+        let mut config = Config::default();
+        config.index.local.directory = root.to_string_lossy().into_owned();
+        config.index.local.dimensions = dimensions;
+        config
+    }
+
     #[test]
     fn manual_vector_index_round_trip() {
         let root = std::env::temp_dir().join(format!(
@@ -1296,19 +1531,19 @@ mod tests {
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&root);
-        let client = LocalIndex::new(Config::default(), Some(root.clone()))
+        let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
             .expect("create local index client");
         let graph = build_single_return_graph();
 
         client
-            .graph("corpus", "deadbeef", &graph, &[], None, None)
+            .index_graph("corpus", "deadbeef", &graph, &[], None, None)
             .expect("stage graph");
         client
             .vector(
                 "corpus",
-                Collection::Function,
+                Entity::Function,
                 Architecture::AMD64,
-                &[1.0, 0.0, 0.0],
+                &test_vector(0),
                 "deadbeef",
                 0x1000,
             )
@@ -1318,8 +1553,8 @@ mod tests {
         let hits = client
             .search(
                 &["corpus".to_string()],
-                &[1.0, 0.0, 0.0],
-                Some(&[Collection::Function]),
+                &test_vector(0),
+                Some(&[Entity::Function]),
                 &[Architecture::AMD64],
                 4,
             )
@@ -1328,7 +1563,7 @@ mod tests {
         assert_eq!(hits.len(), 1);
         assert_eq!(
             hits[0].object_id(),
-            manual_object_id(Collection::Function, "amd64", "deadbeef", 0x1000)
+            manual_object_id(Entity::Function, "amd64", "deadbeef", 0x1000)
         );
         assert_eq!(hits[0].sha256(), "deadbeef");
         assert_eq!(hits[0].address(), 0x1000);
@@ -1353,11 +1588,11 @@ mod tests {
                 serde_json::to_value(functions[0].process()).expect("serialize function");
             selector_vector(&processed, "processors.embeddings.vector").expect("function vector")
         };
-        let client = LocalIndex::new(Config::default(), Some(root.clone()))
+        let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
             .expect("create local index client");
 
         client
-            .graph(
+            .index_graph(
                 "corpus",
                 "feedface",
                 &graph,
@@ -1372,7 +1607,7 @@ mod tests {
             .search(
                 &["corpus".to_string()],
                 &vector,
-                Some(&[Collection::Function]),
+                Some(&[Entity::Function]),
                 &[Architecture::AMD64],
                 4,
             )
@@ -1386,21 +1621,21 @@ mod tests {
     }
 
     #[test]
-    fn search_merges_multiple_corpora_and_default_collections() {
+    fn search_merges_multiple_corpora_and_default_entities() {
         let root = std::env::temp_dir().join(format!(
             "binlex-local-store-search-merge-test-{}",
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&root);
-        let client = LocalIndex::new(Config::default(), Some(root.clone()))
+        let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
             .expect("create local index client");
 
         client
             .vector(
                 "alpha",
-                Collection::Function,
+                Entity::Function,
                 Architecture::AMD64,
-                &[1.0, 0.0, 0.0],
+                &test_vector(0),
                 "alpha-sha",
                 0x1000,
             )
@@ -1408,9 +1643,9 @@ mod tests {
         client
             .vector(
                 "beta",
-                Collection::Block,
+                Entity::Block,
                 Architecture::AMD64,
-                &[1.0, 0.0, 0.0],
+                &test_vector(0),
                 "beta-sha",
                 0x2000,
             )
@@ -1420,7 +1655,7 @@ mod tests {
         let hits = client
             .search(
                 &["alpha".to_string(), "beta".to_string()],
-                &[1.0, 0.0, 0.0],
+                &test_vector(0),
                 None,
                 &[Architecture::AMD64],
                 8,
@@ -1432,11 +1667,11 @@ mod tests {
         assert_eq!(hits[1].score(), 1.0);
         assert!(
             hits.iter()
-                .any(|hit| hit.collection() == Collection::Function && hit.sha256() == "alpha-sha")
+                .any(|hit| hit.collection() == Entity::Function && hit.sha256() == "alpha-sha")
         );
         assert!(
             hits.iter()
-                .any(|hit| hit.collection() == Collection::Block && hit.sha256() == "beta-sha")
+                .any(|hit| hit.collection() == Entity::Block && hit.sha256() == "beta-sha")
         );
 
         let _ = std::fs::remove_dir_all(&root);
@@ -1449,16 +1684,16 @@ mod tests {
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&root);
-        let client = LocalIndex::new(Config::default(), Some(root.clone()))
+        let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
             .expect("create local index client");
         let corpora = vec!["malware".to_string(), "plugx".to_string()];
 
         client
             .vector_many(
                 &corpora,
-                Collection::Function,
+                Entity::Function,
                 Architecture::AMD64,
-                &[1.0, 0.0, 0.0],
+                &test_vector(0),
                 "shared-sha",
                 0x1000,
             )
@@ -1474,8 +1709,8 @@ mod tests {
         let hits = client
             .search(
                 &["malware".to_string(), "plugx".to_string()],
-                &[1.0, 0.0, 0.0],
-                Some(&[Collection::Function]),
+                &test_vector(0),
+                Some(&[Entity::Function]),
                 &[Architecture::AMD64],
                 8,
             )
@@ -1492,8 +1727,8 @@ mod tests {
         let remaining_hits = client
             .search(
                 &["malware".to_string(), "plugx".to_string()],
-                &[1.0, 0.0, 0.0],
-                Some(&[Collection::Function]),
+                &test_vector(0),
+                Some(&[Entity::Function]),
                 &[Architecture::AMD64],
                 8,
             )
@@ -1514,10 +1749,183 @@ mod tests {
         let mut config = Config::default();
         config.index.local.directory = root.to_string_lossy().into_owned();
 
-        let client = LocalIndex::new(config, None).expect("create local index client");
+        let client = LocalIndex::new(config).expect("create local index client");
 
         assert_eq!(client.object_store.root(), root.join("object_store"));
         assert_eq!(client.lancedb.root(), root.join("lancedb"));
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn repeat_graph_indexing_does_not_duplicate_search_results() {
+        let root = std::env::temp_dir().join(format!(
+            "binlex-local-store-repeat-index-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
+            .expect("create local index client");
+        let graph = build_single_return_graph();
+        let vector = {
+            let functions = graph.functions();
+            let processed =
+                serde_json::to_value(functions[0].process()).expect("serialize function");
+            selector_vector(&processed, "processors.embeddings.vector").expect("function vector")
+        };
+
+        for _ in 0..3 {
+            client
+                .index_graph(
+                    "default",
+                    "repeat-sha",
+                    &graph,
+                    &[],
+                    Some("processors.embeddings.vector"),
+                    None,
+                )
+                .expect("stage graph with selector");
+            client.commit().expect("commit repeated graph");
+        }
+
+        let hits = client
+            .search(
+                &["default".to_string()],
+                &vector,
+                Some(&[Entity::Function]),
+                &[Architecture::AMD64],
+                8,
+            )
+            .expect("search local index after repeat indexing");
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].sha256(), "repeat-sha");
+        assert_eq!(hits[0].address(), 0x1000);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn same_corpus_distinct_symbols_expand_flat_results_without_duplicate_objects() {
+        let root = std::env::temp_dir().join(format!(
+            "binlex-local-store-symbols-same-corpus-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
+            .expect("create local index client");
+
+        client
+            .index_function(
+                &["alpha".to_string()],
+                Architecture::AMD64,
+                &test_vector(0),
+                "alpha-sha",
+                0x1000,
+                &[symbol_attribute("malware_steal", Entity::Function, 0x1000)],
+            )
+            .expect("stage first symbol");
+        client.commit().expect("commit first symbol");
+
+        client
+            .index_function(
+                &["alpha".to_string()],
+                Architecture::AMD64,
+                &test_vector(1),
+                "alpha-sha",
+                0x1000,
+                &[symbol_attribute(
+                    "malware_stealer",
+                    Entity::Function,
+                    0x1000,
+                )],
+            )
+            .expect("stage second symbol");
+        client.commit().expect("commit second symbol");
+
+        let keys = client
+            .object_store
+            .list_prefix("index/function/amd64/")
+            .expect("list canonical function entries");
+        assert_eq!(keys.len(), 1);
+
+        let hits = client
+            .search(
+                &["alpha".to_string()],
+                &test_vector(1),
+                Some(&[Entity::Function]),
+                &[Architecture::AMD64],
+                8,
+            )
+            .expect("search same-corpus symbols");
+        assert_eq!(hits.len(), 2);
+        assert!(hits.iter().all(|hit| hit.corpus() == "alpha"));
+        assert!(hits.iter().any(|hit| hit.symbol() == Some("malware_steal")));
+        assert!(
+            hits.iter()
+                .any(|hit| hit.symbol() == Some("malware_stealer"))
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn cross_corpus_symbols_expand_flat_results_per_corpus() {
+        let root = std::env::temp_dir().join(format!(
+            "binlex-local-store-symbols-cross-corpus-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
+            .expect("create local index client");
+
+        client
+            .index_function(
+                &["person_a".to_string()],
+                Architecture::AMD64,
+                &test_vector(0),
+                "shared-sha",
+                0x1000,
+                &[symbol_attribute("malware_steal", Entity::Function, 0x1000)],
+            )
+            .expect("stage corpus a symbol");
+        client.commit().expect("commit corpus a symbol");
+
+        client
+            .index_function(
+                &["person_b".to_string()],
+                Architecture::AMD64,
+                &test_vector(0),
+                "shared-sha",
+                0x1000,
+                &[symbol_attribute(
+                    "malware_stealer",
+                    Entity::Function,
+                    0x1000,
+                )],
+            )
+            .expect("stage corpus b symbol");
+        client.commit().expect("commit corpus b symbol");
+
+        let hits = client
+            .search(
+                &["person_a".to_string(), "person_b".to_string()],
+                &test_vector(0),
+                Some(&[Entity::Function]),
+                &[Architecture::AMD64],
+                8,
+            )
+            .expect("search cross-corpus symbols");
+        assert_eq!(hits.len(), 2);
+        assert!(
+            hits.iter()
+                .any(|hit| { hit.corpus() == "person_a" && hit.symbol() == Some("malware_steal") })
+        );
+        assert!(
+            hits.iter().any(|hit| {
+                hit.corpus() == "person_b" && hit.symbol() == Some("malware_stealer")
+            })
+        );
 
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -1537,7 +1945,7 @@ mod tests {
         let mut config = Config::default();
         config.index.local.directory = configured_root.to_string_lossy().into_owned();
 
-        let client = LocalIndex::new(config, Some(override_root.clone()))
+        let client = LocalIndex::with_options(config, Some(override_root.clone()), None)
             .expect("create local index client");
 
         assert_eq!(
@@ -1549,5 +1957,129 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&configured_root);
         let _ = std::fs::remove_dir_all(&override_root);
+    }
+
+    #[test]
+    fn rejects_manual_vector_with_wrong_configured_dimensions() {
+        let root = std::env::temp_dir().join(format!(
+            "binlex-local-store-dims-write-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let client = LocalIndex::new(local_config_with_dimensions(&root, Some(4)))
+            .expect("create local index client");
+
+        let error = client
+            .vector(
+                "demo",
+                Entity::Function,
+                Architecture::AMD64,
+                &test_vector(0),
+                "deadbeef",
+                0x1000,
+            )
+            .expect_err("reject wrong vector length");
+
+        assert_eq!(
+            error.to_string(),
+            "local index configuration error: vector length 64 does not match configured index.local.dimensions 4"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn rejects_search_vector_with_wrong_configured_dimensions() {
+        let root = std::env::temp_dir().join(format!(
+            "binlex-local-store-dims-search-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let client = LocalIndex::new(local_config_with_dimensions(&root, Some(4)))
+            .expect("create local index client");
+
+        let error = client
+            .search(
+                &["demo".to_string()],
+                &[1.0, 0.0, 0.0],
+                Some(&[Entity::Function]),
+                &[Architecture::AMD64],
+                4,
+            )
+            .expect_err("reject wrong search vector length");
+
+        assert_eq!(
+            error.to_string(),
+            "local index configuration error: vector length 3 does not match configured index.local.dimensions 4"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn rejects_selector_vectors_with_wrong_configured_dimensions() {
+        let root = std::env::temp_dir().join(format!(
+            "binlex-local-store-dims-selector-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let graph = build_single_return_graph();
+        let client = LocalIndex::new(local_config_with_dimensions(&root, Some(8)))
+            .expect("create local index client");
+
+        let error = client
+            .index_graph(
+                "demo",
+                "feedface",
+                &graph,
+                &[],
+                Some("processors.embeddings.vector"),
+                None,
+            )
+            .expect_err("reject selector vector length mismatch");
+
+        assert!(
+            error
+                .to_string()
+                .contains("does not match configured index.local.dimensions 8")
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn rejects_existing_table_dimension_mismatch_on_open() {
+        let root = std::env::temp_dir().join(format!(
+            "binlex-local-store-dims-existing-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+
+        let writer = LocalIndex::new(local_config_with_dimensions(&root, Some(3)))
+            .expect("create local index writer");
+        writer
+            .vector(
+                "demo",
+                Entity::Function,
+                Architecture::AMD64,
+                &[1.0, 0.0, 0.0],
+                "deadbeef",
+                0x1000,
+            )
+            .expect("stage vector");
+        writer.commit().expect("commit vector");
+
+        let error = match LocalIndex::new(local_config_with_dimensions(&root, Some(4))) {
+            Ok(_) => panic!("reject existing table dimension mismatch"),
+            Err(error) => error,
+        };
+
+        assert!(
+            error
+                .to_string()
+                .contains("existing local index table function__amd64 uses dimensions 3, but index.local.dimensions is 4")
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

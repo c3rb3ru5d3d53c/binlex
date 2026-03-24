@@ -253,6 +253,7 @@ impl Default for ConfigIndexLocal {
     fn default() -> Self {
         Self {
             directory: Config::default_local_index_directory(),
+            dimensions: Some(64),
         }
     }
 }

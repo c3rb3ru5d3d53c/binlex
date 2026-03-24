@@ -21,13 +21,19 @@ RUNTIME_DIRS = (
 )
 
 
+def is_source_root(path: Path) -> bool:
+    return all((path / filename).is_file() for filename in RUNTIME_FILES) and all(
+        (path / dirname).is_dir() for dirname in RUNTIME_DIRS
+    )
+
+
 def resolve_source_root() -> Path:
     candidates = [
         Path.cwd(),
         Path(__file__).resolve().parent,
     ]
     for candidate in candidates:
-        if (candidate / "ida-plugin.json").is_file() and (candidate / "main.py").is_file():
+        if is_source_root(candidate):
             return candidate
     raise FileNotFoundError(
         "could not locate the plugin source root; run this from plugins/ida or pass --source"
@@ -88,6 +94,23 @@ def resolve_target_root(target: str | None) -> Path:
     raise FileNotFoundError("could not determine an IDA plugins directory")
 
 
+def normalize_source_root(source: str | None) -> Path:
+    source_root = Path(source).expanduser() if source else resolve_source_root()
+    if is_source_root(source_root):
+        return source_root
+
+    if source and "ida pro" in str(source_root).lower():
+        raise FileNotFoundError(
+            f"{source_root} does not look like a Binlex IDA plugin source tree. "
+            "If this is your IDA directory, use --target instead of --source."
+        )
+
+    raise FileNotFoundError(
+        f"{source_root} does not look like a Binlex IDA plugin source tree. "
+        "The source root must contain ida-plugin.json, main.py, core/, and ui/."
+    )
+
+
 def copy_runtime(source_root: Path, destination_root: Path) -> Path:
     plugin_root = destination_root / PLUGIN_NAME
     plugin_root.parent.mkdir(parents=True, exist_ok=True)
@@ -104,7 +127,7 @@ def copy_runtime(source_root: Path, destination_root: Path) -> Path:
 
 
 def install(source: str | None, target: str | None) -> int:
-    source_root = Path(source).expanduser() if source else resolve_source_root()
+    source_root = normalize_source_root(source)
     target_root = resolve_target_root(target)
     plugin_root = copy_runtime(source_root, target_root)
     print(f"installed Binlex IDA plugin to {plugin_root}")
@@ -123,7 +146,7 @@ def uninstall(target: str | None) -> int:
 
 
 def archive(source: str | None, output: str | None) -> int:
-    source_root = Path(source).expanduser() if source else resolve_source_root()
+    source_root = normalize_source_root(source)
     output_path = Path(output).expanduser() if output else source_root / "dist" / "binlex-ida.zip"
     output_path.parent.mkdir(parents=True, exist_ok=True)
     staging_root = output_path.parent / PLUGIN_NAME
