@@ -22,15 +22,25 @@
 
 use crate::hex;
 use crate::imaging::normalize::decode_grayscale;
+use std::borrow::Cow;
 
 pub struct DHash<'dhash> {
-    pub bytes: &'dhash [u8],
+    pub bytes: Cow<'dhash, [u8]>,
 }
 
 impl<'dhash> DHash<'dhash> {
     #[allow(dead_code)]
     pub fn new(bytes: &'dhash [u8]) -> Self {
-        Self { bytes }
+        Self {
+            bytes: Cow::Borrowed(bytes),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn from_bytes(bytes: Vec<u8>) -> DHash<'static> {
+        DHash {
+            bytes: Cow::Owned(bytes),
+        }
     }
 
     pub fn compare(&self, other: &Self) -> Option<f64> {
@@ -64,7 +74,7 @@ impl<'dhash> DHash<'dhash> {
     }
 
     fn bits(&self) -> Option<Vec<bool>> {
-        let image = decode_grayscale(self.bytes, 9, 8)?;
+        let image = decode_grayscale(self.bytes.as_ref(), 9, 8)?;
         let mut bits = Vec::with_capacity(64);
 
         for y in 0..8 {

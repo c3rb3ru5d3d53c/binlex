@@ -81,8 +81,8 @@ fn main() {
     });
 
     let hash = match args.hashtype.to_string().as_str() {
-        "sha256" => file.sha256(),
-        "tlsh" => file.tlsh(),
+        "sha256" => file.sha256().and_then(|hash| hash.hexdigest()),
+        "tlsh" => file.tlsh().and_then(|hash| hash.hexdigest()),
         _ => None,
     };
 

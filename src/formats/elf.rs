@@ -25,6 +25,8 @@ use crate::Config;
 use crate::formats::File;
 use crate::formats::Image;
 use crate::formats::Symbol as BlSymbol;
+use crate::hashing::SHA256;
+use crate::hashing::TLSH;
 use lief::Binary;
 use lief::elf::section::Flags;
 use lief::elf::segment::Type as SegmentType;
@@ -201,11 +203,11 @@ impl ELF {
         Ok(tempmap)
     }
 
-    pub fn tlsh(&self) -> Option<String> {
+    pub fn tlsh(&self) -> Option<TLSH<'_>> {
         self.file.tlsh()
     }
 
-    pub fn sha256(&self) -> Option<String> {
+    pub fn sha256(&self) -> Option<SHA256<'_>> {
         self.file.sha256()
     }
 

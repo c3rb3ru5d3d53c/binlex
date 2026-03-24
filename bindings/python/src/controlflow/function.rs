@@ -285,20 +285,19 @@ impl Function {
     /// - `PyResult<Option<Chromosome>>`: The chromosome associated with this function
     pub fn chromosome(&self, py: Python) -> PyResult<Option<Chromosome>> {
         self.with_inner_function(py, |function| {
-            let inner_config = self.cfg.borrow(py).inner.lock().unwrap().config.clone();
-            let config = Py::new(
-                py,
-                Config {
-                    inner: Arc::new(Mutex::new(inner_config)),
-                },
-            )
-            .unwrap();
-            let pattern = function.pattern();
-            if pattern.is_none() {
+            let binding = self.cfg.borrow(py);
+            let inner_config = binding.inner.lock().unwrap().config.clone();
+            let inner_chromosome = function.chromosome();
+            if inner_chromosome.is_none() {
                 return Ok(None);
             }
-            let chromosome = Chromosome::new(py, pattern.unwrap(), config).ok();
-            Ok(chromosome)
+            Ok(Some(Chromosome {
+                inner: Arc::new(Mutex::new(inner_chromosome.unwrap())),
+                minhash_num_hashes: inner_config.chromosomes.minhash.number_of_hashes,
+                minhash_shingle_size: inner_config.chromosomes.minhash.shingle_size,
+                minhash_seed: inner_config.chromosomes.minhash.seed,
+                tlsh_minimum_byte_size: inner_config.chromosomes.tlsh.minimum_byte_size,
+            }))
         })
     }
 

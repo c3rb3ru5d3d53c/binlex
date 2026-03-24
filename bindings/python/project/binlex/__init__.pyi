@@ -9,6 +9,7 @@ from . import hex, hexdump, math
 from . import index
 from . import indexing
 from . import metadata
+from . import util
 from binlex.magic import Magic
 from . import controlflow, disassemblers, formats, lifters, storage, transports
 
@@ -31,4 +32,5 @@ __all__ = [
     "metadata",
     "storage",
     "transports",
+    "util",
 ]

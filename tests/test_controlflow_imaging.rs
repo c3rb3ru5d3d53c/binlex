@@ -32,9 +32,18 @@ fn function_images_expose_existing_hash_accessors() {
     assert!(png.phash().is_some());
     assert!(png.ahash().is_some());
     assert!(png.dhash().is_some());
-    assert_eq!(png.phash(), svg.phash());
-    assert_eq!(png.ahash(), svg.ahash());
-    assert_eq!(png.dhash(), svg.dhash());
+    assert_eq!(
+        png.phash().and_then(|hash| hash.hexdigest()),
+        svg.phash().and_then(|hash| hash.hexdigest())
+    );
+    assert_eq!(
+        png.ahash().and_then(|hash| hash.hexdigest()),
+        svg.ahash().and_then(|hash| hash.hexdigest())
+    );
+    assert_eq!(
+        png.dhash().and_then(|hash| hash.hexdigest()),
+        svg.dhash().and_then(|hash| hash.hexdigest())
+    );
 }
 
 #[test]
@@ -48,9 +57,18 @@ fn block_images_expose_existing_hash_accessors() {
     assert!(png.phash().is_some());
     assert!(png.ahash().is_some());
     assert!(png.dhash().is_some());
-    assert_eq!(png.phash(), svg.phash());
-    assert_eq!(png.ahash(), svg.ahash());
-    assert_eq!(png.dhash(), svg.dhash());
+    assert_eq!(
+        png.phash().and_then(|hash| hash.hexdigest()),
+        svg.phash().and_then(|hash| hash.hexdigest())
+    );
+    assert_eq!(
+        png.ahash().and_then(|hash| hash.hexdigest()),
+        svg.ahash().and_then(|hash| hash.hexdigest())
+    );
+    assert_eq!(
+        png.dhash().and_then(|hash| hash.hexdigest()),
+        svg.dhash().and_then(|hash| hash.hexdigest())
+    );
 }
 
 #[test]
@@ -64,7 +82,16 @@ fn instruction_images_expose_existing_hash_accessors() {
     assert!(png.phash().is_some());
     assert!(png.ahash().is_some());
     assert!(png.dhash().is_some());
-    assert_eq!(png.phash(), svg.phash());
-    assert_eq!(png.ahash(), svg.ahash());
-    assert_eq!(png.dhash(), svg.dhash());
+    assert_eq!(
+        png.phash().and_then(|hash| hash.hexdigest()),
+        svg.phash().and_then(|hash| hash.hexdigest())
+    );
+    assert_eq!(
+        png.ahash().and_then(|hash| hash.hexdigest()),
+        svg.ahash().and_then(|hash| hash.hexdigest())
+    );
+    assert_eq!(
+        png.dhash().and_then(|hash| hash.hexdigest()),
+        svg.dhash().and_then(|hash| hash.hexdigest())
+    );
 }

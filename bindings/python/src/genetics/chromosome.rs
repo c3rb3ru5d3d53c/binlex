@@ -45,11 +45,20 @@ pub struct Chromosome {
 #[pymethods]
 impl Chromosome {
     #[new]
-    #[pyo3(text_signature = "(pattern, config)")]
-    /// Create a chromosome from a YARA-like pattern string.
-    pub fn new(py: Python, pattern: String, config: Py<Config>) -> PyResult<Self> {
+    #[pyo3(text_signature = "(raw_bytes, wildcard_mask, config)")]
+    /// Create a chromosome from raw bytes and a per-byte wildcard mask.
+    pub fn new(
+        py: Python,
+        raw_bytes: &Bound<'_, PyBytes>,
+        wildcard_mask: &Bound<'_, PyBytes>,
+        config: Py<Config>,
+    ) -> PyResult<Self> {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
-        let inner = InnerChromosome::new(pattern, inner_config.clone())?;
+        let inner = InnerChromosome::new(
+            raw_bytes.as_bytes().to_vec(),
+            wildcard_mask.as_bytes().to_vec(),
+            inner_config.clone(),
+        )?;
         Ok(Self {
             inner: Arc::new(Mutex::new(inner)),
             minhash_num_hashes: inner_config.chromosomes.minhash.number_of_hashes,
@@ -77,13 +86,20 @@ impl Chromosome {
         self.inner.lock().unwrap().mutations()
     }
 
-    #[pyo3(text_signature = "($self, pattern)")]
-    /// Mutate the chromosome using a replacement pattern string.
-    pub fn mutate(&mut self, pattern: String) -> PyResult<()> {
+    #[pyo3(text_signature = "($self, raw_bytes, wildcard_mask)")]
+    /// Mutate the chromosome using replacement raw bytes and wildcard mask.
+    pub fn mutate(
+        &mut self,
+        raw_bytes: &Bound<'_, PyBytes>,
+        wildcard_mask: &Bound<'_, PyBytes>,
+    ) -> PyResult<()> {
         self.inner
             .lock()
             .unwrap()
-            .mutate(pattern)
+            .mutate(
+                raw_bytes.as_bytes().to_vec(),
+                wildcard_mask.as_bytes().to_vec(),
+            )
             .map_err(|error| PyRuntimeError::new_err(format!("{}", error)))
     }
 
@@ -104,7 +120,7 @@ impl Chromosome {
     pub fn tlsh(&self) -> Option<TLSH> {
         let chromosome = self.inner.lock().unwrap();
         chromosome.tlsh().map(|_| TLSH {
-            bytes: chromosome.bytes(),
+            bytes: chromosome.masked(),
         })
     }
 
@@ -113,7 +129,7 @@ impl Chromosome {
     pub fn minhash(&self) -> Option<MinHash32> {
         let chromosome = self.inner.lock().unwrap();
         chromosome.minhash().map(|_| MinHash32 {
-            bytes: chromosome.bytes(),
+            bytes: chromosome.masked(),
             num_hashes: self.minhash_num_hashes,
             shingle_size: self.minhash_shingle_size,
             seed: self.minhash_seed,
@@ -125,20 +141,32 @@ impl Chromosome {
     pub fn sha256(&self) -> Option<SHA256> {
         let chromosome = self.inner.lock().unwrap();
         chromosome.sha256().map(|_| SHA256 {
-            bytes: chromosome.bytes(),
+            bytes: chromosome.masked(),
         })
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return the entropy of the chromosome bytes, if available.
+    /// Return the entropy of the masked chromosome bytes, if available.
     pub fn entropy(&self) -> Option<f64> {
         self.inner.lock().unwrap().entropy()
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return the chromosome bytes.
+    /// Return the original chromosome bytes.
     pub fn bytes(&self, py: Python) -> Py<PyBytes> {
         PyBytes::new(py, &self.inner.lock().unwrap().bytes()).unbind()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the wildcard bitmask for the chromosome.
+    pub fn mask(&self, py: Python) -> Py<PyBytes> {
+        PyBytes::new(py, &self.inner.lock().unwrap().mask()).unbind()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the masked chromosome bytes.
+    pub fn masked(&self, py: Python) -> Py<PyBytes> {
+        PyBytes::new(py, &self.inner.lock().unwrap().masked()).unbind()
     }
 
     #[pyo3(text_signature = "($self)")]

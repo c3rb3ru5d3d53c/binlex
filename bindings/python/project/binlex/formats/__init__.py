@@ -29,6 +29,7 @@ from binlex_bindings.binlex.formats import MACHO as _MACHOBinding
 from binlex_bindings.binlex.formats import PE as _PEBinding
 
 from binlex.architecture import Architecture
+from binlex.hashing import SHA256, TLSH
 from binlex.magic import Magic
 
 
@@ -128,11 +129,11 @@ class ELF:
         return Image.from_binding(self._inner.image())
 
     def tlsh(self):
-        """Return the fuzzy TLSH digest for the image when available."""
+        """Return the TLSH helper for the image when available."""
         return self._inner.tlsh()
 
     def sha256(self):
-        """Return the SHA-256 digest for the image when available."""
+        """Return the SHA-256 helper for the image when available."""
         return self._inner.sha256()
 
     def size(self):
@@ -276,11 +277,11 @@ class MACHO:
         return self._inner.size()
 
     def tlsh(self):
-        """Return the fuzzy TLSH digest for the image when available."""
+        """Return the TLSH helper for the image when available."""
         return self._inner.tlsh()
 
     def sha256(self):
-        """Return the SHA-256 digest for the image when available."""
+        """Return the SHA-256 helper for the image when available."""
         return self._inner.sha256()
 
     def entropy(self):

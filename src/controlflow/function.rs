@@ -196,7 +196,13 @@ impl FunctionJsonDeserializer {
     pub fn chromosome(&self) -> Option<Chromosome> {
         let chromosome = self.json.chromosome.clone();
         chromosome.as_ref()?;
-        Chromosome::new(chromosome.unwrap().pattern.clone(), self.config.clone()).ok()
+        let bytes = self.bytes()?;
+        let mask = if chromosome.as_ref()?.mask.is_empty() {
+            vec![0; bytes.len()]
+        } else {
+            hex::decode(&chromosome.unwrap().mask).ok()?
+        };
+        Chromosome::new(bytes, mask, self.config.clone()).ok()
     }
 
     #[allow(dead_code)]
@@ -325,11 +331,7 @@ impl<'function> Function<'function> {
         let bytes = if contiguous { self.bytes() } else { None };
         let bytes_hex = bytes.as_ref().map(|bytes| hex::encode(bytes));
         let chromosome = if contiguous {
-            self.pattern().and_then(|pattern| {
-                Chromosome::new(pattern, self.cfg.config.clone())
-                    .ok()
-                    .map(|chromosome| chromosome.process())
-            })
+            self.chromosome().map(|chromosome| chromosome.process())
         } else {
             None
         };
@@ -481,11 +483,18 @@ impl<'function> Function<'function> {
         if !self.contiguous() {
             return None;
         }
-        let bytes = self.bytes();
-        bytes.as_ref()?;
-        let pattern = self.pattern()?;
-        let chromosome = Chromosome::new(pattern, self.cfg.config.clone()).ok()?;
-        Some(chromosome)
+        let bytes = self.bytes()?;
+        let end = self.end()?;
+        let mut wildcard_mask = Vec::with_capacity(bytes.len());
+        for entry in self.cfg.listing.range(self.address..end) {
+            let instruction = entry.value();
+            if instruction.chromosome_mask.len() == instruction.bytes.len() {
+                wildcard_mask.extend_from_slice(&instruction.chromosome_mask);
+            } else {
+                wildcard_mask.extend(std::iter::repeat_n(0, instruction.bytes.len()));
+            }
+        }
+        Chromosome::new(bytes, wildcard_mask, self.cfg.config.clone()).ok()
     }
 
     /// Generates the function's chromosome JSON if the function is contiguous.
@@ -497,11 +506,7 @@ impl<'function> Function<'function> {
         if !self.contiguous() {
             return None;
         }
-        let bytes = self.bytes();
-        bytes.as_ref()?;
-        let pattern = self.pattern()?;
-        let chromosome = Chromosome::new(pattern, self.cfg.config.clone()).ok()?;
-        Some(chromosome.process())
+        Some(self.chromosome()?.process())
     }
 
     /// Retrieves the pattern string representation of the chromosome.

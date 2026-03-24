@@ -25,6 +25,8 @@ use crate::Config;
 use crate::formats::File;
 use crate::formats::Image;
 use crate::formats::Symbol as BlSymbol;
+use crate::hashing::SHA256;
+use crate::hashing::TLSH;
 use lief::Binary;
 use lief::generic::{Section, Symbol};
 use lief::macho::commands::{Command, LoadCommandTypes};
@@ -454,18 +456,18 @@ impl MACHO {
     /// Returns the TLS (Thread Local Storage) hash value if present in the MACHO file.
     ///
     /// # Returns
-    /// An `Option<String>` containing the TLS hash if present, otherwise `None`.
+    /// An `Option<TLSH>` containing the TLSH helper if present, otherwise `None`.
     #[allow(dead_code)]
-    pub fn tlsh(&self) -> Option<String> {
+    pub fn tlsh(&self) -> Option<TLSH<'_>> {
         self.file.tlsh()
     }
 
     /// Returns the SHA-256 hash value of the MACHO file.
     ///
     /// # Returns
-    /// An `Option<String>` containing the SHA-256 hash if available, otherwise `None`.
+    /// An `Option<SHA256>` containing the SHA-256 helper if available, otherwise `None`.
     #[allow(dead_code)]
-    pub fn sha256(&self) -> Option<String> {
+    pub fn sha256(&self) -> Option<SHA256<'_>> {
         self.file.sha256()
     }
 

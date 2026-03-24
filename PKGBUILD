@@ -32,6 +32,9 @@ exec x86_64-linux-gnu-gcc "${args[@]}"
 EOF
   chmod +x "$linker_wrapper"
   export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER="$linker_wrapper"
+  # Prefer Arch's system libzstd for the lief -> zip -> zstd build-time path.
+  # This avoids fragile static archive ordering during makepkg's link phase.
+  export ZSTD_SYS_USE_PKG_CONFIG=1
   cargo build --release
 }
 

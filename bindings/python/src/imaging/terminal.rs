@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 use crate::global::Config;
-use crate::hashing::{AHash, DHash, PHash};
+use crate::hashing::{AHash, DHash, MinHash32, PHash, SHA256, TLSH};
 use crate::imaging::palette::Palette;
 use binlex::imaging::Terminal as InnerTerminal;
 use pyo3::exceptions::PyRuntimeError;
@@ -82,39 +82,56 @@ impl Terminal {
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn sha256(&self) -> Option<String> {
-        self.inner.lock().unwrap().sha256()
+    pub fn sha256(&self) -> Option<SHA256> {
+        self.inner.lock().unwrap().sha256().map(|hash| SHA256 {
+            bytes: hash.bytes.into_owned(),
+        })
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn tlsh(&self) -> Option<String> {
-        self.inner.lock().unwrap().tlsh()
+    pub fn tlsh(&self) -> Option<TLSH> {
+        self.inner
+            .lock()
+            .unwrap()
+            .tlsh()
+            .map(|hash| TLSH { bytes: hash.bytes.into_owned() })
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn minhash(&self) -> Option<String> {
-        self.inner.lock().unwrap().minhash()
+    pub fn minhash(&self) -> Option<MinHash32> {
+        self.inner.lock().unwrap().minhash().map(|hash| MinHash32 {
+            bytes: hash.bytes.into_owned(),
+            num_hashes: hash.num_hashes,
+            shingle_size: hash.shingle_size,
+            seed: hash.seed,
+        })
     }
 
     #[pyo3(text_signature = "($self)")]
     pub fn ahash(&self) -> Option<AHash> {
-        let inner = self.inner.lock().unwrap();
-        inner.ahash()?;
-        Some(AHash::new(inner.png_bytes().ok()?))
+        self.inner
+            .lock()
+            .unwrap()
+            .ahash()
+            .map(|hash| AHash::new(hash.bytes.into_owned()))
     }
 
     #[pyo3(text_signature = "($self)")]
     pub fn dhash(&self) -> Option<DHash> {
-        let inner = self.inner.lock().unwrap();
-        inner.dhash()?;
-        Some(DHash::new(inner.png_bytes().ok()?))
+        self.inner
+            .lock()
+            .unwrap()
+            .dhash()
+            .map(|hash| DHash::new(hash.bytes.into_owned()))
     }
 
     #[pyo3(text_signature = "($self)")]
     pub fn phash(&self) -> Option<PHash> {
-        let inner = self.inner.lock().unwrap();
-        inner.phash()?;
-        Some(PHash::new(inner.png_bytes().ok()?))
+        self.inner
+            .lock()
+            .unwrap()
+            .phash()
+            .map(|hash| PHash::new(hash.bytes.into_owned()))
     }
 }
 

@@ -25,6 +25,7 @@ use crate::Config;
 use crate::controlflow::Graph;
 use crate::controlflow::Instruction as CFGInstruction;
 use crate::disassemblers::cil::Instruction;
+use crate::genetics::Chromosome;
 use crate::io::Stderr;
 use rayon::ThreadPoolBuilder;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -121,6 +122,10 @@ impl<'disassembler> Disassembler<'disassembler> {
         cfginstruction.is_return = instruction.is_return();
         cfginstruction.is_trap = false;
         cfginstruction.pattern = instruction.pattern();
+        cfginstruction.chromosome_mask =
+            Chromosome::from_pattern(cfginstruction.pattern.clone(), cfg.config.clone())
+                .expect("failed to parse CIL chromosome pattern")
+                .mask();
         cfginstruction.edges = instruction.edges();
         cfginstruction.to = instruction.to();
         cfginstruction.functions = self.get_instruction_functions(&instruction);
