@@ -493,6 +493,8 @@ impl LocalIndex {
                 .or_default()
                 .push(lancedb::Row {
                     object_id: entry.object_id.clone(),
+                    sha256: Some(entry.sha256.clone()),
+                    address: Some(entry.address),
                     occurrences_json,
                     vector: entry.vector.clone(),
                 });
@@ -616,31 +618,34 @@ impl LocalIndex {
                         serde_json::from_str(&row.occurrences_json)
                             .map_err(|error| Error::Serialization(error.to_string()))?;
                     let score = cosine(vector, &row.vector);
-                    let entry = self
-                        .object_store
-                        .get_json::<IndexEntry>(&index_entry_key(
-                            *entity,
-                            &architecture,
-                            &row.object_id,
-                        ))
-                        .map_err(|error| Error::ObjectStore(error.to_string()))?;
+                    let (sha256, address) = match (row.sha256.as_deref(), row.address) {
+                        (Some(sha256), Some(address)) => (sha256.to_string(), address),
+                        _ => {
+                            let entry = self
+                                .object_store
+                                .get_json::<IndexEntry>(&index_entry_key(
+                                    *entity,
+                                    &architecture,
+                                    &row.object_id,
+                                ))
+                                .map_err(|error| Error::ObjectStore(error.to_string()))?;
+                            (entry.sha256, entry.address)
+                        }
+                    };
                     for corpus_entry in corpus_entries
                         .iter()
                         .filter(|corpus_entry| requested_corpora.contains(&corpus_entry.corpus))
                     {
-                        let symbols = symbol_names_for_attributes(
-                            &corpus_entry.attributes,
-                            *entity,
-                            entry.address,
-                        );
+                        let symbols =
+                            symbol_names_for_attributes(&corpus_entry.attributes, *entity, address);
                         if symbols.is_empty() {
                             hits.push(SearchResult {
                                 corpus: corpus_entry.corpus.clone(),
                                 object_id: row.object_id.clone(),
                                 entity: *entity,
                                 architecture: architecture.clone(),
-                                sha256: entry.sha256.clone(),
-                                address: entry.address,
+                                sha256: sha256.clone(),
+                                address,
                                 symbol: None,
                                 attributes: corpus_entry.attributes.clone(),
                                 score,
@@ -653,8 +658,8 @@ impl LocalIndex {
                                 object_id: row.object_id.clone(),
                                 entity: *entity,
                                 architecture: architecture.clone(),
-                                sha256: entry.sha256.clone(),
-                                address: entry.address,
+                                sha256: sha256.clone(),
+                                address,
                                 symbol: Some(symbol),
                                 attributes: corpus_entry.attributes.clone(),
                                 score,
@@ -932,6 +937,8 @@ impl LocalIndex {
                 .or_default()
                 .push(lancedb::Row {
                     object_id: entry.object_id.clone(),
+                    sha256: Some(entry.sha256.clone()),
+                    address: Some(entry.address),
                     occurrences_json: serde_json::to_string(&entry.corpora)
                         .map_err(|error| Error::Serialization(error.to_string()))?,
                     vector: entry.vector.clone(),
