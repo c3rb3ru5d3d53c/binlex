@@ -4,7 +4,6 @@ import copy
 import json
 import os
 import re
-import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -118,14 +117,7 @@ def ensure_plugin_config_file(config: PluginConfig | None = None) -> Path:
 
 
 def open_plugin_config_in_editor(config: PluginConfig | None = None) -> Path:
-    path = ensure_plugin_config_file(config)
-    if sys.platform.startswith("win"):
-        os.startfile(path)  # type: ignore[attr-defined]
-    elif sys.platform == "darwin":
-        subprocess.Popen(["open", str(path)])
-    else:
-        subprocess.Popen(["xdg-open", str(path)])
-    return path
+    return ensure_plugin_config_file(config)
 
 
 def is_meaningful_name(name: str | None) -> bool:
@@ -140,12 +132,14 @@ def is_meaningful_name(name: str | None) -> bool:
     return True
 
 
-def load_plugin_config() -> PluginConfig:
+def load_plugin_config(*, strict: bool = False) -> PluginConfig:
     path = plugin_config_path()
     if path.is_file():
         try:
             return _parse_plugin_config_toml(path.read_text(encoding="utf-8"))
         except Exception:
+            if strict:
+                raise
             return PluginConfig()
 
     raw = ida_registry.reg_read_string(REGISTRY_KEY, subkey=REGISTRY_SUBKEY)
@@ -157,6 +151,8 @@ def load_plugin_config() -> PluginConfig:
         data = json.loads(raw)
         return PluginConfig(**data)
     except Exception:
+        if strict:
+            raise
         return PluginConfig()
 
 
