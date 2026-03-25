@@ -116,7 +116,7 @@ jobs:
 
       - name: Run Unit Tests (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
-        run: cargo test --workspace --exclude binlex-python --exclude binlex-processor-vex --lib --bins
+        run: cargo test --workspace --exclude binlex-python --exclude binlex-processor-vex --exclude libvex --exclude libvex-macros --exclude vex-sys --lib --bins
 
       - name: Build Project (Ubuntu)
         if: ${{ matrix.os == 'ubuntu-latest' }}
@@ -128,7 +128,7 @@ jobs:
 
       - name: Build Project (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
-        run: cargo build --release --workspace --exclude binlex-python --exclude binlex-processor-vex
+        run: cargo build --release --workspace --exclude binlex-python --exclude binlex-processor-vex --exclude libvex --exclude libvex-macros --exclude vex-sys
 
       - name: Create Dist Directory
         run: mkdir dist
@@ -225,6 +225,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          pacman-key --init
+          pacman-key --populate archlinux
           pacman -Syu --noconfirm
           pacman -S --noconfirm --needed base-devel pkgconf openssl zstd make automake autoconf libtool clang curl git python rust protobuf
           id -u builder >/dev/null 2>&1 || useradd --create-home --shell /bin/bash builder
