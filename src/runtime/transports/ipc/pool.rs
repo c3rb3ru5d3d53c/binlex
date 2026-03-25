@@ -529,9 +529,44 @@ mod tests {
     use super::validate_hello;
     use crate::processor::ProcessorOs;
     use crate::runtime::transports::ipc::protocol::{Hello, HelloProcessor, VERSION};
+    use std::process::Command;
+    use std::sync::OnceLock;
+
+    fn ensure_embeddings_processor_built() {
+        static BUILT: OnceLock<()> = OnceLock::new();
+
+        BUILT.get_or_init(|| {
+            let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            let processor_path = manifest_dir
+                .join("target")
+                .join("debug")
+                .join("binlex-processor-embeddings");
+            if processor_path.exists() {
+                return;
+            }
+
+            let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+            let status = Command::new(cargo)
+                .current_dir(&manifest_dir)
+                .args([
+                    "build",
+                    "-p",
+                    "binlex-processor-embeddings",
+                    "--bin",
+                    "binlex-processor-embeddings",
+                ])
+                .status()
+                .expect("cargo should build binlex-processor-embeddings");
+            assert!(
+                status.success(),
+                "binlex-processor-embeddings binary should build"
+            );
+        });
+    }
 
     #[test]
     fn validate_hello_accepts_matching_os_negotiation() {
+        ensure_embeddings_processor_built();
         let hello = Hello {
             protocol_version: VERSION,
             backend_name: "binlex-processor-embeddings".to_string(),
@@ -553,6 +588,7 @@ mod tests {
 
     #[test]
     fn validate_hello_rejects_processor_os_mismatch() {
+        ensure_embeddings_processor_built();
         let unsupported = match ProcessorOs::current() {
             ProcessorOs::Linux => ProcessorOs::Windows,
             ProcessorOs::Macos => ProcessorOs::Windows,

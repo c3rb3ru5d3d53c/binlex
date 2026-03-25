@@ -13,6 +13,10 @@ const VALGRIND_REPO: &str = "https://sourceware.org/git/valgrind.git";
 const VALGRIND_REV: &str = "0062f2b519ea48b82164ae423fac58a59ee00f1a";
 const VEX_ENV_KEYS: [&str; 3] = ["VEX_SRC", "VEX_HEADERS", "VEX_LIBS"];
 
+fn declare_check_cfgs() {
+    println!("cargo:rustc-check-cfg=cfg(log_bytes)");
+}
+
 fn run_checked(program: &str, args: &[&str], cwd: &Path) -> Result<()> {
     let status = Command::new(program).args(args).current_dir(cwd).status()?;
     if status.success() {
@@ -408,6 +412,7 @@ fn ensure_lib() -> Result<PathBuf> {
 }
 
 fn main() -> Result<()> {
+    declare_check_cfgs();
     for key in VEX_ENV_KEYS {
         println!("cargo:rerun-if-env-changed={key}");
     }

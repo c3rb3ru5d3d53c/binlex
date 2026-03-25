@@ -1452,10 +1452,52 @@ mod tests {
     use crate::controlflow::{Graph, Instruction};
     use crate::formats::SymbolJson;
     use crate::{Architecture, Config};
+    use std::process::Command;
+    use std::sync::OnceLock;
+
+    fn embeddings_processor_dir() -> String {
+        static PROCESSOR_DIR: OnceLock<String> = OnceLock::new();
+
+        PROCESSOR_DIR
+            .get_or_init(|| {
+                let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+                let processor_path = manifest_dir
+                    .join("target")
+                    .join("debug")
+                    .join("binlex-processor-embeddings");
+                if !processor_path.exists() {
+                    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+                    let status = Command::new(cargo)
+                        .current_dir(&manifest_dir)
+                        .args([
+                            "build",
+                            "-p",
+                            "binlex-processor-embeddings",
+                            "--bin",
+                            "binlex-processor-embeddings",
+                        ])
+                        .status()
+                        .expect("cargo should build binlex-processor-embeddings");
+                    assert!(
+                        status.success(),
+                        "binlex-processor-embeddings binary should build"
+                    );
+                }
+
+                processor_path
+                    .parent()
+                    .expect("processor binary should have a parent directory")
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .clone()
+    }
 
     fn build_single_return_graph() -> Graph {
+        let processor_dir = embeddings_processor_dir();
         let mut config = Config::default();
         config.processors.enabled = true;
+        config.processors.path = Some(processor_dir);
         let embeddings = config
             .processors
             .ensure_processor("embeddings")

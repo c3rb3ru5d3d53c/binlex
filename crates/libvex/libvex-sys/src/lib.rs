@@ -52,14 +52,6 @@ mod test {
     #[cfg(not(log_bytes))]
     unsafe extern "C" fn log_bytes(_: *const c_char, _: u64) {}
 
-    unsafe extern "C" fn return_0(
-        _cb: *mut c_void,
-        _addr: *mut u32,
-        _vge: *const VexGuestExtents,
-    ) -> u32 {
-        0
-    }
-
     unsafe extern "C" fn self_check(
         _cb: *mut c_void,
         _addr: *mut VexRegisterUpdates,
@@ -113,7 +105,7 @@ mod test {
         vta.archinfo_host.endness = ve;
         vta.archinfo_host.hwcaps = 0;
         vta.callback_opaque = 0 as *mut c_void;
-        let sanity_ptr = sanity as usize;
+        let sanity_ptr = sanity as *const () as usize;
         vta.guest_bytes = sanity_ptr as *const u8;
         vta.guest_bytes_addr = sanity_ptr as Addr;
         vta.chase_into_ok = Some(return_false);
