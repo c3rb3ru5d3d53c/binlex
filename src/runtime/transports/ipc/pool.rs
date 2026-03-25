@@ -330,12 +330,7 @@ impl ProcessorPool {
             .spawn()
             .map_err(|error| ProcessorError::Spawn(error.to_string()))?;
         let mut stream = accept_with_timeout(&listener, &mut child, timeout)?;
-        stream
-            .set_recv_timeout(Some(timeout))
-            .map_err(ProcessorError::Io)?;
-        stream
-            .set_send_timeout(Some(timeout))
-            .map_err(ProcessorError::Io)?;
+        configure_stream_timeouts(&mut stream, timeout)?;
         let frame =
             read_frame(&mut stream).map_err(|error| map_timeout_error("read hello", error))?;
         if frame.header.kind != MessageKind::HelloAck {
@@ -449,6 +444,30 @@ fn accept_with_timeout(
             Err(error) => return Err(ProcessorError::Io(error)),
         }
     }
+}
+
+#[cfg(windows)]
+fn configure_stream_timeouts(
+    _stream: &mut Stream,
+    _timeout: Duration,
+) -> Result<(), ProcessorError> {
+    // Windows named pipes do not support socket-style I/O timeouts.
+    // Startup timeout is still enforced while waiting for the child to connect.
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn configure_stream_timeouts(
+    stream: &mut Stream,
+    timeout: Duration,
+) -> Result<(), ProcessorError> {
+    stream
+        .set_recv_timeout(Some(timeout))
+        .map_err(ProcessorError::Io)?;
+    stream
+        .set_send_timeout(Some(timeout))
+        .map_err(ProcessorError::Io)?;
+    Ok(())
 }
 
 fn validate_hello(
