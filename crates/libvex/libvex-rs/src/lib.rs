@@ -311,7 +311,9 @@ mod test {
             VexEndness::VexEndnessLE,
         );
 
-        let irsb = vta.front_end(sanity as *const _, sanity as _).unwrap();
+        let irsb = vta
+            .front_end(sanity as *const _, sanity as *const () as _)
+            .unwrap();
 
         println!("{}", irsb);
 
@@ -331,7 +333,9 @@ mod test {
             VexEndness::VexEndnessLE,
         );
 
-        let irsb = vta.front_end(sanity as *const _, sanity as _).unwrap();
+        let irsb = vta
+            .front_end(sanity as *const _, sanity as *const () as _)
+            .unwrap();
 
         // get another irsb
         let next = match irsb.next().as_enum() {
@@ -361,7 +365,7 @@ mod test {
         let mut buf = [0; 1000];
 
         let size = vta
-            .translate(translate as *const _, translate as _, &mut buf)
+            .translate(translate as *const _, translate as *const () as _, &mut buf)
             .unwrap();
 
         assert!(size > 300);
@@ -384,7 +388,9 @@ mod test {
                 VexEndness::VexEndnessLE,
             );
 
-            assert!(vta.front_end(case1 as *const _, case1 as _,).is_err());
+            assert!(vta
+                .front_end(case1 as *const _, case1 as *const () as _)
+                .is_err());
         }
 
         // lift, then create 1 IRSB

@@ -7,7 +7,9 @@ fn main() {
         VexEndness::VexEndnessLE,
     );
 
-    let irsb = vta.front_end(main as *const _, main as _).unwrap();
+    let irsb = vta
+        .front_end(main as *const _, main as *const () as _)
+        .unwrap();
     println!("{}", irsb);
 
     // print an custom irsb:
