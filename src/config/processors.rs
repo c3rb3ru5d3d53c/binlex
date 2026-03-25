@@ -50,7 +50,9 @@ impl ConfigProcessors {
 
     pub fn ensure_processor(&mut self, name: &str) -> Option<&mut ConfigProcessor> {
         if !self.processors.contains_key(name) {
-            let default = crate::processor::default_processor_config(name)?;
+            let default = crate::processor::processor_registration_by_name_for_config(self, name)
+                .map(|registration| registration.registration.default_config)
+                .or_else(|| crate::processor::default_processor_config(name))?;
             self.processors.insert(name.to_string(), default);
         }
         self.processors.get_mut(name)

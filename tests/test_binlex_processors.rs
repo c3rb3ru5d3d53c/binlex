@@ -38,9 +38,42 @@ fn binlex_binary() -> PathBuf {
         .clone()
 }
 
+fn vex_processor_binary() -> PathBuf {
+    static VEX_PATH: OnceLock<PathBuf> = OnceLock::new();
+
+    VEX_PATH
+        .get_or_init(|| {
+            let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            let binary_path = manifest_dir
+                .join("target")
+                .join("debug")
+                .join("binlex-processor-vex");
+            if binary_path.exists() {
+                return binary_path;
+            }
+
+            let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+            let status = Command::new(cargo)
+                .current_dir(&manifest_dir)
+                .args([
+                    "build",
+                    "-p",
+                    "binlex-processor-vex",
+                    "--bin",
+                    "binlex-processor-vex",
+                ])
+                .status()
+                .expect("cargo should build the vex processor binary");
+            assert!(status.success(), "vex processor binary should build");
+            binary_path
+        })
+        .clone()
+}
+
 #[test]
 fn test_cli_processors_override_config_for_vex_function_ir() {
     let binlex = binlex_binary();
+    let _vex = vex_processor_binary();
     let binlex_dir = PathBuf::from(&binlex)
         .parent()
         .expect("binlex binary should have a parent directory")
@@ -119,6 +152,7 @@ fn test_cli_processors_override_config_for_vex_function_ir() {
 #[test]
 fn test_cli_processors_respect_vex_function_target_config() {
     let binlex = binlex_binary();
+    let _vex = vex_processor_binary();
     let binlex_dir = PathBuf::from(&binlex)
         .parent()
         .expect("binlex binary should have a parent directory")
