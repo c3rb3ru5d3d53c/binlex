@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::global::Config;
+use crate::config::Config;
 use crate::hashing::{AHash, DHash, MinHash32, PHash, SHA256, TLSH};
 use crate::imaging::palette::Palette;
 use binlex::imaging::Terminal as InnerTerminal;
@@ -34,6 +34,14 @@ use std::sync::{Arc, Mutex};
 #[pyclass]
 pub struct Terminal {
     inner: Arc<Mutex<InnerTerminal>>,
+}
+
+impl Terminal {
+    pub(crate) fn from_inner(inner: InnerTerminal) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(inner)),
+        }
+    }
 }
 
 #[pymethods]
@@ -90,11 +98,9 @@ impl Terminal {
 
     #[pyo3(text_signature = "($self)")]
     pub fn tlsh(&self) -> Option<TLSH> {
-        self.inner
-            .lock()
-            .unwrap()
-            .tlsh()
-            .map(|hash| TLSH { bytes: hash.bytes.into_owned() })
+        self.inner.lock().unwrap().tlsh().map(|hash| TLSH {
+            bytes: hash.bytes.into_owned(),
+        })
     }
 
     #[pyo3(text_signature = "($self)")]

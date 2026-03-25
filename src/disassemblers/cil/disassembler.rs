@@ -242,7 +242,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         Ok(address)
     }
 
-    pub fn disassemble_controlflow<'a>(
+    pub fn disassemble<'a>(
         &'a self,
         addresses: BTreeSet<u64>,
         cfg: &'a mut Graph,

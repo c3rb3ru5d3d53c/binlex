@@ -24,7 +24,7 @@
 
 from binlex_bindings.binlex.disassemblers.capstone import Disassembler as _DisassemblerBinding
 
-from binlex.architecture import _coerce_architecture
+from binlex.core.architecture import _coerce_architecture
 from binlex.formats import Image
 
 
@@ -54,9 +54,9 @@ class Disassembler:
         """Disassemble the basic block that starts at `address`."""
         return self._inner.disassemble_block(address, cfg._inner)
 
-    def disassemble_controlflow(self, addresses, cfg):
+    def disassemble(self, addresses, cfg):
         """Disassemble a set of entrypoint addresses into the graph."""
-        return self._inner.disassemble_controlflow(addresses, cfg._inner)
+        return self._inner.disassemble(addresses, cfg._inner)
 
     def disassemble_sweep(self):
         """Return candidate addresses discovered during a linear sweep."""

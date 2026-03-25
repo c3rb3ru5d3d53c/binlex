@@ -23,11 +23,17 @@ fn function_images_expose_existing_hash_accessors() {
     let function = Function::new(0x1000, &graph).expect("function should exist");
 
     let png = function
-        .png()
-        .expect("contiguous function should render to PNG");
+        .imaging()
+        .expect("contiguous function should expose imaging")
+        .linear(None, None)
+        .grayscale()
+        .png();
     let svg = function
-        .svg()
-        .expect("contiguous function should render to SVG");
+        .imaging()
+        .expect("contiguous function should expose imaging")
+        .linear(None, None)
+        .grayscale()
+        .svg();
 
     assert!(png.phash().is_some());
     assert!(png.ahash().is_some());
@@ -47,12 +53,37 @@ fn function_images_expose_existing_hash_accessors() {
 }
 
 #[test]
+fn function_imaging_pipeline_materializes_existing_renderers() {
+    let graph = sample_graph();
+    let function = Function::new(0x1000, &graph).expect("function should exist");
+
+    let png = function
+        .imaging()
+        .expect("contiguous function should expose imaging")
+        .linear(None, None)
+        .grayscale()
+        .png();
+    let terminal = function
+        .imaging()
+        .expect("contiguous function should expose imaging")
+        .linear(None, None)
+        .grayscale()
+        .terminal();
+
+    assert!(png.phash().is_some());
+    assert_eq!(
+        png.phash().and_then(|hash| hash.hexdigest()),
+        terminal.phash().and_then(|hash| hash.hexdigest())
+    );
+}
+
+#[test]
 fn block_images_expose_existing_hash_accessors() {
     let graph = sample_graph();
     let block = Block::new(0x1000, &graph).expect("block should exist");
 
-    let png = block.png();
-    let svg = block.svg();
+    let png = block.imaging().linear(None, None).grayscale().png();
+    let svg = block.imaging().linear(None, None).grayscale().svg();
 
     assert!(png.phash().is_some());
     assert!(png.ahash().is_some());
@@ -76,8 +107,8 @@ fn instruction_images_expose_existing_hash_accessors() {
     let graph = sample_graph();
     let instruction = Instruction::new(0x1000, &graph).expect("instruction should exist");
 
-    let png = instruction.png();
-    let svg = instruction.svg();
+    let png = instruction.imaging().linear(None, None).grayscale().png();
+    let svg = instruction.imaging().linear(None, None).grayscale().svg();
 
     assert!(png.phash().is_some());
     assert!(png.ahash().is_some());

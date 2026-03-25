@@ -164,7 +164,7 @@ impl Disassembler {
     }
 
     #[pyo3(text_signature = "($self, addresses, cfg)")]
-    pub fn disassemble_controlflow(
+    pub fn disassemble(
         &self,
         py: Python,
         addresses: BTreeSet<u64>,
@@ -172,7 +172,7 @@ impl Disassembler {
     ) -> Result<(), Error> {
         let cfg_ref = &mut cfg.borrow_mut(py);
         self.with_inner_disassembler(py, |disassembler| {
-            disassembler.disassemble_controlflow(addresses, &mut cfg_ref.inner.lock().unwrap())
+            disassembler.disassemble(addresses, &mut cfg_ref.inner.lock().unwrap())
         })
         .map_err(|error| Error::other(error.to_string()))?;
         Ok(())

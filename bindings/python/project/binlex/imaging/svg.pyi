@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from binlex import Config
+from binlex.config import Config
 from binlex.hashing import AHash, DHash, MinHash32, PHash, SHA256, TLSH
 from .palette import Palette
 

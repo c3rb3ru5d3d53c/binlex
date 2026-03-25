@@ -61,7 +61,7 @@ def main() -> int:
         print("no functions produced")
         return 0
 
-    phash = functions[0].png().phash()
+    phash = functions[0].imaging().linear().grayscale().png().phash()
     print(phash.hexdigest() if phash else "no phash")
     return 0
 

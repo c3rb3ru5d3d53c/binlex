@@ -26,6 +26,8 @@ use std::borrow::Cow;
 use std::hash::{Hash, Hasher};
 use twox_hash::XxHash32;
 
+use crate::math::similarity;
+
 const PRIME_MODULUS: u32 = 4294967291;
 
 /// A MinHash implementation using 32-bit hashes for approximate set similarity calculations.
@@ -150,20 +152,7 @@ impl<'minhash32> MinHash32<'minhash32> {
     pub fn compare_hexdigests(hexdigest1: &str, hexdigest2: &str) -> Option<f64> {
         let hash1 = Self::parse_hexdigest(hexdigest1)?;
         let hash2 = Self::parse_hexdigest(hexdigest2)?;
-        Some(Self::jaccard_similarity(&hash1, &hash2))
-    }
-
-    fn jaccard_similarity(hash1: &[u32], hash2: &[u32]) -> f64 {
-        if hash1.len() != hash2.len() {
-            return 0.0;
-        }
-        let mut intersection = 0;
-        for i in 0..hash1.len() {
-            if hash1[i] == hash2[i] {
-                intersection += 1;
-            }
-        }
-        intersection as f64 / hash1.len() as f64
+        Some(similarity::jaccard_signature(&hash1, &hash2))
     }
 
     fn parse_hexdigest(hexdigest: &str) -> Option<Vec<u32>> {

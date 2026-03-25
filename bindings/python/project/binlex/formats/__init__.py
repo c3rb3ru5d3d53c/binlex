@@ -28,9 +28,10 @@ from binlex_bindings.binlex.formats import Image as _ImageBinding
 from binlex_bindings.binlex.formats import MACHO as _MACHOBinding
 from binlex_bindings.binlex.formats import PE as _PEBinding
 
-from binlex.architecture import Architecture
+from binlex.core.architecture import Architecture
 from binlex.hashing import SHA256, TLSH
-from binlex.magic import Magic
+from binlex.imaging import Imaging
+from binlex.core.magic import Magic
 
 
 class Image:
@@ -41,7 +42,7 @@ class Image:
         self._inner = _ImageBinding(path, cache)
 
     @classmethod
-    def from_binding(cls, binding):
+    def _from_binding(cls, binding):
         """Wrap an existing native image binding in the Python helper class."""
         result = cls.__new__(cls)
         result._inner = binding
@@ -126,7 +127,11 @@ class ELF:
 
     def image(self):
         """Return an `Image` wrapper over the ELF contents."""
-        return Image.from_binding(self._inner.image())
+        return Image._from_binding(self._inner.image())
+
+    def imaging(self):
+        """Return the imaging pipeline over the mapped ELF contents."""
+        return Imaging._from_binding(self._inner.imaging())
 
     def tlsh(self):
         """Return the TLSH helper for the image when available."""
@@ -150,7 +155,7 @@ class ELF:
 
     def file(self):
         """Return the associated `binlex.formats.File` wrapper."""
-        return File.from_binding(self._inner.file())
+        return File._from_binding(self._inner.file())
 
     def __getattr__(self, name):
         """Delegate unknown attributes to the underlying native ELF object."""
@@ -165,7 +170,7 @@ class File:
         self._inner = _FileBinding(path, config)
 
     @classmethod
-    def from_binding(cls, binding):
+    def _from_binding(cls, binding):
         """Wrap an existing native file binding in the Python helper class."""
         result = cls.__new__(cls)
         result._inner = binding
@@ -200,7 +205,11 @@ class PE:
 
     def file(self):
         """Return the associated `binlex.formats.File` wrapper."""
-        return File.from_binding(self._inner.file())
+        return File._from_binding(self._inner.file())
+
+    def imaging(self):
+        """Return the imaging pipeline over the mapped PE contents."""
+        return Imaging._from_binding(self._inner.imaging())
 
     def __getattr__(self, name):
         """Delegate unknown attributes to the underlying native PE object."""
@@ -209,6 +218,53 @@ class PE:
 
 class MACHO:
     """Mach-O wrapper for single-arch and fat binaries with slice-aware helpers."""
+
+    class Slice:
+        """Wrapper for a single Mach-O slice."""
+
+        def __init__(self, binding):
+            self._inner = binding
+
+        def index(self):
+            return self._inner.index()
+
+        def relative_virtual_address_to_virtual_address(self, relative_virtual_address):
+            return self._inner.relative_virtual_address_to_virtual_address(
+                relative_virtual_address
+            )
+
+        def file_offset_to_virtual_address(self, file_offset):
+            return self._inner.file_offset_to_virtual_address(file_offset)
+
+        def entrypoint_virtual_address(self):
+            return self._inner.entrypoint_virtual_address()
+
+        def imagebase(self):
+            return self._inner.imagebase()
+
+        def sizeofheaders(self):
+            return self._inner.sizeofheaders()
+
+        def architecture(self):
+            architecture = self._inner.architecture()
+            if architecture is None:
+                return None
+            return Architecture.from_binding(architecture)
+
+        def entrypoint_virtual_addresses(self):
+            return self._inner.entrypoint_virtual_addresses()
+
+        def export_virtual_addresses(self):
+            return self._inner.export_virtual_addresses()
+
+        def executable_virtual_address_ranges(self):
+            return self._inner.executable_virtual_address_ranges()
+
+        def image(self):
+            return Image._from_binding(self._inner.image())
+
+        def imaging(self):
+            return Imaging._from_binding(self._inner.imaging())
 
     def __init__(self, path, config):
         """Open a Mach-O image from disk using the supplied binlex configuration."""
@@ -236,6 +292,15 @@ class MACHO:
     def number_of_slices(self):
         """Return the number of slices contained in the Mach-O image."""
         return self._inner.number_of_slices()
+
+    def slice(self, index):
+        """Return the Mach-O slice wrapper for `index`, if present."""
+        result = self._inner.slice(index)
+        return None if result is None else MACHO.Slice(result)
+
+    def slices(self):
+        """Return all Mach-O slices."""
+        return [MACHO.Slice(item) for item in self._inner.slices()]
 
     def entrypoint_virtual_address(self, slice):
         """Return the primary entrypoint virtual address for `slice`."""
@@ -270,7 +335,11 @@ class MACHO:
 
     def image(self, slice):
         """Return an `Image` wrapper over the contents of `slice`."""
-        return Image.from_binding(self._inner.image(slice))
+        return Image._from_binding(self._inner.image(slice))
+
+    def imaging(self):
+        """Return the imaging pipeline over the raw Mach-O container bytes."""
+        return Imaging._from_binding(self._inner.imaging())
 
     def size(self):
         """Return the full Mach-O container size in bytes."""
@@ -290,7 +359,7 @@ class MACHO:
 
     def file(self):
         """Return the associated `binlex.formats.File` wrapper."""
-        return File.from_binding(self._inner.file())
+        return File._from_binding(self._inner.file())
 
     def __getattr__(self, name):
         """Delegate unknown attributes to the underlying native Mach-O object."""

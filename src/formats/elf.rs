@@ -27,6 +27,7 @@ use crate::formats::Image;
 use crate::formats::Symbol as BlSymbol;
 use crate::hashing::SHA256;
 use crate::hashing::TLSH;
+use crate::imaging::Imaging;
 use lief::Binary;
 use lief::elf::section::Flags;
 use lief::elf::segment::Type as SegmentType;
@@ -201,6 +202,10 @@ impl ELF {
         }
 
         Ok(tempmap)
+    }
+
+    pub fn imaging(&self) -> Result<Imaging, Error> {
+        Ok(Imaging::new(self.file.data.clone(), self.config.clone()))
     }
 
     pub fn tlsh(&self) -> Option<TLSH<'_>> {

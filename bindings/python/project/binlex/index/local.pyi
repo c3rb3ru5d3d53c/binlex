@@ -1,4 +1,4 @@
-from binlex.architecture import Architecture
+from binlex.core.architecture import Architecture
 from binlex.controlflow import Block, Function, Graph, Instruction
 from binlex.metadata import Attribute
 

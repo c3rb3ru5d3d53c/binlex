@@ -698,14 +698,14 @@ fn process_pe(
         };
 
         disassembler
-            .disassemble_controlflow(entrypoints.clone(), &mut cfg)
+            .disassemble(entrypoints.clone(), &mut cfg)
             .unwrap_or_else(|error| {
                 eprintln!("{}", error);
                 process::exit(1);
             });
         print_stage_timing(
             &config,
-            "pe.disassemble_controlflow",
+            "pe.disassemble",
             disassembly_started_at,
         );
     } else if pe.is_dotnet() {
@@ -727,14 +727,14 @@ fn process_pe(
         };
 
         disassembler
-            .disassemble_controlflow(entrypoints.clone(), &mut cfg)
+            .disassemble(entrypoints.clone(), &mut cfg)
             .unwrap_or_else(|error| {
                 eprintln!("{}", error);
                 process::exit(1);
             });
         print_stage_timing(
             &config,
-            "pe.dotnet.disassemble_controlflow",
+            "pe.dotnet.disassemble",
             disassembly_started_at,
         );
     } else {
@@ -823,14 +823,14 @@ fn process_elf(
     };
 
     disassembler
-        .disassemble_controlflow(entrypoints, &mut cfg)
+        .disassemble(entrypoints, &mut cfg)
         .unwrap_or_else(|error| {
             eprintln!("{}", error);
             process::exit(1);
         });
     print_stage_timing(
         &config,
-        "elf.disassemble_controlflow",
+        "elf.disassemble",
         disassembly_started_at,
     );
 
@@ -888,14 +888,14 @@ fn process_code(
             };
 
             disassembler
-                .disassemble_controlflow(entrypoints, &mut cfg)
+                .disassemble(entrypoints, &mut cfg)
                 .unwrap_or_else(|error| {
                     eprintln!("{}", error);
                     process::exit(1);
                 });
             print_stage_timing(
                 &config,
-                "code.disassemble_controlflow",
+                "code.disassemble",
                 disassembly_started_at,
             );
         }
@@ -916,14 +916,14 @@ fn process_code(
             };
 
             disassembler
-                .disassemble_controlflow(entrypoints, &mut cfg)
+                .disassemble(entrypoints, &mut cfg)
                 .unwrap_or_else(|error| {
                     eprintln!("{}", error);
                     process::exit(1);
                 });
             print_stage_timing(
                 &config,
-                "code.dotnet.disassemble_controlflow",
+                "code.dotnet.disassemble",
                 disassembly_started_at,
             );
         }
@@ -1022,14 +1022,14 @@ fn process_macho(
         };
 
         disassembler
-            .disassemble_controlflow(entrypoints, &mut cfg)
+            .disassemble(entrypoints, &mut cfg)
             .unwrap_or_else(|error| {
                 eprintln!("{}", error);
                 process::exit(1);
             });
         print_stage_timing(
             &config,
-            "macho.disassemble_controlflow",
+            "macho.disassemble",
             disassembly_started_at,
         );
 

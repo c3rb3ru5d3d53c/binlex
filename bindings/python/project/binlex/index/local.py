@@ -3,7 +3,7 @@
 from binlex_bindings.binlex.index.local import Collection as _CollectionBinding
 from binlex_bindings.binlex.index.local import LocalIndex as _LocalIndexBinding
 
-from binlex.architecture import _coerce_architecture
+from binlex.core.architecture import _coerce_architecture
 from binlex.controlflow import Block, Function, Graph, Instruction
 
 
@@ -47,19 +47,19 @@ class SearchResult:
         return self._inner.collection()
 
     def graph(self):
-        return Graph.from_binding(self._inner.graph())
+        return Graph._from_binding(self._inner.graph())
 
     def function(self):
         result = self._inner.function()
-        return None if result is None else Function.from_binding(result)
+        return None if result is None else Function._from_binding(result)
 
     def block(self):
         result = self._inner.block()
-        return None if result is None else Block.from_binding(result)
+        return None if result is None else Block._from_binding(result)
 
     def instruction(self):
         result = self._inner.instruction()
-        return None if result is None else Instruction.from_binding(result)
+        return None if result is None else Instruction._from_binding(result)
 
 
 class LocalIndex:
@@ -242,7 +242,7 @@ class LocalIndex:
         return self._inner.clear()
 
     def load(self, corpus, sha256):
-        return Graph.from_binding(self._inner.load(corpus, sha256))
+        return Graph._from_binding(self._inner.load(corpus, sha256))
 
     def corpora(self):
         return self._inner.corpora()

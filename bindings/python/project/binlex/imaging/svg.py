@@ -23,7 +23,7 @@
 """SVG rendering helpers for binary visualization output."""
 
 from binlex_bindings.binlex.imaging import SVG as _SVGBinding
-from binlex import Config
+from binlex.config import Config
 from binlex.hashing import AHash, DHash, MinHash32, PHash, SHA256, TLSH
 
 from .palette import Palette
@@ -33,7 +33,7 @@ class SVG:
     """Render binary data into an SVG image."""
 
     @classmethod
-    def from_binding(cls, binding):
+    def _from_binding(cls, binding):
         """Wrap an existing native SVG binding."""
         result = cls.__new__(cls)
         result._inner = binding

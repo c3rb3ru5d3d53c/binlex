@@ -67,7 +67,7 @@ disassembler = Disassembler(pe.architecture(), image, pe.executable_virtual_addr
 cfg = Graph(pe.architecture(), config)
 
 # Disassemble the PE Image Entrypoints Recursively
-disassembler.disassemble_controlflow(pe.entrypoint_virtual_addresses(), cfg)
+disassembler.disassemble(pe.entrypoint_virtual_addresses(), cfg)
 
 for address in cfg.queue_functions.valid_addresses():
     function = Function(address, cfg)

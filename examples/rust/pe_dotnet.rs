@@ -56,7 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
 
     let mut cfg = Graph::new(pe.architecture(), config);
-    disassembler.disassemble_controlflow(pe.dotnet_entrypoint_virtual_addresses(), &mut cfg)?;
+    disassembler.disassemble(pe.dotnet_entrypoint_virtual_addresses(), &mut cfg)?;
 
     println!("instructions: {}", cfg.instructions().len());
     println!("blocks: {}", cfg.blocks().len());

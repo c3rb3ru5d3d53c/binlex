@@ -140,7 +140,7 @@ impl<'disassembler> Disassembler<'disassembler> {
     }
 
     #[allow(dead_code)]
-    pub fn disassemble_controlflow<'a>(
+    pub fn disassemble<'a>(
         &'a self,
         addresses: BTreeSet<u64>,
         cfg: &'a mut Graph,

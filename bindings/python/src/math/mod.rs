@@ -1,6 +1,7 @@
 use pyo3::prelude::*;
 
 pub mod entropy;
+pub mod similarity;
 pub mod stats;
 
 pub use entropy::entropy_init;
@@ -8,6 +9,7 @@ pub use entropy::entropy_init;
 #[pymodule]
 #[pyo3(name = "math")]
 pub fn math_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    similarity::register(py, m)?;
     stats::register(m)?;
     py.import("sys")?
         .getattr("modules")?

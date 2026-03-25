@@ -33,11 +33,7 @@ pub trait ArchDisassembler {
     fn disassemble_instruction(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error>;
     fn disassemble_block(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error>;
     fn disassemble_function(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error>;
-    fn disassemble_controlflow(
-        &self,
-        addresses: BTreeSet<u64>,
-        cfg: &mut Graph,
-    ) -> Result<(), Error>;
+    fn disassemble(&self, addresses: BTreeSet<u64>, cfg: &mut Graph) -> Result<(), Error>;
     fn disassemble_sweep(&self) -> BTreeSet<u64>;
 }
 
@@ -69,13 +65,9 @@ impl ArchDisassembler for DisassemblerBackend<'_> {
         }
     }
 
-    fn disassemble_controlflow(
-        &self,
-        addresses: BTreeSet<u64>,
-        cfg: &mut Graph,
-    ) -> Result<(), Error> {
+    fn disassemble(&self, addresses: BTreeSet<u64>, cfg: &mut Graph) -> Result<(), Error> {
         match self {
-            DisassemblerBackend::X86(d) => d.disassemble_controlflow(addresses, cfg),
+            DisassemblerBackend::X86(d) => d.disassemble(addresses, cfg),
         }
     }
 }
@@ -140,12 +132,8 @@ impl<'a> Disassembler<'a> {
         self.backend.disassemble_function(address, cfg)
     }
 
-    pub fn disassemble_controlflow(
-        &self,
-        addresses: BTreeSet<u64>,
-        cfg: &mut Graph,
-    ) -> Result<(), Error> {
-        self.backend.disassemble_controlflow(addresses, cfg)
+    pub fn disassemble(&self, addresses: BTreeSet<u64>, cfg: &mut Graph) -> Result<(), Error> {
+        self.backend.disassemble(addresses, cfg)
     }
 
     pub fn disassemble_sweep(&self) -> BTreeSet<u64> {

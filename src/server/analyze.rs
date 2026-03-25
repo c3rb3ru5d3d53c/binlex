@@ -123,7 +123,7 @@ fn analyze_pe(
         )
         .map_err(|error| ServerError::Processor(error.to_string()))?;
         disassembler
-            .disassemble_controlflow(entrypoints, &mut cfg)
+            .disassemble(entrypoints, &mut cfg)
             .map_err(|error| ServerError::Processor(error.to_string()))?;
     } else {
         let disassembler = Disassembler::new(
@@ -134,7 +134,7 @@ fn analyze_pe(
         )
         .map_err(|error| ServerError::Processor(error.to_string()))?;
         disassembler
-            .disassemble_controlflow(entrypoints, &mut cfg)
+            .disassemble(entrypoints, &mut cfg)
             .map_err(|error| ServerError::Processor(error.to_string()))?;
     }
 
@@ -172,7 +172,7 @@ fn analyze_elf(
     )
     .map_err(|error| ServerError::Processor(error.to_string()))?;
     disassembler
-        .disassemble_controlflow(elf.entrypoint_virtual_addresses(), &mut cfg)
+        .disassemble(elf.entrypoint_virtual_addresses(), &mut cfg)
         .map_err(|error| ServerError::Processor(error.to_string()))?;
 
     finalize_graph(&cfg, &attributes)
@@ -242,7 +242,7 @@ fn analyze_macho(
         )
         .map_err(|error| ServerError::Processor(error.to_string()))?;
         disassembler
-            .disassemble_controlflow(slice.entrypoint_virtual_addresses(), &mut cfg)
+            .disassemble(slice.entrypoint_virtual_addresses(), &mut cfg)
             .map_err(|error| ServerError::Processor(error.to_string()))?;
         if let Some(existing) = &mut merged_graph {
             existing.merge(&mut cfg);
@@ -289,7 +289,7 @@ fn analyze_code(
             )
             .map_err(|error| ServerError::Processor(error.to_string()))?;
             disassembler
-                .disassemble_controlflow(entrypoints, &mut cfg)
+                .disassemble(entrypoints, &mut cfg)
                 .map_err(|error| ServerError::Processor(error.to_string()))?;
         }
         Architecture::CIL => {
@@ -302,7 +302,7 @@ fn analyze_code(
             )
             .map_err(|error| ServerError::Processor(error.to_string()))?;
             disassembler
-                .disassemble_controlflow(entrypoints, &mut cfg)
+                .disassemble(entrypoints, &mut cfg)
                 .map_err(|error| ServerError::Processor(error.to_string()))?;
         }
         Architecture::UNKNOWN => {

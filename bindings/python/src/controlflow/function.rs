@@ -25,7 +25,7 @@ use crate::controlflow::Block;
 use crate::controlflow::Graph;
 use crate::genetics::Chromosome;
 use crate::hashing::{MinHash32, SHA256, TLSH};
-use crate::imaging::{PNG, SVG};
+use crate::imaging::Imaging;
 use crate::Architecture;
 use crate::Config;
 use binlex::controlflow::Function as InnerFunction;
@@ -346,15 +346,11 @@ impl Function {
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Render the function as a PNG image using default imaging settings.
-    pub fn png(&self, py: Python) -> PyResult<Option<PNG>> {
-        self.with_inner_function(py, |function| Ok(function.png().map(PNG::from_inner)))
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Render the function as an SVG image using default imaging settings.
-    pub fn svg(&self, py: Python) -> PyResult<Option<SVG>> {
-        self.with_inner_function(py, |function| Ok(function.svg().map(SVG::from_inner)))
+    /// Return the imaging pipeline for the function bytes, if contiguous.
+    pub fn imaging(&self, py: Python) -> PyResult<Option<Imaging>> {
+        self.with_inner_function(py, |function| {
+            Ok(function.imaging().map(Imaging::from_inner))
+        })
     }
 
     #[pyo3(text_signature = "($self)")]

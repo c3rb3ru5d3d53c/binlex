@@ -99,9 +99,9 @@ def disassemble_block_graph(block_address: int, config) -> Graph:
     return graph
 
 
-def disassemble_controlflow_graph(addresses: list[int] | set[int], config) -> Graph:
+def disassemble_graph(addresses: list[int] | set[int], config) -> Graph:
     graph = build_graph(config)
-    build_disassembler(config).disassemble_controlflow(set(addresses), graph)
+    build_disassembler(config).disassemble(set(addresses), graph)
     return graph
 
 

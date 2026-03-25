@@ -39,7 +39,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let disassembler = Disassembler::from_bytes(Architecture::AMD64, &code, ranges, config.clone())?;
     let mut graph = Graph::new(Architecture::AMD64, config);
-    disassembler.disassemble_controlflow(entrypoints, &mut graph)?;
+    disassembler.disassemble(entrypoints, &mut graph)?;
 
     println!("instructions: {}", graph.instructions().len());
     println!("blocks: {}", graph.blocks().len());
