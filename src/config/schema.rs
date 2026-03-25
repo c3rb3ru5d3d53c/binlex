@@ -41,7 +41,6 @@ pub struct ConfigProcessorTransport {
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct ConfigProcessorTransports {
-    pub inline: ConfigProcessorTransport,
     pub ipc: ConfigProcessorTransport,
     pub http: ConfigProcessorTransport,
 }

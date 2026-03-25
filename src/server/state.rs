@@ -25,24 +25,23 @@ impl AppState {
             enabled: true,
             ..config.processors.clone()
         };
-        for registration in crate::processor::registered_processor_registrations() {
-            if !registration.supported_on_current_os() {
-                continue;
-            }
+        for registration in
+            crate::processor::registered_processor_registrations_for_config(&processors)
+        {
             if !config
                 .processors
-                .processor(registration.name)
+                .processor(&registration.name)
                 .is_some_and(|processor| processor.enabled)
             {
                 continue;
             }
             if config
                 .processors
-                .processor(registration.name)
+                .processor(&registration.name)
                 .and_then(|processor| {
                     crate::server::processors::configured_server_transport(
                         processor,
-                        registration.transports,
+                        &registration.transports,
                     )
                     .ok()
                 })
@@ -50,8 +49,11 @@ impl AppState {
             {
                 continue;
             }
-            let pool = (registration.make_pool)(&processors)?;
-            processor_pools.insert(registration.name.to_string(), pool);
+            let pool = crate::runtime::transports::ipc::ProcessorPool::for_external(
+                &processors,
+                &registration.name,
+            )?;
+            processor_pools.insert(registration.name.clone(), pool);
         }
         Ok(Self {
             config,

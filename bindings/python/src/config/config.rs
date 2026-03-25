@@ -1605,7 +1605,6 @@ impl ConfigProcessorTransport {
             .processors
             .processor(&self.processor_name)
             .is_some_and(|processor| match self.kind {
-                "inline" => processor.transport.inline.enabled,
                 "ipc" => processor.transport.ipc.enabled,
                 "http" => processor.transport.http.enabled,
                 _ => false,
@@ -1618,7 +1617,6 @@ impl ConfigProcessorTransport {
         let mut inner = self.inner.lock().unwrap();
         if let Some(processor) = inner.processors.ensure_processor(&self.processor_name) {
             match self.kind {
-                "inline" => processor.transport.inline.enabled = value,
                 "ipc" => processor.transport.ipc.enabled = value,
                 "http" => processor.transport.http.enabled = value,
                 _ => {}
@@ -1634,7 +1632,6 @@ impl ConfigProcessorTransport {
             .processors
             .processor(&self.processor_name)
             .and_then(|processor| match self.kind {
-                "inline" => processor.transport.inline.options.get("url"),
                 "ipc" => processor.transport.ipc.options.get("url"),
                 "http" => processor.transport.http.options.get("url"),
                 _ => None,
@@ -1649,7 +1646,6 @@ impl ConfigProcessorTransport {
         let mut inner = self.inner.lock().unwrap();
         if let Some(processor) = inner.processors.ensure_processor(&self.processor_name) {
             let options = match self.kind {
-                "inline" => Some(&mut processor.transport.inline.options),
                 "ipc" => Some(&mut processor.transport.ipc.options),
                 "http" => Some(&mut processor.transport.http.options),
                 _ => None,
@@ -1675,7 +1671,6 @@ impl ConfigProcessorTransport {
             .processors
             .processor(&self.processor_name)
             .and_then(|processor| match self.kind {
-                "inline" => processor.transport.inline.options.get("verify"),
                 "ipc" => processor.transport.ipc.options.get("verify"),
                 "http" => processor.transport.http.options.get("verify"),
                 _ => None,
@@ -1689,7 +1684,6 @@ impl ConfigProcessorTransport {
         let mut inner = self.inner.lock().unwrap();
         if let Some(processor) = inner.processors.ensure_processor(&self.processor_name) {
             let options = match self.kind {
-                "inline" => Some(&mut processor.transport.inline.options),
                 "ipc" => Some(&mut processor.transport.ipc.options),
                 "http" => Some(&mut processor.transport.http.options),
                 _ => None,
@@ -1710,16 +1704,6 @@ impl ConfigProcessorTransport {
 
 #[pymethods]
 impl ConfigProcessorTransports {
-    #[getter]
-    /// Return settings for inline execution of this processor.
-    pub fn get_inline(&self) -> ConfigProcessorTransport {
-        ConfigProcessorTransport {
-            inner: Arc::clone(&self.inner),
-            processor_name: self.processor_name.clone(),
-            kind: "inline",
-        }
-    }
-
     #[getter]
     /// Return settings for IPC execution of this processor.
     pub fn get_ipc(&self) -> ConfigProcessorTransport {

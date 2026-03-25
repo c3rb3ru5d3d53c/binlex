@@ -52,6 +52,14 @@ futures = "0.3.31"
 [workspace]
 members = [
     "bindings/python/",
+    "crates/binlex_tools/binlex",
+    "crates/binlex_tools/binlex-hash",
+    "crates/binlex_tools/binlex-image",
+    "crates/binlex_tools/binlex-server",
+    "crates/binlex_tools/binlex-symbols",
+    "crates/binlex_tools/binlex-yara",
+    "crates/binlex_processors/embeddings",
+    "crates/binlex_processors/vex",
 ]
 
 [profile.dev]
@@ -64,36 +72,3 @@ debug = 0
 opt-level = 3
 lto = "thin"
 codegen-units = 16
-
-[[bin]]
-name = "binlex"
-path = "src/bin/binlex.rs"
-
-[[bin]]
-name = "binlex-yara"
-path = "src/bin/binlex-yara.rs"
-
-[[bin]]
-name = "binlex-image"
-path = "src/bin/binlex-image.rs"
-
-[[bin]]
-name = "binlex-hash"
-path = "src/bin/binlex-hash.rs"
-
-[[bin]]
-name = "binlex-symbols"
-path = "src/bin/binlex-symbols.rs"
-
-[[bin]]
-name = "binlex-processor-embeddings"
-path = "src/bin/binlex-processor-embeddings.rs"
-
-[[bin]]
-name = "binlex-processor-vex"
-path = "src/bin/binlex-processor-vex.rs"
-
-[[bin]]
-name = "binlex-server"
-path = "src/bin/binlex-server.rs"
-

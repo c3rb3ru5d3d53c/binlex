@@ -63,6 +63,7 @@ impl Config {
                     .ok_or_else(|| Error::other("invalid default configuration path"))?,
             )?;
         }
+        Self::ensure_default_processor_directory()?;
         Ok(path)
     }
 
@@ -83,10 +84,14 @@ impl Config {
 
     #[allow(dead_code)]
     pub fn write_to_file(&self, file_path: &str) -> Result<(), Error> {
+        let path = PathBuf::from(file_path);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
         let toml_string = self
             .to_string()
             .expect("failed to serialize binlex configration to toml format");
-        fs::write(file_path, toml_string)?;
+        fs::write(path, toml_string)?;
         Ok(())
     }
 
@@ -102,10 +107,18 @@ impl Config {
                 }
             }
             if !config_file_path.exists() {
-                return self.write_to_file(config_file_path.to_str().unwrap());
+                self.write_to_file(config_file_path.to_str().unwrap())?;
+                Self::ensure_default_processor_directory()?;
+                return Ok(());
             }
         }
         Err(Error::other("default configuration already exists"))
+    }
+
+    pub fn ensure_default_processor_directory() -> Result<PathBuf, Error> {
+        let path = PathBuf::from(Self::default_processor_directory());
+        fs::create_dir_all(&path)?;
+        Ok(path)
     }
 
     #[allow(dead_code)]

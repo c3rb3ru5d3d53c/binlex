@@ -27,7 +27,7 @@ impl Default for ConfigProcessors {
     fn default() -> Self {
         Self {
             enabled: true,
-            path: None,
+            path: Some(crate::Config::default_processor_directory()),
             processes: 2,
             compression: true,
             restart_on_crash: true,
@@ -105,7 +105,6 @@ impl ConfigProcessor {
         transport: crate::processor::ProcessorTransport,
     ) -> &ConfigProcessorTransport {
         match transport {
-            crate::processor::ProcessorTransport::Inline => &self.transport.inline,
             crate::processor::ProcessorTransport::Ipc => &self.transport.ipc,
             crate::processor::ProcessorTransport::Http => &self.transport.http,
         }

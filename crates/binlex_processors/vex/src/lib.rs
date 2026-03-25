@@ -1,18 +1,38 @@
 use std::io::{Error, ErrorKind};
 
+use binlex::config::{
+    ConfigProcessor, ConfigProcessorTarget, ConfigProcessorTransport, ConfigProcessorTransports,
+};
+use binlex::controlflow::{Block, Function, Instruction};
+use binlex::core::Architecture;
+use binlex::core::{OperatingSystem, Transport};
+use binlex::processor::{
+    GraphProcessor, JsonProcessor, ProcessorContext, external_processor_registration,
+};
+use binlex::runtime::{Processor, ProcessorError};
 use libvex::{Arch, TranslateArgs, VexEndness};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::collections::BTreeMap;
 
-use crate::controlflow::{Block, Function, Instruction};
-use crate::core::Architecture;
-use crate::core::{OperatingSystem, Transport};
-use crate::hex;
-use crate::lifters::vex::{VexLiftRequest, VexLiftResponse};
-use crate::processor::{GraphProcessor, JsonProcessor};
-use crate::runtime::{Processor, ProcessorError};
+use binlex::hex;
 
 const BUFFER_PADDING: usize = 64;
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct VexLiftRequest {
+    pub architecture: Architecture,
+    pub address: u64,
+    pub bytes: Vec<u8>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct VexLiftResponse {
+    pub architecture: Architecture,
+    pub address: u64,
+    pub bytes: Vec<u8>,
+    pub ir: String,
+}
 
 #[derive(Serialize, Deserialize, Clone)]
 pub enum VexRequest {
@@ -40,17 +60,37 @@ impl Processor for VexProcessor {
 }
 
 impl JsonProcessor for VexProcessor {
-    fn request<C: crate::processor::ProcessorContext>(
-        _: &C,
-        data: Value,
-    ) -> Result<Self::Request, ProcessorError> {
+    fn request<C: ProcessorContext>(_: &C, data: Value) -> Result<Self::Request, ProcessorError> {
         let kind = data.get("type").and_then(Value::as_str).ok_or_else(|| {
             ProcessorError::Protocol("processor payload is missing type".to_string())
         })?;
 
         match kind {
+            "lift" => {
+                let bytes = data.get("bytes").and_then(Value::as_str).ok_or_else(|| {
+                    ProcessorError::Protocol("lift payload does not contain bytes".to_string())
+                })?;
+                let architecture = data
+                    .get("architecture")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| {
+                        ProcessorError::Protocol(
+                            "lift payload does not contain architecture".to_string(),
+                        )
+                    })?;
+                let address = data.get("address").and_then(Value::as_u64).ok_or_else(|| {
+                    ProcessorError::Protocol("lift payload does not contain address".to_string())
+                })?;
+                Ok(VexRequest::Lift(VexLiftRequest {
+                    architecture: Architecture::from_string(architecture)
+                        .map_err(|error| ProcessorError::Protocol(error.to_string()))?,
+                    address,
+                    bytes: hex::decode(bytes)
+                        .map_err(|error| ProcessorError::Serialization(error.to_string()))?,
+                }))
+            }
             "instruction" => {
-                let json: crate::controlflow::InstructionJson = serde_json::from_value(data)
+                let json: binlex::controlflow::InstructionJson = serde_json::from_value(data)
                     .map_err(|error| ProcessorError::Serialization(error.to_string()))?;
                 Ok(VexRequest::Lift(VexLiftRequest {
                     architecture: Architecture::from_string(&json.architecture)
@@ -61,7 +101,7 @@ impl JsonProcessor for VexProcessor {
                 }))
             }
             "block" => {
-                let json: crate::controlflow::BlockJson = serde_json::from_value(data)
+                let json: binlex::controlflow::BlockJson = serde_json::from_value(data)
                     .map_err(|error| ProcessorError::Serialization(error.to_string()))?;
                 Ok(VexRequest::Lift(VexLiftRequest {
                     architecture: Architecture::from_string(&json.architecture)
@@ -72,7 +112,7 @@ impl JsonProcessor for VexProcessor {
                 }))
             }
             "function" => {
-                let json: crate::controlflow::FunctionJson = serde_json::from_value(data)
+                let json: binlex::controlflow::FunctionJson = serde_json::from_value(data)
                     .map_err(|error| ProcessorError::Serialization(error.to_string()))?;
                 let bytes = json.bytes.ok_or_else(|| {
                     ProcessorError::Protocol("function payload does not contain bytes".to_string())
@@ -107,7 +147,7 @@ impl GraphProcessor for VexProcessor {
 
     fn function(function: &Function<'_>) -> Option<Value> {
         let bytes = function.bytes()?;
-        let mut lifter = crate::lifters::vex::Lifter::new(
+        let mut lifter = binlex::lifters::vex::Lifter::new(
             function.architecture(),
             &bytes,
             function.address(),
@@ -120,7 +160,7 @@ impl GraphProcessor for VexProcessor {
 
     fn block(block: &Block<'_>) -> Option<Value> {
         let bytes = block.bytes();
-        let mut lifter = crate::lifters::vex::Lifter::new(
+        let mut lifter = binlex::lifters::vex::Lifter::new(
             block.architecture(),
             &bytes,
             block.address(),
@@ -132,7 +172,7 @@ impl GraphProcessor for VexProcessor {
     }
 
     fn instruction(instruction: &Instruction) -> Option<Value> {
-        let mut lifter = crate::lifters::vex::Lifter::new(
+        let mut lifter = binlex::lifters::vex::Lifter::new(
             instruction.architecture,
             &instruction.bytes,
             instruction.address,
@@ -146,11 +186,10 @@ impl GraphProcessor for VexProcessor {
 
 impl VexProcessor {
     fn process_lift(&self, request: VexLiftRequest) -> Result<VexLiftResponse, ProcessorError> {
-        if !crate::processor::processor_registration_by_type::<Self>().is_some_and(|registration| {
-            registration
-                .registration
-                .supports_architecture(request.architecture)
-        }) {
+        if !matches!(
+            request.architecture,
+            binlex::Architecture::AMD64 | binlex::Architecture::I386
+        ) {
             return Err(ProcessorError::UnexpectedResponse(
                 Error::new(
                     ErrorKind::InvalidInput,
@@ -161,9 +200,9 @@ impl VexProcessor {
         }
 
         let guest_arch = match request.architecture {
-            crate::Architecture::AMD64 => Arch::VexArchAMD64,
-            crate::Architecture::I386 => Arch::VexArchX86,
-            crate::Architecture::CIL | crate::Architecture::UNKNOWN => unreachable!(
+            binlex::Architecture::AMD64 => Arch::VexArchAMD64,
+            binlex::Architecture::I386 => Arch::VexArchX86,
+            binlex::Architecture::CIL | binlex::Architecture::UNKNOWN => unreachable!(
                 "unsupported architecture should be rejected by processor registration"
             ),
         };
@@ -191,22 +230,41 @@ impl VexProcessor {
     }
 }
 
-crate::processor!(VexProcessor {
-    requires: ">=2.0.0 <2.1.0",
-    operating_systems: [OperatingSystem::LINUX, OperatingSystem::MACOS],
-    architectures: [Architecture::AMD64, Architecture::I386],
-    enabled: false,
-    transports: [Transport::INLINE, Transport::HTTP, Transport::IPC],
-    instructions: { enabled: false },
-    blocks: { enabled: false },
-    functions: { enabled: true },
-    inline: { enabled: false },
-    ipc: { enabled: true },
-    http: {
-        enabled: false,
-        options: {
-            url: "http://127.0.0.1:5000",
-            verify: false
-        }
-    },
-});
+pub fn registration() -> binlex::processor::ProcessorRegistration {
+    external_processor_registration(
+        VexProcessor::NAME,
+        ">=2.0.0 <2.1.0",
+        &[OperatingSystem::LINUX, OperatingSystem::MACOS],
+        &[Architecture::AMD64, Architecture::I386],
+        &[Transport::IPC, Transport::HTTP],
+        ConfigProcessor {
+            enabled: false,
+            instructions: ConfigProcessorTarget {
+                enabled: false,
+                options: BTreeMap::new(),
+            },
+            blocks: ConfigProcessorTarget {
+                enabled: false,
+                options: BTreeMap::new(),
+            },
+            functions: ConfigProcessorTarget {
+                enabled: true,
+                options: BTreeMap::new(),
+            },
+            options: BTreeMap::new(),
+            transport: ConfigProcessorTransports {
+                ipc: ConfigProcessorTransport {
+                    enabled: true,
+                    options: BTreeMap::new(),
+                },
+                http: ConfigProcessorTransport {
+                    enabled: false,
+                    options: BTreeMap::from([
+                        ("url".to_string(), "http://127.0.0.1:5000".into()),
+                        ("verify".to_string(), false.into()),
+                    ]),
+                },
+            },
+        },
+    )
+}

@@ -1464,8 +1464,7 @@ mod tests {
         embeddings.instructions.enabled = true;
         embeddings.blocks.enabled = true;
         embeddings.functions.enabled = true;
-        embeddings.transport.inline.enabled = true;
-        embeddings.transport.ipc.enabled = false;
+        embeddings.transport.ipc.enabled = true;
         embeddings.transport.http.enabled = false;
         let mut graph = Graph::new(Architecture::AMD64, config.clone());
         let mut instruction = Instruction::create(0x1000, Architecture::AMD64, config);

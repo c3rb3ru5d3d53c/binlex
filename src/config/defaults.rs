@@ -233,6 +233,16 @@ impl Config {
             .expect("failed to convert local index directory to string")
             .to_owned()
     }
+
+    pub fn default_processor_directory() -> String {
+        dirs::config_dir()
+            .unwrap_or_else(|| env::temp_dir())
+            .join(DIRECTORY)
+            .join("processors")
+            .to_str()
+            .expect("failed to convert processor directory to string")
+            .to_owned()
+    }
 }
 
 impl Default for Config {

@@ -10,4 +10,5 @@ pub use dispatch::{
     register_host_runtime,
 };
 pub use error::ProcessorError;
+pub use execute::{JsonProcessorRequest, JsonProcessorResponse};
 pub use transports::ipc::ProcessorPool;

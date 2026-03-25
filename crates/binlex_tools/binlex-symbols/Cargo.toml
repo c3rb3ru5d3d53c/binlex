@@ -1,0 +1,14 @@
+[package]
+name = "binlex-symbols"
+version = "2.0.0"
+edition = "2024"
+
+[[bin]]
+name = "binlex-symbols"
+path = "src/main.rs"
+
+[dependencies]
+binlex = { path = "../../.." }
+clap = { version = "4.5.27", features = ["derive"] }
+pdb = "0.8.0"
+serde_json = "1.0.137"

@@ -7,14 +7,18 @@ use std::hash::{Hash, Hasher};
 use std::sync::OnceLock;
 use twox_hash::XxHash64;
 
-use crate::config::ConfigProcessor;
-use crate::controlflow::{Block, BlockJson, Function, FunctionJson, Instruction, InstructionJson};
-use crate::core::Architecture;
-use crate::core::{OperatingSystem, Transport};
-use crate::genetics::ChromosomeJson;
-use crate::math::stats::{max_or_zero, normalize_l2, weighted_histogram, weighted_mean};
-use crate::processor::{GraphProcessor, JsonProcessor};
-use crate::runtime::{Processor, ProcessorError};
+use binlex::config::{
+    ConfigProcessor, ConfigProcessorTarget, ConfigProcessorTransport, ConfigProcessorTransports,
+};
+use binlex::controlflow::{Block, BlockJson, Function, FunctionJson, Instruction, InstructionJson};
+use binlex::core::Architecture;
+use binlex::core::{OperatingSystem, Transport};
+use binlex::genetics::ChromosomeJson;
+use binlex::math::stats::{max_or_zero, normalize_l2, weighted_histogram, weighted_mean};
+use binlex::processor::{
+    GraphProcessor, JsonProcessor, ProcessorContext, external_processor_registration,
+};
+use binlex::runtime::{Processor, ProcessorError};
 
 const DEFAULT_DIMENSIONS: usize = 64;
 const NIBBLE_BUCKETS: usize = 16;
@@ -749,11 +753,11 @@ fn embed(value: &Value, config: &EmbeddingModelConfig) -> Vec<f32> {
     vector
 }
 
-fn processor_config(config: &crate::Config) -> Option<&ConfigProcessor> {
+fn processor_config(config: &binlex::Config) -> Option<&ConfigProcessor> {
     config.processors.processor(EmbeddingsProcessor::NAME)
 }
 
-fn configured_dimensions(config: &crate::Config) -> usize {
+fn configured_dimensions(config: &binlex::Config) -> usize {
     processor_config(config)
         .and_then(|processor| processor.option_integer("dimensions"))
         .and_then(|value| usize::try_from(value).ok())
@@ -761,7 +765,7 @@ fn configured_dimensions(config: &crate::Config) -> usize {
         .unwrap_or(DEFAULT_DIMENSIONS)
 }
 
-fn configured_dimensions_from_context<C: crate::processor::ProcessorContext>(context: &C) -> usize {
+fn configured_dimensions_from_context<C: ProcessorContext>(context: &C) -> usize {
     context
         .processor(EmbeddingsProcessor::NAME)
         .and_then(|processor| processor.option_integer("dimensions"))
@@ -770,11 +774,11 @@ fn configured_dimensions_from_context<C: crate::processor::ProcessorContext>(con
         .unwrap_or(DEFAULT_DIMENSIONS)
 }
 
-fn configured_device(config: &crate::Config) -> EmbeddingDevice {
+fn configured_device(config: &binlex::Config) -> EmbeddingDevice {
     parse_device(processor_config(config).and_then(|processor| processor.option_string("device")))
 }
 
-fn configured_device_from_context<C: crate::processor::ProcessorContext>(context: &C) -> String {
+fn configured_device_from_context<C: ProcessorContext>(context: &C) -> String {
     context
         .processor(EmbeddingsProcessor::NAME)
         .and_then(|processor| processor.option_string("device"))
@@ -782,7 +786,7 @@ fn configured_device_from_context<C: crate::processor::ProcessorContext>(context
         .to_string()
 }
 
-fn local_output(data: Value, config: &crate::Config) -> Value {
+fn local_output(data: Value, config: &binlex::Config) -> Value {
     let dimensions = configured_dimensions(config);
     let vector = embed(
         &data,
@@ -796,7 +800,7 @@ fn local_output(data: Value, config: &crate::Config) -> Value {
     })
 }
 
-fn process_value(data: Value, config: &crate::Config) -> Option<Value> {
+fn process_value(data: Value, config: &binlex::Config) -> Option<Value> {
     Some(local_output(data, config))
 }
 
@@ -818,7 +822,7 @@ impl Processor for EmbeddingsProcessor {
 }
 
 impl JsonProcessor for EmbeddingsProcessor {
-    fn request<C: crate::processor::ProcessorContext>(
+    fn request<C: ProcessorContext>(
         context: &C,
         data: Value,
     ) -> Result<Self::Request, ProcessorError> {
@@ -904,26 +908,48 @@ fn function_embedding_input(function: &Function<'_>) -> Result<Value, serde_json
     Ok(data)
 }
 
-crate::processor!(EmbeddingsProcessor {
-    requires: ">=2.0.0 <2.1.0",
-    operating_systems: [OperatingSystem::WINDOWS, OperatingSystem::LINUX, OperatingSystem::MACOS],
-    architectures: [Architecture::AMD64, Architecture::I386, Architecture::CIL],
-    enabled: true,
-    transports: [Transport::INLINE, Transport::HTTP, Transport::IPC],
-    instructions: { enabled: false },
-    blocks: { enabled: true },
-    functions: { enabled: true },
-    options: {
-        dimensions: 64,
-        device: "cpu"
-    },
-    inline: { enabled: true },
-    ipc: { enabled: false },
-    http: {
-        enabled: false,
-        options: {
-            url: "http://127.0.0.1:5000",
-            verify: false
-        }
-    },
-});
+pub fn registration() -> binlex::processor::ProcessorRegistration {
+    external_processor_registration(
+        EmbeddingsProcessor::NAME,
+        ">=2.0.0 <2.1.0",
+        &[
+            OperatingSystem::WINDOWS,
+            OperatingSystem::LINUX,
+            OperatingSystem::MACOS,
+        ],
+        &[Architecture::AMD64, Architecture::I386, Architecture::CIL],
+        &[Transport::IPC, Transport::HTTP],
+        ConfigProcessor {
+            enabled: true,
+            instructions: ConfigProcessorTarget {
+                enabled: false,
+                options: BTreeMap::new(),
+            },
+            blocks: ConfigProcessorTarget {
+                enabled: true,
+                options: BTreeMap::new(),
+            },
+            functions: ConfigProcessorTarget {
+                enabled: true,
+                options: BTreeMap::new(),
+            },
+            options: BTreeMap::from([
+                ("dimensions".to_string(), 64.into()),
+                ("device".to_string(), "cpu".into()),
+            ]),
+            transport: ConfigProcessorTransports {
+                ipc: ConfigProcessorTransport {
+                    enabled: true,
+                    options: BTreeMap::new(),
+                },
+                http: ConfigProcessorTransport {
+                    enabled: false,
+                    options: BTreeMap::from([
+                        ("url".to_string(), "http://127.0.0.1:5000".into()),
+                        ("verify".to_string(), false.into()),
+                    ]),
+                },
+            },
+        },
+    )
+}

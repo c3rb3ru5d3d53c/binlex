@@ -1,0 +1,19 @@
+[package]
+name = "binlex-processor-embeddings"
+version = "2.0.0"
+edition = "2024"
+
+[lib]
+name = "binlex_processor_embeddings"
+path = "src/lib.rs"
+
+[[bin]]
+name = "binlex-processor-embeddings"
+path = "src/main.rs"
+
+[dependencies]
+binlex = { path = "../../.." }
+burn = { version = "0.21.0-pre.2", default-features = false, features = ["std", "dispatch", "ndarray", "cuda", "vulkan"] }
+serde = { version = "1.0.217", features = ["derive"] }
+serde_json = "1.0.137"
+twox-hash = "2.0.0"

@@ -1,22 +1,24 @@
 OUTPUT_DIRECTORY = target
+BUILD_WORKSPACE = cargo build --release --workspace --exclude binlex-python
+TEST_WORKSPACE = cargo test --workspace --exclude binlex-python
 
 all:
-	@cargo build --release
+	@$(BUILD_WORKSPACE)
 
 deps:
 	@cargo fetch
 
 test:
-	@cargo test -- --nocapture
+	@$(TEST_WORKSPACE) -- --nocapture
 
 test-vex:
 	@cargo test --test vex_lifter -- --nocapture
 
 build:
-	@cargo build --release
+	@$(BUILD_WORKSPACE)
 
 zst:
-	@cargo build --release
+	@$(BUILD_WORKSPACE)
 	@makepkg
 	@mkdir -p $(OUTPUT_DIRECTORY)/zst/
 	@for file in *.pkg.tar.zst; do \
@@ -26,7 +28,8 @@ zst:
 
 deb:
 	@cargo install cargo-deb
-	@cargo deb
+	@$(BUILD_WORKSPACE)
+	@cargo deb -p binlex-cli --no-build
 
 wheel:
 	virtualenv -p python3 venv/

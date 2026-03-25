@@ -1,5 +1,5 @@
 use crate::config::ConfigProcessor;
-use crate::processor::{JsonProcessor, ProcessorTransport, processor_registration_by_name};
+use crate::processor::{ProcessorTransport, processor_registration_by_name_for_config};
 use crate::server::dto::ProcessorHttpRequest;
 use crate::server::error::ServerError;
 use crate::server::state::AppState;
@@ -9,55 +9,12 @@ pub fn configured_server_transport(
     processor: &ConfigProcessor,
     supported: &[ProcessorTransport],
 ) -> Result<ProcessorTransport, ServerError> {
-    if processor.transport.inline.enabled && supported.contains(&ProcessorTransport::Inline) {
-        return Ok(ProcessorTransport::Inline);
-    }
     if processor.transport.ipc.enabled && supported.contains(&ProcessorTransport::Ipc) {
         return Ok(ProcessorTransport::Ipc);
     }
     Err(ServerError::Processor(
         "processor has no enabled server execution transport".to_string(),
     ))
-}
-
-pub fn execute_value<P: JsonProcessor>(
-    state: &AppState,
-    data: Value,
-) -> Result<Value, ServerError> {
-    let processor = state.config.processors.processor(P::NAME).ok_or_else(|| {
-        ServerError::Processor(format!("{} processor is not configured", P::NAME))
-    })?;
-    let registration = processor_registration_by_name(P::NAME).ok_or_else(|| {
-        ServerError::Processor(format!("{} processor is not registered", P::NAME))
-    })?;
-    crate::processor::registry::ensure_registration_host_compatibility(registration.registration)
-        .map_err(ServerError::from)?;
-    crate::processor::registry::ensure_payload_architecture_supported_server(
-        registration.registration,
-        &data,
-    )?;
-    match configured_server_transport(processor, registration.registration.transports)? {
-        ProcessorTransport::Inline => {
-            crate::runtime::transports::inline::execute::<P, crate::Config>(&state.config, data)
-                .map_err(ServerError::from)
-        }
-        ProcessorTransport::Ipc => {
-            let response = if let Some(pool) = state.processor_pool(P::NAME) {
-                crate::runtime::transports::ipc::execute_with_pool::<P, crate::Config>(
-                    &pool,
-                    &state.config,
-                    data,
-                )
-            } else {
-                crate::runtime::transports::ipc::execute::<P, crate::Config>(&state.config, data)
-            };
-            response.map_err(ServerError::from)
-        }
-        ProcessorTransport::Http => Err(ServerError::Processor(format!(
-            "processor {} server transport cannot be http",
-            P::NAME
-        ))),
-    }
 }
 
 pub fn execute(
@@ -72,33 +29,53 @@ pub fn execute(
         )));
     }
 
-    let registration = processor_registration_by_name(processor_name).ok_or_else(|| {
-        ServerError::Processor(format!("unsupported HTTP processor: {}", processor_name))
-    })?;
-    if !registration.registration.supports_transport("http") {
-        return Err(ServerError::Processor(format!(
-            "processor {} does not support HTTP mode",
-            processor_name
-        )));
-    }
-    crate::processor::registry::ensure_registration_host_compatibility(registration.registration)
+    let registration =
+        processor_registration_by_name_for_config(&state.config.processors, processor_name)
+            .ok_or_else(|| {
+                ServerError::Processor(format!("unsupported HTTP processor: {}", processor_name))
+            })?;
+    crate::processor::registry::ensure_registration_host_compatibility(&registration.registration)
         .map_err(ServerError::from)?;
     crate::processor::registry::ensure_version_requirement(
         &request.binlex_version,
-        registration.registration.requires,
+        &registration.registration.requires,
     )
     .map_err(ServerError::from)?;
     crate::processor::registry::ensure_version_requirement(crate::VERSION, &request.requires)
         .map_err(ServerError::from)?;
     crate::processor::registry::ensure_payload_architecture_supported_server(
-        registration.registration,
+        &registration.registration,
         &request.data,
     )?;
-    let execute = registration.registration.execute_value.ok_or_else(|| {
-        ServerError::Processor(format!(
-            "processor {} does not implement value execution",
+    let processor = state
+        .config
+        .processors
+        .processor(processor_name)
+        .ok_or_else(|| {
+            ServerError::Processor(format!("processor {} is not configured", processor_name))
+        })?;
+    match configured_server_transport(processor, &registration.registration.transports)? {
+        ProcessorTransport::Ipc => {
+            let pool = state.processor_pool(processor_name).ok_or_else(|| {
+                ServerError::Processor(format!(
+                    "processor {} pool is not available",
+                    processor_name
+                ))
+            })?;
+            let response = pool
+                .execute_json(&crate::runtime::JsonProcessorRequest {
+                    config: toml::to_string(&state.config.processors)
+                        .map_err(|error| ServerError::Processor(error.to_string()))?,
+                    data: serde_json::to_string(&request.data)
+                        .map_err(|error| ServerError::Processor(error.to_string()))?,
+                })
+                .map_err(ServerError::from)?;
+            serde_json::from_str(&response.data)
+                .map_err(|error| ServerError::Processor(error.to_string()))
+        }
+        ProcessorTransport::Http => Err(ServerError::Processor(format!(
+            "processor {} server transport cannot be http",
             processor_name
-        ))
-    })?;
-    execute(state, request.data)
+        ))),
+    }
 }

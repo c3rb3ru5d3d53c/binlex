@@ -42,7 +42,7 @@ Binlex extracts instructions, basic blocks, and functions from binaries and emit
 ### Build 🛠️
 
 ```bash
-cargo build --release
+cargo build --release --workspace
 ```
 
 ### Run on a Sample ▶️

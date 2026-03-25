@@ -1,32 +1,17 @@
 use std::io::{Error, ErrorKind};
 
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 
 use crate::Config;
 use crate::core::Architecture;
 use crate::hex;
-use crate::processors::vex::{VexProcessor, VexRequest, VexResponse};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct LifterJson {
     pub architecture: String,
     pub address: u64,
     pub bytes: String,
-    pub ir: String,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct VexLiftRequest {
-    pub architecture: Architecture,
-    pub address: u64,
-    pub bytes: Vec<u8>,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct VexLiftResponse {
-    pub architecture: Architecture,
-    pub address: u64,
-    pub bytes: Vec<u8>,
     pub ir: String,
 }
 
@@ -204,31 +189,35 @@ impl Lifter {
         }
         #[cfg(not(target_os = "windows"))]
         {
-            let response = self.execute()?;
-            Ok(LifterJson {
-                architecture: response.architecture.to_string(),
-                address: response.address,
-                bytes: hex::encode(&response.bytes),
-                ir: response.ir,
-            })
+            self.execute()
         }
     }
 
     #[cfg(not(target_os = "windows"))]
-    fn execute(&self) -> Result<VexLiftResponse, Error> {
-        let pool =
-            crate::runtime::ProcessorPool::for_processor::<VexProcessor>(&self.config.processors)
-                .map_err(|error| Error::other(error.to_string()))?;
-        let response = pool
-            .execute::<VexProcessor>(&VexRequest::Lift(VexLiftRequest {
-                architecture: self.architecture,
-                address: self.address,
-                bytes: self.bytes.clone(),
-            }))
-            .map_err(|error: crate::runtime::ProcessorError| Error::other(error.to_string()))?;
+    fn execute(&self) -> Result<LifterJson, Error> {
+        let response = crate::runtime::transports::ipc::execute_external(
+            "vex",
+            &self.config.processors,
+            json!({
+                "type": "lift",
+                "architecture": self.architecture.to_string(),
+                "address": self.address,
+                "bytes": hex::encode(&self.bytes),
+            }),
+        )
+        .map_err(|error: crate::runtime::ProcessorError| Error::other(error.to_string()))?;
 
-        match response {
-            VexResponse::Lift(response) => Ok(response),
-        }
+        let ir = response
+            .get("ir")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| Error::other("vex processor response did not contain ir"))?
+            .to_string();
+
+        Ok(LifterJson {
+            architecture: self.architecture.to_string(),
+            address: self.address,
+            bytes: hex::encode(&self.bytes),
+            ir,
+        })
     }
 }

@@ -13,14 +13,17 @@ use once_cell::sync::Lazy;
 
 use crate::config::ConfigProcessors;
 use crate::processor;
-use crate::runtime::dispatch::{Processor, WorkerLaunch};
+use crate::runtime::dispatch::{
+    Processor, WorkerLaunch, processor_backend_filename, resolve_worker_launches,
+};
 use crate::runtime::error::ProcessorError;
+use crate::runtime::execute::{JsonProcessorRequest, JsonProcessorResponse};
 use crate::runtime::transports::ipc::local;
 use crate::runtime::transports::ipc::protocol::{
     Hello, MessageKind, ProcessorFailure, read_frame, write_frame,
 };
 
-type PoolKey = (&'static str, String);
+type PoolKey = (String, String);
 
 static POOLS: Lazy<Mutex<HashMap<PoolKey, Arc<ProcessorPool>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
@@ -35,7 +38,7 @@ pub struct ProcessorPool {
     config: ConfigProcessors,
     binary_name: String,
     launch: WorkerLaunch,
-    processor_name: &'static str,
+    processor_name: String,
     processor_id: u16,
     timeout: Duration,
     processors: Vec<Mutex<ProcessorHandle>>,
@@ -47,17 +50,18 @@ impl ProcessorPool {
     pub fn new(
         config: ConfigProcessors,
         binary_name: impl Into<String>,
-        processor_name: &'static str,
+        processor_name: impl Into<String>,
         processor_id: u16,
         launches: Vec<WorkerLaunch>,
     ) -> Result<Self, ProcessorError> {
         let binary_name = binary_name.into();
+        let processor_name = processor_name.into();
         let timeout = timeout_for_config(&config);
         let process_count = config.processes.max(1);
         let (launch, first_processor) = spawn_worker_with_fallback(
             launches,
             &binary_name,
-            processor_name,
+            &processor_name,
             processor_id,
             config.compression,
             timeout,
@@ -67,7 +71,7 @@ impl ProcessorPool {
         for _ in 1..process_count {
             processors.push(Mutex::new(Self::spawn_worker(
                 &binary_name,
-                processor_name,
+                &processor_name,
                 processor_id,
                 &launch,
                 config.compression,
@@ -112,7 +116,45 @@ impl ProcessorPool {
                 Err(error) if attempts < max_attempts && is_retryable(&error) => {
                     *processor = Self::spawn_worker(
                         &self.binary_name,
-                        self.processor_name,
+                        &self.processor_name,
+                        self.processor_id,
+                        &self.launch,
+                        self.config.compression,
+                        self.timeout,
+                    )?;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
+
+    pub fn execute_json(
+        &self,
+        request: &JsonProcessorRequest,
+    ) -> Result<JsonProcessorResponse, ProcessorError> {
+        let payload = postcard::to_allocvec(request)?;
+        if payload.len() > self.config.max_payload_bytes {
+            return Err(ProcessorError::RequestTooLarge(payload.len()));
+        }
+
+        let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
+        let mut attempts = 0u32;
+        let max_attempts = if self.config.restart_on_crash { 3 } else { 1 };
+
+        loop {
+            attempts += 1;
+            let processor_index =
+                self.next_processor.fetch_add(1, Ordering::Relaxed) % self.processors.len();
+            let mut processor = self.lock_processor(processor_index)?;
+            let response =
+                self.send_payload::<JsonProcessorResponse>(&mut processor, request_id, &payload);
+
+            match response {
+                Ok(response) => return Ok(response),
+                Err(error) if attempts < max_attempts && is_retryable(&error) => {
+                    *processor = Self::spawn_worker(
+                        &self.binary_name,
+                        &self.processor_name,
                         self.processor_id,
                         &self.launch,
                         self.config.compression,
@@ -128,7 +170,7 @@ impl ProcessorPool {
         config: &ConfigProcessors,
     ) -> Result<Arc<Self>, ProcessorError> {
         let key = (
-            P::NAME,
+            P::NAME.to_string(),
             toml::to_string(config).map_err(|error| ProcessorError::Protocol(error.to_string()))?,
         );
         let mut pools = POOLS
@@ -140,13 +182,47 @@ impl ProcessorPool {
 
         let binary_name = P::filename();
         let launches = P::launches(config)?;
-        let registration = processor::processor_registration_by_type::<P>().ok_or_else(|| {
-            ProcessorError::Protocol(format!("unregistered processor {}", P::NAME))
-        })?;
+        let registration = processor::processor_registration_by_name_for_config(config, P::NAME)
+            .ok_or_else(|| {
+                ProcessorError::Protocol(format!("unregistered processor {}", P::NAME))
+            })?;
         let pool = Arc::new(Self::new(
             config.clone(),
             binary_name,
             P::NAME,
+            registration.id,
+            launches,
+        )?);
+        pools.insert(key, Arc::clone(&pool));
+        Ok(pool)
+    }
+
+    pub fn for_external(
+        config: &ConfigProcessors,
+        processor_name: &str,
+    ) -> Result<Arc<Self>, ProcessorError> {
+        let key = (
+            processor_name.to_string(),
+            toml::to_string(config).map_err(|error| ProcessorError::Protocol(error.to_string()))?,
+        );
+        let mut pools = POOLS
+            .lock()
+            .map_err(|_| ProcessorError::Protocol("processor pool mutex poisoned".to_string()))?;
+        if let Some(pool) = pools.get(&key) {
+            return Ok(Arc::clone(pool));
+        }
+
+        let binary_name = processor_backend_filename(processor_name);
+        let launches = resolve_worker_launches(&binary_name, config.path.as_deref())?;
+        let registration =
+            processor::processor_registration_by_name_for_config(config, processor_name)
+                .ok_or_else(|| {
+                    ProcessorError::Protocol(format!("unregistered processor {}", processor_name))
+                })?;
+        let pool = Arc::new(Self::new(
+            config.clone(),
+            binary_name,
+            processor_name.to_string(),
             registration.id,
             launches,
         )?);
@@ -180,6 +256,18 @@ impl ProcessorPool {
         request_id: u64,
         payload: &[u8],
     ) -> Result<P::Response, ProcessorError> {
+        self.send_payload(processor, request_id, payload)
+    }
+
+    fn send_payload<R>(
+        &self,
+        processor: &mut ProcessorHandle,
+        request_id: u64,
+        payload: &[u8],
+    ) -> Result<R, ProcessorError>
+    where
+        R: for<'de> serde::Deserialize<'de>,
+    {
         write_frame(
             &mut processor.stream,
             MessageKind::Request,
@@ -370,9 +458,9 @@ fn validate_hello(
     processor_id: u16,
 ) -> Result<(), ProcessorError> {
     let registration =
-        processor::registry::processor_registration_by_name_unfiltered(processor_name).ok_or_else(
-            || ProcessorError::Protocol(format!("unregistered processor {}", processor_name)),
-        )?;
+        processor::processor_registration_by_name(processor_name).ok_or_else(|| {
+            ProcessorError::Protocol(format!("unregistered processor {}", processor_name))
+        })?;
     if hello.protocol_version != crate::runtime::transports::ipc::protocol::VERSION {
         return Err(ProcessorError::UnexpectedResponse(format!(
             "processor protocol payload mismatch, expected {}, got {}",
@@ -388,7 +476,7 @@ fn validate_hello(
     }
     crate::processor::registry::ensure_version_requirement(
         &hello.binlex_version,
-        registration.registration.requires,
+        &registration.registration.requires,
     )?;
     if hello.processor_name != processor_name {
         return Err(ProcessorError::UnexpectedResponse(format!(
