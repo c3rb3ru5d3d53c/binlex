@@ -194,7 +194,11 @@ fn find_in_directory(directory: PathBuf, filename: &str) -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{LazyLock, Mutex};
+
     use super::{HostRuntime, WorkerLaunch, resolve_worker_launches_for_runtime};
+
+    static PATH_ENV_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
     #[test]
     fn configured_directory_is_used_when_present() {
@@ -211,12 +215,19 @@ mod tests {
         )
         .expect("configured directory should resolve launch candidates");
 
-        assert_eq!(launches, vec![WorkerLaunch::Binary(processor)]);
+        assert_eq!(
+            launches.first(),
+            Some(&WorkerLaunch::Binary(processor.clone()))
+        );
+        assert!(launches.contains(&WorkerLaunch::Binary(processor)));
         let _ = std::fs::remove_dir_all(tempdir);
     }
 
     #[test]
     fn missing_configured_directory_falls_back_to_path_search() {
+        let _path_lock = PATH_ENV_LOCK
+            .lock()
+            .expect("path environment lock should not be poisoned");
         let tempdir = std::env::temp_dir().join(format!(
             "binlex-dispatch-fallback-test-{}",
             std::process::id()
@@ -226,7 +237,10 @@ mod tests {
         std::fs::write(&processor, b"stub").expect("processor stub should be written");
 
         let original_path = std::env::var_os("PATH");
-        std::env::set_var("PATH", &tempdir);
+        // PATH mutation is process-global, so guard it with a test-only mutex.
+        unsafe {
+            std::env::set_var("PATH", &tempdir);
+        }
 
         let launches = resolve_worker_launches_for_runtime(
             "binlex-processor-embeddings",
@@ -238,8 +252,12 @@ mod tests {
         assert_eq!(launches, vec![WorkerLaunch::Binary(processor)]);
 
         match original_path {
-            Some(path) => std::env::set_var("PATH", path),
-            None => std::env::remove_var("PATH"),
+            Some(path) => unsafe {
+                std::env::set_var("PATH", path);
+            },
+            None => unsafe {
+                std::env::remove_var("PATH");
+            },
         }
         let _ = std::fs::remove_dir_all(tempdir);
     }

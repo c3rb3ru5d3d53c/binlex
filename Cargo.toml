@@ -49,6 +49,9 @@ arrow-array = { version = "57.0.0", default-features = false }
 arrow-schema = { version = "57.0.0", default-features = false }
 futures = "0.3.31"
 
+[dev-dependencies]
+binlex-processor-vex = { path = "crates/binlex_processors/vex" }
+
 [workspace]
 members = [
     "bindings/python/",

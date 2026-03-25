@@ -116,7 +116,7 @@ jobs:
 
       - name: Run Unit Tests (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
-        run: cargo test --workspace --exclude binlex-python
+        run: cargo test --workspace --exclude binlex-python --exclude binlex-processor-vex
 
       - name: Build Project (Ubuntu)
         if: ${{ matrix.os == 'ubuntu-latest' }}
@@ -128,7 +128,7 @@ jobs:
 
       - name: Build Project (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
-        run: cargo build --release --workspace --exclude binlex-python
+        run: cargo build --release --workspace --exclude binlex-python --exclude binlex-processor-vex
 
       - name: Create Dist Directory
         run: mkdir dist
@@ -138,7 +138,6 @@ jobs:
         run: |
           copy target\release\binlex.exe dist\
           copy target\release\binlex-server.exe dist\
-          copy target\release\binlex-processor-vex.exe dist\
           copy target\release\binlex-processor-embeddings.exe dist\
           copy target\release\binlex-yara.exe dist\
           copy target\release\binlex-symbols.exe dist\

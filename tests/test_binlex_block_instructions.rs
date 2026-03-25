@@ -3,6 +3,7 @@
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn temp_path(name: &str) -> PathBuf {
@@ -13,15 +14,38 @@ fn temp_path(name: &str) -> PathBuf {
     std::env::temp_dir().join(format!("binlex-{name}-{nanos}-{}", std::process::id()))
 }
 
+fn binlex_binary() -> PathBuf {
+    static BINLEX_PATH: OnceLock<PathBuf> = OnceLock::new();
+
+    BINLEX_PATH
+        .get_or_init(|| {
+            let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            let binary_path = manifest_dir.join("target").join("debug").join("binlex");
+            if binary_path.exists() {
+                return binary_path;
+            }
+
+            let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+            let status = Command::new(cargo)
+                .current_dir(&manifest_dir)
+                .args(["build", "-p", "binlex-cli", "--bin", "binlex"])
+                .status()
+                .expect("cargo should build the binlex binary");
+            assert!(status.success(), "binlex binary should build");
+            binary_path
+        })
+        .clone()
+}
+
 #[test]
 fn test_block_instructions_are_emitted_as_addresses() {
-    let binlex = option_env!("CARGO_BIN_EXE_binlex").expect("binlex binary should be built");
+    let binlex = binlex_binary();
     let input_path = temp_path("input.bin");
     let output_path = temp_path("output.jsonl");
 
     fs::write(&input_path, [0xC3]).expect("input file should be written");
 
-    let status = Command::new(binlex)
+    let status = Command::new(&binlex)
         .args([
             "--input",
             input_path.to_string_lossy().as_ref(),
