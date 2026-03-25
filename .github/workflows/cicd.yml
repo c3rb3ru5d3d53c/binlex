@@ -116,7 +116,7 @@ jobs:
 
       - name: Run Unit Tests (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
-        run: cargo test --workspace --exclude binlex-python --exclude binlex-processor-vex
+        run: cargo test --workspace --exclude binlex-python --exclude binlex-processor-vex --lib --bins
 
       - name: Build Project (Ubuntu)
         if: ${{ matrix.os == 'ubuntu-latest' }}
