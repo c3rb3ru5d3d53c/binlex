@@ -10,11 +10,13 @@ from .compare import apply_match_rows, compare_block, compare_function, compare_
 from .config import load_plugin_config, open_plugin_config_in_editor
 from .copying import copy_hex, copy_minhash, copy_pattern, copy_tlsh, copy_vector, copy_visual_hash
 from .indexing import index_block, index_function, index_functions
+from ui.config_editor import open_config_editor
 from ui.dialogs import prompt_compare, prompt_index, show_error, show_info
 from ui.results import show_results
 
 
 ACTION_PREFIX = "binlex:mvp:"
+MAIN_MENU_ROOT = "Edit/Plugins/Binlex/"
 
 
 class CallbackActionHandler(idaapi.action_handler_t):
@@ -68,6 +70,7 @@ class PluginController:
         self.config = load_plugin_config()
         self.popup_hooks = PopupHooks(self)
         self.registered_actions: list[str] = []
+        self.attached_menu_actions: list[tuple[str, str]] = []
         self.action_handlers = []
 
     def msg(self, text: str) -> None:
@@ -87,6 +90,12 @@ class PluginController:
         ida_kernwin.register_action(description)
         self.registered_actions.append(action_name)
         self.action_handlers.append(handler)
+
+    def attach_menu_action(self, path: str, suffix: str) -> None:
+        action_name = f"{ACTION_PREFIX}{suffix}"
+        menu_flag = getattr(ida_kernwin, "SETMENU_APP", getattr(idaapi, "SETMENU_APP", 0))
+        ida_kernwin.attach_action_to_menu(path, action_name, menu_flag)
+        self.attached_menu_actions.append((path, action_name))
 
     def register_actions(self) -> None:
         self.register_action("index.functions", "Functions", self.action_index_functions)
@@ -124,6 +133,14 @@ class PluginController:
         self.register_action("copy.dhash.function", "DHash", lambda: copy_visual_hash(self.config, "function", "dhash"))
         self.register_action("copy.hex.function", "Hex", lambda: copy_hex(self.config, "function"))
         self.register_action("copy.pattern.function", "Pattern", lambda: copy_pattern(self.config, "function"))
+
+    def register_main_menu_actions(self) -> None:
+        self.attach_menu_action(f"{MAIN_MENU_ROOT}Index/", "index.functions")
+        self.attach_menu_action(f"{MAIN_MENU_ROOT}Compare/", "compare.functions")
+        self.attach_menu_action(MAIN_MENU_ROOT, "config")
+
+    def reload_config(self) -> None:
+        self.config = load_plugin_config(strict=True)
 
     def show_launcher(self) -> None:
         chooser = BinlexLauncherChooser(self)
@@ -196,10 +213,16 @@ class PluginController:
 
     def start(self) -> None:
         self.register_actions()
+        self.register_main_menu_actions()
         self.popup_hooks.hook()
 
     def stop(self) -> None:
         self.popup_hooks.unhook()
+        detach_action_from_menu = getattr(ida_kernwin, "detach_action_from_menu", None)
+        if detach_action_from_menu is not None:
+            for path, action_name in self.attached_menu_actions:
+                detach_action_from_menu(path, action_name)
+        self.attached_menu_actions.clear()
         for action_name in self.registered_actions:
             ida_kernwin.unregister_action(action_name)
         self.registered_actions.clear()
@@ -218,9 +241,17 @@ class PluginController:
 
     def action_config(self) -> None:
         path = open_plugin_config_in_editor(self.config)
-        show_info(f"opened {path}")
+        open_config_editor(
+            path,
+            on_save=self._reload_config_after_save,
+        )
+
+    def _reload_config_after_save(self) -> None:
+        self.reload_config()
+        show_info("reloaded Binlex config")
 
     def _run_index_dialog(self, title: str, allow_index_blocks: bool):
+        self.reload_config()
         return prompt_index(title, self.config, allow_index_blocks=allow_index_blocks)
 
     def action_index_block(self) -> None:
@@ -242,6 +273,7 @@ class PluginController:
         show_info(index_functions(self.config, request))
 
     def _run_compare_dialog(self, title: str):
+        self.reload_config()
         return prompt_compare(title, self.config, self.available_corpora())
 
     def _show_results(self, title: str, rows: list[dict]) -> None:

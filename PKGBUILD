@@ -4,6 +4,7 @@ pkgrel=1
 pkgdesc="A Binary Genetic Trait Lexer Framework"
 arch=('x86_64')
 license=('MIT')
+options=(!lto)
 makedepends=('rust' 'pkgconf' 'clang' 'openssl' 'zstd' 'lz4')
 
 build() {
@@ -32,11 +33,8 @@ exec x86_64-linux-gnu-gcc "${args[@]}"
 EOF
   chmod +x "$linker_wrapper"
   export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER="$linker_wrapper"
-  # Prefer Arch's system compression libraries during makepkg's link phase so
-  # native dependencies are resolved consistently under Arch's injected linker flags.
   export ZSTD_SYS_USE_PKG_CONFIG=1
   export LIBRARY_PATH="/usr/lib${LIBRARY_PATH:+:$LIBRARY_PATH}"
-  export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C link-arg=-llz4"
   : "${CARGO_BUILD_JOBS:=2}"
   export CARGO_BUILD_JOBS
   cargo build --release --workspace --exclude binlex-python
