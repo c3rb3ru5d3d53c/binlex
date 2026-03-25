@@ -35,7 +35,9 @@ EOF
   # Prefer Arch's system libzstd for the lief -> zip -> zstd build-time path.
   # This avoids fragile static archive ordering during makepkg's link phase.
   export ZSTD_SYS_USE_PKG_CONFIG=1
-  cargo build --release
+  : "${CARGO_BUILD_JOBS:=2}"
+  export CARGO_BUILD_JOBS
+  cargo build --release --workspace --exclude binlex-python
 }
 
 package() {

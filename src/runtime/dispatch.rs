@@ -8,12 +8,9 @@ use serde::{Deserialize, Serialize};
 use crate::runtime::error::ProcessorError;
 
 const PROCESSOR_BACKEND_PREFIX: &str = "binlex-processor-";
-const PYTHON_IPC_PROCESSOR_MODULE: &str = "binlex._ipc_processor";
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum HostRuntime {
     Native,
-    Python { executable: PathBuf },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -137,12 +134,7 @@ fn resolve_worker_launches_for_runtime(
     if let Some(path) = configured_directory {
         if let Some(candidate) = find_in_directory(PathBuf::from(path), filename) {
             launches.push(WorkerLaunch::Binary(candidate));
-            return Ok(launches);
         }
-        if launches.is_empty() {
-            return Err(ProcessorError::BinaryNotFound(filename.to_string()));
-        }
-        return Ok(launches);
     }
 
     if let Ok(path) = env::var("PATH") {
@@ -182,27 +174,9 @@ fn resolve_worker_launches_for_runtime(
 }
 
 fn preferred_worker_command(filename: &str, runtime: &HostRuntime) -> Option<Vec<String>> {
-    match runtime {
-        HostRuntime::Native => None,
-        HostRuntime::Python { executable } if is_processor_backend_filename(filename) => {
-            let executable = executable.to_string_lossy().into_owned();
-            if executable.is_empty() {
-                return None;
-            }
-            Some(vec![
-                executable,
-                "-m".to_string(),
-                PYTHON_IPC_PROCESSOR_MODULE.to_string(),
-            ])
-        }
-        HostRuntime::Python { .. } => None,
-    }
-}
-
-fn is_processor_backend_filename(filename: &str) -> bool {
-    filename
-        .strip_prefix(PROCESSOR_BACKEND_PREFIX)
-        .is_some_and(|name| !name.is_empty())
+    let _ = filename;
+    let _ = runtime;
+    None
 }
 
 fn find_in_directory(directory: PathBuf, filename: &str) -> Option<PathBuf> {
@@ -220,35 +194,10 @@ fn find_in_directory(directory: PathBuf, filename: &str) -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        HostRuntime, WorkerLaunch, preferred_worker_command, resolve_worker_launches_for_runtime,
-    };
-    use std::path::PathBuf;
+    use super::{HostRuntime, WorkerLaunch, resolve_worker_launches_for_runtime};
 
     #[test]
-    fn python_runtime_prefers_module_worker_command() {
-        let launches = resolve_worker_launches_for_runtime(
-            "binlex-processor-embeddings",
-            None,
-            &HostRuntime::Python {
-                executable: PathBuf::from("/usr/bin/python3"),
-            },
-        )
-        .expect("python runtime should resolve at least the module worker command");
-
-        assert!(matches!(
-            launches.first(),
-            Some(WorkerLaunch::Command(command))
-                if command == &[
-                    "/usr/bin/python3".to_string(),
-                    "-m".to_string(),
-                    "binlex._ipc_processor".to_string()
-                ]
-        ));
-    }
-
-    #[test]
-    fn configured_directory_is_appended_after_python_runtime_command() {
+    fn configured_directory_is_used_when_present() {
         let tempdir =
             std::env::temp_dir().join(format!("binlex-dispatch-test-{}", std::process::id()));
         std::fs::create_dir_all(&tempdir).expect("tempdir should exist");
@@ -258,36 +207,40 @@ mod tests {
         let launches = resolve_worker_launches_for_runtime(
             "binlex-processor-embeddings",
             Some(tempdir.to_string_lossy().as_ref()),
-            &HostRuntime::Python {
-                executable: PathBuf::from("/usr/bin/python3"),
-            },
+            &HostRuntime::Native,
         )
-        .expect("python runtime and configured directory should both resolve launch candidates");
+        .expect("configured directory should resolve launch candidates");
 
-        assert_eq!(
-            launches,
-            vec![
-                WorkerLaunch::Command(vec![
-                    "/usr/bin/python3".to_string(),
-                    "-m".to_string(),
-                    "binlex._ipc_processor".to_string()
-                ]),
-                WorkerLaunch::Binary(processor)
-            ]
-        );
+        assert_eq!(launches, vec![WorkerLaunch::Binary(processor)]);
         let _ = std::fs::remove_dir_all(tempdir);
     }
 
     #[test]
-    fn python_runtime_only_prefers_module_for_processor_worker() {
-        assert_eq!(
-            preferred_worker_command(
-                "binlex-server",
-                &HostRuntime::Python {
-                    executable: PathBuf::from("/usr/bin/python3"),
-                }
-            ),
-            None
-        );
+    fn missing_configured_directory_falls_back_to_path_search() {
+        let tempdir = std::env::temp_dir().join(format!(
+            "binlex-dispatch-fallback-test-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&tempdir).expect("tempdir should exist");
+        let processor = tempdir.join("binlex-processor-embeddings");
+        std::fs::write(&processor, b"stub").expect("processor stub should be written");
+
+        let original_path = std::env::var_os("PATH");
+        std::env::set_var("PATH", &tempdir);
+
+        let launches = resolve_worker_launches_for_runtime(
+            "binlex-processor-embeddings",
+            Some("/definitely/missing/binlex/processors"),
+            &HostRuntime::Native,
+        )
+        .expect("path fallback should still resolve launch candidates");
+
+        assert_eq!(launches, vec![WorkerLaunch::Binary(processor)]);
+
+        match original_path {
+            Some(path) => std::env::set_var("PATH", path),
+            None => std::env::remove_var("PATH"),
+        }
+        let _ = std::fs::remove_dir_all(tempdir);
     }
 }

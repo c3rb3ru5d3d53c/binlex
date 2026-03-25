@@ -44,7 +44,6 @@ use binlex::io::Stdin;
 use binlex::io::Stdout;
 use binlex::metadata::Attributes;
 use binlex::metadata::Tag;
-use binlex::processor::ProcessorSelection;
 use clap::Parser;
 use rayon::ThreadPoolBuilder;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -95,13 +94,8 @@ pub struct Args {
     pub enable_mmap_cache: bool,
     #[arg(long)]
     pub mmap_directory: Option<String>,
-    #[arg(
-        long,
-        value_delimiter = ',',
-        hide_possible_values = true,
-        help = format!("[{}]", ProcessorSelection::to_list())
-    )]
-    pub processors: Option<Vec<ProcessorSelection>>,
+    #[arg(long, value_delimiter = ',')]
+    pub processors: Option<Vec<String>>,
 }
 
 fn validate_args(args: &Args) {
@@ -118,7 +112,7 @@ fn validate_args(args: &Args) {
     if let Some(processors) = &args.processors {
         let mut unique_processors = HashSet::new();
         for processor in processors {
-            if !unique_processors.insert(*processor) {
+            if !unique_processors.insert(processor) {
                 eprintln!("processors must be unique");
                 process::exit(1);
             }
@@ -150,13 +144,22 @@ fn apply_cli_overrides(args: &Args, config: &mut Config) {
     }
 
     if let Some(processors) = &args.processors {
-        let enabled_processors: HashSet<_> = processors.iter().copied().collect();
-        config.processors.enabled = !enabled_processors.is_empty();
-        if let Some(embeddings) = config.processors.ensure_processor("embeddings") {
-            embeddings.enabled = enabled_processors.contains(&ProcessorSelection::Embeddings);
+        let enabled_processors: HashSet<_> = processors.iter().cloned().collect();
+        let discovered =
+            binlex::processor::registered_processor_registrations_for_config(&config.processors);
+        let discovered_names: HashSet<_> =
+            discovered.iter().map(|entry| entry.name.clone()).collect();
+        for processor_name in &enabled_processors {
+            if !discovered_names.contains(processor_name) {
+                eprintln!("unknown processor: {}", processor_name);
+                process::exit(1);
+            }
         }
-        if let Some(vex) = config.processors.ensure_processor("vex") {
-            vex.enabled = enabled_processors.contains(&ProcessorSelection::Vex);
+        config.processors.enabled = !enabled_processors.is_empty();
+        for registration in discovered {
+            if let Some(processor) = config.processors.ensure_processor(&registration.name) {
+                processor.enabled = enabled_processors.contains(&registration.name);
+            }
         }
     }
 
@@ -502,6 +505,7 @@ fn process_output(
     let mut blocks = Vec::<LZ4String>::new();
 
     if cfg.config.blocks.enabled {
+        let _ = cfg.process_blocks();
         blocks = cfg
             .blocks
             .valid()
@@ -529,6 +533,7 @@ fn process_output(
     let mut functions = Vec::<LZ4String>::new();
 
     if cfg.config.functions.enabled {
+        let _ = cfg.process_functions();
         let function_outputs = cfg
             .functions
             .valid()

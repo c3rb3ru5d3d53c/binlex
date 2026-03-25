@@ -32,28 +32,15 @@ pub trait JsonProcessor: Processor {
     where
         Self: Sized,
     {
-        if let Some(registration) = crate::processor::processor_registration_by_type::<Self>() {
+        if let Some(registration) = crate::processor::processor_registration_by_name_for_config(
+            context.processors(),
+            Self::NAME,
+        ) {
             crate::processor::registry::ensure_payload_architecture_supported(
-                registration.registration,
+                &registration.registration,
                 &data,
             )?;
         }
-        crate::runtime::transports::ipc::execute::<Self, C>(context, data)
-    }
-
-    fn execute_local_value<C: ProcessorContext>(
-        context: &C,
-        data: Value,
-    ) -> Result<Value, ProcessorError>
-    where
-        Self: Sized,
-    {
-        if let Some(registration) = crate::processor::processor_registration_by_type::<Self>() {
-            crate::processor::registry::ensure_payload_architecture_supported(
-                registration.registration,
-                &data,
-            )?;
-        }
-        crate::runtime::transports::inline::execute::<Self, C>(context, data)
+        crate::runtime::transports::ipc::execute_external(Self::NAME, context.processors(), data)
     }
 }

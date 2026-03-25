@@ -2,7 +2,7 @@ use crate::controlflow::{Block, Function, Instruction};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-pub type ProcessorOutputs = Vec<(&'static str, Value)>;
+pub type ProcessorOutputs = Vec<(String, Value)>;
 
 pub trait GraphProcessor {
     fn instruction_json(instruction: &Instruction) -> Option<Value> {

@@ -38,7 +38,6 @@ pub mod lifters;
 pub mod math;
 pub mod metadata;
 pub mod processor;
-pub mod processors;
 pub mod runtime;
 pub mod server;
 pub mod storage;
