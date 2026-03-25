@@ -1,6 +1,7 @@
 use crate::index::Collection;
 use arrow_array::{
-    FixedSizeListArray, Float32Array, RecordBatch, RecordBatchIterator, StringArray,
+    Array, FixedSizeListArray, Float32Array, RecordBatch, RecordBatchIterator, StringArray,
+    UInt64Array,
 };
 use arrow_schema::{DataType, Field, Schema};
 use futures::TryStreamExt;
@@ -44,6 +45,8 @@ impl std::error::Error for Error {}
 #[derive(Clone, Debug)]
 pub struct Row {
     pub object_id: String,
+    pub sha256: Option<String>,
+    pub address: Option<u64>,
     pub occurrences_json: String,
     pub vector: Vec<f32>,
 }
@@ -105,6 +108,8 @@ impl LanceDB {
         entity: Collection,
         architecture: &str,
         object_id: &str,
+        sha256: Option<&str>,
+        address: Option<u64>,
         vector: &[f32],
         occurrences_json: &str,
     ) -> Result<(), Error> {
@@ -116,7 +121,7 @@ impl LanceDB {
             .runtime
             .block_on(connection.open_table(&table_name).execute())
             .map_err(|error| Error::Lance(error.to_string()))?;
-        let batch = record_batch_for_row(object_id, vector, occurrences_json)?;
+        let batch = record_batch_for_row(object_id, sha256, address, vector, occurrences_json)?;
         let reader = batch_reader_for_batches(vec![batch]);
         let mut merge_insert = table.merge_insert(&["object_id"]);
         merge_insert
@@ -183,6 +188,8 @@ impl LanceDB {
                 .iter()
                 .map(|object_id| Row {
                     object_id: object_id.clone(),
+                    sha256: None,
+                    address: None,
                     occurrences_json: String::new(),
                     vector: Vec::new(),
                 })
@@ -262,6 +269,8 @@ const UPSERT_ROWS_CHUNK_SIZE: usize = 512;
 fn schema_for_table(dims: i32) -> Arc<Schema> {
     Arc::new(Schema::new(vec![
         Field::new("object_id", DataType::Utf8, false),
+        Field::new("sha256", DataType::Utf8, true),
+        Field::new("address", DataType::UInt64, true),
         Field::new("occurrences", DataType::Utf8, false),
         Field::new(
             "vector",
@@ -288,6 +297,8 @@ fn vector_dimensions_from_schema(schema: &Schema) -> Result<usize, Error> {
 
 fn record_batch_for_row(
     object_id: &str,
+    sha256: Option<&str>,
+    address: Option<u64>,
     vector: &[f32],
     occurrences_json: &str,
 ) -> Result<RecordBatch, Error> {
@@ -297,6 +308,8 @@ fn record_batch_for_row(
         schema,
         vec![
             Arc::new(StringArray::from(vec![object_id])),
+            Arc::new(StringArray::from(vec![sha256])),
+            Arc::new(UInt64Array::from(vec![address])),
             Arc::new(StringArray::from(vec![occurrences_json])),
             Arc::new(FixedSizeListArray::from_iter_primitive::<
                 arrow_array::types::Float32Type,
@@ -319,6 +332,11 @@ fn record_batch_for_rows(rows: &[Row]) -> Result<RecordBatch, Error> {
         .iter()
         .map(|row| row.object_id.as_str())
         .collect::<Vec<_>>();
+    let sha256_values = rows
+        .iter()
+        .map(|row| row.sha256.as_deref())
+        .collect::<Vec<_>>();
+    let addresses = rows.iter().map(|row| row.address).collect::<Vec<_>>();
     let occurrences = rows
         .iter()
         .map(|row| row.occurrences_json.as_str())
@@ -331,6 +349,8 @@ fn record_batch_for_rows(rows: &[Row]) -> Result<RecordBatch, Error> {
         schema,
         vec![
             Arc::new(StringArray::from(object_ids)),
+            Arc::new(StringArray::from(sha256_values)),
+            Arc::new(UInt64Array::from(addresses)),
             Arc::new(StringArray::from(occurrences)),
             Arc::new(FixedSizeListArray::from_iter_primitive::<
                 arrow_array::types::Float32Type,
@@ -349,6 +369,12 @@ fn rows_from_batch(batch: &RecordBatch) -> Result<Vec<Row>, Error> {
         .as_any()
         .downcast_ref::<StringArray>()
         .ok_or_else(|| Error::Arrow("object_id column type mismatch".to_string()))?;
+    let sha256s = batch
+        .column_by_name("sha256")
+        .and_then(|column| column.as_any().downcast_ref::<StringArray>());
+    let addresses = batch
+        .column_by_name("address")
+        .and_then(|column| column.as_any().downcast_ref::<UInt64Array>());
     let occurrences = batch
         .column_by_name("occurrences")
         .ok_or_else(|| Error::Arrow("missing occurrences column".to_string()))?
@@ -378,6 +404,20 @@ fn rows_from_batch(batch: &RecordBatch) -> Result<Vec<Row>, Error> {
         }
         rows.push(Row {
             object_id: object_ids.value(index).to_string(),
+            sha256: sha256s.and_then(|values| {
+                if values.is_null(index) {
+                    None
+                } else {
+                    Some(values.value(index).to_string())
+                }
+            }),
+            address: addresses.and_then(|values| {
+                if values.is_null(index) {
+                    None
+                } else {
+                    Some(values.value(index))
+                }
+            }),
             occurrences_json: occurrences.value(index).to_string(),
             vector,
         });
@@ -437,6 +477,8 @@ mod tests {
                 Collection::Instruction,
                 "x86_64",
                 "instruction:abc",
+                Some("deadbeef"),
+                Some(4096),
                 &[1.0, 0.0, 0.0],
                 r#"[{"sha256":"deadbeef","address":4096}]"#,
             )
@@ -448,6 +490,8 @@ mod tests {
 
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].object_id, "instruction:abc");
+        assert_eq!(rows[0].sha256.as_deref(), Some("deadbeef"));
+        assert_eq!(rows[0].address, Some(4096));
         assert_eq!(
             rows[0].occurrences_json,
             r#"[{"sha256":"deadbeef","address":4096}]"#
@@ -471,6 +515,8 @@ mod tests {
                     Collection::Function,
                     "amd64",
                     "function:repeat",
+                    Some("repeat-sha"),
+                    Some(4096),
                     &[1.0, 0.0, 0.0],
                     r#"[{"sha256":"repeat-sha","address":4096,"corpora":["default"]}]"#,
                 )

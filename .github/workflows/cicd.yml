@@ -37,6 +37,7 @@ env:
   RUSTC_WRAPPER: sccache
   SCCACHE_GHA_ENABLED: "true"
   SCCACHE_CACHE_SIZE: "4G"
+  WINDOWS_CARGO_EXCLUDES: "--exclude binlex-python --exclude binlex-processor-vex --exclude libvex --exclude libvex-macros --exclude vex-sys"
 
 jobs:
   native-build:
@@ -116,7 +117,7 @@ jobs:
 
       - name: Run Unit Tests (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
-        run: cargo test --workspace --exclude binlex-python --exclude binlex-processor-vex --exclude libvex --exclude libvex-macros --exclude vex-sys --lib --bins
+        run: cargo test --workspace ${{ env.WINDOWS_CARGO_EXCLUDES }} --lib --bins
 
       - name: Build Project (Ubuntu)
         if: ${{ matrix.os == 'ubuntu-latest' }}
@@ -128,7 +129,7 @@ jobs:
 
       - name: Build Project (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
-        run: cargo build --release --workspace --exclude binlex-python --exclude binlex-processor-vex --exclude libvex --exclude libvex-macros --exclude vex-sys
+        run: cargo build --release --workspace ${{ env.WINDOWS_CARGO_EXCLUDES }}
 
       - name: Create Dist Directory
         run: mkdir dist
