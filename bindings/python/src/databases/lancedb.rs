@@ -23,6 +23,7 @@ impl LanceDB {
         self.inner.root().display().to_string()
     }
 
+    #[pyo3(signature = (corpus, collection, architecture, object_id, vector, occurrences, sha256=None, address=None))]
     pub fn upsert(
         &self,
         py: Python<'_>,
@@ -32,6 +33,8 @@ impl LanceDB {
         object_id: String,
         vector: Vec<f32>,
         occurrences: Py<PyAny>,
+        sha256: Option<String>,
+        address: Option<u64>,
     ) -> PyResult<()> {
         let _ = &corpus;
         let collection = collection.borrow(py).inner;
@@ -42,6 +45,8 @@ impl LanceDB {
                 collection,
                 &architecture,
                 &object_id,
+                sha256.as_deref(),
+                address,
                 &vector,
                 &occurrences_json,
             )
@@ -110,9 +115,19 @@ fn row_from_python(py: Python<'_>, row: Py<PyAny>) -> PyResult<InnerLanceRow> {
     let occurrences = dict
         .get_item("occurrences")?
         .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("row is missing occurrences"))?;
+    let sha256 = dict
+        .get_item("sha256")?
+        .map(|value| value.extract())
+        .transpose()?;
+    let address = dict
+        .get_item("address")?
+        .map(|value| value.extract())
+        .transpose()?;
     let json = python_to_json_string(py, occurrences.unbind())?;
     Ok(InnerLanceRow {
         object_id,
+        sha256,
+        address,
         occurrences_json: json,
         vector,
     })
@@ -123,6 +138,8 @@ fn row_to_python(py: Python<'_>, row: &InnerLanceRow) -> PyResult<Py<PyDict>> {
     let json = py.import("json")?;
     let occurrences = json.call_method1("loads", (&row.occurrences_json,))?;
     dict.set_item("object_id", &row.object_id)?;
+    dict.set_item("sha256", row.sha256.as_deref())?;
+    dict.set_item("address", row.address)?;
     dict.set_item("occurrences", occurrences)?;
     dict.set_item("vector", &row.vector)?;
     Ok(dict.unbind())
