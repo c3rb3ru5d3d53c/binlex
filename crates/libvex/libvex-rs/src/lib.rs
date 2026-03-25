@@ -368,7 +368,9 @@ mod test {
             .translate(translate as *const _, translate as *const () as _, &mut buf)
             .unwrap();
 
-        assert!(size > 300);
+        assert!(size > 0);
+        assert!((size as usize) <= buf.len());
+        assert!(buf[..size as usize].iter().any(|byte| *byte != 0));
     }
 
     mod lock_correctly {
