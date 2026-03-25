@@ -12,7 +12,6 @@ use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::env;
 use std::path::{Path, PathBuf};
-use std::process;
 use std::process::Command;
 use std::sync::Mutex;
 
@@ -326,10 +325,9 @@ fn report_transport_error(config: &Config, processor_name: &str, error: &Process
     }
 }
 
-fn fail_transport(config: &Config, processor_name: &str, error: &ProcessorError) -> ! {
+fn fail_transport(config: &Config, processor_name: &str, error: &ProcessorError) {
     report_transport_error(config, processor_name, error);
     eprintln!("processor {} transport error: {}", processor_name, error);
-    process::exit(1);
 }
 
 fn should_fail_transport(error: &ProcessorError) -> bool {
@@ -386,6 +384,7 @@ fn execute_graph_transport(
     .map_err(|error| {
         if should_fail_transport(&error) {
             fail_transport(config, &registration.name, &error);
+            return error;
         }
         report_transport_error(config, &registration.name, &error);
         error

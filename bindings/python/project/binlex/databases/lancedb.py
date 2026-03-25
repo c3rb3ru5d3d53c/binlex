@@ -13,7 +13,17 @@ class LanceDB:
     def root(self):
         return self._inner.root
 
-    def upsert(self, corpus, collection, architecture, object_id, vector, occurrences):
+    def upsert(
+        self,
+        corpus,
+        collection,
+        architecture,
+        object_id,
+        vector,
+        occurrences,
+        sha256=None,
+        address=None,
+    ):
         return self._inner.upsert(
             corpus,
             collection,
@@ -21,6 +31,8 @@ class LanceDB:
             object_id,
             vector,
             occurrences,
+            sha256,
+            address,
         )
 
     def upsert_rows(self, corpus, collection, architecture, rows):
