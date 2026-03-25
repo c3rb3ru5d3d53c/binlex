@@ -229,7 +229,7 @@ jobs:
           pacman-key --init
           pacman-key --populate archlinux
           pacman -Syu --noconfirm
-          pacman -S --noconfirm --needed base-devel pkgconf openssl zstd make automake autoconf libtool clang curl git python rust protobuf
+          pacman -S --noconfirm --needed base-devel pkgconf openssl zstd lz4 make automake autoconf libtool clang curl git python rust protobuf
           id -u builder >/dev/null 2>&1 || useradd --create-home --shell /bin/bash builder
 
       - name: Prepare Arch Build Workspace
