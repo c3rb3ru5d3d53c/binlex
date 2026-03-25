@@ -30,9 +30,9 @@ from binlex_bindings.binlex.controlflow import Graph as _GraphBinding
 from binlex_bindings.binlex.controlflow import GraphQueue as _GraphQueueBinding
 from binlex_bindings.binlex.controlflow import Instruction as _InstructionBinding
 
-from binlex.architecture import _coerce_architecture
+from binlex.core.architecture import _coerce_architecture
 from binlex.hashing import MinHash32, SHA256, TLSH
-from binlex.imaging import PNG, SVG
+from binlex.imaging import Imaging
 
 
 class Instruction:
@@ -43,7 +43,7 @@ class Instruction:
         self._inner = _InstructionBinding(address, cfg._inner)
 
     @classmethod
-    def from_binding(cls, binding):
+    def _from_binding(cls, binding):
         """Wrap an existing native instruction binding."""
         result = cls.__new__(cls)
         result._inner = binding
@@ -82,13 +82,9 @@ class Instruction:
         """Return the instruction size in bytes."""
         return self._inner.size()
 
-    def png(self):
-        """Render the instruction as a PNG image."""
-        return PNG.from_binding(self._inner.png())
-
-    def svg(self):
-        """Render the instruction as an SVG image."""
-        return SVG.from_binding(self._inner.svg())
+    def imaging(self):
+        """Return the imaging pipeline for this instruction."""
+        return Imaging._from_binding(self._inner.imaging())
 
     def processors(self):
         """Return all processor outputs attached to this instruction."""
@@ -123,7 +119,7 @@ class Block:
         self._inner = _BlockBinding(address, cfg._inner)
 
     @classmethod
-    def from_binding(cls, binding):
+    def _from_binding(cls, binding):
         """Wrap an existing native block binding."""
         result = cls.__new__(cls)
         result._inner = binding
@@ -143,19 +139,15 @@ class Block:
 
     def instructions(self):
         """Return the instructions contained in this block."""
-        return [Instruction.from_binding(item) for item in self._inner.instructions()]
+        return [Instruction._from_binding(item) for item in self._inner.instructions()]
 
     def bytes(self):
         """Return the raw bytes for this block."""
         return self._inner.bytes()
 
-    def png(self):
-        """Render the block as a PNG image."""
-        return PNG.from_binding(self._inner.png())
-
-    def svg(self):
-        """Render the block as an SVG image."""
-        return SVG.from_binding(self._inner.svg())
+    def imaging(self):
+        """Return the imaging pipeline for this block."""
+        return Imaging._from_binding(self._inner.imaging())
 
     def prologue(self):
         """Return whether this block looks like a function prologue."""
@@ -242,7 +234,7 @@ class Function:
         self._inner = _FunctionBinding(address, cfg._inner)
 
     @classmethod
-    def from_binding(cls, binding):
+    def _from_binding(cls, binding):
         """Wrap an existing native function binding."""
         result = cls.__new__(cls)
         result._inner = binding
@@ -270,21 +262,16 @@ class Function:
 
     def blocks(self):
         """Return the basic blocks contained in this function."""
-        return [Block.from_binding(item) for item in self._inner.blocks()]
+        return [Block._from_binding(item) for item in self._inner.blocks()]
 
     def bytes(self):
         """Return the raw bytes for this function, if available."""
         return self._inner.bytes()
 
-    def png(self):
-        """Render the function as a PNG image, if contiguous."""
-        image = self._inner.png()
-        return None if image is None else PNG.from_binding(image)
-
-    def svg(self):
-        """Render the function as an SVG image, if contiguous."""
-        image = self._inner.svg()
-        return None if image is None else SVG.from_binding(image)
+    def imaging(self):
+        """Return the imaging pipeline for this function, if contiguous."""
+        image = self._inner.imaging()
+        return None if image is None else Imaging._from_binding(image)
 
     def prologue(self):
         """Return whether this function starts with a prologue."""
@@ -607,7 +594,7 @@ class Graph:
         self._inner = _GraphBinding(_coerce_architecture(architecture), config)
 
     @classmethod
-    def from_binding(cls, binding):
+    def _from_binding(cls, binding):
         """Wrap an existing native graph binding."""
         result = cls.__new__(cls)
         result._inner = binding
@@ -615,15 +602,15 @@ class Graph:
 
     def instructions(self):
         """Return all instructions currently tracked by the graph."""
-        return [Instruction.from_binding(item) for item in self._inner.instructions()]
+        return [Instruction._from_binding(item) for item in self._inner.instructions()]
 
     def blocks(self):
         """Return all blocks currently tracked by the graph."""
-        return [Block.from_binding(item) for item in self._inner.blocks()]
+        return [Block._from_binding(item) for item in self._inner.blocks()]
 
     def functions(self):
         """Return all functions currently tracked by the graph."""
-        return [Function.from_binding(item) for item in self._inner.functions()]
+        return [Function._from_binding(item) for item in self._inner.functions()]
 
     @property
     def queue_instructions(self):
@@ -657,7 +644,7 @@ class Graph:
         result = self._inner.get_instruction(address)
         if result is None:
             return None
-        return Instruction.from_binding(result)
+        return Instruction._from_binding(result)
 
     def __getattr__(self, name):
         """Delegate unknown attributes to the underlying native graph object."""

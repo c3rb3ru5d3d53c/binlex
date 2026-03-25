@@ -53,8 +53,8 @@ fn chromosome_direct_accessors_ignore_serialization_flags() {
     assert!(chromosome.minhash().is_some());
     assert!(chromosome.entropy().is_some());
 
-    let png = chromosome.png();
-    let svg = chromosome.svg();
+    let png = chromosome.imaging().linear(None, None).grayscale().png();
+    let svg = chromosome.imaging().linear(None, None).grayscale().svg();
     assert!(png.phash().is_some());
     assert!(png.ahash().is_some());
     assert!(png.dhash().is_some());
@@ -79,6 +79,25 @@ fn chromosome_direct_accessors_ignore_serialization_flags() {
     assert!(value.get("tlsh").is_none());
     assert!(value.get("minhash").is_none());
     assert!(value.get("entropy").is_none());
+}
+
+#[test]
+fn chromosome_imaging_uses_masked_bytes() {
+    let config = Config::default();
+    let chromosome = Chromosome::new(vec![0xAF, 0x12], vec![0x03, 0xF0], config.clone())
+        .expect("chromosome should build");
+
+    let direct = PNG::new(&chromosome.masked(), Palette::Grayscale, config);
+    let piped = chromosome.imaging().linear(None, None).grayscale().png();
+
+    assert_eq!(
+        direct.phash().and_then(|hash| hash.hexdigest()),
+        piped.phash().and_then(|hash| hash.hexdigest())
+    );
+    assert_eq!(
+        direct.dhash().and_then(|hash| hash.hexdigest()),
+        piped.dhash().and_then(|hash| hash.hexdigest())
+    );
 }
 
 #[test]

@@ -22,7 +22,7 @@
 
 use crate::genetics::AllelePair;
 use crate::hashing::{MinHash32, SHA256, TLSH};
-use crate::imaging::{PNG, SVG};
+use crate::imaging::Imaging;
 use crate::Config;
 use binlex::genetics::Chromosome as InnerChromosome;
 use pyo3::exceptions::PyRuntimeError;
@@ -170,15 +170,9 @@ impl Chromosome {
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Render the chromosome as a PNG image using default imaging settings.
-    pub fn png(&self) -> PNG {
-        PNG::from_inner(self.inner.lock().unwrap().png())
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Render the chromosome as an SVG image using default imaging settings.
-    pub fn svg(&self) -> SVG {
-        SVG::from_inner(self.inner.lock().unwrap().svg())
+    /// Return the imaging pipeline for the masked chromosome bytes.
+    pub fn imaging(&self) -> Imaging {
+        Imaging::from_inner(self.inner.lock().unwrap().imaging())
     }
 
     #[pyo3(text_signature = "($self)")]

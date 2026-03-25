@@ -43,7 +43,7 @@ def main(args):
     image = pe.image()
     disasm = Disassembler(pe.architecture(), image, pe.executable_virtual_address_ranges(), config)
     cfg = Graph(pe.architecture(), config)
-    disasm.disassemble_controlflow(pe.entrypoint_virtual_addresses(), cfg)
+    disasm.disassemble(pe.entrypoint_virtual_addresses(), cfg)
     
     bl_func = Function(int(args.address),cfg)
     

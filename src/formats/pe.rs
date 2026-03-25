@@ -38,9 +38,10 @@ use crate::formats::cli::StorageSignature;
 use crate::formats::cli::StreamHeader;
 use crate::formats::cli::TinyHeader;
 use crate::formats::cli::TypeDefEntry;
+use crate::formats::cli::TypeRefEntry;
 use crate::hashing::SHA256;
 use crate::hashing::TLSH;
-use crate::formats::cli::TypeRefEntry;
+use crate::imaging::Imaging;
 use lief::Binary;
 use lief::generic::Section;
 use lief::pe::data_directory::Type as DATA_DIRECTORY;
@@ -1024,6 +1025,10 @@ impl PE {
                 })?;
         }
         Ok(tempmap)
+    }
+
+    pub fn imaging(&self) -> Result<Imaging, Error> {
+        Ok(Imaging::new(self.file.data.clone(), self.config.clone()))
     }
 
     /// Returns the size of the PE file.

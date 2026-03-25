@@ -20,16 +20,16 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+pub(crate) mod artifact;
+pub(crate) mod formats;
 pub(crate) mod hash;
 pub(crate) mod normalize;
 pub mod palette;
-pub mod png;
+pub mod pipeline;
 pub mod render;
-pub mod svg;
-pub mod terminal;
+pub(crate) mod renderers;
 
+pub use formats::{png::PNG, svg::SVG, terminal::Terminal};
 pub use palette::Palette;
-pub use png::PNG;
+pub use pipeline::{Imaging, ImagingPalette, ImagingRenderer};
 pub use render::{Render, RenderCell};
-pub use svg::SVG;
-pub use terminal::Terminal;

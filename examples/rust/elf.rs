@@ -50,7 +50,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
 
     let mut cfg = Graph::new(elf.architecture(), config);
-    disassembler.disassemble_controlflow(elf.entrypoint_virtual_addresses(), &mut cfg)?;
+    disassembler.disassemble(elf.entrypoint_virtual_addresses(), &mut cfg)?;
 
     println!("instructions: {}", cfg.instructions().len());
     println!("blocks: {}", cfg.blocks().len());

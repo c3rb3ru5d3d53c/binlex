@@ -23,7 +23,7 @@
 """Terminal rendering helpers for ANSI-colored binary output."""
 
 from binlex_bindings.binlex.imaging import Terminal as _TerminalBinding
-from binlex import Config
+from binlex.config import Config
 from binlex.hashing import AHash, DHash, MinHash32, PHash, SHA256, TLSH
 
 from .palette import Palette
@@ -31,6 +31,13 @@ from .palette import Palette
 
 class Terminal:
     """Render binary data as ANSI-colored terminal output."""
+
+    @classmethod
+    def _from_binding(cls, binding):
+        """Wrap an existing native terminal binding."""
+        result = cls.__new__(cls)
+        result._inner = binding
+        return result
 
     def __init__(
         self,

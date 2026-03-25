@@ -23,6 +23,7 @@
 use crate::formats::File;
 use crate::formats::Image;
 use crate::hashing::{SHA256, TLSH};
+use crate::imaging::Imaging;
 use crate::Architecture;
 use crate::Config;
 use binlex::formats::ELF as InnerELF;
@@ -126,12 +127,22 @@ impl ELF {
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn tlsh(&self) -> Option<TLSH> {
-        self.inner
+    /// Return the imaging pipeline over the mapped ELF contents.
+    pub fn imaging(&self) -> PyResult<Imaging> {
+        let result = self
+            .inner
             .lock()
             .unwrap()
-            .tlsh()
-            .map(|hash| TLSH { bytes: hash.bytes.into_owned() })
+            .imaging()
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        Ok(Imaging::from_inner(result))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn tlsh(&self) -> Option<TLSH> {
+        self.inner.lock().unwrap().tlsh().map(|hash| TLSH {
+            bytes: hash.bytes.into_owned(),
+        })
     }
 
     #[pyo3(text_signature = "($self)")]

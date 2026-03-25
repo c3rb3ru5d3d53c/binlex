@@ -55,7 +55,7 @@ def main() -> int:
     )
 
     cfg = Graph(pe.architecture(), config)
-    disassembler.disassemble_controlflow(pe.entrypoint_virtual_addresses(), cfg)
+    disassembler.disassemble(pe.entrypoint_virtual_addresses(), cfg)
 
     functions = cfg.functions()
     if not functions:

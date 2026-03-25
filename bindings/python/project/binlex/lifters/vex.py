@@ -25,8 +25,8 @@
 from binlex_bindings.binlex.lifters.vex import Lifter as _LifterBinding
 from binlex_bindings.binlex.lifters.vex import LifterJsonDeserializer as _LifterJsonDeserializerBinding
 
-from binlex.architecture import Architecture
-from binlex.architecture import _coerce_architecture
+from binlex.core.architecture import Architecture
+from binlex.core.architecture import _coerce_architecture
 
 
 class Lifter:

@@ -12,7 +12,7 @@ from binlex.index import Collection, LocalIndex
 
 from .config import build_binlex_config, is_meaningful_name
 from .context import resolve_block_context, resolve_function_context
-from .disassembly import disassemble_controlflow_graph
+from .disassembly import disassemble_graph
 from .metadata import MetadataStore
 
 
@@ -141,7 +141,7 @@ def index_function(plugin_config, request: IndexRequest) -> str:
 
 def index_functions(plugin_config, request: IndexRequest) -> str:
     config = build_binlex_config(plugin_config, threads=request.threads, dimensions=request.dimensions)
-    graph = disassemble_controlflow_graph(list(idautils.Functions()), config)
+    graph = disassemble_graph(list(idautils.Functions()), config)
     store = LocalIndex(config, directory=plugin_config.index_root)
     sha256 = store.put(_input_file_bytes())
     collections = [Collection.Function]

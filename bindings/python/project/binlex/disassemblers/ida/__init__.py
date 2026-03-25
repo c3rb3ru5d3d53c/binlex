@@ -35,7 +35,7 @@ from binlex.controlflow import (
 	Function as BinlexFunction,
 	Instruction as BinlexInstruction,
 )
-from binlex.magic import Magic
+from binlex.core.magic import Magic
 
 try:
 	import idapro
@@ -588,10 +588,10 @@ class IDA():
 			config,
 		)
 
-	def disassemble_controlflow(self, config: Config, cfg: Graph | None = None) -> Graph:
+	def disassemble(self, config: Config, cfg: Graph | None = None) -> Graph:
 		if cfg is None:
 			cfg = self.graph(config)
-		self.disassembler(config).disassemble_controlflow(cfg)
+		self.disassembler(config).disassemble(cfg)
 		return cfg
 
 	def disassemble_function(self, address: int, config: Config, cfg: Graph | None = None):
@@ -649,7 +649,7 @@ class Disassembler():
 		for block in function.blocks():
 			self.disassemble_block(block, cfg)
 
-	def disassemble_controlflow(self, cfg: Graph):
+	def disassemble(self, cfg: Graph):
 		"""Disassemble all functions discovered in the open IDA database."""
 		for function in self.ida.functions():
 			self.disassemble_function(function, cfg)

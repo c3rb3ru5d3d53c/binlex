@@ -3,6 +3,7 @@ use crate::controlflow::{Block, Function, Graph, GraphSnapshot, Instruction};
 use crate::databases::lancedb;
 use crate::index::Collection;
 use crate::index::Entity;
+use crate::math::similarity::cosine;
 use crate::metadata::Attribute;
 use crate::metadata::SymbolType;
 use crate::processor::ProcessorTarget;
@@ -614,7 +615,7 @@ impl LocalIndex {
                     let corpus_entries: Vec<CorpusEntry> =
                         serde_json::from_str(&row.occurrences_json)
                             .map_err(|error| Error::Serialization(error.to_string()))?;
-                    let score = cosine_similarity(vector, &row.vector);
+                    let score = cosine(vector, &row.vector);
                     let entry = self
                         .object_store
                         .get_json::<IndexEntry>(&index_entry_key(
@@ -1240,24 +1241,6 @@ fn remove_corpus_from_entry(entry: &mut IndexEntry, sha256: &str, corpus: Option
         }
     }
     entry.corpora != before
-}
-
-fn cosine_similarity(lhs: &[f32], rhs: &[f32]) -> f32 {
-    if lhs.is_empty() || rhs.is_empty() || lhs.len() != rhs.len() {
-        return 0.0;
-    }
-    let mut dot = 0.0f32;
-    let mut lhs_norm = 0.0f32;
-    let mut rhs_norm = 0.0f32;
-    for (l, r) in lhs.iter().zip(rhs) {
-        dot += l * r;
-        lhs_norm += l * l;
-        rhs_norm += r * r;
-    }
-    if lhs_norm == 0.0 || rhs_norm == 0.0 {
-        return 0.0;
-    }
-    dot / (lhs_norm.sqrt() * rhs_norm.sqrt())
 }
 
 fn instruction_selector_vector(

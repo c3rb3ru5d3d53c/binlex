@@ -23,17 +23,20 @@
 //! Python bindings for binary rendering helpers and palette types.
 
 pub mod palette;
+pub mod pipeline;
 pub mod png;
 pub mod render;
 pub mod svg;
 pub mod terminal;
 
 use crate::imaging::palette::palette_init;
+use crate::imaging::pipeline::pipeline_init;
 use crate::imaging::png::png_init;
 use crate::imaging::render::render_init;
 use crate::imaging::svg::svg_init;
 use crate::imaging::terminal::terminal_init;
 pub use palette::Palette;
+pub use pipeline::{Imaging, ImagingPalette, ImagingRenderer};
 pub use png::PNG;
 pub use render::{Render, RenderCell};
 pub use svg::SVG;
@@ -45,11 +48,15 @@ use pyo3::{prelude::*, wrap_pymodule};
 #[pyo3(name = "imaging")]
 pub fn imaging_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pymodule!(palette_init))?;
+    m.add_wrapped(wrap_pymodule!(pipeline_init))?;
     m.add_wrapped(wrap_pymodule!(png_init))?;
     m.add_wrapped(wrap_pymodule!(render_init))?;
     m.add_wrapped(wrap_pymodule!(svg_init))?;
     m.add_wrapped(wrap_pymodule!(terminal_init))?;
     m.add_class::<PNG>()?;
+    m.add_class::<Imaging>()?;
+    m.add_class::<ImagingRenderer>()?;
+    m.add_class::<ImagingPalette>()?;
     m.add_class::<Render>()?;
     m.add_class::<RenderCell>()?;
     m.add_class::<SVG>()?;

@@ -76,7 +76,7 @@ lhs_disassembler = Disassembler(lhs_pe.architecture(), lhs_image, lhs_pe.executa
 lhs_cfg = Graph(lhs_pe.architecture(), config)
 
 # Disassemble the PE Image Entrypoints Recursively
-lhs_disassembler.disassemble_controlflow(lhs_pe.entrypoint_virtual_addresses(), lhs_cfg)
+lhs_disassembler.disassemble(lhs_pe.entrypoint_virtual_addresses(), lhs_cfg)
 
 # Open the RHS PE File
 rhs_pe = PE(args.rhs, config)
@@ -91,7 +91,7 @@ rhs_disassembler = Disassembler(rhs_pe.architecture(), rhs_image, rhs_pe.executa
 rhs_cfg = Graph(rhs_pe.architecture(), config)
 
 # Disassemble the PE Image Entrypoints Recursively
-rhs_disassembler.disassemble_controlflow(rhs_pe.entrypoint_virtual_addresses(), rhs_cfg)
+rhs_disassembler.disassemble(rhs_pe.entrypoint_virtual_addresses(), rhs_cfg)
 
 # lhs_blocks = lhs_cfg.blocks()
 # rhs_blocks = rhs_cfg.blocks()

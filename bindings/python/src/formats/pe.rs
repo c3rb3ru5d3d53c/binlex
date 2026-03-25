@@ -23,6 +23,7 @@
 use crate::formats::File;
 use crate::formats::Image;
 use crate::hashing::{SHA256, TLSH};
+use crate::imaging::Imaging;
 use crate::Architecture;
 use crate::Config;
 use binlex::formats::pe::PE as InnerPe;
@@ -193,6 +194,18 @@ impl PE {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the imaging pipeline over the mapped PE contents.
+    pub fn imaging(&self) -> PyResult<Imaging> {
+        let result = self
+            .inner
+            .lock()
+            .unwrap()
+            .imaging()
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        Ok(Imaging::from_inner(result))
+    }
+
+    #[pyo3(text_signature = "($self)")]
     /// Return the total size of the image.
     pub fn size(&self) -> u64 {
         self.inner.lock().unwrap().size()
@@ -215,11 +228,9 @@ impl PE {
 
     #[pyo3(text_signature = "($self)")]
     pub fn tlsh(&self) -> Option<TLSH> {
-        self.inner
-            .lock()
-            .unwrap()
-            .tlsh()
-            .map(|hash| TLSH { bytes: hash.bytes.into_owned() })
+        self.inner.lock().unwrap().tlsh().map(|hash| TLSH {
+            bytes: hash.bytes.into_owned(),
+        })
     }
 
     #[pyo3(text_signature = "($self)")]

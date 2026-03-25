@@ -51,7 +51,7 @@ def build_pe_graph(path: str, config: Config) -> tuple[Graph, str, Attribute]:
         config,
     )
     graph = Graph(pe.architecture(), config)
-    disassembler.disassemble_controlflow(pe.entrypoint_virtual_addresses(), graph)
+    disassembler.disassemble(pe.entrypoint_virtual_addresses(), graph)
     return graph, pe.sha256().hexdigest(), Attribute.from_file(pe.file())
 
 
@@ -65,7 +65,7 @@ def build_elf_graph(path: str, config: Config) -> tuple[Graph, str, Attribute]:
         config,
     )
     graph = Graph(elf.architecture(), config)
-    disassembler.disassemble_controlflow(elf.entrypoint_virtual_addresses(), graph)
+    disassembler.disassemble(elf.entrypoint_virtual_addresses(), graph)
     return graph, elf.sha256().hexdigest(), Attribute.from_file(elf.file())
 
 
@@ -82,7 +82,7 @@ def build_macho_graph(path: str, config: Config, slice_index: int) -> tuple[Grap
         config,
     )
     graph = Graph(architecture, config)
-    disassembler.disassemble_controlflow(
+    disassembler.disassemble(
         macho.entrypoint_virtual_addresses(slice_index),
         graph,
     )

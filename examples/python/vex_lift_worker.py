@@ -53,7 +53,7 @@ def main() -> int:
     )
 
     cfg = Graph(pe.architecture(), config)
-    disassembler.disassemble_controlflow(
+    disassembler.disassemble(
         pe.entrypoint_virtual_addresses(),
         cfg,
     )

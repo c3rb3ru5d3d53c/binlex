@@ -65,7 +65,7 @@ disassembler = Disassembler(elf.architecture(), image, elf.executable_virtual_ad
 cfg = Graph(elf.architecture(), config)
 
 # Disassemble the ELF Image Entrypoints Recursively
-disassembler.disassemble_controlflow(elf.entrypoint_virtual_addresses(), cfg)
+disassembler.disassemble(elf.entrypoint_virtual_addresses(), cfg)
 
 for function in cfg.functions():
     function.print()

@@ -58,10 +58,7 @@ pe = PE(args.input, config)
 # To check if a DotNet PE use ps.is_dotnet()
 
 # Get the Memory Mapped File
-mapped_file = pe.image()
-
-# Get the Memory Map
-image = mapped_file.mmap()
+image = pe.image()
 
 # Create Disassembler on Mapped PE Image and PE Architecture
 disassembler = Disassembler(pe.architecture(), image, pe.dotnet_metadata_token_virtual_addresses(), pe.dotnet_executable_virtual_address_ranges(), config)
@@ -70,7 +67,7 @@ disassembler = Disassembler(pe.architecture(), image, pe.dotnet_metadata_token_v
 cfg = Graph(pe.architecture(), config)
 
 # Disassemble the PE Image Entrypoints Recursively
-disassembler.disassemble_controlflow(pe.dotnet_entrypoint_virtual_addresses(), cfg)
+disassembler.disassemble(pe.dotnet_entrypoint_virtual_addresses(), cfg)
 
 for function in cfg.functions():
     function.print()

@@ -11,7 +11,7 @@ from binlex.index import Collection, LocalIndex
 
 from .config import build_binlex_config, is_meaningful_name
 from .context import resolve_block_context, resolve_function_context, vector_for_context
-from .disassembly import disassemble_controlflow_graph
+from .disassembly import disassemble_graph
 from .metadata import MetadataStore
 
 
@@ -157,7 +157,7 @@ def compare_function(plugin_config, request: CompareRequest) -> list[dict]:
 
 def compare_functions(plugin_config, request: CompareRequest) -> list[dict]:
     config = build_binlex_config(plugin_config)
-    graph = disassemble_controlflow_graph(list(idautils.Functions()), config)
+    graph = disassemble_graph(list(idautils.Functions()), config)
     store = LocalIndex(config, directory=plugin_config.index_root)
     metadata = MetadataStore(plugin_config.index_root)
     rows: list[dict] = []

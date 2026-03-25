@@ -28,26 +28,25 @@ and higher-level subpackages that wrap the compiled Rust extension.
 
 from importlib import import_module
 
-from binlex_bindings.binlex import Config
-from .architecture import Architecture
-from .magic import Magic
+from .client import Client
+from .config import Config
+from .core import Architecture, Magic
 
 _LAZY_SUBMODULES = {
+    "client",
     "compression",
     "controlflow",
     "disassemblers",
     "formats",
     "genetics",
     "hashing",
-    "hexdump",
     "hex",
     "index",
-    "indexing",
+    "databases",
     "lifters",
     "math",
     "metadata",
     "storage",
-    "transports",
     "util",
 }
 
@@ -62,22 +61,22 @@ def __getattr__(name):
 
 __all__ = [
     "Architecture",
+    "Client",
     "Config",
     "Magic",
+    "client",
     "compression",
     "controlflow",
     "disassemblers",
     "formats",
     "genetics",
     "hashing",
-    "hexdump",
     "hex",
     "index",
-    "indexing",
+    "databases",
     "lifters",
     "math",
     "metadata",
     "storage",
-    "transports",
     "util",
 ]

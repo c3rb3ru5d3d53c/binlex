@@ -34,6 +34,26 @@ pub struct RenderCell {
 }
 
 impl RenderCell {
+    pub(crate) fn new(
+        index: usize,
+        address: u64,
+        x: usize,
+        y: usize,
+        width: usize,
+        height: usize,
+        rgb: (u8, u8, u8),
+    ) -> Self {
+        Self {
+            index,
+            address,
+            x,
+            y,
+            width,
+            height,
+            rgb,
+        }
+    }
+
     pub fn index(&self) -> usize {
         self.index
     }
@@ -83,27 +103,17 @@ impl Render {
         cell_size: usize,
         fixed_width: usize,
     ) -> Self {
-        let fixed_width = fixed_width.max(1);
-        let total_cells = data.len();
-        let total_width = fixed_width * cell_size;
-        let total_height = total_cells.div_ceil(fixed_width) * cell_size;
-        let mut cells = Vec::with_capacity(total_cells);
+        crate::imaging::renderers::LinearRenderer::new(Some(cell_size), Some(fixed_width))
+            .render(data, palette)
+    }
 
-        for (i, &byte) in data.iter().enumerate() {
-            let row = i / fixed_width;
-            let col = i % fixed_width;
-
-            cells.push(RenderCell {
-                index: i,
-                address: i as u64,
-                x: col * cell_size,
-                y: row * cell_size,
-                width: cell_size,
-                height: cell_size,
-                rgb: palette.map_byte_rgb(byte),
-            });
-        }
-
+    pub(crate) fn from_cells(
+        cells: Vec<RenderCell>,
+        total_width: usize,
+        total_height: usize,
+        total_cells: usize,
+        fixed_width: usize,
+    ) -> Self {
         Self {
             cells,
             total_width,

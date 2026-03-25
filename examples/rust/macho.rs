@@ -56,7 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?;
 
         let mut cfg = Graph::new(architecture, config.clone());
-        disassembler.disassemble_controlflow(macho_slice.entrypoint_virtual_addresses(), &mut cfg)?;
+        disassembler.disassemble(macho_slice.entrypoint_virtual_addresses(), &mut cfg)?;
 
         println!("slice architecture {}", architecture);
         println!("instructions: {}", cfg.instructions().len());

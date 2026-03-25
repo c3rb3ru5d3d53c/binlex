@@ -71,7 +71,7 @@ for macho_slice in macho.slices():
   cfg = Graph(architecture, config)
 
   # Disassemble the MACHO Image Entrypoints Recursively
-  disassembler.disassemble_controlflow(macho_slice.entrypoint_virtual_addresses(), cfg)
+  disassembler.disassemble(macho_slice.entrypoint_virtual_addresses(), cfg)
 
   for function in cfg.functions():
     function.print()
