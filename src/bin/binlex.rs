@@ -703,11 +703,7 @@ fn process_pe(
                 eprintln!("{}", error);
                 process::exit(1);
             });
-        print_stage_timing(
-            &config,
-            "pe.disassemble",
-            disassembly_started_at,
-        );
+        print_stage_timing(&config, "pe.disassemble", disassembly_started_at);
     } else if pe.is_dotnet() {
         Stderr::print_debug(&config, "starting pe dotnet disassembler");
         let disassembly_started_at = Instant::now();
@@ -732,11 +728,7 @@ fn process_pe(
                 eprintln!("{}", error);
                 process::exit(1);
             });
-        print_stage_timing(
-            &config,
-            "pe.dotnet.disassemble",
-            disassembly_started_at,
-        );
+        print_stage_timing(&config, "pe.dotnet.disassemble", disassembly_started_at);
     } else {
         eprintln!("invalid or unsupported pe file");
         process::exit(1);
@@ -828,11 +820,7 @@ fn process_elf(
             eprintln!("{}", error);
             process::exit(1);
         });
-    print_stage_timing(
-        &config,
-        "elf.disassemble",
-        disassembly_started_at,
-    );
+    print_stage_timing(&config, "elf.disassemble", disassembly_started_at);
 
     let output_started_at = Instant::now();
     process_output(output, &cfg, &attributes, &function_symbols);
@@ -893,11 +881,7 @@ fn process_code(
                     eprintln!("{}", error);
                     process::exit(1);
                 });
-            print_stage_timing(
-                &config,
-                "code.disassemble",
-                disassembly_started_at,
-            );
+            print_stage_timing(&config, "code.disassemble", disassembly_started_at);
         }
         Architecture::CIL => {
             let disassembly_started_at = Instant::now();
@@ -921,11 +905,7 @@ fn process_code(
                     eprintln!("{}", error);
                     process::exit(1);
                 });
-            print_stage_timing(
-                &config,
-                "code.dotnet.disassemble",
-                disassembly_started_at,
-            );
+            print_stage_timing(&config, "code.dotnet.disassemble", disassembly_started_at);
         }
         _ => {}
     }
@@ -1027,11 +1007,7 @@ fn process_macho(
                 eprintln!("{}", error);
                 process::exit(1);
             });
-        print_stage_timing(
-            &config,
-            "macho.disassemble",
-            disassembly_started_at,
-        );
+        print_stage_timing(&config, "macho.disassemble", disassembly_started_at);
 
         let output_started_at = Instant::now();
         process_output(output.clone(), &cfg, &attributes, &function_symbols);
