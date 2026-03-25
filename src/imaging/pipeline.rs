@@ -73,6 +73,44 @@ impl Imaging {
         self.state.renderer = Renderer::linear(cell_size, fixed_width);
         ImagingRenderer { state: self.state }
     }
+
+    pub fn bitmap(
+        mut self,
+        cell_size: Option<usize>,
+        fixed_width: Option<usize>,
+    ) -> ImagingRenderer {
+        self.state.renderer = Renderer::bitmap(cell_size, fixed_width);
+        ImagingRenderer { state: self.state }
+    }
+
+    pub fn digraph(
+        mut self,
+        cell_size: Option<usize>,
+        axis_size: Option<usize>,
+        stride: Option<usize>,
+        offset: Option<usize>,
+        window_size: Option<usize>,
+        intensity: Option<String>,
+    ) -> ImagingRenderer {
+        self.state.renderer =
+            Renderer::digraph(cell_size, axis_size, stride, offset, window_size, intensity);
+        ImagingRenderer { state: self.state }
+    }
+
+    pub fn entropy(
+        mut self,
+        window_size: Option<usize>,
+        cell_size: Option<usize>,
+        fixed_width: Option<usize>,
+    ) -> ImagingRenderer {
+        self.state.renderer = Renderer::entropy(window_size, cell_size, fixed_width);
+        ImagingRenderer { state: self.state }
+    }
+
+    pub fn hilbert(mut self, cell_size: Option<usize>) -> ImagingRenderer {
+        self.state.renderer = Renderer::hilbert(cell_size);
+        ImagingRenderer { state: self.state }
+    }
 }
 
 impl ImagingRenderer {

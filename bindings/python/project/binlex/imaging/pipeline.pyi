@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from binlex.config import Config
 from .png import PNG
 from .svg import SVG
 from .terminal import Terminal
+
+DigraphIntensity = Literal["linear", "log", "sqrt"]
 
 class Imaging:
     def __init__(self, data: bytes, config: Config) -> None: ...
@@ -11,9 +15,30 @@ class Imaging:
     def _from_binding(cls, binding: object) -> Imaging: ...
     def linear(
         self,
-        cell_size: int | None = None,
-        fixed_width: int | None = None,
+        cell_size: int = 1,
+        fixed_width: int = 16,
     ) -> ImagingRenderer: ...
+    def bitmap(
+        self,
+        cell_size: int = 1,
+        fixed_width: int = 16,
+    ) -> ImagingRenderer: ...
+    def digraph(
+        self,
+        cell_size: int = 1,
+        axis_size: int = 256,
+        stride: int = 1,
+        offset: int = 0,
+        window_size: int | None = None,
+        intensity: DigraphIntensity = "log",
+    ) -> ImagingRenderer: ...
+    def entropy(
+        self,
+        window_size: int = 64,
+        cell_size: int = 1,
+        fixed_width: int = 64,
+    ) -> ImagingRenderer: ...
+    def hilbert(self, cell_size: int = 1) -> ImagingRenderer: ...
 
 class ImagingRenderer:
     @classmethod
@@ -30,4 +55,4 @@ class ImagingPalette:
     def svg(self) -> SVG: ...
     def terminal(self) -> Terminal: ...
 
-__all__ = ["Imaging", "ImagingPalette", "ImagingRenderer"]
+__all__ = ["DigraphIntensity", "Imaging", "ImagingPalette", "ImagingRenderer"]

@@ -118,7 +118,9 @@ impl Disassembler {
 #[pymethods]
 impl Disassembler {
     #[new]
-    #[pyo3(text_signature = "(machine, image, metadata_token_addresses, executable_address_ranges, config)")]
+    #[pyo3(
+        text_signature = "(machine, image, metadata_token_addresses, executable_address_ranges, config)"
+    )]
     pub fn new(
         py: Python,
         machine: Py<Architecture>,

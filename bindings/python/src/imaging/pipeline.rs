@@ -66,6 +66,62 @@ impl Imaging {
                 .linear(cell_size, fixed_width),
         )
     }
+
+    #[pyo3(signature = (cell_size=None, fixed_width=None))]
+    #[pyo3(text_signature = "($self, cell_size=None, fixed_width=None)")]
+    pub fn bitmap(&self, cell_size: Option<usize>, fixed_width: Option<usize>) -> ImagingRenderer {
+        ImagingRenderer::from_inner(
+            self.inner
+                .lock()
+                .unwrap()
+                .clone()
+                .bitmap(cell_size, fixed_width),
+        )
+    }
+
+    #[pyo3(signature = (cell_size=None, axis_size=None, stride=None, offset=None, window_size=None, intensity=None))]
+    #[pyo3(
+        text_signature = "($self, cell_size=None, axis_size=None, stride=None, offset=None, window_size=None, intensity=None)"
+    )]
+    pub fn digraph(
+        &self,
+        cell_size: Option<usize>,
+        axis_size: Option<usize>,
+        stride: Option<usize>,
+        offset: Option<usize>,
+        window_size: Option<usize>,
+        intensity: Option<String>,
+    ) -> ImagingRenderer {
+        ImagingRenderer::from_inner(self.inner.lock().unwrap().clone().digraph(
+            cell_size,
+            axis_size,
+            stride,
+            offset,
+            window_size,
+            intensity,
+        ))
+    }
+
+    #[pyo3(signature = (window_size=None, cell_size=None, fixed_width=None))]
+    #[pyo3(text_signature = "($self, window_size=None, cell_size=None, fixed_width=None)")]
+    pub fn entropy(
+        &self,
+        window_size: Option<usize>,
+        cell_size: Option<usize>,
+        fixed_width: Option<usize>,
+    ) -> ImagingRenderer {
+        ImagingRenderer::from_inner(self.inner.lock().unwrap().clone().entropy(
+            window_size,
+            cell_size,
+            fixed_width,
+        ))
+    }
+
+    #[pyo3(signature = (cell_size=None))]
+    #[pyo3(text_signature = "($self, cell_size=None)")]
+    pub fn hilbert(&self, cell_size: Option<usize>) -> ImagingRenderer {
+        ImagingRenderer::from_inner(self.inner.lock().unwrap().clone().hilbert(cell_size))
+    }
 }
 
 #[pyclass]

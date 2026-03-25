@@ -22,11 +22,15 @@
 
 """Fluent imaging pipeline helpers for visualization output."""
 
+from typing import Literal
+
 from binlex_bindings.binlex.imaging import Imaging as _ImagingBinding
 
 from .png import PNG
 from .svg import SVG
 from .terminal import Terminal
+
+DigraphIntensity = Literal["linear", "log", "sqrt"]
 
 
 class Imaging:
@@ -41,11 +45,55 @@ class Imaging:
     def __init__(self, data, config):
         self._inner = _ImagingBinding(data, config)
 
-    def linear(self, cell_size=None, fixed_width=None):
+    def linear(self, cell_size=1, fixed_width=16):
         """Select the linear renderer."""
         return ImagingRenderer._from_binding(
             self._inner.linear(cell_size, fixed_width)
         )
+
+    def bitmap(self, cell_size=1, fixed_width=16):
+        """Select the bitmap renderer."""
+        return ImagingRenderer._from_binding(
+            self._inner.bitmap(cell_size, fixed_width)
+        )
+
+    def digraph(
+        self,
+        cell_size=1,
+        axis_size=256,
+        stride=1,
+        offset=0,
+        window_size=None,
+        intensity: DigraphIntensity = "log",
+    ):
+        """Select the digraph renderer.
+
+        Defaults:
+            cell_size=1
+            axis_size=256
+            stride=1
+            offset=0
+            window_size=None
+            intensity="log"
+
+        Intensity options:
+            "linear", "log", "sqrt"
+        """
+        return ImagingRenderer._from_binding(
+            self._inner.digraph(
+                cell_size, axis_size, stride, offset, window_size, intensity
+            )
+        )
+
+    def entropy(self, window_size=64, cell_size=1, fixed_width=64):
+        """Select the entropy renderer."""
+        return ImagingRenderer._from_binding(
+            self._inner.entropy(window_size, cell_size, fixed_width)
+        )
+
+    def hilbert(self, cell_size=1):
+        """Select the Hilbert renderer."""
+        return ImagingRenderer._from_binding(self._inner.hilbert(cell_size))
 
 
 class ImagingRenderer:
@@ -95,4 +143,4 @@ class ImagingPalette:
         return Terminal._from_binding(self._inner.terminal())
 
 
-__all__ = ["Imaging", "ImagingPalette", "ImagingRenderer"]
+__all__ = ["DigraphIntensity", "Imaging", "ImagingPalette", "ImagingRenderer"]
