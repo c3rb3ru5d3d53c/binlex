@@ -7,4 +7,5 @@ pub enum ProcessorTarget {
     Instruction,
     Block,
     Function,
+    Graph,
 }

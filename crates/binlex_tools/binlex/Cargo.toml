@@ -12,3 +12,6 @@ binlex = { path = "../../.." }
 clap = { version = "4.5.27", features = ["derive"] }
 rayon = "1.10.0"
 serde_json = "1.0.137"
+
+[dev-dependencies]
+toml = "0.8.19"

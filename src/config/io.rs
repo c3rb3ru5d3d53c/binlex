@@ -38,7 +38,7 @@ impl Config {
 
     pub fn from_file(file_path: &str) -> Result<Config, Error> {
         let toml_string = fs::read_to_string(file_path)?;
-        let config: ConfigData = toml::from_str(&toml_string).map_err(|error| {
+        let mut config: ConfigData = toml::from_str(&toml_string).map_err(|error| {
             Error::new(
                 ErrorKind::InvalidData,
                 format!(
@@ -47,6 +47,10 @@ impl Config {
                 ),
             )
         })?;
+        if config.processors.max_payload_bytes == 4 * 1024 * 1024 {
+            config.processors.max_payload_bytes =
+                super::ConfigProcessors::default().max_payload_bytes;
+        }
         Ok(Self::from_data(config))
     }
 

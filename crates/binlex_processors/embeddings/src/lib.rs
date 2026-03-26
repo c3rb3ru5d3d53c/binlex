@@ -1,5 +1,6 @@
 use burn::tensor::{Tensor, TensorData};
 use burn::{Dispatch, DispatchDevice};
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -10,13 +11,14 @@ use twox_hash::XxHash64;
 use binlex::config::{
     ConfigProcessor, ConfigProcessorTarget, ConfigProcessorTransport, ConfigProcessorTransports,
 };
-use binlex::controlflow::{Block, BlockJson, Function, FunctionJson, Instruction, InstructionJson};
+use binlex::controlflow::{BlockJson, Function, FunctionJson, Graph, InstructionJson};
 use binlex::core::Architecture;
 use binlex::core::{OperatingSystem, Transport};
 use binlex::genetics::ChromosomeJson;
 use binlex::math::stats::{max_or_zero, normalize_l2, weighted_histogram, weighted_mean};
 use binlex::processor::{
-    GraphProcessor, JsonProcessor, ProcessorContext, external_processor_registration,
+    GraphProcessor, GraphProcessorFanout, OnGraphOptions, ProcessorContext,
+    external_processor_registration,
 };
 use binlex::runtime::{Processor, ProcessorError};
 
@@ -30,16 +32,18 @@ const CALL_BUCKETS: usize = 8;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct EmbeddingsRequest {
-    pub data: String,
     #[serde(default)]
     pub dimensions: Option<usize>,
     #[serde(default)]
     pub device: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct EmbeddingsResponse {
-    pub vector: Vec<f32>,
+    #[serde(default)]
+    pub threads: Option<usize>,
+    #[serde(default)]
+    pub instructions: Vec<EmbeddingEntityInput>,
+    #[serde(default)]
+    pub blocks: Vec<EmbeddingEntityInput>,
+    #[serde(default)]
+    pub functions: Vec<EmbeddingEntityInput>,
 }
 
 #[derive(Default)]
@@ -49,6 +53,12 @@ pub struct EmbeddingsProcessor;
 struct EmbeddingModelConfig {
     dimensions: usize,
     device: EmbeddingDevice,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct EmbeddingEntityInput {
+    address: u64,
+    data: Value,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -778,6 +788,14 @@ fn configured_device(config: &binlex::Config) -> EmbeddingDevice {
     parse_device(processor_config(config).and_then(|processor| processor.option_string("device")))
 }
 
+fn configured_threads(config: &binlex::Config) -> usize {
+    processor_config(config)
+        .and_then(|processor| processor.option_integer("threads"))
+        .and_then(|value| usize::try_from(value).ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(1)
+}
+
 fn configured_device_from_context<C: ProcessorContext>(context: &C) -> String {
     context
         .processor(EmbeddingsProcessor::NAME)
@@ -786,79 +804,187 @@ fn configured_device_from_context<C: ProcessorContext>(context: &C) -> String {
         .to_string()
 }
 
-fn local_output(data: Value, config: &binlex::Config) -> Value {
-    let dimensions = configured_dimensions(config);
-    let vector = embed(
-        &data,
-        &EmbeddingModelConfig {
-            dimensions,
-            device: configured_device(config),
-        },
-    );
-    json!({
-        "vector": vector,
-    })
-}
-
-fn process_value(data: Value, config: &binlex::Config) -> Option<Value> {
-    Some(local_output(data, config))
+fn configured_threads_from_context<C: ProcessorContext>(context: &C) -> usize {
+    context
+        .processor(EmbeddingsProcessor::NAME)
+        .and_then(|processor| processor.option_integer("threads"))
+        .and_then(|value| usize::try_from(value).ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(1)
 }
 
 impl Processor for EmbeddingsProcessor {
     const NAME: &'static str = "embeddings";
     type Request = EmbeddingsRequest;
-    type Response = EmbeddingsResponse;
+    type Response = GraphProcessorFanout;
 
-    fn request(&self, request: Self::Request) -> Result<Self::Response, ProcessorError> {
-        let data: Value = serde_json::from_str(&request.data)
-            .map_err(|error| ProcessorError::Serialization(error.to_string()))?;
+    fn execute(&self, request: Self::Request) -> Result<Self::Response, ProcessorError> {
         let config = EmbeddingModelConfig {
             dimensions: request.dimensions.unwrap_or(DEFAULT_DIMENSIONS),
             device: parse_device(request.device.as_deref()),
         };
-        let vector = embed(&data, &config);
-        Ok(EmbeddingsResponse { vector })
-    }
-}
-
-impl JsonProcessor for EmbeddingsProcessor {
-    fn request<C: ProcessorContext>(
-        context: &C,
-        data: Value,
-    ) -> Result<Self::Request, ProcessorError> {
-        Ok(EmbeddingsRequest {
-            data: serde_json::to_string(&data)
-                .map_err(|error| ProcessorError::Serialization(error.to_string()))?,
-            dimensions: Some(configured_dimensions_from_context(context)),
-            device: Some(configured_device_from_context(context)),
-        })
-    }
-
-    fn response(response: Self::Response) -> Result<Value, ProcessorError> {
-        Ok(json!({
-            "vector": response.vector,
+        let threads = request.threads.unwrap_or(1).max(1);
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build()
+            .map_err(|error: rayon::ThreadPoolBuildError| {
+                ProcessorError::Protocol(error.to_string())
+            })?;
+        Ok(pool.install(|| GraphProcessorFanout {
+            instructions: request
+                .instructions
+                .into_par_iter()
+                .map(|item| {
+                    (
+                        item.address,
+                        json!({ "vector": embed(&item.data, &config) }),
+                    )
+                })
+                .collect(),
+            blocks: request
+                .blocks
+                .into_par_iter()
+                .map(|item| {
+                    (
+                        item.address,
+                        json!({ "vector": embed(&item.data, &config) }),
+                    )
+                })
+                .collect(),
+            functions: request
+                .functions
+                .into_par_iter()
+                .map(|item| {
+                    (
+                        item.address,
+                        json!({ "vector": embed(&item.data, &config) }),
+                    )
+                })
+                .collect(),
         }))
     }
 }
 
 impl GraphProcessor for EmbeddingsProcessor {
-    fn function_json(function: &Function<'_>) -> Option<Value> {
+    fn on_graph_options() -> OnGraphOptions {
+        OnGraphOptions {
+            instructions: false,
+            blocks: false,
+            functions: true,
+        }
+    }
+
+    fn request_message<C: ProcessorContext>(
+        context: &C,
+        data: Value,
+    ) -> Result<Self::Request, ProcessorError> {
+        if data.get("type").and_then(Value::as_str) != Some("graph") {
+            return Err(ProcessorError::Protocol(
+                "embeddings processor only supports graph-stage requests".to_string(),
+            ));
+        }
+        let instructions = data
+            .get("instructions")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|value| {
+                let address = value.get("address")?.as_u64()?;
+                Some(EmbeddingEntityInput {
+                    address,
+                    data: value,
+                })
+            })
+            .collect();
+        let blocks = data
+            .get("blocks")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|value| {
+                let address = value.get("address")?.as_u64()?;
+                Some(EmbeddingEntityInput {
+                    address,
+                    data: value,
+                })
+            })
+            .collect();
+        let functions = data
+            .get("functions")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|value| {
+                let address = value.get("address")?.as_u64()?;
+                Some(EmbeddingEntityInput {
+                    address,
+                    data: value,
+                })
+            })
+            .collect();
+
+        Ok(EmbeddingsRequest {
+            dimensions: Some(configured_dimensions_from_context(context)),
+            device: Some(configured_device_from_context(context)),
+            threads: Some(configured_threads_from_context(context)),
+            instructions,
+            blocks,
+            functions,
+        })
+    }
+
+    fn function_message(function: &Function<'_>) -> Option<Value> {
         function_embedding_input(function).ok()
     }
 
-    fn instruction(instruction: &Instruction) -> Option<Value> {
-        let data = serde_json::to_value(instruction.process_base()).ok()?;
-        process_value(data, &instruction.config)
-    }
+    fn on_graph(graph: &Graph) -> Option<GraphProcessorFanout> {
+        let config = EmbeddingModelConfig {
+            dimensions: configured_dimensions(&graph.config),
+            device: configured_device(&graph.config),
+        };
+        let threads = configured_threads(&graph.config);
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(threads.max(1))
+            .build()
+            .ok()?;
 
-    fn block(block: &Block<'_>) -> Option<Value> {
-        let data = serde_json::to_value(block.process_base()).ok()?;
-        process_value(data, &block.cfg.config)
-    }
-
-    fn function(function: &Function<'_>) -> Option<Value> {
-        let data = function_embedding_input(function).ok()?;
-        process_value(data, &function.cfg.config)
+        Some(pool.install(|| {
+            GraphProcessorFanout {
+                instructions: graph
+                    .instructions()
+                    .into_par_iter()
+                    .filter_map(|instruction| {
+                        let data = serde_json::to_value(instruction.process_base()).ok()?;
+                        Some((
+                            instruction.address,
+                            json!({ "vector": embed(&data, &config) }),
+                        ))
+                    })
+                    .collect(),
+                blocks: graph
+                    .blocks()
+                    .into_par_iter()
+                    .filter_map(|block| {
+                        let data = serde_json::to_value(block.process_base()).ok()?;
+                        Some((block.address(), json!({ "vector": embed(&data, &config) })))
+                    })
+                    .collect(),
+                functions: graph
+                    .functions()
+                    .into_par_iter()
+                    .filter_map(|function| {
+                        let data = function_embedding_input(&function).ok()?;
+                        Some((
+                            function.address(),
+                            json!({ "vector": embed(&data, &config) }),
+                        ))
+                    })
+                    .collect(),
+            }
+        }))
     }
 }
 
@@ -919,23 +1045,29 @@ pub fn registration() -> binlex::processor::ProcessorRegistration {
         ],
         &[Architecture::AMD64, Architecture::I386, Architecture::CIL],
         &[Transport::IPC, Transport::HTTP],
+        EmbeddingsProcessor::on_graph_options(),
         ConfigProcessor {
-            enabled: true,
+            enabled: false,
             instructions: ConfigProcessorTarget {
                 enabled: false,
                 options: BTreeMap::new(),
             },
             blocks: ConfigProcessorTarget {
-                enabled: true,
+                enabled: false,
                 options: BTreeMap::new(),
             },
             functions: ConfigProcessorTarget {
+                enabled: false,
+                options: BTreeMap::new(),
+            },
+            graph: ConfigProcessorTarget {
                 enabled: true,
                 options: BTreeMap::new(),
             },
             options: BTreeMap::from([
                 ("dimensions".to_string(), 64.into()),
                 ("device".to_string(), "cpu".into()),
+                ("threads".to_string(), 1.into()),
             ]),
             transport: ConfigProcessorTransports {
                 ipc: ConfigProcessorTransport {

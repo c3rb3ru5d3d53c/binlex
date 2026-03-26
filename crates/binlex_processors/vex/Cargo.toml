@@ -18,3 +18,6 @@ libvex = { path = "../../libvex/libvex-rs", features = ["pic"] }
 binlex = { path = "../../.." }
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = "1.0.137"
+
+[dev-dependencies]
+postcard = { version = "1.1.1", features = ["alloc"] }

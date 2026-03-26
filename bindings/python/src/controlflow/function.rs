@@ -169,6 +169,12 @@ impl FunctionJsonDeserializer {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the Markov importance scores for the function, if available.
+    pub fn markov(&self) -> Option<BTreeMap<u64, f64>> {
+        self.inner.lock().unwrap().markov()
+    }
+
+    #[pyo3(text_signature = "($self)")]
     /// Return the chromosome derived from the serialized function.
     pub fn chromosome(&self) -> Chromosome {
         let inner_chromosome = self.inner.lock().unwrap().chromosome();
@@ -466,6 +472,12 @@ impl Function {
                 seed: function.cfg.config.functions.minhash.seed,
             }))
         })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return normalized Markov importance scores for each block in the function.
+    pub fn markov(&self, py: Python) -> PyResult<BTreeMap<u64, f64>> {
+        self.with_inner_function(py, |function| Ok(function.markov()))
     }
 
     #[pyo3(text_signature = "($self)")]

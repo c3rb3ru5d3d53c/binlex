@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::fmt;
 use std::io::Error;
 use std::io::ErrorKind;
@@ -28,7 +28,7 @@ use std::str::FromStr;
 
 /// Represents the different architectures of a binary.
 #[repr(u16)]
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize)]
 pub enum Architecture {
     /// 64-bit AMD architecture.
     AMD64 = 0x00,
@@ -38,6 +38,16 @@ pub enum Architecture {
     CIL = 0x02,
     /// Unknown architecture.
     UNKNOWN = 0x03,
+}
+
+impl<'de> Deserialize<'de> for Architecture {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Architecture::from_string(&value).map_err(serde::de::Error::custom)
+    }
 }
 
 impl Architecture {

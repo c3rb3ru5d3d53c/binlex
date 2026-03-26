@@ -1,8 +1,11 @@
 use crate::Config;
 use crate::config::{ConfigProcessor, ConfigProcessors};
-use crate::controlflow::{Block, Function, Instruction};
+use crate::controlflow::{Block, Function, Graph, Instruction};
 use crate::io::stderr::Stderr;
-use crate::processor::{ProcessorArchitecture, ProcessorOs, ProcessorTarget, ProcessorTransport};
+use crate::processor::{
+    GraphProcessorFanout, OnGraphOptions, ProcessorArchitecture, ProcessorOs, ProcessorTarget,
+    ProcessorTransport,
+};
 use crate::runtime::ProcessorError;
 use crate::server::error::ServerError;
 use once_cell::sync::Lazy;
@@ -23,6 +26,8 @@ pub struct ProcessorRegistration {
     pub operating_systems: Vec<ProcessorOs>,
     pub architectures: Vec<ProcessorArchitecture>,
     pub transports: Vec<ProcessorTransport>,
+    #[serde(default)]
+    pub on_graph_options: OnGraphOptions,
     pub default_config: ConfigProcessor,
 }
 
@@ -48,7 +53,7 @@ impl RegisteredProcessor {
         {
             return None;
         }
-        let data = serde_json::to_value(block.process_base()).ok()?;
+        let data = block_transport_message(&self.registration, block).ok()?;
         execute_graph_transport(&self.registration, data, &block.cfg.config).ok()
     }
 
@@ -59,7 +64,7 @@ impl RegisteredProcessor {
         {
             return None;
         }
-        let data = serde_json::to_value(instruction.process_base()).ok()?;
+        let data = instruction_transport_message(&self.registration, instruction).ok()?;
         execute_graph_transport(&self.registration, data, &instruction.config).ok()
     }
 
@@ -70,8 +75,17 @@ impl RegisteredProcessor {
         {
             return None;
         }
-        let data = function_processor_input(function).ok()?;
+        let data = function_transport_message(&self.registration, function).ok()?;
         execute_graph_transport(&self.registration, data, &function.cfg.config).ok()
+    }
+
+    pub fn process_graph(&self, graph: &Graph) -> Option<GraphProcessorFanout> {
+        if !self.registration.supports_architecture(graph.architecture) {
+            return None;
+        }
+        let data = graph_transport_message(&self.registration, graph).ok()?;
+        let response = execute_graph_transport(&self.registration, data, &graph.config).ok()?;
+        serde_json::from_value(response).ok()
     }
 }
 
@@ -138,12 +152,11 @@ fn discover_processor_registrations(
 
 fn processor_binary_candidates(configured_directory: Option<&str>) -> Vec<PathBuf> {
     let mut directories = Vec::new();
-    if let Some(directory) = configured_directory {
+    let default_directory = Config::default_processor_directory();
+    if let Some(directory) =
+        configured_directory.filter(|directory| *directory != default_directory)
+    {
         directories.push(PathBuf::from(directory));
-    }
-    directories.push(PathBuf::from(Config::default_processor_directory()));
-    if let Ok(path) = env::var("PATH") {
-        directories.extend(env::split_paths(&path));
     }
     if let Ok(current_exe) = env::current_exe() {
         if let Some(parent) = current_exe.parent() {
@@ -151,8 +164,12 @@ fn processor_binary_candidates(configured_directory: Option<&str>) -> Vec<PathBu
         }
     }
     if let Some(manifest_dir) = option_env!("CARGO_MANIFEST_DIR") {
-        directories.push(PathBuf::from(manifest_dir).join("target/debug"));
         directories.push(PathBuf::from(manifest_dir).join("target/release"));
+        directories.push(PathBuf::from(manifest_dir).join("target/debug"));
+    }
+    directories.push(PathBuf::from(default_directory));
+    if let Ok(path) = env::var("PATH") {
+        directories.extend(env::split_paths(&path));
     }
 
     let mut seen = BTreeSet::new();
@@ -307,6 +324,7 @@ pub fn enabled_processors_for_target(
                                 ProcessorTarget::Instruction => processor.instructions.enabled,
                                 ProcessorTarget::Block => processor.blocks.enabled,
                                 ProcessorTarget::Function => processor.functions.enabled,
+                                ProcessorTarget::Graph => processor.graph.enabled,
                             }
                     })
         })
@@ -430,6 +448,7 @@ pub fn external_processor_registration(
     operating_systems: &[ProcessorOs],
     architectures: &[ProcessorArchitecture],
     transports: &[ProcessorTransport],
+    on_graph_options: OnGraphOptions,
     default_config: ConfigProcessor,
 ) -> ProcessorRegistration {
     ProcessorRegistration {
@@ -439,12 +458,75 @@ pub fn external_processor_registration(
         operating_systems: operating_systems.to_vec(),
         architectures: architectures.to_vec(),
         transports: transports.to_vec(),
+        on_graph_options,
         default_config,
     }
 }
 
-fn function_processor_input(function: &Function<'_>) -> Result<Value, serde_json::Error> {
+fn instruction_transport_message(
+    registration: &ProcessorRegistration,
+    instruction: &Instruction,
+) -> Result<Value, serde_json::Error> {
+    if registration.name == "vex" {
+        return Ok(json!({
+            "architecture": instruction.architecture,
+            "address": instruction.address,
+            "bytes": instruction.bytes,
+        }));
+    }
+
+    let mut data = serde_json::to_value(instruction.process_base())?;
+    set_message_architecture(&mut data, instruction.architecture)?;
+    Ok(data)
+}
+
+fn block_transport_message(
+    registration: &ProcessorRegistration,
+    block: &Block<'_>,
+) -> Result<Value, serde_json::Error> {
+    if registration.name == "vex" {
+        return Ok(json!({
+            "architecture": block.architecture(),
+            "address": block.address(),
+            "bytes": block.bytes(),
+        }));
+    }
+
+    let mut data = serde_json::to_value(block.process_base())?;
+    set_message_architecture(&mut data, block.architecture())?;
+    Ok(data)
+}
+
+fn function_transport_message(
+    registration: &ProcessorRegistration,
+    function: &Function<'_>,
+) -> Result<Value, serde_json::Error> {
+    if registration.name == "vex" {
+        let Some(bytes) = function.bytes() else {
+            return Err(serde_json::Error::io(std::io::Error::other(
+                "vex requires contiguous function bytes",
+            )));
+        };
+        return Ok(json!({
+            "architecture": function.architecture(),
+            "address": function.address(),
+            "bytes": bytes,
+        }));
+    }
+
+    function_message(function)
+}
+
+fn graph_transport_message(
+    registration: &ProcessorRegistration,
+    graph: &Graph,
+) -> Result<Value, serde_json::Error> {
+    graph_message(graph, registration.on_graph_options)
+}
+
+fn function_message(function: &Function<'_>) -> Result<Value, serde_json::Error> {
     let mut data = serde_json::to_value(function.process_base())?;
+    set_message_architecture(&mut data, function.architecture())?;
     let cfg_blocks = function
         .blocks()
         .into_iter()
@@ -480,4 +562,68 @@ fn function_processor_input(function: &Function<'_>) -> Result<Value, serde_json
         map.insert("cfg_blocks".to_string(), serde_json::to_value(cfg_blocks)?);
     }
     Ok(data)
+}
+
+fn graph_message(graph: &Graph, options: OnGraphOptions) -> Result<Value, serde_json::Error> {
+    let instructions = if options.instructions {
+        graph
+            .instructions()
+            .into_iter()
+            .map(|instruction| {
+                let mut data = serde_json::to_value(instruction.process_base())?;
+                set_message_architecture(&mut data, instruction.architecture)?;
+                Ok(data)
+            })
+            .collect::<Result<Vec<_>, _>>()?
+    } else {
+        Vec::new()
+    };
+    let blocks = if options.blocks {
+        graph
+            .blocks()
+            .into_iter()
+            .map(|block| {
+                let mut data = serde_json::to_value(block.process_base())?;
+                set_message_architecture(&mut data, block.architecture())?;
+                Ok(data)
+            })
+            .collect::<Result<Vec<_>, _>>()?
+    } else {
+        Vec::new()
+    };
+    let functions = if options.functions {
+        graph
+            .functions()
+            .into_iter()
+            .map(|function| function_message(&function))
+            .collect::<Result<Vec<_>, _>>()?
+    } else {
+        Vec::new()
+    };
+
+    let mut data = serde_json::to_value(graph.snapshot())?;
+    if let Value::Object(ref mut map) = data {
+        map.insert("type".to_string(), "graph".into());
+        map.insert(
+            "architecture".to_string(),
+            serde_json::to_value(graph.architecture)?,
+        );
+        map.insert("instructions".to_string(), Value::Array(instructions));
+        map.insert("blocks".to_string(), Value::Array(blocks));
+        map.insert("functions".to_string(), Value::Array(functions));
+    }
+    Ok(data)
+}
+
+fn set_message_architecture(
+    data: &mut Value,
+    architecture: ProcessorArchitecture,
+) -> Result<(), serde_json::Error> {
+    if let Value::Object(map) = data {
+        map.insert(
+            "architecture".to_string(),
+            serde_json::to_value(architecture)?,
+        );
+    }
+    Ok(())
 }

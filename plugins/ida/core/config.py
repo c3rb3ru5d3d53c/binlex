@@ -289,6 +289,7 @@ def build_binlex_config(plugin_config: PluginConfig, *, threads: int | None = No
     except Exception:
         pass
     config.general.threads = threads or plugin_config.default_threads
+    config.processors.embeddings.enabled = True
     if dimensions is not None:
         config.processors.embeddings.dimensions = dimensions
     return config

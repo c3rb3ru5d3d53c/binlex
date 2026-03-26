@@ -56,6 +56,20 @@ use std::io::Write;
 use std::process;
 use std::time::Instant;
 
+fn colocated_processor_directory(processors: &[String]) -> Option<String> {
+    let current_exe = std::env::current_exe().ok()?;
+    let parent = current_exe.parent()?;
+    let has_all = processors.iter().all(|processor| {
+        let filename = binlex::runtime::dispatch::processor_backend_filename(processor);
+        parent.join(filename).is_file()
+    });
+    if has_all {
+        Some(parent.to_string_lossy().into_owned())
+    } else {
+        None
+    }
+}
+
 #[derive(Parser, Debug, Clone)]
 #[command(
     name = "binlex",
@@ -144,6 +158,9 @@ fn apply_cli_overrides(args: &Args, config: &mut Config) {
     }
 
     if let Some(processors) = &args.processors {
+        if let Some(directory) = colocated_processor_directory(processors) {
+            config.processors.path = Some(directory);
+        }
         let enabled_processors: HashSet<_> = processors.iter().cloned().collect();
         let discovered =
             binlex::processor::registered_processor_registrations_for_config(&config.processors);
@@ -463,6 +480,15 @@ fn process_output(
     function_symbols: &BTreeMap<u64, Symbol>,
 ) {
     let mut instructions = Vec::<LZ4String>::new();
+
+    if !binlex::processor::enabled_processors_for_target(
+        &cfg.config,
+        binlex::processor::ProcessorTarget::Graph,
+    )
+    .is_empty()
+    {
+        let _ = cfg.process_graph();
+    }
 
     if cfg.config.instructions.enabled {
         let _ = cfg.process_instructions();

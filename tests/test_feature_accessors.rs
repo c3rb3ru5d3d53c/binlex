@@ -1,4 +1,6 @@
+use binlex::Architecture;
 use binlex::Config;
+use binlex::controlflow::{Function, Graph, Instruction};
 use binlex::formats::file::File;
 use binlex::genetics::Chromosome;
 use binlex::imaging::{PNG, Palette, SVG, Terminal};
@@ -35,6 +37,8 @@ fn file_direct_accessors_ignore_serialization_flags() {
 #[test]
 fn chromosome_direct_accessors_ignore_serialization_flags() {
     let mut config = Config::default();
+    config.chromosomes.mask.enabled = false;
+    config.chromosomes.masked.enabled = false;
     config.chromosomes.vector.enabled = false;
     config.chromosomes.sha256.enabled = false;
     config.chromosomes.tlsh.enabled = false;
@@ -74,6 +78,8 @@ fn chromosome_direct_accessors_ignore_serialization_flags() {
     let value: serde_json::Value =
         serde_json::from_str(&chromosome.json().expect("chromosome json should serialize"))
             .expect("chromosome json should parse");
+    assert!(value.get("mask").is_none());
+    assert!(value.get("masked").is_none());
     assert!(value.get("vector").is_none());
     assert!(value.get("sha256").is_none());
     assert!(value.get("tlsh").is_none());
@@ -111,6 +117,34 @@ fn chromosome_bytes_zero_masked_bits_without_compaction() {
     assert_eq!(chromosome.masked(), vec![0xAC, 0x02]);
     assert_eq!(chromosome.vector(), vec![0xA, 0xC, 0x0, 0x2]);
     assert_eq!(chromosome.pattern(), "a??2");
+}
+
+#[test]
+fn chromosome_json_includes_mask_and_masked_when_enabled() {
+    let mut config = Config::default();
+    config.chromosomes.mask.enabled = true;
+    config.chromosomes.masked.enabled = true;
+    config.chromosomes.vector.enabled = false;
+    config.chromosomes.sha256.enabled = false;
+    config.chromosomes.tlsh.enabled = false;
+    config.chromosomes.minhash.enabled = false;
+    config.chromosomes.entropy.enabled = false;
+
+    let chromosome = Chromosome::new(vec![0xAF, 0x12], vec![0x03, 0xF0], config)
+        .expect("chromosome should build");
+
+    let value: serde_json::Value =
+        serde_json::from_str(&chromosome.json().expect("chromosome json should serialize"))
+            .expect("chromosome json should parse");
+
+    assert_eq!(
+        value.get("mask").and_then(|value| value.as_str()),
+        Some("03f0")
+    );
+    assert_eq!(
+        value.get("masked").and_then(|value| value.as_str()),
+        Some("ac02")
+    );
 }
 
 #[test]
@@ -178,4 +212,94 @@ fn imaging_direct_accessors_ignore_config_flags() {
         png.phash().and_then(|hash| hash.hexdigest()),
         terminal.phash().and_then(|hash| hash.hexdigest())
     );
+}
+
+#[test]
+fn function_markov_direct_accessor_ignores_serialization_flag() {
+    let mut config = Config::default();
+    config.functions.markov.enabled = false;
+
+    let mut graph = Graph::new(Architecture::AMD64, config.clone());
+
+    let mut entry = Instruction::create(0x1000, Architecture::AMD64, config.clone());
+    entry.bytes = vec![0x90];
+    entry.pattern = "90".to_string();
+    entry.is_conditional = true;
+    entry.to = [0x1002].into_iter().collect();
+    graph.insert_instruction(entry);
+
+    let mut left = Instruction::create(0x1001, Architecture::AMD64, config.clone());
+    left.bytes = vec![0x90];
+    left.pattern = "90".to_string();
+    left.is_return = true;
+    graph.insert_instruction(left);
+
+    let mut right = Instruction::create(0x1002, Architecture::AMD64, config);
+    right.bytes = vec![0xC3];
+    right.pattern = "c3".to_string();
+    right.is_return = true;
+    graph.insert_instruction(right);
+
+    assert!(graph.set_block(0x1000));
+    assert!(graph.set_block(0x1001));
+    assert!(graph.set_block(0x1002));
+    assert!(graph.set_function(0x1000));
+
+    let function = Function::new(0x1000, &graph).expect("function should exist");
+    let scores = function.markov();
+
+    assert!(scores.len() >= 2);
+    assert!(scores.contains_key(&0x1000));
+    let total: f64 = scores.values().sum();
+    assert!(
+        (total - 1.0).abs() < 1e-9,
+        "markov scores should be normalized"
+    );
+
+    let value: serde_json::Value =
+        serde_json::from_str(&function.json().expect("function json should serialize"))
+            .expect("function json should parse");
+    assert!(value.get("markov").is_none());
+}
+
+#[test]
+fn function_markov_serializes_when_enabled() {
+    let config = Config::default();
+    let mut graph = Graph::new(Architecture::AMD64, config.clone());
+
+    let mut entry = Instruction::create(0x1000, Architecture::AMD64, config.clone());
+    entry.bytes = vec![0x90];
+    entry.pattern = "90".to_string();
+    entry.is_conditional = true;
+    entry.to = [0x1002].into_iter().collect();
+    graph.insert_instruction(entry);
+
+    let mut left = Instruction::create(0x1001, Architecture::AMD64, config.clone());
+    left.bytes = vec![0x90];
+    left.pattern = "90".to_string();
+    left.is_return = true;
+    graph.insert_instruction(left);
+
+    let mut right = Instruction::create(0x1002, Architecture::AMD64, config);
+    right.bytes = vec![0xC3];
+    right.pattern = "c3".to_string();
+    right.is_return = true;
+    graph.insert_instruction(right);
+
+    assert!(graph.set_block(0x1000));
+    assert!(graph.set_block(0x1001));
+    assert!(graph.set_block(0x1002));
+    assert!(graph.set_function(0x1000));
+
+    let function = Function::new(0x1000, &graph).expect("function should exist");
+    let value: serde_json::Value =
+        serde_json::from_str(&function.json().expect("function json should serialize"))
+            .expect("function json should parse");
+
+    let markov = value
+        .get("markov")
+        .and_then(|value| value.as_object())
+        .expect("markov scores should be serialized");
+    assert!(markov.len() >= 2);
+    assert!(markov.contains_key("4096"));
 }

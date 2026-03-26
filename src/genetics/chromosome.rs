@@ -41,6 +41,9 @@ pub struct ChromosomeJson {
     /// Hex-encoded wildcard mask for the chromosome, one byte per source byte.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub mask: String,
+    /// Hex-encoded masked chromosome bytes with wildcard bits zeroed in place.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub masked: String,
     /// The vector extracted from the chromosome.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub vector: Vec<u8>,
@@ -245,7 +248,16 @@ impl Chromosome {
     pub fn process(&self) -> ChromosomeJson {
         ChromosomeJson {
             pattern: self.pattern(),
-            mask: hex::encode(&self.mask()),
+            mask: if self.config.chromosomes.mask.enabled {
+                hex::encode(&self.mask())
+            } else {
+                String::new()
+            },
+            masked: if self.config.chromosomes.masked.enabled {
+                hex::encode(&self.masked())
+            } else {
+                String::new()
+            },
             vector: if self.config.chromosomes.vector.enabled {
                 self.vector()
             } else {

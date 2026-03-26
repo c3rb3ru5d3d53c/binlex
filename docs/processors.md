@@ -1,26 +1,69 @@
 # Custom Processors
 
-Minimal skeleton for adding a custom processor.
+This page shows the simplest way to build a processor for Binlex.
 
-## Example Skeleton
+## What A Processor Does
+
+A processor takes Binlex data, runs some analysis, and returns JSON that gets attached back to the graph.
+
+This means, you can build your own processor for your own analysis workflow and share your processor binary with others.
+
+You can run a processor at four levels:
+
+- `instruction`
+- `block`
+- `function`
+- `graph`
+
+Most processors follow this shape:
+
+1. Define a request type.
+2. Define a response type.
+3. Implement `Processor::execute(...)`.
+4. Implement `GraphProcessor` hooks for the levels you care about.
+5. Export a `registration()` that declares supported platforms and default config.
+
+## The Easiest Mental Model
+
+Think of the processor API as two layers:
+
+- `Processor` is the worker. It accepts a typed request and returns a typed response.
+- `GraphProcessor` is the adapter. It tells Binlex how to build requests from graph entities and where to attach the results.
+
+If your request and response already match the JSON sent by Binlex, you usually only need:
+
+- `impl Processor`
+- `impl GraphProcessor`
+- `registration()`
+
+## Minimal Example
+
+This example attaches the size of each function in bytes.
 
 ```rust
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use crate::controlflow::{Block, Function, Instruction};
-use crate::core::{Architecture, OperatingSystem, Transport};
-use crate::processor::{GraphProcessor, JsonProcessor, ProcessorContext};
-use crate::runtime::{Processor, ProcessorError};
+use binlex::config::{
+    ConfigProcessor, ConfigProcessorTarget, ConfigProcessorTransport, ConfigProcessorTransports,
+};
+use binlex::controlflow::{Function, Graph};
+use binlex::core::{Architecture, OperatingSystem, Transport};
+use binlex::processor::{
+    GraphProcessor, GraphProcessorFanout, OnGraphOptions, external_processor_registration,
+};
+use binlex::runtime::{Processor, ProcessorError};
 
 #[derive(Serialize, Deserialize, Clone)]
-pub enum ExampleRequest {
-    Analyze { bytes: Vec<u8> },
+pub struct ExampleRequest {
+    pub bytes: Vec<u8>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub enum ExampleResponse {
-    Analyze { score: u32 },
+pub struct ExampleResponse {
+    pub size: usize,
 }
 
 #[derive(Default)]
@@ -31,69 +74,217 @@ impl Processor for ExampleProcessor {
     type Request = ExampleRequest;
     type Response = ExampleResponse;
 
-    fn request(&self, request: Self::Request) -> Result<Self::Response, ProcessorError> {
-        match request {
-            ExampleRequest::Analyze { bytes } => {
-                Ok(ExampleResponse::Analyze { score: bytes.len() as u32 })
-            }
-        }
-    }
-}
-
-impl JsonProcessor for ExampleProcessor {
-    fn request<C: ProcessorContext>(_: &C, data: Value) -> Result<Self::Request, ProcessorError> {
-        let bytes = serde_json::to_vec(&data)
-            .map_err(|error| ProcessorError::Serialization(error.to_string()))?;
-        Ok(ExampleRequest::Analyze { bytes })
-    }
-
-    fn response(response: Self::Response) -> Result<Value, ProcessorError> {
-        match response {
-            ExampleResponse::Analyze { score } => Ok(json!({ "score": score })),
-        }
+    fn execute(&self, request: Self::Request) -> Result<Self::Response, ProcessorError> {
+        Ok(ExampleResponse {
+            size: request.bytes.len(),
+        })
     }
 }
 
 impl GraphProcessor for ExampleProcessor {
-    fn instruction(instruction: &Instruction) -> Option<Value> {
-        Some(json!({
-            "address": instruction.address,
-            "size": instruction.bytes.len()
-        }))
+    fn function_message(function: &Function<'_>) -> Option<Value> {
+        let bytes = function.bytes()?;
+        Some(json!({ "bytes": bytes }))
     }
 
-    fn block(block: &Block<'_>) -> Option<Value> {
-        Some(json!({
-            "address": block.address(),
-            "size": block.size()
-        }))
+    fn on_function(function: &Function<'_>) -> Option<Value> {
+        let bytes = function.bytes()?;
+        let response = Self::execute_owned(ExampleRequest { bytes }).ok()?;
+        Some(json!({ "size": response.size, "address": function.address() }))
     }
 
-    fn function(function: &Function<'_>) -> Option<Value> {
-        Some(json!({
-            "address": function.address(),
-            "instructions": function.number_of_instructions()
-        }))
+    fn on_graph_options() -> OnGraphOptions {
+        OnGraphOptions {
+            instructions: false,
+            blocks: false,
+            functions: false,
+        }
+    }
+
+    fn on_graph(_: &Graph) -> Option<GraphProcessorFanout> {
+        None
     }
 }
 
-crate::processor!(ExampleProcessor {
-    requires: ">=2.0.0 <3.0.0",
-    operating_systems: [OperatingSystem::LINUX, OperatingSystem::MACOS],
-    architectures: [Architecture::AMD64, Architecture::I386],
-    enabled: false,
-    transports: [Transport::INLINE, Transport::IPC, Transport::HTTP],
-    instructions: { enabled: false },
-    blocks: { enabled: false },
-    functions: { enabled: true },
-    inline: { enabled: true },
-    ipc: { enabled: true },
-    http: {
-        enabled: false,
-        options: {
-            url: "http://127.0.0.1:5000",
-            verify: false
-        }
-    },
-});
+pub fn registration() -> binlex::processor::ProcessorRegistration {
+    external_processor_registration(
+        ExampleProcessor::NAME,
+        ">=2.0.0 <2.1.0",
+        &[OperatingSystem::LINUX, OperatingSystem::MACOS],
+        &[Architecture::AMD64, Architecture::I386],
+        &[Transport::IPC, Transport::HTTP],
+        ExampleProcessor::on_graph_options(),
+        ConfigProcessor {
+            enabled: false,
+            instructions: ConfigProcessorTarget {
+                enabled: false,
+                options: BTreeMap::new(),
+            },
+            blocks: ConfigProcessorTarget {
+                enabled: false,
+                options: BTreeMap::new(),
+            },
+            functions: ConfigProcessorTarget {
+                enabled: true,
+                options: BTreeMap::new(),
+            },
+            graph: ConfigProcessorTarget {
+                enabled: false,
+                options: BTreeMap::new(),
+            },
+            options: BTreeMap::new(),
+            transport: ConfigProcessorTransports {
+                ipc: ConfigProcessorTransport {
+                    enabled: true,
+                    options: BTreeMap::new(),
+                },
+                http: ConfigProcessorTransport {
+                    enabled: false,
+                    options: BTreeMap::from([
+                        ("url".to_string(), "http://127.0.0.1:5000".into()),
+                        ("verify".to_string(), false.into()),
+                    ]),
+                },
+            },
+        },
+    )
+}
+```
+
+## Which Methods Matter
+
+### `Processor::execute(...)`
+
+This is the only required analysis method.
+
+- Input: `Self::Request`
+- Output: `Self::Response`
+
+It should not know anything about Binlex graph internals. It should only process the request it receives.
+
+### `instruction_message`, `block_message`, `function_message`, `graph_message`
+
+These methods build the JSON payload sent to your processor.
+
+Defaults:
+
+- instruction, block, and function messages serialize the entity's base JSON
+- graph messages default to `None`
+
+Override these when your processor needs a different request shape.
+
+### `request_message(...)`
+
+This converts incoming JSON into `Self::Request`.
+
+The default implementation is:
+
+```rust
+serde_json::from_value(data)
+```
+
+If your request type matches the JSON payload, you do not need to override it.
+
+### `response_message(...)`
+
+This converts `Self::Response` back into JSON.
+
+The default implementation is:
+
+```rust
+serde_json::to_value(response)
+```
+
+If your response type is already serializable into the JSON you want, leave it alone.
+
+## Lifecycle
+
+Binlex can call these hooks during graph construction:
+
+- `on_instruction(...)` for each instruction
+- `on_block(...)` for each block
+- `on_function(...)` for each function
+- `on_graph(...)` after the graph is complete
+
+The `on_*` hooks are optional. Return `None` to skip output.
+
+## When To Use `on_graph`
+
+Use `on_graph(...)` when the analysis needs the whole graph at once.
+
+Typical examples:
+
+- embeddings
+- whole-function CFG features
+- ranking or scoring that compares many entities together
+
+`on_graph(...)` returns a `GraphProcessorFanout`, which lets you attach results back to individual entities by address:
+
+```rust
+GraphProcessorFanout {
+    instructions: BTreeMap::new(),
+    blocks: BTreeMap::new(),
+    functions: BTreeMap::new(),
+}
+```
+
+## `OnGraphOptions`
+
+Graph-stage processors can ask Binlex to include full entity collections in the graph payload:
+
+```rust
+fn on_graph_options() -> OnGraphOptions {
+    OnGraphOptions {
+        instructions: false,
+        blocks: false,
+        functions: true,
+    }
+}
+```
+
+This matters only for graph-level transport payloads.
+
+Use it to keep requests small:
+
+- enable only the collections your processor actually needs
+- leave unused collections as `false`
+
+## Choosing A Pattern
+
+Use per-entity hooks when:
+
+- each instruction, block, or function can be processed independently
+- you want simple behavior
+- you do not need whole-graph context
+
+Use `on_graph(...)` when:
+
+- the analysis needs relationships across the graph
+- you want one pass that fans results back to many entities
+- you want to perform multi-threading
+
+## Registration
+
+`registration()` tells Binlex how to discover and configure the processor.
+
+It should declare:
+
+- processor name
+- compatible Binlex version range
+- supported operating systems
+- supported architectures
+- supported transports
+- graph payload options
+- default processor config
+
+The backend executable name is derived from the processor name:
+
+```text
+binlex-processor-<name>
+```
+
+So a processor named `example` is expected to ship as:
+
+```text
+binlex-processor-example
 ```

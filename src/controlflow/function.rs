@@ -86,6 +86,9 @@ pub struct FunctionJson {
     /// The TLSH of the function, if enabled.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tlsh: Option<String>,
+    /// The Markov-derived block importance scores, if enabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub markov: Option<BTreeMap<u64, f64>>,
     /// Indicates whether the function is contiguous.
     pub contiguous: bool,
     /// Optional processor outputs attached by post-processing.
@@ -175,6 +178,11 @@ impl FunctionJsonDeserializer {
     #[allow(dead_code)]
     pub fn minhash(&self) -> Option<String> {
         self.json.minhash.clone()
+    }
+
+    #[allow(dead_code)]
+    pub fn markov(&self) -> Option<BTreeMap<u64, f64>> {
+        self.json.markov.clone()
     }
 
     #[allow(dead_code)]
@@ -355,6 +363,11 @@ impl<'function> Function<'function> {
         } else {
             None
         };
+        let markov = if self.cfg.config.functions.markov.enabled {
+            Some(self.markov())
+        } else {
+            None
+        };
 
         FunctionJson {
             address: self.address,
@@ -373,6 +386,7 @@ impl<'function> Function<'function> {
             sha256,
             minhash,
             tlsh,
+            markov,
             contiguous,
             processors: None,
             architecture: self.architecture().to_string(),
@@ -382,6 +396,22 @@ impl<'function> Function<'function> {
 
     pub fn process(&self) -> FunctionJson {
         let mut json = self.process_base();
+        if crate::processor::enabled_processors_for_target(
+            &self.cfg.config,
+            crate::processor::ProcessorTarget::Graph,
+        )
+        .iter()
+        .any(|processor| {
+            self.cfg
+                .processor_output(
+                    crate::processor::ProcessorTarget::Function,
+                    self.address,
+                    processor.name(),
+                )
+                .is_none()
+        }) {
+            let _ = self.cfg.process_graph();
+        }
         if let Some(outputs) = self
             .cfg
             .processor_outputs(crate::processor::ProcessorTarget::Function, self.address)
@@ -736,6 +766,98 @@ impl<'function> Function<'function> {
             .values()
             .flat_map(|block| block.functions())
             .collect()
+    }
+
+    /// Computes normalized Markov-derived importance scores for blocks in the function.
+    pub fn markov(&self) -> BTreeMap<u64, f64> {
+        let addresses: Vec<u64> = self.blocks.keys().copied().collect();
+        let n = addresses.len();
+
+        if n == 0 {
+            return BTreeMap::new();
+        }
+
+        if n == 1 {
+            return BTreeMap::from([(addresses[0], 1.0)]);
+        }
+
+        let damping = self.cfg.config.functions.markov.damping;
+        let tolerance = self.cfg.config.functions.markov.tolerance;
+        let max_iterations = self.cfg.config.functions.markov.max_iterations;
+        let base = (1.0 - damping) / n as f64;
+        let block_set: std::collections::BTreeSet<u64> = addresses.iter().copied().collect();
+
+        let outgoing: BTreeMap<u64, Vec<u64>> = self
+            .blocks
+            .iter()
+            .map(|(&address, block)| {
+                let targets = block
+                    .blocks()
+                    .into_iter()
+                    .filter(|target| block_set.contains(target))
+                    .collect::<Vec<_>>();
+                (address, targets)
+            })
+            .collect();
+
+        let mut scores: BTreeMap<u64, f64> = addresses
+            .iter()
+            .copied()
+            .map(|address| (address, 1.0 / n as f64))
+            .collect();
+
+        for _ in 0..max_iterations {
+            let mut next: BTreeMap<u64, f64> = addresses
+                .iter()
+                .copied()
+                .map(|address| (address, base))
+                .collect();
+
+            for source in &addresses {
+                let source_score = *scores.get(source).unwrap_or(&0.0);
+                let targets = outgoing.get(source).map(Vec::as_slice).unwrap_or(&[]);
+
+                if targets.is_empty() {
+                    let share = damping * source_score / n as f64;
+                    for target in &addresses {
+                        if let Some(value) = next.get_mut(target) {
+                            *value += share;
+                        }
+                    }
+                } else {
+                    let share = damping * source_score / targets.len() as f64;
+                    for target in targets {
+                        if let Some(value) = next.get_mut(target) {
+                            *value += share;
+                        }
+                    }
+                }
+            }
+
+            let delta: f64 = addresses
+                .iter()
+                .map(|address| {
+                    let old = scores.get(address).copied().unwrap_or(0.0);
+                    let new = next.get(address).copied().unwrap_or(0.0);
+                    (new - old).abs()
+                })
+                .sum();
+
+            scores = next;
+
+            if delta < tolerance {
+                break;
+            }
+        }
+
+        let total: f64 = scores.values().sum();
+        if total > 0.0 {
+            for value in scores.values_mut() {
+                *value /= total;
+            }
+        }
+
+        scores
     }
 
     /// Checks whether the function is contiguous in memory.

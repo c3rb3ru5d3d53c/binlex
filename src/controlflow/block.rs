@@ -400,6 +400,22 @@ impl<'block> Block<'block> {
 
     pub fn process(&self) -> BlockJson {
         let mut json = self.process_base();
+        if crate::processor::enabled_processors_for_target(
+            &self.cfg.config,
+            crate::processor::ProcessorTarget::Graph,
+        )
+        .iter()
+        .any(|processor| {
+            self.cfg
+                .processor_output(
+                    crate::processor::ProcessorTarget::Block,
+                    self.address,
+                    processor.name(),
+                )
+                .is_none()
+        }) {
+            let _ = self.cfg.process_graph();
+        }
         if let Some(outputs) = self
             .cfg
             .processor_outputs(crate::processor::ProcessorTarget::Block, self.address)

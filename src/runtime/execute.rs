@@ -48,7 +48,7 @@ where
     let data: Value = serde_json::from_str(&request.data)
         .map_err(|error| ProcessorError::Serialization(error.to_string()))?;
     let request = <P as JsonProcessor>::request(&context, data)?;
-    let response = P::execute(request)?;
+    let response = P::execute_owned(request)?;
     Ok(JsonProcessorResponse {
         data: serde_json::to_string(&<P as JsonProcessor>::response(response)?)
             .map_err(|error| ProcessorError::Serialization(error.to_string()))?,
