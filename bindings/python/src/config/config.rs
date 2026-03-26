@@ -21,6 +21,8 @@
 // SOFTWARE.
 
 use binlex::Config as InnerConfig;
+use binlex::config::ConfigProcessor as InnerConfigProcessor;
+use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use std::sync::{Arc, Mutex};
 
@@ -1595,6 +1597,48 @@ pub struct ConfigProcessorTarget {
     pub kind: &'static str,
 }
 
+impl ConfigProcessorTransport {
+    fn require_processor_mut<'a>(
+        &self,
+        inner: &'a mut InnerConfig,
+    ) -> PyResult<&'a mut InnerConfigProcessor> {
+        inner.processors.ensure_processor(&self.processor_name).ok_or_else(|| {
+            PyRuntimeError::new_err(format!(
+                "processor {} is not registered; check processors.path and processor discovery",
+                self.processor_name
+            ))
+        })
+    }
+}
+
+impl ConfigProcessorTarget {
+    fn require_processor_mut<'a>(
+        &self,
+        inner: &'a mut InnerConfig,
+    ) -> PyResult<&'a mut InnerConfigProcessor> {
+        inner.processors.ensure_processor(&self.processor_name).ok_or_else(|| {
+            PyRuntimeError::new_err(format!(
+                "processor {} is not registered; check processors.path and processor discovery",
+                self.processor_name
+            ))
+        })
+    }
+}
+
+impl ConfigProcessor {
+    fn require_processor_mut<'a>(
+        &self,
+        inner: &'a mut InnerConfig,
+    ) -> PyResult<&'a mut InnerConfigProcessor> {
+        inner.processors.ensure_processor(&self.name).ok_or_else(|| {
+            PyRuntimeError::new_err(format!(
+                "processor {} is not registered; check processors.path and processor discovery",
+                self.name
+            ))
+        })
+    }
+}
+
 #[pymethods]
 impl ConfigProcessorTransport {
     #[getter]
@@ -1613,15 +1657,15 @@ impl ConfigProcessorTransport {
 
     #[setter]
     /// Enable or disable this processor transport.
-    pub fn set_enabled(&mut self, value: bool) {
+    pub fn set_enabled(&mut self, value: bool) -> PyResult<()> {
         let mut inner = self.inner.lock().unwrap();
-        if let Some(processor) = inner.processors.ensure_processor(&self.processor_name) {
-            match self.kind {
-                "ipc" => processor.transport.ipc.enabled = value,
-                "http" => processor.transport.http.enabled = value,
-                _ => {}
-            }
+        let processor = self.require_processor_mut(&mut inner)?;
+        match self.kind {
+            "ipc" => processor.transport.ipc.enabled = value,
+            "http" => processor.transport.http.enabled = value,
+            _ => {}
         }
+        Ok(())
     }
 
     #[getter]
@@ -1642,25 +1686,29 @@ impl ConfigProcessorTransport {
 
     #[setter]
     /// Set or clear the configured URL for this transport when supported.
-    pub fn set_url(&mut self, value: Option<String>) {
+    pub fn set_url(&mut self, value: Option<String>) -> PyResult<()> {
         let mut inner = self.inner.lock().unwrap();
-        if let Some(processor) = inner.processors.ensure_processor(&self.processor_name) {
-            let options = match self.kind {
-                "ipc" => Some(&mut processor.transport.ipc.options),
-                "http" => Some(&mut processor.transport.http.options),
-                _ => None,
-            };
-            if let Some(options) = options {
-                match value {
-                    Some(value) => {
-                        options.insert("url".to_string(), value.into());
-                    }
-                    None => {
-                        options.remove("url");
-                    }
+        let processor = self.require_processor_mut(&mut inner)?;
+        match self.kind {
+            "ipc" => match value {
+                Some(value) => {
+                    processor.transport.ipc.options.insert("url".to_string(), value.into());
                 }
-            }
+                None => {
+                    processor.transport.ipc.options.remove("url");
+                }
+            },
+            "http" => match value {
+                Some(value) => {
+                    processor.transport.http.options.insert("url".to_string(), value.into());
+                }
+                None => {
+                    processor.transport.http.options.remove("url");
+                }
+            },
+            _ => {}
         }
+        Ok(())
     }
 
     #[getter]
@@ -1680,25 +1728,37 @@ impl ConfigProcessorTransport {
 
     #[setter]
     /// Set or clear certificate verification behavior for this transport when supported.
-    pub fn set_verify(&mut self, value: Option<bool>) {
+    pub fn set_verify(&mut self, value: Option<bool>) -> PyResult<()> {
         let mut inner = self.inner.lock().unwrap();
-        if let Some(processor) = inner.processors.ensure_processor(&self.processor_name) {
-            let options = match self.kind {
-                "ipc" => Some(&mut processor.transport.ipc.options),
-                "http" => Some(&mut processor.transport.http.options),
-                _ => None,
-            };
-            if let Some(options) = options {
-                match value {
-                    Some(value) => {
-                        options.insert("verify".to_string(), value.into());
-                    }
-                    None => {
-                        options.remove("verify");
-                    }
+        let processor = self.require_processor_mut(&mut inner)?;
+        match self.kind {
+            "ipc" => match value {
+                Some(value) => {
+                    processor
+                        .transport
+                        .ipc
+                        .options
+                        .insert("verify".to_string(), value.into());
                 }
-            }
+                None => {
+                    processor.transport.ipc.options.remove("verify");
+                }
+            },
+            "http" => match value {
+                Some(value) => {
+                    processor
+                        .transport
+                        .http
+                        .options
+                        .insert("verify".to_string(), value.into());
+                }
+                None => {
+                    processor.transport.http.options.remove("verify");
+                }
+            },
+            _ => {}
         }
+        Ok(())
     }
 }
 
@@ -1744,16 +1804,16 @@ impl ConfigProcessorTarget {
 
     #[setter]
     /// Enable or disable this processor target type.
-    pub fn set_enabled(&mut self, value: bool) {
+    pub fn set_enabled(&mut self, value: bool) -> PyResult<()> {
         let mut inner = self.inner.lock().unwrap();
-        if let Some(processor) = inner.processors.ensure_processor(&self.processor_name) {
-            match self.kind {
-                "instructions" => processor.instructions.enabled = value,
-                "blocks" => processor.blocks.enabled = value,
-                "functions" => processor.functions.enabled = value,
-                _ => {}
-            }
+        let processor = self.require_processor_mut(&mut inner)?;
+        match self.kind {
+            "instructions" => processor.instructions.enabled = value,
+            "blocks" => processor.blocks.enabled = value,
+            "functions" => processor.functions.enabled = value,
+            _ => {}
         }
+        Ok(())
     }
 }
 
@@ -1771,11 +1831,10 @@ impl ConfigProcessor {
 
     #[setter]
     /// Enable or disable this processor backend.
-    pub fn set_enabled(&mut self, value: bool) {
+    pub fn set_enabled(&mut self, value: bool) -> PyResult<()> {
         let mut inner = self.inner.lock().unwrap();
-        if let Some(processor) = inner.processors.ensure_processor(&self.name) {
-            processor.enabled = value;
-        }
+        self.require_processor_mut(&mut inner)?.enabled = value;
+        Ok(())
     }
 
     #[getter]
@@ -1791,20 +1850,20 @@ impl ConfigProcessor {
 
     #[setter]
     /// Set or clear the configured vector dimensionality for this processor when supported.
-    pub fn set_dimensions(&mut self, value: Option<usize>) {
+    pub fn set_dimensions(&mut self, value: Option<usize>) -> PyResult<()> {
         let mut inner = self.inner.lock().unwrap();
-        if let Some(processor) = inner.processors.ensure_processor(&self.name) {
-            match value {
-                Some(value) => {
-                    processor
-                        .options
-                        .insert("dimensions".to_string(), value.into());
-                }
-                None => {
-                    processor.options.remove("dimensions");
-                }
+        let processor = self.require_processor_mut(&mut inner)?;
+        match value {
+            Some(value) => {
+                processor
+                    .options
+                    .insert("dimensions".to_string(), value.into());
+            }
+            None => {
+                processor.options.remove("dimensions");
             }
         }
+        Ok(())
     }
 
     #[getter]
@@ -1820,18 +1879,18 @@ impl ConfigProcessor {
 
     #[setter]
     /// Set or clear the configured device string for this processor when supported.
-    pub fn set_device(&mut self, value: Option<String>) {
+    pub fn set_device(&mut self, value: Option<String>) -> PyResult<()> {
         let mut inner = self.inner.lock().unwrap();
-        if let Some(processor) = inner.processors.ensure_processor(&self.name) {
-            match value {
-                Some(value) => {
-                    processor.options.insert("device".to_string(), value.into());
-                }
-                None => {
-                    processor.options.remove("device");
-                }
+        let processor = self.require_processor_mut(&mut inner)?;
+        match value {
+            Some(value) => {
+                processor.options.insert("device".to_string(), value.into());
+            }
+            None => {
+                processor.options.remove("device");
             }
         }
+        Ok(())
     }
 
     #[getter]

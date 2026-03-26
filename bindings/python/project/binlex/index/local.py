@@ -86,7 +86,7 @@ class LocalIndex:
             return list(collections)
         return list(default or ())
 
-    def index_graph(self, *args, **kwargs):
+    def graph(self, *args, **kwargs):
         sha256 = kwargs.pop("sha256", None)
         graph = kwargs.pop("graph", None)
         attributes = kwargs.pop("attributes", None)
@@ -110,12 +110,12 @@ class LocalIndex:
             pass
         else:
             raise TypeError(
-                "index_graph expects either (corpus, sha256, graph) or (sha256, graph)"
+                "graph expects either (corpus, sha256, graph) or (sha256, graph)"
             )
 
         resolved_corpora, is_many = self._resolve_corpora(corpus=corpus, corpora=corpora)
         if is_many:
-            return self._inner.index_graph_many(
+            return self._inner.graph_many(
                 resolved_corpora,
                 sha256,
                 graph._inner,
@@ -123,7 +123,7 @@ class LocalIndex:
                 selector,
                 collections,
             )
-        return self._inner.index_graph(
+        return self._inner.graph(
             resolved_corpora[0],
             sha256,
             graph._inner,
@@ -132,14 +132,14 @@ class LocalIndex:
             collections,
         )
 
-    def index_instruction(self, *args, **kwargs):
-        return self._index_collection(Collection.Instruction, self._inner.index_instruction, *args, **kwargs)
+    def instruction(self, *args, **kwargs):
+        return self._index_collection(Collection.Instruction, self._inner.instruction, *args, **kwargs)
 
-    def index_block(self, *args, **kwargs):
-        return self._index_collection(Collection.Block, self._inner.index_block, *args, **kwargs)
+    def block(self, *args, **kwargs):
+        return self._index_collection(Collection.Block, self._inner.block, *args, **kwargs)
 
-    def index_function(self, *args, **kwargs):
-        return self._index_collection(Collection.Function, self._inner.index_function, *args, **kwargs)
+    def function(self, *args, **kwargs):
+        return self._index_collection(Collection.Function, self._inner.function, *args, **kwargs)
 
     def _index_collection(self, expected_collection, binding, *args, **kwargs):
         collection = kwargs.pop("collection", expected_collection)
@@ -154,7 +154,7 @@ class LocalIndex:
             raise TypeError(f"unexpected keyword arguments: {', '.join(kwargs)}")
 
         if collection != expected_collection:
-            raise ValueError("collection does not match the indexing method")
+            raise ValueError("collection does not match the selected method")
 
         if len(args) == 5:
             architecture, vector, sha256, address, attributes = args
@@ -170,7 +170,7 @@ class LocalIndex:
             pass
         else:
             raise TypeError(
-                "index method expects (architecture, vector, sha256, address[, attributes])"
+                "method expects (architecture, vector, sha256, address[, attributes])"
             )
 
         resolved_corpora, _ = self._resolve_corpora(corpus=corpus, corpora=corpora)

@@ -9,7 +9,7 @@ import idc
 
 from binlex.index import Collection, LocalIndex
 
-from .config import build_binlex_config, is_meaningful_name
+from .config import build_binlex_config, effective_index_root, is_meaningful_name, require_embeddings
 from .context import resolve_block_context, resolve_function_context, vector_for_context
 from .disassembly import disassemble_graph
 from .metadata import MetadataStore
@@ -79,13 +79,15 @@ def _row(
 
 def compare_block(plugin_config, request: CompareRequest) -> list[dict]:
     config = build_binlex_config(plugin_config)
+    require_embeddings(config, target="block")
     context = resolve_block_context(config)
     vector = vector_for_context(context)
     if not vector:
         raise RuntimeError("embeddings vector is not available for this block or selection")
 
-    store = LocalIndex(config, directory=plugin_config.index_root)
-    metadata = MetadataStore(plugin_config.index_root)
+    index_root = effective_index_root(plugin_config)
+    store = LocalIndex(config, directory=index_root)
+    metadata = MetadataStore(index_root)
     rows: list[dict] = []
     for hit in store.search(
         corpora=request.corpora,
@@ -118,13 +120,15 @@ def compare_block(plugin_config, request: CompareRequest) -> list[dict]:
 
 def compare_function(plugin_config, request: CompareRequest) -> list[dict]:
     config = build_binlex_config(plugin_config)
+    require_embeddings(config, target="function")
     context = resolve_function_context(config)
     vector = vector_for_context(context)
     if not vector:
         raise RuntimeError("embeddings vector is not available for this function")
 
-    store = LocalIndex(config, directory=plugin_config.index_root)
-    metadata = MetadataStore(plugin_config.index_root)
+    index_root = effective_index_root(plugin_config)
+    store = LocalIndex(config, directory=index_root)
+    metadata = MetadataStore(index_root)
     rows: list[dict] = []
     for hit in store.search(
         corpora=request.corpora,
@@ -157,9 +161,11 @@ def compare_function(plugin_config, request: CompareRequest) -> list[dict]:
 
 def compare_functions(plugin_config, request: CompareRequest) -> list[dict]:
     config = build_binlex_config(plugin_config)
+    require_embeddings(config, target="function")
     graph = disassemble_graph(list(idautils.Functions()), config)
-    store = LocalIndex(config, directory=plugin_config.index_root)
-    metadata = MetadataStore(plugin_config.index_root)
+    index_root = effective_index_root(plugin_config)
+    store = LocalIndex(config, directory=index_root)
+    metadata = MetadataStore(index_root)
     rows: list[dict] = []
 
     for function in graph.functions():

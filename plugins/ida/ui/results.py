@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import ida_kernwin
 
-from qt_compat import exec_dialog, import_qt
+try:
+    from qt_compat import exec_dialog, import_qt
+except ModuleNotFoundError:  # pragma: no cover - fallback for packaged package layouts
+    from ..qt_compat import exec_dialog, import_qt
 
 
 def _format_row(index: int, row: dict) -> str:

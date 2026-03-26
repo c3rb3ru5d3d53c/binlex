@@ -7,7 +7,7 @@ import ida_kernwin
 import ida_ua
 import idc
 
-from binlex.controlflow import Block, Function
+from binlex.controlflow import Block, Function, Instruction
 from binlex.genetics import Chromosome
 from binlex.hashing import MinHash32, TLSH
 
@@ -75,20 +75,65 @@ def selection_bytes(selection: SelectionRange) -> bytes:
     return ida_bytes.get_bytes(selection.start, size) or b""
 
 
-def _transient_block_for_selection(config, selection: SelectionRange):
+def disassemble_selection_graph(config, selection: SelectionRange) -> tuple[object, list[int]]:
     addresses = selected_instruction_addresses(selection)
     if not addresses:
         raise RuntimeError("no instructions are selected")
     graph = build_graph(config)
-    graph.set_block(addresses[0])
     disassembler = build_disassembler(config)
     for address in addresses:
         disassembler.disassemble_instruction(address, graph)
     for current, nxt in zip(addresses, addresses[1:]):
-        graph.extend_instruction_edges(current, [nxt])
-    block = Block(addresses[0], graph)
-    chromosome = block.chromosome()
-    return graph, block, chromosome.pattern()
+        graph.extend_instruction_edges(current, {nxt})
+    return graph, addresses
+
+
+def selection_pattern(config, selection: SelectionRange) -> str:
+    graph, addresses = disassemble_selection_graph(config, selection)
+    patterns: list[str] = []
+    for address in addresses:
+        chromosome = Instruction(address, graph).chromosome()
+        if chromosome is None:
+            continue
+        patterns.append(chromosome.pattern())
+    return "".join(patterns)
+
+
+def chromosome_from_pattern(pattern: str, config) -> Chromosome:
+    if len(pattern) % 2 != 0:
+        raise RuntimeError("pattern length must be even")
+    raw_bytes = bytearray()
+    wildcard_mask = bytearray()
+    for index in range(0, len(pattern), 2):
+        pair = pattern[index : index + 2]
+        value = 0
+        mask = 0
+        for shift, nibble in ((4, pair[0]), (0, pair[1])):
+            if nibble == "?":
+                mask |= 0xF << shift
+                continue
+            try:
+                nibble_value = int(nibble, 16)
+            except ValueError as error:
+                raise RuntimeError(f"invalid chromosome pattern nibble: {nibble}") from error
+            value |= nibble_value << shift
+        raw_bytes.append(value)
+        wildcard_mask.append(mask)
+    return Chromosome(bytes(raw_bytes), bytes(wildcard_mask), config)
+
+
+def selection_vectors(config, selection: SelectionRange) -> list[list[float]]:
+    graph, addresses = disassemble_selection_graph(config, selection)
+    vectors: list[list[float]] = []
+    for address in addresses:
+        processor = Instruction(address, graph).processor("embeddings")
+        if not isinstance(processor, dict):
+            continue
+        vector = processor.get("vector")
+        if not isinstance(vector, list) or not vector:
+            continue
+        vectors.append(vector)
+    return vectors
 
 
 def _function_pattern(function) -> str:
@@ -125,10 +170,6 @@ def resolve_function_context(config, widget=None) -> ResolvedContext:
 
 
 def resolve_block_context(config, widget=None) -> ResolvedContext:
-    selection = current_viewer_selection(widget)
-    if selection is not None:
-        return resolve_selection_context(config, widget)
-
     address = ida_kernwin.get_screen_ea()
     block_address = current_block_address(address)
     if block_address is None:
@@ -154,23 +195,29 @@ def resolve_selection_context(config, widget=None) -> ResolvedContext:
     selection = current_viewer_selection(widget)
     if selection is None:
         raise RuntimeError("no instruction selection is active")
-    graph, entity, pattern = _transient_block_for_selection(config, selection)
+    graph, addresses = disassemble_selection_graph(config, selection)
     function_address = current_function_address(selection.start)
     function_name = idc.get_func_name(function_address) if function_address is not None else ""
     return ResolvedContext(
         kind="selection",
-        address=entity.address(),
+        address=addresses[0],
         function_address=function_address,
         function_name=function_name or "",
         selection=selection,
         graph=graph,
-        entity=entity,
+        entity=None,
         bytes_data=selection_bytes(selection),
-        pattern=pattern,
+        pattern=selection_pattern(config, selection),
     )
 
 
 def vector_for_context(context: ResolvedContext) -> list[float] | None:
+    if context.entity is None:
+        return None
+    if context.kind == "block":
+        context.graph.process_blocks()
+    elif context.kind == "function":
+        context.graph.process_functions()
     processor = context.entity.processor("embeddings")
     if not isinstance(processor, dict):
         return None
@@ -205,10 +252,10 @@ def tlsh_for_context(context: ResolvedContext, config) -> str | None:
 
 def visual_hash_for_context(context: ResolvedContext, config, kind: str) -> str | None:
     image = None
-    if hasattr(context.entity, "png"):
-        image = context.entity.png()
+    if context.entity is not None and hasattr(context.entity, "imaging"):
+        image = context.entity.imaging().linear().grayscale().png()
     if image is None:
-        image = Chromosome(context.pattern, config).png()
+        image = chromosome_from_pattern(context.pattern, config).imaging().linear().grayscale().png()
     if kind == "ahash":
         value = image.ahash()
     elif kind == "dhash":
