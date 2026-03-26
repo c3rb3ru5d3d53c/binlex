@@ -10,7 +10,9 @@ use std::time::{Duration, Instant};
 
 use interprocess::local_socket::ListenerNonblockingMode;
 use interprocess::local_socket::Stream;
-use interprocess::local_socket::traits::{Listener as _, Stream as _};
+use interprocess::local_socket::traits::Listener as _;
+#[cfg(not(windows))]
+use interprocess::local_socket::traits::Stream as _;
 use once_cell::sync::Lazy;
 
 use crate::config::ConfigProcessors;
@@ -559,32 +561,41 @@ mod tests {
     use super::validate_hello;
     use crate::processor::ProcessorOs;
     use crate::runtime::transports::ipc::protocol::{Hello, HelloProcessor, VERSION};
+    use std::path::PathBuf;
     use std::process::Command;
     use std::sync::OnceLock;
+
+    fn embeddings_processor_path(manifest_dir: &std::path::Path) -> PathBuf {
+        let binary_name = if cfg!(windows) {
+            "binlex-processor-embeddings.exe"
+        } else {
+            "binlex-processor-embeddings"
+        };
+        manifest_dir.join("target").join("debug").join(binary_name)
+    }
 
     fn ensure_embeddings_processor_built() {
         static BUILT: OnceLock<()> = OnceLock::new();
 
         BUILT.get_or_init(|| {
             let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            let processor_path = manifest_dir
-                .join("target")
-                .join("debug")
-                .join("binlex-processor-embeddings");
+            let processor_path = embeddings_processor_path(&manifest_dir);
             if processor_path.exists() {
                 return;
             }
 
             let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-            let status = Command::new(cargo)
-                .current_dir(&manifest_dir)
-                .args([
-                    "build",
-                    "-p",
-                    "binlex-processor-embeddings",
-                    "--bin",
-                    "binlex-processor-embeddings",
-                ])
+            let mut command = Command::new(cargo);
+            command.current_dir(&manifest_dir);
+            command.env_remove("RUSTC_WRAPPER");
+            command.args([
+                "build",
+                "-p",
+                "binlex-processor-embeddings",
+                "--bin",
+                "binlex-processor-embeddings",
+            ]);
+            let status = command
                 .status()
                 .expect("cargo should build binlex-processor-embeddings");
             assert!(
