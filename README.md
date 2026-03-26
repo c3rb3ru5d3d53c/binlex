@@ -28,7 +28,8 @@ Binlex extracts instructions, basic blocks, and functions from binaries and emit
 - 🔐 Hashing and traits: MinHash, TLSH, SHA256, entropy, and wildcard patterns
 - 📈 Normalization and feature pipelines for ML-oriented similarity workflows
 - 🧰 Interfaces: CLI, Rust API, Python API/bindings, and IDA plugin
-- ⚙️ Processor execution modes: `inline`, `ipc`, and `http` via `binlex-server`
+- ⚙️ Processor framework in Rust with fast external execution over `ipc` and `http`
+- 🧠 Built-in processors include `vex` and `embeddings`; you can also build and share your own
 - 🎯 Tooling for YARA generation, symbol ingestion, and batch JSON workflows
 
 ## Supported Targets 🌐
@@ -37,7 +38,25 @@ Binlex extracts instructions, basic blocks, and functions from binaries and emit
 - Formats: PE, ELF, MachO
 - Architectures: AMD64, I386, CIL
 
-## Setup and Run 🚀
+## Built-In Processors 🧠
+
+- `binlex-processor-vex`: lifts instructions, blocks, or functions into VEX IR
+- `binlex-processor-embeddings`: generates vector embeddings for similarity and ML workflows
+
+Processors are implemented in Rust for fast execution. Binlex ships with these processors out of the box, and you can build and share your own processor backends as separate `binlex-processor-*` binaries.
+
+See [Custom Processors](docs/processors.md) for the processor model and registration flow.
+
+## Included Tools 🧰
+
+- `binlex`: main CLI for binary trait extraction
+- `binlex-server`: processor transport server for `http` workflows
+- `binlex-hash`: hashing utility
+- `binlex-image`: image-related utility
+- `binlex-symbols`: symbol ingestion and conversion helper
+- `binlex-yara`: generate YARA rules from Binlex-style patterns or streams
+
+## Quick Start 🚀
 
 ### Build 🛠️
 
@@ -49,6 +68,12 @@ cargo build --release --workspace
 
 ```bash
 binlex -i sample.dll --threads 16 | jq
+```
+
+### Explore The CLI
+
+```bash
+binlex --help
 ```
 
 ### Optional: Python Bindings 🐍
@@ -91,12 +116,12 @@ Default config file location:
 - macOS: `$HOME/Library/Application Support/binlex/binlex.toml`
 - Windows: `%APPDATA%\binlex\binlex.toml`
 
-## Docs and References 📚
+## Docs 📚
 
 - [Command-Line Guide](docs/command-line.md)
 - [Custom Processors](docs/processors.md)
 
-API reference docs are generated from source during build:
+API reference docs can be generated from source:
 
 ```bash
 cargo doc --open

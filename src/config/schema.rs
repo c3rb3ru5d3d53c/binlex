@@ -72,6 +72,8 @@ pub struct ConfigBlocks {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigChromosomes {
+    pub mask: ConfigHashEnabled,
+    pub masked: ConfigHashEnabled,
     pub sha256: ConfigHashEnabled,
     pub tlsh: ConfigTLSH,
     pub minhash: ConfigMinhash,
@@ -86,6 +88,8 @@ pub struct ConfigFunctions {
     pub tlsh: ConfigTLSH,
     pub minhash: ConfigMinhash,
     pub entropy: ConfigHeuristicEntropy,
+    #[serde(default)]
+    pub markov: ConfigMarkov,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -137,6 +141,7 @@ pub struct ConfigProcessor {
     pub instructions: ConfigProcessorTarget,
     pub blocks: ConfigProcessorTarget,
     pub functions: ConfigProcessorTarget,
+    pub graph: ConfigProcessorTarget,
     #[serde(flatten, default)]
     pub options: BTreeMap<String, ConfigProcessorValue>,
     pub transport: ConfigProcessorTransports,
@@ -186,6 +191,25 @@ pub struct ConfigHeuristicFeatures {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigHeuristicEntropy {
     pub enabled: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigMarkov {
+    pub enabled: bool,
+    pub damping: f64,
+    pub tolerance: f64,
+    pub max_iterations: usize,
+}
+
+impl Default for ConfigMarkov {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            damping: 0.85,
+            tolerance: 1e-9,
+            max_iterations: 100,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]

@@ -20,8 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use binlex::Config as InnerConfig;
 use binlex::config::ConfigProcessor as InnerConfigProcessor;
+use binlex::Config as InnerConfig;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use std::sync::{Arc, Mutex};
@@ -33,6 +33,20 @@ pub struct ConfigChromosomes {
 
 #[pymethods]
 impl ConfigChromosomes {
+    #[getter]
+    pub fn get_mask(&self) -> ConfigChromosomesMask {
+        ConfigChromosomesMask {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
+    pub fn get_masked(&self) -> ConfigChromosomesMasked {
+        ConfigChromosomesMasked {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
     #[getter]
     pub fn get_sha256(&self) -> ConfigChromosomesHashingSHA256 {
         ConfigChromosomesHashingSHA256 {
@@ -95,6 +109,46 @@ impl ConfigChromosomesHashing {
         ConfigChromosomesHashingMinhash {
             inner: Arc::clone(&self.inner),
         }
+    }
+}
+
+#[pyclass]
+pub struct ConfigChromosomesMask {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigChromosomesMask {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.chromosomes.mask.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.chromosomes.mask.enabled = value;
+    }
+}
+
+#[pyclass]
+pub struct ConfigChromosomesMasked {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigChromosomesMasked {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.chromosomes.masked.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.chromosomes.masked.enabled = value;
     }
 }
 
@@ -317,6 +371,13 @@ impl ConfigFunctions {
             inner: Arc::clone(&self.inner),
         }
     }
+
+    #[getter]
+    pub fn get_markov(&self) -> ConfigFunctionsMarkov {
+        ConfigFunctionsMarkov {
+            inner: Arc::clone(&self.inner),
+        }
+    }
 }
 
 #[pyclass]
@@ -365,6 +426,62 @@ impl ConfigFunctionsHeuristicsEntropy {
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
         inner.functions.entropy.enabled = value;
+    }
+}
+
+#[pyclass]
+pub struct ConfigFunctionsMarkov {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigFunctionsMarkov {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.functions.markov.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.functions.markov.enabled = value;
+    }
+
+    #[getter]
+    pub fn get_damping(&self) -> f64 {
+        let inner = self.inner.lock().unwrap();
+        inner.functions.markov.damping
+    }
+
+    #[setter]
+    pub fn set_damping(&mut self, value: f64) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.functions.markov.damping = value;
+    }
+
+    #[getter]
+    pub fn get_tolerance(&self) -> f64 {
+        let inner = self.inner.lock().unwrap();
+        inner.functions.markov.tolerance
+    }
+
+    #[setter]
+    pub fn set_tolerance(&mut self, value: f64) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.functions.markov.tolerance = value;
+    }
+
+    #[getter]
+    pub fn get_max_iterations(&self) -> usize {
+        let inner = self.inner.lock().unwrap();
+        inner.functions.markov.max_iterations
+    }
+
+    #[setter]
+    pub fn set_max_iterations(&mut self, value: usize) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.functions.markov.max_iterations = value;
     }
 }
 
@@ -1602,12 +1719,15 @@ impl ConfigProcessorTransport {
         &self,
         inner: &'a mut InnerConfig,
     ) -> PyResult<&'a mut InnerConfigProcessor> {
-        inner.processors.ensure_processor(&self.processor_name).ok_or_else(|| {
-            PyRuntimeError::new_err(format!(
-                "processor {} is not registered; check processors.path and processor discovery",
-                self.processor_name
-            ))
-        })
+        inner
+            .processors
+            .ensure_processor(&self.processor_name)
+            .ok_or_else(|| {
+                PyRuntimeError::new_err(format!(
+                    "processor {} is not registered; check processors.path and processor discovery",
+                    self.processor_name
+                ))
+            })
     }
 }
 
@@ -1616,12 +1736,15 @@ impl ConfigProcessorTarget {
         &self,
         inner: &'a mut InnerConfig,
     ) -> PyResult<&'a mut InnerConfigProcessor> {
-        inner.processors.ensure_processor(&self.processor_name).ok_or_else(|| {
-            PyRuntimeError::new_err(format!(
-                "processor {} is not registered; check processors.path and processor discovery",
-                self.processor_name
-            ))
-        })
+        inner
+            .processors
+            .ensure_processor(&self.processor_name)
+            .ok_or_else(|| {
+                PyRuntimeError::new_err(format!(
+                    "processor {} is not registered; check processors.path and processor discovery",
+                    self.processor_name
+                ))
+            })
     }
 }
 
@@ -1630,12 +1753,15 @@ impl ConfigProcessor {
         &self,
         inner: &'a mut InnerConfig,
     ) -> PyResult<&'a mut InnerConfigProcessor> {
-        inner.processors.ensure_processor(&self.name).ok_or_else(|| {
-            PyRuntimeError::new_err(format!(
-                "processor {} is not registered; check processors.path and processor discovery",
-                self.name
-            ))
-        })
+        inner
+            .processors
+            .ensure_processor(&self.name)
+            .ok_or_else(|| {
+                PyRuntimeError::new_err(format!(
+                    "processor {} is not registered; check processors.path and processor discovery",
+                    self.name
+                ))
+            })
     }
 }
 
@@ -1692,7 +1818,11 @@ impl ConfigProcessorTransport {
         match self.kind {
             "ipc" => match value {
                 Some(value) => {
-                    processor.transport.ipc.options.insert("url".to_string(), value.into());
+                    processor
+                        .transport
+                        .ipc
+                        .options
+                        .insert("url".to_string(), value.into());
                 }
                 None => {
                     processor.transport.ipc.options.remove("url");
@@ -1700,7 +1830,11 @@ impl ConfigProcessorTransport {
             },
             "http" => match value {
                 Some(value) => {
-                    processor.transport.http.options.insert("url".to_string(), value.into());
+                    processor
+                        .transport
+                        .http
+                        .options
+                        .insert("url".to_string(), value.into());
                 }
                 None => {
                     processor.transport.http.options.remove("url");

@@ -24,7 +24,7 @@ use super::{
     Config, ConfigBlocks, ConfigChromosomes, ConfigData, ConfigDisassembler,
     ConfigDisassemblerSweep, ConfigFile, ConfigFormats, ConfigFunctions, ConfigGeneral,
     ConfigHashEnabled, ConfigHeuristicEntropy, ConfigHeuristicFeatures, ConfigImaging, ConfigIndex,
-    ConfigIndexLocal, ConfigInstructions, ConfigMinhash, ConfigMmap, ConfigMmapCache,
+    ConfigIndexLocal, ConfigInstructions, ConfigMarkov, ConfigMinhash, ConfigMmap, ConfigMmapCache,
     ConfigProcessors, ConfigServer, ConfigTLSH,
 };
 use std::env;
@@ -85,7 +85,7 @@ impl Config {
                 enabled: true,
                 sha256: ConfigHashEnabled { enabled: true },
                 tlsh: ConfigTLSH {
-                    enabled: true,
+                    enabled: false,
                     minimum_byte_size: 50,
                 },
                 minhash: ConfigMinhash {
@@ -102,7 +102,7 @@ impl Config {
                 enabled: true,
                 sha256: ConfigHashEnabled { enabled: true },
                 tlsh: ConfigTLSH {
-                    enabled: true,
+                    enabled: false,
                     minimum_byte_size: 50,
                 },
                 minhash: ConfigMinhash {
@@ -114,11 +114,19 @@ impl Config {
                     seed: 0,
                 },
                 entropy: ConfigHeuristicEntropy { enabled: true },
+                markov: ConfigMarkov {
+                    enabled: true,
+                    damping: 0.85,
+                    tolerance: 1e-9,
+                    max_iterations: 100,
+                },
             },
             chromosomes: ConfigChromosomes {
+                mask: ConfigHashEnabled { enabled: false },
+                masked: ConfigHashEnabled { enabled: false },
                 sha256: ConfigHashEnabled { enabled: true },
                 tlsh: ConfigTLSH {
-                    enabled: true,
+                    enabled: false,
                     minimum_byte_size: 50,
                 },
                 minhash: ConfigMinhash {

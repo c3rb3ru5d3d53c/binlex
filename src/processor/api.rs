@@ -44,3 +44,19 @@ pub trait JsonProcessor: Processor {
         crate::runtime::transports::ipc::execute_external(Self::NAME, context.processors(), data)
     }
 }
+
+impl<T> JsonProcessor for T
+where
+    T: crate::processor::GraphProcessor,
+{
+    fn request<C: ProcessorContext>(
+        context: &C,
+        data: Value,
+    ) -> Result<Self::Request, ProcessorError> {
+        <T as crate::processor::GraphProcessor>::request_message(context, data)
+    }
+
+    fn response(response: Self::Response) -> Result<Value, ProcessorError> {
+        <T as crate::processor::GraphProcessor>::response_message(response)
+    }
+}

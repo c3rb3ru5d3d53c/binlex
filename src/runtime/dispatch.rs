@@ -49,13 +49,13 @@ pub trait Processor: Send + Sync + Default + 'static {
     type Request: Serialize + for<'de> Deserialize<'de>;
     type Response: Serialize + for<'de> Deserialize<'de>;
 
-    fn request(&self, request: Self::Request) -> Result<Self::Response, ProcessorError>;
+    fn execute(&self, request: Self::Request) -> Result<Self::Response, ProcessorError>;
 
-    fn execute(request: Self::Request) -> Result<Self::Response, ProcessorError>
+    fn execute_owned(request: Self::Request) -> Result<Self::Response, ProcessorError>
     where
         Self: Sized,
     {
-        Self::default().request(request)
+        Self::default().execute(request)
     }
 
     fn filename() -> String {
@@ -68,7 +68,7 @@ pub trait Processor: Send + Sync + Default + 'static {
 
     fn process(&self, payload: &[u8]) -> Result<Vec<u8>, ProcessorError> {
         let request: Self::Request = postcard::from_bytes(payload)?;
-        let response = self.request(request)?;
+        let response = self.execute(request)?;
         Ok(postcard::to_allocvec(&response)?)
     }
 }
@@ -131,18 +131,12 @@ fn resolve_worker_launches_for_runtime(
         launches.push(WorkerLaunch::Command(command));
     }
 
-    if let Some(path) = configured_directory {
+    let default_directory = crate::Config::default_processor_directory();
+
+    if let Some(path) = configured_directory.filter(|path| *path != default_directory) {
         if let Some(candidate) = find_in_directory(PathBuf::from(path), filename) {
             launches.push(WorkerLaunch::Binary(candidate));
-        }
-    }
-
-    if let Ok(path) = env::var("PATH") {
-        for path_entry in env::split_paths(&path) {
-            if let Some(candidate) = find_in_directory(path_entry, filename) {
-                launches.push(WorkerLaunch::Binary(candidate));
-                return Ok(launches);
-            }
+            return Ok(launches);
         }
     }
 
@@ -160,6 +154,22 @@ fn resolve_worker_launches_for_runtime(
             PathBuf::from(manifest_dir).join("target/debug"),
         ] {
             if let Some(candidate) = find_in_directory(directory, filename) {
+                launches.push(WorkerLaunch::Binary(candidate));
+                return Ok(launches);
+            }
+        }
+    }
+
+    if let Some(path) = configured_directory.filter(|path| *path == default_directory) {
+        if let Some(candidate) = find_in_directory(PathBuf::from(path), filename) {
+            launches.push(WorkerLaunch::Binary(candidate));
+            return Ok(launches);
+        }
+    }
+
+    if let Ok(path) = env::var("PATH") {
+        for path_entry in env::split_paths(&path) {
+            if let Some(candidate) = find_in_directory(path_entry, filename) {
                 launches.push(WorkerLaunch::Binary(candidate));
                 return Ok(launches);
             }
@@ -224,7 +234,7 @@ mod tests {
     }
 
     #[test]
-    fn missing_configured_directory_falls_back_to_path_search() {
+    fn missing_configured_directory_falls_back_to_available_search_locations() {
         let _path_lock = PATH_ENV_LOCK
             .lock()
             .expect("path environment lock should not be poisoned");
@@ -249,7 +259,24 @@ mod tests {
         )
         .expect("path fallback should still resolve launch candidates");
 
-        assert_eq!(launches, vec![WorkerLaunch::Binary(processor)]);
+        assert!(
+            !launches.is_empty(),
+            "fallback search should resolve at least one launch candidate"
+        );
+        match launches.first() {
+            Some(WorkerLaunch::Binary(path)) => {
+                assert!(
+                    path.exists(),
+                    "resolved fallback binary should exist: {}",
+                    path.display()
+                );
+                assert_eq!(
+                    path.file_name().and_then(|name| name.to_str()),
+                    Some("binlex-processor-embeddings")
+                );
+            }
+            other => panic!("expected binary launch candidate, got {other:?}"),
+        }
 
         match original_path {
             Some(path) => unsafe {

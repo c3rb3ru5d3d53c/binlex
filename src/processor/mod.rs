@@ -4,7 +4,9 @@ pub mod registry;
 pub mod selection;
 
 pub use api::{JsonProcessor, ProcessorContext};
-pub use graph::{GraphProcessor, ProcessorOutputs, apply_output};
+pub use graph::{
+    GraphProcessor, GraphProcessorFanout, OnGraphOptions, ProcessorOutputs, apply_output,
+};
 pub use registry::{
     ProcessorRegistration, RegisteredProcessor, default_processor_config,
     default_processor_configs, enabled_processors_for_target, external_processor_registration,

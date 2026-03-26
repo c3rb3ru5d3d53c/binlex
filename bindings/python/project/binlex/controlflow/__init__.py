@@ -317,6 +317,10 @@ class Function:
         """Return the MinHash object for this function, if available."""
         return self._inner.minhash()
 
+    def markov(self):
+        """Return normalized Markov importance scores for each block."""
+        return self._inner.markov()
+
     def size(self):
         """Return the size of this function in bytes."""
         return self._inner.size()
@@ -500,6 +504,10 @@ class FunctionJsonDeserializer:
     def tlsh(self):
         """Return the TLSH digest for the function, if available."""
         return self._inner.tlsh()
+
+    def markov(self):
+        """Return the Markov importance scores for the function, if available."""
+        return self._inner.markov()
 
     def chromosome(self):
         """Return the chromosome derived from the serialized function."""

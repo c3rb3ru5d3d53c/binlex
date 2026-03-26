@@ -6,6 +6,10 @@ use std::process::Command;
 use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+fn workspace_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
+}
+
 fn temp_path(name: &str) -> PathBuf {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -19,15 +23,15 @@ fn binlex_binary() -> PathBuf {
 
     BINLEX_PATH
         .get_or_init(|| {
-            let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            let binary_path = manifest_dir.join("target").join("debug").join("binlex");
+            let workspace_root = workspace_root();
+            let binary_path = workspace_root.join("target").join("debug").join("binlex");
             if binary_path.exists() {
                 return binary_path;
             }
 
             let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
             let status = Command::new(cargo)
-                .current_dir(&manifest_dir)
+                .current_dir(&workspace_root)
                 .args(["build", "-p", "binlex-cli", "--bin", "binlex"])
                 .status()
                 .expect("cargo should build the binlex binary");

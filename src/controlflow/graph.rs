@@ -641,6 +641,7 @@ impl Graph {
         self.process_instructions()?;
         self.process_blocks()?;
         self.process_functions()?;
+        self.process_graph()?;
         Ok(())
     }
 
@@ -654,6 +655,10 @@ impl Graph {
 
     pub fn process_functions(&self) -> Result<(), Error> {
         self.process_target(ProcessorTarget::Function)
+    }
+
+    pub fn process_graph(&self) -> Result<(), Error> {
+        self.process_target(ProcessorTarget::Graph)
     }
 
     pub fn processor_outputs(
@@ -697,7 +702,9 @@ impl Graph {
         if enabled.is_empty() {
             let mut processor_state = self.processor_state.lock().unwrap();
             if self.revision.load(Ordering::SeqCst) == revision {
-                processor_state.outputs.insert(target, HashMap::new());
+                if target != ProcessorTarget::Graph {
+                    processor_state.outputs.entry(target).or_default();
+                }
                 processor_state.revisions.insert(target, revision);
             }
             return Ok(());
@@ -757,6 +764,58 @@ impl Graph {
                     }
                 }
             }
+            ProcessorTarget::Graph => {
+                let mut instruction_outputs = HashMap::new();
+                let mut block_outputs = HashMap::new();
+                let mut function_outputs = HashMap::new();
+                for processor in &remote_processors {
+                    let Some(fanout) = processor.process_graph(self) else {
+                        continue;
+                    };
+
+                    for (address, output) in fanout.instructions {
+                        instruction_outputs
+                            .entry(address)
+                            .or_insert_with(Vec::new)
+                            .push((processor.name().to_string(), output));
+                    }
+
+                    for (address, output) in fanout.blocks {
+                        block_outputs
+                            .entry(address)
+                            .or_insert_with(Vec::new)
+                            .push((processor.name().to_string(), output));
+                    }
+
+                    for (address, output) in fanout.functions {
+                        function_outputs
+                            .entry(address)
+                            .or_insert_with(Vec::new)
+                            .push((processor.name().to_string(), output));
+                    }
+                }
+
+                let mut processor_state = self.processor_state.lock().unwrap();
+                if self.revision.load(Ordering::SeqCst) == revision {
+                    Self::merge_target_outputs(
+                        &mut processor_state.outputs,
+                        ProcessorTarget::Instruction,
+                        instruction_outputs,
+                    );
+                    Self::merge_target_outputs(
+                        &mut processor_state.outputs,
+                        ProcessorTarget::Block,
+                        block_outputs,
+                    );
+                    Self::merge_target_outputs(
+                        &mut processor_state.outputs,
+                        ProcessorTarget::Function,
+                        function_outputs,
+                    );
+                    processor_state.revisions.insert(target, revision);
+                }
+                return Ok(());
+            }
         }
 
         let mut processor_state = self.processor_state.lock().unwrap();
@@ -791,6 +850,27 @@ impl Graph {
         }
         for address in snapshot.invalid {
             queue.insert_invalid(address);
+        }
+    }
+
+    fn merge_target_outputs(
+        state_outputs: &mut HashMap<ProcessorTarget, HashMap<u64, ProcessorOutputs>>,
+        target: ProcessorTarget,
+        new_outputs: HashMap<u64, ProcessorOutputs>,
+    ) {
+        let existing = state_outputs.entry(target).or_default();
+        for (address, outputs) in new_outputs {
+            let entity_outputs = existing.entry(address).or_default();
+            for (processor_name, output) in outputs {
+                if let Some(existing_output) = entity_outputs
+                    .iter_mut()
+                    .find(|(name, _)| *name == processor_name)
+                {
+                    existing_output.1 = output;
+                } else {
+                    entity_outputs.push((processor_name, output));
+                }
+            }
         }
     }
 }

@@ -471,10 +471,7 @@ fn configure_stream_timeouts(
 }
 
 #[cfg(not(windows))]
-fn configure_stream_timeouts(
-    stream: &mut Stream,
-    timeout: Duration,
-) -> Result<(), ProcessorError> {
+fn configure_stream_timeouts(stream: &mut Stream, timeout: Duration) -> Result<(), ProcessorError> {
     stream
         .set_recv_timeout(Some(timeout))
         .map_err(ProcessorError::Io)?;

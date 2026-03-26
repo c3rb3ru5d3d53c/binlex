@@ -1326,6 +1326,14 @@ fn processor_output_vector(
     processor_name: &str,
     output_selector: &str,
 ) -> Option<Vec<f32>> {
+    if graph
+        .processor_output(target, address, processor_name)
+        .is_none()
+        && !crate::processor::enabled_processors_for_target(&graph.config, ProcessorTarget::Graph)
+            .is_empty()
+    {
+        let _ = graph.process_graph();
+    }
     let output = graph.processor_output(target, address, processor_name)?;
     selector_vector(&output, output_selector)
 }
@@ -1472,24 +1480,22 @@ mod tests {
                     .join("target")
                     .join("debug")
                     .join("binlex-processor-embeddings");
-                if !processor_path.exists() {
-                    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-                    let status = Command::new(cargo)
-                        .current_dir(&manifest_dir)
-                        .args([
-                            "build",
-                            "-p",
-                            "binlex-processor-embeddings",
-                            "--bin",
-                            "binlex-processor-embeddings",
-                        ])
-                        .status()
-                        .expect("cargo should build binlex-processor-embeddings");
-                    assert!(
-                        status.success(),
-                        "binlex-processor-embeddings binary should build"
-                    );
-                }
+                let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+                let status = Command::new(cargo)
+                    .current_dir(&manifest_dir)
+                    .args([
+                        "build",
+                        "-p",
+                        "binlex-processor-embeddings",
+                        "--bin",
+                        "binlex-processor-embeddings",
+                    ])
+                    .status()
+                    .expect("cargo should build binlex-processor-embeddings");
+                assert!(
+                    status.success(),
+                    "binlex-processor-embeddings binary should build"
+                );
 
                 processor_path
                     .parent()
@@ -1510,9 +1516,10 @@ mod tests {
             .ensure_processor("embeddings")
             .expect("embeddings processor config should exist");
         embeddings.enabled = true;
-        embeddings.instructions.enabled = true;
-        embeddings.blocks.enabled = true;
-        embeddings.functions.enabled = true;
+        embeddings.instructions.enabled = false;
+        embeddings.blocks.enabled = false;
+        embeddings.functions.enabled = false;
+        embeddings.graph.enabled = true;
         embeddings.transport.ipc.enabled = true;
         embeddings.transport.http.enabled = false;
         let mut graph = Graph::new(Architecture::AMD64, config.clone());
