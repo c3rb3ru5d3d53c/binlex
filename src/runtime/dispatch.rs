@@ -204,18 +204,28 @@ fn find_in_directory(directory: PathBuf, filename: &str) -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
     use std::sync::{LazyLock, Mutex};
 
     use super::{HostRuntime, WorkerLaunch, resolve_worker_launches_for_runtime};
 
     static PATH_ENV_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
+    fn processor_stub_path(directory: &std::path::Path) -> PathBuf {
+        let filename = if cfg!(windows) {
+            "binlex-processor-embeddings.exe"
+        } else {
+            "binlex-processor-embeddings"
+        };
+        directory.join(filename)
+    }
+
     #[test]
     fn configured_directory_is_used_when_present() {
         let tempdir =
             std::env::temp_dir().join(format!("binlex-dispatch-test-{}", std::process::id()));
         std::fs::create_dir_all(&tempdir).expect("tempdir should exist");
-        let processor = tempdir.join("binlex-processor-embeddings");
+        let processor = processor_stub_path(&tempdir);
         std::fs::write(&processor, b"stub").expect("processor stub should be written");
 
         let launches = resolve_worker_launches_for_runtime(
@@ -243,7 +253,7 @@ mod tests {
             std::process::id()
         ));
         std::fs::create_dir_all(&tempdir).expect("tempdir should exist");
-        let processor = tempdir.join("binlex-processor-embeddings");
+        let processor = processor_stub_path(&tempdir);
         std::fs::write(&processor, b"stub").expect("processor stub should be written");
 
         let original_path = std::env::var_os("PATH");
@@ -272,7 +282,7 @@ mod tests {
                 );
                 assert_eq!(
                     path.file_name().and_then(|name| name.to_str()),
-                    Some("binlex-processor-embeddings")
+                    processor.file_name().and_then(|name| name.to_str())
                 );
             }
             other => panic!("expected binary launch candidate, got {other:?}"),

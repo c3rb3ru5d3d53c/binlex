@@ -1467,8 +1467,18 @@ mod tests {
     use crate::controlflow::{Graph, Instruction};
     use crate::formats::SymbolJson;
     use crate::{Architecture, Config};
+    use std::path::PathBuf;
     use std::process::Command;
     use std::sync::OnceLock;
+
+    fn embeddings_processor_path(manifest_dir: &std::path::Path) -> PathBuf {
+        let binary_name = if cfg!(windows) {
+            "binlex-processor-embeddings.exe"
+        } else {
+            "binlex-processor-embeddings"
+        };
+        manifest_dir.join("target").join("debug").join(binary_name)
+    }
 
     fn embeddings_processor_dir() -> String {
         static PROCESSOR_DIR: OnceLock<String> = OnceLock::new();
@@ -1476,26 +1486,27 @@ mod tests {
         PROCESSOR_DIR
             .get_or_init(|| {
                 let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-                let processor_path = manifest_dir
-                    .join("target")
-                    .join("debug")
-                    .join("binlex-processor-embeddings");
-                let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-                let status = Command::new(cargo)
-                    .current_dir(&manifest_dir)
-                    .args([
+                let processor_path = embeddings_processor_path(&manifest_dir);
+                if !processor_path.exists() {
+                    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+                    let mut command = Command::new(cargo);
+                    command.current_dir(&manifest_dir);
+                    command.env_remove("RUSTC_WRAPPER");
+                    command.args([
                         "build",
                         "-p",
                         "binlex-processor-embeddings",
                         "--bin",
                         "binlex-processor-embeddings",
-                    ])
-                    .status()
-                    .expect("cargo should build binlex-processor-embeddings");
-                assert!(
-                    status.success(),
-                    "binlex-processor-embeddings binary should build"
-                );
+                    ]);
+                    let status = command
+                        .status()
+                        .expect("cargo should build binlex-processor-embeddings");
+                    assert!(
+                        status.success(),
+                        "binlex-processor-embeddings binary should build"
+                    );
+                }
 
                 processor_path
                     .parent()
