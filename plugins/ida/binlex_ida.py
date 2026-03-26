@@ -14,6 +14,7 @@ RUNTIME_FILES = (
     "main.py",
     "ida-plugin.json",
     "requirements.txt",
+    "qt_compat.py",
 )
 RUNTIME_DIRS = (
     "core",

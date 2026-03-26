@@ -141,6 +141,7 @@ fn processor_binary_candidates(configured_directory: Option<&str>) -> Vec<PathBu
     if let Some(directory) = configured_directory {
         directories.push(PathBuf::from(directory));
     }
+    directories.push(PathBuf::from(Config::default_processor_directory()));
     if let Ok(path) = env::var("PATH") {
         directories.extend(env::split_paths(&path));
     }

@@ -7,16 +7,16 @@ import idaapi
 import idc
 
 from .compare import apply_match_rows, compare_block, compare_function, compare_functions
-from .config import load_plugin_config, open_plugin_config_in_editor
+from .config import effective_index_root, ensure_binlex_config_file, load_plugin_config, open_plugin_config_in_editor
 from .copying import copy_hex, copy_minhash, copy_pattern, copy_tlsh, copy_vector, copy_visual_hash
 from .indexing import index_block, index_function, index_functions
 from ui.config_editor import open_config_editor
 from ui.dialogs import prompt_compare, prompt_index, show_error, show_info
+from ui.launcher import open_launcher
 from ui.results import show_results
 
 
 ACTION_PREFIX = "binlex:mvp:"
-MAIN_MENU_ROOT = "Edit/Plugins/Binlex/"
 
 
 class CallbackActionHandler(idaapi.action_handler_t):
@@ -43,26 +43,6 @@ class PopupHooks(ida_kernwin.UI_Hooks):
             self.controller.attach_disasm_popup(widget, popup)
         elif widget_type == ida_kernwin.BWN_PSEUDOCODE:
             self.controller.attach_pseudocode_popup(widget, popup)
-
-
-class BinlexLauncherChooser(ida_kernwin.Choose):
-    def __init__(self, controller: "PluginController") -> None:
-        self.controller = controller
-        self.items = [
-            ("Config", self.controller.action_config),
-            ("Index / Functions", self.controller.action_index_functions),
-            ("Compare / Functions", self.controller.action_compare_functions),
-        ]
-        super().__init__(
-            "Binlex",
-            [["Action", 40 | ida_kernwin.Choose.CHCOL_PLAIN]],
-        )
-
-    def OnGetSize(self):
-        return len(self.items)
-
-    def OnGetLine(self, n):
-        return [self.items[n][0]]
 
 
 class PluginController:
@@ -135,20 +115,19 @@ class PluginController:
         self.register_action("copy.pattern.function", "Pattern", lambda: copy_pattern(self.config, "function"))
 
     def register_main_menu_actions(self) -> None:
-        self.attach_menu_action(f"{MAIN_MENU_ROOT}Index/", "index.functions")
-        self.attach_menu_action(f"{MAIN_MENU_ROOT}Compare/", "compare.functions")
-        self.attach_menu_action(MAIN_MENU_ROOT, "config")
+        return None
 
     def reload_config(self) -> None:
         self.config = load_plugin_config(strict=True)
 
     def show_launcher(self) -> None:
-        chooser = BinlexLauncherChooser(self)
-        selection = chooser.Show(modal=True)
-        if selection is None or selection < 0 or selection >= len(chooser.items):
-            return
-        _, callback = chooser.items[selection]
-        self.run_safe(callback)
+        commands = [
+            ("Binlex -> Config", lambda: self.run_safe(self.action_binlex_config)),
+            ("Binlex -> Plugin -> Config", lambda: self.run_safe(self.action_config)),
+            ("Binlex -> Index -> Functions", lambda: self.run_safe(self.action_index_functions)),
+            ("Binlex -> Compare -> Functions", lambda: self.run_safe(self.action_compare_functions)),
+        ]
+        open_launcher(commands)
 
     def attach_disasm_popup(self, widget, popup) -> None:
         selection = ida_kernwin.read_range_selection(widget)
@@ -234,7 +213,7 @@ class PluginController:
 
         config = build_binlex_config(self.config)
         try:
-            store = LocalIndex(config, directory=self.config.index_root)
+            store = LocalIndex(config, directory=effective_index_root(self.config))
             return store.corpora()
         except Exception:
             return []
@@ -245,6 +224,10 @@ class PluginController:
             path,
             on_save=self._reload_config_after_save,
         )
+
+    def action_binlex_config(self) -> None:
+        path = ensure_binlex_config_file()
+        open_config_editor(path, on_save=lambda: None)
 
     def _reload_config_after_save(self) -> None:
         self.reload_config()

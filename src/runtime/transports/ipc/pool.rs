@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use std::io::ErrorKind;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -317,7 +319,8 @@ impl ProcessorPool {
         listener
             .set_nonblocking(ListenerNonblockingMode::Accept)
             .map_err(ProcessorError::Io)?;
-        let mut child = command_for_launch(launch)
+        let mut command = command_for_launch(launch);
+        command
             .arg("--socket")
             .arg(&socket_name)
             .arg("--processor")
@@ -326,7 +329,9 @@ impl ProcessorPool {
             .arg(if compression { "true" } else { "false" })
             .stdin(Stdio::null())
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
+            .stderr(Stdio::null());
+        configure_worker_command(&mut command);
+        let mut child = command
             .spawn()
             .map_err(|error| ProcessorError::Spawn(error.to_string()))?;
         let mut stream = accept_with_timeout(&listener, &mut child, timeout)?;
@@ -389,6 +394,15 @@ fn command_for_launch(launch: &WorkerLaunch) -> Command {
         }
     }
 }
+
+#[cfg(windows)]
+fn configure_worker_command(command: &mut Command) {
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn configure_worker_command(_command: &mut Command) {}
 
 fn is_retryable(error: &ProcessorError) -> bool {
     matches!(

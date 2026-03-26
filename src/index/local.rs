@@ -259,7 +259,7 @@ impl LocalIndex {
             })
     }
 
-    pub fn index_graph(
+    pub fn graph(
         &self,
         corpus: &str,
         sha256: &str,
@@ -268,7 +268,7 @@ impl LocalIndex {
         selector: Option<&str>,
         collections: Option<&[Collection]>,
     ) -> Result<(), Error> {
-        self.index_graph_many(
+        self.graph_many(
             &[corpus.to_string()],
             sha256,
             graph,
@@ -278,7 +278,7 @@ impl LocalIndex {
         )
     }
 
-    pub fn index_graph_many(
+    pub fn graph_many(
         &self,
         corpora: &[String],
         sha256: &str,
@@ -338,7 +338,7 @@ impl LocalIndex {
         )
     }
 
-    pub fn index_instruction(
+    pub fn instruction(
         &self,
         corpora: &[String],
         architecture: crate::Architecture,
@@ -358,7 +358,7 @@ impl LocalIndex {
         )
     }
 
-    pub fn index_block(
+    pub fn block(
         &self,
         corpora: &[String],
         architecture: crate::Architecture,
@@ -378,7 +378,7 @@ impl LocalIndex {
         )
     }
 
-    pub fn index_function(
+    pub fn function(
         &self,
         corpora: &[String],
         architecture: crate::Architecture,
@@ -1567,7 +1567,7 @@ mod tests {
         let graph = build_single_return_graph();
 
         client
-            .index_graph("corpus", "deadbeef", &graph, &[], None, None)
+            .graph("corpus", "deadbeef", &graph, &[], None, None)
             .expect("stage graph");
         client
             .vector(
@@ -1606,7 +1606,7 @@ mod tests {
     }
 
     #[test]
-    fn selector_index_graph_round_trip() {
+    fn selector_graph_round_trip() {
         let root = std::env::temp_dir().join(format!(
             "binlex-local-store-selector-test-{}",
             std::process::id()
@@ -1623,7 +1623,7 @@ mod tests {
             .expect("create local index client");
 
         client
-            .index_graph(
+            .graph(
                 "corpus",
                 "feedface",
                 &graph,
@@ -1807,7 +1807,7 @@ mod tests {
 
         for _ in 0..3 {
             client
-                .index_graph(
+                .graph(
                     "default",
                     "repeat-sha",
                     &graph,
@@ -1847,7 +1847,7 @@ mod tests {
             .expect("create local index client");
 
         client
-            .index_function(
+            .function(
                 &["alpha".to_string()],
                 Architecture::AMD64,
                 &test_vector(0),
@@ -1859,7 +1859,7 @@ mod tests {
         client.commit().expect("commit first symbol");
 
         client
-            .index_function(
+            .function(
                 &["alpha".to_string()],
                 Architecture::AMD64,
                 &test_vector(1),
@@ -1911,7 +1911,7 @@ mod tests {
             .expect("create local index client");
 
         client
-            .index_function(
+            .function(
                 &["person_a".to_string()],
                 Architecture::AMD64,
                 &test_vector(0),
@@ -1923,7 +1923,7 @@ mod tests {
         client.commit().expect("commit corpus a symbol");
 
         client
-            .index_function(
+            .function(
                 &["person_b".to_string()],
                 Architecture::AMD64,
                 &test_vector(0),
@@ -2059,7 +2059,7 @@ mod tests {
             .expect("create local index client");
 
         let error = client
-            .index_graph(
+            .graph(
                 "demo",
                 "feedface",
                 &graph,

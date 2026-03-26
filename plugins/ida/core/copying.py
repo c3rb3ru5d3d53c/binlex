@@ -7,15 +7,27 @@ import subprocess
 
 import ida_kernwin
 
+from binlex.genetics import Chromosome
+from binlex.hashing import MinHash32, TLSH
+
 from .context import (
+    chromosome_from_pattern,
+    current_viewer_selection,
     minhash_for_context,
     resolve_block_context,
     resolve_function_context,
     resolve_selection_context,
+    selection_bytes,
+    selection_pattern,
+    selection_vectors,
     tlsh_for_context,
     vector_for_context,
     visual_hash_for_context,
 )
+try:
+    from qt_compat import import_qt
+except ModuleNotFoundError:  # pragma: no cover - fallback for packaged package layouts
+    from ..qt_compat import import_qt
 
 
 def _write_windows_clipboard(text: str) -> bool:
@@ -65,6 +77,13 @@ def _write_command_clipboard(text: str, command: list[str]) -> bool:
 
 
 def _copy_to_clipboard(text: str) -> bool:
+    try:
+        _, _, QtGui, _ = import_qt()
+        QtGui.QGuiApplication.clipboard().setText(text)
+        return True
+    except Exception:
+        pass
+
     system = platform.system()
     if system == "Windows":
         return _write_windows_clipboard(text)
@@ -99,10 +118,38 @@ def _resolve_copy_context(config, target: str):
     return resolve_block_context(config)
 
 
+def _average_vectors(vectors: list[list[float]]) -> list[float]:
+    if not vectors:
+        return []
+    dimensions = len(vectors[0])
+    totals = [0.0] * dimensions
+    count = 0
+    for vector in vectors:
+        if len(vector) != dimensions:
+            continue
+        for index, value in enumerate(vector):
+            totals[index] += float(value)
+        count += 1
+    if count == 0:
+        return []
+    return [value / count for value in totals]
+
+
 def copy_vector(plugin_config, target: str) -> None:
-    from .config import build_binlex_config
+    from .config import build_binlex_config, require_embeddings
 
     config = build_binlex_config(plugin_config)
+    if target == "selection":
+        require_embeddings(config, target="instructions")
+        selection = current_viewer_selection()
+        if selection is None:
+            raise RuntimeError("no instruction selection is active")
+        vector = _average_vectors(selection_vectors(config, selection))
+        if not vector:
+            raise RuntimeError("embeddings vector is not available for this instruction selection")
+        _copy_text("vector", json.dumps(vector))
+        return
+    require_embeddings(config, target=target)
     context = _resolve_copy_context(config, target)
     vector = vector_for_context(context)
     if not vector:
@@ -114,6 +161,21 @@ def copy_minhash(plugin_config, target: str) -> None:
     from .config import build_binlex_config
 
     config = build_binlex_config(plugin_config)
+    if target == "selection":
+        selection = current_viewer_selection()
+        if selection is None:
+            raise RuntimeError("no instruction selection is active")
+        pattern = selection_pattern(config, selection)
+        if not pattern:
+            raise RuntimeError("minhash is not available for this instruction selection")
+        value = MinHash32(
+            pattern.encode("utf-8"),
+            config.chromosomes.minhash.number_of_hashes,
+            config.chromosomes.minhash.shingle_size,
+            config.chromosomes.minhash.seed,
+        ).hexdigest()
+        _copy_text("minhash", value)
+        return
     context = _resolve_copy_context(config, target)
     value = minhash_for_context(context, config)
     if not value:
@@ -125,6 +187,18 @@ def copy_tlsh(plugin_config, target: str) -> None:
     from .config import build_binlex_config
 
     config = build_binlex_config(plugin_config)
+    if target == "selection":
+        selection = current_viewer_selection()
+        if selection is None:
+            raise RuntimeError("no instruction selection is active")
+        pattern = selection_pattern(config, selection)
+        if not pattern:
+            raise RuntimeError("TLSH is not available for this instruction selection")
+        value = TLSH(pattern.encode("utf-8")).hexdigest(config.chromosomes.tlsh.minimum_byte_size)
+        if not value:
+            raise RuntimeError("TLSH is not available for this instruction selection")
+        _copy_text("tlsh", value)
+        return
     context = _resolve_copy_context(config, target)
     value = tlsh_for_context(context, config)
     if not value:
@@ -136,6 +210,24 @@ def copy_visual_hash(plugin_config, target: str, kind: str) -> None:
     from .config import build_binlex_config
 
     config = build_binlex_config(plugin_config)
+    if target == "selection":
+        selection = current_viewer_selection()
+        if selection is None:
+            raise RuntimeError("no instruction selection is active")
+        pattern = selection_pattern(config, selection)
+        if not pattern:
+            raise RuntimeError(f"{kind} is not available for this instruction selection")
+        image = chromosome_from_pattern(pattern, config).imaging().linear().grayscale().png()
+        if kind == "ahash":
+            value = image.ahash()
+        elif kind == "dhash":
+            value = image.dhash()
+        else:
+            value = image.phash()
+        if value is None:
+            raise RuntimeError(f"{kind} is not available for this instruction selection")
+        _copy_text(kind, value.hexdigest())
+        return
     context = _resolve_copy_context(config, target)
     value = visual_hash_for_context(context, config, kind)
     if not value:
@@ -144,6 +236,15 @@ def copy_visual_hash(plugin_config, target: str, kind: str) -> None:
 
 
 def copy_hex(plugin_config, target: str) -> None:
+    if target == "selection":
+        selection = current_viewer_selection()
+        if selection is None:
+            raise RuntimeError("no instruction selection is active")
+        data = selection_bytes(selection)
+        if not data:
+            raise RuntimeError("hex bytes are not available for this instruction selection")
+        _copy_text("hex", data.hex())
+        return
     from .config import build_binlex_config
 
     config = build_binlex_config(plugin_config)
@@ -157,6 +258,15 @@ def copy_pattern(plugin_config, target: str) -> None:
     from .config import build_binlex_config
 
     config = build_binlex_config(plugin_config)
+    if target == "selection":
+        selection = current_viewer_selection()
+        if selection is None:
+            raise RuntimeError("no instruction selection is active")
+        pattern = selection_pattern(config, selection)
+        if not pattern:
+            raise RuntimeError("pattern is not available for this instruction selection")
+        _copy_text("pattern", pattern)
+        return
     context = _resolve_copy_context(config, target)
     if not context.pattern:
         raise RuntimeError("pattern is not available for this context")

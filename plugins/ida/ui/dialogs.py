@@ -154,9 +154,6 @@ def _prompt_index_form(title: str, plugin_config: PluginConfig, *, allow_index_b
 
 
 def prompt_config(plugin_config: PluginConfig) -> PluginConfig | None:
-    index_root = _ask_text(plugin_config.index_root, "Binlex config: index root")
-    if index_root is None:
-        return None
     default_corpora = _ask_text(plugin_config.default_corpus, "Binlex config: default corpora (comma-separated)")
     if default_corpora is None:
         return None
@@ -193,7 +190,7 @@ def prompt_config(plugin_config: PluginConfig) -> PluginConfig | None:
         return None
 
     return PluginConfig(
-        index_root=index_root.strip(),
+        index_root=plugin_config.index_root,
         default_corpus=", ".join(_parse_corpora(default_corpora)) or "default",
         default_threads=default_threads,
         default_embedding_dimensions=default_dimensions,

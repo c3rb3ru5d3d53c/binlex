@@ -12,7 +12,7 @@ import idaapi
 import idautils
 import idc
 
-from binlex.architecture import Architecture
+from binlex import Architecture
 from binlex.controlflow import Graph
 from binlex.disassemblers.capstone import Disassembler
 from binlex.formats import Image

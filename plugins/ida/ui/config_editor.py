@@ -4,7 +4,10 @@ from pathlib import Path
 
 import ida_kernwin
 
-from qt_compat import exec_dialog, import_qt
+try:
+    from qt_compat import exec_dialog, import_qt
+except ModuleNotFoundError:  # pragma: no cover - fallback for packaged package layouts
+    from ..qt_compat import exec_dialog, import_qt
 
 
 def open_config_editor(path: Path, *, on_save) -> None:

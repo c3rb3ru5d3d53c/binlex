@@ -98,62 +98,53 @@ impl LocalIndex {
         Ok(PyBytes::new(py, &data))
     }
 
-    #[pyo3(signature = (corpus, sha256, graph, attributes=None, selector=None, collections=None), text_signature = "($self, corpus, sha256, graph, attributes=None, selector=None, collections=None)")]
-    pub fn index_graph(
+    #[pyo3(signature = (sha256, graph, attributes=None, selector=None, collections=None, corpus=None, corpora=None), text_signature = "($self, sha256, graph, attributes=None, selector=None, collections=None, corpus=None, corpora=None)")]
+    pub fn graph(
         &self,
         py: Python,
-        corpus: String,
         sha256: String,
         graph: Py<Graph>,
         attributes: Option<Vec<Py<PyAttribute>>>,
         selector: Option<String>,
         collections: Option<Vec<Py<Collection>>>,
+        corpus: Option<String>,
+        corpora: Option<Vec<String>>,
     ) -> PyResult<()> {
+        if corpus.is_some() == corpora.is_some() {
+            return Err(PyRuntimeError::new_err(
+                "provide exactly one of corpus or corpora",
+            ));
+        }
         let graph_ref = graph.borrow(py);
         let inner_graph = graph_ref.inner.lock().unwrap();
         let attributes = py_to_attributes(py, attributes);
         let collections = py_to_collections(py, collections);
-        self.inner
-            .lock()
-            .unwrap()
-            .index_graph(
-                &corpus,
-                &sha256,
-                &inner_graph,
-                &attributes,
-                selector.as_deref(),
-                collections.as_deref(),
-            )
-            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
-    }
-
-    #[pyo3(signature = (corpora, sha256, graph, attributes=None, selector=None, collections=None), text_signature = "($self, corpora, sha256, graph, attributes=None, selector=None, collections=None)")]
-    pub fn index_graph_many(
-        &self,
-        py: Python,
-        corpora: Vec<String>,
-        sha256: String,
-        graph: Py<Graph>,
-        attributes: Option<Vec<Py<PyAttribute>>>,
-        selector: Option<String>,
-        collections: Option<Vec<Py<Collection>>>,
-    ) -> PyResult<()> {
-        let graph_ref = graph.borrow(py);
-        let inner_graph = graph_ref.inner.lock().unwrap();
-        let attributes = py_to_attributes(py, attributes);
-        let collections = py_to_collections(py, collections);
-        self.inner
-            .lock()
-            .unwrap()
-            .index_graph_many(
-                &corpora,
-                &sha256,
-                &inner_graph,
-                &attributes,
-                selector.as_deref(),
-                collections.as_deref(),
-            )
-            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+        let index = self.inner.lock().unwrap();
+        match (corpus, corpora) {
+            (Some(corpus), None) => index
+                .graph(
+                    &corpus,
+                    &sha256,
+                    &inner_graph,
+                    &attributes,
+                    selector.as_deref(),
+                    collections.as_deref(),
+                )
+                .map_err(|error| PyRuntimeError::new_err(error.to_string())),
+            (None, Some(corpora)) => index
+                .graph_many(
+                    &corpora,
+                    &sha256,
+                    &inner_graph,
+                    &attributes,
+                    selector.as_deref(),
+                    collections.as_deref(),
+                )
+                .map_err(|error| PyRuntimeError::new_err(error.to_string())),
+            _ => Err(PyRuntimeError::new_err(
+                "provide exactly one of corpus or corpora",
+            )),
+        }
     }
 
     #[pyo3(signature = (corpus, collection, architecture, vector, sha256, address), text_signature = "($self, corpus, collection, architecture, vector, sha256, address)")]
@@ -204,7 +195,7 @@ impl LocalIndex {
     }
 
     #[pyo3(signature = (corpora, architecture, vector, sha256, address, attributes=None), text_signature = "($self, corpora, architecture, vector, sha256, address, attributes=None)")]
-    pub fn index_instruction(
+    pub fn instruction(
         &self,
         py: Python,
         corpora: Vec<String>,
@@ -219,7 +210,7 @@ impl LocalIndex {
         self.inner
             .lock()
             .unwrap()
-            .index_instruction(
+            .instruction(
                 &corpora,
                 architecture,
                 &vector,
@@ -231,7 +222,7 @@ impl LocalIndex {
     }
 
     #[pyo3(signature = (corpora, architecture, vector, sha256, address, attributes=None), text_signature = "($self, corpora, architecture, vector, sha256, address, attributes=None)")]
-    pub fn index_block(
+    pub fn block(
         &self,
         py: Python,
         corpora: Vec<String>,
@@ -246,7 +237,7 @@ impl LocalIndex {
         self.inner
             .lock()
             .unwrap()
-            .index_block(
+            .block(
                 &corpora,
                 architecture,
                 &vector,
@@ -258,7 +249,7 @@ impl LocalIndex {
     }
 
     #[pyo3(signature = (corpora, architecture, vector, sha256, address, attributes=None), text_signature = "($self, corpora, architecture, vector, sha256, address, attributes=None)")]
-    pub fn index_function(
+    pub fn function(
         &self,
         py: Python,
         corpora: Vec<String>,
@@ -273,7 +264,7 @@ impl LocalIndex {
         self.inner
             .lock()
             .unwrap()
-            .index_function(
+            .function(
                 &corpora,
                 architecture,
                 &vector,

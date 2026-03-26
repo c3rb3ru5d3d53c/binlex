@@ -10,7 +10,7 @@ import idc
 
 from binlex.index import Collection, LocalIndex
 
-from .config import build_binlex_config, is_meaningful_name
+from .config import build_binlex_config, effective_index_root, is_meaningful_name, require_embeddings
 from .context import resolve_block_context, resolve_function_context
 from .disassembly import disassemble_graph
 from .metadata import MetadataStore
@@ -86,15 +86,17 @@ def _function_names() -> dict[int, list[str]]:
 
 def index_block(plugin_config, request: IndexRequest) -> str:
     config = build_binlex_config(plugin_config, threads=request.threads, dimensions=request.dimensions)
+    require_embeddings(config, target="block")
     context = resolve_block_context(config)
-    store = LocalIndex(config, directory=plugin_config.index_root)
+    index_root = effective_index_root(plugin_config)
+    store = LocalIndex(config, directory=index_root)
     sha256 = store.put(_input_file_bytes())
     _store_graph_for_corpora(store, request.corpora, sha256, context.graph, [Collection.Block])
     store.commit()
 
     if request.include_names and context.function_address is not None and is_meaningful_name(context.function_name):
         _record_names_for_corpora(
-            MetadataStore(plugin_config.index_root),
+            MetadataStore(index_root),
             request.corpora,
             "block",
             sha256,
@@ -106,8 +108,12 @@ def index_block(plugin_config, request: IndexRequest) -> str:
 
 def index_function(plugin_config, request: IndexRequest) -> str:
     config = build_binlex_config(plugin_config, threads=request.threads, dimensions=request.dimensions)
+    require_embeddings(config, target="function")
+    if request.index_blocks:
+        require_embeddings(config, target="block")
     context = resolve_function_context(config)
-    store = LocalIndex(config, directory=plugin_config.index_root)
+    index_root = effective_index_root(plugin_config)
+    store = LocalIndex(config, directory=index_root)
     sha256 = store.put(_input_file_bytes())
     collections = [Collection.Function]
     if request.index_blocks:
@@ -116,7 +122,7 @@ def index_function(plugin_config, request: IndexRequest) -> str:
     store.commit()
 
     if request.include_names and is_meaningful_name(context.function_name):
-        metadata = MetadataStore(plugin_config.index_root)
+        metadata = MetadataStore(index_root)
         _record_names_for_corpora(
             metadata,
             request.corpora,
@@ -141,8 +147,12 @@ def index_function(plugin_config, request: IndexRequest) -> str:
 
 def index_functions(plugin_config, request: IndexRequest) -> str:
     config = build_binlex_config(plugin_config, threads=request.threads, dimensions=request.dimensions)
+    require_embeddings(config, target="function")
+    if request.index_blocks:
+        require_embeddings(config, target="block")
     graph = disassemble_graph(list(idautils.Functions()), config)
-    store = LocalIndex(config, directory=plugin_config.index_root)
+    index_root = effective_index_root(plugin_config)
+    store = LocalIndex(config, directory=index_root)
     sha256 = store.put(_input_file_bytes())
     collections = [Collection.Function]
     if request.index_blocks:
@@ -151,7 +161,7 @@ def index_functions(plugin_config, request: IndexRequest) -> str:
     store.commit()
 
     if request.include_names:
-        metadata = MetadataStore(plugin_config.index_root)
+        metadata = MetadataStore(index_root)
         function_items = _function_names()
         _record_names_for_corpora(
             metadata,
