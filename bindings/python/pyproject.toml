@@ -1,15 +1,12 @@
 [project]
 name = "binlex"
-version = "2.0.0"
+dynamic = ["version"]
 authors = [{ name = "c3rb3ru5d3d53c", email = "c3rb3ru5d3d53c@gmail.com" }]
 description = "A Binary Genetic Traits Lexer Framework"
 keywords = ["malware", "genomics", "binary similarity", "cybersecurity", "research"]
 classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
@@ -17,7 +14,7 @@ classifiers = [
     "Topic :: Security",
     "License :: OSI Approved :: MIT License"
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 
 [project.optional-dependencies]
 docs = [

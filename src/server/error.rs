@@ -14,13 +14,21 @@ impl ServerError {
     pub fn json(error: serde_json::Error) -> Self {
         Self::Processor(format!("json error: {}", error))
     }
+
+    pub fn status_code(&self) -> StatusCode {
+        match self {
+            Self::Processor(_) => StatusCode::BAD_GATEWAY,
+            Self::NotImplemented(_) => StatusCode::NOT_IMPLEMENTED,
+        }
+    }
 }
 
 impl IntoResponse for ServerError {
     fn into_response(self) -> Response {
-        let (status, message) = match self {
-            Self::Processor(message) => (StatusCode::BAD_GATEWAY, message),
-            Self::NotImplemented(message) => (StatusCode::NOT_IMPLEMENTED, message.to_string()),
+        let status = self.status_code();
+        let message = match self {
+            Self::Processor(message) => message,
+            Self::NotImplemented(message) => message.to_string(),
         };
         (status, Json(ErrorResponse { error: message })).into_response()
     }

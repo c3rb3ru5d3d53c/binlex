@@ -8,12 +8,13 @@ A processor takes Binlex data, runs some analysis, and returns JSON that gets at
 
 This means, you can build your own processor for your own analysis workflow and share your processor binary with others.
 
-You can run a processor at four levels:
+You can run a processor at five levels:
 
 - `instruction`
 - `block`
 - `function`
 - `graph`
+- `complete`
 
 Most processors follow this shape:
 
@@ -132,6 +133,10 @@ pub fn registration() -> binlex::processor::ProcessorRegistration {
                 enabled: false,
                 options: BTreeMap::new(),
             },
+            complete: ConfigProcessorTarget {
+                enabled: false,
+                options: BTreeMap::new(),
+            },
             options: BTreeMap::new(),
             transport: ConfigProcessorTransports {
                 ipc: ConfigProcessorTransport {
@@ -199,12 +204,13 @@ If your response type is already serializable into the JSON you want, leave it a
 
 ## Lifecycle
 
-Binlex can call these hooks during graph construction:
+Binlex can call these hooks during processing:
 
 - `on_instruction(...)` for each instruction
 - `on_block(...)` for each block
 - `on_function(...)` for each function
 - `on_graph(...)` after the graph is complete
+- `on_complete(...)` after all processor stages have completed
 
 The `on_*` hooks are optional. Return `None` to skip output.
 
@@ -262,6 +268,20 @@ Use `on_graph(...)` when:
 - the analysis needs relationships across the graph
 - you want one pass that fans results back to many entities
 - you want to perform multi-threading
+
+## When To Use `on_complete`
+
+Use `on_complete(...)` when the processor needs the fully processed graph and wants to persist,
+export, or publish the results.
+
+Typical examples:
+
+- storing finalized processor outputs
+- indexing enriched functions or blocks
+- writing graph artifacts to external systems
+
+`on_complete(...)` is a terminal stage. It should consume the finalized graph state and perform
+side effects rather than attaching new outputs back onto entities.
 
 ## Registration
 

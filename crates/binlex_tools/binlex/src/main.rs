@@ -489,6 +489,14 @@ fn process_output(
     {
         let _ = cfg.process_graph();
     }
+    if !binlex::processor::enabled_processors_for_target(
+        &cfg.config,
+        binlex::processor::ProcessorTarget::Complete,
+    )
+    .is_empty()
+    {
+        let _ = cfg.process_complete();
+    }
 
     if cfg.config.instructions.enabled {
         let _ = cfg.process_instructions();

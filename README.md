@@ -103,6 +103,12 @@ docker compose build binlex-mcp
 docker compose up -d binlex-mcp
 ```
 
+Build just the reusable Python base image:
+
+```bash
+docker build -f docker/binlex.Dockerfile --target binlex-python -t binlex-python:latest .
+```
+
 ### Python Bindings 🐍
 
 ```bash

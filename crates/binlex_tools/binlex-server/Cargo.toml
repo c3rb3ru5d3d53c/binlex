@@ -1,6 +1,6 @@
 [package]
 name = "binlex-server"
-version = "2.0.0"
+version.workspace = true
 edition = "2024"
 
 [[bin]]
@@ -12,3 +12,5 @@ binlex = { path = "../../.." }
 axum = "0.8.4"
 clap = { version = "4.5.27", features = ["derive"] }
 tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread", "signal"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["fmt"] }

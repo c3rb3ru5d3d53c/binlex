@@ -4,6 +4,7 @@ use std::sync::Arc;
 use crate::Config;
 use crate::config::ConfigProcessors;
 use crate::runtime::ProcessorPool;
+use tracing::{debug, info};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -67,8 +68,12 @@ impl AppState {
 
     pub fn debug_log<T: std::fmt::Display>(&self, line: T) {
         if self.debug_enabled() {
-            eprintln!("[binlex-server] {}", line);
+            debug!("{}", line);
         }
+    }
+
+    pub fn log<T: std::fmt::Display>(&self, line: T) {
+        info!("{}", line);
     }
 
     pub fn processor_pool(&self, name: &str) -> Option<Arc<ProcessorPool>> {

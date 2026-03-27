@@ -1,6 +1,4 @@
-use rmcp::model::{
-    GetPromptResult, Prompt, PromptArgument, PromptMessage, PromptMessageRole,
-};
+use rmcp::model::{GetPromptResult, Prompt, PromptArgument, PromptMessage, PromptMessageRole};
 
 #[derive(Clone)]
 pub struct SkillPrompt {
@@ -47,8 +45,10 @@ impl SkillPrompt {
             content.push_str(goal);
         }
 
-        let mut result =
-            GetPromptResult::new(vec![PromptMessage::new_text(PromptMessageRole::User, content)]);
+        let mut result = GetPromptResult::new(vec![PromptMessage::new_text(
+            PromptMessageRole::User,
+            content,
+        )]);
         if let Some(description) = self.prompt.description.clone() {
             result = result.with_description(description);
         }

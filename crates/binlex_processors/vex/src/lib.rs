@@ -206,6 +206,10 @@ pub fn registration() -> binlex::processor::ProcessorRegistration {
                 enabled: false,
                 options: BTreeMap::new(),
             },
+            complete: ConfigProcessorTarget {
+                enabled: false,
+                options: BTreeMap::new(),
+            },
             options: BTreeMap::new(),
             transport: ConfigProcessorTransports {
                 ipc: ConfigProcessorTransport {

@@ -1,6 +1,6 @@
 [package]
 name = "libvex"
-version = "0.1.1"
+version.workspace = true
 authors = ["Noam Kleinburd <noam93k@gmail.com>"]
 edition = "2018"
 description = "High-level bindings for valgrind's LibVEX."
@@ -11,7 +11,7 @@ license = "MIT"
 libc = "0.2"
 lazy_static = "1.4"
 parking_lot = "0.11"
-vex-sys = { path = "../libvex-sys", version = "0.3.1" }
+vex-sys = { path = "../libvex-sys" }
 libvex-macros = { path = "../libvex-macros" }
 
 [features]

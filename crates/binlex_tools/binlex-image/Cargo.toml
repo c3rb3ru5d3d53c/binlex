@@ -1,6 +1,6 @@
 [package]
 name = "binlex-image"
-version = "2.0.0"
+version.workspace = true
 edition = "2024"
 
 [[bin]]

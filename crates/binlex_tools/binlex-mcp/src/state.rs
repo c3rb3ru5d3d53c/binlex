@@ -22,6 +22,8 @@ const MCP_FILE_NAME: &str = "binlex-mcp.toml";
 pub struct McpConfig {
     pub listen: String,
     pub port: u16,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_url: Option<String>,
     #[serde(default)]
     pub samples: McpSamplesConfig,
     #[serde(default)]
@@ -48,7 +50,8 @@ impl Default for McpConfig {
     fn default() -> Self {
         Self {
             listen: "127.0.0.1".to_string(),
-            port: 5001,
+            port: 3000,
+            base_url: None,
             samples: McpSamplesConfig::default(),
             skills: Vec::new(),
         }
@@ -65,11 +68,7 @@ pub struct McpState {
 }
 
 impl McpState {
-    pub fn new(
-        config: Config,
-        mcp: McpConfig,
-        python_command: String,
-    ) -> Result<Self, DynError> {
+    pub fn new(config: Config, mcp: McpConfig, python_command: String) -> Result<Self, DynError> {
         let processor_state = AppState::new(config.clone())?;
         let samples_dir = resolve_samples_dir(mcp.samples.directory.as_deref().map(Path::new))?;
         let sample_store = Arc::new(SampleStore::new(
@@ -124,6 +123,19 @@ impl McpState {
             },
         )
         .map_err(|error| format!("{:?}", error).into())
+    }
+
+    pub fn bind_url(&self) -> String {
+        format!("http://{}:{}", self.mcp.listen, self.mcp.port)
+    }
+
+    pub fn effective_base_url(&self) -> String {
+        self.mcp
+            .base_url
+            .clone()
+            .unwrap_or_else(|| self.bind_url())
+            .trim_end_matches('/')
+            .to_string()
     }
 }
 
@@ -230,7 +242,10 @@ fn expand_sources(sources: &[String]) -> Result<Vec<String>, DynError> {
                     if !path.is_file() {
                         return None;
                     }
-                    if path.extension().is_some_and(|extension| extension == "toml") {
+                    if path
+                        .extension()
+                        .is_some_and(|extension| extension == "toml")
+                    {
                         return Some(path);
                     }
                     None
@@ -253,7 +268,11 @@ fn expand_sources(sources: &[String]) -> Result<Vec<String>, DynError> {
 
 fn merge_skill_sets(config: &mut McpConfig, incoming: Vec<McpSkill>) -> Result<(), DynError> {
     for skill in incoming {
-        if let Some(existing) = config.skills.iter().find(|existing| existing.name == skill.name) {
+        if let Some(existing) = config
+            .skills
+            .iter()
+            .find(|existing| existing.name == skill.name)
+        {
             if !skills_equal(existing, &skill) {
                 return Err(format!("skill conflict for '{}'", skill.name).into());
             }
@@ -310,6 +329,24 @@ pub fn resolve_python_command() -> String {
     "python3".to_string()
 }
 
+pub fn resolve_base_url(configured: Option<&str>) -> Result<Option<String>, DynError> {
+    let Some(url) = configured.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+    let parsed = reqwest::Url::parse(url)?;
+    match parsed.scheme() {
+        "http" | "https" => {}
+        scheme => {
+            return Err(format!(
+                "invalid MCP base URL scheme '{}': expected http or https",
+                scheme
+            )
+            .into());
+        }
+    }
+    Ok(Some(parsed.to_string().trim_end_matches('/').to_string()))
+}
+
 pub fn resolve_samples_dir(configured: Option<&Path>) -> Result<PathBuf, DynError> {
     let path = configured
         .map(Path::to_path_buf)
@@ -341,6 +378,7 @@ fn default_samples_dir() -> PathBuf {
 pub fn log_startup(
     listen: &str,
     port: u16,
+    base_url: Option<&str>,
     python_command: &str,
     samples_dir: &Path,
     max_upload_size_bytes: usize,
@@ -349,6 +387,7 @@ pub fn log_startup(
     info!(
         listen = listen,
         port = port,
+        base_url = base_url.unwrap_or(""),
         python = python_command,
         samples = %samples_dir.display(),
         max_upload_size_bytes = max_upload_size_bytes,

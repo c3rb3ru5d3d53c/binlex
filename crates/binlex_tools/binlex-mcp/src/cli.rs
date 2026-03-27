@@ -42,6 +42,8 @@ pub struct ServeArgs {
     #[arg(long)]
     pub port: Option<u16>,
     #[arg(long)]
+    pub base_url: Option<String>,
+    #[arg(long)]
     pub samples: Option<PathBuf>,
 }
 
