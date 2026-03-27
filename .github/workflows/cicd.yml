@@ -40,6 +40,7 @@ env:
   SCCACHE_GHA_ENABLED: "true"
   SCCACHE_CACHE_SIZE: "4G"
   WINDOWS_CARGO_EXCLUDES: "--exclude binlex-python --exclude binlex-processor-vex --exclude libvex --exclude libvex-macros --exclude vex-sys"
+  DOCKER_PLATFORMS: linux/amd64,linux/arm64
 
 jobs:
   native-build:
@@ -619,8 +620,81 @@ jobs:
           PY
 
   docker-build:
-    name: docker-build (${{ matrix.target }})
+    name: docker-build (${{ matrix.target }} / ${{ matrix.platform }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [binlex-mcp, binlex-python, binlex-server]
+        platform: [linux/amd64, linux/arm64]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Resolve Binlex Version
+        shell: bash
+        run: |
+          version="$(./scripts/binlex-version.sh)"
+          test -n "${version}"
+          echo "BINLEX_VERSION=${version}" >> "$GITHUB_ENV"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Validate Release Tag Version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          test "${TAG_VERSION}" = "${BINLEX_VERSION}"
+
+      - name: Resolve Docker Build Variables
+        shell: bash
+        run: |
+          platform_slug="${{ matrix.platform }}"
+          platform_slug="${platform_slug//\//-}"
+          echo "BINLEX_DOCKER_IMAGE=${{ matrix.target }}:${BINLEX_VERSION}-${platform_slug}" >> "$GITHUB_ENV"
+
+      - name: Build ${{ matrix.target }} Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/binlex.Dockerfile
+          target: ${{ matrix.target }}
+          platforms: ${{ matrix.platform }}
+          load: true
+          push: false
+          tags: ${{ env.BINLEX_DOCKER_IMAGE }}
+          build-args: |
+            BINLEX_IMAGE_VERSION=${{ env.BINLEX_VERSION }}
+            BINLEX_IMAGE_REVISION=${{ github.sha }}
+          cache-from: type=gha,scope=docker-${{ matrix.target }}-${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=docker-${{ matrix.target }}-${{ matrix.platform }}
+
+      - name: Smoke Test binlex-mcp Image
+        if: matrix.target == 'binlex-mcp'
+        shell: bash
+        run: docker run --rm "${BINLEX_DOCKER_IMAGE}" binlex-mcp --help
+
+      - name: Smoke Test binlex-python Image
+        if: matrix.target == 'binlex-python'
+        shell: bash
+        run: docker run --rm "${BINLEX_DOCKER_IMAGE}" python -c "import binlex"
+
+      - name: Smoke Test binlex-server Image
+        if: matrix.target == 'binlex-server'
+        shell: bash
+        run: docker run --rm "${BINLEX_DOCKER_IMAGE}" binlex-server --help
+
+  docker-publish:
+    name: docker-publish (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
     strategy:
       fail-fast: false
       matrix:
@@ -640,6 +714,9 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Validate Release Tag Version
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
@@ -647,72 +724,27 @@ jobs:
           TAG_VERSION="${GITHUB_REF_NAME#v}"
           test "${TAG_VERSION}" = "${BINLEX_VERSION}"
 
-      - name: Resolve Docker Image Tag
-        if: matrix.target == 'binlex-python'
+      - name: Resolve Docker Tags
         shell: bash
+        env:
+          DOCKER_NAMESPACE: ${{ secrets.DOCKER_USERNAME }}
         run: |
-          image_tag="${BINLEX_VERSION}"
+          set -euo pipefail
+          tags=()
           if [ "${GITHUB_REF}" = "refs/heads/master" ]; then
-            image_tag="latest"
+            tags+=("${DOCKER_NAMESPACE}/${{ matrix.target }}:latest")
           fi
-          echo "BINLEX_DOCKER_TAG=${image_tag}" >> "$GITHUB_ENV"
-
-      - name: Build binlex-mcp Image
-        if: matrix.target == 'binlex-mcp'
-        shell: bash
-        run: docker compose build binlex-mcp
-
-      - name: Smoke Test binlex-mcp Image
-        if: matrix.target == 'binlex-mcp'
-        shell: bash
-        run: docker compose run --rm --no-deps binlex-mcp binlex-mcp --help
-
-      - name: Build binlex-python Image
-        if: matrix.target == 'binlex-python'
-        shell: bash
-        run: docker build -f docker/binlex.Dockerfile --target binlex-python --build-arg BINLEX_IMAGE_VERSION="${BINLEX_VERSION}" -t "binlex-python:${BINLEX_DOCKER_TAG}" .
-
-      - name: Smoke Test binlex-python Image
-        if: matrix.target == 'binlex-python'
-        shell: bash
-        run: docker run --rm "binlex-python:${BINLEX_DOCKER_TAG}" python -c "import binlex"
-
-      - name: Build binlex-server Image
-        if: matrix.target == 'binlex-server'
-        shell: bash
-        run: docker compose build binlex-server
-
-      - name: Smoke Test binlex-server Image
-        if: matrix.target == 'binlex-server'
-        shell: bash
-        run: docker compose run --rm --no-deps binlex-server binlex-server --help
-
-  docker-publish:
-    name: docker-publish
-    runs-on: ubuntu-latest
-    needs: docker-build
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v6
-
-      - name: Resolve Binlex Version
-        shell: bash
-        run: |
-          version="$(./scripts/binlex-version.sh)"
-          test -n "${version}"
-          echo "BINLEX_VERSION=${version}" >> "$GITHUB_ENV"
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Validate Release Tag Version
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: bash
-        run: |
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
-          test "${TAG_VERSION}" = "${BINLEX_VERSION}"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            tags+=("${DOCKER_NAMESPACE}/${{ matrix.target }}:${BINLEX_VERSION}")
+          fi
+          if [ "${#tags[@]}" -eq 0 ]; then
+            exit 1
+          fi
+          {
+            echo 'DOCKER_TAGS<<EOF'
+            printf '%s\n' "${tags[@]}"
+            echo 'EOF'
+          } >> "$GITHUB_ENV"
 
       - name: Log In to Docker Hub
         uses: docker/login-action@v3
@@ -720,44 +752,20 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
-      - name: Publish Docker Images
-        shell: bash
-        env:
-          DOCKER_NAMESPACE: ${{ secrets.DOCKER_USERNAME }}
-        run: |
-          set -euo pipefail
-
-          tag_and_push() {
-            local local_ref="$1"
-            local remote_ref="$2"
-            docker image inspect "${local_ref}" >/dev/null
-            docker tag "${local_ref}" "${remote_ref}"
-            docker push "${remote_ref}"
-          }
-
-          docker compose build binlex-mcp
-          if [ "${GITHUB_REF}" = "refs/heads/master" ]; then
-            tag_and_push "binlex-mcp:${BINLEX_VERSION}" "${DOCKER_NAMESPACE}/binlex-mcp:latest"
-          fi
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            tag_and_push "binlex-mcp:${BINLEX_VERSION}" "${DOCKER_NAMESPACE}/binlex-mcp:${BINLEX_VERSION}"
-          fi
-
-          docker build -f docker/binlex.Dockerfile --target binlex-python --build-arg BINLEX_IMAGE_VERSION="${BINLEX_VERSION}" -t "binlex-python:${BINLEX_VERSION}" .
-          if [ "${GITHUB_REF}" = "refs/heads/master" ]; then
-            tag_and_push "binlex-python:${BINLEX_VERSION}" "${DOCKER_NAMESPACE}/binlex-python:latest"
-          fi
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            tag_and_push "binlex-python:${BINLEX_VERSION}" "${DOCKER_NAMESPACE}/binlex-python:${BINLEX_VERSION}"
-          fi
-
-          docker compose build binlex-server
-          if [ "${GITHUB_REF}" = "refs/heads/master" ]; then
-            tag_and_push "binlex-server:${BINLEX_VERSION}" "${DOCKER_NAMESPACE}/binlex-server:latest"
-          fi
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            tag_and_push "binlex-server:${BINLEX_VERSION}" "${DOCKER_NAMESPACE}/binlex-server:${BINLEX_VERSION}"
-          fi
+      - name: Publish ${{ matrix.target }} Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/binlex.Dockerfile
+          target: ${{ matrix.target }}
+          platforms: ${{ env.DOCKER_PLATFORMS }}
+          push: true
+          tags: ${{ env.DOCKER_TAGS }}
+          build-args: |
+            BINLEX_IMAGE_VERSION=${{ env.BINLEX_VERSION }}
+            BINLEX_IMAGE_REVISION=${{ github.sha }}
+          cache-from: type=gha,scope=docker-${{ matrix.target }}-publish
+          cache-to: type=gha,mode=max,scope=docker-${{ matrix.target }}-publish
 
   docs-build:
     name: docs-build (${{ matrix.docs }})

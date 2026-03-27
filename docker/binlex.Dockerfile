@@ -1,3 +1,5 @@
+#
+# syntax=docker/dockerfile:1.7
 ARG PYTHON_BUILD_IMAGE=python:3.12.13-bookworm
 ARG PYTHON_RUNTIME_IMAGE=python:3.12.13-slim-bookworm
 ARG RUST_IMAGE=rust:1.94-bookworm
@@ -6,7 +8,7 @@ ARG BINLEX_IMAGE_SOURCE=https://github.com/c3rb3ru5d3d53c/binlex
 ARG BINLEX_IMAGE_VERSION=dev
 ARG BINLEX_IMAGE_REVISION=unknown
 
-FROM ${PYTHON_BUILD_IMAGE} AS binlex-python-builder
+FROM ${PYTHON_BUILD_IMAGE} AS binlex-builder
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -28,8 +30,23 @@ RUN pip install --no-cache-dir --upgrade pip maturin[patchelf]
 
 COPY . .
 
-RUN mkdir -p /tmp/binlex-wheels \
-    && maturin build --manifest-path bindings/python/Cargo.toml --release --out /tmp/binlex-wheels
+RUN --mount=type=cache,target=/root/.cargo/registry \
+    --mount=type=cache,target=/root/.cargo/git \
+    --mount=type=cache,target=/app/target \
+    set -eux; \
+    mkdir -p /tmp/binlex-wheels; \
+    maturin build --manifest-path bindings/python/Cargo.toml --release --out /tmp/binlex-wheels; \
+    cargo build --release --bins \
+        -p binlex-mcp \
+        -p binlex-server \
+        -p binlex-processor-embeddings \
+        -p binlex-processor-vex; \
+    mkdir -p /tmp/binlex-processors; \
+    for path in /app/target/release/binlex-processor-*; do \
+        [ -f "$path" ] || continue; \
+        [ -x "$path" ] || continue; \
+        cp "$path" /tmp/binlex-processors/; \
+    done
 
 FROM ${PYTHON_RUNTIME_IMAGE} AS binlex-python
 
@@ -48,38 +65,12 @@ RUN apt-get update \
         libstdc++6 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=binlex-python-builder /tmp/binlex-wheels /tmp/binlex-wheels
+COPY --from=binlex-builder /tmp/binlex-wheels /tmp/binlex-wheels
 
 RUN pip install --no-cache-dir /tmp/binlex-wheels/binlex-*.whl \
     && rm -rf /tmp/binlex-wheels
 
 WORKDIR /app
-
-FROM ${RUST_IMAGE} AS binlex-mcp-builder
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        libprotobuf-dev \
-        protobuf-compiler \
-    && rm -rf /var/lib/apt/lists/*
-
-ENV PROTOC_INCLUDE=/usr/include
-
-WORKDIR /app
-
-COPY . .
-
-RUN set -eux; \
-    cargo build --release -p binlex-mcp --bin binlex-mcp; \
-    for manifest in $(find crates/binlex_processors -mindepth 2 -maxdepth 2 -name Cargo.toml | sort); do \
-        cargo build --release --manifest-path "$manifest"; \
-    done; \
-    mkdir -p /tmp/binlex-processors; \
-    for path in /app/target/release/binlex-processor-*; do \
-        [ -f "$path" ] || continue; \
-        [ -x "$path" ] || continue; \
-        cp "$path" /tmp/binlex-processors/; \
-    done
 
 FROM binlex-python AS binlex-mcp
 
@@ -107,10 +98,10 @@ RUN pip install --no-cache-dir \
 
 WORKDIR /app
 
-COPY --from=binlex-mcp-builder /app/target/release/binlex-mcp /usr/local/bin/binlex-mcp
-COPY --from=binlex-mcp-builder /tmp/binlex-processors/ /opt/binlex/processors/
-COPY --from=binlex-mcp-builder /tmp/binlex-processors/ /root/.local/share/binlex/processors/
-COPY --from=binlex-mcp-builder /app/crates/binlex_tools/binlex-mcp/skills /opt/binlex-mcp/skills
+COPY --from=binlex-builder /app/target/release/binlex-mcp /usr/local/bin/binlex-mcp
+COPY --from=binlex-builder /tmp/binlex-processors/ /opt/binlex/processors/
+COPY --from=binlex-builder /tmp/binlex-processors/ /root/.local/share/binlex/processors/
+COPY --from=binlex-builder /app/crates/binlex_tools/binlex-mcp/skills /opt/binlex-mcp/skills
 
 ENV BINLEX_MCP_LISTEN=0.0.0.0
 ENV BINLEX_MCP_PORT=3000
@@ -121,30 +112,6 @@ ENV BINLEX_MCP_SAMPLES=/root/.local/share/binlex/samples
 EXPOSE 3000
 
 CMD ["sh", "-lc", "mkdir -p /data/binlex-mcp /root/.config/binlex /root/.local/share/binlex/processors \"${BINLEX_MCP_SAMPLES}\" && cp -an /opt/binlex/processors/. /root/.local/share/binlex/processors/ && if [ ! -f \"${BINLEX_MCP_CONFIG}\" ]; then init_source=\"${BINLEX_MCP_INIT_SOURCES:-/opt/binlex-mcp/skills}\"; binlex-mcp init --yes --config \"${BINLEX_MCP_CONFIG}\" \"${init_source}\"; fi && exec binlex-mcp serve --config \"${BINLEX_MCP_CONFIG}\" --samples \"${BINLEX_MCP_SAMPLES}\" --listen \"${BINLEX_MCP_LISTEN}\" --port \"${BINLEX_MCP_PORT}\""]
-
-FROM ${RUST_IMAGE} AS binlex-server-builder
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends libprotobuf-dev protobuf-compiler \
-    && rm -rf /var/lib/apt/lists/*
-
-ENV PROTOC_INCLUDE=/usr/include
-
-WORKDIR /app
-
-COPY . .
-
-RUN set -eux; \
-    cargo build --release -p binlex-server; \
-    for manifest in $(find crates/binlex_processors -mindepth 2 -maxdepth 2 -name Cargo.toml | sort); do \
-        cargo build --release --manifest-path "$manifest"; \
-    done; \
-    mkdir -p /tmp/binlex-processors; \
-    for path in /app/target/release/binlex-processor-*; do \
-        [ -f "$path" ] || continue; \
-        [ -x "$path" ] || continue; \
-        cp "$path" /tmp/binlex-processors/; \
-    done
 
 FROM debian:bookworm-slim AS binlex-server
 
@@ -163,9 +130,9 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY --from=binlex-server-builder /app/target/release/binlex-server /usr/local/bin/binlex-server
-COPY --from=binlex-server-builder /tmp/binlex-processors/ /opt/binlex/processors/
-COPY --from=binlex-server-builder /tmp/binlex-processors/ /root/.local/share/binlex/processors/
+COPY --from=binlex-builder /app/target/release/binlex-server /usr/local/bin/binlex-server
+COPY --from=binlex-builder /tmp/binlex-processors/ /opt/binlex/processors/
+COPY --from=binlex-builder /tmp/binlex-processors/ /root/.local/share/binlex/processors/
 
 EXPOSE 5000
 
