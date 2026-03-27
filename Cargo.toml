@@ -68,6 +68,7 @@ members = [
     "crates/libvex/libvex-macros",
     "crates/libvex/libvex-rs",
     "crates/libvex/libvex-sys",
+    "tests/fixtures/binlex-processor-complete-test",
 ]
 
 [workspace.package]
