@@ -48,21 +48,69 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-14, macos-15-intel, macos-15, windows-latest]
+        include:
+          - os: ubuntu-latest
+            runner: ubuntu-latest
+            container: "null"
+            asset: linux-x86_64
+            archive_ext: tar.gz
+          - os: archlinux
+            runner: ubuntu-latest
+            container: '{"image":"archlinux:latest"}'
+            asset: archlinux-x86_64
+            archive_ext: tar.gz
+          - os: macos-14
+            runner: macos-14
+            container: "null"
+            asset: macos-14-arm64
+            archive_ext: tar.gz
+          - os: macos-15-intel
+            runner: macos-15-intel
+            container: "null"
+            asset: macos-15-intel-x86_64
+            archive_ext: tar.gz
+          - os: macos-15
+            runner: macos-15
+            container: "null"
+            asset: macos-15-arm64
+            archive_ext: tar.gz
+          - os: windows-latest
+            runner: windows-latest
+            container: "null"
+            asset: windows-x86_64
+            archive_ext: zip
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
+    container: ${{ fromJSON(matrix.container) }}
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6
 
+      - name: Resolve Binlex Version
+        shell: bash
+        run: |
+          version="$(./scripts/binlex-version.sh)"
+          test -n "${version}"
+          echo "BINLEX_VERSION=${version}" >> "$GITHUB_ENV"
+          echo "ASSET_BASENAME=binlex-${version}-${{ matrix.asset }}" >> "$GITHUB_ENV"
+
+      - name: Validate Release Tag Version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          test "${TAG_VERSION}" = "${BINLEX_VERSION}"
+
       - name: Set up Rust
+        if: ${{ matrix.os != 'archlinux' }}
         uses: dtolnay/rust-toolchain@stable
 
       - name: Set up sccache
         uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: Set up Protoc
+        if: ${{ matrix.os != 'archlinux' }}
         uses: arduino/setup-protoc@v3
         with:
           version: ${{ env.PROTOC_VERSION }}
@@ -71,7 +119,7 @@ jobs:
       - name: Cache Rust Build Artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: native-${{ matrix.os }}
+          shared-key: ${{ matrix.os == 'archlinux' && 'archlinux-native' || format('native-{0}', matrix.os) }}
           cache-provider: github
 
       - name: Install Dependencies (Ubuntu)
@@ -79,6 +127,49 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential pkg-config libssl-dev make automake autoconf libtool
+
+      - name: Install Dependencies (Arch Linux)
+        if: ${{ matrix.os == 'archlinux' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          pacman-key --init
+          pacman-key --populate archlinux
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm --needed base-devel pkgconf openssl zstd lz4 make automake autoconf libtool clang curl git python rust protobuf
+          id -u builder >/dev/null 2>&1 || useradd --create-home --shell /bin/bash builder
+
+      - name: Prepare Arch Build Workspace
+        if: ${{ matrix.os == 'archlinux' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/binlex-build
+          mkdir -p /tmp/binlex-build
+          cp -a "$GITHUB_WORKSPACE"/. /tmp/binlex-build/
+          chown -R builder:builder /tmp/binlex-build
+
+      - name: Configure Arch Linker Wrapper
+        if: ${{ matrix.os == 'archlinux' }}
+        shell: bash
+        run: |
+          cat > "$GITHUB_WORKSPACE/binlex-arch-linker-wrapper" <<'EOF'
+          #!/bin/bash
+          set -euo pipefail
+
+          args=()
+          for arg in "$@"; do
+            if [[ "$arg" == "-Wl,--as-needed" ]]; then
+              args+=("-Wl,--no-as-needed")
+            else
+              args+=("$arg")
+            fi
+          done
+
+          exec x86_64-linux-gnu-gcc "${args[@]}"
+          EOF
+          chmod +x "$GITHUB_WORKSPACE/binlex-arch-linker-wrapper"
+          echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=$GITHUB_WORKSPACE/binlex-arch-linker-wrapper" >> "$GITHUB_ENV"
 
       - name: Install Dependencies (macOS)
         if: startsWith(matrix.os, 'macos-')
@@ -110,11 +201,25 @@ jobs:
           arch: x64
 
       - name: Run Unit Tests (Unix)
-        if: ${{ matrix.os != 'windows-latest' }}
+        if: ${{ matrix.os != 'windows-latest' && matrix.os != 'archlinux' }}
         shell: bash
         run: |
           for attempt in 1 2 3; do
             cargo test --workspace --exclude binlex-python && break
+            echo "Attempt $attempt failed, retrying in 15s..."
+            sleep 15
+          done
+
+      - name: Run Unit Tests (Arch Linux)
+        if: ${{ matrix.os == 'archlinux' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            runuser -u builder -- bash -lc "cd /tmp/binlex-build && CARGO_BUILD_JOBS=2 cargo test --workspace --exclude binlex-python" && break
+            if [[ "$attempt" -eq 3 ]]; then
+              exit 1
+            fi
             echo "Attempt $attempt failed, retrying in 15s..."
             sleep 15
           done
@@ -127,6 +232,13 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: make deb
 
+      - name: Build Project (Arch Linux)
+        if: ${{ matrix.os == 'archlinux' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          runuser -u builder -- bash -lc "cd /tmp/binlex-build && CARGO_BUILD_JOBS=2 makepkg"
+
       - name: Build Project (macOS)
         if: startsWith(matrix.os, 'macos-')
         run: cargo build --release --workspace --exclude binlex-python
@@ -136,7 +248,7 @@ jobs:
         run: cargo build --release --workspace ${{ env.WINDOWS_CARGO_EXCLUDES }}
 
       - name: Create Dist Directory
-        run: mkdir dist
+        run: mkdir -p dist
 
       - name: Copy Binary (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
@@ -177,128 +289,8 @@ jobs:
           cp target/release/binlex-hash dist/
           cp target/debian/*.deb dist/
 
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v6
-        with:
-          name: ${{ matrix.os }}-native-artifacts
-          path: dist/
-
-      - name: Summarize Native Artifacts
-        shell: bash
-        run: |
-          python - <<'PY'
-          import hashlib
-          import os
-          from pathlib import Path
-
-          dist = Path("dist")
-          files = sorted(path for path in dist.iterdir() if path.is_file())
-          summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
-
-          def sha256(path: Path) -> str:
-              digest = hashlib.sha256()
-              with path.open("rb") as handle:
-                  for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                      digest.update(chunk)
-              return digest.hexdigest()
-
-          with summary.open("a", encoding="utf-8") as handle:
-              handle.write("## Native Artifacts (${{ matrix.os }})\n\n")
-              handle.write("Artifact name: `${{ matrix.os }}-native-artifacts`\n\n")
-              handle.write("| File | Size | SHA-256 |\n")
-              handle.write("| --- | ---: | --- |\n")
-              for path in files:
-                  size = path.stat().st_size
-                  handle.write(f"| `{path.name}` | {size:,} bytes | `{sha256(path)}` |\n")
-              handle.write("\n")
-          PY
-
-      - name: Show sccache Statistics
-        if: always()
-        run: sccache --show-stats
-
-  native-build-archlinux:
-    name: native-build-archlinux
-    runs-on: ubuntu-latest
-    container:
-      image: archlinux:latest
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v6
-
-      - name: Set up sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
-
-      - name: Install Dependencies
-        shell: bash
-        run: |
-          set -euo pipefail
-          pacman-key --init
-          pacman-key --populate archlinux
-          pacman -Syu --noconfirm
-          pacman -S --noconfirm --needed base-devel pkgconf openssl zstd lz4 make automake autoconf libtool clang curl git python rust protobuf
-          id -u builder >/dev/null 2>&1 || useradd --create-home --shell /bin/bash builder
-
-      - name: Prepare Arch Build Workspace
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf /tmp/binlex-build
-          mkdir -p /tmp/binlex-build
-          cp -a "$GITHUB_WORKSPACE"/. /tmp/binlex-build/
-          chown -R builder:builder /tmp/binlex-build
-
-      - name: Cache Rust Build Artifacts
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: archlinux-native
-          cache-provider: github
-
-      - name: Configure Arch Linker Wrapper
-        shell: bash
-        run: |
-          cat > "$GITHUB_WORKSPACE/binlex-arch-linker-wrapper" <<'EOF'
-          #!/bin/bash
-          set -euo pipefail
-
-          args=()
-          for arg in "$@"; do
-            if [[ "$arg" == "-Wl,--as-needed" ]]; then
-              args+=("-Wl,--no-as-needed")
-            else
-              args+=("$arg")
-            fi
-          done
-
-          exec x86_64-linux-gnu-gcc "${args[@]}"
-          EOF
-          chmod +x "$GITHUB_WORKSPACE/binlex-arch-linker-wrapper"
-          echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=$GITHUB_WORKSPACE/binlex-arch-linker-wrapper" >> "$GITHUB_ENV"
-
-      - name: Run Unit Tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          for attempt in 1 2 3; do
-            runuser -u builder -- bash -lc "cd /tmp/binlex-build && CARGO_BUILD_JOBS=2 cargo test --workspace --exclude binlex-python" && break
-            if [[ "$attempt" -eq 3 ]]; then
-              exit 1
-            fi
-            echo "Attempt $attempt failed, retrying in 15s..."
-            sleep 15
-          done
-
-      - name: Build Project
-        shell: bash
-        run: |
-          set -euo pipefail
-          runuser -u builder -- bash -lc "cd /tmp/binlex-build && CARGO_BUILD_JOBS=2 makepkg"
-
-      - name: Create Dist Directory
-        run: mkdir -p dist
-
-      - name: Copy Binary
+      - name: Copy Binary (Arch Linux)
+        if: ${{ matrix.os == 'archlinux' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -313,11 +305,28 @@ jobs:
           cp /tmp/binlex-build/target/release/binlex-hash dist/
           cp /tmp/binlex-build/*.pkg.tar.zst dist/
 
+      - name: Package Native Artifacts (Unix)
+        if: ${{ matrix.os != 'windows-latest' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          cp -a dist "release/${ASSET_BASENAME}"
+          tar -C release -czf "dist/${ASSET_BASENAME}.tar.gz" "${ASSET_BASENAME}"
+
+      - name: Package Native Artifacts (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          Copy-Item -Recurse dist "release/$env:ASSET_BASENAME"
+          Compress-Archive -Path "release/$env:ASSET_BASENAME" -DestinationPath "dist/$env:ASSET_BASENAME.zip" -Force
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: archlinux-native-artifacts
-          path: dist/
+          name: ${{ env.ASSET_BASENAME }}
+          path: dist/${{ env.ASSET_BASENAME }}.${{ matrix.archive_ext }}
 
       - name: Summarize Native Artifacts
         shell: bash
@@ -327,26 +336,20 @@ jobs:
           import os
           from pathlib import Path
 
-          dist = Path("dist")
-          files = sorted(path for path in dist.iterdir() if path.is_file())
+          archive = Path(f"dist/{os.environ['ASSET_BASENAME']}.${{ matrix.archive_ext }}")
           summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
 
-          def sha256(path: Path) -> str:
-              digest = hashlib.sha256()
-              with path.open("rb") as handle:
-                  for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                      digest.update(chunk)
-              return digest.hexdigest()
+          digest = hashlib.sha256()
+          with archive.open("rb") as handle:
+              for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                  digest.update(chunk)
 
           with summary.open("a", encoding="utf-8") as handle:
-              handle.write("## Native Artifacts (archlinux)\n\n")
-              handle.write("Artifact name: `archlinux-native-artifacts`\n\n")
+              handle.write("## Native Artifacts (${{ matrix.os }})\n\n")
+              handle.write(f"Artifact name: `{os.environ['ASSET_BASENAME']}`\n\n")
               handle.write("| File | Size | SHA-256 |\n")
               handle.write("| --- | ---: | --- |\n")
-              for path in files:
-                  size = path.stat().st_size
-                  handle.write(f"| `{path.name}` | {size:,} bytes | `{sha256(path)}` |\n")
-              handle.write("\n")
+              handle.write(f"| `{archive.name}` | {archive.stat().st_size:,} bytes | `{digest.hexdigest()}` |\n\n")
           PY
 
       - name: Show sccache Statistics
@@ -358,13 +361,48 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-14, macos-15-intel, macos-15, windows-latest]
+        include:
+          - os: ubuntu-latest
+            runner: ubuntu-latest
+            asset: linux-x86_64
+            archive_ext: tar.gz
+          - os: macos-14
+            runner: macos-14
+            asset: macos-14-arm64
+            archive_ext: tar.gz
+          - os: macos-15-intel
+            runner: macos-15-intel
+            asset: macos-15-intel-x86_64
+            archive_ext: tar.gz
+          - os: macos-15
+            runner: macos-15
+            asset: macos-15-arm64
+            archive_ext: tar.gz
+          - os: windows-latest
+            runner: windows-latest
+            asset: windows-x86_64
+            archive_ext: zip
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6
+
+      - name: Resolve Binlex Version
+        shell: bash
+        run: |
+          version="$(./scripts/binlex-version.sh)"
+          test -n "${version}"
+          echo "BINLEX_VERSION=${version}" >> "$GITHUB_ENV"
+          echo "ASSET_BASENAME=binlex-${version}-python-wheels-${{ matrix.asset }}" >> "$GITHUB_ENV"
+
+      - name: Validate Release Tag Version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          test "${TAG_VERSION}" = "${BINLEX_VERSION}"
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -478,11 +516,29 @@ jobs:
           package-dir: bindings/python
           output-dir: wheelhouse
 
+      - name: Package Wheel Artifacts (Unix)
+        if: ${{ matrix.os != 'windows-latest' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist release
+          cp -a wheelhouse "release/${ASSET_BASENAME}"
+          tar -C release -czf "dist/${ASSET_BASENAME}.tar.gz" "${ASSET_BASENAME}"
+
+      - name: Package Wheel Artifacts (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          Copy-Item -Recurse wheelhouse "release/$env:ASSET_BASENAME"
+          Compress-Archive -Path "release/$env:ASSET_BASENAME" -DestinationPath "dist/$env:ASSET_BASENAME.zip" -Force
+
       - name: Upload Wheel Artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: ${{ matrix.os }}-python-wheels
-          path: wheelhouse/
+          name: ${{ env.ASSET_BASENAME }}
+          path: dist/${{ env.ASSET_BASENAME }}.${{ matrix.archive_ext }}
 
       - name: Show sccache Statistics
         if: always()
@@ -519,9 +575,28 @@ jobs:
       - name: Download Wheel Artifacts
         uses: actions/download-artifact@v6
         with:
-          pattern: "*-python-wheels"
+          pattern: "binlex-${{ env.BINLEX_VERSION }}-python-wheels-*"
           merge-multiple: true
-          path: dist/python
+          path: dist/python-archives
+
+      - name: Extract Wheel Artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/python
+          shopt -s nullglob
+          for archive in dist/python-archives/*.tar.gz; do
+            tar -xzf "$archive" -C dist/python --strip-components=1
+          done
+          for archive in dist/python-archives/*.zip; do
+            unzip -oq "$archive" -d dist/python-tmp
+            for directory in dist/python-tmp/*; do
+              if [ -d "$directory" ]; then
+                cp -a "$directory"/. dist/python/
+              fi
+            done
+            rm -rf dist/python-tmp
+          done
 
       - name: Install Upload Tools
         run: |
@@ -543,7 +618,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [ida-plugin, mcp-skills]
+        package: [ida-plugin, mcp-skills, source-code]
 
     steps:
       - name: Checkout Code
@@ -554,24 +629,37 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Resolve Binlex Version
+        shell: bash
+        run: |
+          version="$(./scripts/binlex-version.sh)"
+          test -n "${version}"
+          echo "BINLEX_VERSION=${version}" >> "$GITHUB_ENV"
+
+      - name: Validate Release Tag Version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          test "${TAG_VERSION}" = "${BINLEX_VERSION}"
+
       - name: Build IDA Plugin Package
         if: matrix.package == 'ida-plugin'
         run: |
           python -m pip install --upgrade pip
           python -m pip install build
+          mkdir -p dist
           cd plugins/ida/
           python -m pip install .
           python -m build
-          python -m plugin archive --output ../../dist/binlex-ida.zip
+          python -m plugin archive --output ../../dist/binlex-${{ env.BINLEX_VERSION }}-ida.zip
 
       - name: Upload IDA Plugin Artifacts
         if: matrix.package == 'ida-plugin'
         uses: actions/upload-artifact@v6
         with:
-          name: ida-plugin-artifacts
-          path: |
-            dist/binlex-ida.zip
-            plugins/ida/dist/*
+          name: binlex-${{ env.BINLEX_VERSION }}-ida
+          path: dist/binlex-${{ env.BINLEX_VERSION }}-ida.zip
 
       - name: Create MCP Skills Archive
         if: matrix.package == 'mcp-skills'
@@ -580,10 +668,11 @@ jobs:
           mkdir -p dist
           python - <<'PY'
           import shutil
+          import os
           from pathlib import Path
 
           source = Path("crates/binlex_tools/binlex-mcp/skills")
-          archive = Path("dist/binlex-mcp-skills.zip")
+          archive = Path(f"dist/binlex-{os.environ['BINLEX_VERSION']}-mcp-skills.zip")
           shutil.make_archive(str(archive.with_suffix("")), "zip", root_dir=source.parent, base_dir=source.name)
           PY
 
@@ -591,8 +680,8 @@ jobs:
         if: matrix.package == 'mcp-skills'
         uses: actions/upload-artifact@v6
         with:
-          name: binlex-mcp-skills
-          path: dist/binlex-mcp-skills.zip
+          name: binlex-${{ env.BINLEX_VERSION }}-mcp-skills
+          path: dist/binlex-${{ env.BINLEX_VERSION }}-mcp-skills.zip
 
       - name: Summarize MCP Skills Artifact
         if: matrix.package == 'mcp-skills'
@@ -603,7 +692,7 @@ jobs:
           import os
           from pathlib import Path
 
-          archive = Path("dist/binlex-mcp-skills.zip")
+          archive = Path(f"dist/binlex-{os.environ['BINLEX_VERSION']}-mcp-skills.zip")
           summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
 
           digest = hashlib.sha256()
@@ -613,11 +702,124 @@ jobs:
 
           with summary.open("a", encoding="utf-8") as handle:
               handle.write("## MCP Skills Artifact\n\n")
-              handle.write("Artifact name: `binlex-mcp-skills`\n\n")
+              handle.write(f"Artifact name: `binlex-{os.environ['BINLEX_VERSION']}-mcp-skills`\n\n")
               handle.write("| File | Size | SHA-256 |\n")
               handle.write("| --- | ---: | --- |\n")
               handle.write(f"| `{archive.name}` | {archive.stat().st_size:,} bytes | `{digest.hexdigest()}` |\n\n")
           PY
+
+      - name: Create Source Code Archive
+        if: matrix.package == 'source-code'
+        shell: bash
+        run: |
+          mkdir -p dist
+          git archive --format=tar.gz --prefix="binlex-${BINLEX_VERSION}/" -o "dist/binlex-${BINLEX_VERSION}-source.tar.gz" HEAD
+
+      - name: Upload Source Code Artifact
+        if: matrix.package == 'source-code'
+        uses: actions/upload-artifact@v6
+        with:
+          name: binlex-${{ env.BINLEX_VERSION }}-source
+          path: dist/binlex-${{ env.BINLEX_VERSION }}-source.tar.gz
+
+      - name: Summarize Source Code Artifact
+        if: matrix.package == 'source-code'
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+
+          archive = Path(f"dist/binlex-{os.environ['BINLEX_VERSION']}-source.tar.gz")
+          summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
+
+          digest = hashlib.sha256()
+          with archive.open("rb") as handle:
+              for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                  digest.update(chunk)
+
+          with summary.open("a", encoding="utf-8") as handle:
+              handle.write("## Source Code Artifact\n\n")
+              handle.write(f"Artifact name: `binlex-{os.environ['BINLEX_VERSION']}-source`\n\n")
+              handle.write("| File | Size | SHA-256 |\n")
+              handle.write("| --- | ---: | --- |\n")
+              handle.write(f"| `{archive.name}` | {archive.stat().st_size:,} bytes | `{digest.hexdigest()}` |\n\n")
+          PY
+
+      - name: Summarize IDA Plugin Artifact
+        if: matrix.package == 'ida-plugin'
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+
+          archive = Path(f"dist/binlex-{os.environ['BINLEX_VERSION']}-ida.zip")
+          summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
+
+          digest = hashlib.sha256()
+          with archive.open("rb") as handle:
+              for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                  digest.update(chunk)
+
+          with summary.open("a", encoding="utf-8") as handle:
+              handle.write("## IDA Artifact\n\n")
+              handle.write(f"Artifact name: `binlex-{os.environ['BINLEX_VERSION']}-ida`\n\n")
+              handle.write("| File | Size | SHA-256 |\n")
+              handle.write("| --- | ---: | --- |\n")
+              handle.write(f"| `{archive.name}` | {archive.stat().st_size:,} bytes | `{digest.hexdigest()}` |\n\n")
+          PY
+
+  release-publish:
+    name: release-publish
+    runs-on: ubuntu-latest
+    needs: [native-build, python-wheels, package-build]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Resolve Binlex Version
+        shell: bash
+        run: |
+          version="$(./scripts/binlex-version.sh)"
+          test -n "${version}"
+          echo "BINLEX_VERSION=${version}" >> "$GITHUB_ENV"
+
+      - name: Validate Release Tag Version
+        shell: bash
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          test "${TAG_VERSION}" = "${BINLEX_VERSION}"
+
+      - name: Download Release Artifacts
+        uses: actions/download-artifact@v6
+        with:
+          pattern: binlex-${{ env.BINLEX_VERSION }}-*
+          merge-multiple: true
+          path: dist/release-assets
+
+      - name: Publish GitHub Release Assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          assets=(dist/release-assets/*)
+          if [[ "${#assets[@]}" -eq 0 ]]; then
+            echo "No release assets found" >&2
+            exit 1
+          fi
+          if ! gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --generate-notes
+          fi
+          gh release upload "${GITHUB_REF_NAME}" "${assets[@]}" --clobber
 
   docker-build:
     name: docker-build (${{ matrix.target }} / ${{ matrix.platform }})
