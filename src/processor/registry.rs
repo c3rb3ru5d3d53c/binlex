@@ -87,6 +87,16 @@ impl RegisteredProcessor {
         let response = execute_graph_transport(&self.registration, data, &graph.config).ok()?;
         serde_json::from_value(response).ok()
     }
+
+    pub fn process_complete(&self, graph: &Graph) -> Result<(), ProcessorError> {
+        if !self.registration.supports_architecture(graph.architecture) {
+            return Ok(());
+        }
+        let data = complete_transport_message(&self.registration, graph)
+            .map_err(|error| ProcessorError::Serialization(error.to_string()))?;
+        let _ = execute_graph_transport(&self.registration, data, &graph.config)?;
+        Ok(())
+    }
 }
 
 impl ProcessorRegistration {
@@ -129,6 +139,7 @@ fn discover_processor_registrations(
     configured_directory: Option<&str>,
 ) -> Vec<ProcessorRegistration> {
     let mut registrations = Vec::new();
+    let mut seen_names = BTreeSet::new();
     for candidate in processor_binary_candidates(configured_directory) {
         let Ok(output) = Command::new(&candidate).arg("--describe").output() else {
             continue;
@@ -143,10 +154,11 @@ fn discover_processor_registrations(
         if registration.name.is_empty() || registration.backend_name.is_empty() {
             continue;
         }
+        if !seen_names.insert(registration.name.clone()) {
+            continue;
+        }
         registrations.push(registration);
     }
-    registrations.sort_by(|left, right| left.name.cmp(&right.name));
-    registrations.dedup_by(|left, right| left.name == right.name);
     registrations
 }
 
@@ -325,6 +337,7 @@ pub fn enabled_processors_for_target(
                                 ProcessorTarget::Block => processor.blocks.enabled,
                                 ProcessorTarget::Function => processor.functions.enabled,
                                 ProcessorTarget::Graph => processor.graph.enabled,
+                                ProcessorTarget::Complete => processor.complete.enabled,
                             }
                     })
         })
@@ -524,6 +537,13 @@ fn graph_transport_message(
     graph_message(graph, registration.on_graph_options)
 }
 
+fn complete_transport_message(
+    registration: &ProcessorRegistration,
+    graph: &Graph,
+) -> Result<Value, serde_json::Error> {
+    graph_complete_message(graph, registration.on_graph_options)
+}
+
 fn function_message(function: &Function<'_>) -> Result<Value, serde_json::Error> {
     let mut data = serde_json::to_value(function.process_base())?;
     set_message_architecture(&mut data, function.architecture())?;
@@ -608,6 +628,37 @@ fn graph_message(graph: &Graph, options: OnGraphOptions) -> Result<Value, serde_
             "architecture".to_string(),
             serde_json::to_value(graph.architecture)?,
         );
+        map.insert("instructions".to_string(), Value::Array(instructions));
+        map.insert("blocks".to_string(), Value::Array(blocks));
+        map.insert("functions".to_string(), Value::Array(functions));
+    }
+    Ok(data)
+}
+
+fn graph_complete_message(
+    graph: &Graph,
+    options: OnGraphOptions,
+) -> Result<Value, serde_json::Error> {
+    let mut data = graph_message(graph, options)?;
+    let instructions = graph
+        .snapshot()
+        .instructions
+        .into_iter()
+        .map(serde_json::to_value)
+        .collect::<Result<Vec<_>, _>>()?;
+    let blocks = graph
+        .blocks()
+        .into_iter()
+        .map(|block| serde_json::to_value(block.process()))
+        .collect::<Result<Vec<_>, _>>()?;
+    let functions = graph
+        .functions()
+        .into_iter()
+        .map(|function| serde_json::to_value(function.process()))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    if let Value::Object(ref mut map) = data {
+        map.insert("stage".to_string(), "complete".into());
         map.insert("instructions".to_string(), Value::Array(instructions));
         map.insert("blocks".to_string(), Value::Array(blocks));
         map.insert("functions".to_string(), Value::Array(functions));

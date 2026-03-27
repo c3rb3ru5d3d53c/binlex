@@ -1,12 +1,15 @@
 use axum::Json;
 use axum::Router;
 use axum::body::Bytes;
+use axum::extract::ConnectInfo;
 use axum::extract::Path;
 use axum::extract::State;
 use axum::http::header::{ACCEPT, CONTENT_ENCODING, CONTENT_TYPE};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
+use std::net::SocketAddr;
+use tracing::info;
 
 use crate::server::auth;
 use crate::server::dto::{
@@ -24,7 +27,12 @@ pub fn build_router(state: AppState) -> Router {
         .with_state(state)
 }
 
-async fn health() -> impl IntoResponse {
+async fn health(ConnectInfo(remote): ConnectInfo<SocketAddr>) -> impl IntoResponse {
+    info!(
+        "request complete route=/health remote_addr={} remote_port={} status=200",
+        remote.ip(),
+        remote.port()
+    );
     Json(HealthResponse {
         status: "ok".to_string(),
     })
@@ -32,9 +40,16 @@ async fn health() -> impl IntoResponse {
 
 async fn analyze(
     State(state): State<AppState>,
+    ConnectInfo(remote): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<impl IntoResponse, ServerError> {
+    state.log(format!(
+        "request start route=/analyze remote_addr={} remote_port={} bytes={}",
+        remote.ip(),
+        remote.port(),
+        body.len()
+    ));
     state.debug_log(format!(
         "request start analyze bytes={} content_encoding={:?}",
         body.len(),
@@ -49,17 +64,54 @@ async fn analyze(
     }
 
     let request: AnalyzeRequest = decode_request(&headers, &body)?;
-    let response = crate::server::analyze::execute(&state.config, request)?;
-    let encoded = encode_response(state.config.processors.compression, &headers, &response)?;
+    let response = match crate::server::analyze::execute(&state.config, request) {
+        Ok(response) => response,
+        Err(error) => {
+            state.log(format!(
+                "request complete route=/analyze remote_addr={} remote_port={} status={} error={:?}",
+                remote.ip(),
+                remote.port(),
+                error.status_code().as_u16(),
+                error
+            ));
+            return Err(error);
+        }
+    };
+    let encoded = match encode_response(state.config.processors.compression, &headers, &response) {
+        Ok(response) => response,
+        Err(error) => {
+            state.log(format!(
+                "request complete route=/analyze remote_addr={} remote_port={} status={} error={:?}",
+                remote.ip(),
+                remote.port(),
+                error.status_code().as_u16(),
+                error
+            ));
+            return Err(error);
+        }
+    };
+    state.log(format!(
+        "request complete route=/analyze remote_addr={} remote_port={} status=200",
+        remote.ip(),
+        remote.port()
+    ));
     Ok(encoded)
 }
 
 async fn processor_execute(
     State(state): State<AppState>,
+    ConnectInfo(remote): ConnectInfo<SocketAddr>,
     Path(processor): Path<String>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<impl IntoResponse, ServerError> {
+    state.log(format!(
+        "request start route=/processors/{} remote_addr={} remote_port={} bytes={}",
+        processor,
+        remote.ip(),
+        remote.port(),
+        body.len()
+    ));
     state.debug_log(format!(
         "request start processor={} bytes={} content_encoding={:?} accept={:?}",
         processor,
@@ -78,6 +130,14 @@ async fn processor_execute(
     let request: ProcessorHttpRequest = match decode_request(&headers, &body) {
         Ok(request) => request,
         Err(error) => {
+            state.log(format!(
+                "request complete route=/processors/{} remote_addr={} remote_port={} status={} error={:?}",
+                processor,
+                remote.ip(),
+                remote.port(),
+                error.status_code().as_u16(),
+                error
+            ));
             state.debug_log(format!(
                 "request decode failed processor={} error={:?}",
                 processor, error
@@ -91,6 +151,14 @@ async fn processor_execute(
     let response = match crate::server::processors::execute(&state, &processor, request) {
         Ok(response) => response,
         Err(error) => {
+            state.log(format!(
+                "request complete route=/processors/{} remote_addr={} remote_port={} status={} error={:?}",
+                processor,
+                remote.ip(),
+                remote.port(),
+                error.status_code().as_u16(),
+                error
+            ));
             state.debug_log(format!(
                 "processor execution failed processor={} error={:?}",
                 processor, error
@@ -107,6 +175,14 @@ async fn processor_execute(
     let encoded = match encode_response(state.config.processors.compression, &headers, &response) {
         Ok(response) => response,
         Err(error) => {
+            state.log(format!(
+                "request complete route=/processors/{} remote_addr={} remote_port={} status={} error={:?}",
+                processor,
+                remote.ip(),
+                remote.port(),
+                error.status_code().as_u16(),
+                error
+            ));
             state.debug_log(format!(
                 "response encode failed processor={} error={:?}",
                 processor, error
@@ -116,6 +192,12 @@ async fn processor_execute(
     };
 
     state.debug_log(format!("request complete processor={}", processor));
+    state.log(format!(
+        "request complete route=/processors/{} remote_addr={} remote_port={} status=200",
+        processor,
+        remote.ip(),
+        remote.port()
+    ));
     Ok(encoded)
 }
 

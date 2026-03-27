@@ -75,12 +75,12 @@ pub struct SampleMetadata {
 #[derive(Clone, Debug, Serialize)]
 pub struct SamplePutResponse {
     pub filename: String,
-    pub size: usize,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub sha256: Option<String>,
     pub method: String,
     pub upload_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub upload_url: Option<String>,
     pub max_upload_size_bytes: usize,
+    pub instruction: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -92,14 +92,13 @@ pub struct SampleGetResponse {
     pub size: Option<usize>,
     pub method: String,
     pub download_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub download_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct SamplePutRequest {
     pub filename: String,
-    pub size: usize,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub sha256: Option<String>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -110,8 +109,6 @@ pub struct SampleGetRequest {
 #[derive(Clone)]
 struct UploadSession {
     filename: String,
-    size: usize,
-    sha256: Option<String>,
     expires_at_epoch_seconds: u64,
 }
 
@@ -134,45 +131,14 @@ impl SampleStore {
         })
     }
 
-    pub fn create_upload(
-        &self,
-        filename: String,
-        size: usize,
-        sha256: Option<String>,
-    ) -> Result<SamplePutResponse, DynError> {
+    pub fn create_upload(&self, filename: String) -> Result<SamplePutResponse, DynError> {
         if filename.trim().is_empty() {
             return Err("filename must not be empty".into());
         }
-        if size == 0 {
-            return Err("size must be greater than zero".into());
-        }
-        if size > self.max_upload_size_bytes {
-            return Err(format!(
-                "size {} exceeds max upload size {}",
-                size, self.max_upload_size_bytes
-            )
-            .into());
-        }
-        if let Some(ref digest) = sha256 {
-            validate_sha256(digest)?;
-            if self.sample_path(digest).is_file() {
-                let metadata = self.sample_metadata(digest)?;
-                return Ok(SamplePutResponse {
-                    filename: metadata.filename,
-                    size: metadata.size,
-                    sha256: Some(metadata.sha256),
-                    method: "PUT".to_string(),
-                    upload_path: format!("/samples/{}", digest),
-                    max_upload_size_bytes: self.max_upload_size_bytes,
-                });
-            }
-        }
 
-        let token = issue_token(&filename, size);
+        let token = issue_token(&filename);
         let session = UploadSession {
             filename: sanitize_filename(&filename),
-            size,
-            sha256,
             expires_at_epoch_seconds: now_epoch_seconds() + UPLOAD_TTL_SECONDS,
         };
         self.uploads
@@ -182,11 +148,11 @@ impl SampleStore {
 
         Ok(SamplePutResponse {
             filename: sanitize_filename(&filename),
-            size,
-            sha256: None,
             method: "PUT".to_string(),
             upload_path: format!("/samples/uploads/{}", token),
+            upload_url: None,
             max_upload_size_bytes: self.max_upload_size_bytes,
+            instruction: "Upload the sample bytes with an HTTP PUT to upload_url outside the sandbox.".to_string(),
         })
     }
 
@@ -199,6 +165,7 @@ impl SampleStore {
             size: Some(metadata.size),
             method: "GET".to_string(),
             download_path: format!("/samples/{}", sha256),
+            download_url: None,
         })
     }
 
@@ -217,14 +184,6 @@ impl SampleStore {
             session
         };
 
-        if bytes.len() != session.size {
-            return Err(format!(
-                "upload size mismatch: expected {}, got {}",
-                session.size,
-                bytes.len()
-            )
-            .into());
-        }
         if bytes.len() > self.max_upload_size_bytes {
             return Err(format!(
                 "upload size {} exceeds max upload size {}",
@@ -233,24 +192,11 @@ impl SampleStore {
             )
             .into());
         }
-
         let sha256 = SHA256::new(bytes)
             .hexdigest()
             .ok_or("failed to compute sha256")?;
-        if let Some(expected) = session.sha256.as_deref() {
-            validate_sha256(expected)?;
-            if expected != sha256 {
-                return Err(format!(
-                    "sha256 mismatch: expected {}, got {}",
-                    expected, sha256
-                )
-                .into());
-            }
-        }
-
-        let sample_path = self.sample_path(&sha256);
-        if !sample_path.exists() {
-            fs::write(&sample_path, bytes)?;
+        if self.sample_path(&sha256).is_file() {
+            return self.sample_metadata(&sha256);
         }
 
         let metadata = SampleMetadata {
@@ -258,6 +204,8 @@ impl SampleStore {
             filename: session.filename,
             size: bytes.len(),
         };
+
+        fs::write(self.sample_path(&sha256), bytes)?;
         self.write_metadata(&metadata)?;
         Ok(metadata)
     }
@@ -358,8 +306,8 @@ fn validate_sha256(sha256: &str) -> Result<(), DynError> {
     Ok(())
 }
 
-fn issue_token(filename: &str, size: usize) -> String {
-    let seed = format!("{}:{}:{}", filename, size, now_epoch_nanos());
+fn issue_token(filename: &str) -> String {
+    let seed = format!("{}:{}", filename, now_epoch_nanos());
     SHA256::new(seed.as_bytes())
         .hexdigest()
         .unwrap_or_else(|| format!("upload-{}", now_epoch_nanos()))

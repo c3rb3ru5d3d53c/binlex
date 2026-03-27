@@ -8,4 +8,5 @@ pub enum ProcessorTarget {
     Block,
     Function,
     Graph,
+    Complete,
 }

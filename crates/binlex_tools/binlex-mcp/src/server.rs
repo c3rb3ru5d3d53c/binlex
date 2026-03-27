@@ -13,14 +13,13 @@ use rmcp::{RoleServer, ServerHandler, tool, tool_handler, tool_router};
 use rmcp_actix_web::transport::StreamableHttpService;
 use schemars::JsonSchema;
 use serde::Deserialize;
+use serde::Serialize;
 use serde_json::Value;
 use tracing::info;
 
 use crate::error::internal_error;
 use crate::python::{PythonRequest, execute_python};
-use crate::samples::{
-    SampleGetRequest, SamplePutRequest, download_bytes, upload_bytes,
-};
+use crate::samples::{SampleGetRequest, SamplePutRequest, download_bytes, upload_bytes};
 use crate::skills::SkillPrompt;
 use crate::state::{McpState, to_json_string};
 
@@ -36,6 +35,16 @@ pub struct ProcessorRunRequest {
     pub processor: String,
     #[schemars(description = "JSON payload sent directly to the selected processor.")]
     pub data: Value,
+}
+
+#[derive(Serialize)]
+struct McpInfoResponse {
+    listen: String,
+    port: u16,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    base_url: Option<String>,
+    bind_url: String,
+    effective_base_url: String,
 }
 
 impl BinlexMcpServer {
@@ -77,64 +86,110 @@ impl BinlexMcpServer {
                 .route("/samples/{sha256}", web::get().to(download_bytes))
                 .service(web::scope("/").service(service.clone().scope()))
         })
-            .bind(bind)?
-            .run()
-            .await?;
+        .bind(bind)?
+        .run()
+        .await?;
         Ok(())
+    }
+
+    fn join_url(&self, path: &str) -> String {
+        format!("{}{}", self.state.effective_base_url(), path)
     }
 }
 
 #[tool_router]
 impl BinlexMcpServer {
-    #[tool(name = "python", description = "Execute Python in the active environment with Binlex bindings available.")]
-    fn python(&self, Parameters(request): Parameters<PythonRequest>) -> Result<String, rmcp::ErrorData> {
+    #[tool(
+        name = "python",
+        description = "Execute Python in the active environment with Binlex bindings available."
+    )]
+    fn python(
+        &self,
+        Parameters(request): Parameters<PythonRequest>,
+    ) -> Result<String, rmcp::ErrorData> {
         let response = execute_python(&self.state.python_command, request)
             .map_err(|error| internal_error(error.to_string()))?;
         to_json_string(&response).map_err(|error| internal_error(error.to_string()))
     }
 
-    #[tool(name = "processors.list", description = "List the external Binlex processors discoverable for this configuration.")]
+    #[tool(
+        name = "processors.list",
+        description = "List the external Binlex processors discoverable for this configuration."
+    )]
     fn processors_list(&self) -> Result<String, rmcp::ErrorData> {
-        to_json_string(&self.state.processor_list()).map_err(|error| internal_error(error.to_string()))
+        to_json_string(&self.state.processor_list())
+            .map_err(|error| internal_error(error.to_string()))
     }
 
-    #[tool(name = "processors.run", description = "Execute an external Binlex processor with a JSON payload.")]
+    #[tool(
+        name = "processors.run",
+        description = "Execute an external Binlex processor with a JSON payload."
+    )]
     fn processors_run(
         &self,
         Parameters(request): Parameters<ProcessorRunRequest>,
     ) -> Result<String, rmcp::ErrorData> {
-        let value = self.state
+        let value = self
+            .state
             .processor_run(&request.processor, request.data)
             .map_err(|error| internal_error(error.to_string()))?;
         to_json_string(&value).map_err(|error| internal_error(error.to_string()))
     }
 
-    #[tool(name = "config.get", description = "Return the effective Binlex configuration.")]
+    #[tool(
+        name = "config.get",
+        description = "Return the effective Binlex configuration."
+    )]
     fn config_get(&self) -> Result<String, rmcp::ErrorData> {
         to_json_string(&self.state.config).map_err(|error| internal_error(error.to_string()))
     }
 
-    #[tool(name = "samples.put", description = "Prepare a direct upload into the server sample store and return the relative upload endpoint.")]
+    #[tool(
+        name = "mcp.info",
+        description = "Return the effective Binlex MCP listener and advertised base URL."
+    )]
+    fn mcp_info(&self) -> Result<String, rmcp::ErrorData> {
+        to_json_string(&McpInfoResponse {
+            listen: self.state.mcp.listen.clone(),
+            port: self.state.mcp.port,
+            base_url: self.state.mcp.base_url.clone(),
+            bind_url: self.state.bind_url(),
+            effective_base_url: self.state.effective_base_url(),
+        })
+        .map_err(|error| internal_error(error.to_string()))
+    }
+
+    #[tool(
+        name = "samples.put",
+        description = "Prepare a direct upload into the server sample store and return the upload endpoint. The follow-up HTTP PUT should be performed outside the sandbox."
+    )]
     fn samples_put(
         &self,
         Parameters(request): Parameters<SamplePutRequest>,
     ) -> Result<String, rmcp::ErrorData> {
-        let response = self.state
+        let mut response = self
+            .state
             .sample_store
-            .create_upload(request.filename, request.size, request.sha256)
+            .create_upload(request.filename)
             .map_err(|error| internal_error(error.to_string()))?;
+        response.upload_url = Some(self.join_url(&response.upload_path));
         to_json_string(&response).map_err(|error| internal_error(error.to_string()))
     }
 
-    #[tool(name = "samples.get", description = "Return the relative download endpoint for a stored sample identified by sha256.")]
+    #[tool(
+        name = "samples.get",
+        description = "Return the relative download endpoint for a stored sample identified by sha256."
+    )]
     fn samples_get(
         &self,
         Parameters(request): Parameters<SampleGetRequest>,
     ) -> Result<String, rmcp::ErrorData> {
-        let response = self.state
+        let mut response = self
+            .state
             .sample_store
             .get_download(&request.sha256)
             .map_err(|error| internal_error(error.to_string()))?;
+        response.download_url = Some(self.join_url(&response.download_path));
         to_json_string(&response).map_err(|error| internal_error(error.to_string()))
     }
 }
@@ -160,7 +215,11 @@ impl ServerHandler for BinlexMcpServer {
         _context: RequestContext<RoleServer>,
     ) -> Result<ListPromptsResult, rmcp::ErrorData> {
         let mut result = ListPromptsResult::default();
-        result.prompts = self.prompts.iter().map(|prompt| prompt.prompt.clone()).collect();
+        result.prompts = self
+            .prompts
+            .iter()
+            .map(|prompt| prompt.prompt.clone())
+            .collect();
         Ok(result)
     }
 

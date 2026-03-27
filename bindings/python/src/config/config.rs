@@ -1932,6 +1932,8 @@ impl ConfigProcessorTarget {
                 "instructions" => processor.instructions.enabled,
                 "blocks" => processor.blocks.enabled,
                 "functions" => processor.functions.enabled,
+                "graph" => processor.graph.enabled,
+                "complete" => processor.complete.enabled,
                 _ => false,
             })
     }
@@ -1945,6 +1947,8 @@ impl ConfigProcessorTarget {
             "instructions" => processor.instructions.enabled = value,
             "blocks" => processor.blocks.enabled = value,
             "functions" => processor.functions.enabled = value,
+            "graph" => processor.graph.enabled = value,
+            "complete" => processor.complete.enabled = value,
             _ => {}
         }
         Ok(())
@@ -2054,6 +2058,26 @@ impl ConfigProcessor {
             inner: Arc::clone(&self.inner),
             processor_name: self.name.clone(),
             kind: "functions",
+        }
+    }
+
+    #[getter]
+    /// Return settings for graph outputs produced by this processor.
+    pub fn get_graph(&self) -> ConfigProcessorTarget {
+        ConfigProcessorTarget {
+            inner: Arc::clone(&self.inner),
+            processor_name: self.name.clone(),
+            kind: "graph",
+        }
+    }
+
+    #[getter]
+    /// Return settings for completion-stage side effects produced by this processor.
+    pub fn get_complete(&self) -> ConfigProcessorTarget {
+        ConfigProcessorTarget {
+            inner: Arc::clone(&self.inner),
+            processor_name: self.name.clone(),
+            kind: "complete",
         }
     }
 

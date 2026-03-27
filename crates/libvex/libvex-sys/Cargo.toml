@@ -1,6 +1,6 @@
 [package]
 name = "vex-sys"
-version = "0.3.1"
+version.workspace = true
 authors = ["Noam Kleinburd <noam93k@gmail.com>"]
 edition = "2018"
 description = "Bindings for valgrind's LibVEX."

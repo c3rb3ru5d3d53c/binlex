@@ -1,104 +1,126 @@
 services:
-  etcd:
-    container_name: milvus-etcd
-    image: quay.io/coreos/etcd:v3.5.18
-    restart: unless-stopped
-    environment:
-      ETCD_AUTO_COMPACTION_MODE: revision
-      ETCD_AUTO_COMPACTION_RETENTION: "1000"
-      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
-      ETCD_SNAPSHOT_COUNT: "50000"
-    command:
-      - etcd
-      - -advertise-client-urls=http://etcd:2379
-      - -listen-client-urls
-      - http://0.0.0.0:2379
-      - --data-dir
-      - /etcd
-    volumes:
-      - ./data/etcd:/etcd
-    healthcheck:
-      test: ["CMD", "etcdctl", "endpoint", "health"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
+  binlex-python:
+    container_name: binlex-python
+    image: binlex-python:${BINLEX_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: docker/binlex.Dockerfile
+      target: binlex-python
+      args:
+        BINLEX_IMAGE_VERSION: ${BINLEX_VERSION:-latest}
 
-  minio:
-    container_name: milvus-minio
-    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
-    restart: unless-stopped
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-    command: minio server /data --console-address ":9001"
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - ./data/minio:/data
-
-  milvus:
-    container_name: milvus-standalone
-    image: milvusdb/milvus:v2.6.11
-    restart: unless-stopped
-    command: ["milvus", "run", "standalone"]
-    environment:
-      ETCD_ENDPOINTS: etcd:2379
-      MINIO_ADDRESS: minio:9000
-    ports:
-      - "19530:19530"
-      - "9091:9091"
-    volumes:
-      - ./data/milvus:/var/lib/milvus
-    depends_on:
-      etcd:
-        condition: service_healthy
-      minio:
-        condition: service_started
-
-  attu:
-    container_name: milvus-attu
-    image: zilliz/attu:v2.6
-    restart: unless-stopped
-    environment:
-      MILVUS_URL: milvus:19530
-    ports:
-      - "8000:3000"
-    volumes:
-      - ./data/attu:/attu
-    depends_on:
-      milvus:
-        condition: service_started
+  # etcd:
+  #   container_name: milvus-etcd
+  #   image: quay.io/coreos/etcd:v3.5.18
+  #   restart: unless-stopped
+  #   environment:
+  #     ETCD_AUTO_COMPACTION_MODE: revision
+  #     ETCD_AUTO_COMPACTION_RETENTION: "1000"
+  #     ETCD_QUOTA_BACKEND_BYTES: "4294967296"
+  #     ETCD_SNAPSHOT_COUNT: "50000"
+  #   command:
+  #     - etcd
+  #     - -advertise-client-urls=http://etcd:2379
+  #     - -listen-client-urls
+  #     - http://0.0.0.0:2379
+  #     - --data-dir
+  #     - /etcd
+  #   volumes:
+  #     - ./data/etcd:/etcd
+  #   healthcheck:
+  #     test: ["CMD", "etcdctl", "endpoint", "health"]
+  #     interval: 30s
+  #     timeout: 20s
+  #     retries: 3
+  #
+  # minio:
+  #   container_name: milvus-minio
+  #   image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+  #   restart: unless-stopped
+  #   environment:
+  #     MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
+  #     MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-admin}
+  #   command: minio server /data --console-address ":9001"
+  #   ports:
+  #     - "9000:9000"
+  #     - "9001:9001"
+  #   volumes:
+  #     - ./data/minio:/data
+  #
+  # milvus:
+  #   container_name: milvus-standalone
+  #   image: milvusdb/milvus:v2.6.11
+  #   restart: unless-stopped
+  #   command: ["milvus", "run", "standalone"]
+  #   environment:
+  #     ETCD_ENDPOINTS: etcd:2379
+  #     MINIO_ADDRESS: minio:9000
+  #   ports:
+  #     - "19530:19530"
+  #     - "9091:9091"
+  #   volumes:
+  #     - ./data/milvus:/var/lib/milvus
+  #   depends_on:
+  #     etcd:
+  #       condition: service_healthy
+  #     minio:
+  #       condition: service_started
+  #
+  # attu:
+  #   container_name: milvus-attu
+  #   image: zilliz/attu:v2.6
+  #   restart: unless-stopped
+  #   environment:
+  #     MILVUS_URL: milvus:19530
+  #   ports:
+  #     - "8000:3000"
+  #   volumes:
+  #     - ./data/attu:/attu
+  #   depends_on:
+  #     milvus:
+  #       condition: service_started
 
   binlex-server:
     container_name: binlex-server
+    image: binlex-server:${BINLEX_VERSION:-latest}
     build:
       context: .
-      dockerfile: docker/binlex-server.Dockerfile
+      dockerfile: docker/binlex.Dockerfile
+      target: binlex-server
+      args:
+        BINLEX_IMAGE_VERSION: ${BINLEX_VERSION:-latest}
     restart: unless-stopped
     environment:
-      BINLEX_SERVER_CONFIG: /root/.config/binlex/binlex.toml
+      BINLEX_SERVER_CONFIG: ${BINLEX_SERVER_CONFIG:-/root/.config/binlex/binlex.toml}
     ports:
       - "5000:5000"
     volumes:
       - ./data/binlex-server:/data/binlex-server
-      - ./data/config/binlex:/root/.config/binlex
-    depends_on:
-      milvus:
-        condition: service_started
-      minio:
-        condition: service_started
+      - ./data/binlex-server/config:/root/.config
+      - ./data/binlex-server/local:/root/.local
+    # depends_on:
+    #   milvus:
+    #     condition: service_started
+    #   minio:
+    #     condition: service_started
 
   binlex-mcp:
     container_name: binlex-mcp
+    image: binlex-mcp:${BINLEX_VERSION:-latest}
     build:
       context: .
-      dockerfile: docker/binlex-mcp.Dockerfile
+      dockerfile: docker/binlex.Dockerfile
+      target: binlex-mcp
+      args:
+        BINLEX_IMAGE_VERSION: ${BINLEX_VERSION:-latest}
     restart: unless-stopped
     environment:
-      BINLEX_MCP_CONFIG: /root/.config/binlex/binlex-mcp.toml
+      BINLEX_MCP_CONFIG: ${BINLEX_MCP_CONFIG:-/root/.config/binlex/binlex-mcp.toml}
+      BINLEX_MCP_BASE_URL: ${BINLEX_MCP_BASE_URL:-http://127.0.0.1:3000}
+      BINLEX_MCP_SAMPLES: ${BINLEX_MCP_SAMPLES:-/root/.local/share/binlex/samples}
     ports:
-      - "5001:5001"
+      - "3000:3000"
     volumes:
       - ./data/binlex-mcp:/data/binlex-mcp
-      - ./data/config/binlex:/root/.config/binlex
+      - ./data/binlex-mcp/config:/root/.config
+      - ./data/binlex-mcp/local:/root/.local

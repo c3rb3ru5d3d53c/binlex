@@ -489,10 +489,6 @@ fn validate_hello(
     processor_name: &str,
     processor_id: u16,
 ) -> Result<(), ProcessorError> {
-    let registration =
-        processor::processor_registration_by_name(processor_name).ok_or_else(|| {
-            ProcessorError::Protocol(format!("unregistered processor {}", processor_name))
-        })?;
     if hello.protocol_version != crate::runtime::transports::ipc::protocol::VERSION {
         return Err(ProcessorError::UnexpectedResponse(format!(
             "processor protocol payload mismatch, expected {}, got {}",
@@ -506,10 +502,6 @@ fn validate_hello(
             binary_name, hello.backend_name
         )));
     }
-    crate::processor::registry::ensure_version_requirement(
-        &hello.binlex_version,
-        &registration.registration.requires,
-    )?;
     if hello.processor_name != processor_name {
         return Err(ProcessorError::UnexpectedResponse(format!(
             "processor name mismatch, expected {}, got {}",
@@ -536,6 +528,17 @@ fn validate_hello(
         return Err(ProcessorError::UnexpectedResponse(format!(
             "processor metadata name mismatch for id {}, expected {}, got {}",
             processor_id, processor_name, processor.name
+        )));
+    }
+    if let Some(registration) = processor::processor_registration_by_name(processor_name) {
+        crate::processor::registry::ensure_version_requirement(
+            &hello.binlex_version,
+            &registration.registration.requires,
+        )?;
+    } else if hello.binlex_version != crate::VERSION {
+        return Err(ProcessorError::Protocol(format!(
+            "unregistered processor {} reported incompatible binlex version {}",
+            processor_name, hello.binlex_version
         )));
     }
     crate::processor::registry::ensure_version_requirement(crate::VERSION, &processor.requires)?;

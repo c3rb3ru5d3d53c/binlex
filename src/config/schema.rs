@@ -142,6 +142,7 @@ pub struct ConfigProcessor {
     pub blocks: ConfigProcessorTarget,
     pub functions: ConfigProcessorTarget,
     pub graph: ConfigProcessorTarget,
+    pub complete: ConfigProcessorTarget,
     #[serde(flatten, default)]
     pub options: BTreeMap<String, ConfigProcessorValue>,
     pub transport: ConfigProcessorTransports,

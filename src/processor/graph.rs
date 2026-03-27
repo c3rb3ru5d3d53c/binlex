@@ -75,6 +75,10 @@ pub trait GraphProcessor: Processor {
     fn on_graph(_: &Graph) -> Option<GraphProcessorFanout> {
         None
     }
+
+    fn on_complete(_: &Graph) -> Result<(), ProcessorError> {
+        Ok(())
+    }
 }
 
 pub fn apply_output(outputs: &mut BTreeMap<String, Value>, processor_name: &str, output: &Value) {

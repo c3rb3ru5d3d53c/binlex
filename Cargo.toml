@@ -1,6 +1,6 @@
 [package]
 name = "binlex"
-version = "2.0.0"
+version.workspace = true
 edition = "2024"
 license = "MIT"
 description = "A Binary Genetic Trait Lexer Framework"
@@ -48,6 +48,7 @@ lancedb = { version = "0.27.1", default-features = false }
 arrow-array = { version = "57.0.0", default-features = false }
 arrow-schema = { version = "57.0.0", default-features = false }
 futures = "0.3.31"
+tracing = "0.1.41"
 
 [target.'cfg(not(target_os = "windows"))'.dev-dependencies]
 binlex-processor-vex = { path = "crates/binlex_processors/vex" }
@@ -64,7 +65,13 @@ members = [
     "crates/binlex_tools/binlex-yara",
     "crates/binlex_processors/embeddings",
     "crates/binlex_processors/vex",
+    "crates/libvex/libvex-macros",
+    "crates/libvex/libvex-rs",
+    "crates/libvex/libvex-sys",
 ]
+
+[workspace.package]
+version = "2.0.0"
 
 [profile.dev]
 debug = 0

@@ -1064,6 +1064,10 @@ pub fn registration() -> binlex::processor::ProcessorRegistration {
                 enabled: true,
                 options: BTreeMap::new(),
             },
+            complete: ConfigProcessorTarget {
+                enabled: false,
+                options: BTreeMap::new(),
+            },
             options: BTreeMap::from([
                 ("dimensions".to_string(), 64.into()),
                 ("device".to_string(), "cpu".into()),

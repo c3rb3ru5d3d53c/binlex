@@ -642,6 +642,7 @@ impl Graph {
         self.process_blocks()?;
         self.process_functions()?;
         self.process_graph()?;
+        self.process_complete()?;
         Ok(())
     }
 
@@ -659,6 +660,14 @@ impl Graph {
 
     pub fn process_graph(&self) -> Result<(), Error> {
         self.process_target(ProcessorTarget::Graph)
+    }
+
+    pub fn process_complete(&self) -> Result<(), Error> {
+        self.process_instructions()?;
+        self.process_blocks()?;
+        self.process_functions()?;
+        self.process_graph()?;
+        self.process_target(ProcessorTarget::Complete)
     }
 
     pub fn processor_outputs(
@@ -702,7 +711,7 @@ impl Graph {
         if enabled.is_empty() {
             let mut processor_state = self.processor_state.lock().unwrap();
             if self.revision.load(Ordering::SeqCst) == revision {
-                if target != ProcessorTarget::Graph {
+                if !matches!(target, ProcessorTarget::Graph | ProcessorTarget::Complete) {
                     processor_state.outputs.entry(target).or_default();
                 }
                 processor_state.revisions.insert(target, revision);
@@ -812,6 +821,19 @@ impl Graph {
                         ProcessorTarget::Function,
                         function_outputs,
                     );
+                    processor_state.revisions.insert(target, revision);
+                }
+                return Ok(());
+            }
+            ProcessorTarget::Complete => {
+                for processor in &remote_processors {
+                    processor
+                        .process_complete(self)
+                        .map_err(|error| Error::other(error.to_string()))?;
+                }
+
+                let mut processor_state = self.processor_state.lock().unwrap();
+                if self.revision.load(Ordering::SeqCst) == revision {
                     processor_state.revisions.insert(target, revision);
                 }
                 return Ok(());
