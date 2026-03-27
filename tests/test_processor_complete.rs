@@ -22,12 +22,7 @@ fn processor_dir() -> String {
             }
 
             let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-            let fixture_manifest = manifest_dir
-                .join("tests")
-                .join("fixtures")
-                .join("binlex-processor-complete-test")
-                .join("Cargo.toml");
-            let status = Command::new(cargo)
+            let vex_status = Command::new(&cargo)
                 .current_dir(&manifest_dir)
                 .args([
                     "build",
@@ -35,10 +30,21 @@ fn processor_dir() -> String {
                     "binlex-processor-vex",
                     "--bin",
                     "binlex-processor-vex",
-                    "--manifest-path",
-                    fixture_manifest
+                    "--target-dir",
+                    target_dir
                         .to_str()
-                        .expect("fixture manifest path should be valid"),
+                        .expect("target dir path should be valid"),
+                ])
+                .status()
+                .expect("cargo should build binlex-processor-vex");
+            assert!(vex_status.success(), "binlex-processor-vex binary should build");
+
+            let complete_status = Command::new(&cargo)
+                .current_dir(&manifest_dir)
+                .args([
+                    "build",
+                    "-p",
+                    "binlex-processor-complete-test",
                     "--bin",
                     "binlex-processor-complete-test",
                     "--target-dir",
@@ -47,8 +53,11 @@ fn processor_dir() -> String {
                         .expect("target dir path should be valid"),
                 ])
                 .status()
-                .expect("cargo should build processor test binaries");
-            assert!(status.success(), "processor test binaries should build");
+                .expect("cargo should build binlex-processor-complete-test");
+            assert!(
+                complete_status.success(),
+                "binlex-processor-complete-test binary should build"
+            );
 
             target_dir.to_string_lossy().into_owned()
         })
