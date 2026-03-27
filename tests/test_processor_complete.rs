@@ -14,7 +14,8 @@ fn processor_dir() -> String {
     PROCESSOR_DIR
         .get_or_init(|| {
             let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            let target_dir = manifest_dir.join("target").join("debug");
+            let target_root = manifest_dir.join("target");
+            let target_dir = target_root.join("debug");
             let vex_path = target_dir.join("binlex-processor-vex");
             let complete_path = target_dir.join("binlex-processor-complete-test");
             if vex_path.exists() && complete_path.exists() {
@@ -31,7 +32,7 @@ fn processor_dir() -> String {
                     "--bin",
                     "binlex-processor-vex",
                     "--target-dir",
-                    target_dir
+                    target_root
                         .to_str()
                         .expect("target dir path should be valid"),
                 ])
@@ -48,7 +49,7 @@ fn processor_dir() -> String {
                     "--bin",
                     "binlex-processor-complete-test",
                     "--target-dir",
-                    target_dir
+                    target_root
                         .to_str()
                         .expect("target dir path should be valid"),
                 ])
