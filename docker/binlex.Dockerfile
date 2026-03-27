@@ -34,6 +34,7 @@ RUN --mount=type=cache,target=/root/.cargo/registry \
     --mount=type=cache,target=/root/.cargo/git \
     --mount=type=cache,target=/app/target \
     set -eux; \
+    mkdir -p /tmp/binlex-tools; \
     mkdir -p /tmp/binlex-wheels; \
     maturin build --manifest-path bindings/python/Cargo.toml --release --out /tmp/binlex-wheels; \
     cargo build --release --bins \
@@ -41,6 +42,8 @@ RUN --mount=type=cache,target=/root/.cargo/registry \
         -p binlex-server \
         -p binlex-processor-embeddings \
         -p binlex-processor-vex; \
+    cp /app/target/release/binlex-mcp /tmp/binlex-tools/; \
+    cp /app/target/release/binlex-server /tmp/binlex-tools/; \
     mkdir -p /tmp/binlex-processors; \
     for path in /app/target/release/binlex-processor-*; do \
         [ -f "$path" ] || continue; \
@@ -98,7 +101,7 @@ RUN pip install --no-cache-dir \
 
 WORKDIR /app
 
-COPY --from=binlex-builder /app/target/release/binlex-mcp /usr/local/bin/binlex-mcp
+COPY --from=binlex-builder /tmp/binlex-tools/binlex-mcp /usr/local/bin/binlex-mcp
 COPY --from=binlex-builder /tmp/binlex-processors/ /opt/binlex/processors/
 COPY --from=binlex-builder /tmp/binlex-processors/ /root/.local/share/binlex/processors/
 COPY --from=binlex-builder /app/crates/binlex_tools/binlex-mcp/skills /opt/binlex-mcp/skills
@@ -130,7 +133,7 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY --from=binlex-builder /app/target/release/binlex-server /usr/local/bin/binlex-server
+COPY --from=binlex-builder /tmp/binlex-tools/binlex-server /usr/local/bin/binlex-server
 COPY --from=binlex-builder /tmp/binlex-processors/ /opt/binlex/processors/
 COPY --from=binlex-builder /tmp/binlex-processors/ /root/.local/share/binlex/processors/
 

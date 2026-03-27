@@ -775,7 +775,7 @@ jobs:
   release-publish:
     name: release-publish
     runs-on: ubuntu-latest
-    needs: [native-build, python-wheels, package-build]
+    needs: [native-build, python-wheels, package-build, docs-build]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
@@ -983,6 +983,21 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v6
 
+      - name: Resolve Binlex Version
+        shell: bash
+        run: |
+          version="$(./scripts/binlex-version.sh)"
+          test -n "${version}"
+          echo "BINLEX_VERSION=${version}" >> "$GITHUB_ENV"
+          echo "DOCS_ARTIFACT_NAME=binlex-${version}-docs-${{ matrix.docs }}" >> "$GITHUB_ENV"
+
+      - name: Validate Release Tag Version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          test "${TAG_VERSION}" = "${BINLEX_VERSION}"
+
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -1035,12 +1050,12 @@ jobs:
         if: matrix.docs == 'rust'
         uses: actions/upload-artifact@v6
         with:
-          name: rust-api-docs
+          name: ${{ env.DOCS_ARTIFACT_NAME }}
           path: target/doc/
 
       - name: Upload Python Docs
         if: matrix.docs == 'python'
         uses: actions/upload-artifact@v6
         with:
-          name: python-api-docs
+          name: ${{ env.DOCS_ARTIFACT_NAME }}
           path: bindings/python/docs/
