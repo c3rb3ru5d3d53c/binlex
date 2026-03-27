@@ -1,0 +1,74 @@
+[[skills]]
+name = "index.local"
+description = "Open or create a LocalIndex and summarize it."
+instructions = "Use the LocalIndex bindings and return concise index metadata."
+python = """
+import binlex
+
+result = {
+    "skill": "index.local",
+    "path": path,
+    "paths": paths,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "index.local.add"
+description = "Add entries into a LocalIndex."
+instructions = "Use LocalIndex to add the requested items and report what was indexed."
+python = """
+import binlex
+
+result = {
+    "skill": "index.local.add",
+    "path": path,
+    "paths": paths,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "index.local.search"
+description = "Search a LocalIndex for related entries."
+instructions = "Use LocalIndex search APIs and return the best matches."
+python = """
+import binlex
+
+result = {
+    "skill": "index.local.search",
+    "path": path,
+    "paths": paths,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "index.local.compare"
+description = "Compare an input against a LocalIndex."
+instructions = "Use LocalIndex to find nearby or similar entries for the requested input."
+python = """
+import binlex
+
+result = {
+    "skill": "index.local.compare",
+    "path": path,
+    "paths": paths,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "index.local.functions"
+description = "Index or search function-level data with LocalIndex."
+instructions = "Use LocalIndex with function-level artifacts and return concise results."
+python = """
+import binlex
+
+result = {
+    "skill": "index.local.functions",
+    "path": path,
+    "paths": paths,
+    "args": args,
+}
+"""

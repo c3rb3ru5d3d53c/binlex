@@ -1,0 +1,187 @@
+[[skills]]
+name = "hashing.sha256"
+description = "Compute a SHA-256 digest."
+instructions = "Return a SHA-256 digest for the requested input or selected artifact. When hashing a file through `binlex.formats.File`, enable SHA-256 in the config and call `read()` before `sha256()`."
+python = """
+import binlex
+
+config = binlex.Config()
+config.formats.file.sha256.enabled = True
+file = binlex.formats.File(path, config)
+file.read()
+sha256 = file.sha256()
+
+result = {
+    "skill": "hashing.sha256",
+    "path": path,
+    "paths": paths,
+    "args": args,
+    "sha256": None if sha256 is None else sha256.hexdigest(),
+}
+"""
+
+[[skills]]
+name = "hashing.tlsh"
+description = "Compute a TLSH digest."
+instructions = "Return a TLSH digest when available and explain if it cannot be computed. When hashing a file through `binlex.formats.File`, enable TLSH in the config and call `read()` before `tlsh()`."
+python = """
+import binlex
+
+config = binlex.Config()
+config.formats.file.tlsh.enabled = True
+file = binlex.formats.File(path, config)
+file.read()
+tlsh = file.tlsh()
+
+result = {
+    "skill": "hashing.tlsh",
+    "path": path,
+    "paths": paths,
+    "args": args,
+    "tlsh": None if tlsh is None else tlsh.hexdigest(),
+}
+"""
+
+[[skills]]
+name = "hashing.minhash"
+description = "Compute a MinHash digest."
+instructions = "Return a MinHash digest or signature for the requested input."
+python = """
+import binlex
+
+result = {
+    "skill": "hashing.minhash",
+    "path": path,
+    "paths": paths,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "hashing.ahash"
+description = "Compute an average image hash."
+instructions = "Use image or rendered-image data to compute an average hash."
+python = """
+import binlex
+
+result = {
+    "skill": "hashing.ahash",
+    "path": path,
+    "paths": paths,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "hashing.dhash"
+description = "Compute a difference image hash."
+instructions = "Use image or rendered-image data to compute a difference hash."
+python = """
+import binlex
+
+result = {
+    "skill": "hashing.dhash",
+    "path": path,
+    "paths": paths,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "hashing.phash"
+description = "Compute a perceptual image hash."
+instructions = "Use image or rendered-image data to compute a perceptual hash."
+python = """
+import binlex
+
+result = {
+    "skill": "hashing.phash",
+    "path": path,
+    "paths": paths,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "hashing.compare.sha256"
+description = "Compare SHA-256 digests across inputs."
+instructions = "Hash multiple inputs and compare their SHA-256 digests."
+python = """
+import binlex
+
+result = {
+    "skill": "hashing.compare.sha256",
+    "paths": paths or ([path] if path else []),
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "hashing.compare.tlsh"
+description = "Compare TLSH digests across inputs."
+instructions = "Hash multiple inputs and compare their TLSH digests."
+python = """
+import binlex
+
+result = {
+    "skill": "hashing.compare.tlsh",
+    "paths": paths or ([path] if path else []),
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "hashing.compare.minhash"
+description = "Compare MinHash digests across inputs."
+instructions = "Hash multiple inputs and compare their MinHash digests."
+python = """
+import binlex
+
+result = {
+    "skill": "hashing.compare.minhash",
+    "paths": paths or ([path] if path else []),
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "hashing.compare.ahash"
+description = "Compare average image hashes across inputs."
+instructions = "Compute average hashes for multiple inputs and compare them."
+python = """
+import binlex
+
+result = {
+    "skill": "hashing.compare.ahash",
+    "paths": paths or ([path] if path else []),
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "hashing.compare.dhash"
+description = "Compare difference image hashes across inputs."
+instructions = "Compute difference hashes for multiple inputs and compare them."
+python = """
+import binlex
+
+result = {
+    "skill": "hashing.compare.dhash",
+    "paths": paths or ([path] if path else []),
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "hashing.compare.phash"
+description = "Compare perceptual image hashes across inputs."
+instructions = "Compute perceptual hashes for multiple inputs and compare them."
+python = """
+import binlex
+
+result = {
+    "skill": "hashing.compare.phash",
+    "paths": paths or ([path] if path else []),
+    "args": args,
+}
+"""

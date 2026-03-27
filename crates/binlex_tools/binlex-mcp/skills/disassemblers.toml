@@ -1,0 +1,27 @@
+[[skills]]
+name = "disassemblers.capstone"
+description = "Disassemble supported native inputs with Capstone-backed bindings."
+instructions = "Use the Capstone bindings to build a graph or summarize decoded instructions."
+python = """
+import binlex
+
+result = {
+    "skill": "disassemblers.capstone",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "disassemblers.cil"
+description = "Disassemble CIL inputs with the managed-code bindings."
+instructions = "Use the CIL disassembler when the input is a managed binary."
+python = """
+import binlex
+
+result = {
+    "skill": "disassemblers.cil",
+    "path": path,
+    "args": args,
+}
+"""

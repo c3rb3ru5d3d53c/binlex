@@ -35,21 +35,29 @@ Binlex extracts instructions, basic blocks, and functions from binaries and emit
 ## Supported Targets 🌐
 
 - Platforms: Linux, macOS, Windows
-- Formats: PE, ELF, MachO
+- Formats: PE, ELF, Mach-O
 - Architectures: AMD64, I386, CIL
 
 ## Built-In Processors 🧠
 
+Default processors:
+
 - `binlex-processor-vex`: lifts instructions, blocks, or functions into VEX IR
 - `binlex-processor-embeddings`: generates vector embeddings for similarity and ML workflows
 
-Processors are implemented in Rust for fast execution. Binlex ships with these processors out of the box, and you can build and share your own processor backends as separate `binlex-processor-*` binaries.
+Processors are implemented in Rust for fast execution. You can build and share your own processors as separate `binlex-processor-*` binaries.
 
-See [Custom Processors](docs/processors.md) for the processor model and registration flow.
+Just ensure to place them in one of these directories:
+- Linux: `$XDG_DATA_HOME/binlex/processors` or `$HOME/.local/share/binlex/processors`
+- macOS: `$HOME/Library/Application Support/binlex/processors`
+- Windows: `%LOCALAPPDATA%\\binlex\\processors`
+
+See [Custom Processors](docs/processors.md) for the rust processor skeleton.
 
 ## Included Tools 🧰
 
 - `binlex`: main CLI for binary trait extraction
+- `binlex-mcp`: Model Context Protocol server for exposing Binlex tools to MCP clients
 - `binlex-server`: processor transport server for `http` workflows
 - `binlex-hash`: hashing utility
 - `binlex-image`: image-related utility
@@ -64,19 +72,38 @@ See [Custom Processors](docs/processors.md) for the processor model and registra
 cargo build --release --workspace
 ```
 
-### Run on a Sample ▶️
+### Binlex CLI Tool ▶️
 
 ```bash
-binlex -i sample.dll --threads 16 | jq
+./target/release/binlex -i samples/malware.exe --threads 16 | jq
 ```
 
-### Explore The CLI
+### MCP Server 🔌
+
+Give your LLM access to Binlex using the MCP server.
+
+Initialize the MCP server config:
 
 ```bash
-binlex --help
+binlex-mcp init crates/binlex_tools/binlex-mcp/skills/
+# combine urls and file paths and directories to share skills with friends
+binlex-mcp init <directory> <url> <file_path> <url>
 ```
 
-### Optional: Python Bindings 🐍
+Start the MCP server:
+
+```bash
+binlex-mcp serve
+```
+
+If you prefer to deploy it with Docker:
+
+```bash
+docker compose build binlex-mcp
+docker compose up -d binlex-mcp
+```
+
+### Python Bindings 🐍
 
 ```bash
 cd bindings/python/
@@ -86,7 +113,7 @@ pip install maturin[patchelf]
 maturin develop
 ```
 
-### Optional: Packaging 📦
+### Packaging 📦
 
 ```bash
 make zst   # Arch Linux
@@ -94,14 +121,7 @@ make deb   # Debian-based
 make wheel # Python Wheel
 ```
 
-### Optional: Binlex Server 🖥️
-
-```bash
-cp env.example .env
-docker compose up -d
-```
-
-### Optional: IDA Plugin 🧠
+### IDA Plugin 🧠
 
 ```bash
 cd plugins/ida/
@@ -109,7 +129,7 @@ pip install .
 python -m binlex_ida install
 ```
 
-## Configuration Path 📁
+## Configuration Paths 📁
 
 Default config file location:
 - Linux: `$XDG_CONFIG_HOME/binlex/binlex.toml` or `$HOME/.config/binlex/binlex.toml`

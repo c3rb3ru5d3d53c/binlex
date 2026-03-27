@@ -1,0 +1,83 @@
+[[skills]]
+name = "workflow.triage"
+description = "Perform a first-pass triage of an input."
+instructions = "Combine file identification, hashing, and structure summary into a concise triage report."
+python = """
+import binlex
+
+result = {
+    "skill": "workflow.triage",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "workflow.compare.hashes"
+description = "Compare multiple inputs using exact and fuzzy hashes."
+instructions = "Hash multiple inputs and summarize exact or fuzzy similarity."
+python = """
+import binlex
+
+result = {
+    "skill": "workflow.compare.hashes",
+    "paths": paths or ([path] if path else []),
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "workflow.compare.functions"
+description = "Compare function-level artifacts across inputs."
+instructions = "Use graph or hash-derived metadata to compare selected functions."
+python = """
+import binlex
+
+result = {
+    "skill": "workflow.compare.functions",
+    "paths": paths or ([path] if path else []),
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "workflow.yara.candidates"
+description = "Identify candidate material for YARA generation."
+instructions = "Use file and graph-derived traits to shortlist stable candidate regions."
+python = """
+import binlex
+
+result = {
+    "skill": "workflow.yara.candidates",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "workflow.processor.lift"
+description = "Prepare for processor-based lifting or enrichment."
+instructions = "Collect the right artifacts, then run or prepare a processor-backed workflow."
+python = """
+import binlex
+
+result = {
+    "skill": "workflow.processor.lift",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "workflow.corpus.summary"
+description = "Summarize a collection of inputs."
+instructions = "Use multiple inputs to build a concise corpus-level summary with hashes or shared traits."
+python = """
+import binlex
+
+result = {
+    "skill": "workflow.corpus.summary",
+    "paths": paths or ([path] if path else []),
+    "args": args,
+}
+"""

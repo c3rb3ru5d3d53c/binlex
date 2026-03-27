@@ -1,0 +1,201 @@
+[[skills]]
+name = "formats.file"
+description = "Open a file and summarize basic metadata."
+instructions = "Use the file-level bindings, call `read()` before accessing content-derived properties, and return size, entropy, and any obvious traits."
+python = """
+import binlex
+
+config = binlex.Config()
+file = binlex.formats.File(path, config)
+file.read()
+
+result = {
+    "skill": "formats.file",
+    "path": path,
+    "args": args,
+    "size": file.size(),
+    "magic": str(file.magic()),
+    "entropy": file.entropy() if hasattr(file, "entropy") else None,
+}
+"""
+
+[[skills]]
+name = "formats.file.magic"
+description = "Open a file and report its magic value."
+instructions = "Focus on file type identification."
+python = """
+import binlex
+
+result = {
+    "skill": "formats.file.magic",
+    "path": path,
+}
+"""
+
+[[skills]]
+name = "formats.file.sha256"
+description = "Open a file and compute its SHA-256 digest."
+instructions = "Return the file SHA-256 digest and basic context. For `binlex.formats.File`, call `read()` before `sha256()` or the digest may be unavailable because no bytes have been loaded."
+python = """
+import binlex
+
+config = binlex.Config()
+config.formats.file.sha256.enabled = True
+file = binlex.formats.File(path, config)
+file.read()
+sha256 = file.sha256()
+
+result = {
+    "skill": "formats.file.sha256",
+    "path": path,
+    "size": file.size(),
+    "sha256": None if sha256 is None else sha256.hexdigest(),
+}
+"""
+
+[[skills]]
+name = "formats.file.tlsh"
+description = "Open a file and compute its TLSH digest."
+instructions = "Return the file TLSH digest and any caveats if it is unavailable. For `binlex.formats.File`, call `read()` before `tlsh()` or the digest may be unavailable because no bytes have been loaded."
+python = """
+import binlex
+
+config = binlex.Config()
+config.formats.file.tlsh.enabled = True
+file = binlex.formats.File(path, config)
+file.read()
+tlsh = file.tlsh()
+
+result = {
+    "skill": "formats.file.tlsh",
+    "path": path,
+    "size": file.size(),
+    "tlsh": None if tlsh is None else tlsh.hexdigest(),
+}
+"""
+
+[[skills]]
+name = "formats.file.entropy"
+description = "Open a file and compute its entropy."
+instructions = "Return file entropy and note whether it looks unusually high. For `binlex.formats.File`, call `read()` before accessing content-derived properties."
+python = """
+import binlex
+
+config = binlex.Config()
+file = binlex.formats.File(path, config)
+file.read()
+
+result = {
+    "skill": "formats.file.entropy",
+    "path": path,
+    "size": file.size(),
+    "entropy": file.entropy(),
+}
+"""
+
+[[skills]]
+name = "formats.pe"
+description = "Open a PE file and summarize it."
+instructions = "Use the PE bindings to report architecture, entrypoints, and exports if available."
+python = """
+import binlex
+
+result = {
+    "skill": "formats.pe",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "formats.pe.entrypoints"
+description = "Open a PE file and report its entrypoints."
+instructions = "Focus on PE entrypoints and related metadata."
+python = """
+import binlex
+
+result = {
+    "skill": "formats.pe.entrypoints",
+    "path": path,
+}
+"""
+
+[[skills]]
+name = "formats.pe.exports"
+description = "Open a PE file and report its exports."
+instructions = "Return exported symbols and related metadata if available."
+python = """
+import binlex
+
+result = {
+    "skill": "formats.pe.exports",
+    "path": path,
+}
+"""
+
+[[skills]]
+name = "formats.elf"
+description = "Open an ELF file and summarize it."
+instructions = "Use the ELF bindings to report architecture, entrypoint, and exports if available."
+python = """
+import binlex
+
+result = {
+    "skill": "formats.elf",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "formats.elf.entrypoint"
+description = "Open an ELF file and report its entrypoint."
+instructions = "Focus on the entrypoint and related metadata."
+python = """
+import binlex
+
+result = {
+    "skill": "formats.elf.entrypoint",
+    "path": path,
+}
+"""
+
+[[skills]]
+name = "formats.elf.exports"
+description = "Open an ELF file and report its exports."
+instructions = "Return exported symbols and related metadata if available."
+python = """
+import binlex
+
+result = {
+    "skill": "formats.elf.exports",
+    "path": path,
+}
+"""
+
+[[skills]]
+name = "formats.macho"
+description = "Open a Mach-O file and summarize it."
+instructions = "Use the Mach-O bindings to report architecture and slice metadata."
+python = """
+import binlex
+
+result = {
+    "skill": "formats.macho",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "formats.macho.slices"
+description = "Open a Mach-O file and report its slices."
+instructions = "Focus on slice metadata for fat or multi-arch Mach-O files."
+python = """
+import binlex
+
+result = {
+    "skill": "formats.macho.slices",
+    "path": path,
+}
+"""

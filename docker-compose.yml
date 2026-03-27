@@ -76,33 +76,29 @@ services:
       context: .
       dockerfile: docker/binlex-server.Dockerfile
     restart: unless-stopped
+    environment:
+      BINLEX_SERVER_CONFIG: /root/.config/binlex/binlex.toml
     ports:
       - "5000:5000"
     volumes:
       - ./data/binlex-server:/data/binlex-server
+      - ./data/config/binlex:/root/.config/binlex
     depends_on:
       milvus:
         condition: service_started
       minio:
         condition: service_started
 
-  binlex-server-gpu:
-    container_name: binlex-server-gpu
+  binlex-mcp:
+    container_name: binlex-mcp
     build:
       context: .
-      dockerfile: docker/binlex-server.Dockerfile
+      dockerfile: docker/binlex-mcp.Dockerfile
     restart: unless-stopped
-    profiles: ["gpu"]
-    gpus: all
     environment:
-      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES}
-      NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES}
+      BINLEX_MCP_CONFIG: /root/.config/binlex/binlex-mcp.toml
     ports:
-      - "5000:5000"
+      - "5001:5001"
     volumes:
-      - ./data/binlex-server:/data/binlex-server
-    depends_on:
-      milvus:
-        condition: service_started
-      minio:
-        condition: service_started
+      - ./data/binlex-mcp:/data/binlex-mcp
+      - ./data/config/binlex:/root/.config/binlex

@@ -1,0 +1,181 @@
+[[skills]]
+name = "controlflow.graph"
+description = "Build or inspect a control-flow graph for an input."
+instructions = "Return a graph-level summary including counts and notable traits."
+python = """
+import binlex
+
+result = {
+    "skill": "controlflow.graph",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "controlflow.graph.summary"
+description = "Summarize a control-flow graph with compact metrics."
+instructions = "Return graph-level counts and high-level structure only."
+python = """
+import binlex
+
+result = {
+    "skill": "controlflow.graph.summary",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "controlflow.function"
+description = "Inspect a function from a control-flow graph."
+instructions = "Load the graph, locate the target function, and return its summary."
+python = """
+import binlex
+
+result = {
+    "skill": "controlflow.function",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "controlflow.function.blocks"
+description = "Inspect the blocks belonging to a function."
+instructions = "Load the target function and return its basic blocks."
+python = """
+import binlex
+
+result = {
+    "skill": "controlflow.function.blocks",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "controlflow.function.instructions"
+description = "Inspect the instructions belonging to a function."
+instructions = "Load the target function and return its decoded instructions."
+python = """
+import binlex
+
+result = {
+    "skill": "controlflow.function.instructions",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "controlflow.function.filter"
+description = "Filter functions by selected properties."
+instructions = "Use graph-derived metadata to select functions by thresholds or predicates."
+python = """
+import binlex
+
+result = {
+    "skill": "controlflow.function.filter",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "controlflow.function.rank.entropy"
+description = "Rank functions by entropy."
+instructions = "Compute or read entropy values and return the highest-ranked functions."
+python = """
+import binlex
+
+result = {
+    "skill": "controlflow.function.rank.entropy",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "controlflow.function.rank.complexity"
+description = "Rank functions by complexity."
+instructions = "Use graph metadata such as block counts or cyclomatic complexity to rank functions."
+python = """
+import binlex
+
+result = {
+    "skill": "controlflow.function.rank.complexity",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "controlflow.block"
+description = "Inspect a basic block from a control-flow graph."
+instructions = "Return the target block and concise metadata for it."
+python = """
+import binlex
+
+result = {
+    "skill": "controlflow.block",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "controlflow.block.instructions"
+description = "Inspect the instructions within a basic block."
+instructions = "Return the target block and its instructions."
+python = """
+import binlex
+
+result = {
+    "skill": "controlflow.block.instructions",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "controlflow.block.filter"
+description = "Filter basic blocks by selected properties."
+instructions = "Use block-level metadata to select blocks by thresholds or predicates."
+python = """
+import binlex
+
+result = {
+    "skill": "controlflow.block.filter",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "controlflow.instruction"
+description = "Inspect an instruction from a control-flow graph."
+instructions = "Return the target instruction and concise metadata."
+python = """
+import binlex
+
+result = {
+    "skill": "controlflow.instruction",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "controlflow.instruction.successors"
+description = "Inspect successor relationships for an instruction."
+instructions = "Return the target instruction and its successor or edge metadata."
+python = """
+import binlex
+
+result = {
+    "skill": "controlflow.instruction.successors",
+    "path": path,
+    "args": args,
+}
+"""
