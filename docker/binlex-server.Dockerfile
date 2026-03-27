@@ -1,4 +1,10 @@
-FROM rust:1.88-bookworm AS builder
+FROM rust:1.94-bookworm AS builder
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libprotobuf-dev protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PROTOC_INCLUDE=/usr/include
 
 WORKDIR /app
 
@@ -15,7 +21,7 @@ FROM debian:bookworm-slim
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates libgcc-s1 libstdc++6 \
     && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /data/binlex-server
+    && mkdir -p /data/binlex-server /root/.config/binlex
 
 WORKDIR /app
 

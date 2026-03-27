@@ -23,9 +23,9 @@
 use super::{
     Config, ConfigBlocks, ConfigChromosomes, ConfigData, ConfigDisassembler,
     ConfigDisassemblerSweep, ConfigFile, ConfigFormats, ConfigFunctions, ConfigGeneral,
-    ConfigHashEnabled, ConfigHeuristicEntropy, ConfigHeuristicFeatures, ConfigImaging, ConfigIndex,
-    ConfigIndexLocal, ConfigInstructions, ConfigMarkov, ConfigMinhash, ConfigMmap, ConfigMmapCache,
-    ConfigProcessors, ConfigServer, ConfigTLSH,
+    ConfigHashEnabled, ConfigHeuristicEntropy, ConfigHeuristicFeatures, ConfigImaging,
+    ConfigIndex, ConfigIndexLocal, ConfigInstructions, ConfigMarkov, ConfigMinhash, ConfigMmap,
+    ConfigMmapCache, ConfigProcessors, ConfigServer, ConfigTLSH,
 };
 use std::env;
 
@@ -233,7 +233,8 @@ impl Config {
     }
 
     pub fn default_local_index_directory() -> String {
-        dirs::config_dir()
+        dirs::data_local_dir()
+            .or_else(dirs::data_dir)
             .unwrap_or_else(|| env::temp_dir())
             .join(DIRECTORY)
             .join("index")
@@ -243,7 +244,8 @@ impl Config {
     }
 
     pub fn default_processor_directory() -> String {
-        dirs::config_dir()
+        dirs::data_local_dir()
+            .or_else(dirs::data_dir)
             .unwrap_or_else(|| env::temp_dir())
             .join(DIRECTORY)
             .join("processors")

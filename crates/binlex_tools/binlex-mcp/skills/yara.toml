@@ -1,0 +1,109 @@
+[[skills]]
+name = "client.requests.fetch"
+description = "Fetch remote content with the requests library from inside the Binlex MCP Python runtime."
+instructions = "Use `requests` for HTTP GET requests, especially for Binlex MCP sample download paths or other HTTP-accessible artifacts. Expect request parameters in `args` such as `url`, `headers`, `params`, and `timeout`, and return status, selected headers, and either parsed JSON or a compact body preview."
+python = """
+import hashlib
+import requests
+
+request_args = args or {}
+url = request_args.get("url") or path
+headers = request_args.get("headers") or {}
+params = request_args.get("params") or {}
+timeout = request_args.get("timeout", 30)
+
+response = requests.get(url, headers=headers, params=params, timeout=timeout)
+content_type = response.headers.get("content-type", "")
+body_preview = None
+body_json = None
+
+if "application/json" in content_type:
+    try:
+        body_json = response.json()
+    except Exception:
+        body_preview = response.text[:4000]
+else:
+    try:
+        body_preview = response.text[:4000]
+    except Exception:
+        body_preview = None
+
+result = {
+    "skill": "client.requests.fetch",
+    "url": url,
+    "status_code": response.status_code,
+    "content_type": content_type,
+    "content_length": len(response.content),
+    "sha256": hashlib.sha256(response.content).hexdigest(),
+    "headers": {
+        "content-type": response.headers.get("content-type"),
+        "content-length": response.headers.get("content-length"),
+        "x-binlex-sha256": response.headers.get("x-binlex-sha256"),
+        "x-binlex-size": response.headers.get("x-binlex-size"),
+    },
+    "json": body_json,
+    "body_preview": body_preview,
+}
+"""
+
+[[skills]]
+name = "workflow.yara.scan"
+description = "Compile YARA rules with yara-python and scan a fetched or local target from inside the Binlex MCP runtime."
+instructions = "Use `requests` to fetch a target when only a URL is available, or read `path` directly when the file exists in the MCP runtime. Expect `args` to provide either `rule_text` or `rule_path`, and either `url` or `path`. Return the matched rule names, namespaces, tags, strings, and a concise summary of why the target matched."
+python = """
+import pathlib
+import requests
+import yara
+
+request_args = args or {}
+rule_text = request_args.get("rule_text")
+rule_path = request_args.get("rule_path")
+url = request_args.get("url")
+target_path = path or request_args.get("path")
+timeout = request_args.get("timeout", 30)
+
+if rule_text:
+    rules = yara.compile(source=rule_text)
+elif rule_path:
+    rules = yara.compile(filepath=rule_path)
+else:
+    raise ValueError("provide `rule_text` or `rule_path`")
+
+if url:
+    response = requests.get(url, timeout=timeout)
+    response.raise_for_status()
+    matches = rules.match(data=response.content)
+    target = url
+elif target_path:
+    matches = rules.match(filepath=str(pathlib.Path(target_path)))
+    target = target_path
+else:
+    raise ValueError("provide `url` or `path`")
+
+result = {
+    "skill": "workflow.yara.scan",
+    "target": target,
+    "match_count": len(matches),
+    "matches": [
+        {
+            "rule": match.rule,
+            "namespace": match.namespace,
+            "tags": list(match.tags),
+            "strings": [
+                {
+                    "identifier": string.identifier,
+                    "instances": [
+                        {
+                            "offset": instance.offset,
+                            "matched_length": instance.matched_length,
+                        }
+                        for instance in string.instances
+                    ],
+                }
+                for string in match.strings
+            ],
+        }
+        for match in matches
+    ],
+}
+"""

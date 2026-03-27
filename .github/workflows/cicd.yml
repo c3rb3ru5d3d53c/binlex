@@ -138,6 +138,7 @@ jobs:
         if: ${{ matrix.os == 'windows-latest' }}
         run: |
           copy target\release\binlex.exe dist\
+          copy target\release\binlex-mcp.exe dist\
           copy target\release\binlex-server.exe dist\
           copy target\release\binlex-processor-embeddings.exe dist\
           copy target\release\binlex-yara.exe dist\
@@ -149,6 +150,7 @@ jobs:
         if: startsWith(matrix.os, 'macos-')
         run: |
           cp target/release/binlex dist/
+          cp target/release/binlex-mcp dist/
           cp target/release/binlex-server dist/
           cp target/release/binlex-processor-vex dist/
           cp target/release/binlex-processor-embeddings dist/
@@ -161,6 +163,7 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
           cp target/release/binlex dist/
+          cp target/release/binlex-mcp dist/
           cp target/release/binlex-server dist/
           cp target/release/binlex-processor-vex dist/
           cp target/release/binlex-processor-embeddings dist/
@@ -295,6 +298,7 @@ jobs:
         run: |
           set -euo pipefail
           cp /tmp/binlex-build/target/release/binlex dist/
+          cp /tmp/binlex-build/target/release/binlex-mcp dist/
           cp /tmp/binlex-build/target/release/binlex-server dist/
           cp /tmp/binlex-build/target/release/binlex-processor-vex dist/
           cp /tmp/binlex-build/target/release/binlex-processor-embeddings dist/
@@ -506,6 +510,96 @@ jobs:
           path: |
             dist/binlex-ida.zip
             plugins/ida/dist/*
+
+  mcp-skills:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Create MCP Skills Archive
+        shell: bash
+        run: |
+          mkdir -p dist
+          python - <<'PY'
+          import shutil
+          from pathlib import Path
+
+          source = Path("crates/binlex_tools/binlex-mcp/skills")
+          archive = Path("dist/binlex-mcp-skills.zip")
+          shutil.make_archive(str(archive.with_suffix("")), "zip", root_dir=source.parent, base_dir=source.name)
+          PY
+
+      - name: Upload MCP Skills Artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: binlex-mcp-skills
+          path: dist/binlex-mcp-skills.zip
+
+      - name: Summarize MCP Skills Artifact
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+
+          archive = Path("dist/binlex-mcp-skills.zip")
+          summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
+
+          digest = hashlib.sha256()
+          with archive.open("rb") as handle:
+              for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                  digest.update(chunk)
+
+          with summary.open("a", encoding="utf-8") as handle:
+              handle.write("## MCP Skills Artifact\n\n")
+              handle.write("Artifact name: `binlex-mcp-skills`\n\n")
+              handle.write("| File | Size | SHA-256 |\n")
+              handle.write("| --- | ---: | --- |\n")
+              handle.write(f"| `{archive.name}` | {archive.stat().st_size:,} bytes | `{digest.hexdigest()}` |\n\n")
+          PY
+
+  docker-binlex-mcp:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build binlex-mcp Image
+        shell: bash
+        run: docker compose build binlex-mcp
+
+      - name: Smoke Test binlex-mcp Image
+        shell: bash
+        run: docker compose run --rm --no-deps binlex-mcp binlex-mcp --help
+
+      # Uncomment the steps below when you are ready to publish to Docker Hub.
+      # You will also need DOCKERHUB_USERNAME and DOCKERHUB_TOKEN GitHub secrets.
+      #
+      # - name: Log In to Docker Hub
+      #   if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+      #   uses: docker/login-action@v3
+      #   with:
+      #     username: ${{ secrets.DOCKERHUB_USERNAME }}
+      #     password: ${{ secrets.DOCKERHUB_TOKEN }}
+      #
+      # - name: Tag binlex-mcp Image for Docker Hub
+      #   if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+      #   shell: bash
+      #   run: |
+      #     image_id="$(docker compose images -q binlex-mcp)"
+      #     docker tag "$image_id" yourorg/binlex-mcp:latest
+      #
+      # - name: Push binlex-mcp Image
+      #   if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+      #   shell: bash
+      #   run: docker push yourorg/binlex-mcp:latest
 
   docs:
     runs-on: ubuntu-latest

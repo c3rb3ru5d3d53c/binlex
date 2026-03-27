@@ -1,0 +1,27 @@
+[[skills]]
+name = "core.magic"
+description = "Inspect an input and report its detected magic."
+instructions = "Use Binlex to identify the input type and return a concise summary."
+python = """
+import binlex
+
+result = {
+    "skill": "core.magic",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "core.architecture"
+description = "Inspect an input and report its detected architecture."
+instructions = "Use Binlex to identify the architecture and return a concise summary."
+python = """
+import binlex
+
+result = {
+    "skill": "core.architecture",
+    "path": path,
+    "args": args,
+}
+"""

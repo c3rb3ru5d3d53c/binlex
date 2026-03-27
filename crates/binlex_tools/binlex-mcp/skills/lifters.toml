@@ -1,0 +1,27 @@
+[[skills]]
+name = "lifters.vex.function"
+description = "Lift a function into VEX IR."
+instructions = "Select the target function and return a VEX-based summary or IR."
+python = """
+import binlex
+
+result = {
+    "skill": "lifters.vex.function",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "lifters.vex.block"
+description = "Lift a basic block into VEX IR."
+instructions = "Select the target block and return a VEX-based summary or IR."
+python = """
+import binlex
+
+result = {
+    "skill": "lifters.vex.block",
+    "path": path,
+    "args": args,
+}
+"""

@@ -1,0 +1,125 @@
+[[skills]]
+name = "imaging.render"
+description = "Render an input into an image-oriented representation."
+instructions = "Use imaging bindings to create a representation suitable for visualization."
+python = """
+import binlex
+
+result = {
+    "skill": "imaging.render",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "imaging.terminal"
+description = "Render an input for terminal display."
+instructions = "Use imaging bindings to produce console-friendly output."
+python = """
+import binlex
+
+result = {
+    "skill": "imaging.terminal",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "imaging.svg"
+description = "Render an input as SVG."
+instructions = "Use imaging bindings to produce SVG output."
+python = """
+import binlex
+
+result = {
+    "skill": "imaging.svg",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "imaging.png"
+description = "Render an input as PNG."
+instructions = "Use imaging bindings to produce PNG output."
+python = """
+import binlex
+
+result = {
+    "skill": "imaging.png",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "imaging.pipeline.linear"
+description = "Run a linear imaging pipeline."
+instructions = "Use the linear imaging pipeline for the selected input."
+python = """
+import binlex
+
+result = {
+    "skill": "imaging.pipeline.linear",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "imaging.pipeline.bitmap"
+description = "Run a bitmap imaging pipeline."
+instructions = "Use the bitmap imaging pipeline for the selected input."
+python = """
+import binlex
+
+result = {
+    "skill": "imaging.pipeline.bitmap",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "imaging.pipeline.digraph"
+description = "Run a digraph imaging pipeline."
+instructions = "Use the digraph imaging pipeline for the selected input."
+python = """
+import binlex
+
+result = {
+    "skill": "imaging.pipeline.digraph",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "imaging.pipeline.entropy"
+description = "Run an entropy imaging pipeline."
+instructions = "Use the entropy imaging pipeline for the selected input."
+python = """
+import binlex
+
+result = {
+    "skill": "imaging.pipeline.entropy",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "imaging.pipeline.hilbert"
+description = "Run a Hilbert imaging pipeline."
+instructions = "Use the Hilbert imaging pipeline for the selected input."
+python = """
+import binlex
+
+result = {
+    "skill": "imaging.pipeline.hilbert",
+    "path": path,
+    "args": args,
+}
+"""

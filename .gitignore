@@ -18,3 +18,4 @@ pkg/
 perf.data
 __pycache__/
 *.pyc
+data/

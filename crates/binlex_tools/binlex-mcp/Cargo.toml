@@ -1,0 +1,24 @@
+[package]
+name = "binlex-mcp"
+version = "2.0.0"
+edition = "2024"
+
+[[bin]]
+name = "binlex-mcp"
+path = "src/main.rs"
+
+[dependencies]
+actix-web = "4.11.0"
+binlex = { path = "../../.." }
+clap = { version = "4.5.27", features = ["derive"] }
+dirs = "6.0.0"
+reqwest = { version = "0.12.28", default-features = false, features = ["blocking", "rustls-tls"] }
+rmcp = { version = "1.0.0", features = ["server"] }
+rmcp-actix-web = "0.12.2"
+schemars = "1.0.4"
+serde = { version = "1.0.217", features = ["derive"] }
+serde_json = "1.0.137"
+tokio = { version = "1.47.1", features = ["rt-multi-thread"] }
+toml = "0.8.19"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt"] }

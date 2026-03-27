@@ -43,6 +43,7 @@ EOF
 package() {
   local builddir="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
   install -Dm755 "$builddir/target/release/binlex" "$pkgdir/usr/bin/binlex"
+  install -Dm755 "$builddir/target/release/binlex-mcp" "$pkgdir/usr/bin/binlex-mcp"
   install -Dm755 "$builddir/target/release/binlex-symbols" "$pkgdir/usr/bin/binlex-symbols"
   install -Dm755 "$builddir/target/release/binlex-hash" "$pkgdir/usr/bin/binlex-hash"
   install -Dm755 "$builddir/target/release/binlex-image" "$pkgdir/usr/bin/binlex-image"

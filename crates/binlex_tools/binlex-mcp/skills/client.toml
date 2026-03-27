@@ -1,0 +1,40 @@
+[[skills]]
+name = "client.analyze"
+description = "Use the Binlex client path to analyze an input."
+instructions = "Call the client-facing APIs and summarize the returned analysis."
+python = """
+import binlex
+
+result = {
+    "skill": "client.analyze",
+    "path": path,
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "client.processors.list"
+description = "List processors via the Binlex client path."
+instructions = "Call the client-facing APIs and return available processors."
+python = """
+import binlex
+
+result = {
+    "skill": "client.processors.list",
+    "args": args,
+}
+"""
+
+[[skills]]
+name = "client.processors.run"
+description = "Run a processor via the Binlex client path."
+instructions = "Call the client-facing APIs and return the processor result."
+python = """
+import binlex
+
+result = {
+    "skill": "client.processors.run",
+    "path": path,
+    "args": args,
+}
+"""
