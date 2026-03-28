@@ -40,7 +40,6 @@ env:
   SCCACHE_GHA_ENABLED: "true"
   SCCACHE_CACHE_SIZE: "4G"
   WINDOWS_CARGO_EXCLUDES: "--exclude binlex-python --exclude binlex-processor-vex --exclude libvex --exclude libvex-macros --exclude vex-sys"
-  DOCKER_PLATFORMS: linux/amd64,linux/arm64
 
 jobs:
   native-build:
@@ -823,12 +822,29 @@ jobs:
 
   docker-build:
     name: docker-build (${{ matrix.target }} / ${{ matrix.platform }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        target: [binlex-mcp, binlex-python, binlex-server]
-        platform: [linux/amd64, linux/arm64]
+        include:
+          - target: binlex-mcp
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - target: binlex-mcp
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+          - target: binlex-python
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - target: binlex-python
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+          - target: binlex-server
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - target: binlex-server
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
 
     steps:
       - name: Checkout Code
@@ -843,9 +859,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Validate Release Tag Version
         if: startsWith(github.ref, 'refs/tags/v')
@@ -893,14 +906,32 @@ jobs:
         run: docker run --rm "${BINLEX_DOCKER_IMAGE}" binlex-server --help
 
   docker-publish:
-    name: docker-publish (${{ matrix.target }})
-    runs-on: ubuntu-latest
+    name: docker-publish (${{ matrix.target }} / ${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
     needs: docker-build
     if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
     strategy:
       fail-fast: false
       matrix:
-        target: [binlex-mcp, binlex-python, binlex-server]
+        include:
+          - target: binlex-mcp
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - target: binlex-mcp
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+          - target: binlex-python
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - target: binlex-python
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+          - target: binlex-server
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - target: binlex-server
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
 
     steps:
       - name: Checkout Code
@@ -915,9 +946,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Validate Release Tag Version
         if: startsWith(github.ref, 'refs/tags/v')
@@ -942,10 +970,12 @@ jobs:
           if [ "${#tags[@]}" -eq 0 ]; then
             exit 1
           fi
+          platform_slug="${{ matrix.platform }}"
+          platform_slug="${platform_slug//\//-}"
+          digest_artifact="digests-${{ matrix.target }}-${platform_slug}"
           {
-            echo 'DOCKER_TAGS<<EOF'
-            printf '%s\n' "${tags[@]}"
-            echo 'EOF'
+            echo "DOCKER_IMAGE=${DOCKER_NAMESPACE}/${{ matrix.target }}"
+            echo "DIGEST_ARTIFACT=${digest_artifact}"
           } >> "$GITHUB_ENV"
 
       - name: Log In to Docker Hub
@@ -955,19 +985,117 @@ jobs:
           password: ${{ secrets.DOCKER_TOKEN }}
 
       - name: Publish ${{ matrix.target }} Image
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/binlex.Dockerfile
           target: ${{ matrix.target }}
-          platforms: ${{ env.DOCKER_PLATFORMS }}
+          platforms: ${{ matrix.platform }}
           push: true
-          tags: ${{ env.DOCKER_TAGS }}
+          outputs: type=image,name=${{ env.DOCKER_IMAGE }},push-by-digest=true,name-canonical=true,push=true
           build-args: |
             BINLEX_IMAGE_VERSION=${{ env.BINLEX_VERSION }}
             BINLEX_IMAGE_REVISION=${{ github.sha }}
-          cache-from: type=gha,scope=docker-${{ matrix.target }}-publish
-          cache-to: type=gha,mode=max,scope=docker-${{ matrix.target }}-publish
+          cache-from: type=gha,scope=docker-${{ matrix.target }}-${{ matrix.platform }}-publish
+          cache-to: type=gha,mode=max,scope=docker-${{ matrix.target }}-${{ matrix.platform }}-publish
+
+      - name: Export Image Digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload Image Digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.DIGEST_ARTIFACT }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  docker-manifest:
+    name: docker-manifest (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    needs: docker-publish
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [binlex-mcp, binlex-python, binlex-server]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Resolve Binlex Version
+        shell: bash
+        run: |
+          version="$(./scripts/binlex-version.sh)"
+          test -n "${version}"
+          echo "BINLEX_VERSION=${version}" >> "$GITHUB_ENV"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Download AMD64 Digest
+        uses: actions/download-artifact@v4
+        with:
+          name: digests-${{ matrix.target }}-linux-amd64
+          path: /tmp/digests
+
+      - name: Download ARM64 Digest
+        uses: actions/download-artifact@v4
+        with:
+          name: digests-${{ matrix.target }}-linux-arm64
+          path: /tmp/digests
+
+      - name: Log In to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Resolve Docker Tags
+        shell: bash
+        env:
+          DOCKER_NAMESPACE: ${{ secrets.DOCKER_USERNAME }}
+        run: |
+          set -euo pipefail
+          tags=()
+          if [ "${GITHUB_REF}" = "refs/heads/master" ]; then
+            tags+=("${DOCKER_NAMESPACE}/${{ matrix.target }}:latest")
+          fi
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            tags+=("${DOCKER_NAMESPACE}/${{ matrix.target }}:${BINLEX_VERSION}")
+          fi
+          if [ "${#tags[@]}" -eq 0 ]; then
+            exit 1
+          fi
+          {
+            echo 'DOCKER_TAGS<<EOF'
+            printf '%s\n' "${tags[@]}"
+            echo 'EOF'
+            echo "DOCKER_IMAGE=${DOCKER_NAMESPACE}/${{ matrix.target }}"
+          } >> "$GITHUB_ENV"
+
+      - name: Create Multi-Arch Manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t tags <<< "${DOCKER_TAGS}"
+          mapfile -t digests < <(find /tmp/digests -maxdepth 1 -type f -printf '%f\n' | sort)
+          test "${#digests[@]}" -eq 2
+          tag_args=()
+          for tag in "${tags[@]}"; do
+            tag_args+=(--tag "$tag")
+          done
+          docker buildx imagetools create \
+            "${tag_args[@]}" \
+            "${DOCKER_IMAGE}@sha256:${digests[0]}" \
+            "${DOCKER_IMAGE}@sha256:${digests[1]}"
 
   docs-build:
     name: docs-build (${{ matrix.docs }})
