@@ -111,17 +111,6 @@ docker compose -f compose.yml -f compose.remote.yml up -d
 ```bash
 cargo doc --open
 ```
-
-# Command-Line ▶️
-
-```bash
-./target/release/binlex -i samples/malware.exe --threads 16 | jq
-binlex-mcp init crates/binlex_tools/binlex-mcp/skills/
-# combine urls and file paths and directories to share skills with friends
-binlex-mcp init <directory> <url> <file_path> <url>
-binlex-mcp serve
-```
-
 ## Configuration 📁
 
 Default configuration directories:
