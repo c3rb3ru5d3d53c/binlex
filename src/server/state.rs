@@ -9,15 +9,17 @@ use tracing::{debug, info};
 #[derive(Clone)]
 pub struct AppState {
     pub config: Config,
+    pub debug: bool,
     pub processor_pools: BTreeMap<String, Arc<ProcessorPool>>,
 }
 
 impl AppState {
-    pub fn new(config: Config) -> Result<Self, crate::runtime::error::ProcessorError> {
+    pub fn new(config: Config, debug: bool) -> Result<Self, crate::runtime::error::ProcessorError> {
         let mut processor_pools = BTreeMap::new();
         if !config.processors.enabled {
             return Ok(Self {
                 config,
+                debug,
                 processor_pools,
             });
         }
@@ -58,12 +60,13 @@ impl AppState {
         }
         Ok(Self {
             config,
+            debug,
             processor_pools,
         })
     }
 
     pub fn debug_enabled(&self) -> bool {
-        self.config.server.debug
+        self.debug
     }
 
     pub fn debug_log<T: std::fmt::Display>(&self, line: T) {

@@ -25,7 +25,7 @@ use super::{
     ConfigDisassemblerSweep, ConfigFile, ConfigFormats, ConfigFunctions, ConfigGeneral,
     ConfigHashEnabled, ConfigHeuristicEntropy, ConfigHeuristicFeatures, ConfigImaging, ConfigIndex,
     ConfigIndexLocal, ConfigInstructions, ConfigMarkov, ConfigMinhash, ConfigMmap, ConfigMmapCache,
-    ConfigProcessors, ConfigServer, ConfigTLSH,
+    ConfigProcessors, ConfigTLSH,
 };
 use std::env;
 
@@ -45,10 +45,6 @@ impl Config {
             general: ConfigGeneral {
                 threads: 1,
                 minimal: false,
-                debug: false,
-            },
-            server: ConfigServer {
-                bind: "127.0.0.1:5000".to_string(),
                 debug: false,
             },
             index: ConfigIndex::default(),

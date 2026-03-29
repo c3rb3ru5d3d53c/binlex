@@ -255,6 +255,7 @@ jobs:
           copy target\release\binlex.exe dist\
           copy target\release\binlex-mcp.exe dist\
           copy target\release\binlex-server.exe dist\
+          copy target\release\binlex-web.exe dist\
           copy target\release\binlex-processor-embeddings.exe dist\
           copy target\release\binlex-yara.exe dist\
           copy target\release\binlex-symbols.exe dist\
@@ -267,6 +268,7 @@ jobs:
           cp target/release/binlex dist/
           cp target/release/binlex-mcp dist/
           cp target/release/binlex-server dist/
+          cp target/release/binlex-web dist/
           cp target/release/binlex-processor-vex dist/
           cp target/release/binlex-processor-embeddings dist/
           cp target/release/binlex-yara dist/
@@ -280,6 +282,7 @@ jobs:
           cp target/release/binlex dist/
           cp target/release/binlex-mcp dist/
           cp target/release/binlex-server dist/
+          cp target/release/binlex-web dist/
           cp target/release/binlex-processor-vex dist/
           cp target/release/binlex-processor-embeddings dist/
           cp target/release/binlex-yara dist/
@@ -296,6 +299,7 @@ jobs:
           cp /tmp/binlex-build/target/release/binlex dist/
           cp /tmp/binlex-build/target/release/binlex-mcp dist/
           cp /tmp/binlex-build/target/release/binlex-server dist/
+          cp /tmp/binlex-build/target/release/binlex-web dist/
           cp /tmp/binlex-build/target/release/binlex-processor-vex dist/
           cp /tmp/binlex-build/target/release/binlex-processor-embeddings dist/
           cp /tmp/binlex-build/target/release/binlex-yara dist/
@@ -820,8 +824,8 @@ jobs:
           fi
           gh release upload "${GITHUB_REF_NAME}" "${assets[@]}" --clobber
 
-  docker-build:
-    name: docker-build (${{ matrix.target }} / ${{ matrix.platform }})
+  docker-image:
+    name: docker-image (${{ matrix.target }} / ${{ matrix.platform }})
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -830,21 +834,43 @@ jobs:
           - target: binlex-mcp
             platform: linux/amd64
             runner: ubuntu-latest
+            dockerfile: docker/binlex.Dockerfile
+            uses_shared_target: true
           - target: binlex-mcp
             platform: linux/arm64
             runner: ubuntu-24.04-arm
+            dockerfile: docker/binlex.Dockerfile
+            uses_shared_target: true
           - target: binlex-python
             platform: linux/amd64
             runner: ubuntu-latest
+            dockerfile: docker/binlex.Dockerfile
+            uses_shared_target: true
           - target: binlex-python
             platform: linux/arm64
             runner: ubuntu-24.04-arm
+            dockerfile: docker/binlex.Dockerfile
+            uses_shared_target: true
           - target: binlex-server
             platform: linux/amd64
             runner: ubuntu-latest
+            dockerfile: docker/binlex-server.Dockerfile
+            uses_shared_target: false
           - target: binlex-server
             platform: linux/arm64
             runner: ubuntu-24.04-arm
+            dockerfile: docker/binlex-server.Dockerfile
+            uses_shared_target: false
+          - target: binlex-web
+            platform: linux/amd64
+            runner: ubuntu-latest
+            dockerfile: docker/binlex-web.Dockerfile
+            uses_shared_target: false
+          - target: binlex-web
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            dockerfile: docker/binlex-web.Dockerfile
+            uses_shared_target: false
 
     steps:
       - name: Checkout Code
@@ -872,13 +898,18 @@ jobs:
         run: |
           platform_slug="${{ matrix.platform }}"
           platform_slug="${platform_slug//\//-}"
-          echo "BINLEX_DOCKER_IMAGE=${{ matrix.target }}:${BINLEX_VERSION}-${platform_slug}" >> "$GITHUB_ENV"
+          digest_artifact="digests-${{ matrix.target }}-${platform_slug}"
+          {
+            echo "BINLEX_DOCKER_IMAGE=${{ matrix.target }}:${BINLEX_VERSION}-${platform_slug}"
+            echo "DIGEST_ARTIFACT=${digest_artifact}"
+          } >> "$GITHUB_ENV"
 
-      - name: Build ${{ matrix.target }} Image
+      - name: Build ${{ matrix.target }} Image (shared Dockerfile)
+        if: github.event_name == 'pull_request' && matrix.uses_shared_target
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: docker/binlex.Dockerfile
+          file: ${{ matrix.dockerfile }}
           target: ${{ matrix.target }}
           platforms: ${{ matrix.platform }}
           load: true
@@ -890,71 +921,44 @@ jobs:
           cache-from: type=gha,scope=docker-${{ matrix.target }}-${{ matrix.platform }}
           cache-to: type=gha,mode=max,scope=docker-${{ matrix.target }}-${{ matrix.platform }}
 
+      - name: Build ${{ matrix.target }} Image (standalone Dockerfile)
+        if: github.event_name == 'pull_request' && !matrix.uses_shared_target
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platform }}
+          load: true
+          push: false
+          tags: ${{ env.BINLEX_DOCKER_IMAGE }}
+          build-args: |
+            BINLEX_IMAGE_VERSION=${{ env.BINLEX_VERSION }}
+            BINLEX_IMAGE_REVISION=${{ github.sha }}
+          cache-from: type=gha,scope=docker-${{ matrix.target }}-${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=docker-${{ matrix.target }}-${{ matrix.platform }}
+
       - name: Smoke Test binlex-mcp Image
-        if: matrix.target == 'binlex-mcp'
+        if: github.event_name == 'pull_request' && matrix.target == 'binlex-mcp'
         shell: bash
         run: docker run --rm "${BINLEX_DOCKER_IMAGE}" binlex-mcp --help
 
       - name: Smoke Test binlex-python Image
-        if: matrix.target == 'binlex-python'
+        if: github.event_name == 'pull_request' && matrix.target == 'binlex-python'
         shell: bash
         run: docker run --rm "${BINLEX_DOCKER_IMAGE}" python -c "import binlex"
 
       - name: Smoke Test binlex-server Image
-        if: matrix.target == 'binlex-server'
+        if: github.event_name == 'pull_request' && matrix.target == 'binlex-server'
         shell: bash
         run: docker run --rm "${BINLEX_DOCKER_IMAGE}" binlex-server --help
 
-  docker-publish:
-    name: docker-publish (${{ matrix.target }} / ${{ matrix.platform }})
-    runs-on: ${{ matrix.runner }}
-    needs: docker-build
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: binlex-mcp
-            platform: linux/amd64
-            runner: ubuntu-latest
-          - target: binlex-mcp
-            platform: linux/arm64
-            runner: ubuntu-24.04-arm
-          - target: binlex-python
-            platform: linux/amd64
-            runner: ubuntu-latest
-          - target: binlex-python
-            platform: linux/arm64
-            runner: ubuntu-24.04-arm
-          - target: binlex-server
-            platform: linux/amd64
-            runner: ubuntu-latest
-          - target: binlex-server
-            platform: linux/arm64
-            runner: ubuntu-24.04-arm
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v6
-
-      - name: Resolve Binlex Version
+      - name: Smoke Test binlex-web Image
+        if: github.event_name == 'pull_request' && matrix.target == 'binlex-web'
         shell: bash
-        run: |
-          version="$(./scripts/binlex-version.sh)"
-          test -n "${version}"
-          echo "BINLEX_VERSION=${version}" >> "$GITHUB_ENV"
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Validate Release Tag Version
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: bash
-        run: |
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
-          test "${TAG_VERSION}" = "${BINLEX_VERSION}"
+        run: docker run --rm "${BINLEX_DOCKER_IMAGE}" binlex-web --help
 
       - name: Resolve Docker Tags
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
         shell: bash
         env:
           DOCKER_NAMESPACE: ${{ secrets.DOCKER_USERNAME }}
@@ -979,17 +983,19 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Log In to Docker Hub
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
-      - name: Publish ${{ matrix.target }} Image
+      - name: Publish ${{ matrix.target }} Image (shared Dockerfile)
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')) && matrix.uses_shared_target
         id: build
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: docker/binlex.Dockerfile
+          file: ${{ matrix.dockerfile }}
           target: ${{ matrix.target }}
           platforms: ${{ matrix.platform }}
           push: true
@@ -997,18 +1003,36 @@ jobs:
           build-args: |
             BINLEX_IMAGE_VERSION=${{ env.BINLEX_VERSION }}
             BINLEX_IMAGE_REVISION=${{ github.sha }}
-          cache-from: type=gha,scope=docker-${{ matrix.target }}-${{ matrix.platform }}-publish
-          cache-to: type=gha,mode=max,scope=docker-${{ matrix.target }}-${{ matrix.platform }}-publish
+          cache-from: type=gha,scope=docker-${{ matrix.target }}-${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=docker-${{ matrix.target }}-${{ matrix.platform }}
+
+      - name: Publish ${{ matrix.target }} Image (standalone Dockerfile)
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')) && !matrix.uses_shared_target
+        id: build-standalone
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platform }}
+          push: true
+          outputs: type=image,name=${{ env.DOCKER_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          build-args: |
+            BINLEX_IMAGE_VERSION=${{ env.BINLEX_VERSION }}
+            BINLEX_IMAGE_REVISION=${{ github.sha }}
+          cache-from: type=gha,scope=docker-${{ matrix.target }}-${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=docker-${{ matrix.target }}-${{ matrix.platform }}
 
       - name: Export Image Digest
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p /tmp/digests
-          digest="${{ steps.build.outputs.digest }}"
+          digest="${{ steps.build.outputs.digest || steps.build-standalone.outputs.digest }}"
           touch "/tmp/digests/${digest#sha256:}"
 
       - name: Upload Image Digest
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.DIGEST_ARTIFACT }}
@@ -1019,12 +1043,12 @@ jobs:
   docker-manifest:
     name: docker-manifest (${{ matrix.target }})
     runs-on: ubuntu-latest
-    needs: docker-publish
+    needs: docker-image
     if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
     strategy:
       fail-fast: false
       matrix:
-        target: [binlex-mcp, binlex-python, binlex-server]
+        target: [binlex-mcp, binlex-python, binlex-server, binlex-web]
 
     steps:
       - name: Checkout Code

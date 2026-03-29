@@ -27,6 +27,6 @@ pub struct AnalyzeRequest {
     pub magic: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub architecture: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub config: Option<crate::Config>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub corpora: Vec<String>,
 }

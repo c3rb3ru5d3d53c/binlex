@@ -1,0 +1,22 @@
+[package]
+name = "binlex-web"
+version.workspace = true
+edition = "2024"
+
+[[bin]]
+name = "binlex-web"
+path = "src/main.rs"
+
+[dependencies]
+axum = { version = "0.8.4", features = ["multipart"] }
+binlex = { path = "../../.." }
+clap = { version = "4.5.27", features = ["derive"] }
+dirs = "6.0.0"
+serde = { version = "1.0.217", features = ["derive"] }
+serde_json = "1.0.137"
+serde_urlencoded = "0.7.1"
+tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread", "signal"] }
+toml = "0.8.19"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["fmt"] }
+zip = "0.6.6"

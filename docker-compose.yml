@@ -1,13 +1,13 @@
 services:
-  binlex-python:
-    container_name: binlex-python
-    image: binlex-python:${BINLEX_VERSION:-latest}
-    build:
-      context: .
-      dockerfile: docker/binlex.Dockerfile
-      target: binlex-python
-      args:
-        BINLEX_IMAGE_VERSION: ${BINLEX_VERSION:-latest}
+  # binlex-python:
+  #   container_name: binlex-python
+  #   image: binlex-python:${BINLEX_VERSION:-latest}
+  #   build:
+  #     context: .
+  #     dockerfile: docker/binlex.Dockerfile
+  #     target: binlex-python
+  #     args:
+  #       BINLEX_IMAGE_VERSION: ${BINLEX_VERSION:-latest}
 
   # etcd:
   #   container_name: milvus-etcd
@@ -91,18 +91,13 @@ services:
         BINLEX_IMAGE_VERSION: ${BINLEX_VERSION:-latest}
     restart: unless-stopped
     environment:
-      BINLEX_SERVER_CONFIG: ${BINLEX_SERVER_CONFIG:-/root/.config/binlex/binlex.toml}
+      BINLEX_SERVER_CONFIG: ${BINLEX_SERVER_CONFIG:-/root/.config/binlex/binlex-server.toml}
     ports:
       - "5000:5000"
     volumes:
       - ./data/binlex-server:/data/binlex-server
-      - ./data/binlex-server/config:/root/.config
-      - ./data/binlex-server/local:/root/.local
-    # depends_on:
-    #   milvus:
-    #     condition: service_started
-    #   minio:
-    #     condition: service_started
+      - ./data/binlex/config:/root/.config
+      - ./data/binlex/local:/root/.local
 
   binlex-mcp:
     container_name: binlex-mcp
@@ -122,5 +117,31 @@ services:
       - "3000:3000"
     volumes:
       - ./data/binlex-mcp:/data/binlex-mcp
-      - ./data/binlex-mcp/config:/root/.config
-      - ./data/binlex-mcp/local:/root/.local
+      - ./data/binlex/config:/root/.config
+      - ./data/binlex/local:/root/.local
+
+  binlex-web:
+    container_name: binlex-web
+    image: binlex-web:${BINLEX_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: docker/binlex-web.Dockerfile
+      args:
+        BINLEX_IMAGE_VERSION: ${BINLEX_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      BINLEX_WEB_CONFIG: ${BINLEX_WEB_CONFIG:-/root/.config/binlex/binlex-web.toml}
+      BINLEX_WEB_LISTEN: ${BINLEX_WEB_LISTEN:-0.0.0.0}
+      BINLEX_WEB_PORT: ${BINLEX_WEB_PORT:-8000}
+      BINLEX_WEB_URL: ${BINLEX_WEB_URL:-http://127.0.0.1:8000}
+      BINLEX_WEB_SERVER_URL: ${BINLEX_WEB_SERVER_URL:-http://binlex-server:5000}
+      BINLEX_WEB_CORPUS: ${BINLEX_WEB_CORPUS:-default}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data/binlex-web:/data/binlex-web
+      - ./data/binlex/config:/root/.config
+      - ./data/binlex/local:/root/.local
+    depends_on:
+      binlex-server:
+        condition: service_started

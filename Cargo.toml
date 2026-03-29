@@ -62,6 +62,7 @@ members = [
     "crates/binlex_tools/binlex-mcp",
     "crates/binlex_tools/binlex-server",
     "crates/binlex_tools/binlex-symbols",
+    "crates/binlex_tools/binlex-web",
     "crates/binlex_tools/binlex-yara",
     "crates/binlex_processors/embeddings",
     "crates/binlex_processors/vex",

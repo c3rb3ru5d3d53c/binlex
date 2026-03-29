@@ -81,9 +81,7 @@ impl GraphProcessor for CompleteTestProcessor {
             .processor(Self::NAME)
             .and_then(|processor| processor.option_string("path"))
             .ok_or_else(|| {
-                ProcessorError::Protocol(
-                    "complete-test processor requires path option".to_string(),
-                )
+                ProcessorError::Protocol("complete-test processor requires path option".to_string())
             })?;
         let instruction_count = data
             .get("instructions")
