@@ -1,0 +1,26 @@
+services:
+  binlex-server:
+    image: binlex-server:${BINLEX_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: docker/binlex.Dockerfile
+      target: binlex-server
+      args:
+        BINLEX_IMAGE_VERSION: ${BINLEX_VERSION:-latest}
+
+  binlex-mcp:
+    image: binlex-mcp:${BINLEX_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: docker/binlex.Dockerfile
+      target: binlex-mcp
+      args:
+        BINLEX_IMAGE_VERSION: ${BINLEX_VERSION:-latest}
+
+  binlex-web:
+    image: binlex-web:${BINLEX_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: docker/binlex-web.Dockerfile
+      args:
+        BINLEX_IMAGE_VERSION: ${BINLEX_VERSION:-latest}

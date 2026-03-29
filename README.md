@@ -5,6 +5,10 @@
 [![GitHub stars](https://img.shields.io/github/stars/c3rb3ru5d3d53c/binlex)](https://github.com/c3rb3ru5d3d53c/binlex/stargazers)
 [![GitHub license](https://img.shields.io/github/license/c3rb3ru5d3d53c/binlex)](https://github.com/c3rb3ru5d3d53c/binlex/blob/master/LICENSE)
 ![GitHub all releases](https://img.shields.io/github/downloads/c3rb3ru5d3d53c/binlex/total)
+![binlex-python](https://img.shields.io/docker/pulls/c3rb3ru5d3d53c/binlex-python?logo=docker&label=binlex-python)
+![binlex-server](https://img.shields.io/docker/pulls/c3rb3ru5d3d53c/binlex-server?logo=docker&label=binlex-server)
+![binlex-web](https://img.shields.io/docker/pulls/c3rb3ru5d3d53c/binlex-web?logo=docker&label=binlex-web)
+![binlex-mcp](https://img.shields.io/docker/pulls/c3rb3ru5d3d53c/binlex-mcp?logo=docker&label=binlex-mcp)
 
 <table>
   <tr>
@@ -38,23 +42,7 @@ Binlex extracts instructions, basic blocks, and functions from binaries and emit
 - Formats: PE, ELF, Mach-O
 - Architectures: AMD64, I386, CIL
 
-## Built-In Processors 🧠
-
-Default processors:
-
-- `binlex-processor-vex`: lifts instructions, blocks, or functions into VEX IR
-- `binlex-processor-embeddings`: generates vector embeddings for similarity and ML workflows
-
-Processors are implemented in Rust for fast execution. You can build and share your own processors as separate `binlex-processor-*` binaries.
-
-Just ensure to place them in one of these directories:
-- Linux: `$XDG_DATA_HOME/binlex/processors` or `$HOME/.local/share/binlex/processors`
-- macOS: `$HOME/Library/Application Support/binlex/processors`
-- Windows: `%LOCALAPPDATA%\\binlex\\processors`
-
-See [Custom Processors](docs/processors.md) for the rust processor skeleton.
-
-## Included Tools 🧰
+## Included Command-Line Tool Suite 🧰
 
 - `binlex`: main CLI for binary trait extraction
 - `binlex-mcp`: Model Context Protocol server for exposing Binlex tools to MCP clients
@@ -64,49 +52,12 @@ See [Custom Processors](docs/processors.md) for the rust processor skeleton.
 - `binlex-symbols`: symbol ingestion and conversion helper
 - `binlex-yara`: generate YARA rules from Binlex-style patterns or streams
 
-## Quick Start 🚀
+## Build & Install 🛠️
 
-### Build 🛠️
+### Rust API & Tooling
 
 ```bash
 cargo build --release --workspace
-```
-
-### Binlex CLI Tool ▶️
-
-```bash
-./target/release/binlex -i samples/malware.exe --threads 16 | jq
-```
-
-### MCP Server 🔌
-
-Give your LLM access to Binlex using the MCP server.
-
-Initialize the MCP server config:
-
-```bash
-binlex-mcp init crates/binlex_tools/binlex-mcp/skills/
-# combine urls and file paths and directories to share skills with friends
-binlex-mcp init <directory> <url> <file_path> <url>
-```
-
-Start the MCP server:
-
-```bash
-binlex-mcp serve
-```
-
-If you prefer to deploy it with Docker:
-
-```bash
-docker compose build binlex-mcp
-docker compose up -d binlex-mcp
-```
-
-Build just the reusable Python base image:
-
-```bash
-docker build -f docker/binlex.Dockerfile --target binlex-python -t binlex-python:latest .
 ```
 
 ### Python Bindings 🐍
@@ -135,34 +86,52 @@ pip install .
 python -m binlex_ida install
 ```
 
-## Configuration Paths 📁
+### Docker Containers
 
-Default config file location:
-- Linux: `$XDG_CONFIG_HOME/binlex/binlex.toml` or `$HOME/.config/binlex/binlex.toml`
-- macOS: `$HOME/Library/Application Support/binlex/binlex.toml`
-- Windows: `%APPDATA%\binlex\binlex.toml`
+```bash
+# Local Build and Start
+docker compose -f compose.yml -f compose.local.yml up --build -d
+# Start Using Docker Hub
+docker compose -f compose.yml -f compose.remote.yml up -d
+```
+### Documentation 📚
 
-`binlex-server` uses the same configuration schema, including `server.*`, but defaults to `binlex-server.toml` in the same config directory.
-
-## Docs 📚
+#### Guides
 
 - [Command-Line Guide](docs/command-line.md)
 - [Custom Processors](docs/processors.md)
 
-API reference docs can be generated from source:
+#### Examples 🧪
+
+- [Python Examples](examples/python/)
+- [Rust Examples](examples/rust/)
+
+#### Rust API
 
 ```bash
 cargo doc --open
 ```
 
-## Examples 🧪
+# Command-Line ▶️
 
-- [Python Examples](examples/python/)
-- [Rust Examples](examples/rust/)
+```bash
+./target/release/binlex -i samples/malware.exe --threads 16 | jq
+binlex-mcp init crates/binlex_tools/binlex-mcp/skills/
+# combine urls and file paths and directories to share skills with friends
+binlex-mcp init <directory> <url> <file_path> <url>
+binlex-mcp serve
+```
+
+## Configuration 📁
+
+Default configuration directories:
+- Linux: `$XDG_CONFIG_HOME/binlex/binlex.toml` or `$HOME/.config/binlex/`
+- macOS: `$HOME/Library/Application Support/binlex/`
+- Windows: `%APPDATA%\binlex\`
 
 ## Citation 📖
 
-If you use Binlex in a journal publication or open-source AI model, cite:
+If you use Binlex in a journal publication or an open-source AI model, cite:
 
 ```bibtex
 @misc{binlex,
@@ -173,4 +142,4 @@ If you use Binlex in a journal publication or open-source AI model, cite:
 }
 ```
 
-For corporate/personal usage or generated outputs (for example YARA rules), citation is not required.
+For any other corporate/personal usage or generated outputs (for example YARA rules), citation is not required.
