@@ -1,0 +1,9 @@
+services:
+  binlex-server:
+    image: ${DOCKER_NAMESPACE:-c3rb3ru5d3d53c}/binlex-server:${BINLEX_VERSION:-latest}
+
+  binlex-mcp:
+    image: ${DOCKER_NAMESPACE:-c3rb3ru5d3d53c}/binlex-mcp:${BINLEX_VERSION:-latest}
+
+  binlex-web:
+    image: ${DOCKER_NAMESPACE:-c3rb3ru5d3d53c}/binlex-web:${BINLEX_VERSION:-latest}
