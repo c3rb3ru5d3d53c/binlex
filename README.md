@@ -142,6 +142,8 @@ Default config file location:
 - macOS: `$HOME/Library/Application Support/binlex/binlex.toml`
 - Windows: `%APPDATA%\binlex\binlex.toml`
 
+`binlex-server` uses the same configuration schema, including `server.*`, but defaults to `binlex-server.toml` in the same config directory.
+
 ## Docs 📚
 
 - [Command-Line Guide](docs/command-line.md)

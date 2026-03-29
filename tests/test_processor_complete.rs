@@ -38,7 +38,10 @@ fn processor_dir() -> String {
                 ])
                 .status()
                 .expect("cargo should build binlex-processor-vex");
-            assert!(vex_status.success(), "binlex-processor-vex binary should build");
+            assert!(
+                vex_status.success(),
+                "binlex-processor-vex binary should build"
+            );
 
             let complete_status = Command::new(&cargo)
                 .current_dir(&manifest_dir)

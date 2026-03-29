@@ -1,9 +1,14 @@
 use binlex::config::ConfigProcessor;
 use binlex::controlflow::{Graph, Instruction};
+use binlex::index::{Collection, LocalIndex};
 use binlex::processor::GraphProcessor;
 use binlex::runtime::Processor;
 use binlex::{Architecture, Config};
-use binlex_processor_embeddings::{EmbeddingsProcessor, EmbeddingsRequest, registration};
+use binlex_processor_embeddings::{
+    EmbeddingsLocalIndexRequest, EmbeddingsProcessor, EmbeddingsRequest, registration,
+};
+use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 fn embeddings_config() -> Config {
     let mut config = Config::default();
@@ -114,4 +119,80 @@ fn on_graph_returns_function_fanout() {
         .and_then(|value| value.as_array())
         .expect("function vector should be present");
     assert_eq!(vector.len(), 64);
+}
+
+#[test]
+fn complete_stage_indexes_function_vectors_locally() {
+    let graph = build_single_return_graph();
+    let fanout = <EmbeddingsProcessor as GraphProcessor>::on_graph(&graph)
+        .expect("graph fanout should exist");
+
+    let mut snapshot = graph.snapshot();
+    snapshot.processor_outputs.functions = HashMap::from([(
+        0x1000,
+        vec![(
+            "embeddings".to_string(),
+            fanout
+                .functions
+                .get(&0x1000)
+                .cloned()
+                .expect("function embedding should exist"),
+        )],
+    )]);
+
+    let root = std::env::temp_dir().join(format!(
+        "binlex-embeddings-index-{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time should be monotonic")
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&root).expect("temp index root should be created");
+
+    let request = EmbeddingsRequest {
+        stage: Some("complete".to_string()),
+        dimensions: Some(64),
+        device: Some("cpu".to_string()),
+        threads: Some(1),
+        snapshot: Some(snapshot),
+        sha256: Some(
+            "ae3f4619b0413d70d3004b9131c3752153074e45725be13b9a148978895e359e"
+                .to_string(),
+        ),
+        corpora: vec!["default".to_string()],
+        attributes: Vec::new(),
+        index: Some(EmbeddingsLocalIndexRequest {
+            enabled: true,
+            path: root.to_string_lossy().into_owned(),
+            selector: "processors.embeddings.vector".to_string(),
+            corpus: "default".to_string(),
+            function: true,
+            block: false,
+            instruction: false,
+        }),
+        instructions: Vec::new(),
+        blocks: Vec::new(),
+        functions: Vec::new(),
+    };
+
+    EmbeddingsProcessor
+        .execute(request)
+        .expect("complete request should index locally");
+
+    let mut config = Config::default();
+    config.index.local.directory = root.to_string_lossy().into_owned();
+    config.index.local.dimensions = Some(64);
+    let index = LocalIndex::new(config).expect("local index should open");
+    let results = index
+        .exact_search(
+            &["default".to_string()],
+            "ae3f4619b0413d70d3004b9131c3752153074e45725be13b9a148978895e359e",
+            Some(&[Collection::Function]),
+            &[],
+            4,
+        )
+        .expect("exact search should succeed");
+    assert_eq!(results.len(), 1);
+
+    let _ = std::fs::remove_dir_all(root);
 }

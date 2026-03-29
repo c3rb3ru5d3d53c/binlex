@@ -103,11 +103,21 @@ impl Client {
         magic: Option<crate::Magic>,
         architecture: Option<crate::Architecture>,
     ) -> Result<Graph, Error> {
+        self.analyze_bytes_with_corpora(data, magic, architecture, &[])
+    }
+
+    pub fn analyze_bytes_with_corpora(
+        &self,
+        data: &[u8],
+        magic: Option<crate::Magic>,
+        architecture: Option<crate::Architecture>,
+        corpora: &[String],
+    ) -> Result<Graph, Error> {
         let request = AnalyzeRequest {
             data: base64::engine::general_purpose::STANDARD.encode(data),
             magic: magic.map(|value| value.to_string()),
             architecture: architecture.map(|value| value.to_string()),
-            config: Some(self.config.clone()),
+            corpora: corpora.to_vec(),
         };
         let client = self.http_client()?;
         let body = encode_request(&request, self.compression)?;
@@ -151,12 +161,8 @@ impl Client {
 }
 
 fn default_url(config: &crate::Config) -> String {
-    let bind = config.server.bind.trim();
-    if bind.starts_with("http://") || bind.starts_with("https://") {
-        bind.to_string()
-    } else {
-        format!("http://{}", bind)
-    }
+    let _ = config;
+    "http://127.0.0.1:5000".to_string()
 }
 
 fn config_processors_compression(config: &crate::Config) -> bool {

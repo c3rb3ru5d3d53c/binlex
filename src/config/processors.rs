@@ -31,7 +31,7 @@ impl Default for ConfigProcessors {
             processes: 2,
             compression: true,
             restart_on_crash: true,
-            max_payload_bytes: 64 * 1024 * 1024,
+            max_payload_bytes: 1024 * 1024 * 1024,
             idle_timeout_ms: 30_000,
             max_queue_depth: 2 * 64,
             processors: crate::processor::default_processor_configs(),

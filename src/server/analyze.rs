@@ -1,6 +1,3 @@
-use crate::Architecture;
-use crate::Config;
-use crate::Magic;
 use crate::controlflow::{Graph, GraphSnapshot};
 use crate::disassemblers::capstone::Disassembler;
 use crate::disassemblers::cil::Disassembler as CILDisassembler;
@@ -8,14 +5,16 @@ use crate::formats::{ELF, File, MACHO, PE};
 use crate::metadata::Attributes;
 use crate::server::dto::AnalyzeRequest;
 use crate::server::error::ServerError;
+use crate::{Architecture, Config, Magic};
 use base64::Engine;
+use ring::digest::{SHA256, digest};
 use std::collections::{BTreeMap, BTreeSet};
 
 pub fn execute(config: &Config, request: AnalyzeRequest) -> Result<GraphSnapshot, ServerError> {
     let data = base64::engine::general_purpose::STANDARD
         .decode(&request.data)
         .map_err(|error| ServerError::Processor(format!("invalid base64 payload: {}", error)))?;
-    let analysis_config = request.config.unwrap_or_else(|| config.clone());
+    let mut analysis_config = config.clone();
 
     let detected_magic = Magic::from_bytes(&data);
     let requested_magic = request
@@ -31,18 +30,37 @@ pub fn execute(config: &Config, request: AnalyzeRequest) -> Result<GraphSnapshot
         .map(parse_architecture)
         .transpose()?
         .flatten();
-
-    let file = File::from_bytes(data.clone(), analysis_config.clone());
-    let mut attributes = Attributes::new();
-    if !analysis_config.general.minimal {
-        attributes.push(file.attribute());
-    }
+    let corpora = normalize_corpora(&request.corpora);
 
     match selected_magic {
-        Magic::PE => analyze_pe(&analysis_config, requested_architecture, data, attributes),
-        Magic::ELF => analyze_elf(&analysis_config, requested_architecture, data, attributes),
-        Magic::MACHO => analyze_macho(&analysis_config, requested_architecture, data, attributes),
-        Magic::CODE => analyze_code(&analysis_config, requested_architecture, data, attributes),
+        Magic::PE => analyze_pe(
+            &mut analysis_config,
+            requested_architecture,
+            data,
+            selected_magic,
+            corpora,
+        ),
+        Magic::ELF => analyze_elf(
+            &mut analysis_config,
+            requested_architecture,
+            data,
+            selected_magic,
+            corpora,
+        ),
+        Magic::MACHO => analyze_macho(
+            &mut analysis_config,
+            requested_architecture,
+            data,
+            selected_magic,
+            corpora,
+        ),
+        Magic::CODE => analyze_code(
+            &mut analysis_config,
+            requested_architecture,
+            data,
+            selected_magic,
+            corpora,
+        ),
         Magic::PNG => Err(ServerError::Processor(
             "png inputs do not produce a control-flow graph".to_string(),
         )),
@@ -71,19 +89,132 @@ fn parse_architecture(value: &str) -> Result<Option<Architecture>, ServerError> 
         .map_err(|error| ServerError::Processor(error.to_string()))
 }
 
-fn finalize_graph(cfg: &Graph, _attributes: &Attributes) -> Result<GraphSnapshot, ServerError> {
+fn normalize_corpora(values: &[String]) -> Vec<String> {
+    values
+        .iter()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn digest_hex(data: &[u8]) -> String {
+    let digest = digest(&SHA256, data);
+    crate::hex::encode(digest.as_ref())
+}
+
+fn configure_embeddings_complete_request(
+    config: &mut Config,
+    data: &[u8],
+    attributes: &Attributes,
+    corpora: &[String],
+) -> Result<(), ServerError> {
+    let Some(processor) = config.processors.ensure_processor("embeddings") else {
+        return Ok(());
+    };
+    processor
+        .complete
+        .options
+        .insert("sha256".to_string(), digest_hex(data).into());
+    processor.complete.options.insert(
+        "attributes_json".to_string(),
+        attributes.process().to_string().into(),
+    );
+    processor.complete.options.insert(
+        "corpora_json".to_string(),
+        serde_json::to_string(corpora)
+            .map_err(|error| ServerError::Processor(error.to_string()))?
+            .into(),
+    );
+    Ok(())
+}
+
+fn collect_attributes(
+    bytes: &[u8],
+    architecture: Architecture,
+    config: Config,
+    magic: Magic,
+) -> Attributes {
+    let mut attributes = Attributes::new();
+    let file = File::from_bytes(bytes.to_vec(), config.clone());
+    if !config.general.minimal {
+        attributes.push(file.attribute());
+    }
+    match magic {
+        Magic::ELF => {
+            if let Ok(elf) = ELF::from_bytes(bytes.to_vec(), config) {
+                for symbol in elf.symbols().into_values() {
+                    attributes.push(symbol.attribute());
+                }
+            }
+        }
+        Magic::MACHO => {
+            if let Ok(macho) = MACHO::from_bytes(bytes.to_vec(), config) {
+                for (slice_index, _) in macho.slices().enumerate() {
+                    if macho.architecture(slice_index) != Some(architecture) {
+                        continue;
+                    }
+                    for symbol in macho.symbols(slice_index).into_values() {
+                        attributes.push(symbol.attribute());
+                    }
+                }
+            }
+        }
+        Magic::PE => {
+            let _ = PE::from_bytes(bytes.to_vec(), config);
+        }
+        _ => {}
+    }
+    attributes
+}
+
+fn finalize_graph(
+    cfg: &mut Graph,
+    data: &[u8],
+    attributes: &Attributes,
+    corpora: &[String],
+) -> Result<GraphSnapshot, ServerError> {
+    configure_embeddings_complete_request(&mut cfg.config, data, attributes, corpora)?;
     cfg.process()
         .map_err(|error| ServerError::Processor(error.to_string()))?;
     Ok(cfg.snapshot())
 }
 
+#[cfg(test)]
+mod tests {
+    use crate::Magic;
+    use crate::server::dto::AnalyzeRequest;
+    use base64::Engine;
+    use serde_json::Value;
+
+    #[test]
+    fn analyze_request_payload_has_no_config_field() {
+        let request = AnalyzeRequest {
+            data: base64::engine::general_purpose::STANDARD.encode([0xC3u8]),
+            magic: Some(Magic::CODE.to_string()),
+            architecture: Some("amd64".to_string()),
+            corpora: vec!["default".to_string()],
+        };
+        let json: Value = serde_json::to_value(request).expect("request should serialize");
+        assert!(json.get("config").is_none());
+        assert_eq!(
+            json.get("corpora")
+                .and_then(Value::as_array)
+                .map(Vec::len)
+                .unwrap_or_default(),
+            1
+        );
+    }
+}
+
 fn analyze_pe(
-    config: &Config,
+    config: &mut Config,
     requested_architecture: Option<Architecture>,
     data: Vec<u8>,
-    attributes: Attributes,
+    magic: Magic,
+    corpora: Vec<String>,
 ) -> Result<GraphSnapshot, ServerError> {
-    let pe = PE::from_bytes(data, config.clone())
+    let pe = PE::from_bytes(data.clone(), config.clone())
         .map_err(|error| ServerError::Processor(format!("failed to parse pe image: {}", error)))?;
     let architecture = requested_architecture.unwrap_or(pe.architecture());
     if architecture == Architecture::UNKNOWN {
@@ -138,16 +269,18 @@ fn analyze_pe(
             .map_err(|error| ServerError::Processor(error.to_string()))?;
     }
 
-    finalize_graph(&cfg, &attributes)
+    let attributes = collect_attributes(&data, architecture, config.clone(), magic);
+    finalize_graph(&mut cfg, &data, &attributes, &corpora)
 }
 
 fn analyze_elf(
-    config: &Config,
+    config: &mut Config,
     requested_architecture: Option<Architecture>,
     data: Vec<u8>,
-    attributes: Attributes,
+    magic: Magic,
+    corpora: Vec<String>,
 ) -> Result<GraphSnapshot, ServerError> {
-    let elf = ELF::from_bytes(data, config.clone())
+    let elf = ELF::from_bytes(data.clone(), config.clone())
         .map_err(|error| ServerError::Processor(format!("failed to parse elf image: {}", error)))?;
     let architecture = requested_architecture.unwrap_or(elf.architecture());
     if architecture == Architecture::UNKNOWN {
@@ -175,16 +308,18 @@ fn analyze_elf(
         .disassemble(elf.entrypoint_virtual_addresses(), &mut cfg)
         .map_err(|error| ServerError::Processor(error.to_string()))?;
 
-    finalize_graph(&cfg, &attributes)
+    let attributes = collect_attributes(&data, architecture, config.clone(), magic);
+    finalize_graph(&mut cfg, &data, &attributes, &corpora)
 }
 
 fn analyze_macho(
-    config: &Config,
+    config: &mut Config,
     requested_architecture: Option<Architecture>,
     data: Vec<u8>,
-    attributes: Attributes,
+    magic: Magic,
+    corpora: Vec<String>,
 ) -> Result<GraphSnapshot, ServerError> {
-    let macho = MACHO::from_bytes(data, config.clone()).map_err(|error| {
+    let macho = MACHO::from_bytes(data.clone(), config.clone()).map_err(|error| {
         ServerError::Processor(format!("failed to parse macho image: {}", error))
     })?;
 
@@ -251,17 +386,19 @@ fn analyze_macho(
         }
     }
 
-    let graph = merged_graph.ok_or_else(|| {
+    let mut graph = merged_graph.ok_or_else(|| {
         ServerError::Processor("requested macho architecture not found".to_string())
     })?;
-    finalize_graph(&graph, &attributes)
+    let attributes = collect_attributes(&data, selected_architecture, config.clone(), magic);
+    finalize_graph(&mut graph, &data, &attributes, &corpora)
 }
 
 fn analyze_code(
-    config: &Config,
+    config: &mut Config,
     requested_architecture: Option<Architecture>,
     data: Vec<u8>,
-    attributes: Attributes,
+    magic: Magic,
+    corpora: Vec<String>,
 ) -> Result<GraphSnapshot, ServerError> {
     let architecture = requested_architecture.ok_or_else(|| {
         ServerError::Processor("architecture is required for code analysis".to_string())
@@ -312,5 +449,6 @@ fn analyze_code(
         }
     }
 
-    finalize_graph(&cfg, &attributes)
+    let attributes = collect_attributes(&data, architecture, config.clone(), magic);
+    finalize_graph(&mut cfg, &data, &attributes, &corpora)
 }

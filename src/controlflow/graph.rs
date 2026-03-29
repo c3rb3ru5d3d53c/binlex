@@ -31,13 +31,12 @@ use crossbeam_skiplist::SkipMap;
 use crossbeam_skiplist::SkipSet;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::BTreeSet;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::io::Error;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct GraphQueueSnapshot {
     pub valid: BTreeSet<u64>,
     pub invalid: BTreeSet<u64>,
@@ -51,6 +50,18 @@ pub struct GraphSnapshot {
     pub instruction_queue: GraphQueueSnapshot,
     pub block_queue: GraphQueueSnapshot,
     pub function_queue: GraphQueueSnapshot,
+    #[serde(default)]
+    pub processor_outputs: GraphProcessorOutputsSnapshot,
+}
+
+#[derive(Clone, Default, Serialize, Deserialize)]
+pub struct GraphProcessorOutputsSnapshot {
+    #[serde(default)]
+    pub instructions: HashMap<u64, ProcessorOutputs>,
+    #[serde(default)]
+    pub blocks: HashMap<u64, ProcessorOutputs>,
+    #[serde(default)]
+    pub functions: HashMap<u64, ProcessorOutputs>,
 }
 
 /// Queue structure used within `Graph` for managing addresses in processing stages.
@@ -376,8 +387,33 @@ impl Graph {
         let instructions = self
             .listing
             .iter()
-            .map(|entry| entry.value().process())
+            .map(|entry| {
+                let instruction = entry.value();
+                let mut json = instruction.process();
+                json.chromosome.mask = crate::hex::encode(&instruction.chromosome_mask);
+                json
+            })
             .collect();
+        let processor_outputs = {
+            let processor_state = self.processor_state.lock().unwrap();
+            GraphProcessorOutputsSnapshot {
+                instructions: processor_state
+                    .outputs
+                    .get(&ProcessorTarget::Instruction)
+                    .cloned()
+                    .unwrap_or_default(),
+                blocks: processor_state
+                    .outputs
+                    .get(&ProcessorTarget::Block)
+                    .cloned()
+                    .unwrap_or_default(),
+                functions: processor_state
+                    .outputs
+                    .get(&ProcessorTarget::Function)
+                    .cloned()
+                    .unwrap_or_default(),
+            }
+        };
 
         GraphSnapshot {
             architecture: self.architecture.to_string(),
@@ -385,6 +421,7 @@ impl Graph {
             instruction_queue: Self::snapshot_queue(&self.instructions),
             block_queue: Self::snapshot_queue(&self.blocks),
             function_queue: Self::snapshot_queue(&self.functions),
+            processor_outputs,
         }
     }
 
@@ -429,6 +466,34 @@ impl Graph {
         Self::restore_queue(&mut graph.instructions, snapshot.instruction_queue);
         Self::restore_queue(&mut graph.blocks, snapshot.block_queue);
         Self::restore_queue(&mut graph.functions, snapshot.function_queue);
+        {
+            let mut processor_state = graph.processor_state.lock().unwrap();
+            if !snapshot.processor_outputs.instructions.is_empty() {
+                processor_state.outputs.insert(
+                    ProcessorTarget::Instruction,
+                    snapshot.processor_outputs.instructions,
+                );
+                processor_state
+                    .revisions
+                    .insert(ProcessorTarget::Instruction, 0);
+            }
+            if !snapshot.processor_outputs.blocks.is_empty() {
+                processor_state
+                    .outputs
+                    .insert(ProcessorTarget::Block, snapshot.processor_outputs.blocks);
+                processor_state.revisions.insert(ProcessorTarget::Block, 0);
+            }
+            if !snapshot.processor_outputs.functions.is_empty() {
+                processor_state.outputs.insert(
+                    ProcessorTarget::Function,
+                    snapshot.processor_outputs.functions,
+                );
+                processor_state
+                    .revisions
+                    .insert(ProcessorTarget::Function, 0);
+                processor_state.revisions.insert(ProcessorTarget::Graph, 0);
+            }
+        }
 
         Ok(graph)
     }
@@ -894,5 +959,104 @@ impl Graph {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Graph, GraphProcessorOutputsSnapshot, GraphQueueSnapshot, GraphSnapshot};
+    use crate::controlflow::{Block, Function};
+    use crate::controlflow::Instruction;
+    use crate::processor::ProcessorTarget;
+    use crate::{Architecture, Config};
+    use serde_json::json;
+    use std::collections::BTreeSet;
+    use std::collections::HashMap;
+
+    #[test]
+    fn snapshot_roundtrip_preserves_processor_outputs() {
+        let config = Config::default();
+        let graph = Graph::new(Architecture::AMD64, config.clone());
+        let mut instruction = Instruction::create(0x1000, Architecture::AMD64, config);
+        instruction.bytes = vec![0xC3];
+        instruction.pattern = "c3".to_string();
+        graph.listing.insert(instruction.address, instruction);
+
+        let snapshot = GraphSnapshot {
+            architecture: "amd64".to_string(),
+            instructions: graph.snapshot().instructions,
+            instruction_queue: GraphQueueSnapshot {
+                valid: BTreeSet::from([0x1000]),
+                invalid: BTreeSet::new(),
+                processed: BTreeSet::from([0x1000]),
+            },
+            block_queue: GraphQueueSnapshot::default(),
+            function_queue: GraphQueueSnapshot::default(),
+            processor_outputs: GraphProcessorOutputsSnapshot {
+                instructions: HashMap::from([(
+                    0x1000,
+                    vec![("demo".to_string(), json!({"vector": [1.0, 2.0]}))],
+                )]),
+                blocks: HashMap::new(),
+                functions: HashMap::new(),
+            },
+        };
+
+        let restored =
+            Graph::from_snapshot(snapshot, Config::default()).expect("snapshot should restore");
+
+        let output = restored
+            .processor_output(ProcessorTarget::Instruction, 0x1000, "demo")
+            .expect("processor output should survive snapshot roundtrip");
+        assert_eq!(output, json!({"vector": [1.0, 2.0]}));
+    }
+
+    #[test]
+    fn snapshot_roundtrip_preserves_wildcard_patterns_when_mask_output_disabled() {
+        let config = Config::default();
+        assert!(!config.chromosomes.mask.enabled);
+        let mut graph = Graph::new(Architecture::AMD64, config.clone());
+
+        let mut first = Instruction::create(0x1000, Architecture::AMD64, config.clone());
+        first.bytes = vec![0x48, 0x8b, 0x05];
+        first.chromosome_mask = vec![0x00, 0x00, 0xFF];
+        first.pattern = "488b??".to_string();
+        graph.listing.insert(first.address, first);
+        graph.instructions.insert_processed(0x1000);
+        graph.instructions.insert_valid(0x1000);
+
+        let mut second = Instruction::create(0x1003, Architecture::AMD64, config.clone());
+        second.bytes = vec![0xc3];
+        second.chromosome_mask = vec![0x00];
+        second.pattern = "c3".to_string();
+        second.is_return = true;
+        graph.listing.insert(second.address, second);
+        graph.instructions.insert_processed(0x1003);
+        graph.instructions.insert_valid(0x1003);
+
+        graph.blocks.insert_processed(0x1000);
+        graph.blocks.insert_valid(0x1000);
+        graph.functions.insert_processed(0x1000);
+        graph.functions.insert_valid(0x1000);
+
+        let restored = Graph::from_snapshot(graph.snapshot(), config)
+            .expect("snapshot should restore wildcard masks");
+
+        let instruction = restored
+            .get_instruction(0x1000)
+            .expect("instruction should exist after restore");
+        assert_eq!(instruction.chromosome().process().pattern, "488b??");
+
+        let block = Block::new(0x1000, &restored).expect("block should restore");
+        assert_eq!(block.chromosome_json().pattern, "488b??c3");
+
+        let function = Function::new(0x1000, &restored).expect("function should restore");
+        assert_eq!(
+            function
+                .chromosome_json()
+                .expect("function chromosome should exist")
+                .pattern,
+            "488b??c3"
+        );
     }
 }

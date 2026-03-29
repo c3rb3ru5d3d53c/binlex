@@ -110,6 +110,10 @@ pub struct SearchResult {
     symbol: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     attributes: Vec<Value>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    vector: Vec<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    json: Option<Value>,
     score: f32,
 }
 
@@ -148,6 +152,14 @@ impl SearchResult {
 
     pub fn score(&self) -> f32 {
         self.score
+    }
+
+    pub fn vector(&self) -> &[f32] {
+        &self.vector
+    }
+
+    pub fn json(&self) -> Option<&Value> {
+        self.json.as_ref()
     }
 }
 
@@ -595,6 +607,7 @@ impl LocalIndex {
         let corpora = normalize_corpora(corpora)?;
         let requested_corpora = corpora.iter().cloned().collect::<BTreeSet<_>>();
         let mut hits = Vec::new();
+        let mut graph_cache = BTreeMap::<(String, String), Graph>::new();
         let mut collections = collections.to_vec();
         collections.sort();
         collections.dedup();
@@ -648,6 +661,15 @@ impl LocalIndex {
                                 address,
                                 symbol: None,
                                 attributes: corpus_entry.attributes.clone(),
+                                vector: row.vector.clone(),
+                                json: entity_json_for_result(
+                                    self,
+                                    &mut graph_cache,
+                                    &corpus_entry.corpus,
+                                    &sha256,
+                                    *entity,
+                                    address,
+                                ),
                                 score,
                             });
                             continue;
@@ -662,6 +684,15 @@ impl LocalIndex {
                                 address,
                                 symbol: Some(symbol),
                                 attributes: corpus_entry.attributes.clone(),
+                                vector: row.vector.clone(),
+                                json: entity_json_for_result(
+                                    self,
+                                    &mut graph_cache,
+                                    &corpus_entry.corpus,
+                                    &sha256,
+                                    *entity,
+                                    address,
+                                ),
                                 score,
                             });
                         }
@@ -687,6 +718,271 @@ impl LocalIndex {
                 .flat_map(|membership| membership.corpora)
                 .collect::<Vec<_>>(),
         ))
+    }
+
+    pub fn search_corpora(&self, query: &str, limit: usize) -> Result<Vec<String>, Error> {
+        let mut corpora = self.corpora()?;
+        let query = query.trim().to_ascii_lowercase();
+        if query.is_empty() {
+            if corpora.len() > limit {
+                corpora.truncate(limit);
+            }
+            return Ok(corpora);
+        }
+        corpora.sort_by(|lhs, rhs| {
+            corpus_match_score(lhs, &query)
+                .cmp(&corpus_match_score(rhs, &query))
+                .then_with(|| lhs.cmp(rhs))
+        });
+        corpora.reverse();
+        corpora.retain(|corpus| corpus_match_score(corpus, &query) > 0);
+        if corpora.len() > limit {
+            corpora.truncate(limit);
+        }
+        Ok(corpora)
+    }
+
+    pub fn architectures(&self) -> Result<Vec<String>, Error> {
+        let keys = self
+            .object_store
+            .list_prefix("index/")
+            .map_err(|error| Error::ObjectStore(error.to_string()))?;
+        let mut architectures = keys
+            .into_iter()
+            .filter_map(|key| architecture_from_index_entry_key(&key))
+            .collect::<Vec<_>>();
+        architectures.sort();
+        architectures.dedup();
+        Ok(architectures)
+    }
+
+    pub fn exact_search(
+        &self,
+        corpora: &[String],
+        sha256: &str,
+        collections: Option<&[Collection]>,
+        architectures: &[crate::Architecture],
+        limit: usize,
+    ) -> Result<Vec<SearchResult>, Error> {
+        if corpora.is_empty() {
+            return Err(Error::InvalidConfiguration("corpora must not be empty"));
+        }
+        if sha256.trim().is_empty() {
+            return Err(Error::InvalidConfiguration("sha256 must not be empty"));
+        }
+        let collections = collections.unwrap_or(DEFAULT_INDEX_GRAPH_COLLECTIONS);
+        if collections.is_empty() {
+            return Err(Error::InvalidConfiguration("collections must not be empty"));
+        }
+        let corpora = normalize_corpora(corpora)?;
+        let requested_corpora = corpora.iter().cloned().collect::<BTreeSet<_>>();
+        let requested_architectures = architectures
+            .iter()
+            .map(ToString::to_string)
+            .collect::<BTreeSet<_>>();
+        let requested_collections = collections.iter().copied().collect::<BTreeSet<_>>();
+        let keys = self
+            .object_store
+            .list_prefix("index/")
+            .map_err(|error| Error::ObjectStore(error.to_string()))?;
+        let mut hits = Vec::new();
+        let mut graph_cache = BTreeMap::<(String, String), Graph>::new();
+        for key in keys {
+            let entry = self
+                .object_store
+                .get_json::<IndexEntry>(&key)
+                .map_err(|error| Error::ObjectStore(error.to_string()))?;
+            if entry.sha256 != sha256 {
+                continue;
+            }
+            if !requested_collections.contains(&entry.entity) {
+                continue;
+            }
+            if !requested_architectures.is_empty()
+                && !requested_architectures.contains(&entry.architecture)
+            {
+                continue;
+            }
+            for corpus_entry in entry
+                .corpora
+                .iter()
+                .filter(|corpus_entry| requested_corpora.contains(&corpus_entry.corpus))
+            {
+                let symbols = symbol_names_for_attributes(
+                    &corpus_entry.attributes,
+                    entry.entity,
+                    entry.address,
+                );
+                if symbols.is_empty() {
+                    hits.push(SearchResult {
+                        corpus: corpus_entry.corpus.clone(),
+                        object_id: entry.object_id.clone(),
+                        entity: entry.entity,
+                        architecture: entry.architecture.clone(),
+                        sha256: entry.sha256.clone(),
+                        address: entry.address,
+                        symbol: None,
+                        attributes: corpus_entry.attributes.clone(),
+                        vector: entry.vector.clone(),
+                        json: entity_json_for_result(
+                            self,
+                            &mut graph_cache,
+                            &corpus_entry.corpus,
+                            &entry.sha256,
+                            entry.entity,
+                            entry.address,
+                        ),
+                        score: 1.0,
+                    });
+                    continue;
+                }
+                for symbol in symbols {
+                    hits.push(SearchResult {
+                        corpus: corpus_entry.corpus.clone(),
+                        object_id: entry.object_id.clone(),
+                        entity: entry.entity,
+                        architecture: entry.architecture.clone(),
+                        sha256: entry.sha256.clone(),
+                        address: entry.address,
+                        symbol: Some(symbol),
+                        attributes: corpus_entry.attributes.clone(),
+                        vector: entry.vector.clone(),
+                        json: entity_json_for_result(
+                            self,
+                            &mut graph_cache,
+                            &corpus_entry.corpus,
+                            &entry.sha256,
+                            entry.entity,
+                            entry.address,
+                        ),
+                        score: 1.0,
+                    });
+                }
+            }
+        }
+        hits.sort_by(|lhs, rhs| {
+            rhs.score
+                .total_cmp(&lhs.score)
+                .then_with(|| lhs.corpus.cmp(&rhs.corpus))
+                .then_with(|| lhs.architecture.cmp(&rhs.architecture))
+                .then_with(|| lhs.entity.cmp(&rhs.entity))
+                .then_with(|| lhs.address.cmp(&rhs.address))
+        });
+        if hits.len() > limit {
+            hits.truncate(limit);
+        }
+        Ok(hits)
+    }
+
+    pub fn scan_search(
+        &self,
+        corpora: &[String],
+        collections: Option<&[Collection]>,
+        architectures: &[crate::Architecture],
+        limit: usize,
+    ) -> Result<Vec<SearchResult>, Error> {
+        if corpora.is_empty() {
+            return Err(Error::InvalidConfiguration("corpora must not be empty"));
+        }
+        let collections = collections.unwrap_or(DEFAULT_INDEX_GRAPH_COLLECTIONS);
+        if collections.is_empty() {
+            return Err(Error::InvalidConfiguration("collections must not be empty"));
+        }
+        let corpora = normalize_corpora(corpora)?;
+        let requested_corpora = corpora.iter().cloned().collect::<BTreeSet<_>>();
+        let requested_architectures = architectures
+            .iter()
+            .map(ToString::to_string)
+            .collect::<BTreeSet<_>>();
+        let requested_collections = collections.iter().copied().collect::<BTreeSet<_>>();
+        let keys = self
+            .object_store
+            .list_prefix("index/")
+            .map_err(|error| Error::ObjectStore(error.to_string()))?;
+        let mut hits = Vec::new();
+        let mut graph_cache = BTreeMap::<(String, String), Graph>::new();
+        for key in keys {
+            let entry = self
+                .object_store
+                .get_json::<IndexEntry>(&key)
+                .map_err(|error| Error::ObjectStore(error.to_string()))?;
+            if !requested_collections.contains(&entry.entity) {
+                continue;
+            }
+            if !requested_architectures.is_empty()
+                && !requested_architectures.contains(&entry.architecture)
+            {
+                continue;
+            }
+            for corpus_entry in entry
+                .corpora
+                .iter()
+                .filter(|corpus_entry| requested_corpora.contains(&corpus_entry.corpus))
+            {
+                let symbols = symbol_names_for_attributes(
+                    &corpus_entry.attributes,
+                    entry.entity,
+                    entry.address,
+                );
+                if symbols.is_empty() {
+                    hits.push(SearchResult {
+                        corpus: corpus_entry.corpus.clone(),
+                        object_id: entry.object_id.clone(),
+                        entity: entry.entity,
+                        architecture: entry.architecture.clone(),
+                        sha256: entry.sha256.clone(),
+                        address: entry.address,
+                        symbol: None,
+                        attributes: corpus_entry.attributes.clone(),
+                        vector: entry.vector.clone(),
+                        json: entity_json_for_result(
+                            self,
+                            &mut graph_cache,
+                            &corpus_entry.corpus,
+                            &entry.sha256,
+                            entry.entity,
+                            entry.address,
+                        ),
+                        score: 1.0,
+                    });
+                    continue;
+                }
+                for symbol in symbols {
+                    hits.push(SearchResult {
+                        corpus: corpus_entry.corpus.clone(),
+                        object_id: entry.object_id.clone(),
+                        entity: entry.entity,
+                        architecture: entry.architecture.clone(),
+                        sha256: entry.sha256.clone(),
+                        address: entry.address,
+                        symbol: Some(symbol),
+                        attributes: corpus_entry.attributes.clone(),
+                        vector: entry.vector.clone(),
+                        json: entity_json_for_result(
+                            self,
+                            &mut graph_cache,
+                            &corpus_entry.corpus,
+                            &entry.sha256,
+                            entry.entity,
+                            entry.address,
+                        ),
+                        score: 1.0,
+                    });
+                }
+            }
+        }
+        hits.sort_by(|lhs, rhs| {
+            rhs.score
+                .total_cmp(&lhs.score)
+                .then_with(|| lhs.corpus.cmp(&rhs.corpus))
+                .then_with(|| lhs.architecture.cmp(&rhs.architecture))
+                .then_with(|| lhs.entity.cmp(&rhs.entity))
+                .then_with(|| lhs.address.cmp(&rhs.address))
+        });
+        if hits.len() > limit {
+            hits.truncate(limit);
+        }
+        Ok(hits)
     }
 
     pub fn delete(&self, corpus: &str, sha256: &str) -> Result<(), Error> {
@@ -1193,6 +1489,53 @@ fn normalize_corpora(corpora: &[String]) -> Result<Vec<String>, Error> {
     Ok(corpora)
 }
 
+fn corpus_match_score(corpus: &str, query: &str) -> usize {
+    if query.is_empty() {
+        return 1;
+    }
+    let corpus = corpus.to_ascii_lowercase();
+    if corpus == query {
+        return 10_000;
+    }
+    if corpus.starts_with(query) {
+        return 8_000usize.saturating_sub(corpus.len());
+    }
+    if corpus.contains(query) {
+        return 6_000usize.saturating_sub(corpus.len());
+    }
+    fuzzy_subsequence_score(&corpus, query)
+}
+
+fn fuzzy_subsequence_score(haystack: &str, needle: &str) -> usize {
+    let mut score = 0usize;
+    let mut streak = 0usize;
+    let mut chars = haystack.char_indices();
+    let mut last_index = None;
+    for needle_char in needle.chars() {
+        let mut matched = false;
+        for (index, hay_char) in chars.by_ref() {
+            if hay_char != needle_char {
+                streak = 0;
+                continue;
+            }
+            matched = true;
+            streak += 1;
+            score += 10 + streak * 4;
+            if let Some(previous) = last_index {
+                if index == previous + 1 {
+                    score += 8;
+                }
+            }
+            last_index = Some(index);
+            break;
+        }
+        if !matched {
+            return 0;
+        }
+    }
+    score.saturating_sub(haystack.len())
+}
+
 fn union_corpora(lhs: &[String], rhs: &[String]) -> Vec<String> {
     let mut merged = lhs.to_vec();
     merged.extend_from_slice(rhs);
@@ -1355,6 +1698,29 @@ fn selector_vector(value: &Value, selector: &str) -> Option<Vec<f32>> {
         .iter()
         .map(|value| value.as_f64().map(|item| item as f32))
         .collect()
+}
+
+fn entity_json_for_result(
+    index: &LocalIndex,
+    cache: &mut BTreeMap<(String, String), Graph>,
+    corpus: &str,
+    sha256: &str,
+    entity: Entity,
+    address: u64,
+) -> Option<Value> {
+    let key = (corpus.to_string(), sha256.to_string());
+    if !cache.contains_key(&key) {
+        let graph = index.load(corpus, sha256).ok()?;
+        cache.insert(key.clone(), graph);
+    }
+    let graph = cache.get(&key)?;
+    match entity {
+        Entity::Instruction => serde_json::to_value(graph.get_instruction(address)?.process()).ok(),
+        Entity::Block => serde_json::to_value(Block::new(address, graph).ok()?.process()).ok(),
+        Entity::Function => {
+            serde_json::to_value(Function::new(address, graph).ok()?.process()).ok()
+        }
+    }
 }
 
 fn object_id_for_value(entity: Entity, value: &Value) -> String {

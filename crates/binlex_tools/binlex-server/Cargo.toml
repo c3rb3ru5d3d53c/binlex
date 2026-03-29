@@ -14,3 +14,6 @@ clap = { version = "4.5.27", features = ["derive"] }
 tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread", "signal"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["fmt"] }
+dirs = "6.0.0"
+serde = { version = "1.0.217", features = ["derive"] }
+toml = "0.8.19"

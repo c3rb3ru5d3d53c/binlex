@@ -152,7 +152,9 @@ impl SampleStore {
             upload_path: format!("/samples/uploads/{}", token),
             upload_url: None,
             max_upload_size_bytes: self.max_upload_size_bytes,
-            instruction: "Upload the sample bytes with an HTTP PUT to upload_url outside the sandbox.".to_string(),
+            instruction:
+                "Upload the sample bytes with an HTTP PUT to upload_url outside the sandbox."
+                    .to_string(),
         })
     }
 

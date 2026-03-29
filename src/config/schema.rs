@@ -117,7 +117,6 @@ pub struct ConfigImaging {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigData {
     pub general: ConfigGeneral,
-    pub server: ConfigServer,
     #[serde(default)]
     pub index: ConfigIndex,
     pub formats: ConfigFormats,
@@ -217,13 +216,6 @@ impl Default for ConfigMarkov {
 pub struct ConfigGeneral {
     pub threads: usize,
     pub minimal: bool,
-    pub debug: bool,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigServer {
-    pub bind: String,
-    #[serde(default)]
     pub debug: bool,
 }
 
