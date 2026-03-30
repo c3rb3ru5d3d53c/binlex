@@ -31,6 +31,12 @@ class SearchResult:
     def address(self):
         return self._inner.address()
 
+    def size(self):
+        return self._inner.size()
+
+    def date(self):
+        return self._inner.date()
+
     def object_id(self):
         return self._inner.object_id()
 
@@ -42,6 +48,12 @@ class SearchResult:
 
     def architecture(self):
         return self._inner.architecture()
+
+    def embedding(self):
+        return self._inner.embedding()
+
+    def embeddings(self):
+        return self._inner.embeddings()
 
     def collection(self):
         return self._inner.collection()
@@ -143,10 +155,9 @@ class LocalIndex:
 
     def _index_collection(self, expected_collection, binding, *args, **kwargs):
         collection = kwargs.pop("collection", expected_collection)
-        architecture = kwargs.pop("architecture", None)
+        entity = kwargs.pop("entity", None)
         vector = kwargs.pop("vector", None)
         sha256 = kwargs.pop("sha256", None)
-        address = kwargs.pop("address", None)
         attributes = kwargs.pop("attributes", None)
         corpus = kwargs.pop("corpus", None)
         corpora = kwargs.pop("corpora", None)
@@ -156,83 +167,29 @@ class LocalIndex:
         if collection != expected_collection:
             raise ValueError("collection does not match the selected method")
 
-        if len(args) == 5:
-            architecture, vector, sha256, address, attributes = args
-        elif len(args) == 4:
-            architecture, vector, sha256, address = args
+        if len(args) == 4:
+            entity, vector, sha256, attributes = args
+        elif len(args) == 3:
+            entity, vector, sha256 = args
         elif (
             len(args) == 0
-            and architecture is not None
+            and entity is not None
             and vector is not None
             and sha256 is not None
-            and address is not None
         ):
             pass
         else:
             raise TypeError(
-                "method expects (architecture, vector, sha256, address[, attributes])"
+                "method expects (entity, vector, sha256[, attributes])"
             )
 
         resolved_corpora, _ = self._resolve_corpora(corpus=corpus, corpora=corpora)
-        architecture = _coerce_architecture(architecture)
         return binding(
             resolved_corpora,
-            architecture,
+            entity._inner,
             vector,
             sha256,
-            address,
             attributes,
-        )
-
-    def vector(self, *args, **kwargs):
-        collection = kwargs.pop("collection", None)
-        architecture = kwargs.pop("architecture", None)
-        vector = kwargs.pop("vector", None)
-        sha256 = kwargs.pop("sha256", None)
-        address = kwargs.pop("address", None)
-        corpus = kwargs.pop("corpus", None)
-        corpora = kwargs.pop("corpora", None)
-        if kwargs:
-            raise TypeError(f"unexpected keyword arguments: {', '.join(kwargs)}")
-
-        if len(args) == 6:
-            corpus = args[0] if corpus is None and corpora is None else corpus
-            collection, architecture, vector, sha256, address = args[1:]
-        elif len(args) == 5:
-            collection, architecture, vector, sha256, address = args
-        elif (
-            len(args) == 0
-            and collection is not None
-            and architecture is not None
-            and vector is not None
-            and sha256 is not None
-            and address is not None
-        ):
-            pass
-        else:
-            raise TypeError(
-                "vector expects either (corpus, collection, architecture, vector, sha256, address) "
-                "or (collection, architecture, vector, sha256, address)"
-            )
-
-        resolved_corpora, is_many = self._resolve_corpora(corpus=corpus, corpora=corpora)
-        architecture = _coerce_architecture(architecture)
-        if is_many:
-            return self._inner.vector_many(
-                resolved_corpora,
-                collection,
-                architecture,
-                vector,
-                sha256,
-                address,
-            )
-        return self._inner.vector(
-            resolved_corpora[0],
-            collection,
-            architecture,
-            vector,
-            sha256,
-            address,
         )
 
     def commit(self):
@@ -252,6 +209,27 @@ class LocalIndex:
 
     def delete_corpus(self, corpus):
         return self._inner.delete_corpus(corpus)
+
+    def add_symbol(self, sha256, address, name):
+        return self._inner.add_symbol(sha256, address, name)
+
+    def remove_symbol(self, sha256, address, name):
+        return self._inner.remove_symbol(sha256, address, name)
+
+    def replace_symbol(self, sha256, address, name):
+        return self._inner.replace_symbol(sha256, address, name)
+
+    def add_corpus(self, sha256, corpus):
+        return self._inner.add_corpus(sha256, corpus)
+
+    def replace_corpus(self, sha256, corpus):
+        return self._inner.replace_corpus(sha256, corpus)
+
+    def rename_corpus(self, old_name, new_name):
+        return self._inner.rename_corpus(old_name, new_name)
+
+    def query(self, query, top_k=16, page=1):
+        return [SearchResult(item) for item in self._inner.query(query, top_k, page)]
 
     def search(
         self,

@@ -87,7 +87,10 @@ fn server_default_config() -> binlex::Config {
                     std::collections::BTreeMap::from([
                         ("enabled".to_string(), true.into()),
                         ("path".to_string(), default_index_path.into()),
-                        ("selector".to_string(), "processors.embeddings.vector".into()),
+                        (
+                            "selector".to_string(),
+                            "processors.embeddings.vector".into(),
+                        ),
                         ("corpus".to_string(), "default".into()),
                     ])
                     .into(),
@@ -108,7 +111,9 @@ fn server_default_config() -> binlex::Config {
     config
 }
 
-fn load_server_config(path: &std::path::Path) -> Result<ServerConfigFile, Box<dyn std::error::Error>> {
+fn load_server_config(
+    path: &std::path::Path,
+) -> Result<ServerConfigFile, Box<dyn std::error::Error>> {
     let raw = std::fs::read_to_string(path)?;
     let config: ServerConfigFile = toml::from_str(&raw)?;
     Ok(config)
@@ -216,7 +221,8 @@ mod tests {
             .and_then(binlex::config::ConfigProcessorValue::as_table)
             .expect("embeddings local index config should exist");
         assert_eq!(
-            local.get("selector")
+            local
+                .get("selector")
                 .and_then(binlex::config::ConfigProcessorValue::as_string),
             Some("processors.embeddings.vector")
         );

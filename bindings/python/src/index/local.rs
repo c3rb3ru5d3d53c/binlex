@@ -2,6 +2,9 @@ use crate::controlflow::{Block, Function, Graph, Instruction};
 use crate::metadata::Attribute as PyAttribute;
 use crate::Architecture;
 use crate::Config;
+use binlex::controlflow::{
+    Block as InnerBlock, Function as InnerFunction, Instruction as InnerInstruction,
+};
 use binlex::index::{
     Collection as InnerCollection, LocalIndex as InnerClient, SearchResult as InnerSearchResult,
 };
@@ -147,129 +150,93 @@ impl LocalIndex {
         }
     }
 
-    #[pyo3(signature = (corpus, collection, architecture, vector, sha256, address), text_signature = "($self, corpus, collection, architecture, vector, sha256, address)")]
-    pub fn vector(
-        &self,
-        py: Python,
-        corpus: String,
-        collection: Py<Collection>,
-        architecture: Py<Architecture>,
-        vector: Vec<f32>,
-        sha256: String,
-        address: u64,
-    ) -> PyResult<()> {
-        let collection = collection.borrow(py).inner;
-        let architecture = architecture.borrow(py).inner;
-        self.inner
-            .lock()
-            .unwrap()
-            .vector(&corpus, collection, architecture, &vector, &sha256, address)
-            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
-    }
-
-    #[pyo3(signature = (corpora, collection, architecture, vector, sha256, address), text_signature = "($self, corpora, collection, architecture, vector, sha256, address)")]
-    pub fn vector_many(
-        &self,
-        py: Python,
-        corpora: Vec<String>,
-        collection: Py<Collection>,
-        architecture: Py<Architecture>,
-        vector: Vec<f32>,
-        sha256: String,
-        address: u64,
-    ) -> PyResult<()> {
-        let collection = collection.borrow(py).inner;
-        let architecture = architecture.borrow(py).inner;
-        self.inner
-            .lock()
-            .unwrap()
-            .vector_many(
-                &corpora,
-                collection,
-                architecture,
-                &vector,
-                &sha256,
-                address,
-            )
-            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
-    }
-
-    #[pyo3(signature = (corpora, architecture, vector, sha256, address, attributes=None), text_signature = "($self, corpora, architecture, vector, sha256, address, attributes=None)")]
+    #[pyo3(signature = (corpora, instruction, vector, sha256, attributes=None), text_signature = "($self, corpora, instruction, vector, sha256, attributes=None)")]
     pub fn instruction(
         &self,
         py: Python,
         corpora: Vec<String>,
-        architecture: Py<Architecture>,
+        instruction: Py<Instruction>,
         vector: Vec<f32>,
         sha256: String,
-        address: u64,
         attributes: Option<Vec<Py<PyAttribute>>>,
     ) -> PyResult<()> {
-        let architecture = architecture.borrow(py).inner;
         let attributes = py_to_attributes(py, attributes);
+        let instruction = instruction.borrow(py);
+        let binding = instruction.cfg.borrow(py);
+        let inner_graph = binding.inner.lock().unwrap();
+        #[allow(mutable_transmutes)]
+        #[allow(clippy::all)]
+        let inner_ref: _ = unsafe { std::mem::transmute(&*inner_graph) };
+        let inner_instruction = InnerInstruction::new(instruction.address, inner_ref)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
         self.inner
             .lock()
             .unwrap()
             .instruction(
                 &corpora,
-                architecture,
+                &inner_instruction,
                 &vector,
                 &sha256,
-                address,
                 &attributes,
             )
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
-    #[pyo3(signature = (corpora, architecture, vector, sha256, address, attributes=None), text_signature = "($self, corpora, architecture, vector, sha256, address, attributes=None)")]
+    #[pyo3(signature = (corpora, block, vector, sha256, attributes=None), text_signature = "($self, corpora, block, vector, sha256, attributes=None)")]
     pub fn block(
         &self,
         py: Python,
         corpora: Vec<String>,
-        architecture: Py<Architecture>,
+        block: Py<Block>,
         vector: Vec<f32>,
         sha256: String,
-        address: u64,
         attributes: Option<Vec<Py<PyAttribute>>>,
     ) -> PyResult<()> {
-        let architecture = architecture.borrow(py).inner;
         let attributes = py_to_attributes(py, attributes);
+        let block = block.borrow(py);
+        let binding = block.cfg.borrow(py);
+        let inner_graph = binding.inner.lock().unwrap();
+        let inner_ref: &'static _ = unsafe { std::mem::transmute(&*inner_graph) };
+        let inner_block =
+            InnerBlock::new(block.address, inner_ref).map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
         self.inner
             .lock()
             .unwrap()
             .block(
                 &corpora,
-                architecture,
+                &inner_block,
                 &vector,
                 &sha256,
-                address,
                 &attributes,
             )
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
-    #[pyo3(signature = (corpora, architecture, vector, sha256, address, attributes=None), text_signature = "($self, corpora, architecture, vector, sha256, address, attributes=None)")]
+    #[pyo3(signature = (corpora, function, vector, sha256, attributes=None), text_signature = "($self, corpora, function, vector, sha256, attributes=None)")]
     pub fn function(
         &self,
         py: Python,
         corpora: Vec<String>,
-        architecture: Py<Architecture>,
+        function: Py<Function>,
         vector: Vec<f32>,
         sha256: String,
-        address: u64,
         attributes: Option<Vec<Py<PyAttribute>>>,
     ) -> PyResult<()> {
-        let architecture = architecture.borrow(py).inner;
         let attributes = py_to_attributes(py, attributes);
+        let function = function.borrow(py);
+        let binding = function.cfg.borrow(py);
+        let inner_graph = binding.inner.lock().unwrap();
+        let inner_ref: &'static _ = unsafe { std::mem::transmute(&*inner_graph) };
+        let inner_function = InnerFunction::new(function.address, inner_ref)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
         self.inner
             .lock()
             .unwrap()
             .function(
                 &corpora,
-                architecture,
+                &inner_function,
                 &vector,
                 &sha256,
-                address,
                 &attributes,
             )
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
@@ -325,6 +292,78 @@ impl LocalIndex {
             .unwrap()
             .delete_corpus(&corpus)
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    #[pyo3(text_signature = "($self, sha256, address, name)")]
+    pub fn add_symbol(&self, sha256: String, address: u64, name: String) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .add_symbol(&sha256, address, &name)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    #[pyo3(text_signature = "($self, sha256, address, name)")]
+    pub fn remove_symbol(&self, sha256: String, address: u64, name: String) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .remove_symbol(&sha256, address, &name)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    #[pyo3(text_signature = "($self, sha256, address, name)")]
+    pub fn replace_symbol(&self, sha256: String, address: u64, name: String) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .replace_symbol(&sha256, address, &name)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    #[pyo3(text_signature = "($self, sha256, corpus)")]
+    pub fn add_corpus(&self, sha256: String, corpus: String) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .add_corpus(&sha256, &corpus)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    #[pyo3(text_signature = "($self, sha256, corpus)")]
+    pub fn replace_corpus(&self, sha256: String, corpus: String) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .replace_corpus(&sha256, &corpus)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    #[pyo3(text_signature = "($self, old_name, new_name)")]
+    pub fn rename_corpus(&self, old_name: String, new_name: String) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .rename_corpus(&old_name, &new_name)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    #[pyo3(signature = (query, top_k=16, page=1), text_signature = "($self, query, top_k=16, page=1)")]
+    pub fn query(slf: Py<Self>, py: Python, query: String, top_k: usize, page: usize) -> PyResult<Vec<SearchResult>> {
+        let hits = slf
+            .borrow(py)
+            .inner
+            .lock()
+            .unwrap()
+            .query(&query, top_k, page)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(hits
+            .into_iter()
+            .map(|hit| SearchResult {
+                index: slf.clone_ref(py),
+                hit,
+            })
+            .collect())
     }
 
     #[pyo3(signature = (corpora, vector, collections=None, architectures=None, limit=10), text_signature = "($self, corpora, vector, collections=[Collection.Block, Collection.Function], architectures=None, limit=10)")]
@@ -389,6 +428,18 @@ impl SearchResult {
         self.hit.address()
     }
 
+    pub fn size(&self) -> u64 {
+        self.hit.size()
+    }
+
+    pub fn date(&self, py: Python) -> PyResult<Py<PyAny>> {
+        let datetime = py.import("datetime")?;
+        let cls = datetime.getattr("datetime")?;
+        Ok(cls
+            .call_method1("fromisoformat", (self.hit.date().to_rfc3339(),))?
+            .into())
+    }
+
     pub fn object_id(&self) -> String {
         self.hit.object_id().to_string()
     }
@@ -406,6 +457,14 @@ impl SearchResult {
 
     pub fn architecture(&self) -> String {
         self.hit.architecture().to_string()
+    }
+
+    pub fn embedding(&self) -> String {
+        self.hit.embedding().to_string()
+    }
+
+    pub fn embeddings(&self) -> u64 {
+        self.hit.embeddings()
     }
 
     pub fn collection(&self) -> Collection {
