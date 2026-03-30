@@ -60,12 +60,12 @@ impl Serialize for Architecture {
 }
 
 impl Architecture {
+    pub const fn all() -> &'static [Self] {
+        &[Self::AMD64, Self::I386, Self::CIL]
+    }
+
     pub fn to_vec() -> Vec<String> {
-        vec![
-            Architecture::AMD64.to_string(),
-            Architecture::I386.to_string(),
-            Architecture::CIL.to_string(),
-        ]
+        Self::all().iter().map(ToString::to_string).collect()
     }
 }
 

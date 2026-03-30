@@ -49,6 +49,8 @@ arrow-array = { version = "57.0.0", default-features = false }
 arrow-schema = { version = "57.0.0", default-features = false }
 futures = "0.3.31"
 tracing = "0.1.41"
+winnow = "0.7.15"
+chrono = { version = "0.4.42", features = ["serde"] }
 
 [target.'cfg(not(target_os = "windows"))'.dev-dependencies]
 binlex-processor-vex = { path = "crates/binlex_processors/vex" }
@@ -62,6 +64,7 @@ members = [
     "crates/binlex_tools/binlex-mcp",
     "crates/binlex_tools/binlex-server",
     "crates/binlex_tools/binlex-symbols",
+    "crates/binlex_tools/binlex-test",
     "crates/binlex_tools/binlex-web",
     "crates/binlex_tools/binlex-yara",
     "crates/binlex_processors/embeddings",

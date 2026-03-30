@@ -965,8 +965,8 @@ impl Graph {
 #[cfg(test)]
 mod tests {
     use super::{Graph, GraphProcessorOutputsSnapshot, GraphQueueSnapshot, GraphSnapshot};
-    use crate::controlflow::{Block, Function};
     use crate::controlflow::Instruction;
+    use crate::controlflow::{Block, Function};
     use crate::processor::ProcessorTarget;
     use crate::{Architecture, Config};
     use serde_json::json;

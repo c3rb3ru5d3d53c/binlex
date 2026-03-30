@@ -10,6 +10,10 @@ pub enum Collection {
 }
 
 impl Collection {
+    pub const fn all() -> &'static [Self] {
+        &[Self::Instruction, Self::Block, Self::Function]
+    }
+
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Instruction => "instruction",

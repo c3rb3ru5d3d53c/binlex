@@ -874,13 +874,17 @@ fn bool_value(table: &BTreeMap<String, ConfigProcessorValue>, key: &str) -> Opti
     table.get(key)?.as_bool()
 }
 
-fn configured_local_index_from_processor(processor: &ConfigProcessor) -> EmbeddingsLocalIndexConfig {
+fn configured_local_index_from_processor(
+    processor: &ConfigProcessor,
+) -> EmbeddingsLocalIndexConfig {
     let index = table_value(&processor.options, "index");
     let local = index.and_then(|value| table_value(value, "local"));
     let collections = index.and_then(|value| table_value(value, "collection"));
     let default_path = default_embeddings_local_index_path();
     EmbeddingsLocalIndexConfig {
-        enabled: local.and_then(|value| bool_value(value, "enabled")).unwrap_or(false),
+        enabled: local
+            .and_then(|value| bool_value(value, "enabled"))
+            .unwrap_or(false),
         path: local
             .and_then(|value| string_value(value, "path"))
             .unwrap_or(default_path.as_str())
@@ -1000,9 +1004,9 @@ fn index_request_from_config(config: EmbeddingsLocalIndexConfig) -> EmbeddingsLo
 
 fn execute_complete(request: EmbeddingsRequest) -> Result<GraphProcessorFanout, ProcessorError> {
     let index = configured_local_index_from_request(&request)?;
-    let snapshot = request
-        .snapshot
-        .ok_or_else(|| ProcessorError::Protocol("embeddings complete stage requires a snapshot".to_string()))?;
+    let snapshot = request.snapshot.ok_or_else(|| {
+        ProcessorError::Protocol("embeddings complete stage requires a snapshot".to_string())
+    })?;
     if !index.enabled {
         return Ok(GraphProcessorFanout::default());
     }
@@ -1011,9 +1015,9 @@ fn execute_complete(request: EmbeddingsRequest) -> Result<GraphProcessorFanout, 
     } else {
         request.corpora
     };
-    let sha256 = request
-        .sha256
-        .ok_or_else(|| ProcessorError::Protocol("embeddings complete stage requires sha256".to_string()))?;
+    let sha256 = request.sha256.ok_or_else(|| {
+        ProcessorError::Protocol("embeddings complete stage requires sha256".to_string())
+    })?;
     let mut config = binlex::Config::default();
     config.index.local.directory = PathBuf::from(&index.path).to_string_lossy().into_owned();
     config.index.local.dimensions = request.dimensions;
@@ -1024,7 +1028,8 @@ fn execute_complete(request: EmbeddingsRequest) -> Result<GraphProcessorFanout, 
         .iter()
         .filter_map(attribute_from_value)
         .collect::<Vec<_>>();
-    let local_index = LocalIndex::new(config).map_err(|error| ProcessorError::Protocol(error.to_string()))?;
+    let local_index =
+        LocalIndex::new(config).map_err(|error| ProcessorError::Protocol(error.to_string()))?;
     let collections = configured_index_collections(&index);
     local_index
         .graph_many(
@@ -1140,9 +1145,9 @@ impl GraphProcessor for EmbeddingsProcessor {
                 sha256: parse_complete_sha256(context),
                 corpora: parse_complete_corpora(context),
                 attributes: parse_complete_attributes(context),
-                index: Some(index_request_from_config(configured_local_index_from_context(
-                    context,
-                ))),
+                index: Some(index_request_from_config(
+                    configured_local_index_from_context(context),
+                )),
                 instructions: Vec::new(),
                 blocks: Vec::new(),
                 functions: Vec::new(),

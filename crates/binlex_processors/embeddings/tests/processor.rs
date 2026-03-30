@@ -156,8 +156,7 @@ fn complete_stage_indexes_function_vectors_locally() {
         threads: Some(1),
         snapshot: Some(snapshot),
         sha256: Some(
-            "ae3f4619b0413d70d3004b9131c3752153074e45725be13b9a148978895e359e"
-                .to_string(),
+            "ae3f4619b0413d70d3004b9131c3752153074e45725be13b9a148978895e359e".to_string(),
         ),
         corpora: vec!["default".to_string()],
         attributes: Vec::new(),
