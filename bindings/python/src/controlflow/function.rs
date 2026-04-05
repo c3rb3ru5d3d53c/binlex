@@ -229,7 +229,7 @@ pub struct Function {
 }
 
 impl Function {
-    fn with_inner_function<F, R>(&self, py: Python, f: F) -> PyResult<R>
+    pub(crate) fn with_inner_function<F, R>(&self, py: Python, f: F) -> PyResult<R>
     where
         F: FnOnce(&InnerFunction<'static>) -> PyResult<R>,
     {

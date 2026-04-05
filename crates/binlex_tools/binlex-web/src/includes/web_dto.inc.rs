@@ -1,0 +1,817 @@
+#[derive(Clone, Default, Deserialize, Serialize, ToSchema)]
+struct PageParams {
+    #[serde(default)]
+    search: Option<String>,
+    #[serde(default)]
+    query: String,
+    #[serde(default)]
+    uploaded_sha256: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_string_or_vec")]
+    corpora: Vec<String>,
+    #[serde(default, deserialize_with = "deserialize_string_or_vec")]
+    architectures: Vec<String>,
+    #[serde(default, deserialize_with = "deserialize_string_or_vec")]
+    collections: Vec<String>,
+    #[serde(default)]
+    top_k: Option<usize>,
+    #[serde(default)]
+    page: Option<usize>,
+    #[serde(default)]
+    message: Option<String>,
+    #[serde(default)]
+    warning: Option<String>,
+    #[serde(default)]
+    error: Option<String>,
+}
+
+#[derive(Clone, Default, Deserialize, Serialize, ToSchema)]
+struct SearchRequest {
+    #[serde(default)]
+    query: String,
+    #[serde(default)]
+    top_k: Option<usize>,
+    #[serde(default)]
+    page: Option<usize>,
+}
+
+#[derive(Deserialize, ToSchema)]
+struct IndexCommitRequest {}
+
+#[derive(Serialize, ToSchema)]
+struct IndexActionResponse {
+    ok: bool,
+}
+
+#[derive(Deserialize, ToSchema)]
+struct IndexGraphRequest {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+    #[schema(value_type = Object)]
+    graph: Value,
+    #[serde(default)]
+    #[schema(value_type = Object, nullable = true)]
+    attributes: Option<Value>,
+    #[serde(default, deserialize_with = "deserialize_string_or_vec")]
+    collections: Vec<String>,
+    #[serde(default, deserialize_with = "deserialize_string_or_vec")]
+    corpora: Vec<String>,
+}
+
+#[derive(Deserialize, ToSchema)]
+struct IndexFunctionRequest {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+    #[schema(value_type = Object)]
+    function: Value,
+    #[serde(default, deserialize_with = "deserialize_string_or_vec")]
+    corpora: Vec<String>,
+}
+
+#[derive(Deserialize, ToSchema)]
+struct IndexBlockRequest {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+    #[schema(value_type = Object)]
+    block: Value,
+    #[serde(default, deserialize_with = "deserialize_string_or_vec")]
+    corpora: Vec<String>,
+}
+
+#[derive(Deserialize, ToSchema)]
+struct IndexInstructionRequest {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+    #[schema(value_type = Object)]
+    instruction: Value,
+    #[serde(default, deserialize_with = "deserialize_string_or_vec")]
+    corpora: Vec<String>,
+}
+
+#[derive(Default)]
+struct UploadForm {
+    filename: Option<String>,
+    bytes: Vec<u8>,
+    format: Option<String>,
+    architecture: Option<String>,
+    corpus: Vec<String>,
+    tags: Vec<String>,
+}
+
+#[derive(Default)]
+pub(crate) struct PageData {
+    pub(crate) corpora_options: Vec<String>,
+    pub(crate) architecture_options: Vec<String>,
+    pub(crate) collection_options: Vec<String>,
+    pub(crate) query_completion_specs: Vec<QueryCompletionSpec>,
+    pub(crate) status: UiStatus,
+    pub(crate) uploaded_sha256: Option<String>,
+    pub(crate) message: Option<String>,
+    pub(crate) warning: Option<String>,
+    pub(crate) error: Option<String>,
+    pub(crate) query: String,
+    pub(crate) top_k: usize,
+    pub(crate) page: usize,
+    pub(crate) total_results: usize,
+    pub(crate) has_previous_page: bool,
+    pub(crate) has_next_page: bool,
+    pub(crate) rows: Vec<ResultRow>,
+    pub(crate) upload_format_options: Vec<String>,
+    pub(crate) upload_architecture_options: Vec<String>,
+    pub(crate) upload_corpus_options: Vec<String>,
+    pub(crate) upload_corpora_locked: bool,
+    pub(crate) upload_selected_corpora: Vec<String>,
+    pub(crate) upload_tag_options: Vec<String>,
+    pub(crate) upload_selected_tags: Vec<String>,
+    pub(crate) uploads_enabled: bool,
+    pub(crate) sample_downloads_enabled: bool,
+}
+
+#[derive(Default)]
+pub(crate) struct UiStatus {
+    pub(crate) server_ok: bool,
+    pub(crate) index_ok: bool,
+    pub(crate) database_ok: bool,
+}
+
+#[derive(Deserialize, IntoParams, ToSchema)]
+struct CorporaApiParams {
+    #[serde(default)]
+    #[schema(example = "good")]
+    q: String,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct CorpusActionRequest {
+    #[schema(example = "goodware")]
+    corpus: String,
+}
+
+#[derive(Serialize, ToSchema)]
+struct UploadResponse {
+    #[schema(example = true)]
+    ok: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(example = "upload exceeds max size of 209715200 bytes")]
+    error: Option<String>,
+}
+
+#[derive(Deserialize, IntoParams, ToSchema)]
+struct UploadStatusParams {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+}
+
+#[derive(Serialize, ToSchema)]
+struct UploadStatusResponse {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+    #[schema(example = "processing")]
+    status: String,
+    #[schema(example = "2026-04-01T12:00:00Z")]
+    timestamp: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(example = "analysis failed", nullable = true)]
+    error_message: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(example = "req_123", nullable = true)]
+    id: Option<String>,
+}
+
+#[derive(Serialize, ToSchema)]
+struct SearchResponse {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    message: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    warning: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+    query: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    uploaded_sha256: Option<String>,
+    page: usize,
+    top_k: usize,
+    total_results: usize,
+    has_previous_page: bool,
+    has_next_page: bool,
+    sample_downloads_enabled: bool,
+    results: Vec<SearchRowResponse>,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct ActionYaraRequest {
+    #[serde(default)]
+    query: String,
+    #[serde(default)]
+    items: Vec<ActionYaraItemRequest>,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct ActionYaraItemRequest {
+    #[schema(example = "default")]
+    corpus: String,
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+    #[schema(example = "function")]
+    collection: String,
+    #[schema(example = "amd64")]
+    architecture: String,
+    #[schema(example = 4198400)]
+    address: u64,
+}
+
+#[derive(Deserialize, IntoParams, ToSchema)]
+struct SearchDetailParams {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+    #[schema(example = "function")]
+    collection: String,
+    #[schema(example = "amd64")]
+    architecture: String,
+    #[schema(example = 4198400)]
+    address: u64,
+    #[serde(default)]
+    #[schema(nullable = true, example = "CreateFileW")]
+    symbol: Option<String>,
+}
+
+#[derive(Serialize, ToSchema)]
+struct SearchRowResponse {
+    side: String,
+    grouped: bool,
+    group_end: bool,
+    detail_loaded: bool,
+    object_id: String,
+    timestamp: String,
+    username: String,
+    size: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    score: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    similarity_score: Option<f32>,
+    vector: Vec<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Object, nullable = true)]
+    json: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    symbol: Option<String>,
+    architecture: String,
+    sha256: String,
+    collection: String,
+    address: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cyclomatic_complexity: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    average_instructions_per_block: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    number_of_instructions: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    number_of_blocks: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    markov: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    entropy: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    contiguous: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    chromosome_entropy: Option<f64>,
+    embedding: String,
+    embeddings: u64,
+    corpora: Vec<String>,
+    #[serde(default)]
+    collection_tag_count: usize,
+}
+
+#[derive(Serialize, ToSchema)]
+struct SearchRowDetailResponse {
+    detail_loaded: bool,
+    object_id: String,
+    timestamp: String,
+    username: String,
+    size: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    score: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    similarity_score: Option<f32>,
+    vector: Vec<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Object, nullable = true)]
+    json: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    symbol: Option<String>,
+    architecture: String,
+    sha256: String,
+    collection: String,
+    address: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cyclomatic_complexity: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    average_instructions_per_block: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    number_of_instructions: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    number_of_blocks: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    markov: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    entropy: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    contiguous: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    chromosome_entropy: Option<f64>,
+    embedding: String,
+    embeddings: u64,
+    corpora: Vec<String>,
+}
+
+#[derive(Deserialize, Serialize, IntoParams, ToSchema)]
+struct SampleTagsParams {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+}
+
+#[derive(Deserialize, Serialize, IntoParams, ToSchema)]
+struct CollectionTagsParams {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+    #[schema(example = "function")]
+    collection: String,
+    #[schema(example = 4198400)]
+    address: u64,
+}
+
+#[derive(Deserialize, Serialize, IntoParams, ToSchema)]
+struct CollectionSymbolsParams {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+    #[schema(example = "function")]
+    collection: String,
+    #[schema(example = "amd64")]
+    architecture: String,
+    #[schema(example = 4198400)]
+    address: u64,
+}
+
+#[derive(Deserialize, Serialize, IntoParams, ToSchema)]
+struct CollectionCorporaParams {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+    #[schema(example = "function")]
+    collection: String,
+    #[schema(example = "amd64")]
+    architecture: String,
+    #[schema(example = 4198400)]
+    address: u64,
+}
+
+#[derive(Deserialize, Serialize, IntoParams, ToSchema)]
+struct SearchSymbolsParams {
+    #[serde(default)]
+    #[schema(example = "Create")]
+    q: String,
+    #[serde(default)]
+    #[schema(example = 64)]
+    limit: Option<usize>,
+}
+
+#[derive(Deserialize, Serialize, IntoParams, ToSchema)]
+struct SearchTagsParams {
+    #[serde(default)]
+    #[schema(example = "shared")]
+    q: String,
+    #[serde(default)]
+    #[schema(example = 64)]
+    limit: Option<usize>,
+}
+
+#[derive(Deserialize, Serialize, IntoParams, ToSchema)]
+struct SearchAssignedTagsParams {
+    #[serde(default)]
+    #[schema(example = "shared")]
+    q: String,
+    #[serde(default)]
+    page: Option<usize>,
+    #[serde(default)]
+    page_size: Option<usize>,
+}
+
+#[derive(Deserialize, Serialize, IntoParams, ToSchema)]
+struct SearchCollectionTagsParams {
+    #[serde(default)]
+    #[schema(example = "shared")]
+    q: String,
+    #[serde(default)]
+    #[schema(example = "function", nullable = true)]
+    collection: Option<String>,
+    #[serde(default)]
+    page: Option<usize>,
+    #[serde(default)]
+    page_size: Option<usize>,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct SampleTagActionRequest {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+    #[schema(example = "fancybear")]
+    tag: String,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct SampleTagsReplaceRequest {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+    tags: Vec<String>,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct CollectionTagActionRequest {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+    #[schema(example = "function")]
+    collection: String,
+    #[schema(example = 4198400)]
+    address: u64,
+    #[schema(example = "goodware")]
+    tag: String,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct CollectionTagsReplaceRequest {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+    #[schema(example = "function")]
+    collection: String,
+    #[schema(example = 4198400)]
+    address: u64,
+    tags: Vec<String>,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct CollectionSymbolActionRequest {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+    #[schema(example = "function")]
+    collection: String,
+    #[schema(example = "amd64")]
+    architecture: String,
+    #[schema(example = 4198400)]
+    address: u64,
+    #[schema(example = "CreateFileW")]
+    symbol: String,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct CollectionSymbolsReplaceRequest {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+    #[schema(example = "function")]
+    collection: String,
+    #[schema(example = "amd64")]
+    architecture: String,
+    #[schema(example = 4198400)]
+    address: u64,
+    symbols: Vec<String>,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct SymbolActionRequest {
+    #[schema(example = "CreateFileW")]
+    symbol: String,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct TagActionRequest {
+    #[schema(example = "needs-review")]
+    tag: String,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct CollectionCorpusActionRequest {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+    #[schema(example = "function")]
+    collection: String,
+    #[schema(example = "amd64")]
+    architecture: String,
+    #[schema(example = 4198400)]
+    address: u64,
+    #[schema(example = "goodware")]
+    corpus: String,
+}
+
+#[derive(Serialize, ToSchema)]
+struct TagsResponse {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    collection: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    address: Option<u64>,
+    tags: Vec<String>,
+}
+
+#[derive(Serialize, ToSchema)]
+struct SymbolsResponse {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+    collection: String,
+    architecture: String,
+    address: u64,
+    symbols: Vec<String>,
+}
+
+#[derive(Serialize, ToSchema)]
+struct SymbolsCatalogResponse {
+    symbols: Vec<String>,
+    total_results: usize,
+    has_next: bool,
+}
+
+#[derive(Serialize, ToSchema)]
+struct TagsCatalogResponse {
+    tags: Vec<String>,
+    total_results: usize,
+    has_next: bool,
+}
+
+#[derive(Serialize, ToSchema)]
+struct CorporaResponse {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    collection: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    architecture: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    address: Option<u64>,
+    corpora: Vec<String>,
+}
+
+#[derive(Serialize, ToSchema)]
+struct TagsActionResponse {
+    ok: bool,
+}
+
+#[derive(Serialize, ToSchema)]
+struct TagSearchItemResponse {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+    #[schema(example = "needs-review")]
+    tag: String,
+    #[schema(example = "2026-04-02T12:00:00Z")]
+    timestamp: String,
+}
+
+#[derive(Serialize, ToSchema)]
+struct TagSearchResponse {
+    items: Vec<TagSearchItemResponse>,
+    page: usize,
+    page_size: usize,
+    has_next: bool,
+}
+
+#[derive(Serialize, ToSchema)]
+struct CollectionTagSearchItemResponse {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+    #[schema(example = "function")]
+    collection: String,
+    #[schema(example = 4198400)]
+    address: u64,
+    #[schema(example = "goodware")]
+    tag: String,
+    #[schema(example = "2026-04-02T12:00:00Z")]
+    timestamp: String,
+}
+
+#[derive(Serialize, ToSchema)]
+struct CollectionTagSearchResponse {
+    items: Vec<CollectionTagSearchItemResponse>,
+    page: usize,
+    page_size: usize,
+    has_next: bool,
+}
+
+struct SearchPage {
+    rows: Vec<ResultRow>,
+    total_results: usize,
+    has_next: bool,
+    warning: Option<String>,
+}
+
+#[derive(Clone, Serialize)]
+pub(crate) struct ResultRow {
+    pub(crate) side: RowSide,
+    pub(crate) result: SearchResult,
+    pub(crate) score: Option<f32>,
+    pub(crate) grouped: bool,
+    pub(crate) group_end: bool,
+    pub(crate) collection_tag_count: usize,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub(crate) enum RowSide {
+    Lhs,
+    Rhs,
+}
+
+impl RowSide {
+    fn as_api_str(self) -> &'static str {
+        match self {
+            Self::Lhs => "lhs",
+            Self::Rhs => "rhs",
+        }
+    }
+}
+
+#[derive(Clone)]
+struct ComparePair {
+    lhs: SearchResult,
+    rhs: SearchResult,
+    score: f32,
+}
+
+enum ExecutedStream {
+    Search {
+        results: Vec<SearchResult>,
+        side: RowSide,
+    },
+    Compare {
+        pairs: Vec<ComparePair>,
+    },
+}
+
+#[derive(Deserialize, IntoParams, ToSchema)]
+struct DownloadSampleParams {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+}
+
+#[derive(Deserialize, IntoParams, ToSchema)]
+struct DownloadSamplesParams {
+    #[serde(default, deserialize_with = "deserialize_string_or_vec")]
+    #[schema(example = json!(["d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5","116dfe7cc1c09cb0cf7b6d3936d6f2bbc0739a9267cf840fb873b142150253be"]))]
+    sha256: Vec<String>,
+}
+
+#[derive(Deserialize, IntoParams, ToSchema)]
+struct DownloadJsonParams {
+    #[schema(example = "default")]
+    corpus: String,
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+    #[schema(example = "function")]
+    collection: String,
+    #[schema(example = 4198400)]
+    address: u64,
+}
+
+#[derive(Serialize, ToSchema)]
+struct ApiErrorResponse {
+    #[schema(example = "invalid sha256")]
+    error: String,
+    #[schema(
+        example = "req_018f7e3d4a2b_00000001_5f0c2d71467c8a21",
+        nullable = true
+    )]
+    request_id: Option<String>,
+}
+
+#[derive(Serialize, ToSchema)]
+struct VersionResponse {
+    #[schema(example = "2.0.0")]
+    version: String,
+}
+
+#[derive(Deserialize, Serialize, ToSchema, Default)]
+struct TokenCreateRequest {}
+
+#[derive(Serialize, ToSchema)]
+struct TokenCreateResponse {
+    #[schema(example = "9f1a8c3d4e5f60718293a4b5c6d7e8f90123456789abcdef")]
+    token: String,
+    #[schema(example = "2026-04-03T18:00:00Z")]
+    expires: String,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct TokenClearRequest {
+    #[schema(example = "9f1a8c3d4e5f60718293a4b5c6d7e8f90123456789abcdef")]
+    token: String,
+}
+
+#[derive(Serialize, ToSchema)]
+struct TokenActionResponse {
+    ok: bool,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct AuthRoleCreateRequest {
+    #[schema(example = "admin")]
+    name: String,
+}
+
+#[derive(Deserialize, IntoParams, Serialize, ToSchema)]
+struct AuthRoleGetParams {
+    #[schema(example = "admin")]
+    name: String,
+}
+
+#[derive(Deserialize, IntoParams, Serialize, ToSchema)]
+struct AuthSearchParams {
+    #[serde(default)]
+    #[schema(example = "adm")]
+    q: String,
+    #[serde(default = "default_page")]
+    #[schema(example = 1)]
+    page: usize,
+    #[serde(default = "default_limit")]
+    #[schema(example = 25)]
+    limit: usize,
+}
+
+#[derive(Serialize, ToSchema)]
+struct AuthRoleResponse {
+    name: String,
+    timestamp: String,
+}
+
+#[derive(Serialize, ToSchema)]
+struct AuthRoleSearchResponse {
+    items: Vec<AuthRoleResponse>,
+    page: usize,
+    limit: usize,
+    has_next: bool,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct AuthRoleDeleteRequest {
+    #[schema(example = "analyst")]
+    name: String,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct AuthUserCreateRequest {
+    #[schema(example = "alice")]
+    username: String,
+    #[serde(default)]
+    #[schema(example = "admin", nullable = true)]
+    role: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct AuthUserNameRequest {
+    #[schema(example = "alice")]
+    username: String,
+}
+
+#[derive(Deserialize, IntoParams, Serialize, ToSchema)]
+struct AuthUserGetParams {
+    #[schema(example = "alice")]
+    username: String,
+}
+
+#[derive(Serialize, ToSchema)]
+struct AuthUserResponse {
+    username: String,
+    role: String,
+    enabled: bool,
+    reserved: bool,
+    timestamp: String,
+}
+
+#[derive(Serialize, ToSchema)]
+struct AuthUserCreateResponse {
+    user: AuthUserResponse,
+    api_key: String,
+}
+
+#[derive(Serialize, ToSchema)]
+struct AuthUserResetResponse {
+    username: String,
+    api_key: String,
+}
+
+#[derive(Serialize, ToSchema)]
+struct AuthUserSearchResponse {
+    items: Vec<AuthUserResponse>,
+    page: usize,
+    limit: usize,
+    has_next: bool,
+}
+
+#[allow(dead_code)]
+#[derive(ToSchema)]
+struct UploadSampleRequestDoc {
+    #[schema(value_type = String, format = Binary)]
+    data: String,
+    #[schema(example = "PE", nullable = true)]
+    format: Option<String>,
+    #[schema(example = "amd64", nullable = true)]
+    architecture: Option<String>,
+    #[schema(nullable = true)]
+    corpus: Option<Vec<String>>,
+}

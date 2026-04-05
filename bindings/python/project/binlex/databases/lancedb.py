@@ -1,8 +1,10 @@
 """LanceDB indexing backend."""
 
 from binlex.core.architecture import _coerce_architecture
-from binlex.index.local import Collection
-from binlex_bindings.binlex.databases.lancedb import LanceDB as _LanceDBBinding
+from binlex.indexing.local import Collection
+from binlex_bindings.binlex import databases as _databases_binding
+
+_LanceDBBinding = _databases_binding.lancedb.LanceDB
 
 
 class LanceDB:

@@ -1,0 +1,15 @@
+[package]
+name = "binlex-performance"
+version.workspace = true
+edition = "2024"
+
+[[bin]]
+name = "binlex-performance"
+path = "src/main.rs"
+
+[dependencies]
+base64 = "0.22.1"
+binlex = { path = "../../.." }
+clap = { version = "4.5.27", features = ["derive"] }
+tempfile = "3.23.0"
+toml = "0.8.19"

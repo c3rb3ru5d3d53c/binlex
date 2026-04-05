@@ -1,0 +1,16 @@
+<div class="upload-corpus-picker" data-upload-tag-root="1" data-options='{{ options_json }}' data-selected='{{ selected_json }}'>
+  <div class="upload-corpus-header">Tags</div>
+  <div class="upload-corpus-grid">
+    <div class="upload-corpus-column">
+      <div class="upload-corpus-label">Available</div>
+      <div class="upload-corpus-search-wrap"><input class="search-input upload-corpus-search" id="upload-tag-available-search" type="text" placeholder="Search tags" oninput="handleUploadTagAvailableInput()" onkeydown="handleUploadTagAvailableKeydown(event)"><button type="button" class="upload-corpus-create-inline" id="upload-tag-create-inline" onclick="promptCreateUploadTag()" disabled>Create</button></div>
+      <div class="upload-corpus-list" id="upload-tag-available-list"></div>
+    </div>
+    <div class="upload-corpus-column">
+      <div class="upload-corpus-label">Selected</div>
+      <input class="search-input upload-corpus-search" id="upload-tag-selected-search" type="text" placeholder="Search selected" oninput="renderUploadTagPicker()" onkeydown="handleUploadTagSelectedKeydown(event)">
+      <div class="upload-corpus-list" id="upload-tag-selected-list"></div>
+    </div>
+  </div>
+  <div class="upload-corpus-create-overlay" id="upload-tag-create-overlay" hidden><div class="upload-corpus-create-prompt" id="upload-tag-create-prompt"><div class="upload-corpus-create-text" id="upload-tag-create-text"></div><div class="upload-corpus-create-actions"><button type="button" class="secondary" onclick="cancelCreateUploadTag()">Cancel</button><button type="button" class="primary" onclick="confirmCreateUploadTag()">OK</button></div></div></div>
+</div>

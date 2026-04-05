@@ -9,11 +9,12 @@ use crate::{Architecture, Config, Magic};
 use base64::Engine;
 use ring::digest::{SHA256, digest};
 use std::collections::{BTreeMap, BTreeSet};
+use tracing::info;
 
 pub fn execute(config: &Config, request: AnalyzeRequest) -> Result<GraphSnapshot, ServerError> {
     let data = base64::engine::general_purpose::STANDARD
         .decode(&request.data)
-        .map_err(|error| ServerError::Processor(format!("invalid base64 payload: {}", error)))?;
+        .map_err(|error| ServerError::processor(format!("invalid base64 payload: {}", error)))?;
     let mut analysis_config = config.clone();
 
     let detected_magic = Magic::from_bytes(&data);
@@ -61,10 +62,10 @@ pub fn execute(config: &Config, request: AnalyzeRequest) -> Result<GraphSnapshot
             selected_magic,
             corpora,
         ),
-        Magic::PNG => Err(ServerError::Processor(
+        Magic::PNG => Err(ServerError::processor(
             "png inputs do not produce a control-flow graph".to_string(),
         )),
-        Magic::UNKNOWN => Err(ServerError::Processor(
+        Magic::UNKNOWN => Err(ServerError::processor(
             "unable to identify file format; provide magic override".to_string(),
         )),
     }
@@ -73,7 +74,7 @@ pub fn execute(config: &Config, request: AnalyzeRequest) -> Result<GraphSnapshot
 fn parse_magic(value: &str) -> Result<Option<Magic>, ServerError> {
     let magic = value
         .parse::<Magic>()
-        .map_err(|error| ServerError::Processor(error.to_string()))?;
+        .map_err(|error| ServerError::processor(error.to_string()))?;
     Ok(match magic {
         Magic::UNKNOWN => None,
         other => Some(other),
@@ -86,7 +87,7 @@ fn parse_architecture(value: &str) -> Result<Option<Architecture>, ServerError> 
     }
     Architecture::from_string(value)
         .map(Some)
-        .map_err(|error| ServerError::Processor(error.to_string()))
+        .map_err(|error| ServerError::processor(error.to_string()))
 }
 
 fn normalize_corpora(values: &[String]) -> Vec<String> {
@@ -101,32 +102,6 @@ fn normalize_corpora(values: &[String]) -> Vec<String> {
 fn digest_hex(data: &[u8]) -> String {
     let digest = digest(&SHA256, data);
     crate::hex::encode(digest.as_ref())
-}
-
-fn configure_embeddings_complete_request(
-    config: &mut Config,
-    data: &[u8],
-    attributes: &Attributes,
-    corpora: &[String],
-) -> Result<(), ServerError> {
-    let Some(processor) = config.processors.ensure_processor("embeddings") else {
-        return Ok(());
-    };
-    processor
-        .complete
-        .options
-        .insert("sha256".to_string(), digest_hex(data).into());
-    processor.complete.options.insert(
-        "attributes_json".to_string(),
-        attributes.process().to_string().into(),
-    );
-    processor.complete.options.insert(
-        "corpora_json".to_string(),
-        serde_json::to_string(corpora)
-            .map_err(|error| ServerError::Processor(error.to_string()))?
-            .into(),
-    );
-    Ok(())
 }
 
 fn collect_attributes(
@@ -171,12 +146,26 @@ fn collect_attributes(
 fn finalize_graph(
     cfg: &mut Graph,
     data: &[u8],
-    attributes: &Attributes,
+    _attributes: &Attributes,
     corpora: &[String],
 ) -> Result<GraphSnapshot, ServerError> {
-    configure_embeddings_complete_request(&mut cfg.config, data, attributes, corpora)?;
+    let embeddings = cfg.config.processors.processor("embeddings");
+    info!(
+        "analyze finalize sha256={} corpora={:?} embeddings_enabled={} graph_enabled={} complete_enabled={}",
+        digest_hex(data),
+        corpora,
+        embeddings
+            .map(|processor| processor.enabled)
+            .unwrap_or(false),
+        embeddings
+            .map(|processor| processor.graph.enabled)
+            .unwrap_or(false),
+        embeddings
+            .map(|processor| processor.complete.enabled)
+            .unwrap_or(false),
+    );
     cfg.process()
-        .map_err(|error| ServerError::Processor(error.to_string()))?;
+        .map_err(|error| ServerError::processor(error.to_string()))?;
     Ok(cfg.snapshot())
 }
 
@@ -215,20 +204,20 @@ fn analyze_pe(
     corpora: Vec<String>,
 ) -> Result<GraphSnapshot, ServerError> {
     let pe = PE::from_bytes(data.clone(), config.clone())
-        .map_err(|error| ServerError::Processor(format!("failed to parse pe image: {}", error)))?;
+        .map_err(|error| ServerError::processor(format!("failed to parse pe image: {}", error)))?;
     let architecture = requested_architecture.unwrap_or(pe.architecture());
     if architecture == Architecture::UNKNOWN {
-        return Err(ServerError::Processor(
+        return Err(ServerError::processor(
             "unsupported pe architecture".to_string(),
         ));
     }
 
     let mut mapped = pe
         .image()
-        .map_err(|error| ServerError::Processor(format!("failed to map pe image: {}", error)))?;
+        .map_err(|error| ServerError::processor(format!("failed to map pe image: {}", error)))?;
     let image = mapped
         .mmap()
-        .map_err(|error| ServerError::Processor(format!("failed to map pe image: {}", error)))?;
+        .map_err(|error| ServerError::processor(format!("failed to map pe image: {}", error)))?;
 
     let executable_address_ranges = if pe.is_dotnet() {
         pe.dotnet_executable_virtual_address_ranges()
@@ -252,10 +241,10 @@ fn analyze_pe(
             executable_address_ranges,
             config.clone(),
         )
-        .map_err(|error| ServerError::Processor(error.to_string()))?;
+        .map_err(|error| ServerError::processor(error.to_string()))?;
         disassembler
             .disassemble(entrypoints, &mut cfg)
-            .map_err(|error| ServerError::Processor(error.to_string()))?;
+            .map_err(|error| ServerError::processor(error.to_string()))?;
     } else {
         let disassembler = Disassembler::new(
             architecture,
@@ -263,10 +252,10 @@ fn analyze_pe(
             executable_address_ranges,
             config.clone(),
         )
-        .map_err(|error| ServerError::Processor(error.to_string()))?;
+        .map_err(|error| ServerError::processor(error.to_string()))?;
         disassembler
             .disassemble(entrypoints, &mut cfg)
-            .map_err(|error| ServerError::Processor(error.to_string()))?;
+            .map_err(|error| ServerError::processor(error.to_string()))?;
     }
 
     let attributes = collect_attributes(&data, architecture, config.clone(), magic);
@@ -281,20 +270,20 @@ fn analyze_elf(
     corpora: Vec<String>,
 ) -> Result<GraphSnapshot, ServerError> {
     let elf = ELF::from_bytes(data.clone(), config.clone())
-        .map_err(|error| ServerError::Processor(format!("failed to parse elf image: {}", error)))?;
+        .map_err(|error| ServerError::processor(format!("failed to parse elf image: {}", error)))?;
     let architecture = requested_architecture.unwrap_or(elf.architecture());
     if architecture == Architecture::UNKNOWN {
-        return Err(ServerError::Processor(
+        return Err(ServerError::processor(
             "unsupported elf architecture".to_string(),
         ));
     }
 
     let mut mapped = elf
         .image()
-        .map_err(|error| ServerError::Processor(format!("failed to map elf image: {}", error)))?;
+        .map_err(|error| ServerError::processor(format!("failed to map elf image: {}", error)))?;
     let image = mapped
         .mmap()
-        .map_err(|error| ServerError::Processor(format!("failed to map elf image: {}", error)))?;
+        .map_err(|error| ServerError::processor(format!("failed to map elf image: {}", error)))?;
 
     let mut cfg = Graph::new(architecture, config.clone());
     let disassembler = Disassembler::new(
@@ -303,10 +292,10 @@ fn analyze_elf(
         elf.executable_virtual_address_ranges(),
         config.clone(),
     )
-    .map_err(|error| ServerError::Processor(error.to_string()))?;
+    .map_err(|error| ServerError::processor(error.to_string()))?;
     disassembler
         .disassemble(elf.entrypoint_virtual_addresses(), &mut cfg)
-        .map_err(|error| ServerError::Processor(error.to_string()))?;
+        .map_err(|error| ServerError::processor(error.to_string()))?;
 
     let attributes = collect_attributes(&data, architecture, config.clone(), magic);
     finalize_graph(&mut cfg, &data, &attributes, &corpora)
@@ -320,7 +309,7 @@ fn analyze_macho(
     corpora: Vec<String>,
 ) -> Result<GraphSnapshot, ServerError> {
     let macho = MACHO::from_bytes(data.clone(), config.clone()).map_err(|error| {
-        ServerError::Processor(format!("failed to parse macho image: {}", error))
+        ServerError::processor(format!("failed to parse macho image: {}", error))
     })?;
 
     let slices: Vec<_> = macho.slices().collect();
@@ -339,12 +328,12 @@ fn analyze_macho(
                 }
             }
             if unique_architectures.len() > 1 {
-                return Err(ServerError::Processor(
+                return Err(ServerError::processor(
                     "architecture is required for multi-architecture macho analysis".to_string(),
                 ));
             }
             unique_architectures.into_iter().next().ok_or_else(|| {
-                ServerError::Processor("unsupported macho architecture".to_string())
+                ServerError::processor("unsupported macho architecture".to_string())
             })?
         }
     };
@@ -363,10 +352,10 @@ fn analyze_macho(
         }
         let architecture = selected_architecture;
         let mut mapped = slice.image().map_err(|error| {
-            ServerError::Processor(format!("failed to map macho image: {}", error))
+            ServerError::processor(format!("failed to map macho image: {}", error))
         })?;
         let image = mapped.mmap().map_err(|error| {
-            ServerError::Processor(format!("failed to map macho image: {}", error))
+            ServerError::processor(format!("failed to map macho image: {}", error))
         })?;
         let mut cfg = Graph::new(architecture, config.clone());
         let disassembler = Disassembler::new(
@@ -375,10 +364,10 @@ fn analyze_macho(
             slice.executable_virtual_address_ranges(),
             config.clone(),
         )
-        .map_err(|error| ServerError::Processor(error.to_string()))?;
+        .map_err(|error| ServerError::processor(error.to_string()))?;
         disassembler
             .disassemble(slice.entrypoint_virtual_addresses(), &mut cfg)
-            .map_err(|error| ServerError::Processor(error.to_string()))?;
+            .map_err(|error| ServerError::processor(error.to_string()))?;
         if let Some(existing) = &mut merged_graph {
             existing.merge(&mut cfg);
         } else {
@@ -387,7 +376,7 @@ fn analyze_macho(
     }
 
     let mut graph = merged_graph.ok_or_else(|| {
-        ServerError::Processor("requested macho architecture not found".to_string())
+        ServerError::processor("requested macho architecture not found".to_string())
     })?;
     let attributes = collect_attributes(&data, selected_architecture, config.clone(), magic);
     finalize_graph(&mut graph, &data, &attributes, &corpora)
@@ -401,11 +390,11 @@ fn analyze_code(
     corpora: Vec<String>,
 ) -> Result<GraphSnapshot, ServerError> {
     let architecture = requested_architecture.ok_or_else(|| {
-        ServerError::Processor("architecture is required for code analysis".to_string())
+        ServerError::processor("architecture is required for code analysis".to_string())
     })?;
 
     if architecture == Architecture::UNKNOWN {
-        return Err(ServerError::Processor(
+        return Err(ServerError::processor(
             "unsupported architecture".to_string(),
         ));
     }
@@ -424,10 +413,10 @@ fn analyze_code(
                 executable_address_ranges,
                 config.clone(),
             )
-            .map_err(|error| ServerError::Processor(error.to_string()))?;
+            .map_err(|error| ServerError::processor(error.to_string()))?;
             disassembler
                 .disassemble(entrypoints, &mut cfg)
-                .map_err(|error| ServerError::Processor(error.to_string()))?;
+                .map_err(|error| ServerError::processor(error.to_string()))?;
         }
         Architecture::CIL => {
             let disassembler = CILDisassembler::new(
@@ -437,13 +426,13 @@ fn analyze_code(
                 executable_address_ranges,
                 config.clone(),
             )
-            .map_err(|error| ServerError::Processor(error.to_string()))?;
+            .map_err(|error| ServerError::processor(error.to_string()))?;
             disassembler
                 .disassemble(entrypoints, &mut cfg)
-                .map_err(|error| ServerError::Processor(error.to_string()))?;
+                .map_err(|error| ServerError::processor(error.to_string()))?;
         }
         Architecture::UNKNOWN => {
-            return Err(ServerError::Processor(
+            return Err(ServerError::processor(
                 "unsupported architecture".to_string(),
             ));
         }

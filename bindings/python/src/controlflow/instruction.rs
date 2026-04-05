@@ -39,7 +39,7 @@ pub struct Instruction {
 }
 
 impl Instruction {
-    fn with_inner_instruction<F, R>(&self, py: Python, f: F) -> PyResult<R>
+    pub(crate) fn with_inner_instruction<F, R>(&self, py: Python, f: F) -> PyResult<R>
     where
         F: FnOnce(&InnerInstruction) -> PyResult<R>,
     {

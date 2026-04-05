@@ -6,7 +6,9 @@ use axum::serve;
 use binlex::config::DIRECTORY;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
-use tracing::info;
+use tracing::{info, warn};
+
+mod routes;
 
 const SERVER_FILE_NAME: &str = "binlex-server.toml";
 
@@ -52,6 +54,12 @@ struct Args {
     listen: Option<String>,
     #[arg(long)]
     port: Option<u16>,
+    #[arg(long, value_delimiter = ',')]
+    processors: Option<Vec<String>>,
+    #[arg(long)]
+    processes: Option<usize>,
+    #[arg(long)]
+    processor_directory: Option<String>,
     #[arg(long)]
     debug: bool,
 }
@@ -72,43 +80,7 @@ fn resolve_config_path(
 }
 
 fn server_default_config() -> binlex::Config {
-    let mut config = binlex::Config::default();
-    let default_index_path = binlex::Config::default_local_index_directory();
-    if let Some(processor) = config.processors.ensure_processor("embeddings") {
-        processor.enabled = true;
-        processor.complete.enabled = true;
-        processor.transport.ipc.enabled = true;
-        processor.transport.http.enabled = false;
-        processor.options.insert(
-            "index".to_string(),
-            std::collections::BTreeMap::from([
-                (
-                    "local".to_string(),
-                    std::collections::BTreeMap::from([
-                        ("enabled".to_string(), true.into()),
-                        ("path".to_string(), default_index_path.into()),
-                        (
-                            "selector".to_string(),
-                            "processors.embeddings.vector".into(),
-                        ),
-                        ("corpus".to_string(), "default".into()),
-                    ])
-                    .into(),
-                ),
-                (
-                    "collection".to_string(),
-                    std::collections::BTreeMap::from([
-                        ("function".to_string(), true.into()),
-                        ("block".to_string(), false.into()),
-                        ("instruction".to_string(), false.into()),
-                    ])
-                    .into(),
-                ),
-            ])
-            .into(),
-        );
-    }
-    config
+    binlex::Config::default()
 }
 
 fn load_server_config(
@@ -117,6 +89,36 @@ fn load_server_config(
     let raw = std::fs::read_to_string(path)?;
     let config: ServerConfigFile = toml::from_str(&raw)?;
     Ok(config)
+}
+
+fn apply_processor_cli_overrides(loaded: &mut ServerConfigFile, args: &Args) {
+    if let Some(processes) = args.processes {
+        loaded.binlex.processors.processes = processes;
+    }
+    if let Some(directory) = args
+        .processor_directory
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        loaded.binlex.processors.path = Some(directory.to_string());
+    }
+    if let Some(processors) = args.processors.as_ref() {
+        let enabled: std::collections::BTreeSet<String> = processors
+            .iter()
+            .map(|value| value.trim())
+            .filter(|value| !value.is_empty())
+            .map(ToString::to_string)
+            .collect();
+        for processor in loaded.binlex.processors.processors.values_mut() {
+            processor.enabled = false;
+        }
+        for name in enabled {
+            if let Some(processor) = loaded.binlex.processors.ensure_processor(&name) {
+                processor.enabled = true;
+            }
+        }
+    }
 }
 
 fn ensure_config_exists(path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
@@ -138,7 +140,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config_path = resolve_config_path(args.config.as_deref())?;
     ensure_config_exists(&config_path)?;
     let mut loaded = load_server_config(&config_path)?;
-    if let Some(listen) = args.listen {
+    if let Some(listen) = args.listen.as_ref() {
         let port = args.port.unwrap_or_else(|| {
             loaded
                 .server
@@ -161,6 +163,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if args.debug {
         loaded.server.debug = true;
     }
+    apply_processor_cli_overrides(&mut loaded, &args);
+    let embeddings_registered = binlex::processor::processor_registration_by_name_for_config(
+        &loaded.binlex.processors,
+        "embeddings",
+    )
+    .is_some();
+    let embeddings_config = loaded.binlex.processors.processor("embeddings").cloned();
     let config = loaded.binlex;
     tracing_subscriber::fmt()
         .with_target(false)
@@ -172,11 +181,74 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
     let bind: SocketAddr = loaded.server.bind.parse()?;
     let state = binlex::server::state::AppState::new(config.clone(), loaded.server.debug)?;
-    let router = binlex::server::routes::build_router(state);
+    let router = routes::build_router(state);
     info!(
-        "listening on {} debug={}",
-        loaded.server.bind, loaded.server.debug
+        "listening on {} debug={} processors_path={:?} embeddings_registered={} embeddings_enabled={} embeddings_graph_enabled={} embeddings_complete_enabled={}",
+        loaded.server.bind,
+        loaded.server.debug,
+        config.processors.path,
+        embeddings_registered,
+        embeddings_config
+            .as_ref()
+            .map(|processor| processor.enabled)
+            .unwrap_or(false),
+        embeddings_config
+            .as_ref()
+            .map(|processor| processor.graph.enabled)
+            .unwrap_or(false),
+        embeddings_config
+            .as_ref()
+            .map(|processor| processor.complete.enabled)
+            .unwrap_or(false),
     );
+    if !embeddings_registered {
+        for diagnostic in
+            binlex::processor::processor_discovery_diagnostics_for_config(&config.processors)
+        {
+            match diagnostic.status {
+                binlex::processor::ProcessorDiscoveryStatus::Registered { name } => {
+                    info!(
+                        "processor discovery candidate={:?} status=registered name={}",
+                        diagnostic.candidate, name
+                    );
+                }
+                binlex::processor::ProcessorDiscoveryStatus::DuplicateName { name } => {
+                    warn!(
+                        "processor discovery candidate={:?} status=duplicate_name name={}",
+                        diagnostic.candidate, name
+                    );
+                }
+                binlex::processor::ProcessorDiscoveryStatus::SpawnFailed { error } => {
+                    warn!(
+                        "processor discovery candidate={:?} status=spawn_failed error={}",
+                        diagnostic.candidate, error
+                    );
+                }
+                binlex::processor::ProcessorDiscoveryStatus::DescribeFailed { status, stderr } => {
+                    warn!(
+                        "processor discovery candidate={:?} status=describe_failed exit_status={} stderr={:?}",
+                        diagnostic.candidate, status, stderr
+                    );
+                }
+                binlex::processor::ProcessorDiscoveryStatus::InvalidRegistrationJson {
+                    error,
+                    stdout,
+                    stderr,
+                } => {
+                    warn!(
+                        "processor discovery candidate={:?} status=invalid_registration_json error={} stdout={:?} stderr={:?}",
+                        diagnostic.candidate, error, stdout, stderr
+                    );
+                }
+                binlex::processor::ProcessorDiscoveryStatus::InvalidRegistrationMetadata => {
+                    warn!(
+                        "processor discovery candidate={:?} status=invalid_registration_metadata",
+                        diagnostic.candidate
+                    );
+                }
+            }
+        }
+    }
 
     let listener = tokio::net::TcpListener::bind(bind).await?;
     serve(
@@ -197,35 +269,18 @@ mod tests {
     }
 
     #[test]
-    fn server_default_config_enables_embeddings_processor() {
+    fn server_default_config_defers_to_processor_defaults() {
         let config = server_default_config();
         let embeddings = config
             .processors
             .processor("embeddings")
-            .expect("embeddings processor config should exist");
-        assert!(embeddings.enabled);
-        assert!(embeddings.graph.enabled);
-        assert!(!embeddings.instructions.enabled);
-        assert!(!embeddings.blocks.enabled);
-        assert!(!embeddings.functions.enabled);
-        assert!(embeddings.complete.enabled);
-        assert!(embeddings.transport.ipc.enabled);
-        assert!(!embeddings.transport.http.enabled);
-        let index = embeddings
-            .options
-            .get("index")
-            .and_then(binlex::config::ConfigProcessorValue::as_table)
-            .expect("embeddings index config should exist");
-        let local = index
-            .get("local")
-            .and_then(binlex::config::ConfigProcessorValue::as_table)
-            .expect("embeddings local index config should exist");
-        assert_eq!(
-            local
-                .get("selector")
-                .and_then(binlex::config::ConfigProcessorValue::as_string),
-            Some("processors.embeddings.vector")
-        );
+            .expect("shared config should include embeddings processor entry");
+        let shared_default = binlex::Config::default();
+        let expected = shared_default
+            .processors
+            .processor("embeddings")
+            .expect("shared default should include embeddings processor entry");
+        assert_eq!(embeddings.enabled, expected.enabled);
     }
 
     #[test]

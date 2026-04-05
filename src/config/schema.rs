@@ -118,6 +118,10 @@ pub struct ConfigImaging {
 pub struct ConfigData {
     pub general: ConfigGeneral,
     #[serde(default)]
+    pub storage: ConfigStorage,
+    #[serde(default)]
+    pub databases: ConfigDatabases,
+    #[serde(default)]
     pub index: ConfigIndex,
     pub formats: ConfigFormats,
     pub imaging: ConfigImaging,
@@ -133,6 +137,28 @@ pub struct ConfigData {
 
 #[derive(Clone)]
 pub struct Config(pub(crate) Arc<ConfigData>);
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigStorage {
+    #[serde(default)]
+    pub local: ConfigStorageLocal,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigStorageLocal {
+    pub directory: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigDatabases {
+    #[serde(default)]
+    pub local: ConfigDatabaseLocal,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigDatabaseLocal {
+    pub path: String,
+}
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct ConfigProcessor {

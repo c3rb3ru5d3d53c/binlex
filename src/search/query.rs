@@ -1,5 +1,5 @@
 use crate::Architecture;
-use crate::index::Collection;
+use crate::indexing::Collection;
 use chrono::{DateTime, Duration, Months, NaiveDate, TimeZone, Utc};
 use serde::Serialize;
 use std::fmt;
@@ -63,11 +63,11 @@ pub struct QueryCompletionSpec {
 pub fn query_completion_specs() -> Vec<QueryCompletionSpec> {
     vec![
         QueryCompletionSpec {
-            label: "sha256:",
-            insert: "sha256:",
+            label: "sample:",
+            insert: "sample:",
             kind: "field",
-            usage: "sha256:<64-hex-hash>",
-            description: "Exact lookup by sample SHA-256",
+            usage: "sample:<64-hex-hash>",
+            description: "Root a search from a specific sample",
         },
         QueryCompletionSpec {
             label: "embedding:",
@@ -91,6 +91,20 @@ pub fn query_completion_specs() -> Vec<QueryCompletionSpec> {
             description: "Nearest-neighbor search from an explicit vector",
         },
         QueryCompletionSpec {
+            label: "score:",
+            insert: "score:",
+            kind: "field",
+            usage: "score:>0.95",
+            description: "Filter by similarity score with comparisons",
+        },
+        QueryCompletionSpec {
+            label: "expand:",
+            insert: "expand:",
+            kind: "field",
+            usage: "expand:blocks",
+            description: "Expand rows downward to child blocks or instructions",
+        },
+        QueryCompletionSpec {
             label: "corpus:",
             insert: "corpus:",
             kind: "field",
@@ -112,6 +126,13 @@ pub fn query_completion_specs() -> Vec<QueryCompletionSpec> {
             description: "Filter by architecture",
         },
         QueryCompletionSpec {
+            label: "username:",
+            insert: "username:",
+            kind: "field",
+            usage: "username:anonymous",
+            description: "Filter by the indexing username",
+        },
+        QueryCompletionSpec {
             label: "address:",
             insert: "address:",
             kind: "field",
@@ -119,11 +140,11 @@ pub fn query_completion_specs() -> Vec<QueryCompletionSpec> {
             description: "Filter by exact address",
         },
         QueryCompletionSpec {
-            label: "date:",
-            insert: "date:",
+            label: "timestamp:",
+            insert: "timestamp:",
             kind: "field",
-            usage: "date:>=2026-03-01",
-            description: "Filter by indexed UTC date or date range bounds",
+            usage: "timestamp:>=2026-03-01",
+            description: "Filter by indexed UTC timestamp or date range bounds",
         },
         QueryCompletionSpec {
             label: "size:",
@@ -140,25 +161,123 @@ pub fn query_completion_specs() -> Vec<QueryCompletionSpec> {
             description: "Filter by exact quoted symbol name",
         },
         QueryCompletionSpec {
-            label: "AND",
-            insert: "AND ",
-            kind: "operator",
-            usage: "term AND term",
-            description: "Combine clauses that must all match",
+            label: "cyclomatic_complexity:",
+            insert: "cyclomatic_complexity:",
+            kind: "field",
+            usage: "cyclomatic_complexity:>5",
+            description: "Filter by cyclomatic complexity",
         },
         QueryCompletionSpec {
-            label: "OR",
-            insert: "OR ",
+            label: "average_instructions_per_block:",
+            insert: "average_instructions_per_block:",
+            kind: "field",
+            usage: "average_instructions_per_block:<10",
+            description: "Filter by average instructions per block",
+        },
+        QueryCompletionSpec {
+            label: "instructions:",
+            insert: "instructions:",
+            kind: "field",
+            usage: "instructions:>=32",
+            description: "Filter by the number of instructions",
+        },
+        QueryCompletionSpec {
+            label: "blocks:",
+            insert: "blocks:",
+            kind: "field",
+            usage: "blocks:>=4",
+            description: "Filter by the number of blocks",
+        },
+        QueryCompletionSpec {
+            label: "markov:",
+            insert: "markov:",
+            kind: "field",
+            usage: "markov:>0.6",
+            description: "Filter by block Markov score",
+        },
+        QueryCompletionSpec {
+            label: "entropy:",
+            insert: "entropy:",
+            kind: "field",
+            usage: "entropy:<6.5",
+            description: "Filter by byte entropy",
+        },
+        QueryCompletionSpec {
+            label: "contiguous:",
+            insert: "contiguous:",
+            kind: "field",
+            usage: "contiguous:true",
+            description: "Filter by contiguous layout",
+        },
+        QueryCompletionSpec {
+            label: "chromosome.entropy:",
+            insert: "chromosome.entropy:",
+            kind: "field",
+            usage: "chromosome.entropy:>3.0",
+            description: "Filter by chromosome entropy",
+        },
+        QueryCompletionSpec {
+            label: "limit:",
+            insert: "limit:",
+            kind: "field",
+            usage: "limit:10",
+            description: "Cap the current result stream",
+        },
+        QueryCompletionSpec {
+            label: "drop:",
+            insert: "drop:",
+            kind: "field",
+            usage: "drop:rhs",
+            description: "Project compare results onto one side",
+        },
+        QueryCompletionSpec {
+            label: "|",
+            insert: " | ",
             kind: "operator",
-            usage: "term OR term",
+            usage: "term | term",
+            description: "Pipe results through another narrowing filter",
+        },
+        QueryCompletionSpec {
+            label: "||",
+            insert: " || ",
+            kind: "operator",
+            usage: "term || term",
             description: "Match either clause",
         },
         QueryCompletionSpec {
-            label: "NOT",
-            insert: "NOT ",
+            label: "!",
+            insert: "!",
             kind: "operator",
-            usage: "NOT term",
-            description: "Negate the next clause",
+            usage: "!term",
+            description: "Negate the next term or group",
+        },
+        QueryCompletionSpec {
+            label: "->",
+            insert: " -> ",
+            kind: "operator",
+            usage: "left-query -> right-query",
+            description: "Compare each left-side result to its best right-side match",
+        },
+        QueryCompletionSpec {
+            label: "<-",
+            insert: " <- ",
+            kind: "operator",
+            usage: "left-query <- right-query",
+            description: "Compare each right-side result to its best left-side match",
+        },
+        QueryCompletionSpec {
+            label: "ascending:",
+            insert: "ascending:",
+            kind: "field",
+            usage: "ascending:score",
+            description: "Sort the current result stream in ascending order by a specific field",
+        },
+        QueryCompletionSpec {
+            label: "descending:",
+            insert: "descending:",
+            kind: "field",
+            usage: "descending:score",
+            description: "Sort the current result stream in descending order by a specific field",
         },
         QueryCompletionSpec {
             label: "(",
@@ -183,13 +302,23 @@ pub enum QueryField {
     Embedding,
     Embeddings,
     Vector,
+    Score,
     Corpus,
     Collection,
     Architecture,
+    Username,
     Address,
-    Date,
+    Timestamp,
     Size,
     Symbol,
+    CyclomaticComplexity,
+    AverageInstructionsPerBlock,
+    NumberOfInstructions,
+    NumberOfBlocks,
+    Markov,
+    Entropy,
+    Contiguous,
+    ChromosomeEntropy,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -298,7 +427,7 @@ fn analyze_query_term(
         QueryField::Embedding => {
             if negated || inside_or {
                 return Err(QueryError(
-                    "embedding queries can only be combined with AND filters".to_string(),
+                    "embedding queries can only be combined with `|` filters".to_string(),
                 ));
             }
             if !is_sha256(term.value.trim()) {
@@ -314,7 +443,7 @@ fn analyze_query_term(
         QueryField::Sha256 => {
             if inside_or && !negated {
                 return Err(QueryError(
-                    "sha256 queries can only be combined with AND filters".to_string(),
+                    "sha256 queries can only be combined with `|` filters".to_string(),
                 ));
             }
             if !is_sha256(term.value.trim()) {
@@ -333,7 +462,7 @@ fn analyze_query_term(
         QueryField::Vector => {
             if negated || inside_or {
                 return Err(QueryError(
-                    "vector queries can only be combined with AND filters".to_string(),
+                    "vector queries can only be combined with `|` filters".to_string(),
                 ));
             }
             let vector = parse_query_vector(term.value.trim()).ok_or_else(|| {
@@ -346,6 +475,14 @@ fn analyze_query_term(
                 return Err(QueryError(
                     "embeddings expects counts with optional comparisons like embeddings:>1k or embeddings:<=12m"
                         .to_string(),
+                ));
+            }
+            Ok(())
+        }
+        QueryField::Score => {
+            if parse_score_query(term.value.trim()).is_none() {
+                return Err(QueryError(
+                    "score expects decimal comparisons like score:>0.95 or score:<=1.0".to_string(),
                 ));
             }
             Ok(())
@@ -363,16 +500,22 @@ fn analyze_query_term(
             push_unique_architecture(&mut analysis.architectures, architecture);
             Ok(())
         }
+        QueryField::Username => {
+            if term.value.trim().is_empty() {
+                return Err(QueryError("username requires a value".to_string()));
+            }
+            Ok(())
+        }
         QueryField::Address => {
             if parse_query_address(term.value.trim()).is_none() {
                 return Err(QueryError(format!("invalid address {}", term.value)));
             }
             Ok(())
         }
-        QueryField::Date => {
+        QueryField::Timestamp => {
             if parse_date_query(term.value.trim()).is_none() {
                 return Err(QueryError(
-                    "date expects YYYY, YYYY-MM, YYYY-MM-DD, or comparisons like date:>=2026-03-01"
+                    "timestamp expects YYYY, YYYY-MM, YYYY-MM-DD, or comparisons like timestamp:>=2026-03-01"
                         .to_string(),
                 ));
             }
@@ -384,6 +527,55 @@ fn analyze_query_term(
                     "size expects bytes with optional comparisons like size:>64 or size:>=1mb"
                         .to_string(),
                 ));
+            }
+            Ok(())
+        }
+        QueryField::CyclomaticComplexity
+        | QueryField::NumberOfInstructions
+        | QueryField::NumberOfBlocks => {
+            if parse_integer_query(term.value.trim()).is_none() {
+                return Err(QueryError(format!(
+                    "{} expects integer comparisons like {}:>5",
+                    match term.field {
+                        QueryField::CyclomaticComplexity => "cyclomatic_complexity",
+                        QueryField::NumberOfInstructions => "instructions",
+                        _ => "blocks",
+                    },
+                    match term.field {
+                        QueryField::CyclomaticComplexity => "cyclomatic_complexity",
+                        QueryField::NumberOfInstructions => "instructions",
+                        _ => "blocks",
+                    }
+                )));
+            }
+            Ok(())
+        }
+        QueryField::AverageInstructionsPerBlock
+        | QueryField::Markov
+        | QueryField::Entropy
+        | QueryField::ChromosomeEntropy => {
+            if parse_float_query(term.value.trim()).is_none() {
+                return Err(QueryError(format!(
+                    "{} expects decimal comparisons like {}:>1.5",
+                    match term.field {
+                        QueryField::AverageInstructionsPerBlock => "average_instructions_per_block",
+                        QueryField::Markov => "markov",
+                        QueryField::Entropy => "entropy",
+                        _ => "chromosome.entropy",
+                    },
+                    match term.field {
+                        QueryField::AverageInstructionsPerBlock => "average_instructions_per_block",
+                        QueryField::Markov => "markov",
+                        QueryField::Entropy => "entropy",
+                        _ => "chromosome.entropy",
+                    }
+                )));
+            }
+            Ok(())
+        }
+        QueryField::Contiguous => {
+            if parse_bool_query(term.value.trim()).is_none() {
+                return Err(QueryError("contiguous expects true or false".to_string()));
             }
             Ok(())
         }
@@ -464,7 +656,7 @@ fn tokenize_search_query(query: &str) -> Result<Vec<QueryToken>, QueryError> {
         let colon_result: winnow::ModalResult<char, ContextError> = ':'.parse_next(&mut input);
         colon_result.map_err(|_| {
             QueryError(format!(
-                "unexpected token {}. Use explicit fields like sha256:, embedding:, embeddings:, or vector:",
+                "unexpected token {}. Use explicit fields like sample:, embedding:, embeddings:, or vector:",
                 head
             ))
         })?;
@@ -484,6 +676,18 @@ fn tokenize_search_query(query: &str) -> Result<Vec<QueryToken>, QueryError> {
 }
 
 fn parse_query_operator(input: &mut &str) -> Option<QueryToken> {
+    if let Some(remainder) = input.strip_prefix("||") {
+        *input = remainder;
+        return Some(QueryToken::Or);
+    }
+    if let Some(remainder) = input.strip_prefix('|') {
+        *input = remainder;
+        return Some(QueryToken::And);
+    }
+    if let Some(remainder) = input.strip_prefix('!') {
+        *input = remainder;
+        return Some(QueryToken::Not);
+    }
     for (label, token) in [
         ("AND", QueryToken::And),
         ("OR", QueryToken::Or),
@@ -502,7 +706,13 @@ fn parse_query_operator(input: &mut &str) -> Option<QueryToken> {
 
 fn parse_query_head(input: &mut &str) -> Result<String, QueryError> {
     let head_result: winnow::ModalResult<&str, ContextError> = take_while(1.., |ch: char| {
-        !ch.is_whitespace() && ch != '(' && ch != ')' && ch != ':'
+        !ch.is_whitespace()
+            && ch != '('
+            && ch != ')'
+            && ch != ':'
+            && ch != '|'
+            && ch != '!'
+            && ch != '~'
     })
     .parse_next(input);
     head_result
@@ -518,7 +728,7 @@ fn parse_simple_query_value(input: &mut &str) -> Result<String, QueryError> {
     let source = *input;
     let mut end = source.len();
     for (offset, ch) in source.char_indices() {
-        if ch == '(' || ch == ')' {
+        if ch == '(' || ch == ')' || ch == '|' || ch == '~' {
             end = offset;
             break;
         }
@@ -604,28 +814,41 @@ fn parse_vector_token_value(input: &mut &str) -> Result<String, QueryError> {
 fn is_query_boundary(next: Option<char>) -> bool {
     match next {
         None => true,
-        Some(ch) => ch.is_whitespace() || ch == '(' || ch == ')',
+        Some(ch) => ch.is_whitespace() || ch == '(' || ch == ')' || ch == '|',
     }
 }
 
 fn parse_query_field(value: &str) -> Result<QueryField, QueryError> {
     match value.trim().to_ascii_lowercase().as_str() {
+        "sample" => Ok(QueryField::Sha256),
+        "lhs" => Ok(QueryField::Sha256),
+        "rhs" => Ok(QueryField::Sha256),
         "sha256" => Ok(QueryField::Sha256),
         "embedding" => Ok(QueryField::Embedding),
         "embeddings" => Ok(QueryField::Embeddings),
         "vector" => Ok(QueryField::Vector),
+        "score" => Ok(QueryField::Score),
         "corpus" => Ok(QueryField::Corpus),
         "collection" => Ok(QueryField::Collection),
         "architecture" => Ok(QueryField::Architecture),
+        "username" => Ok(QueryField::Username),
         "address" => Ok(QueryField::Address),
-        "date" => Ok(QueryField::Date),
+        "timestamp" => Ok(QueryField::Timestamp),
         "size" => Ok(QueryField::Size),
         "symbol" => Ok(QueryField::Symbol),
+        "cyclomatic_complexity" => Ok(QueryField::CyclomaticComplexity),
+        "average_instructions_per_block" => Ok(QueryField::AverageInstructionsPerBlock),
+        "instructions" => Ok(QueryField::NumberOfInstructions),
+        "blocks" => Ok(QueryField::NumberOfBlocks),
+        "markov" => Ok(QueryField::Markov),
+        "entropy" => Ok(QueryField::Entropy),
+        "contiguous" => Ok(QueryField::Contiguous),
+        "chromosome.entropy" => Ok(QueryField::ChromosomeEntropy),
         other => Err(QueryError(format!("unknown search field {}", other))),
     }
 }
 
-pub fn query_date_matches(raw: &str, actual: DateTime<Utc>) -> bool {
+pub fn query_timestamp_matches(raw: &str, actual: DateTime<Utc>) -> bool {
     let Some(filter) = parse_date_query(raw) else {
         return false;
     };
@@ -651,6 +874,40 @@ pub fn query_size_matches(raw: &str, actual: u64) -> bool {
     }
 }
 
+pub fn query_score_matches(raw: &str, actual: f32) -> bool {
+    query_float_matches(raw, actual as f64)
+}
+
+pub fn query_integer_matches(raw: &str, actual: u64) -> bool {
+    let Some((operator, expected)) = parse_integer_query(raw) else {
+        return false;
+    };
+    match operator {
+        CountOperator::Eq => actual == expected,
+        CountOperator::Gt => actual > expected,
+        CountOperator::Gte => actual >= expected,
+        CountOperator::Lt => actual < expected,
+        CountOperator::Lte => actual <= expected,
+    }
+}
+
+pub fn query_float_matches(raw: &str, actual: f64) -> bool {
+    let Some((operator, expected)) = parse_score_query(raw) else {
+        return false;
+    };
+    match operator {
+        ScoreOperator::Eq => (actual - expected as f64).abs() < f64::EPSILON,
+        ScoreOperator::Gt => actual > expected as f64,
+        ScoreOperator::Gte => actual >= expected as f64,
+        ScoreOperator::Lt => actual < expected as f64,
+        ScoreOperator::Lte => actual <= expected as f64,
+    }
+}
+
+pub fn query_bool_matches(raw: &str, actual: bool) -> bool {
+    parse_bool_query(raw) == Some(actual)
+}
+
 fn parse_search_query(tokens: &[QueryToken]) -> Result<QueryExpr, QueryError> {
     struct Parser<'a> {
         tokens: &'a [QueryToken],
@@ -664,7 +921,7 @@ fn parse_search_query(tokens: &[QueryToken]) -> Result<QueryExpr, QueryError> {
                 self.index += 1;
                 let rhs = self
                     .parse_and()
-                    .map_err(|_| QueryError("expected a search term after OR".to_string()))?;
+                    .map_err(|_| QueryError("expected a search term after ||".to_string()))?;
                 expr = QueryExpr::Or(Box::new(expr), Box::new(rhs));
             }
             Ok(expr)
@@ -676,7 +933,7 @@ fn parse_search_query(tokens: &[QueryToken]) -> Result<QueryExpr, QueryError> {
                 self.index += 1;
                 let rhs = self
                     .parse_not()
-                    .map_err(|_| QueryError("expected a search term after AND".to_string()))?;
+                    .map_err(|_| QueryError("expected a search term after |".to_string()))?;
                 expr = QueryExpr::And(Box::new(expr), Box::new(rhs));
             }
             Ok(expr)
@@ -687,13 +944,12 @@ fn parse_search_query(tokens: &[QueryToken]) -> Result<QueryExpr, QueryError> {
                 self.index += 1;
                 if matches!(self.tokens.get(self.index), Some(QueryToken::Not)) {
                     return Err(QueryError(
-                        "consecutive NOT operators are not allowed".to_string(),
+                        "consecutive ! operators are not allowed".to_string(),
                     ));
                 }
-                return Ok(QueryExpr::Not(Box::new(
-                    self.parse_not()
-                        .map_err(|_| QueryError("expected a search term after NOT".to_string()))?,
-                )));
+                return Ok(QueryExpr::Not(Box::new(self.parse_not().map_err(
+                    |_| QueryError("expected a search term after !".to_string()),
+                )?)));
             }
             self.parse_primary()
         }
@@ -760,6 +1016,22 @@ fn parse_query_vector(value: &str) -> Option<Vec<f32>> {
         .collect()
 }
 
+fn parse_integer_query(raw: &str) -> Option<(CountOperator, u64)> {
+    parse_count_query(raw)
+}
+
+fn parse_float_query(raw: &str) -> Option<(ScoreOperator, f32)> {
+    parse_score_query(raw)
+}
+
+fn parse_bool_query(raw: &str) -> Option<bool> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "true" => Some(true),
+        "false" => Some(false),
+        _ => None,
+    }
+}
+
 fn parse_query_address(value: &str) -> Option<u64> {
     let trimmed = value.trim();
     if let Some(hex) = trimmed
@@ -804,6 +1076,15 @@ enum CountOperator {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DateOperator {
+    Eq,
+    Gt,
+    Gte,
+    Lt,
+    Lte,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ScoreOperator {
     Eq,
     Gt,
     Gte,
@@ -884,6 +1165,28 @@ fn parse_size_query(raw: &str) -> Option<(CountOperator, u64)> {
     parse_size_bytes(remainder).map(|value| (operator, value))
 }
 
+fn parse_score_query(raw: &str) -> Option<(ScoreOperator, f32)> {
+    let trimmed = raw.trim();
+    let (operator, remainder) = if let Some(value) = trimmed.strip_prefix(">=") {
+        (ScoreOperator::Gte, value)
+    } else if let Some(value) = trimmed.strip_prefix("<=") {
+        (ScoreOperator::Lte, value)
+    } else if let Some(value) = trimmed.strip_prefix('>') {
+        (ScoreOperator::Gt, value)
+    } else if let Some(value) = trimmed.strip_prefix('<') {
+        (ScoreOperator::Lt, value)
+    } else if let Some(value) = trimmed.strip_prefix('=') {
+        (ScoreOperator::Eq, value)
+    } else {
+        (ScoreOperator::Eq, trimmed)
+    };
+    let value = remainder.trim().parse::<f32>().ok()?;
+    if !value.is_finite() {
+        return None;
+    }
+    Some((operator, value))
+}
+
 fn parse_size_bytes(raw: &str) -> Option<u64> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -941,7 +1244,7 @@ mod tests {
 
     #[test]
     fn tokenizer_preserves_vector_json_array() {
-        let query = Query::parse("vector: [0.1, -0.2, 0.3] AND collection: function").unwrap();
+        let query = Query::parse("vector: [0.1, -0.2, 0.3] | collection: function").unwrap();
         match query.expr() {
             QueryExpr::And(lhs, _) => match lhs.as_ref() {
                 QueryExpr::Term(term) => {
@@ -974,7 +1277,7 @@ mod tests {
 
     #[test]
     fn tokenizer_accepts_terms_without_space_after_colon() {
-        let query = Query::parse("collection:function AND architecture:amd64").unwrap();
+        let query = Query::parse("collection:function | architecture:amd64").unwrap();
         match query.expr() {
             QueryExpr::And(lhs, rhs) => {
                 match lhs.as_ref() {
@@ -998,7 +1301,7 @@ mod tests {
 
     #[test]
     fn tokenizer_accepts_space_before_colon() {
-        let query = Query::parse("collection : function AND architecture : amd64").unwrap();
+        let query = Query::parse("collection : function | architecture : amd64").unwrap();
         match query.expr() {
             QueryExpr::And(lhs, rhs) => {
                 match lhs.as_ref() {
@@ -1022,7 +1325,7 @@ mod tests {
 
     #[test]
     fn parser_gives_and_higher_precedence_than_or() {
-        let query = Query::parse("symbol: \"a\" OR symbol: \"b\" AND corpus: default").unwrap();
+        let query = Query::parse("symbol: \"a\" || symbol: \"b\" | corpus: default").unwrap();
         match query.expr() {
             QueryExpr::Or(_, rhs) => match rhs.as_ref() {
                 QueryExpr::And(_, _) => {}
@@ -1035,35 +1338,35 @@ mod tests {
     #[test]
     fn root_terms_are_rejected_inside_or() {
         let query = Query::parse(
-            "sha256: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef OR corpus: default",
+            "lhs: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef || corpus: default",
         )
         .unwrap();
         let error = query.analyze().unwrap_err();
         assert!(
             error
                 .to_string()
-                .contains("sha256 queries can only be combined with AND")
+                .contains("sha256 queries can only be combined with `|`")
         );
     }
 
     #[test]
     fn embedding_root_terms_are_rejected_inside_or() {
         let query = Query::parse(
-            "embedding: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef OR corpus: default",
+            "embedding: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef || corpus: default",
         )
         .unwrap();
         let error = query.analyze().unwrap_err();
         assert!(
             error
                 .to_string()
-                .contains("embedding queries can only be combined with AND")
+                .contains("embedding queries can only be combined with `|`")
         );
     }
 
     #[test]
     fn negated_sha256_is_allowed_with_vector_root() {
         let query = Query::parse(
-            "vector: [0.1, 0.2] AND collection: function AND architecture: amd64 AND NOT sha256: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "vector: [0.1, 0.2] | collection: function | architecture: amd64 | !lhs: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         )
         .unwrap();
         let analysis = query.analyze().unwrap();
@@ -1073,7 +1376,7 @@ mod tests {
     #[test]
     fn negated_sha256_or_group_is_allowed_with_vector_root() {
         let query = Query::parse(
-            "vector: [0.1, 0.2] AND collection: function AND architecture: amd64 AND NOT (sha256: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef OR sha256: fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210)",
+            "vector: [0.1, 0.2] | collection: function | architecture: amd64 | !(lhs: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef || rhs: fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210)",
         )
         .unwrap();
         let analysis = query.analyze().unwrap();
@@ -1099,9 +1402,21 @@ mod tests {
     }
 
     #[test]
+    fn username_parses_as_simple_filter() {
+        let query = Query::parse("username:anonymous").unwrap();
+        match query.expr() {
+            QueryExpr::Term(term) => {
+                assert_eq!(term.field, QueryField::Username);
+                assert_eq!(term.value, "anonymous");
+            }
+            other => panic!("unexpected expr: {:?}", other),
+        }
+    }
+
+    #[test]
     fn analyze_returns_language_level_filters() {
         let query = Query::parse(
-            "embedding: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef AND corpus: default AND collection:function AND architecture:amd64",
+            "embedding: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef | corpus: default | collection:function | architecture:amd64",
         )
         .unwrap();
         let analysis = query.analyze().unwrap();
@@ -1120,7 +1435,12 @@ mod tests {
 
     #[test]
     fn embeddings_reject_zero_counts() {
-        for raw in ["embeddings:0", "embeddings:=0", "embeddings:>0", "embeddings:<0"] {
+        for raw in [
+            "embeddings:0",
+            "embeddings:=0",
+            "embeddings:>0",
+            "embeddings:<0",
+        ] {
             let query = Query::parse(raw).unwrap();
             let error = query.analyze().unwrap_err();
             assert!(error.to_string().contains("embeddings expects counts"));
@@ -1130,11 +1450,11 @@ mod tests {
     #[test]
     fn date_accepts_supported_forms() {
         for raw in [
-            "date:2026",
-            "date:2026-03",
-            "date:2026-03-30",
-            "date:>=2026-03-01",
-            "date:<=2026-03-31",
+            "timestamp:2026",
+            "timestamp:2026-03",
+            "timestamp:2026-03-30",
+            "timestamp:>=2026-03-01",
+            "timestamp:<=2026-03-31",
         ] {
             Query::parse(raw).unwrap().analyze().unwrap();
         }
@@ -1142,24 +1462,32 @@ mod tests {
 
     #[test]
     fn date_rejects_invalid_forms() {
-        for raw in ["date:2026-3", "date:2026-03-3", "date:2026-13", "date:bogus"] {
+        for raw in [
+            "timestamp:2026-3",
+            "timestamp:2026-03-3",
+            "timestamp:2026-13",
+            "timestamp:bogus",
+        ] {
             let query = Query::parse(raw).unwrap();
             let error = query.analyze().unwrap_err();
-            assert!(error.to_string().contains("date expects"));
+            assert!(error.to_string().contains("timestamp expects"));
         }
     }
 
     #[test]
     fn date_filter_matches_exact_and_comparison_forms() {
-        let actual = Utc.with_ymd_and_hms(2026, 3, 30, 18, 25, 0).single().unwrap();
-        assert!(query_date_matches("2026", actual));
-        assert!(query_date_matches("2026-03", actual));
-        assert!(query_date_matches("2026-03-30", actual));
-        assert!(query_date_matches(">=2026-03-01", actual));
-        assert!(query_date_matches("<=2026-03-31", actual));
-        assert!(!query_date_matches("<2026-03", actual));
-        assert!(!query_date_matches(">2026-03", actual));
-        assert!(!query_date_matches("2026-04", actual));
+        let actual = Utc
+            .with_ymd_and_hms(2026, 3, 30, 18, 25, 0)
+            .single()
+            .unwrap();
+        assert!(query_timestamp_matches("2026", actual));
+        assert!(query_timestamp_matches("2026-03", actual));
+        assert!(query_timestamp_matches("2026-03-30", actual));
+        assert!(query_timestamp_matches(">=2026-03-01", actual));
+        assert!(query_timestamp_matches("<=2026-03-31", actual));
+        assert!(!query_timestamp_matches("<2026-03", actual));
+        assert!(!query_timestamp_matches(">2026-03", actual));
+        assert!(!query_timestamp_matches("2026-04", actual));
     }
 
     #[test]
@@ -1186,6 +1514,45 @@ mod tests {
     }
 
     #[test]
+    fn score_accepts_supported_forms() {
+        for raw in ["score:0.95", "score:>0.9", "score:>=1.0", "score:<0.5"] {
+            Query::parse(raw).unwrap().analyze().unwrap();
+        }
+    }
+
+    #[test]
+    fn score_rejects_invalid_forms() {
+        let query = Query::parse("score:bogus").unwrap();
+        let error = query.analyze().unwrap_err();
+        assert!(error.to_string().contains("score expects"));
+    }
+
+    #[test]
+    fn score_filter_matches_comparison_forms() {
+        assert!(query_score_matches("0.95", 0.95));
+        assert!(query_score_matches(">0.9", 0.95));
+        assert!(query_score_matches(">=0.95", 0.95));
+        assert!(query_score_matches("<1.0", 0.95));
+        assert!(!query_score_matches(">1.0", 0.95));
+    }
+
+    #[test]
+    fn structural_metric_filters_accept_supported_forms() {
+        for raw in [
+            "sample:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef | cyclomatic_complexity:1",
+            "sample:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef | average_instructions_per_block:>0",
+            "sample:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef | instructions:1",
+            "sample:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef | blocks:1",
+            "sample:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef | markov:>0",
+            "sample:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef | entropy:>0",
+            "sample:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef | contiguous:true",
+            "sample:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef | chromosome.entropy:>0",
+        ] {
+            Query::parse(raw).unwrap().analyze().unwrap();
+        }
+    }
+
+    #[test]
     fn address_rejects_invalid_syntax() {
         let query = Query::parse("address:xyz").unwrap();
         let error = query.analyze().unwrap_err();
@@ -1194,38 +1561,38 @@ mod tests {
 
     #[test]
     fn incomplete_and_reports_specific_error() {
-        let error = Query::parse("collection:function AND").unwrap_err();
-        assert_eq!(error.to_string(), "expected a search term after AND");
+        let error = Query::parse("collection:function |").unwrap_err();
+        assert_eq!(error.to_string(), "expected a search term after |");
     }
 
     #[test]
     fn incomplete_not_reports_specific_error() {
-        let error = Query::parse("collection:function AND NOT").unwrap_err();
-        assert_eq!(error.to_string(), "expected a search term after AND");
+        let error = Query::parse("collection:function | !").unwrap_err();
+        assert_eq!(error.to_string(), "expected a search term after |");
     }
 
     #[test]
     fn incomplete_parenthesis_reports_specific_error() {
-        let error = Query::parse("collection:function AND NOT (").unwrap_err();
-        assert_eq!(error.to_string(), "expected a search term after AND");
+        let error = Query::parse("collection:function | !(").unwrap_err();
+        assert_eq!(error.to_string(), "expected a search term after |");
     }
 
     #[test]
     fn empty_parenthesis_reports_specific_error() {
-        let error = Query::parse("collection:function AND NOT ( )").unwrap_err();
-        assert_eq!(error.to_string(), "expected a search term after AND");
+        let error = Query::parse("collection:function | !( )").unwrap_err();
+        assert_eq!(error.to_string(), "expected a search term after |");
     }
 
     #[test]
     fn bare_not_group_reports_specific_error() {
-        let error = Query::parse("NOT(").unwrap_err();
-        assert_eq!(error.to_string(), "expected a search term after NOT");
+        let error = Query::parse("!(").unwrap_err();
+        assert_eq!(error.to_string(), "expected a search term after !");
     }
 
     #[test]
     fn consecutive_not_is_rejected() {
-        let error = Query::parse("sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef AND NOT NOT collection:function")
+        let error = Query::parse("lhs:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef | ! !collection:function")
             .unwrap_err();
-        assert_eq!(error.to_string(), "expected a search term after AND");
+        assert_eq!(error.to_string(), "expected a search term after |");
     }
 }

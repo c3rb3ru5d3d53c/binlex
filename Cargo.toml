@@ -51,9 +51,12 @@ futures = "0.3.31"
 tracing = "0.1.41"
 winnow = "0.7.15"
 chrono = { version = "0.4.42", features = ["serde"] }
+rusqlite = { version = "0.37.0", features = ["bundled"] }
+yara-x = "1.14.0"
 
 [target.'cfg(not(target_os = "windows"))'.dev-dependencies]
 binlex-processor-vex = { path = "crates/binlex_processors/vex" }
+tempfile = "3.23.0"
 
 [workspace]
 members = [
@@ -62,6 +65,7 @@ members = [
     "crates/binlex_tools/binlex-hash",
     "crates/binlex_tools/binlex-image",
     "crates/binlex_tools/binlex-mcp",
+    "crates/binlex_tools/binlex-performance",
     "crates/binlex_tools/binlex-server",
     "crates/binlex_tools/binlex-symbols",
     "crates/binlex_tools/binlex-test",

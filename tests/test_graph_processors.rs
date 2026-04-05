@@ -25,8 +25,12 @@ fn vex_processor_dir() -> String {
                     .into_owned();
             }
             let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-            let status = Command::new(cargo)
-                .current_dir(&manifest_dir)
+            let mut command = Command::new(cargo);
+            command.current_dir(&manifest_dir);
+            if let Ok(rustc) = std::env::var("RUSTC") {
+                command.env("RUSTC", rustc);
+            }
+            let status = command
                 .args([
                     "build",
                     "-p",
