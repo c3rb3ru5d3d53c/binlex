@@ -1,5 +1,4 @@
 use pyo3::prelude::*;
-use serde_json::Value;
 
 #[pyclass(name = "ObjectStore")]
 pub struct ObjectStore {
@@ -20,51 +19,34 @@ impl ObjectStore {
         self.inner.root().display().to_string()
     }
 
-    pub fn put_bytes(&self, key: String, payload: Vec<u8>) -> PyResult<()> {
+    pub fn put(&self, path: String, payload: Vec<u8>) -> PyResult<()> {
         self.inner
-            .put_bytes(&key, &payload)
+            .put(&path, &payload)
             .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
     }
 
-    pub fn get_bytes(&self, key: String) -> PyResult<Vec<u8>> {
+    pub fn get(&self, path: String) -> PyResult<Vec<u8>> {
         self.inner
-            .get_bytes(&key)
+            .get(&path)
             .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
     }
 
-    pub fn exists(&self, key: String) -> PyResult<bool> {
+    pub fn exists(&self, path: String) -> PyResult<bool> {
         self.inner
-            .exists(&key)
+            .exists(&path)
             .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
     }
 
-    pub fn put_json(&self, py: Python<'_>, key: String, value: Py<PyAny>) -> PyResult<()> {
-        let json = py.import("json")?;
-        let text: String = json.call_method1("dumps", (value,))?.extract()?;
-        let value: Value = serde_json::from_str(&text)
-            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?;
+    pub fn list_prefix(&self, prefix: String) -> PyResult<Vec<String>> {
         self.inner
-            .put_json(&key, &value)
+            .list_prefix(&prefix)
             .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
     }
 
-    pub fn get_json(&self, py: Python<'_>, key: String) -> PyResult<Py<PyAny>> {
-        let value: Value = self
-            .inner
-            .get_json(&key)
-            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?;
-        json_value_to_python(py, &value)
-    }
-
-    pub fn list_json_prefix(&self, py: Python<'_>, prefix: String) -> PyResult<Vec<Py<PyAny>>> {
-        let values: Vec<Value> = self
-            .inner
-            .list_json_prefix(&prefix)
-            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?;
-        values
-            .iter()
-            .map(|value| json_value_to_python(py, value))
-            .collect()
+    pub fn delete(&self, path: String) -> PyResult<()> {
+        self.inner
+            .delete(&path)
+            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
     }
 
     pub fn delete_prefix(&self, prefix: String) -> PyResult<()> {
@@ -72,14 +54,6 @@ impl ObjectStore {
             .delete_prefix(&prefix)
             .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
     }
-}
-
-fn json_value_to_python(py: Python<'_>, value: &Value) -> PyResult<Py<PyAny>> {
-    let json = py.import("json")?;
-    let text = serde_json::to_string(value)
-        .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?;
-    json.call_method1("loads", (text,))
-        .map(|value| value.unbind())
 }
 
 #[pymodule]

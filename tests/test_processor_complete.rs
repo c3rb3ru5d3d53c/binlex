@@ -23,8 +23,12 @@ fn processor_dir() -> String {
             }
 
             let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-            let vex_status = Command::new(&cargo)
-                .current_dir(&manifest_dir)
+            let mut vex_command = Command::new(&cargo);
+            vex_command.current_dir(&manifest_dir);
+            if let Ok(rustc) = std::env::var("RUSTC") {
+                vex_command.env("RUSTC", rustc);
+            }
+            let vex_status = vex_command
                 .args([
                     "build",
                     "-p",
@@ -43,8 +47,12 @@ fn processor_dir() -> String {
                 "binlex-processor-vex binary should build"
             );
 
-            let complete_status = Command::new(&cargo)
-                .current_dir(&manifest_dir)
+            let mut complete_command = Command::new(&cargo);
+            complete_command.current_dir(&manifest_dir);
+            if let Ok(rustc) = std::env::var("RUSTC") {
+                complete_command.env("RUSTC", rustc);
+            }
+            let complete_status = complete_command
                 .args([
                     "build",
                     "-p",

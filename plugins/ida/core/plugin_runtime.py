@@ -209,7 +209,7 @@ class PluginController:
 
     def available_corpora(self) -> list[str]:
         from .config import build_binlex_config
-        from binlex.index import LocalIndex
+        from binlex.indexing import LocalIndex
 
         config = build_binlex_config(self.config)
         try:

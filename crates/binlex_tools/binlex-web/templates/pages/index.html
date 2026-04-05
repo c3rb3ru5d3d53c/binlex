@@ -1,0 +1,83 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Binlex</title>
+  <style>{{ styles|safe }}</style>
+</head>
+<body>
+  <main class="page">
+    <header class="header">
+      <h1>Binlex</h1>
+      <div class="status-row">
+        <div class="theme-toggle">
+          <button type="button" class="theme-button" id="theme-toggle-button" onclick="toggleTheme()" aria-label="Switch to light mode" title="Switch to light mode">☀️</button>
+          <a class="theme-button docs-button" href="/api/v1/docs" target="_blank" rel="noopener noreferrer" aria-label="Open API docs" title="Open API docs">📄</a>
+        </div>
+        <div class="status-badge-stack">
+          {{ server_status_badge|safe }}
+          {{ index_status_badge|safe }}
+          {{ database_status_badge|safe }}
+        </div>
+      </div>
+    </header>
+
+    <div id="page-notices"></div>
+
+    <section class="controls">
+      <div class="action-row">
+        {% if uploads_enabled %}
+        <form method="post" action="/api/v1/upload/sample" enctype="multipart/form-data" class="upload-form" id="upload-form">
+          <input id="upload-input" type="file" name="data" class="hidden-file">
+          <input id="upload-format" type="hidden" name="format" value="">
+          <input id="upload-architecture" type="hidden" name="architecture" value="">
+          <button class="secondary upload-button" type="button" onclick="openUploadModal()">Upload</button>
+        </form>
+        {% endif %}
+
+        <form method="post" action="/api/v1/search" class="search-form" id="search-form" onsubmit="syncSearchState()" data-corpora='{{ corpora_options_json }}' data-architectures='{{ architecture_options_json }}' data-collections='{{ collection_options_json }}' data-query-completions='{{ query_completion_specs_json }}'>
+          <input type="hidden" name="search" value="1">
+          {% match uploaded_sha256 %}
+          {% when Some with (sha256) %}
+          <input type="hidden" name="uploaded_sha256" value="{{ sha256 }}">
+          {% when None %}
+          {% endmatch %}
+          <div class="search-stack">
+            <div class="search-row">
+              <input type="hidden" name="top_k" id="top-k-input" value="{{ top_k }}">
+              <input type="hidden" name="page" id="page-input" value="{{ page }}">
+              <div class="query-input-stack">
+                <input class="search-input" id="query-input" type="text" name="query" value="{{ query }}" placeholder="Search" autocomplete="off" oninput="updateQueryAssistant()" onfocus="scheduleQueryAssistantUpdate()" onmouseup="scheduleQueryAssistantUpdate()" onkeyup="handleQueryInputKeyup(event)" onkeydown="handleQueryInputKeydown(event)">
+                <button type="button" class="row-actions-trigger query-copy-button" onclick="copyQuery(this)">Copy</button>
+                <div class="query-assistant" id="query-assistant" hidden></div>
+              </div>
+              <div class="top-k-control">
+                <button type="button" class="secondary top-k-trigger" id="top-k-trigger" onclick="toggleTopKPopover()">Top K: <span id="top-k-label">{{ top_k }}</span></button>
+                <div class="top-k-popover" id="top-k-popover" hidden>
+                  <div class="top-k-slider-wrap">
+                    <span class="top-k-tick top">64</span>
+                    <input type="range" min="1" max="64" value="{{ top_k }}" id="top-k-slider" class="top-k-slider" orient="vertical" oninput="updateTopKValue(this.value)">
+                    <span class="top-k-tick bottom">1</span>
+                  </div>
+                </div>
+              </div>
+              <button class="primary search-submit-button" id="search-submit-button" type="submit">
+                <span class="search-submit-label">Search</span>
+                <span class="chromosome-loader search-submit-loader" aria-hidden="true" hidden><span class="chromosome left"><span class="waist"></span></span><span class="chromosome right"><span class="waist"></span></span></span>
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section class="results" id="search-results"></section>
+    {{ upload_modal_html|safe }}
+    <div id="row-action-popover" class="row-actions-popover" hidden data-actions="[]" data-path=""><div class="row-actions-header"><button type="button" class="secondary row-actions-back" onclick="navigateRowActions(this)" disabled>Back</button><div class="row-actions-breadcrumb">Action</div></div><input class="menu-search" type="text" placeholder="Search action" oninput="renderRowActionMenu(this.closest('.row-actions-popover'))" onkeydown="handleRowActionSearchKeydown(event, this.closest('.row-actions-popover'))"><div class="row-action-options"></div></div>
+
+    <script>{{ bootstrap|safe }}</script>
+    <script>{{ script|safe }}</script>
+  </main>
+</body>
+</html>

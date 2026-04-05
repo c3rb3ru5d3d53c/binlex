@@ -1,0 +1,16 @@
+<div class="upload-corpus-picker" data-upload-corpus-root="1" data-options='{{ options_json }}' data-selected='{{ selected_json }}'>
+  <div class="upload-corpus-header">Corpora</div>
+  <div class="upload-corpus-grid">
+    <div class="upload-corpus-column">
+      <div class="upload-corpus-label">Available</div>
+      <div class="upload-corpus-search-wrap"><input class="search-input upload-corpus-search" id="upload-corpus-available-search" type="text" placeholder="Search corpora" oninput="handleUploadCorpusAvailableInput()" onkeydown="handleUploadCorpusAvailableKeydown(event)"><button type="button" class="upload-corpus-create-inline" id="upload-corpus-create-inline" onclick="promptCreateUploadCorpus()" disabled>Create</button></div>
+      <div class="upload-corpus-list" id="upload-corpus-available-list"></div>
+    </div>
+    <div class="upload-corpus-column">
+      <div class="upload-corpus-label">Selected</div>
+      <input class="search-input upload-corpus-search" id="upload-corpus-selected-search" type="text" placeholder="Search selected" oninput="renderUploadCorpusPicker()" onkeydown="handleUploadCorpusSelectedKeydown(event)">
+      <div class="upload-corpus-list" id="upload-corpus-selected-list"></div>
+    </div>
+  </div>
+  <div class="upload-corpus-create-overlay" id="upload-corpus-create-overlay" hidden><div class="upload-corpus-create-prompt" id="upload-corpus-create-prompt"><div class="upload-corpus-create-text" id="upload-corpus-create-text"></div><div class="upload-corpus-create-actions"><button type="button" class="secondary" onclick="cancelCreateUploadCorpus()">Cancel</button><button type="button" class="primary" onclick="confirmCreateUploadCorpus()">OK</button></div></div></div>
+</div>

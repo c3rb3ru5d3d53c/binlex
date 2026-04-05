@@ -8,7 +8,7 @@ import ida_nalt
 import idautils
 import idc
 
-from binlex.index import Collection, LocalIndex
+from binlex.indexing import Collection, LocalIndex
 
 from .config import build_binlex_config, effective_index_root, is_meaningful_name, require_embeddings
 from .context import resolve_block_context, resolve_function_context

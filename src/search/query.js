@@ -6,10 +6,13 @@
   root.BinlexQuery = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   const QUERY_FIELD_SUGGESTIONS = [
-    { label: "sha256:", insert: "sha256:", kind: "field" },
+    { label: "sample:", insert: "sample:", kind: "field" },
     { label: "embedding:", insert: "embedding:", kind: "field" },
     { label: "embeddings:", insert: "embeddings:", kind: "field" },
     { label: "vector:", insert: "vector:", kind: "field" },
+    { label: "score:", insert: "score:", kind: "field" },
+    { label: "limit:", insert: "limit:", kind: "field" },
+    { label: "drop:", insert: "drop:", kind: "field" },
     { label: "corpus:", insert: "corpus:", kind: "field" },
     { label: "collection:", insert: "collection:", kind: "field" },
     { label: "architecture:", insert: "architecture:", kind: "field" },
@@ -17,9 +20,20 @@
     { label: "date:", insert: "date:", kind: "field" },
     { label: "size:", insert: "size:", kind: "field" },
     { label: "symbol:", insert: "symbol:", kind: "field" },
-    { label: "AND", insert: "AND ", kind: "operator" },
-    { label: "OR", insert: "OR ", kind: "operator" },
-    { label: "NOT", insert: "NOT ", kind: "operator" },
+    { label: "cyclomatic_complexity:", insert: "cyclomatic_complexity:", kind: "field" },
+    { label: "average_instructions_per_block:", insert: "average_instructions_per_block:", kind: "field" },
+    { label: "number_of_instructions:", insert: "number_of_instructions:", kind: "field" },
+    { label: "number_of_blocks:", insert: "number_of_blocks:", kind: "field" },
+    { label: "entropy:", insert: "entropy:", kind: "field" },
+    { label: "contiguous:", insert: "contiguous:", kind: "field" },
+    { label: "chromosome.entropy:", insert: "chromosome.entropy:", kind: "field" },
+    { label: "|", insert: " | ", kind: "operator" },
+    { label: "||", insert: " || ", kind: "operator" },
+    { label: "!", insert: "!", kind: "operator" },
+    { label: "->", insert: " -> ", kind: "operator" },
+    { label: "<-", insert: " <- ", kind: "operator" },
+    { label: "ascending", insert: " | ascending", kind: "operator" },
+    { label: "descending", insert: " | descending", kind: "operator" },
     { label: "(", insert: "(", kind: "group" },
     { label: ")", insert: ")", kind: "group" },
   ];
@@ -36,13 +50,18 @@
     const prefix = value.slice(0, cursor);
     let depth = 0;
     for (const ch of prefix) {
-      if (ch === "(") {
-        depth += 1;
-      } else if (ch === ")" && depth > 0) {
-        depth -= 1;
-      }
+      if (ch === "(") depth += 1;
+      else if (ch === ")" && depth > 0) depth -= 1;
     }
     return depth;
+  }
+
+  function symbolicOperatorAt(value, index) {
+    if ((value || "").startsWith("||", index)) return "||";
+    if ((value || "").startsWith("->", index)) return "->";
+    if ((value || "").startsWith("<-", index)) return "<-";
+    if ((value || "")[index] === "|") return "|";
+    return null;
   }
 
   function analyzeQueryContext(value, cursor = value.length) {
@@ -51,9 +70,7 @@
     let depth = 0;
     let previousKind = "start";
     while (index < cursor) {
-      while (index < cursor && /\s/.test(value[index])) {
-        index += 1;
-      }
+      while (index < cursor && /\s/.test(value[index])) index += 1;
       if (index >= cursor) {
         if (previousKind === "term" || previousKind === "group-close") {
           return { stage: "operator", partial: "", token: "", previousKind, depth, value, cursor };
@@ -82,47 +99,58 @@
       }
 
       if (previousKind === "term" || previousKind === "group-close") {
-        const opStart = index;
-        while (index < cursor && /[A-Za-z]/.test(value[index])) {
-          index += 1;
+        const operator = symbolicOperatorAt(value, index);
+        if (!operator) {
+          return {
+            stage: "operator",
+            partial: value.slice(index, cursor),
+            token: value.slice(index, cursor),
+            previousKind,
+            depth,
+            value,
+            cursor,
+          };
         }
-        const op = value.slice(opStart, index).toUpperCase();
-        if (index >= cursor || !/\s/.test(value[index])) {
-          return { stage: "operator", partial: op, token: op, previousKind, depth, value, cursor };
+        const operatorEnd = index + operator.length;
+        if (cursor <= operatorEnd) {
+          const partial = value.slice(index, cursor);
+          return { stage: "operator", partial, token: partial, previousKind, depth, value, cursor };
         }
-        if (["AND", "OR", "NOT"].includes(op)) {
-          previousKind = "operator";
-          continue;
-        }
-        return { stage: "operator", partial: op, token: op, previousKind, depth, value, cursor };
-      }
-
-      const fieldStart = index;
-      while (index < cursor && /[A-Za-z0-9_]/.test(value[index])) {
-        index += 1;
-      }
-      const field = value.slice(fieldStart, index).toLowerCase();
-      if (field === "not" && index < cursor && (/\s/.test(value[index]) || value[index] === "(")) {
+        index = operatorEnd;
         previousKind = "operator";
         continue;
       }
+
+      if (value[index] === "!") {
+        index += 1;
+        previousKind = "not";
+        if (index >= cursor) {
+          return { stage: "field", partial: "", token: "", previousKind, depth, value, cursor };
+        }
+        continue;
+      }
+
+      const fieldStart = index;
+      while (index < cursor && /[A-Za-z0-9_.]/.test(value[index])) index += 1;
+      const field = value.slice(fieldStart, index).toLowerCase();
       if (index >= cursor) {
         return { stage: "field", partial: field, token: field, previousKind, depth, value, cursor };
       }
       if (value[index] !== ":") {
         return { stage: "field", partial: field, token: field, previousKind, depth, value, cursor };
       }
+
       index += 1;
-      while (index < cursor && /\s/.test(value[index])) {
-        index += 1;
-      }
+      while (index < cursor && /\s/.test(value[index])) index += 1;
       const valueStart = index;
       if (index >= cursor) {
         return { stage: "value", field, partial: "", token: "", previousKind, depth, value, cursor };
       }
+
       if (field === "vector") {
         if (value[index] !== "[") {
-          return { stage: "value", field, partial: value.slice(valueStart, cursor), token: value.slice(valueStart, cursor), previousKind, depth, value, cursor };
+          const token = value.slice(valueStart, cursor);
+          return { stage: "value", field, partial: token, token, previousKind, depth, value, cursor };
         }
         let vectorDepth = 0;
         while (index < cursor) {
@@ -142,33 +170,24 @@
         }
       } else if (field === "symbol") {
         if (value[index] !== "\"") {
-          return { stage: "value", field, partial: value.slice(valueStart, cursor), token: value.slice(valueStart, cursor), previousKind, depth, value, cursor };
+          const token = value.slice(valueStart, cursor);
+          return { stage: "value", field, partial: token, token, previousKind, depth, value, cursor };
         }
         index += 1;
         let escaped = false;
         while (index < cursor) {
           const ch = value[index];
           index += 1;
-          if (escaped) {
-            escaped = false;
-            continue;
-          }
-          if (ch === "\\") {
-            escaped = true;
-            continue;
-          }
-          if (ch === "\"") {
-            break;
-          }
+          if (escaped) escaped = false;
+          else if (ch === "\\") escaped = true;
+          else if (ch === "\"") break;
         }
         if (index >= cursor) {
           const token = value.slice(valueStart, cursor);
           return { stage: completedValueContext(field, token, normalizeOptions()) ? "complete" : "value", field, partial: token, token, previousKind, depth, value, cursor };
         }
       } else {
-        while (index < cursor && !/\s|\(|\)/.test(value[index])) {
-          index += 1;
-        }
+        while (index < cursor && !/\s|\(|\)|\|/.test(value[index])) index += 1;
         if (index >= cursor) {
           const token = value.slice(valueStart, cursor);
           return { stage: completedValueContext(field, token, normalizeOptions()) ? "complete" : "value", field, partial: token, token, previousKind, depth, value, cursor };
@@ -188,9 +207,7 @@
   function terminalQueryContext(value, cursor) {
     const prefix = (value || "").slice(0, cursor);
     const trimmed = prefix.replace(/\s+$/, "");
-    if (!trimmed) {
-      return { hasTrailingSpace: /\s$/.test(prefix), context: null, prefix };
-    }
+    if (!trimmed) return { hasTrailingSpace: /\s$/.test(prefix), context: null, prefix };
     return {
       hasTrailingSpace: trimmed.length < prefix.length,
       context: analyzeQueryContext(trimmed, trimmed.length),
@@ -233,16 +250,11 @@
           },
         };
       }
-      if (partial.startsWith(committed.value)) {
-        return null;
-      }
+      if (partial.startsWith(committed.value)) return null;
     }
     const clauseText = `${committed.field}:${committed.value}`;
     if (prefix.endsWith(`${clauseText} `)) {
-      return {
-        kind: "operator",
-        context: operatorContinuationContext(prefix, queryGroupDepth(prefix, prefix.length)),
-      };
+      return { kind: "operator", context: operatorContinuationContext(prefix, queryGroupDepth(prefix, prefix.length)) };
     }
     if (prefix.endsWith(clauseText)) {
       return {
@@ -275,19 +287,14 @@
     if (/\(\s+$/i.test(prefix)) {
       return { kind: "field", context: { stage: "field", partial: "", token: "", previousKind: "group-open", depth: queryGroupDepth(prefix, prefix.length), value: prefix, cursor: prefix.length } };
     }
-    if (/\bNOT\s+$/i.test(prefix)) {
+    if (/!\s+$/i.test(prefix)) {
       return { kind: "field", context: { stage: "field", partial: "", token: "", previousKind: "not", depth: queryGroupDepth(prefix, prefix.length), value: prefix, cursor: prefix.length } };
     }
-    if (context.stage === "complete") {
-      return { kind: "operator", context: operatorContinuationContext(prefix, context.depth) };
-    }
+    if (context.stage === "complete") return { kind: "operator", context: operatorContinuationContext(prefix, context.depth) };
     if (context.stage === "operator") {
-      const token = (context.token || "").toUpperCase();
-      if (["AND", "OR", "NOT"].includes(token)) {
-        return {
-          kind: "field",
-          context: { ...context, stage: "field", partial: "", token: "", previousKind: token === "NOT" ? "not" : "operator", value: prefix, cursor: prefix.length },
-        };
+      const token = context.token || "";
+      if (["|", "||", "->", "<-"].includes(token)) {
+        return { kind: "field", context: { ...context, stage: "field", partial: "", token: "", previousKind: "operator", value: prefix, cursor: prefix.length } };
       }
       return { kind: "operator", context: operatorContinuationContext(prefix, context.depth) };
     }
@@ -310,7 +317,7 @@
   }
 
   function operatorSuggestions(context) {
-    const items = continuationSuggestions().filter((item) => item.kind === "operator");
+    const items = continuationSuggestions().filter((item) => item.kind === "operator" && item.label !== "!");
     if ((context.depth || 0) > 0) {
       const close = continuationSuggestions().find((item) => item.label === ")");
       if (close) items.push(close);
@@ -319,22 +326,26 @@
   }
 
   function fieldSuggestions(context) {
-    const open =
-      context?.token === "(" || context?.partial === "("
-        ? null
-        : continuationSuggestions().find((item) => item.label === "(");
-    const not = continuationSuggestions().find((item) => item.label === "NOT");
+    const open = context?.token === "(" || context?.partial === "(" ? null : continuationSuggestions().find((item) => item.label === "(");
+    const negate = continuationSuggestions().find((item) => item.label === "!");
     const fields = continuationSuggestions().filter((item) => item.kind === "field");
     const items = [...fields];
     if (open) items.push(open);
-    if (
-      not &&
-      context?.previousKind !== "term" &&
-      context?.previousKind !== "group-close" &&
-      context?.previousKind !== "not"
-    ) {
-      items.push(not);
+    if (negate && context?.previousKind !== "term" && context?.previousKind !== "group-close" && context?.previousKind !== "not") {
+      items.push(negate);
     }
+    return items;
+  }
+
+  function fieldStageSuggestions(context) {
+    const items = [...fieldSuggestions(context)];
+    continuationSuggestions()
+      .filter(
+        (item) =>
+          item.kind === "operator" &&
+          ["ascending", "descending"].includes((item.label || "").toLowerCase())
+      )
+      .forEach((item) => items.push(item));
     return items;
   }
 
@@ -342,18 +353,16 @@
     if (!context || context.stage !== "value") return [];
     const normalized = normalizeOptions(options);
     if (context.field === "architecture") {
-      return normalized.architectures.map((value) => ({
-        label: value,
-        insert: value,
-        kind: "value",
-      }));
+      return normalized.architectures.map((value) => ({ label: value, insert: value, kind: "value" }));
     }
     if (context.field === "collection") {
-      return normalized.collections.map((value) => ({
-        label: value,
-        insert: value,
-        kind: "value",
-      }));
+      return normalized.collections.map((value) => ({ label: value, insert: value, kind: "value" }));
+    }
+    if (context.field === "drop") {
+      return ["lhs", "rhs"].map((value) => ({ label: value, insert: value, kind: "value" }));
+    }
+    if (context.field === "contiguous") {
+      return ["true", "false"].map((value) => ({ label: value, insert: value, kind: "value" }));
     }
     return [];
   }
@@ -383,17 +392,8 @@
 
   function filterQuerySuggestions(items, query) {
     const needle = (query || "").trim();
-    const normalizedNeedle = needle.toUpperCase();
     return items
-      .map((item, index) => ({
-        item,
-        index,
-        score: needle
-          ? (normalizedNeedle === "NOT" && item.kind === "operator" && item.label === "NOT"
-            ? -1
-            : fuzzyMenuScore(needle, item.label || ""))
-          : 0,
-      }))
+      .map((item, index) => ({ item, index, score: needle ? fuzzyMenuScore(needle, item.label || "") : 0 }))
       .filter((entry) => !needle || entry.score >= 0)
       .sort((lhs, rhs) => {
         if (!needle) return lhs.index - rhs.index;
@@ -415,9 +415,12 @@
     const value = (context.partial || "").trim();
     if (!value) return false;
     const normalized = normalizeOptions(options);
-    if (context.field === "sha256") return /^[0-9a-fA-F]{64}$/.test(value);
+    if (context.field === "sample") return /^[0-9a-fA-F]{64}$/.test(value);
     if (context.field === "embedding") return /^[0-9a-fA-F]{64}$/.test(value);
     if (context.field === "embeddings") return /^(>=|<=|>|<|=)?\s*\d+(?:\.\d+)?\s*[kKmMbB]?$/.test(value);
+    if (context.field === "score") return /^(>=|<=|>|<|=)?\s*-?\d+(?:\.\d+)?$/.test(value);
+    if (context.field === "limit") return /^\d+$/.test(value) && Number(value) > 0;
+    if (context.field === "drop") return /^(lhs|rhs)$/i.test(value);
     if (context.field === "date") return /^(>=|<=|>|<|=)?\s*\d{4}(?:-\d{2}(?:-\d{2})?)?$/.test(value);
     if (context.field === "vector") {
       try {
@@ -430,6 +433,14 @@
     if (context.field === "symbol") return /^"(?:[^"\\]|\\.)+"$/.test(value);
     if (context.field === "architecture") return normalized.architectures.some((item) => item.toLowerCase() === value.toLowerCase());
     if (context.field === "collection") return normalized.collections.some((item) => item.toLowerCase() === value.toLowerCase());
+    if (context.field === "drop") return ["lhs", "rhs"].some((item) => item === value.toLowerCase());
+    if (["cyclomatic_complexity", "number_of_instructions", "number_of_blocks", "embeddings", "limit", "size"].includes(context.field)) {
+      return /^(>=|<=|>|<|=)?\s*\d+(?:\.\d+)?\s*[kKmMbB]?$/.test(value);
+    }
+    if (["average_instructions_per_block", "entropy", "chromosome.entropy", "score"].includes(context.field)) {
+      return /^(>=|<=|>|<|=)?\s*-?\d+(?:\.\d+)?$/.test(value);
+    }
+    if (context.field === "contiguous") return /^(true|false)$/i.test(value);
     if (context.field === "corpus") return false;
     if (context.field === "address") return /^(0x[0-9a-fA-F]+|\d+)$/.test(value);
     return false;
@@ -439,10 +450,7 @@
     const partialLength = (context.partial || "").length;
     const before = (context.value || "").slice(0, (context.cursor || 0) - partialLength);
     const after = (context.value || "").slice(context.cursor || 0);
-    return {
-      value: `${before}${replacement}${after}`,
-      cursor: before.length + cursorOffset,
-    };
+    return { value: `${before}${replacement}${after}`, cursor: before.length + cursorOffset };
   }
 
   function applySuggestion(value, cursor, item, options = {}) {
@@ -451,14 +459,10 @@
     const current = (context.partial || "").trim();
     if (item.kind === "group" && replacement === "(") {
       const nextChar = (context.value || "").slice(context.cursor || 0, (context.cursor || 0) + 1);
-      return nextChar === ")"
-        ? replacementStateForContext(context, "(", 1)
-        : replacementStateForContext(context, "(  )", 2);
+      return nextChar === ")" ? replacementStateForContext(context, "(", 1) : replacementStateForContext(context, "(  )", 2);
     }
     if (item.kind === "group" && current === replacement.trim()) {
-      if (cursor >= value.length || !/\s/.test(value[cursor] || "")) {
-        return { value: `${value.slice(0, cursor)} ${value.slice(cursor)}`, cursor: cursor + 1 };
-      }
+      if (cursor >= value.length || !/\s/.test(value[cursor] || "")) return { value: `${value.slice(0, cursor)} ${value.slice(cursor)}`, cursor: cursor + 1 };
       return { value, cursor };
     }
     const state = replacementStateForContext(context, replacement);
@@ -471,39 +475,23 @@
   function suggestQueryCompletions(value, cursor = value.length, options = {}) {
     const continuation = continuationStateAfterSpace(value, cursor, options);
     if (continuation) {
-      if (continuation.kind === "operator") {
-        return { kind: "operator", context: continuation.context, suggestions: operatorSuggestions(continuation.context) };
-      }
-      if (continuation.kind === "field") {
-        return { kind: "field", context: continuation.context, suggestions: fieldSuggestions(continuation.context) };
-      }
-      if (continuation.kind === "value") {
-        return {
-          kind: "value",
-          context: continuation.context,
-          suggestions: valueSuggestions(continuation.context, options),
-        };
-      }
+      if (continuation.kind === "operator") return { kind: "operator", context: continuation.context, suggestions: operatorSuggestions(continuation.context) };
+      if (continuation.kind === "field") return { kind: "field", context: continuation.context, suggestions: fieldStageSuggestions(continuation.context) };
+      if (continuation.kind === "value") return { kind: "value", context: continuation.context, suggestions: valueSuggestions(continuation.context, options) };
       return { kind: continuation.kind, context: continuation.context, suggestions: [] };
     }
 
     const clause = analyzeQueryContext(value, cursor);
-    if (clause.stage === "complete" || clause.stage === "none") {
-      return { kind: "none", context: clause, suggestions: [] };
-    }
+    if (clause.stage === "complete" || clause.stage === "none") return { kind: "none", context: clause, suggestions: [] };
     if (!clause.token && clause.stage === "field") {
       return clause.previousKind === "term" || clause.previousKind === "group-close"
         ? { kind: "operator", context: clause, suggestions: operatorSuggestions(clause) }
-        : { kind: "field", context: clause, suggestions: fieldSuggestions(clause) };
+        : { kind: "field", context: clause, suggestions: fieldStageSuggestions(clause) };
     }
     if (clause.stage === "value") {
-      return {
-        kind: "value",
-        context: clause,
-        suggestions: filterQuerySuggestions(valueSuggestions(clause, options), clause.partial),
-      };
+      return { kind: "value", context: clause, suggestions: filterQuerySuggestions(valueSuggestions(clause, options), clause.partial) };
     }
-    const baseSuggestions = clause.stage === "operator" ? operatorSuggestions(clause) : fieldSuggestions(clause);
+    const baseSuggestions = clause.stage === "operator" ? operatorSuggestions(clause) : fieldStageSuggestions(clause);
     return { kind: clause.stage, context: clause, suggestions: filterQuerySuggestions(baseSuggestions, clause.partial) };
   }
 
@@ -514,6 +502,7 @@
     continuationStateAfterSpace,
     continuationSuggestions,
     fieldSuggestions,
+    fieldStageSuggestions,
     filterQuerySuggestions,
     isClauseComplete,
     isDelimitedValueContext,

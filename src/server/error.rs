@@ -6,19 +6,54 @@ use crate::server::dto::ErrorResponse;
 
 #[derive(Debug)]
 pub enum ServerError {
-    Processor(String),
-    NotImplemented(&'static str),
+    Processor {
+        message: String,
+        request_id: Option<String>,
+    },
+    NotImplemented {
+        message: &'static str,
+        request_id: Option<String>,
+    },
 }
 
 impl ServerError {
+    pub fn processor(message: impl Into<String>) -> Self {
+        Self::Processor {
+            message: message.into(),
+            request_id: None,
+        }
+    }
+
+    pub fn not_implemented(message: &'static str) -> Self {
+        Self::NotImplemented {
+            message,
+            request_id: None,
+        }
+    }
+
     pub fn json(error: serde_json::Error) -> Self {
-        Self::Processor(format!("json error: {}", error))
+        Self::processor(format!("json error: {}", error))
+    }
+
+    pub fn with_request_id(mut self, request_id: impl Into<String>) -> Self {
+        let request_id = Some(request_id.into());
+        match &mut self {
+            Self::Processor {
+                request_id: current,
+                ..
+            } => *current = request_id,
+            Self::NotImplemented {
+                request_id: current,
+                ..
+            } => *current = request_id,
+        }
+        self
     }
 
     pub fn status_code(&self) -> StatusCode {
         match self {
-            Self::Processor(_) => StatusCode::BAD_GATEWAY,
-            Self::NotImplemented(_) => StatusCode::NOT_IMPLEMENTED,
+            Self::Processor { .. } => StatusCode::BAD_GATEWAY,
+            Self::NotImplemented { .. } => StatusCode::NOT_IMPLEMENTED,
         }
     }
 }
@@ -26,16 +61,32 @@ impl ServerError {
 impl IntoResponse for ServerError {
     fn into_response(self) -> Response {
         let status = self.status_code();
-        let message = match self {
-            Self::Processor(message) => message,
-            Self::NotImplemented(message) => message.to_string(),
+        let (message, request_id) = match self {
+            Self::Processor {
+                message,
+                request_id,
+            } => (message, request_id),
+            Self::NotImplemented {
+                message,
+                request_id,
+            } => (message.to_string(), request_id),
         };
-        (status, Json(ErrorResponse { error: message })).into_response()
+        (
+            status,
+            Json(ErrorResponse {
+                error: message,
+                request_id,
+            }),
+        )
+            .into_response()
     }
 }
 
 impl From<crate::runtime::error::ProcessorError> for ServerError {
     fn from(error: crate::runtime::error::ProcessorError) -> Self {
-        Self::Processor(error.to_string())
+        Self::Processor {
+            message: error.to_string(),
+            request_id: None,
+        }
     }
 }

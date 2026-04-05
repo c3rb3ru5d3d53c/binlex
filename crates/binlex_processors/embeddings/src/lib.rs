@@ -10,22 +10,17 @@ use twox_hash::XxHash64;
 
 use binlex::config::{
     ConfigProcessor, ConfigProcessorTarget, ConfigProcessorTransport, ConfigProcessorTransports,
-    ConfigProcessorValue,
 };
 use binlex::controlflow::{BlockJson, Function, FunctionJson, Graph, InstructionJson};
 use binlex::core::Architecture;
 use binlex::core::{OperatingSystem, Transport};
-use binlex::formats::{FileJson, SymbolJson};
 use binlex::genetics::ChromosomeJson;
-use binlex::index::{Collection, LocalIndex};
 use binlex::math::stats::{max_or_zero, normalize_l2, weighted_histogram, weighted_mean};
-use binlex::metadata::{Attribute, TagJson};
 use binlex::processor::{
     GraphProcessor, GraphProcessorFanout, OnGraphOptions, ProcessorContext,
     external_processor_registration,
 };
 use binlex::runtime::{Processor, ProcessorError};
-use std::path::PathBuf;
 
 const DEFAULT_DIMENSIONS: usize = 64;
 const NIBBLE_BUCKETS: usize = 16;
@@ -38,23 +33,11 @@ const CALL_BUCKETS: usize = 8;
 #[derive(Serialize, Deserialize, Clone)]
 pub struct EmbeddingsRequest {
     #[serde(default)]
-    pub stage: Option<String>,
-    #[serde(default)]
     pub dimensions: Option<usize>,
     #[serde(default)]
     pub device: Option<String>,
     #[serde(default)]
     pub threads: Option<usize>,
-    #[serde(default)]
-    pub snapshot: Option<binlex::controlflow::GraphSnapshot>,
-    #[serde(default)]
-    pub sha256: Option<String>,
-    #[serde(default)]
-    pub corpora: Vec<String>,
-    #[serde(default)]
-    pub attributes: Vec<Value>,
-    #[serde(default)]
-    pub index: Option<EmbeddingsLocalIndexRequest>,
     #[serde(default)]
     pub instructions: Vec<EmbeddingEntityInput>,
     #[serde(default)]
@@ -120,32 +103,6 @@ struct FunctionCfgBlock {
     to: Vec<u64>,
     #[serde(default)]
     blocks: Vec<u64>,
-}
-
-#[derive(Clone, Debug)]
-struct EmbeddingsLocalIndexConfig {
-    enabled: bool,
-    path: String,
-    selector: String,
-    corpus: String,
-    function: bool,
-    block: bool,
-    instruction: bool,
-}
-
-fn default_embeddings_local_index_path() -> String {
-    binlex::Config::default_local_index_directory()
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct EmbeddingsLocalIndexRequest {
-    pub enabled: bool,
-    pub path: String,
-    pub selector: String,
-    pub corpus: String,
-    pub function: bool,
-    pub block: bool,
-    pub instruction: bool,
 }
 
 fn parse_device(value: Option<&str>) -> EmbeddingDevice {
@@ -856,224 +813,12 @@ fn configured_threads_from_context<C: ProcessorContext>(context: &C) -> usize {
         .unwrap_or(1)
 }
 
-fn table_value<'a>(
-    table: &'a BTreeMap<String, ConfigProcessorValue>,
-    key: &str,
-) -> Option<&'a BTreeMap<String, ConfigProcessorValue>> {
-    table.get(key)?.as_table()
-}
-
-fn string_value<'a>(
-    table: &'a BTreeMap<String, ConfigProcessorValue>,
-    key: &str,
-) -> Option<&'a str> {
-    table.get(key)?.as_string()
-}
-
-fn bool_value(table: &BTreeMap<String, ConfigProcessorValue>, key: &str) -> Option<bool> {
-    table.get(key)?.as_bool()
-}
-
-fn configured_local_index_from_processor(
-    processor: &ConfigProcessor,
-) -> EmbeddingsLocalIndexConfig {
-    let index = table_value(&processor.options, "index");
-    let local = index.and_then(|value| table_value(value, "local"));
-    let collections = index.and_then(|value| table_value(value, "collection"));
-    let default_path = default_embeddings_local_index_path();
-    EmbeddingsLocalIndexConfig {
-        enabled: local
-            .and_then(|value| bool_value(value, "enabled"))
-            .unwrap_or(false),
-        path: local
-            .and_then(|value| string_value(value, "path"))
-            .unwrap_or(default_path.as_str())
-            .to_string(),
-        selector: local
-            .and_then(|value| string_value(value, "selector"))
-            .unwrap_or("processors.embeddings.vector")
-            .to_string(),
-        corpus: local
-            .and_then(|value| string_value(value, "corpus"))
-            .unwrap_or("default")
-            .to_string(),
-        function: collections
-            .and_then(|value| bool_value(value, "function"))
-            .unwrap_or(true),
-        block: collections
-            .and_then(|value| bool_value(value, "block"))
-            .unwrap_or(false),
-        instruction: collections
-            .and_then(|value| bool_value(value, "instruction"))
-            .unwrap_or(false),
-    }
-}
-
-fn configured_local_index_from_context<C: ProcessorContext>(
-    context: &C,
-) -> EmbeddingsLocalIndexConfig {
-    context
-        .processor(EmbeddingsProcessor::NAME)
-        .map(configured_local_index_from_processor)
-        .unwrap_or(EmbeddingsLocalIndexConfig {
-            enabled: false,
-            path: default_embeddings_local_index_path(),
-            selector: "processors.embeddings.vector".to_string(),
-            corpus: "default".to_string(),
-            function: true,
-            block: false,
-            instruction: false,
-        })
-}
-
-fn parse_complete_sha256<C: ProcessorContext>(context: &C) -> Option<String> {
-    context
-        .processor(EmbeddingsProcessor::NAME)?
-        .complete
-        .options
-        .get("sha256")?
-        .as_string()
-        .map(ToString::to_string)
-}
-
-fn parse_complete_corpora<C: ProcessorContext>(context: &C) -> Vec<String> {
-    let Some(raw) = context
-        .processor(EmbeddingsProcessor::NAME)
-        .and_then(|processor| processor.complete.options.get("corpora_json"))
-        .and_then(ConfigProcessorValue::as_string)
-    else {
-        return Vec::new();
-    };
-    serde_json::from_str(raw).unwrap_or_default()
-}
-
-fn parse_complete_attributes<C: ProcessorContext>(context: &C) -> Vec<Value> {
-    let Some(raw) = context
-        .processor(EmbeddingsProcessor::NAME)
-        .and_then(|processor| processor.complete.options.get("attributes_json"))
-        .and_then(ConfigProcessorValue::as_string)
-    else {
-        return Vec::new();
-    };
-    serde_json::from_str(raw).unwrap_or_default()
-}
-
-fn attribute_from_value(value: &Value) -> Option<Attribute> {
-    match value.get("type").and_then(Value::as_str) {
-        Some("file") => serde_json::from_value::<FileJson>(value.clone())
-            .ok()
-            .map(Attribute::File),
-        Some("symbol") => serde_json::from_value::<SymbolJson>(value.clone())
-            .ok()
-            .map(Attribute::Symbol),
-        Some("tag") => serde_json::from_value::<TagJson>(value.clone())
-            .ok()
-            .map(Attribute::Tag),
-        _ => None,
-    }
-}
-
-fn configured_index_collections(index: &EmbeddingsLocalIndexConfig) -> Vec<Collection> {
-    let mut collections = Vec::new();
-    if index.function {
-        collections.push(Collection::Function);
-    }
-    if index.block {
-        collections.push(Collection::Block);
-    }
-    if index.instruction {
-        collections.push(Collection::Instruction);
-    }
-    if collections.is_empty() {
-        collections.push(Collection::Function);
-    }
-    collections
-}
-
-fn index_request_from_config(config: EmbeddingsLocalIndexConfig) -> EmbeddingsLocalIndexRequest {
-    EmbeddingsLocalIndexRequest {
-        enabled: config.enabled,
-        path: config.path,
-        selector: config.selector,
-        corpus: config.corpus,
-        function: config.function,
-        block: config.block,
-        instruction: config.instruction,
-    }
-}
-
-fn execute_complete(request: EmbeddingsRequest) -> Result<GraphProcessorFanout, ProcessorError> {
-    let index = configured_local_index_from_request(&request)?;
-    let snapshot = request.snapshot.ok_or_else(|| {
-        ProcessorError::Protocol("embeddings complete stage requires a snapshot".to_string())
-    })?;
-    if !index.enabled {
-        return Ok(GraphProcessorFanout::default());
-    }
-    let corpora = if request.corpora.is_empty() {
-        vec![index.corpus.clone()]
-    } else {
-        request.corpora
-    };
-    let sha256 = request.sha256.ok_or_else(|| {
-        ProcessorError::Protocol("embeddings complete stage requires sha256".to_string())
-    })?;
-    let mut config = binlex::Config::default();
-    config.index.local.directory = PathBuf::from(&index.path).to_string_lossy().into_owned();
-    config.index.local.dimensions = request.dimensions;
-    let graph = Graph::from_snapshot(snapshot, config.clone())
-        .map_err(|error| ProcessorError::Protocol(error.to_string()))?;
-    let attributes = request
-        .attributes
-        .iter()
-        .filter_map(attribute_from_value)
-        .collect::<Vec<_>>();
-    let local_index =
-        LocalIndex::new(config).map_err(|error| ProcessorError::Protocol(error.to_string()))?;
-    let collections = configured_index_collections(&index);
-    local_index
-        .graph_many(
-            &corpora,
-            &sha256,
-            &graph,
-            &attributes,
-            Some(&index.selector),
-            Some(&collections),
-        )
-        .map_err(|error| ProcessorError::Protocol(error.to_string()))?;
-    local_index
-        .commit()
-        .map_err(|error| ProcessorError::Protocol(error.to_string()))?;
-    Ok(GraphProcessorFanout::default())
-}
-
-fn configured_local_index_from_request(
-    request: &EmbeddingsRequest,
-) -> Result<EmbeddingsLocalIndexConfig, ProcessorError> {
-    let index = request
-        .index
-        .as_ref()
-        .ok_or_else(|| ProcessorError::Protocol("missing local index configuration".to_string()))?;
-    Ok(EmbeddingsLocalIndexConfig {
-        enabled: index.enabled,
-        path: index.path.clone(),
-        selector: index.selector.clone(),
-        corpus: index.corpus.clone(),
-        function: index.function,
-        block: index.block,
-        instruction: index.instruction,
-    })
-}
-
 impl Processor for EmbeddingsProcessor {
     const NAME: &'static str = "embeddings";
     type Request = EmbeddingsRequest;
     type Response = GraphProcessorFanout;
 
     fn execute(&self, request: Self::Request) -> Result<Self::Response, ProcessorError> {
-        if request.stage.as_deref() == Some("complete") {
-            return execute_complete(request);
-        }
         let config = EmbeddingModelConfig {
             dimensions: request.dimensions.unwrap_or(DEFAULT_DIMENSIONS),
             device: parse_device(request.device.as_deref()),
@@ -1124,7 +869,7 @@ impl GraphProcessor for EmbeddingsProcessor {
     fn on_graph_options() -> OnGraphOptions {
         OnGraphOptions {
             instructions: false,
-            blocks: false,
+            blocks: true,
             functions: true,
         }
     }
@@ -1133,26 +878,6 @@ impl GraphProcessor for EmbeddingsProcessor {
         context: &C,
         data: Value,
     ) -> Result<Self::Request, ProcessorError> {
-        if data.get("stage").and_then(Value::as_str) == Some("complete") {
-            let snapshot = serde_json::from_value::<binlex::controlflow::GraphSnapshot>(data)
-                .map_err(|error| ProcessorError::Protocol(error.to_string()))?;
-            return Ok(EmbeddingsRequest {
-                stage: Some("complete".to_string()),
-                dimensions: Some(configured_dimensions_from_context(context)),
-                device: Some(configured_device_from_context(context)),
-                threads: Some(configured_threads_from_context(context)),
-                snapshot: Some(snapshot),
-                sha256: parse_complete_sha256(context),
-                corpora: parse_complete_corpora(context),
-                attributes: parse_complete_attributes(context),
-                index: Some(index_request_from_config(
-                    configured_local_index_from_context(context),
-                )),
-                instructions: Vec::new(),
-                blocks: Vec::new(),
-                functions: Vec::new(),
-            });
-        }
         if data.get("type").and_then(Value::as_str) != Some("graph") {
             return Err(ProcessorError::Protocol(
                 "embeddings processor only supports graph-stage requests".to_string(),
@@ -1202,15 +927,9 @@ impl GraphProcessor for EmbeddingsProcessor {
             .collect();
 
         Ok(EmbeddingsRequest {
-            stage: Some("graph".to_string()),
             dimensions: Some(configured_dimensions_from_context(context)),
             device: Some(configured_device_from_context(context)),
             threads: Some(configured_threads_from_context(context)),
-            snapshot: None,
-            sha256: None,
-            corpora: Vec::new(),
-            attributes: Vec::new(),
-            index: None,
             instructions,
             blocks,
             functions,
@@ -1328,17 +1047,17 @@ pub fn registration() -> binlex::processor::ProcessorRegistration {
         &[Transport::IPC, Transport::HTTP],
         EmbeddingsProcessor::on_graph_options(),
         ConfigProcessor {
-            enabled: false,
+            enabled: true,
             instructions: ConfigProcessorTarget {
                 enabled: false,
                 options: BTreeMap::new(),
             },
             blocks: ConfigProcessorTarget {
-                enabled: false,
+                enabled: true,
                 options: BTreeMap::new(),
             },
             functions: ConfigProcessorTarget {
-                enabled: false,
+                enabled: true,
                 options: BTreeMap::new(),
             },
             graph: ConfigProcessorTarget {
@@ -1353,37 +1072,6 @@ pub fn registration() -> binlex::processor::ProcessorRegistration {
                 ("dimensions".to_string(), 64.into()),
                 ("device".to_string(), "cpu".into()),
                 ("threads".to_string(), 1.into()),
-                (
-                    "index".to_string(),
-                    BTreeMap::from([
-                        (
-                            "local".to_string(),
-                            BTreeMap::from([
-                                ("enabled".to_string(), true.into()),
-                                (
-                                    "path".to_string(),
-                                    default_embeddings_local_index_path().into(),
-                                ),
-                                (
-                                    "selector".to_string(),
-                                    "processors.embeddings.vector".into(),
-                                ),
-                                ("corpus".to_string(), "default".into()),
-                            ])
-                            .into(),
-                        ),
-                        (
-                            "collection".to_string(),
-                            BTreeMap::from([
-                                ("function".to_string(), true.into()),
-                                ("block".to_string(), false.into()),
-                                ("instruction".to_string(), false.into()),
-                            ])
-                            .into(),
-                        ),
-                    ])
-                    .into(),
-                ),
             ]),
             transport: ConfigProcessorTransports {
                 ipc: ConfigProcessorTransport {

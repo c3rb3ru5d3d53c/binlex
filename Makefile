@@ -50,6 +50,12 @@ clean:
 	@rm -rf pkg/
 	@cargo clean
 
+clean-config:
+	cd ~/.config/ && \
+		rm -rf binlex/
+	cd ~/.local/share/ && \
+		rm -rf binlex/
+
 clean-deps:
 	@cargo clean
 

@@ -37,6 +37,35 @@ pub struct RegisteredProcessor {
     pub registration: ProcessorRegistration,
 }
 
+#[derive(Clone, Debug)]
+pub enum ProcessorDiscoveryStatus {
+    Registered {
+        name: String,
+    },
+    SpawnFailed {
+        error: String,
+    },
+    DescribeFailed {
+        status: i32,
+        stderr: String,
+    },
+    InvalidRegistrationJson {
+        error: String,
+        stdout: String,
+        stderr: String,
+    },
+    InvalidRegistrationMetadata,
+    DuplicateName {
+        name: String,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub struct ProcessorDiscoveryDiagnostic {
+    pub candidate: PathBuf,
+    pub status: ProcessorDiscoveryStatus,
+}
+
 impl RegisteredProcessor {
     pub fn name(&self) -> &str {
         &self.registration.name
@@ -135,31 +164,109 @@ fn cached_registrations(configured_directory: Option<&str>) -> Vec<ProcessorRegi
     discovered
 }
 
+fn describe_processor_candidate(
+    candidate: &Path,
+) -> (ProcessorDiscoveryDiagnostic, Option<ProcessorRegistration>) {
+    match Command::new(candidate).arg("--describe").output() {
+        Err(error) => (
+            ProcessorDiscoveryDiagnostic {
+                candidate: candidate.to_path_buf(),
+                status: ProcessorDiscoveryStatus::SpawnFailed {
+                    error: error.to_string(),
+                },
+            },
+            None,
+        ),
+        Ok(output) => {
+            if !output.status.success() {
+                return (
+                    ProcessorDiscoveryDiagnostic {
+                        candidate: candidate.to_path_buf(),
+                        status: ProcessorDiscoveryStatus::DescribeFailed {
+                            status: output.status.code().unwrap_or(-1),
+                            stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+                        },
+                    },
+                    None,
+                );
+            }
+            match serde_json::from_slice::<ProcessorRegistration>(&output.stdout) {
+                Err(error) => (
+                    ProcessorDiscoveryDiagnostic {
+                        candidate: candidate.to_path_buf(),
+                        status: ProcessorDiscoveryStatus::InvalidRegistrationJson {
+                            error: error.to_string(),
+                            stdout: String::from_utf8_lossy(&output.stdout).trim().to_string(),
+                            stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+                        },
+                    },
+                    None,
+                ),
+                Ok(registration) => {
+                    if registration.name.is_empty() || registration.backend_name.is_empty() {
+                        (
+                            ProcessorDiscoveryDiagnostic {
+                                candidate: candidate.to_path_buf(),
+                                status: ProcessorDiscoveryStatus::InvalidRegistrationMetadata,
+                            },
+                            None,
+                        )
+                    } else {
+                        (
+                            ProcessorDiscoveryDiagnostic {
+                                candidate: candidate.to_path_buf(),
+                                status: ProcessorDiscoveryStatus::Registered {
+                                    name: registration.name.clone(),
+                                },
+                            },
+                            Some(registration),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn discover_processor_registrations(
     configured_directory: Option<&str>,
 ) -> Vec<ProcessorRegistration> {
     let mut registrations = Vec::new();
     let mut seen_names = BTreeSet::new();
     for candidate in processor_binary_candidates(configured_directory) {
-        let Ok(output) = Command::new(&candidate).arg("--describe").output() else {
+        let (diagnostic, registration) = describe_processor_candidate(&candidate);
+        let ProcessorDiscoveryStatus::Registered { name } = &diagnostic.status else {
             continue;
         };
-        if !output.status.success() {
+        if !seen_names.insert(name.clone()) {
             continue;
         }
-        let Ok(registration) = serde_json::from_slice::<ProcessorRegistration>(&output.stdout)
-        else {
-            continue;
-        };
-        if registration.name.is_empty() || registration.backend_name.is_empty() {
-            continue;
+        if let Some(registration) = registration {
+            registrations.push(registration);
         }
-        if !seen_names.insert(registration.name.clone()) {
-            continue;
-        }
-        registrations.push(registration);
     }
     registrations
+}
+
+pub fn processor_discovery_diagnostics_for_config(
+    config: &ConfigProcessors,
+) -> Vec<ProcessorDiscoveryDiagnostic> {
+    let mut diagnostics = Vec::new();
+    let mut seen_names = BTreeSet::new();
+    for candidate in processor_binary_candidates(config.path.as_deref()) {
+        let (diagnostic, _) = describe_processor_candidate(&candidate);
+        let diagnostic = match &diagnostic.status {
+            ProcessorDiscoveryStatus::Registered { name } if !seen_names.insert(name.clone()) => {
+                ProcessorDiscoveryDiagnostic {
+                    candidate: diagnostic.candidate.clone(),
+                    status: ProcessorDiscoveryStatus::DuplicateName { name: name.clone() },
+                }
+            }
+            _ => diagnostic,
+        };
+        diagnostics.push(diagnostic);
+    }
+    diagnostics
 }
 
 fn processor_binary_candidates(configured_directory: Option<&str>) -> Vec<PathBuf> {

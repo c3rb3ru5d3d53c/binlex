@@ -28,7 +28,7 @@ from binlex import Config
 from binlex.controlflow import Graph
 from binlex.disassemblers.capstone import Disassembler
 from binlex.formats import ELF, MACHO, PE
-from binlex.index import Collection, LocalIndex
+from binlex.indexing import Collection, LocalIndex
 from binlex.metadata import Attribute
 
 

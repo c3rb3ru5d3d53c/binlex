@@ -215,7 +215,7 @@ pub struct Block {
 }
 
 impl Block {
-    fn with_inner_block<F, R>(&self, py: Python, f: F) -> PyResult<R>
+    pub(crate) fn with_inner_block<F, R>(&self, py: Python, f: F) -> PyResult<R>
     where
         F: FnOnce(&InnerBlock<'static>) -> PyResult<R>,
     {
