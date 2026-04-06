@@ -486,7 +486,7 @@ impl LocalIndex {
         self.inner
             .lock()
             .unwrap()
-            .symbol_add(&sha256, collection, address, &name)
+            .symbol_add(&sha256, collection, address, &name, "")
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
@@ -528,7 +528,7 @@ impl LocalIndex {
         self.inner
             .lock()
             .unwrap()
-            .symbol_replace(&sha256, collection, address, &name)
+            .symbol_replace(&sha256, collection, address, &name, "")
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
@@ -550,7 +550,7 @@ impl LocalIndex {
         self.inner
             .lock()
             .unwrap()
-            .collection_corpus_add(&sha256, collection, &architecture, address, &corpus)
+            .collection_corpus_add(&sha256, collection, &architecture, address, &corpus, "")
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
@@ -738,7 +738,7 @@ impl LocalIndex {
         self.inner
             .lock()
             .unwrap()
-            .collection_tag_add(&sha256, collection.borrow(py).inner, address, &tag)
+            .collection_tag_add(&sha256, collection.borrow(py).inner, address, &tag, "")
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
@@ -770,7 +770,7 @@ impl LocalIndex {
         self.inner
             .lock()
             .unwrap()
-            .collection_tag_replace(&sha256, collection.borrow(py).inner, address, &tags)
+            .collection_tag_replace(&sha256, collection.borrow(py).inner, address, &tags, "")
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 

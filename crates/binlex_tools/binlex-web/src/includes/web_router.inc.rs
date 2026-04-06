@@ -8,16 +8,59 @@ async fn run_server(
         .route("/api/v1/version", get(version_api))
         .route("/api/v1/token", post(create_token_api))
         .route("/api/v1/token/clear", post(clear_token_api))
-        .route("/api/v1/auth/role/create", post(auth_role_create_api))
-        .route("/api/v1/auth/role", get(auth_role_get_api))
-        .route("/api/v1/auth/roles/search", get(auth_roles_search_api))
-        .route("/api/v1/auth/role/delete", post(auth_role_delete_api))
-        .route("/api/v1/auth/user/create", post(auth_user_create_api))
-        .route("/api/v1/auth/user", get(auth_user_get_api))
-        .route("/api/v1/auth/users/search", get(auth_users_search_api))
-        .route("/api/v1/auth/user/disable", post(auth_user_disable_api))
-        .route("/api/v1/auth/user/enable", post(auth_user_enable_api))
-        .route("/api/v1/auth/user/reset", post(auth_user_reset_api))
+        .route("/api/v1/auth/bootstrap", post(auth_bootstrap_api))
+        .route("/api/v1/auth/login", post(auth_login_api))
+        .route("/api/v1/auth/logout", post(auth_logout_api))
+        .route("/api/v1/auth/captcha", get(auth_captcha_api))
+        .route("/api/v1/auth/register", post(auth_register_api))
+        .route("/api/v1/auth/password/reset", post(auth_password_reset_api))
+        .route("/api/v1/auth/username/check", get(auth_username_check_api))
+        .route("/api/v1/auth/me", get(auth_me_api))
+        .route("/api/v1/profile", get(profile_get_api))
+        .route("/api/v1/profile/password", post(profile_password_api))
+        .route(
+            "/api/v1/profile/picture",
+            post(profile_picture_api).delete(profile_picture_delete_api),
+        )
+        .route(
+            "/api/v1/profile/picture/{username}",
+            get(profile_picture_get_api),
+        )
+        .route(
+            "/api/v1/profile/key/regenerate",
+            post(profile_key_regenerate_api),
+        )
+        .route(
+            "/api/v1/profile/recovery/regenerate",
+            post(profile_recovery_regenerate_api),
+        )
+        .route("/api/v1/profile/delete", post(profile_delete_api))
+        .route("/api/v1/admin/users", get(admin_users_api))
+        .route("/api/v1/admin/users/create", post(admin_user_create_api))
+        .route("/api/v1/admin/users/role", post(admin_user_role_api))
+        .route("/api/v1/admin/users/enabled", post(admin_user_enabled_api))
+        .route(
+            "/api/v1/admin/corpora/delete",
+            post(admin_delete_corpus_api),
+        )
+        .route("/api/v1/admin/tags/delete", post(admin_delete_tag_api))
+        .route(
+            "/api/v1/admin/symbols/delete",
+            post(admin_delete_symbol_api),
+        )
+        .route(
+            "/api/v1/admin/users/password/reset",
+            post(admin_user_password_reset_api),
+        )
+        .route(
+            "/api/v1/admin/users/key/regenerate",
+            post(admin_user_key_regenerate_api),
+        )
+        .route(
+            "/api/v1/admin/users/picture/delete",
+            post(admin_user_picture_delete_api),
+        )
+        .route("/api/v1/admin/users/delete", post(admin_user_delete_api))
         .route("/api/v1/index/graph", post(stage_index_graph))
         .route("/api/v1/index/function", post(stage_index_function))
         .route("/api/v1/index/block", post(stage_index_block))

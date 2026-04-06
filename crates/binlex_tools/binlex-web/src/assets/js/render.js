@@ -1,5 +1,11 @@
 function resultCorpora(row) {
-  return Array.isArray(row?.corpora) ? row.corpora : [];
+  return Array.isArray(row?.corpora)
+    ? row.corpora.map((item) => metadataItemName(item)).filter(Boolean)
+    : [];
+}
+
+function canWrite() {
+  return !!globalThis.__BINLEX_AUTH__?.can_write;
 }
 
 function displayCorpora(row) {
@@ -35,10 +41,51 @@ function serializeCorpora(values) {
   }
 }
 
+async function copyResultPill(button, encodedValue) {
+  if (!(button instanceof HTMLElement)) return;
+  const value = decodeURIComponent(String(encodedValue || ""));
+  if (!value) return;
+  try {
+    await navigator.clipboard.writeText(value);
+    button.classList.add("action-feedback");
+    setTimeout(() => {
+      button.classList.remove("action-feedback");
+    }, 900);
+  } catch (_) {}
+}
+
+function usernameTooltipHtml(row) {
+  const username = String(row?.username || "").trim();
+  if (!username) return "";
+  const html = metadataTooltipEntryHtml(
+    {
+      username,
+      profile_picture: String(row?.profile_picture || "").trim() || null,
+    },
+    "Indexed by",
+    row?.timestamp || "",
+  );
+  if (!html) return "";
+  return `<span class="picker-tooltip-anchor" hidden data-picker-tooltip="${escapeHtml(encodeURIComponent(html))}"></span>`;
+}
+
+function renderResultCopyPill(displayValue, copyValue, options = {}) {
+  const display = String(displayValue ?? "").trim();
+  const copy = String(copyValue ?? "").trim();
+  if (!display || !copy) return "";
+  const tooltipHtml = options.tooltipHtml || "";
+  const classes = `result-copy-pill${tooltipHtml ? " has-tooltip" : ""}${options.className ? ` ${options.className}` : ""}`;
+  const title = options.title || `${copy}\nClick to copy`;
+  return `<button type="button" class="${classes}" title="${escapeHtml(title)}" onclick="event.stopPropagation(); copyResultPill(this,'${escapeHtml(encodeURIComponent(copy))}')">${escapeHtml(display)}${tooltipHtml}</button>`;
+}
+
 function renderCorporaCell(row) {
   const resultKey = resultRowKey(row);
   const count = Array.isArray(row?.corpora) ? row.corpora.length : 0;
   const triggerLabel = count > 0 ? `+${count}` : "+";
+  if (!canWrite()) {
+    return `<div class="corpora-cell"><span class="corpora-popover-trigger readonly-count">${escapeHtml(triggerLabel)}</span></div>`;
+  }
   return `<div class="corpora-cell"><button type="button" class="corpora-popover-trigger" data-result-key="${escapeHtml(resultKey)}" onclick="event.stopPropagation(); toggleCorporaPopover(this)">${escapeHtml(triggerLabel)}</button></div>`;
 }
 
@@ -46,12 +93,15 @@ function renderTagsCell(row) {
   const resultKey = resultRowKey(row);
   const count = Number(row?.collection_tag_count || 0);
   const triggerLabel = count > 0 ? `+${count}` : "+";
+  if (!canWrite()) {
+    return `<div class="tags-cell"><span class="tags-popover-trigger readonly-count">${escapeHtml(triggerLabel)}</span></div>`;
+  }
   return `<div class="tags-cell"><button type="button" class="tags-popover-trigger" data-result-key="${escapeHtml(resultKey)}" onclick="event.stopPropagation(); toggleTagsPopover(this)">${escapeHtml(triggerLabel)}</button></div>`;
 }
 
 function rowSymbolEntries(row) {
   const loaded = Array.isArray(row?.symbols)
-    ? row.symbols.map((symbol) => String(symbol || "").trim()).filter(Boolean)
+    ? row.symbols.map((symbol) => metadataItemName(symbol)).filter(Boolean)
     : [];
   if (loaded.length > 0) {
     return loaded.filter((symbol, index, items) => items.findIndex((candidate) => candidate.toLowerCase() === symbol.toLowerCase()) === index);
@@ -65,6 +115,9 @@ function renderSymbolCell(row) {
   const applied = rowSymbolEntries(row);
   const count = applied.length;
   const triggerLabel = count > 0 ? `+${count}` : "+";
+  if (!canWrite()) {
+    return `<div class="symbol-cell"><span class="symbol-popover-trigger readonly-count">${escapeHtml(triggerLabel)}</span></div>`;
+  }
   return `<div class="symbol-cell"><button type="button" class="symbol-popover-trigger" data-result-key="${escapeHtml(resultKey)}" onclick="event.stopPropagation(); toggleSymbolPopover(this)">${escapeHtml(triggerLabel)}</button></div>`;
 }
 
@@ -88,6 +141,7 @@ function renderResultsCsv(rows) {
     "instructions",
     "blocks",
     "markov",
+    "contiguous",
     "corpus",
     "architecture",
     "username",
@@ -107,6 +161,7 @@ function renderResultsCsv(rows) {
       csvCell(row.collection === "function" || row.collection === "block" ? String(row.number_of_instructions ?? "") : ""),
       csvCell(row.collection === "function" ? String(row.number_of_blocks ?? "") : ""),
       csvCell(row.collection === "block" && row.markov != null ? formatMetricFloat(row.markov) : ""),
+      csvCell(row.contiguous == null ? "" : (row.contiguous ? "true" : "false")),
       csvCell(displayCorpora(row)),
       csvCell(row.architecture),
       csvCell(row.username || ""),
@@ -131,9 +186,9 @@ function buildResultActionTree(row, sampleDownloadsEnabled, query) {
   copyChildren.push(actionLeaf("Embeddings", String(row.embeddings ?? 0)));
   copyChildren.push(actionLeaf("Size", String(row.size ?? 0)));
   copyChildren.push(actionLeaf("Address", `0x${Number(row.address).toString(16)}`));
-  copyChildren.push(actionLeaf("Date", row.timestamp || ""));
+  copyChildren.push(actionLeaf("Timestamp", row.timestamp || ""));
   copyChildren.push(actionLeaf("Username", row.username || ""));
-  copyChildren.push(actionBranch("Sample", [actionLeaf("SHA256", row.sha256 || "")]));
+  copyChildren.push(actionLeaf("Sample SHA256", row.sha256 || ""));
   copyChildren.push(actionLeaf("Embedding", row.embedding || ""));
   copyChildren.push(actionLeaf("Corpora", displayCorpora(row)));
   copyChildren.push(actionLeaf("Architecture", row.architecture || ""));
@@ -196,7 +251,7 @@ function buildGlobalResultsActionTree(rows, sampleDownloadsEnabled, query) {
   const copyChildren = [
     actionCopy("CSV", csv),
     actionCopy("JSON", json),
-    actionBranch("Sample", [actionCopy("SHA256", sha256)]),
+    actionCopy("Sample SHA256", sha256),
     actionCopy("Embedding", embedding),
   ];
   if (contiguousRows.length > 0) {
@@ -249,7 +304,7 @@ function renderGlobalResultsActions(rows, sampleDownloadsEnabled, query) {
 function resultColumnDefinitions() {
   return [
     { id: "side", label: "side" },
-    { id: "timestamp", label: "Date (UTC)" },
+    { id: "timestamp", label: "Timestamp (UTC)" },
     { id: "size", label: "size" },
     { id: "score", label: "score" },
     { id: "embeddings", label: "embeddings" },
@@ -257,6 +312,7 @@ function resultColumnDefinitions() {
     { id: "instructions", label: "instructions" },
     { id: "blocks", label: "blocks" },
     { id: "markov", label: "markov" },
+    { id: "contiguous", label: "contiguous" },
     { id: "corpora", label: "corpora" },
     { id: "architecture", label: "architecture" },
     { id: "username", label: "username" },
@@ -303,11 +359,11 @@ const DETAIL_PREVIEW_LIMITS = {
 function detailPreviewValues(row, kind) {
   switch (kind) {
     case "corpora":
-      return normalizeTagList(row?.collection_corpora || row?.corpora || []);
+      return normalizeMetadataItems(row?.collection_corpora || row?.corpora || []);
     case "tags":
-      return normalizeTagList(row?.collection_tags || []);
+      return normalizeMetadataItems(row?.collection_tags || []);
     case "symbols":
-      return rowSymbolEntries(row);
+      return normalizeMetadataItems(row?.symbols || rowSymbolEntries(row));
     default:
       return [];
   }
@@ -336,7 +392,13 @@ function renderDetailPreviewRow(label, values, kind, loading) {
   const limit = DETAIL_PREVIEW_LIMITS[kind] || 6;
   const visible = values.slice(0, limit);
   const remaining = Math.max(0, values.length - visible.length);
-  const chips = visible.map((value) => `<span class="result-detail-preview-chip" title="${escapeHtml(value)}">${escapeHtml(value)}</span>`).join("");
+  const chips = visible.map((value) => {
+    const itemLabel = metadataItemName(value);
+    return renderResultCopyPill(itemLabel, itemLabel, {
+      className: "result-detail-preview-chip",
+      tooltipHtml: metadataTooltipHtml(value, "full"),
+    });
+  }).join("");
   const more = remaining > 0 ? `<span class="result-detail-preview-more">+${escapeHtml(String(remaining))} more</span>` : "";
   return `<div class="result-detail-preview-item"><span class="result-detail-label">${escapeHtml(label)}</span><div class="result-detail-preview-list">${chips}${more}</div></div>`;
 }
@@ -364,7 +426,10 @@ function renderResultDetails(row, resultKey, columnCount) {
   );
   const items = metrics
     .filter(([, value]) => value != null && value !== "")
-    .map(([label, value]) => `<div class="result-detail-item"><span class="result-detail-label">${escapeHtml(label)}</span><span class="result-detail-value">${escapeHtml(String(value))}</span></div>`)
+    .map(([label, value]) => {
+      const text = String(value);
+      return `<div class="result-detail-item"><span class="result-detail-label">${escapeHtml(label)}</span>${renderResultCopyPill(text, text, { className: "result-detail-metric-pill" })}</div>`;
+    })
     .join("");
   const previews = [
     renderDetailPreviewRow("Corpora", detailPreviewValues(row, "corpora"), "corpora", detailPreviewLoading(row, "corpora")),
@@ -399,41 +464,47 @@ function renderResultCell(columnId, row, data) {
   const collection = String(row?.collection || "").trim().toLowerCase();
   switch (columnId) {
     case "side":
-      return `<td>${escapeHtml(row.side)}</td>`;
+      return `<td>${renderResultCopyPill(row.side, row.side, { className: "result-copy-pill-compact" })}</td>`;
     case "timestamp":
-      return `<td title="${escapeHtml(row.timestamp)}">${escapeHtml(formatResultDate(row.timestamp))}</td>`;
+      return `<td>${renderResultCopyPill(formatResultDate(row.timestamp), row.timestamp, { title: `${row.timestamp}\nClick to copy` })}</td>`;
     case "size":
-      return `<td title="${escapeHtml(String(row.size))} bytes">${escapeHtml(formatResultSize(row.size))}</td>`;
+      return `<td>${renderResultCopyPill(formatResultSize(row.size), formatResultSize(row.size), { title: `${String(row.size)} bytes\nClick to copy` })}</td>`;
     case "score":
-      return `<td title="${escapeHtml(scoreValue)}">${escapeHtml(scoreValue)}</td>`;
+      return `<td>${renderResultCopyPill(scoreValue, scoreValue)}</td>`;
     case "embeddings":
-      return `<td title="${escapeHtml(String(row.embeddings))}">${escapeHtml(compactCount(row.embeddings))}</td>`;
+      return `<td>${renderResultCopyPill(compactCount(row.embeddings), String(row.embeddings ?? ""))}</td>`;
     case "embedding":
-      return `<td><code title="${escapeHtml(row.embedding)}">${escapeHtml(abbreviateHex(row.embedding))}</code></td>`;
-    case "instructions":
-      return `<td>${collection === "function" || collection === "block" ? escapeHtml(String(row.number_of_instructions ?? "")) : ""}</td>`;
-    case "blocks":
-      return `<td>${collection === "function" ? escapeHtml(String(row.number_of_blocks ?? "")) : ""}</td>`;
+      return `<td>${renderResultCopyPill(abbreviateHex(row.embedding), row.embedding)}</td>`;
+    case "instructions": {
+      const value = collection === "function" || collection === "block" ? String(row.number_of_instructions ?? "") : "";
+      return `<td>${renderResultCopyPill(value, value)}</td>`;
+    }
+    case "blocks": {
+      const value = collection === "function" ? String(row.number_of_blocks ?? "") : "";
+      return `<td>${renderResultCopyPill(value, value)}</td>`;
+    }
     case "markov": {
       const value = collection === "block" && row.markov != null ? formatMetricFloat(row.markov) : "";
-      return `<td>${escapeHtml(value)}</td>`;
+      return `<td>${renderResultCopyPill(value, value)}</td>`;
     }
+    case "contiguous":
+      return `<td>${renderResultCopyPill(row.contiguous == null ? "" : (row.contiguous ? "true" : "false"), row.contiguous == null ? "" : (row.contiguous ? "true" : "false"))}</td>`;
     case "corpora":
       return `<td class="corpora-cell-td">${renderCorporaCell(row)}</td>`;
     case "architecture":
-      return `<td>${escapeHtml(displayArchitecture(row.architecture))}</td>`;
+      return `<td>${renderResultCopyPill(displayArchitecture(row.architecture), displayArchitecture(row.architecture))}</td>`;
     case "username":
-      return `<td>${escapeHtml(row.username || "")}</td>`;
+      return `<td>${renderResultCopyPill(row.username || "", row.username || "", { tooltipHtml: usernameTooltipHtml(row) })}</td>`;
     case "sample":
-      return `<td class="sha256-cell"><code title="${escapeHtml(row.sha256)}">${escapeHtml(abbreviateHex(row.sha256))}</code></td>`;
+      return `<td class="sha256-cell">${renderResultCopyPill(abbreviateHex(row.sha256), row.sha256)}</td>`;
     case "collection":
-      return `<td>${escapeHtml(displayCollection(row.collection))}</td>`;
+      return `<td>${renderResultCopyPill(displayCollection(row.collection), displayCollection(row.collection))}</td>`;
     case "symbol":
       return `<td class="symbol-cell-td">${renderSymbolCell(row)}</td>`;
     case "tags":
       return `<td class="tags-cell-td">${renderTagsCell(row)}</td>`;
     case "address":
-      return `<td>${escapeHtml(`0x${Number(row.address).toString(16)}`)}</td>`;
+      return `<td>${renderResultCopyPill(`0x${Number(row.address).toString(16)}`, `0x${Number(row.address).toString(16)}`)}</td>`;
     case "action":
       return `<td class="action-cell">${renderResultActions(row, data.sample_downloads_enabled, data.query)}</td>`;
     default:

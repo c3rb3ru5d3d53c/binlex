@@ -3,10 +3,12 @@ use crate::databases::sqlite::{Error as SQLiteError, SQLite, SQLiteValue};
 use crate::indexing::Collection;
 use rand::RngCore;
 use ring::digest::{SHA256, digest};
+use ring::pbkdf2;
 use rusqlite::params_from_iter;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt;
+use std::num::NonZeroU32;
 use std::path::Path;
 
 #[derive(Debug)]
@@ -86,6 +88,7 @@ pub struct CollectionTagRecord {
     pub collection: Collection,
     pub address: u64,
     pub tag: String,
+    pub username: String,
     pub timestamp: String,
 }
 
@@ -108,25 +111,34 @@ pub struct CollectionCommentRecord {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SymbolRecord {
     pub symbol: String,
+    pub username: String,
     pub timestamp: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CorpusRecord {
     pub corpus: String,
+    pub username: String,
     pub timestamp: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SymbolSearchPage {
-    pub items: Vec<String>,
+    pub items: Vec<SymbolRecord>,
     pub total_results: usize,
     pub has_next: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TagCatalogRecord {
+    pub tag: String,
+    pub username: String,
+    pub timestamp: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TagCatalogSearchPage {
-    pub items: Vec<String>,
+    pub items: Vec<TagCatalogRecord>,
     pub total_results: usize,
     pub has_next: bool,
 }
@@ -175,6 +187,7 @@ pub struct EntityCorpusWrite {
     pub architecture: String,
     pub address: u64,
     pub corpora: Vec<String>,
+    pub username: String,
     pub timestamp: String,
 }
 
@@ -205,9 +218,19 @@ pub struct RoleRecord {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UserRecord {
     pub username: String,
+    pub api_key: String,
     pub role: String,
     pub enabled: bool,
     pub reserved: bool,
+    pub profile_picture: Option<String>,
+    pub timestamp: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RecoveryCodeRecord {
+    pub username: String,
+    pub code_hash: String,
+    pub enabled: bool,
     pub timestamp: String,
 }
 
@@ -216,6 +239,24 @@ pub struct TokenRecord {
     pub id: String,
     pub token: String,
     pub enabled: bool,
+    pub timestamp: String,
+    pub expires: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionRecord {
+    pub id: String,
+    pub username: String,
+    pub enabled: bool,
+    pub timestamp: String,
+    pub expires: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CaptchaRecord {
+    pub id: String,
+    pub answer_hash: String,
+    pub used: bool,
     pub timestamp: String,
     pub expires: String,
 }
@@ -321,7 +362,12 @@ impl LocalDB {
         Ok(())
     }
 
-    pub fn corpus_add(&self, corpus: &str, timestamp: Option<&str>) -> Result<(), Error> {
+    pub fn corpus_add(
+        &self,
+        corpus: &str,
+        timestamp: Option<&str>,
+        username: Option<&str>,
+    ) -> Result<(), Error> {
         let corpus = corpus.trim();
         if corpus.is_empty() {
             return Err(Error("corpus must not be empty".to_string()));
@@ -329,13 +375,16 @@ impl LocalDB {
         let timestamp = timestamp
             .map(ToString::to_string)
             .unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
+        let username = username.unwrap_or_default().trim().to_string();
         self.sqlite.execute(
-            "INSERT INTO corpora_catalog (corpus, timestamp)
-             VALUES (?1, ?2)
+            "INSERT INTO corpora_catalog (corpus, username, timestamp)
+             VALUES (?1, ?2, ?3)
              ON CONFLICT(corpus) DO UPDATE SET
+               username = excluded.username,
                timestamp = excluded.timestamp",
             &[
                 SQLiteValue::Text(corpus.to_string()),
+                SQLiteValue::Text(username),
                 SQLiteValue::Text(timestamp),
             ],
         )?;
@@ -343,6 +392,15 @@ impl LocalDB {
     }
 
     pub fn corpus_search(&self, query: &str, limit: usize) -> Result<Vec<String>, Error> {
+        self.corpus_search_details(query, limit)
+            .map(|items| items.into_iter().map(|item| item.corpus).collect())
+    }
+
+    pub fn corpus_search_details(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> Result<Vec<CorpusRecord>, Error> {
         let limit = limit.max(1);
         let pattern = if query.trim().is_empty() {
             "%".to_string()
@@ -350,7 +408,7 @@ impl LocalDB {
             format!("%{}%", query.trim().to_ascii_lowercase())
         };
         let rows = self.sqlite.query(
-            "SELECT corpus
+            "SELECT corpus, username, timestamp
              FROM corpora_catalog
              WHERE LOWER(corpus) LIKE ?1
              ORDER BY corpus ASC
@@ -362,12 +420,83 @@ impl LocalDB {
         )?;
         rows.into_iter()
             .map(|row| {
-                row.get("corpus")
-                    .and_then(|value| value.as_str())
-                    .ok_or_else(|| Error("corpus row is missing corpus".to_string()))
-                    .map(ToString::to_string)
+                Ok(CorpusRecord {
+                    corpus: row
+                        .get("corpus")
+                        .and_then(|value| value.as_str())
+                        .ok_or_else(|| Error("corpus row is missing corpus".to_string()))?
+                        .to_string(),
+                    username: row
+                        .get("username")
+                        .and_then(|value| value.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    timestamp: row
+                        .get("timestamp")
+                        .and_then(|value| value.as_str())
+                        .ok_or_else(|| Error("corpus row is missing timestamp".to_string()))?
+                        .to_string(),
+                })
             })
             .collect()
+    }
+
+    pub fn corpus_get(&self, corpus: &str) -> Result<Option<CorpusRecord>, Error> {
+        let rows = self.sqlite.query(
+            "SELECT corpus, username, timestamp
+             FROM corpora_catalog
+             WHERE corpus = ?1
+             LIMIT 1",
+            &[SQLiteValue::Text(corpus.trim().to_string())],
+        )?;
+        rows.into_iter()
+            .next()
+            .map(|row| {
+                Ok(CorpusRecord {
+                    corpus: row
+                        .get("corpus")
+                        .and_then(|value| value.as_str())
+                        .ok_or_else(|| Error("corpus row is missing corpus".to_string()))?
+                        .to_string(),
+                    username: row
+                        .get("username")
+                        .and_then(|value| value.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    timestamp: row
+                        .get("timestamp")
+                        .and_then(|value| value.as_str())
+                        .ok_or_else(|| Error("corpus row is missing timestamp".to_string()))?
+                        .to_string(),
+                })
+            })
+            .transpose()
+    }
+
+    pub fn corpus_delete_global(&self, corpus: &str) -> Result<bool, Error> {
+        let corpus = corpus.trim();
+        if corpus.is_empty() {
+            return Err(Error("corpus must not be empty".to_string()));
+        }
+        if matches!(
+            corpus.to_ascii_lowercase().as_str(),
+            "default" | "goodware" | "malware"
+        ) {
+            return Err(Error(format!(
+                "core corpus {} cannot be deleted",
+                corpus
+            )));
+        }
+        self.sqlite.execute(
+            "DELETE FROM corpora_catalog WHERE corpus = ?1",
+            &[SQLiteValue::Text(corpus.to_string())],
+        )?;
+        self.entity_corpus_delete_global(corpus)?;
+        let rows = self.sqlite.query(
+            "SELECT corpus FROM corpora_catalog WHERE corpus = ?1 LIMIT 1",
+            &[SQLiteValue::Text(corpus.to_string())],
+        )?;
+        Ok(rows.is_empty())
     }
 
     pub fn entity_corpus_replace(
@@ -377,6 +506,7 @@ impl LocalDB {
         architecture: &str,
         address: u64,
         corpora: &[String],
+        username: &str,
         timestamp: &str,
     ) -> Result<(), Error> {
         self.sqlite.execute(
@@ -395,9 +525,10 @@ impl LocalDB {
                 continue;
             }
             self.sqlite.execute(
-                "INSERT INTO entity_corpora (sha256, collection, architecture, address, corpus, timestamp)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                "INSERT INTO entity_corpora (sha256, collection, architecture, address, corpus, username, timestamp)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
                  ON CONFLICT(sha256, collection, architecture, address, corpus) DO UPDATE SET
+                   username = excluded.username,
                    timestamp = excluded.timestamp",
                 &[
                     SQLiteValue::Text(sha256.to_string()),
@@ -405,6 +536,7 @@ impl LocalDB {
                     SQLiteValue::Text(architecture.to_string()),
                     SQLiteValue::Integer(address as i64),
                     SQLiteValue::Text(corpus.to_string()),
+                    SQLiteValue::Text(username.to_string()),
                     SQLiteValue::Text(timestamp.to_string()),
                 ],
             )?;
@@ -419,8 +551,19 @@ impl LocalDB {
         architecture: &str,
         address: u64,
     ) -> Result<Vec<String>, Error> {
+        self.entity_corpus_details_list(sha256, collection, architecture, address)
+            .map(|items| items.into_iter().map(|item| item.corpus).collect())
+    }
+
+    pub fn entity_corpus_details_list(
+        &self,
+        sha256: &str,
+        collection: Collection,
+        architecture: &str,
+        address: u64,
+    ) -> Result<Vec<CorpusRecord>, Error> {
         let rows = self.sqlite.query(
-            "SELECT corpus
+            "SELECT corpus, username, timestamp
              FROM entity_corpora
              WHERE sha256 = ?1 AND collection = ?2 AND architecture = ?3 AND address = ?4
              ORDER BY corpus ASC",
@@ -433,10 +576,23 @@ impl LocalDB {
         )?;
         rows.into_iter()
             .map(|row| {
-                row.get("corpus")
-                    .and_then(|value| value.as_str())
-                    .ok_or_else(|| Error("entity corpus row is missing corpus".to_string()))
-                    .map(ToString::to_string)
+                Ok(CorpusRecord {
+                    corpus: row
+                        .get("corpus")
+                        .and_then(|value| value.as_str())
+                        .ok_or_else(|| Error("entity corpus row is missing corpus".to_string()))?
+                        .to_string(),
+                    username: row
+                        .get("username")
+                        .and_then(|value| value.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    timestamp: row
+                        .get("timestamp")
+                        .and_then(|value| value.as_str())
+                        .ok_or_else(|| Error("entity corpus row is missing timestamp".to_string()))?
+                        .to_string(),
+                })
             })
             .collect()
     }
@@ -731,9 +887,10 @@ impl LocalDB {
                  WHERE sha256 = ?1 AND collection = ?2 AND architecture = ?3 AND address = ?4",
             )?;
             let mut entity_insert = transaction.prepare(
-                "INSERT INTO entity_corpora (sha256, collection, architecture, address, corpus, timestamp)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                "INSERT INTO entity_corpora (sha256, collection, architecture, address, corpus, username, timestamp)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
                  ON CONFLICT(sha256, collection, architecture, address, corpus) DO UPDATE SET
+                   username = excluded.username,
                    timestamp = excluded.timestamp",
             )?;
             for write in entity_corpora {
@@ -754,6 +911,7 @@ impl LocalDB {
                         &write.architecture,
                         write.address as i64,
                         corpus,
+                        &write.username,
                         &write.timestamp,
                     ))?;
                 }
@@ -1201,7 +1359,12 @@ impl LocalDB {
         })
     }
 
-    pub fn tag_add(&self, tag: &str, timestamp: Option<&str>) -> Result<(), Error> {
+    pub fn tag_add(
+        &self,
+        tag: &str,
+        timestamp: Option<&str>,
+        username: Option<&str>,
+    ) -> Result<(), Error> {
         let tag = tag.trim();
         if tag.is_empty() {
             return Err(Error("tag must not be empty".to_string()));
@@ -1209,13 +1372,16 @@ impl LocalDB {
         let timestamp = timestamp
             .map(ToString::to_string)
             .unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
+        let username = username.unwrap_or_default().trim().to_string();
         self.sqlite.execute(
-            "INSERT INTO tags (tag, timestamp)
-             VALUES (?1, ?2)
+            "INSERT INTO tags (tag, username, timestamp)
+             VALUES (?1, ?2, ?3)
              ON CONFLICT(tag) DO UPDATE SET
+               username = excluded.username,
                timestamp = excluded.timestamp",
             &[
                 SQLiteValue::Text(tag.to_string()),
+                SQLiteValue::Text(username),
                 SQLiteValue::Text(timestamp),
             ],
         )?;
@@ -1242,7 +1408,7 @@ impl LocalDB {
             .unwrap_or(0)
             .max(0) as usize;
         let rows = self.sqlite.query(
-            "SELECT tag
+            "SELECT tag, username, timestamp
              FROM tags
              WHERE LOWER(tag) LIKE ?1
              ORDER BY tag ASC
@@ -1254,11 +1420,24 @@ impl LocalDB {
         )?;
         let items = rows
             .into_iter()
-            .map(|row| {
-                row.get("tag")
-                    .and_then(|value| value.as_str())
-                    .ok_or_else(|| Error("tag row is missing tag".to_string()))
-                    .map(ToString::to_string)
+            .map(|row| -> Result<TagCatalogRecord, Error> {
+                Ok(TagCatalogRecord {
+                    tag: row
+                        .get("tag")
+                        .and_then(|value| value.as_str())
+                        .ok_or_else(|| Error("tag row is missing tag".to_string()))?
+                        .to_string(),
+                    username: row
+                        .get("username")
+                        .and_then(|value| value.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    timestamp: row
+                        .get("timestamp")
+                        .and_then(|value| value.as_str())
+                        .ok_or_else(|| Error("tag row is missing timestamp".to_string()))?
+                        .to_string(),
+                })
             })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(TagCatalogSearchPage {
@@ -1268,18 +1447,76 @@ impl LocalDB {
         })
     }
 
-    pub fn collection_tag_add(&self, tag: &CollectionTagRecord) -> Result<(), Error> {
-        self.tag_add(&tag.tag, Some(&tag.timestamp))?;
+    pub fn tag_get(&self, tag: &str) -> Result<Option<TagCatalogRecord>, Error> {
+        let rows = self.sqlite.query(
+            "SELECT tag, username, timestamp
+             FROM tags
+             WHERE tag = ?1
+             LIMIT 1",
+            &[SQLiteValue::Text(tag.trim().to_string())],
+        )?;
+        rows.into_iter()
+            .next()
+            .map(|row| {
+                Ok(TagCatalogRecord {
+                    tag: row
+                        .get("tag")
+                        .and_then(|value| value.as_str())
+                        .ok_or_else(|| Error("tag row is missing tag".to_string()))?
+                        .to_string(),
+                    username: row
+                        .get("username")
+                        .and_then(|value| value.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    timestamp: row
+                        .get("timestamp")
+                        .and_then(|value| value.as_str())
+                        .ok_or_else(|| Error("tag row is missing timestamp".to_string()))?
+                        .to_string(),
+                })
+            })
+            .transpose()
+    }
+
+    pub fn tag_delete_global(&self, tag: &str) -> Result<bool, Error> {
+        let tag = tag.trim();
+        if tag.is_empty() {
+            return Err(Error("tag must not be empty".to_string()));
+        }
         self.sqlite.execute(
-            "INSERT INTO collection_tags (sha256, collection, address, tag, timestamp)
-             VALUES (?1, ?2, ?3, ?4, ?5)
+            "DELETE FROM sample_tags WHERE tag = ?1",
+            &[SQLiteValue::Text(tag.to_string())],
+        )?;
+        self.sqlite.execute(
+            "DELETE FROM collection_tags WHERE tag = ?1",
+            &[SQLiteValue::Text(tag.to_string())],
+        )?;
+        self.sqlite.execute(
+            "DELETE FROM tags WHERE tag = ?1",
+            &[SQLiteValue::Text(tag.to_string())],
+        )?;
+        let rows = self.sqlite.query(
+            "SELECT tag FROM tags WHERE tag = ?1 LIMIT 1",
+            &[SQLiteValue::Text(tag.to_string())],
+        )?;
+        Ok(rows.is_empty())
+    }
+
+    pub fn collection_tag_add(&self, tag: &CollectionTagRecord) -> Result<(), Error> {
+        self.tag_add(&tag.tag, Some(&tag.timestamp), Some(&tag.username))?;
+        self.sqlite.execute(
+            "INSERT INTO collection_tags (sha256, collection, address, tag, username, timestamp)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
              ON CONFLICT(sha256, collection, address, tag) DO UPDATE SET
+               username = excluded.username,
                timestamp = excluded.timestamp",
             &[
                 SQLiteValue::Text(tag.sha256.clone()),
                 SQLiteValue::Text(tag.collection.as_str().to_string()),
                 SQLiteValue::Integer(tag.address as i64),
                 SQLiteValue::Text(tag.tag.clone()),
+                SQLiteValue::Text(tag.username.clone()),
                 SQLiteValue::Text(tag.timestamp.clone()),
             ],
         )?;
@@ -1296,15 +1533,17 @@ impl LocalDB {
 
         {
             let mut tag_upsert = transaction.prepare(
-                "INSERT INTO tags (tag, timestamp)
-                 VALUES (?1, ?2)
+                "INSERT INTO tags (tag, username, timestamp)
+                 VALUES (?1, ?2, ?3)
                  ON CONFLICT(tag) DO UPDATE SET
+                   username = excluded.username,
                    timestamp = excluded.timestamp",
             )?;
             let mut collection_tag_upsert = transaction.prepare(
-                "INSERT INTO collection_tags (sha256, collection, address, tag, timestamp)
-                 VALUES (?1, ?2, ?3, ?4, ?5)
+                "INSERT INTO collection_tags (sha256, collection, address, tag, username, timestamp)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
                  ON CONFLICT(sha256, collection, address, tag) DO UPDATE SET
+                   username = excluded.username,
                    timestamp = excluded.timestamp",
             )?;
 
@@ -1313,12 +1552,13 @@ impl LocalDB {
                 if tag.is_empty() {
                     return Err(Error("tag must not be empty".to_string()));
                 }
-                tag_upsert.execute((tag, &record.timestamp))?;
+                tag_upsert.execute((tag, &record.username, &record.timestamp))?;
                 collection_tag_upsert.execute((
                     &record.sha256,
                     record.collection.as_str(),
                     record.address as i64,
                     tag,
+                    &record.username,
                     &record.timestamp,
                 ))?;
             }
@@ -1354,6 +1594,7 @@ impl LocalDB {
         collection: Collection,
         address: u64,
         tags: &[String],
+        username: &str,
         timestamp: &str,
     ) -> Result<(), Error> {
         self.sqlite.execute(
@@ -1370,6 +1611,7 @@ impl LocalDB {
                 collection,
                 address,
                 tag: tag.clone(),
+                username: username.to_string(),
                 timestamp: timestamp.to_string(),
             })?;
         }
@@ -1382,8 +1624,18 @@ impl LocalDB {
         collection: Collection,
         address: u64,
     ) -> Result<Vec<String>, Error> {
+        self.collection_tag_details_list(sha256, collection, address)
+            .map(|items| items.into_iter().map(|item| item.tag).collect())
+    }
+
+    pub fn collection_tag_details_list(
+        &self,
+        sha256: &str,
+        collection: Collection,
+        address: u64,
+    ) -> Result<Vec<CollectionTagRecord>, Error> {
         let rows = self.sqlite.query(
-            "SELECT tag
+            "SELECT tag, username, timestamp
              FROM collection_tags
              WHERE sha256 = ?1 AND collection = ?2 AND address = ?3
              ORDER BY tag ASC",
@@ -1395,10 +1647,28 @@ impl LocalDB {
         )?;
         rows.into_iter()
             .map(|row| {
-                row.get("tag")
-                    .and_then(|value| value.as_str())
-                    .ok_or_else(|| Error("collection tag row is missing tag".to_string()))
-                    .map(ToString::to_string)
+                Ok(CollectionTagRecord {
+                    sha256: sha256.to_string(),
+                    collection,
+                    address,
+                    tag: row
+                        .get("tag")
+                        .and_then(|value| value.as_str())
+                        .ok_or_else(|| Error("collection tag row is missing tag".to_string()))?
+                        .to_string(),
+                    username: row
+                        .get("username")
+                        .and_then(|value| value.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    timestamp: row
+                        .get("timestamp")
+                        .and_then(|value| value.as_str())
+                        .ok_or_else(|| {
+                            Error("collection tag row is missing timestamp".to_string())
+                        })?
+                        .to_string(),
+                })
             })
             .collect()
     }
@@ -1505,8 +1775,8 @@ impl LocalDB {
         };
         let (sql, params) = if let Some(collection) = collection {
             (
-                "SELECT sha256, collection, address, tag, timestamp
-                 FROM collection_tags
+                "SELECT sha256, collection, address, tag, username, timestamp
+             FROM collection_tags
                  WHERE LOWER(tag) LIKE ?1 AND collection = ?2
                  ORDER BY tag ASC, sha256 ASC, address ASC
                  LIMIT ?3 OFFSET ?4",
@@ -1559,6 +1829,11 @@ impl LocalDB {
                         .get("tag")
                         .and_then(|value| value.as_str())
                         .ok_or_else(|| Error("collection tag row is missing tag".to_string()))?
+                        .to_string(),
+                    username: row
+                        .get("username")
+                        .and_then(|value| value.as_str())
+                        .unwrap_or_default()
                         .to_string(),
                     timestamp: row
                         .get("timestamp")
@@ -1901,7 +2176,12 @@ impl LocalDB {
         })
     }
 
-    pub fn symbol_add(&self, symbol: &str, timestamp: Option<&str>) -> Result<(), Error> {
+    pub fn symbol_add(
+        &self,
+        symbol: &str,
+        timestamp: Option<&str>,
+        username: Option<&str>,
+    ) -> Result<(), Error> {
         let symbol = symbol.trim();
         if symbol.is_empty() {
             return Err(Error("symbol must not be empty".to_string()));
@@ -1909,13 +2189,16 @@ impl LocalDB {
         let timestamp = timestamp
             .map(ToString::to_string)
             .unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
+        let username = username.unwrap_or_default().trim().to_string();
         self.sqlite.execute(
-            "INSERT INTO symbols (symbol, timestamp)
-             VALUES (?1, ?2)
+            "INSERT INTO symbols (symbol, username, timestamp)
+             VALUES (?1, ?2, ?3)
              ON CONFLICT(symbol) DO UPDATE SET
+               username = excluded.username,
                timestamp = excluded.timestamp",
             &[
                 SQLiteValue::Text(symbol.to_string()),
+                SQLiteValue::Text(username),
                 SQLiteValue::Text(timestamp),
             ],
         )?;
@@ -1942,7 +2225,7 @@ impl LocalDB {
             .unwrap_or(0)
             .max(0) as usize;
         let rows = self.sqlite.query(
-            "SELECT symbol
+            "SELECT symbol, username, timestamp
              FROM symbols
              WHERE LOWER(symbol) LIKE ?1
              ORDER BY symbol ASC
@@ -1954,11 +2237,24 @@ impl LocalDB {
         )?;
         let items = rows
             .into_iter()
-            .map(|row| {
-                row.get("symbol")
-                    .and_then(|value| value.as_str())
-                    .ok_or_else(|| Error("symbol row is missing symbol".to_string()))
-                    .map(ToString::to_string)
+            .map(|row| -> Result<SymbolRecord, Error> {
+                Ok(SymbolRecord {
+                    symbol: row
+                        .get("symbol")
+                        .and_then(|value| value.as_str())
+                        .ok_or_else(|| Error("symbol row is missing symbol".to_string()))?
+                        .to_string(),
+                    username: row
+                        .get("username")
+                        .and_then(|value| value.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    timestamp: row
+                        .get("timestamp")
+                        .and_then(|value| value.as_str())
+                        .ok_or_else(|| Error("symbol row is missing timestamp".to_string()))?
+                        .to_string(),
+                })
             })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(SymbolSearchPage {
@@ -1966,6 +2262,54 @@ impl LocalDB {
             total_results,
             items,
         })
+    }
+
+    pub fn symbol_get(&self, symbol: &str) -> Result<Option<SymbolRecord>, Error> {
+        let rows = self.sqlite.query(
+            "SELECT symbol, username, timestamp
+             FROM symbols
+             WHERE symbol = ?1
+             LIMIT 1",
+            &[SQLiteValue::Text(symbol.trim().to_string())],
+        )?;
+        rows.into_iter()
+            .next()
+            .map(|row| {
+                Ok(SymbolRecord {
+                    symbol: row
+                        .get("symbol")
+                        .and_then(|value| value.as_str())
+                        .ok_or_else(|| Error("symbol row is missing symbol".to_string()))?
+                        .to_string(),
+                    username: row
+                        .get("username")
+                        .and_then(|value| value.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    timestamp: row
+                        .get("timestamp")
+                        .and_then(|value| value.as_str())
+                        .ok_or_else(|| Error("symbol row is missing timestamp".to_string()))?
+                        .to_string(),
+                })
+            })
+            .transpose()
+    }
+
+    pub fn symbol_delete_global(&self, symbol: &str) -> Result<bool, Error> {
+        let symbol = symbol.trim();
+        if symbol.is_empty() {
+            return Err(Error("symbol must not be empty".to_string()));
+        }
+        self.sqlite.execute(
+            "DELETE FROM symbols WHERE symbol = ?1",
+            &[SQLiteValue::Text(symbol.to_string())],
+        )?;
+        let rows = self.sqlite.query(
+            "SELECT symbol FROM symbols WHERE symbol = ?1 LIMIT 1",
+            &[SQLiteValue::Text(symbol.to_string())],
+        )?;
+        Ok(rows.is_empty())
     }
 
     pub fn role_create(&self, name: &str, timestamp: Option<&str>) -> Result<RoleRecord, Error> {
@@ -2085,40 +2429,339 @@ impl LocalDB {
         username: &str,
         role: &str,
         timestamp: Option<&str>,
-    ) -> Result<(UserRecord, String), Error> {
-        let plaintext = generate_api_key();
-        let record = self.user_create_with_key(username, role, &plaintext, false, timestamp)?;
-        Ok((record, plaintext))
+    ) -> Result<(UserRecord, String, Vec<String>), Error> {
+        self.user_create_account(username, &generate_secret(), role, false, timestamp)
     }
 
-    pub fn user_disable(&self, username: &str) -> Result<bool, Error> {
+    pub fn user_create_account(
+        &self,
+        username: &str,
+        password: &str,
+        role: &str,
+        reserved: bool,
+        timestamp: Option<&str>,
+    ) -> Result<(UserRecord, String, Vec<String>), Error> {
+        let username = normalize_username(username)?;
+        let role = normalize_role_name(role)?;
+        normalize_password(password)?;
+        if self.role_get(role)?.is_none() {
+            return Err(Error(format!("role {} does not exist", role)));
+        }
+        if self.user_get(&username)?.is_some() {
+            return Err(Error(format!("user {} already exists", username)));
+        }
+        let api_key = generate_api_key();
+        let recovery_codes = generate_recovery_codes();
+        let when = timestamp
+            .map(ToString::to_string)
+            .unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
+        let record = UserRecord {
+            username: username.to_string(),
+            api_key: api_key.clone(),
+            role: role.to_string(),
+            enabled: true,
+            reserved,
+            profile_picture: None,
+            timestamp: when.clone(),
+        };
+        self.sqlite.execute(
+            "INSERT INTO users (username, email, password_hash, role, api_key, enabled, reserved, profile_picture, timestamp)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            &[
+                SQLiteValue::Text(record.username.clone()),
+                SQLiteValue::Text(String::new()),
+                SQLiteValue::Text(hash_password(password)?),
+                SQLiteValue::Text(record.role.clone()),
+                SQLiteValue::Text(record.api_key.clone()),
+                SQLiteValue::Integer(if record.enabled { 1 } else { 0 }),
+                SQLiteValue::Integer(if record.reserved { 1 } else { 0 }),
+                match &record.profile_picture {
+                    Some(value) => SQLiteValue::Text(value.clone()),
+                    None => SQLiteValue::Null,
+                },
+                SQLiteValue::Text(record.timestamp.clone()),
+            ],
+        )?;
+        self.replace_recovery_codes(&record.username, &recovery_codes, &when)?;
+        Ok((record, api_key, recovery_codes))
+    }
+
+    pub fn user_count(&self) -> Result<usize, Error> {
+        let rows = self
+            .sqlite
+            .query("SELECT COUNT(*) AS count FROM users", &[])?;
+        Ok(rows
+            .into_iter()
+            .next()
+            .and_then(|row| row.get("count").and_then(|value| value.as_i64()))
+            .unwrap_or(0) as usize)
+    }
+
+    pub fn username_availability(&self, username: &str) -> Result<(String, bool), Error> {
+        let normalized = normalize_username(username)?;
+        let available = self.user_get(&normalized)?.is_none();
+        Ok((normalized, available))
+    }
+
+    pub fn admin_count(&self) -> Result<usize, Error> {
+        let rows = self.sqlite.query(
+            "SELECT COUNT(*) AS count FROM users WHERE role = 'admin'",
+            &[],
+        )?;
+        Ok(rows
+            .into_iter()
+            .next()
+            .and_then(|row| row.get("count").and_then(|value| value.as_i64()))
+            .unwrap_or(0) as usize)
+    }
+
+    pub fn enabled_admin_count(&self) -> Result<usize, Error> {
+        let rows = self.sqlite.query(
+            "SELECT COUNT(*) AS count FROM users WHERE role = 'admin' AND enabled = 1",
+            &[],
+        )?;
+        Ok(rows
+            .into_iter()
+            .next()
+            .and_then(|row| row.get("count").and_then(|value| value.as_i64()))
+            .unwrap_or(0) as usize)
+    }
+
+    pub fn user_authenticate(
+        &self,
+        username: &str,
+        password: &str,
+    ) -> Result<Option<UserRecord>, Error> {
+        let username = normalize_username(username)?;
+        if username.is_empty() {
+            return Ok(None);
+        }
+        let rows = self.sqlite.query(
+            "SELECT username, email, api_key, role, enabled, reserved, profile_picture, password_hash, timestamp
+             FROM users
+             WHERE lower(username) = ?1 AND enabled = 1
+             LIMIT 1",
+            &[SQLiteValue::Text(username)],
+        )?;
+        let Some(row) = rows.into_iter().next() else {
+            return Ok(None);
+        };
+        let password_hash = row
+            .get("password_hash")
+            .and_then(|value| value.as_str())
+            .ok_or_else(|| Error("user row is missing password_hash".to_string()))?;
+        if !verify_password(password_hash, password)? {
+            return Ok(None);
+        }
+        Ok(Some(user_record_from_row(row)?))
+    }
+
+    pub fn user_update_role(&self, username: &str, role: &str) -> Result<UserRecord, Error> {
+        let username = normalize_username(username)?;
+        let role = normalize_role_name(role)?;
+        let current = self
+            .user_get(&username)?
+            .ok_or_else(|| Error(format!("user {} does not exist", username)))?;
+        if current.reserved {
+            return Err(Error(format!("user {} is reserved", username)));
+        }
+        if current.role == "admin"
+            && current.enabled
+            && role != "admin"
+            && self.enabled_admin_count()? <= 1
+        {
+            return Err(Error("cannot remove the last admin role".to_string()));
+        }
+        self.sqlite.execute(
+            "UPDATE users SET role = ?1, timestamp = ?2 WHERE username = ?3",
+            &[
+                SQLiteValue::Text(role.to_string()),
+                SQLiteValue::Text(chrono::Utc::now().to_rfc3339()),
+                SQLiteValue::Text(username.to_string()),
+            ],
+        )?;
+        self.user_get(&username)?
+            .ok_or_else(|| Error(format!("user {} does not exist", username)))
+    }
+
+    pub fn user_update_profile_picture(
+        &self,
+        username: &str,
+        profile_picture: Option<&str>,
+    ) -> Result<UserRecord, Error> {
         let username = normalize_username(username)?;
         let current = self
-            .user_get(username)?
+            .user_get(&username)?
             .ok_or_else(|| Error(format!("user {} does not exist", username)))?;
         if current.reserved {
             return Err(Error(format!("user {} is reserved", username)));
         }
         self.sqlite.execute(
-            "UPDATE users SET enabled = 0 WHERE username = ?1",
-            &[SQLiteValue::Text(username.to_string())],
+            "UPDATE users SET profile_picture = ?1, timestamp = ?2 WHERE username = ?3",
+            &[
+                match profile_picture
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                {
+                    Some(value) => SQLiteValue::Text(value.to_string()),
+                    None => SQLiteValue::Null,
+                },
+                SQLiteValue::Text(chrono::Utc::now().to_rfc3339()),
+                SQLiteValue::Text(username.to_string()),
+            ],
         )?;
-        Ok(true)
+        self.user_get(&username)?
+            .ok_or_else(|| Error(format!("user {} does not exist", username)))
     }
 
-    pub fn user_enable(&self, username: &str) -> Result<bool, Error> {
+    pub fn user_change_password(
+        &self,
+        username: &str,
+        current_password: &str,
+        new_password: &str,
+    ) -> Result<(), Error> {
         let username = normalize_username(username)?;
-        self.sqlite.execute(
-            "UPDATE users SET enabled = 1 WHERE username = ?1",
+        normalize_password(new_password)?;
+        let rows = self.sqlite.query(
+            "SELECT password_hash FROM users WHERE username = ?1 LIMIT 1",
             &[SQLiteValue::Text(username.to_string())],
         )?;
-        Ok(self.user_get(username)?.is_some())
+        let Some(row) = rows.into_iter().next() else {
+            return Err(Error(format!("user {} does not exist", username)));
+        };
+        let password_hash = row
+            .get("password_hash")
+            .and_then(|value| value.as_str())
+            .ok_or_else(|| Error("user row is missing password_hash".to_string()))?;
+        if !verify_password(password_hash, current_password)? {
+            return Err(Error("current password is invalid".to_string()));
+        }
+        self.user_set_password(&username, new_password)
     }
 
-    pub fn user_reset(&self, username: &str, timestamp: Option<&str>) -> Result<String, Error> {
+    pub fn user_set_password(&self, username: &str, password: &str) -> Result<(), Error> {
+        let username = normalize_username(username)?;
+        normalize_password(password)?;
+        self.sqlite.execute(
+            "UPDATE users SET password_hash = ?1, timestamp = ?2 WHERE username = ?3",
+            &[
+                SQLiteValue::Text(hash_password(password)?),
+                SQLiteValue::Text(chrono::Utc::now().to_rfc3339()),
+                SQLiteValue::Text(username.to_string()),
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn user_regenerate_recovery_codes(
+        &self,
+        username: &str,
+        timestamp: Option<&str>,
+    ) -> Result<Vec<String>, Error> {
         let username = normalize_username(username)?;
         let current = self
-            .user_get(username)?
+            .user_get(&username)?
+            .ok_or_else(|| Error(format!("user {} does not exist", username)))?;
+        if current.reserved {
+            return Err(Error(format!("user {} is reserved", username)));
+        }
+        let codes = generate_recovery_codes();
+        let when = timestamp
+            .map(ToString::to_string)
+            .unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
+        self.replace_recovery_codes(&username, &codes, &when)?;
+        Ok(codes)
+    }
+
+    pub fn user_reset_with_recovery_code(
+        &self,
+        username: &str,
+        recovery_code: &str,
+        new_password: &str,
+        timestamp: Option<&str>,
+    ) -> Result<(), Error> {
+        let username = normalize_username(username)?;
+        let recovery_code = recovery_code.trim();
+        if recovery_code.is_empty() {
+            return Err(Error("recovery code must not be empty".to_string()));
+        }
+        normalize_password(new_password)?;
+        let current = self
+            .user_get(&username)?
+            .ok_or_else(|| Error(format!("user {} does not exist", username)))?;
+        if !current.enabled {
+            return Err(Error(format!("user {} is disabled", username)));
+        }
+        let code_hash = hash_secret(recovery_code);
+        let rows = self.sqlite.query(
+            "SELECT enabled FROM recovery_codes
+             WHERE username = ?1 AND code_hash = ?2
+             LIMIT 1",
+            &[
+                SQLiteValue::Text(username.to_string()),
+                SQLiteValue::Text(code_hash.clone()),
+            ],
+        )?;
+        let Some(row) = rows.into_iter().next() else {
+            return Err(Error("invalid recovery code".to_string()));
+        };
+        let enabled = row
+            .get("enabled")
+            .and_then(|value| value.as_i64())
+            .map(|value| value != 0)
+            .ok_or_else(|| Error("recovery code row is missing enabled".to_string()))?;
+        if !enabled {
+            return Err(Error("recovery code has already been used".to_string()));
+        }
+        let when = timestamp
+            .map(ToString::to_string)
+            .unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
+        self.user_set_password(&username, new_password)?;
+        self.sqlite.execute(
+            "UPDATE recovery_codes SET enabled = 0, timestamp = ?1 WHERE username = ?2 AND code_hash = ?3",
+            &[
+                SQLiteValue::Text(when),
+                SQLiteValue::Text(username.to_string()),
+                SQLiteValue::Text(code_hash),
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn user_delete(&self, username: &str) -> Result<bool, Error> {
+        let username = normalize_username(username)?;
+        let current = self
+            .user_get(&username)?
+            .ok_or_else(|| Error(format!("user {} does not exist", username)))?;
+        if current.reserved {
+            return Err(Error(format!("user {} is reserved", username)));
+        }
+        if current.role == "admin" && current.enabled && self.enabled_admin_count()? <= 1 {
+            return Err(Error("cannot delete the last admin".to_string()));
+        }
+        self.sqlite.execute(
+            "DELETE FROM sessions WHERE username = ?1",
+            &[SQLiteValue::Text(username.to_string())],
+        )?;
+        self.sqlite.execute(
+            "DELETE FROM recovery_codes WHERE username = ?1",
+            &[SQLiteValue::Text(username.to_string())],
+        )?;
+        self.sqlite.execute(
+            "DELETE FROM users WHERE username = ?1",
+            &[SQLiteValue::Text(username.to_string())],
+        )?;
+        Ok(self.user_get(&username)?.is_none())
+    }
+
+    pub fn user_regenerate_key(
+        &self,
+        username: &str,
+        timestamp: Option<&str>,
+    ) -> Result<String, Error> {
+        let username = normalize_username(username)?;
+        let current = self
+            .user_get(&username)?
             .ok_or_else(|| Error(format!("user {} does not exist", username)))?;
         if current.reserved {
             return Err(Error(format!("user {} is reserved", username)));
@@ -2130,7 +2773,7 @@ impl LocalDB {
         self.sqlite.execute(
             "UPDATE users SET api_key = ?1, timestamp = ?2 WHERE username = ?3",
             &[
-                SQLiteValue::Text(hash_api_key(&plaintext)),
+                SQLiteValue::Text(plaintext.clone()),
                 SQLiteValue::Text(when),
                 SQLiteValue::Text(username.to_string()),
             ],
@@ -2138,10 +2781,68 @@ impl LocalDB {
         Ok(plaintext)
     }
 
+    pub fn user_disable(&self, username: &str) -> Result<bool, Error> {
+        let username = normalize_username(username)?;
+        let current = self
+            .user_get(&username)?
+            .ok_or_else(|| Error(format!("user {} does not exist", username)))?;
+        if current.reserved {
+            return Err(Error(format!("user {} is reserved", username)));
+        }
+        if current.role == "admin" && current.enabled && self.enabled_admin_count()? <= 1 {
+            return Err(Error("cannot disable the last enabled admin".to_string()));
+        }
+        self.sqlite.execute(
+            "UPDATE users SET enabled = 0, timestamp = ?1 WHERE username = ?2",
+            &[
+                SQLiteValue::Text(chrono::Utc::now().to_rfc3339()),
+                SQLiteValue::Text(username.to_string()),
+            ],
+        )?;
+        self.sqlite.execute(
+            "UPDATE sessions SET enabled = 0 WHERE username = ?1",
+            &[SQLiteValue::Text(username.to_string())],
+        )?;
+        Ok(true)
+    }
+
+    pub fn user_enable(&self, username: &str) -> Result<bool, Error> {
+        let username = normalize_username(username)?;
+        let current = self
+            .user_get(&username)?
+            .ok_or_else(|| Error(format!("user {} does not exist", username)))?;
+        if current.reserved {
+            return Err(Error(format!("user {} is reserved", username)));
+        }
+        self.sqlite.execute(
+            "UPDATE users SET enabled = 1, timestamp = ?1 WHERE username = ?2",
+            &[
+                SQLiteValue::Text(chrono::Utc::now().to_rfc3339()),
+                SQLiteValue::Text(username.to_string()),
+            ],
+        )?;
+        Ok(self.user_get(&username)?.is_some())
+    }
+
+    pub fn user_reset(&self, username: &str, timestamp: Option<&str>) -> Result<String, Error> {
+        let password = generate_secret();
+        self.user_set_password(username, &password)?;
+        if let Some(when) = timestamp {
+            self.sqlite.execute(
+                "UPDATE users SET timestamp = ?1 WHERE username = ?2",
+                &[
+                    SQLiteValue::Text(when.to_string()),
+                    SQLiteValue::Text(normalize_username(username)?.to_string()),
+                ],
+            )?;
+        }
+        Ok(password)
+    }
+
     pub fn user_get(&self, username: &str) -> Result<Option<UserRecord>, Error> {
         let username = normalize_username(username)?;
         let rows = self.sqlite.query(
-            "SELECT username, role, enabled, reserved, timestamp
+            "SELECT username, email, api_key, role, enabled, reserved, profile_picture, timestamp
              FROM users
              WHERE username = ?1
              LIMIT 1",
@@ -2165,7 +2866,7 @@ impl LocalDB {
         let offset = (page - 1) * limit;
         let like = format!("%{}%", query.trim().to_ascii_lowercase());
         let rows = self.sqlite.query(
-            "SELECT username, role, enabled, reserved, timestamp
+            "SELECT username, email, api_key, role, enabled, reserved, profile_picture, timestamp
              FROM users
              WHERE lower(username) LIKE ?1 OR lower(role) LIKE ?1
              ORDER BY reserved DESC, username ASC
@@ -2190,6 +2891,21 @@ impl LocalDB {
         })
     }
 
+    pub fn user_search_total(&self, query: &str) -> Result<usize, Error> {
+        let like = format!("%{}%", query.trim().to_ascii_lowercase());
+        let rows = self.sqlite.query(
+            "SELECT COUNT(*) AS count
+             FROM users
+             WHERE lower(username) LIKE ?1 OR lower(role) LIKE ?1",
+            &[SQLiteValue::Text(like)],
+        )?;
+        Ok(rows
+            .into_iter()
+            .next()
+            .and_then(|row| row.get("count").and_then(|value| value.as_i64()))
+            .unwrap_or(0) as usize)
+    }
+
     pub fn auth_check(&self, api_key: &str) -> Result<bool, Error> {
         Ok(self.auth_user(api_key)?.is_some())
     }
@@ -2200,17 +2916,228 @@ impl LocalDB {
             return Ok(None);
         }
         let rows = self.sqlite.query(
-            "SELECT username, role, enabled, reserved, timestamp
+            "SELECT username, email, api_key, role, enabled, reserved, profile_picture, timestamp
              FROM users
              WHERE api_key = ?1 AND enabled = 1
              LIMIT 1",
-            &[SQLiteValue::Text(hash_api_key(api_key))],
+            &[SQLiteValue::Text(api_key.to_string())],
         )?;
         Ok(rows
             .into_iter()
             .next()
             .map(user_record_from_row)
             .transpose()?)
+    }
+
+    pub fn session_create(
+        &self,
+        username: &str,
+        ttl_seconds: u64,
+    ) -> Result<(SessionRecord, String), Error> {
+        let username = normalize_username(username)?;
+        let current = self
+            .user_get(&username)?
+            .ok_or_else(|| Error(format!("user {} does not exist", username)))?;
+        if !current.enabled {
+            return Err(Error(format!("user {} is disabled", username)));
+        }
+        let plaintext = generate_secret();
+        let now = chrono::Utc::now();
+        let expires = now
+            .checked_add_signed(chrono::TimeDelta::seconds(ttl_seconds as i64))
+            .ok_or_else(|| Error("failed to compute session expiry".to_string()))?;
+        let record = SessionRecord {
+            id: generate_session_id(),
+            username: username.to_string(),
+            enabled: true,
+            timestamp: now.to_rfc3339(),
+            expires: expires.to_rfc3339(),
+        };
+        self.sqlite.execute(
+            "INSERT INTO sessions (id, session, username, enabled, timestamp, expires)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            &[
+                SQLiteValue::Text(record.id.clone()),
+                SQLiteValue::Text(hash_secret(&plaintext)),
+                SQLiteValue::Text(record.username.clone()),
+                SQLiteValue::Integer(if record.enabled { 1 } else { 0 }),
+                SQLiteValue::Text(record.timestamp.clone()),
+                SQLiteValue::Text(record.expires.clone()),
+            ],
+        )?;
+        Ok((record, plaintext))
+    }
+
+    pub fn session_user(&self, session: &str) -> Result<Option<UserRecord>, Error> {
+        let session = session.trim();
+        if session.is_empty() {
+            return Ok(None);
+        }
+        let rows = self.sqlite.query(
+            "SELECT users.username, users.email, users.api_key, users.role, users.enabled, users.reserved, users.profile_picture, users.timestamp, sessions.expires, sessions.enabled AS session_enabled
+             FROM sessions
+             JOIN users ON users.username = sessions.username
+             WHERE sessions.session = ?1
+             LIMIT 1",
+            &[SQLiteValue::Text(hash_secret(session))],
+        )?;
+        let Some(row) = rows.into_iter().next() else {
+            return Ok(None);
+        };
+        let session_enabled = row
+            .get("session_enabled")
+            .and_then(|value| value.as_i64())
+            .map(|value| value != 0)
+            .ok_or_else(|| Error("session row is missing enabled".to_string()))?;
+        if !session_enabled {
+            return Ok(None);
+        }
+        let user_enabled = row
+            .get("enabled")
+            .and_then(|value| value.as_i64())
+            .map(|value| value != 0)
+            .ok_or_else(|| Error("user row is missing enabled".to_string()))?;
+        if !user_enabled {
+            return Ok(None);
+        }
+        let expires = row
+            .get("expires")
+            .and_then(|value| value.as_str())
+            .ok_or_else(|| Error("session row is missing expires".to_string()))?;
+        let expires = chrono::DateTime::parse_from_rfc3339(expires)
+            .map_err(|error| Error(format!("invalid session expiry {}: {}", expires, error)))?
+            .with_timezone(&chrono::Utc);
+        if chrono::Utc::now() >= expires {
+            return Ok(None);
+        }
+        Ok(Some(user_record_from_row(row)?))
+    }
+
+    pub fn session_disable_value(&self, session: &str) -> Result<bool, Error> {
+        let session = session.trim();
+        if session.is_empty() {
+            return Err(Error("session must not be empty".to_string()));
+        }
+        self.sqlite.execute(
+            "UPDATE sessions SET enabled = 0 WHERE session = ?1",
+            &[SQLiteValue::Text(hash_secret(session))],
+        )?;
+        let rows = self.sqlite.query(
+            "SELECT enabled FROM sessions WHERE session = ?1",
+            &[SQLiteValue::Text(hash_secret(session))],
+        )?;
+        Ok(!rows.is_empty())
+    }
+
+    pub fn session_clear(&self) -> Result<usize, Error> {
+        let now = chrono::Utc::now().to_rfc3339();
+        let before = self.sqlite.query(
+            "SELECT id FROM sessions WHERE expires <= ?1",
+            &[SQLiteValue::Text(now.clone())],
+        )?;
+        self.sqlite.execute(
+            "DELETE FROM sessions WHERE expires <= ?1",
+            &[SQLiteValue::Text(now)],
+        )?;
+        Ok(before.len())
+    }
+
+    pub fn captcha_create(
+        &self,
+        answer: &str,
+        ttl_seconds: u64,
+    ) -> Result<(CaptchaRecord, String), Error> {
+        let answer = answer.trim().to_ascii_lowercase();
+        if answer.is_empty() {
+            return Err(Error("captcha answer must not be empty".to_string()));
+        }
+        let now = chrono::Utc::now();
+        let expires = now
+            .checked_add_signed(chrono::TimeDelta::seconds(ttl_seconds as i64))
+            .ok_or_else(|| Error("failed to compute captcha expiry".to_string()))?;
+        let record = CaptchaRecord {
+            id: generate_captcha_id(),
+            answer_hash: hash_secret(&answer),
+            used: false,
+            timestamp: now.to_rfc3339(),
+            expires: expires.to_rfc3339(),
+        };
+        self.sqlite.execute(
+            "INSERT INTO captchas (id, answer_hash, used, timestamp, expires)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            &[
+                SQLiteValue::Text(record.id.clone()),
+                SQLiteValue::Text(record.answer_hash.clone()),
+                SQLiteValue::Integer(0),
+                SQLiteValue::Text(record.timestamp.clone()),
+                SQLiteValue::Text(record.expires.clone()),
+            ],
+        )?;
+        Ok((record, answer))
+    }
+
+    pub fn captcha_verify_once(&self, id: &str, answer: &str) -> Result<(), Error> {
+        let id = id.trim();
+        let answer = answer.trim().to_ascii_lowercase();
+        if id.is_empty() || answer.is_empty() {
+            return Err(Error("captcha is required".to_string()));
+        }
+        let rows = self.sqlite.query(
+            "SELECT used, expires
+             FROM captchas
+             WHERE id = ?1
+             LIMIT 1",
+            &[SQLiteValue::Text(id.to_string())],
+        )?;
+        let Some(row) = rows.into_iter().next() else {
+            return Err(Error("captcha challenge is invalid".to_string()));
+        };
+        let used = row
+            .get("used")
+            .and_then(|value| value.as_i64())
+            .map(|value| value != 0)
+            .ok_or_else(|| Error("captcha row is missing used".to_string()))?;
+        if used {
+            return Err(Error("captcha challenge has already been used".to_string()));
+        }
+        let expires = row
+            .get("expires")
+            .and_then(|value| value.as_str())
+            .ok_or_else(|| Error("captcha row is missing expires".to_string()))?;
+        let expires = chrono::DateTime::parse_from_rfc3339(expires)
+            .map_err(|error| Error(format!("invalid captcha expiry {}: {}", expires, error)))?
+            .with_timezone(&chrono::Utc);
+        self.sqlite.execute(
+            "UPDATE captchas SET used = 1 WHERE id = ?1",
+            &[SQLiteValue::Text(id.to_string())],
+        )?;
+        if chrono::Utc::now() >= expires {
+            return Err(Error("captcha challenge has expired".to_string()));
+        }
+        let rows = self.sqlite.query(
+            "SELECT id FROM captchas WHERE id = ?1 AND answer_hash = ?2 LIMIT 1",
+            &[
+                SQLiteValue::Text(id.to_string()),
+                SQLiteValue::Text(hash_secret(&answer)),
+            ],
+        )?;
+        if rows.is_empty() {
+            return Err(Error("captcha answer is invalid".to_string()));
+        }
+        Ok(())
+    }
+
+    pub fn captcha_clear_expired(&self) -> Result<usize, Error> {
+        let now = chrono::Utc::now().to_rfc3339();
+        let before = self.sqlite.query(
+            "SELECT id FROM captchas WHERE expires <= ?1 OR used = 1",
+            &[SQLiteValue::Text(now.clone())],
+        )?;
+        self.sqlite.execute(
+            "DELETE FROM captchas WHERE expires <= ?1 OR used = 1",
+            &[SQLiteValue::Text(now)],
+        )?;
+        Ok(before.len())
     }
 
     pub fn token_create(&self, ttl_seconds: u64) -> Result<(TokenRecord, String), Error> {
@@ -2335,6 +3262,7 @@ impl LocalDB {
             );
             CREATE TABLE IF NOT EXISTS tags (
                 tag TEXT NOT NULL,
+                username TEXT NOT NULL DEFAULT '',
                 timestamp TEXT NOT NULL,
                 PRIMARY KEY (tag)
             );
@@ -2343,6 +3271,7 @@ impl LocalDB {
                 collection TEXT NOT NULL,
                 address INTEGER NOT NULL,
                 tag TEXT NOT NULL,
+                username TEXT NOT NULL DEFAULT '',
                 timestamp TEXT NOT NULL,
                 PRIMARY KEY (sha256, collection, address, tag)
             );
@@ -2352,11 +3281,13 @@ impl LocalDB {
                 architecture TEXT NOT NULL,
                 address INTEGER NOT NULL,
                 corpus TEXT NOT NULL,
+                username TEXT NOT NULL DEFAULT '',
                 timestamp TEXT NOT NULL,
                 PRIMARY KEY (sha256, collection, architecture, address, corpus)
             );
             CREATE TABLE IF NOT EXISTS corpora_catalog (
                 corpus TEXT NOT NULL,
+                username TEXT NOT NULL DEFAULT '',
                 timestamp TEXT NOT NULL,
                 PRIMARY KEY (corpus)
             );
@@ -2420,6 +3351,7 @@ impl LocalDB {
             );
             CREATE TABLE IF NOT EXISTS symbols (
                 symbol TEXT NOT NULL,
+                username TEXT NOT NULL DEFAULT '',
                 timestamp TEXT NOT NULL,
                 PRIMARY KEY (symbol)
             );
@@ -2429,16 +3361,41 @@ impl LocalDB {
             );
             CREATE TABLE IF NOT EXISTS users (
                 username TEXT PRIMARY KEY NOT NULL,
+                email TEXT NOT NULL DEFAULT '',
+                password_hash TEXT NOT NULL DEFAULT '',
                 role TEXT NOT NULL,
                 api_key TEXT NOT NULL,
                 enabled INTEGER NOT NULL,
                 reserved INTEGER NOT NULL,
+                profile_picture TEXT NULL,
                 timestamp TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS sessions (
+                id TEXT PRIMARY KEY NOT NULL,
+                session TEXT NOT NULL,
+                username TEXT NOT NULL,
+                enabled INTEGER NOT NULL,
+                timestamp TEXT NOT NULL,
+                expires TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS recovery_codes (
+                username TEXT NOT NULL,
+                code_hash TEXT NOT NULL,
+                enabled INTEGER NOT NULL,
+                timestamp TEXT NOT NULL,
+                PRIMARY KEY (username, code_hash)
             );
             CREATE TABLE IF NOT EXISTS tokens (
                 id TEXT PRIMARY KEY NOT NULL,
                 token TEXT NOT NULL,
                 enabled INTEGER NOT NULL,
+                timestamp TEXT NOT NULL,
+                expires TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS captchas (
+                id TEXT PRIMARY KEY NOT NULL,
+                answer_hash TEXT NOT NULL,
+                used INTEGER NOT NULL,
                 timestamp TEXT NOT NULL,
                 expires TEXT NOT NULL
             );
@@ -2450,8 +3407,26 @@ impl LocalDB {
             CREATE INDEX IF NOT EXISTS idx_embedding_counts_lookup ON embedding_counts (collection, architecture, embedding);
             CREATE INDEX IF NOT EXISTS idx_entity_metadata_sha256 ON entity_metadata (sha256);
             CREATE INDEX IF NOT EXISTS idx_entity_metadata_lookup ON entity_metadata (collection, architecture, object_id);
-            CREATE INDEX IF NOT EXISTS idx_symbols_symbol ON symbols (symbol);",
+            CREATE INDEX IF NOT EXISTS idx_symbols_symbol ON symbols (symbol);
+            CREATE INDEX IF NOT EXISTS idx_recovery_codes_username ON recovery_codes (username);
+            CREATE INDEX IF NOT EXISTS idx_captchas_expires ON captchas (expires);",
         )?;
+        for statement in [
+            "ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN profile_picture TEXT NULL",
+            "ALTER TABLE tags ADD COLUMN username TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE collection_tags ADD COLUMN username TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE entity_corpora ADD COLUMN username TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE corpora_catalog ADD COLUMN username TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE symbols ADD COLUMN username TEXT NOT NULL DEFAULT ''",
+        ] {
+            match self.sqlite.execute(statement, &[]) {
+                Ok(_) => {}
+                Err(error) if error.to_string().contains("duplicate column name") => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
         match self.sqlite.execute(
             "ALTER TABLE entity_metadata ADD COLUMN markov REAL NULL",
             &[],
@@ -2460,25 +3435,68 @@ impl LocalDB {
             Err(error) if error.to_string().contains("duplicate column name") => {}
             Err(error) => return Err(error.into()),
         }
+        self.cleanup_legacy_auth_state()?;
         self.ensure_reserved_auth_objects()?;
+        self.ensure_default_corpora()?;
+        Ok(())
+    }
+
+    fn ensure_default_corpora(&self) -> Result<(), Error> {
+        for corpus in ["goodware", "malware"] {
+            self.corpus_add(corpus, None, None)?;
+        }
+        Ok(())
+    }
+
+    fn cleanup_legacy_auth_state(&self) -> Result<(), Error> {
+        self.sqlite.execute(
+            "DELETE FROM sessions WHERE username IN (
+                SELECT username FROM users WHERE coalesce(password_hash, '') = ''
+            )",
+            &[],
+        )?;
+        self.sqlite.execute(
+            "DELETE FROM users WHERE coalesce(password_hash, '') = ''",
+            &[],
+        )?;
+        Ok(())
+    }
+
+    fn replace_recovery_codes(
+        &self,
+        username: &str,
+        codes: &[String],
+        timestamp: &str,
+    ) -> Result<(), Error> {
+        self.sqlite.execute(
+            "DELETE FROM recovery_codes WHERE username = ?1",
+            &[SQLiteValue::Text(username.to_string())],
+        )?;
+        for code in codes
+            .iter()
+            .map(|value| value.trim())
+            .filter(|value| !value.is_empty())
+        {
+            self.sqlite.execute(
+                "INSERT INTO recovery_codes (username, code_hash, enabled, timestamp)
+                 VALUES (?1, ?2, ?3, ?4)",
+                &[
+                    SQLiteValue::Text(username.to_string()),
+                    SQLiteValue::Text(hash_secret(code)),
+                    SQLiteValue::Integer(1),
+                    SQLiteValue::Text(timestamp.to_string()),
+                ],
+            )?;
+        }
         Ok(())
     }
 
     fn ensure_reserved_auth_objects(&self) -> Result<(), Error> {
         let now = chrono::Utc::now().to_rfc3339();
-        for role in ["anonymous", "admin", "user"] {
+        for role in ["admin", "user"] {
             if self.role_get(role)?.is_none() {
                 self.role_create(role, Some(&now))?;
             }
-        }
-        if self.user_get("anonymous")?.is_none() {
-            let _ = self.user_create_with_key(
-                "anonymous",
-                "anonymous",
-                &generate_api_key(),
-                true,
-                Some(&now),
-            )?;
         }
         Ok(())
     }
@@ -2500,27 +3518,32 @@ impl LocalDB {
         if self.role_get(role)?.is_none() {
             return Err(Error(format!("role {} does not exist", role)));
         }
-        if self.user_get(username)?.is_some() {
+        if self.user_get(&username)?.is_some() {
             return Err(Error(format!("user {} already exists", username)));
         }
         let record = UserRecord {
             username: username.to_string(),
+            api_key: api_key.to_string(),
             role: role.to_string(),
             enabled: true,
             reserved,
+            profile_picture: None,
             timestamp: timestamp
                 .map(ToString::to_string)
                 .unwrap_or_else(|| chrono::Utc::now().to_rfc3339()),
         };
         self.sqlite.execute(
-            "INSERT INTO users (username, role, api_key, enabled, reserved, timestamp)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO users (username, email, password_hash, role, api_key, enabled, reserved, profile_picture, timestamp)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             &[
                 SQLiteValue::Text(record.username.clone()),
+                SQLiteValue::Text(String::new()),
+                SQLiteValue::Text(String::new()),
                 SQLiteValue::Text(record.role.clone()),
-                SQLiteValue::Text(hash_api_key(api_key)),
+                SQLiteValue::Text(record.api_key.clone()),
                 SQLiteValue::Integer(if record.enabled { 1 } else { 0 }),
                 SQLiteValue::Integer(if record.reserved { 1 } else { 0 }),
+                SQLiteValue::Null,
                 SQLiteValue::Text(record.timestamp.clone()),
             ],
         )?;
@@ -2538,6 +3561,16 @@ fn generate_api_key() -> String {
     generate_secret()
 }
 
+fn generate_recovery_code() -> String {
+    let mut bytes = [0u8; 12];
+    rand::thread_rng().fill_bytes(&mut bytes);
+    crate::hex::encode(&bytes)
+}
+
+fn generate_recovery_codes() -> Vec<String> {
+    (0..8).map(|_| generate_recovery_code()).collect()
+}
+
 fn generate_token_id() -> String {
     let mut bytes = [0u8; 8];
     rand::thread_rng().fill_bytes(&mut bytes);
@@ -2548,20 +3581,106 @@ fn generate_token_id() -> String {
     )
 }
 
+fn generate_session_id() -> String {
+    let mut bytes = [0u8; 8];
+    rand::thread_rng().fill_bytes(&mut bytes);
+    format!(
+        "sess_{:x}_{}",
+        chrono::Utc::now().timestamp_micros(),
+        crate::hex::encode(&bytes)
+    )
+}
+
+fn generate_captcha_id() -> String {
+    let mut bytes = [0u8; 8];
+    rand::thread_rng().fill_bytes(&mut bytes);
+    format!(
+        "cap_{:x}_{}",
+        chrono::Utc::now().timestamp_micros(),
+        crate::hex::encode(&bytes)
+    )
+}
+
 fn hash_secret(value: &str) -> String {
     crate::hex::encode(digest(&SHA256, value.as_bytes()).as_ref())
 }
 
-fn hash_api_key(value: &str) -> String {
-    hash_secret(value)
+fn hash_password(password: &str) -> Result<String, Error> {
+    let mut salt = [0u8; 16];
+    rand::thread_rng().fill_bytes(&mut salt);
+    let iterations = NonZeroU32::new(120_000)
+        .ok_or_else(|| Error("invalid password iteration count".to_string()))?;
+    let mut output = [0u8; 32];
+    pbkdf2::derive(
+        pbkdf2::PBKDF2_HMAC_SHA256,
+        iterations,
+        &salt,
+        password.as_bytes(),
+        &mut output,
+    );
+    Ok(format!(
+        "pbkdf2_sha256${}${}${}",
+        iterations.get(),
+        crate::hex::encode(&salt),
+        crate::hex::encode(&output)
+    ))
 }
 
-fn normalize_username(value: &str) -> Result<&str, Error> {
+fn verify_password(encoded: &str, password: &str) -> Result<bool, Error> {
+    let mut parts = encoded.split('$');
+    let Some(algorithm) = parts.next() else {
+        return Ok(false);
+    };
+    if algorithm != "pbkdf2_sha256" {
+        return Ok(false);
+    }
+    let iterations = parts
+        .next()
+        .ok_or_else(|| Error("password hash is missing iterations".to_string()))?
+        .parse::<u32>()
+        .map_err(|error| Error(format!("invalid password hash iterations: {}", error)))?;
+    let salt = crate::hex::decode(
+        parts
+            .next()
+            .ok_or_else(|| Error("password hash is missing salt".to_string()))?,
+    )
+    .map_err(|error| Error(format!("invalid password hash salt: {}", error)))?;
+    let hash = crate::hex::decode(
+        parts
+            .next()
+            .ok_or_else(|| Error("password hash is missing digest".to_string()))?,
+    )
+    .map_err(|error| Error(format!("invalid password hash digest: {}", error)))?;
+    let iterations = NonZeroU32::new(iterations)
+        .ok_or_else(|| Error("password hash has invalid iteration count".to_string()))?;
+    Ok(pbkdf2::verify(
+        pbkdf2::PBKDF2_HMAC_SHA256,
+        iterations,
+        &salt,
+        password.as_bytes(),
+        &hash,
+    )
+    .is_ok())
+}
+
+fn normalize_username(value: &str) -> Result<String, Error> {
     let value = value.trim();
     if value.is_empty() {
         return Err(Error("username must not be empty".to_string()));
     }
-    Ok(value)
+    if value.len() > 15 {
+        return Err(Error("username must be at most 15 characters".to_string()));
+    }
+    let normalized = value.to_ascii_lowercase();
+    if !normalized
+        .chars()
+        .all(|character| character.is_ascii_lowercase() || character.is_ascii_digit())
+    {
+        return Err(Error(
+            "username must contain only lowercase letters and digits".to_string(),
+        ));
+    }
+    Ok(normalized)
 }
 
 fn normalize_role_name(value: &str) -> Result<&str, Error> {
@@ -2572,8 +3691,19 @@ fn normalize_role_name(value: &str) -> Result<&str, Error> {
     Ok(value)
 }
 
+fn normalize_password(value: &str) -> Result<&str, Error> {
+    let value = value.trim();
+    if value.len() < 12 {
+        return Err(Error("password must be at least 12 characters".to_string()));
+    }
+    if value.len() > 32 {
+        return Err(Error("password must be at most 32 characters".to_string()));
+    }
+    Ok(value)
+}
+
 fn is_reserved_role(value: &str) -> bool {
-    matches!(value, "anonymous" | "admin" | "user")
+    matches!(value, "admin" | "user")
 }
 
 fn user_record_from_row(
@@ -2584,6 +3714,11 @@ fn user_record_from_row(
             .get("username")
             .and_then(|value| value.as_str())
             .ok_or_else(|| Error("user row is missing username".to_string()))?
+            .to_string(),
+        api_key: row
+            .get("api_key")
+            .and_then(|value| value.as_str())
+            .unwrap_or_default()
             .to_string(),
         role: row
             .get("role")
@@ -2600,6 +3735,10 @@ fn user_record_from_row(
             .and_then(|value| value.as_i64())
             .map(|value| value != 0)
             .ok_or_else(|| Error("user row is missing reserved".to_string()))?,
+        profile_picture: row
+            .get("profile_picture")
+            .and_then(|value| value.as_str())
+            .map(ToString::to_string),
         timestamp: row
             .get("timestamp")
             .and_then(|value| value.as_str())
@@ -2796,10 +3935,11 @@ mod tests {
         assert_eq!(tags.items[0].tag, "training");
         db.sample_tag_remove(sha256, "clean").expect("remove tag");
 
-        db.tag_add("triage", Some("2026-04-01T00:00:03Z"))
+        db.tag_add("triage", Some("2026-04-01T00:00:03Z"), Some("admin"))
             .expect("add catalog tag");
         let tag_catalog = db.tag_search("tri", 10).expect("search tag catalog");
-        assert_eq!(tag_catalog.items, vec!["triage".to_string()]);
+        assert_eq!(tag_catalog.items.len(), 1);
+        assert_eq!(tag_catalog.items[0].tag, "triage");
         assert_eq!(tag_catalog.total_results, 1);
 
         db.sample_comment_add_record(&SampleCommentRecord {
@@ -2840,6 +3980,7 @@ mod tests {
             collection: Collection::Function,
             address: 0x401000,
             tag: "goodware".to_string(),
+            username: "admin".to_string(),
             timestamp: "2026-04-02T00:00:00Z".to_string(),
         })
         .expect("add first collection tag");
@@ -2848,6 +3989,7 @@ mod tests {
             collection: Collection::Block,
             address: 0x401020,
             tag: "dispatcher".to_string(),
+            username: "admin".to_string(),
             timestamp: "2026-04-02T00:00:01Z".to_string(),
         })
         .expect("add second collection tag");
@@ -2869,6 +4011,7 @@ mod tests {
             Collection::Function,
             0x401000,
             &["library".to_string(), "shared".to_string()],
+            "admin",
             "2026-04-02T00:00:02Z",
         )
         .expect("replace collection tags");
@@ -2985,12 +4128,7 @@ mod tests {
         config.databases.local.path = root.path().join("local.db").display().to_string();
         let db = LocalDB::new(&config).expect("create local db");
 
-        let anonymous = db
-            .user_get("anonymous")
-            .expect("get anonymous")
-            .expect("anonymous present");
-        assert!(anonymous.reserved);
-        assert_eq!(anonymous.role, "anonymous");
+        assert_eq!(db.admin_count().expect("admin count"), 0);
 
         let analyst = db
             .role_create("analyst", Some("2026-04-03T10:00:00Z"))
@@ -3006,42 +4144,198 @@ mod tests {
         let roles = db.role_search("analys", 1, 10).expect("search roles");
         assert_eq!(roles.items, vec![analyst]);
 
-        let (user, plaintext) = db
-            .user_create("researcher1", "analyst", Some("2026-04-03T10:00:01Z"))
+        let (user, api_key, recovery_codes) = db
+            .user_create_account(
+                "researcher1",
+                "supersecret123",
+                "analyst",
+                false,
+                Some("2026-04-03T10:00:01Z"),
+            )
             .expect("create user");
         assert_eq!(user.username, "researcher1");
         assert_eq!(user.role, "analyst");
         assert!(user.enabled);
         assert!(!user.reserved);
-        assert!(db.auth_check(&plaintext).expect("auth check"));
+        assert_eq!(recovery_codes.len(), 8);
+        assert!(db.auth_check(&api_key).expect("auth check"));
         assert_eq!(
-            db.auth_user(&plaintext)
+            db.auth_user(&api_key)
                 .expect("auth user")
                 .expect("user exists")
                 .username,
             "researcher1"
         );
-
-        let reset = db
+        assert!(
+            db.user_authenticate("researcher1", "supersecret123")
+                .expect("authenticate by username")
+                .is_some()
+        );
+        let reset_password = db
             .user_reset("researcher1", Some("2026-04-03T10:00:02Z"))
             .expect("reset user");
-        assert_ne!(reset, plaintext);
-        assert!(!db.auth_check(&plaintext).expect("old key invalid"));
-        assert!(db.auth_check(&reset).expect("new key valid"));
+        assert_ne!(reset_password, "supersecret123");
+        assert!(
+            db.user_authenticate("researcher1", "supersecret123")
+                .expect("old password invalid")
+                .is_none()
+        );
+        assert!(
+            db.user_authenticate("researcher1", &reset_password)
+                .expect("new password valid")
+                .is_some()
+        );
+
+        let recovery_reset_codes = db
+            .user_regenerate_recovery_codes("researcher1", Some("2026-04-03T10:00:02Z"))
+            .expect("regenerate recovery codes");
+        let recovery_reset_password = "anothersecret123";
+        db.user_reset_with_recovery_code(
+            "researcher1",
+            &recovery_reset_codes[0],
+            recovery_reset_password,
+            Some("2026-04-03T10:00:02Z"),
+        )
+        .expect("reset with recovery code");
+        assert!(
+            db.user_authenticate("researcher1", recovery_reset_password)
+                .expect("recovery password valid")
+                .is_some()
+        );
+
+        let regenerated_key = db
+            .user_regenerate_key("researcher1", Some("2026-04-03T10:00:03Z"))
+            .expect("regenerate key");
+        assert_ne!(regenerated_key, api_key);
+        assert!(!db.auth_check(&api_key).expect("old key invalid"));
+        assert!(db.auth_check(&regenerated_key).expect("new key valid"));
 
         assert!(db.user_disable("researcher1").expect("disable user"));
-        assert!(!db.auth_check(&reset).expect("disabled user invalid"));
+        assert!(
+            !db.auth_check(&regenerated_key)
+                .expect("disabled user invalid")
+        );
 
         assert!(db.user_enable("researcher1").expect("enable user"));
-        assert!(db.auth_check(&reset).expect("re-enabled user valid"));
+        assert!(
+            db.auth_check(&regenerated_key)
+                .expect("re-enabled user valid")
+        );
 
         let users = db.user_search("research", 1, 10).expect("search users");
         assert_eq!(users.items.len(), 1);
         assert_eq!(users.items[0].username, "researcher1");
 
         assert!(db.role_delete("analyst").is_err());
-        assert!(db.user_disable("anonymous").is_err());
-        assert!(db.user_reset("anonymous", None).is_err());
+    }
+
+    #[test]
+    fn local_db_normalizes_and_limits_usernames() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let mut config = Config::default();
+        config.databases.local.path = root.path().join("local.db").display().to_string();
+        let db = LocalDB::new(&config).expect("create local db");
+
+        let (user, _, _) = db
+            .user_create_account("MixedCaseUser", "supersecret123", "user", false, None)
+            .expect("create normalized user");
+        assert_eq!(user.username, "mixedcaseuser");
+        assert!(db.user_get("MIXEDCASEUSER").expect("lookup").is_some());
+
+        let error = db
+            .user_create_account(
+                "thisusernameistoolong",
+                "supersecret123",
+                "user",
+                false,
+                None,
+            )
+            .expect_err("reject long username");
+        assert!(error.to_string().contains("at most 15 characters"));
+
+        let error = db
+            .user_create_account("bad_user!", "supersecret123", "user", false, None)
+            .expect_err("reject non alnum username");
+        assert!(
+            error
+                .to_string()
+                .contains("only lowercase letters and digits")
+        );
+
+        let error = db
+            .user_create_account("shortname", "shortpass", "user", false, None)
+            .expect_err("reject short password");
+        assert!(error.to_string().contains("at least 12 characters"));
+
+        let error = db
+            .user_create_account(
+                "longpassuser",
+                "abcdefghijklmnopqrstuvwxyz1234567",
+                "user",
+                false,
+                None,
+            )
+            .expect_err("reject long password");
+        assert!(error.to_string().contains("at most 32 characters"));
+    }
+
+    #[test]
+    fn local_db_seeds_default_corpora() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let mut config = Config::default();
+        config.databases.local.path = root.path().join("local.db").display().to_string();
+        let db = LocalDB::new(&config).expect("create local db");
+
+        let corpora = db.corpus_search("", 16).expect("search corpora");
+        assert!(corpora.iter().any(|corpus| corpus == "goodware"));
+        assert!(corpora.iter().any(|corpus| corpus == "malware"));
+    }
+
+    #[test]
+    fn local_db_disabling_user_invalidates_sessions_and_preserves_enabled_admin() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let mut config = Config::default();
+        config.databases.local.path = root.path().join("local.db").display().to_string();
+        let db = LocalDB::new(&config).expect("create local db");
+
+        let (admin1, _, _) = db
+            .user_create_account("adminone", "supersecret123", "admin", false, None)
+            .expect("create first admin");
+        let (_session, session_value) = db
+            .session_create(&admin1.username, 3600)
+            .expect("create session");
+        assert!(
+            db.session_user(&session_value)
+                .expect("resolve active session")
+                .is_some()
+        );
+
+        let error = db
+            .user_disable(&admin1.username)
+            .expect_err("cannot disable last enabled admin");
+        assert!(error.to_string().contains("last enabled admin"));
+
+        let (_admin2, _, _) = db
+            .user_create_account("admintwo", "supersecret123", "admin", false, None)
+            .expect("create second admin");
+        assert!(
+            db.user_disable(&admin1.username)
+                .expect("disable first admin")
+        );
+        assert!(
+            db.session_user(&session_value)
+                .expect("disabled session resolves")
+                .is_none()
+        );
+        assert!(
+            db.user_authenticate(&admin1.username, "supersecret123")
+                .expect("disabled admin authenticate")
+                .is_none()
+        );
+        assert!(
+            db.user_enable(&admin1.username)
+                .expect("re-enable first admin")
+        );
     }
 
     #[test]

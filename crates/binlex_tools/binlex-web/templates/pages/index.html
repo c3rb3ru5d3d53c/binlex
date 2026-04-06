@@ -15,6 +15,7 @@
           <button type="button" class="theme-button" id="theme-toggle-button" onclick="toggleTheme()" aria-label="Switch to light mode" title="Switch to light mode">☀️</button>
           <a class="theme-button docs-button" href="/api/v1/docs" target="_blank" rel="noopener noreferrer" aria-label="Open API docs" title="Open API docs">📄</a>
         </div>
+        {{ auth_header_html|safe }}
         <div class="status-badge-stack">
           {{ server_status_badge|safe }}
           {{ index_status_badge|safe }}
@@ -27,14 +28,12 @@
 
     <section class="controls">
       <div class="action-row">
-        {% if uploads_enabled %}
         <form method="post" action="/api/v1/upload/sample" enctype="multipart/form-data" class="upload-form" id="upload-form">
           <input id="upload-input" type="file" name="data" class="hidden-file">
           <input id="upload-format" type="hidden" name="format" value="">
           <input id="upload-architecture" type="hidden" name="architecture" value="">
-          <button class="secondary upload-button" type="button" onclick="openUploadModal()">Upload</button>
+          <button class="secondary upload-button" type="button"{% if !upload_button_enabled %} disabled{% endif %}{% if upload_button_enabled %} onclick="openUploadModal()"{% endif %}>Upload</button>
         </form>
-        {% endif %}
 
         <form method="post" action="/api/v1/search" class="search-form" id="search-form" onsubmit="syncSearchState()" data-corpora='{{ corpora_options_json }}' data-architectures='{{ architecture_options_json }}' data-collections='{{ collection_options_json }}' data-query-completions='{{ query_completion_specs_json }}'>
           <input type="hidden" name="search" value="1">
@@ -74,6 +73,7 @@
 
     <section class="results" id="search-results"></section>
     {{ upload_modal_html|safe }}
+    {{ auth_modal_html|safe }}
     <div id="row-action-popover" class="row-actions-popover" hidden data-actions="[]" data-path=""><div class="row-actions-header"><button type="button" class="secondary row-actions-back" onclick="navigateRowActions(this)" disabled>Back</button><div class="row-actions-breadcrumb">Action</div></div><input class="menu-search" type="text" placeholder="Search action" oninput="renderRowActionMenu(this.closest('.row-actions-popover'))" onkeydown="handleRowActionSearchKeydown(event, this.closest('.row-actions-popover'))"><div class="row-action-options"></div></div>
 
     <script>{{ bootstrap|safe }}</script>

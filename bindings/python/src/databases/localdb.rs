@@ -1,5 +1,5 @@
-use crate::indexing::local::Collection;
 use crate::Config;
+use crate::indexing::local::Collection;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
@@ -384,6 +384,7 @@ impl LocalDB {
                 collection: collection.borrow(py).inner,
                 address,
                 tag,
+                username: String::new(),
                 timestamp,
             })
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
@@ -425,6 +426,7 @@ impl LocalDB {
                 address,
                 &tags,
                 &timestamp,
+                "",
             )
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
@@ -609,13 +611,15 @@ impl LocalDB {
         username: String,
         role: String,
         timestamp: Option<Py<PyAny>>,
-    ) -> PyResult<(UserRecord, String)> {
+    ) -> PyResult<(UserRecord, String, Vec<String>)> {
         let timestamp = option_python_datetime_to_string(py, timestamp)?;
         self.inner
             .lock()
             .unwrap()
             .user_create(&username, &role, timestamp.as_deref())
-            .map(|(inner, plaintext)| (UserRecord { inner }, plaintext))
+            .map(|(inner, plaintext, recovery_codes)| {
+                (UserRecord { inner }, plaintext, recovery_codes)
+            })
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 

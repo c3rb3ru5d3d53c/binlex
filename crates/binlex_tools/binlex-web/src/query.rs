@@ -941,7 +941,14 @@ mod tests {
             .expect("stage function");
         index.commit().expect("commit function");
         index
-            .collection_corpus_add(&sha256, Collection::Function, "amd64", 0x1000, "malware")
+            .collection_corpus_add(
+                &sha256,
+                Collection::Function,
+                "amd64",
+                0x1000,
+                "malware",
+                "",
+            )
             .expect("add second corpus");
 
         let plan = build_search_plan(

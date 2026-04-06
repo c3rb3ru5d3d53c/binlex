@@ -123,7 +123,11 @@ pub(crate) struct PageData {
     pub(crate) upload_tag_options: Vec<String>,
     pub(crate) upload_selected_tags: Vec<String>,
     pub(crate) uploads_enabled: bool,
+    pub(crate) upload_button_enabled: bool,
     pub(crate) sample_downloads_enabled: bool,
+    pub(crate) auth_bootstrap_required: bool,
+    pub(crate) auth_registration_enabled: bool,
+    pub(crate) auth_user: Option<AuthUserProfile>,
 }
 
 #[derive(Default)]
@@ -131,6 +135,14 @@ pub(crate) struct UiStatus {
     pub(crate) server_ok: bool,
     pub(crate) index_ok: bool,
     pub(crate) database_ok: bool,
+}
+
+#[derive(Clone, Default, Serialize)]
+pub(crate) struct AuthUserProfile {
+    pub(crate) username: String,
+    pub(crate) key: String,
+    pub(crate) role: String,
+    pub(crate) profile_picture: Option<String>,
 }
 
 #[derive(Deserialize, IntoParams, ToSchema)]
@@ -246,6 +258,8 @@ struct SearchRowResponse {
     object_id: String,
     timestamp: String,
     username: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    profile_picture: Option<String>,
     size: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     score: Option<f32>,
@@ -503,6 +517,24 @@ struct CollectionCorpusActionRequest {
 }
 
 #[derive(Serialize, ToSchema)]
+struct MetadataActorResponse {
+    username: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    profile_picture: Option<String>,
+}
+
+#[derive(Serialize, ToSchema)]
+struct MetadataItemResponse {
+    name: String,
+    created_actor: MetadataActorResponse,
+    created_timestamp: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    assigned_actor: Option<MetadataActorResponse>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    assigned_timestamp: Option<String>,
+}
+
+#[derive(Serialize, ToSchema)]
 struct TagsResponse {
     #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
     sha256: String,
@@ -510,7 +542,7 @@ struct TagsResponse {
     collection: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     address: Option<u64>,
-    tags: Vec<String>,
+    tags: Vec<MetadataItemResponse>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -520,19 +552,19 @@ struct SymbolsResponse {
     collection: String,
     architecture: String,
     address: u64,
-    symbols: Vec<String>,
+    symbols: Vec<MetadataItemResponse>,
 }
 
 #[derive(Serialize, ToSchema)]
 struct SymbolsCatalogResponse {
-    symbols: Vec<String>,
+    symbols: Vec<MetadataItemResponse>,
     total_results: usize,
     has_next: bool,
 }
 
 #[derive(Serialize, ToSchema)]
 struct TagsCatalogResponse {
-    tags: Vec<String>,
+    tags: Vec<MetadataItemResponse>,
     total_results: usize,
     has_next: bool,
 }
@@ -547,7 +579,13 @@ struct CorporaResponse {
     architecture: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     address: Option<u64>,
-    corpora: Vec<String>,
+    corpora: Vec<MetadataItemResponse>,
+}
+
+#[derive(Serialize, ToSchema)]
+struct CorporaCatalogResponse {
+    corpora: Vec<MetadataItemResponse>,
+    total_results: usize,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -607,6 +645,7 @@ pub(crate) struct ResultRow {
     pub(crate) side: RowSide,
     pub(crate) result: SearchResult,
     pub(crate) score: Option<f32>,
+    pub(crate) profile_picture: Option<String>,
     pub(crate) grouped: bool,
     pub(crate) group_end: bool,
     pub(crate) collection_tag_count: usize,
@@ -709,19 +748,108 @@ struct TokenActionResponse {
 }
 
 #[derive(Deserialize, Serialize, ToSchema)]
-struct AuthRoleCreateRequest {
-    #[schema(example = "admin")]
-    name: String,
+struct AuthBootstrapRequest {
+    #[schema(example = "alice")]
+    username: String,
+    #[schema(example = "supersecret123")]
+    password: String,
+    #[schema(example = "supersecret123")]
+    password_confirm: String,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct AuthLoginRequest {
+    #[schema(example = "alice")]
+    username: String,
+    #[schema(example = "supersecret123")]
+    password: String,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct AuthRegisterRequest {
+    #[schema(example = "alice")]
+    username: String,
+    #[schema(example = "supersecret123")]
+    password: String,
+    #[schema(example = "supersecret123")]
+    password_confirm: String,
+    #[schema(example = "cap_123")]
+    captcha_id: String,
+    #[schema(example = "7f3ca9")]
+    captcha_answer: String,
+}
+
+#[derive(Serialize, ToSchema)]
+struct CaptchaResponse {
+    captcha_id: String,
+    image_base64: String,
+    expires: String,
+}
+
+#[derive(Serialize, ToSchema)]
+struct AuthUserResponse {
+    username: String,
+    key: String,
+    role: String,
+    enabled: bool,
+    profile_picture: Option<String>,
+    timestamp: String,
+}
+
+#[derive(Serialize, ToSchema)]
+struct AuthSessionResponse {
+    authenticated: bool,
+    registration_enabled: bool,
+    bootstrap_required: bool,
+    user: Option<AuthUserResponse>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    recovery_codes: Option<Vec<String>>,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct ProfilePasswordRequest {
+    #[schema(example = "oldpassword123")]
+    current_password: String,
+    #[schema(example = "newpassword123")]
+    new_password: String,
+    #[schema(example = "newpassword123")]
+    password_confirm: String,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct ProfileDeleteRequest {
+    #[schema(example = "supersecret123")]
+    password: String,
+}
+
+#[derive(Serialize, ToSchema)]
+struct KeyRegenerateResponse {
+    key: String,
+}
+
+#[derive(Serialize, ToSchema)]
+struct RecoveryCodesResponse {
+    recovery_codes: Vec<String>,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct AuthPasswordResetRequest {
+    #[schema(example = "alice")]
+    username: String,
+    #[schema(example = "9fd5aa184c1b")]
+    recovery_code: String,
+    #[schema(example = "newpassword123")]
+    new_password: String,
+    #[schema(example = "newpassword123")]
+    password_confirm: String,
+    #[schema(example = "cap_123")]
+    captcha_id: String,
+    #[schema(example = "7f3ca9")]
+    captcha_answer: String,
 }
 
 #[derive(Deserialize, IntoParams, Serialize, ToSchema)]
-struct AuthRoleGetParams {
-    #[schema(example = "admin")]
-    name: String,
-}
-
-#[derive(Deserialize, IntoParams, Serialize, ToSchema)]
-struct AuthSearchParams {
+struct UsersSearchParams {
     #[serde(default)]
     #[schema(example = "adm")]
     q: String,
@@ -733,74 +861,81 @@ struct AuthSearchParams {
     limit: usize,
 }
 
-#[derive(Serialize, ToSchema)]
-struct AuthRoleResponse {
-    name: String,
-    timestamp: String,
-}
-
-#[derive(Serialize, ToSchema)]
-struct AuthRoleSearchResponse {
-    items: Vec<AuthRoleResponse>,
-    page: usize,
-    limit: usize,
-    has_next: bool,
-}
-
-#[derive(Deserialize, Serialize, ToSchema)]
-struct AuthRoleDeleteRequest {
-    #[schema(example = "analyst")]
-    name: String,
-}
-
-#[derive(Deserialize, Serialize, ToSchema)]
-struct AuthUserCreateRequest {
-    #[schema(example = "alice")]
-    username: String,
-    #[serde(default)]
-    #[schema(example = "admin", nullable = true)]
-    role: Option<String>,
-}
-
-#[derive(Deserialize, Serialize, ToSchema)]
-struct AuthUserNameRequest {
-    #[schema(example = "alice")]
-    username: String,
-}
-
 #[derive(Deserialize, IntoParams, Serialize, ToSchema)]
-struct AuthUserGetParams {
+struct UsernameCheckParams {
     #[schema(example = "alice")]
     username: String,
 }
 
 #[derive(Serialize, ToSchema)]
-struct AuthUserResponse {
-    username: String,
-    role: String,
-    enabled: bool,
-    reserved: bool,
-    timestamp: String,
+struct UsernameCheckResponse {
+    normalized: String,
+    valid: bool,
+    available: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
 }
 
 #[derive(Serialize, ToSchema)]
-struct AuthUserCreateResponse {
-    user: AuthUserResponse,
-    api_key: String,
-}
-
-#[derive(Serialize, ToSchema)]
-struct AuthUserResetResponse {
-    username: String,
-    api_key: String,
-}
-
-#[derive(Serialize, ToSchema)]
-struct AuthUserSearchResponse {
+struct UsersListResponse {
     items: Vec<AuthUserResponse>,
     page: usize,
     limit: usize,
+    total_results: usize,
     has_next: bool,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct AdminUserCreateRequest {
+    #[schema(example = "alice")]
+    username: String,
+    #[schema(example = "supersecret123")]
+    password: String,
+    #[schema(example = "supersecret123")]
+    password_confirm: String,
+    #[schema(example = "user")]
+    role: String,
+}
+
+#[derive(Serialize, ToSchema)]
+struct AdminUserCreateResponse {
+    user: AuthUserResponse,
+    key: String,
+    recovery_codes: Vec<String>,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct AdminUserRoleRequest {
+    #[schema(example = "alice")]
+    username: String,
+    #[schema(example = "admin")]
+    role: String,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct AdminUserNameRequest {
+    #[schema(example = "alice")]
+    username: String,
+}
+
+#[derive(Deserialize, IntoParams, ToSchema)]
+struct ProfilePictureParams {
+    #[schema(example = "alice")]
+    username: String,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct AdminUserEnabledRequest {
+    #[schema(example = "alice")]
+    username: String,
+    #[schema(example = false)]
+    enabled: bool,
+}
+
+#[derive(Serialize, ToSchema)]
+struct AdminPasswordResetResponse {
+    username: String,
+    password: String,
 }
 
 #[allow(dead_code)]

@@ -194,6 +194,7 @@ async fn health(
     request_body(content = AnalyzeRequestDoc, content_type = "application/json", description = "Analyze raw bytes and return a processed graph snapshot."),
     responses(
         (status = 200, description = "Processed graph snapshot."),
+        (status = 415, description = "Unsupported or unrecognized input format.", body = ApiErrorResponseDoc),
         (status = 502, description = "Analysis failure.", body = ApiErrorResponseDoc)
     )
 )]

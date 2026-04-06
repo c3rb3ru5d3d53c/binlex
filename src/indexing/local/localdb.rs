@@ -68,14 +68,14 @@ impl LocalIndex {
             return Err(Error::Validation("tag must not be empty".to_string()));
         }
         self.localdb
-            .tag_add(tag, Some(&Utc::now().to_rfc3339()))
+            .tag_add(tag, Some(&Utc::now().to_rfc3339()), None)
             .map_err(|error| Error::LocalDb(error.to_string()))
     }
 
     pub fn tag_search(&self, query: &str, limit: usize) -> Result<Vec<String>, Error> {
         self.localdb
             .tag_search(query, limit)
-            .map(|page| page.items)
+            .map(|page| page.items.into_iter().map(|item| item.tag).collect())
             .map_err(|error| Error::LocalDb(error.to_string()))
     }
 
@@ -92,6 +92,7 @@ impl LocalIndex {
         collection: Collection,
         address: u64,
         tag: &str,
+        username: &str,
     ) -> Result<(), Error> {
         let sha256 = self.ensure_collection_member_exists(sha256, collection, address)?;
         let tag = tag.trim();
@@ -99,7 +100,7 @@ impl LocalIndex {
             return Err(Error::Validation("tag must not be empty".to_string()));
         }
         self.localdb
-            .tag_add(tag, Some(&Utc::now().to_rfc3339()))
+            .tag_add(tag, Some(&Utc::now().to_rfc3339()), Some(username))
             .map_err(|error| Error::LocalDb(error.to_string()))?;
         self.localdb
             .collection_tag_add(&CollectionTagRecord {
@@ -107,6 +108,7 @@ impl LocalIndex {
                 collection,
                 address,
                 tag: tag.to_string(),
+                username: username.to_string(),
                 timestamp: Utc::now().to_rfc3339(),
             })
             .map_err(|error| Error::LocalDb(error.to_string()))
@@ -135,6 +137,7 @@ impl LocalIndex {
         collection: Collection,
         address: u64,
         tags: &[String],
+        username: &str,
     ) -> Result<(), Error> {
         let sha256 = self.ensure_collection_member_exists(sha256, collection, address)?;
         let tags = tags
@@ -148,6 +151,7 @@ impl LocalIndex {
                 collection,
                 address,
                 &tags,
+                username,
                 &Utc::now().to_rfc3339(),
             )
             .map_err(|error| Error::LocalDb(error.to_string()))
@@ -175,6 +179,18 @@ impl LocalIndex {
         let sha256 = self.ensure_collection_member_exists(sha256, collection, address)?;
         self.localdb
             .collection_tag_list(&sha256, collection, address)
+            .map_err(|error| Error::LocalDb(error.to_string()))
+    }
+
+    pub fn collection_tag_details_list(
+        &self,
+        sha256: &str,
+        collection: Collection,
+        address: u64,
+    ) -> Result<Vec<CollectionTagRecord>, Error> {
+        let sha256 = self.ensure_collection_member_exists(sha256, collection, address)?;
+        self.localdb
+            .collection_tag_details_list(&sha256, collection, address)
             .map_err(|error| Error::LocalDb(error.to_string()))
     }
 

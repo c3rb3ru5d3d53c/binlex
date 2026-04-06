@@ -48,10 +48,22 @@ struct BinlexWebConfig {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct WebAuthConfig {
-    #[serde(default)]
+    #[serde(default = "default_true")]
     enabled: bool,
+    #[serde(default = "default_true")]
+    allow_guest: bool,
+    #[serde(default)]
+    registration: WebRegistrationConfig,
+    #[serde(default = "default_session_ttl_seconds")]
+    session_ttl_seconds: u64,
     #[serde(default = "default_auth_rules")]
     rules: Vec<WebAuthRuleConfig>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct WebRegistrationConfig {
+    #[serde(default = "default_true")]
+    enabled: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -231,8 +243,19 @@ impl Default for BinlexWebConfig {
 impl Default for WebAuthConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: default_true(),
+            allow_guest: default_true(),
+            registration: WebRegistrationConfig::default(),
+            session_ttl_seconds: default_session_ttl_seconds(),
             rules: default_auth_rules(),
+        }
+    }
+}
+
+impl Default for WebRegistrationConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_true(),
         }
     }
 }
@@ -484,6 +507,10 @@ fn default_compare_ascending_limit() -> usize {
     4_096
 }
 
+fn default_session_ttl_seconds() -> u64 {
+    60 * 60 * 24 * 30
+}
+
 fn default_page() -> usize {
     1
 }
@@ -492,42 +519,8 @@ fn default_limit() -> usize {
     25
 }
 
-fn generate_initial_api_key() -> String {
-    let mut bytes = [0u8; 24];
-    rand::thread_rng().fill_bytes(&mut bytes);
-    binlex::hex::encode(&bytes)
-}
-
-fn bootstrap_initial_admin_user(database: &LocalDB) -> Result<(), Error> {
-    let count = database
-        .user_search("", 1, 10_000)
-        .map_err(|error| Error::other(error.to_string()))?
-        .items
-        .into_iter()
-        .filter(|user| user.username != "anonymous")
-        .count();
-    if count > 0 {
-        return Ok(());
-    }
-    let timestamp = Utc::now().to_rfc3339();
-    let api_key = generate_initial_api_key();
-    database
-        .user_create_with_key("admin", "admin", &api_key, false, Some(&timestamp))
-        .map_err(|error| Error::other(error.to_string()))?;
-    warn!(
-        "bootstrapped initial admin user admin with api key: {}",
-        api_key
-    );
-    Ok(())
-}
-
 fn default_auth_rules() -> Vec<WebAuthRuleConfig> {
     vec![
-        WebAuthRuleConfig {
-            path: "/".to_string(),
-            enabled: false,
-            roles: Vec::new(),
-        },
         WebAuthRuleConfig {
             path: "/api/v1/index/graph".to_string(),
             enabled: true,
@@ -559,77 +552,27 @@ fn default_auth_rules() -> Vec<WebAuthRuleConfig> {
             roles: vec!["admin".to_string(), "user".to_string()],
         },
         WebAuthRuleConfig {
-            path: "/api/v1/auth/role/create".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/auth/role".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/auth/roles/search".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/auth/role/delete".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/auth/user/create".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/auth/user".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/auth/users/search".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/auth/user/disable".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/auth/user/enable".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/auth/user/reset".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/tags/sample".to_string(),
+            path: "/api/v1/upload/sample".to_string(),
             enabled: true,
             roles: vec!["admin".to_string(), "user".to_string()],
         },
         WebAuthRuleConfig {
-            path: "/api/v1/tags/sample/add".to_string(),
+            path: "/api/v1/corpora/add".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string()],
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/corpora/collection/add".to_string(),
             enabled: true,
             roles: vec!["admin".to_string(), "user".to_string()],
         },
         WebAuthRuleConfig {
-            path: "/api/v1/tags/sample/remove".to_string(),
+            path: "/api/v1/corpora/collection/remove".to_string(),
             enabled: true,
             roles: vec!["admin".to_string(), "user".to_string()],
         },
         WebAuthRuleConfig {
-            path: "/api/v1/tags/sample/replace".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/tags/collection".to_string(),
+            path: "/api/v1/tags/add".to_string(),
             enabled: true,
             roles: vec!["admin".to_string(), "user".to_string()],
         },
@@ -649,14 +592,114 @@ fn default_auth_rules() -> Vec<WebAuthRuleConfig> {
             roles: vec!["admin".to_string(), "user".to_string()],
         },
         WebAuthRuleConfig {
-            path: "/api/v1/tags/search/sample".to_string(),
+            path: "/api/v1/symbols/add".to_string(),
             enabled: true,
             roles: vec!["admin".to_string(), "user".to_string()],
         },
         WebAuthRuleConfig {
-            path: "/api/v1/tags/search/collection".to_string(),
+            path: "/api/v1/symbols/collection/add".to_string(),
             enabled: true,
             roles: vec!["admin".to_string(), "user".to_string()],
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/symbols/collection/remove".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string(), "user".to_string()],
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/symbols/collection/replace".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string(), "user".to_string()],
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/profile".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string(), "user".to_string()],
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/profile/password".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string(), "user".to_string()],
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/profile/picture".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string(), "user".to_string()],
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/profile/key/regenerate".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string(), "user".to_string()],
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/profile/recovery/regenerate".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string(), "user".to_string()],
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/profile/delete".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string(), "user".to_string()],
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/auth/password/reset".to_string(),
+            enabled: false,
+            roles: Vec::new(),
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/admin/users".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string()],
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/admin/users/create".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string()],
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/admin/users/role".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string()],
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/admin/users/enabled".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string()],
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/admin/users/password/reset".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string()],
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/admin/users/key/regenerate".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string()],
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/admin/users/picture/delete".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string()],
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/admin/users/delete".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string()],
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/admin/corpora/delete".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string()],
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/admin/tags/delete".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string()],
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/admin/symbols/delete".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string()],
         },
         WebAuthRuleConfig {
             path: "/api/v1/search".to_string(),
@@ -665,11 +708,6 @@ fn default_auth_rules() -> Vec<WebAuthRuleConfig> {
         },
         WebAuthRuleConfig {
             path: "/api/v1/corpora".to_string(),
-            enabled: false,
-            roles: Vec::new(),
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/upload/sample".to_string(),
             enabled: false,
             roles: Vec::new(),
         },
@@ -705,6 +743,31 @@ fn default_auth_rules() -> Vec<WebAuthRuleConfig> {
         },
         WebAuthRuleConfig {
             path: "/api/v1/version".to_string(),
+            enabled: false,
+            roles: Vec::new(),
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/auth/bootstrap".to_string(),
+            enabled: false,
+            roles: Vec::new(),
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/auth/login".to_string(),
+            enabled: false,
+            roles: Vec::new(),
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/auth/logout".to_string(),
+            enabled: false,
+            roles: Vec::new(),
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/auth/register".to_string(),
+            enabled: false,
+            roles: Vec::new(),
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/auth/me".to_string(),
             enabled: false,
             roles: Vec::new(),
         },
