@@ -43,7 +43,10 @@ services:
       - "8000:8000"
     volumes:
       - ./data/binlex-web/config:/root/.config/binlex/
-      - ./data/binlex-web/local:/root/.local/binlex/
+      - binlex-web-index:/root/.local/share/binlex/index
     depends_on:
       binlex-server:
         condition: service_started
+
+volumes:
+  binlex-web-index:
