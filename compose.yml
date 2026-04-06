@@ -10,10 +10,9 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - ./data/binlex-server:/data/binlex-server
       - ./data/binlex-server/processors:/root/.local/share/binlex/processors
-      - ./data/binlex/config:/root/.config
-      - ./data/binlex/local:/root/.local
+      - ./data/binlex-server/config:/root/.config
+      - ./data/binlex-server/local:/root/.local
 
   binlex-mcp:
     container_name: binlex-mcp
@@ -25,10 +24,9 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./data/binlex-mcp:/data/binlex-mcp
       - ./data/binlex-mcp/processors:/root/.local/share/binlex/processors
-      - ./data/binlex/config:/root/.config
-      - ./data/binlex/local:/root/.local
+      - ./data/binlex/config/:/root/.config/binlex/
+      - ./data/binlex/local:/root/.local/binlex/
 
   binlex-web:
     container_name: binlex-web
@@ -44,9 +42,8 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./data/binlex-web:/data/binlex-web
-      - ./data/binlex/config:/root/.config
-      - ./data/binlex/local:/root/.local
+      - ./data/binlex-web/config:/root/.config/binlex/
+      - ./data/binlex-web/local:/root/.local/binlex/
     depends_on:
       binlex-server:
         condition: service_started
