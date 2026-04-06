@@ -227,7 +227,7 @@ mod tests {
         let sha256 = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5";
         let state = build_test_state(&root, sha256);
 
-        let page = execute_search(
+        let error = match execute_search(
             &state,
             &PageParams {
                 search: Some("1".to_string()),
@@ -236,10 +236,12 @@ mod tests {
                 page: Some(1),
                 ..PageParams::default()
             },
-        )
-        .expect("execute search");
-
-        assert!(page.rows.is_empty());
+        ) {
+            Ok(_) => panic!("reject function-only blocks filter on block rows"),
+            Err(error) => error,
+        };
+        assert!(error.contains("blocks"));
+        assert!(error.contains("collection:function"));
 
         let _ = std::fs::remove_dir_all(&root);
     }

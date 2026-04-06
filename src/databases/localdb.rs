@@ -2430,7 +2430,7 @@ impl LocalDB {
         role: &str,
         timestamp: Option<&str>,
     ) -> Result<(UserRecord, String, Vec<String>), Error> {
-        self.user_create_account(username, &generate_secret(), role, false, timestamp)
+        self.user_create_account(username, &generate_password_secret(), role, false, timestamp)
     }
 
     pub fn user_create_account(
@@ -2825,7 +2825,7 @@ impl LocalDB {
     }
 
     pub fn user_reset(&self, username: &str, timestamp: Option<&str>) -> Result<String, Error> {
-        let password = generate_secret();
+        let password = generate_password_secret();
         self.user_set_password(username, &password)?;
         if let Some(when) = timestamp {
             self.sqlite.execute(
@@ -3553,6 +3553,12 @@ impl LocalDB {
 
 fn generate_secret() -> String {
     let mut bytes = [0u8; 24];
+    rand::thread_rng().fill_bytes(&mut bytes);
+    crate::hex::encode(&bytes)
+}
+
+fn generate_password_secret() -> String {
+    let mut bytes = [0u8; 16];
     rand::thread_rng().fill_bytes(&mut bytes);
     crate::hex::encode(&bytes)
 }
