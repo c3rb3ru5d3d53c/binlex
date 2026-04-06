@@ -48,7 +48,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     .map_err(|error| Error::other(error.to_string()))?;
     let database =
         Arc::new(LocalDB::new(&analysis_config).map_err(|error| Error::other(error.to_string()))?);
-    bootstrap_initial_admin_user(database.as_ref())?;
 
     let state = Arc::new(AppState {
         ui: config.binlex_web.clone(),

@@ -610,9 +610,11 @@ pub(super) fn mutate_symbol_attributes(
     entity: Entity,
     address: u64,
     name: &str,
+    username: &str,
+    timestamp: &str,
     mutation: SymbolMutation,
 ) -> (bool, bool) {
-    let symbol_value = symbol_attribute_value(name, entity, address);
+    let symbol_value = symbol_attribute_value(name, entity, address, username, timestamp);
     let had_symbol = symbol_names_for_attributes(attributes, entity, address)
         .iter()
         .any(|existing| existing == name);
@@ -674,7 +676,13 @@ pub(super) fn symbol_attribute_matches(
     }
 }
 
-pub(super) fn symbol_attribute_value(name: &str, entity: Entity, address: u64) -> Value {
+pub(super) fn symbol_attribute_value(
+    name: &str,
+    entity: Entity,
+    address: u64,
+    username: &str,
+    timestamp: &str,
+) -> Value {
     Attribute::Symbol(SymbolJson {
         type_: "symbol".to_string(),
         symbol_type: match entity {
@@ -685,6 +693,8 @@ pub(super) fn symbol_attribute_value(name: &str, entity: Entity, address: u64) -
         .to_string(),
         name: name.to_string(),
         address,
+        username: username.to_string(),
+        timestamp: timestamp.to_string(),
     })
     .to_json_value()
 }
@@ -905,5 +915,56 @@ pub(super) fn symbol_names_for_attributes(
         .collect::<Vec<_>>();
     symbols.sort();
     symbols.dedup();
+    symbols
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SymbolAttribution {
+    pub name: String,
+    pub username: String,
+    pub timestamp: String,
+}
+
+pub(super) fn symbol_details_for_attributes(
+    attributes: &[Value],
+    entity: Entity,
+    address: u64,
+) -> Vec<SymbolAttribution> {
+    let mut symbols = attributes
+        .iter()
+        .filter_map(|attribute| {
+            let object = attribute.as_object()?;
+            if object.get("type")?.as_str()? != "symbol" {
+                return None;
+            }
+            let name = object.get("name")?.as_str()?;
+            if name.is_empty() {
+                return None;
+            }
+            let symbol_type = object.get("symbol_type")?.as_str()?;
+            if !symbol_type_matches_collection(symbol_type, entity) {
+                return None;
+            }
+            let symbol_address = object.get("address")?.as_u64()?;
+            if symbol_address != address {
+                return None;
+            }
+            Some(SymbolAttribution {
+                name: name.to_string(),
+                username: object
+                    .get("username")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string(),
+                timestamp: object
+                    .get("timestamp")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string(),
+            })
+        })
+        .collect::<Vec<_>>();
+    symbols.sort_by(|lhs, rhs| lhs.name.cmp(&rhs.name));
+    symbols.dedup_by(|lhs, rhs| lhs.name == rhs.name);
     symbols
 }

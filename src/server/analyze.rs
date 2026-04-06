@@ -62,10 +62,10 @@ pub fn execute(config: &Config, request: AnalyzeRequest) -> Result<GraphSnapshot
             selected_magic,
             corpora,
         ),
-        Magic::PNG => Err(ServerError::processor(
+        Magic::PNG => Err(ServerError::unsupported_media(
             "png inputs do not produce a control-flow graph".to_string(),
         )),
-        Magic::UNKNOWN => Err(ServerError::processor(
+        Magic::UNKNOWN => Err(ServerError::unsupported_media(
             "unable to identify file format; provide magic override".to_string(),
         )),
     }

@@ -10,6 +10,10 @@ pub enum ServerError {
         message: String,
         request_id: Option<String>,
     },
+    UnsupportedMedia {
+        message: String,
+        request_id: Option<String>,
+    },
     NotImplemented {
         message: &'static str,
         request_id: Option<String>,
@@ -19,6 +23,13 @@ pub enum ServerError {
 impl ServerError {
     pub fn processor(message: impl Into<String>) -> Self {
         Self::Processor {
+            message: message.into(),
+            request_id: None,
+        }
+    }
+
+    pub fn unsupported_media(message: impl Into<String>) -> Self {
+        Self::UnsupportedMedia {
             message: message.into(),
             request_id: None,
         }
@@ -42,6 +53,10 @@ impl ServerError {
                 request_id: current,
                 ..
             } => *current = request_id,
+            Self::UnsupportedMedia {
+                request_id: current,
+                ..
+            } => *current = request_id,
             Self::NotImplemented {
                 request_id: current,
                 ..
@@ -53,6 +68,7 @@ impl ServerError {
     pub fn status_code(&self) -> StatusCode {
         match self {
             Self::Processor { .. } => StatusCode::BAD_GATEWAY,
+            Self::UnsupportedMedia { .. } => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::NotImplemented { .. } => StatusCode::NOT_IMPLEMENTED,
         }
     }
@@ -63,6 +79,10 @@ impl IntoResponse for ServerError {
         let status = self.status_code();
         let (message, request_id) = match self {
             Self::Processor {
+                message,
+                request_id,
+            } => (message, request_id),
+            Self::UnsupportedMedia {
                 message,
                 request_id,
             } => (message, request_id),

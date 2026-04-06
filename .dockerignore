@@ -4,3 +4,4 @@ target/
 venv/
 __pycache__/
 data/
+.codex

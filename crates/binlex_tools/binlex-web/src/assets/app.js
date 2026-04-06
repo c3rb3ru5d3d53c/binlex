@@ -12,7 +12,7 @@ const QUERY_FIELD_SUGGESTIONS = [
   { label: "corpus:", insert: "corpus:", kind: "field", usage: "corpus:<name>", description: "Filter by corpus name" },
   { label: "collection:", insert: "collection:", kind: "field", usage: "collection:function", description: "Filter by indexed entity type" },
   { label: "architecture:", insert: "architecture:", kind: "field", usage: "architecture:amd64", description: "Filter by architecture" },
-  { label: "username:", insert: "username:", kind: "field", usage: "username:anonymous", description: "Filter by the indexing username" },
+  { label: "username:", insert: "username:", kind: "field", usage: "username:alice", description: "Filter by the indexing username" },
   { label: "address:", insert: "address:", kind: "field", usage: "address:0x401000", description: "Filter by exact address" },
   { label: "date:", insert: "date:", kind: "field", usage: "date:>=2026-03-01", description: "Filter by indexed UTC date or date range bounds" },
   { label: "size:", insert: "size:", kind: "field", usage: "size:>1mb", description: "Filter by instruction, block, or function byte size" },
@@ -60,6 +60,7 @@ let activeTagTrigger = null;
 let activeTagResultKey = null;
 let activeSymbolTrigger = null;
 let activeSymbolResultKey = null;
+let activePickerTooltipHost = null;
 const QUERY_COMMIT_DATASET_KEY = "committedQueryClause";
 let queryAssistantUpdateHandle = null;
 const MODAL_SELECT_ACTIVE_Z_INDEX = "120";
@@ -74,6 +75,11 @@ let uploadCorporaSearchHandle = null;
 const RESULT_COLUMNS_STORAGE_KEY = "binlex-web-result-columns-v2";
 const TAGS_POPOVER_VISIBLE_LIMIT = 6;
 let activeColumnsTrigger = null;
+const LOCKED_CORE_CORPORA = new Set(["default", "goodware", "malware"]);
+
+function isAdmin() {
+  return String(globalThis.__BINLEX_AUTH__?.role || "").toLowerCase() === "admin";
+}
 
 function getSearchForm() {
   return document.getElementById("search-form");
@@ -982,7 +988,7 @@ function helpTextForClause(clause) {
     return "Select an architecture like amd64, i386, or cil.";
   }
   if (clause.field === "username") {
-    return "Filter by the exact indexing username, for example username:anonymous";
+    return "Filter by the exact indexing username, for example username:alice";
   }
   if (clause.field === "collection") {
     return "Select function, block, or instruction.";
@@ -1075,6 +1081,7 @@ function hideQueryAssistantMenu() {
   querySuggestionItems = [];
   querySuggestionIndex = 0;
   assistant.hidden = true;
+  assistant.parentElement?.classList.remove("assistant-open");
   menu.remove();
 }
 
@@ -1089,6 +1096,7 @@ function renderQuerySuggestions(items) {
   querySuggestionItems = items.slice(0, 8);
   querySuggestionIndex = 0;
   assistant.hidden = false;
+  assistant.parentElement?.classList.add("assistant-open");
   menu.hidden = false;
   menu.innerHTML = "";
   querySuggestionItems.forEach((item, index) => {
@@ -1229,13 +1237,16 @@ function suggestionItemsForValueField(field, partial) {
   const url = `/api/v1/corpora?q=${encodeURIComponent(partial || "")}`;
   return fetch(url, { signal: corpusSuggestionAbort.signal })
     .then((response) => response.json())
-    .then((items) =>
+    .then((payload) =>
       filterQuerySuggestions(
-        items.map((value) => ({
+        (Array.isArray(payload?.corpora) ? payload.corpora : []).map((item) => {
+          const value = metadataItemName(item);
+          return {
           label: value,
           insert: value,
           kind: "value",
-        })),
+        };
+        }),
         partial
       )
     )
@@ -1501,8 +1512,8 @@ async function loadRowCorporaByKey(resultKey, force = false) {
   const row = findSearchRowByKey(resultKey);
   if (!row) return;
   if (!force && row.corpora_loaded) return;
-  row.collection_corpora = normalizeTagList(row.collection_corpora || row.corpora || []);
-  row.corpora = normalizeTagList(row.corpora || row.collection_corpora || []);
+  row.collection_corpora = normalizeMetadataItems(row.collection_corpora || row.corpora || []);
+  row.corpora = row.collection_corpora.map((item) => metadataItemName(item));
   corporaRowRequests.add(resultKey);
   row.corpora_loading = true;
   row.corpora_error = null;
@@ -1514,13 +1525,13 @@ async function loadRowCorporaByKey(resultKey, force = false) {
       address: String(Number(row.address || 0)),
     }).toString()}`;
     const collection = await fetchJsonWithCredentials(collectionUrl);
-    row.collection_corpora = normalizeTagList(collection?.corpora || []);
-    row.corpora = normalizeTagList([...row.collection_corpora]);
+    row.collection_corpora = normalizeMetadataItems(collection?.corpora || []);
+    row.corpora = row.collection_corpora.map((item) => metadataItemName(item));
     row.corpora_loaded = true;
     row.corpora_error = null;
   } catch (error) {
-    row.collection_corpora = normalizeTagList(row.collection_corpora || row.corpora || []);
-    row.corpora = normalizeTagList(row.corpora || row.collection_corpora || []);
+    row.collection_corpora = normalizeMetadataItems(row.collection_corpora || row.corpora || []);
+    row.corpora = row.collection_corpora.map((item) => metadataItemName(item));
     row.corpora_loaded = true;
     row.corpora_error = error instanceof Error ? error.message : "Unable to load corpora.";
   } finally {
@@ -1547,11 +1558,11 @@ async function loadAvailableCorporaByKey(resultKey, query = "", force = false) {
   try {
     const url = `/api/v1/corpora?q=${encodeURIComponent(normalizedQuery)}`;
     const payload = await fetchJsonWithCredentials(url);
-    row.available_corpora = normalizeTagList([...(Array.isArray(payload) ? payload : []), ...(row.available_corpora_created || [])]);
-    row.available_corpora_total_results = row.available_corpora.length;
+    row.available_corpora = normalizeMetadataItems([...(Array.isArray(payload?.corpora) ? payload.corpora : []), ...(row.available_corpora_created || [])]);
+    row.available_corpora_total_results = Number(payload?.total_results || row.available_corpora.length);
     row.available_corpora_loaded_query = normalizedQuery;
   } catch (error) {
-    row.available_corpora = normalizeTagList(row.available_corpora_created || []);
+    row.available_corpora = normalizeMetadataItems(row.available_corpora_created || []);
     row.available_corpora_total_results = row.available_corpora.length;
     row.available_corpora_loaded_query = normalizedQuery;
     row.available_corpora_error = error instanceof Error ? error.message : "Unable to search corpora.";
@@ -1575,13 +1586,13 @@ function corporaCollectionSearchValue() {
 
 function filteredCorporaForSearch(values, needle) {
   const lowered = String(needle || "").trim().toLowerCase();
-  return normalizeTagList(values).filter((value) => !lowered || value.toLowerCase().includes(lowered));
+  return normalizeMetadataItems(values).filter((value) => !lowered || metadataItemName(value).toLowerCase().includes(lowered));
 }
 
 function filteredAvailableCorpora(row) {
-  const assigned = new Set([...(row?.collection_corpora || [])].map((value) => value.toLowerCase()));
+  const assigned = new Set([...(row?.collection_corpora || [])].map((value) => metadataItemName(value).toLowerCase()));
   return filteredCorporaForSearch(row?.available_corpora || [], corporaAvailableSearchValue())
-    .filter((value) => !assigned.has(value.toLowerCase()));
+    .filter((value) => !assigned.has(metadataItemName(value).toLowerCase()));
 }
 
 function filteredCollectionCorpora(row) {
@@ -1589,11 +1600,12 @@ function filteredCollectionCorpora(row) {
 }
 
 function canCreateCorpus(row) {
+  if (!isAdmin()) return false;
   const typed = corporaAvailableSearchValue();
   const lowered = typed.toLowerCase();
   if (!lowered) return false;
-  const known = normalizeTagList([...(row?.available_corpora || []), ...(row?.collection_corpora || [])]);
-  return !known.some((value) => value.toLowerCase() === lowered);
+  const known = normalizeMetadataItems([...(row?.available_corpora || []), ...(row?.collection_corpora || [])]);
+  return !known.some((value) => metadataItemName(value).toLowerCase() === lowered);
 }
 
 function corporaCollectionTitle(row) {
@@ -1604,14 +1616,16 @@ function corporaSummaryText(visible, total) {
   return total > visible ? `Showing ${compactCount(visible)} of ${compactCount(total)}` : "";
 }
 
-function renderAvailableCorpusItem(value, active, resultKey) {
+function renderAvailableCorpusItem(item, active, resultKey) {
   const activeClass = active ? " active" : "";
-  return `<div class="symbol-picker-item${activeClass}"><span class="symbol-picker-name" title="${escapeHtml(value)}">${escapeHtml(value)}</span><div class="symbol-picker-actions"><button type="button" class="symbol-picker-copy" onclick="event.stopPropagation(); copyPickerValue(this,'${escapeHtml(encodeURIComponent(value))}')">Copy</button><button type="button" class="symbol-picker-move" data-corpora-action="apply" data-corpora-scope="collection" data-result-key="${escapeHtml(resultKey)}" data-corpus="${escapeHtml(encodeURIComponent(value))}">&rarr;</button></div></div>`;
+  const value = metadataItemName(item);
+  return `<div class="symbol-picker-item${activeClass}"><span class="symbol-picker-name" title="${escapeHtml(value)}">${escapeHtml(value)}</span><div class="symbol-picker-actions"><button type="button" class="symbol-picker-copy" onclick="event.stopPropagation(); copyPickerValue(this,'${escapeHtml(encodeURIComponent(value))}')">Copy</button><button type="button" class="symbol-picker-move" data-corpora-action="apply" data-corpora-scope="collection" data-result-key="${escapeHtml(resultKey)}" data-corpus="${escapeHtml(encodeURIComponent(value))}">&rarr;</button></div>${metadataTooltipHtml(item, "created")}</div>`;
 }
 
-function renderAssignedCorpusItem(value, scope, active, resultKey) {
+function renderAssignedCorpusItem(item, scope, active, resultKey) {
   const activeClass = active ? " active" : "";
-  return `<div class="symbol-picker-item${activeClass}"><span class="symbol-picker-name" title="${escapeHtml(value)}">${escapeHtml(value)}</span><div class="symbol-picker-actions"><button type="button" class="symbol-picker-copy" onclick="event.stopPropagation(); copyPickerValue(this,'${escapeHtml(encodeURIComponent(value))}')">Copy</button><button type="button" class="symbol-picker-move" data-corpora-action="remove" data-corpora-scope="${escapeHtml(scope)}" data-result-key="${escapeHtml(resultKey)}" data-corpus="${escapeHtml(encodeURIComponent(value))}">&larr;</button></div></div>`;
+  const value = metadataItemName(item);
+  return `<div class="symbol-picker-item${activeClass}"><span class="symbol-picker-name" title="${escapeHtml(value)}">${escapeHtml(value)}</span><div class="symbol-picker-actions"><button type="button" class="symbol-picker-copy" onclick="event.stopPropagation(); copyPickerValue(this,'${escapeHtml(encodeURIComponent(value))}')">Copy</button><button type="button" class="symbol-picker-move" data-corpora-action="remove" data-corpora-scope="${escapeHtml(scope)}" data-result-key="${escapeHtml(resultKey)}" data-corpus="${escapeHtml(encodeURIComponent(value))}">&larr;</button></div>${metadataTooltipHtml(item, "full")}</div>`;
 }
 
 function renderCorporaManagerColumn(title, scope, items, resultKey, total, searchValue, create) {
@@ -1796,7 +1810,7 @@ function handleCorporaPopoverKeydown(event) {
   if (scope === "available") {
     const available = filteredAvailableCorpora(row);
     if (available.length > 0) {
-      applyAvailableCorpus(activeCorporaResultKey, "collection", encodeURIComponent(available[0]));
+      applyAvailableCorpus(activeCorporaResultKey, "collection", encodeURIComponent(metadataItemName(available[0])));
       return;
     }
     if (canCreateCorpus(row)) createAvailableCorpus();
@@ -1820,8 +1834,9 @@ async function createAvailableCorpus() {
   if (!confirmed) return;
   try {
     await postJsonWithCredentials("/api/v1/corpora/add", { corpus: typed });
-    row.available_corpora_created = normalizeTagList([...(row.available_corpora_created || []), typed]);
-    row.available_corpora = normalizeTagList([...(row.available_corpora || []), typed]);
+    const createdItem = { name: typed, created_actor: { username: "", profile_picture: null }, created_timestamp: "", assigned_actor: null, assigned_timestamp: null };
+    row.available_corpora_created = normalizeMetadataItems([...(row.available_corpora_created || []), createdItem]);
+    row.available_corpora = normalizeMetadataItems([...(row.available_corpora || []), createdItem]);
     row.available_corpora_total_results = Math.max(
       Number(row.available_corpora_total_results || 0),
       row.available_corpora.length,
@@ -1846,8 +1861,8 @@ async function applyAvailableCorpus(resultKey, scope, encodedCorpus) {
       address: Number(row.address || 0),
       corpus,
     });
-    row.collection_corpora = normalizeTagList([...(row.collection_corpora || []), corpus]);
-    row.corpora = normalizeTagList([...(row.collection_corpora || [])]);
+    row.collection_corpora = normalizeMetadataItems([...(row.collection_corpora || []), { name: corpus, created_actor: { username: "", profile_picture: null }, created_timestamp: "", assigned_actor: { username: "", profile_picture: null }, assigned_timestamp: "" }]);
+    row.corpora = row.collection_corpora.map((item) => metadataItemName(item));
     row.corpora_loaded = true;
     row.corpora_error = null;
     updateCorporaCell(resultKey);
@@ -1872,8 +1887,8 @@ async function removeAssignedCorpus(resultKey, scope, encodedCorpus) {
       address: Number(row.address || 0),
       corpus,
     });
-    row.collection_corpora = normalizeTagList((row.collection_corpora || []).filter((value) => value !== corpus));
-    row.corpora = normalizeTagList([...(row.collection_corpora || [])]);
+    row.collection_corpora = normalizeMetadataItems((row.collection_corpora || []).filter((value) => metadataItemName(value) !== corpus));
+    row.corpora = row.collection_corpora.map((item) => metadataItemName(item));
     row.corpora_loaded = true;
     row.corpora_error = null;
     updateCorporaCell(resultKey);
@@ -1910,13 +1925,13 @@ function tagCollectionSearchValue() {
 
 function filterTagsForSearch(tags, needle) {
   const lowered = String(needle || "").trim().toLowerCase();
-  return normalizeTagList(tags).filter((tag) => !lowered || tag.toLowerCase().includes(lowered));
+  return normalizeMetadataItems(tags).filter((tag) => !lowered || metadataItemName(tag).toLowerCase().includes(lowered));
 }
 
 function filteredAvailableTags(row) {
-  const assigned = new Set((row?.collection_tags || []).map((tag) => tag.toLowerCase()));
+  const assigned = new Set((row?.collection_tags || []).map((tag) => metadataItemName(tag).toLowerCase()));
   return filterTagsForSearch(row?.available_tags || [], tagAvailableSearchValue())
-    .filter((tag) => !assigned.has(tag.toLowerCase()));
+    .filter((tag) => !assigned.has(metadataItemName(tag).toLowerCase()));
 }
 
 function filteredCollectionTags(row) {
@@ -1927,8 +1942,8 @@ function canCreateTag(row) {
   const typed = tagAvailableSearchValue();
   const lowered = typed.toLowerCase();
   if (!lowered) return false;
-  const known = normalizeTagList([...(row?.available_tags || []), ...(row?.collection_tags || [])]);
-  return !known.some((tag) => tag.toLowerCase() === lowered);
+  const known = normalizeMetadataItems([...(row?.available_tags || []), ...(row?.collection_tags || [])]);
+  return !known.some((tag) => metadataItemName(tag).toLowerCase() === lowered);
 }
 
 function updateTagsCell(resultKey) {
@@ -1965,8 +1980,8 @@ function rowSymbolsSearchValue() {
 
 function filterSymbolsForSearch(symbols, needle) {
   const lowered = String(needle || "").trim().toLowerCase();
-  const unique = Array.from(new Set((symbols || []).map((symbol) => String(symbol || "").trim()).filter(Boolean)));
-  return unique.filter((symbol) => !lowered || symbol.toLowerCase().includes(lowered));
+  return normalizeMetadataItems(symbols)
+    .filter((symbol) => !lowered || metadataItemName(symbol).toLowerCase().includes(lowered));
 }
 
 function updateSymbolCell(resultKey) {
@@ -2053,12 +2068,12 @@ async function loadRowTagsByKey(resultKey, force = false) {
       address: String(Number(row.address || 0)),
     }).toString()}`;
     const collection = await fetchJsonWithCredentials(collectionUrl);
-    row.collection_tags = normalizeTagList(collection?.tags || []);
+    row.collection_tags = normalizeMetadataItems(collection?.tags || []);
     row.collection_tag_count = row.collection_tags.length;
     row.tags_loaded = true;
     row.tag_error = null;
   } catch (error) {
-    row.collection_tags = normalizeTagList(row.collection_tags || []);
+    row.collection_tags = normalizeMetadataItems(row.collection_tags || []);
     row.collection_tag_count = Number(row.collection_tag_count || row.collection_tags.length || 0);
     row.tags_loaded = true;
     row.tag_error = error instanceof Error ? error.message : "Unable to load tags.";
@@ -2089,7 +2104,7 @@ async function loadAvailableTagsByKey(resultKey, query = "", force = false) {
       limit: "64",
     }).toString()}`;
     const payload = await fetchJsonWithCredentials(url);
-    row.available_tags = normalizeTagList(payload?.tags || []);
+    row.available_tags = normalizeMetadataItems(payload?.tags || []);
     row.available_tags_total_results = Number(payload?.total_results || 0);
     row.available_tags_has_next = !!payload?.has_next;
     row.available_tags_loaded_query = normalizedQuery;
@@ -2287,9 +2302,9 @@ function symbolAppliedSearchValue() {
 }
 
 function filteredAvailableSymbols(row) {
-  const applied = new Set(filterSymbolsForSearch(row?.symbols || [], "").map((symbol) => symbol.toLowerCase()));
+  const applied = new Set(filterSymbolsForSearch(row?.symbols || [], "").map((symbol) => metadataItemName(symbol).toLowerCase()));
   return filterSymbolsForSearch(row?.available_symbols || [], "")
-    .filter((symbol) => !applied.has(symbol.toLowerCase()));
+    .filter((symbol) => !applied.has(metadataItemName(symbol).toLowerCase()));
 }
 
 function filteredAppliedSymbols(row) {
@@ -2301,7 +2316,7 @@ function symbolCanCreate(row) {
   const lowered = typed.trim().toLowerCase();
   if (!lowered) return false;
   const known = [...filterSymbolsForSearch(row?.symbols || [], ""), ...filterSymbolsForSearch(row?.available_symbols || [], "")];
-  return !known.some((symbol) => symbol.toLowerCase() === lowered);
+  return !known.some((symbol) => metadataItemName(symbol).toLowerCase() === lowered);
 }
 
 async function copySymbolValue(button, encodedSymbol) {
@@ -2346,10 +2361,12 @@ async function copyPickerValue(button, encodedValue) {
   }
 }
 
-function symbolPickerItemHtml(symbol, direction, active, resultKey) {
+function symbolPickerItemHtml(item, direction, active, resultKey) {
   const moveArrow = direction === "apply" ? "&rarr;" : "&larr;";
   const activeClass = active ? " active" : "";
-  return `<div class="symbol-picker-item${activeClass}"><span class="symbol-picker-name" title="${escapeHtml(symbol)}">${escapeHtml(symbol)}</span><div class="symbol-picker-actions"><button type="button" class="symbol-picker-copy" onclick="event.stopPropagation(); copySymbolValue(this,'${escapeHtml(encodeURIComponent(symbol))}')">Copy</button><button type="button" class="symbol-picker-move" onclick="event.stopPropagation(); ${direction === "apply" ? `applyAvailableSymbol('${escapeHtml(resultKey)}','${escapeHtml(encodeURIComponent(symbol))}')` : `unapplySymbol('${escapeHtml(resultKey)}','${escapeHtml(encodeURIComponent(symbol))}')`}">${moveArrow}</button></div></div>`;
+  const symbol = metadataItemName(item);
+  const mode = direction === "apply" ? "created" : "full";
+  return `<div class="symbol-picker-item${activeClass}"><span class="symbol-picker-name" title="${escapeHtml(symbol)}">${escapeHtml(symbol)}</span><div class="symbol-picker-actions"><button type="button" class="symbol-picker-copy" onclick="event.stopPropagation(); copySymbolValue(this,'${escapeHtml(encodeURIComponent(symbol))}')">Copy</button><button type="button" class="symbol-picker-move" onclick="event.stopPropagation(); ${direction === "apply" ? `applyAvailableSymbol('${escapeHtml(resultKey)}','${escapeHtml(encodeURIComponent(symbol))}')` : `unapplySymbol('${escapeHtml(resultKey)}','${escapeHtml(encodeURIComponent(symbol))}')`}">${moveArrow}</button></div>${metadataTooltipHtml(item, mode)}</div>`;
 }
 
 function renderSymbolPickerColumn(title, scope, items, resultKey, searchValue) {
@@ -2525,7 +2542,7 @@ function handleSymbolPopoverKeydown(event) {
   if (scope === "available") {
     const available = filteredAvailableSymbols(row);
     if (available.length > 0) {
-      applyAvailableSymbol(activeSymbolResultKey, encodeURIComponent(available[0]));
+      applyAvailableSymbol(activeSymbolResultKey, encodeURIComponent(metadataItemName(available[0])));
       return;
     }
     if (symbolCanCreate(row)) {
@@ -2535,7 +2552,7 @@ function handleSymbolPopoverKeydown(event) {
   }
   const applied = filteredAppliedSymbols(row);
   if (applied.length > 0) {
-    unapplySymbol(activeSymbolResultKey, encodeURIComponent(applied[0]));
+    unapplySymbol(activeSymbolResultKey, encodeURIComponent(metadataItemName(applied[0])));
   }
 }
 
@@ -2611,14 +2628,16 @@ function tagSummaryText(row, scope, visible, total) {
   return total > visible ? `Showing ${compactCount(visible)} of ${compactCount(total)}` : "";
 }
 
-function renderAvailableTagItem(tag, active, resultKey) {
+function renderAvailableTagItem(item, active, resultKey) {
   const activeClass = active ? " active" : "";
-  return `<div class="symbol-picker-item${activeClass}"><span class="symbol-picker-name" title="${escapeHtml(tag)}">${escapeHtml(tag)}</span><div class="symbol-picker-actions"><button type="button" class="symbol-picker-copy" onclick="event.stopPropagation(); copyPickerValue(this,'${escapeHtml(encodeURIComponent(tag))}')">Copy</button><button type="button" class="symbol-picker-move" data-tag-action="apply" data-result-key="${escapeHtml(resultKey)}" data-tag="${escapeHtml(encodeURIComponent(tag))}">&rarr;</button></div></div>`;
+  const tag = metadataItemName(item);
+  return `<div class="symbol-picker-item${activeClass}"><span class="symbol-picker-name" title="${escapeHtml(tag)}">${escapeHtml(tag)}</span><div class="symbol-picker-actions"><button type="button" class="symbol-picker-copy" onclick="event.stopPropagation(); copyPickerValue(this,'${escapeHtml(encodeURIComponent(tag))}')">Copy</button><button type="button" class="symbol-picker-move" data-tag-action="apply" data-result-key="${escapeHtml(resultKey)}" data-tag="${escapeHtml(encodeURIComponent(tag))}">&rarr;</button></div>${metadataTooltipHtml(item, "created")}</div>`;
 }
 
-function renderAssignedTagItem(tag, active, resultKey) {
+function renderAssignedTagItem(item, active, resultKey) {
   const activeClass = active ? " active" : "";
-  return `<div class="symbol-picker-item${activeClass}"><span class="symbol-picker-name" title="${escapeHtml(tag)}">${escapeHtml(tag)}</span><div class="symbol-picker-actions"><button type="button" class="symbol-picker-copy" onclick="event.stopPropagation(); copyPickerValue(this,'${escapeHtml(encodeURIComponent(tag))}')">Copy</button><button type="button" class="symbol-picker-move" data-tag-action="remove" data-result-key="${escapeHtml(resultKey)}" data-tag="${escapeHtml(encodeURIComponent(tag))}">&larr;</button></div></div>`;
+  const tag = metadataItemName(item);
+  return `<div class="symbol-picker-item${activeClass}"><span class="symbol-picker-name" title="${escapeHtml(tag)}">${escapeHtml(tag)}</span><div class="symbol-picker-actions"><button type="button" class="symbol-picker-copy" onclick="event.stopPropagation(); copyPickerValue(this,'${escapeHtml(encodeURIComponent(tag))}')">Copy</button><button type="button" class="symbol-picker-move" data-tag-action="remove" data-result-key="${escapeHtml(resultKey)}" data-tag="${escapeHtml(encodeURIComponent(tag))}">&larr;</button></div>${metadataTooltipHtml(item, "full")}</div>`;
 }
 
 function renderTagsManagerColumn(title, scope, items, row, resultKey, total, searchValue, create) {
@@ -2804,7 +2823,7 @@ function handleTagsPopoverKeydown(event) {
   if (scope === "available") {
     const available = filteredAvailableTags(row);
     if (available.length > 0) {
-      applyAvailableTag(activeTagResultKey, encodeURIComponent(available[0]));
+      applyAvailableTag(activeTagResultKey, encodeURIComponent(metadataItemName(available[0])));
       return;
     }
     if (canCreateTag(row)) createAvailableTag();
@@ -2812,7 +2831,7 @@ function handleTagsPopoverKeydown(event) {
   }
   const collection = filteredCollectionTags(row);
   if (collection.length > 0) {
-    removeAssignedTag(activeTagResultKey, encodeURIComponent(collection[0]));
+    removeAssignedTag(activeTagResultKey, encodeURIComponent(metadataItemName(collection[0])));
   }
 }
 
@@ -2847,7 +2866,7 @@ async function applyAvailableTag(resultKey, encodedTag) {
       address: Number(row.address || 0),
       tag,
     });
-    row.collection_tags = normalizeTagList([...(row.collection_tags || []), tag]);
+    row.collection_tags = normalizeMetadataItems([...(row.collection_tags || []), { name: tag, created_actor: { username: "", profile_picture: null }, created_timestamp: "", assigned_actor: { username: "", profile_picture: null }, assigned_timestamp: "" }]);
     row.collection_tag_count = row.collection_tags.length;
     row.tags_loaded = true;
     row.tag_error = null;
@@ -2878,7 +2897,7 @@ async function removeAssignedTag(resultKey, encodedTag) {
       address: Number(row.address || 0),
       tag,
     });
-    row.collection_tags = normalizeTagList((row.collection_tags || []).filter((value) => value !== tag));
+    row.collection_tags = normalizeMetadataItems((row.collection_tags || []).filter((value) => metadataItemName(value) !== tag));
     row.collection_tag_count = row.collection_tags.length;
     row.tags_loaded = true;
     row.tag_error = null;
@@ -3393,6 +3412,205 @@ function abbreviateHex(value) {
   return `${text.slice(0, edge)}...${text.slice(-edge)}`;
 }
 
+function metadataItemName(item) {
+  if (item && typeof item === "object" && !Array.isArray(item)) {
+    return String(item.name || "").trim();
+  }
+  return String(item || "").trim();
+}
+
+function metadataItemCreatedActor(item) {
+  return item && typeof item === "object" && !Array.isArray(item) && item.created_actor && typeof item.created_actor === "object"
+    ? item.created_actor
+    : null;
+}
+
+function metadataItemAssignedActor(item) {
+  return item && typeof item === "object" && !Array.isArray(item) && item.assigned_actor && typeof item.assigned_actor === "object"
+    ? item.assigned_actor
+    : null;
+}
+
+function metadataActorUsername(actor) {
+  return String(actor?.username || "").trim();
+}
+
+function metadataActorProfilePicture(actor) {
+  return String(actor?.profile_picture || "").trim();
+}
+
+function metadataItemUsername(item) {
+  return metadataActorUsername(metadataItemCreatedActor(item));
+}
+
+function metadataItemProfilePicture(item) {
+  return metadataActorProfilePicture(metadataItemCreatedActor(item));
+}
+
+function metadataItemTimestamp(item) {
+  return String(item && typeof item === "object" && !Array.isArray(item) ? item.created_timestamp || "" : "").trim();
+}
+
+function metadataItemAssignedUsername(item) {
+  return metadataActorUsername(metadataItemAssignedActor(item));
+}
+
+function metadataItemAssignedProfilePicture(item) {
+  return metadataActorProfilePicture(metadataItemAssignedActor(item));
+}
+
+function metadataItemAssignedTimestamp(item) {
+  return String(item && typeof item === "object" && !Array.isArray(item) ? item.assigned_timestamp || "" : "").trim();
+}
+
+function normalizeMetadataItems(values) {
+  const seen = new Map();
+  (Array.isArray(values) ? values : []).forEach((value) => {
+    const name = metadataItemName(value);
+    if (!name) return;
+    const key = name.toLowerCase();
+    const normalized = typeof value === "object" && value !== null && !Array.isArray(value)
+      ? {
+          name,
+          created_actor: {
+            username: metadataItemUsername(value),
+            profile_picture: metadataItemProfilePicture(value) || null,
+          },
+          created_timestamp: metadataItemTimestamp(value),
+          assigned_actor: metadataItemAssignedActor(value)
+            ? {
+                username: metadataItemAssignedUsername(value),
+                profile_picture: metadataItemAssignedProfilePicture(value) || null,
+              }
+            : null,
+          assigned_timestamp: metadataItemAssignedTimestamp(value) || null,
+        }
+      : {
+          name,
+          created_actor: { username: "", profile_picture: null },
+          created_timestamp: "",
+          assigned_actor: null,
+          assigned_timestamp: null,
+        };
+    seen.set(key, normalized);
+  });
+  return Array.from(seen.values()).sort((lhs, rhs) => lhs.name.localeCompare(rhs.name));
+}
+
+function metadataTooltipEntryHtml(actor, verb, timestamp) {
+  const username = metadataActorUsername(actor);
+  const profilePicture = metadataActorProfilePicture(actor);
+  if (!username && !timestamp) return "";
+  const avatar = profilePicture
+    ? `<img class="picker-tooltip-avatar" src="${escapeHtml(profilePicture)}" alt="${escapeHtml(username || "user")}">`
+    : `<div class="picker-tooltip-avatar picker-tooltip-avatar-fallback">${escapeHtml((username || "?").slice(0, 1).toLowerCase())}</div>`;
+  const lines = [];
+  if (username) lines.push(`<div class="picker-tooltip-username">${escapeHtml(username)}</div>`);
+  lines.push(`<div class="picker-tooltip-verb">${escapeHtml(verb)}</div>`);
+  if (timestamp) lines.push(`<div class="picker-tooltip-time">${escapeHtml(formatUtcTimestamp(timestamp))}</div>`);
+  return `<div class="picker-tooltip-entry">${avatar}<div class="picker-tooltip-copy">${lines.join("")}</div></div>`;
+}
+
+function metadataTooltipHtml(item, mode = "created") {
+  const entries = [];
+  const created = metadataTooltipEntryHtml(metadataItemCreatedActor(item), "Created by", metadataItemTimestamp(item));
+  const assigned = metadataTooltipEntryHtml(metadataItemAssignedActor(item), "Assigned by", metadataItemAssignedTimestamp(item));
+  if (mode === "created") {
+    if (created) entries.push(created);
+  } else {
+    if (created) entries.push(created);
+    if (assigned) entries.push(assigned);
+  }
+  if (!entries.length) return "";
+  return `<span class="picker-tooltip-anchor" hidden data-picker-tooltip="${escapeHtml(encodeURIComponent(entries.join("")))}"></span>`;
+}
+
+function getPickerTooltipOverlay() {
+  let overlay = document.getElementById("picker-tooltip-overlay");
+  if (overlay) return overlay;
+  overlay = document.createElement("div");
+  overlay.id = "picker-tooltip-overlay";
+  overlay.className = "picker-tooltip-card";
+  overlay.hidden = true;
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
+function tooltipHtmlForHost(host) {
+  if (!(host instanceof HTMLElement)) return "";
+  const anchor = host.querySelector(".picker-tooltip-anchor[data-picker-tooltip]");
+  if (!(anchor instanceof HTMLElement)) return "";
+  const encoded = String(anchor.dataset.pickerTooltip || "").trim();
+  if (!encoded) return "";
+  try {
+    return decodeURIComponent(encoded);
+  } catch (_) {
+    return "";
+  }
+}
+
+function positionPickerTooltip(host) {
+  const overlay = getPickerTooltipOverlay();
+  if (!(host instanceof HTMLElement) || overlay.hidden) return;
+  const rect = host.getBoundingClientRect();
+  const overlayRect = overlay.getBoundingClientRect();
+  const margin = 10;
+  let left = rect.left;
+  let top = rect.bottom + 6;
+  if (left + overlayRect.width > window.innerWidth - margin) {
+    left = Math.max(margin, window.innerWidth - overlayRect.width - margin);
+  }
+  if (top + overlayRect.height > window.innerHeight - margin) {
+    top = rect.top - overlayRect.height - 6;
+  }
+  if (top < margin) top = margin;
+  overlay.style.left = `${Math.round(left)}px`;
+  overlay.style.top = `${Math.round(top)}px`;
+}
+
+function hidePickerTooltip() {
+  activePickerTooltipHost = null;
+  const overlay = document.getElementById("picker-tooltip-overlay");
+  if (!(overlay instanceof HTMLElement)) return;
+  overlay.hidden = true;
+  overlay.innerHTML = "";
+}
+
+function showPickerTooltip(host) {
+  const html = tooltipHtmlForHost(host);
+  if (!html) {
+    hidePickerTooltip();
+    return;
+  }
+  activePickerTooltipHost = host;
+  const overlay = getPickerTooltipOverlay();
+  overlay.innerHTML = html;
+  overlay.hidden = false;
+  positionPickerTooltip(host);
+}
+
+function syncPickerTooltipTarget(target) {
+  const host = target instanceof Element
+    ? target.closest(".symbol-picker-item, .result-detail-preview-chip.has-tooltip, .result-copy-pill.has-tooltip")
+    : null;
+  if (!(host instanceof HTMLElement)) {
+    hidePickerTooltip();
+    return;
+  }
+  if (host !== activePickerTooltipHost) {
+    showPickerTooltip(host);
+    return;
+  }
+  positionPickerTooltip(host);
+}
+
+function formatUtcTimestamp(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value || "");
+  const pad = (part) => String(part).padStart(2, "0");
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())} UTC`;
+}
+
 function compactCount(value) {
   const numeric = Number(value || 0);
   if (!Number.isFinite(numeric)) return "0";
@@ -3617,6 +3835,29 @@ function buildJsonCopyActions(value, depth = 0) {
 }
 
 if (typeof document !== "undefined") {
+  document.addEventListener("mouseover", (event) => {
+    syncPickerTooltipTarget(event.target);
+  });
+  document.addEventListener("mousemove", (event) => {
+    syncPickerTooltipTarget(event.target);
+  });
+  document.addEventListener("mouseout", (event) => {
+    if (!(activePickerTooltipHost instanceof HTMLElement)) return;
+    const related = event.relatedTarget;
+    if (related instanceof Node && activePickerTooltipHost.contains(related)) return;
+    if (event.target instanceof Node && activePickerTooltipHost.contains(event.target)) {
+      hidePickerTooltip();
+    }
+  });
+  document.addEventListener("focusin", (event) => {
+    syncPickerTooltipTarget(event.target);
+  });
+  document.addEventListener("focusout", (event) => {
+    if (!(activePickerTooltipHost instanceof HTMLElement)) return;
+    const related = event.relatedTarget;
+    if (related instanceof Node && activePickerTooltipHost.contains(related)) return;
+    hidePickerTooltip();
+  });
   document.addEventListener("click", (event) => {
     const popover = getRowActionPopover();
     if (!popover || popover.hidden) return;
@@ -3677,9 +3918,13 @@ if (typeof window !== "undefined") {
     if (columnsPopover && !columnsPopover.hidden) {
       positionColumnsPopover(activeColumnsTrigger, columnsPopover);
     }
+    if (activePickerTooltipHost instanceof HTMLElement) {
+      positionPickerTooltip(activePickerTooltipHost);
+    }
   });
 
   window.addEventListener("scroll", (event) => {
+    hidePickerTooltip();
     const popover = getRowActionPopover();
     if (popover && !popover.hidden && popover.contains(event.target)) {
       return;
@@ -3957,7 +4202,7 @@ async function loadUploadCorpora(query = "", force = false) {
   uploadCorporaRequests.add(requestKey);
   try {
     const payload = await fetchJsonWithCredentials(`/api/v1/corpora?q=${encodeURIComponent(normalizedQuery)}`);
-    setUploadCorpusOptions(Array.isArray(payload) ? payload : []);
+    setUploadCorpusOptions(Array.isArray(payload?.corpora) ? payload.corpora.map((item) => metadataItemName(item)) : []);
     setUploadCorpusLoadedQuery(normalizedQuery);
     renderUploadCorpusPicker();
   } catch (error) {
@@ -3980,7 +4225,7 @@ async function loadUploadTags(query = "", force = false) {
   uploadTagRequests.add(requestKey);
   try {
     const payload = await fetchJsonWithCredentials(`/api/v1/tags/search?q=${encodeURIComponent(normalizedQuery)}`);
-    const items = Array.isArray(payload?.tags) ? payload.tags : [];
+    const items = Array.isArray(payload?.tags) ? payload.tags.map((item) => metadataItemName(item)) : [];
     setUploadTagOptions(items);
     setUploadTagLoadedQuery(normalizedQuery);
     renderUploadTagPicker();
@@ -4051,6 +4296,7 @@ function filteredSelectedUploadTags() {
 }
 
 function shouldOfferUploadCorpusCreate() {
+  if (!isAdmin()) return false;
   const typed = availableUploadCorpusQuery();
   return !!typed && !findUploadCorpusByName(typed) && filteredAvailableUploadCorpora().length === 0;
 }
@@ -4087,13 +4333,23 @@ function renderUploadTagPicker() {
   if (!root) return;
   const availableList = document.getElementById("upload-tag-available-list");
   const selectedList = document.getElementById("upload-tag-selected-list");
+  const availableSummary = document.getElementById("upload-tag-available-summary");
+  const selectedSummary = document.getElementById("upload-tag-selected-summary");
   if (!(availableList instanceof HTMLElement) || !(selectedList instanceof HTMLElement)) return;
   const available = filteredAvailableUploadTags();
   const selected = filteredSelectedUploadTags();
-  availableList.innerHTML = available.map((value, index) => corpusButtonHtml(value, "available", index === 0, "selectUploadTag")).join("");
-  selectedList.innerHTML = selected.length === 0
+  const visibleAvailable = available.slice(0, 6);
+  const visibleSelected = selected.slice(0, 6);
+  if (availableSummary) {
+    availableSummary.textContent = `Showing ${compactCount(visibleAvailable.length)} of ${compactCount(available.length)}`;
+  }
+  if (selectedSummary) {
+    selectedSummary.textContent = `Showing ${compactCount(visibleSelected.length)} of ${compactCount(selected.length)}`;
+  }
+  availableList.innerHTML = visibleAvailable.map((value, index) => corpusButtonHtml(value, "available", index === 0, "selectUploadTag")).join("");
+  selectedList.innerHTML = visibleSelected.length === 0
     ? '<div class="upload-corpus-empty">No tags selected.</div>'
-    : selected.map((value, index) => corpusButtonHtml(value, "selected", index === 0, "unselectUploadTag")).join("");
+    : visibleSelected.map((value, index) => corpusButtonHtml(value, "selected", index === 0, "unselectUploadTag")).join("");
   renderUploadTagCreatePrompt();
   renderUploadTagCreateInline();
 }
@@ -4138,7 +4394,7 @@ function handleUploadCorpusAvailableKeydown(event) {
   event.preventDefault();
   const available = filteredAvailableUploadCorpora();
   if (available.length > 0) {
-    selectUploadCorpus(encodeURIComponent(available[0]));
+    selectUploadCorpus(encodeURIComponent(metadataItemName(available[0])));
     return;
   }
   if (!shouldOfferUploadCorpusCreate()) {
@@ -4161,7 +4417,7 @@ function handleUploadTagAvailableKeydown(event) {
   event.preventDefault();
   const available = filteredAvailableUploadTags();
   if (available.length > 0) {
-    selectUploadTag(encodeURIComponent(available[0]));
+    selectUploadTag(encodeURIComponent(metadataItemName(available[0])));
     return;
   }
   if (!shouldOfferUploadTagCreate()) {
@@ -4182,16 +4438,19 @@ function handleUploadTagSelectedKeydown(event) {
 function renderUploadCorpusCreatePrompt() {
   const overlay = document.getElementById("upload-corpus-create-overlay");
   const prompt = document.getElementById("upload-corpus-create-prompt");
+  const title = document.getElementById("upload-corpus-create-title");
   const text = document.getElementById("upload-corpus-create-text");
-  if (!(overlay instanceof HTMLElement) || !(prompt instanceof HTMLElement) || !(text instanceof HTMLElement)) return;
+  if (!(overlay instanceof HTMLElement) || !(prompt instanceof HTMLElement) || !(title instanceof HTMLElement) || !(text instanceof HTMLElement)) return;
   const value = uploadCorpusPendingCreate();
   if (!value) {
     overlay.hidden = true;
+    title.textContent = "Create Corpus";
     text.textContent = "";
     return;
   }
   overlay.hidden = false;
-  text.textContent = `Create corpus "${value}"?`;
+  title.textContent = "Create Corpus";
+  text.textContent = `Create "${value}"?`;
 }
 
 function renderUploadCorpusCreateInline() {
@@ -4205,16 +4464,19 @@ function renderUploadCorpusCreateInline() {
 function renderUploadTagCreatePrompt() {
   const overlay = document.getElementById("upload-tag-create-overlay");
   const prompt = document.getElementById("upload-tag-create-prompt");
+  const title = document.getElementById("upload-tag-create-title");
   const text = document.getElementById("upload-tag-create-text");
-  if (!(overlay instanceof HTMLElement) || !(prompt instanceof HTMLElement) || !(text instanceof HTMLElement)) return;
+  if (!(overlay instanceof HTMLElement) || !(prompt instanceof HTMLElement) || !(title instanceof HTMLElement) || !(text instanceof HTMLElement)) return;
   const value = uploadTagPendingCreate();
   if (!value) {
     overlay.hidden = true;
+    title.textContent = "Create Tag";
     text.textContent = "";
     return;
   }
   overlay.hidden = false;
-  text.textContent = `Create tag "${value}"?`;
+  title.textContent = "Create Tag";
+  text.textContent = `Create "${value}"?`;
 }
 
 function renderUploadTagCreateInline() {
@@ -4372,6 +4634,15 @@ function initializeModalSelectStacking() {
   });
 }
 
+function initializeProfilePictureCrop() {
+  const stage = document.getElementById("profile-picture-crop-stage");
+  if (!(stage instanceof HTMLElement)) return;
+  stage.addEventListener("pointerdown", beginProfilePictureCropDrag);
+  stage.addEventListener("pointermove", moveProfilePictureCropDrag);
+  stage.addEventListener("pointerup", endProfilePictureCropDrag);
+  stage.addEventListener("pointercancel", endProfilePictureCropDrag);
+}
+
 function openUploadModal() {
   const modal = document.getElementById("upload-modal");
   if (!modal) return;
@@ -4437,10 +4708,19 @@ function openUploadStatusModal(state, payload = {}) {
       extra.innerHTML = renderUploadStatusSha(payload.sha256);
     }
   } else if (state === "processing") {
-    title.textContent = "Analyzing Sample";
-    text.textContent = "Binlex Web is analyzing and indexing the sample now.";
+    if (payload.allowSearchNow) {
+      title.textContent = "Still Processing";
+      text.textContent = "Binlex Web is still analyzing and indexing the sample. You can search now while results continue to come in.";
+    } else {
+      title.textContent = "Analyzing Sample";
+      text.textContent = "Binlex Web is analyzing and indexing the sample now.";
+    }
     if (payload.sha256) {
       extra.innerHTML = renderUploadStatusSha(payload.sha256);
+      if (payload.allowSearchNow) {
+        searchButton.hidden = false;
+        searchButton.dataset.sha256 = payload.sha256;
+      }
     }
   } else if (state === "success") {
     title.textContent = "Analysis Complete";
@@ -4464,14 +4744,18 @@ function renderUploadStatusSha(sha256) {
 }
 
 let uploadStatusPollToken = 0;
+let uploadStatusStartedAt = 0;
+const UPLOAD_STATUS_SEARCH_THRESHOLD_MS = 15000;
 
 function stopUploadStatusPolling() {
   uploadStatusPollToken += 1;
+  uploadStatusStartedAt = 0;
 }
 
 function startUploadStatusPolling(sha256) {
   stopUploadStatusPolling();
   if (!sha256) return;
+  uploadStatusStartedAt = Date.now();
   const token = uploadStatusPollToken;
   pollUploadStatus(sha256, token);
 }
@@ -4500,7 +4784,8 @@ async function pollUploadStatus(sha256, token) {
       return;
     }
     if (payload.status === "processing") {
-      openUploadStatusModal("processing", { sha256 });
+      const allowSearchNow = uploadStatusStartedAt > 0 && (Date.now() - uploadStatusStartedAt) >= UPLOAD_STATUS_SEARCH_THRESHOLD_MS;
+      openUploadStatusModal("processing", { sha256, allowSearchNow });
       setTimeout(() => pollUploadStatus(sha256, token), 1200);
       return;
     }
@@ -4748,6 +5033,1346 @@ function installDropzone() {
   });
 }
 
+function getAuthMenu() {
+  return document.getElementById("auth-menu");
+}
+
+function closeAuthMenu() {
+  const menu = getAuthMenu();
+  if (menu) menu.hidden = true;
+}
+
+function toggleAuthMenu() {
+  const menu = getAuthMenu();
+  if (!menu) return;
+  menu.hidden = !menu.hidden;
+}
+
+function getAuthModal() {
+  return document.getElementById("auth-modal");
+}
+
+function openAuthModal(tab = "login") {
+  closeAuthMenu();
+  const modal = getAuthModal();
+  if (!modal) return;
+  modal.hidden = false;
+  toggleAuthTab(tab);
+}
+
+function closeAuthModal() {
+  const modal = getAuthModal();
+  if (modal) modal.hidden = true;
+}
+
+function toggleAuthTab(tab) {
+  document.querySelectorAll("[data-auth-tab]").forEach((button) => {
+    button.classList.toggle("is-active", button.getAttribute("data-auth-tab") === tab);
+  });
+  document.querySelectorAll("[data-auth-panel]").forEach((panel) => {
+    panel.hidden = panel.getAttribute("data-auth-panel") !== tab;
+  });
+  if (tab === "register") {
+    refreshRegisterCaptcha().catch(() => {});
+  } else if (tab === "reset") {
+    refreshResetCaptcha().catch(() => {});
+  }
+}
+
+async function getJson(url) {
+  const response = await fetch(url, {
+    method: "GET",
+    credentials: "same-origin",
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error || "Request failed");
+  }
+  return data;
+}
+
+async function refreshRegisterCaptcha() {
+  return refreshAuthCaptcha("auth-register-form", "auth-register-captcha-image", "auth-register-captcha-id", "auth-register-error");
+}
+
+async function refreshResetCaptcha() {
+  return refreshAuthCaptcha("auth-reset-form", "auth-reset-captcha-image", "auth-reset-captcha-id", "auth-reset-error");
+}
+
+async function refreshAuthCaptcha(formId, imageId, fieldId, errorId) {
+  const form = document.getElementById(formId);
+  const image = document.getElementById(imageId);
+  const field = document.getElementById(fieldId);
+  if (!(form instanceof HTMLElement) || !(image instanceof HTMLImageElement) || !(field instanceof HTMLInputElement)) return;
+  try {
+    const data = await getJson("/api/v1/auth/captcha");
+    field.value = String(data?.captcha_id || "");
+    image.src = `data:image/png;base64,${String(data?.image_base64 || "")}`;
+    image.hidden = false;
+  } catch (error) {
+    setInlineError(errorId, error.message || "Unable to load captcha.");
+  }
+}
+
+async function postJson(url, payload) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify(payload || {}),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error || "Request failed");
+  }
+  return data;
+}
+
+function setInlineError(id, message) {
+  const target = document.getElementById(id);
+  if (target) target.textContent = message || "";
+}
+
+let recoveryCodesState = {
+  title: "Recovery Codes",
+  description: "Save these recovery codes somewhere secure. Each code can be used once to reset your password.",
+  codes: [],
+  visible: false,
+  onClose: null,
+};
+
+const USERNAME_MAX_LENGTH = 15;
+const PASSWORD_MIN_LENGTH = 12;
+const PASSWORD_MAX_LENGTH = 32;
+const usernameValidationTimers = new WeakMap();
+const usernameValidationTokens = new WeakMap();
+
+function getValidationContainer(root, key) {
+  return root?.querySelector?.(`[data-feedback-for="${key}"]`) || null;
+}
+
+function renderValidationFeedback(target, items) {
+  if (!target) return;
+  const normalized = Array.isArray(items) ? items.filter(Boolean) : [];
+  if (!normalized.length) {
+    target.innerHTML = "";
+    return;
+  }
+  target.innerHTML = `<div class="auth-feedback-list">${normalized
+    .map((item) => `<div class="auth-feedback-item ${item.kind === "ok" ? "is-ok" : item.kind === "error" ? "is-error" : "is-neutral"}">${escapeHtml(item.text || "")}</div>`)
+    .join("")}</div>`;
+}
+
+function getFormValidationScope(root) {
+  return root?.dataset?.liveValidation || "";
+}
+
+function getUsernameInput(root) {
+  return root?.querySelector?.('input[name="username"]') || null;
+}
+
+function getPasswordInput(root) {
+  return root?.querySelector?.('input[name="new_password"], input[name="password"]') || null;
+}
+
+function getPasswordConfirmInput(root) {
+  return root?.querySelector?.('input[name="password_confirm"]') || null;
+}
+
+function validateUsernameLocally(rawValue) {
+  const trimmed = String(rawValue || "").trim();
+  const normalized = trimmed.toLowerCase();
+  const validChars = /^[a-z0-9]*$/.test(normalized);
+  const validLength = normalized.length > 0 && normalized.length <= USERNAME_MAX_LENGTH;
+  const error = !trimmed
+    ? "username must not be empty"
+    : !validLength
+      ? `username must be at most ${USERNAME_MAX_LENGTH} characters`
+      : !validChars
+        ? "username must contain only lowercase letters and digits"
+        : "";
+  return {
+    normalized,
+    valid: !!trimmed && validChars && validLength,
+    error,
+    items: trimmed
+      ? [
+          {
+            kind: validChars ? "ok" : "error",
+            text: "lowercase letters and digits only",
+          },
+          {
+            kind: validLength ? "ok" : "error",
+            text: `at most ${USERNAME_MAX_LENGTH} characters`,
+          },
+        ]
+      : [],
+  };
+}
+
+function validatePasswordLocally(value) {
+  const password = String(value || "");
+  const minOk = password.length >= PASSWORD_MIN_LENGTH;
+  const maxOk = password.length <= PASSWORD_MAX_LENGTH;
+  const error = !password
+    ? `password must be at least ${PASSWORD_MIN_LENGTH} characters`
+    : !minOk
+      ? `password must be at least ${PASSWORD_MIN_LENGTH} characters`
+      : !maxOk
+        ? `password must be at most ${PASSWORD_MAX_LENGTH} characters`
+        : "";
+  return {
+    valid: !!password && minOk && maxOk,
+    error,
+    items: [
+      {
+        kind: minOk ? "ok" : "error",
+        text: `at least ${PASSWORD_MIN_LENGTH} characters`,
+      },
+      {
+        kind: maxOk ? "ok" : "error",
+        text: `at most ${PASSWORD_MAX_LENGTH} characters`,
+      },
+    ],
+  };
+}
+
+function updateUsernameValidation(root) {
+  const input = getUsernameInput(root);
+  const target = getValidationContainer(root, "username");
+  if (!input || !target) return Promise.resolve(true);
+  const local = validateUsernameLocally(input.value);
+  if (input.value !== local.normalized) {
+    input.value = local.normalized;
+  }
+  const scope = getFormValidationScope(root);
+  const needsAvailability = scope === "create";
+  root.dataset.usernameAvailable = local.valid && !needsAvailability ? "true" : "false";
+  if (!local.valid || !needsAvailability) {
+    renderValidationFeedback(
+      target,
+      local.items.length
+        ? local.items
+        : [
+            { kind: "neutral", text: "lowercase letters and digits only" },
+            { kind: "neutral", text: `at most ${USERNAME_MAX_LENGTH} characters` },
+          ]
+    );
+    return Promise.resolve(local.valid);
+  }
+  const token = (usernameValidationTokens.get(input) || 0) + 1;
+  usernameValidationTokens.set(input, token);
+  clearTimeout(usernameValidationTimers.get(input));
+  renderValidationFeedback(target, [
+    ...local.items,
+    { kind: "neutral", text: "checking availability" },
+  ]);
+  return new Promise((resolve) => {
+    const timeout = window.setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `/api/v1/auth/username/check?username=${encodeURIComponent(local.normalized)}`,
+          { credentials: "same-origin" }
+        );
+        const data = await response.json().catch(() => ({}));
+        if (usernameValidationTokens.get(input) !== token) {
+          resolve(false);
+          return;
+        }
+        const available = !!data?.valid && !!data?.available;
+        root.dataset.usernameAvailable = available ? "true" : "false";
+        renderValidationFeedback(target, [
+          ...local.items,
+          {
+            kind: available ? "ok" : "error",
+            text: available ? "username is available" : (data?.error || "username is already taken"),
+          },
+        ]);
+        resolve(available);
+      } catch (_) {
+        root.dataset.usernameAvailable = "false";
+        renderValidationFeedback(target, [
+          ...local.items,
+          { kind: "error", text: "could not check username availability" },
+        ]);
+        resolve(false);
+      }
+    }, 250);
+    usernameValidationTimers.set(input, timeout);
+  });
+}
+
+function updatePasswordValidation(root) {
+  const passwordInput = getPasswordInput(root);
+  const passwordTarget = getValidationContainer(root, "password");
+  const confirmInput = getPasswordConfirmInput(root);
+  const confirmTarget = getValidationContainer(root, "password_confirm");
+  let passwordValid = true;
+  if (passwordInput && passwordTarget) {
+    const local = validatePasswordLocally(passwordInput.value);
+    renderValidationFeedback(
+      passwordTarget,
+      passwordInput.value
+        ? local.items
+        : [
+            { kind: "neutral", text: `at least ${PASSWORD_MIN_LENGTH} characters` },
+            { kind: "neutral", text: `at most ${PASSWORD_MAX_LENGTH} characters` },
+          ]
+    );
+    passwordValid = local.valid;
+  }
+  if (confirmInput && confirmTarget) {
+    const passwordValue = passwordInput?.value || "";
+    const confirmValue = confirmInput.value || "";
+    const items =
+      passwordValue || confirmValue
+        ? [{
+            kind: passwordValue && confirmValue && passwordValue === confirmValue ? "ok" : "error",
+            text:
+              passwordValue && confirmValue && passwordValue === confirmValue
+                ? "passwords match"
+                : "passwords do not match",
+          }]
+        : [{ kind: "neutral", text: "passwords must match" }];
+    renderValidationFeedback(confirmTarget, items);
+  }
+  return passwordValid;
+}
+
+function updateValidationForRoot(root) {
+  if (!root?.dataset?.liveValidation) return;
+  updateUsernameValidation(root);
+  updatePasswordValidation(root);
+}
+
+async function validateFormBeforeSubmit(root) {
+  const scope = getFormValidationScope(root);
+  const usernameInput = getUsernameInput(root);
+  if (usernameInput) {
+    const local = validateUsernameLocally(usernameInput.value);
+    usernameInput.value = local.normalized;
+    if (!local.valid) {
+      updateUsernameValidation(root);
+      return local.error;
+    }
+    if (scope === "create") {
+      const available = await updateUsernameValidation(root);
+      if (!available) {
+        return "username is already taken";
+      }
+    } else {
+      updateUsernameValidation(root);
+    }
+  }
+  const passwordInput = getPasswordInput(root);
+  if (passwordInput) {
+    const local = validatePasswordLocally(passwordInput.value);
+    updatePasswordValidation(root);
+    if (!local.valid) {
+      return local.error;
+    }
+  }
+  const confirmInput = getPasswordConfirmInput(root);
+  if (confirmInput && passwordInput && passwordInput.value !== confirmInput.value) {
+    updatePasswordValidation(root);
+    return "password confirmation does not match";
+  }
+  return "";
+}
+
+function formatRecoveryCodes(codes) {
+  return Array.isArray(codes) ? codes.filter(Boolean).join("\n") : "";
+}
+
+function maskRecoveryCode(code) {
+  return "\u2022".repeat(Math.max(String(code || "").length, 8));
+}
+
+function renderRecoveryCodesModal() {
+  const title = document.getElementById("recovery-codes-title");
+  const description = document.getElementById("recovery-codes-description");
+  const output = document.getElementById("recovery-codes-output");
+  const toggle = document.getElementById("recovery-codes-toggle");
+  const copy = document.getElementById("recovery-codes-copy");
+  if (title) title.textContent = recoveryCodesState.title;
+  if (description) description.textContent = recoveryCodesState.description;
+  if (toggle) {
+    toggle.setAttribute(
+      "aria-label",
+      recoveryCodesState.visible ? "Hide recovery codes" : "Show recovery codes"
+    );
+    toggle.setAttribute(
+      "title",
+      recoveryCodesState.visible ? "Hide recovery codes" : "Show recovery codes"
+    );
+    toggle.classList.toggle("is-active", recoveryCodesState.visible);
+  }
+  if (copy) copy.disabled = !recoveryCodesState.codes.length;
+  if (!output) return;
+  if (!recoveryCodesState.codes.length) {
+    output.textContent = "";
+    return;
+  }
+  output.textContent = recoveryCodesState.codes
+    .map((code) => (recoveryCodesState.visible ? code : maskRecoveryCode(code)))
+    .join("\n");
+}
+
+function openRecoveryCodesModal(title, codes, description = "", onClose = null) {
+  const normalized = Array.isArray(codes) ? codes.filter((value) => typeof value === "string" && value.trim()) : [];
+  if (!normalized.length) return;
+  recoveryCodesState = {
+    title: title || "Recovery Codes",
+    description: description || "Save these recovery codes somewhere secure. Each code can be used once to reset your password.",
+    codes: normalized,
+    visible: false,
+    onClose,
+  };
+  renderRecoveryCodesModal();
+  const modal = document.getElementById("recovery-codes-modal");
+  if (modal) modal.hidden = false;
+}
+
+function closeRecoveryCodesModal() {
+  const modal = document.getElementById("recovery-codes-modal");
+  if (modal) modal.hidden = true;
+  const onClose = recoveryCodesState.onClose;
+  recoveryCodesState.onClose = null;
+  if (typeof onClose === "function") {
+    onClose();
+  }
+}
+
+function toggleRecoveryCodesVisibility() {
+  recoveryCodesState.visible = !recoveryCodesState.visible;
+  renderRecoveryCodesModal();
+}
+
+async function copyRecoveryCodes() {
+  const copy = document.getElementById("recovery-codes-copy");
+  const payload = formatRecoveryCodes(recoveryCodesState.codes);
+  if (!payload) return;
+  try {
+    await navigator.clipboard.writeText(payload);
+    if (copy) {
+      copy.textContent = "Copied";
+      copy.classList.add("is-copied");
+      window.setTimeout(() => {
+        copy.textContent = "Copy";
+        copy.classList.remove("is-copied");
+      }, 1200);
+    }
+  } catch (_) {}
+}
+
+async function submitBootstrap(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  setInlineError("bootstrap-error", "");
+  const error = await validateFormBeforeSubmit(form);
+  if (error) {
+    setInlineError("bootstrap-error", error);
+    return;
+  }
+  try {
+    const data = await postJson("/api/v1/auth/bootstrap", Object.fromEntries(new FormData(form).entries()));
+    openRecoveryCodesModal(
+      "Recovery Codes",
+      data?.recovery_codes,
+      "Save these recovery codes before continuing. Each code can be used once to reset your password.",
+      () => window.location.reload()
+    );
+  } catch (error) {
+    setInlineError("bootstrap-error", error.message);
+  }
+}
+
+async function submitLogin(event) {
+  event.preventDefault();
+  setInlineError("auth-login-error", "");
+  try {
+    await postJson("/api/v1/auth/login", Object.fromEntries(new FormData(event.currentTarget).entries()));
+    window.location.reload();
+  } catch (error) {
+    setInlineError("auth-login-error", error.message);
+  }
+}
+
+async function submitRegister(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  setInlineError("auth-register-error", "");
+  const error = await validateFormBeforeSubmit(form);
+  if (error) {
+    setInlineError("auth-register-error", error);
+    return;
+  }
+  try {
+    const data = await postJson("/api/v1/auth/register", Object.fromEntries(new FormData(form).entries()));
+    openRecoveryCodesModal(
+      "Recovery Codes",
+      data?.recovery_codes,
+      "Save these recovery codes before continuing. Each code can be used once to reset your password.",
+      () => window.location.reload()
+    );
+  } catch (error) {
+    setInlineError("auth-register-error", error.message);
+    refreshRegisterCaptcha().catch(() => {});
+  }
+}
+
+async function submitPasswordReset(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  setInlineError("auth-reset-error", "");
+  const error = await validateFormBeforeSubmit(form);
+  if (error) {
+    setInlineError("auth-reset-error", error);
+    return;
+  }
+  try {
+    await postJson("/api/v1/auth/password/reset", Object.fromEntries(new FormData(form).entries()));
+    setInlineError("auth-reset-error", "Password reset. You can sign in now.");
+    form.reset();
+    updateValidationForRoot(form);
+    refreshResetCaptcha().catch(() => {});
+  } catch (error) {
+    setInlineError("auth-reset-error", error.message);
+    refreshResetCaptcha().catch(() => {});
+  }
+}
+
+async function logout() {
+  closeAuthMenu();
+  try {
+    await postJson("/api/v1/auth/logout", {});
+  } catch (_) {}
+  window.location.reload();
+}
+
+function openProfileModal() {
+  closeAuthMenu();
+  const modal = document.getElementById("profile-modal");
+  if (modal) modal.hidden = false;
+  toggleProfileTab("account");
+  const field = document.getElementById("profile-key-output");
+  syncProfileKeyField(field?.dataset.secret || "", false);
+}
+
+function closeProfileModal() {
+  const modal = document.getElementById("profile-modal");
+  if (modal) modal.hidden = true;
+}
+
+function avatarMarkupForUser(user) {
+  const username = String(user?.username || "").trim();
+  const profilePicture = String(user?.profile_picture || "").trim();
+  if (profilePicture) {
+    return `<img src="${escapeHtml(profilePicture)}" alt="${escapeHtml(username)}">`;
+  }
+  const initial = username ? username[0] : "u";
+  return `<span>${escapeHtml(initial)}</span>`;
+}
+
+function applyCurrentUserProfile(user) {
+  if (!user || typeof user !== "object") return;
+  const preview = document.getElementById("profile-avatar-preview");
+  if (preview) {
+    const camera = preview.querySelector(".profile-avatar-camera");
+    preview.innerHTML = avatarMarkupForUser(user);
+    if (camera) {
+      preview.appendChild(camera);
+    }
+  }
+  document.querySelectorAll(".auth-header .auth-avatar").forEach((node) => {
+    node.innerHTML = avatarMarkupForUser(user);
+  });
+}
+
+function toggleProfileTab(tabName) {
+  document.querySelectorAll("[data-profile-tab-button]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.profileTabButton === tabName);
+  });
+  document.querySelectorAll("[data-profile-panel]").forEach((panel) => {
+    const active = panel.dataset.profilePanel === tabName;
+    panel.hidden = !active;
+    panel.classList.toggle("is-active", active);
+  });
+}
+
+function syncProfileKeyField(secret, visible) {
+  const field = document.getElementById("profile-key-output");
+  const toggle = document.getElementById("profile-key-toggle");
+  const copy = document.getElementById("profile-key-copy");
+  if (!field || !toggle || !copy) return;
+  const hasSecret = typeof secret === "string" && secret.length > 0;
+  field.dataset.secret = hasSecret ? secret : "";
+  field.value = hasSecret ? secret : "";
+  field.type = visible && hasSecret ? "text" : "password";
+  field.placeholder = hasSecret ? "" : "Regenerate to reveal a new API key.";
+  toggle.disabled = !hasSecret;
+  copy.disabled = !hasSecret;
+  toggle.classList.toggle("is-active", visible && hasSecret);
+  toggle.setAttribute(
+    "aria-label",
+    visible && hasSecret ? "Hide API key" : "Show API key"
+  );
+  toggle.setAttribute(
+    "title",
+    visible && hasSecret ? "Hide API key" : "Show API key"
+  );
+}
+
+function toggleProfileKeyVisibility() {
+  const field = document.getElementById("profile-key-output");
+  if (!field) return;
+  const secret = field.dataset.secret || "";
+  if (!secret) return;
+  syncProfileKeyField(secret, field.type === "password");
+}
+
+async function copyProfileKey() {
+  const field = document.getElementById("profile-key-output");
+  if (!field) return;
+  const secret = field.dataset.secret || "";
+  if (!secret) return;
+  try {
+    await navigator.clipboard.writeText(secret);
+    setInlineError("profile-key-error", "API key copied.");
+  } catch (_) {
+    setInlineError("profile-key-error", "Failed to copy API key.");
+  }
+}
+
+function toggleAdminUserKeyVisibility(username) {
+  const field = document.getElementById(`admin-user-key-${username}`);
+  const toggle = document.getElementById(`admin-user-key-toggle-${username}`);
+  if (!field || !toggle) return;
+  const secret = field.dataset.secret || "";
+  if (!secret) return;
+  const visible = field.type === "password";
+  field.type = visible ? "text" : "password";
+  toggle.classList.toggle("is-active", visible);
+  toggle.setAttribute(
+    "aria-label",
+    visible ? "Hide API key" : "Show API key"
+  );
+  toggle.setAttribute(
+    "title",
+    visible ? "Hide API key" : "Show API key"
+  );
+}
+
+async function copyAdminUserKey(username) {
+  const field = document.getElementById(`admin-user-key-${username}`);
+  const button = document.getElementById(`admin-user-key-copy-${username}`);
+  if (!field || !button) return;
+  const secret = field.dataset.secret || "";
+  if (!secret) return;
+  try {
+    await navigator.clipboard.writeText(secret);
+    button.textContent = "Copied";
+    button.classList.add("is-copied");
+    window.setTimeout(() => {
+      button.textContent = "Copy";
+      button.classList.remove("is-copied");
+    }, 1200);
+  } catch (_) {}
+}
+
+async function saveProfilePicture() {
+  setInlineError("profile-picture-crop-error", "");
+  if (!(profilePictureCropState.image instanceof Image)) {
+    setInlineError("profile-picture-crop-error", "Choose an image first.");
+    return;
+  }
+  try {
+    const blob = await croppedProfilePictureBlob();
+    const formData = new FormData();
+    formData.append("picture", blob, "avatar.png");
+    const response = await fetch("/api/v1/profile/picture", {
+      method: "POST",
+      body: formData,
+      credentials: "same-origin",
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload?.error || "Failed to save profile picture.");
+    }
+    const data = await response.json().catch(() => ({}));
+    applyCurrentUserProfile(data);
+    const input = document.getElementById("profile-picture-file");
+    if (input instanceof HTMLInputElement) {
+      input.value = "";
+    }
+    closeProfilePictureCropModal();
+  } catch (error) {
+    setInlineError("profile-picture-crop-error", error.message);
+  }
+}
+
+function chooseProfilePicture() {
+  const input = document.getElementById("profile-picture-file");
+  if (input instanceof HTMLInputElement) input.click();
+}
+
+function updateProfilePictureSelection() {
+  const input = document.getElementById("profile-picture-file");
+  if (!(input instanceof HTMLInputElement) || !input.files || input.files.length === 0) {
+    return;
+  }
+  openProfilePictureCropModal(input.files[0]).catch((error) => {
+    setInlineError("profile-picture-error", error.message || "Failed to load image.");
+  });
+}
+
+async function deleteProfilePicture() {
+  setInlineError("profile-picture-error", "");
+  try {
+    const response = await fetch("/api/v1/profile/picture", {
+      method: "DELETE",
+      credentials: "same-origin",
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload?.error || "Failed to delete avatar.");
+    }
+    const data = await response.json().catch(() => ({}));
+    applyCurrentUserProfile(data);
+    const input = document.getElementById("profile-picture-file");
+    if (input instanceof HTMLInputElement) {
+      input.value = "";
+    }
+    closeProfilePictureCropModal();
+  } catch (error) {
+    setInlineError("profile-picture-error", error.message);
+  }
+}
+
+const PROFILE_PICTURE_CROP_VIEWPORT = 280;
+const PROFILE_PICTURE_OUTPUT_SIZE = 128;
+const PROFILE_PICTURE_CROP_DIAMETER = 192;
+const PROFILE_PICTURE_CROP_RADIUS = PROFILE_PICTURE_CROP_DIAMETER / 2;
+const profilePictureCropState = {
+  image: null,
+  imageUrl: "",
+  baseScale: 1,
+  zoom: 1,
+  cropCenterX: PROFILE_PICTURE_CROP_VIEWPORT / 2,
+  cropCenterY: PROFILE_PICTURE_CROP_VIEWPORT / 2,
+  pointerId: null,
+  dragStartX: 0,
+  dragStartY: 0,
+  dragOriginCenterX: PROFILE_PICTURE_CROP_VIEWPORT / 2,
+  dragOriginCenterY: PROFILE_PICTURE_CROP_VIEWPORT / 2,
+};
+
+function clampProfilePictureCropCircle() {
+  if (!(profilePictureCropState.image instanceof Image)) return;
+  const displayedWidth = profilePictureCropState.image.naturalWidth * profilePictureCropState.baseScale * profilePictureCropState.zoom;
+  const displayedHeight = profilePictureCropState.image.naturalHeight * profilePictureCropState.baseScale * profilePictureCropState.zoom;
+  const imageLeft = (PROFILE_PICTURE_CROP_VIEWPORT - displayedWidth) / 2;
+  const imageTop = (PROFILE_PICTURE_CROP_VIEWPORT - displayedHeight) / 2;
+  const minCenterX = imageLeft + PROFILE_PICTURE_CROP_RADIUS;
+  const maxCenterX = imageLeft + displayedWidth - PROFILE_PICTURE_CROP_RADIUS;
+  const minCenterY = imageTop + PROFILE_PICTURE_CROP_RADIUS;
+  const maxCenterY = imageTop + displayedHeight - PROFILE_PICTURE_CROP_RADIUS;
+  profilePictureCropState.cropCenterX = Math.max(minCenterX, Math.min(maxCenterX, profilePictureCropState.cropCenterX));
+  profilePictureCropState.cropCenterY = Math.max(minCenterY, Math.min(maxCenterY, profilePictureCropState.cropCenterY));
+}
+
+function renderProfilePictureCrop() {
+  const image = document.getElementById("profile-picture-crop-image");
+  const stage = document.getElementById("profile-picture-crop-stage");
+  if (!(image instanceof HTMLImageElement) || !(stage instanceof HTMLElement) || !(profilePictureCropState.image instanceof Image)) return;
+  const scale = profilePictureCropState.baseScale * profilePictureCropState.zoom;
+  const width = profilePictureCropState.image.naturalWidth * scale;
+  const height = profilePictureCropState.image.naturalHeight * scale;
+  clampProfilePictureCropCircle();
+  image.style.width = `${width}px`;
+  image.style.height = `${height}px`;
+  image.style.left = `${(PROFILE_PICTURE_CROP_VIEWPORT - width) / 2}px`;
+  image.style.top = `${(PROFILE_PICTURE_CROP_VIEWPORT - height) / 2}px`;
+  stage.style.setProperty("--crop-center-x", `${profilePictureCropState.cropCenterX}px`);
+  stage.style.setProperty("--crop-center-y", `${profilePictureCropState.cropCenterY}px`);
+  stage.style.setProperty("--crop-size", `${PROFILE_PICTURE_CROP_DIAMETER}px`);
+}
+
+async function openProfilePictureCropModal(file) {
+  if (!(file instanceof File)) return;
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Failed to read image."));
+    reader.readAsDataURL(file);
+  });
+  const image = await new Promise((resolve, reject) => {
+    const preview = new Image();
+    preview.onload = () => resolve(preview);
+    preview.onerror = () => reject(new Error("Failed to decode image."));
+    preview.src = dataUrl;
+  });
+  profilePictureCropState.image = image;
+  profilePictureCropState.imageUrl = dataUrl;
+  profilePictureCropState.baseScale = Math.max(
+    PROFILE_PICTURE_CROP_VIEWPORT / image.naturalWidth,
+    PROFILE_PICTURE_CROP_VIEWPORT / image.naturalHeight,
+  );
+  profilePictureCropState.zoom = 1;
+  profilePictureCropState.cropCenterX = PROFILE_PICTURE_CROP_VIEWPORT / 2;
+  profilePictureCropState.cropCenterY = PROFILE_PICTURE_CROP_VIEWPORT / 2;
+  const modal = document.getElementById("profile-picture-crop-modal");
+  const preview = document.getElementById("profile-picture-crop-image");
+  const slider = document.getElementById("profile-picture-crop-zoom");
+  if (preview instanceof HTMLImageElement) {
+    preview.src = dataUrl;
+  }
+  if (slider instanceof HTMLInputElement) {
+    slider.value = "1";
+  }
+  setInlineError("profile-picture-crop-error", "");
+  if (modal) modal.hidden = false;
+  renderProfilePictureCrop();
+}
+
+function closeProfilePictureCropModal() {
+  const modal = document.getElementById("profile-picture-crop-modal");
+  if (modal) modal.hidden = true;
+  const stage = document.getElementById("profile-picture-crop-stage");
+  if (stage) stage.classList.remove("is-dragging");
+  profilePictureCropState.pointerId = null;
+}
+
+function setProfilePictureCropZoom(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || !(profilePictureCropState.image instanceof Image)) return;
+  profilePictureCropState.zoom = Math.max(1, Math.min(4, parsed));
+  renderProfilePictureCrop();
+}
+
+function beginProfilePictureCropDrag(event) {
+  if (!(profilePictureCropState.image instanceof Image)) return;
+  profilePictureCropState.pointerId = event.pointerId;
+  profilePictureCropState.dragStartX = event.clientX;
+  profilePictureCropState.dragStartY = event.clientY;
+  profilePictureCropState.dragOriginCenterX = profilePictureCropState.cropCenterX;
+  profilePictureCropState.dragOriginCenterY = profilePictureCropState.cropCenterY;
+  const stage = document.getElementById("profile-picture-crop-stage");
+  if (stage) {
+    stage.classList.add("is-dragging");
+    stage.setPointerCapture?.(event.pointerId);
+  }
+}
+
+function moveProfilePictureCropDrag(event) {
+  if (profilePictureCropState.pointerId !== event.pointerId) return;
+  profilePictureCropState.cropCenterX = profilePictureCropState.dragOriginCenterX + (event.clientX - profilePictureCropState.dragStartX);
+  profilePictureCropState.cropCenterY = profilePictureCropState.dragOriginCenterY + (event.clientY - profilePictureCropState.dragStartY);
+  renderProfilePictureCrop();
+}
+
+function endProfilePictureCropDrag(event) {
+  if (profilePictureCropState.pointerId !== event.pointerId) return;
+  profilePictureCropState.pointerId = null;
+  const stage = document.getElementById("profile-picture-crop-stage");
+  if (stage) {
+    stage.classList.remove("is-dragging");
+    stage.releasePointerCapture?.(event.pointerId);
+  }
+}
+
+async function croppedProfilePictureBlob() {
+  if (!(profilePictureCropState.image instanceof Image)) {
+    throw new Error("Choose an image first.");
+  }
+  const scale = profilePictureCropState.baseScale * profilePictureCropState.zoom;
+  const displayedWidth = profilePictureCropState.image.naturalWidth * scale;
+  const displayedHeight = profilePictureCropState.image.naturalHeight * scale;
+  const left = (PROFILE_PICTURE_CROP_VIEWPORT - displayedWidth) / 2;
+  const top = (PROFILE_PICTURE_CROP_VIEWPORT - displayedHeight) / 2;
+  const cropLeft = profilePictureCropState.cropCenterX - PROFILE_PICTURE_CROP_RADIUS;
+  const cropTop = profilePictureCropState.cropCenterY - PROFILE_PICTURE_CROP_RADIUS;
+  const sx = Math.max(0, (cropLeft - left) / scale);
+  const sy = Math.max(0, (cropTop - top) / scale);
+  const sw = Math.min(profilePictureCropState.image.naturalWidth - sx, PROFILE_PICTURE_CROP_DIAMETER / scale);
+  const sh = Math.min(profilePictureCropState.image.naturalHeight - sy, PROFILE_PICTURE_CROP_DIAMETER / scale);
+  const canvas = document.createElement("canvas");
+  canvas.width = PROFILE_PICTURE_OUTPUT_SIZE;
+  canvas.height = PROFILE_PICTURE_OUTPUT_SIZE;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("Failed to prepare avatar image.");
+  }
+  context.drawImage(profilePictureCropState.image, sx, sy, sw, sh, 0, 0, PROFILE_PICTURE_OUTPUT_SIZE, PROFILE_PICTURE_OUTPUT_SIZE);
+  return await new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error("Failed to create avatar image."));
+    }, "image/png");
+  });
+}
+
+async function changeProfilePassword() {
+  setInlineError("profile-password-error", "");
+  const root = document.querySelector('[data-profile-panel="security"]');
+  const validationError = await validateFormBeforeSubmit(root);
+  if (validationError) {
+    setInlineError("profile-password-error", validationError);
+    return;
+  }
+  try {
+    await postJson("/api/v1/profile/password", {
+      current_password: document.getElementById("profile-password-current")?.value || "",
+      new_password: document.getElementById("profile-password-next")?.value || "",
+      password_confirm: document.getElementById("profile-password-confirm")?.value || "",
+    });
+    setInlineError("profile-password-error", "Password changed.");
+    document.getElementById("profile-password-current").value = "";
+    document.getElementById("profile-password-next").value = "";
+    document.getElementById("profile-password-confirm").value = "";
+    if (root) updateValidationForRoot(root);
+  } catch (error) {
+    setInlineError("profile-password-error", error.message);
+  }
+}
+
+async function regenerateProfileKey() {
+  setInlineError("profile-key-error", "");
+  try {
+    const data = await postJson("/api/v1/profile/key/regenerate", {});
+    syncProfileKeyField(data.key || "", false);
+    setInlineError("profile-key-error", "API key regenerated.");
+  } catch (error) {
+    setInlineError("profile-key-error", error.message);
+  }
+}
+
+async function regenerateProfileRecoveryCodes() {
+  setInlineError("profile-recovery-error", "");
+  try {
+    const data = await postJson("/api/v1/profile/recovery/regenerate", {});
+    setInlineError("profile-recovery-error", "Recovery codes regenerated.");
+    openRecoveryCodesModal(
+      "Recovery Codes",
+      data?.recovery_codes,
+      "Save this new recovery-code set somewhere secure. The previous set is no longer valid."
+    );
+  } catch (error) {
+    setInlineError("profile-recovery-error", error.message);
+  }
+}
+
+async function deleteProfile() {
+  setInlineError("profile-delete-error", "");
+  try {
+    await postJson("/api/v1/profile/delete", {
+      password: document.getElementById("profile-delete-password")?.value || "",
+    });
+    window.location.reload();
+  } catch (error) {
+    setInlineError("profile-delete-error", error.message);
+  }
+}
+
+function openUsersModal() {
+  closeAuthMenu();
+  const modal = document.getElementById("users-modal");
+  if (modal) modal.hidden = false;
+  toggleUsersTab("search");
+  loadUsers();
+}
+
+function closeUsersModal() {
+  const modal = document.getElementById("users-modal");
+  if (modal) modal.hidden = true;
+}
+
+function toggleUsersTab(tabName) {
+  document.querySelectorAll("[data-users-tab-button]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.usersTabButton === tabName);
+  });
+  document.querySelectorAll("[data-users-panel]").forEach((panel) => {
+    const active = panel.dataset.usersPanel === tabName;
+    panel.hidden = !active;
+    panel.classList.toggle("is-active", active);
+  });
+  if (tabName === "search") {
+    loadUsers();
+  } else if (tabName === "corpora" || tabName === "tags" || tabName === "symbols") {
+    loadAdminMetadata(tabName);
+  }
+}
+
+const ADMIN_METADATA_CONFIG = {
+  corpora: {
+    listId: "admin-corpora-list",
+    summaryId: "admin-corpora-summary",
+    errorId: "admin-corpora-error",
+    inputId: "admin-corpora-search-input",
+    createButtonId: "admin-corpora-create-button",
+    searchUrl: "/api/v1/corpora",
+    createUrl: "/api/v1/corpora/add",
+    deleteUrl: "/api/v1/admin/corpora/delete",
+    responseKey: "corpora",
+    requestKey: "corpus",
+    singular: "corpus",
+    plural: "corpora",
+  },
+  tags: {
+    listId: "admin-tags-list",
+    summaryId: "admin-tags-summary",
+    errorId: "admin-tags-error",
+    inputId: "admin-tags-search-input",
+    createButtonId: "admin-tags-create-button",
+    searchUrl: "/api/v1/tags/search",
+    createUrl: "/api/v1/tags/add",
+    deleteUrl: "/api/v1/admin/tags/delete",
+    responseKey: "tags",
+    requestKey: "tag",
+    singular: "tag",
+    plural: "tags",
+  },
+  symbols: {
+    listId: "admin-symbols-list",
+    summaryId: "admin-symbols-summary",
+    errorId: "admin-symbols-error",
+    inputId: "admin-symbols-search-input",
+    createButtonId: "admin-symbols-create-button",
+    searchUrl: "/api/v1/symbols/search",
+    createUrl: "/api/v1/symbols/add",
+    deleteUrl: "/api/v1/admin/symbols/delete",
+    responseKey: "symbols",
+    requestKey: "symbol",
+    singular: "symbol",
+    plural: "symbols",
+  },
+};
+
+function adminMetadataConfig(kind) {
+  return ADMIN_METADATA_CONFIG[kind] || null;
+}
+
+function isLockedAdminMetadata(kind, name) {
+  if (kind !== "corpora") return false;
+  return LOCKED_CORE_CORPORA.has(String(name || "").trim().toLowerCase());
+}
+
+function renderAdminMetadataSummary(kind, visibleCount, totalCount) {
+  const config = adminMetadataConfig(kind);
+  const summary = config ? document.getElementById(config.summaryId) : null;
+  if (!summary) return;
+  summary.textContent = `Showing ${visibleCount} of ${totalCount}`;
+}
+
+function setAdminMetadataCreateState(kind, query, items) {
+  const config = adminMetadataConfig(kind);
+  const button = config ? document.getElementById(config.createButtonId) : null;
+  if (!button) return;
+  const normalizedQuery = String(query || "").trim().toLowerCase();
+  const exists = Array.isArray(items) && items.some((item) => metadataItemName(item).trim().toLowerCase() === normalizedQuery);
+  button.disabled = !normalizedQuery || exists;
+}
+
+function renderAdminMetadataList(kind, items) {
+  const config = adminMetadataConfig(kind);
+  const container = config ? document.getElementById(config.listId) : null;
+  if (!container) return;
+  if (!Array.isArray(items) || items.length === 0) {
+    container.innerHTML = `<div class="users-empty">No ${escapeHtml(config.plural)}.</div>`;
+    return;
+  }
+  container.innerHTML = items.map((item) => {
+    const name = metadataItemName(item);
+    const locked = isLockedAdminMetadata(kind, name);
+    const actions = locked
+      ? ""
+      : `<div class="symbol-picker-actions">
+            <button
+              type="button"
+              class="symbol-picker-move admin-metadata-delete"
+              title="Delete ${escapeHtml(config.singular)}"
+              aria-label="Delete ${escapeHtml(config.singular)}"
+              onclick="deleteAdminMetadata('${escapeHtml(kind)}','${escapeHtml(encodeURIComponent(name))}')"
+            >🗑</button>
+          </div>`;
+    return `
+      <div class="admin-metadata-item">
+        <div class="symbol-picker-item admin-metadata-pill">
+          <span class="symbol-picker-name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+          ${actions}
+          ${metadataTooltipHtml(item, "created")}
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function pruneDeletedMetadataFromSearch(kind, value) {
+  const data = currentSearchData();
+  const needle = String(value || "").trim().toLowerCase();
+  if (!data || !Array.isArray(data.results) || !needle) return;
+  let changed = false;
+  data.results.forEach((row) => {
+    if (!row || typeof row !== "object") return;
+    if (kind === "tags") {
+      const tags = normalizeMetadataItems(row.collection_tags || []);
+      const nextTags = tags.filter((item) => metadataItemName(item).toLowerCase() !== needle);
+      if (nextTags.length !== tags.length) {
+        row.collection_tags = nextTags;
+        row.collection_tag_count = nextTags.length;
+        row.tags_loaded = true;
+        changed = true;
+      }
+    } else if (kind === "symbols") {
+      const symbols = normalizeMetadataItems(row.symbols || (row.symbol ? [row.symbol] : []));
+      const nextSymbols = symbols.filter((item) => metadataItemName(item).toLowerCase() !== needle);
+      if (nextSymbols.length !== symbols.length || String(row.symbol || "").trim().toLowerCase() === needle) {
+        row.symbols = nextSymbols;
+        row.symbols_loaded = true;
+        const currentPrimary = String(row.symbol || "").trim();
+        if (!currentPrimary || currentPrimary.toLowerCase() === needle) {
+          row.symbol = nextSymbols.length > 0 ? metadataItemName(nextSymbols[0]) : "";
+        }
+        changed = true;
+      }
+    } else if (kind === "corpora") {
+      const corpora = normalizeMetadataItems(row.collection_corpora || row.corpora || []);
+      const nextCorpora = corpora.filter((item) => metadataItemName(item).toLowerCase() !== needle);
+      if (nextCorpora.length !== corpora.length) {
+        row.collection_corpora = nextCorpora;
+        row.corpora = nextCorpora;
+        row.corpora_loaded = true;
+        changed = true;
+      }
+    }
+  });
+  if (changed) {
+    renderSearchData(data);
+  }
+}
+
+async function loadAdminMetadata(kind) {
+  const config = adminMetadataConfig(kind);
+  if (!config) return;
+  const query = document.getElementById(config.inputId)?.value || "";
+  setAdminMetadataCreateState(kind, query, []);
+  setInlineError(config.errorId, "");
+  try {
+    const response = await fetch(`${config.searchUrl}?q=${encodeURIComponent(query)}&limit=6`, {
+      credentials: "same-origin",
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data?.error || `Failed to load ${config.plural}`);
+    }
+    const items = normalizeMetadataItems(Array.isArray(data?.[config.responseKey]) ? data[config.responseKey] : []);
+    const total = Number(data?.total_results || items.length || 0);
+    setAdminMetadataCreateState(kind, query, items);
+    renderAdminMetadataSummary(kind, items.length, total);
+    renderAdminMetadataList(kind, items);
+  } catch (error) {
+    setAdminMetadataCreateState(kind, query, []);
+    renderAdminMetadataSummary(kind, 0, 0);
+    renderAdminMetadataList(kind, []);
+    setInlineError(config.errorId, error.message);
+  }
+}
+
+async function createAdminMetadata(kind) {
+  const config = adminMetadataConfig(kind);
+  if (!config) return;
+  const input = document.getElementById(config.inputId);
+  const value = String(input?.value || "").trim();
+  if (!value) return;
+  setInlineError(config.errorId, "");
+  const confirmed = await requestTagsConfirmation({
+    title: `Create ${config.singular[0].toUpperCase()}${config.singular.slice(1)}`,
+    message: `Create "${value}" as a ${config.singular}?`,
+    confirmLabel: "Create",
+  });
+  if (!confirmed) return;
+  try {
+    await postJson(config.createUrl, { [config.requestKey]: value });
+    await loadAdminMetadata(kind);
+  } catch (error) {
+    setInlineError(config.errorId, error.message);
+  }
+}
+
+async function deleteAdminMetadata(kind, encodedValue) {
+  const config = adminMetadataConfig(kind);
+  if (!config) return;
+  const value = decodeURIComponent(String(encodedValue || ""));
+  if (!value) return;
+  setInlineError(config.errorId, "");
+  const confirmed = await requestTagsConfirmation({
+    title: `Delete ${config.singular[0].toUpperCase()}${config.singular.slice(1)}`,
+    message: `Delete "${value}" from ${config.plural} globally?`,
+    confirmLabel: "Delete",
+  });
+  if (!confirmed) return;
+  try {
+    await postJson(config.deleteUrl, { [config.requestKey]: value });
+    pruneDeletedMetadataFromSearch(kind, value);
+    await loadAdminMetadata(kind);
+  } catch (error) {
+    setInlineError(config.errorId, error.message);
+  }
+}
+
+function renderUsersList(items) {
+  const container = document.getElementById("users-list");
+  if (!container) return;
+  if (!Array.isArray(items) || items.length === 0) {
+    container.innerHTML = '<div class="users-empty">No users.</div>';
+    return;
+  }
+  container.innerHTML = items.map((user) => `
+    <div class="users-item">
+      <div class="users-item-header">
+        <div class="users-item-main">
+          <div class="auth-avatar users-item-avatar">${avatarMarkupForUser(user)}</div>
+          <div class="users-item-copy">
+            <strong>${escapeHtml(user.username)}</strong>
+            <small>role: ${escapeHtml(user.role)}${user.enabled ? "" : " | disabled"}</small>
+          </div>
+        </div>
+        <div class="users-item-actions">
+          <button type="button" class="secondary" onclick="toggleUserEnabled('${escapeHtml(user.username)}', ${user.enabled ? "true" : "false"})">${user.enabled ? "Disable" : "Enable"}</button>
+          <button type="button" class="secondary" onclick="toggleUserRole('${escapeHtml(user.username)}', '${escapeHtml(user.role)}')">Role</button>
+          <button type="button" class="secondary" onclick="resetUserPassword('${escapeHtml(user.username)}')">Reset</button>
+          ${user.profile_picture ? `<button type="button" class="secondary" onclick="deleteUserPicture('${escapeHtml(user.username)}')">Delete Avatar</button>` : ""}
+          <button type="button" class="secondary" onclick="deleteUser('${escapeHtml(user.username)}')">Delete</button>
+        </div>
+      </div>
+      <div class="admin-user-key-section">
+        <div class="admin-user-key-label">API Key</div>
+        <div class="admin-user-key-wrap">
+          <input class="menu-search profile-key-input admin-user-key-input" id="admin-user-key-${escapeHtml(user.username)}" type="password" value="${escapeHtml(user.key || "")}" readonly data-secret="${escapeHtml(user.key || "")}">
+          <button type="button" class="symbol-picker-copy admin-user-key-copy" id="admin-user-key-copy-${escapeHtml(user.username)}" onclick="copyAdminUserKey('${escapeHtml(user.username)}')">Copy</button>
+          <button type="button" class="secondary recovery-codes-visibility admin-user-key-toggle" id="admin-user-key-toggle-${escapeHtml(user.username)}" onclick="toggleAdminUserKeyVisibility('${escapeHtml(user.username)}')" aria-label="Show API key" title="Show API key"><span class="recovery-codes-eye" aria-hidden="true">👁</span></button>
+        </div>
+      </div>
+    </div>
+  `).join("");
+}
+
+function renderUsersSummary(visibleCount, totalCount) {
+  const summary = document.getElementById("users-summary");
+  if (!summary) return;
+  summary.textContent = `Showing ${visibleCount} of ${totalCount}`;
+}
+
+async function loadUsers() {
+  const query = document.getElementById("users-search-input")?.value || "";
+  setInlineError("users-search-error", "");
+  try {
+    const response = await fetch(`/api/v1/admin/users?q=${encodeURIComponent(query)}&page=1&limit=3`, {
+      credentials: "same-origin",
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data?.error || "Failed to load users");
+    }
+    const items = Array.isArray(data.items) ? data.items : [];
+    renderUsersSummary(items.length, Number(data.total_results) || 0);
+    renderUsersList(items);
+  } catch (error) {
+    renderUsersSummary(0, 0);
+    setInlineError("users-search-error", error.message);
+  }
+}
+
+async function createUser(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  setInlineError("users-create-error", "");
+  const validationError = await validateFormBeforeSubmit(form);
+  if (validationError) {
+    setInlineError("users-create-error", validationError);
+    return;
+  }
+  try {
+    const data = await postJson("/api/v1/admin/users/create", Object.fromEntries(new FormData(form).entries()));
+    form.reset();
+    updateValidationForRoot(form);
+    if (Array.isArray(data?.recovery_codes) && data.recovery_codes.length) {
+      openRecoveryCodesModal(
+        `Recovery Codes For ${data?.user?.username || "User"}`,
+        data.recovery_codes,
+        `Save these recovery codes for ${data?.user?.username || "this user"}. Each code can be used once to reset the password.`
+      );
+    }
+    loadUsers();
+  } catch (error) {
+    setInlineError("users-create-error", error.message);
+  }
+}
+
+async function toggleUserRole(username, currentRole) {
+  setInlineError("users-search-error", "");
+  try {
+    await postJson("/api/v1/admin/users/role", {
+      username,
+      role: currentRole === "admin" ? "user" : "admin",
+    });
+    loadUsers();
+  } catch (error) {
+    setInlineError("users-search-error", error.message);
+  }
+}
+
+async function toggleUserEnabled(username, currentlyEnabled) {
+  setInlineError("users-search-error", "");
+  try {
+    await postJson("/api/v1/admin/users/enabled", {
+      username,
+      enabled: !currentlyEnabled,
+    });
+    loadUsers();
+  } catch (error) {
+    setInlineError("users-search-error", error.message);
+  }
+}
+
+async function resetUserPassword(username) {
+  try {
+    const data = await postJson("/api/v1/admin/users/password/reset", { username });
+    alert(`Temporary password for ${username}: ${data.password || ""}`);
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+async function regenerateUserKey(username) {
+  try {
+    const data = await postJson("/api/v1/admin/users/key/regenerate", { username });
+    alert(`API key for ${username}: ${data.key || ""}`);
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+async function deleteUser(username) {
+  setInlineError("users-search-error", "");
+  try {
+    await postJson("/api/v1/admin/users/delete", { username });
+    loadUsers();
+  } catch (error) {
+    setInlineError("users-search-error", error.message);
+  }
+}
+
+async function deleteUserPicture(username) {
+  setInlineError("users-search-error", "");
+  try {
+    await postJson("/api/v1/admin/users/picture/delete", { username });
+    loadUsers();
+  } catch (error) {
+    setInlineError("users-search-error", error.message);
+  }
+}
+
 if (typeof document !== "undefined") {
   document.addEventListener("click", (event) => {
     const assistant = document.getElementById("query-assistant");
@@ -4762,15 +6387,29 @@ if (typeof document !== "undefined") {
     if (!(event.target instanceof Element) || !event.target.closest(".modal-select")) {
       clearActiveModalSelect();
     }
+    if (!(event.target instanceof Element) || !event.target.closest(".auth-header")) {
+      closeAuthMenu();
+    }
   });
 
   document.addEventListener("submit", (event) => {
     handleEnhancedFormSubmit(event);
   });
 
+  document.addEventListener("input", (event) => {
+    if (!(event.target instanceof HTMLInputElement)) return;
+    const root = event.target.closest("[data-live-validation]");
+    if (!root) return;
+    updateValidationForRoot(root);
+  });
+
   document.addEventListener("DOMContentLoaded", () => {
     initializeSearchPage();
     initializeModalSelectStacking();
+    initializeProfilePictureCrop();
+    document.querySelectorAll("[data-live-validation]").forEach((root) => {
+      updateValidationForRoot(root);
+    });
     let savedTheme = "dark";
     try {
       savedTheme = localStorage.getItem(THEME_STORAGE_KEY) || "dark";

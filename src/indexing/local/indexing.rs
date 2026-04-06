@@ -745,6 +745,7 @@ impl LocalIndex {
                 architecture: entry.architecture.clone(),
                 address: entry.address,
                 corpora,
+                username: entry.username.clone(),
                 timestamp: entry.timestamp.clone(),
             });
             metadata_writes.push(EntityMetadataRecord {
@@ -798,6 +799,7 @@ impl LocalIndex {
                 architecture: entry.architecture.clone(),
                 address: entry.address,
                 corpora: effective_corpora,
+                username: entry.username.clone(),
                 timestamp: entry.timestamp.clone(),
             });
         }
@@ -816,7 +818,7 @@ impl LocalIndex {
                 metadata.address,
             ) {
                 self.localdb
-                    .symbol_add(&symbol, Some(&metadata.timestamp))
+                    .symbol_add(&symbol, Some(&metadata.timestamp), None)
                     .map_err(|error| Error::LocalDb(error.to_string()))?;
             }
         }

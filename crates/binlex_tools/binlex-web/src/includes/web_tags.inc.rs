@@ -1,3 +1,55 @@
+fn metadata_actor_response(state: &AppState, username: &str) -> MetadataActorResponse {
+    let normalized = username.trim();
+    let (profile_picture, timestamp) = if normalized.is_empty() {
+        (None, None)
+    } else if let Some(user) = state.database.user_get(normalized).ok().flatten() {
+        (user.profile_picture, Some(user.timestamp))
+    } else {
+        (None, None)
+    };
+    let profile_picture = if normalized.is_empty() {
+        None
+    } else {
+        avatar_url_for_user(normalized, profile_picture.as_deref(), timestamp.as_deref())
+    };
+    MetadataActorResponse {
+        username: normalized.to_string(),
+        profile_picture,
+    }
+}
+
+fn metadata_item_response(
+    state: &AppState,
+    name: &str,
+    username: &str,
+    timestamp: &str,
+) -> MetadataItemResponse {
+    MetadataItemResponse {
+        name: name.to_string(),
+        created_actor: metadata_actor_response(state, username),
+        created_timestamp: timestamp.to_string(),
+        assigned_actor: None,
+        assigned_timestamp: None,
+    }
+}
+
+fn metadata_assigned_item_response(
+    state: &AppState,
+    name: &str,
+    created_username: &str,
+    created_timestamp: &str,
+    assigned_username: &str,
+    assigned_timestamp: &str,
+) -> MetadataItemResponse {
+    MetadataItemResponse {
+        name: name.to_string(),
+        created_actor: metadata_actor_response(state, created_username),
+        created_timestamp: created_timestamp.to_string(),
+        assigned_actor: Some(metadata_actor_response(state, assigned_username)),
+        assigned_timestamp: Some(assigned_timestamp.to_string()),
+    }
+}
+
 #[utoipa::path(
     get,
     path = "/api/v1/corpora/collection",
@@ -18,9 +70,12 @@ async fn get_collection_corpora_api(
     let address = params.address;
     let state_for_work = state.clone();
     let corpora = task::spawn_blocking(move || {
-        state_for_work
-            .index
-            .collection_corpus_list(&sha256, collection, &architecture, address)
+        state_for_work.index.collection_corpus_details_list(
+            &sha256,
+            collection,
+            &architecture,
+            address,
+        )
     })
     .await
     .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?
@@ -30,7 +85,26 @@ async fn get_collection_corpora_api(
         collection: Some(params.collection),
         architecture: Some(params.architecture),
         address: Some(params.address),
-        corpora,
+        corpora: corpora
+            .into_iter()
+            .map(|item| {
+                let created = state.database.corpus_get(&item.corpus).ok().flatten();
+                metadata_assigned_item_response(
+                    state.as_ref(),
+                    &item.corpus,
+                    created
+                        .as_ref()
+                        .map(|value| value.username.as_str())
+                        .unwrap_or(""),
+                    created
+                        .as_ref()
+                        .map(|value| value.timestamp.as_str())
+                        .unwrap_or(""),
+                    &item.username,
+                    &item.timestamp,
+                )
+            })
+            .collect(),
     }))
 }
 
@@ -44,11 +118,17 @@ async fn get_collection_corpora_api(
 )]
 async fn add_collection_corpus_api(
     State(state): State<Arc<AppState>>,
+    Extension(context): Extension<RequestAuthContext>,
     Extension(request_id): Extension<RequestId>,
     Json(request): Json<CollectionCorpusActionRequest>,
 ) -> Result<Json<TagsActionResponse>, AppError> {
     let collection = parse_collection(&request.collection)
         .ok_or_else(|| AppError::with_request_id("invalid collection", request_id.to_string()))?;
+    let username = context
+        .user
+        .as_ref()
+        .map(|user| user.username.clone())
+        .ok_or_else(|| AppError::unauthorized("authentication is required"))?;
     let state_for_work = state.clone();
     task::spawn_blocking(move || {
         state_for_work.index.collection_corpus_add(
@@ -57,6 +137,7 @@ async fn add_collection_corpus_api(
             &request.architecture,
             request.address,
             &request.corpus,
+            &username,
         )
     })
     .await
@@ -119,7 +200,10 @@ async fn get_sample_tags(
         sha256: params.sha256,
         collection: None,
         address: None,
-        tags,
+        tags: tags
+            .into_iter()
+            .map(|tag| metadata_item_response(state.as_ref(), &tag, "", ""))
+            .collect(),
     }))
 }
 
@@ -219,7 +303,7 @@ async fn get_collection_tags(
     let tags = task::spawn_blocking(move || {
         state_for_work
             .index
-            .collection_tag_list(&sha256, collection, address)
+            .collection_tag_details_list(&sha256, collection, address)
     })
     .await
     .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?
@@ -228,7 +312,26 @@ async fn get_collection_tags(
         sha256: params.sha256,
         collection: Some(params.collection),
         address: Some(params.address),
-        tags,
+        tags: tags
+            .into_iter()
+            .map(|item| {
+                let created = state.database.tag_get(&item.tag).ok().flatten();
+                metadata_assigned_item_response(
+                    state.as_ref(),
+                    &item.tag,
+                    created
+                        .as_ref()
+                        .map(|value| value.username.as_str())
+                        .unwrap_or(""),
+                    created
+                        .as_ref()
+                        .map(|value| value.timestamp.as_str())
+                        .unwrap_or(""),
+                    &item.username,
+                    &item.timestamp,
+                )
+            })
+            .collect(),
     }))
 }
 
@@ -242,11 +345,17 @@ async fn get_collection_tags(
 )]
 async fn add_collection_tag_api(
     State(state): State<Arc<AppState>>,
+    Extension(context): Extension<RequestAuthContext>,
     Extension(request_id): Extension<RequestId>,
     Json(request): Json<CollectionTagActionRequest>,
 ) -> Result<Json<TagsActionResponse>, AppError> {
     let collection = parse_collection(&request.collection)
         .ok_or_else(|| AppError::with_request_id("invalid collection", request_id.to_string()))?;
+    let username = context
+        .user
+        .as_ref()
+        .map(|user| user.username.clone())
+        .ok_or_else(|| AppError::unauthorized("authentication is required"))?;
     let state_for_work = state.clone();
     task::spawn_blocking(move || {
         state_for_work.index.collection_tag_add(
@@ -254,6 +363,7 @@ async fn add_collection_tag_api(
             collection,
             request.address,
             &request.tag,
+            &username,
         )
     })
     .await
@@ -302,11 +412,17 @@ async fn remove_collection_tag_api(
 )]
 async fn replace_collection_tags_api(
     State(state): State<Arc<AppState>>,
+    Extension(context): Extension<RequestAuthContext>,
     Extension(request_id): Extension<RequestId>,
     Json(request): Json<CollectionTagsReplaceRequest>,
 ) -> Result<Json<TagsActionResponse>, AppError> {
     let collection = parse_collection(&request.collection)
         .ok_or_else(|| AppError::with_request_id("invalid collection", request_id.to_string()))?;
+    let username = context
+        .user
+        .as_ref()
+        .map(|user| user.username.clone())
+        .ok_or_else(|| AppError::unauthorized("authentication is required"))?;
     let state_for_work = state.clone();
     task::spawn_blocking(move || {
         state_for_work.index.collection_tag_replace(
@@ -314,6 +430,7 @@ async fn replace_collection_tags_api(
             collection,
             request.address,
             &request.tags,
+            &username,
         )
     })
     .await
@@ -343,7 +460,13 @@ async fn search_tags_api(
         .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?
         .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?;
     Ok(Json(TagsCatalogResponse {
-        tags: results.items,
+        tags: results
+            .items
+            .into_iter()
+            .map(|item| {
+                metadata_item_response(state.as_ref(), &item.tag, &item.username, &item.timestamp)
+            })
+            .collect(),
         total_results: results.total_results,
         has_next: results.has_next,
     }))
@@ -359,14 +482,56 @@ async fn search_tags_api(
 )]
 async fn add_tag_api(
     State(state): State<Arc<AppState>>,
+    Extension(context): Extension<RequestAuthContext>,
     Extension(request_id): Extension<RequestId>,
     Json(request): Json<TagActionRequest>,
 ) -> Result<Json<TagsActionResponse>, AppError> {
+    let username = context
+        .user
+        .as_ref()
+        .map(|user| user.username.clone())
+        .ok_or_else(|| AppError::unauthorized("authentication is required"))?;
     let state_for_work = state.clone();
-    task::spawn_blocking(move || state_for_work.database.tag_add(&request.tag, None))
-        .await
-        .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?
-        .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?;
+    task::spawn_blocking(move || {
+        state_for_work
+            .database
+            .tag_add(&request.tag, None, Some(&username))
+    })
+    .await
+    .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?
+    .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?;
+    Ok(Json(TagsActionResponse { ok: true }))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/admin/tags/delete",
+    tag = "Admin",
+    security(("bearer_auth" = [])),
+    request_body = TagActionRequest,
+    responses((status = 200, description = "Deleted a tag globally.", body = TagsActionResponse))
+)]
+async fn admin_delete_tag_api(
+    State(state): State<Arc<AppState>>,
+    Extension(request_id): Extension<RequestId>,
+    Json(request): Json<TagActionRequest>,
+) -> Result<Json<TagsActionResponse>, AppError> {
+    let tag = request.tag.trim().to_string();
+    if tag.is_empty() {
+        return Err(AppError::with_request_id(
+            "tag must not be empty",
+            request_id.to_string(),
+        ));
+    }
+    let state_for_work = state.clone();
+    task::spawn_blocking(move || {
+        state_for_work
+            .database
+            .tag_delete_global(&tag)
+            .map_err(|error| AppError::new(error.to_string()))
+    })
+    .await
+    .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))??;
     Ok(Json(TagsActionResponse { ok: true }))
 }
 
@@ -479,7 +644,7 @@ async fn get_collection_symbols(
     let symbols = task::spawn_blocking(move || {
         state_for_work
             .index
-            .symbol_list(&sha256, collection, &architecture, address)
+            .symbol_details_list(&sha256, collection, &architecture, address)
     })
     .await
     .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?
@@ -489,7 +654,26 @@ async fn get_collection_symbols(
         collection: params.collection,
         architecture: params.architecture,
         address: params.address,
-        symbols,
+        symbols: symbols
+            .into_iter()
+            .map(|item| {
+                let created = state.database.symbol_get(&item.name).ok().flatten();
+                metadata_assigned_item_response(
+                    state.as_ref(),
+                    &item.name,
+                    created
+                        .as_ref()
+                        .map(|value| value.username.as_str())
+                        .unwrap_or(""),
+                    created
+                        .as_ref()
+                        .map(|value| value.timestamp.as_str())
+                        .unwrap_or(""),
+                    &item.username,
+                    &item.timestamp,
+                )
+            })
+            .collect(),
     }))
 }
 
@@ -544,7 +728,18 @@ async fn search_symbols_api(
         .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?
         .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?;
     Ok(Json(SymbolsCatalogResponse {
-        symbols: results.items,
+        symbols: results
+            .items
+            .into_iter()
+            .map(|item| {
+                metadata_item_response(
+                    state.as_ref(),
+                    &item.symbol,
+                    &item.username,
+                    &item.timestamp,
+                )
+            })
+            .collect(),
         total_results: results.total_results,
         has_next: results.has_next,
     }))
@@ -560,14 +755,56 @@ async fn search_symbols_api(
 )]
 async fn add_symbol_api(
     State(state): State<Arc<AppState>>,
+    Extension(context): Extension<RequestAuthContext>,
     Extension(request_id): Extension<RequestId>,
     Json(request): Json<SymbolActionRequest>,
 ) -> Result<Json<TagsActionResponse>, AppError> {
+    let username = context
+        .user
+        .as_ref()
+        .map(|user| user.username.clone())
+        .ok_or_else(|| AppError::unauthorized("authentication is required"))?;
     let state_for_work = state.clone();
-    task::spawn_blocking(move || state_for_work.database.symbol_add(&request.symbol, None))
-        .await
-        .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?
-        .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?;
+    task::spawn_blocking(move || {
+        state_for_work
+            .database
+            .symbol_add(&request.symbol, None, Some(&username))
+    })
+    .await
+    .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?
+    .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?;
+    Ok(Json(TagsActionResponse { ok: true }))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/admin/symbols/delete",
+    tag = "Admin",
+    security(("bearer_auth" = [])),
+    request_body = SymbolActionRequest,
+    responses((status = 200, description = "Deleted a symbol globally.", body = TagsActionResponse))
+)]
+async fn admin_delete_symbol_api(
+    State(state): State<Arc<AppState>>,
+    Extension(request_id): Extension<RequestId>,
+    Json(request): Json<SymbolActionRequest>,
+) -> Result<Json<TagsActionResponse>, AppError> {
+    let symbol = request.symbol.trim().to_string();
+    if symbol.is_empty() {
+        return Err(AppError::with_request_id(
+            "symbol must not be empty",
+            request_id.to_string(),
+        ));
+    }
+    let state_for_work = state.clone();
+    task::spawn_blocking(move || {
+        state_for_work
+            .index
+            .symbol_delete_global(&symbol)
+            .map_err(|error| AppError::new(error.to_string()))
+    })
+    .await
+    .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))??;
     Ok(Json(TagsActionResponse { ok: true }))
 }
 
@@ -581,11 +818,17 @@ async fn add_symbol_api(
 )]
 async fn add_collection_symbol_api(
     State(state): State<Arc<AppState>>,
+    Extension(context): Extension<RequestAuthContext>,
     Extension(request_id): Extension<RequestId>,
     Json(request): Json<CollectionSymbolActionRequest>,
 ) -> Result<Json<TagsActionResponse>, AppError> {
     let collection = parse_collection(&request.collection)
         .ok_or_else(|| AppError::with_request_id("invalid collection", request_id.to_string()))?;
+    let username = context
+        .user
+        .as_ref()
+        .map(|user| user.username.clone())
+        .ok_or_else(|| AppError::unauthorized("authentication is required"))?;
     let state_for_work = state.clone();
     task::spawn_blocking(move || {
         state_for_work.index.symbol_add(
@@ -593,6 +836,7 @@ async fn add_collection_symbol_api(
             collection,
             request.address,
             &request.symbol,
+            &username,
         )
     })
     .await
@@ -611,6 +855,7 @@ async fn add_collection_symbol_api(
 )]
 async fn replace_collection_symbols_api(
     State(state): State<Arc<AppState>>,
+    Extension(context): Extension<RequestAuthContext>,
     Extension(request_id): Extension<RequestId>,
     Json(request): Json<CollectionSymbolsReplaceRequest>,
 ) -> Result<Json<TagsActionResponse>, AppError> {
@@ -619,11 +864,20 @@ async fn replace_collection_symbols_api(
     let first = request.symbols.first().cloned().ok_or_else(|| {
         AppError::with_request_id("symbols must not be empty", request_id.to_string())
     })?;
+    let username = context
+        .user
+        .as_ref()
+        .map(|user| user.username.clone())
+        .ok_or_else(|| AppError::unauthorized("authentication is required"))?;
     let state_for_work = state.clone();
     task::spawn_blocking(move || {
-        state_for_work
-            .index
-            .symbol_replace(&request.sha256, collection, request.address, &first)
+        state_for_work.index.symbol_replace(
+            &request.sha256,
+            collection,
+            request.address,
+            &first,
+            &username,
+        )
     })
     .await
     .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?

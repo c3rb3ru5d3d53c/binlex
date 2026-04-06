@@ -3,7 +3,8 @@ use super::lancedb as local_lancedb;
 use super::support::{
     SearchHitContext, SearchHydration, architecture_from_index_entry_key, build_search_result,
     corpus_match_score, embedding_id_for_vector, index_entry_key, manual_object_id,
-    normalize_corpora, page_search_results, push_search_hits, symbol_names_for_attributes,
+    normalize_corpora, page_search_results, push_search_hits, symbol_details_for_attributes,
+    symbol_names_for_attributes, SymbolAttribution,
 };
 use super::types::{DEFAULT_INDEX_GRAPH_COLLECTIONS, Error, IndexEntry, SearchResult};
 use crate::controlflow::{Block, Function, Graph};
@@ -581,6 +582,34 @@ impl LocalIndex {
             })?;
         let entry = metadata_entry(&metadata, None);
         Ok(symbol_names_for_attributes(
+            &entry.attributes,
+            entry.entity,
+            entry.address,
+        ))
+    }
+
+    pub fn symbol_details_list(
+        &self,
+        sha256: &str,
+        collection: Collection,
+        architecture: &str,
+        address: u64,
+    ) -> Result<Vec<SymbolAttribution>, Error> {
+        let object_id = manual_object_id(collection, architecture, sha256, address);
+        let metadata = self
+            .localdb
+            .entity_metadata_get(collection, architecture, &object_id)
+            .map_err(|error| Error::LocalDb(error.to_string()))?
+            .ok_or_else(|| {
+                Error::NotFound(format!(
+                    "entity metadata {}/{}/{}",
+                    collection.as_str(),
+                    architecture,
+                    object_id
+                ))
+            })?;
+        let entry = metadata_entry(&metadata, None);
+        Ok(symbol_details_for_attributes(
             &entry.attributes,
             entry.entity,
             entry.address,

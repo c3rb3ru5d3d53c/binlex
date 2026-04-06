@@ -1,7 +1,7 @@
 use axum::Json;
 use axum::Router;
 use axum::body::Body;
-use axum::extract::{DefaultBodyLimit, Extension, Multipart, Query, State};
+use axum::extract::{DefaultBodyLimit, Extension, Multipart, Path, Query, State};
 use axum::http::{HeaderMap, HeaderValue, Request, StatusCode, header};
 use axum::middleware;
 use axum::middleware::Next;
@@ -21,7 +21,6 @@ use binlex::yara::Rule;
 use binlex::{Architecture, Config, Magic};
 use chrono::Utc;
 use clap::Parser;
-use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};

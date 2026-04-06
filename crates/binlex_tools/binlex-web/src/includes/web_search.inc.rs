@@ -1,5 +1,6 @@
 async fn index_page(
     State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<RequestAuthContext>,
     Extension(request_id): Extension<RequestId>,
     Query(mut params): Query<PageParams>,
 ) -> Result<Html<String>, AppError> {
@@ -7,8 +8,14 @@ async fn index_page(
     clamp_page(&mut params);
     let state_for_page = state.clone();
     let request_id_for_page = request_id.to_string();
+    let auth_user = auth.user.clone();
     let data = task::spawn_blocking(move || {
-        build_page_data(state_for_page.as_ref(), params, &request_id_for_page)
+        build_page_data(
+            state_for_page.as_ref(),
+            params,
+            &request_id_for_page,
+            auth_user,
+        )
     })
     .await
     .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))??;
@@ -41,7 +48,7 @@ async fn search_api(
         ..PageParams::default()
     };
     let data = task::spawn_blocking(move || {
-        build_page_data(state_for_page.as_ref(), params, &request_id_for_page)
+        build_page_data(state_for_page.as_ref(), params, &request_id_for_page, None)
     })
     .await
     .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))??;
@@ -138,6 +145,13 @@ pub(crate) fn build_search_response(data: &PageData) -> SearchResponse {
     }
 }
 
+fn display_result_username(value: &str) -> String {
+    if value.eq_ignore_ascii_case("anonymous") {
+        return String::new();
+    }
+    value.to_string()
+}
+
 pub(crate) fn build_search_row_response(row: &ResultRow) -> SearchRowResponse {
     let result = &row.result;
     SearchRowResponse {
@@ -147,7 +161,8 @@ pub(crate) fn build_search_row_response(row: &ResultRow) -> SearchRowResponse {
         detail_loaded: false,
         object_id: result.object_id().to_string(),
         timestamp: result.timestamp().to_rfc3339(),
-        username: result.username().to_string(),
+        username: display_result_username(result.username()),
+        profile_picture: row.profile_picture.clone(),
         size: result.size(),
         score: row.score,
         similarity_score: row.score,
@@ -184,32 +199,38 @@ fn build_action_yara_rule(
     if !request.query.trim().is_empty() {
         rule.comment_set(request.query.trim());
     }
-    let mut seen = BTreeSet::new();
-    let mut included = 0usize;
+    let mut grouped = BTreeMap::<(String, String), Vec<(Collection, u64)>>::new();
     for item in &request.items {
         let collection = parse_collection(&item.collection)
             .ok_or_else(|| AppError::new("invalid collection"))?;
-        let json =
-            entity_json_for_download(state, &item.corpus, &item.sha256, collection, item.address);
-        let pattern = json
-            .as_ref()
-            .and_then(|json| json.get("chromosome"))
-            .and_then(|value| value.get("pattern"))
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty());
-        let Some(pattern) = pattern else {
-            continue;
-        };
-        if !seen.insert(pattern.to_string()) {
-            continue;
+        grouped
+            .entry((item.corpus.clone(), item.sha256.clone()))
+            .or_default()
+            .push((collection, item.address));
+    }
+    let mut seen = BTreeSet::new();
+    let mut included = 0usize;
+    for ((corpus, sha256), items) in grouped {
+        let graph = state
+            .index
+            .sample_load(&corpus, &sha256)
+            .map_err(|error| AppError::new(error.to_string()))?;
+        for (collection, address) in items {
+            let Some(pattern) = yara_pattern_for_entity(&graph, collection, address) else {
+                continue;
+            };
+            if !seen.insert(pattern.clone()) {
+                continue;
+            }
+            let comment = format!(
+                "sample:{} collection:{} address:0x{:x}",
+                sha256,
+                collection.as_str(),
+                address
+            );
+            rule.pattern_add(&pattern, Some(&comment));
+            included = included.saturating_add(1);
         }
-        let comment = format!(
-            "sample:{} collection:{} address:0x{:x}",
-            item.sha256, item.collection, item.address
-        );
-        rule.pattern_add(pattern, Some(&comment));
-        included = included.saturating_add(1);
     }
     if rule.patterns().is_empty() {
         return Err(AppError::new(
@@ -225,12 +246,40 @@ fn build_action_yara_rule(
     Ok(rule.render())
 }
 
+fn yara_pattern_for_entity(
+    graph: &binlex::controlflow::Graph,
+    entity: Collection,
+    address: u64,
+) -> Option<String> {
+    let pattern = match entity {
+        Collection::Instruction => graph.get_instruction(address)?.chromosome_json().pattern,
+        Collection::Block => {
+            binlex::controlflow::Block::new(address, graph)
+                .ok()?
+                .chromosome_json()
+                .pattern
+        }
+        Collection::Function => {
+            binlex::controlflow::Function::new(address, graph)
+                .ok()?
+                .chromosome_json()?
+                .pattern
+        }
+    };
+    let pattern = pattern.trim();
+    if pattern.is_empty() {
+        None
+    } else {
+        Some(pattern.to_string())
+    }
+}
+
 fn build_search_row_detail_response(result: &SearchResult) -> SearchRowDetailResponse {
     SearchRowDetailResponse {
         detail_loaded: true,
         object_id: result.object_id().to_string(),
         timestamp: result.timestamp().to_rfc3339(),
-        username: result.username().to_string(),
+        username: display_result_username(result.username()),
         size: result.size(),
         score: None,
         similarity_score: None,
@@ -258,6 +307,7 @@ fn build_page_data(
     state: &AppState,
     mut params: PageParams,
     request_id: &str,
+    auth_user: Option<binlex::databases::UserRecord>,
 ) -> Result<PageData, AppError> {
     let corpora_options = state
         .index
@@ -273,9 +323,21 @@ fn build_page_data(
     let upload_tag_options = state
         .database
         .tag_search("", state.ui.api.corpora.max_results)
-        .map(|page| page.items)
+        .map(|page| page.items.into_iter().map(|item| item.tag).collect())
         .unwrap_or_default();
     let upload_selected_tags = Vec::new();
+    let auth_bootstrap_required = state.database.user_count().unwrap_or(0) == 0;
+    let can_write = auth_user.is_some() && !auth_bootstrap_required;
+    let auth_user_profile = auth_user.as_ref().map(|user| AuthUserProfile {
+        username: user.username.clone(),
+        key: user.api_key.clone(),
+        role: user.role.clone(),
+        profile_picture: avatar_url_for_user(
+            &user.username,
+            user.profile_picture.as_deref(),
+            Some(&user.timestamp),
+        ),
+    });
 
     let status = UiStatus {
         server_ok: state
@@ -342,6 +404,16 @@ fn build_page_data(
                             row.result.address(),
                         ))
                         .unwrap_or(&0);
+                    let username = row.result.username();
+                    if !username.is_empty()
+                        && let Some(user) = state.database.user_get(username).ok().flatten()
+                    {
+                        row.profile_picture = avatar_url_for_user(
+                            &user.username,
+                            user.profile_picture.as_deref(),
+                            Some(&user.timestamp),
+                        );
+                    }
                 }
                 if search_page.warning.is_some() {
                     warning = search_page.warning;
@@ -404,8 +476,12 @@ fn build_page_data(
         upload_tag_options,
         upload_selected_tags,
         uploads_enabled: state.ui.upload.sample.enabled,
+        upload_button_enabled: state.ui.upload.sample.enabled && can_write,
         sample_downloads_enabled: state.ui.download.sample.enabled
             || state.ui.download.samples.enabled,
+        auth_bootstrap_required,
+        auth_registration_enabled: state.ui.auth.registration.enabled,
+        auth_user: auth_user_profile,
     })
 }
 
@@ -421,6 +497,44 @@ fn build_page_data(
 )]
 async fn add_corpus_api(
     State(state): State<Arc<AppState>>,
+    Extension(context): Extension<RequestAuthContext>,
+    Extension(request_id): Extension<RequestId>,
+    Json(request): Json<CorpusActionRequest>,
+) -> Result<Json<TagsActionResponse>, AppError> {
+    let corpus = request.corpus.trim().to_string();
+    if corpus.is_empty() {
+        return Err(AppError::with_request_id(
+            "corpus must not be empty",
+            request_id.to_string(),
+        ));
+    }
+    let username = context
+        .user
+        .as_ref()
+        .map(|user| user.username.clone())
+        .ok_or_else(|| AppError::unauthorized("authentication is required"))?;
+    let state_for_work = state.clone();
+    task::spawn_blocking(move || {
+        state_for_work
+            .database
+            .corpus_add(&corpus, None, Some(&username))
+    })
+    .await
+    .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?
+    .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?;
+    Ok(Json(TagsActionResponse { ok: true }))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/admin/corpora/delete",
+    tag = "Admin",
+    security(("bearer_auth" = [])),
+    request_body = CorpusActionRequest,
+    responses((status = 200, description = "Deleted a corpus globally.", body = TagsActionResponse))
+)]
+async fn admin_delete_corpus_api(
+    State(state): State<Arc<AppState>>,
     Extension(request_id): Extension<RequestId>,
     Json(request): Json<CorpusActionRequest>,
 ) -> Result<Json<TagsActionResponse>, AppError> {
@@ -432,10 +546,22 @@ async fn add_corpus_api(
         ));
     }
     let state_for_work = state.clone();
-    task::spawn_blocking(move || state_for_work.database.corpus_add(&corpus, None))
-        .await
-        .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?
-        .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?;
+    task::spawn_blocking(move || {
+        state_for_work
+            .database
+            .corpus_delete_global(&corpus)
+            .map_err(|error| AppError::new(error.to_string()))?;
+        state_for_work
+            .index
+            .corpus_delete(&corpus)
+            .map_err(|error| AppError::new(error.to_string()))?;
+        state_for_work
+            .index
+            .commit()
+            .map_err(|error| AppError::new(error.to_string()))
+    })
+    .await
+    .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))??;
     Ok(Json(TagsActionResponse { ok: true }))
 }
 
@@ -445,7 +571,7 @@ async fn add_corpus_api(
     tag = "Search",
     params(CorporaApiParams),
     responses(
-        (status = 200, description = "Matching corpora names.", body = [String]),
+        (status = 200, description = "Matching corpora names.", body = CorporaCatalogResponse),
         (status = 400, description = "Invalid request.", body = ApiErrorResponse)
     )
 )]
@@ -453,7 +579,7 @@ async fn search_corpora_api(
     State(state): State<Arc<AppState>>,
     Extension(request_id): Extension<RequestId>,
     Query(params): Query<CorporaApiParams>,
-) -> Result<Json<Vec<String>>, AppError> {
+) -> Result<Json<CorporaCatalogResponse>, AppError> {
     if params.q.len() > state.ui.api.corpora.max_query_length {
         return Err(AppError::with_request_id(
             format!(
@@ -473,16 +599,63 @@ async fn search_corpora_api(
             .map_err(|error| error.to_string())?;
         let catalog = state
             .database
-            .corpus_search(&params.q, max_results)
+            .corpus_search_details(&params.q, max_results)
             .map_err(|error| error.to_string())?;
-        let mut values = indexed;
-        values.extend(catalog);
-        values.sort();
-        values.dedup();
+        let mut values = indexed
+            .into_iter()
+            .map(|name| MetadataItemResponse {
+                name,
+                created_actor: MetadataActorResponse {
+                    username: String::new(),
+                    profile_picture: None,
+                },
+                created_timestamp: String::new(),
+                assigned_actor: None,
+                assigned_timestamp: None,
+            })
+            .collect::<Vec<_>>();
+        for item in catalog {
+            if values
+                .iter()
+                .any(|existing| existing.name.eq_ignore_ascii_case(&item.corpus))
+            {
+                continue;
+            }
+            let (profile_picture, timestamp) = if item.username.is_empty() {
+                (None, None)
+            } else if let Some(user) = state.database.user_get(&item.username).ok().flatten() {
+                (user.profile_picture, Some(user.timestamp))
+            } else {
+                (None, None)
+            };
+            values.push(MetadataItemResponse {
+                name: item.corpus,
+                created_actor: MetadataActorResponse {
+                    username: item.username.clone(),
+                    profile_picture: avatar_url_for_user(
+                        &item.username,
+                        profile_picture.as_deref(),
+                        timestamp.as_deref(),
+                    ),
+                },
+                created_timestamp: item.timestamp,
+                assigned_actor: None,
+                assigned_timestamp: None,
+            });
+        }
+        values.sort_by(|lhs, rhs| {
+            lhs.name
+                .to_ascii_lowercase()
+                .cmp(&rhs.name.to_ascii_lowercase())
+        });
         if values.len() > max_results {
             values.truncate(max_results);
         }
-        Ok::<Vec<String>, String>(values)
+        let total_results = values.len();
+        Ok::<CorporaCatalogResponse, String>(CorporaCatalogResponse {
+            corpora: values,
+            total_results,
+        })
     })
     .await
     .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?
@@ -490,7 +663,7 @@ async fn search_corpora_api(
     info!(
         "corpora api request_id={} results={}",
         request_id,
-        values.len()
+        values.corpora.len()
     );
     Ok(Json(values))
 }
@@ -534,6 +707,7 @@ fn execute_stream_search(
                 .map(|result| ResultRow {
                     side,
                     score: show_score.then_some(result.score()),
+                    profile_picture: None,
                     result,
                     grouped: false,
                     group_end: false,
@@ -560,6 +734,7 @@ fn execute_stream_search(
                 rows.push(ResultRow {
                     side: RowSide::Lhs,
                     score: Some(pair.score),
+                    profile_picture: None,
                     result: pair.lhs,
                     grouped: true,
                     group_end: false,
@@ -568,6 +743,7 @@ fn execute_stream_search(
                 rows.push(ResultRow {
                     side: RowSide::Rhs,
                     score: Some(pair.score),
+                    profile_picture: None,
                     result: pair.rhs,
                     grouped: true,
                     group_end: true,

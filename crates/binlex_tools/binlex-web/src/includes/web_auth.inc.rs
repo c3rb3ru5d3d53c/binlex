@@ -1,3 +1,140 @@
+const SESSION_COOKIE_NAME: &str = "binlex_session";
+const CAPTCHA_TTL_SECONDS: u64 = 180;
+const CAPTCHA_LENGTH: usize = 6;
+
+fn captcha_alphabet() -> &'static [u8] {
+    b"23456789ABCDEF"
+}
+
+fn captcha_glyph(ch: char) -> Option<[u8; 7]> {
+    match ch.to_ascii_uppercase() {
+        '2' => Some([
+            0b11111, 0b00001, 0b00001, 0b11111, 0b10000, 0b10000, 0b11111,
+        ]),
+        '3' => Some([
+            0b11111, 0b00001, 0b00001, 0b01111, 0b00001, 0b00001, 0b11111,
+        ]),
+        '4' => Some([
+            0b10001, 0b10001, 0b10001, 0b11111, 0b00001, 0b00001, 0b00001,
+        ]),
+        '5' => Some([
+            0b11111, 0b10000, 0b10000, 0b11111, 0b00001, 0b00001, 0b11111,
+        ]),
+        '6' => Some([
+            0b11111, 0b10000, 0b10000, 0b11111, 0b10001, 0b10001, 0b11111,
+        ]),
+        '7' => Some([
+            0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b01000, 0b01000,
+        ]),
+        '8' => Some([
+            0b11111, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b11111,
+        ]),
+        '9' => Some([
+            0b11111, 0b10001, 0b10001, 0b11111, 0b00001, 0b00001, 0b11111,
+        ]),
+        'A' => Some([
+            0b01110, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001,
+        ]),
+        'B' => Some([
+            0b11110, 0b10001, 0b10001, 0b11110, 0b10001, 0b10001, 0b11110,
+        ]),
+        'C' => Some([
+            0b01111, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b01111,
+        ]),
+        'D' => Some([
+            0b11110, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b11110,
+        ]),
+        'E' => Some([
+            0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b11111,
+        ]),
+        'F' => Some([
+            0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b10000,
+        ]),
+        _ => None,
+    }
+}
+
+fn captcha_text() -> String {
+    use rand::seq::SliceRandom;
+    let mut rng = rand::thread_rng();
+    let alphabet = captcha_alphabet();
+    (0..CAPTCHA_LENGTH)
+        .filter_map(|_| alphabet.choose(&mut rng).copied().map(char::from))
+        .collect()
+}
+
+fn render_captcha_png(text: &str) -> Result<Vec<u8>, AppError> {
+    use image::{ColorType, ImageEncoder, Rgba, RgbaImage, codecs::png::PngEncoder};
+    use rand::Rng;
+    let width = 180u32;
+    let height = 64u32;
+    let mut image = RgbaImage::from_pixel(width, height, Rgba([16, 22, 30, 255]));
+    let mut rng = rand::thread_rng();
+    for _ in 0..120 {
+        let x = rng.gen_range(0..width);
+        let y = rng.gen_range(0..height);
+        let value = rng.gen_range(26..56) as u8;
+        image.put_pixel(x, y, Rgba([value, value + 8, value + 12, 255]));
+    }
+    for _ in 0..6 {
+        let y = rng.gen_range(8..(height - 8));
+        let slope = rng.gen_range(-1.4f32..1.4f32);
+        let shade = rng.gen_range(55..90) as u8;
+        for x in 0..width {
+            let sample_y =
+                (y as f32 + (x as f32 - width as f32 / 2.0) * slope / 18.0).round() as i32;
+            if sample_y >= 0 && sample_y < height as i32 {
+                image.put_pixel(
+                    x,
+                    sample_y as u32,
+                    Rgba([shade, shade + 10, shade + 18, 255]),
+                );
+            }
+        }
+    }
+    let scale = 4i32;
+    let start_x = 18i32;
+    let start_y = 16i32;
+    for (index, ch) in text.chars().enumerate() {
+        let glyph = captcha_glyph(ch).ok_or_else(|| AppError::new("unsupported captcha glyph"))?;
+        let offset_x = start_x + index as i32 * 24 + rng.gen_range(-1..=1);
+        let offset_y = start_y + rng.gen_range(-2..=2);
+        let ink = [
+            rng.gen_range(220..246) as u8,
+            rng.gen_range(224..250) as u8,
+            rng.gen_range(228..255) as u8,
+            255u8,
+        ];
+        for (row_idx, row_bits) in glyph.into_iter().enumerate() {
+            for col_idx in 0..5 {
+                if row_bits & (1 << (4 - col_idx)) == 0 {
+                    continue;
+                }
+                for dy in 0..scale {
+                    for dx in 0..scale {
+                        let px = offset_x + col_idx * scale + dx;
+                        let py = offset_y + row_idx as i32 * scale + dy;
+                        if px >= 0 && py >= 0 && px < width as i32 && py < height as i32 {
+                            image.put_pixel(px as u32, py as u32, Rgba(ink));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let mut bytes = Vec::new();
+    PngEncoder::new(&mut bytes)
+        .write_image(image.as_raw(), width, height, ColorType::Rgba8.into())
+        .map_err(|error| AppError::new(error.to_string()))?;
+    Ok(bytes)
+}
+
+#[derive(Clone, Default)]
+struct RequestAuthContext {
+    user: Option<binlex::databases::UserRecord>,
+    session: Option<String>,
+}
+
 fn bearer_api_key(headers: &HeaderMap) -> Option<String> {
     let value = headers.get(header::AUTHORIZATION)?.to_str().ok()?.trim();
     let token = value.strip_prefix("Bearer ")?.trim();
@@ -7,12 +144,59 @@ fn bearer_api_key(headers: &HeaderMap) -> Option<String> {
     Some(token.to_string())
 }
 
+fn session_cookie(headers: &HeaderMap) -> Option<String> {
+    let cookie = headers.get(header::COOKIE)?.to_str().ok()?;
+    cookie
+        .split(';')
+        .map(str::trim)
+        .find_map(|pair| pair.strip_prefix(&format!("{}=", SESSION_COOKIE_NAME)))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string)
+}
+
 fn temporary_token(headers: &HeaderMap) -> Option<String> {
     let value = headers.get("Token")?.to_str().ok()?.trim();
     if value.is_empty() {
         return None;
     }
     Some(value.to_string())
+}
+
+fn session_cookie_header(value: &str, ttl_seconds: u64) -> Result<HeaderValue, AppError> {
+    HeaderValue::from_str(&format!(
+        "{name}={value}; Path=/; HttpOnly; SameSite=Lax; Max-Age={ttl}",
+        name = SESSION_COOKIE_NAME,
+        value = value,
+        ttl = ttl_seconds
+    ))
+    .map_err(|error| AppError::new(error.to_string()))
+}
+
+fn clear_session_cookie_header() -> HeaderValue {
+    HeaderValue::from_static("binlex_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0")
+}
+
+fn current_user_for_headers(
+    state: &AppState,
+    headers: &HeaderMap,
+) -> Result<Option<binlex::databases::UserRecord>, AppError> {
+    if let Some(session) = session_cookie(headers) {
+        if let Some(user) = state
+            .database
+            .session_user(&session)
+            .map_err(|error| AppError::unauthorized(error.to_string()))?
+        {
+            return Ok(Some(user));
+        }
+    }
+    let Some(api_key) = bearer_api_key(headers) else {
+        return Ok(None);
+    };
+    state
+        .database
+        .auth_user(&api_key)
+        .map_err(|error| AppError::unauthorized(error.to_string()))
 }
 
 fn staging_key_for_request(
@@ -28,33 +212,39 @@ fn staging_key_for_request(
 }
 
 fn username_for_request(state: &AppState, headers: &HeaderMap) -> Result<String, AppError> {
-    let Some(api_key) = bearer_api_key(headers) else {
-        return Ok("anonymous".to_string());
-    };
-    let user = state
-        .database
-        .auth_user(&api_key)
-        .map_err(|error| AppError::unauthorized(error.to_string()))?;
-    Ok(user
+    Ok(current_user_for_headers(state, headers)?
         .map(|user| user.username)
-        .unwrap_or_else(|| "anonymous".to_string()))
+        .unwrap_or_default())
+}
+
+fn auth_session_response(
+    state: &AppState,
+    user: Option<binlex::databases::UserRecord>,
+) -> AuthSessionResponse {
+    AuthSessionResponse {
+        authenticated: user.is_some(),
+        registration_enabled: state.ui.auth.registration.enabled,
+        bootstrap_required: state.database.user_count().unwrap_or(0) == 0,
+        user: user.map(user_response),
+        recovery_codes: None,
+    }
 }
 
 async fn auth_middleware(
     State(state): State<Arc<AppState>>,
-    request: Request<Body>,
+    mut request: Request<Body>,
     next: Next,
 ) -> Result<Response, AppError> {
     let path = request.uri().path().to_string();
+    let context = RequestAuthContext {
+        user: current_user_for_headers(state.as_ref(), request.headers())?,
+        session: session_cookie(request.headers()),
+    };
     if state.route_auth_enabled(&path) {
-        let api_key = bearer_api_key(request.headers())
-            .ok_or_else(|| AppError::unauthorized("missing or invalid bearer api key"))?;
-        let user = state
-            .database
-            .auth_user(&api_key)
-            .map_err(|error| AppError::unauthorized(error.to_string()))?;
-        let Some(user) = user else {
-            return Err(AppError::unauthorized("invalid api key"));
+        let Some(user) = context.user.as_ref() else {
+            return Err(AppError::unauthorized(
+                "authentication is required for this endpoint",
+            ));
         };
         let allowed_roles = state.route_auth_roles(&path);
         if !allowed_roles.is_empty() && !allowed_roles.iter().any(|role| role == &user.role) {
@@ -72,6 +262,7 @@ async fn auth_middleware(
             return Err(AppError::unauthorized("invalid or expired temporary token"));
         }
     }
+    request.extensions_mut().insert(context);
     Ok(next.run(request).await)
 }
 
@@ -140,40 +331,461 @@ async fn clear_token_api(
     Ok(Json(TokenActionResponse { ok: true }))
 }
 
-fn role_response(role: binlex::databases::RoleRecord) -> AuthRoleResponse {
-    AuthRoleResponse {
-        name: role.name,
-        timestamp: role.timestamp,
+fn user_response(user: binlex::databases::UserRecord) -> AuthUserResponse {
+    let timestamp = user.timestamp.clone();
+    AuthUserResponse {
+        profile_picture: avatar_url_for_user(
+            &user.username,
+            user.profile_picture.as_deref(),
+            Some(&timestamp),
+        ),
+        username: user.username,
+        key: user.api_key,
+        role: user.role,
+        enabled: user.enabled,
+        timestamp,
     }
 }
 
-fn user_response(user: binlex::databases::UserRecord) -> AuthUserResponse {
-    AuthUserResponse {
-        username: user.username,
-        role: user.role,
-        enabled: user.enabled,
-        reserved: user.reserved,
-        timestamp: user.timestamp,
+const PROFILE_PICTURE_MAX_BYTES: usize = 1024 * 1024;
+const PROFILE_PICTURE_SIZE: u32 = 128;
+
+fn avatars_dir() -> Result<PathBuf, AppError> {
+    let root = dirs::data_local_dir()
+        .or_else(dirs::data_dir)
+        .unwrap_or_else(std::env::temp_dir)
+        .join("binlex")
+        .join("avatars");
+    fs::create_dir_all(&root).map_err(|error| AppError::new(error.to_string()))?;
+    Ok(root)
+}
+
+fn avatar_filename(username: &str) -> Result<String, AppError> {
+    let normalized = username.trim().to_ascii_lowercase();
+    if normalized.is_empty()
+        || !normalized
+            .chars()
+            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit())
+    {
+        return Err(AppError::new("invalid username"));
     }
+    Ok(format!("{}.png", normalized))
+}
+
+fn avatar_path_for_username(username: &str) -> Result<PathBuf, AppError> {
+    Ok(avatars_dir()?.join(avatar_filename(username)?))
+}
+
+fn avatar_url_for_user(
+    username: &str,
+    stored: Option<&str>,
+    _timestamp: Option<&str>,
+) -> Option<String> {
+    let stored = stored.map(str::trim).unwrap_or_default();
+    if stored.is_empty() {
+        return None;
+    }
+    let username = username.trim();
+    if username.is_empty() {
+        return None;
+    }
+    Some(format!("/api/v1/profile/picture/{}", username))
+}
+
+fn store_profile_picture(username: &str, bytes: &[u8]) -> Result<String, AppError> {
+    if bytes.is_empty() {
+        return Err(AppError::new("profile picture must not be empty"));
+    }
+    if bytes.len() > PROFILE_PICTURE_MAX_BYTES {
+        return Err(AppError::new("profile picture exceeds 1MB"));
+    }
+    let image = image::load_from_memory(bytes)
+        .map_err(|_| AppError::new("profile picture must be PNG, JPEG, or WebP"))?;
+    let rgba = image.to_rgba8();
+    let width = rgba.width();
+    let height = rgba.height();
+    if width == 0 || height == 0 {
+        return Err(AppError::new("profile picture could not be decoded"));
+    }
+    let side = width.min(height);
+    let offset_x = (width - side) / 2;
+    let offset_y = (height - side) / 2;
+    let cropped = image::imageops::crop_imm(&rgba, offset_x, offset_y, side, side).to_image();
+    let resized = image::imageops::resize(
+        &cropped,
+        PROFILE_PICTURE_SIZE,
+        PROFILE_PICTURE_SIZE,
+        image::imageops::FilterType::Triangle,
+    );
+    let path = avatar_path_for_username(username)?;
+    resized
+        .save_with_format(&path, image::ImageFormat::Png)
+        .map_err(|error| AppError::new(error.to_string()))?;
+    Ok(path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .map(|value| format!("avatars/{}", value))
+        .ok_or_else(|| AppError::new("failed to persist profile picture path"))?)
+}
+
+fn remove_profile_picture_file(username: &str) -> Result<(), AppError> {
+    let path = avatar_path_for_username(username)?;
+    if path.exists() {
+        fs::remove_file(&path).map_err(|error| AppError::new(error.to_string()))?;
+    }
+    Ok(())
 }
 
 #[utoipa::path(
     post,
-    path = "/api/v1/auth/role/create",
+    path = "/api/v1/auth/bootstrap",
     tag = "Auth",
-    security(("bearer_auth" = [])),
-    request_body = AuthRoleCreateRequest,
-    responses((status = 200, description = "Created a role.", body = AuthRoleResponse))
+    request_body = AuthBootstrapRequest,
+    responses((status = 200, description = "Created the initial admin account.", body = AuthSessionResponse))
 )]
-async fn auth_role_create_api(
+async fn auth_bootstrap_api(
     State(state): State<Arc<AppState>>,
-    Json(request): Json<AuthRoleCreateRequest>,
-) -> Result<Json<AuthRoleResponse>, AppError> {
+    Json(request): Json<AuthBootstrapRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    if request.password != request.password_confirm {
+        return Err(AppError::new("password confirmation does not match"));
+    }
+    let database = state.database.clone();
+    let ttl_seconds = state.ui.auth.session_ttl_seconds;
+    let response = task::spawn_blocking(move || {
+        if database
+            .user_count()
+            .map_err(|error| AppError::new(error.to_string()))?
+            > 0
+        {
+            return Err(AppError::forbidden("bootstrap is no longer available"));
+        }
+        let (user, _, recovery_codes) = database
+            .user_create_account(&request.username, &request.password, "admin", false, None)
+            .map_err(|error| AppError::new(error.to_string()))?;
+        let (_, session) = database
+            .session_create(&user.username, ttl_seconds)
+            .map_err(|error| AppError::new(error.to_string()))?;
+        let mut response = auth_session_response(state.as_ref(), Some(user));
+        response.recovery_codes = Some(recovery_codes);
+        Ok::<(AuthSessionResponse, HeaderValue), AppError>((
+            response,
+            session_cookie_header(&session, ttl_seconds)?,
+        ))
+    })
+    .await
+    .map_err(|error| AppError::new(error.to_string()))??;
+    Ok(([(header::SET_COOKIE, response.1)], Json(response.0)))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/login",
+    tag = "Auth",
+    request_body = AuthLoginRequest,
+    responses((status = 200, description = "Authenticated a user.", body = AuthSessionResponse))
+)]
+async fn auth_login_api(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<AuthLoginRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let database = state.database.clone();
+    let ttl_seconds = state.ui.auth.session_ttl_seconds;
+    let response = task::spawn_blocking(move || {
+        let user = database
+            .user_authenticate(&request.username, &request.password)
+            .map_err(|error| AppError::unauthorized(error.to_string()))?
+            .ok_or_else(|| AppError::unauthorized("invalid username or password"))?;
+        let (_, session) = database
+            .session_create(&user.username, ttl_seconds)
+            .map_err(|error| AppError::new(error.to_string()))?;
+        Ok::<(AuthSessionResponse, HeaderValue), AppError>((
+            auth_session_response(state.as_ref(), Some(user)),
+            session_cookie_header(&session, ttl_seconds)?,
+        ))
+    })
+    .await
+    .map_err(|error| AppError::new(error.to_string()))??;
+    Ok(([(header::SET_COOKIE, response.1)], Json(response.0)))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/auth/captcha",
+    tag = "Auth",
+    responses((status = 200, description = "Generated a registration captcha.", body = CaptchaResponse))
+)]
+async fn auth_captcha_api(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<CaptchaResponse>, AppError> {
     let database = state.database.clone();
     let response = task::spawn_blocking(move || {
+        let _ = database.captcha_clear_expired();
+        let text = captcha_text();
+        let png = render_captcha_png(&text)?;
+        let (record, _) = database
+            .captcha_create(&text, CAPTCHA_TTL_SECONDS)
+            .map_err(|error| AppError::new(error.to_string()))?;
+        Ok::<CaptchaResponse, AppError>(CaptchaResponse {
+            captcha_id: record.id,
+            image_base64:
+                <base64::engine::general_purpose::GeneralPurpose as base64::Engine>::encode(
+                    &base64::engine::general_purpose::STANDARD,
+                    png,
+                ),
+            expires: record.expires,
+        })
+    })
+    .await
+    .map_err(|error| AppError::new(error.to_string()))??;
+    Ok(Json(response))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/register",
+    tag = "Auth",
+    request_body = AuthRegisterRequest,
+    responses((status = 200, description = "Registered a user account.", body = AuthSessionResponse))
+)]
+async fn auth_register_api(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<AuthRegisterRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    if !state.ui.auth.registration.enabled {
+        return Err(AppError::forbidden("registration is disabled"));
+    }
+    if request.password != request.password_confirm {
+        return Err(AppError::new("password confirmation does not match"));
+    }
+    let database = state.database.clone();
+    let ttl_seconds = state.ui.auth.session_ttl_seconds;
+    let response = task::spawn_blocking(move || {
+        let _ = database.captcha_clear_expired();
+        if database
+            .user_count()
+            .map_err(|error| AppError::new(error.to_string()))?
+            == 0
+        {
+            return Err(AppError::forbidden(
+                "registration is unavailable until the initial admin is created",
+            ));
+        }
         database
-            .role_create(&request.name, None)
-            .map(role_response)
+            .captcha_verify_once(&request.captcha_id, &request.captcha_answer)
+            .map_err(|error| AppError::new(error.to_string()))?;
+        let (user, _, recovery_codes) = database
+            .user_create_account(&request.username, &request.password, "user", false, None)
+            .map_err(|error| AppError::new(error.to_string()))?;
+        let (_, session) = database
+            .session_create(&user.username, ttl_seconds)
+            .map_err(|error| AppError::new(error.to_string()))?;
+        let mut response = auth_session_response(state.as_ref(), Some(user));
+        response.recovery_codes = Some(recovery_codes);
+        Ok::<(AuthSessionResponse, HeaderValue), AppError>((
+            response,
+            session_cookie_header(&session, ttl_seconds)?,
+        ))
+    })
+    .await
+    .map_err(|error| AppError::new(error.to_string()))??;
+    Ok(([(header::SET_COOKIE, response.1)], Json(response.0)))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/logout",
+    tag = "Auth",
+    responses((status = 200, description = "Ended the current session.", body = TokenActionResponse))
+)]
+async fn auth_logout_api(
+    State(state): State<Arc<AppState>>,
+    Extension(context): Extension<RequestAuthContext>,
+) -> Result<impl IntoResponse, AppError> {
+    if let Some(session) = context.session {
+        let database = state.database.clone();
+        task::spawn_blocking(move || {
+            database
+                .session_disable_value(&session)
+                .map_err(|error| AppError::new(error.to_string()))
+        })
+        .await
+        .map_err(|error| AppError::new(error.to_string()))??;
+    }
+    Ok((
+        [(header::SET_COOKIE, clear_session_cookie_header())],
+        Json(TokenActionResponse { ok: true }),
+    ))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/auth/me",
+    tag = "Auth",
+    responses((status = 200, description = "Current browser auth state.", body = AuthSessionResponse))
+)]
+async fn auth_me_api(
+    State(state): State<Arc<AppState>>,
+    Extension(context): Extension<RequestAuthContext>,
+) -> Json<AuthSessionResponse> {
+    Json(auth_session_response(state.as_ref(), context.user))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/auth/username/check",
+    tag = "Auth",
+    params(UsernameCheckParams),
+    responses((status = 200, description = "Checked username validity and availability.", body = UsernameCheckResponse))
+)]
+async fn auth_username_check_api(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<UsernameCheckParams>,
+) -> Json<UsernameCheckResponse> {
+    let database = state.database.clone();
+    let username = params.username.clone();
+    let fallback_username = username.clone();
+    let response = task::spawn_blocking(move || match database.username_availability(&username) {
+        Ok((normalized, available)) => UsernameCheckResponse {
+            normalized,
+            valid: true,
+            available,
+            error: None,
+        },
+        Err(error) => UsernameCheckResponse {
+            normalized: username.trim().to_ascii_lowercase(),
+            valid: false,
+            available: false,
+            error: Some(error.to_string()),
+        },
+    })
+    .await
+    .unwrap_or_else(|error| UsernameCheckResponse {
+        normalized: fallback_username.trim().to_ascii_lowercase(),
+        valid: false,
+        available: false,
+        error: Some(error.to_string()),
+    });
+    Json(response)
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/profile",
+    tag = "Auth",
+    security(("bearer_auth" = [])),
+    responses((status = 200, description = "Current profile.", body = AuthUserResponse))
+)]
+async fn profile_get_api(
+    Extension(context): Extension<RequestAuthContext>,
+) -> Result<Json<AuthUserResponse>, AppError> {
+    let user = context
+        .user
+        .ok_or_else(|| AppError::unauthorized("authentication is required"))?;
+    Ok(Json(user_response(user)))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/profile/password",
+    tag = "Auth",
+    security(("bearer_auth" = [])),
+    request_body = ProfilePasswordRequest,
+    responses((status = 200, description = "Changed the current password.", body = TokenActionResponse))
+)]
+async fn profile_password_api(
+    State(state): State<Arc<AppState>>,
+    Extension(context): Extension<RequestAuthContext>,
+    Json(request): Json<ProfilePasswordRequest>,
+) -> Result<Json<TokenActionResponse>, AppError> {
+    if request.new_password != request.password_confirm {
+        return Err(AppError::new("password confirmation does not match"));
+    }
+    let user = context
+        .user
+        .ok_or_else(|| AppError::unauthorized("authentication is required"))?;
+    let database = state.database.clone();
+    task::spawn_blocking(move || {
+        database
+            .user_change_password(
+                &user.username,
+                &request.current_password,
+                &request.new_password,
+            )
+            .map_err(|error| AppError::new(error.to_string()))
+    })
+    .await
+    .map_err(|error| AppError::new(error.to_string()))??;
+    Ok(Json(TokenActionResponse { ok: true }))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/profile/picture",
+    tag = "Auth",
+    security(("bearer_auth" = [])),
+    responses((status = 200, description = "Updated the profile picture.", body = AuthUserResponse))
+)]
+async fn profile_picture_api(
+    State(state): State<Arc<AppState>>,
+    Extension(context): Extension<RequestAuthContext>,
+    mut multipart: Multipart,
+) -> Result<Json<AuthUserResponse>, AppError> {
+    let user = context
+        .user
+        .ok_or_else(|| AppError::unauthorized("authentication is required"))?;
+    let mut bytes = Vec::new();
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|error| AppError::new(error.to_string()))?
+    {
+        if field.name() != Some("picture") {
+            continue;
+        }
+        bytes = field
+            .bytes()
+            .await
+            .map_err(|error| AppError::new(error.to_string()))?
+            .to_vec();
+        break;
+    }
+    if bytes.is_empty() {
+        return Err(AppError::new("profile picture must not be empty"));
+    }
+    let database = state.database.clone();
+    let response = task::spawn_blocking(move || {
+        let stored = store_profile_picture(&user.username, &bytes)?;
+        database
+            .user_update_profile_picture(&user.username, Some(&stored))
+            .map(user_response)
+            .map_err(|error| AppError::new(error.to_string()))
+    })
+    .await
+    .map_err(|error| AppError::new(error.to_string()))??;
+    Ok(Json(response))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/v1/profile/picture",
+    tag = "Auth",
+    security(("bearer_auth" = [])),
+    responses((status = 200, description = "Removed the profile picture.", body = AuthUserResponse))
+)]
+async fn profile_picture_delete_api(
+    State(state): State<Arc<AppState>>,
+    Extension(context): Extension<RequestAuthContext>,
+) -> Result<Json<AuthUserResponse>, AppError> {
+    let user = context
+        .user
+        .ok_or_else(|| AppError::unauthorized("authentication is required"))?;
+    let database = state.database.clone();
+    let response = task::spawn_blocking(move || {
+        remove_profile_picture_file(&user.username)?;
+        database
+            .user_update_profile_picture(&user.username, None)
+            .map(user_response)
             .map_err(|error| AppError::new(error.to_string()))
     })
     .await
@@ -183,161 +795,193 @@ async fn auth_role_create_api(
 
 #[utoipa::path(
     get,
-    path = "/api/v1/auth/role",
+    path = "/api/v1/profile/picture/{username}",
     tag = "Auth",
-    security(("bearer_auth" = [])),
-    params(AuthRoleGetParams),
-    responses((status = 200, description = "Fetched one role.", body = AuthRoleResponse))
+    params(ProfilePictureParams),
+    responses((status = 200, description = "Profile picture image"))
 )]
-async fn auth_role_get_api(
+async fn profile_picture_get_api(
     State(state): State<Arc<AppState>>,
-    Query(params): Query<AuthRoleGetParams>,
-) -> Result<Json<AuthRoleResponse>, AppError> {
+    Path(params): Path<ProfilePictureParams>,
+) -> Result<impl IntoResponse, AppError> {
     let database = state.database.clone();
-    let response = task::spawn_blocking(move || {
-        database
-            .role_get(&params.name)
+    let username = params.username;
+    let bytes = task::spawn_blocking(move || {
+        let user = database
+            .user_get(&username)
             .map_err(|error| AppError::new(error.to_string()))?
-            .map(role_response)
-            .ok_or_else(|| AppError::new("role not found"))
+            .ok_or_else(|| AppError::new("user does not exist"))?;
+        let stored = user
+            .profile_picture
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| AppError::new("profile picture not found"))?;
+        let filename = stored
+            .rsplit('/')
+            .next()
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| AppError::new("profile picture not found"))?;
+        fs::read(avatars_dir()?.join(filename)).map_err(|error| AppError::new(error.to_string()))
     })
     .await
     .map_err(|error| AppError::new(error.to_string()))??;
-    Ok(Json(response))
-}
-
-#[utoipa::path(
-    get,
-    path = "/api/v1/auth/roles/search",
-    tag = "Auth",
-    security(("bearer_auth" = [])),
-    params(AuthSearchParams),
-    responses((status = 200, description = "Search roles.", body = AuthRoleSearchResponse))
-)]
-async fn auth_roles_search_api(
-    State(state): State<Arc<AppState>>,
-    Query(params): Query<AuthSearchParams>,
-) -> Result<Json<AuthRoleSearchResponse>, AppError> {
-    let database = state.database.clone();
-    let response = task::spawn_blocking(move || {
-        let page = database
-            .role_search(&params.q, params.page.max(1), params.limit.max(1))
-            .map_err(|error| AppError::new(error.to_string()))?;
-        Ok::<AuthRoleSearchResponse, AppError>(AuthRoleSearchResponse {
-            items: page.items.into_iter().map(role_response).collect(),
-            page: page.page,
-            limit: page.page_size,
-            has_next: page.has_next,
-        })
-    })
-    .await
-    .map_err(|error| AppError::new(error.to_string()))??;
-    Ok(Json(response))
+    Ok((
+        [(header::CONTENT_TYPE, HeaderValue::from_static("image/png"))],
+        bytes,
+    ))
 }
 
 #[utoipa::path(
     post,
-    path = "/api/v1/auth/role/delete",
+    path = "/api/v1/profile/key/regenerate",
     tag = "Auth",
     security(("bearer_auth" = [])),
-    request_body = AuthRoleDeleteRequest,
-    responses((status = 200, description = "Deleted a role.", body = TokenActionResponse))
+    responses((status = 200, description = "Regenerated the current API key.", body = KeyRegenerateResponse))
 )]
-async fn auth_role_delete_api(
+async fn profile_key_regenerate_api(
     State(state): State<Arc<AppState>>,
-    Json(request): Json<AuthRoleDeleteRequest>,
+    Extension(context): Extension<RequestAuthContext>,
+) -> Result<Json<KeyRegenerateResponse>, AppError> {
+    let user = context
+        .user
+        .ok_or_else(|| AppError::unauthorized("authentication is required"))?;
+    let database = state.database.clone();
+    let key = task::spawn_blocking(move || {
+        database
+            .user_regenerate_key(&user.username, None)
+            .map_err(|error| AppError::new(error.to_string()))
+    })
+    .await
+    .map_err(|error| AppError::new(error.to_string()))??;
+    Ok(Json(KeyRegenerateResponse { key }))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/profile/recovery/regenerate",
+    tag = "Auth",
+    security(("bearer_auth" = [])),
+    responses((status = 200, description = "Regenerated recovery codes.", body = RecoveryCodesResponse))
+)]
+async fn profile_recovery_regenerate_api(
+    State(state): State<Arc<AppState>>,
+    Extension(context): Extension<RequestAuthContext>,
+) -> Result<Json<RecoveryCodesResponse>, AppError> {
+    let user = context
+        .user
+        .ok_or_else(|| AppError::unauthorized("authentication is required"))?;
+    let database = state.database.clone();
+    let recovery_codes = task::spawn_blocking(move || {
+        database
+            .user_regenerate_recovery_codes(&user.username, None)
+            .map_err(|error| AppError::new(error.to_string()))
+    })
+    .await
+    .map_err(|error| AppError::new(error.to_string()))??;
+    Ok(Json(RecoveryCodesResponse { recovery_codes }))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/password/reset",
+    tag = "Auth",
+    request_body = AuthPasswordResetRequest,
+    responses((status = 200, description = "Reset a password using a recovery code.", body = TokenActionResponse))
+)]
+async fn auth_password_reset_api(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<AuthPasswordResetRequest>,
 ) -> Result<Json<TokenActionResponse>, AppError> {
+    if request.new_password != request.password_confirm {
+        return Err(AppError::new("password confirmation does not match"));
+    }
     let database = state.database.clone();
     task::spawn_blocking(move || {
-        let deleted = database
-            .role_delete(&request.name)
+        let _ = database.captcha_clear_expired();
+        database
+            .captcha_verify_once(&request.captcha_id, &request.captcha_answer)
             .map_err(|error| AppError::new(error.to_string()))?;
-        if !deleted {
-            return Err(AppError::new("role not found"));
+        database
+            .user_reset_with_recovery_code(
+                &request.username,
+                &request.recovery_code,
+                &request.new_password,
+                None,
+            )
+            .map_err(|error| AppError::new(error.to_string()))
+    })
+    .await
+    .map_err(|error| AppError::new(error.to_string()))??;
+    Ok(Json(TokenActionResponse { ok: true }))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/profile/delete",
+    tag = "Auth",
+    security(("bearer_auth" = [])),
+    request_body = ProfileDeleteRequest,
+    responses((status = 200, description = "Deleted the current account.", body = TokenActionResponse))
+)]
+async fn profile_delete_api(
+    State(state): State<Arc<AppState>>,
+    Extension(context): Extension<RequestAuthContext>,
+    Json(request): Json<ProfileDeleteRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let user = context
+        .user
+        .ok_or_else(|| AppError::unauthorized("authentication is required"))?;
+    let session = context.session.clone();
+    let database = state.database.clone();
+    task::spawn_blocking(move || {
+        let authenticated = database
+            .user_authenticate(&user.username, &request.password)
+            .map_err(|error| AppError::new(error.to_string()))?
+            .is_some();
+        if !authenticated {
+            return Err(AppError::unauthorized("invalid password"));
+        }
+        database
+            .user_delete(&user.username)
+            .map_err(|error| AppError::new(error.to_string()))?;
+        let _ = remove_profile_picture_file(&user.username);
+        if let Some(session) = session {
+            let _ = database.session_disable_value(&session);
         }
         Ok::<(), AppError>(())
     })
     .await
     .map_err(|error| AppError::new(error.to_string()))??;
-    Ok(Json(TokenActionResponse { ok: true }))
+    Ok((
+        [(header::SET_COOKIE, clear_session_cookie_header())],
+        Json(TokenActionResponse { ok: true }),
+    ))
 }
 
 #[utoipa::path(
-    post,
-    path = "/api/v1/auth/user/create",
+    get,
+    path = "/api/v1/admin/users",
     tag = "Auth",
     security(("bearer_auth" = [])),
-    request_body = AuthUserCreateRequest,
-    responses((status = 200, description = "Created a user and API key.", body = AuthUserCreateResponse))
+    params(UsersSearchParams),
+    responses((status = 200, description = "Listed users.", body = UsersListResponse))
 )]
-async fn auth_user_create_api(
+async fn admin_users_api(
     State(state): State<Arc<AppState>>,
-    Json(request): Json<AuthUserCreateRequest>,
-) -> Result<Json<AuthUserCreateResponse>, AppError> {
+    Query(params): Query<UsersSearchParams>,
+) -> Result<Json<UsersListResponse>, AppError> {
     let database = state.database.clone();
     let response = task::spawn_blocking(move || {
-        let timestamp = Utc::now().to_rfc3339();
-        let username = request.username;
-        let role = request.role.unwrap_or_else(|| "user".to_string());
-        let (user, api_key) = database
-            .user_create(&username, &role, Some(&timestamp))
+        let total_results = database
+            .user_search_total(&params.q)
             .map_err(|error| AppError::new(error.to_string()))?;
-        Ok::<AuthUserCreateResponse, AppError>(AuthUserCreateResponse {
-            user: user_response(user),
-            api_key,
-        })
-    })
-    .await
-    .map_err(|error| AppError::new(error.to_string()))??;
-    Ok(Json(response))
-}
-
-#[utoipa::path(
-    get,
-    path = "/api/v1/auth/user",
-    tag = "Auth",
-    security(("bearer_auth" = [])),
-    params(AuthUserGetParams),
-    responses((status = 200, description = "Fetched one user.", body = AuthUserResponse))
-)]
-async fn auth_user_get_api(
-    State(state): State<Arc<AppState>>,
-    Query(params): Query<AuthUserGetParams>,
-) -> Result<Json<AuthUserResponse>, AppError> {
-    let database = state.database.clone();
-    let response = task::spawn_blocking(move || {
-        database
-            .user_get(&params.username)
-            .map_err(|error| AppError::new(error.to_string()))?
-            .map(user_response)
-            .ok_or_else(|| AppError::new("user not found"))
-    })
-    .await
-    .map_err(|error| AppError::new(error.to_string()))??;
-    Ok(Json(response))
-}
-
-#[utoipa::path(
-    get,
-    path = "/api/v1/auth/users/search",
-    tag = "Auth",
-    security(("bearer_auth" = [])),
-    params(AuthSearchParams),
-    responses((status = 200, description = "Search users.", body = AuthUserSearchResponse))
-)]
-async fn auth_users_search_api(
-    State(state): State<Arc<AppState>>,
-    Query(params): Query<AuthSearchParams>,
-) -> Result<Json<AuthUserSearchResponse>, AppError> {
-    let database = state.database.clone();
-    let response = task::spawn_blocking(move || {
         let page = database
             .user_search(&params.q, params.page.max(1), params.limit.max(1))
             .map_err(|error| AppError::new(error.to_string()))?;
-        Ok::<AuthUserSearchResponse, AppError>(AuthUserSearchResponse {
+        Ok::<UsersListResponse, AppError>(UsersListResponse {
             items: page.items.into_iter().map(user_response).collect(),
             page: page.page,
             limit: page.page_size,
+            total_results,
             has_next: page.has_next,
         })
     })
@@ -348,73 +992,192 @@ async fn auth_users_search_api(
 
 #[utoipa::path(
     post,
-    path = "/api/v1/auth/user/disable",
+    path = "/api/v1/admin/users/create",
     tag = "Auth",
     security(("bearer_auth" = [])),
-    request_body = AuthUserNameRequest,
-    responses((status = 200, description = "Disabled a user.", body = TokenActionResponse))
+    request_body = AdminUserCreateRequest,
+    responses((status = 200, description = "Created a user.", body = AdminUserCreateResponse))
 )]
-async fn auth_user_disable_api(
+async fn admin_user_create_api(
     State(state): State<Arc<AppState>>,
-    Json(request): Json<AuthUserNameRequest>,
-) -> Result<Json<TokenActionResponse>, AppError> {
-    let database = state.database.clone();
-    task::spawn_blocking(move || {
-        database
-            .user_disable(&request.username)
-            .map_err(|error| AppError::new(error.to_string()))?;
-        Ok::<(), AppError>(())
-    })
-    .await
-    .map_err(|error| AppError::new(error.to_string()))??;
-    Ok(Json(TokenActionResponse { ok: true }))
-}
-
-#[utoipa::path(
-    post,
-    path = "/api/v1/auth/user/enable",
-    tag = "Auth",
-    security(("bearer_auth" = [])),
-    request_body = AuthUserNameRequest,
-    responses((status = 200, description = "Enabled a user.", body = TokenActionResponse))
-)]
-async fn auth_user_enable_api(
-    State(state): State<Arc<AppState>>,
-    Json(request): Json<AuthUserNameRequest>,
-) -> Result<Json<TokenActionResponse>, AppError> {
-    let database = state.database.clone();
-    task::spawn_blocking(move || {
-        database
-            .user_enable(&request.username)
-            .map_err(|error| AppError::new(error.to_string()))?;
-        Ok::<(), AppError>(())
-    })
-    .await
-    .map_err(|error| AppError::new(error.to_string()))??;
-    Ok(Json(TokenActionResponse { ok: true }))
-}
-
-#[utoipa::path(
-    post,
-    path = "/api/v1/auth/user/reset",
-    tag = "Auth",
-    security(("bearer_auth" = [])),
-    request_body = AuthUserNameRequest,
-    responses((status = 200, description = "Reset a user API key.", body = AuthUserResetResponse))
-)]
-async fn auth_user_reset_api(
-    State(state): State<Arc<AppState>>,
-    Json(request): Json<AuthUserNameRequest>,
-) -> Result<Json<AuthUserResetResponse>, AppError> {
+    Json(request): Json<AdminUserCreateRequest>,
+) -> Result<Json<AdminUserCreateResponse>, AppError> {
+    if request.password != request.password_confirm {
+        return Err(AppError::new("password confirmation does not match"));
+    }
     let database = state.database.clone();
     let response = task::spawn_blocking(move || {
-        let api_key = database
+        let (user, key, recovery_codes) = database
+            .user_create_account(
+                &request.username,
+                &request.password,
+                &request.role,
+                false,
+                None,
+            )
+            .map_err(|error| AppError::new(error.to_string()))?;
+        Ok::<AdminUserCreateResponse, AppError>(AdminUserCreateResponse {
+            user: user_response(user),
+            key,
+            recovery_codes,
+        })
+    })
+    .await
+    .map_err(|error| AppError::new(error.to_string()))??;
+    Ok(Json(response))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/admin/users/role",
+    tag = "Auth",
+    security(("bearer_auth" = [])),
+    request_body = AdminUserRoleRequest,
+    responses((status = 200, description = "Updated a user role.", body = AuthUserResponse))
+)]
+async fn admin_user_role_api(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<AdminUserRoleRequest>,
+) -> Result<Json<AuthUserResponse>, AppError> {
+    let database = state.database.clone();
+    let response = task::spawn_blocking(move || {
+        database
+            .user_update_role(&request.username, &request.role)
+            .map(user_response)
+            .map_err(|error| AppError::new(error.to_string()))
+    })
+    .await
+    .map_err(|error| AppError::new(error.to_string()))??;
+    Ok(Json(response))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/admin/users/enabled",
+    tag = "Auth",
+    security(("bearer_auth" = [])),
+    request_body = AdminUserEnabledRequest,
+    responses((status = 200, description = "Enabled or disabled a user account.", body = AuthUserResponse))
+)]
+async fn admin_user_enabled_api(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<AdminUserEnabledRequest>,
+) -> Result<Json<AuthUserResponse>, AppError> {
+    let database = state.database.clone();
+    let response = task::spawn_blocking(move || {
+        if request.enabled {
+            database
+                .user_enable(&request.username)
+                .map_err(|error| AppError::new(error.to_string()))?;
+        } else {
+            database
+                .user_disable(&request.username)
+                .map_err(|error| AppError::new(error.to_string()))?;
+        }
+        database
+            .user_get(&request.username)
+            .map_err(|error| AppError::new(error.to_string()))?
+            .map(user_response)
+            .ok_or_else(|| AppError::new("user no longer exists"))
+    })
+    .await
+    .map_err(|error| AppError::new(error.to_string()))??;
+    Ok(Json(response))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/admin/users/password/reset",
+    tag = "Auth",
+    security(("bearer_auth" = [])),
+    request_body = AdminUserNameRequest,
+    responses((status = 200, description = "Reset a user password.", body = AdminPasswordResetResponse))
+)]
+async fn admin_user_password_reset_api(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<AdminUserNameRequest>,
+) -> Result<Json<AdminPasswordResetResponse>, AppError> {
+    let database = state.database.clone();
+    let response = task::spawn_blocking(move || {
+        let password = database
             .user_reset(&request.username, None)
             .map_err(|error| AppError::new(error.to_string()))?;
-        Ok::<AuthUserResetResponse, AppError>(AuthUserResetResponse {
+        Ok::<AdminPasswordResetResponse, AppError>(AdminPasswordResetResponse {
             username: request.username,
-            api_key,
+            password,
         })
+    })
+    .await
+    .map_err(|error| AppError::new(error.to_string()))??;
+    Ok(Json(response))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/admin/users/key/regenerate",
+    tag = "Auth",
+    security(("bearer_auth" = [])),
+    request_body = AdminUserNameRequest,
+    responses((status = 200, description = "Regenerated a user API key.", body = KeyRegenerateResponse))
+)]
+async fn admin_user_key_regenerate_api(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<AdminUserNameRequest>,
+) -> Result<Json<KeyRegenerateResponse>, AppError> {
+    let database = state.database.clone();
+    let key = task::spawn_blocking(move || {
+        database
+            .user_regenerate_key(&request.username, None)
+            .map_err(|error| AppError::new(error.to_string()))
+    })
+    .await
+    .map_err(|error| AppError::new(error.to_string()))??;
+    Ok(Json(KeyRegenerateResponse { key }))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/admin/users/delete",
+    tag = "Auth",
+    security(("bearer_auth" = [])),
+    request_body = AdminUserNameRequest,
+    responses((status = 200, description = "Deleted a user account.", body = TokenActionResponse))
+)]
+async fn admin_user_delete_api(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<AdminUserNameRequest>,
+) -> Result<Json<TokenActionResponse>, AppError> {
+    let database = state.database.clone();
+    task::spawn_blocking(move || {
+        let _ = remove_profile_picture_file(&request.username);
+        database
+            .user_delete(&request.username)
+            .map_err(|error| AppError::new(error.to_string()))
+    })
+    .await
+    .map_err(|error| AppError::new(error.to_string()))??;
+    Ok(Json(TokenActionResponse { ok: true }))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/admin/users/picture/delete",
+    tag = "Auth",
+    security(("bearer_auth" = [])),
+    request_body = AdminUserNameRequest,
+    responses((status = 200, description = "Removed a user's avatar.", body = AuthUserResponse))
+)]
+async fn admin_user_picture_delete_api(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<AdminUserNameRequest>,
+) -> Result<Json<AuthUserResponse>, AppError> {
+    let database = state.database.clone();
+    let response = task::spawn_blocking(move || {
+        remove_profile_picture_file(&request.username)?;
+        database
+            .user_update_profile_picture(&request.username, None)
+            .map(user_response)
+            .map_err(|error| AppError::new(error.to_string()))
     })
     .await
     .map_err(|error| AppError::new(error.to_string()))??;

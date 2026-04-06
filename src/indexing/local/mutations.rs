@@ -16,12 +16,14 @@ impl LocalIndex {
         collection: crate::indexing::Collection,
         address: u64,
         name: &str,
+        username: &str,
     ) -> Result<(), Error> {
         self.mutate_symbol(
             sha256,
             collection,
             address,
             name,
+            username,
             super::support::SymbolMutation::Add,
         )
     }
@@ -38,6 +40,7 @@ impl LocalIndex {
             collection,
             address,
             name,
+            "",
             super::support::SymbolMutation::Remove,
         )
     }
@@ -48,14 +51,73 @@ impl LocalIndex {
         collection: crate::indexing::Collection,
         address: u64,
         name: &str,
+        username: &str,
     ) -> Result<(), Error> {
         self.mutate_symbol(
             sha256,
             collection,
             address,
             name,
+            username,
             super::support::SymbolMutation::Replace,
         )
+    }
+
+    pub fn symbol_delete_global(&self, name: &str) -> Result<(), Error> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err(Error::InvalidConfiguration("symbol must not be empty"));
+        }
+        let keys = self
+            .store
+            .object_list("index/")
+            .map_err(|error| Error::LocalStore(error.to_string()))?;
+        for key in keys {
+            let mut entry = self
+                .store
+                .object_get_json::<IndexEntry>(&key)
+                .map_err(|error| Error::LocalStore(error.to_string()))?;
+            let (changed, _) = mutate_symbol_attributes(
+                &mut entry.attributes,
+                entry.entity,
+                entry.address,
+                name,
+                "",
+                "",
+                super::support::SymbolMutation::Remove,
+            );
+            if changed {
+                self.store
+                    .object_put_json(&key, &entry)
+                    .map_err(|error| Error::LocalStore(error.to_string()))?;
+                self.localdb
+                    .entity_metadata_upsert(&EntityMetadataRecord {
+                        object_id: entry.object_id.clone(),
+                        sha256: entry.sha256.clone(),
+                        collection: entry.entity,
+                        architecture: entry.architecture.clone(),
+                        username: entry.username.clone(),
+                        address: entry.address,
+                        size: entry.size,
+                        cyclomatic_complexity: entry.cyclomatic_complexity,
+                        average_instructions_per_block: entry.average_instructions_per_block,
+                        number_of_instructions: entry.number_of_instructions,
+                        number_of_blocks: entry.number_of_blocks,
+                        markov: entry.markov,
+                        entropy: entry.entropy,
+                        contiguous: entry.contiguous,
+                        chromosome_entropy: entry.chromosome_entropy,
+                        timestamp: entry.timestamp.clone(),
+                        vector: entry.vector.clone(),
+                        attributes: entry.attributes.clone(),
+                    })
+                    .map_err(|error| Error::LocalDb(error.to_string()))?;
+            }
+        }
+        self.localdb
+            .symbol_delete_global(name)
+            .map_err(|error| Error::LocalDb(error.to_string()))?;
+        Ok(())
     }
 
     pub fn collection_corpus_list(
@@ -71,6 +133,19 @@ impl LocalIndex {
             .map_err(|error| Error::LocalDb(error.to_string()))
     }
 
+    pub fn collection_corpus_details_list(
+        &self,
+        sha256: &str,
+        collection: crate::indexing::Collection,
+        architecture: &str,
+        address: u64,
+    ) -> Result<Vec<crate::databases::localdb::CorpusRecord>, Error> {
+        self.collection_entry(sha256, collection, architecture, address)?;
+        self.localdb
+            .entity_corpus_details_list(sha256, collection, architecture, address)
+            .map_err(|error| Error::LocalDb(error.to_string()))
+    }
+
     pub fn collection_corpus_add(
         &self,
         sha256: &str,
@@ -78,8 +153,17 @@ impl LocalIndex {
         architecture: &str,
         address: u64,
         corpus: &str,
+        username: &str,
     ) -> Result<(), Error> {
-        self.mutate_collection_corpus(sha256, collection, architecture, address, corpus, true)
+        self.mutate_collection_corpus(
+            sha256,
+            collection,
+            architecture,
+            address,
+            corpus,
+            username,
+            true,
+        )
     }
 
     pub fn collection_corpus_remove(
@@ -90,7 +174,7 @@ impl LocalIndex {
         address: u64,
         corpus: &str,
     ) -> Result<(), Error> {
-        self.mutate_collection_corpus(sha256, collection, architecture, address, corpus, false)
+        self.mutate_collection_corpus(sha256, collection, architecture, address, corpus, "", false)
     }
 
     pub fn corpus_rename(&self, old_name: &str, new_name: &str) -> Result<(), Error> {
@@ -189,6 +273,7 @@ impl LocalIndex {
         collection: crate::indexing::Collection,
         address: u64,
         name: &str,
+        username: &str,
         mutation: super::support::SymbolMutation,
     ) -> Result<(), Error> {
         let sha256 = sha256.trim();
@@ -218,6 +303,7 @@ impl LocalIndex {
             crate::indexing::Collection::Block => crate::indexing::Entity::Block,
             crate::indexing::Collection::Instruction => crate::indexing::Entity::Instruction,
         };
+        let timestamp = chrono::Utc::now().to_rfc3339();
         let mut updated_rows = BTreeMap::<(Entity, String), Vec<local_lancedb::Row>>::new();
         let mut matched_entry = false;
         let mut matched_symbol = false;
@@ -235,6 +321,8 @@ impl LocalIndex {
                 entry.entity,
                 address,
                 name,
+                username,
+                &timestamp,
                 mutation,
             );
             matched_symbol |= entry_matched_symbol;
@@ -295,7 +383,7 @@ impl LocalIndex {
             super::support::SymbolMutation::Add | super::support::SymbolMutation::Replace
         ) {
             self.localdb
-                .symbol_add(name, None)
+                .symbol_add(name, Some(&timestamp), Some(username))
                 .map_err(|error| Error::LocalDb(error.to_string()))?;
         }
 
@@ -339,6 +427,7 @@ impl LocalIndex {
         architecture: &str,
         address: u64,
         corpus: &str,
+        username: &str,
         add: bool,
     ) -> Result<(), Error> {
         let corpus = corpus.trim();
@@ -359,6 +448,8 @@ impl LocalIndex {
             effective.retain(|existing| existing != corpus);
             effective = unique_corpora(&effective);
         }
+        entry.username = username.to_string();
+        entry.timestamp = chrono::Utc::now().to_rfc3339();
         entry.explicit_corpora = (!effective.is_empty()).then_some(effective);
         let object_id = super::support::manual_object_id(collection, architecture, sha256, address);
         let key = super::support::index_entry_key(collection, architecture, &object_id);
@@ -372,6 +463,7 @@ impl LocalIndex {
                 &entry.architecture,
                 entry.address,
                 entry.explicit_corpora.as_deref().unwrap_or(&[]),
+                &entry.username,
                 &entry.timestamp,
             )
             .map_err(|error| Error::LocalDb(error.to_string()))

@@ -112,6 +112,8 @@ fn symbol_attribute(name: &str, entity: Entity, address: u64) -> Attribute {
         .to_string(),
         name: name.to_string(),
         address,
+        username: String::new(),
+        timestamp: String::new(),
     })
 }
 
@@ -801,6 +803,7 @@ fn add_remove_replace_symbol_updates_results() {
             crate::indexing::Collection::Function,
             0x1000,
             "beta",
+            "admin",
         )
         .expect("add symbol");
     let add_hits = client
@@ -842,6 +845,7 @@ fn add_remove_replace_symbol_updates_results() {
             crate::indexing::Collection::Function,
             0x1000,
             "gamma",
+            "admin",
         )
         .expect("replace symbol");
     let replace_hits = client
@@ -969,7 +973,14 @@ fn graph_level_corpus_mutations_recompute_inherited_entity_corpora() {
     client.commit().expect("commit function");
 
     client
-        .collection_corpus_add(&sha256, Entity::Function, "amd64", 0x1000, "malware")
+        .collection_corpus_add(
+            &sha256,
+            Entity::Function,
+            "amd64",
+            0x1000,
+            "malware",
+            "admin",
+        )
         .expect("add corpus");
     let corpora = client.corpus_list().expect("list corpora after add");
     assert!(corpora.iter().any(|corpus| corpus == "default"));
@@ -1055,7 +1066,14 @@ fn entity_corpora_are_collection_scoped() {
     );
 
     client
-        .collection_corpus_add(&sha256, Entity::Function, "amd64", 0x1000, "goodware")
+        .collection_corpus_add(
+            &sha256,
+            Entity::Function,
+            "amd64",
+            0x1000,
+            "goodware",
+            "admin",
+        )
         .expect("add function corpus");
 
     assert_eq!(
@@ -1079,7 +1097,7 @@ fn entity_corpora_are_collection_scoped() {
     );
 
     client
-        .collection_corpus_add(&sha256, Entity::Block, "amd64", 0x1000, "clean")
+        .collection_corpus_add(&sha256, Entity::Block, "amd64", 0x1000, "clean", "admin")
         .expect("add block corpus");
 
     assert_eq!(
@@ -1151,7 +1169,7 @@ fn localdb_metadata_round_trips_through_local_index() {
     client.commit().expect("commit function for tag metadata");
 
     client
-        .collection_tag_add(&sha256, Collection::Function, 0x1000, "goodware")
+        .collection_tag_add(&sha256, Collection::Function, 0x1000, "goodware", "admin")
         .expect("add collection tag");
     let collection_tags = client
         .collection_tag_search("good", Some(Collection::Function), 1, 10)
@@ -1165,6 +1183,7 @@ fn localdb_metadata_round_trips_through_local_index() {
             Collection::Function,
             0x1000,
             &["library".to_string(), "shared".to_string()],
+            "admin",
         )
         .expect("replace collection tags");
     let collection_tags = client
@@ -1312,13 +1331,19 @@ fn entity_tags_are_collection_scoped() {
     client.commit().expect("commit graph");
 
     client
-        .collection_tag_add(&sha256, Collection::Function, 0x1000, "function")
+        .collection_tag_add(&sha256, Collection::Function, 0x1000, "function", "admin")
         .expect("add function tag");
     client
-        .collection_tag_add(&sha256, Collection::Block, 0x1000, "block")
+        .collection_tag_add(&sha256, Collection::Block, 0x1000, "block", "admin")
         .expect("add block tag");
     client
-        .collection_tag_add(&sha256, Collection::Instruction, 0x1000, "instruction")
+        .collection_tag_add(
+            &sha256,
+            Collection::Instruction,
+            0x1000,
+            "instruction",
+            "admin",
+        )
         .expect("add instruction tag");
 
     assert_eq!(

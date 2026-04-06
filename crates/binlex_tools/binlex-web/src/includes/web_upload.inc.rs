@@ -396,6 +396,7 @@ fn ingest_upload(
                                                 collection: Collection::Function,
                                                 address: function.address(),
                                                 tag: tag.clone(),
+                                                username: username_for_background.clone(),
                                                 timestamp: timestamp.clone(),
                                             });
                                         }
@@ -409,6 +410,7 @@ fn ingest_upload(
                                                 collection: Collection::Block,
                                                 address: block.address(),
                                                 tag: tag.clone(),
+                                                username: username_for_background.clone(),
                                                 timestamp: timestamp.clone(),
                                             });
                                         }
@@ -422,6 +424,7 @@ fn ingest_upload(
                                                 collection: Collection::Instruction,
                                                 address: instruction.address,
                                                 tag: tag.clone(),
+                                                username: username_for_background.clone(),
                                                 timestamp: timestamp.clone(),
                                             });
                                         }
