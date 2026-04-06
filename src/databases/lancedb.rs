@@ -100,16 +100,14 @@ impl LanceDB {
             .runtime
             .block_on(connection.open_table(table_name).execute())
             .map_err(|error| Error::Lance(error.to_string()))?;
-        for batch in batches {
-            let reader = batch_reader_for_batches(vec![batch]);
-            let mut merge_insert = table.merge_insert(merge_keys);
-            merge_insert
-                .when_matched_update_all(None)
-                .when_not_matched_insert_all();
-            self.runtime
-                .block_on(merge_insert.execute(reader))
-                .map_err(|error| Error::Lance(error.to_string()))?;
-        }
+        let reader = batch_reader_for_batches(batches);
+        let mut merge_insert = table.merge_insert(merge_keys);
+        merge_insert
+            .when_matched_update_all(None)
+            .when_not_matched_insert_all();
+        self.runtime
+            .block_on(merge_insert.execute(reader))
+            .map_err(|error| Error::Lance(error.to_string()))?;
         Ok(())
     }
 

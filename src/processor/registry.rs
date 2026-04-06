@@ -158,9 +158,7 @@ fn cached_registrations(configured_directory: Option<&str>) -> Vec<ProcessorRegi
         return registrations.clone();
     }
     let discovered = discover_processor_registrations(configured_directory);
-    if !discovered.is_empty() {
-        registrations.insert(key, discovered.clone());
-    }
+    registrations.insert(key, discovered.clone());
     discovered
 }
 

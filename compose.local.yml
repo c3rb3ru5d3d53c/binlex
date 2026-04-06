@@ -24,3 +24,10 @@ services:
       dockerfile: docker/binlex-web.Dockerfile
       args:
         BINLEX_IMAGE_VERSION: ${BINLEX_VERSION:-latest}
+    environment:
+      BINLEX_WEB_IDLE: ${BINLEX_WEB_IDLE:-}
+    cap_add:
+      - PERFMON
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined

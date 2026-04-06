@@ -1,4 +1,4 @@
-FROM rust:1.94-bookworm AS builder
+FROM rust:1.94.1-trixie AS builder
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libprotobuf-dev protobuf-compiler \
@@ -22,7 +22,7 @@ RUN set -eux; \
         cp "$path" /tmp/binlex-processors/; \
     done
 
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 ARG BINLEX_IMAGE_SOURCE=https://github.com/c3rb3ru5d3d53c/binlex
 ARG BINLEX_IMAGE_VERSION=dev

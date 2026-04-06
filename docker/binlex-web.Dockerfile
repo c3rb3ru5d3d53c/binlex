@@ -1,4 +1,4 @@
-FROM rust:1.94-bookworm AS builder
+FROM rust:1.94.1-trixie AS builder
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libprotobuf-dev protobuf-compiler \
@@ -13,7 +13,7 @@ COPY . .
 RUN set -eux; \
     cargo build --release -p binlex-web
 
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 ARG BINLEX_IMAGE_SOURCE=https://github.com/c3rb3ru5d3d53c/binlex
 ARG BINLEX_IMAGE_VERSION=dev
@@ -24,7 +24,7 @@ LABEL org.opencontainers.image.version="${BINLEX_IMAGE_VERSION}"
 LABEL org.opencontainers.image.revision="${BINLEX_IMAGE_REVISION}"
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates libgcc-s1 libstdc++6 \
+    && apt-get install -y --no-install-recommends ca-certificates libgcc-s1 libstdc++6 linux-perf procps \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /data/binlex-web /root/.config/binlex /root/.local/share/binlex/index
 
@@ -41,5 +41,6 @@ ENV BINLEX_WEB_CONFIG=/root/.config/binlex/binlex-web.toml
 ENV BINLEX_WEB_SERVER_URL=http://binlex-server:5000
 ENV BINLEX_WEB_CORPUS=default
 ENV BINLEX_WEB_LOCK_CORPORA=
+ENV BINLEX_WEB_IDLE=
 
-CMD ["sh", "-lc", "mkdir -p /data/binlex-web /root/.config/binlex /root/.local/share/binlex/index && if [ ! -f \"${BINLEX_WEB_CONFIG}\" ]; then cat > \"${BINLEX_WEB_CONFIG}\" <<EOF\n[binlex-web]\nlisten = \"${BINLEX_WEB_LISTEN}\"\nport = ${BINLEX_WEB_PORT}\nurl = \"${BINLEX_WEB_URL}\"\ncorpus = \"${BINLEX_WEB_CORPUS}\"\n\n[binlex-web.binlex-server]\nurl = \"${BINLEX_WEB_SERVER_URL}\"\n\n[binlex-web.index.local]\nenabled = true\npath = \"/root/.local/share/binlex/index\"\n\n[binlex-web.upload.sample.corpora]\nlock = false\ndefault = [\"default\", \"goodware\", \"malware\"]\nEOF\nfi && lock_corpora_arg=\"\" && if [ -n \"${BINLEX_WEB_LOCK_CORPORA}\" ]; then lock_corpora_arg=\"--lock-corpora\"; fi && exec binlex-web --listen \"${BINLEX_WEB_LISTEN}\" --port \"${BINLEX_WEB_PORT}\" --url \"${BINLEX_WEB_URL}\" ${lock_corpora_arg}"]
+CMD ["sh", "-lc", "mkdir -p /data/binlex-web /root/.config/binlex /root/.local/share/binlex/index && if [ ! -f \"${BINLEX_WEB_CONFIG}\" ]; then cat > \"${BINLEX_WEB_CONFIG}\" <<EOF\n[binlex-web]\nlisten = \"${BINLEX_WEB_LISTEN}\"\nport = ${BINLEX_WEB_PORT}\nurl = \"${BINLEX_WEB_URL}\"\ncorpus = \"${BINLEX_WEB_CORPUS}\"\n\n[binlex-web.binlex-server]\nurl = \"${BINLEX_WEB_SERVER_URL}\"\n\n[binlex-web.index.local]\nenabled = true\npath = \"/root/.local/share/binlex/index\"\n\n[binlex-web.upload.sample.corpora]\nlock = false\ndefault = [\"default\", \"goodware\", \"malware\"]\nEOF\nfi && if [ -n \"${BINLEX_WEB_IDLE}\" ]; then echo \"binlex-web idle profiling mode enabled\"; while true; do sleep 3600; done; fi && lock_corpora_arg=\"\" && if [ -n \"${BINLEX_WEB_LOCK_CORPORA}\" ]; then lock_corpora_arg=\"--lock-corpora\"; fi && exec binlex-web --listen \"${BINLEX_WEB_LISTEN}\" --port \"${BINLEX_WEB_PORT}\" --url \"${BINLEX_WEB_URL}\" ${lock_corpora_arg}"]
