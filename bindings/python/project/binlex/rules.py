@@ -157,8 +157,8 @@ class Rule:
     def add_pattern(self, pattern: str, comment: str | None = None) -> str:
         return self._inner.add_pattern(pattern, comment)
 
-    def fragment_pattern(self, name: str, parts: int) -> list[str]:
-        return self._inner.fragment_pattern(name, parts)
+    def fragment_pattern(self, name: str, parts: int, destructive: bool = True) -> list[str]:
+        return self._inner.fragment_pattern(name, parts, destructive)
 
     def add_text(
         self,

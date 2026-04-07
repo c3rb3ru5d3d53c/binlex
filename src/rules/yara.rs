@@ -516,7 +516,12 @@ impl Rule {
         &self.patterns
     }
 
-    pub fn fragment_pattern(&mut self, name: &str, parts: usize) -> Result<Vec<String>, Error> {
+    pub fn fragment_pattern(
+        &mut self,
+        name: &str,
+        parts: usize,
+        destructive: bool,
+    ) -> Result<Vec<String>, Error> {
         if parts < 2 {
             return Err(Error::Validation(
                 "fragment_pattern requires at least 2 parts".to_string(),
@@ -571,6 +576,10 @@ impl Rule {
             });
             names.push(fragment_name);
             start = end;
+        }
+
+        if destructive {
+            self.remove_pattern(&source.name);
         }
 
         Ok(names)
@@ -1105,7 +1114,7 @@ mod tests {
     fn rule_can_fragment_hex_patterns() {
         let mut rule = Rule::new_with_options(Some("fragmented"), None);
         let pattern = rule.add_pattern("48 8B 05 11 22 33 44 48 85 C0", Some("anchor"));
-        let fragments = rule.fragment_pattern(&pattern, 3).unwrap();
+        let fragments = rule.fragment_pattern(&pattern, 3, true).unwrap();
         assert_eq!(
             fragments,
             vec![
@@ -1115,6 +1124,7 @@ mod tests {
             ]
         );
         let rendered = rule.render();
+        assert!(!rendered.contains("$chromosome_0 = { 48 8B 05 11 22 33 44 48 85 C0 }"));
         assert!(rendered.contains("$chromosome_0_fragment_0 = { 48 8B 05 11 }"));
         assert!(rendered.contains("$chromosome_0_fragment_1 = { 22 33 44 }"));
         assert!(rendered.contains("$chromosome_0_fragment_2 = { 48 85 C0 }"));
@@ -1124,7 +1134,7 @@ mod tests {
     fn rule_can_fragment_compact_hex_patterns() {
         let mut rule = Rule::new_with_options(Some("fragmented_compact"), None);
         let pattern = rule.add_pattern("488B05112233444885C0", None);
-        let fragments = rule.fragment_pattern(&pattern, 3).unwrap();
+        let fragments = rule.fragment_pattern(&pattern, 3, true).unwrap();
         assert_eq!(
             fragments,
             vec![
@@ -1134,17 +1144,27 @@ mod tests {
             ]
         );
         let rendered = rule.render();
-        assert!(rendered.contains("$chromosome_0 = { 488B05112233444885C0 }"));
+        assert!(!rendered.contains("$chromosome_0 = { 488B05112233444885C0 }"));
         assert!(rendered.contains("$chromosome_0_fragment_0 = { 48 8B 05 11 }"));
         assert!(rendered.contains("$chromosome_0_fragment_1 = { 22 33 44 }"));
         assert!(rendered.contains("$chromosome_0_fragment_2 = { 48 85 C0 }"));
     }
 
     #[test]
+    fn rule_can_fragment_patterns_non_destructively() {
+        let mut rule = Rule::new_with_options(Some("fragmented_keep"), None);
+        let pattern = rule.add_pattern("48 8B 05 11 22 33 44 48 85 C0", None);
+        let _ = rule.fragment_pattern(&pattern, 3, false).unwrap();
+        let rendered = rule.render();
+        assert!(rendered.contains("$chromosome_0 = { 48 8B 05 11 22 33 44 48 85 C0 }"));
+        assert!(rendered.contains("$chromosome_0_fragment_0 = { 48 8B 05 11 }"));
+    }
+
+    #[test]
     fn rule_supports_condition_at_least() {
         let mut rule = Rule::new_with_options(Some("at_least"), None);
         let pattern = rule.add_pattern("48 8B 05 11 22 33 44 48 85 C0", None);
-        let fragments = rule.fragment_pattern(&pattern, 3).unwrap();
+        let fragments = rule.fragment_pattern(&pattern, 3, true).unwrap();
         rule.set_condition(rule.condition_at_least(2, fragments.clone()));
         assert_eq!(
             rule.get_condition_text().as_deref(),
@@ -1169,7 +1189,7 @@ mod tests {
                 None,
             )
             .unwrap();
-        let error = rule.fragment_pattern(&text, 2).unwrap_err();
+        let error = rule.fragment_pattern(&text, 2, true).unwrap_err();
         assert_eq!(error.to_string(), "fragment_pattern only supports hex patterns");
     }
 
