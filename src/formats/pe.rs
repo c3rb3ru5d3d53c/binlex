@@ -62,6 +62,16 @@ pub struct PE {
 }
 
 impl PE {
+    fn dotnet_clr_runtime_directory(&self) -> Option<lief::pe::DataDirectory<'_>> {
+        let directory = self
+            .pe
+            .data_directory_by_type(DATA_DIRECTORY::CLR_RUNTIME_HEADER)?;
+        if directory.rva() == 0 || directory.size() < Cor20Header::size() as u32 {
+            return None;
+        }
+        Some(directory)
+    }
+
     /// Creates a new `PE` instance by reading a PE file from the provided path.
     ///
     /// # Parameters
@@ -113,23 +123,15 @@ impl PE {
     ///   * A reference to the parsed `Cor20Header` structure.
     /// * `None` - If the file is not a .NET executable or the header cannot be parsed.
     fn dotnet_parse_cor20_header(&self) -> Option<(u64, &Cor20Header)> {
-        if !self.is_dotnet() {
+        let clr_runtime_header = self.dotnet_clr_runtime_directory()?;
+        let start = self.relative_virtual_address_to_file_offset(clr_runtime_header.rva() as u64)?;
+        let end = start + Cor20Header::size() as u64;
+        if end as usize > self.file.data.len() {
             return None;
         }
-        if let Some(clr_runtime_header) = self
-            .pe
-            .data_directory_by_type(DATA_DIRECTORY::CLR_RUNTIME_HEADER)
-        {
-            if let Some(start) =
-                self.relative_virtual_address_to_file_offset(clr_runtime_header.rva() as u64)
-            {
-                let end = start + clr_runtime_header.size() as u64;
-                let data = &self.file.data[start as usize..end as usize];
-                let header = &Cor20Header::from_bytes(data)?;
-                return Some((start, header));
-            }
-        }
-        None
+        let data = &self.file.data[start as usize..end as usize];
+        let header = &Cor20Header::from_bytes(data)?;
+        Some((start, header))
     }
 
     /// Retrieves the .NET Core 2.0 header from the PE file if it is a .NET executable.
@@ -583,15 +585,20 @@ impl PE {
     /// - `false` otherwise.
     #[allow(dead_code)]
     pub fn is_dotnet(&self) -> bool {
-        self.pe.imports().any(|import| {
-            matches!(
-                import.name().to_lowercase().as_str(),
-                "mscorelib.dll" | "mscoree.dll"
-            ) && self
-                .pe
-                .data_directory_by_type(DATA_DIRECTORY::CLR_RUNTIME_HEADER)
-                .is_some()
-        })
+        let Some((_, cor20_header)) = self.dotnet_parse_cor20_header() else {
+            return false;
+        };
+        if cor20_header.cb < Cor20Header::size() as u32 {
+            return false;
+        }
+        if cor20_header.meta_data.virtual_address == 0 || cor20_header.meta_data.size == 0 {
+            return false;
+        }
+        matches!(
+            self.dotnet_storage_signature()
+                .map(|signature| signature.signature),
+            Some(0x424A_5342)
+        )
     }
 
     /// Creates a new `PE` instance from a byte vector containing PE file data.

@@ -50,6 +50,7 @@ struct SingleSelectTemplate<'a> {
     label: &'a str,
     selected: &'a str,
     options: &'a [String],
+    search_enabled: bool,
 }
 
 #[derive(Template)]
@@ -110,8 +111,10 @@ fn render_search_bootstrap(data: &PageData) -> String {
     let value =
         serde_json::to_string(&build_search_response(data)).unwrap_or_else(|_| "{}".to_string());
     let escaped = value.replace('<', "\\u003c");
+    let auth_user_json =
+        serde_json::to_string(&data.auth_user).unwrap_or_else(|_| "null".to_string());
     format!(
-        "window.__BINLEX_SEARCH_DATA__ = {}; window.__BINLEX_AUTH__ = {{ can_write: {}, role: \"{}\" }};",
+        "window.__BINLEX_SEARCH_DATA__ = {}; window.__BINLEX_AUTH__ = {{ can_write: {}, role: \"{}\", two_factor_required: {} }}; window.__BINLEX_CURRENT_USER__ = {};",
         escaped,
         if data.auth_user.is_some() {
             "true"
@@ -121,7 +124,13 @@ fn render_search_bootstrap(data: &PageData) -> String {
         data.auth_user
             .as_ref()
             .map(|user| html_escape(&user.role))
-            .unwrap_or_default()
+            .unwrap_or_default(),
+        if data.auth_two_factor_required {
+            "true"
+        } else {
+            "false"
+        },
+        auth_user_json.replace('<', "\\u003c")
     )
 }
 
@@ -199,25 +208,40 @@ fn render_auth_modals(data: &PageData) -> String {
     let profile_key = user
         .map(|value| html_escape(&value.key))
         .unwrap_or_default();
+    let profile_two_factor_enabled = user.map(|value| value.two_factor_enabled).unwrap_or(false);
+    let profile_two_factor_required = user.map(|value| value.two_factor_required).unwrap_or(false);
+    let profile_two_factor_status = if profile_two_factor_enabled {
+        "Enabled"
+    } else if profile_two_factor_required {
+        "Required on next sign in"
+    } else {
+        "Disabled"
+    };
     let profile_avatar = if let Some(value) = user {
         auth_avatar_label(value)
     } else {
         "<span>u</span>".to_string()
     };
+    let user_role_options = vec!["user".to_string(), "admin".to_string()];
+    let user_role_select_html =
+        render_single_select_dropdown("role", "Role", &user_role_options, "user", false);
     format!(
         r#"
 <div class="modal-backdrop auth-modal-backdrop" id="bootstrap-modal"{bootstrap_hidden}>
-  <div class="modal-card auth-card" role="dialog" aria-modal="true" aria-label="Create Admin">
+  <div class="modal-card auth-card bootstrap-card" role="dialog" aria-modal="true" aria-label="Create Admin">
     <div class="modal-header"><h2>Create Admin</h2></div>
     <p class="modal-tip">Create the first admin account to finish setting up Binlex Web.</p>
-    <form class="modal-grid auth-form" data-live-validation="create" onsubmit="submitBootstrap(event)">
+    <form class="modal-grid auth-form bootstrap-form" data-live-validation="create" onsubmit="submitBootstrap(event)">
+      <div class="profile-security-heading">Account</div>
       <label class="modal-field"><span>Admin Username</span><input class="menu-search" name="username" required autocomplete="username"></label>
       <div class="auth-field-feedback" data-feedback-for="username"></div>
+      <div class="profile-security-heading">Security</div>
       <label class="modal-field"><span>Password</span><input class="menu-search" name="password" type="password" required autocomplete="new-password"></label>
       <div class="auth-field-feedback" data-feedback-for="password"></div>
       <label class="modal-field"><span>Confirm Password</span><input class="menu-search" name="password_confirm" type="password" required autocomplete="new-password"></label>
       <div class="auth-field-feedback" data-feedback-for="password_confirm"></div>
-      <div class="modal-actions"><span class="auth-form-error" id="bootstrap-error"></span><button class="primary" type="submit">Create Admin</button></div>
+      <div class="profile-key-note bootstrap-note">This admin account will be required to enroll in 2FA before setup is complete.</div>
+      <div class="modal-actions bootstrap-actions"><span class="auth-form-error" id="bootstrap-error"></span><button class="primary" type="submit">Create Admin</button></div>
     </form>
   </div>
 </div>
@@ -305,6 +329,15 @@ fn render_auth_modals(data: &PageData) -> String {
       <label class="modal-field"><span>Role</span><input class="menu-search" value="{profile_role}" disabled></label>
     </div>
     <div class="modal-grid profile-panel" data-profile-panel="security" data-live-validation="profile-password" hidden>
+      <div class="profile-security-block">
+        <div class="profile-security-heading">Two-Factor Authentication</div>
+        <div class="profile-key-note" id="profile-2fa-status">Status: {profile_two_factor_status}</div>
+        <div class="modal-actions">
+          <span class="auth-form-error" id="profile-2fa-error"></span>
+          <button type="button" class="secondary" id="profile-2fa-setup-button" onclick="openTwoFactorSetupModal('profile')"{profile_two_factor_setup_hidden}>Enable 2FA</button>
+          <button type="button" class="secondary" id="profile-2fa-disable-button" onclick="openTwoFactorDisableModal()"{profile_two_factor_disable_hidden}>Disable 2FA</button>
+        </div>
+      </div>
       <label class="modal-field"><span>Current Password</span><input class="menu-search" id="profile-password-current" type="password" autocomplete="current-password"></label>
       <label class="modal-field"><span>New Password</span><input class="menu-search" id="profile-password-next" name="new_password" type="password" autocomplete="new-password"></label>
       <div class="auth-field-feedback" data-feedback-for="password"></div>
@@ -338,16 +371,16 @@ fn render_auth_modals(data: &PageData) -> String {
   <div class="modal-card auth-card users-card" role="dialog" aria-modal="true" aria-label="Users">
     <div class="modal-header"><h2>Administration</h2><button type="button" class="secondary auth-close" onclick="closeUsersModal()">Close</button></div>
     <div class="upload-metadata-tab-row auth-tab-row profile-tab-row">
-      <button type="button" class="upload-metadata-tab is-active" data-users-tab-button="search" onclick="toggleUsersTab('search')">Search Users</button>
+      <button type="button" class="upload-metadata-tab is-active" data-users-tab-button="search" onclick="toggleUsersTab('search')">Users</button>
       <button type="button" class="upload-metadata-tab" data-users-tab-button="create" onclick="toggleUsersTab('create')">Create User</button>
       <button type="button" class="upload-metadata-tab" data-users-tab-button="corpora" onclick="toggleUsersTab('corpora')">Corpora</button>
       <button type="button" class="upload-metadata-tab" data-users-tab-button="tags" onclick="toggleUsersTab('tags')">Tags</button>
       <button type="button" class="upload-metadata-tab" data-users-tab-button="symbols" onclick="toggleUsersTab('symbols')">Symbols</button>
+      <button type="button" class="upload-metadata-tab" data-users-tab-button="comments" onclick="toggleUsersTab('comments')">Comments</button>
     </div>
     <div class="modal-grid users-panel is-active" data-users-panel="search">
       <div class="modal-actions"><input class="menu-search" id="users-search-input" placeholder="Search users" oninput="loadUsers()"></div>
-      <div class="users-summary" id="users-summary">Showing 0 of 0</div>
-      <div class="auth-form-error users-search-error" id="users-search-error"></div>
+      <div class="users-summary users-summary-row"><span id="users-summary">Showing 0 of 0</span><span class="auth-form-error users-search-error" id="users-search-error"></span></div>
       <div id="users-list" class="users-list"></div>
     </div>
     <form class="modal-grid auth-form users-create-form users-panel" data-users-panel="create" data-live-validation="create" onsubmit="createUser(event)" hidden>
@@ -357,26 +390,28 @@ fn render_auth_modals(data: &PageData) -> String {
       <div class="auth-field-feedback" data-feedback-for="password"></div>
       <label class="modal-field"><span>Confirm Password</span><input class="menu-search" name="password_confirm" type="password" required></label>
       <div class="auth-field-feedback" data-feedback-for="password_confirm"></div>
-      <label class="modal-field"><span>Role</span><select class="menu-search" name="role"><option value="user">user</option><option value="admin">admin</option></select></label>
+      <div class="modal-field users-create-role-field">{user_role_select_html}</div>
       <div class="modal-actions"><span class="auth-form-error" id="users-create-error"></span><button class="primary" type="submit">Create User</button></div>
     </form>
     <div class="modal-grid users-panel" data-users-panel="corpora" hidden>
       <div class="metadata-admin-search-wrap"><input class="menu-search metadata-admin-search metadata-admin-search-has-action" id="admin-corpora-search-input" placeholder="Search corpora" oninput="loadAdminMetadata('corpora')"><button type="button" class="upload-corpus-create-inline metadata-admin-create-inline" id="admin-corpora-create-button" onclick="createAdminMetadata('corpora')" disabled>Create</button></div>
-      <div class="users-summary" id="admin-corpora-summary">Showing 0 of 0</div>
-      <div class="auth-form-error users-search-error" id="admin-corpora-error"></div>
+      <div class="users-summary users-summary-row"><span id="admin-corpora-summary">Showing 0 of 0</span><span class="auth-form-error users-search-error" id="admin-corpora-error"></span></div>
       <div id="admin-corpora-list" class="users-list admin-metadata-list"></div>
     </div>
     <div class="modal-grid users-panel" data-users-panel="tags" hidden>
       <div class="metadata-admin-search-wrap"><input class="menu-search metadata-admin-search metadata-admin-search-has-action" id="admin-tags-search-input" placeholder="Search tags" oninput="loadAdminMetadata('tags')"><button type="button" class="upload-corpus-create-inline metadata-admin-create-inline" id="admin-tags-create-button" onclick="createAdminMetadata('tags')" disabled>Create</button></div>
-      <div class="users-summary" id="admin-tags-summary">Showing 0 of 0</div>
-      <div class="auth-form-error users-search-error" id="admin-tags-error"></div>
+      <div class="users-summary users-summary-row"><span id="admin-tags-summary">Showing 0 of 0</span><span class="auth-form-error users-search-error" id="admin-tags-error"></span></div>
       <div id="admin-tags-list" class="users-list admin-metadata-list"></div>
     </div>
     <div class="modal-grid users-panel" data-users-panel="symbols" hidden>
       <div class="metadata-admin-search-wrap"><input class="menu-search metadata-admin-search metadata-admin-search-has-action" id="admin-symbols-search-input" placeholder="Search symbols" oninput="loadAdminMetadata('symbols')"><button type="button" class="upload-corpus-create-inline metadata-admin-create-inline" id="admin-symbols-create-button" onclick="createAdminMetadata('symbols')" disabled>Create</button></div>
-      <div class="users-summary" id="admin-symbols-summary">Showing 0 of 0</div>
-      <div class="auth-form-error users-search-error" id="admin-symbols-error"></div>
+      <div class="users-summary users-summary-row"><span id="admin-symbols-summary">Showing 0 of 0</span><span class="auth-form-error users-search-error" id="admin-symbols-error"></span></div>
       <div id="admin-symbols-list" class="users-list admin-metadata-list"></div>
+    </div>
+    <div class="modal-grid users-panel" data-users-panel="comments" hidden>
+      <div class="modal-actions"><input class="menu-search" id="admin-comments-search-input" placeholder="Search comments" oninput="loadAdminComments()"></div>
+      <div class="users-summary users-summary-row"><span id="admin-comments-summary">Showing 0 of 0</span><span class="auth-form-error users-search-error" id="admin-comments-error"></span></div>
+      <div id="admin-comments-list" class="users-list admin-comments-list"></div>
     </div>
   </div>
 </div>
@@ -413,6 +448,82 @@ fn render_auth_modals(data: &PageData) -> String {
     </div>
   </div>
 </div>
+
+<div class="modal-backdrop auth-modal-backdrop" id="two-factor-login-modal" hidden>
+  <div class="modal-card auth-card recovery-codes-card" role="dialog" aria-modal="true" aria-label="Two-Factor Authentication">
+    <div class="modal-header"><h2>Two-Factor Authentication</h2><button type="button" class="secondary auth-close" onclick="closeTwoFactorLoginModal()">Close</button></div>
+    <p class="modal-tip">Enter a 6-digit authenticator code or a recovery code to finish signing in.</p>
+    <form class="modal-grid auth-form" onsubmit="submitLoginTwoFactor(event)">
+      <label class="modal-field"><span>Authenticator Or Recovery Code</span><input class="menu-search" id="auth-login-2fa-code" autocomplete="one-time-code"></label>
+      <div class="modal-actions two-factor-login-actions">
+        <span class="auth-form-error" id="auth-login-2fa-error"></span>
+        <button type="submit" class="secondary">Verify</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-backdrop auth-modal-backdrop" id="two-factor-setup-modal" hidden>
+  <div class="modal-card auth-card recovery-codes-card two-factor-setup-card" role="dialog" aria-modal="true" aria-label="Set Up Two-Factor Authentication">
+    <div class="modal-header"><h2>Set Up 2FA</h2><button type="button" class="secondary auth-close" onclick="closeTwoFactorSetupModal()">Close</button></div>
+    <p class="modal-tip" id="two-factor-setup-tip">Use an authenticator app to scan the QR code, then confirm setup with your password and a 6-digit code.</p>
+    <div class="two-factor-step">
+      <div class="profile-security-heading">Step 1: Scan QR Code</div>
+      <div class="two-factor-qr-frame" id="two-factor-qr-frame">
+        <div class="two-factor-qr-svg is-empty" id="two-factor-qr-svg"></div>
+        <div class="two-factor-qr-actions">
+          <button type="button" class="secondary" id="two-factor-generate-button" onclick="startTwoFactorSetup()">Generate</button>
+        </div>
+      </div>
+      <label class="modal-field">
+        <span>Secret</span>
+        <div class="profile-key-wrap two-factor-secret-wrap">
+          <input class="menu-search profile-key-input" id="two-factor-manual-secret" type="password" readonly data-secret="">
+          <button type="button" class="symbol-picker-copy profile-key-copy" id="two-factor-secret-copy" onclick="copyTwoFactorSetupSecret()" disabled>Copy</button>
+          <button type="button" class="secondary recovery-codes-visibility profile-key-toggle" id="two-factor-secret-toggle" onclick="toggleTwoFactorSetupSecretVisibility()" disabled aria-label="Show secret" title="Show secret"><span class="recovery-codes-eye" aria-hidden="true">👁</span></button>
+        </div>
+      </label>
+    </div>
+    <div class="two-factor-step" id="two-factor-setup-password-step">
+      <div class="profile-security-heading" id="two-factor-password-step-heading">Step 2: Confirm With Password</div>
+      <label class="modal-field" id="two-factor-setup-password-field">
+        <span>Current Password</span>
+        <div class="profile-key-wrap two-factor-inline-wrap">
+          <input class="menu-search profile-key-input two-factor-inline-input" id="two-factor-setup-password" type="password" autocomplete="current-password">
+          <button type="button" class="secondary recovery-codes-visibility profile-key-toggle" id="two-factor-password-toggle" onclick="toggleTwoFactorSetupPasswordVisibility()" aria-label="Show current password" title="Show current password"><span class="recovery-codes-eye" aria-hidden="true">👁</span></button>
+        </div>
+      </label>
+    </div>
+    <div class="two-factor-step">
+      <div class="profile-security-heading">Step 3: Enter Authenticator Code</div>
+      <label class="modal-field">
+        <span>Authenticator Code</span>
+        <div class="profile-key-wrap two-factor-inline-wrap">
+          <input class="menu-search profile-key-input two-factor-inline-input" id="two-factor-setup-code" type="password" autocomplete="one-time-code">
+          <button type="button" class="secondary recovery-codes-visibility profile-key-toggle" id="two-factor-code-toggle" onclick="toggleTwoFactorSetupCodeVisibility()" aria-label="Show authenticator code" title="Show authenticator code"><span class="recovery-codes-eye" aria-hidden="true">👁</span></button>
+        </div>
+      </label>
+    </div>
+    <span class="auth-form-error" id="two-factor-setup-error"></span>
+    <div class="modal-actions two-factor-setup-actions">
+      <button type="button" class="secondary" onclick="closeTwoFactorSetupModal()">Cancel</button>
+      <button type="button" class="secondary" id="two-factor-enable-button" onclick="confirmTwoFactorSetup()" disabled>Enable 2FA</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop auth-modal-backdrop" id="two-factor-disable-modal" hidden>
+  <div class="modal-card auth-card recovery-codes-card two-factor-disable-card" role="dialog" aria-modal="true" aria-label="Disable Two-Factor Authentication">
+    <div class="modal-header"><h2 id="two-factor-disable-title">Disable 2FA</h2><button type="button" class="secondary auth-close" onclick="closeTwoFactorDisableModal()">Close</button></div>
+    <p class="modal-tip" id="two-factor-disable-tip">Confirm your password and enter an authenticator or recovery code to disable two-factor authentication.</p>
+    <label class="modal-field"><span>Current Password</span><input class="menu-search" id="two-factor-disable-password" type="password" autocomplete="current-password"></label>
+    <label class="modal-field"><span>Authenticator Or Recovery Code</span><input class="menu-search" id="two-factor-disable-code" autocomplete="one-time-code"></label>
+    <div class="modal-actions two-factor-disable-actions">
+      <span class="auth-form-error" id="two-factor-disable-error"></span>
+      <button type="button" class="secondary" id="two-factor-disable-submit" onclick="submitTwoFactorDisable()">Disable 2FA</button>
+    </div>
+  </div>
+</div>
 "#,
         bootstrap_hidden = bootstrap_hidden,
         auth_hidden = auth_hidden,
@@ -425,6 +536,19 @@ fn render_auth_modals(data: &PageData) -> String {
         } else {
             ""
         },
+        profile_two_factor_status = profile_two_factor_status,
+        profile_two_factor_setup_hidden = if profile_two_factor_enabled {
+            " hidden"
+        } else {
+            ""
+        },
+        profile_two_factor_disable_hidden =
+            if profile_two_factor_enabled || profile_two_factor_required {
+                ""
+            } else {
+                " hidden"
+            },
+        user_role_select_html = user_role_select_html,
         profile_avatar = profile_avatar
     )
 }
@@ -436,6 +560,7 @@ fn render_upload_modal(data: &PageData) -> String {
             "Format",
             &data.upload_format_options,
             "Auto",
+            true,
         ),
         has_corpus_picker: !data.upload_corpora_locked,
         architecture_select_html: render_single_select_dropdown(
@@ -443,6 +568,7 @@ fn render_upload_modal(data: &PageData) -> String {
             "Architecture",
             &data.upload_architecture_options,
             "Auto",
+            true,
         ),
         corpus_picker_html: if data.upload_corpora_locked {
             None
@@ -466,12 +592,14 @@ fn render_single_select_dropdown(
     label: &str,
     options: &[String],
     selected: &str,
+    search_enabled: bool,
 ) -> String {
     SingleSelectTemplate {
         name,
         label,
         selected,
         options,
+        search_enabled,
     }
     .render()
     .unwrap_or_else(|_| String::new())

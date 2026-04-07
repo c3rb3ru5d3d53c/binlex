@@ -5,7 +5,7 @@ use super::support::{
     prune_pending_entries_for_sample, remove_corpus_from_entry, sample_key, unique_corpora,
 };
 use super::types::{Error, IndexEntry};
-use crate::databases::localdb::EntityMetadataRecord;
+use crate::databases::localdb::{EntityMetadataRecord, normalize_metadata_name};
 use crate::indexing::Entity;
 use std::collections::BTreeMap;
 
@@ -64,10 +64,8 @@ impl LocalIndex {
     }
 
     pub fn symbol_delete_global(&self, name: &str) -> Result<(), Error> {
-        let name = name.trim();
-        if name.is_empty() {
-            return Err(Error::InvalidConfiguration("symbol must not be empty"));
-        }
+        let name = normalize_metadata_name("symbol", name)
+            .map_err(|error| Error::Validation(error.to_string()))?;
         let keys = self
             .store
             .object_list("index/")
@@ -81,7 +79,7 @@ impl LocalIndex {
                 &mut entry.attributes,
                 entry.entity,
                 entry.address,
-                name,
+                &name,
                 "",
                 "",
                 super::support::SymbolMutation::Remove,
@@ -107,6 +105,9 @@ impl LocalIndex {
                         entropy: entry.entropy,
                         contiguous: entry.contiguous,
                         chromosome_entropy: entry.chromosome_entropy,
+                        collection_tag_count: entry.collection_tag_count,
+                        collection_tags: entry.collection_tags.clone(),
+                        collection_comment_count: entry.collection_comment_count,
                         timestamp: entry.timestamp.clone(),
                         vector: entry.vector.clone(),
                         attributes: entry.attributes.clone(),
@@ -115,7 +116,7 @@ impl LocalIndex {
             }
         }
         self.localdb
-            .symbol_delete_global(name)
+            .symbol_delete_global(&name)
             .map_err(|error| Error::LocalDb(error.to_string()))?;
         Ok(())
     }
@@ -251,19 +252,18 @@ impl LocalIndex {
     }
 
     pub fn corpus_delete(&self, corpus: &str) -> Result<(), Error> {
-        if corpus.trim().is_empty() {
-            return Err(Error::InvalidConfiguration("corpus must not be empty"));
-        }
+        let corpus = normalize_metadata_name("corpus", corpus)
+            .map_err(|error| Error::Validation(error.to_string()))?;
         let mut pending = self.pending.lock().unwrap();
-        pending.deleted_corpora.push(corpus.to_string());
+        pending.deleted_corpora.push(corpus.clone());
         let (entries, entity_corpora) = {
             let pending = &mut *pending;
             (&mut pending.entries, &mut pending.entity_corpora)
         };
-        prune_pending_entries_for_corpus(entries, entity_corpora, corpus);
+        prune_pending_entries_for_corpus(entries, entity_corpora, &corpus);
         pending
             .deleted_samples
-            .retain(|(existing_corpus, _)| existing_corpus != corpus);
+            .retain(|(existing_corpus, _)| existing_corpus != &corpus);
         Ok(())
     }
 
@@ -280,12 +280,8 @@ impl LocalIndex {
         if !is_sha256(sha256) {
             return Err(Error::Validation(format!("invalid sha256 {}", sha256)));
         }
-        let name = name.trim();
-        if name.is_empty() {
-            return Err(Error::Validation(
-                "symbol name must not be empty".to_string(),
-            ));
-        }
+        let name = normalize_metadata_name("symbol", name)
+            .map_err(|error| Error::Validation(error.to_string()))?;
         if !self
             .store
             .object_exists(&sample_key(sha256))
@@ -320,7 +316,7 @@ impl LocalIndex {
                 &mut entry.attributes,
                 entry.entity,
                 address,
-                name,
+                &name,
                 username,
                 &timestamp,
                 mutation,
@@ -349,6 +345,9 @@ impl LocalIndex {
                     entropy: entry.entropy,
                     contiguous: entry.contiguous,
                     chromosome_entropy: entry.chromosome_entropy,
+                    collection_tag_count: entry.collection_tag_count,
+                    collection_tags: entry.collection_tags.clone(),
+                    collection_comment_count: entry.collection_comment_count,
                     timestamp: entry.timestamp.clone(),
                     vector: entry.vector.clone(),
                     attributes: entry.attributes.clone(),
@@ -383,7 +382,7 @@ impl LocalIndex {
             super::support::SymbolMutation::Add | super::support::SymbolMutation::Replace
         ) {
             self.localdb
-                .symbol_add(name, Some(&timestamp), Some(username))
+                .symbol_add(&name, Some(&timestamp), Some(username))
                 .map_err(|error| Error::LocalDb(error.to_string()))?;
         }
 
@@ -430,10 +429,8 @@ impl LocalIndex {
         username: &str,
         add: bool,
     ) -> Result<(), Error> {
-        let corpus = corpus.trim();
-        if corpus.is_empty() {
-            return Err(Error::Validation("corpus must not be empty".to_string()));
-        }
+        let corpus = normalize_metadata_name("corpus", corpus)
+            .map_err(|error| Error::Validation(error.to_string()))?;
         let mut entry = self.collection_entry(sha256, collection, architecture, address)?;
         let mut effective = self
             .localdb
@@ -442,10 +439,10 @@ impl LocalIndex {
         if add {
             effective = normalize_index_corpora(&super::support::union_corpora(
                 &effective,
-                &[corpus.to_string()],
+                std::slice::from_ref(&corpus),
             ))?;
         } else {
-            effective.retain(|existing| existing != corpus);
+            effective.retain(|existing| existing != &corpus);
             effective = unique_corpora(&effective);
         }
         entry.username = username.to_string();

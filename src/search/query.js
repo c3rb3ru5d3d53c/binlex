@@ -20,6 +20,10 @@
     { label: "date:", insert: "date:", kind: "field" },
     { label: "size:", insert: "size:", kind: "field" },
     { label: "symbol:", insert: "symbol:", kind: "field" },
+    { label: "tag:", insert: "tag:", kind: "field" },
+    { label: "symbols:", insert: "symbols:", kind: "field" },
+    { label: "tags:", insert: "tags:", kind: "field" },
+    { label: "comments:", insert: "comments:", kind: "field" },
     { label: "cyclomatic_complexity:", insert: "cyclomatic_complexity:", kind: "field" },
     { label: "average_instructions_per_block:", insert: "average_instructions_per_block:", kind: "field" },
     { label: "number_of_instructions:", insert: "number_of_instructions:", kind: "field" },
@@ -434,7 +438,7 @@
     if (context.field === "architecture") return normalized.architectures.some((item) => item.toLowerCase() === value.toLowerCase());
     if (context.field === "collection") return normalized.collections.some((item) => item.toLowerCase() === value.toLowerCase());
     if (context.field === "drop") return ["lhs", "rhs"].some((item) => item === value.toLowerCase());
-    if (["cyclomatic_complexity", "number_of_instructions", "number_of_blocks", "embeddings", "limit", "size"].includes(context.field)) {
+    if (["symbols", "tags", "comments", "cyclomatic_complexity", "number_of_instructions", "number_of_blocks", "embeddings", "limit", "size"].includes(context.field)) {
       return /^(>=|<=|>|<|=)?\s*\d+(?:\.\d+)?\s*[kKmMbB]?$/.test(value);
     }
     if (["average_instructions_per_block", "entropy", "chromosome.entropy", "score"].includes(context.field)) {

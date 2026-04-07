@@ -10,6 +10,15 @@ async fn run_server(
         .route("/api/v1/token/clear", post(clear_token_api))
         .route("/api/v1/auth/bootstrap", post(auth_bootstrap_api))
         .route("/api/v1/auth/login", post(auth_login_api))
+        .route("/api/v1/auth/login/2fa", post(auth_login_two_factor_api))
+        .route(
+            "/api/v1/auth/login/2fa/setup",
+            post(auth_login_two_factor_setup_api),
+        )
+        .route(
+            "/api/v1/auth/login/2fa/enable",
+            post(auth_login_two_factor_enable_api),
+        )
         .route("/api/v1/auth/logout", post(auth_logout_api))
         .route("/api/v1/auth/captcha", get(auth_captcha_api))
         .route("/api/v1/auth/register", post(auth_register_api))
@@ -18,6 +27,18 @@ async fn run_server(
         .route("/api/v1/auth/me", get(auth_me_api))
         .route("/api/v1/profile", get(profile_get_api))
         .route("/api/v1/profile/password", post(profile_password_api))
+        .route(
+            "/api/v1/profile/2fa/setup",
+            post(profile_two_factor_setup_api),
+        )
+        .route(
+            "/api/v1/profile/2fa/enable",
+            post(profile_two_factor_enable_api),
+        )
+        .route(
+            "/api/v1/profile/2fa/disable",
+            post(profile_two_factor_disable_api),
+        )
         .route(
             "/api/v1/profile/picture",
             post(profile_picture_api).delete(profile_picture_delete_api),
@@ -59,6 +80,18 @@ async fn run_server(
         .route(
             "/api/v1/admin/users/picture/delete",
             post(admin_user_picture_delete_api),
+        )
+        .route(
+            "/api/v1/admin/users/2fa/require",
+            post(admin_user_two_factor_require_api),
+        )
+        .route(
+            "/api/v1/admin/users/2fa/disable",
+            post(admin_user_two_factor_disable_api),
+        )
+        .route(
+            "/api/v1/admin/users/2fa/reset",
+            post(admin_user_two_factor_reset_api),
         )
         .route("/api/v1/admin/users/delete", post(admin_user_delete_api))
         .route("/api/v1/index/graph", post(stage_index_graph))
@@ -103,6 +136,13 @@ async fn run_server(
         .route("/api/v1/symbols/collection", get(get_collection_symbols))
         .route("/api/v1/symbols/search", get(search_symbols_api))
         .route("/api/v1/symbols/add", post(add_symbol_api))
+        .route("/api/v1/comments", get(get_entity_comments_api))
+        .route("/api/v1/comments/add", post(add_entity_comment_api))
+        .route(
+            "/api/v1/comments/{id}",
+            axum::routing::delete(delete_entity_comment_api),
+        )
+        .route("/api/v1/admin/comments", get(admin_comments_api))
         .route(
             "/api/v1/symbols/collection/add",
             post(add_collection_symbol_api),

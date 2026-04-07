@@ -40,6 +40,10 @@
 </div>
 <div id="upload-status-modal" class="modal-backdrop" hidden>
   <div class="modal-card upload-status-card" role="dialog" aria-modal="true" aria-label="Upload Status">
+    <div class="modal-header upload-status-header">
+      <span aria-hidden="true"></span>
+      <button type="button" class="secondary" id="upload-status-close" onclick="closeUploadStatusModal()" hidden>Close</button>
+    </div>
     <div class="upload-status-body">
       <div id="upload-status-icon" class="upload-status-icon uploading"><div class="upload-status-spinner"></div><div class="upload-status-checkmark">&#10003;</div><div class="upload-status-fail">!</div></div>
       <h2 id="upload-status-title">Uploading Sample</h2>
@@ -47,7 +51,6 @@
       <div id="upload-status-extra"></div>
     </div>
     <div class="modal-actions">
-      <button type="button" class="secondary" id="upload-status-close" onclick="closeUploadStatusModal()" hidden>Close</button>
       <button type="button" class="primary" id="upload-status-search" onclick="searchUploadedSample()" hidden>Search</button>
     </div>
   </div>

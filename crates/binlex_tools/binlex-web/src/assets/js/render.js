@@ -75,8 +75,9 @@ function renderResultCopyPill(displayValue, copyValue, options = {}) {
   if (!display || !copy) return "";
   const tooltipHtml = options.tooltipHtml || "";
   const classes = `result-copy-pill${tooltipHtml ? " has-tooltip" : ""}${options.className ? ` ${options.className}` : ""}`;
-  const title = options.title || `${copy}\nClick to copy`;
-  return `<button type="button" class="${classes}" title="${escapeHtml(title)}" onclick="event.stopPropagation(); copyResultPill(this,'${escapeHtml(encodeURIComponent(copy))}')">${escapeHtml(display)}${tooltipHtml}</button>`;
+  const title = tooltipHtml ? "" : (options.title || `${copy}\nClick to copy`);
+  const titleAttr = title ? ` title="${escapeHtml(title)}"` : "";
+  return `<button type="button" class="${classes}"${titleAttr} onclick="event.stopPropagation(); copyResultPill(this,'${escapeHtml(encodeURIComponent(copy))}')">${escapeHtml(display)}${tooltipHtml}</button>`;
 }
 
 function renderCorporaCell(row) {
@@ -119,6 +120,13 @@ function renderSymbolCell(row) {
     return `<div class="symbol-cell"><span class="symbol-popover-trigger readonly-count">${escapeHtml(triggerLabel)}</span></div>`;
   }
   return `<div class="symbol-cell"><button type="button" class="symbol-popover-trigger" data-result-key="${escapeHtml(resultKey)}" onclick="event.stopPropagation(); toggleSymbolPopover(this)">${escapeHtml(triggerLabel)}</button></div>`;
+}
+
+function renderCommentsCell(row) {
+  const resultKey = resultRowKey(row);
+  const count = Number(row?.collection_comment_count || 0);
+  const triggerLabel = count > 0 ? `+${count}` : "+";
+  return `<div class="comments-cell"><button type="button" class="comments-popover-trigger" data-result-key="${escapeHtml(resultKey)}" onclick="event.stopPropagation(); toggleCommentsPopover(this)">${escapeHtml(triggerLabel)}</button></div>`;
 }
 
 function formatScoreValue(score) {
@@ -221,9 +229,9 @@ function buildResultActionTree(row, sampleDownloadsEnabled, query) {
     root.push(actionBranch("Copy", copyChildren));
   }
   root.push(actionBranch("Search", [
-    actionNavigate("Embedding", `/?search=1&query=${urlEncode(`embedding:${row.embedding} | collection:${row.collection} | architecture:${row.architecture}`)}`),
-    actionNavigate("Sample", `/?search=1&query=${urlEncode(`sample:${row.sha256} | collection:${row.collection} | architecture:${row.architecture}`)}`),
-    actionNavigate("Vector", `/?search=1&query=${urlEncode(`vector:${JSON.stringify(row.vector || [])} | collection:${row.collection} | architecture:${row.architecture}`)}`),
+    actionSearchQuery("Embedding", `embedding:${row.embedding} | collection:${row.collection} | architecture:${row.architecture}`),
+    actionSearchQuery("Sample", `sample:${row.sha256} | collection:${row.collection} | architecture:${row.architecture}`),
+    actionSearchQuery("Vector", `vector:${JSON.stringify(row.vector || [])} | collection:${row.collection} | architecture:${row.architecture}`),
   ]));
   const downloadChildren = [];
   if (sampleDownloadsEnabled) {
@@ -320,6 +328,7 @@ function resultColumnDefinitions() {
     { id: "collection", label: "collection" },
     { id: "symbol", label: "symbols" },
     { id: "tags", label: "tags" },
+    { id: "comments", label: "comments" },
     { id: "address", label: "address" },
     { id: "action", label: "action" },
   ];
@@ -503,6 +512,8 @@ function renderResultCell(columnId, row, data) {
       return `<td class="symbol-cell-td">${renderSymbolCell(row)}</td>`;
     case "tags":
       return `<td class="tags-cell-td">${renderTagsCell(row)}</td>`;
+    case "comments":
+      return `<td class="comments-cell-td">${renderCommentsCell(row)}</td>`;
     case "address":
       return `<td>${renderResultCopyPill(`0x${Number(row.address).toString(16)}`, `0x${Number(row.address).toString(16)}`)}</td>`;
     case "action":

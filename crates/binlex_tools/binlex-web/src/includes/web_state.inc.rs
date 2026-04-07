@@ -9,6 +9,10 @@ struct AppState {
 }
 
 impl AppState {
+    fn two_factor_required(&self) -> bool {
+        self.ui.auth.two_factor.enabled && self.ui.auth.two_factor.required
+    }
+
     fn staged_index(&self, token: &str) -> Result<LocalIndex, AppError> {
         if let Some(staged) = self.staged_indexes.lock().unwrap().get(token).cloned() {
             return Ok(staged);
@@ -35,7 +39,9 @@ impl AppState {
     }
 
     fn route_auth_rule(&self, path: &str) -> Option<&WebAuthRuleConfig> {
-        self.ui.auth.rules.iter().find(|rule| rule.path == path)
+        self.ui.auth.rules.iter().find(|rule| {
+            rule.path == path || (rule.path.ends_with('/') && path.starts_with(&rule.path))
+        })
     }
 
     fn route_auth_enabled(&self, path: &str) -> bool {
@@ -61,7 +67,9 @@ impl AppState {
             .token
             .rules
             .iter()
-            .find(|rule| rule.path == path)
+            .find(|rule| {
+                rule.path == path || (rule.path.ends_with('/') && path.starts_with(&rule.path))
+            })
             .map(|rule| rule.enabled)
             .unwrap_or(false)
     }

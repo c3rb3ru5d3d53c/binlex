@@ -185,6 +185,7 @@ pub(crate) fn build_search_row_response(row: &ResultRow) -> SearchRowResponse {
         embeddings: result.embeddings(),
         corpora: result.corpora().to_vec(),
         collection_tag_count: row.collection_tag_count,
+        collection_comment_count: row.collection_comment_count,
     }
 }
 
@@ -337,6 +338,8 @@ fn build_page_data(
             user.profile_picture.as_deref(),
             Some(&user.timestamp),
         ),
+        two_factor_enabled: user.two_factor_enabled,
+        two_factor_required: user.two_factor_required,
     });
 
     let status = UiStatus {
@@ -389,6 +392,7 @@ fn build_page_data(
                         )
                     })
                     .collect::<Vec<_>>();
+                let comment_count_keys = tag_count_keys.clone();
                 let tag_counts =
                     state
                         .index
@@ -396,8 +400,21 @@ fn build_page_data(
                         .map_err(|error| {
                             AppError::with_request_id(error.to_string(), request_id.to_string())
                         })?;
+                let comment_counts = state
+                    .index
+                    .entity_comment_counts(&comment_count_keys)
+                    .map_err(|error| {
+                        AppError::with_request_id(error.to_string(), request_id.to_string())
+                    })?;
                 for row in &mut rows {
                     row.collection_tag_count = *tag_counts
+                        .get(&(
+                            row.result.sha256().to_string(),
+                            row.result.collection(),
+                            row.result.address(),
+                        ))
+                        .unwrap_or(&0);
+                    row.collection_comment_count = *comment_counts
                         .get(&(
                             row.result.sha256().to_string(),
                             row.result.collection(),
@@ -481,6 +498,7 @@ fn build_page_data(
             || state.ui.download.samples.enabled,
         auth_bootstrap_required,
         auth_registration_enabled: state.ui.auth.registration.enabled,
+        auth_two_factor_required: state.two_factor_required(),
         auth_user: auth_user_profile,
     })
 }
@@ -708,6 +726,7 @@ fn execute_stream_search(
                     side,
                     score: show_score.then_some(result.score()),
                     profile_picture: None,
+                    collection_comment_count: result.collection_comment_count() as usize,
                     result,
                     grouped: false,
                     group_end: false,
@@ -735,6 +754,7 @@ fn execute_stream_search(
                     side: RowSide::Lhs,
                     score: Some(pair.score),
                     profile_picture: None,
+                    collection_comment_count: pair.lhs.collection_comment_count() as usize,
                     result: pair.lhs,
                     grouped: true,
                     group_end: false,
@@ -744,6 +764,7 @@ fn execute_stream_search(
                     side: RowSide::Rhs,
                     score: Some(pair.score),
                     profile_picture: None,
+                    collection_comment_count: pair.rhs.collection_comment_count() as usize,
                     result: pair.rhs,
                     grouped: true,
                     group_end: true,
@@ -781,17 +802,21 @@ fn collect_search_candidates(
                 "search root=sha256 sha256={} corpora={:?} collections={:?} architectures={:?} top_k={}",
                 sha256, plan.corpora, plan.collections, plan.architectures, limit
             );
-            state
-                .index
-                .exact_search_page(
-                    &plan.corpora,
-                    sha256,
-                    Some(&plan.collections),
-                    &plan.architectures,
-                    0,
-                    broad_limit,
-                )
-                .map_err(|error| error.to_string())?
+            if search_requires_full_exact_scan(plan.query.expr()) {
+                collect_exact_search_candidates(state, plan, sha256, broad_limit)?
+            } else {
+                state
+                    .index
+                    .exact_search_page(
+                        &plan.corpora,
+                        sha256,
+                        Some(&plan.collections),
+                        &plan.architectures,
+                        0,
+                        broad_limit,
+                    )
+                    .map_err(|error| error.to_string())?
+            }
         }
         Some(SearchRoot::Embedding(embedding)) => {
             info!(
@@ -837,20 +862,122 @@ fn collect_search_candidates(
                 "search root=scan corpora={:?} collections={:?} architectures={:?} top_k={} page={}",
                 plan.corpora, plan.collections, plan.architectures, limit, page
             );
-            state
-                .index
-                .scan_search_page(
-                    &plan.corpora,
-                    Some(&plan.collections),
-                    &plan.architectures,
-                    0,
-                    broad_limit,
-                )
-                .map_err(|error| error.to_string())?
+            if search_requires_full_scan(plan.query.expr()) {
+                collect_scan_search_candidates(state, plan, broad_limit)?
+            } else {
+                state
+                    .index
+                    .scan_search_page(
+                        &plan.corpora,
+                        Some(&plan.collections),
+                        &plan.architectures,
+                        0,
+                        broad_limit,
+                    )
+                    .map_err(|error| error.to_string())?
+            }
         }
     };
     candidates.retain(|result| search_expr_matches(result, plan.query.expr(), &plan.root));
     Ok(candidates)
+}
+
+fn search_requires_full_scan(expr: &binlex::search::QueryExpr) -> bool {
+    match expr {
+        binlex::search::QueryExpr::Term(term) => !matches!(
+            term.field,
+            binlex::search::QueryField::Corpus
+                | binlex::search::QueryField::Collection
+                | binlex::search::QueryField::Architecture
+        ),
+        binlex::search::QueryExpr::Not(inner) => search_requires_full_scan(inner),
+        binlex::search::QueryExpr::And(lhs, rhs) | binlex::search::QueryExpr::Or(lhs, rhs) => {
+            search_requires_full_scan(lhs) || search_requires_full_scan(rhs)
+        }
+    }
+}
+
+fn search_requires_full_exact_scan(expr: &binlex::search::QueryExpr) -> bool {
+    match expr {
+        binlex::search::QueryExpr::Term(term) => !matches!(
+            term.field,
+            binlex::search::QueryField::Sha256
+                | binlex::search::QueryField::Corpus
+                | binlex::search::QueryField::Collection
+                | binlex::search::QueryField::Architecture
+        ),
+        binlex::search::QueryExpr::Not(inner) => search_requires_full_exact_scan(inner),
+        binlex::search::QueryExpr::And(lhs, rhs) | binlex::search::QueryExpr::Or(lhs, rhs) => {
+            search_requires_full_exact_scan(lhs) || search_requires_full_exact_scan(rhs)
+        }
+    }
+}
+
+fn collect_exact_search_candidates(
+    state: &AppState,
+    plan: &crate::query::SearchPlan,
+    sha256: &str,
+    page_size: usize,
+) -> Result<Vec<SearchResult>, String> {
+    let page_size = page_size.max(64);
+    let mut page = 0usize;
+    let mut results = Vec::new();
+    loop {
+        let chunk = state
+            .index
+            .exact_search_page(
+                &plan.corpora,
+                sha256,
+                Some(&plan.collections),
+                &plan.architectures,
+                page,
+                page_size,
+            )
+            .map_err(|error| error.to_string())?;
+        let chunk_len = chunk.len();
+        if chunk_len == 0 {
+            break;
+        }
+        results.extend(chunk);
+        if chunk_len < page_size {
+            break;
+        }
+        page = page.saturating_add(1);
+    }
+    Ok(results)
+}
+
+fn collect_scan_search_candidates(
+    state: &AppState,
+    plan: &crate::query::SearchPlan,
+    page_size: usize,
+) -> Result<Vec<SearchResult>, String> {
+    let page_size = page_size.max(64);
+    let mut page = 0usize;
+    let mut results = Vec::new();
+    loop {
+        let offset = page.saturating_mul(page_size);
+        let chunk = state
+            .index
+            .scan_search_page(
+                &plan.corpora,
+                Some(&plan.collections),
+                &plan.architectures,
+                offset,
+                page_size,
+            )
+            .map_err(|error| error.to_string())?;
+        let chunk_len = chunk.len();
+        if chunk_len == 0 {
+            break;
+        }
+        results.extend(chunk);
+        if chunk_len < page_size {
+            break;
+        }
+        page = page.saturating_add(1);
+    }
+    Ok(results)
 }
 
 fn evaluate_stream(

@@ -585,8 +585,14 @@ fn upload_corpora(state: &AppState, values: &[String]) -> Result<Vec<String>, St
         .iter()
         .map(|value| value.trim())
         .filter(|value| !value.is_empty())
-        .map(ToString::to_string)
-        .collect::<Vec<_>>();
+        .map(|value| {
+            if value.chars().any(char::is_whitespace) {
+                Err(format!("corpus '{}' must not contain whitespace", value))
+            } else {
+                Ok(value.to_string())
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     corpora.sort();
     corpora.dedup();
     if corpora.is_empty() {
@@ -629,13 +635,16 @@ fn upload_tags(values: &[String]) -> Result<Vec<String>, String> {
         .iter()
         .map(|value| value.trim())
         .filter(|value| !value.is_empty())
-        .map(ToString::to_string)
-        .collect::<Vec<_>>();
+        .map(|value| {
+            if value.chars().any(char::is_whitespace) {
+                Err(format!("tag '{}' must not contain whitespace", value))
+            } else {
+                Ok(value.to_string())
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     tags.sort();
     tags.dedup_by(|lhs, rhs| lhs.eq_ignore_ascii_case(rhs));
-    if tags.iter().any(|value| value.trim().is_empty()) {
-        return Err("tag must not be empty".to_string());
-    }
     Ok(tags)
 }
 
