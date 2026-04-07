@@ -170,7 +170,7 @@ mod tests {
             &PageParams {
                 search: Some("1".to_string()),
                 query: format!(
-                    "sample:{sha256} | collection:function | address:0x1000 | expand:blocks | collection:block"
+                    "sample:{sha256} | collection:functions | address:0x1000 | expand:blocks | collection:blocks"
                 ),
                 top_k: Some(16),
                 page: Some(1),
@@ -201,7 +201,7 @@ mod tests {
             &PageParams {
                 search: Some("1".to_string()),
                 query: format!(
-                    "sample:{sha256} | collection:block | address:0x1000 | expand:instructions | collection:instruction"
+                    "sample:{sha256} | collection:blocks | address:0x1000 | expand:instructions | collection:instructions"
                 ),
                 top_k: Some(16),
                 page: Some(1),
@@ -231,7 +231,7 @@ mod tests {
             &state,
             &PageParams {
                 search: Some("1".to_string()),
-                query: format!("sample:{sha256} | collection:block | blocks:>1"),
+                query: format!("sample:{sha256} | collection:blocks | blocks:>1"),
                 top_k: Some(16),
                 page: Some(1),
                 ..PageParams::default()
@@ -241,7 +241,7 @@ mod tests {
             Err(error) => error,
         };
         assert!(error.contains("blocks"));
-        assert!(error.contains("collection:function"));
+        assert!(error.contains("collection:functions"));
 
         let _ = std::fs::remove_dir_all(&root);
     }

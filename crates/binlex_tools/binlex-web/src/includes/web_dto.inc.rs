@@ -229,7 +229,7 @@ struct ActionYaraItemRequest {
     corpus: String,
     #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
     sha256: String,
-    #[schema(example = "function")]
+    #[schema(example = "functions")]
     collection: String,
     #[schema(example = "amd64")]
     architecture: String,
@@ -241,7 +241,7 @@ struct ActionYaraItemRequest {
 struct SearchDetailParams {
     #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
     sha256: String,
-    #[schema(example = "function")]
+    #[schema(example = "functions")]
     collection: String,
     #[schema(example = "amd64")]
     architecture: String,
@@ -349,7 +349,7 @@ struct SearchRowDetailResponse {
 struct CollectionCommentsParams {
     #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
     sha256: String,
-    #[schema(example = "function")]
+    #[schema(example = "functions")]
     collection: String,
     #[schema(example = 4198400)]
     address: u64,
@@ -363,7 +363,7 @@ struct CollectionCommentsParams {
 struct EntityCommentCreateRequest {
     #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
     sha256: String,
-    #[schema(example = "function")]
+    #[schema(example = "functions")]
     collection: String,
     #[schema(example = 4198400)]
     address: u64,
@@ -429,7 +429,7 @@ struct SampleTagsParams {
 struct CollectionTagsParams {
     #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
     sha256: String,
-    #[schema(example = "function")]
+    #[schema(example = "functions")]
     collection: String,
     #[schema(example = 4198400)]
     address: u64,
@@ -439,7 +439,7 @@ struct CollectionTagsParams {
 struct CollectionSymbolsParams {
     #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
     sha256: String,
-    #[schema(example = "function")]
+    #[schema(example = "functions")]
     collection: String,
     #[schema(example = "amd64")]
     architecture: String,
@@ -451,7 +451,7 @@ struct CollectionSymbolsParams {
 struct CollectionCorporaParams {
     #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
     sha256: String,
-    #[schema(example = "function")]
+    #[schema(example = "functions")]
     collection: String,
     #[schema(example = "amd64")]
     architecture: String,
@@ -496,7 +496,7 @@ struct SearchCollectionTagsParams {
     #[schema(example = "shared")]
     q: String,
     #[serde(default)]
-    #[schema(example = "function", nullable = true)]
+    #[schema(example = "functions", nullable = true)]
     collection: Option<String>,
     #[serde(default)]
     page: Option<usize>,
@@ -523,7 +523,7 @@ struct SampleTagsReplaceRequest {
 struct CollectionTagActionRequest {
     #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
     sha256: String,
-    #[schema(example = "function")]
+    #[schema(example = "functions")]
     collection: String,
     #[schema(example = 4198400)]
     address: u64,
@@ -535,7 +535,7 @@ struct CollectionTagActionRequest {
 struct CollectionTagsReplaceRequest {
     #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
     sha256: String,
-    #[schema(example = "function")]
+    #[schema(example = "functions")]
     collection: String,
     #[schema(example = 4198400)]
     address: u64,
@@ -546,7 +546,7 @@ struct CollectionTagsReplaceRequest {
 struct CollectionSymbolActionRequest {
     #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
     sha256: String,
-    #[schema(example = "function")]
+    #[schema(example = "functions")]
     collection: String,
     #[schema(example = "amd64")]
     architecture: String,
@@ -560,7 +560,7 @@ struct CollectionSymbolActionRequest {
 struct CollectionSymbolsReplaceRequest {
     #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
     sha256: String,
-    #[schema(example = "function")]
+    #[schema(example = "functions")]
     collection: String,
     #[schema(example = "amd64")]
     architecture: String,
@@ -585,7 +585,7 @@ struct TagActionRequest {
 struct CollectionCorpusActionRequest {
     #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
     sha256: String,
-    #[schema(example = "function")]
+    #[schema(example = "functions")]
     collection: String,
     #[schema(example = "amd64")]
     architecture: String,
@@ -694,7 +694,7 @@ struct TagSearchResponse {
 struct CollectionTagSearchItemResponse {
     #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
     sha256: String,
-    #[schema(example = "function")]
+    #[schema(example = "functions")]
     collection: String,
     #[schema(example = 4198400)]
     address: u64,
@@ -782,7 +782,7 @@ struct DownloadJsonParams {
     corpus: String,
     #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
     sha256: String,
-    #[schema(example = "function")]
+    #[schema(example = "functions")]
     collection: String,
     #[schema(example = 4198400)]
     address: u64,

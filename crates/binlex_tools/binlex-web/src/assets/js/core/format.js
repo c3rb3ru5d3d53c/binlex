@@ -24,7 +24,16 @@ function displayArchitecture(value) {
 }
 
 function displayCollection(value) {
-  return String(value ?? "").toLowerCase();
+  switch (String(value ?? "").toLowerCase()) {
+    case "functions":
+      return "function";
+    case "blocks":
+      return "block";
+    case "instructions":
+      return "instruction";
+    default:
+      return String(value ?? "").toLowerCase();
+  }
 }
 
 function resultColumnsCatalog() {
@@ -392,4 +401,3 @@ function actionExpandAll(label) {
 function actionCollapseAll(label) {
   return { label, action: "collapse_all" };
 }
-

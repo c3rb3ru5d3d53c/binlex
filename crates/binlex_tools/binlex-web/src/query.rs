@@ -1045,7 +1045,7 @@ mod tests {
             &index,
             "default",
             &[Collection::Function],
-            "collection:function",
+            "collection:functions",
         )
         .expect("build search plan");
 
@@ -1058,7 +1058,7 @@ mod tests {
     #[test]
     fn split_directional_compare_extracts_both_sides() {
         let parts = split_directional_compare(
-            "sample:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa | collection:function -> corpus:goodware | collection:function",
+            "sample:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa | collection:functions -> corpus:goodware | collection:functions",
         )
         .expect("split compare query")
         .expect("compare query");
@@ -1080,7 +1080,7 @@ mod tests {
             &index,
             "default",
             &[Collection::Function],
-            "sample:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa | collection:function -> corpus:goodware | collection:function",
+            "sample:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa | collection:functions -> corpus:goodware | collection:functions",
         )
         .expect("build query plan");
         match plan {
@@ -1105,7 +1105,7 @@ mod tests {
             &index,
             "default",
             &[Collection::Function],
-            "( sample:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -> corpus:goodware | collection:function ) | score:<0.25 | ascending:score | drop:rhs",
+            "( sample:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -> corpus:goodware | collection:functions ) | score:<0.25 | ascending:score | drop:rhs",
         )
         .expect("build query plan");
         match plan {
@@ -1128,14 +1128,14 @@ mod tests {
             &index,
             "default",
             &[Collection::Function],
-            "sample:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa | expand:blocks | collection:block",
+            "sample:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa | expand:blocks | collection:blocks",
         )
         .expect("build query plan");
         assert!(stream_plan_contains_expand(&plan, ExpandTarget::Blocks));
         assert!(stream_plan_contains_search_filter(
             &plan,
             &QueryField::Collection,
-            "block"
+            "blocks"
         ));
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -1173,7 +1173,7 @@ mod tests {
             &index,
             "default",
             &[Collection::Function, Collection::Block, Collection::Instruction],
-            "sample:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa | collection:function | expand:blocks | ascending:markov | limit:10",
+            "sample:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa | collection:functions | expand:blocks | ascending:markov | limit:10",
         )
         .expect("allow markov sort after expand to blocks");
         assert!(stream_plan_contains_expand(&plan, ExpandTarget::Blocks));
@@ -1193,7 +1193,7 @@ mod tests {
             &index,
             "default",
             &[Collection::Function, Collection::Block],
-            "sample:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa | collection:function | expand:blocks | collection:block",
+            "sample:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa | collection:functions | expand:blocks | collection:blocks",
         )
         .expect("build query plan");
         let root_plan = unwrap_stream_search_root(&plan);
@@ -1202,7 +1202,7 @@ mod tests {
         assert!(stream_plan_contains_search_filter(
             &plan,
             &QueryField::Collection,
-            "block"
+            "blocks"
         ));
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -1220,11 +1220,11 @@ mod tests {
             &index,
             "default",
             &[Collection::Function, Collection::Block],
-            "sample:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa | collection:block | blocks:>1",
+            "sample:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa | collection:blocks | blocks:>1",
         )
         .expect_err("reject block-only blocks filter");
         assert!(error.to_string().contains("blocks"));
-        assert!(error.to_string().contains("collection:function"));
+        assert!(error.to_string().contains("collection:functions"));
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -1241,11 +1241,11 @@ mod tests {
             &index,
             "default",
             &[Collection::Function, Collection::Block],
-            "sample:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa | collection:block | blocks:1",
+            "sample:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa | collection:blocks | blocks:1",
         )
         .expect_err("reject piped block-only blocks filter");
         assert!(error.to_string().contains("blocks"));
-        assert!(error.to_string().contains("collection:function"));
+        assert!(error.to_string().contains("collection:functions"));
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -1291,7 +1291,7 @@ mod tests {
             &index,
             "default",
             &[Collection::Function],
-            "sample:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa | collection:function",
+            "sample:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa | collection:functions",
         )
         .expect("build query plan");
         let root_plan = unwrap_stream_search_root(&plan);
@@ -1300,7 +1300,7 @@ mod tests {
         assert!(!stream_plan_contains_search_filter(
             &plan,
             &QueryField::Collection,
-            "function"
+            "functions"
         ));
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -1318,7 +1318,7 @@ mod tests {
             &index,
             "default",
             &[Collection::Function, Collection::Block],
-            "sample:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa | corpus:default | collection:function",
+            "sample:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa | corpus:default | collection:functions",
         )
         .expect("build query plan");
         let root_plan = unwrap_stream_search_root(&plan);
@@ -1333,7 +1333,7 @@ mod tests {
         assert!(!stream_plan_contains_search_filter(
             &plan,
             &QueryField::Collection,
-            "function"
+            "functions"
         ));
         let _ = std::fs::remove_dir_all(&root);
     }

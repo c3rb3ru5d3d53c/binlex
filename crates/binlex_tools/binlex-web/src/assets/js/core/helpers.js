@@ -10,7 +10,7 @@ const QUERY_FIELD_SUGGESTIONS = [
   { label: "descending:", insert: "descending:", kind: "field", usage: "descending:score", description: "Sort the current result stream in descending order by a specific field" },
   { label: "drop:", insert: "drop:", kind: "field", usage: "drop:rhs", description: "Project compare results onto one side" },
   { label: "corpus:", insert: "corpus:", kind: "field", usage: "corpus:<name>", description: "Filter by corpus name" },
-  { label: "collection:", insert: "collection:", kind: "field", usage: "collection:function", description: "Filter by indexed entity type" },
+  { label: "collection:", insert: "collection:", kind: "field", usage: "collection:functions", description: "Filter by indexed entity type" },
   { label: "architecture:", insert: "architecture:", kind: "field", usage: "architecture:amd64", description: "Filter by architecture" },
   { label: "username:", insert: "username:", kind: "field", usage: "username:alice", description: "Filter by the indexing username" },
   { label: "address:", insert: "address:", kind: "field", usage: "address:0x401000", description: "Filter by exact address" },

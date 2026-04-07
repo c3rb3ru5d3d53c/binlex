@@ -1,8 +1,8 @@
 fn parse_collection(value: &str) -> Option<Collection> {
     match value.trim().to_ascii_lowercase().as_str() {
-        "instruction" => Some(Collection::Instruction),
-        "block" => Some(Collection::Block),
-        "function" => Some(Collection::Function),
+        "instructions" => Some(Collection::Instruction),
+        "blocks" => Some(Collection::Block),
+        "functions" => Some(Collection::Function),
         _ => None,
     }
 }

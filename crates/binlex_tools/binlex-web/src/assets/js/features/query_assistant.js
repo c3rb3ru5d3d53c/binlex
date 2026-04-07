@@ -686,7 +686,7 @@ function helpTextForClause(clause) {
     return "Filter by the exact indexing username, for example username:alice";
   }
   if (clause.field === "collection") {
-    return "Select function, block, or instruction.";
+    return "Select functions, blocks, or instructions.";
   }
   if (clause.field === "ascending" || clause.field === "descending") {
     return "Select a sort field like score, markov, entropy, or blocks.";
@@ -1075,4 +1075,3 @@ function handleQueryInputKeyup(event) {
   }
   scheduleQueryAssistantUpdate();
 }
-

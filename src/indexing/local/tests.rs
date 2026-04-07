@@ -245,7 +245,7 @@ fn directional_compare_queries_return_compare_pairs() {
 
     let results = client
         .search(
-            "corpus:malware AND collection:function -> corpus:goodware AND collection:function",
+            "corpus:malware AND collection:functions -> corpus:goodware AND collection:functions",
             10,
             1,
         )
@@ -293,7 +293,7 @@ fn directional_compare_queries_support_drop_projection() {
 
     let results = client
         .search(
-            "(corpus:malware AND collection:function -> corpus:goodware AND collection:function) | drop:rhs",
+            "(corpus:malware AND collection:functions -> corpus:goodware AND collection:functions) | drop:rhs",
             10,
             1,
         )
@@ -634,7 +634,7 @@ fn shared_entries_support_multiple_corpora_without_duplicate_objects() {
 
     let keys = client
         .store
-        .object_list("index/function/amd64/")
+        .object_list("index/functions/amd64/")
         .expect("list shared index entries");
     assert_eq!(keys.len(), 1);
 
@@ -897,10 +897,10 @@ fn query_supports_pagination() {
     client.commit().expect("commit functions");
 
     let page_one = client
-        .search("collection:function", 1, 1)
+        .search("collection:functions", 1, 1)
         .expect("query first page");
     let page_two = client
-        .search("collection:function", 1, 2)
+        .search("collection:functions", 1, 2)
         .expect("query second page");
 
     assert_eq!(page_one.len(), 1);
@@ -927,19 +927,19 @@ fn query_filters_by_entity_size() {
     client.commit().expect("commit function");
 
     let all_hits = client
-        .search("collection:function", 8, 1)
+        .search("collection:functions", 8, 1)
         .expect("query functions");
     assert_eq!(all_hits.len(), 1);
     assert_eq!(all_hits[0].size(), 1);
 
     let sized_hits = client
-        .search("size:1 AND collection:function", 8, 1)
+        .search("size:1 AND collection:functions", 8, 1)
         .expect("query size match");
     assert_eq!(sized_hits.len(), 1);
     assert_eq!(sized_hits[0].size(), 1);
 
     let empty_hits = client
-        .search("size:>1 AND collection:function", 8, 1)
+        .search("size:>1 AND collection:functions", 8, 1)
         .expect("query size mismatch");
     assert!(empty_hits.is_empty());
 
@@ -986,7 +986,7 @@ fn graph_level_corpus_mutations_recompute_inherited_entity_corpora() {
     assert!(corpora.iter().any(|corpus| corpus == "default"));
     assert!(corpora.iter().any(|corpus| corpus == "malware"));
     let add_hits = client
-        .search("corpus:malware AND collection:function", 8, 1)
+        .search("corpus:malware AND collection:functions", 8, 1)
         .expect("query after add corpus");
     assert_eq!(add_hits.len(), 1);
     assert_eq!(
@@ -1045,21 +1045,21 @@ fn entity_corpora_are_collection_scoped() {
 
     assert_eq!(
         client
-            .search("corpus:malware AND collection:function", 8, 1)
+            .search("corpus:malware AND collection:functions", 8, 1)
             .expect("query inherited function")
             .len(),
         1
     );
     assert_eq!(
         client
-            .search("corpus:malware AND collection:block", 8, 1)
+            .search("corpus:malware AND collection:blocks", 8, 1)
             .expect("query block")
             .len(),
         1
     );
     assert_eq!(
         client
-            .search("corpus:malware AND collection:instruction", 8, 1)
+            .search("corpus:malware AND collection:instructions", 8, 1)
             .expect("query instruction")
             .len(),
         1
@@ -1078,20 +1078,20 @@ fn entity_corpora_are_collection_scoped() {
 
     assert_eq!(
         client
-            .search("corpus:goodware AND collection:function", 8, 1)
+            .search("corpus:goodware AND collection:functions", 8, 1)
             .expect("query function corpus")
             .len(),
         1
     );
     assert!(
         client
-            .search("corpus:goodware AND collection:block", 8, 1)
+            .search("corpus:goodware AND collection:blocks", 8, 1)
             .expect("query block remains unchanged")
             .is_empty()
     );
     assert!(
         client
-            .search("corpus:goodware AND collection:instruction", 8, 1)
+            .search("corpus:goodware AND collection:instructions", 8, 1)
             .expect("query instruction remains unchanged")
             .is_empty()
     );
@@ -1102,21 +1102,21 @@ fn entity_corpora_are_collection_scoped() {
 
     assert_eq!(
         client
-            .search("corpus:goodware AND collection:function", 8, 1)
+            .search("corpus:goodware AND collection:functions", 8, 1)
             .expect("function remains scoped")
             .len(),
         1
     );
     assert_eq!(
         client
-            .search("corpus:clean AND collection:block", 8, 1)
+            .search("corpus:clean AND collection:blocks", 8, 1)
             .expect("query overridden block")
             .len(),
         1
     );
     assert!(
         client
-            .search("corpus:clean AND collection:instruction", 8, 1)
+            .search("corpus:clean AND collection:instructions", 8, 1)
             .expect("instruction remains scoped")
             .is_empty()
     );
@@ -1414,7 +1414,7 @@ fn rename_corpus_updates_index_globally() {
     assert!(!corpora.iter().any(|corpus| corpus == "malware"));
 
     let hits = client
-        .search("collection:function", 8, 1)
+        .search("collection:functions", 8, 1)
         .expect("query after rename corpus");
     assert_eq!(hits.len(), 2);
     assert!(hits.iter().all(|hit| {
@@ -1531,7 +1531,7 @@ fn same_corpus_distinct_symbols_expand_flat_results_without_duplicate_objects() 
 
     let keys = client
         .store
-        .object_list("index/function/amd64/")
+        .object_list("index/functions/amd64/")
         .expect("list canonical function entries");
     assert_eq!(keys.len(), 1);
 
@@ -1770,7 +1770,7 @@ fn rejects_existing_table_dimension_mismatch_on_open() {
     assert!(
             error
                 .to_string()
-                .contains("existing local index table function__amd64 uses dimensions 3, but index.local.dimensions is 4")
+                .contains("existing local index table functions__amd64 uses dimensions 3, but index.local.dimensions is 4")
         );
 
     let _ = std::fs::remove_dir_all(&root);

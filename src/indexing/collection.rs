@@ -2,10 +2,12 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
 pub enum Collection {
+    #[serde(rename = "instructions")]
     Instruction,
+    #[serde(rename = "blocks")]
     Block,
+    #[serde(rename = "functions")]
     Function,
 }
 
@@ -16,9 +18,9 @@ impl Collection {
 
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Instruction => "instruction",
-            Self::Block => "block",
-            Self::Function => "function",
+            Self::Instruction => "instructions",
+            Self::Block => "blocks",
+            Self::Function => "functions",
         }
     }
 }
