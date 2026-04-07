@@ -52,12 +52,22 @@ struct WebAuthConfig {
     enabled: bool,
     #[serde(default = "default_true")]
     allow_guest: bool,
+    #[serde(default, rename = "2fa")]
+    two_factor: WebTwoFactorConfig,
     #[serde(default)]
     registration: WebRegistrationConfig,
     #[serde(default = "default_session_ttl_seconds")]
     session_ttl_seconds: u64,
     #[serde(default = "default_auth_rules")]
     rules: Vec<WebAuthRuleConfig>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct WebTwoFactorConfig {
+    #[serde(default = "default_true")]
+    enabled: bool,
+    #[serde(default = "default_true")]
+    required: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -245,9 +255,19 @@ impl Default for WebAuthConfig {
         Self {
             enabled: default_true(),
             allow_guest: default_true(),
+            two_factor: WebTwoFactorConfig::default(),
             registration: WebRegistrationConfig::default(),
             session_ttl_seconds: default_session_ttl_seconds(),
             rules: default_auth_rules(),
+        }
+    }
+}
+
+impl Default for WebTwoFactorConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_true(),
+            required: default_true(),
         }
     }
 }
@@ -622,6 +642,21 @@ fn default_auth_rules() -> Vec<WebAuthRuleConfig> {
             roles: vec!["admin".to_string(), "user".to_string()],
         },
         WebAuthRuleConfig {
+            path: "/api/v1/profile/2fa/setup".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string(), "user".to_string()],
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/profile/2fa/enable".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string(), "user".to_string()],
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/profile/2fa/disable".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string(), "user".to_string()],
+        },
+        WebAuthRuleConfig {
             path: "/api/v1/profile/picture".to_string(),
             enabled: true,
             roles: vec!["admin".to_string(), "user".to_string()],
@@ -682,6 +717,21 @@ fn default_auth_rules() -> Vec<WebAuthRuleConfig> {
             roles: vec!["admin".to_string()],
         },
         WebAuthRuleConfig {
+            path: "/api/v1/admin/users/2fa/require".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string()],
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/admin/users/2fa/disable".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string()],
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/admin/users/2fa/reset".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string()],
+        },
+        WebAuthRuleConfig {
             path: "/api/v1/admin/users/delete".to_string(),
             enabled: true,
             roles: vec!["admin".to_string()],
@@ -698,6 +748,21 @@ fn default_auth_rules() -> Vec<WebAuthRuleConfig> {
         },
         WebAuthRuleConfig {
             path: "/api/v1/admin/symbols/delete".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string()],
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/admin/comments".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string()],
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/comments/add".to_string(),
+            enabled: true,
+            roles: vec!["admin".to_string(), "user".to_string()],
+        },
+        WebAuthRuleConfig {
+            path: "/api/v1/comments/".to_string(),
             enabled: true,
             roles: vec!["admin".to_string()],
         },

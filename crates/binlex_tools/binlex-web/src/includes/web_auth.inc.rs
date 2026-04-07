@@ -1,6 +1,10 @@
 const SESSION_COOKIE_NAME: &str = "binlex_session";
 const CAPTCHA_TTL_SECONDS: u64 = 180;
 const CAPTCHA_LENGTH: usize = 6;
+const LOGIN_CHALLENGE_TTL_SECONDS: u64 = 300;
+const TOTP_DIGITS: u32 = 6;
+const TOTP_PERIOD_SECONDS: u64 = 30;
+const TOTP_WINDOW_STEPS: i64 = 1;
 
 fn captcha_alphabet() -> &'static [u8] {
     b"23456789ABCDEF"
@@ -226,6 +230,9 @@ fn auth_session_response(
         registration_enabled: state.ui.auth.registration.enabled,
         bootstrap_required: state.database.user_count().unwrap_or(0) == 0,
         user: user.map(user_response),
+        two_factor_required: false,
+        two_factor_setup_required: false,
+        challenge_token: None,
         recovery_codes: None,
     }
 }
@@ -343,6 +350,8 @@ fn user_response(user: binlex::databases::UserRecord) -> AuthUserResponse {
         key: user.api_key,
         role: user.role,
         enabled: user.enabled,
+        two_factor_enabled: user.two_factor_enabled,
+        two_factor_required: user.two_factor_required,
         timestamp,
     }
 }
@@ -436,6 +445,106 @@ fn remove_profile_picture_file(username: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+fn generate_totp_secret() -> String {
+    use rand::RngCore;
+    let mut bytes = [0u8; 20];
+    rand::thread_rng().fill_bytes(&mut bytes);
+    data_encoding::BASE32_NOPAD.encode(&bytes)
+}
+
+fn decode_totp_secret(secret: &str) -> Result<Vec<u8>, AppError> {
+    data_encoding::BASE32_NOPAD
+        .decode(secret.trim().as_bytes())
+        .map_err(|_| AppError::new("invalid two-factor secret"))
+}
+
+fn otpauth_uri(username: &str, secret: &str) -> String {
+    let label = format!("Binlex:{}", username.trim());
+    format!(
+        "otpauth://totp/{}?secret={}&issuer={}&algorithm=SHA1&digits={}&period={}",
+        serde_urlencoded::to_string([("label", label.clone())])
+            .unwrap_or_else(|_| format!("label={}", label))
+            .trim_start_matches("label="),
+        secret.trim(),
+        serde_urlencoded::to_string([("issuer", "Binlex")])
+            .unwrap_or_else(|_| "issuer=Binlex".to_string())
+            .trim_start_matches("issuer="),
+        TOTP_DIGITS,
+        TOTP_PERIOD_SECONDS
+    )
+}
+
+fn render_totp_qr_svg(uri: &str) -> Result<String, AppError> {
+    use qrcode::{QrCode, render::svg};
+    let code = QrCode::new(uri.as_bytes()).map_err(|error| AppError::new(error.to_string()))?;
+    Ok(code
+        .render::<svg::Color<'_>>()
+        .min_dimensions(192, 192)
+        .dark_color(svg::Color("#dfe8f3"))
+        .light_color(svg::Color("#131a22"))
+        .build())
+}
+
+fn hotp(secret: &[u8], counter: u64, digits: u32) -> Result<u32, AppError> {
+    use hmac::{Hmac, Mac};
+    type HmacSha1 = Hmac<sha1::Sha1>;
+    let mut mac =
+        HmacSha1::new_from_slice(secret).map_err(|error| AppError::new(error.to_string()))?;
+    mac.update(&counter.to_be_bytes());
+    let digest = mac.finalize().into_bytes();
+    let offset = (digest[19] & 0x0f) as usize;
+    let binary = ((digest[offset] as u32 & 0x7f) << 24)
+        | ((digest[offset + 1] as u32) << 16)
+        | ((digest[offset + 2] as u32) << 8)
+        | (digest[offset + 3] as u32);
+    Ok(binary % 10u32.pow(digits))
+}
+
+fn verify_totp_code(secret: &str, code: &str) -> Result<bool, AppError> {
+    let normalized = code.trim();
+    if normalized.len() != TOTP_DIGITS as usize || !normalized.chars().all(|ch| ch.is_ascii_digit())
+    {
+        return Ok(false);
+    }
+    let secret = decode_totp_secret(secret)?;
+    let target = normalized
+        .parse::<u32>()
+        .map_err(|error| AppError::new(error.to_string()))?;
+    let now = chrono::Utc::now().timestamp();
+    let current_counter = (now / TOTP_PERIOD_SECONDS as i64) as u64;
+    for delta in -TOTP_WINDOW_STEPS..=TOTP_WINDOW_STEPS {
+        let counter = if delta < 0 {
+            current_counter.saturating_sub(delta.unsigned_abs())
+        } else {
+            current_counter.saturating_add(delta as u64)
+        };
+        if hotp(&secret, counter, TOTP_DIGITS)? == target {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn login_challenge_response(
+    state: &AppState,
+    user: binlex::databases::UserRecord,
+    challenge_token: String,
+    setup_required: bool,
+) -> AuthSessionResponse {
+    let mut response = auth_session_response(state, None);
+    response.two_factor_required = true;
+    response.two_factor_setup_required = setup_required;
+    response.challenge_token = Some(challenge_token);
+    response.user = Some(user_response(user));
+    response
+}
+
+fn apply_two_factor_policy(user: &mut binlex::databases::UserRecord, state: &AppState) {
+    if state.two_factor_required() {
+        user.two_factor_required = true;
+    }
+}
+
 #[utoipa::path(
     post,
     path = "/api/v1/auth/bootstrap",
@@ -452,6 +561,7 @@ async fn auth_bootstrap_api(
     }
     let database = state.database.clone();
     let ttl_seconds = state.ui.auth.session_ttl_seconds;
+    let two_factor_required = state.two_factor_required();
     let response = task::spawn_blocking(move || {
         if database
             .user_count()
@@ -460,22 +570,43 @@ async fn auth_bootstrap_api(
         {
             return Err(AppError::forbidden("bootstrap is no longer available"));
         }
-        let (user, _, recovery_codes) = database
-            .user_create_account(&request.username, &request.password, "admin", false, None)
+        let (mut user, _, recovery_codes) = database
+            .user_create_account(
+                &request.username,
+                &request.password,
+                "admin",
+                false,
+                two_factor_required,
+                None,
+            )
             .map_err(|error| AppError::new(error.to_string()))?;
+        if two_factor_required {
+            let (_, challenge_token) = database
+                .login_challenge_create(&user.username, true, LOGIN_CHALLENGE_TTL_SECONDS)
+                .map_err(|error| AppError::new(error.to_string()))?;
+            user.two_factor_required = true;
+            let mut response =
+                login_challenge_response(state.as_ref(), user, challenge_token, true);
+            response.recovery_codes = Some(recovery_codes);
+            return Ok::<(Option<HeaderValue>, AuthSessionResponse), AppError>((None, response));
+        }
         let (_, session) = database
             .session_create(&user.username, ttl_seconds)
             .map_err(|error| AppError::new(error.to_string()))?;
         let mut response = auth_session_response(state.as_ref(), Some(user));
         response.recovery_codes = Some(recovery_codes);
-        Ok::<(AuthSessionResponse, HeaderValue), AppError>((
+        Ok::<(Option<HeaderValue>, AuthSessionResponse), AppError>((
+            Some(session_cookie_header(&session, ttl_seconds)?),
             response,
-            session_cookie_header(&session, ttl_seconds)?,
         ))
     })
     .await
     .map_err(|error| AppError::new(error.to_string()))??;
-    Ok(([(header::SET_COOKIE, response.1)], Json(response.0)))
+    if let Some(cookie) = response.0 {
+        Ok(([(header::SET_COOKIE, cookie)], Json(response.1)).into_response())
+    } else {
+        Ok(Json(response.1).into_response())
+    }
 }
 
 #[utoipa::path(
@@ -492,15 +623,167 @@ async fn auth_login_api(
     let database = state.database.clone();
     let ttl_seconds = state.ui.auth.session_ttl_seconds;
     let response = task::spawn_blocking(move || {
-        let user = database
+        let mut user = database
             .user_authenticate(&request.username, &request.password)
             .map_err(|error| AppError::unauthorized(error.to_string()))?
             .ok_or_else(|| AppError::unauthorized("invalid username or password"))?;
+        apply_two_factor_policy(&mut user, state.as_ref());
+        if user.two_factor_enabled || user.two_factor_required {
+            let setup_required = user.two_factor_required && !user.two_factor_enabled;
+            let (_, challenge_token) = database
+                .login_challenge_create(&user.username, setup_required, LOGIN_CHALLENGE_TTL_SECONDS)
+                .map_err(|error| AppError::new(error.to_string()))?;
+            return Ok::<(Option<HeaderValue>, AuthSessionResponse), AppError>((
+                None,
+                login_challenge_response(state.as_ref(), user, challenge_token, setup_required),
+            ));
+        }
+        let (_, session) = database
+            .session_create(&user.username, ttl_seconds)
+            .map_err(|error| AppError::new(error.to_string()))?;
+        Ok::<(Option<HeaderValue>, AuthSessionResponse), AppError>((
+            Some(session_cookie_header(&session, ttl_seconds)?),
+            auth_session_response(state.as_ref(), Some(user)),
+        ))
+    })
+    .await
+    .map_err(|error| AppError::new(error.to_string()))??;
+    if let Some(cookie) = response.0 {
+        Ok(([(header::SET_COOKIE, cookie)], Json(response.1)).into_response())
+    } else {
+        Ok(Json(response.1).into_response())
+    }
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/login/2fa",
+    tag = "Auth",
+    request_body = AuthLoginTwoFactorRequest,
+    responses((status = 200, description = "Completed a two-factor login challenge.", body = AuthSessionResponse))
+)]
+async fn auth_login_two_factor_api(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<AuthLoginTwoFactorRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let database = state.database.clone();
+    let ttl_seconds = state.ui.auth.session_ttl_seconds;
+    let response = task::spawn_blocking(move || {
+        let (mut user, _) = database
+            .login_challenge_user(&request.challenge_token)
+            .map_err(|error| AppError::unauthorized(error.to_string()))?
+            .ok_or_else(|| AppError::unauthorized("invalid or expired login challenge"))?;
+        apply_two_factor_policy(&mut user, state.as_ref());
+        if !user.two_factor_enabled {
+            return Err(AppError::unauthorized(
+                "two-factor authentication is not enabled",
+            ));
+        }
+        let secret = database
+            .user_two_factor_secret(&user.username)
+            .map_err(|error| AppError::new(error.to_string()))?
+            .ok_or_else(|| AppError::unauthorized("two-factor setup is incomplete"))?;
+        let verified = verify_totp_code(&secret, &request.code)?;
+        if !verified {
+            database
+                .user_consume_recovery_code(&user.username, &request.code, None)
+                .map_err(|error| AppError::unauthorized(error.to_string()))?;
+        }
+        database
+            .login_challenge_disable_value(&request.challenge_token)
+            .map_err(|error| AppError::new(error.to_string()))?;
         let (_, session) = database
             .session_create(&user.username, ttl_seconds)
             .map_err(|error| AppError::new(error.to_string()))?;
         Ok::<(AuthSessionResponse, HeaderValue), AppError>((
             auth_session_response(state.as_ref(), Some(user)),
+            session_cookie_header(&session, ttl_seconds)?,
+        ))
+    })
+    .await
+    .map_err(|error| AppError::new(error.to_string()))??;
+    Ok(([(header::SET_COOKIE, response.1)], Json(response.0)))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/login/2fa/setup",
+    tag = "Auth",
+    request_body = AuthLoginTwoFactorSetupRequest,
+    responses((status = 200, description = "Generated TOTP setup for a pending login.", body = TwoFactorSetupResponse))
+)]
+async fn auth_login_two_factor_setup_api(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<AuthLoginTwoFactorSetupRequest>,
+) -> Result<Json<TwoFactorSetupResponse>, AppError> {
+    let database = state.database.clone();
+    let response = task::spawn_blocking(move || {
+        let (user, challenge) = database
+            .login_challenge_user(&request.challenge_token)
+            .map_err(|error| AppError::unauthorized(error.to_string()))?
+            .ok_or_else(|| AppError::unauthorized("invalid or expired login challenge"))?;
+        if !challenge.setup_required {
+            return Err(AppError::forbidden("two-factor setup is not required"));
+        }
+        let secret = generate_totp_secret();
+        database
+            .user_begin_two_factor_setup(&user.username, &secret)
+            .map_err(|error| AppError::new(error.to_string()))?;
+        Ok::<TwoFactorSetupResponse, AppError>(TwoFactorSetupResponse {
+            manual_secret: secret.clone(),
+            qr_svg: render_totp_qr_svg(&otpauth_uri(&user.username, &secret))?,
+        })
+    })
+    .await
+    .map_err(|error| AppError::new(error.to_string()))??;
+    Ok(Json(response))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/login/2fa/enable",
+    tag = "Auth",
+    request_body = AuthLoginTwoFactorRequest,
+    responses((status = 200, description = "Enabled TOTP during a pending login.", body = AuthSessionResponse))
+)]
+async fn auth_login_two_factor_enable_api(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<AuthLoginTwoFactorRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let database = state.database.clone();
+    let ttl_seconds = state.ui.auth.session_ttl_seconds;
+    let response = task::spawn_blocking(move || {
+        let (user, challenge) = database
+            .login_challenge_user(&request.challenge_token)
+            .map_err(|error| AppError::unauthorized(error.to_string()))?
+            .ok_or_else(|| AppError::unauthorized("invalid or expired login challenge"))?;
+        if !challenge.setup_required {
+            return Err(AppError::forbidden("two-factor setup is not required"));
+        }
+        let secret = database
+            .user_two_factor_secret(&user.username)
+            .map_err(|error| AppError::new(error.to_string()))?
+            .ok_or_else(|| AppError::new("two-factor setup has not been started"))?;
+        if !verify_totp_code(&secret, &request.code)? {
+            return Err(AppError::unauthorized("invalid authenticator code"));
+        }
+        let mut user = database
+            .user_enable_two_factor(&user.username, None)
+            .map_err(|error| AppError::new(error.to_string()))?;
+        apply_two_factor_policy(&mut user, state.as_ref());
+        let recovery_codes = database
+            .user_regenerate_recovery_codes(&user.username, None)
+            .map_err(|error| AppError::new(error.to_string()))?;
+        database
+            .login_challenge_disable_value(&request.challenge_token)
+            .map_err(|error| AppError::new(error.to_string()))?;
+        let (_, session) = database
+            .session_create(&user.username, ttl_seconds)
+            .map_err(|error| AppError::new(error.to_string()))?;
+        let mut response = auth_session_response(state.as_ref(), Some(user));
+        response.recovery_codes = Some(recovery_codes);
+        Ok::<(AuthSessionResponse, HeaderValue), AppError>((
+            response,
             session_cookie_header(&session, ttl_seconds)?,
         ))
     })
@@ -560,6 +843,7 @@ async fn auth_register_api(
     }
     let database = state.database.clone();
     let ttl_seconds = state.ui.auth.session_ttl_seconds;
+    let two_factor_required = state.two_factor_required();
     let response = task::spawn_blocking(move || {
         let _ = database.captcha_clear_expired();
         if database
@@ -574,22 +858,43 @@ async fn auth_register_api(
         database
             .captcha_verify_once(&request.captcha_id, &request.captcha_answer)
             .map_err(|error| AppError::new(error.to_string()))?;
-        let (user, _, recovery_codes) = database
-            .user_create_account(&request.username, &request.password, "user", false, None)
+        let (mut user, _, recovery_codes) = database
+            .user_create_account(
+                &request.username,
+                &request.password,
+                "user",
+                false,
+                two_factor_required,
+                None,
+            )
             .map_err(|error| AppError::new(error.to_string()))?;
+        if two_factor_required {
+            let (_, challenge_token) = database
+                .login_challenge_create(&user.username, true, LOGIN_CHALLENGE_TTL_SECONDS)
+                .map_err(|error| AppError::new(error.to_string()))?;
+            user.two_factor_required = true;
+            let mut response =
+                login_challenge_response(state.as_ref(), user, challenge_token, true);
+            response.recovery_codes = Some(recovery_codes);
+            return Ok::<(Option<HeaderValue>, AuthSessionResponse), AppError>((None, response));
+        }
         let (_, session) = database
             .session_create(&user.username, ttl_seconds)
             .map_err(|error| AppError::new(error.to_string()))?;
         let mut response = auth_session_response(state.as_ref(), Some(user));
         response.recovery_codes = Some(recovery_codes);
-        Ok::<(AuthSessionResponse, HeaderValue), AppError>((
+        Ok::<(Option<HeaderValue>, AuthSessionResponse), AppError>((
+            Some(session_cookie_header(&session, ttl_seconds)?),
             response,
-            session_cookie_header(&session, ttl_seconds)?,
         ))
     })
     .await
     .map_err(|error| AppError::new(error.to_string()))??;
-    Ok(([(header::SET_COOKIE, response.1)], Json(response.0)))
+    if let Some(cookie) = response.0 {
+        Ok(([(header::SET_COOKIE, cookie)], Json(response.1)).into_response())
+    } else {
+        Ok(Json(response.1).into_response())
+    }
 }
 
 #[utoipa::path(
@@ -882,6 +1187,135 @@ async fn profile_recovery_regenerate_api(
 
 #[utoipa::path(
     post,
+    path = "/api/v1/profile/2fa/setup",
+    tag = "Auth",
+    security(("bearer_auth" = [])),
+    request_body = TwoFactorSetupRequest,
+    responses((status = 200, description = "Started TOTP setup for the current user.", body = TwoFactorSetupResponse))
+)]
+async fn profile_two_factor_setup_api(
+    State(state): State<Arc<AppState>>,
+    Extension(context): Extension<RequestAuthContext>,
+    Json(_request): Json<TwoFactorSetupRequest>,
+) -> Result<Json<TwoFactorSetupResponse>, AppError> {
+    let user = context
+        .user
+        .ok_or_else(|| AppError::unauthorized("authentication is required"))?;
+    let database = state.database.clone();
+    let response = task::spawn_blocking(move || {
+        let secret = generate_totp_secret();
+        database
+            .user_begin_two_factor_setup(&user.username, &secret)
+            .map_err(|error| AppError::new(error.to_string()))?;
+        Ok::<TwoFactorSetupResponse, AppError>(TwoFactorSetupResponse {
+            manual_secret: secret.clone(),
+            qr_svg: render_totp_qr_svg(&otpauth_uri(&user.username, &secret))?,
+        })
+    })
+    .await
+    .map_err(|error| AppError::new(error.to_string()))??;
+    Ok(Json(response))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/profile/2fa/enable",
+    tag = "Auth",
+    security(("bearer_auth" = [])),
+    request_body = TwoFactorEnableRequest,
+    responses((status = 200, description = "Enabled TOTP for the current user.", body = AuthSessionResponse))
+)]
+async fn profile_two_factor_enable_api(
+    State(state): State<Arc<AppState>>,
+    Extension(context): Extension<RequestAuthContext>,
+    Json(request): Json<TwoFactorEnableRequest>,
+) -> Result<Json<AuthSessionResponse>, AppError> {
+    let user = context
+        .user
+        .ok_or_else(|| AppError::unauthorized("authentication is required"))?;
+    let database = state.database.clone();
+    let response = task::spawn_blocking(move || {
+        let authenticated = database
+            .user_authenticate(&user.username, &request.current_password)
+            .map_err(|error| AppError::new(error.to_string()))?
+            .is_some();
+        if !authenticated {
+            return Err(AppError::unauthorized("invalid password"));
+        }
+        let secret = database
+            .user_two_factor_secret(&user.username)
+            .map_err(|error| AppError::new(error.to_string()))?
+            .ok_or_else(|| AppError::new("two-factor setup has not been started"))?;
+        if !verify_totp_code(&secret, &request.code)? {
+            return Err(AppError::unauthorized("invalid authenticator code"));
+        }
+        let mut user = database
+            .user_enable_two_factor(&user.username, None)
+            .map_err(|error| AppError::new(error.to_string()))?;
+        apply_two_factor_policy(&mut user, state.as_ref());
+        let recovery_codes = database
+            .user_regenerate_recovery_codes(&user.username, None)
+            .map_err(|error| AppError::new(error.to_string()))?;
+        let mut response = auth_session_response(state.as_ref(), Some(user));
+        response.recovery_codes = Some(recovery_codes);
+        Ok::<AuthSessionResponse, AppError>(response)
+    })
+    .await
+    .map_err(|error| AppError::new(error.to_string()))??;
+    Ok(Json(response))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/profile/2fa/disable",
+    tag = "Auth",
+    security(("bearer_auth" = [])),
+    request_body = TwoFactorDisableRequest,
+    responses((status = 200, description = "Disabled TOTP for the current user.", body = AuthUserResponse))
+)]
+async fn profile_two_factor_disable_api(
+    State(state): State<Arc<AppState>>,
+    Extension(context): Extension<RequestAuthContext>,
+    Json(request): Json<TwoFactorDisableRequest>,
+) -> Result<Json<AuthUserResponse>, AppError> {
+    let user = context
+        .user
+        .ok_or_else(|| AppError::unauthorized("authentication is required"))?;
+    let database = state.database.clone();
+    let clear_required = !state.two_factor_required();
+    let response = task::spawn_blocking(move || {
+        let authenticated = database
+            .user_authenticate(&user.username, &request.current_password)
+            .map_err(|error| AppError::new(error.to_string()))?
+            .is_some();
+        if !authenticated {
+            return Err(AppError::unauthorized("invalid password"));
+        }
+        let secret = database
+            .user_two_factor_secret(&user.username)
+            .map_err(|error| AppError::new(error.to_string()))?;
+        let verified = secret
+            .as_deref()
+            .map(|value| verify_totp_code(value, &request.code))
+            .transpose()?
+            .unwrap_or(false);
+        if !verified {
+            database
+                .user_consume_recovery_code(&user.username, &request.code, None)
+                .map_err(|error| AppError::unauthorized(error.to_string()))?;
+        }
+        database
+            .user_disable_two_factor(&user.username, clear_required, None)
+            .map(user_response)
+            .map_err(|error| AppError::new(error.to_string()))
+    })
+    .await
+    .map_err(|error| AppError::new(error.to_string()))??;
+    Ok(Json(response))
+}
+
+#[utoipa::path(
+    post,
     path = "/api/v1/auth/password/reset",
     tag = "Auth",
     request_body = AuthPasswordResetRequest,
@@ -1006,6 +1440,7 @@ async fn admin_user_create_api(
         return Err(AppError::new("password confirmation does not match"));
     }
     let database = state.database.clone();
+    let two_factor_required = state.two_factor_required();
     let response = task::spawn_blocking(move || {
         let (user, key, recovery_codes) = database
             .user_create_account(
@@ -1013,6 +1448,7 @@ async fn admin_user_create_api(
                 &request.password,
                 &request.role,
                 false,
+                two_factor_required,
                 None,
             )
             .map_err(|error| AppError::new(error.to_string()))?;
@@ -1040,11 +1476,19 @@ async fn admin_user_role_api(
     Json(request): Json<AdminUserRoleRequest>,
 ) -> Result<Json<AuthUserResponse>, AppError> {
     let database = state.database.clone();
+    let two_factor_required = state.two_factor_required();
     let response = task::spawn_blocking(move || {
-        database
+        let user = database
             .user_update_role(&request.username, &request.role)
-            .map(user_response)
-            .map_err(|error| AppError::new(error.to_string()))
+            .map_err(|error| AppError::new(error.to_string()))?;
+        if two_factor_required && !user.two_factor_required {
+            database
+                .user_require_two_factor(&request.username, true, None)
+                .map(user_response)
+                .map_err(|error| AppError::new(error.to_string()))
+        } else {
+            Ok(user_response(user))
+        }
     })
     .await
     .map_err(|error| AppError::new(error.to_string()))??;
@@ -1176,6 +1620,80 @@ async fn admin_user_picture_delete_api(
         remove_profile_picture_file(&request.username)?;
         database
             .user_update_profile_picture(&request.username, None)
+            .map(user_response)
+            .map_err(|error| AppError::new(error.to_string()))
+    })
+    .await
+    .map_err(|error| AppError::new(error.to_string()))??;
+    Ok(Json(response))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/admin/users/2fa/require",
+    tag = "Auth",
+    security(("bearer_auth" = [])),
+    request_body = AdminUserTwoFactorRequiredRequest,
+    responses((status = 200, description = "Updated a user's 2FA requirement.", body = AuthUserResponse))
+)]
+async fn admin_user_two_factor_require_api(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<AdminUserTwoFactorRequiredRequest>,
+) -> Result<Json<AuthUserResponse>, AppError> {
+    let database = state.database.clone();
+    let response = task::spawn_blocking(move || {
+        database
+            .user_require_two_factor(&request.username, request.required, None)
+            .map(user_response)
+            .map_err(|error| AppError::new(error.to_string()))
+    })
+    .await
+    .map_err(|error| AppError::new(error.to_string()))??;
+    Ok(Json(response))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/admin/users/2fa/disable",
+    tag = "Auth",
+    security(("bearer_auth" = [])),
+    request_body = AdminUserNameRequest,
+    responses((status = 200, description = "Disabled a user's 2FA.", body = AuthUserResponse))
+)]
+async fn admin_user_two_factor_disable_api(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<AdminUserNameRequest>,
+) -> Result<Json<AuthUserResponse>, AppError> {
+    let database = state.database.clone();
+    let clear_required = !state.two_factor_required();
+    let response = task::spawn_blocking(move || {
+        database
+            .user_disable_two_factor(&request.username, clear_required, None)
+            .map(user_response)
+            .map_err(|error| AppError::new(error.to_string()))
+    })
+    .await
+    .map_err(|error| AppError::new(error.to_string()))??;
+    Ok(Json(response))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/admin/users/2fa/reset",
+    tag = "Auth",
+    security(("bearer_auth" = [])),
+    request_body = AdminUserNameRequest,
+    responses((status = 200, description = "Reset a user's 2FA and require setup again.", body = AuthUserResponse))
+)]
+async fn admin_user_two_factor_reset_api(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<AdminUserNameRequest>,
+) -> Result<Json<AuthUserResponse>, AppError> {
+    let database = state.database.clone();
+    let clear_required = !state.two_factor_required();
+    let response = task::spawn_blocking(move || {
+        database
+            .user_disable_two_factor(&request.username, clear_required, None)
             .map(user_response)
             .map_err(|error| AppError::new(error.to_string()))
     })

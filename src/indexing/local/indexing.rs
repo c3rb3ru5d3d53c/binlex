@@ -672,6 +672,9 @@ impl LocalIndex {
                     entropy: staged.entropy,
                     contiguous: staged.contiguous,
                     chromosome_entropy: staged.chromosome_entropy,
+                    collection_tag_count: staged.collection_tag_count,
+                    collection_tags: staged.collection_tags.clone(),
+                    collection_comment_count: staged.collection_comment_count,
                     timestamp: staged.timestamp.clone(),
                     vector: staged.vector.clone(),
                     explicit_corpora: None,
@@ -696,6 +699,9 @@ impl LocalIndex {
             entry.entropy = staged.entropy;
             entry.contiguous = staged.contiguous;
             entry.chromosome_entropy = staged.chromosome_entropy;
+            entry.collection_tag_count = staged.collection_tag_count;
+            entry.collection_tags = staged.collection_tags.clone();
+            entry.collection_comment_count = staged.collection_comment_count;
             entry.timestamp = staged.timestamp.clone();
             entry.vector = staged.vector.clone();
             self.store
@@ -764,6 +770,9 @@ impl LocalIndex {
                 entropy: entry.entropy,
                 contiguous: entry.contiguous,
                 chromosome_entropy: entry.chromosome_entropy,
+                collection_tag_count: entry.collection_tag_count,
+                collection_tags: entry.collection_tags.clone(),
+                collection_comment_count: entry.collection_comment_count,
                 timestamp: entry.timestamp.clone(),
                 vector: entry.vector.clone(),
                 attributes: entry.attributes.clone(),
@@ -1159,6 +1168,9 @@ fn build_staged_graph_entry(
             entropy: metrics.as_ref().and_then(|value| value.entropy),
             contiguous: metrics.as_ref().and_then(|value| value.contiguous),
             chromosome_entropy: metrics.as_ref().and_then(|value| value.chromosome_entropy),
+            collection_tag_count: 0,
+            collection_tags: Vec::new(),
+            collection_comment_count: 0,
             timestamp,
             vector,
             explicit_corpora: None,

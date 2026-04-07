@@ -158,7 +158,35 @@ pub fn query_completion_specs() -> Vec<QueryCompletionSpec> {
             insert: "symbol:",
             kind: "field",
             usage: "symbol:\"kernel32:CreateFileW\"",
-            description: "Filter by exact quoted symbol name",
+            description: "Filter by quoted fuzzy symbol name matches",
+        },
+        QueryCompletionSpec {
+            label: "tag:",
+            insert: "tag:",
+            kind: "field",
+            usage: "tag:malware:emotet",
+            description: "Filter by exact entity tag name",
+        },
+        QueryCompletionSpec {
+            label: "symbols:",
+            insert: "symbols:",
+            kind: "field",
+            usage: "symbols:>0",
+            description: "Filter by the number of entity symbols",
+        },
+        QueryCompletionSpec {
+            label: "tags:",
+            insert: "tags:",
+            kind: "field",
+            usage: "tags:>0",
+            description: "Filter by the number of entity tags",
+        },
+        QueryCompletionSpec {
+            label: "comments:",
+            insert: "comments:",
+            kind: "field",
+            usage: "comments:>0",
+            description: "Filter by the number of entity comments",
         },
         QueryCompletionSpec {
             label: "cyclomatic_complexity:",
@@ -311,6 +339,10 @@ pub enum QueryField {
     Timestamp,
     Size,
     Symbol,
+    Tag,
+    Symbols,
+    Tags,
+    Comments,
     CyclomaticComplexity,
     AverageInstructionsPerBlock,
     NumberOfInstructions,
@@ -471,7 +503,7 @@ fn analyze_query_term(
             set_search_root(analysis, SearchRoot::Vector(vector))
         }
         QueryField::Embeddings => {
-            if parse_count_query(term.value.trim()).is_none() {
+            if parse_positive_count_query(term.value.trim()).is_none() {
                 return Err(QueryError(
                     "embeddings expects counts with optional comparisons like embeddings:>1k or embeddings:<=12m"
                         .to_string(),
@@ -530,18 +562,33 @@ fn analyze_query_term(
             }
             Ok(())
         }
-        QueryField::CyclomaticComplexity
+        QueryField::Tag => {
+            if term.value.trim().is_empty() {
+                return Err(QueryError("tag requires a value".to_string()));
+            }
+            Ok(())
+        }
+        QueryField::Symbols
+        | QueryField::Tags
+        | QueryField::Comments
+        | QueryField::CyclomaticComplexity
         | QueryField::NumberOfInstructions
         | QueryField::NumberOfBlocks => {
             if parse_integer_query(term.value.trim()).is_none() {
                 return Err(QueryError(format!(
                     "{} expects integer comparisons like {}:>5",
                     match term.field {
+                        QueryField::Symbols => "symbols",
+                        QueryField::Tags => "tags",
+                        QueryField::Comments => "comments",
                         QueryField::CyclomaticComplexity => "cyclomatic_complexity",
                         QueryField::NumberOfInstructions => "instructions",
                         _ => "blocks",
                     },
                     match term.field {
+                        QueryField::Symbols => "symbols",
+                        QueryField::Tags => "tags",
+                        QueryField::Comments => "comments",
                         QueryField::CyclomaticComplexity => "cyclomatic_complexity",
                         QueryField::NumberOfInstructions => "instructions",
                         _ => "blocks",
@@ -836,6 +883,10 @@ fn parse_query_field(value: &str) -> Result<QueryField, QueryError> {
         "timestamp" => Ok(QueryField::Timestamp),
         "size" => Ok(QueryField::Size),
         "symbol" => Ok(QueryField::Symbol),
+        "tag" => Ok(QueryField::Tag),
+        "symbols" => Ok(QueryField::Symbols),
+        "tags" => Ok(QueryField::Tags),
+        "comments" => Ok(QueryField::Comments),
         "cyclomatic_complexity" => Ok(QueryField::CyclomaticComplexity),
         "average_instructions_per_block" => Ok(QueryField::AverageInstructionsPerBlock),
         "instructions" => Ok(QueryField::NumberOfInstructions),
@@ -1020,6 +1071,14 @@ fn parse_integer_query(raw: &str) -> Option<(CountOperator, u64)> {
     parse_count_query(raw)
 }
 
+fn parse_positive_count_query(raw: &str) -> Option<(CountOperator, u64)> {
+    let (operator, value) = parse_count_query(raw)?;
+    if value == 0 {
+        return None;
+    }
+    Some((operator, value))
+}
+
 fn parse_float_query(raw: &str) -> Option<(ScoreOperator, f32)> {
     parse_score_query(raw)
 }
@@ -1058,11 +1117,7 @@ fn parse_count_query(raw: &str) -> Option<(CountOperator, u64)> {
     } else {
         (CountOperator::Eq, trimmed)
     };
-    let value = parse_compact_count(remainder)?;
-    if value == 0 {
-        return None;
-    }
-    Some((operator, value))
+    parse_compact_count(remainder).map(|value| (operator, value))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1444,6 +1499,19 @@ mod tests {
             let query = Query::parse(raw).unwrap();
             let error = query.analyze().unwrap_err();
             assert!(error.to_string().contains("embeddings expects counts"));
+        }
+    }
+
+    #[test]
+    fn entity_count_filters_accept_zero_bounds() {
+        for raw in [
+            "symbols:>0",
+            "symbols:>=0",
+            "tags:>0",
+            "tags:>=0",
+            "comments:>=0",
+        ] {
+            Query::parse(raw).unwrap().analyze().unwrap();
         }
     }
 

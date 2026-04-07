@@ -2,6 +2,7 @@ use super::LocalIndex;
 use super::types::{EntityMetrics, Error, IndexEntry, SearchResult};
 use crate::Config;
 use crate::controlflow::{Block, Function, Graph, Instruction};
+use crate::databases::localdb::normalize_metadata_name;
 use crate::formats::SymbolJson;
 use crate::indexing::{Collection, Entity};
 use crate::metadata::{Attribute, SymbolType};
@@ -88,6 +89,9 @@ pub(super) fn accumulate_entry(
         entropy: None,
         contiguous: None,
         chromosome_entropy: None,
+        collection_tag_count: 0,
+        collection_tags: Vec::new(),
+        collection_comment_count: 0,
         vector: vector.clone(),
         timestamp: current_timestamp(),
         explicit_corpora: None,
@@ -228,6 +232,9 @@ pub(super) fn build_search_result(
         entropy: context.entry.entropy,
         contiguous: context.entry.contiguous,
         chromosome_entropy: context.entry.chromosome_entropy,
+        collection_tag_count: context.entry.collection_tag_count,
+        collection_tags: context.entry.collection_tags.clone(),
+        collection_comment_count: context.entry.collection_comment_count,
         timestamp: context.entry.timestamp.clone(),
         symbol,
         attributes: context.entry.attributes.clone(),
@@ -249,24 +256,13 @@ pub(super) fn push_search_hits(
     corpora: &[String],
     hydration: SearchHydration,
 ) {
-    let symbols =
-        symbol_names_for_attributes(&context.entry.attributes, context.entity, context.address);
-    if symbols.is_empty() {
-        hits.push(build_search_result(
-            index, cache, &context, corpora, None, hydration,
-        ));
-        return;
-    }
-    for symbol in symbols {
-        hits.push(build_search_result(
-            index,
-            cache,
-            &context,
-            corpora,
-            Some(symbol),
-            hydration,
-        ));
-    }
+    let symbol =
+        symbol_names_for_attributes(&context.entry.attributes, context.entity, context.address)
+            .into_iter()
+            .next();
+    hits.push(build_search_result(
+        index, cache, &context, corpora, symbol, hydration,
+    ));
 }
 
 pub(super) fn symbol_type_matches_collection(symbol_type: &str, collection: Collection) -> bool {
@@ -278,9 +274,8 @@ pub(super) fn symbol_type_matches_collection(symbol_type: &str, collection: Coll
 }
 
 pub(super) fn validate_corpus_sha256(corpus: &str, sha256: &str) -> Result<(), Error> {
-    if corpus.trim().is_empty() {
-        return Err(Error::InvalidConfiguration("corpus must not be empty"));
-    }
+    normalize_metadata_name("corpus", corpus)
+        .map_err(|error| Error::Validation(error.to_string()))?;
     if sha256.trim().is_empty() {
         return Err(Error::InvalidConfiguration("sha256 must not be empty"));
     }
@@ -291,14 +286,12 @@ pub(super) fn normalize_corpora(corpora: &[String]) -> Result<Vec<String>, Error
     let corpora = unique_corpora(
         &corpora
             .iter()
-            .map(|corpus| corpus.trim().to_string())
-            .collect::<Vec<_>>(),
+            .map(|corpus| normalize_metadata_name("corpus", corpus))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| Error::Validation(error.to_string()))?,
     );
     if corpora.is_empty() {
         return Err(Error::InvalidConfiguration("corpora must not be empty"));
-    }
-    if corpora.iter().any(|corpus| corpus.is_empty()) {
-        return Err(Error::InvalidConfiguration("corpus must not be empty"));
     }
     Ok(corpora)
 }
@@ -476,10 +469,23 @@ pub(super) fn search_term_matches(
         QueryField::Address => parse_query_address(value) == Some(result.address()),
         QueryField::Timestamp => query_timestamp_matches(value, result.timestamp()),
         QueryField::Size => query_size_matches(value, result.size()),
-        QueryField::Symbol => result
-            .symbol()
-            .map(|symbol| symbol.eq_ignore_ascii_case(value))
-            .unwrap_or(false),
+        QueryField::Symbol => {
+            result
+                .attributes()
+                .iter()
+                .filter_map(|attribute| matching_symbol_name(result, attribute))
+                .map(|symbol| symbol_match_score(&symbol, value))
+                .max()
+                .unwrap_or(0)
+                > 0
+        }
+        QueryField::Tag => result
+            .collection_tags()
+            .iter()
+            .any(|tag| tag.eq_ignore_ascii_case(value)),
+        QueryField::Symbols => query_integer_matches(value, result.symbol_count()),
+        QueryField::Tags => query_integer_matches(value, result.collection_tag_count()),
+        QueryField::Comments => query_integer_matches(value, result.collection_comment_count()),
         QueryField::CyclomaticComplexity => {
             result.collection() != Collection::Function
                 || result
@@ -525,6 +531,40 @@ pub(super) fn search_term_matches(
             .map(|actual| query_float_matches(value, actual))
             .unwrap_or(false),
     }
+}
+
+fn matching_symbol_name(result: &SearchResult, attribute: &Value) -> Option<String> {
+    let object = attribute.as_object()?;
+    if object.get("type")?.as_str()? != "symbol" {
+        return None;
+    }
+    let symbol_type = object.get("symbol_type")?.as_str()?;
+    if !symbol_type_matches_collection(symbol_type, result.collection()) {
+        return None;
+    }
+    let symbol_address = object.get("address")?.as_u64()?;
+    if symbol_address != result.address() {
+        return None;
+    }
+    object.get("name")?.as_str().map(str::to_string)
+}
+
+fn symbol_match_score(symbol: &str, query: &str) -> usize {
+    let symbol = symbol.trim().to_ascii_lowercase();
+    let query = query.trim().to_ascii_lowercase();
+    if symbol.is_empty() || query.is_empty() {
+        return 0;
+    }
+    if symbol == query {
+        return 20_000;
+    }
+    if symbol.starts_with(&query) {
+        return 16_000usize.saturating_sub(symbol.len());
+    }
+    if symbol.contains(&query) {
+        return 12_000usize.saturating_sub(symbol.len());
+    }
+    fuzzy_subsequence_score(&symbol, &query)
 }
 
 pub(super) fn parse_query_address(value: &str) -> Option<u64> {

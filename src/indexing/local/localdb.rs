@@ -2,10 +2,12 @@ use super::LocalIndex;
 use super::support::sample_key;
 use super::types::{
     CollectionCommentRecord, CollectionCommentSearchPage, CollectionTagRecord,
-    CollectionTagSearchPage, CommentRecord, CommentSearchPage, Error, SampleStatusRecord,
-    StoredGraphRecord, TagRecord, TagSearchPage,
+    CollectionTagSearchPage, CommentRecord, CommentSearchPage, EntityCommentRecord,
+    EntityCommentSearchPage, Error, SampleStatusRecord, StoredGraphRecord, TagRecord,
+    TagSearchPage,
 };
 use crate::controlflow::{Block, Function, Graph, Instruction};
+use crate::databases::localdb::normalize_metadata_name;
 use crate::databases::{LocalDBPage, SampleCommentRecord, SampleTagRecord};
 use crate::indexing::Collection;
 use chrono::Utc;
@@ -14,14 +16,12 @@ use std::collections::BTreeMap;
 impl LocalIndex {
     pub fn sample_tag_add(&self, sha256: &str, tag: &str) -> Result<(), Error> {
         let sha256 = self.ensure_sample_exists(sha256)?;
-        let tag = tag.trim();
-        if tag.is_empty() {
-            return Err(Error::Validation("tag must not be empty".to_string()));
-        }
+        let tag = normalize_metadata_name("tag", tag)
+            .map_err(|error| Error::Validation(error.to_string()))?;
         self.localdb
             .sample_tag_add(&SampleTagRecord {
                 sha256,
-                tag: tag.to_string(),
+                tag,
                 timestamp: Utc::now().to_rfc3339(),
             })
             .map_err(|error| Error::LocalDb(error.to_string()))
@@ -29,12 +29,10 @@ impl LocalIndex {
 
     pub fn sample_tag_remove(&self, sha256: &str, tag: &str) -> Result<(), Error> {
         let sha256 = self.ensure_sample_exists(sha256)?;
-        let tag = tag.trim();
-        if tag.is_empty() {
-            return Err(Error::Validation("tag must not be empty".to_string()));
-        }
+        let tag = normalize_metadata_name("tag", tag)
+            .map_err(|error| Error::Validation(error.to_string()))?;
         self.localdb
-            .sample_tag_remove(&sha256, tag)
+            .sample_tag_remove(&sha256, &tag)
             .map_err(|error| Error::LocalDb(error.to_string()))
     }
 
@@ -42,9 +40,9 @@ impl LocalIndex {
         let sha256 = self.ensure_sample_exists(sha256)?;
         let tags = tags
             .iter()
-            .map(|tag| tag.trim().to_string())
-            .filter(|tag| !tag.is_empty())
-            .collect::<Vec<_>>();
+            .map(|tag| normalize_metadata_name("tag", tag))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| Error::Validation(error.to_string()))?;
         self.localdb
             .sample_tag_replace(&sha256, &tags, &Utc::now().to_rfc3339())
             .map_err(|error| Error::LocalDb(error.to_string()))
@@ -63,12 +61,10 @@ impl LocalIndex {
     }
 
     pub fn tag_add(&self, tag: &str) -> Result<(), Error> {
-        let tag = tag.trim();
-        if tag.is_empty() {
-            return Err(Error::Validation("tag must not be empty".to_string()));
-        }
+        let tag = normalize_metadata_name("tag", tag)
+            .map_err(|error| Error::Validation(error.to_string()))?;
         self.localdb
-            .tag_add(tag, Some(&Utc::now().to_rfc3339()), None)
+            .tag_add(&tag, Some(&Utc::now().to_rfc3339()), None)
             .map_err(|error| Error::LocalDb(error.to_string()))
     }
 
@@ -95,23 +91,22 @@ impl LocalIndex {
         username: &str,
     ) -> Result<(), Error> {
         let sha256 = self.ensure_collection_member_exists(sha256, collection, address)?;
-        let tag = tag.trim();
-        if tag.is_empty() {
-            return Err(Error::Validation("tag must not be empty".to_string()));
-        }
+        let tag = normalize_metadata_name("tag", tag)
+            .map_err(|error| Error::Validation(error.to_string()))?;
         self.localdb
-            .tag_add(tag, Some(&Utc::now().to_rfc3339()), Some(username))
+            .tag_add(&tag, Some(&Utc::now().to_rfc3339()), Some(username))
             .map_err(|error| Error::LocalDb(error.to_string()))?;
         self.localdb
             .collection_tag_add(&CollectionTagRecord {
-                sha256,
+                sha256: sha256.clone(),
                 collection,
                 address,
-                tag: tag.to_string(),
+                tag,
                 username: username.to_string(),
                 timestamp: Utc::now().to_rfc3339(),
             })
-            .map_err(|error| Error::LocalDb(error.to_string()))
+            .map_err(|error| Error::LocalDb(error.to_string()))?;
+        self.sync_entity_tags(&sha256, collection, address)
     }
 
     pub fn collection_tag_remove(
@@ -122,13 +117,12 @@ impl LocalIndex {
         tag: &str,
     ) -> Result<(), Error> {
         let sha256 = self.ensure_collection_member_exists(sha256, collection, address)?;
-        let tag = tag.trim();
-        if tag.is_empty() {
-            return Err(Error::Validation("tag must not be empty".to_string()));
-        }
+        let tag = normalize_metadata_name("tag", tag)
+            .map_err(|error| Error::Validation(error.to_string()))?;
         self.localdb
-            .collection_tag_remove(&sha256, collection, address, tag)
-            .map_err(|error| Error::LocalDb(error.to_string()))
+            .collection_tag_remove(&sha256, collection, address, &tag)
+            .map_err(|error| Error::LocalDb(error.to_string()))?;
+        self.sync_entity_tags(&sha256, collection, address)
     }
 
     pub fn collection_tag_replace(
@@ -142,9 +136,9 @@ impl LocalIndex {
         let sha256 = self.ensure_collection_member_exists(sha256, collection, address)?;
         let tags = tags
             .iter()
-            .map(|tag| tag.trim().to_string())
-            .filter(|tag| !tag.is_empty())
-            .collect::<Vec<_>>();
+            .map(|tag| normalize_metadata_name("tag", tag))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| Error::Validation(error.to_string()))?;
         self.localdb
             .collection_tag_replace(
                 &sha256,
@@ -154,7 +148,8 @@ impl LocalIndex {
                 username,
                 &Utc::now().to_rfc3339(),
             )
-            .map_err(|error| Error::LocalDb(error.to_string()))
+            .map_err(|error| Error::LocalDb(error.to_string()))?;
+        self.sync_entity_tags(&sha256, collection, address)
     }
 
     pub fn collection_tag_search(
@@ -338,6 +333,92 @@ impl LocalIndex {
             .map_err(|error| Error::LocalDb(error.to_string()))
     }
 
+    pub fn entity_comment_add(
+        &self,
+        sha256: &str,
+        collection: Collection,
+        address: u64,
+        username: &str,
+        comment: &str,
+    ) -> Result<EntityCommentRecord, Error> {
+        let sha256 = self.ensure_collection_member_exists(sha256, collection, address)?;
+        let comment = comment.trim();
+        if comment.is_empty() {
+            return Err(Error::Validation("comment must not be empty".to_string()));
+        }
+        let created = self
+            .localdb
+            .entity_comment_add(
+                &sha256,
+                collection,
+                address,
+                username,
+                comment,
+                Some(&Utc::now().to_rfc3339()),
+            )
+            .map_err(|error| Error::LocalDb(error.to_string()))?;
+        self.sync_entity_comment_count(&sha256, collection, address)?;
+        Ok(created)
+    }
+
+    pub fn entity_comment_delete(&self, id: i64) -> Result<bool, Error> {
+        let deleted = self
+            .localdb
+            .entity_comment_delete(id)
+            .map_err(|error| Error::LocalDb(error.to_string()))?;
+        if let Some(record) = deleted {
+            self.sync_entity_comment_count(&record.sha256, record.collection, record.address)?;
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
+    pub fn entity_comment_list(
+        &self,
+        sha256: &str,
+        collection: Collection,
+        address: u64,
+        page: usize,
+        page_size: usize,
+    ) -> Result<EntityCommentSearchPage, Error> {
+        let sha256 = self.ensure_collection_member_exists(sha256, collection, address)?;
+        self.localdb
+            .entity_comment_list(&sha256, collection, address, page, page_size)
+            .map_err(|error| Error::LocalDb(error.to_string()))
+    }
+
+    pub fn entity_comment_search(
+        &self,
+        query: &str,
+        page: usize,
+        page_size: usize,
+    ) -> Result<EntityCommentSearchPage, Error> {
+        self.localdb
+            .entity_comment_search(query, page, page_size)
+            .map_err(|error| Error::LocalDb(error.to_string()))
+    }
+
+    pub fn entity_comment_count(
+        &self,
+        sha256: &str,
+        collection: Collection,
+        address: u64,
+    ) -> Result<usize, Error> {
+        let sha256 = self.ensure_collection_member_exists(sha256, collection, address)?;
+        self.localdb
+            .entity_comment_count(&sha256, collection, address)
+            .map_err(|error| Error::LocalDb(error.to_string()))
+    }
+
+    pub fn entity_comment_counts(
+        &self,
+        keys: &[(String, Collection, u64)],
+    ) -> Result<BTreeMap<(String, Collection, u64), usize>, Error> {
+        self.localdb
+            .entity_comment_counts(keys)
+            .map_err(|error| Error::LocalDb(error.to_string()))
+    }
+
     pub fn sample_status_get(&self, sha256: &str) -> Result<Option<SampleStatusRecord>, Error> {
         let sha256 = sha256.trim();
         if sha256.is_empty() {
@@ -459,6 +540,89 @@ impl LocalIndex {
             Err(crate::storage::localstore::Error::NotFound(_)) => Ok(None),
             Err(error) => Err(Error::LocalStore(error.to_string())),
         }
+    }
+
+    fn sync_entity_comment_count(
+        &self,
+        sha256: &str,
+        collection: Collection,
+        address: u64,
+    ) -> Result<(), Error> {
+        let count = self
+            .localdb
+            .entity_comment_count(sha256, collection, address)
+            .map_err(|error| Error::LocalDb(error.to_string()))? as u64;
+        self.localdb
+            .entity_metadata_comment_count_set(sha256, collection, address, count)
+            .map_err(|error| Error::LocalDb(error.to_string()))?;
+        let metadata = self
+            .localdb
+            .entity_metadata_search(Some(sha256), &[collection], &[])
+            .map_err(|error| Error::LocalDb(error.to_string()))?;
+        for record in metadata
+            .into_iter()
+            .filter(|record| record.address == address)
+        {
+            let key = super::support::index_entry_key(
+                collection,
+                &record.architecture,
+                &record.object_id,
+            );
+            let mut entry = match self.store.object_get_json::<super::types::IndexEntry>(&key) {
+                Ok(entry) => entry,
+                Err(crate::storage::localstore::Error::NotFound(_)) => continue,
+                Err(error) => return Err(Error::LocalStore(error.to_string())),
+            };
+            entry.collection_comment_count = count;
+            self.store
+                .object_put_json(&key, &entry)
+                .map_err(|error| Error::LocalStore(error.to_string()))?;
+        }
+        Ok(())
+    }
+
+    fn sync_entity_tags(
+        &self,
+        sha256: &str,
+        collection: Collection,
+        address: u64,
+    ) -> Result<(), Error> {
+        let tags = self
+            .localdb
+            .collection_tag_list(sha256, collection, address)
+            .map_err(|error| Error::LocalDb(error.to_string()))?;
+        let count = self
+            .localdb
+            .collection_tag_count(sha256, collection, address)
+            .map_err(|error| Error::LocalDb(error.to_string()))? as u64;
+        self.localdb
+            .entity_metadata_tags_set(sha256, collection, address, count, &tags)
+            .map_err(|error| Error::LocalDb(error.to_string()))?;
+        let metadata = self
+            .localdb
+            .entity_metadata_search(Some(sha256), &[collection], &[])
+            .map_err(|error| Error::LocalDb(error.to_string()))?;
+        for record in metadata
+            .into_iter()
+            .filter(|record| record.address == address)
+        {
+            let key = super::support::index_entry_key(
+                collection,
+                &record.architecture,
+                &record.object_id,
+            );
+            let mut entry = match self.store.object_get_json::<super::types::IndexEntry>(&key) {
+                Ok(entry) => entry,
+                Err(crate::storage::localstore::Error::NotFound(_)) => continue,
+                Err(error) => return Err(Error::LocalStore(error.to_string())),
+            };
+            entry.collection_tag_count = count;
+            entry.collection_tags = tags.clone();
+            self.store
+                .object_put_json(&key, &entry)
+                .map_err(|error| Error::LocalStore(error.to_string()))?;
+        }
+        Ok(())
     }
 }
 

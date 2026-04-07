@@ -127,6 +127,7 @@ pub(crate) struct PageData {
     pub(crate) sample_downloads_enabled: bool,
     pub(crate) auth_bootstrap_required: bool,
     pub(crate) auth_registration_enabled: bool,
+    pub(crate) auth_two_factor_required: bool,
     pub(crate) auth_user: Option<AuthUserProfile>,
 }
 
@@ -143,6 +144,8 @@ pub(crate) struct AuthUserProfile {
     pub(crate) key: String,
     pub(crate) role: String,
     pub(crate) profile_picture: Option<String>,
+    pub(crate) two_factor_enabled: bool,
+    pub(crate) two_factor_required: bool,
 }
 
 #[derive(Deserialize, IntoParams, ToSchema)]
@@ -296,6 +299,8 @@ struct SearchRowResponse {
     corpora: Vec<String>,
     #[serde(default)]
     collection_tag_count: usize,
+    #[serde(default)]
+    collection_comment_count: usize,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -338,6 +343,80 @@ struct SearchRowDetailResponse {
     embedding: String,
     embeddings: u64,
     corpora: Vec<String>,
+}
+
+#[derive(Deserialize, Serialize, IntoParams, ToSchema)]
+struct CollectionCommentsParams {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+    #[schema(example = "function")]
+    collection: String,
+    #[schema(example = 4198400)]
+    address: u64,
+    #[serde(default)]
+    page: Option<usize>,
+    #[serde(default)]
+    page_size: Option<usize>,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct EntityCommentCreateRequest {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+    #[schema(example = "function")]
+    collection: String,
+    #[schema(example = 4198400)]
+    address: u64,
+    #[schema(example = "Resolves imports lazily and caches the resulting function pointers.")]
+    body: String,
+}
+
+#[derive(Serialize, ToSchema)]
+struct EntityCommentResponse {
+    id: i64,
+    sha256: String,
+    collection: String,
+    address: u64,
+    actor: MetadataActorResponse,
+    timestamp: String,
+    body: String,
+}
+
+#[derive(Serialize, ToSchema)]
+struct EntityCommentsResponse {
+    sha256: String,
+    collection: String,
+    address: u64,
+    items: Vec<EntityCommentResponse>,
+    page: usize,
+    page_size: usize,
+    total_results: usize,
+    has_next: bool,
+}
+
+#[derive(Deserialize, Serialize, IntoParams, ToSchema)]
+struct AdminCommentsSearchParams {
+    #[serde(default)]
+    #[schema(example = "dispatcher")]
+    q: String,
+    #[serde(default)]
+    page: Option<usize>,
+    #[serde(default)]
+    page_size: Option<usize>,
+}
+
+#[derive(Serialize, ToSchema)]
+struct AdminCommentsSearchResponse {
+    items: Vec<EntityCommentResponse>,
+    page: usize,
+    page_size: usize,
+    total_results: usize,
+    has_next: bool,
+}
+
+#[derive(Serialize, ToSchema)]
+struct CommentActionResponse {
+    ok: bool,
 }
 
 #[derive(Deserialize, Serialize, IntoParams, ToSchema)]
@@ -649,6 +728,7 @@ pub(crate) struct ResultRow {
     pub(crate) grouped: bool,
     pub(crate) group_end: bool,
     pub(crate) collection_tag_count: usize,
+    pub(crate) collection_comment_count: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -793,6 +873,8 @@ struct AuthUserResponse {
     role: String,
     enabled: bool,
     profile_picture: Option<String>,
+    two_factor_enabled: bool,
+    two_factor_required: bool,
     timestamp: String,
 }
 
@@ -801,9 +883,54 @@ struct AuthSessionResponse {
     authenticated: bool,
     registration_enabled: bool,
     bootstrap_required: bool,
+    #[serde(default)]
+    two_factor_required: bool,
+    #[serde(default)]
+    two_factor_setup_required: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    challenge_token: Option<String>,
     user: Option<AuthUserResponse>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     recovery_codes: Option<Vec<String>>,
+}
+
+#[derive(Serialize, ToSchema)]
+struct TwoFactorSetupResponse {
+    manual_secret: String,
+    qr_svg: String,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct TwoFactorSetupRequest {}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct TwoFactorEnableRequest {
+    #[schema(example = "supersecret123")]
+    current_password: String,
+    #[schema(example = "123456")]
+    code: String,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct TwoFactorDisableRequest {
+    #[schema(example = "supersecret123")]
+    current_password: String,
+    #[schema(example = "123456")]
+    code: String,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct AuthLoginTwoFactorRequest {
+    #[schema(example = "abc123")]
+    challenge_token: String,
+    #[schema(example = "123456")]
+    code: String,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct AuthLoginTwoFactorSetupRequest {
+    #[schema(example = "abc123")]
+    challenge_token: String,
 }
 
 #[derive(Deserialize, Serialize, ToSchema)]
@@ -916,6 +1043,14 @@ struct AdminUserRoleRequest {
 struct AdminUserNameRequest {
     #[schema(example = "alice")]
     username: String,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct AdminUserTwoFactorRequiredRequest {
+    #[schema(example = "alice")]
+    username: String,
+    #[schema(example = true)]
+    required: bool,
 }
 
 #[derive(Deserialize, IntoParams, ToSchema)]

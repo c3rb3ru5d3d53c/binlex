@@ -3,6 +3,8 @@ use crate::controlflow::GraphSnapshot;
 use crate::databases::{
     CollectionCommentRecord as DatabaseCollectionCommentRecord,
     CollectionTagRecord as DatabaseCollectionTagRecord,
+    EntityCommentRecord as DatabaseEntityCommentRecord,
+    EntityCommentSearchPage as DatabaseEntityCommentSearchPage,
     SampleStatusRecord as DatabaseSampleStatusRecord,
 };
 use crate::indexing::Collection;
@@ -82,6 +84,12 @@ pub(super) struct IndexEntry {
     pub(super) contiguous: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) chromosome_entropy: Option<f64>,
+    #[serde(default)]
+    pub(super) collection_tag_count: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(super) collection_tags: Vec<String>,
+    #[serde(default)]
+    pub(super) collection_comment_count: u64,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub(super) timestamp: String,
     pub(super) vector: Vec<f32>,
@@ -174,6 +182,9 @@ pub struct CollectionCommentSearchPage {
     pub has_next: bool,
 }
 
+pub type EntityCommentRecord = DatabaseEntityCommentRecord;
+pub type EntityCommentSearchPage = DatabaseEntityCommentSearchPage;
+
 pub type SampleStatusRecord = DatabaseSampleStatusRecord;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -204,6 +215,12 @@ pub struct SearchResult {
     pub(super) contiguous: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) chromosome_entropy: Option<f64>,
+    #[serde(default)]
+    pub(super) collection_tag_count: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(super) collection_tags: Vec<String>,
+    #[serde(default)]
+    pub(super) collection_comment_count: u64,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub(super) timestamp: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -288,6 +305,23 @@ impl SearchResult {
 
     pub fn chromosome_entropy(&self) -> Option<f64> {
         self.chromosome_entropy
+    }
+
+    pub fn collection_comment_count(&self) -> u64 {
+        self.collection_comment_count
+    }
+
+    pub fn collection_tag_count(&self) -> u64 {
+        self.collection_tag_count
+    }
+
+    pub fn collection_tags(&self) -> &[String] {
+        &self.collection_tags
+    }
+
+    pub fn symbol_count(&self) -> u64 {
+        super::support::symbol_names_for_attributes(&self.attributes, self.entity, self.address)
+            .len() as u64
     }
 
     pub fn timestamp(&self) -> DateTime<Utc> {

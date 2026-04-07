@@ -1,12 +1,14 @@
-<details class="multiselect modal-select" data-single-select="{{ name }}">
+<details class="multiselect modal-select" data-single-select="{{ name }}" data-single-label="{{ label }}">
   <summary>{{ label }}: {{ selected }}</summary>
   <div class="menu">
+    {% if search_enabled %}
     <input class="menu-search" type="text" placeholder="Search {{ label }}" oninput="filterSingleOptions(this, '{{ name }}')">
+    {% endif %}
     <div class="menu-options">
       {% for option in options %}
       <label class="menu-option" data-single-group="{{ name }}" data-option="{{ option }}">
         <input type="radio" name="{{ name }}" value="{{ option }}"{% if option == selected %} checked{% endif %} onchange="selectSingleOption('{{ name }}', this.value)">
-        <span>{{ option }}</span>
+        <span class="menu-option-pill"><span class="menu-option-indicator" aria-hidden="true"></span><span class="menu-option-label">{{ option }}</span></span>
       </label>
       {% endfor %}
     </div>

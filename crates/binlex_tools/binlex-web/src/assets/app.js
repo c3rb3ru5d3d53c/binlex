@@ -16,7 +16,11 @@ const QUERY_FIELD_SUGGESTIONS = [
   { label: "address:", insert: "address:", kind: "field", usage: "address:0x401000", description: "Filter by exact address" },
   { label: "date:", insert: "date:", kind: "field", usage: "date:>=2026-03-01", description: "Filter by indexed UTC date or date range bounds" },
   { label: "size:", insert: "size:", kind: "field", usage: "size:>1mb", description: "Filter by instruction, block, or function byte size" },
-  { label: "symbol:", insert: "symbol:", kind: "field", usage: "symbol:\"kernel32:CreateFileW\"", description: "Filter by exact quoted symbol name" },
+  { label: "symbol:", insert: "symbol:", kind: "field", usage: "symbol:\"kernel32:CreateFileW\"", description: "Filter by quoted fuzzy symbol name matches" },
+  { label: "tag:", insert: "tag:", kind: "field", usage: "tag:malware:emotet", description: "Filter by exact entity tag name" },
+  { label: "symbols:", insert: "symbols:", kind: "field", usage: "symbols:>0", description: "Filter by the number of entity symbols" },
+  { label: "tags:", insert: "tags:", kind: "field", usage: "tags:>0", description: "Filter by the number of entity tags" },
+  { label: "comments:", insert: "comments:", kind: "field", usage: "comments:>0", description: "Filter by the number of entity comments" },
   { label: "cyclomatic_complexity:", insert: "cyclomatic_complexity:", kind: "field", usage: "cyclomatic_complexity:>5", description: "Filter by cyclomatic complexity" },
   { label: "average_instructions_per_block:", insert: "average_instructions_per_block:", kind: "field", usage: "average_instructions_per_block:<10", description: "Filter by average instructions per block" },
   { label: "instructions:", insert: "instructions:", kind: "field", usage: "instructions:>=32", description: "Filter by the number of instructions" },
@@ -50,6 +54,7 @@ const QUERY_SORT_KEYS = [
 ];
 
 let corpusSuggestionAbort = null;
+let tagSuggestionAbort = null;
 let querySuggestionItems = [];
 let querySuggestionIndex = 0;
 const THEME_STORAGE_KEY = "binlex-web-theme";
@@ -60,6 +65,8 @@ let activeTagTrigger = null;
 let activeTagResultKey = null;
 let activeSymbolTrigger = null;
 let activeSymbolResultKey = null;
+let activeCommentsTrigger = null;
+let activeCommentsResultKey = null;
 let activePickerTooltipHost = null;
 const QUERY_COMMIT_DATASET_KEY = "committedQueryClause";
 let queryAssistantUpdateHandle = null;
@@ -74,6 +81,8 @@ const uploadCorporaRequests = new Set();
 let uploadCorporaSearchHandle = null;
 const RESULT_COLUMNS_STORAGE_KEY = "binlex-web-result-columns-v2";
 const TAGS_POPOVER_VISIBLE_LIMIT = 6;
+const COMMENTS_PAGE_SIZE = 20;
+const COMMENT_MAX_LENGTH = 2048;
 let activeColumnsTrigger = null;
 const LOCKED_CORE_CORPORA = new Set(["default", "goodware", "malware"]);
 
@@ -163,6 +172,10 @@ function getTagsPopover() {
 
 function getSymbolPopover() {
   return document.getElementById("symbol-popover");
+}
+
+function getCommentsPopover() {
+  return document.getElementById("comments-popover");
 }
 
 function getColumnsPopover() {
@@ -776,7 +789,7 @@ function continuationStateAfterSpace(input) {
         context: operatorContinuationContext(prefix, context.depth),
       };
     }
-    if (["corpus", "architecture", "collection"].includes(context.field)) {
+    if (["corpus", "tag", "architecture", "collection"].includes(context.field)) {
       return {
         kind: "value",
         context: {
@@ -893,7 +906,7 @@ function isClauseComplete(context) {
   if (context.field === "ascending" || context.field === "descending") {
     return QUERY_SORT_KEYS.some((item) => item === value.toLowerCase());
   }
-  if (["cyclomatic_complexity", "instructions", "blocks"].includes(context.field)) {
+  if (["symbols", "tags", "comments", "cyclomatic_complexity", "instructions", "blocks"].includes(context.field)) {
     return /^(>=|<=|>|<|=)?\s*\d+$/.test(value);
   }
   if (["average_instructions_per_block", "markov", "entropy", "chromosome.entropy"].includes(context.field)) {
@@ -955,10 +968,10 @@ function fieldStageSuggestions(context) {
 
 function helpTextForClause(clause) {
   if (!clause || !clause.token) {
-    return "Use explicit fields like sample:, embedding:, embeddings:, vector:, score:, limit:, corpus:, collection:, architecture:, username:, address:, date:, size:, symbol:, cyclomatic_complexity:, average_instructions_per_block:, instructions:, blocks:, markov:, entropy:, contiguous:, and chromosome.entropy:, plus pipe utilities like expand:blocks, expand:instructions, and drop:rhs.";
+    return "Use explicit fields like sample:, embedding:, embeddings:, vector:, score:, limit:, corpus:, collection:, architecture:, username:, address:, date:, size:, symbol:, tag:, symbols:, tags:, comments:, cyclomatic_complexity:, average_instructions_per_block:, instructions:, blocks:, markov:, entropy:, contiguous:, and chromosome.entropy:, plus pipe utilities like expand:blocks, expand:instructions, and drop:rhs.";
   }
   if (clause.stage === "field") {
-    return "Use explicit fields like sample:, embedding:, embeddings:, vector:, score:, limit:, corpus:, collection:, architecture:, username:, address:, date:, size:, symbol:, cyclomatic_complexity:, average_instructions_per_block:, instructions:, blocks:, markov:, entropy:, contiguous:, and chromosome.entropy:, plus pipe utilities like expand:blocks, expand:instructions, and drop:rhs.";
+    return "Use explicit fields like sample:, embedding:, embeddings:, vector:, score:, limit:, corpus:, collection:, architecture:, username:, address:, date:, size:, symbol:, tag:, symbols:, tags:, comments:, cyclomatic_complexity:, average_instructions_per_block:, instructions:, blocks:, markov:, entropy:, contiguous:, and chromosome.entropy:, plus pipe utilities like expand:blocks, expand:instructions, and drop:rhs.";
   }
   if (clause.field === "vector") {
     return "vector expects a JSON array like vector:[0.1, -0.2, 0.3]";
@@ -980,6 +993,18 @@ function helpTextForClause(clause) {
   }
   if (clause.field === "size") {
     return "size accepts bytes with optional comparisons like size:>64 or size:>=1mb";
+  }
+  if (clause.field === "tag") {
+    return "Select or search for an exact entity tag value.";
+  }
+  if (clause.field === "symbols") {
+    return "symbols accepts integer comparisons like symbols:>0 or symbols:>=2";
+  }
+  if (clause.field === "tags") {
+    return "tags accepts integer comparisons like tags:>0 or tags:>=3";
+  }
+  if (clause.field === "comments") {
+    return "comments accepts integer comparisons like comments:>0 or comments:>=5";
   }
   if (clause.field === "corpus") {
     return "Select or search for a corpus value.";
@@ -1065,9 +1090,9 @@ function applyQuerySuggestion(item) {
     return;
   }
   applyReplacementState(input, replaceActiveQueryClause(input, replacement));
-  if (item.kind === "value" && context.field === "corpus") {
+  if (item.kind === "value" && ["corpus", "tag"].includes(context.field)) {
     setCommittedQueryClause(input, {
-      field: "corpus",
+      field: context.field,
       value: replacement.trim(),
     });
     scheduleQueryAssistantUpdate();
@@ -1229,6 +1254,27 @@ function suggestionItemsForValueField(field, partial) {
       )
     );
   }
+  if (field === "tag") {
+    if (tagSuggestionAbort) tagSuggestionAbort.abort();
+    tagSuggestionAbort = new AbortController();
+    const url = `/api/v1/tags/search?q=${encodeURIComponent(partial || "")}`;
+    return fetch(url, { signal: tagSuggestionAbort.signal })
+      .then((response) => response.json())
+      .then((payload) =>
+        filterQuerySuggestions(
+          (Array.isArray(payload?.tags) ? payload.tags : []).map((item) => {
+            const value = metadataItemName(item);
+            return {
+              label: value,
+              insert: value,
+              kind: "value",
+            };
+          }),
+          partial
+        )
+      )
+      .catch(() => []);
+  }
   if (field !== "corpus") {
     return Promise.resolve([]);
   }
@@ -1305,7 +1351,7 @@ async function updateQueryAssistant() {
       hideQueryAssistantMenu();
       return;
     }
-    if (["corpus", "architecture", "collection", "drop", "contiguous", "expand", "ascending", "descending"].includes(clause.field)) {
+    if (["corpus", "tag", "architecture", "collection", "drop", "contiguous", "expand", "ascending", "descending"].includes(clause.field)) {
       const items = await suggestionItemsForValueField(clause.field, clause.partial);
       renderQuerySuggestions(items);
       return;
@@ -1784,6 +1830,7 @@ function toggleCorporaPopover(button) {
   closeRowActionMenu();
   closeTagsPopover();
   closeSymbolPopover();
+  closeCommentsPopover();
   if (activeCorporaTrigger instanceof HTMLElement) {
     activeCorporaTrigger.classList.remove("active");
   }
@@ -2409,6 +2456,7 @@ function ensureSymbolPopover() {
   popover.innerHTML = `
     <div class="symbol-popover-header">
       <div class="symbol-popover-title">Symbols</div>
+      <button type="button" class="secondary result-popover-close" onclick="closeSymbolPopover()">Close</button>
     </div>
     <div class="symbol-popover-body"></div>
   `;
@@ -2512,6 +2560,7 @@ function toggleSymbolPopover(button) {
   closeRowActionMenu();
   closeCorporaPopover();
   closeTagsPopover();
+  closeCommentsPopover();
   if (activeSymbolTrigger instanceof HTMLElement) {
     activeSymbolTrigger.classList.remove("active");
   }
@@ -2553,6 +2602,307 @@ function handleSymbolPopoverKeydown(event) {
   const applied = filteredAppliedSymbols(row);
   if (applied.length > 0) {
     unapplySymbol(activeSymbolResultKey, encodeURIComponent(metadataItemName(applied[0])));
+  }
+}
+
+function commentAuthorHtml(actor) {
+  const username = metadataActorUsername(actor) || "?";
+  const profilePicture = metadataActorProfilePicture(actor);
+  if (profilePicture) {
+    return `<img class="comment-avatar" src="${escapeHtml(profilePicture)}" alt="${escapeHtml(username)}">`;
+  }
+  return `<div class="comment-avatar comment-avatar-fallback">${escapeHtml(username.slice(0, 1).toLowerCase())}</div>`;
+}
+
+function commentCardHtml(comment, options = {}) {
+  const body = escapeHtml(String(comment?.body || "")).replace(/\n/g, "<br>");
+  const deleteButton = options.showDelete
+    ? `<button type="button" class="symbol-picker-move comment-delete" title="Delete comment" aria-label="Delete comment" onclick="event.stopPropagation(); deleteCommentById(${Number(comment?.id || 0)},'${escapeHtml(options.resultKey || "")}')">🗑</button>`
+    : "";
+  return `
+    <div class="comment-card">
+      <div class="comment-avatar-wrap">${commentAuthorHtml(comment?.actor)}</div>
+      <div class="comment-card-body">
+        <div class="comment-card-header">
+          <div class="comment-card-identity">
+            <span class="comment-card-username">${escapeHtml(metadataActorUsername(comment?.actor) || "unknown")}</span>
+            <span class="comment-card-time">${escapeHtml(formatUtcTimestamp(comment?.timestamp || ""))}</span>
+          </div>
+          ${deleteButton}
+        </div>
+        <div class="comment-card-text">${body}</div>
+      </div>
+    </div>
+  `;
+}
+
+function commentsTotalPages(row) {
+  const totalResults = Math.max(0, Number(row?.comments_total_results ?? row?.collection_comment_count ?? 0));
+  const pageSize = Math.max(1, Number(row?.comments_page_size || COMMENTS_PAGE_SIZE));
+  return Math.max(1, Math.ceil(totalResults / pageSize));
+}
+
+function commentsPagerHtml(row) {
+  const page = Math.max(1, Number(row?.comments_page || 1));
+  const totalPages = commentsTotalPages(row);
+  return `
+    <div class="comments-pager-copy">Showing page ${page} of ${totalPages}</div>
+    <div class="comments-pager-actions">
+      <button type="button" class="secondary comments-page-button" onclick="event.stopPropagation(); changeCommentsPage('${escapeHtml(resultRowKey(row))}', -1)"${page <= 1 ? " disabled" : ""}>←</button>
+      <button type="button" class="secondary comments-page-button" onclick="event.stopPropagation(); changeCommentsPage('${escapeHtml(resultRowKey(row))}', 1)"${page >= totalPages ? " disabled" : ""}>→</button>
+    </div>
+  `;
+}
+
+function commentsPopoverContent(row) {
+  const comments = Array.isArray(row?.entity_comments) ? row.entity_comments : [];
+  const items = comments.length
+    ? comments.map((item) => commentCardHtml(item, { showDelete: isAdmin(), resultKey: resultRowKey(row) })).join("")
+    : '<div class="comments-empty">No comments yet.</div>';
+  const composer = canWrite()
+    ? `
+      <div class="comments-composer">
+        <textarea
+          class="menu-search comments-input"
+          id="comments-input"
+          maxlength="${COMMENT_MAX_LENGTH}"
+          placeholder="Add a documentation note"
+          oninput="updateCommentsComposerState()"
+        ></textarea>
+        <div class="comments-composer-footer">
+          <div class="comments-count" id="comments-count">0 / ${COMMENT_MAX_LENGTH}</div>
+          <button type="button" class="primary comments-post" id="comments-post-button" onclick="postActiveComment()" disabled>Post</button>
+        </div>
+        <div class="auth-form-error users-search-error" id="comments-error"></div>
+      </div>
+    `
+    : '<div class="comments-readonly-note">Login to add comments.</div>';
+  return `
+    <div class="comments-thread">${items}</div>
+    <div class="comments-thread-footer">${commentsPagerHtml(row)}</div>
+    ${composer}
+  `;
+}
+
+function ensureCommentsPopover() {
+  let popover = getCommentsPopover();
+  if (popover) return popover;
+  popover = document.createElement("div");
+  popover.id = "comments-popover";
+  popover.className = "comments-popover";
+  popover.hidden = true;
+  popover.innerHTML = `
+    <div class="comments-popover-header">
+      <div class="comments-popover-title">Comments</div>
+      <button type="button" class="secondary result-popover-close" onclick="closeCommentsPopover()">Close</button>
+    </div>
+    <div class="comments-popover-body"></div>
+  `;
+  document.body.appendChild(popover);
+  return popover;
+}
+
+function positionCommentsPopover(trigger, popover) {
+  if (!(trigger instanceof HTMLElement) || !(popover instanceof HTMLElement) || popover.hidden) return;
+  const triggerRect = trigger.getBoundingClientRect();
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+  const popoverRect = popover.getBoundingClientRect();
+  const left = Math.max(12, Math.min(triggerRect.right - popoverRect.width, viewportWidth - popoverRect.width - 12));
+  let top = triggerRect.bottom + 6;
+  if (top + popoverRect.height > viewportHeight - 12) {
+    top = Math.max(12, triggerRect.top - popoverRect.height - 6);
+  }
+  popover.style.left = `${left}px`;
+  popover.style.top = `${top}px`;
+}
+
+function currentCommentsPopoverTrigger() {
+  if (!activeCommentsResultKey) return null;
+  return document.querySelector(`.comments-popover-trigger[data-result-key="${CSS.escape(activeCommentsResultKey)}"]`);
+}
+
+async function loadRowCommentsByKey(resultKey, options = {}) {
+  const row = findSearchRowByKey(resultKey);
+  if (!row) return;
+  const page = Number(options.page || row.comments_page || 1);
+  row.comments_loading = true;
+  row.comments_error = "";
+  const popover = getCommentsPopover();
+  if (popover && !popover.hidden && activeCommentsResultKey === resultKey) {
+    renderCommentsPopover();
+  }
+  try {
+    const payload = await getJson(`/api/v1/comments?sha256=${encodeURIComponent(row.sha256 || "")}&collection=${encodeURIComponent(row.collection || "")}&address=${Number(row.address || 0)}&page=${page}&page_size=${COMMENTS_PAGE_SIZE}`);
+    const items = Array.isArray(payload?.items) ? payload.items : [];
+    row.entity_comments = items;
+    row.comments_loaded = true;
+    row.comments_loading = false;
+    row.comments_error = "";
+    row.comments_page = Number(payload?.page || page);
+    row.comments_page_size = Number(payload?.page_size || COMMENTS_PAGE_SIZE);
+    row.comments_total_results = Number(payload?.total_results || 0);
+    row.comments_has_next = !!payload?.has_next;
+    row.collection_comment_count = Number(payload?.total_results || row.collection_comment_count || 0);
+    const data = currentSearchData();
+    if (data) renderSearchData(data);
+    if (popover && !popover.hidden && activeCommentsResultKey === resultKey) {
+      renderCommentsPopover();
+    }
+  } catch (error) {
+    row.comments_loading = false;
+    row.comments_error = error.message || "Failed to load comments.";
+    if (popover && !popover.hidden && activeCommentsResultKey === resultKey) {
+      renderCommentsPopover();
+    }
+  }
+}
+
+function renderCommentsPopover() {
+  const popover = ensureCommentsPopover();
+  const body = popover?.querySelector?.(".comments-popover-body");
+  if (!(popover instanceof HTMLElement) || !(body instanceof HTMLElement)) return;
+  const currentTrigger = currentCommentsPopoverTrigger();
+  if (currentTrigger) {
+    activeCommentsTrigger = currentTrigger;
+    activeCommentsTrigger.classList.add("active");
+  }
+  const row = activeCommentsResultKey ? findSearchRowByKey(activeCommentsResultKey) : null;
+  if (!row) {
+    closeCommentsPopover();
+    return;
+  }
+  if (!row.comments_loaded && !row.comments_loading) {
+    loadRowCommentsByKey(activeCommentsResultKey).catch((error) => {
+      console.error("binlex-web comment load failed", error);
+    });
+  }
+  if (row.comments_loading && !Array.isArray(row.entity_comments)) {
+    body.innerHTML = '<div class="tags-popover-status">Loading comments...</div>';
+  } else if (row.comments_error) {
+    body.innerHTML = `<div class="tags-popover-status error">${escapeHtml(row.comments_error)}</div>`;
+  } else {
+    body.innerHTML = commentsPopoverContent(row);
+    updateCommentsComposerState();
+  }
+  positionCommentsPopover(currentTrigger || activeCommentsTrigger, popover);
+}
+
+function closeCommentsPopover() {
+  const popover = getCommentsPopover();
+  if (popover) popover.hidden = true;
+  if (activeCommentsTrigger instanceof HTMLElement) {
+    activeCommentsTrigger.classList.remove("active");
+  }
+  activeCommentsTrigger = null;
+  activeCommentsResultKey = null;
+}
+
+function toggleCommentsPopover(button) {
+  const popover = ensureCommentsPopover();
+  if (!(button instanceof HTMLElement) || !(popover instanceof HTMLElement)) return;
+  const resultKey = String(button.dataset.resultKey || "");
+  if (activeCommentsTrigger === button && activeCommentsResultKey === resultKey && !popover.hidden) {
+    closeCommentsPopover();
+    return;
+  }
+  closeRowActionMenu();
+  closeCorporaPopover();
+  closeTagsPopover();
+  closeSymbolPopover();
+  closeCommentsPopover();
+  if (activeCommentsTrigger instanceof HTMLElement) {
+    activeCommentsTrigger.classList.remove("active");
+  }
+  activeCommentsTrigger = button;
+  activeCommentsResultKey = resultKey;
+  activeCommentsTrigger.classList.add("active");
+  popover.hidden = false;
+  renderCommentsPopover();
+  if (canWrite()) {
+    const input = popover.querySelector("#comments-input");
+    if (input instanceof HTMLElement) {
+      setTimeout(() => input.focus(), 0);
+    }
+  }
+}
+
+function updateCommentsComposerState() {
+  const input = document.getElementById("comments-input");
+  const counter = document.getElementById("comments-count");
+  const button = document.getElementById("comments-post-button");
+  if (!(input instanceof HTMLTextAreaElement)) return;
+  const length = Array.from(input.value || "").length;
+  if (counter) counter.textContent = `${length} / ${COMMENT_MAX_LENGTH}`;
+  if (button instanceof HTMLButtonElement) {
+    button.disabled = !String(input.value || "").trim() || length > COMMENT_MAX_LENGTH;
+  }
+}
+
+async function postActiveComment() {
+  if (!activeCommentsResultKey) return;
+  const row = findSearchRowByKey(activeCommentsResultKey);
+  const input = document.getElementById("comments-input");
+  if (!row || !(input instanceof HTMLTextAreaElement)) return;
+  const body = String(input.value || "").trim();
+  setInlineError("comments-error", "");
+  if (!body) return;
+  try {
+    const created = await postJson("/api/v1/comments/add", {
+      sha256: row.sha256,
+      collection: row.collection,
+      address: Number(row.address || 0),
+      body,
+    });
+    row.entity_comments = [created, ...(Array.isArray(row.entity_comments) ? row.entity_comments : [])];
+    row.comments_loaded = true;
+    row.comments_error = "";
+    row.collection_comment_count = Number(row.collection_comment_count || 0) + 1;
+    row.comments_total_results = Number(row.comments_total_results || 0) + 1;
+    row.comments_page = 1;
+    input.value = "";
+    updateCommentsComposerState();
+    const data = currentSearchData();
+    if (data) renderSearchData(data);
+    renderCommentsPopover();
+  } catch (error) {
+    setInlineError("comments-error", error.message);
+  }
+}
+
+async function changeCommentsPage(resultKey, delta) {
+  const row = findSearchRowByKey(resultKey);
+  if (!row || row.comments_loading) return;
+  const nextPage = Math.max(1, Number(row.comments_page || 1) + Number(delta || 0));
+  if (nextPage === Number(row.comments_page || 1) || nextPage > commentsTotalPages(row)) return;
+  await loadRowCommentsByKey(resultKey, { page: nextPage });
+}
+
+async function deleteCommentById(id, resultKey = "") {
+  const commentId = Number(id || 0);
+  if (!commentId || !isAdmin()) return;
+  try {
+    const response = await fetch(`/api/v1/comments/${commentId}`, {
+      method: "DELETE",
+      credentials: "same-origin",
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data?.error || "Request failed");
+    }
+    const row = resultKey ? findSearchRowByKey(resultKey) : null;
+    if (row) {
+      const before = Array.isArray(row.entity_comments) ? row.entity_comments : [];
+      row.entity_comments = before.filter((item) => Number(item?.id || 0) !== commentId);
+      row.collection_comment_count = Math.max(0, Number(row.collection_comment_count || 0) - (before.length === row.entity_comments.length ? 0 : 1));
+      const searchData = currentSearchData();
+      if (searchData) renderSearchData(searchData);
+      renderCommentsPopover();
+    }
+    await loadAdminComments();
+  } catch (error) {
+    setInlineError("comments-error", error.message || "Failed to delete comment.");
+    setInlineError("admin-comments-error", error.message || "Failed to delete comment.");
   }
 }
 
@@ -2663,6 +3013,7 @@ function ensureTagsPopover() {
   popover.innerHTML = `
     <div class="tags-popover-header">
       <div class="tags-popover-title">Tags</div>
+      <button type="button" class="secondary result-popover-close" onclick="closeTagsPopover()">Close</button>
     </div>
     <div class="tags-popover-body"></div>
   `;
@@ -2795,6 +3146,7 @@ function toggleTagsPopover(button) {
   closeRowActionMenu();
   closeCorporaPopover();
   closeSymbolPopover();
+  closeCommentsPopover();
   if (activeTagTrigger instanceof HTMLElement) {
     activeTagTrigger.classList.remove("active");
   }
@@ -3046,6 +3398,7 @@ function toggleColumnsPopover(button) {
   closeRowActionMenu();
   closeCorporaPopover();
   closeTagsPopover();
+  closeCommentsPopover();
   if (activeColumnsTrigger instanceof HTMLElement) {
     activeColumnsTrigger.classList.remove("active");
   }
@@ -3104,6 +3457,7 @@ function toggleRowActionMenu(button) {
   closeCorporaPopover();
   closeTagsPopover();
   closeSymbolPopover();
+  closeCommentsPopover();
   if (activeRowActionTrigger instanceof HTMLElement) {
     activeRowActionTrigger.classList.remove("active");
   }
@@ -3174,6 +3528,20 @@ function handleRowActionSearchKeydown(event, shell) {
 }
 
 async function runRowAction(button, item) {
+  if (item?.action === "search_query") {
+    const queryInput = getQueryInput();
+    const form = getSearchForm();
+    if ((queryInput instanceof HTMLInputElement || queryInput instanceof HTMLTextAreaElement) && form instanceof HTMLFormElement) {
+      queryInput.value = String(item?.query || "");
+      clearCommittedQueryClause(queryInput);
+      const pageInput = getPageInput();
+      if (pageInput) pageInput.value = "1";
+      syncSearchState();
+      closeRowActionMenu();
+      form.requestSubmit();
+    }
+    return;
+  }
   if (item?.action === "expand_all") {
     closeRowActionMenu();
     expandAllResultDetails();
@@ -3710,6 +4078,10 @@ function actionNavigate(label, url) {
   return { label, action: "navigate", url };
 }
 
+function actionSearchQuery(label, query) {
+  return { label, action: "search_query", query };
+}
+
 function actionExpand(label, resultKey) {
   return { label, action: "expand", result_key: resultKey };
 }
@@ -3894,6 +4266,13 @@ if (typeof document !== "undefined") {
     if (activeColumnsTrigger && activeColumnsTrigger.contains(event.target)) return;
     closeColumnsPopover();
   });
+  document.addEventListener("click", (event) => {
+    const popover = getCommentsPopover();
+    if (!popover || popover.hidden) return;
+    if (popover.contains(event.target)) return;
+    if (activeCommentsTrigger && activeCommentsTrigger.contains(event.target)) return;
+    closeCommentsPopover();
+  });
 }
 
 if (typeof window !== "undefined") {
@@ -3913,6 +4292,10 @@ if (typeof window !== "undefined") {
     const symbolPopover = getSymbolPopover();
     if (symbolPopover && !symbolPopover.hidden) {
       positionSymbolPopover(activeSymbolTrigger, symbolPopover);
+    }
+    const commentsPopover = getCommentsPopover();
+    if (commentsPopover && !commentsPopover.hidden) {
+      positionCommentsPopover(activeCommentsTrigger, commentsPopover);
     }
     const columnsPopover = getColumnsPopover();
     if (columnsPopover && !columnsPopover.hidden) {
@@ -3945,6 +4328,11 @@ if (typeof window !== "undefined") {
       return;
     }
     closeSymbolPopover();
+    const commentsPopover = getCommentsPopover();
+    if (commentsPopover && !commentsPopover.hidden && commentsPopover.contains(event.target)) {
+      return;
+    }
+    closeCommentsPopover();
     const columnsPopover = getColumnsPopover();
     if (columnsPopover && !columnsPopover.hidden && columnsPopover.contains(event.target)) {
       return;
@@ -4298,12 +4686,12 @@ function filteredSelectedUploadTags() {
 function shouldOfferUploadCorpusCreate() {
   if (!isAdmin()) return false;
   const typed = availableUploadCorpusQuery();
-  return !!typed && !findUploadCorpusByName(typed) && filteredAvailableUploadCorpora().length === 0;
+  return !!typed && !metadataNameHasWhitespace(typed) && !findUploadCorpusByName(typed) && filteredAvailableUploadCorpora().length === 0;
 }
 
 function shouldOfferUploadTagCreate() {
   const typed = availableUploadTagQuery();
-  return !!typed && !findUploadTagByName(typed) && filteredAvailableUploadTags().length === 0;
+  return !!typed && !metadataNameHasWhitespace(typed) && !findUploadTagByName(typed) && filteredAvailableUploadTags().length === 0;
 }
 
 function corpusButtonHtml(value, direction, active, handler) {
@@ -4538,7 +4926,7 @@ function promptCreateUploadTag() {
 async function confirmCreateUploadCorpus() {
   const typed = uploadCorpusPendingCreate();
   const value = String(typed || "").trim();
-  if (!value) return;
+  if (!value || metadataNameHasWhitespace(value)) return;
   try {
     await postJsonWithCredentials("/api/v1/corpora/add", { corpus: value });
     setUploadCorpusPendingCreate("");
@@ -4558,7 +4946,7 @@ async function confirmCreateUploadCorpus() {
 async function confirmCreateUploadTag() {
   const typed = uploadTagPendingCreate();
   const value = String(typed || "").trim();
-  if (!value) return;
+  if (!value || metadataNameHasWhitespace(value)) return;
   try {
     await postJsonWithCredentials("/api/v1/tags/add", { tag: value });
     setUploadTagPendingCreate("");
@@ -4626,12 +5014,19 @@ function initializeModalSelectStacking() {
     root.addEventListener("toggle", () => {
       if (root.open) {
         activateModalSelect(root);
+        positionFloatingSingleSelectMenu(root);
       } else {
         root.classList.remove("is-active");
         root.style.removeProperty("z-index");
+        clearFloatingSingleSelectMenu(root);
       }
     });
   });
+  if (!document.body.dataset.floatingSingleSelectInstalled) {
+    document.body.dataset.floatingSingleSelectInstalled = "1";
+    window.addEventListener("resize", repositionFloatingSingleSelectMenus);
+    document.addEventListener("scroll", repositionFloatingSingleSelectMenus, true);
+  }
 }
 
 function initializeProfilePictureCrop() {
@@ -4700,20 +5095,20 @@ function openUploadStatusModal(state, payload = {}) {
 
   if (state === "uploading") {
     title.textContent = "Uploading Sample";
-    text.textContent = "Binlex Web is uploading and processing the sample.";
+    text.textContent = "Binlex is uploading and processing the sample.";
   } else if (state === "pending") {
     title.textContent = "Analysis Pending";
-    text.textContent = "The sample was uploaded successfully. Binlex Web accepted analysis and is waiting for processing to begin.";
+    text.textContent = "The sample was uploaded successfully. Binlex accepted analysis and is waiting for processing to begin.";
     if (payload.sha256) {
       extra.innerHTML = renderUploadStatusSha(payload.sha256);
     }
   } else if (state === "processing") {
     if (payload.allowSearchNow) {
       title.textContent = "Still Processing";
-      text.textContent = "Binlex Web is still analyzing and indexing the sample. You can search now while results continue to come in.";
+      text.textContent = "Binlex is still analyzing and indexing the sample. You can search now while results continue to come in.";
     } else {
       title.textContent = "Analyzing Sample";
-      text.textContent = "Binlex Web is analyzing and indexing the sample now.";
+      text.textContent = "Binlex is analyzing and indexing the sample.";
     }
     if (payload.sha256) {
       extra.innerHTML = renderUploadStatusSha(payload.sha256);
@@ -4740,7 +5135,7 @@ function openUploadStatusModal(state, payload = {}) {
 }
 
 function renderUploadStatusSha(sha256) {
-  return `<div class="upload-status-sha"><span>SHA256</span><div class="upload-status-sha-row"><code id="upload-status-sha-value">${escapeHtml(sha256)}</code><button type="button" class="row-actions-trigger upload-status-copy" onclick="copyUploadSha(this)" data-sha256="${escapeHtml(sha256)}">Copy</button></div></div>`;
+  return `<div class="upload-status-sha"><span>SHA256</span><div class="upload-status-sha-row"><input class="menu-search upload-status-sha-value" id="upload-status-sha-value" type="text" value="${escapeHtml(sha256)}" readonly><button type="button" class="symbol-picker-copy upload-status-copy" onclick="copyUploadSha(this)" data-sha256="${escapeHtml(sha256)}">Copy</button></div></div>`;
 }
 
 let uploadStatusPollToken = 0;
@@ -4995,8 +5390,44 @@ function setSingleSelectSummary(group, value) {
   if (!root) return;
   const summary = root.querySelector('summary');
   if (!summary) return;
-  const label = group === "upload-format" ? "Format" : "Architecture";
+  const label = String(root.dataset.singleLabel || "").trim() || "Select";
   summary.textContent = `${label}: ${value}`;
+}
+
+function isFloatingSingleSelect(root) {
+  return root instanceof HTMLElement && !!root.closest(".users-create-role-field");
+}
+
+function clearFloatingSingleSelectMenu(root) {
+  if (!(root instanceof HTMLElement)) return;
+  const menu = root.querySelector(".menu");
+  if (!(menu instanceof HTMLElement)) return;
+  menu.style.removeProperty("position");
+  menu.style.removeProperty("top");
+  menu.style.removeProperty("left");
+  menu.style.removeProperty("right");
+  menu.style.removeProperty("width");
+  menu.style.removeProperty("z-index");
+}
+
+function positionFloatingSingleSelectMenu(root) {
+  if (!(root instanceof HTMLElement) || !root.open || !isFloatingSingleSelect(root)) return;
+  const summary = root.querySelector("summary");
+  const menu = root.querySelector(".menu");
+  if (!(summary instanceof HTMLElement) || !(menu instanceof HTMLElement)) return;
+  const rect = summary.getBoundingClientRect();
+  menu.style.position = "fixed";
+  menu.style.top = `${Math.round(rect.bottom - 1)}px`;
+  menu.style.left = `${Math.round(rect.left)}px`;
+  menu.style.right = "auto";
+  menu.style.width = `${Math.round(rect.width)}px`;
+  menu.style.zIndex = "6200";
+}
+
+function repositionFloatingSingleSelectMenus() {
+  document.querySelectorAll(".modal-select[open]").forEach((root) => {
+    positionFloatingSingleSelectMenu(root);
+  });
 }
 
 function setSingleOptionVisible(group, value, visible) {
@@ -5062,6 +5493,125 @@ function openAuthModal(tab = "login") {
 
 function closeAuthModal() {
   const modal = getAuthModal();
+  if (modal) modal.hidden = true;
+}
+
+function openTwoFactorLoginModal(challengeToken) {
+  pendingLoginTwoFactor = {
+    challengeToken: String(challengeToken || ""),
+    setupRequired: false,
+  };
+  setInlineError("auth-login-2fa-error", "");
+  const input = document.getElementById("auth-login-2fa-code");
+  if (input instanceof HTMLInputElement) input.value = "";
+  const modal = document.getElementById("two-factor-login-modal");
+  if (modal) modal.hidden = false;
+}
+
+function closeTwoFactorLoginModal() {
+  const modal = document.getElementById("two-factor-login-modal");
+  if (modal) modal.hidden = true;
+  pendingLoginTwoFactor = { challengeToken: "", setupRequired: false };
+}
+
+function openTwoFactorSetupModal(mode = "profile", challengeToken = "") {
+  twoFactorSetupState = {
+    mode: mode === "login" ? "login" : "profile",
+    challengeToken: String(challengeToken || ""),
+    generated: false,
+  };
+  setInlineError("two-factor-setup-error", "");
+  syncTwoFactorSetupSecretField("", false);
+  const passwordField = document.getElementById("two-factor-setup-password-field");
+  const passwordStep = document.getElementById("two-factor-setup-password-step");
+  const passwordStepHeading = document.getElementById("two-factor-password-step-heading");
+  if (passwordField instanceof HTMLElement) {
+    passwordField.hidden = twoFactorSetupState.mode !== "profile";
+  }
+  if (passwordStep instanceof HTMLElement) {
+    passwordStep.classList.toggle("is-login-setup", twoFactorSetupState.mode === "login");
+  }
+  if (passwordStepHeading instanceof HTMLElement) {
+    passwordStepHeading.textContent = twoFactorSetupState.mode === "login"
+      ? "Step 2: Generate QR"
+      : "Step 2: Confirm With Password";
+  }
+  const passwordInput = document.getElementById("two-factor-setup-password");
+  if (passwordInput instanceof HTMLInputElement) {
+    passwordInput.value = "";
+    passwordInput.type = "password";
+  }
+  const codeInput = document.getElementById("two-factor-setup-code");
+  if (codeInput instanceof HTMLInputElement) {
+    codeInput.value = "";
+    codeInput.type = "password";
+  }
+  const qrFrame = document.getElementById("two-factor-qr-frame");
+  if (qrFrame instanceof HTMLElement) qrFrame.hidden = false;
+  const qrSvg = document.getElementById("two-factor-qr-svg");
+  if (qrSvg instanceof HTMLElement) {
+    qrSvg.innerHTML = "";
+    qrSvg.classList.add("is-empty");
+  }
+  const enableButton = document.getElementById("two-factor-enable-button");
+  if (enableButton instanceof HTMLButtonElement) enableButton.disabled = true;
+  const generateButton = document.getElementById("two-factor-generate-button");
+  if (generateButton instanceof HTMLButtonElement) generateButton.disabled = false;
+  syncTwoFactorInlineVisibility(
+    "two-factor-password-toggle",
+    false,
+    "Show current password",
+    "Hide current password"
+  );
+  syncTwoFactorInlineVisibility(
+    "two-factor-code-toggle",
+    false,
+    "Show authenticator code",
+    "Hide authenticator code"
+  );
+  const tip = document.getElementById("two-factor-setup-tip");
+  if (tip) {
+    tip.textContent = twoFactorSetupState.mode === "login"
+      ? "Two-factor authentication is required for this account. Generate a QR code, scan it with your authenticator app, then confirm with a 6-digit code."
+      : "Use an authenticator app to scan the QR code, then confirm setup with your password and a 6-digit code.";
+  }
+  const modal = document.getElementById("two-factor-setup-modal");
+  if (modal) modal.hidden = false;
+}
+
+function closeTwoFactorSetupModal() {
+  const modal = document.getElementById("two-factor-setup-modal");
+  if (modal) modal.hidden = true;
+  twoFactorSetupState = { mode: "profile", challengeToken: "", generated: false };
+}
+
+function openTwoFactorDisableModal() {
+  setInlineError("two-factor-disable-error", "");
+  const password = document.getElementById("two-factor-disable-password");
+  const code = document.getElementById("two-factor-disable-code");
+  const requiredByPolicy = !!globalThis.__BINLEX_AUTH__?.two_factor_required;
+  const title = document.getElementById("two-factor-disable-title");
+  const tip = document.getElementById("two-factor-disable-tip");
+  const submit = document.getElementById("two-factor-disable-submit");
+  if (password instanceof HTMLInputElement) password.value = "";
+  if (code instanceof HTMLInputElement) code.value = "";
+  if (title) {
+    title.textContent = requiredByPolicy ? "Reset 2FA" : "Disable 2FA";
+  }
+  if (tip) {
+    tip.textContent = requiredByPolicy
+      ? "Confirm your password and enter an authenticator or recovery code to reset two-factor authentication. You will be required to enroll again on your next sign in."
+      : "Confirm your password and enter an authenticator or recovery code to disable two-factor authentication.";
+  }
+  if (submit) {
+    submit.textContent = requiredByPolicy ? "Reset 2FA" : "Disable 2FA";
+  }
+  const modal = document.getElementById("two-factor-disable-modal");
+  if (modal) modal.hidden = false;
+}
+
+function closeTwoFactorDisableModal() {
+  const modal = document.getElementById("two-factor-disable-modal");
   if (modal) modal.hidden = true;
 }
 
@@ -5139,6 +5689,17 @@ let recoveryCodesState = {
   codes: [],
   visible: false,
   onClose: null,
+};
+
+let pendingLoginTwoFactor = {
+  challengeToken: "",
+  setupRequired: false,
+};
+
+let twoFactorSetupState = {
+  mode: "profile",
+  challengeToken: "",
+  generated: false,
 };
 
 const USERNAME_MAX_LENGTH = 15;
@@ -5476,6 +6037,12 @@ async function submitBootstrap(event) {
   }
   try {
     const data = await postJson("/api/v1/auth/bootstrap", Object.fromEntries(new FormData(form).entries()));
+    if (data?.two_factor_required && data?.challenge_token) {
+      const modal = document.getElementById("bootstrap-modal");
+      if (modal) modal.hidden = true;
+      openTwoFactorSetupModal("login", data.challenge_token);
+      return;
+    }
     openRecoveryCodesModal(
       "Recovery Codes",
       data?.recovery_codes,
@@ -5491,10 +6058,36 @@ async function submitLogin(event) {
   event.preventDefault();
   setInlineError("auth-login-error", "");
   try {
-    await postJson("/api/v1/auth/login", Object.fromEntries(new FormData(event.currentTarget).entries()));
+    const data = await postJson("/api/v1/auth/login", Object.fromEntries(new FormData(event.currentTarget).entries()));
+    if (data?.two_factor_required && data?.challenge_token) {
+      closeAuthModal();
+      if (data?.two_factor_setup_required) {
+        openTwoFactorSetupModal("login", data.challenge_token);
+      } else {
+        openTwoFactorLoginModal(data.challenge_token);
+      }
+      return;
+    }
     window.location.reload();
   } catch (error) {
     setInlineError("auth-login-error", error.message);
+  }
+}
+
+async function submitLoginTwoFactor(event) {
+  if (event) {
+    event.preventDefault();
+  }
+  setInlineError("auth-login-2fa-error", "");
+  const code = document.getElementById("auth-login-2fa-code")?.value || "";
+  try {
+    await postJson("/api/v1/auth/login/2fa", {
+      challenge_token: pendingLoginTwoFactor.challengeToken,
+      code,
+    });
+    window.location.reload();
+  } catch (error) {
+    setInlineError("auth-login-2fa-error", error.message);
   }
 }
 
@@ -5509,6 +6102,11 @@ async function submitRegister(event) {
   }
   try {
     const data = await postJson("/api/v1/auth/register", Object.fromEntries(new FormData(form).entries()));
+    if (data?.two_factor_required && data?.challenge_token) {
+      closeAuthModal();
+      openTwoFactorSetupModal("login", data.challenge_token);
+      return;
+    }
     openRecoveryCodesModal(
       "Recovery Codes",
       data?.recovery_codes,
@@ -5542,6 +6140,160 @@ async function submitPasswordReset(event) {
   }
 }
 
+async function startTwoFactorSetup() {
+  setInlineError("two-factor-setup-error", "");
+  try {
+    const payload = twoFactorSetupState.mode === "login"
+      ? await postJson("/api/v1/auth/login/2fa/setup", {
+          challenge_token: twoFactorSetupState.challengeToken,
+        })
+      : await postJson("/api/v1/profile/2fa/setup", {});
+    syncTwoFactorSetupSecretField(String(payload?.manual_secret || ""), false);
+    const qrFrame = document.getElementById("two-factor-qr-frame");
+    const qrSvg = document.getElementById("two-factor-qr-svg");
+    if (qrSvg instanceof HTMLElement) {
+      qrSvg.innerHTML = String(payload?.qr_svg || "");
+      qrSvg.classList.toggle("is-empty", !String(payload?.qr_svg || "").trim());
+    }
+    if (qrFrame instanceof HTMLElement) {
+      qrFrame.hidden = false;
+    }
+    twoFactorSetupState.generated = true;
+    const enableButton = document.getElementById("two-factor-enable-button");
+    if (enableButton instanceof HTMLButtonElement) enableButton.disabled = false;
+    const generateButton = document.getElementById("two-factor-generate-button");
+    if (generateButton instanceof HTMLButtonElement) generateButton.disabled = true;
+  } catch (error) {
+    setInlineError("two-factor-setup-error", error.message);
+  }
+}
+
+async function confirmTwoFactorSetup() {
+  setInlineError("two-factor-setup-error", "");
+  try {
+    const mode = twoFactorSetupState.mode;
+    const payload = twoFactorSetupState.mode === "login"
+      ? await postJson("/api/v1/auth/login/2fa/enable", {
+          challenge_token: twoFactorSetupState.challengeToken,
+          code: document.getElementById("two-factor-setup-code")?.value || "",
+        })
+      : await postJson("/api/v1/profile/2fa/enable", {
+          current_password: document.getElementById("two-factor-setup-password")?.value || "",
+          code: document.getElementById("two-factor-setup-code")?.value || "",
+        });
+    closeTwoFactorSetupModal();
+    if (payload?.user) {
+      applyCurrentUserProfile(payload.user);
+    }
+    if (Array.isArray(payload?.recovery_codes) && payload.recovery_codes.length) {
+      openRecoveryCodesModal(
+        "Recovery Codes",
+        payload.recovery_codes,
+        "Save these recovery codes somewhere secure. Each code can be used once to sign in or reset your password.",
+        mode === "login" ? () => window.location.reload() : null
+      );
+    } else if (mode === "login") {
+      window.location.reload();
+    }
+  } catch (error) {
+    setInlineError("two-factor-setup-error", error.message);
+  }
+}
+
+function syncTwoFactorInlineVisibility(toggleId, visible, showLabel, hideLabel) {
+  const toggle = document.getElementById(toggleId);
+  if (!(toggle instanceof HTMLButtonElement)) return;
+  toggle.classList.toggle("is-active", !!visible);
+  toggle.setAttribute("aria-label", visible ? hideLabel : showLabel);
+  toggle.setAttribute("title", visible ? hideLabel : showLabel);
+}
+
+function syncTwoFactorSetupSecretField(secret, visible) {
+  const field = document.getElementById("two-factor-manual-secret");
+  const toggle = document.getElementById("two-factor-secret-toggle");
+  const copy = document.getElementById("two-factor-secret-copy");
+  if (!(field instanceof HTMLInputElement) || !(toggle instanceof HTMLButtonElement) || !(copy instanceof HTMLButtonElement)) {
+    return;
+  }
+  const hasSecret = typeof secret === "string" && secret.length > 0;
+  field.dataset.secret = hasSecret ? secret : "";
+  field.value = hasSecret ? secret : "";
+  field.type = visible && hasSecret ? "text" : "password";
+  field.placeholder = hasSecret ? "" : "Generate QR to reveal the secret.";
+  toggle.disabled = !hasSecret;
+  copy.disabled = !hasSecret;
+  copy.textContent = "Copy";
+  copy.classList.remove("is-copied");
+  toggle.classList.toggle("is-active", visible && hasSecret);
+  toggle.setAttribute("aria-label", visible && hasSecret ? "Hide secret" : "Show secret");
+  toggle.setAttribute("title", visible && hasSecret ? "Hide secret" : "Show secret");
+}
+
+function toggleTwoFactorSetupSecretVisibility() {
+  const field = document.getElementById("two-factor-manual-secret");
+  if (!(field instanceof HTMLInputElement)) return;
+  const secret = field.dataset.secret || "";
+  if (!secret) return;
+  syncTwoFactorSetupSecretField(secret, field.type === "password");
+}
+
+async function copyTwoFactorSetupSecret() {
+  const field = document.getElementById("two-factor-manual-secret");
+  const button = document.getElementById("two-factor-secret-copy");
+  if (!(field instanceof HTMLInputElement) || !(button instanceof HTMLButtonElement)) return;
+  const secret = field.dataset.secret || "";
+  if (!secret) return;
+  try {
+    await navigator.clipboard.writeText(secret);
+    button.textContent = "Copied";
+    button.classList.add("is-copied");
+    window.setTimeout(() => {
+      button.textContent = "Copy";
+      button.classList.remove("is-copied");
+    }, 1200);
+  } catch (_) {}
+}
+
+function toggleTwoFactorSetupPasswordVisibility() {
+  const field = document.getElementById("two-factor-setup-password");
+  if (!(field instanceof HTMLInputElement)) return;
+  const visible = field.type === "password";
+  field.type = visible ? "text" : "password";
+  syncTwoFactorInlineVisibility(
+    "two-factor-password-toggle",
+    visible,
+    "Show current password",
+    "Hide current password"
+  );
+}
+
+function toggleTwoFactorSetupCodeVisibility() {
+  const field = document.getElementById("two-factor-setup-code");
+  if (!(field instanceof HTMLInputElement)) return;
+  const visible = field.type === "password";
+  field.type = visible ? "text" : "password";
+  syncTwoFactorInlineVisibility(
+    "two-factor-code-toggle",
+    visible,
+    "Show authenticator code",
+    "Hide authenticator code"
+  );
+}
+
+async function submitTwoFactorDisable() {
+  setInlineError("two-factor-disable-error", "");
+  try {
+    const payload = await postJson("/api/v1/profile/2fa/disable", {
+      current_password: document.getElementById("two-factor-disable-password")?.value || "",
+      code: document.getElementById("two-factor-disable-code")?.value || "",
+    });
+    if (payload) applyCurrentUserProfile(payload);
+    closeTwoFactorDisableModal();
+  } catch (error) {
+    setInlineError("two-factor-disable-error", error.message);
+  }
+}
+
 async function logout() {
   closeAuthMenu();
   try {
@@ -5557,6 +6309,7 @@ function openProfileModal() {
   toggleProfileTab("account");
   const field = document.getElementById("profile-key-output");
   syncProfileKeyField(field?.dataset.secret || "", false);
+  syncProfileTwoFactorState(currentAuthUser());
 }
 
 function closeProfileModal() {
@@ -5574,8 +6327,35 @@ function avatarMarkupForUser(user) {
   return `<span>${escapeHtml(initial)}</span>`;
 }
 
+function currentAuthUser() {
+  return globalThis.__BINLEX_CURRENT_USER__ || null;
+}
+
+function syncProfileTwoFactorState(user) {
+  const status = document.getElementById("profile-2fa-status");
+  const setupButton = document.getElementById("profile-2fa-setup-button");
+  const disableButton = document.getElementById("profile-2fa-disable-button");
+  const enabled = !!user?.two_factor_enabled;
+  const required = !!user?.two_factor_required;
+  const requiredByPolicy = !!globalThis.__BINLEX_AUTH__?.two_factor_required;
+  if (status) {
+    status.textContent = `Status: ${enabled ? "Enabled" : required ? "Required on next sign in" : "Disabled"}`;
+  }
+  if (setupButton) {
+    setupButton.hidden = enabled;
+  }
+  if (disableButton) {
+    disableButton.hidden = !(enabled || required);
+    disableButton.textContent = requiredByPolicy ? "Reset 2FA" : "Disable 2FA";
+  }
+}
+
 function applyCurrentUserProfile(user) {
   if (!user || typeof user !== "object") return;
+  globalThis.__BINLEX_CURRENT_USER__ = {
+    ...(globalThis.__BINLEX_CURRENT_USER__ || {}),
+    ...user,
+  };
   const preview = document.getElementById("profile-avatar-preview");
   if (preview) {
     const camera = preview.querySelector(".profile-avatar-camera");
@@ -5587,6 +6367,7 @@ function applyCurrentUserProfile(user) {
   document.querySelectorAll(".auth-header .auth-avatar").forEach((node) => {
     node.innerHTML = avatarMarkupForUser(user);
   });
+  syncProfileTwoFactorState(user);
 }
 
 function toggleProfileTab(tabName) {
@@ -6000,6 +6781,8 @@ function toggleUsersTab(tabName) {
     loadUsers();
   } else if (tabName === "corpora" || tabName === "tags" || tabName === "symbols") {
     loadAdminMetadata(tabName);
+  } else if (tabName === "comments") {
+    loadAdminComments();
   }
 }
 
@@ -6064,13 +6847,17 @@ function renderAdminMetadataSummary(kind, visibleCount, totalCount) {
   summary.textContent = `Showing ${visibleCount} of ${totalCount}`;
 }
 
+function metadataNameHasWhitespace(value) {
+  return /\s/.test(String(value || "").trim());
+}
+
 function setAdminMetadataCreateState(kind, query, items) {
   const config = adminMetadataConfig(kind);
   const button = config ? document.getElementById(config.createButtonId) : null;
   if (!button) return;
   const normalizedQuery = String(query || "").trim().toLowerCase();
   const exists = Array.isArray(items) && items.some((item) => metadataItemName(item).trim().toLowerCase() === normalizedQuery);
-  button.disabled = !normalizedQuery || exists;
+  button.disabled = !normalizedQuery || exists || metadataNameHasWhitespace(query);
 }
 
 function renderAdminMetadataList(kind, items) {
@@ -6178,6 +6965,52 @@ async function loadAdminMetadata(kind) {
   }
 }
 
+function renderAdminCommentsList(items) {
+  const container = document.getElementById("admin-comments-list");
+  if (!container) return;
+  if (!Array.isArray(items) || items.length === 0) {
+    container.innerHTML = '<div class="users-empty">No comments.</div>';
+    return;
+  }
+  container.innerHTML = items.map((item) => `
+    <div class="comment-card admin-comment-card">
+      <div class="comment-avatar-wrap">${commentAuthorHtml(item?.actor)}</div>
+      <div class="comment-card-body">
+        <div class="comment-card-header">
+          <div class="comment-card-identity">
+            <span class="comment-card-username">${escapeHtml(metadataActorUsername(item?.actor) || "unknown")}</span>
+            <span class="comment-card-time">${escapeHtml(formatUtcTimestamp(item?.timestamp || ""))}</span>
+          </div>
+          <button type="button" class="symbol-picker-move comment-delete" title="Delete comment" aria-label="Delete comment" onclick="deleteCommentById(${Number(item?.id || 0)})">🗑</button>
+        </div>
+        <div class="admin-comment-meta">
+          <span>${escapeHtml(displayCollection(item?.collection || ""))}</span>
+          <span>${escapeHtml(`0x${Number(item?.address || 0).toString(16)}`)}</span>
+          <span>${escapeHtml(abbreviateHex(item?.sha256 || ""))}</span>
+        </div>
+        <div class="comment-card-text">${escapeHtml(String(item?.body || "")).replace(/\n/g, "<br>")}</div>
+      </div>
+    </div>
+  `).join("");
+}
+
+async function loadAdminComments() {
+  const query = document.getElementById("admin-comments-search-input")?.value || "";
+  setInlineError("admin-comments-error", "");
+  try {
+    const payload = await getJson(`/api/v1/admin/comments?q=${encodeURIComponent(query)}&page=1&page_size=20`);
+    const items = Array.isArray(payload?.items) ? payload.items : [];
+    const summary = document.getElementById("admin-comments-summary");
+    if (summary) {
+      summary.textContent = `Showing ${items.length} of ${Number(payload?.total_results || items.length)}`;
+    }
+    renderAdminCommentsList(items);
+  } catch (error) {
+    renderAdminCommentsList([]);
+    setInlineError("admin-comments-error", error.message);
+  }
+}
+
 async function createAdminMetadata(kind) {
   const config = adminMetadataConfig(kind);
   if (!config) return;
@@ -6185,6 +7018,10 @@ async function createAdminMetadata(kind) {
   const value = String(input?.value || "").trim();
   if (!value) return;
   setInlineError(config.errorId, "");
+  if (metadataNameHasWhitespace(value)) {
+    setInlineError(config.errorId, `${config.singular} must not contain whitespace`);
+    return;
+  }
   const confirmed = await requestTagsConfirmation({
     title: `Create ${config.singular[0].toUpperCase()}${config.singular.slice(1)}`,
     message: `Create "${value}" as a ${config.singular}?`,
@@ -6223,6 +7060,7 @@ async function deleteAdminMetadata(kind, encodedValue) {
 function renderUsersList(items) {
   const container = document.getElementById("users-list");
   if (!container) return;
+  const policyRequiresTwoFactor = !!globalThis.__BINLEX_AUTH__?.two_factor_required;
   if (!Array.isArray(items) || items.length === 0) {
     container.innerHTML = '<div class="users-empty">No users.</div>';
     return;
@@ -6234,16 +7072,22 @@ function renderUsersList(items) {
           <div class="auth-avatar users-item-avatar">${avatarMarkupForUser(user)}</div>
           <div class="users-item-copy">
             <strong>${escapeHtml(user.username)}</strong>
-            <small>role: ${escapeHtml(user.role)}${user.enabled ? "" : " | disabled"}</small>
+            <small>role: ${escapeHtml(user.role)}${user.enabled ? "" : " | disabled"} | 2fa: ${user.two_factor_enabled ? "enabled" : user.two_factor_required ? "required" : "off"}</small>
           </div>
         </div>
-        <div class="users-item-actions">
-          <button type="button" class="secondary" onclick="toggleUserEnabled('${escapeHtml(user.username)}', ${user.enabled ? "true" : "false"})">${user.enabled ? "Disable" : "Enable"}</button>
-          <button type="button" class="secondary" onclick="toggleUserRole('${escapeHtml(user.username)}', '${escapeHtml(user.role)}')">Role</button>
-          <button type="button" class="secondary" onclick="resetUserPassword('${escapeHtml(user.username)}')">Reset</button>
-          ${user.profile_picture ? `<button type="button" class="secondary" onclick="deleteUserPicture('${escapeHtml(user.username)}')">Delete Avatar</button>` : ""}
-          <button type="button" class="secondary" onclick="deleteUser('${escapeHtml(user.username)}')">Delete</button>
-        </div>
+      </div>
+      <div class="users-item-actions">
+        <button type="button" class="secondary" onclick="toggleUserEnabled('${escapeHtml(user.username)}', ${user.enabled ? "true" : "false"})">${user.enabled ? "Disable" : "Enable"}</button>
+        <button type="button" class="secondary" onclick="toggleUserRole('${escapeHtml(user.username)}', '${escapeHtml(user.role)}')">Role</button>
+        <button type="button" class="secondary" onclick="resetUserPassword('${escapeHtml(user.username)}')">Reset</button>
+        ${policyRequiresTwoFactor
+          ? (user.two_factor_enabled || user.two_factor_required
+            ? `<button type="button" class="secondary" onclick="resetUserTwoFactor('${escapeHtml(user.username)}')">Reset 2FA</button>`
+            : "")
+          : `<button type="button" class="secondary" onclick="${user.two_factor_enabled || user.two_factor_required ? `disableUserTwoFactor('${escapeHtml(user.username)}')` : `requireUserTwoFactor('${escapeHtml(user.username)}')`}">${user.two_factor_enabled || user.two_factor_required ? "Disable 2FA" : "Require 2FA"}</button>`}
+        ${!policyRequiresTwoFactor && user.two_factor_enabled ? `<button type="button" class="secondary" onclick="resetUserTwoFactor('${escapeHtml(user.username)}')">Reset 2FA</button>` : ""}
+        ${user.profile_picture ? `<button type="button" class="secondary" onclick="deleteUserPicture('${escapeHtml(user.username)}')">Delete Avatar</button>` : ""}
+        <button type="button" class="secondary" onclick="deleteUser('${escapeHtml(user.username)}')">Delete</button>
       </div>
       <div class="admin-user-key-section">
         <div class="admin-user-key-label">API Key</div>
@@ -6373,6 +7217,36 @@ async function deleteUserPicture(username) {
   }
 }
 
+async function requireUserTwoFactor(username) {
+  setInlineError("users-search-error", "");
+  try {
+    await postJson("/api/v1/admin/users/2fa/require", { username, required: true });
+    loadUsers();
+  } catch (error) {
+    setInlineError("users-search-error", error.message);
+  }
+}
+
+async function disableUserTwoFactor(username) {
+  setInlineError("users-search-error", "");
+  try {
+    await postJson("/api/v1/admin/users/2fa/disable", { username });
+    loadUsers();
+  } catch (error) {
+    setInlineError("users-search-error", error.message);
+  }
+}
+
+async function resetUserTwoFactor(username) {
+  setInlineError("users-search-error", "");
+  try {
+    await postJson("/api/v1/admin/users/2fa/reset", { username });
+    loadUsers();
+  } catch (error) {
+    setInlineError("users-search-error", error.message);
+  }
+}
+
 if (typeof document !== "undefined") {
   document.addEventListener("click", (event) => {
     const assistant = document.getElementById("query-assistant");
@@ -6407,6 +7281,7 @@ if (typeof document !== "undefined") {
     initializeSearchPage();
     initializeModalSelectStacking();
     initializeProfilePictureCrop();
+    syncProfileTwoFactorState(currentAuthUser());
     document.querySelectorAll("[data-live-validation]").forEach((root) => {
       updateValidationForRoot(root);
     });

@@ -1,10 +1,10 @@
 use super::LocalIndex;
 use super::lancedb as local_lancedb;
 use super::support::{
-    SearchHitContext, SearchHydration, architecture_from_index_entry_key, build_search_result,
-    corpus_match_score, embedding_id_for_vector, index_entry_key, manual_object_id,
-    normalize_corpora, page_search_results, push_search_hits, symbol_details_for_attributes,
-    symbol_names_for_attributes, SymbolAttribution,
+    SearchHitContext, SearchHydration, SymbolAttribution, architecture_from_index_entry_key,
+    build_search_result, corpus_match_score, embedding_id_for_vector, index_entry_key,
+    manual_object_id, normalize_corpora, page_search_results, push_search_hits,
+    symbol_details_for_attributes, symbol_names_for_attributes,
 };
 use super::types::{DEFAULT_INDEX_GRAPH_COLLECTIONS, Error, IndexEntry, SearchResult};
 use crate::controlflow::{Block, Function, Graph};
@@ -741,6 +741,9 @@ fn metadata_entry(
         entropy: metadata.entropy,
         contiguous: metadata.contiguous,
         chromosome_entropy: metadata.chromosome_entropy,
+        collection_tag_count: metadata.collection_tag_count,
+        collection_tags: metadata.collection_tags.clone(),
+        collection_comment_count: metadata.collection_comment_count,
         timestamp: metadata.timestamp.clone(),
         vector: vector_override.unwrap_or_else(|| metadata.vector.clone()),
         explicit_corpora: None,

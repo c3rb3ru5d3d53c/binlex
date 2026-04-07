@@ -8,6 +8,8 @@ pub mod sqlite;
 pub use lancedb::LanceDB;
 pub use localdb::CollectionCommentRecord;
 pub use localdb::CollectionTagRecord;
+pub use localdb::EntityCommentRecord;
+pub use localdb::EntityCommentSearchPage;
 pub use localdb::EntityMetadataRecord;
 pub use localdb::Error as LocalDBError;
 pub use localdb::LocalDB;

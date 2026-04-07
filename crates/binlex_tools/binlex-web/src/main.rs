@@ -71,6 +71,7 @@ include!("includes/web_router.inc.rs");
 include!("includes/web_helpers.inc.rs");
 include!("includes/web_index.inc.rs");
 include!("includes/web_tags.inc.rs");
+include!("includes/web_comments.inc.rs");
 include!("includes/web_search.inc.rs");
 include!("includes/web_upload.inc.rs");
 include!("includes/web_download.inc.rs");
