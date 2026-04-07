@@ -161,13 +161,13 @@ impl PE {
     /// * `None` - If the file is not a .NET executable or the storage signature
     ///   cannot be parsed.
     fn dotnet_parse_storage_signature(&self) -> Option<(u64, &StorageSignature)> {
-        if !self.is_dotnet() {
-            return None;
-        }
         let (_, image_cor20_header) = self.dotnet_parse_cor20_header()?;
         let rva = image_cor20_header.meta_data.virtual_address as u64;
         let start = self.relative_virtual_address_to_file_offset(rva)? as usize;
         let end = start + StorageSignature::size();
+        if end > self.file.data.len() {
+            return None;
+        }
         let data = &self.file.data[start..end];
         let header = StorageSignature::from_bytes(data)?;
         Some((start as u64, header))
@@ -200,14 +200,14 @@ impl PE {
     ///   * A reference to the fparsed `StorageHeader` structure.
     /// * `None` - If the file is not a .NET executable or the storage header cannot be parsed.
     fn dotnet_parse_storage_header(&self) -> Option<(u64, &StorageHeader)> {
-        if !self.is_dotnet() {
-            return None;
-        };
         let (mut start, cor20_storage_signaure_header) = self.dotnet_parse_storage_signature()?;
         start += StorageSignature::size() as u64;
         start += cor20_storage_signaure_header.version_string_size as u64;
         start -= 4;
         let end = start as usize + StorageHeader::size();
+        if end > self.file.data.len() {
+            return None;
+        }
         let data = &self.file.data[start as usize..end];
         let header = StorageHeader::from_bytes(data)?;
         Some((start, header))
@@ -241,14 +241,14 @@ impl PE {
     /// * `None` - If the file is not a .NET executable, the storage header cannot be parsed,
     ///   or no stream headers are found.
     fn dotnet_parse_stream_headers(&self) -> Option<BTreeMap<u64, &StreamHeader>> {
-        if !self.is_dotnet() {
-            return None;
-        }
         let (cor20_storage_header_offset, cor20_storage_header) =
             self.dotnet_parse_storage_header()?;
         let mut offset = cor20_storage_header_offset as usize + StorageHeader::size();
         let mut result = BTreeMap::<u64, &StreamHeader>::new();
         for _ in 0..cor20_storage_header.number_of_streams {
+            if offset + StreamHeader::size() > self.file.data.len() {
+                return None;
+            }
             let data = &self.file.data[offset..offset + StreamHeader::size()];
             let header = StreamHeader::from_bytes(data)?;
             result.insert(offset as u64, header);
@@ -297,14 +297,14 @@ impl PE {
     /// * `None` - If the file is not a .NET executable, the relevant stream header cannot
     ///   be found, or the metadata table cannot be parsed.
     fn dotnet_parse_metadata_table(&self) -> Option<(u64, &MetadataTable)> {
-        if !self.is_dotnet() {
-            return None;
-        }
         let (mut start, _) = self.dotnet_parse_storage_signature()?;
         for (_, header) in self.dotnet_parse_stream_headers()? {
             if header.name() == vec![0x23, 0x7e, 0x00, 0x00] {
                 start += header.offset as u64;
             }
+        }
+        if start as usize + MetadataTable::size() > self.file.data.len() {
+            return None;
         }
         let data = &self.file.data[start as usize..start as usize + MetadataTable::size()];
         Some((start, MetadataTable::from_bytes(data)?))
