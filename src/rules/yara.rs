@@ -858,16 +858,40 @@ fn render_condition_group(operator: &str, parts: &[Condition]) -> String {
 }
 
 fn tokenize_hex_pattern(value: &str) -> Result<Vec<String>, Error> {
-    let tokens = value
-        .split_whitespace()
-        .map(str::trim)
-        .filter(|token| !token.is_empty())
-        .map(ToString::to_string)
-        .collect::<Vec<_>>();
-    if tokens.is_empty() {
+    let normalized = value
+        .trim()
+        .trim_start_matches('{')
+        .trim_end_matches('}')
+        .trim();
+
+    if normalized.is_empty() {
         return Err(Error::Validation("hex pattern must not be empty".to_string()));
     }
-    Ok(tokens)
+
+    if normalized.chars().any(char::is_whitespace) {
+        let tokens = normalized
+            .split_whitespace()
+            .map(str::trim)
+            .filter(|token| !token.is_empty())
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        if tokens.is_empty() {
+            return Err(Error::Validation("hex pattern must not be empty".to_string()));
+        }
+        return Ok(tokens);
+    }
+
+    if normalized.len() % 2 != 0 {
+        return Err(Error::Validation(
+            "compact hex pattern must have an even number of characters".to_string(),
+        ));
+    }
+
+    Ok(normalized
+        .as_bytes()
+        .chunks(2)
+        .map(|chunk| std::str::from_utf8(chunk).unwrap().to_string())
+        .collect())
 }
 
 fn validate_text_modifiers(
@@ -1091,6 +1115,26 @@ mod tests {
             ]
         );
         let rendered = rule.render();
+        assert!(rendered.contains("$chromosome_0_fragment_0 = { 48 8B 05 11 }"));
+        assert!(rendered.contains("$chromosome_0_fragment_1 = { 22 33 44 }"));
+        assert!(rendered.contains("$chromosome_0_fragment_2 = { 48 85 C0 }"));
+    }
+
+    #[test]
+    fn rule_can_fragment_compact_hex_patterns() {
+        let mut rule = Rule::new_with_options(Some("fragmented_compact"), None);
+        let pattern = rule.add_pattern("488B05112233444885C0", None);
+        let fragments = rule.fragment_pattern(&pattern, 3).unwrap();
+        assert_eq!(
+            fragments,
+            vec![
+                "$chromosome_0_fragment_0".to_string(),
+                "$chromosome_0_fragment_1".to_string(),
+                "$chromosome_0_fragment_2".to_string()
+            ]
+        );
+        let rendered = rule.render();
+        assert!(rendered.contains("$chromosome_0 = { 488B05112233444885C0 }"));
         assert!(rendered.contains("$chromosome_0_fragment_0 = { 48 8B 05 11 }"));
         assert!(rendered.contains("$chromosome_0_fragment_1 = { 22 33 44 }"));
         assert!(rendered.contains("$chromosome_0_fragment_2 = { 48 85 C0 }"));
