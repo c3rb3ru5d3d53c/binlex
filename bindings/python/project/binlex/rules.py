@@ -79,8 +79,8 @@ class CompiledRuleSet:
     def scan(self, data: bytes) -> YARAScanResults:
         return YARAScanResults(self._inner.scan(data))
 
-    def scan_path(self, path: str | Path) -> YARAScanResults:
-        return YARAScanResults(self._inner.scan_path(str(path)))
+    def scan_file(self, path: str | Path) -> YARAScanResults:
+        return YARAScanResults(self._inner.scan_file(str(path)))
 
 
 class Rule:
@@ -260,8 +260,8 @@ class Rule:
     def scan(self, data: bytes) -> YARAScanResults:
         return YARAScanResults(self._inner.scan(data))
 
-    def scan_path(self, path: str | Path) -> YARAScanResults:
-        return YARAScanResults(self._inner.scan_path(str(path)))
+    def scan_file(self, path: str | Path) -> YARAScanResults:
+        return YARAScanResults(self._inner.scan_file(str(path)))
 
     def __str__(self) -> str:
         return self.render()
@@ -299,8 +299,8 @@ class RuleSet:
     def scan(self, data: bytes) -> YARAScanResults:
         return YARAScanResults(self._inner.scan(data))
 
-    def scan_path(self, path: str | Path) -> YARAScanResults:
-        return YARAScanResults(self._inner.scan_path(str(path)))
+    def scan_file(self, path: str | Path) -> YARAScanResults:
+        return YARAScanResults(self._inner.scan_file(str(path)))
 
 YARA = RuleSet
 YARACondition = Condition

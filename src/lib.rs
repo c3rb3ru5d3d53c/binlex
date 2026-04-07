@@ -38,12 +38,12 @@ pub mod lifters;
 pub mod math;
 pub mod metadata;
 pub mod processor;
+pub mod rules;
 pub mod runtime;
 pub mod search;
 pub mod server;
 pub mod storage;
 pub mod util;
-pub mod rules;
 
 pub use config::AUTHOR;
 pub use config::Config;
