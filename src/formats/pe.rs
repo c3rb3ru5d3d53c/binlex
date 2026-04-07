@@ -443,9 +443,9 @@ impl PE {
     ///
     /// # Returns
     /// A `u64` value representing the metadata token. The calculation is based on the formula:
-    /// `(0x01000000 * table_index) + (entry_index * 1)`.
+    /// `(0x01000000 * table_index) + (entry_index + 1)`.
     pub fn dotnet_metadata_token_from_index(table_index: u64, entry_index: u64) -> u64 {
-        (0x01000000 * table_index) + entry_index
+        (0x01000000 * table_index) + entry_index + 1
     }
 
     /// Constructs a map of metadata tokens to their corresponding virtual addresses.
