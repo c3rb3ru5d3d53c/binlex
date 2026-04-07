@@ -723,9 +723,9 @@ impl LocalDB {
                     .and_then(|value| value.as_str())
                     .ok_or_else(|| Error("entity corpus row is missing collection".to_string()))?
                 {
-                    "instruction" => Collection::Instruction,
-                    "block" => Collection::Block,
-                    "function" => Collection::Function,
+                    "instructions" => Collection::Instruction,
+                    "blocks" => Collection::Block,
+                    "functions" => Collection::Function,
                     value => {
                         return Err(Error(format!(
                             "entity corpus row contains invalid collection {}",
@@ -1825,9 +1825,9 @@ impl LocalDB {
                 .and_then(|value| value.as_str())
                 .ok_or_else(|| Error("collection tag count row is missing collection".to_string()))
                 .and_then(|value| match value {
-                    "function" => Ok(Collection::Function),
-                    "block" => Ok(Collection::Block),
-                    "instruction" => Ok(Collection::Instruction),
+                    "functions" => Ok(Collection::Function),
+                    "blocks" => Ok(Collection::Block),
+                    "instructions" => Ok(Collection::Instruction),
                     _ => Err(Error(format!(
                         "collection tag count row has invalid collection {}",
                         value
@@ -4657,9 +4657,9 @@ fn entity_metadata_from_row(
 
 fn parse_collection(value: &str) -> Result<Collection, Error> {
     match value.trim().to_ascii_lowercase().as_str() {
-        "instruction" => Ok(Collection::Instruction),
-        "block" => Ok(Collection::Block),
-        "function" => Ok(Collection::Function),
+        "instructions" => Ok(Collection::Instruction),
+        "blocks" => Ok(Collection::Block),
+        "functions" => Ok(Collection::Function),
         _ => Err(Error(format!("invalid collection {}", value))),
     }
 }

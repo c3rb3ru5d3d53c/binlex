@@ -115,7 +115,7 @@ pub fn query_completion_specs() -> Vec<QueryCompletionSpec> {
             label: "collection:",
             insert: "collection:",
             kind: "field",
-            usage: "collection:function",
+            usage: "collection:functions",
             description: "Filter by indexed entity type",
         },
         QueryCompletionSpec {
@@ -363,17 +363,17 @@ pub enum QueryCollection {
 impl QueryCollection {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Instruction => "instruction",
-            Self::Block => "block",
-            Self::Function => "function",
+            Self::Instruction => "instructions",
+            Self::Block => "blocks",
+            Self::Function => "functions",
         }
     }
 
     pub fn parse(value: &str) -> Option<Self> {
         match value.trim().to_ascii_lowercase().as_str() {
-            "instruction" => Some(Self::Instruction),
-            "block" => Some(Self::Block),
-            "function" => Some(Self::Function),
+            "instructions" => Some(Self::Instruction),
+            "blocks" => Some(Self::Block),
+            "functions" => Some(Self::Function),
             _ => None,
         }
     }
@@ -1299,7 +1299,7 @@ mod tests {
 
     #[test]
     fn tokenizer_preserves_vector_json_array() {
-        let query = Query::parse("vector: [0.1, -0.2, 0.3] | collection: function").unwrap();
+        let query = Query::parse("vector: [0.1, -0.2, 0.3] | collection: functions").unwrap();
         match query.expr() {
             QueryExpr::And(lhs, _) => match lhs.as_ref() {
                 QueryExpr::Term(term) => {
@@ -1332,13 +1332,13 @@ mod tests {
 
     #[test]
     fn tokenizer_accepts_terms_without_space_after_colon() {
-        let query = Query::parse("collection:function | architecture:amd64").unwrap();
+        let query = Query::parse("collection:functions | architecture:amd64").unwrap();
         match query.expr() {
             QueryExpr::And(lhs, rhs) => {
                 match lhs.as_ref() {
                     QueryExpr::Term(term) => {
                         assert_eq!(term.field, QueryField::Collection);
-                        assert_eq!(term.value, "function");
+                        assert_eq!(term.value, "functions");
                     }
                     other => panic!("unexpected lhs: {:?}", other),
                 }
@@ -1356,13 +1356,13 @@ mod tests {
 
     #[test]
     fn tokenizer_accepts_space_before_colon() {
-        let query = Query::parse("collection : function | architecture : amd64").unwrap();
+        let query = Query::parse("collection : functions | architecture : amd64").unwrap();
         match query.expr() {
             QueryExpr::And(lhs, rhs) => {
                 match lhs.as_ref() {
                     QueryExpr::Term(term) => {
                         assert_eq!(term.field, QueryField::Collection);
-                        assert_eq!(term.value, "function");
+                        assert_eq!(term.value, "functions");
                     }
                     other => panic!("unexpected lhs: {:?}", other),
                 }
@@ -1421,7 +1421,7 @@ mod tests {
     #[test]
     fn negated_sha256_is_allowed_with_vector_root() {
         let query = Query::parse(
-            "vector: [0.1, 0.2] | collection: function | architecture: amd64 | !lhs: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "vector: [0.1, 0.2] | collection: functions | architecture: amd64 | !lhs: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         )
         .unwrap();
         let analysis = query.analyze().unwrap();
@@ -1431,7 +1431,7 @@ mod tests {
     #[test]
     fn negated_sha256_or_group_is_allowed_with_vector_root() {
         let query = Query::parse(
-            "vector: [0.1, 0.2] | collection: function | architecture: amd64 | !(lhs: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef || rhs: fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210)",
+            "vector: [0.1, 0.2] | collection: functions | architecture: amd64 | !(lhs: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef || rhs: fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210)",
         )
         .unwrap();
         let analysis = query.analyze().unwrap();
@@ -1471,7 +1471,7 @@ mod tests {
     #[test]
     fn analyze_returns_language_level_filters() {
         let query = Query::parse(
-            "embedding: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef | corpus: default | collection:function | architecture:amd64",
+            "embedding: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef | corpus: default | collection:functions | architecture:amd64",
         )
         .unwrap();
         let analysis = query.analyze().unwrap();
@@ -1629,25 +1629,25 @@ mod tests {
 
     #[test]
     fn incomplete_and_reports_specific_error() {
-        let error = Query::parse("collection:function |").unwrap_err();
+        let error = Query::parse("collection:functions |").unwrap_err();
         assert_eq!(error.to_string(), "expected a search term after |");
     }
 
     #[test]
     fn incomplete_not_reports_specific_error() {
-        let error = Query::parse("collection:function | !").unwrap_err();
+        let error = Query::parse("collection:functions | !").unwrap_err();
         assert_eq!(error.to_string(), "expected a search term after |");
     }
 
     #[test]
     fn incomplete_parenthesis_reports_specific_error() {
-        let error = Query::parse("collection:function | !(").unwrap_err();
+        let error = Query::parse("collection:functions | !(").unwrap_err();
         assert_eq!(error.to_string(), "expected a search term after |");
     }
 
     #[test]
     fn empty_parenthesis_reports_specific_error() {
-        let error = Query::parse("collection:function | !( )").unwrap_err();
+        let error = Query::parse("collection:functions | !( )").unwrap_err();
         assert_eq!(error.to_string(), "expected a search term after |");
     }
 
@@ -1659,7 +1659,7 @@ mod tests {
 
     #[test]
     fn consecutive_not_is_rejected() {
-        let error = Query::parse("lhs:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef | ! !collection:function")
+        let error = Query::parse("lhs:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef | ! !collection:functions")
             .unwrap_err();
         assert_eq!(error.to_string(), "expected a search term after |");
     }

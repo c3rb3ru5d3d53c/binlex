@@ -166,9 +166,9 @@ function renderResultsCsv(rows) {
       csvCell(String(row.score ?? row.similarity_score ?? "")),
       csvCell(String(row.embeddings ?? 0)),
       csvCell(row.embedding),
-      csvCell(row.collection === "function" || row.collection === "block" ? String(row.number_of_instructions ?? "") : ""),
-      csvCell(row.collection === "function" ? String(row.number_of_blocks ?? "") : ""),
-      csvCell(row.collection === "block" && row.markov != null ? formatMetricFloat(row.markov) : ""),
+      csvCell(row.collection === "functions" || row.collection === "blocks" ? String(row.number_of_instructions ?? "") : ""),
+      csvCell(row.collection === "functions" ? String(row.number_of_blocks ?? "") : ""),
+      csvCell(row.collection === "blocks" && row.markov != null ? formatMetricFloat(row.markov) : ""),
       csvCell(row.contiguous == null ? "" : (row.contiguous ? "true" : "false")),
       csvCell(displayCorpora(row)),
       csvCell(row.architecture),
@@ -415,14 +415,14 @@ function renderDetailPreviewRow(label, values, kind, loading) {
 function renderResultDetails(row, resultKey, columnCount) {
   const collection = String(row?.collection || "").trim().toLowerCase();
   const metrics = [];
-  if (collection === "function") {
+  if (collection === "functions") {
     metrics.push(
       ["Cyclomatic Complexity", row.cyclomatic_complexity],
       ["Average Instructions per Block", row.average_instructions_per_block != null ? formatMetricFloat(row.average_instructions_per_block) : null],
       ["Number Of Instructions", row.number_of_instructions],
       ["Number Of Blocks", row.number_of_blocks],
     );
-  } else if (collection === "block") {
+  } else if (collection === "blocks") {
     metrics.push(
       ["Number Of Instructions", row.number_of_instructions],
       ["Markov", row.markov != null ? formatMetricFloat(row.markov) : null],
@@ -485,15 +485,15 @@ function renderResultCell(columnId, row, data) {
     case "embedding":
       return `<td>${renderResultCopyPill(abbreviateHex(row.embedding), row.embedding)}</td>`;
     case "instructions": {
-      const value = collection === "function" || collection === "block" ? String(row.number_of_instructions ?? "") : "";
+      const value = collection === "functions" || collection === "blocks" ? String(row.number_of_instructions ?? "") : "";
       return `<td>${renderResultCopyPill(value, value)}</td>`;
     }
     case "blocks": {
-      const value = collection === "function" ? String(row.number_of_blocks ?? "") : "";
+      const value = collection === "functions" ? String(row.number_of_blocks ?? "") : "";
       return `<td>${renderResultCopyPill(value, value)}</td>`;
     }
     case "markov": {
-      const value = collection === "block" && row.markov != null ? formatMetricFloat(row.markov) : "";
+      const value = collection === "blocks" && row.markov != null ? formatMetricFloat(row.markov) : "";
       return `<td>${renderResultCopyPill(value, value)}</td>`;
     }
     case "contiguous":

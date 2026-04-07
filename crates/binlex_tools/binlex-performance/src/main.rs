@@ -212,7 +212,8 @@ fn run_index_local(config: &Config, args: &IndexLocalArgs) -> Result<(), Box<dyn
         }
         let root = resolve_index_root(args.index_path.as_deref(), iteration, args.keep_index)?;
         let _temp_dir = root.temp_dir;
-        let index = LocalIndex::with_options(iteration_config, Some(root.path.clone()), args.dimensions)?;
+        let index =
+            LocalIndex::with_options(iteration_config, Some(root.path.clone()), args.dimensions)?;
         let started_at = Instant::now();
         index.sample_put(&bytes)?;
         index.graph_many_as(

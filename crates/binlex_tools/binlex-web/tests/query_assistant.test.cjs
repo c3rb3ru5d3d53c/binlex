@@ -19,7 +19,7 @@ const SHA256 =
 
 const OPTIONS = {
   architectures: ["amd64", "i386", "cil"],
-  collections: ["function", "block", "instruction"],
+  collections: ["functions", "blocks", "instructions"],
 };
 
 function labels(items) {
@@ -61,7 +61,7 @@ test("query assistant symbolic matrix", async (t) => {
   });
 
   await t.test("operator suggestions include symbolic operators and close paren", () => {
-    const continuation = continuationFor(`sample:${SHA256} | ( collection:function `);
+    const continuation = continuationFor(`sample:${SHA256} | ( collection:functions `);
     assert.ok(continuation);
     assert.equal(continuation.kind, "operator");
     const suggested = labels(operatorSuggestions(continuation.context));
@@ -89,7 +89,7 @@ test("query assistant symbolic matrix", async (t) => {
   });
 
   await t.test("directional compare continuation expects a field on the right side", () => {
-    const continuation = continuationFor(`sample:${SHA256} | collection:function -> `);
+    const continuation = continuationFor(`sample:${SHA256} | collection:functions -> `);
     assert.ok(continuation);
     assert.equal(continuation.kind, "field");
     assert.equal(labels(fieldSuggestions(continuation.context))[0], "sample:");
@@ -127,7 +127,7 @@ test("query assistant symbolic matrix", async (t) => {
     );
     assert.deepEqual(
       labels(valueSuggestions({ stage: "value", field: "collection", partial: "f" }, OPTIONS)),
-      ["function", "block", "instruction"]
+      ["functions", "blocks", "instructions"]
     );
     assert.deepEqual(
       labels(valueSuggestions({ stage: "value", field: "drop", partial: "r" }, OPTIONS)),
@@ -163,6 +163,6 @@ test("query assistant symbolic matrix", async (t) => {
 
     completion = suggestQueryCompletions(`sample:${SHA256} | collection:f`, `sample:${SHA256} | collection:f`.length, OPTIONS);
     assert.equal(completion.kind, "value");
-    assert.deepEqual(labels(completion.suggestions), ["function"]);
+    assert.deepEqual(labels(completion.suggestions), ["functions"]);
   });
 });

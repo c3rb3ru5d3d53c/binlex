@@ -830,9 +830,9 @@ fn decode_web_response<T: for<'de> Deserialize<'de>>(
 
 fn parse_collection(value: &str) -> Collection {
     match value.to_ascii_lowercase().as_str() {
-        "instruction" => Collection::Instruction,
-        "block" => Collection::Block,
-        "function" => Collection::Function,
+        "instructions" => Collection::Instruction,
+        "blocks" => Collection::Block,
+        "functions" => Collection::Function,
         _ => Collection::Function,
     }
 }

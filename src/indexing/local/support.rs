@@ -256,13 +256,24 @@ pub(super) fn push_search_hits(
     corpora: &[String],
     hydration: SearchHydration,
 ) {
-    let symbol =
-        symbol_names_for_attributes(&context.entry.attributes, context.entity, context.address)
-            .into_iter()
-            .next();
-    hits.push(build_search_result(
-        index, cache, &context, corpora, symbol, hydration,
-    ));
+    let symbols =
+        symbol_names_for_attributes(&context.entry.attributes, context.entity, context.address);
+    if symbols.is_empty() {
+        hits.push(build_search_result(
+            index, cache, &context, corpora, None, hydration,
+        ));
+        return;
+    }
+    for symbol in symbols {
+        hits.push(build_search_result(
+            index,
+            cache,
+            &context,
+            corpora,
+            Some(symbol),
+            hydration,
+        ));
+    }
 }
 
 pub(super) fn symbol_type_matches_collection(symbol_type: &str, collection: Collection) -> bool {
