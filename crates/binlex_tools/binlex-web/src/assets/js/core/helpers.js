@@ -77,8 +77,6 @@ const symbolRowRequests = new Set();
 const symbolSearchRequests = new Set();
 const corporaRowRequests = new Set();
 const corporaSearchRequests = new Set();
-const uploadCorporaRequests = new Set();
-let uploadCorporaSearchHandle = null;
 const RESULT_COLUMNS_STORAGE_KEY = "binlex-web-result-columns-v2";
 const TAGS_POPOVER_VISIBLE_LIMIT = 6;
 const COMMENTS_PAGE_SIZE = 20;
@@ -343,4 +341,3 @@ function buildSearchPayload(form) {
     page: Number.isFinite(pageRaw) ? pageRaw : null,
   };
 }
-
