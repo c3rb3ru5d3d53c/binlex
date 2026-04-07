@@ -5,9 +5,9 @@ use pyo3::types::PyBool;
 
 use ::binlex::rules::{
     YARACompiledRuleSet as InnerCompiledRuleSet, YARACondition as InnerCondition,
-    YARAMatch as InnerYARAMatch, YARAMetaValue as InnerMetaValue,
-    YARAPattern as InnerPattern, YARAPatternKind as InnerPatternKind, YARARule as InnerRule,
-    YARARuleSet as InnerRuleSet, YARAScanResults as InnerYARAScanResults,
+    YARAMatch as InnerYARAMatch, YARAMetaValue as InnerMetaValue, YARAPattern as InnerPattern,
+    YARAPatternKind as InnerPatternKind, YARARule as InnerRule, YARARuleSet as InnerRuleSet,
+    YARAScanResults as InnerYARAScanResults,
 };
 
 #[pyclass(name = "Pattern", skip_from_py_object)]
@@ -125,12 +125,12 @@ impl CompiledRuleSet {
         Ok(YARAScanResults { inner: results })
     }
 
-    pub fn scan_path(&self, path: String) -> PyResult<YARAScanResults> {
+    pub fn scan_file(&self, path: String) -> PyResult<YARAScanResults> {
         let results = self
             .inner
             .lock()
             .unwrap()
-            .scan_path(path)
+            .scan_file(path)
             .map_err(|error| PyValueError::new_err(error.to_string()))?;
         Ok(YARAScanResults { inner: results })
     }
@@ -204,12 +204,12 @@ impl RuleSet {
         Ok(YARAScanResults { inner: results })
     }
 
-    pub fn scan_path(&self, path: String) -> PyResult<YARAScanResults> {
+    pub fn scan_file(&self, path: String) -> PyResult<YARAScanResults> {
         let results = self
             .inner
             .lock()
             .unwrap()
-            .scan_path(path)
+            .scan_file(path)
             .map_err(|error| PyValueError::new_err(error.to_string()))?;
         Ok(YARAScanResults { inner: results })
     }
@@ -451,36 +451,48 @@ impl Rule {
 
     pub fn condition_and(&self, values: Vec<PyRef<'_, Condition>>) -> Condition {
         Condition {
-            inner: self
-                .inner
-                .lock()
-                .unwrap()
-                .condition_and(values.into_iter().map(|value| value.inner.clone()).collect()),
+            inner: self.inner.lock().unwrap().condition_and(
+                values
+                    .into_iter()
+                    .map(|value| value.inner.clone())
+                    .collect(),
+            ),
         }
     }
 
     pub fn condition_or(&self, values: Vec<PyRef<'_, Condition>>) -> Condition {
         Condition {
-            inner: self
-                .inner
-                .lock()
-                .unwrap()
-                .condition_or(values.into_iter().map(|value| value.inner.clone()).collect()),
+            inner: self.inner.lock().unwrap().condition_or(
+                values
+                    .into_iter()
+                    .map(|value| value.inner.clone())
+                    .collect(),
+            ),
         }
     }
 
     pub fn condition_not(&self, value: &Condition) -> Condition {
         Condition {
-            inner: self.inner.lock().unwrap().condition_not(value.inner.clone()),
+            inner: self
+                .inner
+                .lock()
+                .unwrap()
+                .condition_not(value.inner.clone()),
         }
     }
 
     pub fn set_condition(&self, value: &Condition) {
-        self.inner.lock().unwrap().set_condition(value.inner.clone());
+        self.inner
+            .lock()
+            .unwrap()
+            .set_condition(value.inner.clone());
     }
 
     pub fn add_condition(&self, value: &Condition) {
-        self.inner.lock().unwrap().add_condition(value.inner.clone());
+        self.inner
+            .lock()
+            .unwrap()
+            .add_condition(value.inner.clone());
     }
 
     pub fn clear_condition(&self) {
@@ -534,12 +546,12 @@ impl Rule {
         Ok(YARAScanResults { inner: results })
     }
 
-    pub fn scan_path(&self, path: String) -> PyResult<YARAScanResults> {
+    pub fn scan_file(&self, path: String) -> PyResult<YARAScanResults> {
         let results = self
             .inner
             .lock()
             .unwrap()
-            .scan_path(path)
+            .scan_file(path)
             .map_err(|error| PyValueError::new_err(error.to_string()))?;
         Ok(YARAScanResults { inner: results })
     }

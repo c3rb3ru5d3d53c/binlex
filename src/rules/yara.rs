@@ -734,8 +734,8 @@ impl Rule {
         self.compile()?.scan(data)
     }
 
-    pub fn scan_path(&self, path: impl AsRef<Path>) -> Result<ScanResults, Error> {
-        self.compile()?.scan_path(path)
+    pub fn scan_file(&self, path: impl AsRef<Path>) -> Result<ScanResults, Error> {
+        self.compile()?.scan_file(path)
     }
 }
 
@@ -785,8 +785,8 @@ impl RuleSet {
         self.compile()?.scan(data)
     }
 
-    pub fn scan_path(&self, path: impl AsRef<Path>) -> Result<ScanResults, Error> {
-        self.compile()?.scan_path(path)
+    pub fn scan_file(&self, path: impl AsRef<Path>) -> Result<ScanResults, Error> {
+        self.compile()?.scan_file(path)
     }
 }
 
@@ -797,7 +797,7 @@ impl CompiledRuleSet {
         Ok(scan_results_from_yara_x(results))
     }
 
-    pub fn scan_path(&self, path: impl AsRef<Path>) -> Result<ScanResults, Error> {
+    pub fn scan_file(&self, path: impl AsRef<Path>) -> Result<ScanResults, Error> {
         let mut scanner = yara_x::Scanner::new(&self.rules);
         let results = scanner.scan_file(path)?;
         Ok(scan_results_from_yara_x(results))
@@ -874,7 +874,9 @@ fn tokenize_hex_pattern(value: &str) -> Result<Vec<String>, Error> {
         .trim();
 
     if normalized.is_empty() {
-        return Err(Error::Validation("hex pattern must not be empty".to_string()));
+        return Err(Error::Validation(
+            "hex pattern must not be empty".to_string(),
+        ));
     }
 
     if normalized.chars().any(char::is_whitespace) {
@@ -885,7 +887,9 @@ fn tokenize_hex_pattern(value: &str) -> Result<Vec<String>, Error> {
             .map(ToString::to_string)
             .collect::<Vec<_>>();
         if tokens.is_empty() {
-            return Err(Error::Validation("hex pattern must not be empty".to_string()));
+            return Err(Error::Validation(
+                "hex pattern must not be empty".to_string(),
+            ));
         }
         for token in &tokens {
             validate_fragment_token(token)?;
@@ -1119,17 +1123,16 @@ mod tests {
         assert_eq!(
             rule.get_condition(),
             Some(&Condition::And(vec![
-                Condition::Or(vec![
-                    Condition::Raw(a.clone()),
-                    Condition::Raw(b.clone())
-                ]),
+                Condition::Or(vec![Condition::Raw(a.clone()), Condition::Raw(b.clone())]),
                 Condition::Not(Box::new(Condition::Raw(c.clone()))),
                 Condition::Raw("filesize < 1MB".to_string())
             ]))
         );
         assert_eq!(
             rule.get_condition_text().as_deref(),
-            Some("(($chromosome_0) or ($chromosome_1)) and (not ($chromosome_2)) and (filesize < 1MB)")
+            Some(
+                "(($chromosome_0) or ($chromosome_1)) and (not ($chromosome_2)) and (filesize < 1MB)"
+            )
         );
     }
 
@@ -1191,7 +1194,9 @@ mod tests {
         rule.set_condition(rule.condition_at_least(2, fragments.clone()));
         assert_eq!(
             rule.get_condition_text().as_deref(),
-            Some("2 of ($chromosome_0_fragment_0, $chromosome_0_fragment_1, $chromosome_0_fragment_2)")
+            Some(
+                "2 of ($chromosome_0_fragment_0, $chromosome_0_fragment_1, $chromosome_0_fragment_2)"
+            )
         );
     }
 
@@ -1213,7 +1218,10 @@ mod tests {
             )
             .unwrap();
         let error = rule.fragment_pattern(&text, 2, true).unwrap_err();
-        assert_eq!(error.to_string(), "fragment_pattern only supports hex patterns");
+        assert_eq!(
+            error.to_string(),
+            "fragment_pattern only supports hex patterns"
+        );
     }
 
     #[test]
@@ -1235,7 +1243,9 @@ mod tests {
         rule.add_import("pe");
         rule.add_pattern("AA BB", None);
         let rendered = rule.render();
-        assert!(rendered.starts_with("import \"pe\"\nimport \"math\"\n\n// module-backed\nrule imports_test {"));
+        assert!(rendered.starts_with(
+            "import \"pe\"\nimport \"math\"\n\n// module-backed\nrule imports_test {"
+        ));
     }
 
     #[test]

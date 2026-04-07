@@ -12,12 +12,12 @@ use binlex::controlflow::{BlockJson, FunctionJson, Graph, GraphSnapshot, Instruc
 use binlex::databases::{LocalDB, SampleStatus, SampleStatusRecord};
 use binlex::indexing::{Collection, LocalIndex, SearchResult};
 use binlex::math::similarity::cosine;
+use binlex::rules::YARARule as Rule;
 use binlex::search::{
     QueryCompletionSpec, query_architecture_values, query_collection_values,
     query_completion_specs, query_score_matches,
 };
 use binlex::server::request_id::RequestId;
-use binlex::rules::YARARule as Rule;
 use binlex::{Architecture, Config, Magic};
 use chrono::Utc;
 use clap::Parser;
