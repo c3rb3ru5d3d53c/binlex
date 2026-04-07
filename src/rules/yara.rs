@@ -87,6 +87,12 @@ pub struct Pattern {
     pub kind: PatternKind,
     pub ascii: bool,
     pub wide: bool,
+    pub nocase: bool,
+    pub xor: bool,
+    pub base64: bool,
+    pub base64wide: bool,
+    pub fullword: bool,
+    pub private: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -100,6 +106,10 @@ pub enum PatternKind {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Rule {
     name: String,
+    imports: Vec<String>,
+    tags: Vec<String>,
+    global: bool,
+    private: bool,
     comment: Option<String>,
     metadata: Vec<(String, MetaValue)>,
     patterns: Vec<Pattern>,
@@ -121,7 +131,7 @@ pub struct CompiledRuleSet {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct RuleMatch {
+pub struct Match {
     rule: String,
     offset: usize,
     data: Vec<u8>,
@@ -129,11 +139,12 @@ pub struct RuleMatch {
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ScanResults {
-    matches: Vec<RuleMatch>,
+    matches: Vec<Match>,
 }
 
 #[derive(Debug)]
 pub enum Error {
+    Validation(String),
     Compile(CompileError),
     Scan(ScanError),
 }
@@ -141,6 +152,7 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Validation(error) => write!(f, "{error}"),
             Self::Compile(error) => write!(f, "{error}"),
             Self::Scan(error) => write!(f, "{error}"),
         }
@@ -179,6 +191,10 @@ impl Rule {
                 .filter(|value| !value.is_empty())
                 .map(ToString::to_string)
                 .unwrap_or_else(default_rule_name),
+            imports: Vec::new(),
+            tags: Vec::new(),
+            global: false,
+            private: false,
             comment: comment
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
@@ -193,20 +209,82 @@ impl Rule {
         }
     }
 
-    pub fn name(&self) -> &str {
+    pub fn get_name(&self) -> &str {
         &self.name
     }
 
-    pub fn comment(&self) -> Option<&str> {
+    pub fn get_comment(&self) -> Option<&str> {
         self.comment.as_deref()
     }
 
-    pub fn comment_set(&mut self, value: &str) -> &mut Self {
+    pub fn add_import(&mut self, value: &str) -> &mut Self {
+        let value = value.trim();
+        if value.is_empty() {
+            return self;
+        }
+        if !self.imports.iter().any(|existing| existing == value) {
+            self.imports.push(value.to_string());
+        }
+        self
+    }
+
+    pub fn remove_import(&mut self, value: &str) -> bool {
+        let before = self.imports.len();
+        self.imports.retain(|existing| existing != value.trim());
+        self.imports.len() != before
+    }
+
+    pub fn clear_imports(&mut self) -> &mut Self {
+        self.imports.clear();
+        self
+    }
+
+    pub fn add_tag(&mut self, value: &str) -> &mut Self {
+        let value = value.trim();
+        if value.is_empty() {
+            return self;
+        }
+        if !self.tags.iter().any(|existing| existing == value) {
+            self.tags.push(value.to_string());
+        }
+        self
+    }
+
+    pub fn remove_tag(&mut self, value: &str) -> bool {
+        let before = self.tags.len();
+        self.tags.retain(|existing| existing != value.trim());
+        self.tags.len() != before
+    }
+
+    pub fn clear_tags(&mut self) -> &mut Self {
+        self.tags.clear();
+        self
+    }
+
+    pub fn set_global(&mut self, value: bool) -> &mut Self {
+        self.global = value;
+        self
+    }
+
+    pub fn set_private(&mut self, value: bool) -> &mut Self {
+        self.private = value;
+        self
+    }
+
+    pub fn is_global(&self) -> bool {
+        self.global
+    }
+
+    pub fn is_private(&self) -> bool {
+        self.private
+    }
+
+    pub fn set_comment(&mut self, value: &str) -> &mut Self {
         self.comment = Some(value.trim().to_string());
         self
     }
 
-    pub fn comment_clear(&mut self) -> &mut Self {
+    pub fn clear_comment(&mut self) -> &mut Self {
         self.comment = None;
         self
     }
@@ -215,15 +293,7 @@ impl Rule {
         self.compile().is_ok()
     }
 
-    pub fn meta<V>(&mut self, key: &str, value: V) -> &mut Self
-    where
-        V: Into<MetaValue>,
-    {
-        self.meta_set(key, value);
-        self
-    }
-
-    pub fn meta_set<V>(&mut self, key: &str, value: V) -> &mut Self
+    pub fn set_metadata<V>(&mut self, key: &str, value: V) -> &mut Self
     where
         V: Into<MetaValue>,
     {
@@ -241,27 +311,22 @@ impl Rule {
         self
     }
 
-    pub fn meta_remove(&mut self, key: &str) -> bool {
+    pub fn remove_metadata(&mut self, key: &str) -> bool {
         let before = self.metadata.len();
         self.metadata.retain(|(existing, _)| existing != key.trim());
         self.metadata.len() != before
     }
 
-    pub fn meta_clear(&mut self) -> &mut Self {
+    pub fn clear_metadata(&mut self) -> &mut Self {
         self.metadata.clear();
         self
     }
 
-    pub fn metadata(&self) -> &[(String, MetaValue)] {
+    pub fn get_metadata(&self) -> &[(String, MetaValue)] {
         &self.metadata
     }
 
-    pub fn pattern(&mut self, pattern: &str, comment: Option<&str>) -> &mut Self {
-        self.pattern_add(pattern, comment);
-        self
-    }
-
-    pub fn pattern_add(&mut self, pattern: &str, comment: Option<&str>) -> String {
+    pub fn add_pattern(&mut self, pattern: &str, comment: Option<&str>) -> String {
         let name = format!("$chromosome_{}", self.next_pattern_index);
         self.next_pattern_index += 1;
         self.patterns.push(Pattern {
@@ -274,17 +339,31 @@ impl Rule {
             kind: PatternKind::Hex,
             ascii: false,
             wide: false,
+            nocase: false,
+            xor: false,
+            base64: false,
+            base64wide: false,
+            fullword: false,
+            private: false,
         });
         name
     }
 
-    pub fn text_add(
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_text(
         &mut self,
         text: &str,
         ascii: bool,
         wide: bool,
+        nocase: bool,
+        xor: bool,
+        base64: bool,
+        base64wide: bool,
+        fullword: bool,
+        private: bool,
         comment: Option<&str>,
-    ) -> String {
+    ) -> Result<String, Error> {
+        validate_text_modifiers(nocase, xor, base64, base64wide, fullword)?;
         let name = format!("$text_{}", self.next_text_index);
         self.next_text_index += 1;
         self.patterns.push(Pattern {
@@ -297,11 +376,17 @@ impl Rule {
             kind: PatternKind::Text,
             ascii,
             wide,
+            nocase,
+            xor,
+            base64,
+            base64wide,
+            fullword,
+            private,
         });
-        name
+        Ok(name)
     }
 
-    pub fn regex_add(&mut self, regex: &str, comment: Option<&str>) -> String {
+    pub fn add_regex(&mut self, regex: &str, comment: Option<&str>) -> String {
         let name = format!("$regex_{}", self.next_regex_index);
         self.next_regex_index += 1;
         self.patterns.push(Pattern {
@@ -314,11 +399,17 @@ impl Rule {
             kind: PatternKind::Regex,
             ascii: false,
             wide: false,
+            nocase: false,
+            xor: false,
+            base64: false,
+            base64wide: false,
+            fullword: false,
+            private: false,
         });
         name
     }
 
-    pub fn string_add(&mut self, value: &str, comment: Option<&str>) -> String {
+    pub fn add_string(&mut self, value: &str, comment: Option<&str>) -> String {
         let name = format!("$string_{}", self.next_string_index);
         self.next_string_index += 1;
         self.patterns.push(Pattern {
@@ -331,11 +422,17 @@ impl Rule {
             kind: PatternKind::String,
             ascii: false,
             wide: false,
+            nocase: false,
+            xor: false,
+            base64: false,
+            base64wide: false,
+            fullword: false,
+            private: false,
         });
         name
     }
 
-    pub fn pattern_update(
+    pub fn update_pattern(
         &mut self,
         name: &str,
         pattern: Option<&str>,
@@ -360,71 +457,73 @@ impl Rule {
         true
     }
 
-    pub fn remove(&mut self, name: &str) -> bool {
+    pub fn remove_pattern(&mut self, name: &str) -> bool {
         let before = self.patterns.len();
         self.patterns
             .retain(|existing| existing.name != name.trim());
         self.patterns.len() != before
     }
 
-    pub fn pattern_clear(&mut self) -> &mut Self {
+    pub fn clear_patterns(&mut self) -> &mut Self {
         self.patterns.clear();
         self
     }
 
-    pub fn patterns(&self) -> &[Pattern] {
+    pub fn get_patterns(&self) -> &[Pattern] {
         &self.patterns
     }
 
-    pub fn condition(&mut self, value: &str) -> &mut Self {
+    pub fn set_condition(&mut self, value: &str) -> &mut Self {
         self.condition = Some(value.trim().to_string());
         self
     }
 
-    pub fn condition_clear(&mut self) -> &mut Self {
+    pub fn add_condition(&mut self, value: &str) -> &mut Self {
+        let value = value.trim();
+        if value.is_empty() {
+            return self;
+        }
+
+        self.condition = match self.condition.take() {
+            Some(existing) if !existing.trim().is_empty() => {
+                Some(format!("({existing}) and ({value})"))
+            }
+            _ => Some(value.to_string()),
+        };
+        self
+    }
+
+    pub fn clear_condition(&mut self) -> &mut Self {
         self.condition = None;
         self
     }
 
-    pub fn condition_value(&self) -> Option<&str> {
+    pub fn get_condition(&self) -> Option<&str> {
         self.condition.as_deref()
-    }
-
-    pub fn condition_all_of_them(&mut self) -> &mut Self {
-        self.condition("all of them")
-    }
-
-    pub fn condition_number_of_them(&mut self, n: usize) -> &mut Self {
-        self.condition(&format!("{n} of them"))
-    }
-
-    pub fn condition_any_of<S>(&mut self, names: &[S]) -> &mut Self
-    where
-        S: AsRef<str>,
-    {
-        self.condition(&format!("any of ({})", format_names(names)))
-    }
-
-    pub fn condition_all_of<S>(&mut self, names: &[S]) -> &mut Self
-    where
-        S: AsRef<str>,
-    {
-        self.condition(&format!("all of ({})", format_names(names)))
-    }
-
-    pub fn condition_at_least<S>(&mut self, n: usize, names: &[S]) -> &mut Self
-    where
-        S: AsRef<str>,
-    {
-        self.condition(&format!("{n} of ({})", format_names(names)))
     }
 
     pub fn render(&self) -> String {
         let mut output = String::new();
+        for import in &self.imports {
+            output.push_str(&format!("import \"{}\"\n", escape_yara_string(import)));
+        }
+        if !self.imports.is_empty() {
+            output.push('\n');
+        }
         if let Some(comment) = &self.comment {
             output.push_str(&format!("// {}\n", comment));
         }
-        output.push_str(&format!("rule {} {{\n", self.name));
+        if self.global {
+            output.push_str("global ");
+        }
+        if self.private {
+            output.push_str("private ");
+        }
+        output.push_str(&format!("rule {}", self.name));
+        if !self.tags.is_empty() {
+            output.push_str(&format!(" : {}", self.tags.join(" ")));
+        }
+        output.push_str(" {\n");
 
         if !self.metadata.is_empty() {
             output.push_str("  meta:\n");
@@ -479,8 +578,8 @@ impl Rule {
         self.compile()?.scan(data)
     }
 
-    pub fn scan_file(&self, path: impl AsRef<Path>) -> Result<ScanResults, Error> {
-        self.compile()?.scan_file(path)
+    pub fn scan_path(&self, path: impl AsRef<Path>) -> Result<ScanResults, Error> {
+        self.compile()?.scan_path(path)
     }
 }
 
@@ -490,14 +589,14 @@ impl RuleSet {
     }
 
     pub fn add(&mut self, rule: Rule) -> &mut Self {
-        self.remove(rule.name());
+        self.remove(rule.get_name());
         self.rules.push(rule);
         self
     }
 
     pub fn remove(&mut self, name: &str) -> bool {
         let before = self.rules.len();
-        self.rules.retain(|rule| rule.name() != name.trim());
+        self.rules.retain(|rule| rule.get_name() != name.trim());
         self.rules.len() != before
     }
 
@@ -506,7 +605,7 @@ impl RuleSet {
         self
     }
 
-    pub fn rules(&self) -> &[Rule] {
+    pub fn get_rules(&self) -> &[Rule] {
         &self.rules
     }
 
@@ -530,8 +629,8 @@ impl RuleSet {
         self.compile()?.scan(data)
     }
 
-    pub fn scan_file(&self, path: impl AsRef<Path>) -> Result<ScanResults, Error> {
-        self.compile()?.scan_file(path)
+    pub fn scan_path(&self, path: impl AsRef<Path>) -> Result<ScanResults, Error> {
+        self.compile()?.scan_path(path)
     }
 }
 
@@ -542,14 +641,14 @@ impl CompiledRuleSet {
         Ok(scan_results_from_yara_x(results))
     }
 
-    pub fn scan_file(&self, path: impl AsRef<Path>) -> Result<ScanResults, Error> {
+    pub fn scan_path(&self, path: impl AsRef<Path>) -> Result<ScanResults, Error> {
         let mut scanner = yara_x::Scanner::new(&self.rules);
         let results = scanner.scan_file(path)?;
         Ok(scan_results_from_yara_x(results))
     }
 }
 
-impl RuleMatch {
+impl Match {
     pub fn rule(&self) -> &str {
         &self.rule
     }
@@ -568,14 +667,14 @@ impl RuleMatch {
 }
 
 impl ScanResults {
-    pub fn matches(&self) -> &[RuleMatch] {
+    pub fn get_matches(&self) -> &[Match] {
         &self.matches
     }
 }
 
 impl IntoIterator for ScanResults {
-    type Item = RuleMatch;
-    type IntoIter = std::vec::IntoIter<RuleMatch>;
+    type Item = Match;
+    type IntoIter = std::vec::IntoIter<Match>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.matches.into_iter()
@@ -583,8 +682,8 @@ impl IntoIterator for ScanResults {
 }
 
 impl<'a> IntoIterator for &'a ScanResults {
-    type Item = &'a RuleMatch;
-    type IntoIter = std::slice::Iter<'a, RuleMatch>;
+    type Item = &'a Match;
+    type IntoIter = std::slice::Iter<'a, Match>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.matches.iter()
@@ -603,15 +702,54 @@ fn escape_yara_regex(value: &str) -> String {
     value.replace('\\', "\\\\").replace('/', "\\/")
 }
 
-fn format_names<S>(names: &[S]) -> String
-where
-    S: AsRef<str>,
-{
-    names
-        .iter()
-        .map(|name| name.as_ref().trim().to_string())
-        .collect::<Vec<_>>()
-        .join(", ")
+fn validate_text_modifiers(
+    nocase: bool,
+    xor: bool,
+    base64: bool,
+    base64wide: bool,
+    fullword: bool,
+) -> Result<(), Error> {
+    if nocase && xor {
+        return Err(Error::Validation(
+            "nocase cannot be used with xor".to_string(),
+        ));
+    }
+    if nocase && base64 {
+        return Err(Error::Validation(
+            "nocase cannot be used with base64".to_string(),
+        ));
+    }
+    if nocase && base64wide {
+        return Err(Error::Validation(
+            "nocase cannot be used with base64wide".to_string(),
+        ));
+    }
+    if xor && base64 {
+        return Err(Error::Validation(
+            "xor cannot be used with base64".to_string(),
+        ));
+    }
+    if xor && base64wide {
+        return Err(Error::Validation(
+            "xor cannot be used with base64wide".to_string(),
+        ));
+    }
+    if base64 && fullword {
+        return Err(Error::Validation(
+            "base64 cannot be used with fullword".to_string(),
+        ));
+    }
+    if base64wide && fullword {
+        return Err(Error::Validation(
+            "base64wide cannot be used with fullword".to_string(),
+        ));
+    }
+    if base64 && base64wide {
+        return Err(Error::Validation(
+            "base64 cannot be used with base64wide".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 fn render_pattern(pattern: &Pattern) -> String {
@@ -625,6 +763,24 @@ fn render_pattern(pattern: &Pattern) -> String {
             if pattern.wide {
                 rendered.push_str(" wide");
             }
+            if pattern.nocase {
+                rendered.push_str(" nocase");
+            }
+            if pattern.xor {
+                rendered.push_str(" xor");
+            }
+            if pattern.base64 {
+                rendered.push_str(" base64");
+            }
+            if pattern.base64wide {
+                rendered.push_str(" base64wide");
+            }
+            if pattern.fullword {
+                rendered.push_str(" fullword");
+            }
+            if pattern.private {
+                rendered.push_str(" private");
+            }
             rendered
         }
         PatternKind::Regex => format!("/{}/", escape_yara_regex(&pattern.value)),
@@ -637,7 +793,7 @@ fn scan_results_from_yara_x(results: yara_x::ScanResults<'_, '_>) -> ScanResults
     for matching_rule in results.matching_rules() {
         for pattern in matching_rule.patterns() {
             for matched in pattern.matches() {
-                matches.push(RuleMatch {
+                matches.push(Match {
                     rule: matching_rule.identifier().to_string(),
                     offset: matched.range().start,
                     data: matched.data().to_vec(),
@@ -655,8 +811,8 @@ mod tests {
     #[test]
     fn rule_defaults_name_and_all_of_them_condition() {
         let mut rule = Rule::new();
-        rule.meta("author", "analyst");
-        rule.pattern("55 8B EC ??", Some("prologue"));
+        rule.set_metadata("author", "analyst");
+        rule.add_pattern("55 8B EC ??", Some("prologue"));
         let text = rule.render();
         assert!(text.contains("rule binlex_"));
         assert!(text.contains("author = \"analyst\""));
@@ -668,9 +824,9 @@ mod tests {
     #[test]
     fn rule_supports_number_of_them_condition() {
         let mut rule = Rule::new_with_options(Some("dispatcher_like"), None);
-        rule.pattern("AA BB CC", None);
-        rule.pattern("DD EE FF", None);
-        rule.condition_number_of_them(2);
+        rule.add_pattern("AA BB CC", None);
+        rule.add_pattern("DD EE FF", None);
+        rule.set_condition("2 of them");
         let text = rule.render();
         assert!(text.contains("rule dispatcher_like"));
         assert!(text.contains("condition:\n    2 of them"));
@@ -679,24 +835,24 @@ mod tests {
     #[test]
     fn rule_supports_metadata_replacement_and_removal() {
         let mut rule = Rule::new_with_options(Some("meta_test"), None);
-        rule.meta_set("author", "analyst");
-        rule.meta_set("author", "researcher");
-        rule.meta_set("score", 10);
-        assert_eq!(rule.metadata().len(), 2);
-        assert!(rule.meta_remove("score"));
-        assert_eq!(rule.metadata().len(), 1);
-        assert_eq!(rule.metadata()[0].0, "author");
+        rule.set_metadata("author", "analyst");
+        rule.set_metadata("author", "researcher");
+        rule.set_metadata("score", 10);
+        assert_eq!(rule.get_metadata().len(), 2);
+        assert!(rule.remove_metadata("score"));
+        assert_eq!(rule.get_metadata().len(), 1);
+        assert_eq!(rule.get_metadata()[0].0, "author");
     }
 
     #[test]
     fn rule_supports_named_pattern_mutation() {
         let mut rule = Rule::new_with_options(Some("pattern_test"), None);
-        let first = rule.pattern_add("AA BB", Some("first"));
-        let second = rule.pattern_add("CC DD", None);
+        let first = rule.add_pattern("AA BB", Some("first"));
+        let second = rule.add_pattern("CC DD", None);
         assert_eq!(first, "$chromosome_0");
         assert_eq!(second, "$chromosome_1");
-        assert!(rule.pattern_update(&second, Some("EE FF"), Some(Some("updated"))));
-        assert!(rule.remove(&first));
+        assert!(rule.update_pattern(&second, Some("EE FF"), Some(Some("updated"))));
+        assert!(rule.remove_pattern(&first));
         let text = rule.render();
         assert!(!text.contains("$chromosome_0 ="));
         assert!(text.contains("$chromosome_1 = { EE FF }"));
@@ -706,43 +862,115 @@ mod tests {
     #[test]
     fn rule_supports_condition_clear() {
         let mut rule = Rule::new_with_options(Some("condition_test"), None);
-        rule.condition("1 of them");
-        assert_eq!(rule.condition_value(), Some("1 of them"));
-        rule.condition_clear();
-        assert_eq!(rule.condition_value(), None);
+        rule.set_condition("1 of them");
+        assert_eq!(rule.get_condition(), Some("1 of them"));
+        rule.clear_condition();
+        assert_eq!(rule.get_condition(), None);
         assert!(rule.render().contains("condition:\n    all of them"));
+    }
+
+    #[test]
+    fn rule_supports_add_condition_composition() {
+        let mut rule = Rule::new_with_options(Some("condition_append"), None);
+        rule.add_condition("1 of them");
+        rule.add_condition("filesize < 5MB");
+        assert_eq!(
+            rule.get_condition(),
+            Some("(1 of them) and (filesize < 5MB)")
+        );
+    }
+
+    #[test]
+    fn rule_supports_imports() {
+        let mut rule = Rule::new_with_options(Some("imports_test"), Some("module-backed"));
+        rule.add_import("pe");
+        rule.add_import("math");
+        rule.add_import("pe");
+        rule.add_pattern("AA BB", None);
+        let rendered = rule.render();
+        assert!(rendered.starts_with("import \"pe\"\nimport \"math\"\n\n// module-backed\nrule imports_test {"));
+    }
+
+    #[test]
+    fn rule_supports_import_and_tag_removal() {
+        let mut rule = Rule::new_with_options(Some("cleanup_test"), None);
+        rule.add_import("pe");
+        rule.add_import("math");
+        rule.add_tag("Foo");
+        rule.add_tag("Bar");
+        assert!(rule.remove_import("math"));
+        assert!(rule.remove_tag("Bar"));
+        rule.clear_imports();
+        rule.clear_tags();
+        rule.add_pattern("AA BB", None);
+        let rendered = rule.render();
+        assert!(!rendered.contains("import \"pe\""));
+        assert!(!rendered.contains("import \"math\""));
+        assert!(rendered.starts_with("rule cleanup_test {\n"));
+    }
+
+    #[test]
+    fn rule_supports_tags() {
+        let mut rule = Rule::new_with_options(Some("tags_test"), None);
+        rule.add_tag("Foo");
+        rule.add_tag("Bar");
+        rule.add_tag("Foo");
+        rule.add_pattern("AA BB", None);
+        let rendered = rule.render();
+        assert!(rendered.starts_with("rule tags_test : Foo Bar {\n"));
+    }
+
+    #[test]
+    fn rule_supports_global_and_private_flags() {
+        let mut rule = Rule::new_with_options(Some("scoped_test"), None);
+        rule.set_global(true);
+        rule.set_private(true);
+        rule.add_tag("Foo");
+        rule.add_pattern("AA BB", None);
+        assert!(rule.is_global());
+        assert!(rule.is_private());
+        let rendered = rule.render();
+        assert!(rendered.starts_with("global private rule scoped_test : Foo {\n"));
     }
 
     #[test]
     fn rule_can_check_and_scan() {
         let mut rule = Rule::new_with_options(Some("scan_test"), None);
-        rule.pattern_add("61 62 63", Some("abc"));
-        rule.condition_all_of_them();
+        rule.add_pattern("61 62 63", Some("abc"));
+        rule.set_condition("all of them");
         assert!(rule.check());
         let results = rule.scan(b"abc").unwrap();
-        assert_eq!(results.matches().len(), 1);
-        assert_eq!(results.matches()[0].rule(), "scan_test");
-        assert_eq!(results.matches()[0].offset(), 0);
-        assert_eq!(results.matches()[0].data(), b"abc");
-        assert_eq!(results.matches()[0].size(), 3);
+        assert_eq!(results.get_matches().len(), 1);
+        assert_eq!(results.get_matches()[0].rule(), "scan_test");
+        assert_eq!(results.get_matches()[0].offset(), 0);
+        assert_eq!(results.get_matches()[0].data(), b"abc");
+        assert_eq!(results.get_matches()[0].size(), 3);
     }
 
     #[test]
     fn rule_supports_text_regex_and_named_conditions() {
         let mut rule = Rule::new_with_options(Some("hybrid"), None);
-        let chromosome = rule.pattern_add("61 62 63", Some("hex"));
-        let text = rule.text_add("powershell", true, true, Some("text"));
-        let regex = rule.regex_add(r"https?://example\.com", Some("regex"));
-        let custom = rule.string_add("xor wide ascii \"cmd.exe\"", Some("custom"));
-        rule.condition_at_least(
-            2,
-            &[
-                chromosome.clone(),
-                text.clone(),
-                regex.clone(),
-                custom.clone(),
-            ],
-        );
+        let chromosome = rule.add_pattern("61 62 63", Some("hex"));
+        let text = rule
+            .add_text(
+                "powershell",
+                true,
+                true,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                Some("text"),
+            )
+            .unwrap();
+        let regex = rule.add_regex(r"https?://example\.com", Some("regex"));
+        let custom = rule.add_string("xor wide ascii \"cmd.exe\"", Some("custom"));
+        rule.set_condition(&format!(
+            "2 of ({}, {}, {}, {})",
+            chromosome, text, regex, custom
+        ));
         let rendered = rule.render();
         assert!(rendered.contains("$text_0 = \"powershell\" ascii wide"));
         assert!(rendered.contains(r#"$regex_0 = /https?:\/\/example\\.com/"#));
@@ -756,20 +984,60 @@ mod tests {
     #[test]
     fn rule_supports_constructor_comment() {
         let mut rule = Rule::new_with_options(Some("commented"), Some("generated from binlex"));
-        rule.pattern_add("AA BB", None);
+        rule.add_pattern("AA BB", None);
         let rendered = rule.render();
         assert!(rendered.starts_with("// generated from binlex\nrule commented {"));
     }
 
     #[test]
+    fn rule_supports_text_modifiers() {
+        let mut rule = Rule::new_with_options(Some("modifiers"), None);
+        rule.add_text(
+            "powershell",
+            true,
+            true,
+            false,
+            false,
+            false,
+            false,
+            true,
+            true,
+            None,
+        )
+        .unwrap();
+        let rendered = rule.render();
+        assert!(rendered.contains("$text_0 = \"powershell\" ascii wide fullword private"));
+    }
+
+    #[test]
+    fn rule_rejects_invalid_text_modifier_combinations() {
+        let mut rule = Rule::new_with_options(Some("invalid_modifiers"), None);
+        let error = rule
+            .add_text(
+                "powershell",
+                true,
+                false,
+                true,
+                true,
+                false,
+                false,
+                false,
+                false,
+                None,
+            )
+            .unwrap_err();
+        assert_eq!(error.to_string(), "nocase cannot be used with xor");
+    }
+
+    #[test]
     fn ruleset_can_scan_multiple_rules() {
         let mut first = Rule::new_with_options(Some("first"), None);
-        first.pattern_add("61 62 63", None);
-        first.condition_all_of_them();
+        first.add_pattern("61 62 63", None);
+        first.set_condition("all of them");
 
         let mut second = Rule::new_with_options(Some("second"), None);
-        second.pattern_add("64 65 66", None);
-        second.condition_all_of_them();
+        second.add_pattern("64 65 66", None);
+        second.set_condition("all of them");
 
         let mut rules = RuleSet::new();
         rules.add(first);
@@ -778,7 +1046,7 @@ mod tests {
         assert!(rules.check());
         let results = rules.scan(b"abcdef").unwrap();
         let names = results
-            .matches()
+            .get_matches()
             .iter()
             .map(|matched| matched.rule().to_string())
             .collect::<Vec<_>>();

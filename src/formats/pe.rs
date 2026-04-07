@@ -360,6 +360,10 @@ impl PE {
         let mut entries = Vec::<Entry>::new();
 
         for i in 0..64 {
+            if (cor20_metadata_table.mask_valid & (1u64 << i)) == 0 {
+                continue;
+            }
+
             let entry_offset =
                 cor20_metadata_table_offset as usize + MetadataTable::size() + (valid_index * 4);
 
@@ -416,7 +420,6 @@ impl PE {
                         offset += entry.size();
                         entries.push(Entry::Field(entry));
                     }
-                    valid_index += 1;
                 }
                 x if x == MetadataToken::MethodDef as usize => {
                     for _ in 0..entry_count {
@@ -430,6 +433,8 @@ impl PE {
                 }
                 _ => {}
             }
+
+            valid_index += 1;
         }
 
         Some(entries)
@@ -498,6 +503,75 @@ impl PE {
         result
     }
 
+    /// Resolves a .NET metadata token to its corresponding virtual address.
+    ///
+    /// This helper currently supports `MethodDef` metadata tokens and returns the
+    /// virtual address of the first CIL instruction in the method body.
+    ///
+    /// # Parameters
+    /// - `metadata_token`: The .NET metadata token to resolve.
+    ///
+    /// # Returns
+    /// * `Some(u64)` - The virtual address associated with the metadata token.
+    /// * `None` - If the token is not present or cannot be resolved.
+    pub fn dotnet_metadata_token_to_virtual_address(&self, metadata_token: u64) -> Option<u64> {
+        self.dotnet_metadata_token_virtual_addresses()
+            .get(&metadata_token)
+            .copied()
+    }
+
+    /// Resolves a .NET metadata token to its corresponding relative virtual address.
+    ///
+    /// This helper currently supports `MethodDef` metadata tokens and returns the
+    /// relative virtual address of the first CIL instruction in the method body.
+    pub fn dotnet_metadata_token_to_relative_virtual_address(
+        &self,
+        metadata_token: u64,
+    ) -> Option<u64> {
+        let address = self.dotnet_metadata_token_to_virtual_address(metadata_token)?;
+        Some(self.virtual_address_to_relative_virtual_address(address))
+    }
+
+    /// Resolves a .NET metadata token to its corresponding file offset.
+    ///
+    /// This helper currently supports `MethodDef` metadata tokens and returns the
+    /// file offset of the first CIL instruction in the method body.
+    pub fn dotnet_metadata_token_to_file_offset(&self, metadata_token: u64) -> Option<u64> {
+        let address = self.dotnet_metadata_token_to_virtual_address(metadata_token)?;
+        self.virtual_address_to_file_offset(address)
+    }
+
+    /// Resolves a .NET method body virtual address back to its metadata token.
+    ///
+    /// This helper currently supports `MethodDef` metadata tokens and expects the
+    /// virtual address of the first CIL instruction in the method body.
+    pub fn dotnet_virtual_address_to_metadata_token(&self, virtual_address: u64) -> Option<u64> {
+        self.dotnet_metadata_token_virtual_addresses()
+            .into_iter()
+            .find_map(|(token, address)| (address == virtual_address).then_some(token))
+    }
+
+    /// Resolves a .NET method body relative virtual address back to its metadata token.
+    ///
+    /// This helper currently supports `MethodDef` metadata tokens and expects the
+    /// relative virtual address of the first CIL instruction in the method body.
+    pub fn dotnet_relative_virtual_address_to_metadata_token(
+        &self,
+        relative_virtual_address: u64,
+    ) -> Option<u64> {
+        let address = self.relative_virtual_address_to_virtual_address(relative_virtual_address);
+        self.dotnet_virtual_address_to_metadata_token(address)
+    }
+
+    /// Resolves a .NET method body file offset back to its metadata token.
+    ///
+    /// This helper currently supports `MethodDef` metadata tokens and expects the
+    /// file offset of the first CIL instruction in the method body.
+    pub fn dotnet_file_offset_to_metadata_token(&self, file_offset: u64) -> Option<u64> {
+        let address = self.file_offset_to_virtual_address(file_offset)?;
+        self.dotnet_virtual_address_to_metadata_token(address)
+    }
+
     /// Converts a virtual address to a relative virtual address (RVA).
     ///
     /// This function computes the relative virtual address by subtracting the image base
@@ -512,6 +586,24 @@ impl PE {
     /// * `u64` - The relative virtual address (RVA).
     pub fn virtual_address_to_relative_virtual_address(&self, address: u64) -> u64 {
         address - self.imagebase()
+    }
+
+    /// Converts a file offset to a relative virtual address (RVA).
+    ///
+    /// This function first resolves the file offset to a virtual address and then
+    /// converts that virtual address to a relative virtual address.
+    ///
+    /// # Parameters
+    ///
+    /// * `file_offset` - The file offset (`u64`) to be converted.
+    ///
+    /// # Returns
+    ///
+    /// * `Option<u64>` - The relative virtual address corresponding to the file
+    ///   offset, or `None` if the conversion fails.
+    pub fn file_offset_to_relative_virtual_address(&self, file_offset: u64) -> Option<u64> {
+        let address = self.file_offset_to_virtual_address(file_offset)?;
+        Some(self.virtual_address_to_relative_virtual_address(address))
     }
 
     /// Converts a virtual address to a file offset in the PE file.
@@ -624,8 +716,11 @@ impl PE {
     /// The `BinaryArchitecture` enum value corresponding to the PE machine type (e.g., AMD64, I386, CIL or UNKNOWN).
     #[allow(dead_code)]
     pub fn architecture(&self) -> Architecture {
+        if self.is_dotnet() {
+            return Architecture::CIL;
+        }
+
         match self.pe.header().machine() {
-            MachineType::I386 if self.is_dotnet() => Architecture::CIL,
             MachineType::I386 => Architecture::I386,
             MachineType::AMD64 => Architecture::AMD64,
             _ => Architecture::UNKNOWN,

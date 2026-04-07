@@ -198,7 +198,7 @@ fn build_action_yara_rule(
     }
     let mut rule = Rule::new();
     if !request.query.trim().is_empty() {
-        rule.comment_set(request.query.trim());
+        rule.set_comment(request.query.trim());
     }
     let mut grouped = BTreeMap::<(String, String), Vec<(Collection, u64)>>::new();
     for item in &request.items {
@@ -229,16 +229,16 @@ fn build_action_yara_rule(
                 collection.as_str(),
                 address
             );
-            rule.pattern_add(&pattern, Some(&comment));
+            rule.add_pattern(&pattern, Some(&comment));
             included = included.saturating_add(1);
         }
     }
-    if rule.patterns().is_empty() {
+    if rule.get_patterns().is_empty() {
         return Err(AppError::new(
             "no chromosome patterns available for YARA generation",
         ));
     }
-    rule.condition_number_of_them(1);
+    rule.set_condition("1 of them");
     if included == 0 {
         return Err(AppError::new(
             "no chromosome patterns available for YARA generation",
