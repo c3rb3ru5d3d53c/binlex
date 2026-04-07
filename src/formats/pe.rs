@@ -387,7 +387,6 @@ impl PE {
                         offset += entry.size();
                         entries.push(Entry::Module(entry));
                     }
-                    valid_index += 1;
                 }
                 x if x == MetadataToken::TypeRef as usize => {
                     for _ in 0..entry_count {
@@ -398,7 +397,6 @@ impl PE {
                         offset += entry.size();
                         entries.push(Entry::TypeRef(entry));
                     }
-                    valid_index += 1;
                 }
                 x if x == MetadataToken::TypeDef as usize => {
                     for _ in 0..entry_count {
@@ -409,7 +407,6 @@ impl PE {
                         offset += entry.size();
                         entries.push(Entry::TypeDef(entry));
                     }
-                    valid_index += 1;
                 }
                 x if x == MetadataToken::Field as usize => {
                     for _ in 0..entry_count {
