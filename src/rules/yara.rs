@@ -887,6 +887,9 @@ fn tokenize_hex_pattern(value: &str) -> Result<Vec<String>, Error> {
         if tokens.is_empty() {
             return Err(Error::Validation("hex pattern must not be empty".to_string()));
         }
+        for token in &tokens {
+            validate_fragment_token(token)?;
+        }
         return Ok(tokens);
     }
 
@@ -896,11 +899,31 @@ fn tokenize_hex_pattern(value: &str) -> Result<Vec<String>, Error> {
         ));
     }
 
-    Ok(normalized
+    let tokens = normalized
         .as_bytes()
         .chunks(2)
         .map(|chunk| std::str::from_utf8(chunk).unwrap().to_string())
-        .collect())
+        .collect::<Vec<_>>();
+    for token in &tokens {
+        validate_fragment_token(token)?;
+    }
+    Ok(tokens)
+}
+
+fn validate_fragment_token(token: &str) -> Result<(), Error> {
+    if token.len() != 2 {
+        return Err(Error::Validation(format!(
+            "fragment_pattern only supports hex byte pairs and wildcard pairs, got: {}",
+            token
+        )));
+    }
+    if token.chars().all(|c| c == '?' || c.is_ascii_hexdigit()) {
+        return Ok(());
+    }
+    Err(Error::Validation(format!(
+        "fragment_pattern only supports hex byte pairs and wildcard pairs, got: {}",
+        token
+    )))
 }
 
 fn validate_text_modifiers(
@@ -1191,6 +1214,17 @@ mod tests {
             .unwrap();
         let error = rule.fragment_pattern(&text, 2, true).unwrap_err();
         assert_eq!(error.to_string(), "fragment_pattern only supports hex patterns");
+    }
+
+    #[test]
+    fn rule_rejects_fragmenting_advanced_yara_hex_syntax() {
+        let mut rule = Rule::new_with_options(Some("invalid_yara_hex"), None);
+        let pattern = rule.add_pattern("de ad [1-2] be ef", None);
+        let error = rule.fragment_pattern(&pattern, 2, true).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "fragment_pattern only supports hex byte pairs and wildcard pairs, got: [1-2]"
+        );
     }
 
     #[test]
