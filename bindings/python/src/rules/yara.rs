@@ -3,10 +3,11 @@ use pyo3::prelude::*;
 use pyo3::types::PyAny;
 use pyo3::types::PyBool;
 
-use ::binlex::yara::{
-    CompiledRuleSet as InnerCompiledRuleSet, MetaValue as InnerMetaValue, Pattern as InnerPattern,
-    PatternKind as InnerPatternKind, Rule as InnerRule, RuleMatch as InnerRuleMatch,
-    RuleSet as InnerRuleSet, ScanResults as InnerScanResults,
+use ::binlex::rules::{
+    YARACompiledRuleSet as InnerCompiledRuleSet, YARAMatch as InnerYARAMatch,
+    YARAMetaValue as InnerMetaValue, YARAPattern as InnerPattern,
+    YARAPatternKind as InnerPatternKind, YARARule as InnerRule,
+    YARARuleSet as InnerRuleSet, YARAScanResults as InnerYARAScanResults,
 };
 
 #[pyclass(name = "Pattern", skip_from_py_object)]
@@ -17,19 +18,19 @@ pub struct Pattern {
 
 #[pymethods]
 impl Pattern {
-    pub fn name(&self) -> String {
+    pub fn get_name(&self) -> String {
         self.inner.name.clone()
     }
 
-    pub fn pattern(&self) -> String {
+    pub fn get_pattern(&self) -> String {
         self.inner.value.clone()
     }
 
-    pub fn comment(&self) -> Option<String> {
+    pub fn get_comment(&self) -> Option<String> {
         self.inner.comment.clone()
     }
 
-    pub fn kind(&self) -> String {
+    pub fn get_kind(&self) -> String {
         match self.inner.kind {
             InnerPatternKind::Hex => "hex".to_string(),
             InnerPatternKind::Text => "text".to_string(),
@@ -38,11 +39,11 @@ impl Pattern {
         }
     }
 
-    pub fn ascii(&self) -> bool {
+    pub fn is_ascii(&self) -> bool {
         self.inner.ascii
     }
 
-    pub fn wide(&self) -> bool {
+    pub fn is_wide(&self) -> bool {
         self.inner.wide
     }
 }
@@ -52,14 +53,14 @@ pub struct Rule {
     inner: std::sync::Mutex<InnerRule>,
 }
 
-#[pyclass(name = "RuleMatch", skip_from_py_object)]
+#[pyclass(name = "YARAMatch", skip_from_py_object)]
 #[derive(Clone)]
-pub struct RuleMatch {
-    inner: InnerRuleMatch,
+pub struct YARAMatch {
+    inner: InnerYARAMatch,
 }
 
 #[pymethods]
-impl RuleMatch {
+impl YARAMatch {
     pub fn rule(&self) -> String {
         self.inner.rule().to_string()
     }
@@ -77,19 +78,19 @@ impl RuleMatch {
     }
 }
 
-#[pyclass(name = "ScanResults")]
-pub struct ScanResults {
-    inner: InnerScanResults,
+#[pyclass(name = "YARAScanResults")]
+pub struct YARAScanResults {
+    inner: InnerYARAScanResults,
 }
 
 #[pymethods]
-impl ScanResults {
-    pub fn matches(&self) -> Vec<RuleMatch> {
+impl YARAScanResults {
+    pub fn get_matches(&self) -> Vec<YARAMatch> {
         self.inner
-            .matches()
+            .get_matches()
             .iter()
             .cloned()
-            .map(|inner| RuleMatch { inner })
+            .map(|inner| YARAMatch { inner })
             .collect()
     }
 }
@@ -101,24 +102,24 @@ pub struct CompiledRuleSet {
 
 #[pymethods]
 impl CompiledRuleSet {
-    pub fn scan(&self, data: Vec<u8>) -> PyResult<ScanResults> {
+    pub fn scan(&self, data: Vec<u8>) -> PyResult<YARAScanResults> {
         let results = self
             .inner
             .lock()
             .unwrap()
             .scan(&data)
             .map_err(|error| PyValueError::new_err(error.to_string()))?;
-        Ok(ScanResults { inner: results })
+        Ok(YARAScanResults { inner: results })
     }
 
-    pub fn scan_file(&self, path: String) -> PyResult<ScanResults> {
+    pub fn scan_path(&self, path: String) -> PyResult<YARAScanResults> {
         let results = self
             .inner
             .lock()
             .unwrap()
-            .scan_file(path)
+            .scan_path(path)
             .map_err(|error| PyValueError::new_err(error.to_string()))?;
-        Ok(ScanResults { inner: results })
+        Ok(YARAScanResults { inner: results })
     }
 }
 
@@ -151,11 +152,11 @@ impl RuleSet {
         self.inner.lock().unwrap().clear();
     }
 
-    pub fn rules(&self) -> Vec<Rule> {
+    pub fn get_rules(&self) -> Vec<Rule> {
         self.inner
             .lock()
             .unwrap()
-            .rules()
+            .get_rules()
             .iter()
             .cloned()
             .map(|inner| Rule {
@@ -180,24 +181,24 @@ impl RuleSet {
         })
     }
 
-    pub fn scan(&self, data: Vec<u8>) -> PyResult<ScanResults> {
+    pub fn scan(&self, data: Vec<u8>) -> PyResult<YARAScanResults> {
         let results = self
             .inner
             .lock()
             .unwrap()
             .scan(&data)
             .map_err(|error| PyValueError::new_err(error.to_string()))?;
-        Ok(ScanResults { inner: results })
+        Ok(YARAScanResults { inner: results })
     }
 
-    pub fn scan_file(&self, path: String) -> PyResult<ScanResults> {
+    pub fn scan_path(&self, path: String) -> PyResult<YARAScanResults> {
         let results = self
             .inner
             .lock()
             .unwrap()
-            .scan_file(path)
+            .scan_path(path)
             .map_err(|error| PyValueError::new_err(error.to_string()))?;
-        Ok(ScanResults { inner: results })
+        Ok(YARAScanResults { inner: results })
     }
 }
 
@@ -214,56 +215,92 @@ impl Rule {
         }
     }
 
-    pub fn name(&self) -> String {
-        self.inner.lock().unwrap().name().to_string()
+    pub fn get_name(&self) -> String {
+        self.inner.lock().unwrap().get_name().to_string()
     }
 
-    pub fn comment(&self) -> Option<String> {
+    pub fn get_comment(&self) -> Option<String> {
         self.inner
             .lock()
             .unwrap()
-            .comment()
+            .get_comment()
             .map(ToString::to_string)
     }
 
-    pub fn comment_set(&self, value: String) {
-        self.inner.lock().unwrap().comment_set(&value);
+    pub fn add_import(&self, value: String) {
+        self.inner.lock().unwrap().add_import(&value);
     }
 
-    pub fn comment_clear(&self) {
-        self.inner.lock().unwrap().comment_clear();
+    pub fn remove_import(&self, value: String) -> bool {
+        self.inner.lock().unwrap().remove_import(&value)
+    }
+
+    pub fn clear_imports(&self) {
+        self.inner.lock().unwrap().clear_imports();
+    }
+
+    pub fn add_tag(&self, value: String) {
+        self.inner.lock().unwrap().add_tag(&value);
+    }
+
+    pub fn remove_tag(&self, value: String) -> bool {
+        self.inner.lock().unwrap().remove_tag(&value)
+    }
+
+    pub fn clear_tags(&self) {
+        self.inner.lock().unwrap().clear_tags();
+    }
+
+    #[pyo3(signature = (value=true))]
+    pub fn set_global(&self, value: bool) {
+        self.inner.lock().unwrap().set_global(value);
+    }
+
+    #[pyo3(signature = (value=true))]
+    pub fn set_private(&self, value: bool) {
+        self.inner.lock().unwrap().set_private(value);
+    }
+
+    pub fn is_global(&self) -> bool {
+        self.inner.lock().unwrap().is_global()
+    }
+
+    pub fn is_private(&self) -> bool {
+        self.inner.lock().unwrap().is_private()
+    }
+
+    pub fn set_comment(&self, value: String) {
+        self.inner.lock().unwrap().set_comment(&value);
+    }
+
+    pub fn clear_comment(&self) {
+        self.inner.lock().unwrap().clear_comment();
     }
 
     pub fn check(&self) -> bool {
         self.inner.lock().unwrap().check()
     }
 
-    pub fn meta(&self, key: String, value: &Bound<'_, PyAny>) -> PyResult<()> {
+    pub fn set_metadata(&self, key: String, value: &Bound<'_, PyAny>) -> PyResult<()> {
         let value = py_meta_value(value)?;
-        self.inner.lock().unwrap().meta(&key, value);
+        self.inner.lock().unwrap().set_metadata(&key, value);
         Ok(())
     }
 
-    pub fn meta_set(&self, key: String, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        let value = py_meta_value(value)?;
-        self.inner.lock().unwrap().meta_set(&key, value);
-        Ok(())
+    pub fn remove_metadata(&self, key: String) -> bool {
+        self.inner.lock().unwrap().remove_metadata(&key)
     }
 
-    pub fn meta_remove(&self, key: String) -> bool {
-        self.inner.lock().unwrap().meta_remove(&key)
+    pub fn clear_metadata(&self) {
+        self.inner.lock().unwrap().clear_metadata();
     }
 
-    pub fn meta_clear(&self) {
-        self.inner.lock().unwrap().meta_clear();
-    }
-
-    pub fn metadata(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+    pub fn get_metadata(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let values = self
             .inner
             .lock()
             .unwrap()
-            .metadata()
+            .get_metadata()
             .iter()
             .map(|(key, value)| (key.clone(), meta_value_to_pyobject(py, value)))
             .collect::<Vec<_>>();
@@ -271,117 +308,122 @@ impl Rule {
     }
 
     #[pyo3(signature = (pattern, comment=None))]
-    pub fn pattern(&self, pattern: String, comment: Option<String>) {
+    pub fn add_pattern(&self, pattern: String, comment: Option<String>) -> String {
         self.inner
             .lock()
             .unwrap()
-            .pattern(&pattern, comment.as_deref());
+            .add_pattern(&pattern, comment.as_deref())
     }
 
-    #[pyo3(signature = (pattern, comment=None))]
-    pub fn pattern_add(&self, pattern: String, comment: Option<String>) -> String {
-        self.inner
-            .lock()
-            .unwrap()
-            .pattern_add(&pattern, comment.as_deref())
-    }
-
-    #[pyo3(signature = (text, ascii=true, wide=false, comment=None))]
-    pub fn text_add(
+    #[pyo3(signature = (
+        text,
+        ascii=true,
+        wide=false,
+        nocase=false,
+        xor=false,
+        base64=false,
+        base64wide=false,
+        fullword=false,
+        private=false,
+        comment=None
+    ))]
+    pub fn add_text(
         &self,
         text: String,
         ascii: bool,
         wide: bool,
+        nocase: bool,
+        xor: bool,
+        base64: bool,
+        base64wide: bool,
+        fullword: bool,
+        private: bool,
         comment: Option<String>,
-    ) -> String {
+    ) -> PyResult<String> {
         self.inner
             .lock()
             .unwrap()
-            .text_add(&text, ascii, wide, comment.as_deref())
+            .add_text(
+                &text,
+                ascii,
+                wide,
+                nocase,
+                xor,
+                base64,
+                base64wide,
+                fullword,
+                private,
+                comment.as_deref(),
+            )
+            .map_err(|error| PyValueError::new_err(error.to_string()))
     }
 
     #[pyo3(signature = (regex, comment=None))]
-    pub fn regex_add(&self, regex: String, comment: Option<String>) -> String {
+    pub fn add_regex(&self, regex: String, comment: Option<String>) -> String {
         self.inner
             .lock()
             .unwrap()
-            .regex_add(&regex, comment.as_deref())
+            .add_regex(&regex, comment.as_deref())
     }
 
     #[pyo3(signature = (value, comment=None))]
-    pub fn string_add(&self, value: String, comment: Option<String>) -> String {
+    pub fn add_string(&self, value: String, comment: Option<String>) -> String {
         self.inner
             .lock()
             .unwrap()
-            .string_add(&value, comment.as_deref())
+            .add_string(&value, comment.as_deref())
     }
 
-    pub fn pattern_update(
+    pub fn update_pattern(
         &self,
         name: String,
         pattern: Option<String>,
         comment: Option<Option<String>>,
     ) -> bool {
-        self.inner.lock().unwrap().pattern_update(
+        self.inner.lock().unwrap().update_pattern(
             &name,
             pattern.as_deref(),
             comment.as_ref().map(|comment| comment.as_deref()),
         )
     }
 
-    pub fn remove(&self, name: String) -> bool {
-        self.inner.lock().unwrap().remove(&name)
+    pub fn remove_pattern(&self, name: String) -> bool {
+        self.inner.lock().unwrap().remove_pattern(&name)
     }
 
-    pub fn pattern_clear(&self) {
-        self.inner.lock().unwrap().pattern_clear();
+    pub fn clear_patterns(&self) {
+        self.inner.lock().unwrap().clear_patterns();
     }
 
-    pub fn patterns(&self) -> Vec<Pattern> {
+    pub fn get_patterns(&self) -> Vec<Pattern> {
         self.inner
             .lock()
             .unwrap()
-            .patterns()
+            .get_patterns()
             .iter()
             .cloned()
             .map(|inner| Pattern { inner })
             .collect()
     }
 
-    pub fn condition(&self, value: String) {
-        self.inner.lock().unwrap().condition(&value);
+    pub fn set_condition(&self, value: String) {
+        self.inner.lock().unwrap().set_condition(&value);
     }
 
-    pub fn condition_clear(&self) {
-        self.inner.lock().unwrap().condition_clear();
+    pub fn add_condition(&self, value: String) {
+        self.inner.lock().unwrap().add_condition(&value);
     }
 
-    pub fn condition_value(&self) -> Option<String> {
+    pub fn clear_condition(&self) {
+        self.inner.lock().unwrap().clear_condition();
+    }
+
+    pub fn get_condition(&self) -> Option<String> {
         self.inner
             .lock()
             .unwrap()
-            .condition_value()
+            .get_condition()
             .map(ToString::to_string)
-    }
-
-    pub fn condition_all_of_them(&self) {
-        self.inner.lock().unwrap().condition_all_of_them();
-    }
-
-    pub fn condition_number_of_them(&self, n: usize) {
-        self.inner.lock().unwrap().condition_number_of_them(n);
-    }
-
-    pub fn condition_any_of(&self, names: Vec<String>) {
-        self.inner.lock().unwrap().condition_any_of(&names);
-    }
-
-    pub fn condition_all_of(&self, names: Vec<String>) {
-        self.inner.lock().unwrap().condition_all_of(&names);
-    }
-
-    pub fn condition_at_least(&self, n: usize, names: Vec<String>) {
-        self.inner.lock().unwrap().condition_at_least(n, &names);
     }
 
     pub fn render(&self) -> String {
@@ -412,24 +454,24 @@ impl Rule {
         })
     }
 
-    pub fn scan(&self, data: Vec<u8>) -> PyResult<ScanResults> {
+    pub fn scan(&self, data: Vec<u8>) -> PyResult<YARAScanResults> {
         let results = self
             .inner
             .lock()
             .unwrap()
             .scan(&data)
             .map_err(|error| PyValueError::new_err(error.to_string()))?;
-        Ok(ScanResults { inner: results })
+        Ok(YARAScanResults { inner: results })
     }
 
-    pub fn scan_file(&self, path: String) -> PyResult<ScanResults> {
+    pub fn scan_path(&self, path: String) -> PyResult<YARAScanResults> {
         let results = self
             .inner
             .lock()
             .unwrap()
-            .scan_file(path)
+            .scan_path(path)
             .map_err(|error| PyValueError::new_err(error.to_string()))?;
-        Ok(ScanResults { inner: results })
+        Ok(YARAScanResults { inner: results })
     }
 
     fn __str__(&self) -> String {
@@ -456,13 +498,18 @@ fn py_meta_value(value: &Bound<'_, PyAny>) -> PyResult<InnerMetaValue> {
 }
 
 #[pymodule]
-pub fn yara_init(m: &Bound<'_, PyModule>) -> PyResult<()> {
+#[pyo3(name = "rules")]
+pub fn rules_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Pattern>()?;
     m.add_class::<Rule>()?;
-    m.add_class::<RuleMatch>()?;
-    m.add_class::<ScanResults>()?;
+    m.add_class::<YARAMatch>()?;
+    m.add_class::<YARAScanResults>()?;
     m.add_class::<CompiledRuleSet>()?;
     m.add_class::<RuleSet>()?;
+    py.import("sys")?
+        .getattr("modules")?
+        .set_item("binlex_bindings.binlex.rules", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.rules")?;
     Ok(())
 }
 

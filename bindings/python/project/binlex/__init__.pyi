@@ -11,10 +11,10 @@ from . import hex, math
 from . import indexing
 from . import databases
 from . import metadata
+from . import rules
 from . import util
 from binlex.core import Magic
 from . import controlflow, disassemblers, formats, lifters, storage
-from . import yara
 
 __all__ = [
     "Architecture",
@@ -35,7 +35,7 @@ __all__ = [
     "lifters",
     "math",
     "metadata",
+    "rules",
     "storage",
     "util",
-    "yara",
 ]

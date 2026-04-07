@@ -37,9 +37,9 @@ pub mod indexing;
 pub mod lifters;
 pub mod math;
 pub mod metadata;
+pub mod rules;
 pub mod storage;
 pub mod util;
-pub mod yara;
 
 pub use config::Config;
 pub use core::Architecture;
@@ -62,9 +62,9 @@ use crate::indexing::indexing_init;
 use crate::lifters::lifters_init;
 use crate::math::{entropy_init, math_init};
 use crate::metadata::metadata_init;
+use crate::rules::rules_init;
 use crate::storage::storage_init;
 use crate::util::util_init;
-use crate::yara::yara_init;
 use ::binlex::runtime::{register_host_runtime, HostRuntime};
 
 use pyo3::{prelude::*, types::PyModule, wrap_pymodule};
@@ -100,6 +100,6 @@ fn binlex(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Magic>()?;
     m.add_wrapped(wrap_pymodule!(util_init))?;
     m.add_wrapped(wrap_pymodule!(storage_init))?;
-    m.add_wrapped(wrap_pymodule!(yara_init))?;
+    m.add_wrapped(wrap_pymodule!(rules_init))?;
     Ok(())
 }

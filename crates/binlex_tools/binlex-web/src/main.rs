@@ -17,7 +17,7 @@ use binlex::search::{
     query_completion_specs, query_score_matches,
 };
 use binlex::server::request_id::RequestId;
-use binlex::yara::Rule;
+use binlex::rules::YARARule as Rule;
 use binlex::{Architecture, Config, Magic};
 use chrono::Utc;
 use clap::Parser;

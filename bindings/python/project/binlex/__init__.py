@@ -46,9 +46,9 @@ _LAZY_SUBMODULES = {
     "lifters",
     "math",
     "metadata",
+    "rules",
     "storage",
     "util",
-    "yara",
 }
 
 
@@ -79,7 +79,7 @@ __all__ = [
     "lifters",
     "math",
     "metadata",
+    "rules",
     "storage",
     "util",
-    "yara",
 ]
