@@ -1,6 +1,7 @@
 mod yara;
 
 pub use yara::CompiledRuleSet as YARACompiledRuleSet;
+pub use yara::Condition as YARACondition;
 pub use yara::Error as YARAError;
 pub use yara::Match as YARAMatch;
 pub use yara::MetaValue as YARAMetaValue;
