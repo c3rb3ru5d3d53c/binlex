@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from binlex_bindings.binlex.rules import CompiledRuleSet as _CompiledRuleSetBinding
+from binlex_bindings.binlex.rules import Condition as _ConditionBinding
 from binlex_bindings.binlex.rules import Pattern as _PatternBinding
 from binlex_bindings.binlex.rules import Rule as _RuleBinding
 from binlex_bindings.binlex.rules import YARAMatch as _YARAMatchBinding
@@ -33,6 +34,14 @@ class Pattern:
 
     def is_wide(self) -> bool:
         return self._inner.is_wide()
+
+
+class Condition:
+    def __init__(self, binding: _ConditionBinding) -> None:
+        self._inner = binding
+
+    def __str__(self) -> str:
+        return str(self._inner)
 
 
 class YARAMatch:
@@ -148,6 +157,9 @@ class Rule:
     def add_pattern(self, pattern: str, comment: str | None = None) -> str:
         return self._inner.add_pattern(pattern, comment)
 
+    def fragment_pattern(self, name: str, parts: int) -> list[str]:
+        return self._inner.fragment_pattern(name, parts)
+
     def add_text(
         self,
         text: str,
@@ -197,20 +209,38 @@ class Rule:
     def get_patterns(self) -> list[Pattern]:
         return [Pattern(binding) for binding in self._inner.get_patterns()]
 
-    def set_condition(self, value: str) -> "Rule":
-        self._inner.set_condition(value)
+    def condition(self, value: str) -> Condition:
+        return Condition(self._inner.condition(value))
+
+    def condition_at_least(self, minimum: int, patterns: list[str]) -> Condition:
+        return Condition(self._inner.condition_at_least(minimum, patterns))
+
+    def condition_and(self, *values: Condition) -> Condition:
+        return Condition(self._inner.condition_and([value._inner for value in values]))
+
+    def condition_or(self, *values: Condition) -> Condition:
+        return Condition(self._inner.condition_or([value._inner for value in values]))
+
+    def condition_not(self, value: Condition) -> Condition:
+        return Condition(self._inner.condition_not(value._inner))
+
+    def set_condition(self, value: Condition) -> "Rule":
+        self._inner.set_condition(value._inner)
         return self
 
-    def add_condition(self, value: str) -> "Rule":
-        self._inner.add_condition(value)
+    def add_condition(self, value: Condition) -> "Rule":
+        self._inner.add_condition(value._inner)
         return self
 
     def clear_condition(self) -> "Rule":
         self._inner.clear_condition()
         return self
 
-    def get_condition(self) -> str | None:
-        return self._inner.get_condition()
+    def get_condition(self) -> Condition | None:
+        binding = self._inner.get_condition()
+        if binding is None:
+            return None
+        return Condition(binding)
 
     def add_string(self, value: str, comment: str | None = None) -> str:
         return self._inner.add_string(value, comment)
@@ -273,16 +303,19 @@ class RuleSet:
         return YARAScanResults(self._inner.scan_path(str(path)))
 
 YARA = RuleSet
+YARACondition = Condition
 YARARule = Rule
 YARAPattern = Pattern
 YARACompiledRuleSet = CompiledRuleSet
 
 __all__ = [
     "CompiledRuleSet",
+    "Condition",
     "Pattern",
     "Rule",
     "RuleSet",
     "YARA",
+    "YARACondition",
     "YARARule",
     "YARAPattern",
     "YARAMatch",

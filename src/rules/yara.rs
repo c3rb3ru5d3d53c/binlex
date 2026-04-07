@@ -113,7 +113,7 @@ pub struct Rule {
     comment: Option<String>,
     metadata: Vec<(String, MetaValue)>,
     patterns: Vec<Pattern>,
-    condition: Option<String>,
+    condition: Option<Condition>,
     next_pattern_index: usize,
     next_text_index: usize,
     next_regex_index: usize,
@@ -123,6 +123,14 @@ pub struct Rule {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct RuleSet {
     rules: Vec<Rule>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Condition {
+    Raw(String),
+    And(Vec<Condition>),
+    Or(Vec<Condition>),
+    Not(Box<Condition>),
 }
 
 #[derive(Clone)]
@@ -176,6 +184,41 @@ impl From<ScanError> for Error {
 impl Default for Rule {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl From<String> for Condition {
+    fn from(value: String) -> Self {
+        Self::Raw(value.trim().to_string())
+    }
+}
+
+impl From<&str> for Condition {
+    fn from(value: &str) -> Self {
+        Self::Raw(value.trim().to_string())
+    }
+}
+
+impl From<&String> for Condition {
+    fn from(value: &String) -> Self {
+        Self::Raw(value.trim().to_string())
+    }
+}
+
+impl fmt::Display for Condition {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.render())
+    }
+}
+
+impl Condition {
+    pub fn render(&self) -> String {
+        match self {
+            Self::Raw(value) => value.trim().to_string(),
+            Self::And(parts) => render_condition_group("and", parts),
+            Self::Or(parts) => render_condition_group("or", parts),
+            Self::Not(part) => format!("not ({})", part.render()),
+        }
     }
 }
 
@@ -473,22 +516,119 @@ impl Rule {
         &self.patterns
     }
 
-    pub fn set_condition(&mut self, value: &str) -> &mut Self {
-        self.condition = Some(value.trim().to_string());
+    pub fn fragment_pattern(&mut self, name: &str, parts: usize) -> Result<Vec<String>, Error> {
+        if parts < 2 {
+            return Err(Error::Validation(
+                "fragment_pattern requires at least 2 parts".to_string(),
+            ));
+        }
+
+        let source = self
+            .patterns
+            .iter()
+            .find(|pattern| pattern.name == name.trim())
+            .cloned()
+            .ok_or_else(|| Error::Validation(format!("pattern not found: {}", name.trim())))?;
+
+        if source.kind != PatternKind::Hex {
+            return Err(Error::Validation(
+                "fragment_pattern only supports hex patterns".to_string(),
+            ));
+        }
+
+        let tokens = tokenize_hex_pattern(&source.value)?;
+        if tokens.len() < parts {
+            return Err(Error::Validation(format!(
+                "cannot fragment {} hex tokens into {} parts",
+                tokens.len(),
+                parts
+            )));
+        }
+
+        let base = tokens.len() / parts;
+        let remainder = tokens.len() % parts;
+        let mut start = 0usize;
+        let mut names = Vec::with_capacity(parts);
+
+        for index in 0..parts {
+            let len = base + usize::from(index < remainder);
+            let end = start + len;
+            let fragment_name = format!("{}_fragment_{}", source.name, index);
+            let fragment_value = tokens[start..end].join(" ");
+            self.patterns.push(Pattern {
+                name: fragment_name.clone(),
+                value: fragment_value,
+                comment: source.comment.clone(),
+                kind: PatternKind::Hex,
+                ascii: false,
+                wide: false,
+                nocase: false,
+                xor: false,
+                base64: false,
+                base64wide: false,
+                fullword: false,
+                private: false,
+            });
+            names.push(fragment_name);
+            start = end;
+        }
+
+        Ok(names)
+    }
+
+    pub fn condition<T>(&self, value: T) -> Condition
+    where
+        T: Into<Condition>,
+    {
+        value.into()
+    }
+
+    pub fn condition_at_least<S>(&self, minimum: usize, patterns: Vec<S>) -> Condition
+    where
+        S: AsRef<str>,
+    {
+        let patterns = patterns
+            .iter()
+            .map(|pattern| pattern.as_ref().trim())
+            .filter(|pattern| !pattern.is_empty())
+            .collect::<Vec<_>>();
+        Condition::Raw(format!("{} of ({})", minimum, patterns.join(", ")))
+    }
+
+    pub fn condition_and(&self, parts: Vec<Condition>) -> Condition {
+        Condition::And(parts)
+    }
+
+    pub fn condition_or(&self, parts: Vec<Condition>) -> Condition {
+        Condition::Or(parts)
+    }
+
+    pub fn condition_not(&self, part: Condition) -> Condition {
+        Condition::Not(Box::new(part))
+    }
+
+    pub fn set_condition<T>(&mut self, value: T) -> &mut Self
+    where
+        T: Into<Condition>,
+    {
+        self.condition = Some(value.into());
         self
     }
 
-    pub fn add_condition(&mut self, value: &str) -> &mut Self {
-        let value = value.trim();
-        if value.is_empty() {
+    pub fn add_condition<T>(&mut self, value: T) -> &mut Self
+    where
+        T: Into<Condition>,
+    {
+        let value = value.into();
+        if value.render().trim().is_empty() {
             return self;
         }
 
         self.condition = match self.condition.take() {
-            Some(existing) if !existing.trim().is_empty() => {
-                Some(format!("({existing}) and ({value})"))
+            Some(existing) if !existing.render().trim().is_empty() => {
+                Some(Condition::And(vec![existing, value]))
             }
-            _ => Some(value.to_string()),
+            _ => Some(value),
         };
         self
     }
@@ -498,8 +638,12 @@ impl Rule {
         self
     }
 
-    pub fn get_condition(&self) -> Option<&str> {
-        self.condition.as_deref()
+    pub fn get_condition(&self) -> Option<&Condition> {
+        self.condition.as_ref()
+    }
+
+    pub fn get_condition_text(&self) -> Option<String> {
+        self.condition.as_ref().map(Condition::render)
     }
 
     pub fn render(&self) -> String {
@@ -554,7 +698,10 @@ impl Rule {
         output.push_str("  condition:\n");
         output.push_str(&format!(
             "    {}\n",
-            self.condition.as_deref().unwrap_or("all of them")
+            self.condition
+                .as_ref()
+                .map(Condition::render)
+                .unwrap_or_else(|| "all of them".to_string())
         ));
         output.push('}');
         output
@@ -702,6 +849,27 @@ fn escape_yara_regex(value: &str) -> String {
     value.replace('\\', "\\\\").replace('/', "\\/")
 }
 
+fn render_condition_group(operator: &str, parts: &[Condition]) -> String {
+    let parts = parts
+        .iter()
+        .map(|part| format!("({})", part.render()))
+        .collect::<Vec<_>>();
+    parts.join(&format!(" {} ", operator))
+}
+
+fn tokenize_hex_pattern(value: &str) -> Result<Vec<String>, Error> {
+    let tokens = value
+        .split_whitespace()
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+    if tokens.is_empty() {
+        return Err(Error::Validation("hex pattern must not be empty".to_string()));
+    }
+    Ok(tokens)
+}
+
 fn validate_text_modifiers(
     nocase: bool,
     xor: bool,
@@ -806,7 +974,7 @@ fn scan_results_from_yara_x(results: yara_x::ScanResults<'_, '_>) -> ScanResults
 
 #[cfg(test)]
 mod tests {
-    use super::{Rule, RuleSet};
+    use super::{Condition, Rule, RuleSet};
 
     #[test]
     fn rule_defaults_name_and_all_of_them_condition() {
@@ -863,7 +1031,7 @@ mod tests {
     fn rule_supports_condition_clear() {
         let mut rule = Rule::new_with_options(Some("condition_test"), None);
         rule.set_condition("1 of them");
-        assert_eq!(rule.get_condition(), Some("1 of them"));
+        assert_eq!(rule.get_condition_text().as_deref(), Some("1 of them"));
         rule.clear_condition();
         assert_eq!(rule.get_condition(), None);
         assert!(rule.render().contains("condition:\n    all of them"));
@@ -875,9 +1043,90 @@ mod tests {
         rule.add_condition("1 of them");
         rule.add_condition("filesize < 5MB");
         assert_eq!(
-            rule.get_condition(),
+            rule.get_condition_text().as_deref(),
             Some("(1 of them) and (filesize < 5MB)")
         );
+    }
+
+    #[test]
+    fn rule_supports_nested_condition_builders() {
+        let mut rule = Rule::new_with_options(Some("nested"), None);
+        let a = rule.add_pattern("AA BB", None);
+        let b = rule.add_pattern("CC DD", None);
+        let c = rule.add_pattern("EE FF", None);
+        let condition = rule.condition_and(vec![
+            rule.condition_or(vec![rule.condition(a.as_str()), rule.condition(b.as_str())]),
+            rule.condition_not(rule.condition(c.as_str())),
+            rule.condition("filesize < 1MB"),
+        ]);
+        rule.set_condition(condition);
+        assert_eq!(
+            rule.get_condition(),
+            Some(&Condition::And(vec![
+                Condition::Or(vec![
+                    Condition::Raw(a.clone()),
+                    Condition::Raw(b.clone())
+                ]),
+                Condition::Not(Box::new(Condition::Raw(c.clone()))),
+                Condition::Raw("filesize < 1MB".to_string())
+            ]))
+        );
+        assert_eq!(
+            rule.get_condition_text().as_deref(),
+            Some("(($chromosome_0) or ($chromosome_1)) and (not ($chromosome_2)) and (filesize < 1MB)")
+        );
+    }
+
+    #[test]
+    fn rule_can_fragment_hex_patterns() {
+        let mut rule = Rule::new_with_options(Some("fragmented"), None);
+        let pattern = rule.add_pattern("48 8B 05 11 22 33 44 48 85 C0", Some("anchor"));
+        let fragments = rule.fragment_pattern(&pattern, 3).unwrap();
+        assert_eq!(
+            fragments,
+            vec![
+                "$chromosome_0_fragment_0".to_string(),
+                "$chromosome_0_fragment_1".to_string(),
+                "$chromosome_0_fragment_2".to_string()
+            ]
+        );
+        let rendered = rule.render();
+        assert!(rendered.contains("$chromosome_0_fragment_0 = { 48 8B 05 11 }"));
+        assert!(rendered.contains("$chromosome_0_fragment_1 = { 22 33 44 }"));
+        assert!(rendered.contains("$chromosome_0_fragment_2 = { 48 85 C0 }"));
+    }
+
+    #[test]
+    fn rule_supports_condition_at_least() {
+        let mut rule = Rule::new_with_options(Some("at_least"), None);
+        let pattern = rule.add_pattern("48 8B 05 11 22 33 44 48 85 C0", None);
+        let fragments = rule.fragment_pattern(&pattern, 3).unwrap();
+        rule.set_condition(rule.condition_at_least(2, fragments.clone()));
+        assert_eq!(
+            rule.get_condition_text().as_deref(),
+            Some("2 of ($chromosome_0_fragment_0, $chromosome_0_fragment_1, $chromosome_0_fragment_2)")
+        );
+    }
+
+    #[test]
+    fn rule_rejects_fragmenting_non_hex_patterns() {
+        let mut rule = Rule::new_with_options(Some("invalid_fragment"), None);
+        let text = rule
+            .add_text(
+                "powershell",
+                true,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                None,
+            )
+            .unwrap();
+        let error = rule.fragment_pattern(&text, 2).unwrap_err();
+        assert_eq!(error.to_string(), "fragment_pattern only supports hex patterns");
     }
 
     #[test]

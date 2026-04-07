@@ -4,9 +4,9 @@ use pyo3::types::PyAny;
 use pyo3::types::PyBool;
 
 use ::binlex::rules::{
-    YARACompiledRuleSet as InnerCompiledRuleSet, YARAMatch as InnerYARAMatch,
-    YARAMetaValue as InnerMetaValue, YARAPattern as InnerPattern,
-    YARAPatternKind as InnerPatternKind, YARARule as InnerRule,
+    YARACompiledRuleSet as InnerCompiledRuleSet, YARACondition as InnerCondition,
+    YARAMatch as InnerYARAMatch, YARAMetaValue as InnerMetaValue,
+    YARAPattern as InnerPattern, YARAPatternKind as InnerPatternKind, YARARule as InnerRule,
     YARARuleSet as InnerRuleSet, YARAScanResults as InnerYARAScanResults,
 };
 
@@ -51,6 +51,19 @@ impl Pattern {
 #[pyclass(name = "Rule")]
 pub struct Rule {
     inner: std::sync::Mutex<InnerRule>,
+}
+
+#[pyclass(name = "Condition", skip_from_py_object)]
+#[derive(Clone)]
+pub struct Condition {
+    inner: InnerCondition,
+}
+
+#[pymethods]
+impl Condition {
+    fn __str__(&self) -> String {
+        self.inner.render()
+    }
 }
 
 #[pyclass(name = "YARAMatch", skip_from_py_object)]
@@ -315,6 +328,14 @@ impl Rule {
             .add_pattern(&pattern, comment.as_deref())
     }
 
+    pub fn fragment_pattern(&self, name: String, parts: usize) -> PyResult<Vec<String>> {
+        self.inner
+            .lock()
+            .unwrap()
+            .fragment_pattern(&name, parts)
+            .map_err(|error| PyValueError::new_err(error.to_string()))
+    }
+
     #[pyo3(signature = (
         text,
         ascii=true,
@@ -406,24 +427,67 @@ impl Rule {
             .collect()
     }
 
-    pub fn set_condition(&self, value: String) {
-        self.inner.lock().unwrap().set_condition(&value);
+    pub fn condition(&self, value: String) -> Condition {
+        Condition {
+            inner: self.inner.lock().unwrap().condition(value),
+        }
     }
 
-    pub fn add_condition(&self, value: String) {
-        self.inner.lock().unwrap().add_condition(&value);
+    pub fn condition_at_least(&self, minimum: usize, patterns: Vec<String>) -> Condition {
+        Condition {
+            inner: self
+                .inner
+                .lock()
+                .unwrap()
+                .condition_at_least(minimum, patterns),
+        }
+    }
+
+    pub fn condition_and(&self, values: Vec<PyRef<'_, Condition>>) -> Condition {
+        Condition {
+            inner: self
+                .inner
+                .lock()
+                .unwrap()
+                .condition_and(values.into_iter().map(|value| value.inner.clone()).collect()),
+        }
+    }
+
+    pub fn condition_or(&self, values: Vec<PyRef<'_, Condition>>) -> Condition {
+        Condition {
+            inner: self
+                .inner
+                .lock()
+                .unwrap()
+                .condition_or(values.into_iter().map(|value| value.inner.clone()).collect()),
+        }
+    }
+
+    pub fn condition_not(&self, value: &Condition) -> Condition {
+        Condition {
+            inner: self.inner.lock().unwrap().condition_not(value.inner.clone()),
+        }
+    }
+
+    pub fn set_condition(&self, value: &Condition) {
+        self.inner.lock().unwrap().set_condition(value.inner.clone());
+    }
+
+    pub fn add_condition(&self, value: &Condition) {
+        self.inner.lock().unwrap().add_condition(value.inner.clone());
     }
 
     pub fn clear_condition(&self) {
         self.inner.lock().unwrap().clear_condition();
     }
 
-    pub fn get_condition(&self) -> Option<String> {
+    pub fn get_condition(&self) -> Option<Condition> {
         self.inner
             .lock()
             .unwrap()
             .get_condition()
-            .map(ToString::to_string)
+            .cloned()
+            .map(|inner| Condition { inner })
     }
 
     pub fn render(&self) -> String {
@@ -502,6 +566,7 @@ fn py_meta_value(value: &Bound<'_, PyAny>) -> PyResult<InnerMetaValue> {
 pub fn rules_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Pattern>()?;
     m.add_class::<Rule>()?;
+    m.add_class::<Condition>()?;
     m.add_class::<YARAMatch>()?;
     m.add_class::<YARAScanResults>()?;
     m.add_class::<CompiledRuleSet>()?;
