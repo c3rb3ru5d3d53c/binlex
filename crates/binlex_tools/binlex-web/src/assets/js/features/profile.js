@@ -442,7 +442,7 @@ async function regenerateProfileRecoveryCodes() {
 async function deleteProfile() {
   setInlineError("profile-delete-error", "");
   try {
-    await postJson("/api/v1/profile/delete", {
+    await deleteJson("/api/v1/profile", {
       password: document.getElementById("profile-delete-password")?.value || "",
     });
     window.location.reload();

@@ -4,7 +4,7 @@ use super::types::{DEFAULT_INDEX_GRAPH_COLLECTIONS, Error, SearchResult};
 use crate::Architecture;
 use crate::indexing::Collection;
 use crate::math::similarity::cosine;
-use crate::search::{Query, QueryCollection, QueryError, SearchRoot, query_score_matches};
+use crate::query::{Query, QueryCollection, QueryError, SearchRoot, query_score_matches};
 
 #[derive(Clone, Debug)]
 pub enum StreamPlan {

@@ -110,7 +110,7 @@ async fn get_collection_corpora_api(
 
 #[utoipa::path(
     post,
-    path = "/api/v1/corpora/collection/add",
+    path = "/api/v1/corpora/collection",
     tag = "Corpora",
     security(("bearer_auth" = [])),
     request_body = CollectionCorpusActionRequest,
@@ -147,8 +147,8 @@ async fn add_collection_corpus_api(
 }
 
 #[utoipa::path(
-    post,
-    path = "/api/v1/corpora/collection/remove",
+    delete,
+    path = "/api/v1/corpora/collection",
     tag = "Corpora",
     security(("bearer_auth" = [])),
     request_body = CollectionCorpusActionRequest,
@@ -170,111 +170,6 @@ async fn remove_collection_corpus_api(
             request.address,
             &request.corpus,
         )
-    })
-    .await
-    .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?
-    .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?;
-    Ok(Json(TagsActionResponse { ok: true }))
-}
-
-#[utoipa::path(
-    get,
-    path = "/api/v1/tags/sample",
-    tag = "Tags",
-    security(("bearer_auth" = [])),
-    params(SampleTagsParams),
-    responses((status = 200, description = "Sample tags.", body = TagsResponse))
-)]
-async fn get_sample_tags(
-    State(state): State<Arc<AppState>>,
-    Extension(request_id): Extension<RequestId>,
-    Query(params): Query<SampleTagsParams>,
-) -> Result<Json<TagsResponse>, AppError> {
-    let sha256 = params.sha256.clone();
-    let state_for_work = state.clone();
-    let tags = task::spawn_blocking(move || state_for_work.index.sample_tag_list(&sha256))
-        .await
-        .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?
-        .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?;
-    Ok(Json(TagsResponse {
-        sha256: params.sha256,
-        collection: None,
-        address: None,
-        tags: tags
-            .into_iter()
-            .map(|tag| metadata_item_response(state.as_ref(), &tag, "", ""))
-            .collect(),
-    }))
-}
-
-#[utoipa::path(
-    post,
-    path = "/api/v1/tags/sample/add",
-    tag = "Tags",
-    security(("bearer_auth" = [])),
-    request_body = SampleTagActionRequest,
-    responses((status = 200, description = "Added a sample tag.", body = TagsActionResponse))
-)]
-async fn add_sample_tag(
-    State(state): State<Arc<AppState>>,
-    Extension(request_id): Extension<RequestId>,
-    Json(request): Json<SampleTagActionRequest>,
-) -> Result<Json<TagsActionResponse>, AppError> {
-    let state_for_work = state.clone();
-    task::spawn_blocking(move || {
-        state_for_work
-            .index
-            .sample_tag_add(&request.sha256, &request.tag)
-    })
-    .await
-    .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?
-    .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?;
-    Ok(Json(TagsActionResponse { ok: true }))
-}
-
-#[utoipa::path(
-    post,
-    path = "/api/v1/tags/sample/remove",
-    tag = "Tags",
-    security(("bearer_auth" = [])),
-    request_body = SampleTagActionRequest,
-    responses((status = 200, description = "Removed a sample tag.", body = TagsActionResponse))
-)]
-async fn remove_sample_tag(
-    State(state): State<Arc<AppState>>,
-    Extension(request_id): Extension<RequestId>,
-    Json(request): Json<SampleTagActionRequest>,
-) -> Result<Json<TagsActionResponse>, AppError> {
-    let state_for_work = state.clone();
-    task::spawn_blocking(move || {
-        state_for_work
-            .index
-            .sample_tag_remove(&request.sha256, &request.tag)
-    })
-    .await
-    .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?
-    .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?;
-    Ok(Json(TagsActionResponse { ok: true }))
-}
-
-#[utoipa::path(
-    post,
-    path = "/api/v1/tags/sample/replace",
-    tag = "Tags",
-    security(("bearer_auth" = [])),
-    request_body = SampleTagsReplaceRequest,
-    responses((status = 200, description = "Replaced sample tags.", body = TagsActionResponse))
-)]
-async fn replace_sample_tags(
-    State(state): State<Arc<AppState>>,
-    Extension(request_id): Extension<RequestId>,
-    Json(request): Json<SampleTagsReplaceRequest>,
-) -> Result<Json<TagsActionResponse>, AppError> {
-    let state_for_work = state.clone();
-    task::spawn_blocking(move || {
-        state_for_work
-            .index
-            .sample_tag_replace(&request.sha256, &request.tags)
     })
     .await
     .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?
@@ -337,7 +232,7 @@ async fn get_collection_tags(
 
 #[utoipa::path(
     post,
-    path = "/api/v1/tags/collection/add",
+    path = "/api/v1/tags/collection",
     tag = "Tags",
     security(("bearer_auth" = [])),
     request_body = CollectionTagActionRequest,
@@ -373,8 +268,8 @@ async fn add_collection_tag_api(
 }
 
 #[utoipa::path(
-    post,
-    path = "/api/v1/tags/collection/remove",
+    delete,
+    path = "/api/v1/tags/collection",
     tag = "Tags",
     security(("bearer_auth" = [])),
     request_body = CollectionTagActionRequest,
@@ -403,8 +298,8 @@ async fn remove_collection_tag_api(
 }
 
 #[utoipa::path(
-    post,
-    path = "/api/v1/tags/collection/replace",
+    put,
+    path = "/api/v1/tags/collection",
     tag = "Tags",
     security(("bearer_auth" = [])),
     request_body = CollectionTagsReplaceRequest,
@@ -453,7 +348,19 @@ async fn search_tags_api(
     Query(params): Query<SearchTagsParams>,
 ) -> Result<Json<TagsCatalogResponse>, AppError> {
     let q = params.q.clone();
-    let limit = params.limit.unwrap_or(64).clamp(1, 256);
+    if q.len() > state.ui.api.tags.max_query_length {
+        return Err(AppError::with_request_id(
+            format!(
+                "query exceeds maximum length of {} characters",
+                state.ui.api.tags.max_query_length
+            ),
+            request_id.to_string(),
+        ));
+    }
+    let limit = params
+        .limit
+        .unwrap_or(state.ui.api.tags.max_results)
+        .clamp(1, state.ui.api.tags.max_results.max(1));
     let state_for_work = state.clone();
     let results = task::spawn_blocking(move || state_for_work.database.tag_search(&q, limit))
         .await
@@ -474,7 +381,7 @@ async fn search_tags_api(
 
 #[utoipa::path(
     post,
-    path = "/api/v1/tags/add",
+    path = "/api/v1/tags",
     tag = "Tags",
     security(("bearer_auth" = [])),
     request_body = TagActionRequest,
@@ -504,19 +411,21 @@ async fn add_tag_api(
 }
 
 #[utoipa::path(
-    post,
-    path = "/api/v1/admin/tags/delete",
+    delete,
+    path = "/api/v1/admin/tags/{tag}",
     tag = "Admin",
     security(("bearer_auth" = [])),
-    request_body = TagActionRequest,
+    params(
+        ("tag" = String, Path, description = "Tag name")
+    ),
     responses((status = 200, description = "Deleted a tag globally.", body = TagsActionResponse))
 )]
 async fn admin_delete_tag_api(
     State(state): State<Arc<AppState>>,
     Extension(request_id): Extension<RequestId>,
-    Json(request): Json<TagActionRequest>,
+    Path(tag): Path<String>,
 ) -> Result<Json<TagsActionResponse>, AppError> {
-    let tag = request.tag.trim().to_string();
+    let tag = tag.trim().to_string();
     if tag.is_empty() {
         return Err(AppError::with_request_id(
             "tag must not be empty",
@@ -533,45 +442,6 @@ async fn admin_delete_tag_api(
     .await
     .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))??;
     Ok(Json(TagsActionResponse { ok: true }))
-}
-
-#[utoipa::path(
-    get,
-    path = "/api/v1/tags/search/sample",
-    tag = "Tags",
-    params(SearchAssignedTagsParams),
-    responses((status = 200, description = "Sample tag search results.", body = TagSearchResponse))
-)]
-async fn search_sample_tags_api(
-    State(state): State<Arc<AppState>>,
-    Extension(request_id): Extension<RequestId>,
-    Query(params): Query<SearchAssignedTagsParams>,
-) -> Result<Json<TagSearchResponse>, AppError> {
-    let page = params.page.unwrap_or(1);
-    let page_size = params.page_size.unwrap_or(50);
-    let q = params.q.clone();
-    let state_for_work = state.clone();
-    let results =
-        task::spawn_blocking(move || state_for_work.index.sample_tag_search(&q, page, page_size))
-            .await
-            .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?
-            .map_err(|error| {
-                AppError::with_request_id(error.to_string(), request_id.to_string())
-            })?;
-    Ok(Json(TagSearchResponse {
-        items: results
-            .items
-            .into_iter()
-            .map(|item| TagSearchItemResponse {
-                sha256: item.sha256,
-                tag: item.tag,
-                timestamp: item.timestamp,
-            })
-            .collect(),
-        page: results.page,
-        page_size: results.page_size,
-        has_next: results.has_next,
-    }))
 }
 
 #[utoipa::path(
@@ -593,8 +463,20 @@ async fn search_collection_tags_api(
         None => None,
     };
     let page = params.page.unwrap_or(1);
-    let page_size = params.page_size.unwrap_or(50);
     let q = params.q.clone();
+    if q.len() > state.ui.api.tags.max_query_length {
+        return Err(AppError::with_request_id(
+            format!(
+                "query exceeds maximum length of {} characters",
+                state.ui.api.tags.max_query_length
+            ),
+            request_id.to_string(),
+        ));
+    }
+    let page_size = params
+        .page_size
+        .unwrap_or(state.ui.api.tags.default_page_size)
+        .clamp(1, state.ui.api.tags.max_page_size.max(1));
     let state_for_work = state.clone();
     let results = task::spawn_blocking(move || {
         state_for_work
@@ -678,8 +560,8 @@ async fn get_collection_symbols(
 }
 
 #[utoipa::path(
-    post,
-    path = "/api/v1/symbols/collection/remove",
+    delete,
+    path = "/api/v1/symbols/collection",
     tag = "Symbols",
     security(("bearer_auth" = [])),
     request_body = CollectionSymbolActionRequest,
@@ -721,7 +603,19 @@ async fn search_symbols_api(
     Query(params): Query<SearchSymbolsParams>,
 ) -> Result<Json<SymbolsCatalogResponse>, AppError> {
     let q = params.q.clone();
-    let limit = params.limit.unwrap_or(64).clamp(1, 256);
+    if q.len() > state.ui.api.symbols.max_query_length {
+        return Err(AppError::with_request_id(
+            format!(
+                "query exceeds maximum length of {} characters",
+                state.ui.api.symbols.max_query_length
+            ),
+            request_id.to_string(),
+        ));
+    }
+    let limit = params
+        .limit
+        .unwrap_or(state.ui.api.symbols.max_results)
+        .clamp(1, state.ui.api.symbols.max_results.max(1));
     let state_for_work = state.clone();
     let results = task::spawn_blocking(move || state_for_work.database.symbol_search(&q, limit))
         .await
@@ -747,7 +641,7 @@ async fn search_symbols_api(
 
 #[utoipa::path(
     post,
-    path = "/api/v1/symbols/add",
+    path = "/api/v1/symbols",
     tag = "Symbols",
     security(("bearer_auth" = [])),
     request_body = SymbolActionRequest,
@@ -777,19 +671,21 @@ async fn add_symbol_api(
 }
 
 #[utoipa::path(
-    post,
-    path = "/api/v1/admin/symbols/delete",
+    delete,
+    path = "/api/v1/admin/symbols/{symbol}",
     tag = "Admin",
     security(("bearer_auth" = [])),
-    request_body = SymbolActionRequest,
+    params(
+        ("symbol" = String, Path, description = "Symbol name")
+    ),
     responses((status = 200, description = "Deleted a symbol globally.", body = TagsActionResponse))
 )]
 async fn admin_delete_symbol_api(
     State(state): State<Arc<AppState>>,
     Extension(request_id): Extension<RequestId>,
-    Json(request): Json<SymbolActionRequest>,
+    Path(symbol): Path<String>,
 ) -> Result<Json<TagsActionResponse>, AppError> {
-    let symbol = request.symbol.trim().to_string();
+    let symbol = symbol.trim().to_string();
     if symbol.is_empty() {
         return Err(AppError::with_request_id(
             "symbol must not be empty",
@@ -810,7 +706,7 @@ async fn admin_delete_symbol_api(
 
 #[utoipa::path(
     post,
-    path = "/api/v1/symbols/collection/add",
+    path = "/api/v1/symbols/collection",
     tag = "Symbols",
     security(("bearer_auth" = [])),
     request_body = CollectionSymbolActionRequest,
@@ -846,8 +742,8 @@ async fn add_collection_symbol_api(
 }
 
 #[utoipa::path(
-    post,
-    path = "/api/v1/symbols/collection/replace",
+    put,
+    path = "/api/v1/symbols/collection",
     tag = "Symbols",
     security(("bearer_auth" = [])),
     request_body = CollectionSymbolsReplaceRequest,

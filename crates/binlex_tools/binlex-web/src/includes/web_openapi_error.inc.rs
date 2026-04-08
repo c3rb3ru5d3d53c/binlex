@@ -10,25 +10,18 @@
         get_collection_corpora_api,
         add_collection_corpus_api,
         remove_collection_corpus_api,
-        get_sample_tags,
-        add_sample_tag,
-        remove_sample_tag,
-        replace_sample_tags,
         search_tags_api,
         add_tag_api,
         get_collection_tags,
         add_collection_tag_api,
         remove_collection_tag_api,
         replace_collection_tags_api,
-        search_sample_tags_api,
         search_collection_tags_api,
         get_entity_comments_api,
         add_entity_comment_api,
         delete_entity_comment_api,
         admin_comments_api,
         version_api,
-        create_token_api,
-        clear_token_api,
         auth_bootstrap_api,
         auth_login_api,
         auth_login_two_factor_api,
@@ -63,6 +56,7 @@
         admin_user_two_factor_reset_api,
         admin_user_delete_api,
         search_api,
+        action_yara_api,
         search_detail_api,
         add_corpus_api,
         search_corpora_api,
@@ -85,11 +79,9 @@
         IndexFunctionRequest,
         IndexBlockRequest,
         IndexInstructionRequest,
-        SampleTagsParams,
         CollectionTagsParams,
         CollectionCorporaParams,
         SearchTagsParams,
-        SearchAssignedTagsParams,
         SearchCollectionTagsParams,
         CollectionCommentsParams,
         EntityCommentCreateRequest,
@@ -99,8 +91,6 @@
         AdminCommentsSearchResponse,
         CommentActionResponse,
         TagActionRequest,
-        SampleTagActionRequest,
-        SampleTagsReplaceRequest,
         CollectionTagActionRequest,
         CollectionCorpusActionRequest,
         CollectionTagsReplaceRequest,
@@ -113,10 +103,7 @@
         CollectionTagSearchItemResponse,
         CollectionTagSearchResponse,
         VersionResponse,
-        TokenCreateRequest,
-        TokenCreateResponse,
-        TokenClearRequest,
-        TokenActionResponse,
+        ActionResponse,
         AuthBootstrapRequest,
         AuthLoginRequest,
         AuthLoginTwoFactorRequest,
@@ -156,17 +143,16 @@
         (name = "System", description = "Service health and version information."),
         (name = "Search", description = "Search endpoints and corpus lookup."),
         (name = "Index", description = "Graph and entity indexing operations."),
-        (name = "Upload", description = "Sample upload and upload status endpoints."),
+        (name = "Action", description = "Generated-output and derived-action endpoints."),
         (name = "Download", description = "Sample and JSON download endpoints."),
-        (name = "Tags", description = "Sample and collection tag operations."),
+        (name = "Tags", description = "Collection tag operations."),
         (name = "Comments", description = "Entity comment and moderation endpoints."),
-        (name = "Tokens", description = "Temporary token lifecycle endpoints."),
         (name = "Auth", description = "Browser authentication, profile, and user management endpoints.")
     ),
     info(
         title = "Binlex Web API",
         version = "v1",
-        description = "Versioned public API for binlex-web. The browser UI routes are intentionally excluded. Protected endpoints may use `Authorization: Bearer <api_key>` and/or `Token: <temporary_token>` depending on binlex-web configuration."
+        description = "Versioned public API for binlex-web. The browser UI routes are intentionally excluded. Protected endpoints use `Authorization: Bearer <api_key>`."
     )
 )]
 struct ApiDoc;
@@ -176,7 +162,7 @@ struct ApiDocSecurity;
 impl Modify for ApiDocSecurity {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
         openapi.info = InfoBuilder::from(openapi.info.clone())
-            .description(Some("Versioned public API for binlex-web. The browser UI routes are intentionally excluded. Protected endpoints may use `Authorization: Bearer <api_key>` and/or `Token: <temporary_token>` depending on binlex-web configuration.".to_string()))
+            .description(Some("Versioned public API for binlex-web. The browser UI routes are intentionally excluded. Protected endpoints use `Authorization: Bearer <api_key>`.".to_string()))
             .build();
 
         let bearer = SecurityScheme::Http(
@@ -188,8 +174,6 @@ impl Modify for ApiDocSecurity {
                 ))
                 .build(),
         );
-        let token = SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::new("Token")));
-
         openapi.components = Some(
             openapi
                 .components
@@ -197,7 +181,6 @@ impl Modify for ApiDocSecurity {
                 .map(ComponentsBuilder::from)
                 .unwrap_or_else(ComponentsBuilder::new)
                 .security_scheme("bearer_auth", bearer)
-                .security_scheme("token_header", token)
                 .build(),
         );
     }

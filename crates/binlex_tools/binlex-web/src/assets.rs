@@ -1,6 +1,6 @@
 pub(crate) const STYLES: &str = include_str!("assets/styles.css");
 pub(crate) const SCRIPT: &str = concat!(
-    include_str!("../../../../src/search/query.js"),
+    include_str!("../../../../src/query/query.js"),
     "\n",
     include_str!("assets/js/core/helpers.js"),
     "\n",

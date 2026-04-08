@@ -431,6 +431,11 @@ impl LocalIndex {
     ) -> Result<(), Error> {
         let corpus = normalize_metadata_name("corpus", corpus)
             .map_err(|error| Error::Validation(error.to_string()))?;
+        if !add && corpus.eq_ignore_ascii_case("default") {
+            return Err(Error::Validation(
+                "default corpus cannot be unassigned".to_string(),
+            ));
+        }
         let mut entry = self.collection_entry(sha256, collection, architecture, address)?;
         let mut effective = self
             .localdb

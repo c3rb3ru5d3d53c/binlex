@@ -251,21 +251,6 @@ class LocalIndex:
     def corpus_rename(self, old_name, new_name):
         return self._inner.corpus_rename(old_name, new_name)
 
-    def sample_tag_add(self, sha256, tag):
-        return self._inner.sample_tag_add(sha256, tag)
-
-    def sample_tag_remove(self, sha256, tag):
-        return self._inner.sample_tag_remove(sha256, tag)
-
-    def sample_tag_replace(self, sha256, tags):
-        return self._inner.sample_tag_replace(sha256, list(tags))
-
-    def sample_tag_search(self, query, page=1, page_size=50):
-        return self._inner.sample_tag_search(query, page, page_size)
-
-    def sample_tag_list(self, sha256):
-        return self._inner.sample_tag_list(sha256)
-
     def sample_comment_add(self, sha256, comment, timestamp=None):
         return self._inner.sample_comment_add(sha256, comment, timestamp)
 

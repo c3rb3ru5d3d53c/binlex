@@ -76,13 +76,6 @@ pub struct SampleStatusRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SampleTagRecord {
-    pub sha256: String,
-    pub tag: String,
-    pub timestamp: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CollectionTagRecord {
     pub sha256: String,
     pub collection: Collection,
@@ -675,7 +668,7 @@ fn parse_collection(value: &str) -> Result<Collection, Error> {
 mod tests {
     use super::{
         CollectionCommentRecord, CollectionTagRecord, LocalDB, RoleRecord, SampleCommentRecord,
-        SampleStatus, SampleStatusRecord, SampleTagRecord,
+        SampleStatus, SampleStatusRecord,
     };
     use crate::Config;
     use crate::indexing::Collection;
@@ -726,36 +719,6 @@ mod tests {
         config.databases.local.path = root.path().join("local.db").display().to_string();
         let db = LocalDB::new(&config).expect("create local db");
         let sha256 = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5";
-
-        db.sample_tag_add(&SampleTagRecord {
-            sha256: sha256.to_string(),
-            tag: "goodware".to_string(),
-            timestamp: "2026-04-01T00:00:00Z".to_string(),
-        })
-        .expect("add first tag");
-        db.sample_tag_add(&SampleTagRecord {
-            sha256: sha256.to_string(),
-            tag: "family".to_string(),
-            timestamp: "2026-04-01T00:00:01Z".to_string(),
-        })
-        .expect("add second tag");
-        let tags = db
-            .sample_tag_search("", 1, 1)
-            .expect("search tags page one");
-        assert_eq!(tags.items.len(), 1);
-        assert!(tags.has_next);
-        db.sample_tag_replace(
-            sha256,
-            &["clean".to_string(), "training".to_string()],
-            "2026-04-01T00:00:02Z",
-        )
-        .expect("replace tags");
-        let tags = db
-            .sample_tag_search("train", 1, 10)
-            .expect("search replaced tags");
-        assert_eq!(tags.items.len(), 1);
-        assert_eq!(tags.items[0].tag, "training");
-        db.sample_tag_remove(sha256, "clean").expect("remove tag");
 
         db.tag_add("triage", Some("2026-04-01T00:00:03Z"), Some("admin"))
             .expect("add catalog tag");

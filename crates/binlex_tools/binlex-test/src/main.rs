@@ -1,4 +1,4 @@
-use binlex::search::{Query, query_architecture_values, query_collection_values};
+use binlex::query::{Query, query_architecture_values, query_collection_values};
 use clap::{Parser, Subcommand, ValueEnum};
 use serde::Serialize;
 use serde_json::json;
@@ -70,8 +70,8 @@ enum QueryEngine {
 #[derive(Serialize)]
 struct RustParseOutput<'a> {
     raw: &'a str,
-    expr: &'a binlex::search::QueryExpr,
-    analysis: binlex::search::QueryAnalysis,
+    expr: &'a binlex::query::QueryExpr,
+    analysis: binlex::query::QueryAnalysis,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -169,7 +169,5 @@ fn run_node_query_cli(
 
 fn query_cli_path() -> PathBuf {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    manifest_dir
-        .join("../../..")
-        .join("src/search/query_cli.js")
+    manifest_dir.join("../../..").join("src/query/query_cli.js")
 }

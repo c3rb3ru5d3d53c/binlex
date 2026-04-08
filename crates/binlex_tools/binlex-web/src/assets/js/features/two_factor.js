@@ -16,7 +16,16 @@ function openTwoFactorLoginModal(challengeToken) {
   };
   setInlineError("auth-login-2fa-error", "");
   const input = document.getElementById("auth-login-2fa-code");
-  if (input instanceof HTMLInputElement) input.value = "";
+  if (input instanceof HTMLInputElement) {
+    input.value = "";
+    input.type = "password";
+  }
+  syncTwoFactorInlineVisibility(
+    "auth-login-2fa-toggle",
+    false,
+    "Show authenticator code",
+    "Hide authenticator code"
+  );
   const modal = document.getElementById("two-factor-login-modal");
   if (modal) modal.hidden = false;
 }
@@ -24,6 +33,16 @@ function openTwoFactorLoginModal(challengeToken) {
 function closeTwoFactorLoginModal() {
   const modal = document.getElementById("two-factor-login-modal");
   if (modal) modal.hidden = true;
+  const input = document.getElementById("auth-login-2fa-code");
+  if (input instanceof HTMLInputElement) {
+    input.type = "password";
+  }
+  syncTwoFactorInlineVisibility(
+    "auth-login-2fa-toggle",
+    false,
+    "Show authenticator code",
+    "Hide authenticator code"
+  );
   pendingLoginTwoFactor = { challengeToken: "", setupRequired: false };
 }
 
@@ -230,6 +249,19 @@ function toggleTwoFactorSetupCodeVisibility() {
   field.type = visible ? "text" : "password";
   syncTwoFactorInlineVisibility(
     "two-factor-code-toggle",
+    visible,
+    "Show authenticator code",
+    "Hide authenticator code"
+  );
+}
+
+function toggleTwoFactorLoginCodeVisibility() {
+  const field = document.getElementById("auth-login-2fa-code");
+  if (!(field instanceof HTMLInputElement)) return;
+  const visible = field.type === "password";
+  field.type = visible ? "text" : "password";
+  syncTwoFactorInlineVisibility(
+    "auth-login-2fa-toggle",
     visible,
     "Show authenticator code",
     "Hide authenticator code"

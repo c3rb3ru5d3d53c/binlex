@@ -3,63 +3,16 @@ use super::support::sample_key;
 use super::types::{
     CollectionCommentRecord, CollectionCommentSearchPage, CollectionTagRecord,
     CollectionTagSearchPage, CommentRecord, CommentSearchPage, EntityCommentRecord,
-    EntityCommentSearchPage, Error, SampleStatusRecord, StoredGraphRecord, TagRecord,
-    TagSearchPage,
+    EntityCommentSearchPage, Error, SampleStatusRecord, StoredGraphRecord,
 };
 use crate::controlflow::{Block, Function, Graph, Instruction};
 use crate::databases::localdb::normalize_metadata_name;
-use crate::databases::{LocalDBPage, SampleCommentRecord, SampleTagRecord};
+use crate::databases::{LocalDBPage, SampleCommentRecord};
 use crate::indexing::Collection;
 use chrono::Utc;
 use std::collections::BTreeMap;
 
 impl LocalIndex {
-    pub fn sample_tag_add(&self, sha256: &str, tag: &str) -> Result<(), Error> {
-        let sha256 = self.ensure_sample_exists(sha256)?;
-        let tag = normalize_metadata_name("tag", tag)
-            .map_err(|error| Error::Validation(error.to_string()))?;
-        self.localdb
-            .sample_tag_add(&SampleTagRecord {
-                sha256,
-                tag,
-                timestamp: Utc::now().to_rfc3339(),
-            })
-            .map_err(|error| Error::LocalDb(error.to_string()))
-    }
-
-    pub fn sample_tag_remove(&self, sha256: &str, tag: &str) -> Result<(), Error> {
-        let sha256 = self.ensure_sample_exists(sha256)?;
-        let tag = normalize_metadata_name("tag", tag)
-            .map_err(|error| Error::Validation(error.to_string()))?;
-        self.localdb
-            .sample_tag_remove(&sha256, &tag)
-            .map_err(|error| Error::LocalDb(error.to_string()))
-    }
-
-    pub fn sample_tag_replace(&self, sha256: &str, tags: &[String]) -> Result<(), Error> {
-        let sha256 = self.ensure_sample_exists(sha256)?;
-        let tags = tags
-            .iter()
-            .map(|tag| normalize_metadata_name("tag", tag))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| Error::Validation(error.to_string()))?;
-        self.localdb
-            .sample_tag_replace(&sha256, &tags, &Utc::now().to_rfc3339())
-            .map_err(|error| Error::LocalDb(error.to_string()))
-    }
-
-    pub fn sample_tag_search(
-        &self,
-        query: &str,
-        page: usize,
-        page_size: usize,
-    ) -> Result<TagSearchPage, Error> {
-        self.localdb
-            .sample_tag_search(query, page, page_size)
-            .map(tag_page_from_localdb)
-            .map_err(|error| Error::LocalDb(error.to_string()))
-    }
-
     pub fn tag_add(&self, tag: &str) -> Result<(), Error> {
         let tag = normalize_metadata_name("tag", tag)
             .map_err(|error| Error::Validation(error.to_string()))?;
@@ -72,13 +25,6 @@ impl LocalIndex {
         self.localdb
             .tag_search(query, limit)
             .map(|page| page.items.into_iter().map(|item| item.tag).collect())
-            .map_err(|error| Error::LocalDb(error.to_string()))
-    }
-
-    pub fn sample_tag_list(&self, sha256: &str) -> Result<Vec<String>, Error> {
-        let sha256 = self.ensure_sample_exists(sha256)?;
-        self.localdb
-            .sample_tag_list(&sha256)
             .map_err(|error| Error::LocalDb(error.to_string()))
     }
 
@@ -623,23 +569,6 @@ impl LocalIndex {
                 .map_err(|error| Error::LocalStore(error.to_string()))?;
         }
         Ok(())
-    }
-}
-
-fn tag_page_from_localdb(page: LocalDBPage<SampleTagRecord>) -> TagSearchPage {
-    TagSearchPage {
-        items: page
-            .items
-            .into_iter()
-            .map(|item| TagRecord {
-                sha256: item.sha256,
-                tag: item.tag,
-                timestamp: item.timestamp,
-            })
-            .collect(),
-        page: page.page,
-        page_size: page.page_size,
-        has_next: page.has_next,
     }
 }
 

@@ -15,7 +15,6 @@ pub struct Web {
     url: String,
     verify: bool,
     api_key: Option<String>,
-    token: Option<String>,
 }
 
 #[derive(Debug)]
@@ -159,17 +158,6 @@ pub struct WebIndexActionResponse {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct WebTokenCreateResponse {
-    pub token: String,
-    pub expires: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct WebTokenActionResponse {
-    pub ok: bool,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WebTagsResponse {
     pub sha256: String,
     #[serde(default)]
@@ -182,21 +170,6 @@ pub struct WebTagsResponse {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WebTagsActionResponse {
     pub ok: bool,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct WebTagSearchItemResponse {
-    pub sha256: String,
-    pub tag: String,
-    pub timestamp: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct WebTagSearchResponse {
-    pub items: Vec<WebTagSearchItemResponse>,
-    pub page: usize,
-    pub page_size: usize,
-    pub has_next: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -313,18 +286,6 @@ enum IndexEntityBody {
 struct IndexCommitRequest {}
 
 #[derive(Clone, Debug, Serialize)]
-struct SampleTagActionRequest<'a> {
-    sha256: &'a str,
-    tag: &'a str,
-}
-
-#[derive(Clone, Debug, Serialize)]
-struct SampleTagsReplaceRequest<'a> {
-    sha256: &'a str,
-    tags: Vec<String>,
-}
-
-#[derive(Clone, Debug, Serialize)]
 struct CollectionTagActionRequest<'a> {
     sha256: &'a str,
     collection: String,
@@ -346,7 +307,6 @@ impl Web {
         url: Option<String>,
         verify: Option<bool>,
         api_key: Option<String>,
-        token: Option<String>,
     ) -> Result<Self, WebError> {
         let url = normalize_url(url.unwrap_or_else(|| "http://127.0.0.1:8080".to_string()))
             .map_err(map_client_error)?;
@@ -355,7 +315,6 @@ impl Web {
             url,
             verify: verify.unwrap_or(true),
             api_key,
-            token,
         })
     }
 
@@ -373,41 +332,6 @@ impl Web {
 
     pub fn set_api_key(&mut self, api_key: Option<String>) {
         self.api_key = api_key;
-    }
-
-    pub fn token(&self) -> Option<&str> {
-        self.token.as_deref()
-    }
-
-    pub fn set_token(&mut self, token: Option<String>) {
-        self.token = token;
-    }
-
-    pub fn create_token(&self) -> Result<WebTokenCreateResponse, WebError> {
-        self.create_token_with_request_id(None)
-    }
-
-    pub fn create_token_with_request_id(
-        &self,
-        request_id: Option<&str>,
-    ) -> Result<WebTokenCreateResponse, WebError> {
-        self.post_json("/api/v1/token", &serde_json::json!({}), request_id)
-    }
-
-    pub fn clear_token(&self, token: &str) -> Result<WebTokenActionResponse, WebError> {
-        self.clear_token_with_request_id(token, None)
-    }
-
-    pub fn clear_token_with_request_id(
-        &self,
-        token: &str,
-        request_id: Option<&str>,
-    ) -> Result<WebTokenActionResponse, WebError> {
-        self.post_json(
-            "/api/v1/token/clear",
-            &serde_json::json!({ "token": token }),
-            request_id,
-        )
     }
 
     pub fn index_graph(
@@ -565,61 +489,6 @@ impl Web {
         self.post_json("/api/v1/search", request, request_id)
     }
 
-    pub fn sample_tags(&self, sha256: &str) -> Result<WebTagsResponse, WebError> {
-        self.sample_tags_with_request_id(sha256, None)
-    }
-
-    pub fn sample_tags_with_request_id(
-        &self,
-        sha256: &str,
-        request_id: Option<&str>,
-    ) -> Result<WebTagsResponse, WebError> {
-        self.get_json(
-            "/api/v1/tags/sample",
-            &[("sha256", sha256.to_string())],
-            request_id,
-        )
-    }
-
-    pub fn add_sample_tag(
-        &self,
-        sha256: &str,
-        tag: &str,
-    ) -> Result<WebTagsActionResponse, WebError> {
-        self.post_json(
-            "/api/v1/tags/sample/add",
-            &SampleTagActionRequest { sha256, tag },
-            None,
-        )
-    }
-
-    pub fn remove_sample_tag(
-        &self,
-        sha256: &str,
-        tag: &str,
-    ) -> Result<WebTagsActionResponse, WebError> {
-        self.post_json(
-            "/api/v1/tags/sample/remove",
-            &SampleTagActionRequest { sha256, tag },
-            None,
-        )
-    }
-
-    pub fn replace_sample_tags(
-        &self,
-        sha256: &str,
-        tags: &[String],
-    ) -> Result<WebTagsActionResponse, WebError> {
-        self.post_json(
-            "/api/v1/tags/sample/replace",
-            &SampleTagsReplaceRequest {
-                sha256,
-                tags: tags.to_vec(),
-            },
-            None,
-        )
-    }
-
     pub fn collection_tags(
         &self,
         sha256: &str,
@@ -704,23 +573,6 @@ impl Web {
         )
     }
 
-    pub fn search_sample_tags(
-        &self,
-        query: &str,
-        page: usize,
-        page_size: usize,
-    ) -> Result<WebTagSearchResponse, WebError> {
-        self.get_json(
-            "/api/v1/tags/search/sample",
-            &[
-                ("q", query.to_string()),
-                ("page", page.to_string()),
-                ("page_size", page_size.to_string()),
-            ],
-            None,
-        )
-    }
-
     pub fn search_collection_tags(
         &self,
         query: &str,
@@ -769,9 +621,6 @@ impl Web {
     ) -> reqwest::blocking::RequestBuilder {
         if let Some(api_key) = &self.api_key {
             builder = builder.header("Authorization", format!("Bearer {}", api_key));
-        }
-        if let Some(token) = &self.token {
-            builder = builder.header("Token", token);
         }
         builder
     }

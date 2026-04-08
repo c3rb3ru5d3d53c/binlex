@@ -1136,26 +1136,6 @@ fn localdb_metadata_round_trips_through_local_index() {
 
     let sha256 = client.sample_put(b"metadata-sample").expect("store sample");
 
-    client.sample_tag_add(&sha256, "family").expect("add tag");
-    client
-        .sample_tag_add(&sha256, "malware")
-        .expect("add second tag");
-    let tags = client.sample_tag_search("mal", 1, 10).expect("search tags");
-    assert_eq!(tags.items.len(), 1);
-    assert_eq!(tags.items[0].tag, "malware");
-
-    client
-        .sample_tag_replace(&sha256, &["clean".to_string(), "training".to_string()])
-        .expect("replace tags");
-    let tags = client
-        .sample_tag_search("tr", 1, 10)
-        .expect("search replaced tags");
-    assert_eq!(tags.items.len(), 1);
-    assert_eq!(tags.items[0].tag, "training");
-    client
-        .sample_tag_remove(&sha256, "clean")
-        .expect("remove tag");
-
     let function = single_return_function();
     client
         .function_many(

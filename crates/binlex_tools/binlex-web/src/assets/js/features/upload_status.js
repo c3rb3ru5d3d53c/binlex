@@ -81,7 +81,7 @@ function startUploadStatusPolling(sha256) {
 async function pollUploadStatus(sha256, token) {
   if (!sha256 || token !== uploadStatusPollToken) return;
   try {
-    const response = await fetch(`/api/v1/upload/status?sha256=${encodeURIComponent(sha256)}`, {
+    const response = await fetch(`/api/v1/index/status?sha256=${encodeURIComponent(sha256)}`, {
       method: "GET",
       headers: {
         Accept: "application/json",

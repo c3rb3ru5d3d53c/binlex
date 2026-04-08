@@ -12,7 +12,7 @@ const {
   operatorSuggestions,
   suggestQueryCompletions,
   valueSuggestions,
-} = require("../../../../src/search/query.js");
+} = require("../../../../src/query/query.js");
 
 const SHA256 =
   "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5";

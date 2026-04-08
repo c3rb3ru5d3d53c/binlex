@@ -12,11 +12,11 @@ use binlex::controlflow::{BlockJson, FunctionJson, Graph, GraphSnapshot, Instruc
 use binlex::databases::{LocalDB, SampleStatus, SampleStatusRecord};
 use binlex::indexing::{Collection, LocalIndex, SearchResult};
 use binlex::math::similarity::cosine;
-use binlex::rules::YARARule as Rule;
-use binlex::search::{
+use binlex::query::{
     QueryCompletionSpec, query_architecture_values, query_collection_values,
     query_completion_specs, query_score_matches,
 };
+use binlex::rules::YARARule as Rule;
 use binlex::server::request_id::RequestId;
 use binlex::{Architecture, Config, Magic};
 use chrono::Utc;
@@ -35,7 +35,7 @@ use std::sync::Mutex;
 use std::thread;
 use tokio::task;
 use tracing::{info, warn};
-use utoipa::openapi::security::{ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityScheme};
+use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
 use utoipa::openapi::{ComponentsBuilder, InfoBuilder};
 use utoipa::{IntoParams, Modify, OpenApi, ToSchema};
 use utoipa_swagger_ui::SwaggerUi;

@@ -57,7 +57,7 @@ async fn search_api(
 
 #[utoipa::path(
     post,
-    path = "/api/v1/action/yara",
+    path = "/api/v1/yara/render",
     tag = "Action",
     request_body = ActionYaraRequest,
     responses(
@@ -318,12 +318,12 @@ fn build_page_data(
     let mut collection_options = query_collection_values();
     collection_options.sort();
     let query_completion_specs = query_completion_specs();
-    let upload_corpora_locked = state.ui.upload.sample.corpora.lock;
+    let upload_corpora_locked = state.ui.index.local.lock_corpora;
     let upload_corpus_options = upload_corpus_options(state, &corpora_options);
     let upload_selected_corpora = upload_default_selected_corpora(state, &upload_corpus_options);
     let upload_tag_options = state
         .database
-        .tag_search("", state.ui.api.corpora.max_results)
+        .tag_search("", state.ui.api.tags.max_results)
         .map(|page| page.items.into_iter().map(|item| item.tag).collect())
         .unwrap_or_default();
     let upload_selected_tags = Vec::new();
@@ -488,6 +488,7 @@ fn build_page_data(
             display_architecture("cil"),
         ],
         upload_corpus_options,
+        upload_default_corpus: state.ui.index.local.default_corpus.clone(),
         upload_corpora_locked,
         upload_selected_corpora,
         upload_tag_options,
@@ -505,7 +506,7 @@ fn build_page_data(
 
 #[utoipa::path(
     post,
-    path = "/api/v1/corpora/add",
+    path = "/api/v1/corpora",
     tag = "Search",
     request_body = CorpusActionRequest,
     responses(
@@ -544,19 +545,21 @@ async fn add_corpus_api(
 }
 
 #[utoipa::path(
-    post,
-    path = "/api/v1/admin/corpora/delete",
+    delete,
+    path = "/api/v1/admin/corpora/{corpus}",
     tag = "Admin",
     security(("bearer_auth" = [])),
-    request_body = CorpusActionRequest,
+    params(
+        ("corpus" = String, Path, description = "Corpus name")
+    ),
     responses((status = 200, description = "Deleted a corpus globally.", body = TagsActionResponse))
 )]
 async fn admin_delete_corpus_api(
     State(state): State<Arc<AppState>>,
     Extension(request_id): Extension<RequestId>,
-    Json(request): Json<CorpusActionRequest>,
+    Path(corpus): Path<String>,
 ) -> Result<Json<TagsActionResponse>, AppError> {
-    let corpus = request.corpus.trim().to_string();
+    let corpus = corpus.trim().to_string();
     if corpus.is_empty() {
         return Err(AppError::with_request_id(
             "corpus must not be empty",
@@ -695,8 +698,8 @@ fn execute_search(state: &AppState, params: &PageParams) -> Result<SearchPage, S
     }
     let plan = build_query_plan(
         &state.index,
-        &state.ui.corpus,
-        &default_collections(&state.ui.collection),
+        &state.ui.index.local.default_corpus,
+        &default_collections(&state.ui.index.local),
         query,
     )
     .map_err(|error| error.to_string())?;
@@ -882,32 +885,32 @@ fn collect_search_candidates(
     Ok(candidates)
 }
 
-fn search_requires_full_scan(expr: &binlex::search::QueryExpr) -> bool {
+fn search_requires_full_scan(expr: &binlex::query::QueryExpr) -> bool {
     match expr {
-        binlex::search::QueryExpr::Term(term) => !matches!(
+        binlex::query::QueryExpr::Term(term) => !matches!(
             term.field,
-            binlex::search::QueryField::Corpus
-                | binlex::search::QueryField::Collection
-                | binlex::search::QueryField::Architecture
+            binlex::query::QueryField::Corpus
+                | binlex::query::QueryField::Collection
+                | binlex::query::QueryField::Architecture
         ),
-        binlex::search::QueryExpr::Not(inner) => search_requires_full_scan(inner),
-        binlex::search::QueryExpr::And(lhs, rhs) | binlex::search::QueryExpr::Or(lhs, rhs) => {
+        binlex::query::QueryExpr::Not(inner) => search_requires_full_scan(inner),
+        binlex::query::QueryExpr::And(lhs, rhs) | binlex::query::QueryExpr::Or(lhs, rhs) => {
             search_requires_full_scan(lhs) || search_requires_full_scan(rhs)
         }
     }
 }
 
-fn search_requires_full_exact_scan(expr: &binlex::search::QueryExpr) -> bool {
+fn search_requires_full_exact_scan(expr: &binlex::query::QueryExpr) -> bool {
     match expr {
-        binlex::search::QueryExpr::Term(term) => !matches!(
+        binlex::query::QueryExpr::Term(term) => !matches!(
             term.field,
-            binlex::search::QueryField::Sha256
-                | binlex::search::QueryField::Corpus
-                | binlex::search::QueryField::Collection
-                | binlex::search::QueryField::Architecture
+            binlex::query::QueryField::Sha256
+                | binlex::query::QueryField::Corpus
+                | binlex::query::QueryField::Collection
+                | binlex::query::QueryField::Architecture
         ),
-        binlex::search::QueryExpr::Not(inner) => search_requires_full_exact_scan(inner),
-        binlex::search::QueryExpr::And(lhs, rhs) | binlex::search::QueryExpr::Or(lhs, rhs) => {
+        binlex::query::QueryExpr::Not(inner) => search_requires_full_exact_scan(inner),
+        binlex::query::QueryExpr::And(lhs, rhs) | binlex::query::QueryExpr::Or(lhs, rhs) => {
             search_requires_full_exact_scan(lhs) || search_requires_full_exact_scan(rhs)
         }
     }

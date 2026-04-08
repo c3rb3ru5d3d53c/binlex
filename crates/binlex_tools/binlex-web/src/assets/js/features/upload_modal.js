@@ -1,5 +1,3 @@
-const DEFAULT_UPLOAD_CORPUS = "default";
-
 function filterOptions(input, group) {
   const needle = input.value.toLowerCase();
   const root = input.closest('[data-group-root]');
@@ -97,6 +95,14 @@ function syncSearchState() {
 
 function getUploadCorpusRoot() {
   return document.querySelector("[data-upload-corpus-root='1']");
+}
+
+function uploadCorpusLocked() {
+  return String(getUploadCorpusRoot()?.dataset?.locked || "false") === "true";
+}
+
+function defaultUploadCorpus() {
+  return String(getUploadCorpusRoot()?.dataset?.defaultCorpus || "default").trim() || "default";
 }
 
 function getUploadTagRoot() {
@@ -206,9 +212,10 @@ function selectedUploadTagValues() {
 }
 
 function setSelectedUploadCorpusValues(values) {
+  const baseValues = [defaultUploadCorpus()];
   const unique = Array.from(
     new Set(
-      [DEFAULT_UPLOAD_CORPUS, ...(values || [])]
+      [...baseValues, ...(values || [])]
         .map((value) => String(value || "").trim())
         .filter(Boolean)
     )
@@ -321,7 +328,6 @@ function filteredAvailableUploadCorpora() {
   const selected = new Set(selectedUploadCorpusValues());
   const needle = availableUploadCorpusQuery().toLowerCase();
   return uploadCorpusOptions()
-    .filter((value) => value.toLowerCase() !== DEFAULT_UPLOAD_CORPUS)
     .filter((value) => !selected.has(value))
     .filter((value) => value.toLowerCase().includes(needle));
 }
@@ -358,7 +364,14 @@ function shouldOfferUploadTagCreate() {
 function corpusButtonHtml(value, direction, active, handler) {
   const arrow = direction === "selected" ? "&larr;" : "&rarr;";
   const activeClass = active ? " active" : "";
-  return `<div class="upload-corpus-item${activeClass}"><span class="upload-corpus-item-name" title="${escapeHtml(value)}">${escapeHtml(value)}</span><div class="upload-corpus-item-actions"><button type="button" class="symbol-picker-copy" onclick="event.stopPropagation(); copyPickerValue(this,'${escapeHtml(encodeURIComponent(value))}')">Copy</button><button type="button" class="symbol-picker-move" onclick="${handler}('${encodeURIComponent(value)}')">${arrow}</button></div></div>`;
+  const moveButton = handler
+    ? `<button type="button" class="symbol-picker-move" onclick="${handler}('${encodeURIComponent(value)}')">${arrow}</button>`
+    : "";
+  return `<div class="upload-corpus-item${activeClass}"><span class="upload-corpus-item-name" title="${escapeHtml(value)}">${escapeHtml(value)}</span><div class="upload-corpus-item-actions"><button type="button" class="symbol-picker-copy" onclick="event.stopPropagation(); copyPickerValue(this,'${escapeHtml(encodeURIComponent(value))}')">Copy</button>${moveButton}</div></div>`;
+}
+
+function selectedCorpusButtonHtml(value, active, removable) {
+  return corpusButtonHtml(value, "selected", active, removable ? "unselectUploadCorpus" : null);
 }
 
 function renderUploadCorpusPicker() {
@@ -372,7 +385,11 @@ function renderUploadCorpusPicker() {
   availableList.innerHTML = available.map((value, index) => corpusButtonHtml(value, "available", index === 0, "selectUploadCorpus")).join("");
   selectedList.innerHTML = selected.length === 0
     ? '<div class="upload-corpus-empty">No selected corpora.</div>'
-    : selected.map((value, index) => corpusButtonHtml(value, "selected", index === 0, "unselectUploadCorpus")).join("");
+    : selected.map((value, index) => selectedCorpusButtonHtml(
+      value,
+      index === 0,
+      value.trim().toLowerCase() !== defaultUploadCorpus().toLowerCase()
+    )).join("");
   renderUploadCorpusCreatePrompt();
   renderUploadCorpusCreateInline();
 }
@@ -417,7 +434,7 @@ function selectUploadCorpus(encodedValue) {
 function unselectUploadCorpus(encodedValue) {
   const value = decodeURIComponent(String(encodedValue || "")).trim();
   if (!value) return;
-  if (value.toLowerCase() === DEFAULT_UPLOAD_CORPUS) return;
+  if (value.toLowerCase() === defaultUploadCorpus().toLowerCase()) return;
   setSelectedUploadCorpusValues(selectedUploadCorpusValues().filter((item) => item !== value));
 }
 
@@ -589,7 +606,7 @@ async function confirmCreateUploadCorpus() {
   const value = String(typed || "").trim();
   if (!value || metadataNameHasWhitespace(value)) return;
   try {
-    await postJsonWithCredentials("/api/v1/corpora/add", { corpus: value });
+    await postJsonWithCredentials("/api/v1/corpora", { corpus: value });
     setUploadCorpusPendingCreate("");
     const input = document.getElementById("upload-corpus-available-search");
     if (input instanceof HTMLInputElement) {
@@ -609,7 +626,7 @@ async function confirmCreateUploadTag() {
   const value = String(typed || "").trim();
   if (!value || metadataNameHasWhitespace(value)) return;
   try {
-    await postJsonWithCredentials("/api/v1/tags/add", { tag: value });
+    await postJsonWithCredentials("/api/v1/tags", { tag: value });
     setUploadTagPendingCreate("");
     const input = document.getElementById("upload-tag-available-search");
     if (input instanceof HTMLInputElement) {
@@ -792,7 +809,7 @@ async function submitUploadModal() {
   closeUploadModal();
   openUploadStatusModal("uploading");
   try {
-    const response = await fetch("/api/v1/upload/sample", {
+    const response = await fetch("/api/v1/index/sample", {
       method: "POST",
       body: formData,
     });

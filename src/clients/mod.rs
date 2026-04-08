@@ -17,7 +17,6 @@ pub use web::WebQueryResult;
 pub use web::WebResult;
 pub use web::WebSearchRequest;
 pub use web::WebSearchResponse;
-pub use web::WebTagSearchResponse;
 pub use web::WebTagsResponse;
 
 #[derive(Debug)]

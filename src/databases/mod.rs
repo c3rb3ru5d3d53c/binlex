@@ -18,7 +18,6 @@ pub use localdb::RoleRecord;
 pub use localdb::SampleCommentRecord;
 pub use localdb::SampleStatus;
 pub use localdb::SampleStatusRecord;
-pub use localdb::SampleTagRecord;
 pub use localdb::TokenRecord;
 pub use localdb::UserRecord;
 pub use milvus::FieldSchema;

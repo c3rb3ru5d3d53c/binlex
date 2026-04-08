@@ -1,13 +1,13 @@
 use binlex::Architecture;
 use binlex::indexing::local;
 use binlex::indexing::{Collection, LocalIndex, SearchResult};
-use binlex::search::{
+use binlex::query::{
     Query, QueryCollection, QueryError, QueryExpr, QueryField, QueryTerm, query_bool_matches,
     query_float_matches, query_integer_matches, query_score_matches, query_size_matches,
     query_timestamp_matches,
 };
 
-pub use binlex::search::SearchRoot;
+pub use binlex::query::SearchRoot;
 
 #[derive(Clone, Debug)]
 pub enum StreamPlan {

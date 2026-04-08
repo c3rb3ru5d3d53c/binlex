@@ -6,15 +6,15 @@ fn parse_collection(value: &str) -> Option<Collection> {
         _ => None,
     }
 }
-fn default_collections(config: &WebCollectionConfig) -> Vec<Collection> {
+fn default_collections(config: &WebLocalIndexConfig) -> Vec<Collection> {
     let mut collections = Vec::new();
-    if config.function {
+    if config.functions {
         collections.push(Collection::Function);
     }
-    if config.block {
+    if config.blocks {
         collections.push(Collection::Block);
     }
-    if config.instruction {
+    if config.instructions {
         collections.push(Collection::Instruction);
     }
     if collections.is_empty() {

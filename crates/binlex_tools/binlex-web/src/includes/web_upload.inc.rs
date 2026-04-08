@@ -1,7 +1,7 @@
 #[utoipa::path(
     post,
-    path = "/api/v1/upload/sample",
-    tag = "Upload",
+    path = "/api/v1/index/sample",
+    tag = "Index",
     request_body(content = UploadSampleRequestDoc, content_type = "multipart/form-data", description = "Upload a sample for analysis and indexing by binlex-server."),
     responses(
         (status = 200, description = "Upload result.", body = UploadResponse)
@@ -88,8 +88,8 @@ async fn upload(
 
 #[utoipa::path(
     get,
-    path = "/api/v1/upload/status",
-    tag = "Upload",
+    path = "/api/v1/index/status",
+    tag = "Index",
     params(UploadStatusParams),
     responses(
         (status = 200, description = "Current upload analysis status.", body = UploadStatusResponse),
@@ -162,7 +162,7 @@ fn ingest_upload(
         form.bytes.len(),
         corpora,
         tags,
-        default_collections(&state.ui.collection),
+        default_collections(&state.ui.index.local),
         form.format,
         form.architecture
     );
@@ -257,7 +257,7 @@ fn ingest_upload(
     let request_id_for_background = request_id.to_string();
     let username_for_background = username.to_string();
     let selector = configured_selector(state);
-    let collections = default_collections(&state.ui.collection);
+    let collections = default_collections(&state.ui.index.local);
     let spawn_result = thread::Builder::new()
         .name("binlex-web-upload-analyze".to_string())
         .spawn(move || {
@@ -595,34 +595,28 @@ fn upload_corpora(state: &AppState, values: &[String]) -> Result<Vec<String>, St
         .collect::<Result<Vec<_>, _>>()?;
     corpora.sort();
     corpora.dedup();
+    let default_corpus = state.ui.index.local.default_corpus.clone();
     if corpora.is_empty() {
-        corpora.push(state.ui.corpus.clone());
-    }
-    if state.ui.upload.sample.corpora.lock {
-        let allowed = state
-            .ui
-            .upload
-            .sample
-            .corpora
-            .default
-            .iter()
-            .map(|value| value.trim())
-            .filter(|value| !value.is_empty())
-            .collect::<Vec<_>>();
-        if let Some(disallowed) = corpora
-            .iter()
-            .find(|value| !allowed.iter().any(|allowed| allowed == &value.as_str()))
-        {
-            return Err(format!("corpus '{}' is not allowed", disallowed));
-        }
+        corpora.push(default_corpus.clone());
+    } else if !corpora
+        .iter()
+        .any(|value| value.eq_ignore_ascii_case(&default_corpus))
+    {
+        corpora.push(default_corpus);
+        corpora.sort();
+        corpora.dedup();
     }
     Ok(corpora)
 }
 
 fn upload_corpus_options(state: &AppState, existing: &[String]) -> Vec<String> {
-    let mut corpora = state.ui.upload.sample.corpora.default.clone();
-    if !state.ui.upload.sample.corpora.lock {
-        corpora.extend(existing.iter().cloned());
+    let mut corpora = state.ui.index.local.default_corpora.clone();
+    corpora.extend(existing.iter().cloned());
+    if !corpora
+        .iter()
+        .any(|value| value.eq_ignore_ascii_case(&state.ui.index.local.default_corpus))
+    {
+        corpora.push(state.ui.index.local.default_corpus.clone());
     }
     corpora.retain(|value| !value.trim().is_empty());
     corpora.sort();
@@ -649,8 +643,11 @@ fn upload_tags(values: &[String]) -> Result<Vec<String>, String> {
 }
 
 fn upload_default_selected_corpora(state: &AppState, options: &[String]) -> Vec<String> {
-    if options.iter().any(|value| value == &state.ui.corpus) {
-        return vec![state.ui.corpus.clone()];
+    if options
+        .iter()
+        .any(|value| value == &state.ui.index.local.default_corpus)
+    {
+        return vec![state.ui.index.local.default_corpus.clone()];
     }
     options
         .first()

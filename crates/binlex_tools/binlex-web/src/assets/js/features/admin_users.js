@@ -172,7 +172,7 @@ async function regenerateUserKey(username) {
 async function deleteUser(username) {
   setInlineError("users-search-error", "");
   try {
-    await postJson("/api/v1/admin/users/delete", { username });
+    await deleteJson(`/api/v1/admin/users/${encodeURIComponent(username)}`);
     loadUsers();
   } catch (error) {
     setInlineError("users-search-error", error.message);
@@ -182,7 +182,7 @@ async function deleteUser(username) {
 async function deleteUserPicture(username) {
   setInlineError("users-search-error", "");
   try {
-    await postJson("/api/v1/admin/users/picture/delete", { username });
+    await deleteJson(`/api/v1/admin/users/${encodeURIComponent(username)}/picture`);
     loadUsers();
   } catch (error) {
     setInlineError("users-search-error", error.message);

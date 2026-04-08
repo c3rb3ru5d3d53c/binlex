@@ -585,57 +585,6 @@ impl LocalIndex {
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
-    #[pyo3(text_signature = "($self, sha256, tag)")]
-    pub fn sample_tag_add(&self, sha256: String, tag: String) -> PyResult<()> {
-        self.inner
-            .lock()
-            .unwrap()
-            .sample_tag_add(&sha256, &tag)
-            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
-    }
-
-    #[pyo3(text_signature = "($self, sha256, tag)")]
-    pub fn sample_tag_remove(&self, sha256: String, tag: String) -> PyResult<()> {
-        self.inner
-            .lock()
-            .unwrap()
-            .sample_tag_remove(&sha256, &tag)
-            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
-    }
-
-    #[pyo3(text_signature = "($self, sha256, tags)")]
-    pub fn sample_tag_replace(&self, sha256: String, tags: Vec<String>) -> PyResult<()> {
-        self.inner
-            .lock()
-            .unwrap()
-            .sample_tag_replace(&sha256, &tags)
-            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
-    }
-
-    #[pyo3(signature = (query, page=1, page_size=50), text_signature = "($self, query, page=1, page_size=50)")]
-    pub fn sample_tag_search(
-        &self,
-        query: String,
-        page: usize,
-        page_size: usize,
-    ) -> PyResult<TagSearchPage> {
-        self.inner
-            .lock()
-            .unwrap()
-            .sample_tag_search(&query, page, page_size)
-            .map(|inner| TagSearchPage { inner })
-            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
-    }
-
-    #[pyo3(text_signature = "($self, sha256)")]
-    pub fn sample_tag_list(&self, sha256: String) -> PyResult<Vec<String>> {
-        self.inner
-            .lock()
-            .unwrap()
-            .sample_tag_list(&sha256)
-            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
-    }
-
     #[pyo3(signature = (sha256, comment, timestamp=None), text_signature = "($self, sha256, comment, timestamp=None)")]
     pub fn sample_comment_add(
         &self,

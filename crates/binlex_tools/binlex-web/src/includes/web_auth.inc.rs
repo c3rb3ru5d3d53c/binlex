@@ -159,14 +159,6 @@ fn session_cookie(headers: &HeaderMap) -> Option<String> {
         .map(ToString::to_string)
 }
 
-fn temporary_token(headers: &HeaderMap) -> Option<String> {
-    let value = headers.get("Token")?.to_str().ok()?.trim();
-    if value.is_empty() {
-        return None;
-    }
-    Some(value.to_string())
-}
-
 fn session_cookie_header(value: &str, ttl_seconds: u64) -> Result<HeaderValue, AppError> {
     HeaderValue::from_str(&format!(
         "{name}={value}; Path=/; HttpOnly; SameSite=Lax; Max-Age={ttl}",
@@ -203,16 +195,16 @@ fn current_user_for_headers(
         .map_err(|error| AppError::unauthorized(error.to_string()))
 }
 
-fn staging_key_for_request(
-    state: &AppState,
-    path: &str,
-    headers: &HeaderMap,
-) -> Result<String, AppError> {
-    if state.route_token_enabled(path) {
-        return temporary_token(headers)
-            .ok_or_else(|| AppError::unauthorized("missing or invalid temporary token"));
+fn staging_key_for_request(headers: &HeaderMap) -> Result<String, AppError> {
+    if let Some(session) = session_cookie(headers) {
+        return Ok(format!("session:{session}"));
     }
-    Ok(temporary_token(headers).unwrap_or_else(|| "__default__".to_string()))
+    if let Some(api_key) = bearer_api_key(headers) {
+        return Ok(format!("api_key:{api_key}"));
+    }
+    Err(AppError::unauthorized(
+        "authentication is required for staged indexing",
+    ))
 }
 
 fn username_for_request(state: &AppState, headers: &HeaderMap) -> Result<String, AppError> {
@@ -243,30 +235,29 @@ async fn auth_middleware(
     next: Next,
 ) -> Result<Response, AppError> {
     let path = request.uri().path().to_string();
+    let method = request.method().clone();
     let context = RequestAuthContext {
         user: current_user_for_headers(state.as_ref(), request.headers())?,
         session: session_cookie(request.headers()),
     };
-    if state.route_auth_enabled(&path) {
-        let Some(user) = context.user.as_ref() else {
-            return Err(AppError::unauthorized(
-                "authentication is required for this endpoint",
-            ));
-        };
-        let allowed_roles = state.route_auth_roles(&path);
-        if !allowed_roles.is_empty() && !allowed_roles.iter().any(|role| role == &user.role) {
-            return Err(AppError::forbidden("role is not allowed for this endpoint"));
+    match state.route_access_policy(&method, &path) {
+        RouteAccessPolicy::Public => {}
+        RouteAccessPolicy::Authenticated => {
+            if context.user.is_none() {
+                return Err(AppError::unauthorized(
+                    "authentication is required for this endpoint",
+                ));
+            }
         }
-    }
-    if state.route_token_enabled(&path) {
-        let token = temporary_token(request.headers())
-            .ok_or_else(|| AppError::unauthorized("missing or invalid temporary token"))?;
-        let authorized = state
-            .database
-            .token_check(&token)
-            .map_err(|error| AppError::unauthorized(error.to_string()))?;
-        if !authorized {
-            return Err(AppError::unauthorized("invalid or expired temporary token"));
+        RouteAccessPolicy::Admin => {
+            let Some(user) = context.user.as_ref() else {
+                return Err(AppError::unauthorized(
+                    "authentication is required for this endpoint",
+                ));
+            };
+            if user.role != "admin" {
+                return Err(AppError::forbidden("role is not allowed for this endpoint"));
+            }
         }
     }
     request.extensions_mut().insert(context);
@@ -283,59 +274,6 @@ async fn version_api() -> Json<VersionResponse> {
     Json(VersionResponse {
         version: binlex::VERSION.to_string(),
     })
-}
-
-#[utoipa::path(
-    post,
-    path = "/api/v1/token",
-    tag = "Tokens",
-    request_body = TokenCreateRequest,
-    responses((status = 200, description = "Created a temporary token.", body = TokenCreateResponse))
-)]
-async fn create_token_api(
-    State(state): State<Arc<AppState>>,
-    Json(_request): Json<TokenCreateRequest>,
-) -> Result<Json<TokenCreateResponse>, AppError> {
-    let database = state.database.clone();
-    let ttl_seconds = state.ui.token.ttl_seconds;
-    let response = task::spawn_blocking(move || {
-        let (record, plaintext) = database
-            .token_create(ttl_seconds)
-            .map_err(|error| AppError::new(error.to_string()))?;
-        Ok::<TokenCreateResponse, AppError>(TokenCreateResponse {
-            token: plaintext,
-            expires: record.expires,
-        })
-    })
-    .await
-    .map_err(|error| AppError::new(error.to_string()))??;
-    Ok(Json(response))
-}
-
-#[utoipa::path(
-    post,
-    path = "/api/v1/token/clear",
-    tag = "Tokens",
-    request_body = TokenClearRequest,
-    responses((status = 200, description = "Cleared a temporary token.", body = TokenActionResponse))
-)]
-async fn clear_token_api(
-    State(state): State<Arc<AppState>>,
-    Json(request): Json<TokenClearRequest>,
-) -> Result<Json<TokenActionResponse>, AppError> {
-    let database = state.database.clone();
-    task::spawn_blocking(move || {
-        let disabled = database
-            .token_disable_value(&request.token)
-            .map_err(|error| AppError::new(error.to_string()))?;
-        if !disabled {
-            return Err(AppError::new("temporary token not found"));
-        }
-        Ok::<(), AppError>(())
-    })
-    .await
-    .map_err(|error| AppError::new(error.to_string()))??;
-    Ok(Json(TokenActionResponse { ok: true }))
 }
 
 fn user_response(user: binlex::databases::UserRecord) -> AuthUserResponse {
@@ -901,7 +839,7 @@ async fn auth_register_api(
     post,
     path = "/api/v1/auth/logout",
     tag = "Auth",
-    responses((status = 200, description = "Ended the current session.", body = TokenActionResponse))
+    responses((status = 200, description = "Ended the current session.", body = ActionResponse))
 )]
 async fn auth_logout_api(
     State(state): State<Arc<AppState>>,
@@ -919,7 +857,7 @@ async fn auth_logout_api(
     }
     Ok((
         [(header::SET_COOKIE, clear_session_cookie_header())],
-        Json(TokenActionResponse { ok: true }),
+        Json(ActionResponse { ok: true }),
     ))
 }
 
@@ -996,13 +934,13 @@ async fn profile_get_api(
     tag = "Auth",
     security(("bearer_auth" = [])),
     request_body = ProfilePasswordRequest,
-    responses((status = 200, description = "Changed the current password.", body = TokenActionResponse))
+    responses((status = 200, description = "Changed the current password.", body = ActionResponse))
 )]
 async fn profile_password_api(
     State(state): State<Arc<AppState>>,
     Extension(context): Extension<RequestAuthContext>,
     Json(request): Json<ProfilePasswordRequest>,
-) -> Result<Json<TokenActionResponse>, AppError> {
+) -> Result<Json<ActionResponse>, AppError> {
     if request.new_password != request.password_confirm {
         return Err(AppError::new("password confirmation does not match"));
     }
@@ -1021,7 +959,7 @@ async fn profile_password_api(
     })
     .await
     .map_err(|error| AppError::new(error.to_string()))??;
-    Ok(Json(TokenActionResponse { ok: true }))
+    Ok(Json(ActionResponse { ok: true }))
 }
 
 #[utoipa::path(
@@ -1319,12 +1257,12 @@ async fn profile_two_factor_disable_api(
     path = "/api/v1/auth/password/reset",
     tag = "Auth",
     request_body = AuthPasswordResetRequest,
-    responses((status = 200, description = "Reset a password using a recovery code.", body = TokenActionResponse))
+    responses((status = 200, description = "Reset a password using a recovery code.", body = ActionResponse))
 )]
 async fn auth_password_reset_api(
     State(state): State<Arc<AppState>>,
     Json(request): Json<AuthPasswordResetRequest>,
-) -> Result<Json<TokenActionResponse>, AppError> {
+) -> Result<Json<ActionResponse>, AppError> {
     if request.new_password != request.password_confirm {
         return Err(AppError::new("password confirmation does not match"));
     }
@@ -1345,16 +1283,16 @@ async fn auth_password_reset_api(
     })
     .await
     .map_err(|error| AppError::new(error.to_string()))??;
-    Ok(Json(TokenActionResponse { ok: true }))
+    Ok(Json(ActionResponse { ok: true }))
 }
 
 #[utoipa::path(
-    post,
-    path = "/api/v1/profile/delete",
+    delete,
+    path = "/api/v1/profile",
     tag = "Auth",
     security(("bearer_auth" = [])),
     request_body = ProfileDeleteRequest,
-    responses((status = 200, description = "Deleted the current account.", body = TokenActionResponse))
+    responses((status = 200, description = "Deleted the current account.", body = ActionResponse))
 )]
 async fn profile_delete_api(
     State(state): State<Arc<AppState>>,
@@ -1387,7 +1325,7 @@ async fn profile_delete_api(
     .map_err(|error| AppError::new(error.to_string()))??;
     Ok((
         [(header::SET_COOKIE, clear_session_cookie_header())],
-        Json(TokenActionResponse { ok: true }),
+        Json(ActionResponse { ok: true }),
     ))
 }
 
@@ -1580,46 +1518,50 @@ async fn admin_user_key_regenerate_api(
 }
 
 #[utoipa::path(
-    post,
-    path = "/api/v1/admin/users/delete",
+    delete,
+    path = "/api/v1/admin/users/{username}",
     tag = "Auth",
     security(("bearer_auth" = [])),
-    request_body = AdminUserNameRequest,
-    responses((status = 200, description = "Deleted a user account.", body = TokenActionResponse))
+    params(
+        ("username" = String, Path, description = "Username")
+    ),
+    responses((status = 200, description = "Deleted a user account.", body = ActionResponse))
 )]
 async fn admin_user_delete_api(
     State(state): State<Arc<AppState>>,
-    Json(request): Json<AdminUserNameRequest>,
-) -> Result<Json<TokenActionResponse>, AppError> {
+    Path(username): Path<String>,
+) -> Result<Json<ActionResponse>, AppError> {
     let database = state.database.clone();
     task::spawn_blocking(move || {
-        let _ = remove_profile_picture_file(&request.username);
+        let _ = remove_profile_picture_file(&username);
         database
-            .user_delete(&request.username)
+            .user_delete(&username)
             .map_err(|error| AppError::new(error.to_string()))
     })
     .await
     .map_err(|error| AppError::new(error.to_string()))??;
-    Ok(Json(TokenActionResponse { ok: true }))
+    Ok(Json(ActionResponse { ok: true }))
 }
 
 #[utoipa::path(
-    post,
-    path = "/api/v1/admin/users/picture/delete",
+    delete,
+    path = "/api/v1/admin/users/{username}/picture",
     tag = "Auth",
     security(("bearer_auth" = [])),
-    request_body = AdminUserNameRequest,
+    params(
+        ("username" = String, Path, description = "Username")
+    ),
     responses((status = 200, description = "Removed a user's avatar.", body = AuthUserResponse))
 )]
 async fn admin_user_picture_delete_api(
     State(state): State<Arc<AppState>>,
-    Json(request): Json<AdminUserNameRequest>,
+    Path(username): Path<String>,
 ) -> Result<Json<AuthUserResponse>, AppError> {
     let database = state.database.clone();
     let response = task::spawn_blocking(move || {
-        remove_profile_picture_file(&request.username)?;
+        remove_profile_picture_file(&username)?;
         database
-            .user_update_profile_picture(&request.username, None)
+            .user_update_profile_picture(&username, None)
             .map(user_response)
             .map_err(|error| AppError::new(error.to_string()))
     })
