@@ -118,6 +118,7 @@ pub(crate) struct PageData {
     pub(crate) upload_format_options: Vec<String>,
     pub(crate) upload_architecture_options: Vec<String>,
     pub(crate) upload_corpus_options: Vec<String>,
+    pub(crate) upload_default_corpus: String,
     pub(crate) upload_corpora_locked: bool,
     pub(crate) upload_selected_corpora: Vec<String>,
     pub(crate) upload_tag_options: Vec<String>,
@@ -420,12 +421,6 @@ struct CommentActionResponse {
 }
 
 #[derive(Deserialize, Serialize, IntoParams, ToSchema)]
-struct SampleTagsParams {
-    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
-    sha256: String,
-}
-
-#[derive(Deserialize, Serialize, IntoParams, ToSchema)]
 struct CollectionTagsParams {
     #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
     sha256: String,
@@ -480,17 +475,6 @@ struct SearchTagsParams {
 }
 
 #[derive(Deserialize, Serialize, IntoParams, ToSchema)]
-struct SearchAssignedTagsParams {
-    #[serde(default)]
-    #[schema(example = "shared")]
-    q: String,
-    #[serde(default)]
-    page: Option<usize>,
-    #[serde(default)]
-    page_size: Option<usize>,
-}
-
-#[derive(Deserialize, Serialize, IntoParams, ToSchema)]
 struct SearchCollectionTagsParams {
     #[serde(default)]
     #[schema(example = "shared")]
@@ -502,21 +486,6 @@ struct SearchCollectionTagsParams {
     page: Option<usize>,
     #[serde(default)]
     page_size: Option<usize>,
-}
-
-#[derive(Deserialize, Serialize, ToSchema)]
-struct SampleTagActionRequest {
-    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
-    sha256: String,
-    #[schema(example = "fancybear")]
-    tag: String,
-}
-
-#[derive(Deserialize, Serialize, ToSchema)]
-struct SampleTagsReplaceRequest {
-    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
-    sha256: String,
-    tags: Vec<String>,
 }
 
 #[derive(Deserialize, Serialize, ToSchema)]
@@ -805,25 +774,8 @@ struct VersionResponse {
     version: String,
 }
 
-#[derive(Deserialize, Serialize, ToSchema, Default)]
-struct TokenCreateRequest {}
-
 #[derive(Serialize, ToSchema)]
-struct TokenCreateResponse {
-    #[schema(example = "9f1a8c3d4e5f60718293a4b5c6d7e8f90123456789abcdef")]
-    token: String,
-    #[schema(example = "2026-04-03T18:00:00Z")]
-    expires: String,
-}
-
-#[derive(Deserialize, Serialize, ToSchema)]
-struct TokenClearRequest {
-    #[schema(example = "9f1a8c3d4e5f60718293a4b5c6d7e8f90123456789abcdef")]
-    token: String,
-}
-
-#[derive(Serialize, ToSchema)]
-struct TokenActionResponse {
+struct ActionResponse {
     ok: bool,
 }
 

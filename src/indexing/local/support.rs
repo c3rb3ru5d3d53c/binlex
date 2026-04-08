@@ -7,7 +7,7 @@ use crate::formats::SymbolJson;
 use crate::indexing::{Collection, Entity};
 use crate::metadata::{Attribute, SymbolType};
 use crate::processor::ProcessorTarget;
-use crate::search::{
+use crate::query::{
     QueryExpr, QueryField, QueryTerm, SearchRoot, query_bool_matches, query_float_matches,
     query_integer_matches, query_score_matches, query_size_matches, query_timestamp_matches,
 };

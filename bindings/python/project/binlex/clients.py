@@ -132,9 +132,8 @@ class Web:
         url: str | None = None,
         verify: bool | None = None,
         api_key: str | None = None,
-        token: str | None = None,
     ) -> None:
-        self._inner = _WebBinding(config, url, verify, api_key, token)
+        self._inner = _WebBinding(config, url, verify, api_key)
 
     def url(self):
         return self._inner.url()
@@ -147,18 +146,6 @@ class Web:
 
     def set_api_key(self, api_key: str | None) -> None:
         self._inner.set_api_key(api_key)
-
-    def token(self):
-        return self._inner.token()
-
-    def set_token(self, token: str | None) -> None:
-        self._inner.set_token(token)
-
-    def create_token(self) -> tuple[str, str]:
-        return self._inner.create_token()
-
-    def clear_token(self, token: str) -> bool:
-        return self._inner.clear_token(token)
 
     def index_graph(
         self,
@@ -198,18 +185,6 @@ class Web:
 
     def clear_index(self) -> bool:
         return self._inner.clear_index()
-
-    def sample_tags(self, sha256: str) -> list[str]:
-        return self._inner.sample_tags(sha256)
-
-    def add_sample_tag(self, sha256: str, tag: str) -> bool:
-        return self._inner.add_sample_tag(sha256, tag)
-
-    def remove_sample_tag(self, sha256: str, tag: str) -> bool:
-        return self._inner.remove_sample_tag(sha256, tag)
-
-    def replace_sample_tags(self, sha256: str, tags: list[str]) -> bool:
-        return self._inner.replace_sample_tags(sha256, tags)
 
     def collection_tags(
         self,

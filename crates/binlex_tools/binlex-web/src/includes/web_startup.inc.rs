@@ -10,24 +10,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(url) = args.url {
         config.binlex_web.url = url;
     }
-    if args.lock_corpora {
-        config.binlex_web.upload.sample.corpora.lock = true;
+    if let Some(server) = args.server {
+        config.binlex_web.server_url = server;
     }
 
     tracing_subscriber::fmt().with_target(false).init();
     info!(
-        "binlex-web starting bind={} server_url={} corpus={} index_path={} index_selector={} compare_limit={} ascending_limit={} collections=function:{} block:{} instruction:{} upload_corpora_lock={}",
+        "binlex-web starting bind={} server_url={} default_corpus={} index_path={} index_selector={} compare_limit={} ascending_limit={} collections=functions:{} blocks:{} instructions:{} upload_corpora_lock={}",
         format!("{}:{}", config.binlex_web.listen, config.binlex_web.port),
-        config.binlex_web.binlex_server.url,
-        config.binlex_web.corpus,
+        config.binlex_web.server_url,
+        config.binlex_web.index.local.default_corpus,
         config.binlex_web.index.local.path,
         config.binlex_web.index.local.selector,
         config.binlex_web.compare.limit,
         config.binlex_web.compare.ascending_limit,
-        config.binlex_web.collection.function,
-        config.binlex_web.collection.block,
-        config.binlex_web.collection.instruction,
-        config.binlex_web.upload.sample.corpora.lock
+        config.binlex_web.index.local.functions,
+        config.binlex_web.index.local.blocks,
+        config.binlex_web.index.local.instructions,
+        config.binlex_web.index.local.lock_corpora
     );
 
     let mut analysis_config = Config::default();
@@ -35,7 +35,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let index_root = PathBuf::from(expand_path(&config.binlex_web.index.local.path));
     let client = Server::new(
         analysis_config.clone(),
-        Some(config.binlex_web.binlex_server.url.clone()),
+        Some(config.binlex_web.server_url.clone()),
         Some(false),
         Some(true),
     )

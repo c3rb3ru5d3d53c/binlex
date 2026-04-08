@@ -58,6 +58,8 @@ struct SingleSelectTemplate<'a> {
 struct UploadCorpusPickerTemplate {
     options_json: String,
     selected_json: String,
+    default_corpus: String,
+    locked: bool,
 }
 
 #[derive(Template)]
@@ -454,7 +456,13 @@ fn render_auth_modals(data: &PageData) -> String {
     <div class="modal-header"><h2>Two-Factor Authentication</h2><button type="button" class="secondary auth-close" onclick="closeTwoFactorLoginModal()">Close</button></div>
     <p class="modal-tip">Enter a 6-digit authenticator code or a recovery code to finish signing in.</p>
     <form class="modal-grid auth-form" onsubmit="submitLoginTwoFactor(event)">
-      <label class="modal-field"><span>Authenticator Or Recovery Code</span><input class="menu-search" id="auth-login-2fa-code" autocomplete="one-time-code"></label>
+      <label class="modal-field">
+        <span>Authenticator Or Recovery Code</span>
+        <div class="profile-key-wrap two-factor-inline-wrap">
+          <input class="menu-search profile-key-input two-factor-inline-input" id="auth-login-2fa-code" type="password" autocomplete="one-time-code">
+          <button type="button" class="secondary recovery-codes-visibility profile-key-toggle" id="auth-login-2fa-toggle" onclick="toggleTwoFactorLoginCodeVisibility()" aria-label="Show authenticator code" title="Show authenticator code"><span class="recovery-codes-eye" aria-hidden="true">👁</span></button>
+        </div>
+      </label>
       <div class="modal-actions two-factor-login-actions">
         <span class="auth-form-error" id="auth-login-2fa-error"></span>
         <button type="submit" class="secondary">Verify</button>
@@ -562,7 +570,7 @@ fn render_upload_modal(data: &PageData) -> String {
             "Auto",
             true,
         ),
-        has_corpus_picker: !data.upload_corpora_locked,
+        has_corpus_picker: true,
         architecture_select_html: render_single_select_dropdown(
             "upload-architecture",
             "Architecture",
@@ -570,14 +578,12 @@ fn render_upload_modal(data: &PageData) -> String {
             "Auto",
             true,
         ),
-        corpus_picker_html: if data.upload_corpora_locked {
-            None
-        } else {
-            Some(render_upload_corpus_picker(
-                &data.upload_corpus_options,
-                &data.upload_selected_corpora,
-            ))
-        },
+        corpus_picker_html: Some(render_upload_corpus_picker(
+            &data.upload_corpus_options,
+            &data.upload_selected_corpora,
+            &data.upload_default_corpus,
+            data.upload_corpora_locked,
+        )),
         tag_picker_html: render_upload_tag_picker(
             &data.upload_tag_options,
             &data.upload_selected_tags,
@@ -605,10 +611,17 @@ fn render_single_select_dropdown(
     .unwrap_or_else(|_| String::new())
 }
 
-fn render_upload_corpus_picker(options: &[String], selected: &[String]) -> String {
+fn render_upload_corpus_picker(
+    options: &[String],
+    selected: &[String],
+    default_corpus: &str,
+    locked: bool,
+) -> String {
     UploadCorpusPickerTemplate {
         options_json: serde_json::to_string(options).unwrap_or_else(|_| "[]".to_string()),
         selected_json: serde_json::to_string(selected).unwrap_or_else(|_| "[]".to_string()),
+        default_corpus: default_corpus.to_string(),
+        locked,
     }
     .render()
     .unwrap_or_else(|_| String::new())

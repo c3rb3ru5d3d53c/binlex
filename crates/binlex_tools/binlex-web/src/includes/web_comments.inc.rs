@@ -1,14 +1,11 @@
-const DEFAULT_COMMENT_PAGE_SIZE: usize = 20;
-const MAX_COMMENT_PAGE_SIZE: usize = 50;
-
 fn clamp_comment_page(value: Option<usize>) -> usize {
     value.unwrap_or(1).max(1)
 }
 
-fn clamp_comment_page_size(value: Option<usize>) -> usize {
+fn clamp_comment_page_size(state: &AppState, value: Option<usize>) -> usize {
     value
-        .unwrap_or(DEFAULT_COMMENT_PAGE_SIZE)
-        .clamp(1, MAX_COMMENT_PAGE_SIZE)
+        .unwrap_or(state.ui.api.comments.default_page_size)
+        .clamp(1, state.ui.api.comments.max_page_size.max(1))
 }
 
 fn build_entity_comment_response(
@@ -44,7 +41,7 @@ async fn get_entity_comments_api(
     let collection = parse_collection(&params.collection)
         .ok_or_else(|| AppError::with_request_id("invalid collection", request_id.to_string()))?;
     let page = clamp_comment_page(params.page);
-    let page_size = clamp_comment_page_size(params.page_size);
+    let page_size = clamp_comment_page_size(state.as_ref(), params.page_size);
     let sha256 = params.sha256.clone();
     let address = params.address;
     let state_for_work = state.clone();
@@ -178,7 +175,7 @@ async fn admin_comments_api(
     Query(params): Query<AdminCommentsSearchParams>,
 ) -> Result<Json<AdminCommentsSearchResponse>, AppError> {
     let page = clamp_comment_page(params.page);
-    let page_size = clamp_comment_page_size(params.page_size);
+    let page_size = clamp_comment_page_size(state.as_ref(), params.page_size);
     let query = params.q.clone();
     let state_for_work = state.clone();
     let request_id_for_work = request_id.to_string();

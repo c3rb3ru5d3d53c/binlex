@@ -6,8 +6,8 @@ struct Args {
     port: Option<u16>,
     #[arg(long)]
     url: Option<String>,
-    #[arg(long, default_value_t = false)]
-    lock_corpora: bool,
+    #[arg(long)]
+    server: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -24,12 +24,8 @@ struct BinlexWebConfig {
     port: u16,
     #[serde(default = "default_url_string")]
     url: String,
-    #[serde(default = "default_corpus_string")]
-    corpus: String,
-    #[serde(default, rename = "binlex-server")]
-    binlex_server: WebBinlexServerConfig,
-    #[serde(default)]
-    collection: WebCollectionConfig,
+    #[serde(default = "default_server_url_string")]
+    server_url: String,
     #[serde(default)]
     index: WebIndexConfig,
     #[serde(default)]
@@ -42,8 +38,6 @@ struct BinlexWebConfig {
     api: WebApiConfig,
     #[serde(default)]
     auth: WebAuthConfig,
-    #[serde(default)]
-    token: WebTokenConfig,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -58,8 +52,6 @@ struct WebAuthConfig {
     registration: WebRegistrationConfig,
     #[serde(default = "default_session_ttl_seconds")]
     session_ttl_seconds: u64,
-    #[serde(default = "default_auth_rules")]
-    rules: Vec<WebAuthRuleConfig>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -77,51 +69,11 @@ struct WebRegistrationConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-struct WebAuthRuleConfig {
-    path: String,
-    enabled: bool,
-    #[serde(default)]
-    roles: Vec<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-struct WebTokenConfig {
-    #[serde(default)]
-    enabled: bool,
-    #[serde(default = "default_token_ttl_seconds")]
-    ttl_seconds: u64,
-    #[serde(default = "default_token_rules")]
-    rules: Vec<WebTokenRuleConfig>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-struct WebTokenRuleConfig {
-    path: String,
-    enabled: bool,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
 struct WebCompareConfig {
     #[serde(default = "default_compare_limit")]
     limit: usize,
     #[serde(default = "default_compare_ascending_limit")]
     ascending_limit: usize,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-struct WebBinlexServerConfig {
-    #[serde(default = "default_server_url_string")]
-    url: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-struct WebCollectionConfig {
-    #[serde(default)]
-    instruction: bool,
-    #[serde(default)]
-    block: bool,
-    #[serde(default = "default_true")]
-    function: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -140,6 +92,18 @@ struct WebLocalIndexConfig {
     path: String,
     #[serde(default = "default_vector_selector")]
     selector: String,
+    #[serde(default = "default_corpus_string")]
+    default_corpus: String,
+    #[serde(default)]
+    instructions: bool,
+    #[serde(default = "default_true")]
+    blocks: bool,
+    #[serde(default = "default_true")]
+    functions: bool,
+    #[serde(default = "default_true")]
+    lock_corpora: bool,
+    #[serde(default = "default_upload_corpora")]
+    default_corpora: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -160,16 +124,6 @@ struct WebUploadSampleConfig {
     enabled: bool,
     #[serde(default = "default_sample_upload_max_bytes")]
     max_bytes: usize,
-    #[serde(default)]
-    corpora: WebUploadSampleCorporaConfig,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-struct WebUploadSampleCorporaConfig {
-    #[serde(default)]
-    lock: bool,
-    #[serde(default = "default_upload_corpora")]
-    default: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -212,6 +166,12 @@ struct WebDownloadJsonConfig {
 struct WebApiConfig {
     #[serde(default)]
     corpora: WebApiCorporaConfig,
+    #[serde(default)]
+    tags: WebApiTagsConfig,
+    #[serde(default)]
+    symbols: WebApiSymbolsConfig,
+    #[serde(default)]
+    comments: WebApiCommentsConfig,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -220,6 +180,34 @@ struct WebApiCorporaConfig {
     max_query_length: usize,
     #[serde(default = "default_api_corpora_max_results")]
     max_results: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct WebApiTagsConfig {
+    #[serde(default = "default_api_tags_max_query_length")]
+    max_query_length: usize,
+    #[serde(default = "default_api_tags_max_results")]
+    max_results: usize,
+    #[serde(default = "default_api_tags_default_page_size")]
+    default_page_size: usize,
+    #[serde(default = "default_api_tags_max_page_size")]
+    max_page_size: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct WebApiSymbolsConfig {
+    #[serde(default = "default_api_symbols_max_query_length")]
+    max_query_length: usize,
+    #[serde(default = "default_api_symbols_max_results")]
+    max_results: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct WebApiCommentsConfig {
+    #[serde(default = "default_api_comments_default_page_size")]
+    default_page_size: usize,
+    #[serde(default = "default_api_comments_max_page_size")]
+    max_page_size: usize,
 }
 
 impl Default for WebConfigFile {
@@ -236,16 +224,13 @@ impl Default for BinlexWebConfig {
             listen: default_listen_string(),
             port: default_port(),
             url: default_url_string(),
-            corpus: default_corpus_string(),
-            binlex_server: WebBinlexServerConfig::default(),
-            collection: WebCollectionConfig::default(),
+            server_url: default_server_url_string(),
             index: WebIndexConfig::default(),
             compare: WebCompareConfig::default(),
             upload: WebUploadConfig::default(),
             download: WebDownloadConfig::default(),
             api: WebApiConfig::default(),
             auth: WebAuthConfig::default(),
-            token: WebTokenConfig::default(),
         }
     }
 }
@@ -258,7 +243,6 @@ impl Default for WebAuthConfig {
             two_factor: WebTwoFactorConfig::default(),
             registration: WebRegistrationConfig::default(),
             session_ttl_seconds: default_session_ttl_seconds(),
-            rules: default_auth_rules(),
         }
     }
 }
@@ -280,39 +264,11 @@ impl Default for WebRegistrationConfig {
     }
 }
 
-impl Default for WebTokenConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            ttl_seconds: default_token_ttl_seconds(),
-            rules: default_token_rules(),
-        }
-    }
-}
-
 impl Default for WebCompareConfig {
     fn default() -> Self {
         Self {
             limit: default_compare_limit(),
             ascending_limit: default_compare_ascending_limit(),
-        }
-    }
-}
-
-impl Default for WebBinlexServerConfig {
-    fn default() -> Self {
-        Self {
-            url: default_server_url_string(),
-        }
-    }
-}
-
-impl Default for WebCollectionConfig {
-    fn default() -> Self {
-        Self {
-            instruction: false,
-            block: true,
-            function: true,
         }
     }
 }
@@ -332,6 +288,12 @@ impl Default for WebLocalIndexConfig {
             enabled: true,
             path: default_local_index_path(),
             selector: default_vector_selector(),
+            default_corpus: default_corpus_string(),
+            instructions: false,
+            blocks: true,
+            functions: true,
+            lock_corpora: true,
+            default_corpora: default_upload_corpora(),
         }
     }
 }
@@ -355,16 +317,6 @@ impl Default for WebUploadSampleConfig {
         Self {
             enabled: default_true(),
             max_bytes: default_sample_upload_max_bytes(),
-            corpora: WebUploadSampleCorporaConfig::default(),
-        }
-    }
-}
-
-impl Default for WebUploadSampleCorporaConfig {
-    fn default() -> Self {
-        Self {
-            lock: false,
-            default: default_upload_corpora(),
         }
     }
 }
@@ -403,6 +355,35 @@ impl Default for WebApiCorporaConfig {
         Self {
             max_query_length: default_api_corpora_max_query_length(),
             max_results: default_api_corpora_max_results(),
+        }
+    }
+}
+
+impl Default for WebApiTagsConfig {
+    fn default() -> Self {
+        Self {
+            max_query_length: default_api_tags_max_query_length(),
+            max_results: default_api_tags_max_results(),
+            default_page_size: default_api_tags_default_page_size(),
+            max_page_size: default_api_tags_max_page_size(),
+        }
+    }
+}
+
+impl Default for WebApiSymbolsConfig {
+    fn default() -> Self {
+        Self {
+            max_query_length: default_api_symbols_max_query_length(),
+            max_results: default_api_symbols_max_results(),
+        }
+    }
+}
+
+impl Default for WebApiCommentsConfig {
+    fn default() -> Self {
+        Self {
+            default_page_size: default_api_comments_default_page_size(),
+            max_page_size: default_api_comments_max_page_size(),
         }
     }
 }
@@ -519,6 +500,38 @@ fn default_api_corpora_max_results() -> usize {
     16
 }
 
+fn default_api_tags_max_query_length() -> usize {
+    64
+}
+
+fn default_api_tags_max_results() -> usize {
+    64
+}
+
+fn default_api_tags_default_page_size() -> usize {
+    50
+}
+
+fn default_api_tags_max_page_size() -> usize {
+    50
+}
+
+fn default_api_symbols_max_query_length() -> usize {
+    64
+}
+
+fn default_api_symbols_max_results() -> usize {
+    64
+}
+
+fn default_api_comments_default_page_size() -> usize {
+    20
+}
+
+fn default_api_comments_max_page_size() -> usize {
+    50
+}
+
 fn default_compare_limit() -> usize {
     100_000
 }
@@ -537,439 +550,4 @@ fn default_page() -> usize {
 
 fn default_limit() -> usize {
     25
-}
-
-fn default_auth_rules() -> Vec<WebAuthRuleConfig> {
-    vec![
-        WebAuthRuleConfig {
-            path: "/api/v1/index/graph".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/index/function".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/index/block".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/index/instruction".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/index/commit".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/index/clear".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/upload/sample".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/corpora/add".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/corpora/collection/add".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/corpora/collection/remove".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/tags/add".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/tags/collection/add".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/tags/collection/remove".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/tags/collection/replace".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/symbols/add".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/symbols/collection/add".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/symbols/collection/remove".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/symbols/collection/replace".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/profile".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/profile/password".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/profile/2fa/setup".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/profile/2fa/enable".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/profile/2fa/disable".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/profile/picture".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/profile/key/regenerate".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/profile/recovery/regenerate".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/profile/delete".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/auth/password/reset".to_string(),
-            enabled: false,
-            roles: Vec::new(),
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/admin/users".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/admin/users/create".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/admin/users/role".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/admin/users/enabled".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/admin/users/password/reset".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/admin/users/key/regenerate".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/admin/users/picture/delete".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/admin/users/2fa/require".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/admin/users/2fa/disable".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/admin/users/2fa/reset".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/admin/users/delete".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/admin/corpora/delete".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/admin/tags/delete".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/admin/symbols/delete".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/admin/comments".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/comments/add".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string(), "user".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/comments/".to_string(),
-            enabled: true,
-            roles: vec!["admin".to_string()],
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/search".to_string(),
-            enabled: false,
-            roles: Vec::new(),
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/corpora".to_string(),
-            enabled: false,
-            roles: Vec::new(),
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/upload/status".to_string(),
-            enabled: false,
-            roles: Vec::new(),
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/download/sample".to_string(),
-            enabled: false,
-            roles: Vec::new(),
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/download/samples".to_string(),
-            enabled: false,
-            roles: Vec::new(),
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/download/json".to_string(),
-            enabled: false,
-            roles: Vec::new(),
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/docs".to_string(),
-            enabled: false,
-            roles: Vec::new(),
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/openapi.json".to_string(),
-            enabled: false,
-            roles: Vec::new(),
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/version".to_string(),
-            enabled: false,
-            roles: Vec::new(),
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/auth/bootstrap".to_string(),
-            enabled: false,
-            roles: Vec::new(),
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/auth/login".to_string(),
-            enabled: false,
-            roles: Vec::new(),
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/auth/logout".to_string(),
-            enabled: false,
-            roles: Vec::new(),
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/auth/register".to_string(),
-            enabled: false,
-            roles: Vec::new(),
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/auth/me".to_string(),
-            enabled: false,
-            roles: Vec::new(),
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/token".to_string(),
-            enabled: false,
-            roles: Vec::new(),
-        },
-        WebAuthRuleConfig {
-            path: "/api/v1/token/clear".to_string(),
-            enabled: false,
-            roles: Vec::new(),
-        },
-    ]
-}
-
-fn default_token_ttl_seconds() -> u64 {
-    900
-}
-
-fn default_token_rules() -> Vec<WebTokenRuleConfig> {
-    vec![
-        WebTokenRuleConfig {
-            path: "/".to_string(),
-            enabled: false,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/version".to_string(),
-            enabled: false,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/token".to_string(),
-            enabled: false,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/token/clear".to_string(),
-            enabled: false,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/index/graph".to_string(),
-            enabled: true,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/index/function".to_string(),
-            enabled: true,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/index/block".to_string(),
-            enabled: true,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/index/instruction".to_string(),
-            enabled: true,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/index/commit".to_string(),
-            enabled: true,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/index/clear".to_string(),
-            enabled: true,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/tags/sample".to_string(),
-            enabled: false,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/tags/sample/add".to_string(),
-            enabled: false,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/tags/sample/remove".to_string(),
-            enabled: false,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/tags/sample/replace".to_string(),
-            enabled: false,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/tags/collection".to_string(),
-            enabled: false,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/tags/collection/add".to_string(),
-            enabled: false,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/tags/collection/remove".to_string(),
-            enabled: false,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/tags/collection/replace".to_string(),
-            enabled: false,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/tags/search/sample".to_string(),
-            enabled: false,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/tags/search/collection".to_string(),
-            enabled: false,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/search".to_string(),
-            enabled: false,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/corpora".to_string(),
-            enabled: false,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/upload/sample".to_string(),
-            enabled: true,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/upload/status".to_string(),
-            enabled: false,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/download/sample".to_string(),
-            enabled: false,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/download/samples".to_string(),
-            enabled: false,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/download/json".to_string(),
-            enabled: false,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/docs".to_string(),
-            enabled: false,
-        },
-        WebTokenRuleConfig {
-            path: "/api/v1/openapi.json".to_string(),
-            enabled: false,
-        },
-    ]
 }

@@ -115,7 +115,7 @@ async fn stage_index_graph(
 ) -> Result<Json<IndexActionResponse>, AppError> {
     let state_for_work = state.clone();
     let request_id_for_error = request_id.to_string();
-    let token = staging_key_for_request(state.as_ref(), "/api/v1/index/graph", &headers)?;
+    let token = staging_key_for_request(&headers)?;
     let username = username_for_request(state.as_ref(), &headers)?;
     task::spawn_blocking(move || {
         let staged = state_for_work.staged_index(&token)?;
@@ -164,7 +164,7 @@ async fn stage_index_function(
     Extension(request_id): Extension<RequestId>,
     Json(request): Json<IndexFunctionRequest>,
 ) -> Result<Json<IndexActionResponse>, AppError> {
-    let token = staging_key_for_request(state.as_ref(), "/api/v1/index/function", &headers)?;
+    let token = staging_key_for_request(&headers)?;
     let username = username_for_request(state.as_ref(), &headers)?;
     let state_for_work = state.clone();
     task::spawn_blocking(move || {
@@ -205,7 +205,7 @@ async fn stage_index_block(
     Extension(request_id): Extension<RequestId>,
     Json(request): Json<IndexBlockRequest>,
 ) -> Result<Json<IndexActionResponse>, AppError> {
-    let token = staging_key_for_request(state.as_ref(), "/api/v1/index/block", &headers)?;
+    let token = staging_key_for_request(&headers)?;
     let username = username_for_request(state.as_ref(), &headers)?;
     let state_for_work = state.clone();
     task::spawn_blocking(move || {
@@ -246,7 +246,7 @@ async fn stage_index_instruction(
     Extension(request_id): Extension<RequestId>,
     Json(request): Json<IndexInstructionRequest>,
 ) -> Result<Json<IndexActionResponse>, AppError> {
-    let token = staging_key_for_request(state.as_ref(), "/api/v1/index/instruction", &headers)?;
+    let token = staging_key_for_request(&headers)?;
     let username = username_for_request(state.as_ref(), &headers)?;
     let state_for_work = state.clone();
     task::spawn_blocking(move || {
@@ -287,7 +287,7 @@ async fn commit_index(
     Extension(request_id): Extension<RequestId>,
     Json(_request): Json<IndexCommitRequest>,
 ) -> Result<Json<IndexActionResponse>, AppError> {
-    let token = staging_key_for_request(state.as_ref(), "/api/v1/index/commit", &headers)?;
+    let token = staging_key_for_request(&headers)?;
     let state_for_work = state.clone();
     task::spawn_blocking(move || {
         let staged = state_for_work.remove_staged_index(&token)?;
@@ -314,7 +314,7 @@ async fn clear_index(
     Extension(request_id): Extension<RequestId>,
     Json(_request): Json<IndexCommitRequest>,
 ) -> Result<Json<IndexActionResponse>, AppError> {
-    let token = staging_key_for_request(state.as_ref(), "/api/v1/index/clear", &headers)?;
+    let token = staging_key_for_request(&headers)?;
     let state_for_work = state.clone();
     task::spawn_blocking(move || {
         let staged = state_for_work.remove_staged_index(&token)?;

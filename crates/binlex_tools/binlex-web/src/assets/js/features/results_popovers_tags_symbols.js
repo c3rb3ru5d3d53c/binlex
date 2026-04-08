@@ -295,7 +295,10 @@ function symbolPickerItemHtml(item, direction, active, resultKey) {
   const activeClass = active ? " active" : "";
   const symbol = metadataItemName(item);
   const mode = direction === "apply" ? "created" : "full";
-  return `<div class="symbol-picker-item${activeClass}"><span class="symbol-picker-name" title="${escapeHtml(symbol)}">${escapeHtml(symbol)}</span><div class="symbol-picker-actions"><button type="button" class="symbol-picker-copy" onclick="event.stopPropagation(); copySymbolValue(this,'${escapeHtml(encodeURIComponent(symbol))}')">Copy</button><button type="button" class="symbol-picker-move" onclick="event.stopPropagation(); ${direction === "apply" ? `applyAvailableSymbol('${escapeHtml(resultKey)}','${escapeHtml(encodeURIComponent(symbol))}')` : `unapplySymbol('${escapeHtml(resultKey)}','${escapeHtml(encodeURIComponent(symbol))}')`}">${moveArrow}</button></div>${metadataTooltipHtml(item, mode)}</div>`;
+  const deleteButton = isAdmin()
+    ? `<button type="button" class="symbol-picker-move" title="Delete symbol" aria-label="Delete symbol" onclick="event.stopPropagation(); deleteSymbolFromPopover('${escapeHtml(resultKey)}','${escapeHtml(encodeURIComponent(symbol))}')">🗑</button>`
+    : "";
+  return `<div class="symbol-picker-item${activeClass}"><span class="symbol-picker-name" title="${escapeHtml(symbol)}">${escapeHtml(symbol)}</span><div class="symbol-picker-actions"><button type="button" class="symbol-picker-copy" onclick="event.stopPropagation(); copySymbolValue(this,'${escapeHtml(encodeURIComponent(symbol))}')">Copy</button><button type="button" class="symbol-picker-move" onclick="event.stopPropagation(); ${direction === "apply" ? `applyAvailableSymbol('${escapeHtml(resultKey)}','${escapeHtml(encodeURIComponent(symbol))}')` : `unapplySymbol('${escapeHtml(resultKey)}','${escapeHtml(encodeURIComponent(symbol))}')`}">${moveArrow}</button>${deleteButton}</div>${metadataTooltipHtml(item, mode)}</div>`;
 }
 
 function renderSymbolPickerColumn(title, scope, items, resultKey, searchValue) {
@@ -498,7 +501,7 @@ async function createAvailableSymbol() {
   });
   if (!confirmed) return;
   try {
-    await postJsonWithCredentials("/api/v1/symbols/add", { symbol: typed });
+    await postJsonWithCredentials("/api/v1/symbols", { symbol: typed });
     await loadAvailableSymbolsByKey(activeSymbolResultKey, typed, true);
   } catch (error) {
     row.available_symbols_error = error instanceof Error ? error.message : "Unable to create symbol.";
@@ -511,7 +514,7 @@ async function applyAvailableSymbol(resultKey, encodedSymbol) {
   const symbol = decodeURIComponent(String(encodedSymbol || ""));
   if (!row || !symbol) return;
   try {
-    await postJsonWithCredentials("/api/v1/symbols/collection/add", {
+    await postJsonWithCredentials("/api/v1/symbols/collection", {
       sha256: row.sha256,
       collection: row.collection,
       architecture: row.architecture,
@@ -530,8 +533,14 @@ async function unapplySymbol(resultKey, encodedSymbol) {
   const row = findSearchRowByKey(resultKey);
   const symbol = decodeURIComponent(String(encodedSymbol || ""));
   if (!row || !symbol) return;
+  const confirmed = await requestTagsConfirmation({
+    title: "Unassign Symbol",
+    message: `Unassign "${symbol}" from ${tagCollectionLabel(row)} symbols?`,
+    confirmLabel: "Unassign",
+  });
+  if (!confirmed) return;
   try {
-    await postJsonWithCredentials("/api/v1/symbols/collection/remove", {
+    await deleteJsonWithCredentials("/api/v1/symbols/collection", {
       sha256: row.sha256,
       collection: row.collection,
       architecture: row.architecture,
@@ -542,6 +551,31 @@ async function unapplySymbol(resultKey, encodedSymbol) {
     await loadAvailableSymbolsByKey(resultKey, symbolAvailableSearchValue(), true);
   } catch (error) {
     row.symbol_error = error instanceof Error ? error.message : "Unable to unapply symbol.";
+    renderSymbolPopover();
+  }
+}
+
+async function deleteSymbolFromPopover(resultKey, encodedSymbol) {
+  const row = findSearchRowByKey(resultKey);
+  const symbol = decodeURIComponent(String(encodedSymbol || ""));
+  if (!row || !symbol || !isAdmin()) return;
+  const confirmed = await requestTagsConfirmation({
+    title: "Delete Symbol",
+    message: `Delete "${symbol}" globally?`,
+    confirmLabel: "Delete",
+  });
+  if (!confirmed) return;
+  try {
+    await deleteJsonWithCredentials(`/api/v1/admin/symbols/${encodeURIComponent(symbol)}`);
+    row.symbol_error = null;
+    row.symbols = filterSymbolsForSearch((row.symbols || []).filter((value) => metadataItemName(value) !== symbol), "");
+    row.available_symbols = filterSymbolsForSearch((row.available_symbols || []).filter((value) => metadataItemName(value) !== symbol), "");
+    updateSymbolCell(resultKey);
+    renderSymbolPopover();
+    loadRowSymbolsByKey(resultKey, true).catch((error) => console.error("binlex-web symbol load failed", error));
+    loadAvailableSymbolsByKey(resultKey, symbolAvailableSearchValue(), true).catch((error) => console.error("binlex-web symbol search failed", error));
+  } catch (error) {
+    row.symbol_error = error instanceof Error ? error.message : "Unable to delete symbol.";
     renderSymbolPopover();
   }
 }
@@ -562,13 +596,19 @@ function tagSummaryText(row, scope, visible, total) {
 function renderAvailableTagItem(item, active, resultKey) {
   const activeClass = active ? " active" : "";
   const tag = metadataItemName(item);
-  return `<div class="symbol-picker-item${activeClass}"><span class="symbol-picker-name" title="${escapeHtml(tag)}">${escapeHtml(tag)}</span><div class="symbol-picker-actions"><button type="button" class="symbol-picker-copy" onclick="event.stopPropagation(); copyPickerValue(this,'${escapeHtml(encodeURIComponent(tag))}')">Copy</button><button type="button" class="symbol-picker-move" data-tag-action="apply" data-result-key="${escapeHtml(resultKey)}" data-tag="${escapeHtml(encodeURIComponent(tag))}">&rarr;</button></div>${metadataTooltipHtml(item, "created")}</div>`;
+  const deleteButton = isAdmin()
+    ? `<button type="button" class="symbol-picker-move" title="Delete tag" aria-label="Delete tag" data-tag-action="delete" data-result-key="${escapeHtml(resultKey)}" data-tag="${escapeHtml(encodeURIComponent(tag))}">🗑</button>`
+    : "";
+  return `<div class="symbol-picker-item${activeClass}"><span class="symbol-picker-name" title="${escapeHtml(tag)}">${escapeHtml(tag)}</span><div class="symbol-picker-actions"><button type="button" class="symbol-picker-copy" onclick="event.stopPropagation(); copyPickerValue(this,'${escapeHtml(encodeURIComponent(tag))}')">Copy</button><button type="button" class="symbol-picker-move" data-tag-action="apply" data-result-key="${escapeHtml(resultKey)}" data-tag="${escapeHtml(encodeURIComponent(tag))}">&rarr;</button>${deleteButton}</div>${metadataTooltipHtml(item, "created")}</div>`;
 }
 
 function renderAssignedTagItem(item, active, resultKey) {
   const activeClass = active ? " active" : "";
   const tag = metadataItemName(item);
-  return `<div class="symbol-picker-item${activeClass}"><span class="symbol-picker-name" title="${escapeHtml(tag)}">${escapeHtml(tag)}</span><div class="symbol-picker-actions"><button type="button" class="symbol-picker-copy" onclick="event.stopPropagation(); copyPickerValue(this,'${escapeHtml(encodeURIComponent(tag))}')">Copy</button><button type="button" class="symbol-picker-move" data-tag-action="remove" data-result-key="${escapeHtml(resultKey)}" data-tag="${escapeHtml(encodeURIComponent(tag))}">&larr;</button></div>${metadataTooltipHtml(item, "full")}</div>`;
+  const deleteButton = isAdmin()
+    ? `<button type="button" class="symbol-picker-move" title="Delete tag" aria-label="Delete tag" data-tag-action="delete" data-result-key="${escapeHtml(resultKey)}" data-tag="${escapeHtml(encodeURIComponent(tag))}">🗑</button>`
+    : "";
+  return `<div class="symbol-picker-item${activeClass}"><span class="symbol-picker-name" title="${escapeHtml(tag)}">${escapeHtml(tag)}</span><div class="symbol-picker-actions"><button type="button" class="symbol-picker-copy" onclick="event.stopPropagation(); copyPickerValue(this,'${escapeHtml(encodeURIComponent(tag))}')">Copy</button><button type="button" class="symbol-picker-move" data-tag-action="remove" data-result-key="${escapeHtml(resultKey)}" data-tag="${escapeHtml(encodeURIComponent(tag))}">&larr;</button>${deleteButton}</div>${metadataTooltipHtml(item, "full")}</div>`;
 }
 
 function renderTagsManagerColumn(title, scope, items, row, resultKey, total, searchValue, create) {
@@ -688,6 +728,14 @@ function renderTagsPopover() {
         removeAssignedTag(String(target?.dataset?.resultKey || ""), String(target?.dataset?.tag || ""));
       });
     });
+    body.querySelectorAll('[data-tag-action="delete"]').forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const target = event.currentTarget;
+        deleteTagFromPopover(String(target?.dataset?.resultKey || ""), String(target?.dataset?.tag || ""));
+      });
+    });
     if (activeScope) {
       const replacement = body.querySelector(`.tags-manager-search[data-tag-scope="${CSS.escape(activeScope)}"]`);
       if (replacement instanceof HTMLInputElement) {
@@ -779,7 +827,7 @@ async function createAvailableTag() {
   });
   if (!confirmed) return;
   try {
-    await postJsonWithCredentials("/api/v1/tags/add", { tag: typed });
+    await postJsonWithCredentials("/api/v1/tags", { tag: typed });
     renderTagsPopover();
     loadAvailableTagsByKey(activeTagResultKey, tagAvailableSearchValue(), true).catch((error) => console.error("binlex-web tag search failed", error));
   } catch (error) {
@@ -793,7 +841,7 @@ async function applyAvailableTag(resultKey, encodedTag) {
   const tag = decodeURIComponent(String(encodedTag || ""));
   if (!row || !tag) return;
   try {
-    await postJsonWithCredentials("/api/v1/tags/collection/add", {
+    await postJsonWithCredentials("/api/v1/tags/collection", {
       sha256: row.sha256,
       collection: row.collection,
       address: Number(row.address || 0),
@@ -818,13 +866,13 @@ async function removeAssignedTag(resultKey, encodedTag) {
   const tag = decodeURIComponent(String(encodedTag || ""));
   if (!row || !tag) return;
   const confirmed = await requestTagsConfirmation({
-    title: "Delete Tag",
-    message: `Remove "${tag}" from ${tagCollectionLabel(row)} tags?`,
-    confirmLabel: "Delete",
+    title: "Unassign Tag",
+    message: `Unassign "${tag}" from ${tagCollectionLabel(row)} tags?`,
+    confirmLabel: "Unassign",
   });
   if (!confirmed) return;
   try {
-    await postJsonWithCredentials("/api/v1/tags/collection/remove", {
+    await deleteJsonWithCredentials("/api/v1/tags/collection", {
       sha256: row.sha256,
       collection: row.collection,
       address: Number(row.address || 0),
@@ -834,6 +882,32 @@ async function removeAssignedTag(resultKey, encodedTag) {
     row.collection_tag_count = row.collection_tags.length;
     row.tags_loaded = true;
     row.tag_error = null;
+    updateTagsCell(resultKey);
+    renderTagsPopover();
+    loadRowTagsByKey(resultKey, true).catch((error) => console.error("binlex-web tag load failed", error));
+    loadAvailableTagsByKey(resultKey, tagAvailableSearchValue(), true).catch((error) => console.error("binlex-web tag search failed", error));
+  } catch (error) {
+    row.tag_error = error instanceof Error ? error.message : "Unable to unassign tag.";
+    renderTagsPopover();
+  }
+}
+
+async function deleteTagFromPopover(resultKey, encodedTag) {
+  const row = findSearchRowByKey(resultKey);
+  const tag = decodeURIComponent(String(encodedTag || ""));
+  if (!row || !tag || !isAdmin()) return;
+  const confirmed = await requestTagsConfirmation({
+    title: "Delete Tag",
+    message: `Delete "${tag}" globally?`,
+    confirmLabel: "Delete",
+  });
+  if (!confirmed) return;
+  try {
+    await deleteJsonWithCredentials(`/api/v1/admin/tags/${encodeURIComponent(tag)}`);
+    row.tag_error = null;
+    row.collection_tags = normalizeMetadataItems((row.collection_tags || []).filter((value) => metadataItemName(value) !== tag));
+    row.collection_tag_count = row.collection_tags.length;
+    row.available_tags = normalizeMetadataItems((row.available_tags || []).filter((value) => metadataItemName(value) !== tag));
     updateTagsCell(resultKey);
     renderTagsPopover();
     loadRowTagsByKey(resultKey, true).catch((error) => console.error("binlex-web tag load failed", error));

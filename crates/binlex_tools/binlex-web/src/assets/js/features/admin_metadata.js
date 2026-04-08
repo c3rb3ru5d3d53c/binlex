@@ -6,8 +6,8 @@ const ADMIN_METADATA_CONFIG = {
     inputId: "admin-corpora-search-input",
     createButtonId: "admin-corpora-create-button",
     searchUrl: "/api/v1/corpora",
-    createUrl: "/api/v1/corpora/add",
-    deleteUrl: "/api/v1/admin/corpora/delete",
+    createUrl: "/api/v1/corpora",
+    deleteUrl: "/api/v1/admin/corpora",
     responseKey: "corpora",
     requestKey: "corpus",
     singular: "corpus",
@@ -20,8 +20,8 @@ const ADMIN_METADATA_CONFIG = {
     inputId: "admin-tags-search-input",
     createButtonId: "admin-tags-create-button",
     searchUrl: "/api/v1/tags/search",
-    createUrl: "/api/v1/tags/add",
-    deleteUrl: "/api/v1/admin/tags/delete",
+    createUrl: "/api/v1/tags",
+    deleteUrl: "/api/v1/admin/tags",
     responseKey: "tags",
     requestKey: "tag",
     singular: "tag",
@@ -34,8 +34,8 @@ const ADMIN_METADATA_CONFIG = {
     inputId: "admin-symbols-search-input",
     createButtonId: "admin-symbols-create-button",
     searchUrl: "/api/v1/symbols/search",
-    createUrl: "/api/v1/symbols/add",
-    deleteUrl: "/api/v1/admin/symbols/delete",
+    createUrl: "/api/v1/symbols",
+    deleteUrl: "/api/v1/admin/symbols",
     responseKey: "symbols",
     requestKey: "symbol",
     singular: "symbol",
@@ -261,7 +261,7 @@ async function deleteAdminMetadata(kind, encodedValue) {
   });
   if (!confirmed) return;
   try {
-    await postJson(config.deleteUrl, { [config.requestKey]: value });
+    await deleteJson(`${config.deleteUrl}/${encodeURIComponent(value)}`);
     pruneDeletedMetadataFromSearch(kind, value);
     await loadAdminMetadata(kind);
   } catch (error) {

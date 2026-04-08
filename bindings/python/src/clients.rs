@@ -113,18 +113,16 @@ impl Server {
 #[pymethods]
 impl Web {
     #[new]
-    #[pyo3(signature = (config, url=None, verify=None, api_key=None, token=None))]
+    #[pyo3(signature = (config, url=None, verify=None, api_key=None))]
     pub fn new(
         py: Python<'_>,
         config: Py<Config>,
         url: Option<String>,
         verify: Option<bool>,
         api_key: Option<String>,
-        token: Option<String>,
     ) -> PyResult<Self> {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
-        let inner =
-            InnerWeb::new(inner_config, url, verify, api_key, token).map_err(map_web_error)?;
+        let inner = InnerWeb::new(inner_config, url, verify, api_key).map_err(map_web_error)?;
         Ok(Self { inner })
     }
 
@@ -142,23 +140,6 @@ impl Web {
 
     pub fn set_api_key(&mut self, api_key: Option<String>) {
         self.inner.set_api_key(api_key);
-    }
-
-    pub fn token(&self) -> Option<String> {
-        self.inner.token().map(ToString::to_string)
-    }
-
-    pub fn set_token(&mut self, token: Option<String>) {
-        self.inner.set_token(token);
-    }
-
-    pub fn create_token(&self) -> PyResult<(String, String)> {
-        let response = self.inner.create_token().map_err(map_web_error)?;
-        Ok((response.token, response.expires))
-    }
-
-    pub fn clear_token(&self, token: String) -> PyResult<bool> {
-        Ok(self.inner.clear_token(&token).map_err(map_web_error)?.ok)
     }
 
     #[pyo3(signature = (sha256, graph, collections=None, corpora=None))]
@@ -254,34 +235,6 @@ impl Web {
 
     pub fn clear_index(&self) -> PyResult<bool> {
         Ok(self.inner.clear_index().map_err(map_web_error)?.ok)
-    }
-
-    pub fn sample_tags(&self, sha256: String) -> PyResult<Vec<String>> {
-        Ok(self.inner.sample_tags(&sha256).map_err(map_web_error)?.tags)
-    }
-
-    pub fn add_sample_tag(&self, sha256: String, tag: String) -> PyResult<bool> {
-        Ok(self
-            .inner
-            .add_sample_tag(&sha256, &tag)
-            .map_err(map_web_error)?
-            .ok)
-    }
-
-    pub fn remove_sample_tag(&self, sha256: String, tag: String) -> PyResult<bool> {
-        Ok(self
-            .inner
-            .remove_sample_tag(&sha256, &tag)
-            .map_err(map_web_error)?
-            .ok)
-    }
-
-    pub fn replace_sample_tags(&self, sha256: String, tags: Vec<String>) -> PyResult<bool> {
-        Ok(self
-            .inner
-            .replace_sample_tags(&sha256, &tags)
-            .map_err(map_web_error)?
-            .ok)
     }
 
     pub fn collection_tags(

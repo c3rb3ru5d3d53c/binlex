@@ -26,12 +26,7 @@ impl LocalDB {
                 error_message TEXT NULL,
                 id TEXT NULL
             );
-            CREATE TABLE IF NOT EXISTS sample_tags (
-                sha256 TEXT NOT NULL,
-                tag TEXT NOT NULL,
-                timestamp TEXT NOT NULL,
-                PRIMARY KEY (sha256, tag)
-            );
+            DROP TABLE IF EXISTS sample_tags;
             CREATE TABLE IF NOT EXISTS tags (
                 tag TEXT NOT NULL,
                 username TEXT NOT NULL DEFAULT '',

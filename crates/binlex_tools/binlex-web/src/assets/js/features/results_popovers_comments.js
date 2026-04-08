@@ -10,7 +10,7 @@ function commentAuthorHtml(actor) {
 function commentCardHtml(comment, options = {}) {
   const body = escapeHtml(String(comment?.body || "")).replace(/\n/g, "<br>");
   const deleteButton = options.showDelete
-    ? `<button type="button" class="symbol-picker-move comment-delete" title="Delete comment" aria-label="Delete comment" onclick="event.stopPropagation(); deleteCommentById(${Number(comment?.id || 0)},'${escapeHtml(options.resultKey || "")}')">🗑</button>`
+    ? `<button type="button" class="symbol-picker-move comment-delete" title="Delete comment" aria-label="Delete comment" onclick="event.stopPropagation(); deleteCommentById(${Number(comment?.id || 0)},'${escapeHtml(options.resultKey || "")}', true)">🗑</button>`
     : "";
   return `
     <div class="comment-card">
@@ -271,9 +271,17 @@ async function changeCommentsPage(resultKey, delta) {
   await loadRowCommentsByKey(resultKey, { page: nextPage });
 }
 
-async function deleteCommentById(id, resultKey = "") {
+async function deleteCommentById(id, resultKey = "", confirmFirst = false) {
   const commentId = Number(id || 0);
   if (!commentId || !isAdmin()) return;
+  if (confirmFirst) {
+    const confirmed = await requestTagsConfirmation({
+      title: "Delete Comment",
+      message: "Delete this comment permanently?",
+      confirmLabel: "Delete",
+    });
+    if (!confirmed) return;
+  }
   try {
     const response = await fetch(`/api/v1/comments/${commentId}`, {
       method: "DELETE",

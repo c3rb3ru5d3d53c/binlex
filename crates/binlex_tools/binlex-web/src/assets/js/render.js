@@ -206,7 +206,7 @@ function buildResultActionTree(row, sampleDownloadsEnabled, query) {
   if (row?.contiguous === true) {
     copyChildren.push(actionFetchCopyText(
       "YARA",
-      "/api/v1/action/yara",
+      "/api/v1/yara/render",
       "POST",
       buildYaraActionRequest(query, [row]),
       "application/json",
@@ -265,7 +265,7 @@ function buildGlobalResultsActionTree(rows, sampleDownloadsEnabled, query) {
   if (contiguousRows.length > 0) {
     copyChildren.push(actionFetchCopyText(
       "YARA",
-      "/api/v1/action/yara",
+      "/api/v1/yara/render",
       "POST",
       buildYaraActionRequest(query, contiguousRows),
       "application/json",

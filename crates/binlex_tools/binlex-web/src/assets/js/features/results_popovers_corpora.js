@@ -138,7 +138,11 @@ function renderAvailableCorpusItem(item, active, resultKey) {
 function renderAssignedCorpusItem(item, scope, active, resultKey) {
   const activeClass = active ? " active" : "";
   const value = metadataItemName(item);
-  return `<div class="symbol-picker-item${activeClass}"><span class="symbol-picker-name" title="${escapeHtml(value)}">${escapeHtml(value)}</span><div class="symbol-picker-actions"><button type="button" class="symbol-picker-copy" onclick="event.stopPropagation(); copyPickerValue(this,'${escapeHtml(encodeURIComponent(value))}')">Copy</button><button type="button" class="symbol-picker-move" data-corpora-action="remove" data-corpora-scope="${escapeHtml(scope)}" data-result-key="${escapeHtml(resultKey)}" data-corpus="${escapeHtml(encodeURIComponent(value))}">&larr;</button></div>${metadataTooltipHtml(item, "full")}</div>`;
+  const removable = value.trim().toLowerCase() !== "default";
+  const moveButton = removable
+    ? `<button type="button" class="symbol-picker-move" data-corpora-action="remove" data-corpora-scope="${escapeHtml(scope)}" data-result-key="${escapeHtml(resultKey)}" data-corpus="${escapeHtml(encodeURIComponent(value))}">&larr;</button>`
+    : "";
+  return `<div class="symbol-picker-item${activeClass}"><span class="symbol-picker-name" title="${escapeHtml(value)}">${escapeHtml(value)}</span><div class="symbol-picker-actions"><button type="button" class="symbol-picker-copy" onclick="event.stopPropagation(); copyPickerValue(this,'${escapeHtml(encodeURIComponent(value))}')">Copy</button>${moveButton}</div>${metadataTooltipHtml(item, "full")}</div>`;
 }
 
 function renderCorporaManagerColumn(title, scope, items, resultKey, total, searchValue, create) {
@@ -347,7 +351,7 @@ async function createAvailableCorpus() {
   });
   if (!confirmed) return;
   try {
-    await postJsonWithCredentials("/api/v1/corpora/add", { corpus: typed });
+    await postJsonWithCredentials("/api/v1/corpora", { corpus: typed });
     const createdItem = { name: typed, created_actor: { username: "", profile_picture: null }, created_timestamp: "", assigned_actor: null, assigned_timestamp: null };
     row.available_corpora_created = normalizeMetadataItems([...(row.available_corpora_created || []), createdItem]);
     row.available_corpora = normalizeMetadataItems([...(row.available_corpora || []), createdItem]);
@@ -368,7 +372,7 @@ async function applyAvailableCorpus(resultKey, scope, encodedCorpus) {
   const corpus = decodeURIComponent(String(encodedCorpus || ""));
   if (!row || !corpus) return;
   try {
-    await postJsonWithCredentials("/api/v1/corpora/collection/add", {
+    await postJsonWithCredentials("/api/v1/corpora/collection", {
       sha256: row.sha256,
       collection: row.collection,
       architecture: row.architecture,
@@ -394,7 +398,7 @@ async function removeAssignedCorpus(resultKey, scope, encodedCorpus) {
   const corpus = decodeURIComponent(String(encodedCorpus || ""));
   if (!row || !corpus) return;
   try {
-    await postJsonWithCredentials("/api/v1/corpora/collection/remove", {
+    await deleteJsonWithCredentials("/api/v1/corpora/collection", {
       sha256: row.sha256,
       collection: row.collection,
       architecture: row.architecture,
