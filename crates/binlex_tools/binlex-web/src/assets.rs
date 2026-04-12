@@ -1,4 +1,5 @@
 pub(crate) const STYLES: &str = include_str!("assets/styles.css");
+pub(crate) const LOGO: &str = include_str!("assets/logo.svg");
 pub(crate) const SCRIPT: &str = concat!(
     include_str!("../../../../src/query/query.js"),
     "\n",

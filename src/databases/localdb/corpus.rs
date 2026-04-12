@@ -296,6 +296,84 @@ impl LocalDB {
             .collect()
     }
 
+    pub fn entity_corpus_details_page(
+        &self,
+        sha256: &str,
+        collection: Collection,
+        architecture: &str,
+        address: u64,
+        page: usize,
+        page_size: usize,
+    ) -> Result<crate::databases::localdb::CountedPage<CorpusRecord>, Error> {
+        let page = page.max(1);
+        let page_size = page_size.max(1);
+        let offset = (page - 1) * page_size;
+        let limit = page_size + 1;
+        let total_rows = self.sqlite.query(
+            "SELECT COUNT(*) AS count
+             FROM entity_corpora
+             WHERE sha256 = ?1 AND collection = ?2 AND architecture = ?3 AND address = ?4",
+            &[
+                SQLiteValue::Text(sha256.to_string()),
+                SQLiteValue::Text(collection.as_str().to_string()),
+                SQLiteValue::Text(architecture.to_string()),
+                SQLiteValue::Integer(address as i64),
+            ],
+        )?;
+        let total_results = total_rows
+            .first()
+            .and_then(|row| row.get("count"))
+            .and_then(|value| value.as_i64())
+            .unwrap_or(0)
+            .max(0) as usize;
+        let rows = self.sqlite.query(
+            "SELECT corpus, username, timestamp
+             FROM entity_corpora
+             WHERE sha256 = ?1 AND collection = ?2 AND architecture = ?3 AND address = ?4
+             ORDER BY corpus ASC
+             LIMIT ?5 OFFSET ?6",
+            &[
+                SQLiteValue::Text(sha256.to_string()),
+                SQLiteValue::Text(collection.as_str().to_string()),
+                SQLiteValue::Text(architecture.to_string()),
+                SQLiteValue::Integer(address as i64),
+                SQLiteValue::Integer(limit as i64),
+                SQLiteValue::Integer(offset as i64),
+            ],
+        )?;
+        let has_next = rows.len() > page_size;
+        let items = rows
+            .into_iter()
+            .take(page_size)
+            .map(|row| -> Result<CorpusRecord, Error> {
+                Ok(CorpusRecord {
+                    corpus: row
+                        .get("corpus")
+                        .and_then(|value| value.as_str())
+                        .ok_or_else(|| Error("entity corpus row is missing corpus".to_string()))?
+                        .to_string(),
+                    username: row
+                        .get("username")
+                        .and_then(|value| value.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    timestamp: row
+                        .get("timestamp")
+                        .and_then(|value| value.as_str())
+                        .ok_or_else(|| Error("entity corpus row is missing timestamp".to_string()))?
+                        .to_string(),
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(crate::databases::localdb::CountedPage {
+            items,
+            page,
+            page_size,
+            total_results,
+            has_next,
+        })
+    }
+
     pub fn entity_corpus_has_any(
         &self,
         sha256: &str,
@@ -673,6 +751,15 @@ impl LocalDB {
                     vector_json = excluded.vector_json,
                     attributes_json = excluded.attributes_json",
             )?;
+            let mut entity_symbol_delete = transaction.prepare(
+                "DELETE FROM entity_symbols
+                 WHERE sha256 = ?1 AND collection = ?2 AND architecture = ?3 AND address = ?4",
+            )?;
+            let mut entity_symbol_insert = transaction.prepare(
+                "INSERT INTO entity_symbols (
+                    sha256, collection, architecture, address, symbol, username, timestamp
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            )?;
             for record in metadata {
                 let vector = serde_json::to_string(&record.vector)
                     .map_err(|error| Error(error.to_string()))?;
@@ -725,6 +812,29 @@ impl LocalDB {
                     SQLiteValue::Text(attributes),
                 ];
                 metadata_upsert.execute(params_from_iter(params.iter()))?;
+                entity_symbol_delete.execute((
+                    &record.sha256,
+                    record.collection.as_str(),
+                    &record.architecture,
+                    record.address as i64,
+                ))?;
+                for item in entity_symbol_records_from_attributes(
+                    &record.sha256,
+                    record.collection,
+                    &record.architecture,
+                    record.address,
+                    &record.attributes,
+                ) {
+                    entity_symbol_insert.execute((
+                        &item.sha256,
+                        item.collection.as_str(),
+                        &item.architecture,
+                        item.address as i64,
+                        &item.symbol,
+                        &item.username,
+                        &item.timestamp,
+                    ))?;
+                }
             }
         }
 
@@ -809,6 +919,19 @@ impl LocalDB {
                 SQLiteValue::Text(vector),
                 SQLiteValue::Text(attributes),
             ],
+        )?;
+        self.entity_symbol_replace_all(
+            &record.sha256,
+            record.collection,
+            &record.architecture,
+            record.address,
+            &entity_symbol_records_from_attributes(
+                &record.sha256,
+                record.collection,
+                &record.architecture,
+                record.address,
+                &record.attributes,
+            ),
         )?;
         Ok(())
     }

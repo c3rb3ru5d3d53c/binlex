@@ -25,6 +25,12 @@ use std::collections::BTreeMap;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigFileRoot {
+    #[serde(rename = "binlex")]
+    pub binlex: ConfigData,
+}
+
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct ConfigProcessorTarget {
     pub enabled: bool,
@@ -116,7 +122,9 @@ pub struct ConfigImaging {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigData {
-    pub general: ConfigGeneral,
+    pub threads: usize,
+    pub minimal: bool,
+    pub debug: bool,
     #[serde(default)]
     pub storage: ConfigStorage,
     #[serde(default)]
@@ -239,13 +247,6 @@ impl Default for ConfigMarkov {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigGeneral {
-    pub threads: usize,
-    pub minimal: bool,
-    pub debug: bool,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigMmap {
     pub directory: String,
     pub cache: ConfigMmapCache,
@@ -282,7 +283,10 @@ impl Serialize for Config {
     where
         S: serde::Serializer,
     {
-        self.0.serialize(serializer)
+        ConfigFileRoot {
+            binlex: self.0.as_ref().clone(),
+        }
+        .serialize(serializer)
     }
 }
 
@@ -291,7 +295,7 @@ impl<'de> Deserialize<'de> for Config {
     where
         D: serde::Deserializer<'de>,
     {
-        ConfigData::deserialize(deserializer).map(Self::from_data)
+        ConfigFileRoot::deserialize(deserializer).map(|root| Self::from_data(root.binlex))
     }
 }
 

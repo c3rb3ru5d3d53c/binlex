@@ -53,6 +53,25 @@ body {
   align-items: center;
   padding: 12px 18px;
 }
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.brand-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+}
+.brand-logo svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
 .header h1 { margin: 0; font-size: 1.8rem; letter-spacing: -0.03em; }
 .status-row {
   display: flex;
@@ -3067,6 +3086,8 @@ code { font-family: "IBM Plex Mono", monospace; font-size: 0.95em; }
 @media (max-width: 980px) {
   .page { padding: 16px; }
   .header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .brand { gap: 10px; }
+  .brand-logo { width: 36px; height: 36px; }
   .results-meta {
     flex-direction: column;
     align-items: stretch;

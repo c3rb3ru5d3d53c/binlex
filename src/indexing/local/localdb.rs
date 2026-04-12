@@ -3,16 +3,141 @@ use super::support::sample_key;
 use super::types::{
     CollectionCommentRecord, CollectionCommentSearchPage, CollectionTagRecord,
     CollectionTagSearchPage, CommentRecord, CommentSearchPage, EntityCommentRecord,
-    EntityCommentSearchPage, Error, SampleStatusRecord, StoredGraphRecord,
+    EntityCommentSearchPage, Error, IndexEntry, SampleStatusRecord, StoredGraphRecord,
 };
-use crate::controlflow::{Block, Function, Graph, Instruction};
+use crate::controlflow::graph::{GraphProcessorOutputsSnapshot, GraphQueueSnapshot};
+use crate::controlflow::{
+    Block, BlockJson, Function, FunctionJson, Graph, GraphSnapshot, Instruction, InstructionJson,
+};
 use crate::databases::localdb::normalize_metadata_name;
 use crate::databases::{LocalDBPage, SampleCommentRecord};
 use crate::indexing::Collection;
+use crate::processor::ProcessorOutputs;
 use chrono::Utc;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 impl LocalIndex {
+    pub fn graph_by_sha256(&self, sha256: &str) -> Result<Graph, Error> {
+        let sha256 = sha256.trim();
+        if sha256.is_empty() {
+            return Err(Error::Validation("sha256 must not be empty".to_string()));
+        }
+        if let Some(graph) = self.load_stored_graph(sha256)? {
+            return Ok(normalize_graph_for_read(graph));
+        }
+
+        let mut architectures = BTreeSet::<String>::new();
+        let mut instructions = Vec::<InstructionJson>::new();
+        let mut instruction_addresses = BTreeSet::<u64>::new();
+        let mut block_addresses = BTreeSet::<u64>::new();
+        let mut function_addresses = BTreeSet::<u64>::new();
+        let mut instruction_outputs = HashMap::<u64, ProcessorOutputs>::new();
+        let mut block_outputs = HashMap::<u64, ProcessorOutputs>::new();
+        let mut function_outputs = HashMap::<u64, ProcessorOutputs>::new();
+
+        for key in self
+            .store
+            .object_list("index/")
+            .map_err(|error| Error::LocalStore(error.to_string()))?
+        {
+            let entry = self
+                .store
+                .object_get_json::<IndexEntry>(&key)
+                .map_err(|error| Error::LocalStore(error.to_string()))?;
+            if entry.sha256 != sha256 {
+                continue;
+            }
+            architectures.insert(entry.architecture.clone());
+            let Some(json) = entry.json.clone() else {
+                continue;
+            };
+            match entry.entity {
+                Collection::Instruction => {
+                    let instruction: InstructionJson = serde_json::from_value(json)
+                        .map_err(|error| Error::Serialization(error.to_string()))?;
+                    instruction_addresses.insert(instruction.address);
+                    if instruction.is_block_start {
+                        block_addresses.insert(instruction.address);
+                    }
+                    if instruction.is_function_start {
+                        function_addresses.insert(instruction.address);
+                    }
+                    if let Some(processors) = instruction.processors.clone() {
+                        instruction_outputs.insert(
+                            instruction.address,
+                            processors.into_iter().collect::<Vec<_>>(),
+                        );
+                    }
+                    instructions.push(instruction);
+                }
+                Collection::Block => {
+                    let block: BlockJson = serde_json::from_value(json)
+                        .map_err(|error| Error::Serialization(error.to_string()))?;
+                    block_addresses.insert(block.address);
+                    if let Some(processors) = block.processors {
+                        block_outputs
+                            .insert(block.address, processors.into_iter().collect::<Vec<_>>());
+                    }
+                }
+                Collection::Function => {
+                    let function: FunctionJson = serde_json::from_value(json)
+                        .map_err(|error| Error::Serialization(error.to_string()))?;
+                    function_addresses.insert(function.address);
+                    if let Some(processors) = function.processors {
+                        function_outputs
+                            .insert(function.address, processors.into_iter().collect::<Vec<_>>());
+                    }
+                }
+            }
+        }
+
+        let architecture = match architectures.len() {
+            0 => return Err(Error::NotFound(format!("graph for sample {}", sha256))),
+            1 => architectures.into_iter().next().unwrap(),
+            _ => {
+                return Err(Error::Validation(format!(
+                    "multiple architectures indexed for sample {}",
+                    sha256
+                )));
+            }
+        };
+        if instructions.is_empty() {
+            return Err(Error::NotFound(format!(
+                "graph instructions for sample {}",
+                sha256
+            )));
+        }
+
+        let snapshot = GraphSnapshot {
+            architecture,
+            instructions,
+            instruction_queue: GraphQueueSnapshot {
+                valid: instruction_addresses.clone(),
+                invalid: BTreeSet::new(),
+                processed: instruction_addresses,
+            },
+            block_queue: GraphQueueSnapshot {
+                valid: block_addresses.clone(),
+                invalid: BTreeSet::new(),
+                processed: block_addresses,
+            },
+            function_queue: GraphQueueSnapshot {
+                valid: function_addresses.clone(),
+                invalid: BTreeSet::new(),
+                processed: function_addresses,
+            },
+            processor_outputs: GraphProcessorOutputsSnapshot {
+                instructions: instruction_outputs,
+                blocks: block_outputs,
+                functions: function_outputs,
+            },
+        };
+
+        Graph::from_snapshot(snapshot, self.config.clone())
+            .map(normalize_graph_for_read)
+            .map_err(|error| Error::Graph(error.to_string()))
+    }
+
     pub fn tag_add(&self, tag: &str) -> Result<(), Error> {
         let tag = normalize_metadata_name("tag", tag)
             .map_err(|error| Error::Validation(error.to_string()))?;
@@ -132,6 +257,20 @@ impl LocalIndex {
         let sha256 = self.ensure_collection_member_exists(sha256, collection, address)?;
         self.localdb
             .collection_tag_details_list(&sha256, collection, address)
+            .map_err(|error| Error::LocalDb(error.to_string()))
+    }
+
+    pub fn collection_tag_details_page(
+        &self,
+        sha256: &str,
+        collection: Collection,
+        address: u64,
+        page: usize,
+        page_size: usize,
+    ) -> Result<crate::databases::localdb::CountedPage<CollectionTagRecord>, Error> {
+        let sha256 = self.ensure_collection_member_exists(sha256, collection, address)?;
+        self.localdb
+            .collection_tag_details_page(&sha256, collection, address, page, page_size)
             .map_err(|error| Error::LocalDb(error.to_string()))
     }
 
@@ -570,6 +709,24 @@ impl LocalIndex {
         }
         Ok(())
     }
+}
+
+fn normalize_graph_for_read(mut graph: Graph) -> Graph {
+    for address in graph.instruction_addresses() {
+        graph.instructions.insert_processed(address);
+        graph.instructions.insert_valid(address);
+        if let Some(instruction) = graph.get_instruction(address) {
+            if instruction.is_block_start {
+                graph.blocks.insert_processed(address);
+                graph.blocks.insert_valid(address);
+            }
+            if instruction.is_function_start {
+                graph.functions.insert_processed(address);
+                graph.functions.insert_valid(address);
+            }
+        }
+    }
+    graph
 }
 
 fn comment_page_from_localdb(page: LocalDBPage<SampleCommentRecord>) -> CommentSearchPage {

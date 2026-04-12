@@ -146,11 +146,11 @@ fn validate_args(args: &Args) {
 
 fn apply_cli_overrides(args: &Args, config: &mut Config) {
     if args.debug {
-        config.general.debug = args.debug;
+        config.debug = args.debug;
     }
 
     if let Some(threads) = args.threads {
-        config.general.threads = threads;
+        config.threads = threads;
     }
 
     if let Some(processes) = args.processes {
@@ -188,7 +188,7 @@ fn apply_cli_overrides(args: &Args, config: &mut Config) {
         config.mmap.cache.enabled = args.enable_mmap_cache;
     }
 
-    if args.minimal || config.general.minimal {
+    if args.minimal || config.minimal {
         config.enable_minimal();
     }
 
@@ -198,7 +198,7 @@ fn apply_cli_overrides(args: &Args, config: &mut Config) {
 }
 
 fn print_stage_timing(config: &Config, stage: &str, started_at: Instant) {
-    if config.general.debug {
+    if config.debug {
         Stderr::print(format!(
             "[timing] {}: {:.3} ms",
             stage,
@@ -670,7 +670,7 @@ fn process_pe(
         process::exit(1);
     }
 
-    if !config.general.minimal {
+    if !config.minimal {
         let file_attribute = pe.file.attribute();
         if tags.is_some() {
             for tag in tags.unwrap() {
@@ -802,7 +802,7 @@ fn process_elf(
         process::exit(1);
     }
 
-    if !config.general.minimal {
+    if !config.minimal {
         let file_attribute = elf.file.attribute();
         if tags.is_some() {
             for tag in tags.unwrap() {
@@ -989,7 +989,7 @@ fn process_macho(
 
         let tags = tags.clone();
 
-        if !config.general.minimal {
+        if !config.minimal {
             let file_attribute = macho.file.attribute();
             if tags.is_some() {
                 for tag in tags.unwrap() {
@@ -1087,7 +1087,7 @@ fn main() {
 
     let thread_pool_started_at = Instant::now();
     ThreadPoolBuilder::new()
-        .num_threads(config.general.threads)
+        .num_threads(config.resolved_threads())
         .build_global()
         .unwrap_or_else(|error| {
             eprintln!("{}", error);

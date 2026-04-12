@@ -248,7 +248,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         cfg: &'a mut Graph,
     ) -> Result<(), Error> {
         let pool = ThreadPoolBuilder::new()
-            .num_threads(cfg.config.general.threads)
+            .num_threads(cfg.config.resolved_threads())
             .build()
             .map_err(|error| Error::other(format!("{}", error)))?;
 

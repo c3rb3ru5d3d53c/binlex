@@ -138,6 +138,16 @@ impl LocalDB {
                 timestamp TEXT NOT NULL,
                 PRIMARY KEY (symbol)
             );
+            CREATE TABLE IF NOT EXISTS entity_symbols (
+                sha256 TEXT NOT NULL,
+                collection TEXT NOT NULL,
+                architecture TEXT NOT NULL,
+                address INTEGER NOT NULL,
+                symbol TEXT NOT NULL,
+                username TEXT NOT NULL DEFAULT '',
+                timestamp TEXT NOT NULL,
+                PRIMARY KEY (sha256, collection, architecture, address, symbol)
+            );
             CREATE TABLE IF NOT EXISTS roles (
                 name TEXT PRIMARY KEY NOT NULL,
                 timestamp TEXT NOT NULL
@@ -203,6 +213,7 @@ impl LocalDB {
             CREATE INDEX IF NOT EXISTS idx_entity_metadata_sha256 ON entity_metadata (sha256);
             CREATE INDEX IF NOT EXISTS idx_entity_metadata_lookup ON entity_metadata (collection, architecture, object_id);
             CREATE INDEX IF NOT EXISTS idx_symbols_symbol ON symbols (symbol);
+            CREATE INDEX IF NOT EXISTS idx_entity_symbols_lookup ON entity_symbols (sha256, collection, architecture, address, symbol);
             CREATE INDEX IF NOT EXISTS idx_recovery_codes_username ON recovery_codes (username);
             CREATE INDEX IF NOT EXISTS idx_captchas_expires ON captchas (expires);",
         )?;

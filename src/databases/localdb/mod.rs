@@ -129,6 +129,17 @@ pub struct SymbolRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EntitySymbolRecord {
+    pub sha256: String,
+    pub collection: Collection,
+    pub architecture: String,
+    pub address: u64,
+    pub symbol: String,
+    pub username: String,
+    pub timestamp: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CorpusRecord {
     pub corpus: String,
     pub username: String,
@@ -294,6 +305,15 @@ pub struct Page<T> {
     pub items: Vec<T>,
     pub page: usize,
     pub page_size: usize,
+    pub has_next: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CountedPage<T> {
+    pub items: Vec<T>,
+    pub page: usize,
+    pub page_size: usize,
+    pub total_results: usize,
     pub has_next: bool,
 }
 
@@ -653,6 +673,65 @@ fn entity_metadata_from_row(
         vector,
         attributes,
     })
+}
+
+fn symbol_type_matches_collection(value: &str, collection: Collection) -> bool {
+    matches!(
+        (collection, value),
+        (Collection::Instruction, "instruction")
+            | (Collection::Block, "block")
+            | (Collection::Function, "function")
+    )
+}
+
+fn entity_symbol_records_from_attributes(
+    sha256: &str,
+    collection: Collection,
+    architecture: &str,
+    address: u64,
+    attributes: &[serde_json::Value],
+) -> Vec<EntitySymbolRecord> {
+    let mut items = attributes
+        .iter()
+        .filter_map(|attribute| {
+            let object = attribute.as_object()?;
+            if object.get("type")?.as_str()? != "symbol" {
+                return None;
+            }
+            let symbol = object.get("name")?.as_str()?.trim();
+            if symbol.is_empty() {
+                return None;
+            }
+            let symbol_type = object.get("symbol_type")?.as_str()?;
+            if !symbol_type_matches_collection(symbol_type, collection) {
+                return None;
+            }
+            let symbol_address = object.get("address")?.as_u64()?;
+            if symbol_address != address {
+                return None;
+            }
+            Some(EntitySymbolRecord {
+                sha256: sha256.to_string(),
+                collection,
+                architecture: architecture.to_string(),
+                address,
+                symbol: symbol.to_string(),
+                username: object
+                    .get("username")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or_default()
+                    .to_string(),
+                timestamp: object
+                    .get("timestamp")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or_default()
+                    .to_string(),
+            })
+        })
+        .collect::<Vec<_>>();
+    items.sort_by(|lhs, rhs| lhs.symbol.cmp(&rhs.symbol));
+    items.dedup_by(|lhs, rhs| lhs.symbol == rhs.symbol);
+    items
 }
 
 fn parse_collection(value: &str) -> Result<Collection, Error> {

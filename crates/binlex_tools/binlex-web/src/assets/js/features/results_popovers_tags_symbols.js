@@ -847,7 +847,7 @@ async function applyAvailableTag(resultKey, encodedTag) {
       address: Number(row.address || 0),
       tag,
     });
-    row.collection_tags = normalizeMetadataItems([...(row.collection_tags || []), { name: tag, created_actor: { username: "", profile_picture: null }, created_timestamp: "", assigned_actor: { username: "", profile_picture: null }, assigned_timestamp: "" }]);
+    row.collection_tags = normalizeMetadataItems([...(row.collection_tags || []), { name: tag, created_by: { username: "", profile_picture: null }, created_timestamp: "", assigned_by: { username: "", profile_picture: null }, assigned_timestamp: "" }]);
     row.collection_tag_count = row.collection_tags.length;
     row.tags_loaded = true;
     row.tag_error = null;

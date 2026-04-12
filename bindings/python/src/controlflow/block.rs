@@ -31,6 +31,7 @@ use crate::Config;
 use binlex::controlflow::Block as InnerBlock;
 use binlex::controlflow::BlockJsonDeserializer as InnerBlockJsonDeserializer;
 use binlex::hex;
+use binlex::imaging::Imaging as InnerImaging;
 use binlex::Architecture as InnerArchitecture;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
@@ -171,6 +172,18 @@ impl BlockJsonDeserializer {
             minhash_seed: self.chromosome_minhash_seed,
             tlsh_minimum_byte_size: self.chromosome_tlsh_minimum_byte_size,
         }
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the imaging pipeline for the serialized block bytes.
+    pub fn imaging(&self) -> PyResult<Imaging> {
+        let binding = self.inner.lock().unwrap();
+        let bytes =
+            hex::decode(&binding.json.bytes).map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
+        Ok(Imaging::from_inner(InnerImaging::new(
+            bytes,
+            binding.config.clone(),
+        )))
     }
 
     #[pyo3(text_signature = "($self)")]

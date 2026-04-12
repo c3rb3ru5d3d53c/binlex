@@ -147,6 +147,24 @@ impl LocalIndex {
             .map_err(|error| Error::LocalDb(error.to_string()))
     }
 
+    pub fn collection_corpus_details_page(
+        &self,
+        sha256: &str,
+        collection: crate::indexing::Collection,
+        architecture: &str,
+        address: u64,
+        page: usize,
+        page_size: usize,
+    ) -> Result<
+        crate::databases::localdb::CountedPage<crate::databases::localdb::CorpusRecord>,
+        Error,
+    > {
+        self.collection_entry(sha256, collection, architecture, address)?;
+        self.localdb
+            .entity_corpus_details_page(sha256, collection, architecture, address, page, page_size)
+            .map_err(|error| Error::LocalDb(error.to_string()))
+    }
+
     pub fn collection_corpus_add(
         &self,
         sha256: &str,

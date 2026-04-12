@@ -1,6 +1,12 @@
-function commentAuthorHtml(actor) {
-  const username = metadataActorUsername(actor) || "?";
-  const profilePicture = metadataActorProfilePicture(actor);
+function commentUser(comment) {
+  return comment && typeof comment === "object" && !Array.isArray(comment)
+    ? (comment.user || comment.actor || null)
+    : null;
+}
+
+function commentAuthorHtml(user) {
+  const username = metadataUserUsername(user) || "?";
+  const profilePicture = metadataUserProfilePicture(user);
   if (profilePicture) {
     return `<img class="comment-avatar" src="${escapeHtml(profilePicture)}" alt="${escapeHtml(username)}">`;
   }
@@ -14,11 +20,11 @@ function commentCardHtml(comment, options = {}) {
     : "";
   return `
     <div class="comment-card">
-      <div class="comment-avatar-wrap">${commentAuthorHtml(comment?.actor)}</div>
+      <div class="comment-avatar-wrap">${commentAuthorHtml(commentUser(comment))}</div>
       <div class="comment-card-body">
         <div class="comment-card-header">
           <div class="comment-card-identity">
-            <span class="comment-card-username">${escapeHtml(metadataActorUsername(comment?.actor) || "unknown")}</span>
+            <span class="comment-card-username">${escapeHtml(metadataUserUsername(commentUser(comment)) || "unknown")}</span>
             <span class="comment-card-time">${escapeHtml(formatUtcTimestamp(comment?.timestamp || ""))}</span>
           </div>
           ${deleteButton}

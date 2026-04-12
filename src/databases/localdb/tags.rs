@@ -302,6 +302,86 @@ impl LocalDB {
             .collect()
     }
 
+    pub fn collection_tag_details_page(
+        &self,
+        sha256: &str,
+        collection: Collection,
+        address: u64,
+        page: usize,
+        page_size: usize,
+    ) -> Result<crate::databases::localdb::CountedPage<CollectionTagRecord>, Error> {
+        let page = page.max(1);
+        let page_size = page_size.max(1);
+        let offset = (page - 1) * page_size;
+        let limit = page_size + 1;
+        let total_rows = self.sqlite.query(
+            "SELECT COUNT(*) AS count
+             FROM collection_tags
+             WHERE sha256 = ?1 AND collection = ?2 AND address = ?3",
+            &[
+                SQLiteValue::Text(sha256.to_string()),
+                SQLiteValue::Text(collection.as_str().to_string()),
+                SQLiteValue::Integer(address as i64),
+            ],
+        )?;
+        let total_results = total_rows
+            .first()
+            .and_then(|row| row.get("count"))
+            .and_then(|value| value.as_i64())
+            .unwrap_or(0)
+            .max(0) as usize;
+        let rows = self.sqlite.query(
+            "SELECT tag, username, timestamp
+             FROM collection_tags
+             WHERE sha256 = ?1 AND collection = ?2 AND address = ?3
+             ORDER BY tag ASC
+             LIMIT ?4 OFFSET ?5",
+            &[
+                SQLiteValue::Text(sha256.to_string()),
+                SQLiteValue::Text(collection.as_str().to_string()),
+                SQLiteValue::Integer(address as i64),
+                SQLiteValue::Integer(limit as i64),
+                SQLiteValue::Integer(offset as i64),
+            ],
+        )?;
+        let has_next = rows.len() > page_size;
+        let items = rows
+            .into_iter()
+            .take(page_size)
+            .map(|row| -> Result<CollectionTagRecord, Error> {
+                Ok(CollectionTagRecord {
+                    sha256: sha256.to_string(),
+                    collection,
+                    address,
+                    tag: row
+                        .get("tag")
+                        .and_then(|value| value.as_str())
+                        .ok_or_else(|| Error("collection tag row is missing tag".to_string()))?
+                        .to_string(),
+                    username: row
+                        .get("username")
+                        .and_then(|value| value.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    timestamp: row
+                        .get("timestamp")
+                        .and_then(|value| value.as_str())
+                        .ok_or_else(|| {
+                            Error("collection tag row is missing timestamp".to_string())
+                        })?
+                        .to_string(),
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(crate::databases::localdb::CountedPage {
+            items,
+            page,
+            page_size,
+            total_results,
+            has_next,
+        })
+    }
+
     pub fn collection_tag_count(
         &self,
         sha256: &str,
@@ -506,6 +586,186 @@ impl LocalDB {
             ],
         )?;
         Ok(())
+    }
+
+    pub fn entity_symbol_replace_all(
+        &self,
+        sha256: &str,
+        collection: Collection,
+        architecture: &str,
+        address: u64,
+        items: &[crate::databases::localdb::EntitySymbolRecord],
+    ) -> Result<(), Error> {
+        self.sqlite.execute(
+            "DELETE FROM entity_symbols
+             WHERE sha256 = ?1 AND collection = ?2 AND architecture = ?3 AND address = ?4",
+            &[
+                SQLiteValue::Text(sha256.to_string()),
+                SQLiteValue::Text(collection.as_str().to_string()),
+                SQLiteValue::Text(architecture.to_string()),
+                SQLiteValue::Integer(address as i64),
+            ],
+        )?;
+        for item in items {
+            self.sqlite.execute(
+                "INSERT INTO entity_symbols (
+                    sha256, collection, architecture, address, symbol, username, timestamp
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                &[
+                    SQLiteValue::Text(item.sha256.clone()),
+                    SQLiteValue::Text(item.collection.as_str().to_string()),
+                    SQLiteValue::Text(item.architecture.clone()),
+                    SQLiteValue::Integer(item.address as i64),
+                    SQLiteValue::Text(item.symbol.clone()),
+                    SQLiteValue::Text(item.username.clone()),
+                    SQLiteValue::Text(item.timestamp.clone()),
+                ],
+            )?;
+        }
+        Ok(())
+    }
+
+    pub fn entity_symbol_details_list(
+        &self,
+        sha256: &str,
+        collection: Collection,
+        architecture: &str,
+        address: u64,
+    ) -> Result<Vec<crate::databases::localdb::EntitySymbolRecord>, Error> {
+        let rows = self.sqlite.query(
+            "SELECT symbol, username, timestamp
+             FROM entity_symbols
+             WHERE sha256 = ?1 AND collection = ?2 AND architecture = ?3 AND address = ?4
+             ORDER BY symbol ASC",
+            &[
+                SQLiteValue::Text(sha256.to_string()),
+                SQLiteValue::Text(collection.as_str().to_string()),
+                SQLiteValue::Text(architecture.to_string()),
+                SQLiteValue::Integer(address as i64),
+            ],
+        )?;
+        rows.into_iter()
+            .map(
+                |row| -> Result<crate::databases::localdb::EntitySymbolRecord, Error> {
+                    Ok(crate::databases::localdb::EntitySymbolRecord {
+                        sha256: sha256.to_string(),
+                        collection,
+                        architecture: architecture.to_string(),
+                        address,
+                        symbol: row
+                            .get("symbol")
+                            .and_then(|value| value.as_str())
+                            .ok_or_else(|| {
+                                Error("entity symbol row is missing symbol".to_string())
+                            })?
+                            .to_string(),
+                        username: row
+                            .get("username")
+                            .and_then(|value| value.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                        timestamp: row
+                            .get("timestamp")
+                            .and_then(|value| value.as_str())
+                            .ok_or_else(|| {
+                                Error("entity symbol row is missing timestamp".to_string())
+                            })?
+                            .to_string(),
+                    })
+                },
+            )
+            .collect()
+    }
+
+    pub fn entity_symbol_details_page(
+        &self,
+        sha256: &str,
+        collection: Collection,
+        architecture: &str,
+        address: u64,
+        page: usize,
+        page_size: usize,
+    ) -> Result<
+        crate::databases::localdb::CountedPage<crate::databases::localdb::EntitySymbolRecord>,
+        Error,
+    > {
+        let page = page.max(1);
+        let page_size = page_size.max(1);
+        let offset = (page - 1) * page_size;
+        let limit = page_size + 1;
+        let total_rows = self.sqlite.query(
+            "SELECT COUNT(*) AS count
+             FROM entity_symbols
+             WHERE sha256 = ?1 AND collection = ?2 AND architecture = ?3 AND address = ?4",
+            &[
+                SQLiteValue::Text(sha256.to_string()),
+                SQLiteValue::Text(collection.as_str().to_string()),
+                SQLiteValue::Text(architecture.to_string()),
+                SQLiteValue::Integer(address as i64),
+            ],
+        )?;
+        let total_results = total_rows
+            .first()
+            .and_then(|row| row.get("count"))
+            .and_then(|value| value.as_i64())
+            .unwrap_or(0)
+            .max(0) as usize;
+        let rows = self.sqlite.query(
+            "SELECT symbol, username, timestamp
+             FROM entity_symbols
+             WHERE sha256 = ?1 AND collection = ?2 AND architecture = ?3 AND address = ?4
+             ORDER BY symbol ASC
+             LIMIT ?5 OFFSET ?6",
+            &[
+                SQLiteValue::Text(sha256.to_string()),
+                SQLiteValue::Text(collection.as_str().to_string()),
+                SQLiteValue::Text(architecture.to_string()),
+                SQLiteValue::Integer(address as i64),
+                SQLiteValue::Integer(limit as i64),
+                SQLiteValue::Integer(offset as i64),
+            ],
+        )?;
+        let has_next = rows.len() > page_size;
+        let items = rows
+            .into_iter()
+            .take(page_size)
+            .map(
+                |row| -> Result<crate::databases::localdb::EntitySymbolRecord, Error> {
+                    Ok(crate::databases::localdb::EntitySymbolRecord {
+                        sha256: sha256.to_string(),
+                        collection,
+                        architecture: architecture.to_string(),
+                        address,
+                        symbol: row
+                            .get("symbol")
+                            .and_then(|value| value.as_str())
+                            .ok_or_else(|| {
+                                Error("entity symbol row is missing symbol".to_string())
+                            })?
+                            .to_string(),
+                        username: row
+                            .get("username")
+                            .and_then(|value| value.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                        timestamp: row
+                            .get("timestamp")
+                            .and_then(|value| value.as_str())
+                            .ok_or_else(|| {
+                                Error("entity symbol row is missing timestamp".to_string())
+                            })?
+                            .to_string(),
+                    })
+                },
+            )
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(crate::databases::localdb::CountedPage {
+            items,
+            page,
+            page_size,
+            total_results,
+            has_next,
+        })
     }
 
     pub fn symbol_search(&self, query: &str, limit: usize) -> Result<SymbolSearchPage, Error> {

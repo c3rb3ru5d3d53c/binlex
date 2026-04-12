@@ -72,6 +72,7 @@ pub(super) fn accumulate_entry(
     vector: Vec<f32>,
     explicit_corpora: Option<&[String]>,
     attributes: &[Value],
+    json: Option<Value>,
 ) {
     let entry = entries.entry(key).or_insert_with(|| IndexEntry {
         object_id,
@@ -96,6 +97,7 @@ pub(super) fn accumulate_entry(
         timestamp: current_timestamp(),
         explicit_corpora: None,
         attributes: Vec::new(),
+        json: None,
     });
     entry.entity = entity;
     entry.username = username.to_string();
@@ -115,6 +117,9 @@ pub(super) fn accumulate_entry(
     entry.attributes = attributes.to_vec();
     dedupe_attribute_values(&mut entry.attributes);
     entry.vector = vector;
+    if json.is_some() {
+        entry.json = json;
+    }
 }
 
 pub(super) fn set_entity_corpora(
@@ -205,6 +210,7 @@ pub(super) struct SearchHitContext<'a> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum SearchHydration {
     Summary,
+    Detail,
 }
 
 pub(super) fn build_search_result(
@@ -241,6 +247,7 @@ pub(super) fn build_search_result(
         vector: context.vector.to_vec(),
         json: match hydration {
             SearchHydration::Summary => None,
+            SearchHydration::Detail => context.entry.json.clone(),
         },
         embedding: String::new(),
         embeddings: 0,
@@ -974,48 +981,4 @@ pub struct SymbolAttribution {
     pub name: String,
     pub username: String,
     pub timestamp: String,
-}
-
-pub(super) fn symbol_details_for_attributes(
-    attributes: &[Value],
-    entity: Entity,
-    address: u64,
-) -> Vec<SymbolAttribution> {
-    let mut symbols = attributes
-        .iter()
-        .filter_map(|attribute| {
-            let object = attribute.as_object()?;
-            if object.get("type")?.as_str()? != "symbol" {
-                return None;
-            }
-            let name = object.get("name")?.as_str()?;
-            if name.is_empty() {
-                return None;
-            }
-            let symbol_type = object.get("symbol_type")?.as_str()?;
-            if !symbol_type_matches_collection(symbol_type, entity) {
-                return None;
-            }
-            let symbol_address = object.get("address")?.as_u64()?;
-            if symbol_address != address {
-                return None;
-            }
-            Some(SymbolAttribution {
-                name: name.to_string(),
-                username: object
-                    .get("username")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default()
-                    .to_string(),
-                timestamp: object
-                    .get("timestamp")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default()
-                    .to_string(),
-            })
-        })
-        .collect::<Vec<_>>();
-    symbols.sort_by(|lhs, rhs| lhs.name.cmp(&rhs.name));
-    symbols.dedup_by(|lhs, rhs| lhs.name == rhs.name);
-    symbols
 }

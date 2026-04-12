@@ -184,6 +184,7 @@ pub(crate) fn build_search_row_response(row: &ResultRow) -> SearchRowResponse {
         embedding: result.embedding().to_string(),
         embeddings: result.embeddings(),
         corpora: result.corpora().to_vec(),
+        corpora_count: result.corpora().len(),
         collection_tag_count: row.collection_tag_count,
         collection_comment_count: row.collection_comment_count,
     }
@@ -302,6 +303,7 @@ fn build_search_row_detail_response(result: &SearchResult) -> SearchRowDetailRes
         embedding: result.embedding().to_string(),
         embeddings: result.embeddings(),
         corpora: result.corpora().to_vec(),
+        corpora_count: result.corpora().len(),
     }
 }
 fn build_page_data(
@@ -626,12 +628,12 @@ async fn search_corpora_api(
             .into_iter()
             .map(|name| MetadataItemResponse {
                 name,
-                created_actor: MetadataActorResponse {
+                created_by: MetadataUserResponse {
                     username: String::new(),
                     profile_picture: None,
                 },
                 created_timestamp: String::new(),
-                assigned_actor: None,
+                assigned_by: None,
                 assigned_timestamp: None,
             })
             .collect::<Vec<_>>();
@@ -651,7 +653,7 @@ async fn search_corpora_api(
             };
             values.push(MetadataItemResponse {
                 name: item.corpus,
-                created_actor: MetadataActorResponse {
+                created_by: MetadataUserResponse {
                     username: item.username.clone(),
                     profile_picture: avatar_url_for_user(
                         &item.username,
@@ -660,7 +662,7 @@ async fn search_corpora_api(
                     ),
                 },
                 created_timestamp: item.timestamp,
-                assigned_actor: None,
+                assigned_by: None,
                 assigned_timestamp: None,
             });
         }

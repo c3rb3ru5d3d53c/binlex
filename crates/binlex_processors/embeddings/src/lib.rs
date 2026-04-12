@@ -792,8 +792,14 @@ fn configured_threads(config: &binlex::Config) -> usize {
     processor_config(config)
         .and_then(|processor| processor.option_integer("threads"))
         .and_then(|value| usize::try_from(value).ok())
-        .filter(|value| *value > 0)
-        .unwrap_or(1)
+        .map(|value| {
+            if value == 0 {
+                config.resolved_threads()
+            } else {
+                value
+            }
+        })
+        .unwrap_or_else(|| config.resolved_threads())
 }
 
 fn configured_device_from_context<C: ProcessorContext>(context: &C) -> String {
@@ -810,7 +816,11 @@ fn configured_threads_from_context<C: ProcessorContext>(context: &C) -> usize {
         .and_then(|processor| processor.option_integer("threads"))
         .and_then(|value| usize::try_from(value).ok())
         .filter(|value| *value > 0)
-        .unwrap_or(1)
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|parallelism| parallelism.get())
+                .unwrap_or(1)
+        })
 }
 
 impl Processor for EmbeddingsProcessor {
@@ -823,7 +833,22 @@ impl Processor for EmbeddingsProcessor {
             dimensions: request.dimensions.unwrap_or(DEFAULT_DIMENSIONS),
             device: parse_device(request.device.as_deref()),
         };
-        let threads = request.threads.unwrap_or(1).max(1);
+        let threads = request
+            .threads
+            .map(|value| {
+                if value == 0 {
+                    std::thread::available_parallelism()
+                        .map(|parallelism| parallelism.get())
+                        .unwrap_or(1)
+                } else {
+                    value
+                }
+            })
+            .unwrap_or_else(|| {
+                std::thread::available_parallelism()
+                    .map(|parallelism| parallelism.get())
+                    .unwrap_or(1)
+            });
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(threads)
             .build()
@@ -947,7 +972,7 @@ impl GraphProcessor for EmbeddingsProcessor {
         };
         let threads = configured_threads(&graph.config);
         let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(threads.max(1))
+            .num_threads(threads)
             .build()
             .ok()?;
 
@@ -1071,7 +1096,7 @@ pub fn registration() -> binlex::processor::ProcessorRegistration {
             options: BTreeMap::from([
                 ("dimensions".to_string(), 64.into()),
                 ("device".to_string(), "cpu".into()),
-                ("threads".to_string(), 1.into()),
+                ("threads".to_string(), 0.into()),
             ]),
             transport: ConfigProcessorTransports {
                 ipc: ConfigProcessorTransport {

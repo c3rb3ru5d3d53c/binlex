@@ -24,11 +24,163 @@ use crate::controlflow::json_value_to_py;
 use crate::controlflow::Graph;
 use crate::genetics::Chromosome;
 use crate::imaging::Imaging;
+use crate::Architecture;
+use crate::Config;
 use binlex::controlflow::Instruction as InnerInstruction;
+use binlex::controlflow::InstructionJson as InnerInstructionJson;
+use binlex::genetics::Chromosome as InnerChromosome;
+use binlex::hex;
+use binlex::imaging::Imaging as InnerImaging;
 use pyo3::prelude::*;
+use pyo3::types::PyBytes;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::Mutex;
+
+/// Deserialize a serialized instruction JSON payload back into typed accessors.
+#[pyclass]
+pub struct InstructionJsonDeserializer {
+    pub inner: Arc<Mutex<InnerInstructionJson>>,
+    pub config: binlex::Config,
+    chromosome_minhash_num_hashes: usize,
+    chromosome_minhash_shingle_size: usize,
+    chromosome_minhash_seed: u64,
+    chromosome_tlsh_minimum_byte_size: usize,
+}
+
+#[pymethods]
+impl InstructionJsonDeserializer {
+    #[new]
+    #[pyo3(text_signature = "(string, config)")]
+    pub fn new(py: Python<'_>, string: String, config: Py<Config>) -> PyResult<Self> {
+        let inner_config = config.borrow(py).inner.lock().unwrap().clone();
+        let inner: InnerInstructionJson = serde_json::from_str(&string)
+            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?;
+        if inner.type_ != "instruction" {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "serialized payload is not an instruction",
+            ));
+        }
+        Ok(Self {
+            inner: Arc::new(Mutex::new(inner)),
+            config: inner_config.clone(),
+            chromosome_minhash_num_hashes: inner_config.chromosomes.minhash.number_of_hashes,
+            chromosome_minhash_shingle_size: inner_config.chromosomes.minhash.shingle_size,
+            chromosome_minhash_seed: inner_config.chromosomes.minhash.seed,
+            chromosome_tlsh_minimum_byte_size: inner_config.chromosomes.tlsh.minimum_byte_size,
+        })
+    }
+
+    pub fn architecture(&self) -> PyResult<Architecture> {
+        let inner = binlex::Architecture::from_string(&self.inner.lock().unwrap().architecture)
+            .map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
+        Ok(Architecture { inner })
+    }
+
+    pub fn address(&self) -> u64 {
+        self.inner.lock().unwrap().address
+    }
+
+    pub fn bytes(&self, py: Python<'_>) -> PyResult<Py<PyBytes>> {
+        let bytes = hex::decode(&self.inner.lock().unwrap().bytes)
+            .map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
+        Ok(PyBytes::new(py, &bytes).unbind())
+    }
+
+    pub fn size(&self) -> usize {
+        self.inner.lock().unwrap().size
+    }
+
+    pub fn blocks(&self) -> BTreeSet<u64> {
+        self.inner.lock().unwrap().blocks.clone()
+    }
+
+    pub fn next(&self) -> Option<u64> {
+        self.inner.lock().unwrap().next
+    }
+
+    pub fn to(&self) -> BTreeSet<u64> {
+        self.inner.lock().unwrap().to.clone()
+    }
+
+    pub fn has_indirect_target(&self) -> bool {
+        self.inner.lock().unwrap().has_indirect_target
+    }
+
+    pub fn functions(&self) -> BTreeSet<u64> {
+        self.inner.lock().unwrap().functions.clone()
+    }
+
+    pub fn chromosome(&self) -> PyResult<Chromosome> {
+        let binding = self.inner.lock().unwrap();
+        let bytes =
+            hex::decode(&binding.bytes).map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
+        let mask = if binding.chromosome.mask.is_empty() {
+            vec![0; bytes.len()]
+        } else {
+            hex::decode(&binding.chromosome.mask)
+                .map_err(pyo3::exceptions::PyRuntimeError::new_err)?
+        };
+        let chromosome = InnerChromosome::new(bytes, mask, self.config.clone())
+            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?;
+        Ok(Chromosome {
+            inner: Arc::new(Mutex::new(chromosome)),
+            minhash_num_hashes: self.chromosome_minhash_num_hashes,
+            minhash_shingle_size: self.chromosome_minhash_shingle_size,
+            minhash_seed: self.chromosome_minhash_seed,
+            tlsh_minimum_byte_size: self.chromosome_tlsh_minimum_byte_size,
+        })
+    }
+
+    pub fn imaging(&self) -> PyResult<Imaging> {
+        let bytes = hex::decode(&self.inner.lock().unwrap().bytes)
+            .map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
+        Ok(Imaging::from_inner(InnerImaging::new(
+            bytes,
+            self.config.clone(),
+        )))
+    }
+
+    pub fn processors(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let value = serde_json::to_value(self.inner.lock().unwrap().processors.clone())
+            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?;
+        json_value_to_py(py, &value)
+    }
+
+    pub fn processor(&self, py: Python<'_>, name: String) -> PyResult<Py<PyAny>> {
+        let value = self
+            .inner
+            .lock()
+            .unwrap()
+            .processors
+            .as_ref()
+            .and_then(|items| items.get(&name))
+            .cloned()
+            .unwrap_or(serde_json::Value::Null);
+        json_value_to_py(py, &value)
+    }
+
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let json_str = self.json()?;
+        let json_module = py.import("json")?;
+        let py_dict = json_module.call_method1("loads", (json_str,))?;
+        Ok(py_dict.into())
+    }
+
+    pub fn json(&self) -> PyResult<String> {
+        serde_json::to_string_pretty(&*self.inner.lock().unwrap())
+            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
+    }
+
+    pub fn print(&self) -> PyResult<()> {
+        println!("{}", self.json()?);
+        Ok(())
+    }
+
+    pub fn __str__(&self) -> PyResult<String> {
+        self.json()
+    }
+}
 
 /// Represent a single instruction inside a control-flow graph.
 #[pyclass]
@@ -203,6 +355,7 @@ impl Instruction {
 #[pymodule]
 #[pyo3(name = "instruction")]
 pub fn instruction_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<InstructionJsonDeserializer>()?;
     m.add_class::<Instruction>()?;
     py.import("sys")?
         .getattr("modules")?

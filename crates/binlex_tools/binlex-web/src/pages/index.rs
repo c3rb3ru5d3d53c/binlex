@@ -1,4 +1,4 @@
-use crate::assets::{SCRIPT, STYLES};
+use crate::assets::{LOGO, SCRIPT, STYLES};
 use crate::{AuthUserProfile, PageData, build_search_response};
 use askama::Template;
 
@@ -7,6 +7,7 @@ use askama::Template;
 struct IndexTemplate<'a> {
     styles: &'a str,
     script: &'a str,
+    logo: &'a str,
     bootstrap: String,
     auth_header_html: String,
     auth_modal_html: String,
@@ -73,6 +74,7 @@ pub(crate) fn render_page(data: &PageData) -> String {
     let template = IndexTemplate {
         styles: STYLES,
         script: SCRIPT,
+        logo: LOGO,
         bootstrap: render_search_bootstrap(data),
         auth_header_html: render_auth_header(data),
         auth_modal_html: render_auth_modals(data),
