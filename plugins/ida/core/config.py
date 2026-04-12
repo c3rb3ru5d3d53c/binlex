@@ -33,7 +33,7 @@ AUTO_NAME_PATTERNS = (
 
 @dataclass
 class PluginConfig:
-    web_url: str = "http://127.0.0.1:8080"
+    web_url: str = "http://127.0.0.1:8000"
     web_api_key: str = ""
     web_verify_tls: bool = True
     default_corpus: str = "default"
