@@ -1,10 +1,17 @@
 services:
+  binlex-python:
+    image: binlex-python:${BINLEX_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: docker/binlex-python.Dockerfile
+      args:
+        BINLEX_IMAGE_VERSION: ${BINLEX_VERSION:-latest}
+
   binlex-server:
     image: binlex-server:${BINLEX_VERSION:-latest}
     build:
       context: .
-      dockerfile: docker/binlex.Dockerfile
-      target: binlex-server
+      dockerfile: docker/binlex-server.Dockerfile
       args:
         BINLEX_IMAGE_VERSION: ${BINLEX_VERSION:-latest}
 
@@ -12,8 +19,7 @@ services:
     image: binlex-mcp:${BINLEX_VERSION:-latest}
     build:
       context: .
-      dockerfile: docker/binlex.Dockerfile
-      target: binlex-mcp
+      dockerfile: docker/binlex-mcp.Dockerfile
       args:
         BINLEX_IMAGE_VERSION: ${BINLEX_VERSION:-latest}
 

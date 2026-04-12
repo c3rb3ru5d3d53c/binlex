@@ -19,6 +19,8 @@ ENV PROTOC_INCLUDE=/usr/include
 
 WORKDIR /app
 
+CMD ["python3"]
+
 RUN pip install --no-cache-dir --upgrade pip maturin[patchelf]
 
 COPY . .
