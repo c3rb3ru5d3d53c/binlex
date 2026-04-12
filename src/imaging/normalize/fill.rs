@@ -20,17 +20,26 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub(crate) mod artifact;
-pub(crate) mod formats;
-pub(crate) mod hash;
-pub mod normalize;
-pub mod palette;
-pub mod pipeline;
-pub mod render;
-pub(crate) mod renderers;
+use image::imageops::crop_imm;
 
-pub use formats::{png::PNG, svg::SVG, terminal::Terminal};
-pub use normalize::NormalizeAlgorithm;
-pub use palette::Palette;
-pub use pipeline::{Imaging, ImagingNormalized, ImagingPalette, ImagingRenderer};
-pub use render::{Render, RenderCell};
+use crate::imaging::Render;
+use crate::imaging::normalize::canvas::{image_to_render, render_to_image};
+use crate::imaging::normalize::fit::{resize_with_default_filter, scale_dimensions};
+
+pub(crate) fn normalize_fill(render: &Render, width: usize, height: usize) -> Render {
+    let target_width = width.max(1);
+    let target_height = height.max(1);
+    let source = render_to_image(render);
+    let (scaled_width, scaled_height) = scale_dimensions(
+        source.width() as usize,
+        source.height() as usize,
+        target_width,
+        target_height,
+        super::fit::ScaleMode::Fill,
+    );
+    let resized = resize_with_default_filter(&source, scaled_width, scaled_height);
+    let x = ((scaled_width - target_width) / 2) as u32;
+    let y = ((scaled_height - target_height) / 2) as u32;
+    let cropped = crop_imm(&resized, x, y, target_width as u32, target_height as u32).to_image();
+    image_to_render(cropped)
+}

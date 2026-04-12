@@ -4,7 +4,7 @@ use binlex::controlflow::Graph;
 use binlex::indexing::{Collection, LocalIndex};
 use binlex::server::analyze;
 use binlex::server::dto::AnalyzeRequest;
-use binlex::{Architecture, Config, Magic, VERSION};
+use binlex::{Architecture, Config, Magic};
 use clap::{Parser, Subcommand, ValueEnum};
 use std::error::Error;
 use std::fs;
@@ -13,16 +13,13 @@ use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
 #[derive(Parser, Debug)]
-#[command(name = "binlex-performance", version = VERSION)]
-struct Args {
-    #[arg(long)]
-    config: Option<PathBuf>,
+pub struct PerfArgs {
     #[command(subcommand)]
-    command: Command,
+    command: PerfCommand,
 }
 
 #[derive(Subcommand, Debug)]
-enum Command {
+enum PerfCommand {
     Analyze(AnalyzeArgs),
     IndexLocal(IndexLocalArgs),
     PipelineLocal(PipelineLocalArgs),
@@ -140,16 +137,18 @@ struct AnalysisOutcome {
     analyze_elapsed: Duration,
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let args = Args::parse();
-    let config = load_config(args.config.as_deref())?;
+struct IndexRoot {
+    path: PathBuf,
+    temp_dir: Option<TempDir>,
+}
+
+pub fn run(config: &Config, args: PerfArgs) -> Result<(), Box<dyn Error>> {
     match args.command {
-        Command::Analyze(command) => run_analyze(&config, &command)?,
-        Command::IndexLocal(command) => run_index_local(&config, &command)?,
-        Command::PipelineLocal(command) => run_pipeline_local(&config, &command)?,
-        Command::PipelineRemote(command) => run_pipeline_remote(&config, &command)?,
+        PerfCommand::Analyze(command) => run_analyze(config, &command),
+        PerfCommand::IndexLocal(command) => run_index_local(config, &command),
+        PerfCommand::PipelineLocal(command) => run_pipeline_local(config, &command),
+        PerfCommand::PipelineRemote(command) => run_pipeline_remote(config, &command),
     }
-    Ok(())
 }
 
 fn run_analyze(config: &Config, args: &AnalyzeArgs) -> Result<(), Box<dyn Error>> {
@@ -403,13 +402,6 @@ fn analyze_sample(
     })
 }
 
-fn load_config(path: Option<&Path>) -> Result<Config, Box<dyn Error>> {
-    match path {
-        Some(path) => Ok(toml::from_str::<Config>(&fs::read_to_string(path)?)?),
-        None => Ok(Config::default()),
-    }
-}
-
 fn parse_magic_option(value: Option<&str>) -> Result<Option<Magic>, Box<dyn Error>> {
     value
         .map(|value| value.parse::<Magic>())
@@ -464,11 +456,6 @@ fn print_summary(label: &str, durations: &[Duration]) {
     );
 }
 
-struct IndexRoot {
-    path: PathBuf,
-    temp_dir: Option<TempDir>,
-}
-
 fn resolve_index_root(
     base: Option<&Path>,
     iteration: usize,
@@ -488,7 +475,7 @@ fn resolve_index_root(
         });
     }
     let temp_dir = tempfile::Builder::new()
-        .prefix("binlex-performance-index-")
+        .prefix("binlex-test-index-")
         .tempdir()?;
     let path = temp_dir.path().to_path_buf();
     Ok(IndexRoot {

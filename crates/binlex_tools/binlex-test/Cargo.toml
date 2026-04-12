@@ -8,7 +8,10 @@ name = "binlex-test"
 path = "src/main.rs"
 
 [dependencies]
+base64 = "0.22.1"
 binlex = { path = "../../.." }
 clap = { version = "4.5.27", features = ["derive"] }
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = "1.0.137"
+tempfile = "3.23.0"
+toml = "0.8.19"

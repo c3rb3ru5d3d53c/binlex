@@ -65,7 +65,6 @@ members = [
     "crates/binlex_tools/binlex-hash",
     "crates/binlex_tools/binlex-image",
     "crates/binlex_tools/binlex-mcp",
-    "crates/binlex_tools/binlex-performance",
     "crates/binlex_tools/binlex-server",
     "crates/binlex_tools/binlex-symbols",
     "crates/binlex_tools/binlex-test",

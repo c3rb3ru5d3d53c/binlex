@@ -142,5 +142,45 @@ class ImagingPalette:
         """Materialize the pipeline as a terminal renderer."""
         return Terminal._from_binding(self._inner.terminal())
 
+    def fit(self, width, height):
+        """Normalize the render to fit inside the target dimensions with padding."""
+        return ImagingNormalized._from_binding(self._inner.fit(width, height))
 
-__all__ = ["DigraphIntensity", "Imaging", "ImagingPalette", "ImagingRenderer"]
+    def fill(self, width, height):
+        """Normalize the render to fill the target dimensions with centered cropping."""
+        return ImagingNormalized._from_binding(self._inner.fill(width, height))
+
+    def exact(self, width, height):
+        """Normalize the render to the exact target dimensions."""
+        return ImagingNormalized._from_binding(self._inner.exact(width, height))
+
+
+class ImagingNormalized:
+    """Materialize a normalized render into an output format."""
+
+    @classmethod
+    def _from_binding(cls, binding):
+        result = cls.__new__(cls)
+        result._inner = binding
+        return result
+
+    def png(self):
+        """Materialize the normalized pipeline as a PNG image."""
+        return PNG._from_binding(self._inner.png())
+
+    def svg(self):
+        """Materialize the normalized pipeline as an SVG image."""
+        return SVG._from_binding(self._inner.svg())
+
+    def terminal(self):
+        """Materialize the normalized pipeline as a terminal renderer."""
+        return Terminal._from_binding(self._inner.terminal())
+
+
+__all__ = [
+    "DigraphIntensity",
+    "Imaging",
+    "ImagingNormalized",
+    "ImagingPalette",
+    "ImagingRenderer",
+]
