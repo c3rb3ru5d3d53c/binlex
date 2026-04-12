@@ -112,7 +112,7 @@ fn collect_attributes(
 ) -> Attributes {
     let mut attributes = Attributes::new();
     let file = File::from_bytes(bytes.to_vec(), config.clone());
-    if !config.general.minimal {
+    if !config.minimal {
         attributes.push(file.attribute());
     }
     match magic {

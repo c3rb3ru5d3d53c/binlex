@@ -23,9 +23,9 @@
 use super::{
     Config, ConfigBlocks, ConfigChromosomes, ConfigData, ConfigDatabaseLocal, ConfigDatabases,
     ConfigDisassembler, ConfigDisassemblerSweep, ConfigFile, ConfigFormats, ConfigFunctions,
-    ConfigGeneral, ConfigHashEnabled, ConfigHeuristicEntropy, ConfigHeuristicFeatures,
-    ConfigImaging, ConfigIndex, ConfigIndexLocal, ConfigInstructions, ConfigMarkov, ConfigMinhash,
-    ConfigMmap, ConfigMmapCache, ConfigProcessors, ConfigStorage, ConfigStorageLocal, ConfigTLSH,
+    ConfigHashEnabled, ConfigHeuristicEntropy, ConfigHeuristicFeatures, ConfigImaging, ConfigIndex,
+    ConfigIndexLocal, ConfigInstructions, ConfigMarkov, ConfigMinhash, ConfigMmap, ConfigMmapCache,
+    ConfigProcessors, ConfigStorage, ConfigStorageLocal, ConfigTLSH,
 };
 use std::env;
 
@@ -35,6 +35,15 @@ pub const DIRECTORY: &str = "binlex";
 pub const FILE_NAME: &str = "binlex.toml";
 
 impl Config {
+    pub fn resolved_threads(&self) -> usize {
+        match self.threads {
+            0 => std::thread::available_parallelism()
+                .map(|parallelism| parallelism.get())
+                .unwrap_or(1),
+            threads => threads,
+        }
+    }
+
     pub fn from_data(data: ConfigData) -> Self {
         Self(std::sync::Arc::new(data))
     }
@@ -42,11 +51,9 @@ impl Config {
     #[allow(dead_code)]
     pub fn new() -> Self {
         Self::from_data(ConfigData {
-            general: ConfigGeneral {
-                threads: 1,
-                minimal: false,
-                debug: false,
-            },
+            threads: 0,
+            minimal: false,
+            debug: false,
             storage: ConfigStorage::default(),
             databases: ConfigDatabases::default(),
             index: ConfigIndex::default(),
@@ -150,11 +157,9 @@ impl Config {
     }
 
     pub fn enable_minimal(&mut self) {
-        self.general.minimal = true;
-        self.disable_heuristics();
+        self.minimal = true;
         self.disable_hashing();
         self.instructions.enabled = false;
-        self.disassembler.sweep.enabled = false;
     }
 
     pub fn disable_hashing(&mut self) {

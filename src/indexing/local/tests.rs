@@ -89,7 +89,16 @@ fn build_single_return_graph() -> Graph {
 }
 
 fn build_plain_single_return_graph() -> Graph {
-    let config = Config::default();
+    let mut config = Config::default();
+    config.processors.enabled = false;
+    config.chromosomes.vector.enabled = true;
+    for processor in config.processors.processors.values_mut() {
+        processor.enabled = false;
+        processor.graph.enabled = false;
+        processor.functions.enabled = false;
+        processor.blocks.enabled = false;
+        processor.instructions.enabled = false;
+    }
     let mut graph = Graph::new(Architecture::AMD64, config.clone());
     let mut instruction = Instruction::create(0x1000, Architecture::AMD64, config);
     instruction.bytes = vec![0xC3];
@@ -151,6 +160,7 @@ fn stage_vector_entry(
             0,
             None,
             &[],
+            None,
         )
         .expect("stage vector entry");
 }
@@ -1646,6 +1656,7 @@ fn rejects_manual_vector_with_wrong_configured_dimensions() {
             0,
             None,
             &[],
+            None,
         )
         .expect_err("reject wrong vector length");
 
@@ -1738,6 +1749,7 @@ fn rejects_existing_table_dimension_mismatch_on_open() {
             0,
             None,
             &[],
+            None,
         )
         .expect("stage vector");
     writer.commit().expect("commit vector");
@@ -1791,4 +1803,209 @@ fn selector_vector_rejects_invalid_bracket_array_indexing() {
     assert_eq!(selector_vector(&value, "thing.items[abc].vector"), None);
     assert_eq!(selector_vector(&value, "thing.items[2].vector"), None);
     assert_eq!(selector_vector(&value, "thing.items[0"), None);
+}
+
+#[test]
+fn result_detail_uses_persisted_entity_json_without_graph() {
+    let root = std::env::temp_dir().join(format!(
+        "binlex-local-store-detail-json-test-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+
+    let client = LocalIndex::new(local_config_with_dimensions(&root, None))
+        .expect("create local index client");
+    let function = single_return_function().process();
+    let vector = test_vector(7);
+
+    client
+        .function_json_many_as(
+            &["demo".to_string()],
+            &function,
+            &vector,
+            "feedface",
+            &[],
+            "anonymous",
+        )
+        .expect("stage function json");
+    client.commit().expect("commit staged function json");
+
+    let result = client
+        .result_detail("feedface", Entity::Function, "amd64", 0x1000, None)
+        .expect("load persisted detail");
+
+    let json = result.json().expect("detail json should be present");
+    assert_eq!(json["type"], "function");
+    assert_eq!(json["address"], 0x1000);
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn result_detail_fails_when_entity_json_was_not_indexed() {
+    let root = std::env::temp_dir().join(format!(
+        "binlex-local-store-detail-missing-json-test-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+
+    let client = LocalIndex::new(local_config_with_dimensions(&root, None))
+        .expect("create local index client");
+    stage_vector_entry(
+        &client,
+        &["demo".to_string()],
+        Entity::Function,
+        Architecture::AMD64,
+        &test_vector(3),
+        "deadbeef",
+        0x1000,
+    );
+    client.commit().expect("commit staged vector");
+
+    let error = client
+        .result_detail("deadbeef", Entity::Function, "amd64", 0x1000, None)
+        .expect_err("detail should require persisted json");
+
+    assert!(
+        error
+            .to_string()
+            .contains("entity detail json functions/amd64/")
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn graph_by_sha256_returns_stored_graph_snapshot() {
+    let root = std::env::temp_dir().join(format!(
+        "binlex-local-store-graph-fetch-snapshot-test-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+
+    let graph = build_plain_single_return_graph();
+    let client = LocalIndex::new(local_config_with_dimensions(&root, None))
+        .expect("create local index client");
+
+    client
+        .graph_many(&["demo".to_string()], "abc123", &graph, &[], None, None)
+        .expect("stage graph");
+    client.commit().expect("commit graph");
+
+    let restored = client
+        .graph_by_sha256("abc123")
+        .expect("load graph by sha256");
+
+    assert_eq!(restored.instructions().len(), 1);
+    assert_eq!(restored.blocks().len(), 1);
+    assert_eq!(restored.functions().len(), 1);
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn graph_by_sha256_assembles_graph_from_persisted_entity_json() {
+    let root = std::env::temp_dir().join(format!(
+        "binlex-local-store-graph-fetch-entity-test-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+
+    let graph = build_plain_single_return_graph();
+    let client = LocalIndex::new(local_config_with_dimensions(&root, None))
+        .expect("create local index client");
+
+    let instruction = graph
+        .get_instruction(0x1000)
+        .expect("instruction should exist")
+        .process();
+    let block = graph
+        .blocks()
+        .into_iter()
+        .next()
+        .expect("block should exist")
+        .process();
+    let function = graph
+        .functions()
+        .into_iter()
+        .next()
+        .expect("function should exist")
+        .process();
+
+    client
+        .instruction_json_many_as(
+            &["demo".to_string()],
+            &instruction,
+            &test_vector(1),
+            "def456",
+            &[],
+            "anonymous",
+        )
+        .expect("stage instruction");
+    client
+        .block_json_many_as(
+            &["demo".to_string()],
+            &block,
+            &test_vector(2),
+            "def456",
+            &[],
+            "anonymous",
+        )
+        .expect("stage block");
+    client
+        .function_json_many_as(
+            &["demo".to_string()],
+            &function,
+            &test_vector(3),
+            "def456",
+            &[],
+            "anonymous",
+        )
+        .expect("stage function");
+    client.commit().expect("commit entity json");
+
+    let restored = client
+        .graph_by_sha256("def456")
+        .expect("assemble graph by sha256");
+
+    assert_eq!(restored.instructions().len(), 1);
+    assert_eq!(restored.blocks().len(), 1);
+    assert_eq!(restored.functions().len(), 1);
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn result_detail_uses_persisted_graph_indexed_entity_json() {
+    let root = std::env::temp_dir().join(format!(
+        "binlex-local-store-graph-detail-json-test-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+
+    let graph = build_plain_single_return_graph();
+    let client = LocalIndex::new(local_config_with_dimensions(&root, None))
+        .expect("create local index client");
+
+    client
+        .graph_many(
+            &["demo".to_string()],
+            "cafebabe",
+            &graph,
+            &[],
+            Some("chromosome.vector"),
+            Some(&[Entity::Function]),
+        )
+        .expect("stage graph function json");
+    client.commit().expect("commit graph entries");
+
+    let result = client
+        .result_detail("cafebabe", Entity::Function, "amd64", 0x1000, None)
+        .expect("load graph-indexed function detail");
+
+    let json = result.json().expect("detail json should be present");
+    assert_eq!(json["type"], "function");
+    assert_eq!(json["address"], 0x1000);
+
+    let _ = std::fs::remove_dir_all(&root);
 }

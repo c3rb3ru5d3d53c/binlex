@@ -31,6 +31,7 @@ use crate::Config;
 use binlex::controlflow::Function as InnerFunction;
 use binlex::controlflow::FunctionJsonDeserializer as InnerFunctionJsonDeserializer;
 use binlex::hex;
+use binlex::imaging::Imaging as InnerImaging;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::Py;
@@ -185,6 +186,17 @@ impl FunctionJsonDeserializer {
             minhash_seed: self.chromosome_minhash_seed,
             tlsh_minimum_byte_size: self.chromosome_tlsh_minimum_byte_size,
         }
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the imaging pipeline for the function bytes, if they are present.
+    pub fn imaging(&self) -> Option<Imaging> {
+        let binding = self.inner.lock().unwrap();
+        let bytes = binding.bytes()?;
+        Some(Imaging::from_inner(InnerImaging::new(
+            bytes,
+            binding.config.clone(),
+        )))
     }
 
     #[pyo3(text_signature = "($self)")]

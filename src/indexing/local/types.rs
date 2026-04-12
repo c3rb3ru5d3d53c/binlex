@@ -97,6 +97,8 @@ pub(super) struct IndexEntry {
     pub(super) explicit_corpora: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(super) attributes: Vec<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) json: Option<Value>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]

@@ -17,7 +17,7 @@ fn build_entity_comment_response(
         sha256: record.sha256.clone(),
         collection: record.collection.as_str().to_string(),
         address: record.address,
-        actor: metadata_actor_response(state, &record.username),
+        user: metadata_user_response(state, &record.username),
         timestamp: record.timestamp.clone(),
         body: record.comment.clone(),
     }

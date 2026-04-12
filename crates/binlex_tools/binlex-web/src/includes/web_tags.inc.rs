@@ -1,4 +1,4 @@
-fn metadata_actor_response(state: &AppState, username: &str) -> MetadataActorResponse {
+fn metadata_user_response(state: &AppState, username: &str) -> MetadataUserResponse {
     let normalized = username.trim();
     let (profile_picture, timestamp) = if normalized.is_empty() {
         (None, None)
@@ -12,7 +12,7 @@ fn metadata_actor_response(state: &AppState, username: &str) -> MetadataActorRes
     } else {
         avatar_url_for_user(normalized, profile_picture.as_deref(), timestamp.as_deref())
     };
-    MetadataActorResponse {
+    MetadataUserResponse {
         username: normalized.to_string(),
         profile_picture,
     }
@@ -26,9 +26,9 @@ fn metadata_item_response(
 ) -> MetadataItemResponse {
     MetadataItemResponse {
         name: name.to_string(),
-        created_actor: metadata_actor_response(state, username),
+        created_by: metadata_user_response(state, username),
         created_timestamp: timestamp.to_string(),
-        assigned_actor: None,
+        assigned_by: None,
         assigned_timestamp: None,
     }
 }
@@ -43,9 +43,9 @@ fn metadata_assigned_item_response(
 ) -> MetadataItemResponse {
     MetadataItemResponse {
         name: name.to_string(),
-        created_actor: metadata_actor_response(state, created_username),
+        created_by: metadata_user_response(state, created_username),
         created_timestamp: created_timestamp.to_string(),
-        assigned_actor: Some(metadata_actor_response(state, assigned_username)),
+        assigned_by: Some(metadata_user_response(state, assigned_username)),
         assigned_timestamp: Some(assigned_timestamp.to_string()),
     }
 }
@@ -69,42 +69,55 @@ async fn get_collection_corpora_api(
     let architecture = params.architecture.clone();
     let address = params.address;
     let state_for_work = state.clone();
-    let corpora = task::spawn_blocking(move || {
-        state_for_work.index.collection_corpus_details_list(
+    let page = params.page.unwrap_or(1).max(1);
+    let limit = params
+        .limit
+        .unwrap_or(state.ui.api.corpora.max_results.min(64))
+        .clamp(1, state.ui.api.corpora.max_results.max(1));
+    let corpora_page = task::spawn_blocking(move || {
+        state_for_work.index.collection_corpus_details_page(
             &sha256,
             collection,
             &architecture,
             address,
+            page,
+            limit,
         )
     })
     .await
     .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?
     .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?;
+    let corpora = corpora_page
+        .items
+        .into_iter()
+        .map(|item| {
+            let created = state.database.corpus_get(&item.corpus).ok().flatten();
+            metadata_assigned_item_response(
+                state.as_ref(),
+                &item.corpus,
+                created
+                    .as_ref()
+                    .map(|value| value.username.as_str())
+                    .unwrap_or(""),
+                created
+                    .as_ref()
+                    .map(|value| value.timestamp.as_str())
+                    .unwrap_or(""),
+                &item.username,
+                &item.timestamp,
+            )
+        })
+        .collect::<Vec<_>>();
     Ok(Json(CorporaResponse {
         sha256: params.sha256,
         collection: Some(params.collection),
         architecture: Some(params.architecture),
         address: Some(params.address),
-        corpora: corpora
-            .into_iter()
-            .map(|item| {
-                let created = state.database.corpus_get(&item.corpus).ok().flatten();
-                metadata_assigned_item_response(
-                    state.as_ref(),
-                    &item.corpus,
-                    created
-                        .as_ref()
-                        .map(|value| value.username.as_str())
-                        .unwrap_or(""),
-                    created
-                        .as_ref()
-                        .map(|value| value.timestamp.as_str())
-                        .unwrap_or(""),
-                    &item.username,
-                    &item.timestamp,
-                )
-            })
-            .collect(),
+        corpora,
+        page: corpora_page.page,
+        limit: corpora_page.page_size,
+        total_results: corpora_page.total_results,
+        has_next: corpora_page.has_next,
     }))
 }
 
@@ -195,38 +208,49 @@ async fn get_collection_tags(
     let sha256 = params.sha256.clone();
     let address = params.address;
     let state_for_work = state.clone();
-    let tags = task::spawn_blocking(move || {
+    let page = params.page.unwrap_or(1).max(1);
+    let limit = params
+        .limit
+        .unwrap_or(state.ui.api.tags.default_page_size)
+        .clamp(1, state.ui.api.tags.max_page_size.max(1));
+    let tags_page = task::spawn_blocking(move || {
         state_for_work
             .index
-            .collection_tag_details_list(&sha256, collection, address)
+            .collection_tag_details_page(&sha256, collection, address, page, limit)
     })
     .await
     .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?
     .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?;
+    let tags = tags_page
+        .items
+        .into_iter()
+        .map(|item| {
+            let created = state.database.tag_get(&item.tag).ok().flatten();
+            metadata_assigned_item_response(
+                state.as_ref(),
+                &item.tag,
+                created
+                    .as_ref()
+                    .map(|value| value.username.as_str())
+                    .unwrap_or(""),
+                created
+                    .as_ref()
+                    .map(|value| value.timestamp.as_str())
+                    .unwrap_or(""),
+                &item.username,
+                &item.timestamp,
+            )
+        })
+        .collect::<Vec<_>>();
     Ok(Json(TagsResponse {
         sha256: params.sha256,
         collection: Some(params.collection),
         address: Some(params.address),
-        tags: tags
-            .into_iter()
-            .map(|item| {
-                let created = state.database.tag_get(&item.tag).ok().flatten();
-                metadata_assigned_item_response(
-                    state.as_ref(),
-                    &item.tag,
-                    created
-                        .as_ref()
-                        .map(|value| value.username.as_str())
-                        .unwrap_or(""),
-                    created
-                        .as_ref()
-                        .map(|value| value.timestamp.as_str())
-                        .unwrap_or(""),
-                    &item.username,
-                    &item.timestamp,
-                )
-            })
-            .collect(),
+        tags,
+        page: tags_page.page,
+        limit: tags_page.page_size,
+        total_results: tags_page.total_results,
+        has_next: tags_page.has_next,
     }))
 }
 
@@ -523,39 +547,50 @@ async fn get_collection_symbols(
     let architecture = params.architecture.clone();
     let address = params.address;
     let state_for_work = state.clone();
-    let symbols = task::spawn_blocking(move || {
+    let page = params.page.unwrap_or(1).max(1);
+    let limit = params
+        .limit
+        .unwrap_or(state.ui.api.symbols.max_results.min(64))
+        .clamp(1, state.ui.api.symbols.max_results.max(1));
+    let symbols_page = task::spawn_blocking(move || {
         state_for_work
             .index
-            .symbol_details_list(&sha256, collection, &architecture, address)
+            .symbol_details_page(&sha256, collection, &architecture, address, page, limit)
     })
     .await
     .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?
     .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?;
+    let symbols = symbols_page
+        .items
+        .into_iter()
+        .map(|item| {
+            let created = state.database.symbol_get(&item.name).ok().flatten();
+            metadata_assigned_item_response(
+                state.as_ref(),
+                &item.name,
+                created
+                    .as_ref()
+                    .map(|value| value.username.as_str())
+                    .unwrap_or(""),
+                created
+                    .as_ref()
+                    .map(|value| value.timestamp.as_str())
+                    .unwrap_or(""),
+                &item.username,
+                &item.timestamp,
+            )
+        })
+        .collect::<Vec<_>>();
     Ok(Json(SymbolsResponse {
         sha256: params.sha256,
         collection: params.collection,
         architecture: params.architecture,
         address: params.address,
-        symbols: symbols
-            .into_iter()
-            .map(|item| {
-                let created = state.database.symbol_get(&item.name).ok().flatten();
-                metadata_assigned_item_response(
-                    state.as_ref(),
-                    &item.name,
-                    created
-                        .as_ref()
-                        .map(|value| value.username.as_str())
-                        .unwrap_or(""),
-                    created
-                        .as_ref()
-                        .map(|value| value.timestamp.as_str())
-                        .unwrap_or(""),
-                    &item.username,
-                    &item.timestamp,
-                )
-            })
-            .collect(),
+        symbols,
+        page: symbols_page.page,
+        limit: symbols_page.page_size,
+        total_results: symbols_page.total_results,
+        has_next: symbols_page.has_next,
     }))
 }
 

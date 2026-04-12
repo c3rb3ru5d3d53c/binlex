@@ -29,6 +29,7 @@ from binlex_bindings.binlex.controlflow import FunctionJsonDeserializer as _Func
 from binlex_bindings.binlex.controlflow import Graph as _GraphBinding
 from binlex_bindings.binlex.controlflow import GraphQueue as _GraphQueueBinding
 from binlex_bindings.binlex.controlflow import Instruction as _InstructionBinding
+from binlex_bindings.binlex.controlflow import InstructionJsonDeserializer as _InstructionJsonDeserializerBinding
 
 from binlex.core.architecture import _coerce_architecture
 from binlex.hashing import MinHash32, SHA256, TLSH
@@ -81,6 +82,89 @@ class Instruction:
     def size(self):
         """Return the instruction size in bytes."""
         return self._inner.size()
+
+    def imaging(self):
+        """Return the imaging pipeline for this instruction."""
+        return Imaging._from_binding(self._inner.imaging())
+
+    def processors(self):
+        """Return all processor outputs attached to this instruction."""
+        return self._inner.processors()
+
+    def processor(self, name):
+        """Return a single processor output attached to this instruction."""
+        return self._inner.processor(name)
+
+    def to_dict(self):
+        """Convert the instruction to a Python dictionary."""
+        return self._inner.to_dict()
+
+    def json(self):
+        """Return the JSON representation of the instruction."""
+        return self._inner.json()
+
+    def print(self):
+        """Print the instruction representation to stdout."""
+        return self._inner.print()
+
+    def __str__(self):
+        """Return the JSON representation when converted to a string."""
+        return str(self._inner)
+
+
+class InstructionJsonDeserializer:
+    """Deserialize a serialized instruction JSON payload into typed accessors."""
+
+    def __init__(self, string, config):
+        """Create an instruction deserializer from a serialized JSON string."""
+        self._inner = _InstructionJsonDeserializerBinding(string, config)
+
+    @classmethod
+    def _from_binding(cls, binding):
+        """Wrap an existing native instruction JSON deserializer binding."""
+        result = cls.__new__(cls)
+        result._inner = binding
+        return result
+
+    def architecture(self):
+        """Return the architecture encoded in the serialized instruction."""
+        return self._inner.architecture()
+
+    def address(self):
+        """Return the address of the serialized instruction."""
+        return self._inner.address()
+
+    def bytes(self):
+        """Return the decoded raw bytes for the serialized instruction."""
+        return self._inner.bytes()
+
+    def size(self):
+        """Return the size of the serialized instruction in bytes."""
+        return self._inner.size()
+
+    def blocks(self):
+        """Return the block addresses containing this instruction."""
+        return self._inner.blocks()
+
+    def next(self):
+        """Return the next linear instruction address, if known."""
+        return self._inner.next()
+
+    def to(self):
+        """Return the control-flow successor addresses for this instruction."""
+        return self._inner.to()
+
+    def has_indirect_target(self):
+        """Return whether this instruction branches to an indirect target."""
+        return self._inner.has_indirect_target()
+
+    def functions(self):
+        """Return the function addresses associated with this instruction."""
+        return self._inner.functions()
+
+    def chromosome(self):
+        """Return the chromosome derived from this instruction, if available."""
+        return self._inner.chromosome()
 
     def imaging(self):
         """Return the imaging pipeline for this instruction."""
@@ -357,6 +441,13 @@ class BlockJsonDeserializer:
         """Create a block deserializer from a serialized JSON string."""
         self._inner = _BlockJsonDeserializerBinding(string, config)
 
+    @classmethod
+    def _from_binding(cls, binding):
+        """Wrap an existing native block JSON deserializer binding."""
+        result = cls.__new__(cls)
+        result._inner = binding
+        return result
+
     def functions(self):
         """Return referenced function addresses contained in the block payload."""
         return self._inner.functions()
@@ -421,6 +512,10 @@ class BlockJsonDeserializer:
         """Return the chromosome derived from the serialized block."""
         return self._inner.chromosome()
 
+    def imaging(self):
+        """Return the imaging pipeline for the serialized block bytes."""
+        return Imaging._from_binding(self._inner.imaging())
+
     def to_dict(self):
         """Convert the serialized block payload to a Python dictionary."""
         return self._inner.to_dict()
@@ -444,6 +539,13 @@ class FunctionJsonDeserializer:
     def __init__(self, string, config):
         """Create a function deserializer from a serialized JSON string."""
         self._inner = _FunctionJsonDeserializerBinding(string, config)
+
+    @classmethod
+    def _from_binding(cls, binding):
+        """Wrap an existing native function JSON deserializer binding."""
+        result = cls.__new__(cls)
+        result._inner = binding
+        return result
 
     def blocks(self):
         """Return the block addresses contained in the function payload."""
@@ -512,6 +614,11 @@ class FunctionJsonDeserializer:
     def chromosome(self):
         """Return the chromosome derived from the serialized function."""
         return self._inner.chromosome()
+
+    def imaging(self):
+        """Return the imaging pipeline for the serialized function, if present."""
+        image = self._inner.imaging()
+        return None if image is None else Imaging._from_binding(image)
 
     def to_dict(self):
         """Convert the serialized function payload to a Python dictionary."""
@@ -666,4 +773,5 @@ __all__ = [
     "Graph",
     "GraphQueue",
     "Instruction",
+    "InstructionJsonDeserializer",
 ]

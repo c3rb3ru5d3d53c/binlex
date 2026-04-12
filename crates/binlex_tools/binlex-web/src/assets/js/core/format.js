@@ -91,32 +91,36 @@ function metadataItemName(item) {
   return String(item || "").trim();
 }
 
-function metadataItemCreatedActor(item) {
-  return item && typeof item === "object" && !Array.isArray(item) && item.created_actor && typeof item.created_actor === "object"
-    ? item.created_actor
+function metadataItemCreatedBy(item) {
+  return item && typeof item === "object" && !Array.isArray(item) && item.created_by && typeof item.created_by === "object"
+    ? item.created_by
+    : item && typeof item === "object" && !Array.isArray(item) && item.created_actor && typeof item.created_actor === "object"
+      ? item.created_actor
+      : null;
+}
+
+function metadataItemAssignedBy(item) {
+  return item && typeof item === "object" && !Array.isArray(item) && item.assigned_by && typeof item.assigned_by === "object"
+    ? item.assigned_by
+    : item && typeof item === "object" && !Array.isArray(item) && item.assigned_actor && typeof item.assigned_actor === "object"
+      ? item.assigned_actor
     : null;
 }
 
-function metadataItemAssignedActor(item) {
-  return item && typeof item === "object" && !Array.isArray(item) && item.assigned_actor && typeof item.assigned_actor === "object"
-    ? item.assigned_actor
-    : null;
+function metadataUserUsername(user) {
+  return String(user?.username || "").trim();
 }
 
-function metadataActorUsername(actor) {
-  return String(actor?.username || "").trim();
-}
-
-function metadataActorProfilePicture(actor) {
-  return String(actor?.profile_picture || "").trim();
+function metadataUserProfilePicture(user) {
+  return String(user?.profile_picture || "").trim();
 }
 
 function metadataItemUsername(item) {
-  return metadataActorUsername(metadataItemCreatedActor(item));
+  return metadataUserUsername(metadataItemCreatedBy(item));
 }
 
 function metadataItemProfilePicture(item) {
-  return metadataActorProfilePicture(metadataItemCreatedActor(item));
+  return metadataUserProfilePicture(metadataItemCreatedBy(item));
 }
 
 function metadataItemTimestamp(item) {
@@ -124,11 +128,11 @@ function metadataItemTimestamp(item) {
 }
 
 function metadataItemAssignedUsername(item) {
-  return metadataActorUsername(metadataItemAssignedActor(item));
+  return metadataUserUsername(metadataItemAssignedBy(item));
 }
 
 function metadataItemAssignedProfilePicture(item) {
-  return metadataActorProfilePicture(metadataItemAssignedActor(item));
+  return metadataUserProfilePicture(metadataItemAssignedBy(item));
 }
 
 function metadataItemAssignedTimestamp(item) {
@@ -144,12 +148,12 @@ function normalizeMetadataItems(values) {
     const normalized = typeof value === "object" && value !== null && !Array.isArray(value)
       ? {
           name,
-          created_actor: {
+          created_by: {
             username: metadataItemUsername(value),
             profile_picture: metadataItemProfilePicture(value) || null,
           },
           created_timestamp: metadataItemTimestamp(value),
-          assigned_actor: metadataItemAssignedActor(value)
+          assigned_by: metadataItemAssignedBy(value)
             ? {
                 username: metadataItemAssignedUsername(value),
                 profile_picture: metadataItemAssignedProfilePicture(value) || null,
@@ -159,9 +163,9 @@ function normalizeMetadataItems(values) {
         }
       : {
           name,
-          created_actor: { username: "", profile_picture: null },
+          created_by: { username: "", profile_picture: null },
           created_timestamp: "",
-          assigned_actor: null,
+          assigned_by: null,
           assigned_timestamp: null,
         };
     seen.set(key, normalized);
@@ -169,9 +173,9 @@ function normalizeMetadataItems(values) {
   return Array.from(seen.values()).sort((lhs, rhs) => lhs.name.localeCompare(rhs.name));
 }
 
-function metadataTooltipEntryHtml(actor, verb, timestamp) {
-  const username = metadataActorUsername(actor);
-  const profilePicture = metadataActorProfilePicture(actor);
+function metadataTooltipEntryHtml(user, verb, timestamp) {
+  const username = metadataUserUsername(user);
+  const profilePicture = metadataUserProfilePicture(user);
   if (!username && !timestamp) return "";
   const avatar = profilePicture
     ? `<img class="picker-tooltip-avatar" src="${escapeHtml(profilePicture)}" alt="${escapeHtml(username || "user")}">`
@@ -185,8 +189,8 @@ function metadataTooltipEntryHtml(actor, verb, timestamp) {
 
 function metadataTooltipHtml(item, mode = "created") {
   const entries = [];
-  const created = metadataTooltipEntryHtml(metadataItemCreatedActor(item), "Created by", metadataItemTimestamp(item));
-  const assigned = metadataTooltipEntryHtml(metadataItemAssignedActor(item), "Assigned by", metadataItemAssignedTimestamp(item));
+  const created = metadataTooltipEntryHtml(metadataItemCreatedBy(item), "Created by", metadataItemTimestamp(item));
+  const assigned = metadataTooltipEntryHtml(metadataItemAssignedBy(item), "Assigned by", metadataItemAssignedTimestamp(item));
   if (mode === "created") {
     if (created) entries.push(created);
   } else {

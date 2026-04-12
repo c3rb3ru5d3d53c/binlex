@@ -9,15 +9,44 @@ pub mod server;
 pub mod web;
 
 pub use server::Server;
+pub use server::ServerVersionResponse;
 pub use web::Web;
+pub use web::WebAdminCommentsResponse;
+pub use web::WebAdminPasswordResetResponse;
+pub use web::WebAdminUserCreateResponse;
+pub use web::WebAuthSessionResponse;
+pub use web::WebAuthUserResponse;
+pub use web::WebCaptchaResponse;
+pub use web::WebCollectionTagSearchItemResponse;
 pub use web::WebCollectionTagSearchResponse;
+pub use web::WebCorporaCatalogResponse;
+pub use web::WebCorporaResponse;
+pub use web::WebEntityCommentResponse;
+pub use web::WebEntityCommentsResponse;
 pub use web::WebError;
 pub use web::WebIndexActionResponse;
+pub use web::WebKeyRegenerateResponse;
+pub use web::WebMetadataItemResponse;
+pub use web::WebMetadataUserResponse;
 pub use web::WebQueryResult;
+pub use web::WebRecoveryCodesResponse;
 pub use web::WebResult;
+pub use web::WebSearchDetailResponse;
 pub use web::WebSearchRequest;
 pub use web::WebSearchResponse;
+pub use web::WebSearchRowResponse;
+pub use web::WebSymbolsCatalogResponse;
+pub use web::WebSymbolsResponse;
+pub use web::WebTagsActionResponse;
+pub use web::WebTagsCatalogResponse;
 pub use web::WebTagsResponse;
+pub use web::WebTwoFactorSetupResponse;
+pub use web::WebUploadResponse;
+pub use web::WebUploadStatusResponse;
+pub use web::WebUsernameCheckResponse;
+pub use web::WebUsersListResponse;
+pub use web::WebVersionResponse;
+pub use web::WebYaraItemRequest;
 
 #[derive(Debug)]
 pub enum Error {

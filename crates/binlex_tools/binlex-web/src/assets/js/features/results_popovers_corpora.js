@@ -352,7 +352,7 @@ async function createAvailableCorpus() {
   if (!confirmed) return;
   try {
     await postJsonWithCredentials("/api/v1/corpora", { corpus: typed });
-    const createdItem = { name: typed, created_actor: { username: "", profile_picture: null }, created_timestamp: "", assigned_actor: null, assigned_timestamp: null };
+    const createdItem = { name: typed, created_by: { username: "", profile_picture: null }, created_timestamp: "", assigned_by: null, assigned_timestamp: null };
     row.available_corpora_created = normalizeMetadataItems([...(row.available_corpora_created || []), createdItem]);
     row.available_corpora = normalizeMetadataItems([...(row.available_corpora || []), createdItem]);
     row.available_corpora_total_results = Math.max(
@@ -379,7 +379,7 @@ async function applyAvailableCorpus(resultKey, scope, encodedCorpus) {
       address: Number(row.address || 0),
       corpus,
     });
-    row.collection_corpora = normalizeMetadataItems([...(row.collection_corpora || []), { name: corpus, created_actor: { username: "", profile_picture: null }, created_timestamp: "", assigned_actor: { username: "", profile_picture: null }, assigned_timestamp: "" }]);
+    row.collection_corpora = normalizeMetadataItems([...(row.collection_corpora || []), { name: corpus, created_by: { username: "", profile_picture: null }, created_timestamp: "", assigned_by: { username: "", profile_picture: null }, assigned_timestamp: "" }]);
     row.corpora = row.collection_corpora.map((item) => metadataItemName(item));
     row.corpora_loaded = true;
     row.corpora_error = null;

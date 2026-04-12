@@ -218,6 +218,8 @@ impl LocalIndex {
         attributes: &[Attribute],
         username: &str,
     ) -> Result<(), Error> {
+        let json = serde_json::to_value(instruction.process())
+            .map_err(|error| Error::Serialization(error.to_string()))?;
         self.index_many(
             corpora,
             Entity::Instruction,
@@ -229,6 +231,7 @@ impl LocalIndex {
             instruction.size() as u64,
             None,
             attributes,
+            Some(json),
         )
     }
 
@@ -287,6 +290,8 @@ impl LocalIndex {
         attributes: &[Attribute],
         username: &str,
     ) -> Result<(), Error> {
+        let json = serde_json::to_value(instruction)
+            .map_err(|error| Error::Serialization(error.to_string()))?;
         self.index_many(
             corpora,
             Entity::Instruction,
@@ -299,6 +304,7 @@ impl LocalIndex {
             instruction.size as u64,
             None,
             attributes,
+            Some(json),
         )
     }
 
@@ -350,6 +356,8 @@ impl LocalIndex {
         attributes: &[Attribute],
         username: &str,
     ) -> Result<(), Error> {
+        let json = serde_json::to_value(block.process())
+            .map_err(|error| Error::Serialization(error.to_string()))?;
         self.index_many(
             corpora,
             Entity::Block,
@@ -361,6 +369,7 @@ impl LocalIndex {
             block.size() as u64,
             Some(entity_metrics_for_block(block)),
             attributes,
+            Some(json),
         )
     }
 
@@ -412,6 +421,8 @@ impl LocalIndex {
         attributes: &[Attribute],
         username: &str,
     ) -> Result<(), Error> {
+        let json =
+            serde_json::to_value(block).map_err(|error| Error::Serialization(error.to_string()))?;
         self.index_many(
             corpora,
             Entity::Block,
@@ -433,6 +444,7 @@ impl LocalIndex {
                 contiguous: Some(block.contiguous),
             }),
             attributes,
+            Some(json),
         )
     }
 
@@ -484,6 +496,8 @@ impl LocalIndex {
         attributes: &[Attribute],
         username: &str,
     ) -> Result<(), Error> {
+        let json = serde_json::to_value(function.process())
+            .map_err(|error| Error::Serialization(error.to_string()))?;
         self.index_many(
             corpora,
             Entity::Function,
@@ -495,6 +509,7 @@ impl LocalIndex {
             function.size() as u64,
             Some(entity_metrics_for_function(function)),
             attributes,
+            Some(json),
         )
     }
 
@@ -546,6 +561,8 @@ impl LocalIndex {
         attributes: &[Attribute],
         username: &str,
     ) -> Result<(), Error> {
+        let json = serde_json::to_value(function)
+            .map_err(|error| Error::Serialization(error.to_string()))?;
         self.index_many(
             corpora,
             Entity::Function,
@@ -567,6 +584,7 @@ impl LocalIndex {
                 contiguous: Some(function.contiguous),
             }),
             attributes,
+            Some(json),
         )
     }
 
@@ -582,6 +600,7 @@ impl LocalIndex {
         size: u64,
         metrics: Option<EntityMetrics>,
         attributes: &[Attribute],
+        json: Option<serde_json::Value>,
     ) -> Result<(), Error> {
         if vector.is_empty() {
             return Err(Error::InvalidConfiguration("vector must not be empty"));
@@ -612,6 +631,7 @@ impl LocalIndex {
             vector.to_vec(),
             Some(&corpora),
             &attributes,
+            json,
         );
         set_entity_corpora(&mut pending.entity_corpora, &key, &corpora);
         Ok(())
@@ -679,6 +699,7 @@ impl LocalIndex {
                     vector: staged.vector.clone(),
                     explicit_corpora: None,
                     attributes: Vec::new(),
+                    json: None,
                 },
             };
             if let Some(staged_explicit) = &staged.explicit_corpora {
@@ -704,6 +725,9 @@ impl LocalIndex {
             entry.collection_comment_count = staged.collection_comment_count;
             entry.timestamp = staged.timestamp.clone();
             entry.vector = staged.vector.clone();
+            if staged.json.is_some() {
+                entry.json = staged.json.clone();
+            }
             self.store
                 .object_put_json(key, &entry)
                 .map_err(|error| Error::LocalStore(error.to_string()))?;
@@ -983,6 +1007,10 @@ impl LocalIndex {
                                 .get(&(Entity::Function, function.address))
                                 .cloned()
                                 .unwrap_or_default(),
+                            Some(
+                                serde_json::to_value(function.process())
+                                    .map_err(|error| Error::Serialization(error.to_string()))?,
+                            ),
                             corpora,
                         ));
                     }
@@ -1008,6 +1036,10 @@ impl LocalIndex {
                                     .get(&(Entity::Block, block.address()))
                                     .cloned()
                                     .unwrap_or_default(),
+                                Some(
+                                    serde_json::to_value(block.process())
+                                        .map_err(|error| Error::Serialization(error.to_string()))?,
+                                ),
                                 corpora,
                             ));
                         }
@@ -1037,6 +1069,10 @@ impl LocalIndex {
                                     .get(&(Entity::Instruction, instruction.address))
                                     .cloned()
                                     .unwrap_or_default(),
+                                Some(
+                                    serde_json::to_value(instruction.process())
+                                        .map_err(|error| Error::Serialization(error.to_string()))?,
+                                ),
                                 corpora,
                             ));
                         }
@@ -1139,6 +1175,7 @@ fn build_staged_graph_entry(
     metrics: Option<EntityMetrics>,
     vector: Vec<f32>,
     attributes: Vec<serde_json::Value>,
+    json: Option<serde_json::Value>,
     corpora: &[String],
 ) -> StagedGraphEntry {
     let object_id = manual_object_id(entity, architecture, sha256, address);
@@ -1175,6 +1212,7 @@ fn build_staged_graph_entry(
             vector,
             explicit_corpora: None,
             attributes,
+            json,
         },
         corpora: corpora.to_vec(),
     }

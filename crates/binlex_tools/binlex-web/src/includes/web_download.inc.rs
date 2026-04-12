@@ -1,5 +1,43 @@
 #[utoipa::path(
     get,
+    path = "/api/v1/graph",
+    tag = "Graph",
+    params(GraphParams),
+    responses(
+        (status = 200, description = "Full graph for a single indexed sample.", body = serde_json::Value),
+        (status = 400, description = "Invalid request.", body = ApiErrorResponse)
+    )
+)]
+async fn graph_api(
+    State(state): State<Arc<AppState>>,
+    Extension(request_id): Extension<RequestId>,
+    Query(params): Query<GraphParams>,
+) -> Result<Json<GraphSnapshot>, AppError> {
+    let sha256 = params.sha256.trim().to_string();
+    if !is_sha256(&sha256) {
+        return Err(AppError::with_request_id(
+            "invalid sha256",
+            request_id.to_string(),
+        ));
+    }
+    let state_for_graph = state.clone();
+    let sha256_for_graph = sha256.clone();
+    let graph = task::spawn_blocking(move || {
+        state_for_graph
+            .index
+            .graph_by_sha256(&sha256_for_graph)
+            .map_err(|error| AppError::new(error.to_string()))
+    })
+    .await
+    .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?
+    .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))?;
+
+    info!("graph request_id={} sha256={}", request_id, sha256);
+    Ok(Json(graph.snapshot()))
+}
+
+#[utoipa::path(
+    get,
     path = "/api/v1/download/sample",
     tag = "Download",
     params(DownloadSampleParams),

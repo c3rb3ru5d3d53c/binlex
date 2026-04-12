@@ -4,7 +4,7 @@ use super::support::{
     SearchHitContext, SearchHydration, SymbolAttribution, architecture_from_index_entry_key,
     build_search_result, corpus_match_score, embedding_id_for_vector, index_entry_key,
     manual_object_id, normalize_corpora, page_search_results, push_search_hits,
-    symbol_details_for_attributes, symbol_names_for_attributes,
+    symbol_names_for_attributes,
 };
 use super::types::{DEFAULT_INDEX_GRAPH_COLLECTIONS, Error, IndexEntry, SearchResult};
 use crate::controlflow::{Block, Function, Graph};
@@ -508,19 +508,27 @@ impl LocalIndex {
         symbol: Option<&str>,
     ) -> Result<SearchResult, Error> {
         let object_id = manual_object_id(collection, architecture, sha256, address);
-        let metadata = self
-            .localdb
-            .entity_metadata_get(collection, architecture, &object_id)
-            .map_err(|error| Error::LocalDb(error.to_string()))?
-            .ok_or_else(|| {
-                Error::NotFound(format!(
-                    "entity metadata {}/{}/{}",
-                    collection.as_str(),
-                    architecture,
-                    object_id
-                ))
-            })?;
-        let entry = metadata_entry(&metadata, None);
+        let key = index_entry_key(collection, architecture, &object_id);
+        let entry =
+            self.store
+                .object_get_json::<IndexEntry>(&key)
+                .map_err(|error| match error {
+                    super::localstore::Error::NotFound(_) => Error::NotFound(format!(
+                        "entity entry {}/{}/{}",
+                        collection.as_str(),
+                        architecture,
+                        object_id
+                    )),
+                    other => Error::LocalStore(other.to_string()),
+                })?;
+        if entry.json.is_none() {
+            return Err(Error::NotFound(format!(
+                "entity detail json {}/{}/{}",
+                collection.as_str(),
+                architecture,
+                object_id
+            )));
+        }
         let corpora = self
             .localdb
             .entity_corpus_list(
@@ -551,7 +559,7 @@ impl LocalIndex {
             },
             &corpora,
             resolved_symbol,
-            SearchHydration::Summary,
+            SearchHydration::Detail,
         );
         Ok(self
             .attach_embedding_metadata(vec![result])?
@@ -567,25 +575,13 @@ impl LocalIndex {
         architecture: &str,
         address: u64,
     ) -> Result<Vec<String>, Error> {
-        let object_id = manual_object_id(collection, architecture, sha256, address);
-        let metadata = self
+        Ok(self
             .localdb
-            .entity_metadata_get(collection, architecture, &object_id)
+            .entity_symbol_details_list(sha256, collection, architecture, address)
             .map_err(|error| Error::LocalDb(error.to_string()))?
-            .ok_or_else(|| {
-                Error::NotFound(format!(
-                    "entity metadata {}/{}/{}",
-                    collection.as_str(),
-                    architecture,
-                    object_id
-                ))
-            })?;
-        let entry = metadata_entry(&metadata, None);
-        Ok(symbol_names_for_attributes(
-            &entry.attributes,
-            entry.entity,
-            entry.address,
-        ))
+            .into_iter()
+            .map(|item| item.symbol)
+            .collect())
     }
 
     pub fn symbol_details_list(
@@ -595,25 +591,50 @@ impl LocalIndex {
         architecture: &str,
         address: u64,
     ) -> Result<Vec<SymbolAttribution>, Error> {
-        let object_id = manual_object_id(collection, architecture, sha256, address);
-        let metadata = self
+        Ok(self
             .localdb
-            .entity_metadata_get(collection, architecture, &object_id)
+            .entity_symbol_details_list(sha256, collection, architecture, address)
             .map_err(|error| Error::LocalDb(error.to_string()))?
-            .ok_or_else(|| {
-                Error::NotFound(format!(
-                    "entity metadata {}/{}/{}",
-                    collection.as_str(),
-                    architecture,
-                    object_id
-                ))
-            })?;
-        let entry = metadata_entry(&metadata, None);
-        Ok(symbol_details_for_attributes(
-            &entry.attributes,
-            entry.entity,
-            entry.address,
-        ))
+            .into_iter()
+            .map(|item| SymbolAttribution {
+                name: item.symbol,
+                username: item.username,
+                timestamp: item.timestamp,
+            })
+            .collect())
+    }
+
+    pub fn symbol_details_page(
+        &self,
+        sha256: &str,
+        collection: Collection,
+        architecture: &str,
+        address: u64,
+        page: usize,
+        page_size: usize,
+    ) -> Result<
+        crate::databases::localdb::CountedPage<crate::indexing::local::support::SymbolAttribution>,
+        Error,
+    > {
+        let page = self
+            .localdb
+            .entity_symbol_details_page(sha256, collection, architecture, address, page, page_size)
+            .map_err(|error| Error::LocalDb(error.to_string()))?;
+        Ok(crate::databases::localdb::CountedPage {
+            items: page
+                .items
+                .into_iter()
+                .map(|item| SymbolAttribution {
+                    name: item.symbol,
+                    username: item.username,
+                    timestamp: item.timestamp,
+                })
+                .collect(),
+            page: page.page,
+            page_size: page.page_size,
+            total_results: page.total_results,
+            has_next: page.has_next,
+        })
     }
 
     pub fn result_children(
@@ -748,5 +769,6 @@ fn metadata_entry(
         vector: vector_override.unwrap_or_else(|| metadata.vector.clone()),
         explicit_corpora: None,
         attributes: metadata.attributes.clone(),
+        json: None,
     }
 }

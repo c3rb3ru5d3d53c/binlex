@@ -180,6 +180,12 @@ struct UploadStatusParams {
     sha256: String,
 }
 
+#[derive(Deserialize, IntoParams, ToSchema)]
+struct GraphParams {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+}
+
 #[derive(Serialize, ToSchema)]
 struct UploadStatusResponse {
     #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
@@ -299,6 +305,8 @@ struct SearchRowResponse {
     embeddings: u64,
     corpora: Vec<String>,
     #[serde(default)]
+    corpora_count: usize,
+    #[serde(default)]
     collection_tag_count: usize,
     #[serde(default)]
     collection_comment_count: usize,
@@ -344,6 +352,8 @@ struct SearchRowDetailResponse {
     embedding: String,
     embeddings: u64,
     corpora: Vec<String>,
+    #[serde(default)]
+    corpora_count: usize,
 }
 
 #[derive(Deserialize, Serialize, IntoParams, ToSchema)]
@@ -378,7 +388,7 @@ struct EntityCommentResponse {
     sha256: String,
     collection: String,
     address: u64,
-    actor: MetadataActorResponse,
+    user: MetadataUserResponse,
     timestamp: String,
     body: String,
 }
@@ -428,6 +438,10 @@ struct CollectionTagsParams {
     collection: String,
     #[schema(example = 4198400)]
     address: u64,
+    #[serde(default)]
+    page: Option<usize>,
+    #[serde(default)]
+    limit: Option<usize>,
 }
 
 #[derive(Deserialize, Serialize, IntoParams, ToSchema)]
@@ -440,6 +454,10 @@ struct CollectionSymbolsParams {
     architecture: String,
     #[schema(example = 4198400)]
     address: u64,
+    #[serde(default)]
+    page: Option<usize>,
+    #[serde(default)]
+    limit: Option<usize>,
 }
 
 #[derive(Deserialize, Serialize, IntoParams, ToSchema)]
@@ -452,6 +470,10 @@ struct CollectionCorporaParams {
     architecture: String,
     #[schema(example = 4198400)]
     address: u64,
+    #[serde(default)]
+    page: Option<usize>,
+    #[serde(default)]
+    limit: Option<usize>,
 }
 
 #[derive(Deserialize, Serialize, IntoParams, ToSchema)]
@@ -565,7 +587,7 @@ struct CollectionCorpusActionRequest {
 }
 
 #[derive(Serialize, ToSchema)]
-struct MetadataActorResponse {
+struct MetadataUserResponse {
     username: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     profile_picture: Option<String>,
@@ -574,10 +596,10 @@ struct MetadataActorResponse {
 #[derive(Serialize, ToSchema)]
 struct MetadataItemResponse {
     name: String,
-    created_actor: MetadataActorResponse,
+    created_by: MetadataUserResponse,
     created_timestamp: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    assigned_actor: Option<MetadataActorResponse>,
+    assigned_by: Option<MetadataUserResponse>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     assigned_timestamp: Option<String>,
 }
@@ -591,6 +613,10 @@ struct TagsResponse {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     address: Option<u64>,
     tags: Vec<MetadataItemResponse>,
+    page: usize,
+    limit: usize,
+    total_results: usize,
+    has_next: bool,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -601,6 +627,10 @@ struct SymbolsResponse {
     architecture: String,
     address: u64,
     symbols: Vec<MetadataItemResponse>,
+    page: usize,
+    limit: usize,
+    total_results: usize,
+    has_next: bool,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -628,6 +658,10 @@ struct CorporaResponse {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     address: Option<u64>,
     corpora: Vec<MetadataItemResponse>,
+    page: usize,
+    limit: usize,
+    total_results: usize,
+    has_next: bool,
 }
 
 #[derive(Serialize, ToSchema)]

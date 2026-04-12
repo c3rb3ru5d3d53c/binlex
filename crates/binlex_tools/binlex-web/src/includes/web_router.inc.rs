@@ -145,6 +145,7 @@ async fn run_server(
         .route("/api/v1/admin/comments", get(admin_comments_api))
         .route("/api/v1/search", post(search_api))
         .route("/api/v1/search/detail", get(search_detail_api))
+        .route("/api/v1/graph", get(graph_api))
         .route("/api/v1/yara/render", post(action_yara_api))
         .route("/api/v1/corpora", get(search_corpora_api).post(add_corpus_api))
         .route("/api/v1/download/sample", get(download_sample))

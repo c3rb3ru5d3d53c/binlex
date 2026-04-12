@@ -9,7 +9,10 @@
 <body>
   <main class="page">
     <header class="header">
-      <h1>Binlex</h1>
+      <div class="brand">
+        <span class="brand-logo" aria-hidden="true">{{ logo|safe }}</span>
+        <h1>Binlex</h1>
+      </div>
       <div class="status-row">
         <div class="theme-toggle">
           <button type="button" class="theme-button" id="theme-toggle-button" onclick="toggleTheme()" aria-label="Switch to light mode" title="Switch to light mode">☀️</button>

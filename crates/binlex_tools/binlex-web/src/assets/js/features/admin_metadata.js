@@ -186,11 +186,11 @@ function renderAdminCommentsList(items) {
   }
   container.innerHTML = items.map((item) => `
     <div class="comment-card admin-comment-card">
-      <div class="comment-avatar-wrap">${commentAuthorHtml(item?.actor)}</div>
+      <div class="comment-avatar-wrap">${commentAuthorHtml(item?.user || item?.actor)}</div>
       <div class="comment-card-body">
         <div class="comment-card-header">
           <div class="comment-card-identity">
-            <span class="comment-card-username">${escapeHtml(metadataActorUsername(item?.actor) || "unknown")}</span>
+            <span class="comment-card-username">${escapeHtml(metadataUserUsername(item?.user || item?.actor) || "unknown")}</span>
             <span class="comment-card-time">${escapeHtml(formatUtcTimestamp(item?.timestamp || ""))}</span>
           </div>
           <button type="button" class="symbol-picker-move comment-delete" title="Delete comment" aria-label="Delete comment" onclick="deleteCommentById(${Number(item?.id || 0)})">🗑</button>

@@ -454,7 +454,7 @@ pub fn enabled_processors_for_target(
 }
 
 fn report_transport_error(config: &Config, processor_name: &str, error: &ProcessorError) {
-    if config.general.debug {
+    if config.debug {
         Stderr::print_debug(
             config,
             format!("processor {} transport error: {}", processor_name, error),

@@ -39,7 +39,7 @@ cxx = "=1.0.138"
 image = { version = "0.25.8", default-features = false, features = ["png"] }
 axum = "0.8.4"
 tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread", "signal"] }
-reqwest = { version = "0.12.23", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+reqwest = { version = "0.12.23", default-features = false, features = ["blocking", "cookies", "json", "rustls-tls"] }
 burn = { version = "0.21.0-pre.2", default-features = false, features = ["std", "dispatch", "ndarray", "cuda", "vulkan"] }
 semver = "1.0.27"
 base64 = "0.22.1"
@@ -75,7 +75,6 @@ members = [
     "crates/libvex/libvex-macros",
     "crates/libvex/libvex-rs",
     "crates/libvex/libvex-sys",
-    "tests/fixtures/binlex-processor-complete-test",
 ]
 
 [workspace.package]

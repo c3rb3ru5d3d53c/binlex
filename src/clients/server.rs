@@ -2,14 +2,18 @@ use super::{Error, decode_response, normalize_url};
 use crate::controlflow::{BlockJson, FunctionJson, Graph, GraphSnapshot, InstructionJson};
 use crate::server::dto::{
     AnalyzeRequest, HealthResponse, LZ4_CONTENT_ENCODING, OCTET_STREAM_CONTENT_TYPE,
-    ProcessEntityRequest, ProcessGraphRequest,
+    ProcessEntityRequest, ProcessGraphRequest, ProcessorHttpRequest,
 };
 use crate::server::request_id::X_REQUEST_ID;
 use base64::Engine;
 use reqwest::blocking::Client as HttpClient;
 use reqwest::header::{ACCEPT, CONTENT_ENCODING, CONTENT_TYPE, HeaderName};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::path::Path;
+
+const SERVER_VERSION_PATH: &str = "/api/v1/version";
+const SERVER_PROCESSORS_PREFIX: &str = "/api/v1/processors/";
 
 #[derive(Clone)]
 pub struct Server {
@@ -17,6 +21,11 @@ pub struct Server {
     url: String,
     verify: bool,
     compression: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ServerVersionResponse {
+    pub version: String,
 }
 
 impl Server {
@@ -46,6 +55,27 @@ impl Server {
 
     pub fn compression(&self) -> bool {
         self.compression
+    }
+
+    pub fn version(&self) -> Result<ServerVersionResponse, Error> {
+        self.version_with_request_id(None)
+    }
+
+    pub fn version_with_request_id(
+        &self,
+        request_id: Option<&str>,
+    ) -> Result<ServerVersionResponse, Error> {
+        let client = self.http_client()?;
+        let mut builder = client
+            .get(format!("{}{}", self.url, SERVER_VERSION_PATH))
+            .header(ACCEPT, "application/json");
+        if let Some(request_id) = request_id {
+            builder = builder.header(HeaderName::from_static(X_REQUEST_ID), request_id);
+        }
+        let response = builder
+            .send()
+            .map_err(|error| Error::Io(error.to_string()))?;
+        decode_response(response)
     }
 
     pub fn health(&self) -> Result<HealthResponse, Error> {
@@ -305,6 +335,65 @@ impl Server {
         decode_response(response)
     }
 
+    pub fn execute_processor(
+        &self,
+        processor: &str,
+        binlex_version: &str,
+        requires: &str,
+        data: Value,
+    ) -> Result<Value, Error> {
+        self.execute_processor_with_request_id(processor, binlex_version, requires, data, None)
+    }
+
+    pub fn execute_processor_with_request_id(
+        &self,
+        processor: &str,
+        binlex_version: &str,
+        requires: &str,
+        data: Value,
+        request_id: Option<&str>,
+    ) -> Result<Value, Error> {
+        let request = ProcessorHttpRequest {
+            binlex_version: binlex_version.to_string(),
+            requires: requires.to_string(),
+            data,
+        };
+        let client = self.http_client()?;
+        let body = encode_request(&request, self.compression)?;
+        let mut builder = client
+            .post(format!(
+                "{}{SERVER_PROCESSORS_PREFIX}{}",
+                self.url, processor
+            ))
+            .header(
+                CONTENT_TYPE,
+                if self.compression {
+                    OCTET_STREAM_CONTENT_TYPE
+                } else {
+                    "application/json"
+                },
+            )
+            .header(
+                ACCEPT,
+                if self.compression {
+                    OCTET_STREAM_CONTENT_TYPE
+                } else {
+                    "application/json"
+                },
+            );
+        if self.compression {
+            builder = builder.header(CONTENT_ENCODING, LZ4_CONTENT_ENCODING);
+        }
+        if let Some(request_id) = request_id {
+            builder = builder.header(HeaderName::from_static(X_REQUEST_ID), request_id);
+        }
+        let response = builder
+            .body(body)
+            .send()
+            .map_err(|error| Error::Io(error.to_string()))?;
+        decode_response(response)
+    }
+
     fn http_client(&self) -> Result<HttpClient, Error> {
         HttpClient::builder()
             .danger_accept_invalid_certs(!self.verify)
@@ -343,4 +432,14 @@ enum ProcessEntityResponse {
     Function(FunctionJson),
     Block(BlockJson),
     Instruction(InstructionJson),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn server_route_constants_match_current_api() {
+        assert_eq!(SERVER_VERSION_PATH, "/api/v1/version");
+        assert_eq!(SERVER_PROCESSORS_PREFIX, "/api/v1/processors/");
+    }
 }

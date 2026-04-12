@@ -17,14 +17,13 @@ struct ServerRuntimeConfig {
     bind: String,
     #[serde(default)]
     debug: bool,
+    binlex_config: String,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 struct ServerConfigFile {
-    #[serde(default)]
+    #[serde(rename = "binlex-server")]
     server: ServerRuntimeConfig,
-    #[serde(flatten)]
-    binlex: binlex::Config,
 }
 
 impl Default for ServerRuntimeConfig {
@@ -32,6 +31,10 @@ impl Default for ServerRuntimeConfig {
         Self {
             bind: "127.0.0.1:5000".to_string(),
             debug: false,
+            binlex_config: binlex::Config::default_path()
+                .unwrap_or_else(|| PathBuf::from("binlex.toml"))
+                .to_string_lossy()
+                .into_owned(),
         }
     }
 }
@@ -40,7 +43,6 @@ impl Default for ServerConfigFile {
     fn default() -> Self {
         Self {
             server: ServerRuntimeConfig::default(),
-            binlex: server_default_config(),
         }
     }
 }
@@ -79,8 +81,16 @@ fn resolve_config_path(
     })
 }
 
-fn server_default_config() -> binlex::Config {
-    binlex::Config::default()
+fn resolve_binlex_config_path(path: &str) -> PathBuf {
+    if path == "~" {
+        return dirs::home_dir().unwrap_or_else(|| PathBuf::from(path));
+    }
+    if let Some(stripped) = path.strip_prefix("~/") {
+        if let Some(home) = dirs::home_dir() {
+            return home.join(stripped);
+        }
+    }
+    PathBuf::from(path)
 }
 
 fn load_server_config(
@@ -91,9 +101,9 @@ fn load_server_config(
     Ok(config)
 }
 
-fn apply_processor_cli_overrides(loaded: &mut ServerConfigFile, args: &Args) {
+fn apply_processor_cli_overrides(config: &mut binlex::Config, args: &Args) {
     if let Some(processes) = args.processes {
-        loaded.binlex.processors.processes = processes;
+        config.processors.processes = processes;
     }
     if let Some(directory) = args
         .processor_directory
@@ -101,7 +111,7 @@ fn apply_processor_cli_overrides(loaded: &mut ServerConfigFile, args: &Args) {
         .map(str::trim)
         .filter(|value| !value.is_empty())
     {
-        loaded.binlex.processors.path = Some(directory.to_string());
+        config.processors.path = Some(directory.to_string());
     }
     if let Some(processors) = args.processors.as_ref() {
         let enabled: std::collections::BTreeSet<String> = processors
@@ -110,11 +120,11 @@ fn apply_processor_cli_overrides(loaded: &mut ServerConfigFile, args: &Args) {
             .filter(|value| !value.is_empty())
             .map(ToString::to_string)
             .collect();
-        for processor in loaded.binlex.processors.processors.values_mut() {
+        for processor in config.processors.processors.values_mut() {
             processor.enabled = false;
         }
         for name in enabled {
-            if let Some(processor) = loaded.binlex.processors.ensure_processor(&name) {
+            if let Some(processor) = config.processors.ensure_processor(&name) {
                 processor.enabled = true;
             }
         }
@@ -130,6 +140,15 @@ fn ensure_config_exists(path: &std::path::Path) -> Result<(), Box<dyn std::error
         std::fs::create_dir_all(parent)?;
     }
     std::fs::write(path, toml::to_string_pretty(&ServerConfigFile::default())?)?;
+    let binlex_config_path = binlex::Config::default_path()
+        .ok_or_else(|| Error::other("unable to resolve default binlex configuration path"))?;
+    if !binlex_config_path.exists() {
+        binlex::Config::default().write_to_file(
+            binlex_config_path
+                .to_str()
+                .ok_or_else(|| Error::other("invalid default binlex configuration path"))?,
+        )?;
+    }
     binlex::Config::ensure_default_processor_directory()?;
     Ok(())
 }
@@ -163,14 +182,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if args.debug {
         loaded.server.debug = true;
     }
-    apply_processor_cli_overrides(&mut loaded, &args);
+    let binlex_config_path = resolve_binlex_config_path(&loaded.server.binlex_config);
+    let mut config = binlex::Config::load(Some(binlex_config_path.as_path()))?;
+    apply_processor_cli_overrides(&mut config, &args);
     let embeddings_registered = binlex::processor::processor_registration_by_name_for_config(
-        &loaded.binlex.processors,
+        &config.processors,
         "embeddings",
     )
     .is_some();
-    let embeddings_config = loaded.binlex.processors.processor("embeddings").cloned();
-    let config = loaded.binlex;
+    let embeddings_config = config.processors.processor("embeddings").cloned();
     tracing_subscriber::fmt()
         .with_target(false)
         .with_max_level(if loaded.server.debug {
@@ -261,7 +281,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{SERVER_FILE_NAME, server_default_config};
+    use super::{SERVER_FILE_NAME, ServerConfigFile, ServerRuntimeConfig};
 
     #[test]
     fn server_config_uses_server_specific_file_name() {
@@ -269,24 +289,23 @@ mod tests {
     }
 
     #[test]
-    fn server_default_config_defers_to_processor_defaults() {
-        let config = server_default_config();
-        let embeddings = config
-            .processors
-            .processor("embeddings")
-            .expect("shared config should include embeddings processor entry");
-        let shared_default = binlex::Config::default();
-        let expected = shared_default
-            .processors
-            .processor("embeddings")
-            .expect("shared default should include embeddings processor entry");
-        assert_eq!(embeddings.enabled, expected.enabled);
+    fn server_runtime_config_defaults_to_binlex_default_path() {
+        let config = ServerRuntimeConfig::default();
+        assert!(!config.binlex_config.is_empty());
     }
 
     #[test]
-    fn shared_binlex_config_has_no_server_section() {
+    fn shared_binlex_config_is_namespaced() {
         let toml = toml::to_string_pretty(&binlex::Config::default())
             .expect("shared config should serialize");
+        assert!(toml.contains("[binlex]"));
+    }
+
+    #[test]
+    fn server_config_uses_binlex_server_namespace() {
+        let toml = toml::to_string_pretty(&ServerConfigFile::default())
+            .expect("server config should serialize");
+        assert!(toml.contains("[binlex-server]"));
         assert!(!toml.contains("[server]"));
     }
 }

@@ -13,12 +13,12 @@
 <table>
   <tr>
     <td style="border: none; text-align: center; vertical-align: middle;">
-      <img src="./assets/binlex.png" alt="Binlex logo" width="100" style="display: inline-block;">
+      <img src="./assets/logo.svg" alt="Binlex logo" width="100" style="display: inline-block;">
     </td>
     <td style="border: none; text-align: center; vertical-align: middle; padding-left: 10px;">
       <h1 style="font-weight: bold; margin: 0;">Binlex - A Binary Genetic Trait Lexer Framework</h1>
       <div style="font-size: smaller; font-weight: bold; margin-top: 5px;">
-        If maldevs think their binary is FUD, they're about to have an existential crisis.
+        <em>If maldevs think their binary is FUD, they're about to have an existential crisis.</em>
       </div>
     </td>
   </tr>
