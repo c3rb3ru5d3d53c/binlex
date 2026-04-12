@@ -54,9 +54,11 @@ chrono = { version = "0.4.42", features = ["serde"] }
 rusqlite = { version = "0.37.0", features = ["bundled"] }
 yara-x = "1.14.0"
 
+[dev-dependencies]
+tempfile = "3.23.0"
+
 [target.'cfg(not(target_os = "windows"))'.dev-dependencies]
 binlex-processor-vex = { path = "crates/binlex_processors/vex" }
-tempfile = "3.23.0"
 
 [workspace]
 members = [

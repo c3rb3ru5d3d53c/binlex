@@ -14,6 +14,7 @@ The plugin disassembles locally inside IDA, then uses `binlex-web` for:
 - the plugin config must contain:
   - `web_url`
   - `web_api_key`
+- `web_api_key` must be generated from a `binlex-web` user profile after you create or log into an account
 - your Binlex config still needs working embeddings processors locally so IDA can generate vectors before sending queries to `binlex-web`
 
 ## Exposed Actions
@@ -50,7 +51,7 @@ python -m binlex_ida install --target "$env:APPDATA\Hex-Rays\IDA Pro\plugins"
 The plugin config is stored in `ida.toml`. The important fields are:
 
 ```toml
-web_url = "http://127.0.0.1:8080"
+web_url = "http://127.0.0.1:8000"
 web_api_key = "replace-me"
 web_verify_tls = true
 default_corpus = "default"
@@ -63,6 +64,16 @@ default_index_blocks_with_functions = true
 ## Docker Deployment
 
 The intended MVP workflow is to run `binlex-web` locally with Docker or Docker Compose, then point the plugin at that local service.
+
+With the default compose setup in this repository, `binlex-web` listens on `http://127.0.0.1:8000`.
+
+Typical setup:
+
+1. Start `binlex-web`.
+2. Open the web UI in a browser.
+3. Create an account or log in.
+4. Generate or copy your API key from the profile UI.
+5. Set `web_url` and `web_api_key` in `ida.toml`.
 
 ## Uninstall
 
