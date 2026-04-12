@@ -20,17 +20,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub(crate) mod artifact;
-pub(crate) mod formats;
-pub(crate) mod hash;
-pub mod normalize;
-pub mod palette;
-pub mod pipeline;
-pub mod render;
-pub(crate) mod renderers;
+use image::imageops::FilterType;
 
-pub use formats::{png::PNG, svg::SVG, terminal::Terminal};
-pub use normalize::NormalizeAlgorithm;
-pub use palette::Palette;
-pub use pipeline::{Imaging, ImagingNormalized, ImagingPalette, ImagingRenderer};
-pub use render::{Render, RenderCell};
+pub(crate) const DEFAULT_FILTER: FilterType = FilterType::Lanczos3;

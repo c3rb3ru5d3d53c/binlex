@@ -20,17 +20,19 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub(crate) mod artifact;
-pub(crate) mod formats;
-pub(crate) mod hash;
-pub mod normalize;
-pub mod palette;
-pub mod pipeline;
-pub mod render;
-pub(crate) mod renderers;
+use image::imageops::resize;
 
-pub use formats::{png::PNG, svg::SVG, terminal::Terminal};
-pub use normalize::NormalizeAlgorithm;
-pub use palette::Palette;
-pub use pipeline::{Imaging, ImagingNormalized, ImagingPalette, ImagingRenderer};
-pub use render::{Render, RenderCell};
+use crate::imaging::Render;
+use crate::imaging::normalize::canvas::{image_to_render, render_to_image};
+use crate::imaging::normalize::filter::DEFAULT_FILTER;
+
+pub(crate) fn normalize_exact(render: &Render, width: usize, height: usize) -> Render {
+    let image = render_to_image(render);
+    let resized = resize(
+        &image,
+        width.max(1) as u32,
+        height.max(1) as u32,
+        DEFAULT_FILTER,
+    );
+    image_to_render(resized)
+}

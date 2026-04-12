@@ -23,8 +23,8 @@
 use crate::config::Config;
 use crate::imaging::{Terminal, PNG, SVG};
 use binlex::imaging::{
-    Imaging as InnerImaging, ImagingPalette as InnerImagingPalette,
-    ImagingRenderer as InnerImagingRenderer,
+    Imaging as InnerImaging, ImagingNormalized as InnerImagingNormalized,
+    ImagingPalette as InnerImagingPalette, ImagingRenderer as InnerImagingRenderer,
 };
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyBytesMethods};
@@ -175,6 +175,52 @@ impl ImagingPalette {
 
 #[pymethods]
 impl ImagingPalette {
+    #[pyo3(text_signature = "($self, width, height)")]
+    pub fn fit(&self, width: usize, height: usize) -> ImagingNormalized {
+        ImagingNormalized::from_inner(self.inner.lock().unwrap().fit(width, height))
+    }
+
+    #[pyo3(text_signature = "($self, width, height)")]
+    pub fn fill(&self, width: usize, height: usize) -> ImagingNormalized {
+        ImagingNormalized::from_inner(self.inner.lock().unwrap().fill(width, height))
+    }
+
+    #[pyo3(text_signature = "($self, width, height)")]
+    pub fn exact(&self, width: usize, height: usize) -> ImagingNormalized {
+        ImagingNormalized::from_inner(self.inner.lock().unwrap().exact(width, height))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn png(&self) -> PNG {
+        PNG::from_inner(self.inner.lock().unwrap().png())
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn svg(&self) -> SVG {
+        SVG::from_inner(self.inner.lock().unwrap().svg())
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn terminal(&self) -> Terminal {
+        Terminal::from_inner(self.inner.lock().unwrap().terminal())
+    }
+}
+
+#[pyclass]
+pub struct ImagingNormalized {
+    pub(crate) inner: Arc<Mutex<InnerImagingNormalized>>,
+}
+
+impl ImagingNormalized {
+    pub(crate) fn from_inner(inner: InnerImagingNormalized) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(inner)),
+        }
+    }
+}
+
+#[pymethods]
+impl ImagingNormalized {
     #[pyo3(text_signature = "($self)")]
     pub fn png(&self) -> PNG {
         PNG::from_inner(self.inner.lock().unwrap().png())
@@ -197,6 +243,7 @@ pub fn pipeline_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Imaging>()?;
     m.add_class::<ImagingRenderer>()?;
     m.add_class::<ImagingPalette>()?;
+    m.add_class::<ImagingNormalized>()?;
     py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.imaging.pipeline", m)?;
