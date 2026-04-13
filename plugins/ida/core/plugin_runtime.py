@@ -6,8 +6,8 @@ import ida_kernwin
 import idaapi
 import idc
 
-from .compare import apply_match_rows, compare_block, compare_function, compare_functions
-from .config import effective_index_root, ensure_binlex_config_file, load_plugin_config, open_plugin_config_in_editor
+from .compare import apply_match_rows, compare_block, compare_function
+from .config import ensure_binlex_config_file, load_plugin_config, open_plugin_config_in_editor
 from .copying import copy_hex, copy_minhash, copy_pattern, copy_tlsh, copy_vector, copy_visual_hash
 from .indexing import index_block, index_function, index_functions
 from ui.config_editor import open_config_editor
@@ -79,7 +79,6 @@ class PluginController:
 
     def register_actions(self) -> None:
         self.register_action("index.functions", "Functions", self.action_index_functions)
-        self.register_action("compare.functions", "Functions", self.action_compare_functions)
         self.register_action("config", "Config", self.action_config)
 
         self.register_action("index.block", "Block", self.action_index_block)
@@ -125,7 +124,7 @@ class PluginController:
             ("Binlex -> Config", lambda: self.run_safe(self.action_binlex_config)),
             ("Binlex -> Plugin -> Config", lambda: self.run_safe(self.action_config)),
             ("Binlex -> Index -> Functions", lambda: self.run_safe(self.action_index_functions)),
-            ("Binlex -> Compare -> Functions", lambda: self.run_safe(self.action_compare_functions)),
+            ("Binlex -> Compare -> Function", lambda: self.run_safe(self.action_compare_function)),
         ]
         open_launcher(commands)
 
@@ -207,17 +206,6 @@ class PluginController:
         self.registered_actions.clear()
         self.action_handlers.clear()
 
-    def available_corpora(self) -> list[str]:
-        from .config import build_binlex_config
-        from binlex.index import LocalIndex
-
-        config = build_binlex_config(self.config)
-        try:
-            store = LocalIndex(config, directory=effective_index_root(self.config))
-            return store.corpora()
-        except Exception:
-            return []
-
     def action_config(self) -> None:
         path = open_plugin_config_in_editor(self.config)
         open_config_editor(
@@ -257,7 +245,7 @@ class PluginController:
 
     def _run_compare_dialog(self, title: str):
         self.reload_config()
-        return prompt_compare(title, self.config, self.available_corpora())
+        return prompt_compare(title, self.config)
 
     def _show_results(self, title: str, rows: list[dict]) -> None:
         show_results(
@@ -297,17 +285,10 @@ class PluginController:
             return
         self._show_results("Binlex Compare Function", compare_function(self.config, request))
 
-    def action_compare_functions(self) -> None:
-        request = self._run_compare_dialog("Binlex Compare Functions")
-        if request is None:
-            return
-        self._show_results("Binlex Compare Functions", compare_functions(self.config, request))
-
-
 class BinlexPlugin(idaapi.plugin_t):
     flags = idaapi.PLUGIN_KEEP
     comment = "Binlex IDA Plugin"
-    help = "Minimal LocalIndex workflow for IDA"
+    help = "Minimal binlex-web workflow for IDA"
     wanted_name = "Binlex"
     wanted_hotkey = ""
 

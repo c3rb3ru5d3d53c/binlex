@@ -21,11 +21,11 @@
 // SOFTWARE.
 
 use super::{
-    Config, ConfigBlocks, ConfigChromosomes, ConfigData, ConfigDisassembler,
-    ConfigDisassemblerSweep, ConfigFile, ConfigFormats, ConfigFunctions, ConfigGeneral,
+    Config, ConfigBlocks, ConfigChromosomes, ConfigData, ConfigDatabaseLocal, ConfigDatabases,
+    ConfigDisassembler, ConfigDisassemblerSweep, ConfigFile, ConfigFormats, ConfigFunctions,
     ConfigHashEnabled, ConfigHeuristicEntropy, ConfigHeuristicFeatures, ConfigImaging, ConfigIndex,
     ConfigIndexLocal, ConfigInstructions, ConfigMarkov, ConfigMinhash, ConfigMmap, ConfigMmapCache,
-    ConfigProcessors, ConfigTLSH,
+    ConfigProcessors, ConfigStorage, ConfigStorageLocal, ConfigTLSH,
 };
 use std::env;
 
@@ -35,6 +35,15 @@ pub const DIRECTORY: &str = "binlex";
 pub const FILE_NAME: &str = "binlex.toml";
 
 impl Config {
+    pub fn resolved_threads(&self) -> usize {
+        match self.threads {
+            0 => std::thread::available_parallelism()
+                .map(|parallelism| parallelism.get())
+                .unwrap_or(1),
+            threads => threads,
+        }
+    }
+
     pub fn from_data(data: ConfigData) -> Self {
         Self(std::sync::Arc::new(data))
     }
@@ -42,11 +51,11 @@ impl Config {
     #[allow(dead_code)]
     pub fn new() -> Self {
         Self::from_data(ConfigData {
-            general: ConfigGeneral {
-                threads: 1,
-                minimal: false,
-                debug: false,
-            },
+            threads: 0,
+            minimal: false,
+            debug: false,
+            storage: ConfigStorage::default(),
+            databases: ConfigDatabases::default(),
             index: ConfigIndex::default(),
             formats: ConfigFormats {
                 file: ConfigFile {
@@ -148,11 +157,9 @@ impl Config {
     }
 
     pub fn enable_minimal(&mut self) {
-        self.general.minimal = true;
-        self.disable_heuristics();
+        self.minimal = true;
         self.disable_hashing();
         self.instructions.enabled = false;
-        self.disassembler.sweep.enabled = false;
     }
 
     pub fn disable_hashing(&mut self) {
@@ -233,9 +240,30 @@ impl Config {
             .or_else(dirs::data_dir)
             .unwrap_or_else(|| env::temp_dir())
             .join(DIRECTORY)
-            .join("index")
+            .join("indexing")
             .to_str()
             .expect("failed to convert local index directory to string")
+            .to_owned()
+    }
+
+    pub fn default_local_storage_directory() -> String {
+        dirs::data_local_dir()
+            .or_else(dirs::data_dir)
+            .unwrap_or_else(|| env::temp_dir())
+            .join(DIRECTORY)
+            .join("storage")
+            .to_str()
+            .expect("failed to convert local storage directory to string")
+            .to_owned()
+    }
+
+    pub fn default_local_database_path() -> String {
+        dirs::config_dir()
+            .unwrap_or_else(|| env::temp_dir())
+            .join(DIRECTORY)
+            .join("local.db")
+            .to_str()
+            .expect("failed to convert local database path to string")
             .to_owned()
     }
 
@@ -261,6 +289,38 @@ impl Default for ConfigIndex {
     fn default() -> Self {
         Self {
             local: ConfigIndexLocal::default(),
+        }
+    }
+}
+
+impl Default for ConfigDatabases {
+    fn default() -> Self {
+        Self {
+            local: ConfigDatabaseLocal::default(),
+        }
+    }
+}
+
+impl Default for ConfigStorage {
+    fn default() -> Self {
+        Self {
+            local: ConfigStorageLocal::default(),
+        }
+    }
+}
+
+impl Default for ConfigStorageLocal {
+    fn default() -> Self {
+        Self {
+            directory: Config::default_local_storage_directory(),
+        }
+    }
+}
+
+impl Default for ConfigDatabaseLocal {
+    fn default() -> Self {
+        Self {
+            path: Config::default_local_database_path(),
         }
     }
 }

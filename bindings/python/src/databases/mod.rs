@@ -1,5 +1,7 @@
 pub mod lancedb;
+pub mod localdb;
 pub mod milvus;
+pub mod sqlite;
 
 use pyo3::{prelude::*, wrap_pymodule};
 
@@ -8,6 +10,8 @@ use pyo3::{prelude::*, wrap_pymodule};
 pub fn databases_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pymodule!(milvus::milvus_init))?;
     m.add_wrapped(wrap_pymodule!(lancedb::lancedb_init))?;
+    m.add_wrapped(wrap_pymodule!(localdb::localdb_init))?;
+    m.add_wrapped(wrap_pymodule!(sqlite::sqlite_init))?;
     py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.databases", m)?;

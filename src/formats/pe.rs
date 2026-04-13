@@ -62,6 +62,16 @@ pub struct PE {
 }
 
 impl PE {
+    fn dotnet_clr_runtime_directory(&self) -> Option<lief::pe::DataDirectory<'_>> {
+        let directory = self
+            .pe
+            .data_directory_by_type(DATA_DIRECTORY::CLR_RUNTIME_HEADER)?;
+        if directory.rva() == 0 || directory.size() < Cor20Header::size() as u32 {
+            return None;
+        }
+        Some(directory)
+    }
+
     /// Creates a new `PE` instance by reading a PE file from the provided path.
     ///
     /// # Parameters
@@ -113,23 +123,15 @@ impl PE {
     ///   * A reference to the parsed `Cor20Header` structure.
     /// * `None` - If the file is not a .NET executable or the header cannot be parsed.
     fn dotnet_parse_cor20_header(&self) -> Option<(u64, &Cor20Header)> {
-        if !self.is_dotnet() {
+        let clr_runtime_header = self.dotnet_clr_runtime_directory()?;
+        let start = self.relative_virtual_address_to_file_offset(clr_runtime_header.rva() as u64)?;
+        let end = start + Cor20Header::size() as u64;
+        if end as usize > self.file.data.len() {
             return None;
         }
-        if let Some(clr_runtime_header) = self
-            .pe
-            .data_directory_by_type(DATA_DIRECTORY::CLR_RUNTIME_HEADER)
-        {
-            if let Some(start) =
-                self.relative_virtual_address_to_file_offset(clr_runtime_header.rva() as u64)
-            {
-                let end = start + clr_runtime_header.size() as u64;
-                let data = &self.file.data[start as usize..end as usize];
-                let header = &Cor20Header::from_bytes(data)?;
-                return Some((start, header));
-            }
-        }
-        None
+        let data = &self.file.data[start as usize..end as usize];
+        let header = &Cor20Header::from_bytes(data)?;
+        Some((start, header))
     }
 
     /// Retrieves the .NET Core 2.0 header from the PE file if it is a .NET executable.
@@ -159,13 +161,13 @@ impl PE {
     /// * `None` - If the file is not a .NET executable or the storage signature
     ///   cannot be parsed.
     fn dotnet_parse_storage_signature(&self) -> Option<(u64, &StorageSignature)> {
-        if !self.is_dotnet() {
-            return None;
-        }
         let (_, image_cor20_header) = self.dotnet_parse_cor20_header()?;
         let rva = image_cor20_header.meta_data.virtual_address as u64;
         let start = self.relative_virtual_address_to_file_offset(rva)? as usize;
         let end = start + StorageSignature::size();
+        if end > self.file.data.len() {
+            return None;
+        }
         let data = &self.file.data[start..end];
         let header = StorageSignature::from_bytes(data)?;
         Some((start as u64, header))
@@ -198,14 +200,14 @@ impl PE {
     ///   * A reference to the fparsed `StorageHeader` structure.
     /// * `None` - If the file is not a .NET executable or the storage header cannot be parsed.
     fn dotnet_parse_storage_header(&self) -> Option<(u64, &StorageHeader)> {
-        if !self.is_dotnet() {
-            return None;
-        };
         let (mut start, cor20_storage_signaure_header) = self.dotnet_parse_storage_signature()?;
         start += StorageSignature::size() as u64;
         start += cor20_storage_signaure_header.version_string_size as u64;
         start -= 4;
         let end = start as usize + StorageHeader::size();
+        if end > self.file.data.len() {
+            return None;
+        }
         let data = &self.file.data[start as usize..end];
         let header = StorageHeader::from_bytes(data)?;
         Some((start, header))
@@ -239,14 +241,14 @@ impl PE {
     /// * `None` - If the file is not a .NET executable, the storage header cannot be parsed,
     ///   or no stream headers are found.
     fn dotnet_parse_stream_headers(&self) -> Option<BTreeMap<u64, &StreamHeader>> {
-        if !self.is_dotnet() {
-            return None;
-        }
         let (cor20_storage_header_offset, cor20_storage_header) =
             self.dotnet_parse_storage_header()?;
         let mut offset = cor20_storage_header_offset as usize + StorageHeader::size();
         let mut result = BTreeMap::<u64, &StreamHeader>::new();
         for _ in 0..cor20_storage_header.number_of_streams {
+            if offset + StreamHeader::size() > self.file.data.len() {
+                return None;
+            }
             let data = &self.file.data[offset..offset + StreamHeader::size()];
             let header = StreamHeader::from_bytes(data)?;
             result.insert(offset as u64, header);
@@ -295,14 +297,14 @@ impl PE {
     /// * `None` - If the file is not a .NET executable, the relevant stream header cannot
     ///   be found, or the metadata table cannot be parsed.
     fn dotnet_parse_metadata_table(&self) -> Option<(u64, &MetadataTable)> {
-        if !self.is_dotnet() {
-            return None;
-        }
         let (mut start, _) = self.dotnet_parse_storage_signature()?;
         for (_, header) in self.dotnet_parse_stream_headers()? {
             if header.name() == vec![0x23, 0x7e, 0x00, 0x00] {
                 start += header.offset as u64;
             }
+        }
+        if start as usize + MetadataTable::size() > self.file.data.len() {
+            return None;
         }
         let data = &self.file.data[start as usize..start as usize + MetadataTable::size()];
         Some((start, MetadataTable::from_bytes(data)?))
@@ -358,6 +360,10 @@ impl PE {
         let mut entries = Vec::<Entry>::new();
 
         for i in 0..64 {
+            if (cor20_metadata_table.mask_valid & (1u64 << i)) == 0 {
+                continue;
+            }
+
             let entry_offset =
                 cor20_metadata_table_offset as usize + MetadataTable::size() + (valid_index * 4);
 
@@ -381,7 +387,6 @@ impl PE {
                         offset += entry.size();
                         entries.push(Entry::Module(entry));
                     }
-                    valid_index += 1;
                 }
                 x if x == MetadataToken::TypeRef as usize => {
                     for _ in 0..entry_count {
@@ -392,7 +397,6 @@ impl PE {
                         offset += entry.size();
                         entries.push(Entry::TypeRef(entry));
                     }
-                    valid_index += 1;
                 }
                 x if x == MetadataToken::TypeDef as usize => {
                     for _ in 0..entry_count {
@@ -403,7 +407,6 @@ impl PE {
                         offset += entry.size();
                         entries.push(Entry::TypeDef(entry));
                     }
-                    valid_index += 1;
                 }
                 x if x == MetadataToken::Field as usize => {
                     for _ in 0..entry_count {
@@ -414,7 +417,6 @@ impl PE {
                         offset += entry.size();
                         entries.push(Entry::Field(entry));
                     }
-                    valid_index += 1;
                 }
                 x if x == MetadataToken::MethodDef as usize => {
                     for _ in 0..entry_count {
@@ -428,6 +430,8 @@ impl PE {
                 }
                 _ => {}
             }
+
+            valid_index += 1;
         }
 
         Some(entries)
@@ -441,9 +445,9 @@ impl PE {
     ///
     /// # Returns
     /// A `u64` value representing the metadata token. The calculation is based on the formula:
-    /// `(0x01000000 * table_index) + (entry_index * 1)`.
+    /// `(0x01000000 * table_index) + (entry_index + 1)`.
     pub fn dotnet_metadata_token_from_index(table_index: u64, entry_index: u64) -> u64 {
-        (0x01000000 * table_index) + entry_index
+        (0x01000000 * table_index) + entry_index + 1
     }
 
     /// Constructs a map of metadata tokens to their corresponding virtual addresses.
@@ -496,6 +500,75 @@ impl PE {
         result
     }
 
+    /// Resolves a .NET metadata token to its corresponding virtual address.
+    ///
+    /// This helper currently supports `MethodDef` metadata tokens and returns the
+    /// virtual address of the first CIL instruction in the method body.
+    ///
+    /// # Parameters
+    /// - `metadata_token`: The .NET metadata token to resolve.
+    ///
+    /// # Returns
+    /// * `Some(u64)` - The virtual address associated with the metadata token.
+    /// * `None` - If the token is not present or cannot be resolved.
+    pub fn dotnet_metadata_token_to_virtual_address(&self, metadata_token: u64) -> Option<u64> {
+        self.dotnet_metadata_token_virtual_addresses()
+            .get(&metadata_token)
+            .copied()
+    }
+
+    /// Resolves a .NET metadata token to its corresponding relative virtual address.
+    ///
+    /// This helper currently supports `MethodDef` metadata tokens and returns the
+    /// relative virtual address of the first CIL instruction in the method body.
+    pub fn dotnet_metadata_token_to_relative_virtual_address(
+        &self,
+        metadata_token: u64,
+    ) -> Option<u64> {
+        let address = self.dotnet_metadata_token_to_virtual_address(metadata_token)?;
+        Some(self.virtual_address_to_relative_virtual_address(address))
+    }
+
+    /// Resolves a .NET metadata token to its corresponding file offset.
+    ///
+    /// This helper currently supports `MethodDef` metadata tokens and returns the
+    /// file offset of the first CIL instruction in the method body.
+    pub fn dotnet_metadata_token_to_file_offset(&self, metadata_token: u64) -> Option<u64> {
+        let address = self.dotnet_metadata_token_to_virtual_address(metadata_token)?;
+        self.virtual_address_to_file_offset(address)
+    }
+
+    /// Resolves a .NET method body virtual address back to its metadata token.
+    ///
+    /// This helper currently supports `MethodDef` metadata tokens and expects the
+    /// virtual address of the first CIL instruction in the method body.
+    pub fn dotnet_virtual_address_to_metadata_token(&self, virtual_address: u64) -> Option<u64> {
+        self.dotnet_metadata_token_virtual_addresses()
+            .into_iter()
+            .find_map(|(token, address)| (address == virtual_address).then_some(token))
+    }
+
+    /// Resolves a .NET method body relative virtual address back to its metadata token.
+    ///
+    /// This helper currently supports `MethodDef` metadata tokens and expects the
+    /// relative virtual address of the first CIL instruction in the method body.
+    pub fn dotnet_relative_virtual_address_to_metadata_token(
+        &self,
+        relative_virtual_address: u64,
+    ) -> Option<u64> {
+        let address = self.relative_virtual_address_to_virtual_address(relative_virtual_address);
+        self.dotnet_virtual_address_to_metadata_token(address)
+    }
+
+    /// Resolves a .NET method body file offset back to its metadata token.
+    ///
+    /// This helper currently supports `MethodDef` metadata tokens and expects the
+    /// file offset of the first CIL instruction in the method body.
+    pub fn dotnet_file_offset_to_metadata_token(&self, file_offset: u64) -> Option<u64> {
+        let address = self.file_offset_to_virtual_address(file_offset)?;
+        self.dotnet_virtual_address_to_metadata_token(address)
+    }
+
     /// Converts a virtual address to a relative virtual address (RVA).
     ///
     /// This function computes the relative virtual address by subtracting the image base
@@ -510,6 +583,24 @@ impl PE {
     /// * `u64` - The relative virtual address (RVA).
     pub fn virtual_address_to_relative_virtual_address(&self, address: u64) -> u64 {
         address - self.imagebase()
+    }
+
+    /// Converts a file offset to a relative virtual address (RVA).
+    ///
+    /// This function first resolves the file offset to a virtual address and then
+    /// converts that virtual address to a relative virtual address.
+    ///
+    /// # Parameters
+    ///
+    /// * `file_offset` - The file offset (`u64`) to be converted.
+    ///
+    /// # Returns
+    ///
+    /// * `Option<u64>` - The relative virtual address corresponding to the file
+    ///   offset, or `None` if the conversion fails.
+    pub fn file_offset_to_relative_virtual_address(&self, file_offset: u64) -> Option<u64> {
+        let address = self.file_offset_to_virtual_address(file_offset)?;
+        Some(self.virtual_address_to_relative_virtual_address(address))
     }
 
     /// Converts a virtual address to a file offset in the PE file.
@@ -583,15 +674,20 @@ impl PE {
     /// - `false` otherwise.
     #[allow(dead_code)]
     pub fn is_dotnet(&self) -> bool {
-        self.pe.imports().any(|import| {
-            matches!(
-                import.name().to_lowercase().as_str(),
-                "mscorelib.dll" | "mscoree.dll"
-            ) && self
-                .pe
-                .data_directory_by_type(DATA_DIRECTORY::CLR_RUNTIME_HEADER)
-                .is_some()
-        })
+        let Some((_, cor20_header)) = self.dotnet_parse_cor20_header() else {
+            return false;
+        };
+        if cor20_header.cb < Cor20Header::size() as u32 {
+            return false;
+        }
+        if cor20_header.meta_data.virtual_address == 0 || cor20_header.meta_data.size == 0 {
+            return false;
+        }
+        matches!(
+            self.dotnet_storage_signature()
+                .map(|signature| signature.signature),
+            Some(0x424A_5342)
+        )
     }
 
     /// Creates a new `PE` instance from a byte vector containing PE file data.
@@ -617,8 +713,11 @@ impl PE {
     /// The `BinaryArchitecture` enum value corresponding to the PE machine type (e.g., AMD64, I386, CIL or UNKNOWN).
     #[allow(dead_code)]
     pub fn architecture(&self) -> Architecture {
+        if self.is_dotnet() {
+            return Architecture::CIL;
+        }
+
         match self.pe.header().machine() {
-            MachineType::I386 if self.is_dotnet() => Architecture::CIL,
             MachineType::I386 => Architecture::I386,
             MachineType::AMD64 => Architecture::AMD64,
             _ => Architecture::UNKNOWN,

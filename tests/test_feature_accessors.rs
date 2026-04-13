@@ -303,3 +303,47 @@ fn function_markov_serializes_when_enabled() {
     assert!(markov.len() >= 2);
     assert!(markov.contains_key("4096"));
 }
+
+#[test]
+fn function_number_of_blocks_accessor_matches_default_json() {
+    let config = Config::default();
+    let mut graph = Graph::new(Architecture::AMD64, config.clone());
+
+    let mut entry = Instruction::create(0x1000, Architecture::AMD64, config.clone());
+    entry.bytes = vec![0x90];
+    entry.pattern = "90".to_string();
+    entry.is_conditional = true;
+    entry.to = [0x1002].into_iter().collect();
+    graph.insert_instruction(entry);
+
+    let mut left = Instruction::create(0x1001, Architecture::AMD64, config.clone());
+    left.bytes = vec![0x90];
+    left.pattern = "90".to_string();
+    left.is_return = true;
+    graph.insert_instruction(left);
+
+    let mut right = Instruction::create(0x1002, Architecture::AMD64, config);
+    right.bytes = vec![0xC3];
+    right.pattern = "c3".to_string();
+    right.is_return = true;
+    graph.insert_instruction(right);
+
+    assert!(graph.set_block(0x1000));
+    assert!(graph.set_block(0x1001));
+    assert!(graph.set_block(0x1002));
+    assert!(graph.set_function(0x1000));
+
+    let function = Function::new(0x1000, &graph).expect("function should exist");
+    let number_of_blocks = function.number_of_blocks();
+    assert!(number_of_blocks >= 1);
+
+    let value: serde_json::Value =
+        serde_json::from_str(&function.json().expect("function json should serialize"))
+            .expect("function json should parse");
+    assert_eq!(
+        value
+            .get("number_of_blocks")
+            .and_then(|value| value.as_u64()),
+        Some(number_of_blocks as u64)
+    );
+}

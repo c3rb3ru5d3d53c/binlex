@@ -11,6 +11,7 @@ from pathlib import Path
 import ida_registry
 
 from binlex import Config
+from binlex.clients import Web
 
 
 REGISTRY_SUBKEY = "binlex"
@@ -28,18 +29,18 @@ AUTO_NAME_PATTERNS = (
     r"^unk_[0-9A-Fa-f]+$",
     r"^off_[0-9A-Fa-f]+$",
 )
-LEGACY_IDA_INDEX_ROOT = str(Path.home() / ".cache" / "binlex" / "ida-local-index")
 
 
 @dataclass
 class PluginConfig:
-    index_root: str | None = None
+    web_url: str = "http://127.0.0.1:8000"
+    web_api_key: str = ""
+    web_verify_tls: bool = True
     default_corpus: str = "default"
     default_threads: int = 4
     default_embedding_dimensions: int = 64
     default_compare_limit: int = 16
-    default_index_blocks_with_functions: bool = False
-    include_meaningful_names: bool = True
+    default_index_blocks_with_functions: bool = True
 
     def clone(self) -> "PluginConfig":
         return copy.deepcopy(self)
@@ -135,20 +136,16 @@ def _serialize_plugin_config(config: PluginConfig) -> str:
     lines = [
         "# Binlex IDA plugin configuration",
         "",
+        f'web_url = {json.dumps(config.web_url)}',
+        f'web_api_key = {json.dumps(config.web_api_key)}',
+        f"web_verify_tls = {_toml_bool(config.web_verify_tls)}",
+        f'default_corpus = {json.dumps(config.default_corpus)}',
+        f"default_threads = {config.default_threads}",
+        f"default_embedding_dimensions = {config.default_embedding_dimensions}",
+        f"default_compare_limit = {config.default_compare_limit}",
+        f"default_index_blocks_with_functions = {_toml_bool(config.default_index_blocks_with_functions)}",
+        "",
     ]
-    if config.index_root:
-        lines.append(f'index_root = {json.dumps(config.index_root)}')
-    lines.extend(
-        [
-            f'default_corpus = {json.dumps(config.default_corpus)}',
-            f"default_threads = {config.default_threads}",
-            f"default_embedding_dimensions = {config.default_embedding_dimensions}",
-            f"default_compare_limit = {config.default_compare_limit}",
-            f"default_index_blocks_with_functions = {_toml_bool(config.default_index_blocks_with_functions)}",
-            f"include_meaningful_names = {_toml_bool(config.include_meaningful_names)}",
-            "",
-        ]
-    )
     return "\n".join(lines)
 
 
@@ -159,7 +156,7 @@ def _parse_plugin_config_toml(text: str) -> PluginConfig:
         if not line or "=" not in line:
             continue
         key, value = [part.strip() for part in line.split("=", 1)]
-        if key in {"index_root", "default_corpus"}:
+        if key in {"web_url", "web_api_key", "default_corpus"}:
             data[key] = json.loads(value)
         elif key in {
             "default_threads",
@@ -168,8 +165,8 @@ def _parse_plugin_config_toml(text: str) -> PluginConfig:
         }:
             data[key] = int(value)
         elif key in {
+            "web_verify_tls",
             "default_index_blocks_with_functions",
-            "include_meaningful_names",
         }:
             normalized = value.lower()
             if normalized not in {"true", "false"}:
@@ -223,10 +220,7 @@ def load_plugin_config(*, strict: bool = False) -> PluginConfig:
     path = plugin_config_path()
     if path.is_file():
         try:
-            config = _parse_plugin_config_toml(path.read_text(encoding="utf-8"))
-            if config.index_root == LEGACY_IDA_INDEX_ROOT:
-                config.index_root = None
-            return config
+            return _parse_plugin_config_toml(path.read_text(encoding="utf-8"))
         except Exception:
             if strict:
                 raise
@@ -236,28 +230,27 @@ def load_plugin_config(*, strict: bool = False) -> PluginConfig:
     if not raw:
         return PluginConfig()
     try:
-        import json
-
         data = json.loads(raw)
-        config = PluginConfig(**data)
-        if config.index_root == LEGACY_IDA_INDEX_ROOT:
-            config.index_root = None
-        return config
+        filtered = {
+            key: value
+            for key, value in data.items()
+            if key
+            in {
+                "web_url",
+                "web_api_key",
+                "web_verify_tls",
+                "default_corpus",
+                "default_threads",
+                "default_embedding_dimensions",
+                "default_compare_limit",
+                "default_index_blocks_with_functions",
+            }
+        }
+        return PluginConfig(**filtered)
     except Exception:
         if strict:
             raise
         return PluginConfig()
-
-
-def effective_index_root(plugin_config: PluginConfig) -> str:
-    if plugin_config.index_root:
-        return plugin_config.index_root
-    config = Config()
-    try:
-        config.from_default()
-    except Exception:
-        pass
-    return config.index.local.directory
 
 
 def save_plugin_config(config: PluginConfig) -> None:
@@ -268,13 +261,14 @@ def save_plugin_config(config: PluginConfig) -> None:
         REGISTRY_KEY,
         json.dumps(
             {
-                "index_root": config.index_root,
+                "web_url": config.web_url,
+                "web_api_key": config.web_api_key,
+                "web_verify_tls": config.web_verify_tls,
                 "default_corpus": config.default_corpus,
                 "default_threads": config.default_threads,
                 "default_embedding_dimensions": config.default_embedding_dimensions,
                 "default_compare_limit": config.default_compare_limit,
                 "default_index_blocks_with_functions": config.default_index_blocks_with_functions,
-                "include_meaningful_names": config.include_meaningful_names,
             },
             sort_keys=True,
         ),
@@ -282,7 +276,12 @@ def save_plugin_config(config: PluginConfig) -> None:
     )
 
 
-def build_binlex_config(plugin_config: PluginConfig, *, threads: int | None = None, dimensions: int | None = None) -> Config:
+def build_binlex_config(
+    plugin_config: PluginConfig,
+    *,
+    threads: int | None = None,
+    dimensions: int | None = None,
+) -> Config:
     config = Config()
     try:
         config.from_default()
@@ -293,3 +292,18 @@ def build_binlex_config(plugin_config: PluginConfig, *, threads: int | None = No
     if dimensions is not None:
         config.processors.embeddings.dimensions = dimensions
     return config
+
+
+def build_web_client(plugin_config: PluginConfig, config: Config | None = None) -> Web:
+    url = plugin_config.web_url.strip()
+    if not url:
+        raise RuntimeError("web_url must be configured for the Binlex IDA plugin")
+    api_key = plugin_config.web_api_key.strip()
+    if not api_key:
+        raise RuntimeError("web_api_key must be configured for the Binlex IDA plugin")
+    return Web(
+        config or build_binlex_config(plugin_config),
+        url=url,
+        verify=plugin_config.web_verify_tls,
+        api_key=api_key,
+    )

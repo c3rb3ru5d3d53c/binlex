@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod client;
+pub mod clients;
 pub mod compression;
 pub mod config;
 pub mod controlflow;
@@ -32,20 +32,19 @@ pub mod genetics;
 pub mod hashing;
 pub mod hex;
 pub mod imaging;
-pub mod index;
+pub mod indexing;
 pub mod io;
 pub mod lifters;
 pub mod math;
 pub mod metadata;
 pub mod processor;
+pub mod query;
+pub mod rules;
 pub mod runtime;
-pub mod search;
 pub mod server;
 pub mod storage;
 pub mod util;
 
-pub use client::Client;
-pub use client::Error as ClientError;
 pub use config::AUTHOR;
 pub use config::Config;
 pub use config::VERSION;
@@ -54,5 +53,5 @@ pub use core::Magic;
 pub use core::OperatingSystem;
 pub use core::Transport;
 pub use math::entropy;
-pub use search::Query;
+pub use query::Query;
 pub use util::hexdump;

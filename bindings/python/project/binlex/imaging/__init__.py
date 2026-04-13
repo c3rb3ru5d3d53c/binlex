@@ -22,7 +22,13 @@
 
 """Image rendering helpers for terminal, PNG, SVG, and palette output."""
 
-from .pipeline import DigraphIntensity, Imaging, ImagingPalette, ImagingRenderer
+from .pipeline import (
+    DigraphIntensity,
+    Imaging,
+    ImagingNormalized,
+    ImagingPalette,
+    ImagingRenderer,
+)
 from .palette import Palette
 from .png import PNG
 from .render import Render, RenderCell
@@ -31,6 +37,7 @@ from .terminal import Terminal
 
 __all__ = [
     "Imaging",
+    "ImagingNormalized",
     "ImagingPalette",
     "ImagingRenderer",
     "DigraphIntensity",

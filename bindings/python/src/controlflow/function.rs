@@ -31,6 +31,7 @@ use crate::Config;
 use binlex::controlflow::Function as InnerFunction;
 use binlex::controlflow::FunctionJsonDeserializer as InnerFunctionJsonDeserializer;
 use binlex::hex;
+use binlex::imaging::Imaging as InnerImaging;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::Py;
@@ -188,6 +189,17 @@ impl FunctionJsonDeserializer {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the imaging pipeline for the function bytes, if they are present.
+    pub fn imaging(&self) -> Option<Imaging> {
+        let binding = self.inner.lock().unwrap();
+        let bytes = binding.bytes()?;
+        Some(Imaging::from_inner(InnerImaging::new(
+            bytes,
+            binding.config.clone(),
+        )))
+    }
+
+    #[pyo3(text_signature = "($self)")]
     /// Convert the serialized function payload into a Python dictionary.
     pub fn to_dict(&self, py: Python) -> PyResult<Py<PyAny>> {
         let json_str = self.json()?;
@@ -229,7 +241,7 @@ pub struct Function {
 }
 
 impl Function {
-    fn with_inner_function<F, R>(&self, py: Python, f: F) -> PyResult<R>
+    pub(crate) fn with_inner_function<F, R>(&self, py: Python, f: F) -> PyResult<R>
     where
         F: FnOnce(&InnerFunction<'static>) -> PyResult<R>,
     {

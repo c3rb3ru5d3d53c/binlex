@@ -23,13 +23,14 @@
 pub(crate) mod artifact;
 pub(crate) mod formats;
 pub(crate) mod hash;
-pub(crate) mod normalize;
+pub mod normalize;
 pub mod palette;
 pub mod pipeline;
 pub mod render;
 pub(crate) mod renderers;
 
 pub use formats::{png::PNG, svg::SVG, terminal::Terminal};
+pub use normalize::NormalizeAlgorithm;
 pub use palette::Palette;
-pub use pipeline::{Imaging, ImagingPalette, ImagingRenderer};
+pub use pipeline::{Imaging, ImagingNormalized, ImagingPalette, ImagingRenderer};
 pub use render::{Render, RenderCell};

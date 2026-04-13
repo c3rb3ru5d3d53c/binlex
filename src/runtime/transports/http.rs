@@ -22,7 +22,7 @@ fn processor_http_url(
             ))
         })?;
     Ok(format!(
-        "{}/processors/{}",
+        "{}/api/v1/processors/{}",
         base_url.trim_end_matches('/'),
         processor_name
     ))

@@ -1,4 +1,4 @@
-FROM rust:1.94-bookworm AS builder
+FROM rust:1.94.1-trixie AS builder
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libprotobuf-dev protobuf-compiler \
@@ -22,7 +22,7 @@ RUN set -eux; \
         cp "$path" /tmp/binlex-processors/; \
     done
 
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 ARG BINLEX_IMAGE_SOURCE=https://github.com/c3rb3ru5d3d53c/binlex
 ARG BINLEX_IMAGE_VERSION=dev
@@ -47,5 +47,8 @@ EXPOSE 5000
 
 ENV BINLEX_SERVER_LISTEN=0.0.0.0
 ENV BINLEX_SERVER_PORT=5000
+ENV BINLEX_SERVER_PROCESSORS=
+ENV BINLEX_SERVER_PROCESSES=
+ENV BINLEX_SERVER_PROCESSOR_DIRECTORY=
 
-CMD ["sh", "-lc", "mkdir -p /root/.local/share/binlex/processors && cp -an /opt/binlex/processors/. /root/.local/share/binlex/processors/ && if [ -n \"${BINLEX_SERVER_CONFIG}\" ]; then exec binlex-server --config \"${BINLEX_SERVER_CONFIG}\" --listen \"${BINLEX_SERVER_LISTEN}\" --port \"${BINLEX_SERVER_PORT}\"; else exec binlex-server --listen \"${BINLEX_SERVER_LISTEN}\" --port \"${BINLEX_SERVER_PORT}\"; fi"]
+CMD ["sh", "-lc", "mkdir -p /root/.local/share/binlex/processors && cp -an /opt/binlex/processors/. /root/.local/share/binlex/processors/ && set -- binlex-server --listen \"${BINLEX_SERVER_LISTEN}\" --port \"${BINLEX_SERVER_PORT}\"; if [ -n \"${BINLEX_SERVER_CONFIG}\" ]; then set -- \"$@\" --config \"${BINLEX_SERVER_CONFIG}\"; fi; if [ -n \"${BINLEX_SERVER_PROCESSORS}\" ]; then set -- \"$@\" --processors \"${BINLEX_SERVER_PROCESSORS}\"; fi; if [ -n \"${BINLEX_SERVER_PROCESSES}\" ]; then set -- \"$@\" --processes \"${BINLEX_SERVER_PROCESSES}\"; fi; if [ -n \"${BINLEX_SERVER_PROCESSOR_DIRECTORY}\" ]; then set -- \"$@\" --processor-directory \"${BINLEX_SERVER_PROCESSOR_DIRECTORY}\"; fi; exec \"$@\""]

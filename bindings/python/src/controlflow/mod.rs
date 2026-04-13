@@ -32,6 +32,7 @@ pub use crate::controlflow::function::FunctionJsonDeserializer;
 pub use crate::controlflow::graph::Graph;
 pub use crate::controlflow::graph::GraphQueue;
 pub use crate::controlflow::instruction::Instruction;
+pub use crate::controlflow::instruction::InstructionJsonDeserializer;
 
 use crate::controlflow::block::block_init;
 use crate::controlflow::function::function_init;
@@ -58,6 +59,7 @@ pub fn controlflow_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Graph>()?;
     m.add_class::<GraphQueue>()?;
     m.add_class::<Instruction>()?;
+    m.add_class::<InstructionJsonDeserializer>()?;
     m.add_class::<Block>()?;
     m.add_class::<BlockJsonDeserializer>()?;
     m.add_class::<Function>()?;

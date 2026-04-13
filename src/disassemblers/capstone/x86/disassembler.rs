@@ -146,7 +146,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         cfg: &'a mut Graph,
     ) -> Result<(), Error> {
         let pool = ThreadPoolBuilder::new()
-            .num_threads(cfg.config.general.threads)
+            .num_threads(cfg.config.resolved_threads())
             .build()
             .map_err(|error| Error::new(ErrorKind::Other, format!("{}", error)))?;
 
@@ -641,11 +641,11 @@ impl<'disassembler> Disassembler<'disassembler> {
             return Ok(vec![0; instruction.bytes().len()]);
         }
 
-        let instruction_size = instruction.bytes().len() * 8;
+        let instruction_size_bits = instruction.bytes().len() * 8;
 
-        let mut wildcarded = vec![false; instruction_size];
+        let mut wildcarded = vec![false; instruction_size_bits];
 
-        let instruction_trailing_null_size = instruction
+        let instruction_trailing_null_size_bits = instruction
             .bytes()
             .iter()
             .rev()
@@ -653,9 +653,9 @@ impl<'disassembler> Disassembler<'disassembler> {
             .count()
             * 8;
 
-        let total_operand_size = Disassembler::get_total_operand_size(&operands)?;
+        let total_operand_size_bits = Disassembler::get_total_operand_size(&operands)? * 8;
 
-        if total_operand_size > instruction_size {
+        if total_operand_size_bits > instruction_size_bits {
             return Ok(vec![0; instruction.bytes().len()]);
         }
 
@@ -666,7 +666,7 @@ impl<'disassembler> Disassembler<'disassembler> {
                 has_immutable_operand,
             );
 
-        if total_operand_size == 0 && !operands.is_empty() {
+        if total_operand_size_bits == 0 && !operands.is_empty() {
             return Err(Error::new(
                 ErrorKind::Other,
                 format!(
@@ -684,24 +684,26 @@ impl<'disassembler> Disassembler<'disassembler> {
                     _ => false,
                 };
 
-                let displacement_size = match op.op_type {
+                let displacement_size_bits = match op.op_type {
                     X86OperandType::Mem(op_mem) => {
                         Disassembler::get_displacement_size(op_mem.disp().unsigned_abs()) * 8
                     }
                     _ => 0,
                 };
 
-                let mut op_size = if (op.size as usize) > displacement_size {
-                    op.size as usize
+                let operand_size_bits = (op.size as usize) * 8;
+
+                let mut op_size_bits = if operand_size_bits > displacement_size_bits {
+                    operand_size_bits
                 } else {
-                    displacement_size
+                    displacement_size_bits
                 };
 
-                if op_size > instruction_size {
-                    op_size = op.size as usize;
+                if op_size_bits > instruction_size_bits {
+                    op_size_bits = operand_size_bits;
                 }
 
-                if op_size > instruction_size {
+                if op_size_bits > instruction_size_bits {
                     Disassembler::print_instruction(instruction);
                     return Err(Error::new(
                         ErrorKind::Other,
@@ -712,11 +714,11 @@ impl<'disassembler> Disassembler<'disassembler> {
                     ));
                 }
 
-                let operand_offset = instruction_size - op_size;
+                let operand_offset_bits = instruction_size_bits - op_size_bits;
 
                 if should_wildcard {
-                    for i in 0..op_size {
-                        if operand_offset + i > wildcarded.len() {
+                    for i in 0..op_size_bits {
+                        if operand_offset_bits + i >= wildcarded.len() {
                             Disassembler::print_instruction(instruction);
                             return Err(Error::new(
                                 ErrorKind::Other,
@@ -726,7 +728,7 @@ impl<'disassembler> Disassembler<'disassembler> {
                                 ),
                             ));
                         }
-                        wildcarded[operand_offset + i] = true;
+                        wildcarded[operand_offset_bits + i] = true;
                     }
                 }
             }
@@ -743,8 +745,9 @@ impl<'disassembler> Disassembler<'disassembler> {
             mask[byte_index] = byte_mask;
         }
 
-        if is_immutable_signature && instruction_trailing_null_size > 0 {
-            let trailing_start = instruction.bytes().len() - (instruction_trailing_null_size / 8);
+        if is_immutable_signature && instruction_trailing_null_size_bits > 0 {
+            let trailing_start =
+                instruction.bytes().len() - (instruction_trailing_null_size_bits / 8);
             for byte_mask in mask.iter_mut().skip(trailing_start) {
                 *byte_mask = 0xFF;
             }

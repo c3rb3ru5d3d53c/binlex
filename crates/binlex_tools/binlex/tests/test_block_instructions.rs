@@ -30,8 +30,12 @@ fn binlex_binary() -> PathBuf {
             }
 
             let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-            let status = Command::new(cargo)
-                .current_dir(&workspace_root)
+            let mut command = Command::new(cargo);
+            command.current_dir(&workspace_root);
+            if let Ok(rustc) = std::env::var("RUSTC") {
+                command.env("RUSTC", rustc);
+            }
+            let status = command
                 .args(["build", "-p", "binlex-cli", "--bin", "binlex"])
                 .status()
                 .expect("cargo should build the binlex binary");

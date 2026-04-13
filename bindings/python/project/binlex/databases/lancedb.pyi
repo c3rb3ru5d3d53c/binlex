@@ -1,5 +1,5 @@
 from binlex.core.architecture import Architecture
-from binlex.index.local import Collection
+from binlex.indexing.local import Collection
 
 
 class LanceDB:

@@ -203,6 +203,14 @@ class PE:
         """Return the architecture declared by the PE image."""
         return Architecture.from_binding(self._inner.architecture())
 
+    def file_offset_to_relative_virtual_address(self, file_offset):
+        """Translate a file offset into a relative virtual address when a mapping exists."""
+        return self._inner.file_offset_to_relative_virtual_address(file_offset)
+
+    def relative_virtual_address_to_file_offset(self, relative_virtual_address):
+        """Translate a relative virtual address into a file offset when a mapping exists."""
+        return self._inner.relative_virtual_address_to_file_offset(relative_virtual_address)
+
     def file(self):
         """Return the associated `binlex.formats.File` wrapper."""
         return File._from_binding(self._inner.file())
@@ -210,6 +218,30 @@ class PE:
     def imaging(self):
         """Return the imaging pipeline over the mapped PE contents."""
         return Imaging._from_binding(self._inner.imaging())
+
+    def dotnet_metadata_token_to_virtual_address(self, metadata_token):
+        """Resolve a .NET metadata token to its method body virtual address."""
+        return self._inner.dotnet_metadata_token_to_virtual_address(metadata_token)
+
+    def dotnet_metadata_token_to_relative_virtual_address(self, metadata_token):
+        """Resolve a .NET metadata token to its method body relative virtual address."""
+        return self._inner.dotnet_metadata_token_to_relative_virtual_address(metadata_token)
+
+    def dotnet_metadata_token_to_file_offset(self, metadata_token):
+        """Resolve a .NET metadata token to its method body file offset."""
+        return self._inner.dotnet_metadata_token_to_file_offset(metadata_token)
+
+    def dotnet_virtual_address_to_metadata_token(self, virtual_address):
+        """Resolve a .NET method body virtual address back to its metadata token."""
+        return self._inner.dotnet_virtual_address_to_metadata_token(virtual_address)
+
+    def dotnet_relative_virtual_address_to_metadata_token(self, relative_virtual_address):
+        """Resolve a .NET method body relative virtual address back to its metadata token."""
+        return self._inner.dotnet_relative_virtual_address_to_metadata_token(relative_virtual_address)
+
+    def dotnet_file_offset_to_metadata_token(self, file_offset):
+        """Resolve a .NET method body file offset back to its metadata token."""
+        return self._inner.dotnet_file_offset_to_metadata_token(file_offset)
 
     def __getattr__(self, name):
         """Delegate unknown attributes to the underlying native PE object."""
