@@ -80,6 +80,8 @@ impl Attribute {
                 name,
                 symbol_type: symbol_type.inner.to_string(),
                 address,
+                username: String::new(),
+                timestamp: String::new(),
             }),
         })
     }

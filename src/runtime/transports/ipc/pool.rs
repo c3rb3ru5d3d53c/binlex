@@ -591,6 +591,9 @@ mod tests {
             let mut command = Command::new(cargo);
             command.current_dir(&manifest_dir);
             command.env_remove("RUSTC_WRAPPER");
+            if let Ok(rustc) = std::env::var("RUSTC") {
+                command.env("RUSTC", rustc);
+            }
             command.args([
                 "build",
                 "-p",

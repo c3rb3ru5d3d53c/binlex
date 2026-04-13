@@ -36,7 +36,7 @@ use crate::imaging::render::render_init;
 use crate::imaging::svg::svg_init;
 use crate::imaging::terminal::terminal_init;
 pub use palette::Palette;
-pub use pipeline::{Imaging, ImagingPalette, ImagingRenderer};
+pub use pipeline::{Imaging, ImagingNormalized, ImagingPalette, ImagingRenderer};
 pub use png::PNG;
 pub use render::{Render, RenderCell};
 pub use svg::SVG;
@@ -57,6 +57,7 @@ pub fn imaging_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Imaging>()?;
     m.add_class::<ImagingRenderer>()?;
     m.add_class::<ImagingPalette>()?;
+    m.add_class::<ImagingNormalized>()?;
     m.add_class::<Render>()?;
     m.add_class::<RenderCell>()?;
     m.add_class::<SVG>()?;

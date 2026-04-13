@@ -12,7 +12,7 @@ pub fn configured_server_transport(
     if processor.transport.ipc.enabled && supported.contains(&ProcessorTransport::Ipc) {
         return Ok(ProcessorTransport::Ipc);
     }
-    Err(ServerError::Processor(
+    Err(ServerError::processor(
         "processor has no enabled server execution transport".to_string(),
     ))
 }
@@ -23,7 +23,7 @@ pub fn execute(
     request: ProcessorHttpRequest,
 ) -> Result<Value, ServerError> {
     if !state.processor_enabled(processor_name) {
-        return Err(ServerError::Processor(format!(
+        return Err(ServerError::processor(format!(
             "processor {} is disabled on this server",
             processor_name
         )));
@@ -32,7 +32,7 @@ pub fn execute(
     let registration =
         processor_registration_by_name_for_config(&state.config.processors, processor_name)
             .ok_or_else(|| {
-                ServerError::Processor(format!("unsupported HTTP processor: {}", processor_name))
+                ServerError::processor(format!("unsupported HTTP processor: {}", processor_name))
             })?;
     crate::processor::registry::ensure_registration_host_compatibility(&registration.registration)
         .map_err(ServerError::from)?;
@@ -52,12 +52,12 @@ pub fn execute(
         .processors
         .processor(processor_name)
         .ok_or_else(|| {
-            ServerError::Processor(format!("processor {} is not configured", processor_name))
+            ServerError::processor(format!("processor {} is not configured", processor_name))
         })?;
     match configured_server_transport(processor, &registration.registration.transports)? {
         ProcessorTransport::Ipc => {
             let pool = state.processor_pool(processor_name).ok_or_else(|| {
-                ServerError::Processor(format!(
+                ServerError::processor(format!(
                     "processor {} pool is not available",
                     processor_name
                 ))
@@ -65,15 +65,15 @@ pub fn execute(
             let response = pool
                 .execute_json(&crate::runtime::JsonProcessorRequest {
                     config: toml::to_string(&state.config.processors)
-                        .map_err(|error| ServerError::Processor(error.to_string()))?,
+                        .map_err(|error| ServerError::processor(error.to_string()))?,
                     data: serde_json::to_string(&request.data)
-                        .map_err(|error| ServerError::Processor(error.to_string()))?,
+                        .map_err(|error| ServerError::processor(error.to_string()))?,
                 })
                 .map_err(ServerError::from)?;
             serde_json::from_str(&response.data)
-                .map_err(|error| ServerError::Processor(error.to_string()))
+                .map_err(|error| ServerError::processor(error.to_string()))
         }
-        ProcessorTransport::Http => Err(ServerError::Processor(format!(
+        ProcessorTransport::Http => Err(ServerError::processor(format!(
             "processor {} server transport cannot be http",
             processor_name
         ))),

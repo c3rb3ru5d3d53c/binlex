@@ -334,8 +334,8 @@ class IDAFunction(IDACommon):
 	def json(self):
 		return self._graph_function().json()
 
-class IDA():
-	"""High-level helpers for interrogating the active IDA session."""
+class Disassembler():
+	"""High-level IDA-backed disassembler with owned or attached database lifecycle."""
 
 	SUPPORTED_MAGIC = {Magic.PE, Magic.ELF, Magic.MACHO}
 	DATABASE_SUFFIXES = {".i64", ".idb"}
@@ -352,7 +352,7 @@ class IDA():
 		self._blocks = None
 		self._instructions = None
 		if path is not None:
-			self.open(path, run_auto_analysis=run_auto_analysis)
+			self._load(path, run_auto_analysis=run_auto_analysis)
 
 	def __enter__(self):
 		return self
@@ -391,7 +391,7 @@ class IDA():
 			)
 		return architecture
 
-	def load(self, path: str, run_auto_analysis: bool = True):
+	def _load(self, path: str, run_auto_analysis: bool = True):
 		self._validate_input_path(path)
 		result = idapro.open_database(path, run_auto_analysis=run_auto_analysis)
 		if result not in (0, None):
@@ -405,9 +405,6 @@ class IDA():
 			self.close()
 			raise
 		return self
-
-	def open(self, path: str, run_auto_analysis: bool = True):
-		return self.load(path, run_auto_analysis=run_auto_analysis)
 
 	def processor(self) -> str | None:
 		if self._processor is None:
@@ -577,11 +574,11 @@ class IDA():
 			raise RuntimeError("unsupported IDA processor for Binlex graph creation")
 		return Graph(architecture, config)
 
-	def disassembler(self, config: Config):
+	def _graph_disassembler(self, config: Config):
 		architecture = self.architecture()
 		if architecture is None:
 			raise RuntimeError("unsupported IDA processor for Binlex disassembly")
-		return Disassembler(
+		return _GraphDisassembler(
 			architecture,
 			self.image(),
 			self.executable_virtual_address_ranges(),
@@ -591,7 +588,7 @@ class IDA():
 	def disassemble(self, config: Config, cfg: Graph | None = None) -> Graph:
 		if cfg is None:
 			cfg = self.graph(config)
-		self.disassembler(config).disassemble(cfg)
+		self._graph_disassembler(config).disassemble(cfg)
 		return cfg
 
 	def disassemble_function(self, address: int, config: Config, cfg: Graph | None = None):
@@ -600,16 +597,34 @@ class IDA():
 			return None
 		if cfg is None:
 			cfg = self.graph(config)
-		self.disassembler(config).disassemble_function(function, cfg)
+		self._graph_disassembler(config).disassemble_function(function, cfg)
 		return function
 
-class Disassembler():
+	def disassemble_block(self, address: int, config: Config, cfg: Graph | None = None):
+		block = self.block(address)
+		if block is None:
+			return None
+		if cfg is None:
+			cfg = self.graph(config)
+		self._graph_disassembler(config).disassemble_block(block, cfg)
+		return block
+
+	def disassemble_instruction(self, address: int, config: Config, cfg: Graph | None = None):
+		instruction = self.instruction(address)
+		if instruction is None:
+			return None
+		if cfg is None:
+			cfg = self.graph(config)
+		self._graph_disassembler(config).disassemble_instruction(instruction, cfg)
+		return instruction
+
+class _GraphDisassembler():
 	"""Bridge IDA database objects into binlex control-flow structures."""
 
 	def __init__(self, architecture: Architecture, image: Image | bytes, executable_virtual_address_ranges: dict, config: Config):
 		"""Create a disassembler that uses IDA for traversal and Capstone for decode."""
 		_require_ida()
-		self.ida = IDA()
+		self.ida = Disassembler()
 		self.architecture = architecture
 		mapped_ranges = self.ida.virtual_address_ranges()
 		self.executable_virtual_address_ranges = dict(mapped_ranges)
@@ -653,3 +668,17 @@ class Disassembler():
 		"""Disassemble all functions discovered in the open IDA database."""
 		for function in self.ida.functions():
 			self.disassemble_function(function, cfg)
+
+
+IDA = Disassembler
+
+__all__ = [
+	"DatabaseLoadError",
+	"Disassembler",
+	"IDA",
+	"IDABlock",
+	"IDAFunction",
+	"IDAInstruction",
+	"UnsupportedArchitectureError",
+	"UnsupportedInputFormatError",
+]

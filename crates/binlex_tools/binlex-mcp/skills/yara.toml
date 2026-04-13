@@ -107,3 +107,94 @@ result = {
     ],
 }
 """
+
+[[skills]]
+name = "workflow.yara.create"
+description = "Create a Binlex YARARule from structured inputs inside the Binlex MCP runtime."
+instructions = "Build a `binlex.rules.YARARule` from `args`. Support rule-level fields like `name`, `comment`, `imports`, `tags`, `metadata`, `global`, and `private`. Support pattern inputs through `patterns`, `texts`, `regexes`, and `strings`. Support either a direct `condition` string or `condition_at_least` with `minimum` and `patterns`. Return the rendered rule text plus a compact summary of the constructed rule."
+python = """
+from binlex.rules import YARARule
+
+request_args = args or {}
+name = request_args.get("name")
+comment = request_args.get("comment")
+
+rule = YARARule(name, comment)
+
+for value in request_args.get("imports", []) or []:
+    rule.add_import(str(value))
+
+for value in request_args.get("tags", []) or []:
+    rule.add_tag(str(value))
+
+if request_args.get("global"):
+    rule.set_global(True)
+
+if request_args.get("private"):
+    rule.set_private(True)
+
+for key, value in (request_args.get("metadata") or {}).items():
+    rule.set_metadata(str(key), value)
+
+for item in request_args.get("patterns", []) or []:
+    if isinstance(item, dict):
+        rule.add_pattern(item["pattern"], item.get("comment"))
+    else:
+        rule.add_pattern(str(item))
+
+for item in request_args.get("texts", []) or []:
+    if not isinstance(item, dict):
+        rule.add_text(str(item))
+        continue
+    rule.add_text(
+        item["text"],
+        ascii=item.get("ascii", True),
+        wide=item.get("wide", False),
+        nocase=item.get("nocase", False),
+        xor=item.get("xor", False),
+        base64=item.get("base64", False),
+        base64wide=item.get("base64wide", False),
+        fullword=item.get("fullword", False),
+        private=item.get("private", False),
+        comment=item.get("comment"),
+    )
+
+for item in request_args.get("regexes", []) or []:
+    if isinstance(item, dict):
+        rule.add_regex(item["regex"], item.get("comment"))
+    else:
+        rule.add_regex(str(item))
+
+for item in request_args.get("strings", []) or []:
+    if isinstance(item, dict):
+        rule.add_string(item["value"], item.get("comment"))
+    else:
+        rule.add_string(str(item))
+
+condition_text = request_args.get("condition")
+condition_at_least = request_args.get("condition_at_least")
+if condition_text:
+    rule.set_condition(rule.condition(condition_text))
+elif isinstance(condition_at_least, dict):
+    minimum = int(condition_at_least["minimum"])
+    patterns = [str(value) for value in condition_at_least.get("patterns", [])]
+    rule.set_condition(rule.condition_at_least(minimum, patterns))
+
+rendered = rule.render()
+patterns = rule.get_patterns()
+condition = rule.get_condition()
+
+result = {
+    "skill": "workflow.yara.create",
+    "name": rule.get_name(),
+    "comment": rule.get_comment(),
+    "imports": list(request_args.get("imports", []) or []),
+    "tags": list(request_args.get("tags", []) or []),
+    "metadata": rule.get_metadata(),
+    "pattern_count": len(patterns),
+    "pattern_names": [pattern.get_name() for pattern in patterns],
+    "condition": None if condition is None else str(condition),
+    "valid": rule.check(),
+    "rendered": rendered,
+}
+"""

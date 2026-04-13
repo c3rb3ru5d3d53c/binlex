@@ -1,6 +1,8 @@
 """Milvus indexing backend."""
 
-from binlex_bindings.binlex.databases.milvus import Client as _MilvusBinding
+from binlex_bindings.binlex import databases as _databases_binding
+
+_MilvusBinding = _databases_binding.milvus.Client
 
 
 class Milvus:

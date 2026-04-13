@@ -57,6 +57,10 @@ pub struct SymbolJson {
     pub name: String,
     /// The virtual address of the function symbol.
     pub address: u64,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub username: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub timestamp: String,
 }
 
 /// Represents a structure containing metadata about a function symbol.
@@ -91,6 +95,8 @@ impl Symbol {
             symbol_type: self.symbol_type.clone(),
             name: self.name.clone(),
             address: self.address,
+            username: String::new(),
+            timestamp: String::new(),
         }
     }
 

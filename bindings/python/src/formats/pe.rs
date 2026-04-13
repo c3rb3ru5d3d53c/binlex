@@ -96,6 +96,18 @@ impl PE {
     }
 
     #[pyo3(text_signature = "($self, relative_virtual_address)")]
+    /// Convert a relative virtual address to a file offset, if mapped.
+    pub fn relative_virtual_address_to_file_offset(
+        &self,
+        relative_virtual_address: u64,
+    ) -> Option<u64> {
+        self.inner
+            .lock()
+            .unwrap()
+            .relative_virtual_address_to_file_offset(relative_virtual_address)
+    }
+
+    #[pyo3(text_signature = "($self, relative_virtual_address)")]
     /// Convert a relative virtual address to a virtual address.
     pub fn relative_virtual_address_to_virtual_address(
         &self,
@@ -116,6 +128,15 @@ impl PE {
             .file_offset_to_virtual_address(file_offset)
     }
 
+    #[pyo3(text_signature = "($self, offset)")]
+    /// Convert a file offset to a relative virtual address, if mapped.
+    pub fn file_offset_to_relative_virtual_address(&self, file_offset: u64) -> Option<u64> {
+        self.inner
+            .lock()
+            .unwrap()
+            .file_offset_to_relative_virtual_address(file_offset)
+    }
+
     #[pyo3(text_signature = "($self)")]
     /// Return the architecture of the PE image.
     pub fn architecture(&self) -> Architecture {
@@ -128,6 +149,60 @@ impl PE {
             .lock()
             .unwrap()
             .dotnet_metadata_token_virtual_addresses()
+    }
+
+    #[pyo3(text_signature = "($self, metadata_token)")]
+    pub fn dotnet_metadata_token_to_virtual_address(&self, metadata_token: u64) -> Option<u64> {
+        self.inner
+            .lock()
+            .unwrap()
+            .dotnet_metadata_token_to_virtual_address(metadata_token)
+    }
+
+    #[pyo3(text_signature = "($self, metadata_token)")]
+    pub fn dotnet_metadata_token_to_relative_virtual_address(
+        &self,
+        metadata_token: u64,
+    ) -> Option<u64> {
+        self.inner
+            .lock()
+            .unwrap()
+            .dotnet_metadata_token_to_relative_virtual_address(metadata_token)
+    }
+
+    #[pyo3(text_signature = "($self, metadata_token)")]
+    pub fn dotnet_metadata_token_to_file_offset(&self, metadata_token: u64) -> Option<u64> {
+        self.inner
+            .lock()
+            .unwrap()
+            .dotnet_metadata_token_to_file_offset(metadata_token)
+    }
+
+    #[pyo3(text_signature = "($self, virtual_address)")]
+    pub fn dotnet_virtual_address_to_metadata_token(&self, virtual_address: u64) -> Option<u64> {
+        self.inner
+            .lock()
+            .unwrap()
+            .dotnet_virtual_address_to_metadata_token(virtual_address)
+    }
+
+    #[pyo3(text_signature = "($self, relative_virtual_address)")]
+    pub fn dotnet_relative_virtual_address_to_metadata_token(
+        &self,
+        relative_virtual_address: u64,
+    ) -> Option<u64> {
+        self.inner
+            .lock()
+            .unwrap()
+            .dotnet_relative_virtual_address_to_metadata_token(relative_virtual_address)
+    }
+
+    #[pyo3(text_signature = "($self, file_offset)")]
+    pub fn dotnet_file_offset_to_metadata_token(&self, file_offset: u64) -> Option<u64> {
+        self.inner
+            .lock()
+            .unwrap()
+            .dotnet_file_offset_to_metadata_token(file_offset)
     }
 
     #[pyo3(text_signature = "($self)")]

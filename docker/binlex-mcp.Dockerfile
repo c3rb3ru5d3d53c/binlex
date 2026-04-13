@@ -1,6 +1,33 @@
-ARG BINLEX_PYTHON_IMAGE=binlex-python:latest
+ARG PYTHON_BUILD_IMAGE=python:3.12.13-bookworm
+ARG PYTHON_RUNTIME_IMAGE=python:3.12.13-slim-bookworm
+ARG RUST_IMAGE=rust:1.94-bookworm
 
-FROM rust:1.94-bookworm AS builder
+FROM ${PYTHON_BUILD_IMAGE} AS python-builder
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        curl \
+        libprotobuf-dev \
+        pkg-config \
+        protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain 1.94.0
+
+ENV PATH=/root/.cargo/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
+ENV PROTOC_INCLUDE=/usr/include
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir --upgrade pip maturin[patchelf]
+
+COPY . .
+
+RUN mkdir -p /tmp/binlex-wheels \
+    && maturin build --manifest-path bindings/python/Cargo.toml --release --out /tmp/binlex-wheels
+
+FROM ${RUST_IMAGE} AS mcp-builder
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -26,7 +53,7 @@ RUN set -eux; \
         cp "$path" /tmp/binlex-processors/; \
     done
 
-FROM ${BINLEX_PYTHON_IMAGE}
+FROM ${PYTHON_RUNTIME_IMAGE}
 
 ARG BINLEX_IMAGE_SOURCE=https://github.com/c3rb3ru5d3d53c/binlex
 ARG BINLEX_IMAGE_VERSION=dev
@@ -45,17 +72,21 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /data/binlex-mcp /opt/binlex/processors /root/.config/binlex /root/.local/share/binlex/processors /samples
 
-RUN pip install --no-cache-dir \
+COPY --from=python-builder /tmp/binlex-wheels /tmp/binlex-wheels
+
+RUN pip install --no-cache-dir /tmp/binlex-wheels/binlex-*.whl \
+    && pip install --no-cache-dir \
         requests==2.33.0 \
         yara-python==4.5.4 \
-        python-magic==0.4.27
+        python-magic==0.4.27 \
+    && rm -rf /tmp/binlex-wheels
 
 WORKDIR /app
 
-COPY --from=builder /app/target/release/binlex-mcp /usr/local/bin/binlex-mcp
-COPY --from=builder /tmp/binlex-processors/ /opt/binlex/processors/
-COPY --from=builder /tmp/binlex-processors/ /root/.local/share/binlex/processors/
-COPY --from=builder /app/crates/binlex_tools/binlex-mcp/skills /opt/binlex-mcp/skills
+COPY --from=mcp-builder /app/target/release/binlex-mcp /usr/local/bin/binlex-mcp
+COPY --from=mcp-builder /tmp/binlex-processors/ /opt/binlex/processors/
+COPY --from=mcp-builder /tmp/binlex-processors/ /root/.local/share/binlex/processors/
+COPY --from=mcp-builder /app/crates/binlex_tools/binlex-mcp/skills /opt/binlex-mcp/skills
 
 ENV BINLEX_MCP_LISTEN=0.0.0.0
 ENV BINLEX_MCP_PORT=3000

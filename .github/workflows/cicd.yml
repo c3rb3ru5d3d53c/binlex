@@ -803,43 +803,35 @@ jobs:
           - target: binlex-mcp
             platform: linux/amd64
             runner: ubuntu-latest
-            dockerfile: docker/binlex.Dockerfile
-            uses_shared_target: true
+            dockerfile: docker/binlex-mcp.Dockerfile
           - target: binlex-mcp
             platform: linux/arm64
             runner: ubuntu-24.04-arm
-            dockerfile: docker/binlex.Dockerfile
-            uses_shared_target: true
+            dockerfile: docker/binlex-mcp.Dockerfile
           - target: binlex-python
             platform: linux/amd64
             runner: ubuntu-latest
-            dockerfile: docker/binlex.Dockerfile
-            uses_shared_target: true
+            dockerfile: docker/binlex-python.Dockerfile
           - target: binlex-python
             platform: linux/arm64
             runner: ubuntu-24.04-arm
-            dockerfile: docker/binlex.Dockerfile
-            uses_shared_target: true
+            dockerfile: docker/binlex-python.Dockerfile
           - target: binlex-server
             platform: linux/amd64
             runner: ubuntu-latest
             dockerfile: docker/binlex-server.Dockerfile
-            uses_shared_target: false
           - target: binlex-server
             platform: linux/arm64
             runner: ubuntu-24.04-arm
             dockerfile: docker/binlex-server.Dockerfile
-            uses_shared_target: false
           - target: binlex-web
             platform: linux/amd64
             runner: ubuntu-latest
             dockerfile: docker/binlex-web.Dockerfile
-            uses_shared_target: false
           - target: binlex-web
             platform: linux/arm64
             runner: ubuntu-24.04-arm
             dockerfile: docker/binlex-web.Dockerfile
-            uses_shared_target: false
 
     steps:
       - name: Checkout Code
@@ -873,27 +865,8 @@ jobs:
             echo "DIGEST_ARTIFACT=${digest_artifact}"
           } >> "$GITHUB_ENV"
 
-      - name: Build ${{ matrix.target }} Image (shared Dockerfile)
-        if: github.event_name == 'pull_request' && matrix.uses_shared_target
-        uses: docker/build-push-action@v6
-        env:
-          DOCKER_BUILD_RECORD_UPLOAD: "false"
-        with:
-          context: .
-          file: ${{ matrix.dockerfile }}
-          target: ${{ matrix.target }}
-          platforms: ${{ matrix.platform }}
-          load: true
-          push: false
-          tags: ${{ env.BINLEX_DOCKER_IMAGE }}
-          build-args: |
-            BINLEX_IMAGE_VERSION=${{ env.BINLEX_VERSION }}
-            BINLEX_IMAGE_REVISION=${{ github.sha }}
-          cache-from: type=gha,scope=docker-${{ matrix.target }}-${{ matrix.platform }}
-          cache-to: type=gha,mode=max,scope=docker-${{ matrix.target }}-${{ matrix.platform }}
-
-      - name: Build ${{ matrix.target }} Image (standalone Dockerfile)
-        if: github.event_name == 'pull_request' && !matrix.uses_shared_target
+      - name: Build ${{ matrix.target }} Image
+        if: github.event_name == 'pull_request'
         uses: docker/build-push-action@v6
         env:
           DOCKER_BUILD_RECORD_UPLOAD: "false"
@@ -962,28 +935,9 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
-      - name: Publish ${{ matrix.target }} Image (shared Dockerfile)
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')) && matrix.uses_shared_target
+      - name: Publish ${{ matrix.target }} Image
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
         id: build
-        uses: docker/build-push-action@v6
-        env:
-          DOCKER_BUILD_RECORD_UPLOAD: "false"
-        with:
-          context: .
-          file: ${{ matrix.dockerfile }}
-          target: ${{ matrix.target }}
-          platforms: ${{ matrix.platform }}
-          push: true
-          outputs: type=image,name=${{ env.DOCKER_IMAGE }},push-by-digest=true,name-canonical=true,push=true
-          build-args: |
-            BINLEX_IMAGE_VERSION=${{ env.BINLEX_VERSION }}
-            BINLEX_IMAGE_REVISION=${{ github.sha }}
-          cache-from: type=gha,scope=docker-${{ matrix.target }}-${{ matrix.platform }}
-          cache-to: type=gha,mode=max,scope=docker-${{ matrix.target }}-${{ matrix.platform }}
-
-      - name: Publish ${{ matrix.target }} Image (standalone Dockerfile)
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')) && !matrix.uses_shared_target
-        id: build-standalone
         uses: docker/build-push-action@v6
         env:
           DOCKER_BUILD_RECORD_UPLOAD: "false"
@@ -1005,7 +959,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/digests
-          digest="${{ steps.build.outputs.digest || steps.build-standalone.outputs.digest }}"
+          digest="${{ steps.build.outputs.digest }}"
           touch "/tmp/digests/${digest#sha256:}"
 
       - name: Upload Image Digest

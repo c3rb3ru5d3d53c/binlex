@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use super::{Config, ConfigData, DIRECTORY, FILE_NAME};
+use super::{Config, DIRECTORY, FILE_NAME};
 use std::fs;
 use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
@@ -38,7 +38,7 @@ impl Config {
 
     pub fn from_file(file_path: &str) -> Result<Config, Error> {
         let toml_string = fs::read_to_string(file_path)?;
-        let mut config: ConfigData = toml::from_str(&toml_string).map_err(|error| {
+        let mut config: Config = toml::from_str(&toml_string).map_err(|error| {
             Error::new(
                 ErrorKind::InvalidData,
                 format!(
@@ -51,7 +51,7 @@ impl Config {
             config.processors.max_payload_bytes =
                 super::ConfigProcessors::default().max_payload_bytes;
         }
-        Ok(Self::from_data(config))
+        Ok(config)
     }
 
     pub fn default_path() -> Option<PathBuf> {

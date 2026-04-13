@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod client;
+pub mod clients;
 pub mod compression;
 pub mod config;
 pub mod controlflow;
@@ -32,11 +32,12 @@ pub mod genetics;
 pub mod hashing;
 pub mod hex;
 pub mod imaging;
-pub mod index;
+pub mod indexing;
 #[cfg(not(target_os = "windows"))]
 pub mod lifters;
 pub mod math;
 pub mod metadata;
+pub mod rules;
 pub mod storage;
 pub mod util;
 
@@ -44,7 +45,7 @@ pub use config::Config;
 pub use core::Architecture;
 pub use core::Magic;
 
-use crate::client::client_init;
+use crate::clients::clients_init;
 use crate::compression::compression_init;
 use crate::config::config_module_init;
 use crate::controlflow::controlflow_init;
@@ -56,11 +57,12 @@ use crate::genetics::genitics_init;
 use crate::hashing::hashing_init;
 use crate::hex::hex_init;
 use crate::imaging::imaging_init;
-use crate::index::index_init;
+use crate::indexing::indexing_init;
 #[cfg(not(target_os = "windows"))]
 use crate::lifters::lifters_init;
 use crate::math::{entropy_init, math_init};
 use crate::metadata::metadata_init;
+use crate::rules::rules_init;
 use crate::storage::storage_init;
 use crate::util::util_init;
 use ::binlex::runtime::{register_host_runtime, HostRuntime};
@@ -75,7 +77,7 @@ fn binlex(m: &Bound<'_, PyModule>) -> PyResult<()> {
         },
     )?;
 
-    m.add_wrapped(wrap_pymodule!(client_init))?;
+    m.add_wrapped(wrap_pymodule!(clients_init))?;
     m.add_wrapped(wrap_pymodule!(compression_init))?;
     m.add_wrapped(wrap_pymodule!(formats_init))?;
     m.add_wrapped(wrap_pymodule!(controlflow_init))?;
@@ -89,7 +91,7 @@ fn binlex(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pymodule!(genitics_init))?;
     m.add_wrapped(wrap_pymodule!(hashing_init))?;
     m.add_wrapped(wrap_pymodule!(imaging_init))?;
-    m.add_wrapped(wrap_pymodule!(index_init))?;
+    m.add_wrapped(wrap_pymodule!(indexing_init))?;
     m.add_wrapped(wrap_pymodule!(databases_init))?;
     #[cfg(not(target_os = "windows"))]
     m.add_wrapped(wrap_pymodule!(lifters_init))?;
@@ -98,5 +100,6 @@ fn binlex(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Magic>()?;
     m.add_wrapped(wrap_pymodule!(util_init))?;
     m.add_wrapped(wrap_pymodule!(storage_init))?;
+    m.add_wrapped(wrap_pymodule!(rules_init))?;
     Ok(())
 }

@@ -1316,11 +1316,42 @@ impl Config {
     }
 
     #[getter]
-    /// Return the general configuration group.
-    pub fn get_general(&self) -> PyResult<ConfigGeneral> {
-        Ok(ConfigGeneral {
-            inner: Arc::clone(&self.inner),
-        })
+    /// Return the configured analysis thread count. A value of 0 means automatic.
+    pub fn get_threads(&self) -> usize {
+        let inner = self.inner.lock().unwrap();
+        inner.threads
+    }
+
+    #[setter]
+    pub fn set_threads(&mut self, value: usize) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.threads = value;
+    }
+
+    #[getter]
+    /// Return whether minimal mode is enabled.
+    pub fn get_minimal(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.minimal
+    }
+
+    #[setter]
+    pub fn set_minimal(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.minimal = value;
+    }
+
+    #[getter]
+    /// Return whether debug logging is enabled.
+    pub fn get_debug(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.debug
+    }
+
+    #[setter]
+    pub fn set_debug(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.debug = value;
     }
 
     #[getter]
@@ -1631,50 +1662,6 @@ impl ConfigMmapCache {
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
         inner.mmap.cache.enabled = value;
-    }
-}
-
-#[pyclass]
-pub struct ConfigGeneral {
-    pub inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigGeneral {
-    #[getter]
-    pub fn get_threads(&self) -> usize {
-        let inner = self.inner.lock().unwrap();
-        inner.general.threads
-    }
-
-    #[setter]
-    pub fn set_threads(&mut self, value: usize) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.general.threads = value;
-    }
-
-    #[getter]
-    pub fn get_minimal(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
-        inner.general.minimal
-    }
-
-    #[setter]
-    pub fn set_minimal(&mut self, value: bool) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.general.minimal = value;
-    }
-
-    #[getter]
-    pub fn get_debug(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
-        inner.general.debug
-    }
-
-    #[setter]
-    pub fn set_debug(&mut self, value: bool) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.general.debug = value;
     }
 }
 

@@ -9,7 +9,6 @@ samples/
 *.exe
 *.dll
 *.so
-*.svg
 pkg/
 *.tar
 *.tar.gz
@@ -19,3 +18,4 @@ perf.data
 __pycache__/
 *.pyc
 data/
+.codex

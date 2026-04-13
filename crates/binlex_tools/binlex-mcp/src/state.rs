@@ -69,7 +69,7 @@ pub struct McpState {
 
 impl McpState {
     pub fn new(config: Config, mcp: McpConfig, python_command: String) -> Result<Self, DynError> {
-        let processor_state = AppState::new(config.clone(), config.general.debug)?;
+        let processor_state = AppState::new(config.clone(), config.debug)?;
         let samples_dir = resolve_samples_dir(mcp.samples.directory.as_deref().map(Path::new))?;
         let sample_store = Arc::new(SampleStore::new(
             samples_dir,

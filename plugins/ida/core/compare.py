@@ -1,24 +1,61 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 
-import idautils
 import ida_kernwin
 import idaapi
 import idc
 
-from binlex.index import Collection, LocalIndex
+from binlex.indexing import Collection
 
-from .config import build_binlex_config, effective_index_root, is_meaningful_name, require_embeddings
+from .config import build_binlex_config, build_web_client, is_meaningful_name, require_embeddings
 from .context import resolve_block_context, resolve_function_context, vector_for_context
-from .disassembly import disassemble_graph
-from .metadata import MetadataStore
+from .disassembly import architecture_for_current_ida
 
 
 @dataclass
 class CompareRequest:
     corpora: list[str]
     limit: int
+
+
+def _architecture_string() -> str:
+    return str(architecture_for_current_ida())
+
+
+def _query_for_vector(vector: list[float], *, corpus: str, collection: Collection, architecture: str) -> str:
+    vector_json = json.dumps(vector, separators=(",", ":"))
+    return (
+        f"vector:{vector_json} | "
+        f"collection:{collection.as_str()} | "
+        f"corpus:{corpus} | "
+        f"architecture:{architecture}"
+    )
+
+
+def _symbol_names_for_hit(web, hit, *, architecture: str) -> list[str]:
+    symbol = hit.symbol()
+    if symbol:
+        return [symbol]
+
+    try:
+        payload = web.collection_symbols(
+            hit.sha256(),
+            hit.collection(),
+            architecture,
+            hit.address(),
+        )
+    except Exception:
+        return [""]
+
+    symbols = payload.get("symbols", [])
+    names = []
+    for item in symbols:
+        name = str(item.get("name", "")).strip()
+        if name:
+            names.append(name)
+    return names or [""]
 
 
 def _dedupe_rows(rows: list[dict]) -> list[dict]:
@@ -39,17 +76,6 @@ def _dedupe_rows(rows: list[dict]) -> list[dict]:
         seen.add(key)
         unique.append(row)
     return unique
-
-
-def _display_names(metadata: MetadataStore, *, corpus: str, collection: str, sha256: str, address: int) -> list[str]:
-    names = metadata.names_for(corpus=corpus, collection=collection, sha256=sha256, address=address)
-    return names or [""]
-
-
-def _local_function_name(address: int | None) -> str:
-    if address is None:
-        return ""
-    return idc.get_func_name(address) or ""
 
 
 def _row(
@@ -77,6 +103,49 @@ def _row(
     }
 
 
+def _search_rows(
+    *,
+    plugin_config,
+    vector: list[float],
+    collection: Collection,
+    local_address: int,
+    local_name: str,
+    local_function_address: int | None,
+    corpora: list[str],
+    limit: int,
+) -> list[dict]:
+    architecture = _architecture_string()
+    web = build_web_client(plugin_config)
+    rows: list[dict] = []
+
+    for corpus in corpora:
+        query = _query_for_vector(
+            vector,
+            corpus=corpus,
+            collection=collection,
+            architecture=architecture,
+        )
+        for item in web.search(query, top_k=limit, page=1):
+            hit = item.lhs() or item.rhs()
+            if hit is None:
+                continue
+            for match_name in _symbol_names_for_hit(web, hit, architecture=architecture):
+                rows.append(
+                    _row(
+                        local_address=local_address,
+                        local_name=local_name,
+                        local_function_address=local_function_address,
+                        score=item.score(),
+                        match_address=hit.address(),
+                        match_name=match_name,
+                        sha256=hit.sha256(),
+                        corpus=hit.corpus(),
+                        collection=hit.collection().as_str(),
+                    )
+                )
+    return _dedupe_rows(rows)
+
+
 def compare_block(plugin_config, request: CompareRequest) -> list[dict]:
     config = build_binlex_config(plugin_config)
     require_embeddings(config, target="block")
@@ -85,37 +154,16 @@ def compare_block(plugin_config, request: CompareRequest) -> list[dict]:
     if not vector:
         raise RuntimeError("embeddings vector is not available for this block or selection")
 
-    index_root = effective_index_root(plugin_config)
-    store = LocalIndex(config, directory=index_root)
-    metadata = MetadataStore(index_root)
-    rows: list[dict] = []
-    for hit in store.search(
-        corpora=request.corpora,
+    return _search_rows(
+        plugin_config=plugin_config,
         vector=vector,
-        collections=[Collection.Block],
+        collection=Collection.Block,
+        local_address=context.address,
+        local_name=context.function_name,
+        local_function_address=context.function_address,
+        corpora=request.corpora,
         limit=request.limit,
-    ):
-        for match_name in _display_names(
-            metadata,
-            corpus=hit.corpus(),
-            collection="block",
-            sha256=hit.sha256(),
-            address=hit.address(),
-        ):
-            rows.append(
-                _row(
-                    local_address=context.address,
-                    local_name=context.function_name,
-                    local_function_address=context.function_address,
-                    score=hit.score(),
-                    match_address=hit.address(),
-                    match_name=match_name,
-                    sha256=hit.sha256(),
-                    corpus=hit.corpus(),
-                    collection="block",
-                )
-            )
-    return _dedupe_rows(rows)
+    )
 
 
 def compare_function(plugin_config, request: CompareRequest) -> list[dict]:
@@ -126,83 +174,16 @@ def compare_function(plugin_config, request: CompareRequest) -> list[dict]:
     if not vector:
         raise RuntimeError("embeddings vector is not available for this function")
 
-    index_root = effective_index_root(plugin_config)
-    store = LocalIndex(config, directory=index_root)
-    metadata = MetadataStore(index_root)
-    rows: list[dict] = []
-    for hit in store.search(
-        corpora=request.corpora,
+    return _search_rows(
+        plugin_config=plugin_config,
         vector=vector,
-        collections=[Collection.Function],
+        collection=Collection.Function,
+        local_address=context.address,
+        local_name=context.function_name,
+        local_function_address=context.address,
+        corpora=request.corpora,
         limit=request.limit,
-    ):
-        for match_name in _display_names(
-            metadata,
-            corpus=hit.corpus(),
-            collection="function",
-            sha256=hit.sha256(),
-            address=hit.address(),
-        ):
-            rows.append(
-                _row(
-                    local_address=context.address,
-                    local_name=context.function_name,
-                    local_function_address=context.address,
-                    score=hit.score(),
-                    match_address=hit.address(),
-                    match_name=match_name,
-                    sha256=hit.sha256(),
-                    corpus=hit.corpus(),
-                    collection="function",
-                )
-            )
-    return _dedupe_rows(rows)
-
-
-def compare_functions(plugin_config, request: CompareRequest) -> list[dict]:
-    config = build_binlex_config(plugin_config)
-    require_embeddings(config, target="function")
-    graph = disassemble_graph(list(idautils.Functions()), config)
-    index_root = effective_index_root(plugin_config)
-    store = LocalIndex(config, directory=index_root)
-    metadata = MetadataStore(index_root)
-    rows: list[dict] = []
-
-    for function in graph.functions():
-        processor = function.processor("embeddings")
-        if not isinstance(processor, dict):
-            continue
-        vector = processor.get("vector")
-        if not isinstance(vector, list) or not vector:
-            continue
-        local_name = _local_function_name(function.address())
-        for hit in store.search(
-            corpora=request.corpora,
-            vector=vector,
-            collections=[Collection.Function],
-            limit=request.limit,
-        ):
-            for match_name in _display_names(
-                metadata,
-                corpus=hit.corpus(),
-                collection="function",
-                sha256=hit.sha256(),
-                address=hit.address(),
-            ):
-                rows.append(
-                    _row(
-                        local_address=function.address(),
-                        local_name=local_name,
-                        local_function_address=function.address(),
-                        score=hit.score(),
-                        match_address=hit.address(),
-                        match_name=match_name,
-                        sha256=hit.sha256(),
-                        corpus=hit.corpus(),
-                        collection="function",
-                    )
-                )
-    return _dedupe_rows(rows)
+    )
 
 
 def apply_match_rows(rows: list[dict]) -> tuple[int, list[str]]:

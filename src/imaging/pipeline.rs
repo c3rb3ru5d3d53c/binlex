@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 use crate::config::Config;
+use crate::imaging::normalize::NormalizeAlgorithm;
 use crate::imaging::renderers::Renderer;
 use crate::imaging::{PNG, Palette, Render, SVG, Terminal};
 
@@ -51,6 +52,12 @@ pub struct ImagingRenderer {
 #[derive(Clone)]
 pub struct ImagingPalette {
     state: ImagingState,
+}
+
+#[derive(Clone)]
+pub struct ImagingNormalized {
+    render: Render,
+    config: Config,
 }
 
 impl Imaging {
@@ -136,15 +143,58 @@ impl ImagingRenderer {
 }
 
 impl ImagingPalette {
+    fn render(&self) -> Render {
+        self.state.render()
+    }
+
+    pub fn fit(&self, width: usize, height: usize) -> ImagingNormalized {
+        ImagingNormalized::new(
+            NormalizeAlgorithm::Fit(width, height).apply(&self.render()),
+            self.state.config.clone(),
+        )
+    }
+
+    pub fn fill(&self, width: usize, height: usize) -> ImagingNormalized {
+        ImagingNormalized::new(
+            NormalizeAlgorithm::Fill(width, height).apply(&self.render()),
+            self.state.config.clone(),
+        )
+    }
+
+    pub fn exact(&self, width: usize, height: usize) -> ImagingNormalized {
+        ImagingNormalized::new(
+            NormalizeAlgorithm::Exact(width, height).apply(&self.render()),
+            self.state.config.clone(),
+        )
+    }
+
     pub fn png(&self) -> PNG {
-        PNG::from_render(self.state.render(), self.state.config.imaging.clone())
+        PNG::from_render(self.render(), self.state.config.imaging.clone())
     }
 
     pub fn svg(&self) -> SVG {
-        SVG::from_render(self.state.render(), self.state.config.imaging.clone())
+        SVG::from_render(self.render(), self.state.config.imaging.clone())
     }
 
     pub fn terminal(&self) -> Terminal {
-        Terminal::from_render(self.state.render(), self.state.config.imaging.clone())
+        Terminal::from_render(self.render(), self.state.config.imaging.clone())
+    }
+}
+
+impl ImagingNormalized {
+    fn new(render: Render, config: Config) -> Self {
+        Self { render, config }
+    }
+
+    pub fn png(&self) -> PNG {
+        PNG::from_render(self.render.clone(), self.config.imaging.clone())
+    }
+
+    pub fn svg(&self) -> SVG {
+        SVG::from_render(self.render.clone(), self.config.imaging.clone())
+    }
+
+    pub fn terminal(&self) -> Terminal {
+        Terminal::from_render(self.render.clone(), self.config.imaging.clone())
     }
 }

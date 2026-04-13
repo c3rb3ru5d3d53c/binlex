@@ -1,0 +1,57 @@
+<div id="upload-modal" class="modal-backdrop" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-label="Upload">
+    <div class="modal-grid modal-grid-single">
+      <div class="modal-field modal-file-field">
+        <input id="upload-file-picker" type="file" class="hidden-file">
+        <label for="upload-file-picker" id="upload-dropzone" class="upload-dropzone">
+          <strong>Click to Upload or Drag and Drop</strong>
+          <em id="upload-file-name">No file selected</em>
+        </label>
+      </div>
+      <div class="modal-select-row">
+        {{ format_select_html|safe }}
+        {{ architecture_select_html|safe }}
+      </div>
+      <div class="upload-metadata-tabs" data-upload-metadata-root="1" data-active-tab="{% if has_corpus_picker %}corpora{% else %}tags{% endif %}">
+        <div class="upload-metadata-tab-row">
+          {% if has_corpus_picker %}
+          <button type="button" class="upload-metadata-tab is-active" data-upload-metadata-tab="corpora" onclick="toggleUploadMetadataTab('corpora')">Corpora</button>
+          {% endif %}
+          <button type="button" class="upload-metadata-tab{% if !has_corpus_picker %} is-active{% endif %}" data-upload-metadata-tab="tags" onclick="toggleUploadMetadataTab('tags')">Tags</button>
+        </div>
+        {% match corpus_picker_html %}
+        {% when Some with (corpus_picker) %}
+        <div class="upload-metadata-panel" data-upload-metadata-panel="corpora">
+          {{ corpus_picker|safe }}
+        </div>
+        {% when None %}
+        {% endmatch %}
+        <div class="upload-metadata-panel" data-upload-metadata-panel="tags"{% if has_corpus_picker %} hidden{% endif %}>
+          {{ tag_picker_html|safe }}
+        </div>
+      </div>
+    </div>
+    <p id="upload-modal-tip" class="modal-tip"></p>
+    <div class="modal-actions">
+      <button type="button" class="secondary" onclick="closeUploadModal()">Cancel</button>
+      <button type="button" class="primary" id="upload-submit" onclick="submitUploadModal()">Upload</button>
+    </div>
+  </div>
+</div>
+<div id="upload-status-modal" class="modal-backdrop" hidden>
+  <div class="modal-card upload-status-card" role="dialog" aria-modal="true" aria-label="Upload Status">
+    <div class="modal-header upload-status-header">
+      <span aria-hidden="true"></span>
+      <button type="button" class="secondary" id="upload-status-close" onclick="closeUploadStatusModal()" hidden>Close</button>
+    </div>
+    <div class="upload-status-body">
+      <div id="upload-status-icon" class="upload-status-icon uploading"><div class="upload-status-spinner"></div><div class="upload-status-checkmark">&#10003;</div><div class="upload-status-fail">!</div></div>
+      <h2 id="upload-status-title">Uploading Sample</h2>
+      <p id="upload-status-text" class="modal-tip">Binlex Web is uploading and processing the sample.</p>
+      <div id="upload-status-extra"></div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="primary" id="upload-status-search" onclick="searchUploadedSample()" hidden>Search</button>
+    </div>
+  </div>
+</div>
