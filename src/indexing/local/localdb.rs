@@ -546,14 +546,19 @@ impl LocalIndex {
             .map_err(|error| Error::LocalDb(error.to_string()))
     }
 
-    fn ensure_sample_exists(&self, sha256: &str) -> Result<String, Error> {
+    fn validate_sha256(&self, sha256: &str) -> Result<String, Error> {
         let sha256 = sha256.trim();
         if sha256.is_empty() {
             return Err(Error::Validation("sha256 must not be empty".to_string()));
         }
+        Ok(sha256.to_string())
+    }
+
+    fn ensure_sample_exists(&self, sha256: &str) -> Result<String, Error> {
+        let sha256 = self.validate_sha256(sha256)?;
         if !self
             .store
-            .object_exists(&sample_key(sha256))
+            .object_exists(&sample_key(&sha256))
             .map_err(|error| Error::LocalStore(error.to_string()))?
         {
             return Err(Error::NotFound(format!("sample {}", sha256)));
@@ -567,7 +572,7 @@ impl LocalIndex {
         collection: Collection,
         address: u64,
     ) -> Result<String, Error> {
-        let sha256 = self.ensure_sample_exists(sha256)?;
+        let sha256 = self.validate_sha256(sha256)?;
         if self.collection_member_exists(&sha256, collection, address)? {
             Ok(sha256)
         } else {

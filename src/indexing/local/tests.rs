@@ -1274,6 +1274,97 @@ fn localdb_metadata_round_trips_through_local_index() {
 }
 
 #[test]
+fn entity_metadata_operations_work_without_stored_sample_bytes() {
+    let root = std::env::temp_dir().join(format!(
+        "binlex-local-index-metadata-no-sample-test-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
+        .expect("create local index client");
+
+    let sha256 = digest_hex(b"plugin-index-only");
+    client
+        .graph_many(
+            &["default".to_string()],
+            &sha256,
+            &build_plain_single_return_graph(),
+            &[],
+            None,
+            None,
+        )
+        .expect("stage graph snapshot without sample upload");
+    let function = single_return_function();
+    client
+        .function_many(
+            &["default".to_string()],
+            &function,
+            &test_vector(11),
+            &sha256,
+            &[],
+        )
+        .expect("stage function without sample upload");
+    client
+        .commit()
+        .expect("commit function without sample upload");
+
+    client
+        .collection_tag_add(&sha256, Collection::Function, 0x1000, "goodware", "admin")
+        .expect("add collection tag without sample upload");
+    let tags = client
+        .collection_tag_details_page(&sha256, Collection::Function, 0x1000, 1, 10)
+        .expect("load collection tags without sample upload");
+    assert_eq!(tags.items.len(), 1);
+    assert_eq!(tags.items[0].tag, "goodware");
+
+    let created = client
+        .entity_comment_add(
+            &sha256,
+            Collection::Function,
+            0x1000,
+            "analyst",
+            "needs triage",
+        )
+        .expect("add entity comment without sample upload");
+    assert_eq!(created.comment, "needs triage");
+    let comments = client
+        .entity_comment_list(&sha256, Collection::Function, 0x1000, 1, 10)
+        .expect("list entity comments without sample upload");
+    assert_eq!(comments.items.len(), 1);
+    assert_eq!(comments.items[0].comment, "needs triage");
+
+    client
+        .symbol_add(
+            &sha256,
+            Collection::Function,
+            0x1000,
+            "plugin_symbol",
+            "admin",
+        )
+        .expect("add symbol without sample upload");
+    let hits = client
+        .exact_search(
+            &["default".to_string()],
+            &sha256,
+            Some(&[Entity::Function]),
+            &[Architecture::AMD64],
+            8,
+        )
+        .expect("search results after symbol add without sample upload");
+    assert_eq!(hits.len(), 1);
+    assert!(hits.iter().any(|hit| hit.symbol() == Some("plugin_symbol")));
+
+    let restored = client
+        .graph_by_sha256(&sha256)
+        .expect("recover graph without sample upload");
+    assert_eq!(restored.functions().len(), 1);
+    assert_eq!(restored.blocks().len(), 1);
+    assert_eq!(restored.instructions().len(), 1);
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
 fn entity_tags_are_collection_scoped() {
     let root = std::env::temp_dir().join(format!(
         "binlex-local-index-effective-tags-test-{}",
