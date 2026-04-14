@@ -26,6 +26,7 @@ use crate::state::{McpState, to_json_string};
 #[derive(Clone)]
 pub struct BinlexMcpServer {
     pub state: Arc<McpState>,
+    #[allow(dead_code)]
     pub tool_router: ToolRouter<Self>,
     pub prompts: Vec<SkillPrompt>,
 }

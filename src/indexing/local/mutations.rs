@@ -2,7 +2,7 @@ use super::LocalIndex;
 use super::lancedb as local_lancedb;
 use super::support::{
     is_sha256, mutate_symbol_attributes, normalize_index_corpora, prune_pending_entries_for_corpus,
-    prune_pending_entries_for_sample, remove_corpus_from_entry, sample_key, unique_corpora,
+    prune_pending_entries_for_sample, remove_corpus_from_entry, unique_corpora,
 };
 use super::types::{Error, IndexEntry};
 use crate::databases::localdb::{EntityMetadataRecord, normalize_metadata_name};
@@ -300,13 +300,6 @@ impl LocalIndex {
         }
         let name = normalize_metadata_name("symbol", name)
             .map_err(|error| Error::Validation(error.to_string()))?;
-        if !self
-            .store
-            .object_exists(&sample_key(sha256))
-            .map_err(|error| Error::LocalStore(error.to_string()))?
-        {
-            return Err(Error::NotFound(format!("sample {}", sha256)));
-        }
 
         let keys = self
             .store
