@@ -12,6 +12,7 @@ from . import indexing
 from . import databases
 from . import metadata
 from . import rules
+from . import semantics
 from . import util
 from binlex.core import Magic
 from . import controlflow, disassemblers, formats, lifters, storage
@@ -36,6 +37,7 @@ __all__ = [
     "math",
     "metadata",
     "rules",
+    "semantics",
     "storage",
     "util",
 ]

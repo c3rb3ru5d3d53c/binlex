@@ -25,10 +25,10 @@
 pub mod architecture;
 pub mod magic;
 
-use crate::core::architecture::architecture_init;
 pub use crate::core::architecture::Architecture;
-use crate::core::magic::magic_init;
+use crate::core::architecture::architecture_init;
 pub use crate::core::magic::Magic;
+use crate::core::magic::magic_init;
 
 use pyo3::{prelude::*, wrap_pymodule};
 

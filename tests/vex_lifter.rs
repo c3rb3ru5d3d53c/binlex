@@ -94,6 +94,7 @@ fn test_lift_instruction() {
         functions: BTreeSet::new(),
         to: BTreeSet::new(),
         edges: 0,
+        semantics: None,
     };
     let mut vex = Lifter::new(
         Architecture::AMD64,
@@ -131,6 +132,7 @@ fn test_lift_block() {
         functions: BTreeSet::new(),
         to: BTreeSet::new(),
         edges: 0,
+        semantics: None,
     };
     graph.listing.insert(0x3000, instruction.clone());
     let block = Block {
@@ -175,6 +177,7 @@ fn test_extract_block_addresses() {
         functions: BTreeSet::new(),
         to: BTreeSet::new(),
         edges: 0,
+        semantics: None,
     };
     let block = Block {
         address: 0x4000,
@@ -249,6 +252,7 @@ fn test_function_process_populates_vex_lifters() {
         functions: BTreeSet::new(),
         to: BTreeSet::new(),
         edges: 0,
+        semantics: None,
     };
     graph.listing.insert(0x5000, instruction.clone());
     let block = Block {
@@ -299,6 +303,7 @@ fn test_block_process_populates_vex_lifters() {
         functions: BTreeSet::new(),
         to: BTreeSet::new(),
         edges: 0,
+        semantics: None,
     };
     graph.listing.insert(0x5100, instruction.clone());
     let block = Block {
@@ -345,6 +350,7 @@ fn test_function_json_omits_disabled_optional_keys() {
         functions: BTreeSet::new(),
         to: BTreeSet::new(),
         edges: 0,
+        semantics: None,
     };
     graph.listing.insert(0x6000, instruction.clone());
     let block = Block {
@@ -400,6 +406,7 @@ fn test_function_direct_accessors_ignore_serialization_flags() {
         functions: BTreeSet::new(),
         to: BTreeSet::new(),
         edges: 0,
+        semantics: None,
     };
     graph.listing.insert(0x6100, instruction.clone());
     let block = Block {
@@ -456,6 +463,7 @@ fn test_block_direct_accessors_ignore_serialization_flags() {
         functions: BTreeSet::new(),
         to: BTreeSet::new(),
         edges: 0,
+        semantics: None,
     };
     graph.listing.insert(0x6200, instruction.clone());
     let block = Block {

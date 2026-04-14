@@ -38,6 +38,7 @@ pub mod lifters;
 pub mod math;
 pub mod metadata;
 pub mod rules;
+pub mod semantics;
 pub mod storage;
 pub mod util;
 
@@ -63,9 +64,10 @@ use crate::lifters::lifters_init;
 use crate::math::{entropy_init, math_init};
 use crate::metadata::metadata_init;
 use crate::rules::rules_init;
+use crate::semantics::semantics_init;
 use crate::storage::storage_init;
 use crate::util::util_init;
-use ::binlex::runtime::{register_host_runtime, HostRuntime};
+use ::binlex::runtime::{HostRuntime, register_host_runtime};
 
 use pyo3::{prelude::*, types::PyModule, wrap_pymodule};
 
@@ -93,6 +95,7 @@ fn binlex(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pymodule!(imaging_init))?;
     m.add_wrapped(wrap_pymodule!(indexing_init))?;
     m.add_wrapped(wrap_pymodule!(databases_init))?;
+    m.add_wrapped(wrap_pymodule!(semantics_init))?;
     #[cfg(not(target_os = "windows"))]
     m.add_wrapped(wrap_pymodule!(lifters_init))?;
     m.add_class::<Architecture>()?;

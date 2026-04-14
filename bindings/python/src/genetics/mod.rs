@@ -26,14 +26,14 @@ pub mod allelepair;
 pub mod chromosome;
 pub mod gene;
 
-pub use crate::genetics::chromosome::chromosome_init;
 pub use crate::genetics::chromosome::Chromosome;
+pub use crate::genetics::chromosome::chromosome_init;
 
-pub use crate::genetics::allelepair::allelepair_init;
 pub use crate::genetics::allelepair::AllelePair;
+pub use crate::genetics::allelepair::allelepair_init;
 
-pub use crate::genetics::gene::gene_init;
 pub use crate::genetics::gene::Gene;
+pub use crate::genetics::gene::gene_init;
 
 use pyo3::{prelude::*, wrap_pymodule};
 

@@ -20,8 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use binlex::config::ConfigProcessor as InnerConfigProcessor;
 use binlex::Config as InnerConfig;
+use binlex::config::ConfigProcessor as InnerConfigProcessor;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use std::sync::{Arc, Mutex};

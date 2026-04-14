@@ -20,21 +20,21 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::controlflow::json_value_to_py;
+use crate::Architecture;
+use crate::Config;
 use crate::controlflow::Block;
 use crate::controlflow::Graph;
+use crate::controlflow::json_value_to_py;
 use crate::genetics::Chromosome;
 use crate::hashing::{MinHash32, SHA256, TLSH};
 use crate::imaging::Imaging;
-use crate::Architecture;
-use crate::Config;
 use binlex::controlflow::Function as InnerFunction;
 use binlex::controlflow::FunctionJsonDeserializer as InnerFunctionJsonDeserializer;
 use binlex::hex;
 use binlex::imaging::Imaging as InnerImaging;
+use pyo3::Py;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
-use pyo3::Py;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::Mutex;

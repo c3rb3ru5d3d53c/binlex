@@ -20,9 +20,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::hashing::{SHA256, TLSH};
 use crate::Config;
 use crate::Magic;
+use crate::hashing::{SHA256, TLSH};
 use binlex::formats::file::File as InnerFile;
 use pyo3::prelude::*;
 use std::io::Error;

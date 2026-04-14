@@ -1,5 +1,5 @@
-use crate::indexing::local::Collection;
 use crate::Config;
+use crate::indexing::local::Collection;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
