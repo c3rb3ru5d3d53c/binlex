@@ -1,11 +1,11 @@
+use crate::Architecture;
+use crate::Config;
 use crate::controlflow::{Block, Function, Graph, Instruction};
 use crate::databases::localdb::{
     CollectionCommentRecord as PyCollectionCommentRecord,
     CollectionTagRecord as PyCollectionTagRecord, SampleStatusRecord as PySampleStatusRecord,
 };
 use crate::metadata::Attribute as PyAttribute;
-use crate::Architecture;
-use crate::Config;
 use binlex::controlflow::{
     Block as InnerBlock, Function as InnerFunction, Instruction as InnerInstruction,
 };

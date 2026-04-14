@@ -24,10 +24,10 @@ use crate::Architecture;
 use crate::Config;
 use binlex::lifters::vex::Lifter as InnerLifter;
 use binlex::lifters::vex::LifterJsonDeserializer as InnerLifterJsonDeserializer;
+use pyo3::Py;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
-use pyo3::Py;
 use std::sync::{Arc, Mutex};
 
 #[pyclass]

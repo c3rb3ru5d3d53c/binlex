@@ -20,12 +20,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::controlflow::json_value_to_py;
-use crate::controlflow::Graph;
-use crate::genetics::Chromosome;
-use crate::imaging::Imaging;
 use crate::Architecture;
 use crate::Config;
+use crate::controlflow::Graph;
+use crate::controlflow::json_value_to_py;
+use crate::genetics::Chromosome;
+use crate::imaging::Imaging;
+use crate::semantics::InstructionSemantics as PyInstructionSemantics;
 use binlex::controlflow::Instruction as InnerInstruction;
 use binlex::controlflow::InstructionJson as InnerInstructionJson;
 use binlex::genetics::Chromosome as InnerChromosome;
@@ -165,6 +166,17 @@ impl InstructionJsonDeserializer {
         let json_module = py.import("json")?;
         let py_dict = json_module.call_method1("loads", (json_str,))?;
         Ok(py_dict.into())
+    }
+
+    pub fn semantics(&self, py: Python<'_>) -> PyResult<Option<Py<PyInstructionSemantics>>> {
+        let binding = self.inner.lock().unwrap();
+        let Some(semantics) = binding.semantics.as_ref() else {
+            return Ok(None);
+        };
+        Ok(Some(Py::new(
+            py,
+            PyInstructionSemantics::from_inner(semantics.clone().into_semantics()),
+        )?))
     }
 
     pub fn json(&self) -> PyResult<String> {
@@ -315,6 +327,20 @@ impl Instruction {
         self.with_inner_instruction(py, |instruction| {
             let value = instruction.processor(&name);
             json_value_to_py(py, &value)
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the canonical semantics attached to this instruction, if present.
+    pub fn semantics(&self, py: Python) -> PyResult<Option<Py<PyInstructionSemantics>>> {
+        self.with_inner_instruction(py, |instruction| {
+            let Some(semantics) = instruction.semantics.as_ref() else {
+                return Ok(None);
+            };
+            Ok(Some(Py::new(
+                py,
+                PyInstructionSemantics::from_inner(semantics.clone()),
+            )?))
         })
     }
 

@@ -20,15 +20,15 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::controlflow::Graph;
-use crate::formats::Image;
 use crate::Architecture;
 use crate::Config;
+use crate::controlflow::Graph;
+use crate::formats::Image;
 use binlex::disassemblers::capstone::Disassembler as InnerDisassembler;
+use pyo3::Py;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
-use pyo3::Py;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::io::Error;

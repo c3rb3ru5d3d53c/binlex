@@ -20,12 +20,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use crate::Architecture;
+use crate::Config;
 use crate::formats::File;
 use crate::formats::Image;
 use crate::hashing::{SHA256, TLSH};
 use crate::imaging::Imaging;
-use crate::Architecture;
-use crate::Config;
 use binlex::formats::pe::PE as InnerPe;
 use pyo3::prelude::*;
 use pyo3::types::PyType;

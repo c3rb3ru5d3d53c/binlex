@@ -26,6 +26,7 @@ use crate::controlflow::Block;
 use crate::controlflow::Function;
 use crate::controlflow::Instruction;
 use crate::processor::{ProcessorOutputs, ProcessorTarget};
+use crate::semantics::InstructionSemantics;
 use crossbeam::queue::SegQueue;
 use crossbeam_skiplist::SkipMap;
 use crossbeam_skiplist::SkipSet;
@@ -649,7 +650,27 @@ impl Graph {
         if existing.pattern.is_empty() {
             existing.pattern = incoming.pattern;
         }
+        existing.semantics =
+            Graph::merge_instruction_semantics(existing.semantics, incoming.semantics);
         existing
+    }
+
+    fn merge_instruction_semantics(
+        existing: Option<InstructionSemantics>,
+        incoming: Option<InstructionSemantics>,
+    ) -> Option<InstructionSemantics> {
+        match (existing, incoming) {
+            (None, None) => None,
+            (Some(semantics), None) => Some(semantics),
+            (None, Some(semantics)) => Some(semantics),
+            (Some(existing), Some(incoming)) => {
+                if existing.status >= incoming.status {
+                    Some(existing)
+                } else {
+                    Some(incoming)
+                }
+            }
+        }
     }
 
     pub fn merge(&mut self, graph: &mut Graph) {

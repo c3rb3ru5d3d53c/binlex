@@ -28,6 +28,8 @@ use crate::genetics::ChromosomeJson;
 use crate::hex;
 use crate::imaging::Imaging;
 use crate::metadata::Attributes;
+use crate::semantics::InstructionSemantics;
+use crate::semantics::InstructionSemanticsJson;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Value;
@@ -75,6 +77,8 @@ pub struct Instruction {
     pub to: BTreeSet<u64>,
     /// The number of edges (connections) for this instruction.
     pub edges: usize,
+    /// Optional canonical instruction semantics for later lifting.
+    pub semantics: Option<InstructionSemantics>,
 }
 
 /// Represents a JSON-serializable view of an `Instruction`.
@@ -130,6 +134,9 @@ pub struct InstructionJson {
     /// Optional processor outputs attached by post-processing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub processors: Option<BTreeMap<String, Value>>,
+    /// Optional canonical semantics for later lifting.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub semantics: Option<InstructionSemanticsJson>,
     /// Attributes
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attributes: Option<Value>,
@@ -164,6 +171,7 @@ impl Instruction {
             to: BTreeSet::<u64>::new(),
             edges: 0,
             is_trap: false,
+            semantics: None,
             architecture,
             config,
         }
@@ -261,6 +269,7 @@ impl Instruction {
             to: self.to(),
             next: self.next(),
             processors: None,
+            semantics: self.semantics.as_ref().map(|semantics| semantics.process()),
             attributes: None,
         }
     }

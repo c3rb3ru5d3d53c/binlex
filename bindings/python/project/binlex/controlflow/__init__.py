@@ -95,6 +95,10 @@ class Instruction:
         """Return a single processor output attached to this instruction."""
         return self._inner.processor(name)
 
+    def semantics(self):
+        """Return canonical semantics for this instruction, if present."""
+        return self._inner.semantics()
+
     def to_dict(self):
         """Convert the instruction to a Python dictionary."""
         return self._inner.to_dict()
@@ -177,6 +181,10 @@ class InstructionJsonDeserializer:
     def processor(self, name):
         """Return a single processor output attached to this instruction."""
         return self._inner.processor(name)
+
+    def semantics(self):
+        """Return canonical semantics for this serialized instruction, if present."""
+        return self._inner.semantics()
 
     def to_dict(self):
         """Convert the instruction to a Python dictionary."""
