@@ -9,6 +9,7 @@ RUN apt-get update \
         curl \
         gnupg \
         libprotobuf-dev \
+        lsb-release \
         pkg-config \
         protobuf-compiler \
         wget \

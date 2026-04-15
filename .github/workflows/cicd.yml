@@ -235,7 +235,9 @@ jobs:
         run: |
           "LLVM_SYS_221_PREFIX=C:\Program Files\LLVM" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
-          & "C:\Program Files\LLVM\bin\llvm-config.exe" --version
+          if (-not (Test-Path "C:\Program Files\LLVM")) {
+            Write-Error "LLVM installation directory not found at C:\Program Files\LLVM"
+          }
 
       - name: Run Unit Tests (Unix)
         if: ${{ matrix.os != 'windows-latest' && matrix.os != 'archlinux' }}
@@ -475,15 +477,38 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libssl-dev make automake autoconf libtool
+          sudo apt-get install -y build-essential pkg-config libssl-dev make automake autoconf libtool wget gnupg
+          wget -q https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh ${{ env.LLVM_MAJOR_VERSION }}
+          sudo apt-get install -y llvm-22-dev clang-22 libclang-common-22-dev
+
+      - name: Configure LLVM Environment (Ubuntu)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        shell: bash
+        run: |
+          echo "LLVM_SYS_221_PREFIX=/usr/lib/llvm-22" >> "$GITHUB_ENV"
+          echo "/usr/lib/llvm-22/bin" >> "$GITHUB_PATH"
+          /usr/lib/llvm-22/bin/llvm-config --version
 
       - name: Install Dependencies (macOS)
         if: startsWith(matrix.os, 'macos-')
         run: |
+          brew list llvm >/dev/null 2>&1 || brew install llvm
           brew list openssl@3 >/dev/null 2>&1 || brew install openssl@3
           brew list automake >/dev/null 2>&1 || brew install automake
           brew list autoconf >/dev/null 2>&1 || brew install autoconf
           brew list libtool >/dev/null 2>&1 || brew install libtool
+
+      - name: Configure LLVM Environment (macOS)
+        if: startsWith(matrix.os, 'macos-')
+        shell: bash
+        run: |
+          LLVM_PREFIX="$(brew --prefix llvm)"
+          echo "LLVM_SYS_221_PREFIX=${LLVM_PREFIX}" >> "$GITHUB_ENV"
+          echo "${LLVM_PREFIX}/bin" >> "$GITHUB_PATH"
+          echo "CIBW_ENVIRONMENT_MACOS=MACOSX_DEPLOYMENT_TARGET=11.0 LLVM_SYS_221_PREFIX=${LLVM_PREFIX} PATH=${LLVM_PREFIX}/bin:\$PATH" >> "$GITHUB_ENV"
+          "${LLVM_PREFIX}/bin/llvm-config" --version
 
       - name: Install Vulkan SDK (macOS)
         if: startsWith(matrix.os, 'macos-')
@@ -505,6 +530,23 @@ jobs:
         uses: TheMrMilchmann/setup-msvc-dev@v4
         with:
           arch: x64
+
+      - name: Install LLVM (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: pwsh
+        run: choco install llvm --version=${{ env.LLVM_WINDOWS_VERSION }} -y
+
+      - name: Configure LLVM Environment (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: pwsh
+        run: |
+          if (Test-Path "C:\Program Files\LLVM") {
+            "LLVM_SYS_221_PREFIX=C:\Program Files\LLVM" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+            "CIBW_ENVIRONMENT_WINDOWS=LLVM_SYS_221_PREFIX=C:\Program Files\LLVM;PATH=C:\Program Files\LLVM\bin;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          } else {
+            Write-Error "LLVM installation directory not found at C:\Program Files\LLVM"
+          }
 
       - name: Install Python Build Tools
         run: |
@@ -541,8 +583,6 @@ jobs:
             mkdir -p /tmp/protoc &&
             curl -fsSL -o /tmp/protoc/protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip &&
             unzip -oq /tmp/protoc/protoc.zip -d /tmp/protoc
-          CIBW_ENVIRONMENT_MACOS: >-
-            MACOSX_DEPLOYMENT_TARGET=11.0
         with:
           package-dir: bindings/python
           output-dir: wheelhouse
