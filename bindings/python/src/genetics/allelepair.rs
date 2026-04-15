@@ -22,8 +22,8 @@
 
 use crate::genetics::Gene;
 use binlex::genetics::AllelePair as InnerAllelePair;
-use pyo3::Py;
 use pyo3::prelude::*;
+use pyo3::Py;
 use std::sync::Arc;
 use std::sync::Mutex;
 

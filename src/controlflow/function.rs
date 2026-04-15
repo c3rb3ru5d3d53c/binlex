@@ -33,6 +33,8 @@ use crate::hashing::SHA256;
 use crate::hashing::TLSH;
 use crate::hex;
 use crate::imaging::Imaging;
+use crate::lifters::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson, LlvmNormalizedJson};
+use crate::lifters::vex::{Lifter as VexLifter, VexJson};
 use crate::metadata::Attributes;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -97,6 +99,9 @@ pub struct FunctionJson {
     /// Attributes
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attributes: Option<Value>,
+    /// Optional lifted representations attached to this function.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lifters: Option<LiftersJson>,
 }
 
 #[allow(dead_code)]
@@ -391,6 +396,7 @@ impl<'function> Function<'function> {
             processors: None,
             architecture: self.architecture().to_string(),
             attributes: None,
+            lifters: self.lifters_json(),
         }
     }
 
@@ -444,6 +450,50 @@ impl<'function> Function<'function> {
     /// Return all processor outputs attached to this function.
     pub fn processors(&self) -> BTreeMap<String, Value> {
         self.process().processors.unwrap_or_default()
+    }
+
+    fn lifters_json(&self) -> Option<LiftersJson> {
+        let llvm = if self.cfg.config.functions.lifters.llvm.enabled {
+            let mut lifter = LlvmLifter::new(self.cfg.config.clone());
+            lifter.lift_function(self).ok()?;
+
+            let normalized = if self.cfg.config.functions.lifters.llvm.normalized.enabled {
+                lifter
+                    .normalized()
+                    .ok()
+                    .map(|artifact| LlvmNormalizedJson {
+                        text: artifact.text(),
+                    })
+            } else {
+                None
+            };
+
+            Some(LlvmJson {
+                text: lifter.text(),
+                normalized,
+            })
+        } else {
+            None
+        };
+
+        let vex = if self.cfg.config.lifters.vex.enabled && self.cfg.config.functions.lifters.vex.enabled {
+            let mut lifter = VexLifter::new(self.cfg.config.clone());
+            lifter.lift_function(self).ok()?;
+            Some(VexJson {
+                text: lifter.text(),
+            })
+        } else {
+            None
+        };
+
+        if llvm.is_none() && vex.is_none() {
+            return None;
+        }
+
+        Some(LiftersJson {
+            llvm,
+            vex,
+        })
     }
 
     /// Return a single processor output by name or an empty object when absent.

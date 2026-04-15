@@ -20,11 +20,15 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+pub mod capstone;
+pub mod cil;
 pub mod instruction;
 
 pub use instruction::{
-    AddressSpace, FenceKind, InstructionSemantics, InstructionSemanticsJson, SemanticBinaryOp,
-    SemanticCastOp, SemanticCompareOp, SemanticDiagnostic, SemanticDiagnosticKind, SemanticEffect,
-    SemanticExpr, SemanticLocation, SemanticStatus, SemanticTemporary, SemanticTerminator,
-    SemanticUnaryOp, TrapKind,
+    InstructionSemantics, InstructionSemanticsJson, SemanticAddressSpace, SemanticDiagnostic,
+    SemanticDiagnosticKind, SemanticEffect, SemanticEffectKind, SemanticExpression,
+    SemanticExpressionKind, SemanticFenceKind, SemanticLocation, SemanticLocationKind,
+    SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
+    SemanticOperationUnary, SemanticStatus, SemanticTemporary, SemanticTerminator,
+    SemanticTerminatorKind, SemanticTrapKind,
 };

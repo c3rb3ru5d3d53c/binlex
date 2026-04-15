@@ -2,14 +2,14 @@
 
 use binlex::controlflow::graph::Graph;
 use binlex::controlflow::{Block, Function, Instruction};
-use binlex::lifters::vex::{Lifter, LifterJsonDeserializer};
+use binlex::lifters::vex::Lifter;
+use binlex::semantics::{
+    InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation, SemanticStatus,
+    SemanticTerminator,
+};
 use binlex::{Architecture, Config};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
-
-fn test_graph() -> Graph {
-    Graph::new(Architecture::AMD64, test_config())
-}
 
 fn test_config() -> Config {
     let mut config = Config::default();
@@ -23,465 +23,239 @@ fn test_config() -> Config {
     config.processors.path = Some(processor_dir.to_string_lossy().into_owned());
     config.processors.processes = 1;
     config.processors.compression = true;
-    let vex = config
-        .processors
-        .ensure_processor("vex")
-        .expect("vex processor config should exist");
-    vex.enabled = true;
-    vex.blocks.enabled = true;
-    vex.functions.enabled = true;
     config
 }
 
 #[test]
-fn test_lift_bytes_ret() {
-    let mut vex = Lifter::new(Architecture::AMD64, &[0xC3u8], 0x1000, test_config()).unwrap();
-    let irsb = vex.ir().ok(); // x86_64 "ret"
-    assert!(irsb.is_some());
-    if let Some(irsb) = irsb {
-        println!("IRSB for ret: {:?}", irsb);
+fn vex_config_defaults_match_expected_shape() {
+    let config = Config::default();
+    assert!(config.lifters.vex.enabled);
+    assert!(!config.instructions.lifters.vex.enabled);
+    assert!(!config.blocks.lifters.vex.enabled);
+    assert!(!config.functions.lifters.vex.enabled);
+}
+
+#[test]
+fn vex_global_disable_blocks_lifting() {
+    let mut config = Config::default();
+    config.lifters.vex.enabled = false;
+    let mut lifter = Lifter::new(config);
+    let error = lifter
+        .lift_instruction(&instruction(0x1800, &[0xC3]))
+        .expect_err("disabled vex lifter should fail");
+    assert!(error.to_string().contains("disabled"));
+}
+
+fn instruction(address: u64, bytes: &[u8]) -> Instruction {
+    Instruction {
+        architecture: Architecture::AMD64,
+        config: Config::default(),
+        address,
+        is_prologue: false,
+        is_block_start: false,
+        is_function_start: false,
+        bytes: bytes.to_vec(),
+        chromosome_mask: vec![0x00; bytes.len()],
+        pattern: bytes
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<Vec<_>>()
+            .join(""),
+        is_return: bytes == [0xC3],
+        is_call: false,
+        is_jump: false,
+        is_conditional: false,
+        is_trap: false,
+        has_indirect_target: false,
+        functions: BTreeSet::new(),
+        to: BTreeSet::new(),
+        edges: 0,
+        semantics: Some(InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Complete,
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Set {
+                dst: SemanticLocation::ProgramCounter { bits: 64 },
+                expression: SemanticExpression::Const {
+                    value: address as u128 + bytes.len() as u128,
+                    bits: 64,
+                },
+            }],
+            terminator: SemanticTerminator::Return { expression: None },
+            diagnostics: Vec::new(),
+        }),
     }
 }
 
-#[test]
-fn test_lifter_process() {
-    let mut lifter = Lifter::new(Architecture::AMD64, &[0xC3u8], 0x1000, test_config()).unwrap();
-    let json = lifter.process().unwrap();
-    assert_eq!(json.architecture, "amd64");
-    assert_eq!(json.address, 0x1000);
-    assert_eq!(json.bytes, "c3");
-    assert!(!json.ir.is_empty());
+fn instruction_for_arch(architecture: Architecture, address: u64, bytes: &[u8]) -> Instruction {
+    let mut instruction = instruction(address, bytes);
+    instruction.architecture = architecture;
+    instruction
+}
+
+fn single_block_graph(address: u64, bytes: &[u8]) -> Graph {
+    let graph = Graph::new(Architecture::AMD64, test_config());
+    graph.listing.insert(address, instruction(address, bytes));
+    graph
 }
 
 #[test]
-fn test_vex_json_deserializer_round_trip() {
-    let config = test_config();
-    let mut lifter = Lifter::new(Architecture::AMD64, &[0xC3u8], 0x1000, config.clone()).unwrap();
-    let serialized = serde_json::to_string(&lifter.process().unwrap()).unwrap();
-    let deserialized = LifterJsonDeserializer::new(serialized, config).unwrap();
-    assert_eq!(deserialized.architecture().unwrap(), Architecture::AMD64);
-    assert_eq!(deserialized.address(), 0x1000);
-    assert_eq!(deserialized.bytes().unwrap(), vec![0xC3]);
-    assert!(!deserialized.ir().unwrap().is_empty());
-    assert_eq!(deserialized.process().unwrap().bytes, "c3");
+fn lift_instruction_renders_vex_text() {
+    let mut lifter = Lifter::new(test_config());
+    let instruction = instruction(0x1000, &[0xC3]);
+    lifter
+        .lift_instruction(&instruction)
+        .expect("instruction lift should succeed");
+    let text = lifter.text();
+    assert!(text.contains("instruction_1000"));
+    assert!(text.contains("IRSB"));
 }
 
 #[test]
-fn test_lifter_json_deserializer_rejects_unsupported_architecture() {
-    let json = r#"{"architecture":"cil","address":4096,"bytes":"c3","ir":"ignored"}"#;
-    let result = LifterJsonDeserializer::new(json.to_string(), Config::default());
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_lift_instruction() {
-    let instruction = Instruction {
-        architecture: Architecture::AMD64,
-        config: Config::default(),
+fn lift_block_renders_vex_text() {
+    let graph = single_block_graph(0x2000, &[0xC3]);
+    let block = Block {
         address: 0x2000,
-        is_prologue: false,
-        is_block_start: false,
-        is_function_start: false,
-        bytes: vec![0xC3],
-        chromosome_mask: vec![0x00],
-        pattern: "c3".to_string(),
-        is_return: true,
-        is_call: false,
-        is_jump: false,
-        is_conditional: false,
-        is_trap: false,
-        has_indirect_target: false,
-        functions: BTreeSet::new(),
-        to: BTreeSet::new(),
-        edges: 0,
-        semantics: None,
+        cfg: &graph,
+        terminator: instruction(0x2000, &[0xC3]),
     };
-    let mut vex = Lifter::new(
-        Architecture::AMD64,
-        &instruction.bytes,
-        instruction.address,
-        test_config(),
-    )
-    .unwrap();
-    let irsb = vex.ir().ok();
-    assert!(irsb.is_some());
-    if let Some(irsb) = irsb {
-        println!("IRSB for instruction: {:?}", irsb);
-    }
+    let mut lifter = Lifter::new(test_config());
+    lifter.lift_block(&block).expect("block lift should succeed");
+    let text = lifter.text();
+    assert!(text.contains("block_2000"));
+    assert!(text.contains("IRSB"));
 }
 
 #[test]
-fn test_lift_block() {
-    let graph = test_graph();
-    let instruction = Instruction {
-        architecture: Architecture::AMD64,
-        config: Config::default(),
-        address: 0x3000,
-        is_prologue: false,
-        is_block_start: false,
-        is_function_start: false,
-        bytes: vec![0xC3],
-        chromosome_mask: vec![0x00],
-        pattern: "c3".to_string(),
-        is_return: true,
-        is_call: false,
-        is_jump: false,
-        is_conditional: false,
-        is_trap: false,
-        has_indirect_target: false,
-        functions: BTreeSet::new(),
-        to: BTreeSet::new(),
-        edges: 0,
-        semantics: None,
-    };
-    graph.listing.insert(0x3000, instruction.clone());
+fn lift_function_renders_vex_text() {
+    let graph = single_block_graph(0x3000, &[0xC3]);
     let block = Block {
         address: 0x3000,
         cfg: &graph,
-        terminator: instruction,
+        terminator: instruction(0x3000, &[0xC3]),
     };
-    let block_bytes = block.bytes();
-    let mut vex = Lifter::new(
-        Architecture::AMD64,
-        &block_bytes,
-        block.address,
-        test_config(),
-    )
-    .unwrap();
-    let irsb = vex.ir().ok();
-    assert!(irsb.is_some());
-    if let Some(irsb) = irsb {
-        println!("IRSB for block: {:?}", irsb);
-    }
+    let function = Function {
+        address: 0x3000,
+        cfg: &graph,
+        blocks: BTreeMap::from([(0x3000, block)]),
+    };
+
+    let mut lifter = Lifter::new(test_config());
+    lifter
+        .lift_function(&function)
+        .expect("function lift should succeed");
+
+    let text = lifter.text();
+    assert!(text.contains("function_3000"));
+    assert!(text.contains("IRSB"));
 }
 
 #[test]
-fn test_extract_block_addresses() {
-    let graph = test_graph();
-    let terminator = Instruction {
-        architecture: Architecture::AMD64,
-        config: Config::default(),
-        address: 0x4000,
-        is_prologue: false,
-        is_block_start: false,
-        is_function_start: false,
-        bytes: vec![0xC3],
-        chromosome_mask: vec![0x00],
-        pattern: "c3".to_string(),
-        is_return: true,
-        is_call: false,
-        is_jump: false,
-        is_conditional: false,
-        is_trap: false,
-        has_indirect_target: false,
-        functions: BTreeSet::new(),
-        to: BTreeSet::new(),
-        edges: 0,
-        semantics: None,
-    };
-    let block = Block {
+fn non_contiguous_function_is_supported() {
+    let graph = Graph::new(Architecture::AMD64, test_config());
+    graph.listing.insert(0x4000, instruction(0x4000, &[0x90, 0xC3]));
+    graph.listing.insert(0x5000, instruction(0x5000, &[0xC3]));
+
+    let first = Block {
         address: 0x4000,
         cfg: &graph,
-        terminator,
+        terminator: instruction(0x4000, &[0x90, 0xC3]),
     };
-    let mut blocks_map = BTreeMap::new();
-    blocks_map.insert(0x4000, block);
+    let second = Block {
+        address: 0x5000,
+        cfg: &graph,
+        terminator: instruction(0x5000, &[0xC3]),
+    };
     let function = Function {
         address: 0x4000,
         cfg: &graph,
-        blocks: blocks_map,
+        blocks: BTreeMap::from([(0x4000, first), (0x5000, second)]),
     };
-    let mut blocks = Vec::new();
-    for block in function.blocks.values() {
-        let addr = block.address;
-        let size = block.bytes().len() as u64;
-        blocks.push((addr, size));
-    }
-    assert!(!blocks.is_empty());
-    println!("Extracted block addresses: {:?}", blocks);
+
+    let mut lifter = Lifter::new(test_config());
+    lifter
+        .lift_function(&function)
+        .expect("non-contiguous function should lift");
+    let text = lifter.text();
+    assert!(text.contains("; block 0x4000"));
+    assert!(text.contains("; block 0x5000"));
 }
 
 #[test]
-fn test_lift_binlex_block_split_example() {
-    // Block: jz 0x4; nop; nop; ret
-    let block_bytes = [0x74, 0x02, 0x90, 0x90, 0xc3];
-    let block_address = 0x1000u64;
-    let mut vex = Lifter::new(
-        Architecture::AMD64,
-        &block_bytes,
-        block_address,
-        test_config(),
-    )
-    .unwrap();
-    let irsb = vex.ir().ok();
-    assert!(irsb.is_some());
-    if let Some(irsb) = irsb {
-        println!("IRSB for binlex block split example: {:?}", irsb);
-    }
-}
-
-#[test]
-fn test_worker_lifter_process() {
-    let config = test_config();
-    let mut lifter = Lifter::new(Architecture::AMD64, &[0xC3u8], 0x1000, config).unwrap();
-    let json = lifter.process().unwrap();
-    assert_eq!(json.architecture, "amd64");
-    assert_eq!(json.bytes, "c3");
-    assert!(!json.ir.is_empty());
-}
-
-#[test]
-fn test_function_process_populates_vex_lifters() {
-    let graph = test_graph();
-    let instruction = Instruction {
-        architecture: Architecture::AMD64,
-        config: Config::default(),
-        address: 0x5000,
-        is_prologue: false,
-        is_block_start: false,
-        is_function_start: false,
-        bytes: vec![0xC3],
-        chromosome_mask: vec![0x00],
-        pattern: "c3".to_string(),
-        is_return: true,
-        is_call: false,
-        is_jump: false,
-        is_conditional: false,
-        is_trap: false,
-        has_indirect_target: false,
-        functions: BTreeSet::new(),
-        to: BTreeSet::new(),
-        edges: 0,
-        semantics: None,
-    };
-    graph.listing.insert(0x5000, instruction.clone());
+fn cil_function_renders_vex_text() {
+    let graph = Graph::new(Architecture::CIL, test_config());
+    graph
+        .listing
+        .insert(0x7000, instruction_for_arch(Architecture::CIL, 0x7000, &[0x02]));
     let block = Block {
-        address: 0x5000,
+        address: 0x7000,
         cfg: &graph,
-        terminator: instruction,
+        terminator: instruction_for_arch(Architecture::CIL, 0x7000, &[0x02]),
     };
-    let mut blocks_map = BTreeMap::new();
-    blocks_map.insert(0x5000, block);
     let function = Function {
-        address: 0x5000,
+        address: 0x7000,
         cfg: &graph,
-        blocks: blocks_map,
+        blocks: BTreeMap::from([(0x7000, block)]),
     };
 
-    let json = function.process();
-    let processors = json.processors.expect("processors should be populated");
-    let vex = processors
-        .get("vex")
-        .expect("vex processor output should be present");
-    let ir = vex
-        .get("ir")
-        .and_then(|value| value.as_str())
-        .expect("vex processor output should include an ir string");
-
-    assert!(!ir.is_empty());
+    let mut lifter = Lifter::new(test_config());
+    lifter
+        .lift_function(&function)
+        .expect("cil function should lift to vex text");
+    let text = lifter.text();
+    assert!(text.contains("; function function_7000 cil 0x7000"));
+    assert!(text.contains("IRSB {"));
 }
 
 #[test]
-fn test_block_process_populates_vex_lifters() {
-    let graph = test_graph();
-    let instruction = Instruction {
-        architecture: Architecture::AMD64,
-        config: Config::default(),
-        address: 0x5100,
-        is_prologue: false,
-        is_block_start: false,
-        is_function_start: false,
-        bytes: vec![0xC3],
-        chromosome_mask: vec![0x00],
-        pattern: "c3".to_string(),
-        is_return: true,
-        is_call: false,
-        is_jump: false,
-        is_conditional: false,
-        is_trap: false,
-        has_indirect_target: false,
-        functions: BTreeSet::new(),
-        to: BTreeSet::new(),
-        edges: 0,
-        semantics: None,
+fn vex_json_emission_respects_entity_flags() {
+    let mut instruction_config = Config::default();
+    instruction_config.instructions.lifters.vex.enabled = true;
+    let lifted_instruction = Instruction {
+        config: instruction_config.clone(),
+        ..instruction(0x8000, &[0xC3])
     };
-    graph.listing.insert(0x5100, instruction.clone());
+    let instruction_json =
+        serde_json::to_value(lifted_instruction.process()).expect("serialize instruction");
+    assert!(instruction_json["lifters"]["vex"]["text"]
+        .as_str()
+        .expect("instruction vex text")
+        .contains("instruction_8000"));
+
+    let mut block_config = Config::default();
+    block_config.blocks.lifters.vex.enabled = true;
+    let block_graph = Graph::new(Architecture::AMD64, block_config);
+    block_graph.listing.insert(0x8100, instruction(0x8100, &[0xC3]));
     let block = Block {
-        address: 0x5100,
-        cfg: &graph,
-        terminator: instruction,
+        address: 0x8100,
+        cfg: &block_graph,
+        terminator: instruction(0x8100, &[0xC3]),
     };
+    let block_json = serde_json::to_value(block.process()).expect("serialize block");
+    assert!(block_json["lifters"]["vex"]["text"]
+        .as_str()
+        .expect("block vex text")
+        .contains("block_8100"));
 
-    let json = block.process();
-    let processors = json.processors.expect("processors should be populated");
-    let vex = processors
-        .get("vex")
-        .expect("vex processor output should be present");
-    let ir = vex
-        .get("ir")
-        .and_then(|value| value.as_str())
-        .expect("vex processor output should include an ir string");
-
-    assert!(!ir.is_empty());
-}
-
-#[test]
-fn test_function_json_omits_disabled_optional_keys() {
-    let mut config = test_config();
-    config.chromosomes.vector.enabled = false;
-    config.functions.entropy.enabled = false;
-    let graph = Graph::new(Architecture::AMD64, config);
-    let instruction = Instruction {
-        architecture: Architecture::AMD64,
-        config: Config::default(),
-        address: 0x6000,
-        is_prologue: false,
-        is_block_start: false,
-        is_function_start: false,
-        bytes: vec![0xC3],
-        chromosome_mask: vec![0x00],
-        pattern: "c3".to_string(),
-        is_return: true,
-        is_call: false,
-        is_jump: false,
-        is_conditional: false,
-        is_trap: false,
-        has_indirect_target: false,
-        functions: BTreeSet::new(),
-        to: BTreeSet::new(),
-        edges: 0,
-        semantics: None,
+    let mut function_config = Config::default();
+    function_config.functions.lifters.vex.enabled = true;
+    let function_graph = Graph::new(Architecture::AMD64, function_config);
+    function_graph
+        .listing
+        .insert(0x8200, instruction(0x8200, &[0xC3]));
+    let function_block = Block {
+        address: 0x8200,
+        cfg: &function_graph,
+        terminator: instruction(0x8200, &[0xC3]),
     };
-    graph.listing.insert(0x6000, instruction.clone());
-    let block = Block {
-        address: 0x6000,
-        cfg: &graph,
-        terminator: instruction,
-    };
-    let mut blocks_map = BTreeMap::new();
-    blocks_map.insert(0x6000, block);
     let function = Function {
-        address: 0x6000,
-        cfg: &graph,
-        blocks: blocks_map,
+        address: 0x8200,
+        cfg: &function_graph,
+        blocks: BTreeMap::from([(0x8200, function_block)]),
     };
-
-    let value: serde_json::Value =
-        serde_json::from_str(&function.json().expect("function json should serialize"))
-            .expect("function json should parse");
-
-    assert!(value.get("entropy").is_none());
-    assert!(
-        value
-            .get("chromosome")
-            .and_then(|chromosome| chromosome.get("vector"))
-            .is_none()
-    );
-}
-
-#[test]
-fn test_function_direct_accessors_ignore_serialization_flags() {
-    let mut config = Config::default();
-    config.functions.entropy.enabled = false;
-    config.functions.sha256.enabled = false;
-    config.functions.tlsh.enabled = false;
-    config.functions.minhash.enabled = false;
-    let graph = Graph::new(Architecture::AMD64, config);
-    let instruction = Instruction {
-        architecture: Architecture::AMD64,
-        config: Config::default(),
-        address: 0x6100,
-        is_prologue: false,
-        is_block_start: false,
-        is_function_start: false,
-        bytes: vec![0x3A, 0x7F, 0x92, 0x5C, 0xE4, 0xA1, 0xD8, 0x47, 0x29, 0xB3],
-        chromosome_mask: vec![0x00; 10],
-        pattern: "3a7f925ce4a1d84729b3".to_string(),
-        is_return: true,
-        is_call: false,
-        is_jump: false,
-        is_conditional: false,
-        is_trap: false,
-        has_indirect_target: false,
-        functions: BTreeSet::new(),
-        to: BTreeSet::new(),
-        edges: 0,
-        semantics: None,
-    };
-    graph.listing.insert(0x6100, instruction.clone());
-    let block = Block {
-        address: 0x6100,
-        cfg: &graph,
-        terminator: instruction,
-    };
-    let mut blocks_map = BTreeMap::new();
-    blocks_map.insert(0x6100, block);
-    let function = Function {
-        address: 0x6100,
-        cfg: &graph,
-        blocks: blocks_map,
-    };
-
-    assert!(function.entropy().is_some());
-    assert!(function.sha256().is_some());
-    assert!(function.tlsh().is_some());
-    assert!(function.minhash().is_some());
-
-    let value: serde_json::Value =
-        serde_json::from_str(&function.json().expect("function json should serialize"))
-            .expect("function json should parse");
-    assert!(value.get("entropy").is_none());
-    assert!(value.get("sha256").is_none());
-    assert!(value.get("tlsh").is_none());
-    assert!(value.get("minhash").is_none());
-}
-
-#[test]
-fn test_block_direct_accessors_ignore_serialization_flags() {
-    let mut config = Config::default();
-    config.blocks.entropy.enabled = false;
-    config.blocks.sha256.enabled = false;
-    config.blocks.tlsh.enabled = false;
-    config.blocks.minhash.enabled = false;
-    let graph = Graph::new(Architecture::AMD64, config);
-    let instruction = Instruction {
-        architecture: Architecture::AMD64,
-        config: Config::default(),
-        address: 0x6200,
-        is_prologue: false,
-        is_block_start: false,
-        is_function_start: false,
-        bytes: vec![0x3A, 0x7F, 0x92, 0x5C, 0xE4, 0xA1, 0xD8, 0x47, 0x29, 0xB3],
-        chromosome_mask: vec![0x00; 10],
-        pattern: "3a7f925ce4a1d84729b3".to_string(),
-        is_return: true,
-        is_call: false,
-        is_jump: false,
-        is_conditional: false,
-        is_trap: false,
-        has_indirect_target: false,
-        functions: BTreeSet::new(),
-        to: BTreeSet::new(),
-        edges: 0,
-        semantics: None,
-    };
-    graph.listing.insert(0x6200, instruction.clone());
-    let block = Block {
-        address: 0x6200,
-        cfg: &graph,
-        terminator: instruction,
-    };
-
-    assert!(block.entropy().is_some());
-    assert!(block.sha256().is_some());
-    assert!(block.tlsh().is_some());
-    assert!(block.minhash().is_some());
-
-    let value: serde_json::Value =
-        serde_json::from_str(&block.json().expect("block json should serialize"))
-            .expect("block json should parse");
-    assert!(value.get("entropy").is_none());
-    assert!(value.get("sha256").is_none());
-    assert!(value.get("tlsh").is_none());
-    assert!(value.get("minhash").is_none());
+    let function_json = serde_json::to_value(function.process()).expect("serialize function");
+    assert!(function_json["lifters"]["vex"]["text"]
+        .as_str()
+        .expect("function vex text")
+        .contains("function_8200"));
 }

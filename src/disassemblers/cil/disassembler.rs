@@ -27,6 +27,9 @@ use crate::controlflow::Instruction as CFGInstruction;
 use crate::disassemblers::cil::Instruction;
 use crate::genetics::Chromosome;
 use crate::io::Stderr;
+use crate::semantics;
+use crate::semantics::InstructionSemantics;
+use crate::semantics::SemanticStatus;
 use rayon::ThreadPoolBuilder;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::BTreeMap;
@@ -43,6 +46,35 @@ pub struct Disassembler<'disassembler> {
 }
 
 impl<'disassembler> Disassembler<'disassembler> {
+    fn log_semantics_debug(&self, semantics: &InstructionSemantics, address: u64) {
+        if semantics.status == SemanticStatus::Complete && semantics.diagnostics.is_empty() {
+            return;
+        }
+
+        let summary = if semantics.diagnostics.is_empty() {
+            format!(
+                "mnemonic_partial_without_diagnostics, effects={}, terminator={:?}",
+                semantics.effects.len(),
+                semantics.terminator.kind()
+            )
+        } else {
+            semantics
+                .diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.message.as_str())
+                .collect::<Vec<_>>()
+                .join("; ")
+        };
+
+        Stderr::print_debug(
+            &self.config,
+            format!(
+                "0x{:x}: semantics status={:?}, diagnostics={}",
+                address, semantics.status, summary
+            ),
+        );
+    }
+
     pub fn new(
         architecture: Architecture,
         image: &'disassembler [u8],
@@ -129,6 +161,11 @@ impl<'disassembler> Disassembler<'disassembler> {
         cfginstruction.edges = instruction.edges();
         cfginstruction.to = instruction.to();
         cfginstruction.functions = self.get_instruction_functions(&instruction);
+        if cfg.config.semantics.enabled {
+            let semantics = semantics::cil::build(&instruction);
+            self.log_semantics_debug(&semantics, cfginstruction.address);
+            cfginstruction.semantics = Some(semantics);
+        }
 
         Stderr::print_debug(
             &cfg.config,

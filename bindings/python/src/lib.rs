@@ -67,7 +67,7 @@ use crate::rules::rules_init;
 use crate::semantics::semantics_init;
 use crate::storage::storage_init;
 use crate::util::util_init;
-use ::binlex::runtime::{HostRuntime, register_host_runtime};
+use ::binlex::runtime::{register_host_runtime, HostRuntime};
 
 use pyo3::{prelude::*, types::PyModule, wrap_pymodule};
 

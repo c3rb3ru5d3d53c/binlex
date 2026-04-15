@@ -36,8 +36,8 @@ use crate::formats::pe::pe_init;
 pub use crate::formats::elf::ELF;
 pub use crate::formats::file::File;
 pub use crate::formats::image::Image;
-pub use crate::formats::macho::MACHO;
 pub use crate::formats::macho::PyMachoSlice;
+pub use crate::formats::macho::MACHO;
 pub use crate::formats::pe::PE;
 
 use pyo3::{prelude::*, wrap_pymodule};

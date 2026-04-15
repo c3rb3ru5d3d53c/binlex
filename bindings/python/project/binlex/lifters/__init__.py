@@ -24,7 +24,7 @@
 
 from importlib import import_module
 
-_LAZY_SUBMODULES = {"vex"}
+_LAZY_SUBMODULES = {"llvm", "vex"}
 
 
 def __getattr__(name):
@@ -35,4 +35,4 @@ def __getattr__(name):
         return module
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-__all__ = ["vex"]
+__all__ = ["llvm", "vex"]

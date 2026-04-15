@@ -27,6 +27,9 @@ use crate::controlflow::graph::Graph;
 use crate::controlflow::instruction::Instruction;
 use crate::genetics::Chromosome;
 use crate::io::Stderr;
+use crate::semantics;
+use crate::semantics::InstructionSemantics;
+use crate::semantics::SemanticStatus;
 use arch::x86::X86OpMem;
 use arch::x86::X86Reg::{X86_REG_EBP, X86_REG_ESP, X86_REG_RBP, X86_REG_RIP, X86_REG_RSP};
 use capstone::Insn;
@@ -59,6 +62,38 @@ pub struct Disassembler<'disassembler> {
 }
 
 impl<'disassembler> Disassembler<'disassembler> {
+    fn log_semantics_debug(&self, semantics: &InstructionSemantics, instruction: &Insn) {
+        if semantics.status == SemanticStatus::Complete && semantics.diagnostics.is_empty() {
+            return;
+        }
+
+        let summary = if semantics.diagnostics.is_empty() {
+            format!(
+                "no diagnostics; mnemonic={}; effects={}; terminator={:?}",
+                instruction.mnemonic().unwrap_or("unknown"),
+                semantics.effects.len(),
+                semantics.terminator.kind()
+            )
+        } else {
+            semantics
+                .diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.message.as_str())
+                .collect::<Vec<_>>()
+                .join("; ")
+        };
+
+        Stderr::print_debug(
+            &self.config,
+            format!(
+                "0x{:x}: semantics status={:?}, diagnostics={}",
+                instruction.address(),
+                semantics.status,
+                summary
+            ),
+        );
+    }
+
     pub fn new(
         machine: Architecture,
         image: &'disassembler [u8],
@@ -331,6 +366,15 @@ impl<'disassembler> Disassembler<'disassembler> {
 
         if blinstruction.is_jump || blinstruction.is_return || blinstruction.is_trap {
             blinstruction.edges = blinstruction.blocks().len();
+        }
+
+        if cfg.config.semantics.enabled {
+            let operands = self
+                .get_instruction_operands(instruction)
+                .unwrap_or_default();
+            let semantics = semantics::capstone::x86::build(self.machine, instruction, &operands);
+            self.log_semantics_debug(&semantics, instruction);
+            blinstruction.semantics = Some(semantics);
         }
 
         Stderr::print_debug(

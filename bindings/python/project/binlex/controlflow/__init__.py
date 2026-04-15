@@ -42,12 +42,14 @@ class Instruction:
     def __init__(self, address, cfg):
         """Look up the instruction at `address` within the provided graph."""
         self._inner = _InstructionBinding(address, cfg._inner)
+        self._config = cfg._config
 
     @classmethod
-    def _from_binding(cls, binding):
+    def _from_binding(cls, binding, config=None):
         """Wrap an existing native instruction binding."""
         result = cls.__new__(cls)
         result._inner = binding
+        result._config = config
         return result
 
     @property
@@ -114,6 +116,10 @@ class Instruction:
     def __str__(self):
         """Return the JSON representation when converted to a string."""
         return str(self._inner)
+
+    def lifters(self):
+        """Return convenience accessors for lifting this instruction."""
+        return _Lifters(self)
 
 
 class InstructionJsonDeserializer:
@@ -209,12 +215,14 @@ class Block:
     def __init__(self, address, cfg):
         """Look up the block that starts at `address` within the provided graph."""
         self._inner = _BlockBinding(address, cfg._inner)
+        self._config = cfg._config
 
     @classmethod
-    def _from_binding(cls, binding):
+    def _from_binding(cls, binding, config=None):
         """Wrap an existing native block binding."""
         result = cls.__new__(cls)
         result._inner = binding
+        result._config = config
         return result
 
     def address(self):
@@ -231,7 +239,7 @@ class Block:
 
     def instructions(self):
         """Return the instructions contained in this block."""
-        return [Instruction._from_binding(item) for item in self._inner.instructions()]
+        return [Instruction._from_binding(item, self._config) for item in self._inner.instructions()]
 
     def bytes(self):
         """Return the raw bytes for this block."""
@@ -317,6 +325,10 @@ class Block:
         """Return the JSON representation when converted to a string."""
         return str(self._inner)
 
+    def lifters(self):
+        """Return convenience accessors for lifting this block."""
+        return _Lifters(self)
+
 
 class Function:
     """Function wrapper backed by the native control-flow engine."""
@@ -324,12 +336,14 @@ class Function:
     def __init__(self, address, cfg):
         """Look up the function that starts at `address` within the provided graph."""
         self._inner = _FunctionBinding(address, cfg._inner)
+        self._config = cfg._config
 
     @classmethod
-    def _from_binding(cls, binding):
+    def _from_binding(cls, binding, config=None):
         """Wrap an existing native function binding."""
         result = cls.__new__(cls)
         result._inner = binding
+        result._config = config
         return result
 
     def address(self):
@@ -354,7 +368,7 @@ class Function:
 
     def blocks(self):
         """Return the basic blocks contained in this function."""
-        return [Block._from_binding(item) for item in self._inner.blocks()]
+        return [Block._from_binding(item, self._config) for item in self._inner.blocks()]
 
     def bytes(self):
         """Return the raw bytes for this function, if available."""
@@ -440,6 +454,50 @@ class Function:
     def __str__(self):
         """Return the JSON representation when converted to a string."""
         return str(self._inner)
+
+    def lifters(self):
+        """Return convenience accessors for lifting this function."""
+        return _Lifters(self)
+
+class _Lifters:
+    """Convenience accessor namespace for controlflow-object lifters."""
+
+    def __init__(self, owner):
+        self._owner = owner
+
+    def llvm(self):
+        from binlex.lifters.llvm import Lifter
+
+        config = getattr(self._owner, "_config", None)
+        if config is None:
+            raise RuntimeError("controlflow object is missing associated Config")
+        lifter = Lifter(config)
+        if isinstance(self._owner, Instruction):
+            lifter.lift_instruction(self._owner)
+        elif isinstance(self._owner, Block):
+            lifter.lift_block(self._owner)
+        elif isinstance(self._owner, Function):
+            lifter.lift_function(self._owner)
+        else:
+            raise TypeError(f"unsupported lifter owner: {type(self._owner)!r}")
+        return lifter
+
+    def vex(self):
+        from binlex.lifters.vex import Lifter
+
+        config = getattr(self._owner, "_config", None)
+        if config is None:
+            raise RuntimeError("controlflow object is missing associated Config")
+        lifter = Lifter(config)
+        if isinstance(self._owner, Instruction):
+            lifter.lift_instruction(self._owner)
+        elif isinstance(self._owner, Block):
+            lifter.lift_block(self._owner)
+        elif isinstance(self._owner, Function):
+            lifter.lift_function(self._owner)
+        else:
+            raise TypeError(f"unsupported lifter owner: {type(self._owner)!r}")
+        return lifter
 
 
 class BlockJsonDeserializer:
@@ -715,25 +773,27 @@ class Graph:
     def __init__(self, architecture, config):
         """Create a graph for the given architecture and configuration."""
         self._inner = _GraphBinding(_coerce_architecture(architecture), config)
+        self._config = config
 
     @classmethod
-    def _from_binding(cls, binding):
+    def _from_binding(cls, binding, config=None):
         """Wrap an existing native graph binding."""
         result = cls.__new__(cls)
         result._inner = binding
+        result._config = config
         return result
 
     def instructions(self):
         """Return all instructions currently tracked by the graph."""
-        return [Instruction._from_binding(item) for item in self._inner.instructions()]
+        return [Instruction._from_binding(item, self._config) for item in self._inner.instructions()]
 
     def blocks(self):
         """Return all blocks currently tracked by the graph."""
-        return [Block._from_binding(item) for item in self._inner.blocks()]
+        return [Block._from_binding(item, self._config) for item in self._inner.blocks()]
 
     def functions(self):
         """Return all functions currently tracked by the graph."""
-        return [Function._from_binding(item) for item in self._inner.functions()]
+        return [Function._from_binding(item, self._config) for item in self._inner.functions()]
 
     @property
     def queue_instructions(self):
@@ -767,7 +827,7 @@ class Graph:
         result = self._inner.get_instruction(address)
         if result is None:
             return None
-        return Instruction._from_binding(result)
+        return Instruction._from_binding(result, self._config)
 
     def __getattr__(self, name):
         """Delegate unknown attributes to the underlying native graph object."""

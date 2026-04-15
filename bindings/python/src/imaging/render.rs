@@ -23,9 +23,9 @@
 use crate::imaging::palette::Palette;
 use binlex::imaging::Render as InnerRender;
 use binlex::imaging::RenderCell as InnerRenderCell;
-use pyo3::Py;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyBytesMethods};
+use pyo3::Py;
 use std::sync::{Arc, Mutex};
 
 /// Describe a single cell in a rendered binary grid.

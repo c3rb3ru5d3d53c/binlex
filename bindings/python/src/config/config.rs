@@ -20,8 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use binlex::Config as InnerConfig;
 use binlex::config::ConfigProcessor as InnerConfigProcessor;
+use binlex::Config as InnerConfig;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use std::sync::{Arc, Mutex};
@@ -29,6 +29,26 @@ use std::sync::{Arc, Mutex};
 #[pyclass]
 pub struct ConfigChromosomes {
     inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pyclass]
+pub struct ConfigSemantics {
+    inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigSemantics {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.semantics.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.semantics.enabled = value;
+    }
 }
 
 #[pymethods]
@@ -326,6 +346,132 @@ impl ConfigChromosomesHashingMinhash {
 // stop
 
 #[pyclass]
+pub struct ConfigEntityLifters {
+    pub inner: Arc<Mutex<InnerConfig>>,
+    pub entity: &'static str,
+}
+
+#[pymethods]
+impl ConfigEntityLifters {
+    #[getter]
+    pub fn get_llvm(&self) -> ConfigEntityLifterLLVM {
+        ConfigEntityLifterLLVM {
+            inner: Arc::clone(&self.inner),
+            entity: self.entity,
+        }
+    }
+
+    #[getter]
+    pub fn get_vex(&self) -> ConfigEntityLifterVex {
+        ConfigEntityLifterVex {
+            inner: Arc::clone(&self.inner),
+            entity: self.entity,
+        }
+    }
+}
+
+#[pyclass]
+pub struct ConfigEntityLifterLLVM {
+    pub inner: Arc<Mutex<InnerConfig>>,
+    pub entity: &'static str,
+}
+
+#[pymethods]
+impl ConfigEntityLifterLLVM {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        match self.entity {
+            "instructions" => inner.instructions.lifters.llvm.enabled,
+            "blocks" => inner.blocks.lifters.llvm.enabled,
+            "functions" => inner.functions.lifters.llvm.enabled,
+            _ => false,
+        }
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        match self.entity {
+            "instructions" => inner.instructions.lifters.llvm.enabled = value,
+            "blocks" => inner.blocks.lifters.llvm.enabled = value,
+            "functions" => inner.functions.lifters.llvm.enabled = value,
+            _ => {}
+        }
+    }
+
+    #[getter]
+    pub fn get_normalized(&self) -> ConfigEntityLifterLLVMNormalized {
+        ConfigEntityLifterLLVMNormalized {
+            inner: Arc::clone(&self.inner),
+            entity: self.entity,
+        }
+    }
+}
+
+#[pyclass]
+pub struct ConfigEntityLifterLLVMNormalized {
+    pub inner: Arc<Mutex<InnerConfig>>,
+    pub entity: &'static str,
+}
+
+#[pymethods]
+impl ConfigEntityLifterLLVMNormalized {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        match self.entity {
+            "instructions" => inner.instructions.lifters.llvm.normalized.enabled,
+            "blocks" => inner.blocks.lifters.llvm.normalized.enabled,
+            "functions" => inner.functions.lifters.llvm.normalized.enabled,
+            _ => false,
+        }
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        match self.entity {
+            "instructions" => inner.instructions.lifters.llvm.normalized.enabled = value,
+            "blocks" => inner.blocks.lifters.llvm.normalized.enabled = value,
+            "functions" => inner.functions.lifters.llvm.normalized.enabled = value,
+            _ => {}
+        }
+    }
+}
+
+#[pyclass]
+pub struct ConfigEntityLifterVex {
+    pub inner: Arc<Mutex<InnerConfig>>,
+    pub entity: &'static str,
+}
+
+#[pymethods]
+impl ConfigEntityLifterVex {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        match self.entity {
+            "instructions" => inner.instructions.lifters.vex.enabled,
+            "blocks" => inner.blocks.lifters.vex.enabled,
+            "functions" => inner.functions.lifters.vex.enabled,
+            _ => false,
+        }
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        match self.entity {
+            "instructions" => inner.instructions.lifters.vex.enabled = value,
+            "blocks" => inner.blocks.lifters.vex.enabled = value,
+            "functions" => inner.functions.lifters.vex.enabled = value,
+            _ => {}
+        }
+    }
+}
+
+#[pyclass]
 pub struct ConfigFunctions {
     inner: Arc<Mutex<InnerConfig>>,
 }
@@ -376,6 +522,14 @@ impl ConfigFunctions {
     pub fn get_markov(&self) -> ConfigFunctionsMarkov {
         ConfigFunctionsMarkov {
             inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
+    pub fn get_lifters(&self) -> ConfigEntityLifters {
+        ConfigEntityLifters {
+            inner: Arc::clone(&self.inner),
+            entity: "functions",
         }
     }
 }
@@ -664,6 +818,14 @@ impl ConfigBlocks {
             inner: Arc::clone(&self.inner),
         }
     }
+
+    #[getter]
+    pub fn get_lifters(&self) -> ConfigEntityLifters {
+        ConfigEntityLifters {
+            inner: Arc::clone(&self.inner),
+            entity: "blocks",
+        }
+    }
 }
 
 #[pyclass]
@@ -683,6 +845,14 @@ impl ConfigInstructions {
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
         inner.instructions.enabled = value;
+    }
+
+    #[getter]
+    pub fn get_lifters(&self) -> ConfigEntityLifters {
+        ConfigEntityLifters {
+            inner: Arc::clone(&self.inner),
+            entity: "instructions",
+        }
     }
 }
 
@@ -1299,6 +1469,80 @@ impl ConfigImagingHashingPHash {
     }
 }
 
+#[pyclass]
+pub struct ConfigLifters {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigLifters {
+    #[getter]
+    pub fn get_llvm(&self) -> ConfigLiftersLLVM {
+        ConfigLiftersLLVM {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
+    pub fn get_vex(&self) -> ConfigLiftersVex {
+        ConfigLiftersVex {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+}
+
+#[pyclass]
+pub struct ConfigLiftersLLVM {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigLiftersLLVM {
+    #[getter]
+    pub fn get_module_name(&self) -> String {
+        let inner = self.inner.lock().unwrap();
+        inner.lifters.llvm.module_name.clone()
+    }
+
+    #[setter]
+    pub fn set_module_name(&mut self, value: String) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.lifters.llvm.module_name = value;
+    }
+
+    #[getter]
+    pub fn get_verify(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.lifters.llvm.verify
+    }
+
+    #[setter]
+    pub fn set_verify(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.lifters.llvm.verify = value;
+    }
+}
+
+#[pyclass]
+pub struct ConfigLiftersVex {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigLiftersVex {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.lifters.vex.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.lifters.vex.enabled = value;
+    }
+}
+
 /// Top-level mutable configuration object for binlex analysis behavior.
 #[pyclass]
 pub struct Config {
@@ -1418,6 +1662,14 @@ impl Config {
     }
 
     #[getter]
+    /// Return the semantics configuration group.
+    pub fn get_semantics(&self) -> PyResult<ConfigSemantics> {
+        Ok(ConfigSemantics {
+            inner: Arc::clone(&self.inner),
+        })
+    }
+
+    #[getter]
     /// Return the memory-mapping configuration group.
     pub fn get_mmap(&self) -> PyResult<ConfigMmap> {
         Ok(ConfigMmap {
@@ -1429,6 +1681,14 @@ impl Config {
     /// Return the disassembler configuration group.
     pub fn get_disassembler(&self) -> PyResult<ConfigDisassembler> {
         Ok(ConfigDisassembler {
+            inner: Arc::clone(&self.inner),
+        })
+    }
+
+    #[getter]
+    /// Return the lifter configuration group.
+    pub fn get_lifters(&self) -> PyResult<ConfigLifters> {
+        Ok(ConfigLifters {
             inner: Arc::clone(&self.inner),
         })
     }
@@ -2089,15 +2349,6 @@ impl ConfigProcessors {
     }
 
     #[getter]
-    /// Return the built-in VEX processor configuration.
-    pub fn get_vex(&self) -> ConfigProcessor {
-        ConfigProcessor {
-            inner: Arc::clone(&self.inner),
-            name: "vex".to_string(),
-        }
-    }
-
-    #[getter]
     /// Return the built-in embeddings processor configuration.
     pub fn get_embeddings(&self) -> ConfigProcessor {
         ConfigProcessor {
@@ -2207,6 +2458,14 @@ impl ConfigProcessors {
 
 pub fn register_config(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Config>()?;
+    m.add_class::<ConfigSemantics>()?;
+    m.add_class::<ConfigEntityLifters>()?;
+    m.add_class::<ConfigEntityLifterLLVM>()?;
+    m.add_class::<ConfigEntityLifterLLVMNormalized>()?;
+    m.add_class::<ConfigEntityLifterVex>()?;
+    m.add_class::<ConfigLifters>()?;
+    m.add_class::<ConfigLiftersLLVM>()?;
+    m.add_class::<ConfigLiftersVex>()?;
     m.add_class::<ConfigProcessorTarget>()?;
     m.add_class::<ConfigProcessorTransports>()?;
     m.add_class::<ConfigProcessorTransport>()?;

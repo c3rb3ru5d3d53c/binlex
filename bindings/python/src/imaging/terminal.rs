@@ -24,10 +24,10 @@ use crate::config::Config;
 use crate::hashing::{AHash, DHash, MinHash32, PHash, SHA256, TLSH};
 use crate::imaging::palette::Palette;
 use binlex::imaging::Terminal as InnerTerminal;
-use pyo3::Py;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
+use pyo3::Py;
 use std::sync::{Arc, Mutex};
 
 /// Render bytes as ANSI-colored terminal output.
