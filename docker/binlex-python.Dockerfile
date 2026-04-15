@@ -7,14 +7,23 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential \
         curl \
+        gnupg \
         libprotobuf-dev \
         pkg-config \
         protobuf-compiler \
+        wget \
+    && wget -q https://apt.llvm.org/llvm.sh \
+    && chmod +x llvm.sh \
+    && ./llvm.sh 22 \
+    && apt-get install -y --no-install-recommends llvm-22-dev clang-22 libclang-common-22-dev \
+    && rm -f llvm.sh \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain 1.94.0
 
 ENV PATH=/root/.cargo/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
+ENV LLVM_SYS_221_PREFIX=/usr/lib/llvm-22
+ENV PATH=/usr/lib/llvm-22/bin:/root/.cargo/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
 ENV PROTOC_INCLUDE=/usr/include
 
 WORKDIR /app

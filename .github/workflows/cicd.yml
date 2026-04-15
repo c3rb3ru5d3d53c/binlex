@@ -35,7 +35,8 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   PROTOC_VERSION: "33.0"
-  LLVM_VERSION: "22.1.3"
+  LLVM_MAJOR_VERSION: "22"
+  LLVM_WINDOWS_VERSION: "22.1.0"
   WINDOWS_CARGO_EXCLUDES: "--exclude binlex-python --exclude binlex-processor-vex --exclude libvex --exclude libvex-macros --exclude vex-sys"
 
 jobs:
@@ -109,12 +110,6 @@ jobs:
           version: ${{ env.PROTOC_VERSION }}
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install LLVM
-        uses: KyleMayes/install-llvm-action@v2
-        with:
-          version: ${{ env.LLVM_VERSION }}
-          directory: ${{ runner.temp }}/llvm
-
       - name: Cache Rust Build Artifacts
         uses: Swatinem/rust-cache@v2
         with:
@@ -125,7 +120,19 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libssl-dev make automake autoconf libtool
+          sudo apt-get install -y build-essential pkg-config libssl-dev make automake autoconf libtool wget gnupg
+          wget -q https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh ${{ env.LLVM_MAJOR_VERSION }}
+          sudo apt-get install -y llvm-22-dev clang-22 libclang-common-22-dev
+
+      - name: Configure LLVM Environment (Ubuntu)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        shell: bash
+        run: |
+          echo "LLVM_SYS_221_PREFIX=/usr/lib/llvm-22" >> "$GITHUB_ENV"
+          echo "/usr/lib/llvm-22/bin" >> "$GITHUB_PATH"
+          /usr/lib/llvm-22/bin/llvm-config --version
 
       - name: Install Dependencies (Arch Linux)
         if: ${{ matrix.os == 'archlinux' }}
@@ -135,15 +142,16 @@ jobs:
           pacman-key --init
           pacman-key --populate archlinux
           pacman -Syu --noconfirm
-          pacman -S --noconfirm --needed base-devel pkgconf openssl zstd lz4 make automake autoconf libtool clang curl git python rust protobuf
+          pacman -S --noconfirm --needed base-devel pkgconf openssl zstd lz4 make automake autoconf libtool clang llvm curl git python rust protobuf
           id -u builder >/dev/null 2>&1 || useradd --create-home --shell /bin/bash builder
 
-      - name: Configure LLVM Environment
+      - name: Configure LLVM Environment (Arch Linux)
+        if: ${{ matrix.os == 'archlinux' }}
         shell: bash
         run: |
-          echo "LLVM_SYS_221_PREFIX=${LLVM_PATH}" >> "$GITHUB_ENV"
-          echo "${LLVM_PATH}/bin" >> "$GITHUB_PATH"
-          "${LLVM_PATH}/bin/llvm-config" --version
+          echo "LLVM_SYS_221_PREFIX=/usr" >> "$GITHUB_ENV"
+          echo "/usr/bin" >> "$GITHUB_PATH"
+          llvm-config --version
 
       - name: Prepare Arch Build Workspace
         if: ${{ matrix.os == 'archlinux' }}
@@ -180,10 +188,20 @@ jobs:
       - name: Install Dependencies (macOS)
         if: startsWith(matrix.os, 'macos-')
         run: |
+          brew list llvm >/dev/null 2>&1 || brew install llvm
           brew list openssl@3 >/dev/null 2>&1 || brew install openssl@3
           brew list automake >/dev/null 2>&1 || brew install automake
           brew list autoconf >/dev/null 2>&1 || brew install autoconf
           brew list libtool >/dev/null 2>&1 || brew install libtool
+
+      - name: Configure LLVM Environment (macOS)
+        if: startsWith(matrix.os, 'macos-')
+        shell: bash
+        run: |
+          LLVM_PREFIX="$(brew --prefix llvm)"
+          echo "LLVM_SYS_221_PREFIX=${LLVM_PREFIX}" >> "$GITHUB_ENV"
+          echo "${LLVM_PREFIX}/bin" >> "$GITHUB_PATH"
+          "${LLVM_PREFIX}/bin/llvm-config" --version
 
       - name: Install Vulkan SDK (macOS)
         if: startsWith(matrix.os, 'macos-')
@@ -206,6 +224,19 @@ jobs:
         with:
           arch: x64
 
+      - name: Install LLVM (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: pwsh
+        run: choco install llvm --version=${{ env.LLVM_WINDOWS_VERSION }} -y
+
+      - name: Configure LLVM Environment (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: pwsh
+        run: |
+          "LLVM_SYS_221_PREFIX=C:\Program Files\LLVM" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          & "C:\Program Files\LLVM\bin\llvm-config.exe" --version
+
       - name: Run Unit Tests (Unix)
         if: ${{ matrix.os != 'windows-latest' && matrix.os != 'archlinux' }}
         shell: bash
@@ -223,8 +254,8 @@ jobs:
           set -euo pipefail
           for attempt in 1 2 3; do
             runuser -u builder -- env \
-              PATH="${LLVM_PATH}/bin:${PATH}" \
-              LLVM_SYS_221_PREFIX="${LLVM_PATH}" \
+              PATH="/usr/bin:${PATH}" \
+              LLVM_SYS_221_PREFIX="/usr" \
               CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER="${CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER}" \
               CARGO_BUILD_JOBS=2 \
               bash -lc "cd /tmp/binlex-build && cargo test --workspace --exclude binlex-python" && break
@@ -249,8 +280,8 @@ jobs:
         run: |
           set -euo pipefail
           runuser -u builder -- env \
-            PATH="${LLVM_PATH}/bin:${PATH}" \
-            LLVM_SYS_221_PREFIX="${LLVM_PATH}" \
+            PATH="/usr/bin:${PATH}" \
+            LLVM_SYS_221_PREFIX="/usr" \
             CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER="${CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER}" \
             CARGO_BUILD_JOBS=2 \
             bash -lc "cd /tmp/binlex-build && makepkg"
@@ -1136,7 +1167,19 @@ jobs:
         if: matrix.docs == 'rust'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libssl-dev make automake autoconf libtool
+          sudo apt-get install -y build-essential pkg-config libssl-dev make automake autoconf libtool wget gnupg
+          wget -q https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh ${{ env.LLVM_MAJOR_VERSION }}
+          sudo apt-get install -y llvm-22-dev clang-22 libclang-common-22-dev
+
+      - name: Configure LLVM Environment
+        if: matrix.docs == 'rust'
+        shell: bash
+        run: |
+          echo "LLVM_SYS_221_PREFIX=/usr/lib/llvm-22" >> "$GITHUB_ENV"
+          echo "/usr/lib/llvm-22/bin" >> "$GITHUB_PATH"
+          /usr/lib/llvm-22/bin/llvm-config --version
 
       - name: Install Python Build Tools
         if: matrix.docs == 'python'

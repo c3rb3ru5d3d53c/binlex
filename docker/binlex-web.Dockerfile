@@ -1,9 +1,16 @@
-FROM rust:1.94.1-trixie AS builder
+FROM rust:1.94.1-bookworm AS builder
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libprotobuf-dev protobuf-compiler \
+    && apt-get install -y --no-install-recommends gnupg libprotobuf-dev protobuf-compiler wget \
+    && wget -q https://apt.llvm.org/llvm.sh \
+    && chmod +x llvm.sh \
+    && ./llvm.sh 22 \
+    && apt-get install -y --no-install-recommends llvm-22-dev clang-22 libclang-common-22-dev \
+    && rm -f llvm.sh \
     && rm -rf /var/lib/apt/lists/*
 
+ENV LLVM_SYS_221_PREFIX=/usr/lib/llvm-22
+ENV PATH=/usr/lib/llvm-22/bin:/usr/local/cargo/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
 ENV PROTOC_INCLUDE=/usr/include
 
 WORKDIR /app
