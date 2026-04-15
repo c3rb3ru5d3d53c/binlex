@@ -20,14 +20,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::Architecture;
-use crate::Config;
 use crate::formats::File;
 use crate::formats::Image;
 use crate::hashing::{SHA256, TLSH};
 use crate::imaging::Imaging;
-use binlex::formats::MACHO as InnerMACHO;
+use crate::Architecture;
+use crate::Config;
 use binlex::formats::MachoSlice as InnerMachoSlice;
+use binlex::formats::MACHO as InnerMACHO;
 use pyo3::prelude::*;
 use pyo3::types::PyType;
 use std::collections::BTreeMap;

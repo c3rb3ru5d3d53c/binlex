@@ -62,9 +62,10 @@ def main() -> int:
 
     function = functions[0]
 
-    lifter = Lifter(pe.architecture(), function.bytes(), function.address(), config)
+    lifter = Lifter(config)
+    lifter.lift_function(function)
 
-    print(lifter.ir())
+    print(lifter.text())
 
 
     return 0

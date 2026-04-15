@@ -22,6 +22,36 @@
 
 use serde::{Deserialize, Serialize};
 
+mod semantic_const_value_serde {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S>(value: &u128, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&value.to_string())
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<u128, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Repr {
+            String(String),
+            Unsigned(u64),
+            Signed(i64),
+        }
+
+        match Repr::deserialize(deserializer)? {
+            Repr::String(value) => value.parse::<u128>().map_err(serde::de::Error::custom),
+            Repr::Unsigned(value) => Ok(value as u128),
+            Repr::Signed(value) => u128::try_from(value).map_err(serde::de::Error::custom),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct InstructionSemantics {
     pub version: u32,
@@ -54,6 +84,15 @@ pub enum SemanticStatus {
     Complete,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum SemanticLocationKind {
+    Register,
+    Flag,
+    ProgramCounter,
+    Temporary,
+    Memory,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SemanticTemporary {
     pub id: u32,
@@ -72,22 +111,22 @@ pub enum SemanticLocation {
         name: String,
         bits: u16,
     },
-    Pc {
+    ProgramCounter {
         bits: u16,
     },
-    Temp {
+    Temporary {
         id: u32,
         bits: u16,
     },
     Memory {
-        space: AddressSpace,
-        addr: Box<SemanticExpr>,
+        space: SemanticAddressSpace,
+        addr: Box<SemanticExpression>,
         bits: u16,
     },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum AddressSpace {
+pub enum SemanticAddressSpace {
     Default,
     Stack,
     Heap,
@@ -101,30 +140,40 @@ pub enum AddressSpace {
 pub enum SemanticEffect {
     Set {
         dst: SemanticLocation,
-        value: SemanticExpr,
+        expression: SemanticExpression,
     },
     Store {
-        space: AddressSpace,
-        addr: SemanticExpr,
-        value: SemanticExpr,
+        space: SemanticAddressSpace,
+        addr: SemanticExpression,
+        expression: SemanticExpression,
         bits: u16,
     },
     Fence {
-        kind: FenceKind,
+        kind: SemanticFenceKind,
     },
     Trap {
-        kind: TrapKind,
+        kind: SemanticTrapKind,
     },
     Intrinsic {
         name: String,
-        args: Vec<SemanticExpr>,
+        args: Vec<SemanticExpression>,
         outputs: Vec<SemanticLocation>,
     },
     Nop,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum SemanticEffectKind {
+    Set,
+    Store,
+    Fence,
+    Trap,
+    Intrinsic,
+    Nop,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum FenceKind {
+pub enum SemanticFenceKind {
     Acquire,
     Release,
     AcquireRelease,
@@ -133,7 +182,7 @@ pub enum FenceKind {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum TrapKind {
+pub enum SemanticTrapKind {
     Breakpoint,
     DivideError,
     Overflow,
@@ -150,75 +199,87 @@ pub enum TrapKind {
 pub enum SemanticTerminator {
     FallThrough,
     Jump {
-        target: SemanticExpr,
+        target: SemanticExpression,
     },
     Branch {
-        condition: SemanticExpr,
-        true_target: SemanticExpr,
-        false_target: SemanticExpr,
+        condition: SemanticExpression,
+        true_target: SemanticExpression,
+        false_target: SemanticExpression,
     },
     Call {
-        target: SemanticExpr,
+        target: SemanticExpression,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        return_target: Option<SemanticExpr>,
+        return_target: Option<SemanticExpression>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         does_return: Option<bool>,
     },
     Return {
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        value: Option<SemanticExpr>,
+        expression: Option<SemanticExpression>,
     },
     Unreachable,
     Trap,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum SemanticTerminatorKind {
+    FallThrough,
+    Jump,
+    Branch,
+    Call,
+    Return,
+    Unreachable,
+    Trap,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum SemanticExpr {
+pub enum SemanticExpression {
     Const {
+        #[serde(with = "semantic_const_value_serde")]
         value: u128,
         bits: u16,
     },
     Read(Box<SemanticLocation>),
     Load {
-        space: AddressSpace,
-        addr: Box<SemanticExpr>,
+        space: SemanticAddressSpace,
+        addr: Box<SemanticExpression>,
         bits: u16,
     },
     Unary {
-        op: SemanticUnaryOp,
-        arg: Box<SemanticExpr>,
+        op: SemanticOperationUnary,
+        arg: Box<SemanticExpression>,
         bits: u16,
     },
     Binary {
-        op: SemanticBinaryOp,
-        left: Box<SemanticExpr>,
-        right: Box<SemanticExpr>,
+        op: SemanticOperationBinary,
+        left: Box<SemanticExpression>,
+        right: Box<SemanticExpression>,
         bits: u16,
     },
     Cast {
-        op: SemanticCastOp,
-        arg: Box<SemanticExpr>,
+        op: SemanticOperationCast,
+        arg: Box<SemanticExpression>,
         bits: u16,
     },
     Compare {
-        op: SemanticCompareOp,
-        left: Box<SemanticExpr>,
-        right: Box<SemanticExpr>,
+        op: SemanticOperationCompare,
+        left: Box<SemanticExpression>,
+        right: Box<SemanticExpression>,
         bits: u16,
     },
     Select {
-        condition: Box<SemanticExpr>,
-        when_true: Box<SemanticExpr>,
-        when_false: Box<SemanticExpr>,
+        condition: Box<SemanticExpression>,
+        when_true: Box<SemanticExpression>,
+        when_false: Box<SemanticExpression>,
         bits: u16,
     },
     Extract {
-        arg: Box<SemanticExpr>,
+        arg: Box<SemanticExpression>,
         lsb: u16,
         bits: u16,
     },
     Concat {
-        parts: Vec<SemanticExpr>,
+        parts: Vec<SemanticExpression>,
         bits: u16,
     },
     Undefined {
@@ -229,13 +290,30 @@ pub enum SemanticExpr {
     },
     Intrinsic {
         name: String,
-        args: Vec<SemanticExpr>,
+        args: Vec<SemanticExpression>,
         bits: u16,
     },
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-pub enum SemanticUnaryOp {
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum SemanticExpressionKind {
+    Const,
+    Read,
+    Load,
+    Unary,
+    Binary,
+    Cast,
+    Compare,
+    Select,
+    Extract,
+    Concat,
+    Undefined,
+    Poison,
+    Intrinsic,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum SemanticOperationUnary {
     Not,
     Neg,
     BitReverse,
@@ -247,8 +325,8 @@ pub enum SemanticUnaryOp {
     Abs,
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-pub enum SemanticBinaryOp {
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum SemanticOperationBinary {
     Add,
     AddWithCarry,
     Sub,
@@ -274,8 +352,8 @@ pub enum SemanticBinaryOp {
     MaxSigned,
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-pub enum SemanticCastOp {
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum SemanticOperationCast {
     ZeroExtend,
     SignExtend,
     Truncate,
@@ -286,8 +364,8 @@ pub enum SemanticCastOp {
     FloatTruncate,
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-pub enum SemanticCompareOp {
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum SemanticOperationCompare {
     Eq,
     Ne,
     Ult,
@@ -347,6 +425,101 @@ impl InstructionSemantics {
     }
 }
 
+impl SemanticLocation {
+    pub fn kind(&self) -> SemanticLocationKind {
+        match self {
+            Self::Register { .. } => SemanticLocationKind::Register,
+            Self::Flag { .. } => SemanticLocationKind::Flag,
+            Self::ProgramCounter { .. } => SemanticLocationKind::ProgramCounter,
+            Self::Temporary { .. } => SemanticLocationKind::Temporary,
+            Self::Memory { .. } => SemanticLocationKind::Memory,
+        }
+    }
+}
+
+impl SemanticEffect {
+    pub fn kind(&self) -> SemanticEffectKind {
+        match self {
+            Self::Set { .. } => SemanticEffectKind::Set,
+            Self::Store { .. } => SemanticEffectKind::Store,
+            Self::Fence { .. } => SemanticEffectKind::Fence,
+            Self::Trap { .. } => SemanticEffectKind::Trap,
+            Self::Intrinsic { .. } => SemanticEffectKind::Intrinsic,
+            Self::Nop => SemanticEffectKind::Nop,
+        }
+    }
+
+    pub fn expression(&self) -> Option<&SemanticExpression> {
+        match self {
+            Self::Set { expression, .. } => Some(expression),
+            Self::Store { expression, .. } => Some(expression),
+            _ => None,
+        }
+    }
+}
+
+impl SemanticTerminator {
+    pub fn kind(&self) -> SemanticTerminatorKind {
+        match self {
+            Self::FallThrough => SemanticTerminatorKind::FallThrough,
+            Self::Jump { .. } => SemanticTerminatorKind::Jump,
+            Self::Branch { .. } => SemanticTerminatorKind::Branch,
+            Self::Call { .. } => SemanticTerminatorKind::Call,
+            Self::Return { .. } => SemanticTerminatorKind::Return,
+            Self::Unreachable => SemanticTerminatorKind::Unreachable,
+            Self::Trap => SemanticTerminatorKind::Trap,
+        }
+    }
+}
+
+impl SemanticExpression {
+    pub fn kind(&self) -> SemanticExpressionKind {
+        match self {
+            Self::Const { .. } => SemanticExpressionKind::Const,
+            Self::Read(_) => SemanticExpressionKind::Read,
+            Self::Load { .. } => SemanticExpressionKind::Load,
+            Self::Unary { .. } => SemanticExpressionKind::Unary,
+            Self::Binary { .. } => SemanticExpressionKind::Binary,
+            Self::Cast { .. } => SemanticExpressionKind::Cast,
+            Self::Compare { .. } => SemanticExpressionKind::Compare,
+            Self::Select { .. } => SemanticExpressionKind::Select,
+            Self::Extract { .. } => SemanticExpressionKind::Extract,
+            Self::Concat { .. } => SemanticExpressionKind::Concat,
+            Self::Undefined { .. } => SemanticExpressionKind::Undefined,
+            Self::Poison { .. } => SemanticExpressionKind::Poison,
+            Self::Intrinsic { .. } => SemanticExpressionKind::Intrinsic,
+        }
+    }
+
+    pub fn binary_operation(&self) -> Option<SemanticOperationBinary> {
+        match self {
+            Self::Binary { op, .. } => Some(*op),
+            _ => None,
+        }
+    }
+
+    pub fn unary_operation(&self) -> Option<SemanticOperationUnary> {
+        match self {
+            Self::Unary { op, .. } => Some(*op),
+            _ => None,
+        }
+    }
+
+    pub fn cast_operation(&self) -> Option<SemanticOperationCast> {
+        match self {
+            Self::Cast { op, .. } => Some(*op),
+            _ => None,
+        }
+    }
+
+    pub fn compare_operation(&self) -> Option<SemanticOperationCompare> {
+        match self {
+            Self::Compare { op, .. } => Some(*op),
+            _ => None,
+        }
+    }
+}
+
 impl InstructionSemanticsJson {
     pub fn into_semantics(self) -> InstructionSemantics {
         InstructionSemantics {
@@ -356,6 +529,76 @@ impl InstructionSemanticsJson {
             effects: self.effects,
             terminator: self.terminator,
             diagnostics: self.diagnostics,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{InstructionSemantics, SemanticExpression, SemanticStatus, SemanticTerminator};
+
+    #[test]
+    fn semantic_const_json_serializes_u128_as_string() {
+        let semantics = InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Complete,
+            temporaries: Vec::new(),
+            effects: Vec::new(),
+            terminator: SemanticTerminator::Return {
+                expression: Some(SemanticExpression::Const {
+                    value: u128::MAX,
+                    bits: 128,
+                }),
+            },
+            diagnostics: Vec::new(),
+        };
+
+        let json = serde_json::to_value(semantics.process()).expect("serialize semantics");
+        let serialized = json
+            .get("terminator")
+            .and_then(|value| value.get("Return"))
+            .and_then(|value| value.get("expression"))
+            .and_then(|value| value.get("Const"))
+            .and_then(|value| value.get("value"))
+            .and_then(|value| value.as_str())
+            .expect("const value should serialize as string");
+
+        assert_eq!(serialized, u128::MAX.to_string());
+    }
+
+    #[test]
+    fn semantic_const_json_deserializes_string_back_to_u128() {
+        let value = u128::MAX.to_string();
+        let payload = serde_json::json!({
+            "version": 1,
+            "status": "Complete",
+            "terminator": {
+                "Return": {
+                    "expression": {
+                        "Const": {
+                            "value": value,
+                            "bits": 128
+                        }
+                    }
+                }
+            },
+            "temporaries": [],
+            "effects": [],
+            "diagnostics": []
+        });
+
+        let json: super::InstructionSemanticsJson =
+            serde_json::from_value(payload).expect("deserialize semantics json");
+        let semantics = json.into_semantics();
+
+        match semantics.terminator {
+            SemanticTerminator::Return {
+                expression: Some(SemanticExpression::Const { value, bits }),
+            } => {
+                assert_eq!(value, u128::MAX);
+                assert_eq!(bits, 128);
+            }
+            other => panic!("unexpected terminator: {:?}", other),
         }
     }
 }

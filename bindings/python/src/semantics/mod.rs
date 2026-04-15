@@ -1,13 +1,15 @@
 use ::binlex::semantics::{
-    AddressSpace as InnerAddressSpace, FenceKind as InnerFenceKind,
-    InstructionSemantics as InnerInstructionSemantics, SemanticBinaryOp as InnerSemanticBinaryOp,
-    SemanticCastOp as InnerSemanticCastOp, SemanticCompareOp as InnerSemanticCompareOp,
+    InstructionSemantics as InnerInstructionSemantics, SemanticAddressSpace as InnerAddressSpace,
     SemanticDiagnostic as InnerSemanticDiagnostic,
     SemanticDiagnosticKind as InnerSemanticDiagnosticKind, SemanticEffect as InnerSemanticEffect,
-    SemanticExpr as InnerSemanticExpr, SemanticLocation as InnerSemanticLocation,
-    SemanticStatus as InnerSemanticStatus, SemanticTemporary as InnerSemanticTemporary,
-    SemanticTerminator as InnerSemanticTerminator, SemanticUnaryOp as InnerSemanticUnaryOp,
-    TrapKind as InnerTrapKind,
+    SemanticEffectKind as InnerSemanticEffectKind, SemanticExpression as InnerSemanticExpr,
+    SemanticExpressionKind as InnerSemanticExprKind, SemanticFenceKind as InnerFenceKind,
+    SemanticLocation as InnerSemanticLocation, SemanticLocationKind as InnerSemanticLocationKind,
+    SemanticOperationBinary as InnerSemanticBinaryOp, SemanticOperationCast as InnerSemanticCastOp,
+    SemanticOperationCompare as InnerSemanticCompareOp,
+    SemanticOperationUnary as InnerSemanticUnaryOp, SemanticStatus as InnerSemanticStatus,
+    SemanticTemporary as InnerSemanticTemporary, SemanticTerminator as InnerSemanticTerminator,
+    SemanticTerminatorKind as InnerSemanticTerminatorKind, SemanticTrapKind as InnerTrapKind,
 };
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -60,7 +62,41 @@ macro_rules! simple_enum_binding {
 
 simple_enum_binding!(SemanticStatus, InnerSemanticStatus, { Partial, Complete });
 simple_enum_binding!(
-    SemanticUnaryOp,
+    SemanticLocationKind,
+    InnerSemanticLocationKind,
+    { Register, Flag, ProgramCounter, Temporary, Memory }
+);
+simple_enum_binding!(
+    SemanticEffectKind,
+    InnerSemanticEffectKind,
+    { Set, Store, Fence, Trap, Intrinsic, Nop }
+);
+simple_enum_binding!(
+    SemanticExpressionKind,
+    InnerSemanticExprKind,
+    {
+        Const,
+        Read,
+        Load,
+        Unary,
+        Binary,
+        Cast,
+        Compare,
+        Select,
+        Extract,
+        Concat,
+        Undefined,
+        Poison,
+        Intrinsic
+    }
+);
+simple_enum_binding!(
+    SemanticTerminatorKind,
+    InnerSemanticTerminatorKind,
+    { FallThrough, Jump, Branch, Call, Return, Unreachable, Trap }
+);
+simple_enum_binding!(
+    SemanticOperationUnary,
     InnerSemanticUnaryOp,
     {
         Not,
@@ -75,7 +111,7 @@ simple_enum_binding!(
     }
 );
 simple_enum_binding!(
-    SemanticBinaryOp,
+    SemanticOperationBinary,
     InnerSemanticBinaryOp,
     {
         Add,
@@ -104,7 +140,7 @@ simple_enum_binding!(
     }
 );
 simple_enum_binding!(
-    SemanticCastOp,
+    SemanticOperationCast,
     InnerSemanticCastOp,
     {
         ZeroExtend,
@@ -118,7 +154,7 @@ simple_enum_binding!(
     }
 );
 simple_enum_binding!(
-    SemanticCompareOp,
+    SemanticOperationCompare,
     InnerSemanticCompareOp,
     {
         Eq,
@@ -150,18 +186,18 @@ simple_enum_binding!(
 
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
-pub struct AddressSpace {
+pub struct SemanticAddressSpace {
     pub inner: InnerAddressSpace,
 }
 
-impl AddressSpace {
+impl SemanticAddressSpace {
     pub fn from_inner(inner: InnerAddressSpace) -> Self {
         Self { inner }
     }
 }
 
 #[pymethods]
-impl AddressSpace {
+impl SemanticAddressSpace {
     #[allow(non_upper_case_globals)]
     #[classattr]
     pub const Default: Self = Self {
@@ -217,18 +253,18 @@ impl AddressSpace {
 
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
-pub struct FenceKind {
+pub struct SemanticFenceKind {
     pub inner: InnerFenceKind,
 }
 
-impl FenceKind {
+impl SemanticFenceKind {
     pub fn from_inner(inner: InnerFenceKind) -> Self {
         Self { inner }
     }
 }
 
 #[pymethods]
-impl FenceKind {
+impl SemanticFenceKind {
     #[allow(non_upper_case_globals)]
     #[classattr]
     pub const Acquire: Self = Self {
@@ -270,18 +306,18 @@ impl FenceKind {
 
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
-pub struct TrapKind {
+pub struct SemanticTrapKind {
     pub inner: InnerTrapKind,
 }
 
-impl TrapKind {
+impl SemanticTrapKind {
     pub fn from_inner(inner: InnerTrapKind) -> Self {
         Self { inner }
     }
 }
 
 #[pymethods]
-impl TrapKind {
+impl SemanticTrapKind {
     #[allow(non_upper_case_globals)]
     #[classattr]
     pub const Breakpoint: Self = Self {
@@ -468,7 +504,7 @@ macro_rules! value_wrapper {
 value_wrapper!(SemanticTemporary, InnerSemanticTemporary);
 value_wrapper!(SemanticDiagnostic, InnerSemanticDiagnostic);
 value_wrapper!(SemanticLocation, InnerSemanticLocation);
-value_wrapper!(SemanticExpr, InnerSemanticExpr);
+value_wrapper!(SemanticExpression, InnerSemanticExpr);
 value_wrapper!(SemanticEffect, InnerSemanticEffect);
 value_wrapper!(SemanticTerminator, InnerSemanticTerminator);
 value_wrapper!(InstructionSemantics, InnerInstructionSemantics);
@@ -572,19 +608,19 @@ impl SemanticLocation {
         Self::from_inner(InnerSemanticLocation::Flag { name, bits })
     }
     #[classmethod]
-    pub fn pc(_cls: &Bound<'_, PyType>, bits: u16) -> Self {
-        Self::from_inner(InnerSemanticLocation::Pc { bits })
+    pub fn program_counter(_cls: &Bound<'_, PyType>, bits: u16) -> Self {
+        Self::from_inner(InnerSemanticLocation::ProgramCounter { bits })
     }
     #[classmethod]
-    pub fn temp(_cls: &Bound<'_, PyType>, id: u32, bits: u16) -> Self {
-        Self::from_inner(InnerSemanticLocation::Temp { id, bits })
+    pub fn temporary(_cls: &Bound<'_, PyType>, id: u32, bits: u16) -> Self {
+        Self::from_inner(InnerSemanticLocation::Temporary { id, bits })
     }
     #[classmethod]
     pub fn memory(
         _cls: &Bound<'_, PyType>,
         py: Python<'_>,
-        space: Py<AddressSpace>,
-        addr: Py<SemanticExpr>,
+        space: Py<SemanticAddressSpace>,
+        addr: Py<SemanticExpression>,
         bits: u16,
     ) -> Self {
         Self::from_inner(InnerSemanticLocation::Memory {
@@ -593,14 +629,8 @@ impl SemanticLocation {
             bits,
         })
     }
-    pub fn kind(&self) -> String {
-        match &*self.inner.lock().unwrap() {
-            InnerSemanticLocation::Register { .. } => "Register".to_string(),
-            InnerSemanticLocation::Flag { .. } => "Flag".to_string(),
-            InnerSemanticLocation::Pc { .. } => "Pc".to_string(),
-            InnerSemanticLocation::Temp { .. } => "Temp".to_string(),
-            InnerSemanticLocation::Memory { .. } => "Memory".to_string(),
-        }
+    pub fn kind(&self) -> SemanticLocationKind {
+        SemanticLocationKind::from_inner(self.inner.lock().unwrap().kind())
     }
     pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         json_value_to_py(
@@ -620,7 +650,7 @@ impl SemanticLocation {
 }
 
 #[pymethods]
-impl SemanticExpr {
+impl SemanticExpression {
     #[classmethod]
     pub fn from_dict(_cls: &Bound<'_, PyType>, py: Python<'_>, data: Py<PyAny>) -> PyResult<Self> {
         let value = py_to_json_value(py, data)?;
@@ -643,8 +673,8 @@ impl SemanticExpr {
     pub fn load(
         _cls: &Bound<'_, PyType>,
         py: Python<'_>,
-        space: Py<AddressSpace>,
-        addr: Py<SemanticExpr>,
+        space: Py<SemanticAddressSpace>,
+        addr: Py<SemanticExpression>,
         bits: u16,
     ) -> Self {
         Self::from_inner(InnerSemanticExpr::Load {
@@ -657,8 +687,8 @@ impl SemanticExpr {
     pub fn unary(
         _cls: &Bound<'_, PyType>,
         py: Python<'_>,
-        op: Py<SemanticUnaryOp>,
-        arg: Py<SemanticExpr>,
+        op: Py<SemanticOperationUnary>,
+        arg: Py<SemanticExpression>,
         bits: u16,
     ) -> Self {
         Self::from_inner(InnerSemanticExpr::Unary {
@@ -671,9 +701,9 @@ impl SemanticExpr {
     pub fn binary(
         _cls: &Bound<'_, PyType>,
         py: Python<'_>,
-        op: Py<SemanticBinaryOp>,
-        left: Py<SemanticExpr>,
-        right: Py<SemanticExpr>,
+        op: Py<SemanticOperationBinary>,
+        left: Py<SemanticExpression>,
+        right: Py<SemanticExpression>,
         bits: u16,
     ) -> Self {
         Self::from_inner(InnerSemanticExpr::Binary {
@@ -687,8 +717,8 @@ impl SemanticExpr {
     pub fn cast(
         _cls: &Bound<'_, PyType>,
         py: Python<'_>,
-        op: Py<SemanticCastOp>,
-        arg: Py<SemanticExpr>,
+        op: Py<SemanticOperationCast>,
+        arg: Py<SemanticExpression>,
         bits: u16,
     ) -> Self {
         Self::from_inner(InnerSemanticExpr::Cast {
@@ -701,9 +731,9 @@ impl SemanticExpr {
     pub fn compare(
         _cls: &Bound<'_, PyType>,
         py: Python<'_>,
-        op: Py<SemanticCompareOp>,
-        left: Py<SemanticExpr>,
-        right: Py<SemanticExpr>,
+        op: Py<SemanticOperationCompare>,
+        left: Py<SemanticExpression>,
+        right: Py<SemanticExpression>,
         bits: u16,
     ) -> Self {
         Self::from_inner(InnerSemanticExpr::Compare {
@@ -717,9 +747,9 @@ impl SemanticExpr {
     pub fn select(
         _cls: &Bound<'_, PyType>,
         py: Python<'_>,
-        condition: Py<SemanticExpr>,
-        when_true: Py<SemanticExpr>,
-        when_false: Py<SemanticExpr>,
+        condition: Py<SemanticExpression>,
+        when_true: Py<SemanticExpression>,
+        when_false: Py<SemanticExpression>,
         bits: u16,
     ) -> Self {
         Self::from_inner(InnerSemanticExpr::Select {
@@ -733,7 +763,7 @@ impl SemanticExpr {
     pub fn extract(
         _cls: &Bound<'_, PyType>,
         py: Python<'_>,
-        arg: Py<SemanticExpr>,
+        arg: Py<SemanticExpression>,
         lsb: u16,
         bits: u16,
     ) -> Self {
@@ -747,7 +777,7 @@ impl SemanticExpr {
     pub fn concat(
         _cls: &Bound<'_, PyType>,
         py: Python<'_>,
-        parts: Vec<Py<SemanticExpr>>,
+        parts: Vec<Py<SemanticExpression>>,
         bits: u16,
     ) -> Self {
         let parts = parts
@@ -769,7 +799,7 @@ impl SemanticExpr {
         _cls: &Bound<'_, PyType>,
         py: Python<'_>,
         name: String,
-        args: Vec<Py<SemanticExpr>>,
+        args: Vec<Py<SemanticExpression>>,
         bits: u16,
     ) -> Self {
         let args = args
@@ -778,22 +808,36 @@ impl SemanticExpr {
             .collect();
         Self::from_inner(InnerSemanticExpr::Intrinsic { name, args, bits })
     }
-    pub fn kind(&self) -> String {
-        match &*self.inner.lock().unwrap() {
-            InnerSemanticExpr::Const { .. } => "Const".to_string(),
-            InnerSemanticExpr::Read(_) => "Read".to_string(),
-            InnerSemanticExpr::Load { .. } => "Load".to_string(),
-            InnerSemanticExpr::Unary { .. } => "Unary".to_string(),
-            InnerSemanticExpr::Binary { .. } => "Binary".to_string(),
-            InnerSemanticExpr::Cast { .. } => "Cast".to_string(),
-            InnerSemanticExpr::Compare { .. } => "Compare".to_string(),
-            InnerSemanticExpr::Select { .. } => "Select".to_string(),
-            InnerSemanticExpr::Extract { .. } => "Extract".to_string(),
-            InnerSemanticExpr::Concat { .. } => "Concat".to_string(),
-            InnerSemanticExpr::Undefined { .. } => "Undefined".to_string(),
-            InnerSemanticExpr::Poison { .. } => "Poison".to_string(),
-            InnerSemanticExpr::Intrinsic { .. } => "Intrinsic".to_string(),
-        }
+    pub fn kind(&self) -> SemanticExpressionKind {
+        SemanticExpressionKind::from_inner(self.inner.lock().unwrap().kind())
+    }
+    pub fn binary_operation(&self) -> Option<SemanticOperationBinary> {
+        self.inner
+            .lock()
+            .unwrap()
+            .binary_operation()
+            .map(SemanticOperationBinary::from_inner)
+    }
+    pub fn unary_operation(&self) -> Option<SemanticOperationUnary> {
+        self.inner
+            .lock()
+            .unwrap()
+            .unary_operation()
+            .map(SemanticOperationUnary::from_inner)
+    }
+    pub fn cast_operation(&self) -> Option<SemanticOperationCast> {
+        self.inner
+            .lock()
+            .unwrap()
+            .cast_operation()
+            .map(SemanticOperationCast::from_inner)
+    }
+    pub fn compare_operation(&self) -> Option<SemanticOperationCompare> {
+        self.inner
+            .lock()
+            .unwrap()
+            .compare_operation()
+            .map(SemanticOperationCompare::from_inner)
     }
     pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         json_value_to_py(
@@ -826,37 +870,37 @@ impl SemanticEffect {
         _cls: &Bound<'_, PyType>,
         py: Python<'_>,
         dst: Py<SemanticLocation>,
-        value: Py<SemanticExpr>,
+        expression: Py<SemanticExpression>,
     ) -> Self {
         Self::from_inner(InnerSemanticEffect::Set {
             dst: dst.borrow(py).inner.lock().unwrap().clone(),
-            value: value.borrow(py).inner.lock().unwrap().clone(),
+            expression: expression.borrow(py).inner.lock().unwrap().clone(),
         })
     }
     #[classmethod]
     pub fn store(
         _cls: &Bound<'_, PyType>,
         py: Python<'_>,
-        space: Py<AddressSpace>,
-        addr: Py<SemanticExpr>,
-        value: Py<SemanticExpr>,
+        space: Py<SemanticAddressSpace>,
+        addr: Py<SemanticExpression>,
+        expression: Py<SemanticExpression>,
         bits: u16,
     ) -> Self {
         Self::from_inner(InnerSemanticEffect::Store {
             space: space.borrow(py).inner.clone(),
             addr: addr.borrow(py).inner.lock().unwrap().clone(),
-            value: value.borrow(py).inner.lock().unwrap().clone(),
+            expression: expression.borrow(py).inner.lock().unwrap().clone(),
             bits,
         })
     }
     #[classmethod]
-    pub fn fence(_cls: &Bound<'_, PyType>, py: Python<'_>, kind: Py<FenceKind>) -> Self {
+    pub fn fence(_cls: &Bound<'_, PyType>, py: Python<'_>, kind: Py<SemanticFenceKind>) -> Self {
         Self::from_inner(InnerSemanticEffect::Fence {
             kind: kind.borrow(py).inner.clone(),
         })
     }
     #[classmethod]
-    pub fn trap(_cls: &Bound<'_, PyType>, py: Python<'_>, kind: Py<TrapKind>) -> Self {
+    pub fn trap(_cls: &Bound<'_, PyType>, py: Python<'_>, kind: Py<SemanticTrapKind>) -> Self {
         Self::from_inner(InnerSemanticEffect::Trap {
             kind: kind.borrow(py).inner.clone(),
         })
@@ -866,7 +910,7 @@ impl SemanticEffect {
         _cls: &Bound<'_, PyType>,
         py: Python<'_>,
         name: String,
-        args: Vec<Py<SemanticExpr>>,
+        args: Vec<Py<SemanticExpression>>,
         outputs: Vec<Py<SemanticLocation>>,
     ) -> Self {
         let args = args
@@ -887,15 +931,14 @@ impl SemanticEffect {
     pub fn nop(_cls: &Bound<'_, PyType>) -> Self {
         Self::from_inner(InnerSemanticEffect::Nop)
     }
-    pub fn kind(&self) -> String {
-        match &*self.inner.lock().unwrap() {
-            InnerSemanticEffect::Set { .. } => "Set".to_string(),
-            InnerSemanticEffect::Store { .. } => "Store".to_string(),
-            InnerSemanticEffect::Fence { .. } => "Fence".to_string(),
-            InnerSemanticEffect::Trap { .. } => "Trap".to_string(),
-            InnerSemanticEffect::Intrinsic { .. } => "Intrinsic".to_string(),
-            InnerSemanticEffect::Nop => "Nop".to_string(),
-        }
+    pub fn kind(&self) -> SemanticEffectKind {
+        SemanticEffectKind::from_inner(self.inner.lock().unwrap().kind())
+    }
+    pub fn expression(&self, py: Python<'_>) -> PyResult<Option<Py<SemanticExpression>>> {
+        let expression = self.inner.lock().unwrap().expression().cloned();
+        expression
+            .map(|expression| Py::new(py, SemanticExpression::from_inner(expression)))
+            .transpose()
     }
     pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         json_value_to_py(
@@ -928,7 +971,7 @@ impl SemanticTerminator {
         Self::from_inner(InnerSemanticTerminator::FallThrough)
     }
     #[classmethod]
-    pub fn jump(_cls: &Bound<'_, PyType>, py: Python<'_>, target: Py<SemanticExpr>) -> Self {
+    pub fn jump(_cls: &Bound<'_, PyType>, py: Python<'_>, target: Py<SemanticExpression>) -> Self {
         Self::from_inner(InnerSemanticTerminator::Jump {
             target: target.borrow(py).inner.lock().unwrap().clone(),
         })
@@ -937,9 +980,9 @@ impl SemanticTerminator {
     pub fn branch(
         _cls: &Bound<'_, PyType>,
         py: Python<'_>,
-        condition: Py<SemanticExpr>,
-        true_target: Py<SemanticExpr>,
-        false_target: Py<SemanticExpr>,
+        condition: Py<SemanticExpression>,
+        true_target: Py<SemanticExpression>,
+        false_target: Py<SemanticExpression>,
     ) -> Self {
         Self::from_inner(InnerSemanticTerminator::Branch {
             condition: condition.borrow(py).inner.lock().unwrap().clone(),
@@ -952,8 +995,8 @@ impl SemanticTerminator {
     pub fn call(
         _cls: &Bound<'_, PyType>,
         py: Python<'_>,
-        target: Py<SemanticExpr>,
-        return_target: Option<Py<SemanticExpr>>,
+        target: Py<SemanticExpression>,
+        return_target: Option<Py<SemanticExpression>>,
         does_return: Option<bool>,
     ) -> Self {
         Self::from_inner(InnerSemanticTerminator::Call {
@@ -963,10 +1006,14 @@ impl SemanticTerminator {
         })
     }
     #[classmethod]
-    #[pyo3(signature = (value=None))]
-    pub fn ret(_cls: &Bound<'_, PyType>, py: Python<'_>, value: Option<Py<SemanticExpr>>) -> Self {
+    #[pyo3(signature = (expression=None))]
+    pub fn return_(
+        _cls: &Bound<'_, PyType>,
+        py: Python<'_>,
+        expression: Option<Py<SemanticExpression>>,
+    ) -> Self {
         Self::from_inner(InnerSemanticTerminator::Return {
-            value: value.map(|item| item.borrow(py).inner.lock().unwrap().clone()),
+            expression: expression.map(|item| item.borrow(py).inner.lock().unwrap().clone()),
         })
     }
     #[classmethod]
@@ -977,16 +1024,8 @@ impl SemanticTerminator {
     pub fn trap(_cls: &Bound<'_, PyType>) -> Self {
         Self::from_inner(InnerSemanticTerminator::Trap)
     }
-    pub fn kind(&self) -> String {
-        match &*self.inner.lock().unwrap() {
-            InnerSemanticTerminator::FallThrough => "FallThrough".to_string(),
-            InnerSemanticTerminator::Jump { .. } => "Jump".to_string(),
-            InnerSemanticTerminator::Branch { .. } => "Branch".to_string(),
-            InnerSemanticTerminator::Call { .. } => "Call".to_string(),
-            InnerSemanticTerminator::Return { .. } => "Return".to_string(),
-            InnerSemanticTerminator::Unreachable => "Unreachable".to_string(),
-            InnerSemanticTerminator::Trap => "Trap".to_string(),
-        }
+    pub fn kind(&self) -> SemanticTerminatorKind {
+        SemanticTerminatorKind::from_inner(self.inner.lock().unwrap().kind())
     }
     pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         json_value_to_py(
@@ -1118,18 +1157,22 @@ impl InstructionSemantics {
 #[pyo3(name = "semantics")]
 pub fn semantics_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<SemanticStatus>()?;
-    m.add_class::<AddressSpace>()?;
-    m.add_class::<FenceKind>()?;
-    m.add_class::<TrapKind>()?;
-    m.add_class::<SemanticUnaryOp>()?;
-    m.add_class::<SemanticBinaryOp>()?;
-    m.add_class::<SemanticCastOp>()?;
-    m.add_class::<SemanticCompareOp>()?;
+    m.add_class::<SemanticLocationKind>()?;
+    m.add_class::<SemanticEffectKind>()?;
+    m.add_class::<SemanticExpressionKind>()?;
+    m.add_class::<SemanticTerminatorKind>()?;
+    m.add_class::<SemanticAddressSpace>()?;
+    m.add_class::<SemanticFenceKind>()?;
+    m.add_class::<SemanticTrapKind>()?;
+    m.add_class::<SemanticOperationUnary>()?;
+    m.add_class::<SemanticOperationBinary>()?;
+    m.add_class::<SemanticOperationCast>()?;
+    m.add_class::<SemanticOperationCompare>()?;
     m.add_class::<SemanticDiagnosticKind>()?;
     m.add_class::<SemanticTemporary>()?;
     m.add_class::<SemanticDiagnostic>()?;
     m.add_class::<SemanticLocation>()?;
-    m.add_class::<SemanticExpr>()?;
+    m.add_class::<SemanticExpression>()?;
     m.add_class::<SemanticEffect>()?;
     m.add_class::<SemanticTerminator>()?;
     m.add_class::<InstructionSemantics>()?;

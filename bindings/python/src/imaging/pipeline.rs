@@ -21,14 +21,14 @@
 // SOFTWARE.
 
 use crate::config::Config;
-use crate::imaging::{PNG, SVG, Terminal};
+use crate::imaging::{Terminal, PNG, SVG};
 use binlex::imaging::{
     Imaging as InnerImaging, ImagingNormalized as InnerImagingNormalized,
     ImagingPalette as InnerImagingPalette, ImagingRenderer as InnerImagingRenderer,
 };
-use pyo3::Py;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyBytesMethods};
+use pyo3::Py;
 use std::sync::{Arc, Mutex};
 
 #[pyclass]

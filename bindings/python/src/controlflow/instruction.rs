@@ -20,13 +20,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::Architecture;
-use crate::Config;
-use crate::controlflow::Graph;
 use crate::controlflow::json_value_to_py;
+use crate::controlflow::Graph;
 use crate::genetics::Chromosome;
 use crate::imaging::Imaging;
 use crate::semantics::InstructionSemantics as PyInstructionSemantics;
+use crate::Architecture;
+use crate::Config;
 use binlex::controlflow::Instruction as InnerInstruction;
 use binlex::controlflow::InstructionJson as InnerInstructionJson;
 use binlex::genetics::Chromosome as InnerChromosome;

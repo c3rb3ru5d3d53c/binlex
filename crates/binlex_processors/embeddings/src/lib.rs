@@ -1078,11 +1078,11 @@ pub fn registration() -> binlex::processor::ProcessorRegistration {
                 options: BTreeMap::new(),
             },
             blocks: ConfigProcessorTarget {
-                enabled: true,
+                enabled: false,
                 options: BTreeMap::new(),
             },
             functions: ConfigProcessorTarget {
-                enabled: true,
+                enabled: false,
                 options: BTreeMap::new(),
             },
             graph: ConfigProcessorTarget {

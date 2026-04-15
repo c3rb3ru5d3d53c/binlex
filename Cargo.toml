@@ -9,9 +9,6 @@ authors = ["c3rb3ru5d3d53c"]
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3.9", features = ["winnt", "fileapi", "ioapiset", "winioctl"] }
 
-[target.'cfg(not(target_os = "windows"))'.dependencies]
-libvex = { path = "crates/libvex/libvex-rs", features = ["pic"] }
-
 [dependencies]
 clap = { version = "4.5.27", features = ["derive"] }
 lief = "0.15.1"
@@ -53,12 +50,10 @@ winnow = "0.7.15"
 chrono = { version = "0.4.42", features = ["serde"] }
 rusqlite = { version = "0.37.0", features = ["bundled"] }
 yara-x = "1.14.0"
+inkwell = { version = "0.9.0", features = ["llvm22-1"] }
 
 [dev-dependencies]
 tempfile = "3.23.0"
-
-[target.'cfg(not(target_os = "windows"))'.dev-dependencies]
-binlex-processor-vex = { path = "crates/binlex_processors/vex" }
 
 [workspace]
 members = [
@@ -73,10 +68,6 @@ members = [
     "crates/binlex_tools/binlex-web",
     "crates/binlex_tools/binlex-yara",
     "crates/binlex_processors/embeddings",
-    "crates/binlex_processors/vex",
-    "crates/libvex/libvex-macros",
-    "crates/libvex/libvex-rs",
-    "crates/libvex/libvex-sys",
 ]
 
 [workspace.package]

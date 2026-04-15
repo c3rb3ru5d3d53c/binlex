@@ -65,6 +65,8 @@ pub enum ConfigProcessorValue {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigInstructions {
     pub enabled: bool,
+    #[serde(default)]
+    pub lifters: ConfigEntityLifters,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -74,6 +76,8 @@ pub struct ConfigBlocks {
     pub tlsh: ConfigTLSH,
     pub minhash: ConfigMinhash,
     pub entropy: ConfigHeuristicEntropy,
+    #[serde(default)]
+    pub lifters: ConfigEntityLifters,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -96,6 +100,33 @@ pub struct ConfigFunctions {
     pub entropy: ConfigHeuristicEntropy,
     #[serde(default)]
     pub markov: ConfigMarkov,
+    #[serde(default)]
+    pub lifters: ConfigEntityLifters,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigEntityLifters {
+    #[serde(default)]
+    pub llvm: ConfigEntityLifterLLVM,
+    #[serde(default)]
+    pub vex: ConfigEntityLifterVex,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigEntityLifterLLVM {
+    pub enabled: bool,
+    #[serde(default)]
+    pub normalized: ConfigEntityLifterLLVMNormalized,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigEntityLifterLLVMNormalized {
+    pub enabled: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigEntityLifterVex {
+    pub enabled: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -121,6 +152,30 @@ pub struct ConfigImaging {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigLifters {
+    #[serde(default)]
+    pub llvm: ConfigLiftersLLVM,
+    #[serde(default)]
+    pub vex: ConfigLiftersVex,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigLiftersLLVM {
+    pub module_name: String,
+    pub verify: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigLiftersVex {
+    pub enabled: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigSemantics {
+    pub enabled: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigData {
     pub threads: usize,
     pub minimal: bool,
@@ -137,8 +192,12 @@ pub struct ConfigData {
     pub blocks: ConfigBlocks,
     pub functions: ConfigFunctions,
     pub chromosomes: ConfigChromosomes,
+    #[serde(default)]
+    pub semantics: ConfigSemantics,
     pub mmap: ConfigMmap,
     pub disassembler: ConfigDisassembler,
+    #[serde(default)]
+    pub lifters: ConfigLifters,
     #[serde(default)]
     pub processors: ConfigProcessors,
 }
@@ -243,6 +302,57 @@ impl Default for ConfigMarkov {
             tolerance: 1e-9,
             max_iterations: 100,
         }
+    }
+}
+
+impl Default for ConfigEntityLifterLLVMNormalized {
+    fn default() -> Self {
+        Self { enabled: false }
+    }
+}
+
+impl Default for ConfigEntityLifterLLVM {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            normalized: ConfigEntityLifterLLVMNormalized::default(),
+        }
+    }
+}
+
+impl Default for ConfigEntityLifters {
+    fn default() -> Self {
+        Self {
+            llvm: ConfigEntityLifterLLVM::default(),
+            vex: ConfigEntityLifterVex::default(),
+        }
+    }
+}
+
+impl Default for ConfigEntityLifterVex {
+    fn default() -> Self {
+        Self { enabled: false }
+    }
+}
+
+impl Default for ConfigLiftersLLVM {
+    fn default() -> Self {
+        Self {
+            module_name: "binlex".to_string(),
+            verify: true,
+        }
+    }
+}
+
+impl Default for ConfigLiftersVex {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
+}
+
+impl Default for ConfigSemantics {
+    fn default() -> Self {
+        Self { enabled: true }
     }
 }
 

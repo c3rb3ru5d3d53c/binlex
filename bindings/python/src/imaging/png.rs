@@ -24,10 +24,10 @@ use crate::config::Config;
 use crate::hashing::{AHash, DHash, MinHash32, PHash, SHA256, TLSH};
 use crate::imaging::palette::Palette;
 use binlex::imaging::PNG as InnerPNG;
-use pyo3::Py;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyBytesMethods};
+use pyo3::Py;
 use std::sync::{Arc, Mutex};
 
 /// Render bytes into a PNG image.

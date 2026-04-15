@@ -22,8 +22,8 @@
 
 pub mod disassembler;
 
-use disassembler::Disassembler;
 use disassembler::binlex_cil_disassembler_init;
+use disassembler::Disassembler;
 
 use pyo3::{prelude::*, wrap_pymodule};
 

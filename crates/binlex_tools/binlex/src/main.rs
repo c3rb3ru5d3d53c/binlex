@@ -487,7 +487,13 @@ fn process_output(
     )
     .is_empty()
     {
-        let _ = cfg.process_graph();
+        match cfg.process_graph() {
+            Ok(()) => Stderr::print_debug(&cfg.config, "process_graph completed"),
+            Err(error) => Stderr::print_debug(
+                &cfg.config,
+                format!("process_graph failed: {}", error),
+            ),
+        }
     }
     if !binlex::processor::enabled_processors_for_target(
         &cfg.config,
@@ -540,6 +546,23 @@ fn process_output(
 
     if cfg.config.blocks.enabled {
         let _ = cfg.process_blocks();
+        Stderr::print_debug(
+            &cfg.config,
+            format!(
+                "block processor outputs attached to {} blocks",
+                cfg.blocks
+                    .valid()
+                    .iter()
+                    .filter(|entry| {
+                        cfg.processor_outputs(
+                            binlex::processor::ProcessorTarget::Block,
+                            **entry,
+                        )
+                        .is_some()
+                    })
+                    .count()
+            ),
+        );
         blocks = cfg
             .blocks
             .valid()
@@ -568,6 +591,23 @@ fn process_output(
 
     if cfg.config.functions.enabled {
         let _ = cfg.process_functions();
+        Stderr::print_debug(
+            &cfg.config,
+            format!(
+                "function processor outputs attached to {} functions",
+                cfg.functions
+                    .valid()
+                    .iter()
+                    .filter(|entry| {
+                        cfg.processor_outputs(
+                            binlex::processor::ProcessorTarget::Function,
+                            **entry,
+                        )
+                        .is_some()
+                    })
+                    .count()
+            ),
+        );
         let function_outputs = cfg
             .functions
             .valid()

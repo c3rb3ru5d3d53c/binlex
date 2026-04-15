@@ -22,10 +22,12 @@
 
 use super::{
     Config, ConfigBlocks, ConfigChromosomes, ConfigData, ConfigDatabaseLocal, ConfigDatabases,
-    ConfigDisassembler, ConfigDisassemblerSweep, ConfigFile, ConfigFormats, ConfigFunctions,
-    ConfigHashEnabled, ConfigHeuristicEntropy, ConfigHeuristicFeatures, ConfigImaging, ConfigIndex,
-    ConfigIndexLocal, ConfigInstructions, ConfigMarkov, ConfigMinhash, ConfigMmap, ConfigMmapCache,
-    ConfigProcessors, ConfigStorage, ConfigStorageLocal, ConfigTLSH,
+    ConfigDisassembler, ConfigDisassemblerSweep, ConfigEntityLifters, ConfigFile, ConfigFormats,
+    ConfigFunctions, ConfigHashEnabled, ConfigHeuristicEntropy, ConfigHeuristicFeatures,
+    ConfigImaging, ConfigIndex, ConfigIndexLocal, ConfigInstructions, ConfigLifters,
+    ConfigLiftersLLVM, ConfigLiftersVex, ConfigMarkov, ConfigMinhash, ConfigMmap,
+    ConfigMmapCache, ConfigProcessors, ConfigSemantics, ConfigStorage, ConfigStorageLocal,
+    ConfigTLSH,
 };
 use std::env;
 
@@ -85,7 +87,10 @@ impl Config {
                 dhash: ConfigHashEnabled { enabled: true },
                 phash: ConfigHashEnabled { enabled: true },
             },
-            instructions: ConfigInstructions { enabled: false },
+            instructions: ConfigInstructions {
+                enabled: false,
+                lifters: ConfigEntityLifters::default(),
+            },
             blocks: ConfigBlocks {
                 enabled: true,
                 sha256: ConfigHashEnabled { enabled: true },
@@ -102,6 +107,7 @@ impl Config {
                     seed: 0,
                 },
                 entropy: ConfigHeuristicEntropy { enabled: true },
+                lifters: ConfigEntityLifters::default(),
             },
             functions: ConfigFunctions {
                 enabled: true,
@@ -125,6 +131,7 @@ impl Config {
                     tolerance: 1e-9,
                     max_iterations: 100,
                 },
+                lifters: ConfigEntityLifters::default(),
             },
             chromosomes: ConfigChromosomes {
                 mask: ConfigHashEnabled { enabled: false },
@@ -145,6 +152,7 @@ impl Config {
                 vector: ConfigHeuristicFeatures { enabled: false },
                 entropy: ConfigHeuristicEntropy { enabled: true },
             },
+            semantics: ConfigSemantics::default(),
             mmap: ConfigMmap {
                 directory: Config::default_file_mapping_directory(),
                 cache: ConfigMmapCache { enabled: false },
@@ -152,6 +160,7 @@ impl Config {
             disassembler: ConfigDisassembler {
                 sweep: ConfigDisassemblerSweep { enabled: true },
             },
+            lifters: ConfigLifters::default(),
             processors: ConfigProcessors::default(),
         })
     }
@@ -160,6 +169,7 @@ impl Config {
         self.minimal = true;
         self.disable_hashing();
         self.instructions.enabled = false;
+        self.semantics.enabled = false;
     }
 
     pub fn disable_hashing(&mut self) {
@@ -331,5 +341,32 @@ impl Default for ConfigIndexLocal {
             directory: Config::default_local_index_directory(),
             dimensions: Some(64),
         }
+    }
+}
+
+impl Default for ConfigLifters {
+    fn default() -> Self {
+        Self {
+            llvm: ConfigLiftersLLVM::default(),
+            vex: ConfigLiftersVex::default(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Config;
+
+    #[test]
+    fn semantics_enabled_by_default() {
+        let config = Config::default();
+        assert!(config.semantics.enabled);
+    }
+
+    #[test]
+    fn minimal_mode_disables_semantics() {
+        let mut config = Config::default();
+        config.enable_minimal();
+        assert!(!config.semantics.enabled);
     }
 }

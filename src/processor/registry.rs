@@ -110,11 +110,66 @@ impl RegisteredProcessor {
 
     pub fn process_graph(&self, graph: &Graph) -> Option<GraphProcessorFanout> {
         if !self.registration.supports_architecture(graph.architecture) {
+            Stderr::print_debug(
+                &graph.config,
+                format!(
+                    "processor {} graph-stage skipped: unsupported architecture {}",
+                    self.registration.name, graph.architecture
+                ),
+            );
             return None;
         }
-        let data = graph_transport_message(&self.registration, graph).ok()?;
-        let response = execute_graph_transport(&self.registration, data, &graph.config).ok()?;
-        serde_json::from_value(response).ok()
+        let data = match graph_transport_message(&self.registration, graph) {
+            Ok(data) => data,
+            Err(error) => {
+                Stderr::print_debug(
+                    &graph.config,
+                    format!(
+                        "processor {} graph-stage request build failed: {}",
+                        self.registration.name, error
+                    ),
+                );
+                return None;
+            }
+        };
+        let response = match execute_graph_transport(&self.registration, data, &graph.config) {
+            Ok(response) => response,
+            Err(error) => {
+                Stderr::print_debug(
+                    &graph.config,
+                    format!(
+                        "processor {} graph-stage transport failed: {}",
+                        self.registration.name, error
+                    ),
+                );
+                return None;
+            }
+        };
+        match serde_json::from_value::<GraphProcessorFanout>(response) {
+            Ok(fanout) => {
+                Stderr::print_debug(
+                    &graph.config,
+                    format!(
+                        "processor {} graph-stage fanout instructions={} blocks={} functions={}",
+                        self.registration.name,
+                        fanout.instructions.len(),
+                        fanout.blocks.len(),
+                        fanout.functions.len()
+                    ),
+                );
+                Some(fanout)
+            }
+            Err(error) => {
+                Stderr::print_debug(
+                    &graph.config,
+                    format!(
+                        "processor {} graph-stage response decode failed: {}",
+                        self.registration.name, error
+                    ),
+                );
+                None
+            }
+        }
     }
 
     pub fn process_complete(&self, graph: &Graph) -> Result<(), ProcessorError> {
@@ -146,6 +201,10 @@ impl ProcessorRegistration {
 
 static REGISTRATIONS: Lazy<Mutex<HashMap<Option<String>, Vec<ProcessorRegistration>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
+
+fn is_supported_external_processor(registration: &ProcessorRegistration) -> bool {
+    registration.name != "vex"
+}
 
 fn config_key(configured_directory: Option<&str>) -> Option<String> {
     configured_directory.map(str::to_string)
@@ -376,6 +435,7 @@ pub fn ensure_registration_host_compatibility(
 pub fn registered_processor_registrations() -> Vec<ProcessorRegistration> {
     cached_registrations(None)
         .into_iter()
+        .filter(is_supported_external_processor)
         .filter(ProcessorRegistration::supported_on_current_os)
         .collect()
 }
@@ -385,6 +445,7 @@ pub fn registered_processor_registrations_for_config(
 ) -> Vec<ProcessorRegistration> {
     cached_registrations(config.path.as_deref())
         .into_iter()
+        .filter(is_supported_external_processor)
         .filter(ProcessorRegistration::supported_on_current_os)
         .collect()
 }
@@ -451,6 +512,63 @@ pub fn enabled_processors_for_target(
             registration,
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn registration(name: &str) -> ProcessorRegistration {
+        ProcessorRegistration {
+            name: name.to_string(),
+            backend_name: name.to_string(),
+            requires: "*".to_string(),
+            operating_systems: vec![ProcessorOs::current()],
+            architectures: vec![ProcessorArchitecture::AMD64],
+            transports: vec![ProcessorTransport::Ipc],
+            on_graph_options: OnGraphOptions::default(),
+            default_config: ConfigProcessor {
+                enabled: false,
+                instructions: crate::config::ConfigProcessorTarget {
+                    enabled: false,
+                    options: Default::default(),
+                },
+                blocks: crate::config::ConfigProcessorTarget {
+                    enabled: false,
+                    options: Default::default(),
+                },
+                functions: crate::config::ConfigProcessorTarget {
+                    enabled: false,
+                    options: Default::default(),
+                },
+                graph: crate::config::ConfigProcessorTarget {
+                    enabled: false,
+                    options: Default::default(),
+                },
+                complete: crate::config::ConfigProcessorTarget {
+                    enabled: false,
+                    options: Default::default(),
+                },
+                options: Default::default(),
+                transport: crate::config::ConfigProcessorTransports {
+                    ipc: crate::config::ConfigProcessorTransport {
+                        enabled: true,
+                        options: Default::default(),
+                    },
+                    http: crate::config::ConfigProcessorTransport {
+                        enabled: false,
+                        options: Default::default(),
+                    },
+                },
+            },
+        }
+    }
+
+    #[test]
+    fn vex_processor_is_no_longer_supported_externally() {
+        assert!(!is_supported_external_processor(&registration("vex")));
+        assert!(is_supported_external_processor(&registration("embeddings")));
+    }
 }
 
 fn report_transport_error(config: &Config, processor_name: &str, error: &ProcessorError) {
@@ -582,56 +700,27 @@ pub fn external_processor_registration(
 }
 
 fn instruction_transport_message(
-    registration: &ProcessorRegistration,
+    _registration: &ProcessorRegistration,
     instruction: &Instruction,
 ) -> Result<Value, serde_json::Error> {
-    if registration.name == "vex" {
-        return Ok(json!({
-            "architecture": instruction.architecture,
-            "address": instruction.address,
-            "bytes": instruction.bytes,
-        }));
-    }
-
     let mut data = serde_json::to_value(instruction.process_base())?;
     set_message_architecture(&mut data, instruction.architecture)?;
     Ok(data)
 }
 
 fn block_transport_message(
-    registration: &ProcessorRegistration,
+    _registration: &ProcessorRegistration,
     block: &Block<'_>,
 ) -> Result<Value, serde_json::Error> {
-    if registration.name == "vex" {
-        return Ok(json!({
-            "architecture": block.architecture(),
-            "address": block.address(),
-            "bytes": block.bytes(),
-        }));
-    }
-
     let mut data = serde_json::to_value(block.process_base())?;
     set_message_architecture(&mut data, block.architecture())?;
     Ok(data)
 }
 
 fn function_transport_message(
-    registration: &ProcessorRegistration,
+    _registration: &ProcessorRegistration,
     function: &Function<'_>,
 ) -> Result<Value, serde_json::Error> {
-    if registration.name == "vex" {
-        let Some(bytes) = function.bytes() else {
-            return Err(serde_json::Error::io(std::io::Error::other(
-                "vex requires contiguous function bytes",
-            )));
-        };
-        return Ok(json!({
-            "architecture": function.architecture(),
-            "address": function.address(),
-            "bytes": bytes,
-        }));
-    }
-
     function_message(function)
 }
 

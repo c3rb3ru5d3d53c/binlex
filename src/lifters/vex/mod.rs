@@ -1,3 +1,10 @@
 pub mod lifter;
 
-pub use lifter::{Lifter, LifterJson, LifterJsonDeserializer};
+use serde::{Deserialize, Serialize};
+
+pub use lifter::Lifter;
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct VexJson {
+    pub text: String,
+}

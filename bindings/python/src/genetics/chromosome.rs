@@ -20,15 +20,15 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::Config;
 use crate::genetics::AllelePair;
 use crate::hashing::{MinHash32, SHA256, TLSH};
 use crate::imaging::Imaging;
+use crate::Config;
 use binlex::genetics::Chromosome as InnerChromosome;
-use pyo3::Py;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
+use pyo3::Py;
 use std::sync::Arc;
 use std::sync::Mutex;
 

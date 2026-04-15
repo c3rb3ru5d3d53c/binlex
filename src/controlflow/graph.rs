@@ -461,6 +461,7 @@ impl Graph {
             instruction.pattern = json.chromosome.pattern;
             instruction.functions = json.functions;
             instruction.to = json.to;
+            instruction.semantics = json.semantics.map(|semantics| semantics.into_semantics());
             graph.listing.insert(instruction.address, instruction);
         }
 
@@ -864,7 +865,21 @@ impl Graph {
                 let mut block_outputs = HashMap::new();
                 let mut function_outputs = HashMap::new();
                 for processor in &remote_processors {
+                    crate::io::stderr::Stderr::print_debug(
+                        &self.config,
+                        format!(
+                            "graph-stage invoking processor {}",
+                            processor.name()
+                        ),
+                    );
                     let Some(fanout) = processor.process_graph(self) else {
+                        crate::io::stderr::Stderr::print_debug(
+                            &self.config,
+                            format!(
+                                "graph-stage processor {} returned no fanout",
+                                processor.name()
+                            ),
+                        );
                         continue;
                     };
 
@@ -888,6 +903,32 @@ impl Graph {
                             .or_insert_with(Vec::new)
                             .push((processor.name().to_string(), output));
                     }
+
+                    crate::io::stderr::Stderr::print_debug(
+                        &self.config,
+                        format!(
+                            "graph-stage processor {} attached instructions={} blocks={} functions={}",
+                            processor.name(),
+                            instruction_outputs
+                                .iter()
+                                .filter(|(_, outputs)| {
+                                    outputs.iter().any(|(name, _)| name == processor.name())
+                                })
+                                .count(),
+                            block_outputs
+                                .iter()
+                                .filter(|(_, outputs)| {
+                                    outputs.iter().any(|(name, _)| name == processor.name())
+                                })
+                                .count(),
+                            function_outputs
+                                .iter()
+                                .filter(|(_, outputs)| {
+                                    outputs.iter().any(|(name, _)| name == processor.name())
+                                })
+                                .count()
+                        ),
+                    );
                 }
 
                 let mut processor_state = self.processor_state.lock().unwrap();
