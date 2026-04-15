@@ -10,6 +10,7 @@ RUN apt-get update \
         curl \
         gnupg \
         libprotobuf-dev \
+        lsb-release \
         pkg-config \
         protobuf-compiler \
         wget \
@@ -42,6 +43,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         gnupg \
         libprotobuf-dev \
+        lsb-release \
         protobuf-compiler \
         wget \
     && wget -q https://apt.llvm.org/llvm.sh \

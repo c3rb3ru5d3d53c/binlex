@@ -1,7 +1,7 @@
 FROM rust:1.94.1-bookworm AS builder
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends gnupg libprotobuf-dev protobuf-compiler wget \
+    && apt-get install -y --no-install-recommends gnupg libprotobuf-dev lsb-release protobuf-compiler wget \
     && wget -q https://apt.llvm.org/llvm.sh \
     && chmod +x llvm.sh \
     && ./llvm.sh 22 \
