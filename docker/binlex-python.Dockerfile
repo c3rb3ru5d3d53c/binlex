@@ -9,6 +9,7 @@ RUN apt-get update \
         curl \
         gnupg \
         libprotobuf-dev \
+        libssl-dev \
         lsb-release \
         pkg-config \
         python3 \
