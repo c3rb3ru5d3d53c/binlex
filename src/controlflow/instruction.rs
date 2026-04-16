@@ -339,10 +339,13 @@ impl Instruction {
             None
         };
 
-        #[cfg(target_os = "windows")]
-        let vex = None;
-
+        #[cfg(not(target_os = "windows"))]
         if llvm.is_none() && vex.is_none() {
+            return None;
+        }
+
+        #[cfg(target_os = "windows")]
+        if llvm.is_none() {
             return None;
         }
 

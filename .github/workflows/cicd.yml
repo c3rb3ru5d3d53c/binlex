@@ -559,9 +559,19 @@ jobs:
       - name: Install Python Build Tools
         run: |
           python -m pip install --upgrade pip
-          python -m pip install cibuildwheel
+          python -m pip install cibuildwheel maturin[patchelf]
 
-      - name: Build Python Wheels
+      - name: Build Python Wheels (Ubuntu)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        shell: bash
+        env:
+          LLVM_SYS_221_PREFIX: /usr/lib/llvm-22
+        run: |
+          mkdir -p wheelhouse
+          maturin build --manifest-path bindings/python/Cargo.toml --release --out wheelhouse
+
+      - name: Build Python Wheels (cibuildwheel)
+        if: ${{ matrix.os != 'ubuntu-latest' }}
         uses: pypa/cibuildwheel@v3.2.0
         env:
           CIBW_BUILD: cp312-* cp313-* cp314-*
