@@ -1,7 +1,7 @@
 FROM ubuntu:24.04 AS builder
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl gnupg libprotobuf-dev lsb-release protobuf-compiler software-properties-common wget \
+    && apt-get install -y --no-install-recommends build-essential ca-certificates curl gnupg libprotobuf-dev lsb-release protobuf-compiler software-properties-common wget \
     && wget -q https://apt.llvm.org/llvm.sh \
     && chmod +x llvm.sh \
     && ./llvm.sh 22 \

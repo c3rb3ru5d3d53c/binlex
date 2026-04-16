@@ -35,7 +35,7 @@ WORKDIR /app
 
 CMD ["python3"]
 
-RUN python3 -m pip install --break-system-packages --no-cache-dir --upgrade pip maturin[patchelf]
+RUN python3 -m pip install --break-system-packages --no-cache-dir maturin[patchelf]
 
 COPY . .
 
