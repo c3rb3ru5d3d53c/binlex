@@ -19,7 +19,6 @@ RUN set -eux; \
         python3-venv \
         protobuf-compiler \
         software-properties-common \
-        wget \
         && break; \
         if [ "$attempt" -eq 3 ]; then exit 1; fi; \
         sleep 15; \
@@ -61,7 +60,6 @@ RUN set -eux; \
         pkg-config \
         protobuf-compiler \
         software-properties-common \
-        wget \
         && break; \
         if [ "$attempt" -eq 3 ]; then exit 1; fi; \
         sleep 15; \
