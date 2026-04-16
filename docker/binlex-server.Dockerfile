@@ -6,11 +6,13 @@ RUN set -eux; \
         if [ "$attempt" -eq 3 ]; then exit 1; fi; \
         sleep 15; \
     done \
-    && curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o llvm.sh https://apt.llvm.org/llvm.sh \
-    && chmod +x llvm.sh \
-    && ./llvm.sh 22 \
+    && install -d /usr/share/keyrings \
+    && curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors https://apt.llvm.org/llvm-snapshot.gpg.key \
+        | gpg --dearmor -o /usr/share/keyrings/llvm-archive-keyring.gpg \
+    && . /etc/os-release \
+    && echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] https://apt.llvm.org/${VERSION_CODENAME}/ llvm-toolchain-${VERSION_CODENAME}-22 main" \
+        > /etc/apt/sources.list.d/llvm.list \
     && for attempt in 1 2 3; do apt-get update && apt-get install -y --no-install-recommends llvm-22-dev clang-22 libclang-common-22-dev libpolly-22-dev && break; if [ "$attempt" -eq 3 ]; then exit 1; fi; sleep 15; done \
-    && rm -f llvm.sh \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain 1.94.0
