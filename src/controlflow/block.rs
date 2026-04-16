@@ -501,6 +501,7 @@ impl<'block> Block<'block> {
 
         Some(LiftersJson {
             llvm,
+            #[cfg(not(target_os = "windows"))]
             vex,
         })
     }

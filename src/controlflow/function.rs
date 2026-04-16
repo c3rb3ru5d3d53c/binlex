@@ -497,6 +497,7 @@ impl<'function> Function<'function> {
 
         Some(LiftersJson {
             llvm,
+            #[cfg(not(target_os = "windows"))]
             vex,
         })
     }

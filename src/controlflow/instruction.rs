@@ -348,6 +348,7 @@ impl Instruction {
 
         Some(LiftersJson {
             llvm,
+            #[cfg(not(target_os = "windows"))]
             vex,
         })
     }
