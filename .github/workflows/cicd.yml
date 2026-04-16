@@ -120,11 +120,11 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libssl-dev make automake autoconf libtool wget gnupg
+          sudo apt-get install -y build-essential pkg-config libssl-dev make automake autoconf libtool wget gnupg software-properties-common
           wget -q https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh ${{ env.LLVM_MAJOR_VERSION }}
-          sudo apt-get install -y llvm-22-dev clang-22 libclang-common-22-dev
+          sudo apt-get install -y llvm-22-dev clang-22 libclang-common-22-dev libpolly-22-dev
 
       - name: Configure LLVM Environment (Ubuntu)
         if: ${{ matrix.os == 'ubuntu-latest' }}
@@ -227,17 +227,22 @@ jobs:
       - name: Install LLVM (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
         shell: pwsh
-        run: choco install llvm --version=${{ env.LLVM_WINDOWS_VERSION }} -y
-
-      - name: Configure LLVM Environment (Windows)
-        if: ${{ matrix.os == 'windows-latest' }}
-        shell: pwsh
         run: |
-          "LLVM_SYS_221_PREFIX=C:\Program Files\LLVM" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
-          if (-not (Test-Path "C:\Program Files\LLVM")) {
-            Write-Error "LLVM installation directory not found at C:\Program Files\LLVM"
+          $llvmVersion = "${{ env.LLVM_WINDOWS_VERSION }}"
+          $archiveName = "clang+llvm-$llvmVersion-x86_64-pc-windows-msvc.tar.xz"
+          $archivePath = Join-Path $env:RUNNER_TEMP $archiveName
+          $extractRoot = Join-Path $env:RUNNER_TEMP "llvm"
+          $extractDir = Join-Path $extractRoot ("clang+llvm-" + $llvmVersion + "-x86_64-pc-windows-msvc")
+          curl.exe -L --fail --output $archivePath "https://github.com/llvm/llvm-project/releases/download/llvmorg-$llvmVersion/$archiveName"
+          if (Test-Path $extractRoot) { Remove-Item -Recurse -Force $extractRoot }
+          New-Item -ItemType Directory -Force -Path $extractRoot | Out-Null
+          tar -xf $archivePath -C $extractRoot
+          if (-not (Test-Path $extractDir)) {
+            Write-Error "LLVM archive extracted to unexpected location: $extractDir"
           }
+          "LLVM_SYS_221_PREFIX=$extractDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "LIBCLANG_PATH=$extractDir\bin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "$extractDir\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
       - name: Run Unit Tests (Unix)
         if: ${{ matrix.os != 'windows-latest' && matrix.os != 'archlinux' }}
@@ -477,11 +482,11 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libssl-dev make automake autoconf libtool wget gnupg
+          sudo apt-get install -y build-essential pkg-config libssl-dev make automake autoconf libtool wget gnupg software-properties-common
           wget -q https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh ${{ env.LLVM_MAJOR_VERSION }}
-          sudo apt-get install -y llvm-22-dev clang-22 libclang-common-22-dev
+          sudo apt-get install -y llvm-22-dev clang-22 libclang-common-22-dev libpolly-22-dev
 
       - name: Configure LLVM Environment (Ubuntu)
         if: ${{ matrix.os == 'ubuntu-latest' }}
@@ -534,19 +539,22 @@ jobs:
       - name: Install LLVM (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
         shell: pwsh
-        run: choco install llvm --version=${{ env.LLVM_WINDOWS_VERSION }} -y
-
-      - name: Configure LLVM Environment (Windows)
-        if: ${{ matrix.os == 'windows-latest' }}
-        shell: pwsh
         run: |
-          if (Test-Path "C:\Program Files\LLVM") {
-            "LLVM_SYS_221_PREFIX=C:\Program Files\LLVM" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-            "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
-            "CIBW_ENVIRONMENT_WINDOWS=LLVM_SYS_221_PREFIX=C:\Program Files\LLVM;PATH=C:\Program Files\LLVM\bin;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          } else {
-            Write-Error "LLVM installation directory not found at C:\Program Files\LLVM"
+          $llvmVersion = "${{ env.LLVM_WINDOWS_VERSION }}"
+          $archiveName = "clang+llvm-$llvmVersion-x86_64-pc-windows-msvc.tar.xz"
+          $archivePath = Join-Path $env:RUNNER_TEMP $archiveName
+          $extractRoot = Join-Path $env:RUNNER_TEMP "llvm"
+          $extractDir = Join-Path $extractRoot ("clang+llvm-" + $llvmVersion + "-x86_64-pc-windows-msvc")
+          curl.exe -L --fail --output $archivePath "https://github.com/llvm/llvm-project/releases/download/llvmorg-$llvmVersion/$archiveName"
+          if (Test-Path $extractRoot) { Remove-Item -Recurse -Force $extractRoot }
+          New-Item -ItemType Directory -Force -Path $extractRoot | Out-Null
+          tar -xf $archivePath -C $extractRoot
+          if (-not (Test-Path $extractDir)) {
+            Write-Error "LLVM archive extracted to unexpected location: $extractDir"
           }
+          "LLVM_SYS_221_PREFIX=$extractDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "LIBCLANG_PATH=$extractDir\bin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "$extractDir\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
       - name: Install Python Build Tools
         run: |
@@ -583,6 +591,8 @@ jobs:
             mkdir -p /tmp/protoc &&
             curl -fsSL -o /tmp/protoc/protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip &&
             unzip -oq /tmp/protoc/protoc.zip -d /tmp/protoc
+          CIBW_ENVIRONMENT_WINDOWS: >-
+            LLVM_SYS_221_PREFIX="$LLVM_SYS_221_PREFIX"
         with:
           package-dir: bindings/python
           output-dir: wheelhouse
@@ -1207,11 +1217,11 @@ jobs:
         if: matrix.docs == 'rust'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libssl-dev make automake autoconf libtool wget gnupg
+          sudo apt-get install -y build-essential pkg-config libssl-dev make automake autoconf libtool wget gnupg software-properties-common
           wget -q https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh ${{ env.LLVM_MAJOR_VERSION }}
-          sudo apt-get install -y llvm-22-dev clang-22 libclang-common-22-dev
+          sudo apt-get install -y llvm-22-dev clang-22 libclang-common-22-dev libpolly-22-dev
 
       - name: Configure LLVM Environment
         if: matrix.docs == 'rust'

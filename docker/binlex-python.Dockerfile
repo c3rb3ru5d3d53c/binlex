@@ -12,11 +12,12 @@ RUN apt-get update \
         lsb-release \
         pkg-config \
         protobuf-compiler \
+        software-properties-common \
         wget \
     && wget -q https://apt.llvm.org/llvm.sh \
     && chmod +x llvm.sh \
     && ./llvm.sh 22 \
-    && apt-get install -y --no-install-recommends llvm-22-dev clang-22 libclang-common-22-dev \
+    && apt-get install -y --no-install-recommends llvm-22-dev clang-22 libclang-common-22-dev libpolly-22-dev \
     && rm -f llvm.sh \
     && rm -rf /var/lib/apt/lists/*
 
