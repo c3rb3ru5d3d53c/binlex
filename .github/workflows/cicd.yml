@@ -120,8 +120,8 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libssl-dev make automake autoconf libtool wget gnupg software-properties-common
-          wget -q https://apt.llvm.org/llvm.sh
+          sudo apt-get install -y build-essential pkg-config libssl-dev make automake autoconf libtool curl gnupg software-properties-common
+          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o llvm.sh https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh ${{ env.LLVM_MAJOR_VERSION }}
           sudo apt-get install -y llvm-22-dev clang-22 libclang-common-22-dev libpolly-22-dev
@@ -492,8 +492,8 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libssl-dev make automake autoconf libtool wget gnupg software-properties-common
-          wget -q https://apt.llvm.org/llvm.sh
+          sudo apt-get install -y build-essential pkg-config libssl-dev make automake autoconf libtool curl gnupg software-properties-common
+          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o llvm.sh https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh ${{ env.LLVM_MAJOR_VERSION }}
           sudo apt-get install -y llvm-22-dev clang-22 libclang-common-22-dev libpolly-22-dev
@@ -1251,8 +1251,8 @@ jobs:
         if: matrix.docs == 'rust' || matrix.docs == 'python'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libssl-dev make automake autoconf libtool wget gnupg software-properties-common
-          wget -q https://apt.llvm.org/llvm.sh
+          sudo apt-get install -y build-essential pkg-config libssl-dev make automake autoconf libtool curl gnupg software-properties-common
+          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o llvm.sh https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh ${{ env.LLVM_MAJOR_VERSION }}
           sudo apt-get install -y llvm-22-dev clang-22 libclang-common-22-dev libpolly-22-dev
