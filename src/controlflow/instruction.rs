@@ -28,6 +28,7 @@ use crate::genetics::ChromosomeJson;
 use crate::hex;
 use crate::imaging::Imaging;
 use crate::lifters::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson, LlvmNormalizedJson};
+#[cfg(not(target_os = "windows"))]
 use crate::lifters::vex::{Lifter as VexLifter, VexJson};
 use crate::metadata::Attributes;
 use crate::semantics::InstructionSemantics;
@@ -327,6 +328,7 @@ impl Instruction {
             None
         };
 
+        #[cfg(not(target_os = "windows"))]
         let vex = if self.config.lifters.vex.enabled && self.config.instructions.lifters.vex.enabled {
             let mut lifter = VexLifter::new(self.config.clone());
             lifter.lift_instruction(self).ok()?;
@@ -336,6 +338,9 @@ impl Instruction {
         } else {
             None
         };
+
+        #[cfg(target_os = "windows")]
+        let vex = None;
 
         if llvm.is_none() && vex.is_none() {
             return None;

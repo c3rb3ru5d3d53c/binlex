@@ -1214,7 +1214,7 @@ jobs:
             docs-${{ runner.os }}-cargo-
 
       - name: Install Dependencies
-        if: matrix.docs == 'rust'
+        if: matrix.docs == 'rust' || matrix.docs == 'python'
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential pkg-config libssl-dev make automake autoconf libtool wget gnupg software-properties-common
@@ -1224,7 +1224,7 @@ jobs:
           sudo apt-get install -y llvm-22-dev clang-22 libclang-common-22-dev libpolly-22-dev
 
       - name: Configure LLVM Environment
-        if: matrix.docs == 'rust'
+        if: matrix.docs == 'rust' || matrix.docs == 'python'
         shell: bash
         run: |
           echo "LLVM_SYS_221_PREFIX=/usr/lib/llvm-22" >> "$GITHUB_ENV"

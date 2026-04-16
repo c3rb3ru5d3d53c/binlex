@@ -1,7 +1,7 @@
-FROM rust:1.94.1-bookworm AS builder
+FROM ubuntu:24.04 AS builder
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends gnupg libprotobuf-dev lsb-release protobuf-compiler software-properties-common wget \
+    && apt-get install -y --no-install-recommends ca-certificates curl gnupg libprotobuf-dev lsb-release protobuf-compiler software-properties-common wget \
     && wget -q https://apt.llvm.org/llvm.sh \
     && chmod +x llvm.sh \
     && ./llvm.sh 22 \
@@ -9,8 +9,10 @@ RUN apt-get update \
     && rm -f llvm.sh \
     && rm -rf /var/lib/apt/lists/*
 
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain 1.94.0
+
 ENV LLVM_SYS_221_PREFIX=/usr/lib/llvm-22
-ENV PATH=/usr/lib/llvm-22/bin:/usr/local/cargo/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
+ENV PATH=/usr/lib/llvm-22/bin:/root/.cargo/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
 ENV PROTOC_INCLUDE=/usr/include
 
 WORKDIR /app
@@ -20,7 +22,7 @@ COPY . .
 RUN set -eux; \
     cargo build --release -p binlex-web
 
-FROM debian:trixie-slim
+FROM ubuntu:24.04
 
 ARG BINLEX_IMAGE_SOURCE=https://github.com/c3rb3ru5d3d53c/binlex
 ARG BINLEX_IMAGE_VERSION=dev
@@ -31,7 +33,7 @@ LABEL org.opencontainers.image.version="${BINLEX_IMAGE_VERSION}"
 LABEL org.opencontainers.image.revision="${BINLEX_IMAGE_REVISION}"
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates libgcc-s1 libstdc++6 linux-perf procps \
+    && apt-get install -y --no-install-recommends ca-certificates libgcc-s1 libstdc++6 linux-tools-generic procps \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /data/binlex-web /root/.config/binlex /root/.local/share/binlex/index
 
