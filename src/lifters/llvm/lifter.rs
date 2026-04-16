@@ -210,7 +210,8 @@ impl Lifter {
     }
 
     fn target_machine(&self) -> Result<TargetMachine, Error> {
-        Target::initialize_all(&InitializationConfig::default());
+        Target::initialize_native(&InitializationConfig::default())
+            .map_err(|err| Error::other(err.to_string()))?;
         let triple = TargetMachine::get_default_triple();
         let target = Target::from_triple(&triple).map_err(|err| Error::other(err.to_string()))?;
         target
