@@ -240,6 +240,13 @@ jobs:
           if (-not (Test-Path $extractDir)) {
             Write-Error "LLVM archive extracted to unexpected location: $extractDir"
           }
+          & "C:\vcpkg\vcpkg.exe" install libxml2:x64-windows-static-md
+          $libxmlDir = "C:\vcpkg\installed\x64-windows-static-md\lib"
+          $libxmlStatic = Join-Path $libxmlDir "libxml2.lib"
+          if (-not (Test-Path $libxmlStatic)) {
+            Write-Error "libxml2 static library not found: $libxmlStatic"
+          }
+          Copy-Item $libxmlStatic (Join-Path $extractDir "lib\xml2s.lib") -Force
           "LLVM_SYS_221_PREFIX=$extractDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "LIBCLANG_PATH=$extractDir\bin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "$extractDir\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
@@ -555,6 +562,13 @@ jobs:
           if (-not (Test-Path $extractDir)) {
             Write-Error "LLVM archive extracted to unexpected location: $extractDir"
           }
+          & "C:\vcpkg\vcpkg.exe" install libxml2:x64-windows-static-md
+          $libxmlDir = "C:\vcpkg\installed\x64-windows-static-md\lib"
+          $libxmlStatic = Join-Path $libxmlDir "libxml2.lib"
+          if (-not (Test-Path $libxmlStatic)) {
+            Write-Error "libxml2 static library not found: $libxmlStatic"
+          }
+          Copy-Item $libxmlStatic (Join-Path $extractDir "lib\xml2s.lib") -Force
           "LLVM_SYS_221_PREFIX=$extractDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "LIBCLANG_PATH=$extractDir\bin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "$extractDir\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
