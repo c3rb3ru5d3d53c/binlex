@@ -424,14 +424,17 @@ jobs:
             runner: macos-14
             asset: macos-14-arm64
             archive_ext: tar.gz
+            macos_deployment_target: "14.0"
           - os: macos-15-intel
             runner: macos-15-intel
             asset: macos-15-intel-x86_64
             archive_ext: tar.gz
+            macos_deployment_target: "15.0"
           - os: macos-15
             runner: macos-15
             asset: macos-15-arm64
             archive_ext: tar.gz
+            macos_deployment_target: "15.0"
           - os: windows-latest
             runner: windows-latest
             asset: windows-x86_64
@@ -512,7 +515,7 @@ jobs:
           LLVM_PREFIX="$(brew --prefix llvm)"
           echo "LLVM_SYS_221_PREFIX=${LLVM_PREFIX}" >> "$GITHUB_ENV"
           echo "${LLVM_PREFIX}/bin" >> "$GITHUB_PATH"
-          echo "CIBW_ENVIRONMENT_MACOS=MACOSX_DEPLOYMENT_TARGET=11.0 LLVM_SYS_221_PREFIX=${LLVM_PREFIX} PATH=${LLVM_PREFIX}/bin:\$PATH" >> "$GITHUB_ENV"
+          echo "CIBW_ENVIRONMENT_MACOS=MACOSX_DEPLOYMENT_TARGET=${{ matrix.macos_deployment_target }} LLVM_SYS_221_PREFIX=${LLVM_PREFIX} PATH=${LLVM_PREFIX}/bin:\$PATH" >> "$GITHUB_ENV"
           "${LLVM_PREFIX}/bin/llvm-config" --version
 
       - name: Install Vulkan SDK (macOS)
