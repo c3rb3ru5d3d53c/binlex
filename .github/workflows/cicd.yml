@@ -569,30 +569,53 @@ jobs:
         with:
           arch: x64
 
-      - name: Install LLVM (Windows)
+      - name: Build LLVM (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
         shell: pwsh
         run: |
           $llvmVersion = "${{ env.LLVM_WINDOWS_VERSION }}"
-          $archiveName = "clang+llvm-$llvmVersion-x86_64-pc-windows-msvc.tar.xz"
-          $archivePath = Join-Path $env:RUNNER_TEMP $archiveName
-          $extractRoot = Join-Path $env:RUNNER_TEMP "llvm"
-          $extractDir = Join-Path $extractRoot ("clang+llvm-" + $llvmVersion + "-x86_64-pc-windows-msvc")
-          curl.exe -L --fail --output $archivePath "https://github.com/llvm/llvm-project/releases/download/llvmorg-$llvmVersion/$archiveName"
-          if (Test-Path $extractRoot) { Remove-Item -Recurse -Force $extractRoot }
-          New-Item -ItemType Directory -Force -Path $extractRoot | Out-Null
-          tar -xf $archivePath -C $extractRoot
-          if (-not (Test-Path $extractDir)) {
-            Write-Error "LLVM archive extracted to unexpected location: $extractDir"
+          $sourceArchiveName = "llvm-project-$llvmVersion.src.tar.xz"
+          $sourceArchivePath = Join-Path $env:RUNNER_TEMP $sourceArchiveName
+          $sourceRoot = Join-Path $env:RUNNER_TEMP "llvm-wheel-src"
+          $sourceDir = Join-Path $sourceRoot ("llvm-project-" + $llvmVersion + ".src")
+          $buildDir = Join-Path $env:RUNNER_TEMP "llvm-wheel-build"
+          $installDir = Join-Path $env:RUNNER_TEMP "llvm-wheel-install"
+
+          curl.exe -L --fail --output $sourceArchivePath "https://github.com/llvm/llvm-project/releases/download/llvmorg-$llvmVersion/$sourceArchiveName"
+
+          foreach ($path in @($sourceRoot, $buildDir, $installDir)) {
+            if (Test-Path $path) {
+              Remove-Item -Recurse -Force $path
+            }
           }
-          & "C:\vcpkg\vcpkg.exe" install libxml2:x64-windows-static-md
-          $libxmlDir = "C:\vcpkg\installed\x64-windows-static-md\lib"
-          $libxmlStatic = Join-Path $libxmlDir "libxml2.lib"
-          if (-not (Test-Path $libxmlStatic)) {
-            Write-Error "libxml2 static library not found: $libxmlStatic"
+
+          New-Item -ItemType Directory -Force -Path $sourceRoot | Out-Null
+          tar -xf $sourceArchivePath -C $sourceRoot
+
+          if (-not (Test-Path $sourceDir)) {
+            Write-Error "LLVM source archive extracted to unexpected location: $sourceDir"
           }
-          Copy-Item $libxmlStatic (Join-Path $extractDir "lib\xml2s.lib") -Force
-          $llvmLibDir = Join-Path $extractDir "lib"
+
+          cmake -S (Join-Path $sourceDir "llvm") -B $buildDir -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_INSTALL_PREFIX="$installDir" `
+            -DCMAKE_POLICY_DEFAULT_CMP0091=NEW `
+            -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL `
+            -DBUILD_SHARED_LIBS=OFF `
+            -DLLVM_BUILD_LLVM_DYLIB=OFF `
+            -DLLVM_TARGETS_TO_BUILD=X86 `
+            -DLLVM_INCLUDE_TESTS=OFF `
+            -DLLVM_INCLUDE_BENCHMARKS=OFF `
+            -DLLVM_INCLUDE_EXAMPLES=OFF `
+            -DLLVM_ENABLE_ASSERTIONS=OFF `
+            -DLLVM_ENABLE_LIBXML2=OFF `
+            -DLLVM_ENABLE_ZLIB=OFF `
+            -DLLVM_ENABLE_ZSTD=OFF `
+            -DLLVM_ENABLE_TERMINFO=OFF
+
+          cmake --build $buildDir --config Release --target install --parallel 2
+
+          $llvmLibDir = Join-Path $installDir "lib"
           $sdkLibRoots = @(
             (Join-Path $env:WindowsSdkDir ("Lib\" + $env:WindowsSDKLibVersion + "um\x64")),
             (Join-Path $env:WindowsSdkDir ("Lib\" + $env:WindowsSDKLibVersion + "ucrt\x64"))
@@ -608,9 +631,9 @@ jobs:
               }
             }
           }
-          "LLVM_SYS_221_PREFIX=$extractDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "LIBCLANG_PATH=$extractDir\bin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "$extractDir\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          "LLVM_SYS_221_PREFIX=$installDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "$installDir\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          & (Join-Path $installDir "bin\llvm-config.exe") --version
 
       - name: Install Python Build Tools
         if: ${{ matrix.os != 'windows-latest' }}
