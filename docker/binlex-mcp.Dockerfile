@@ -2,8 +2,9 @@ ARG UBUNTU_IMAGE=ubuntu:24.04
 
 FROM ${UBUNTU_IMAGE} AS python-builder
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+RUN set -eux; \
+    for attempt in 1 2 3; do \
+        apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         ca-certificates \
         curl \
@@ -19,6 +20,10 @@ RUN apt-get update \
         protobuf-compiler \
         software-properties-common \
         wget \
+        && break; \
+        if [ "$attempt" -eq 3 ]; then exit 1; fi; \
+        sleep 15; \
+    done \
     && wget -q https://apt.llvm.org/llvm.sh \
     && chmod +x llvm.sh \
     && ./llvm.sh 22 \
@@ -43,8 +48,9 @@ RUN mkdir -p /tmp/binlex-wheels \
 
 FROM ${UBUNTU_IMAGE} AS mcp-builder
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+RUN set -eux; \
+    for attempt in 1 2 3; do \
+        apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         ca-certificates \
         curl \
@@ -56,10 +62,14 @@ RUN apt-get update \
         protobuf-compiler \
         software-properties-common \
         wget \
+        && break; \
+        if [ "$attempt" -eq 3 ]; then exit 1; fi; \
+        sleep 15; \
+    done \
     && wget -q https://apt.llvm.org/llvm.sh \
     && chmod +x llvm.sh \
     && ./llvm.sh 22 \
-    && apt-get install -y --no-install-recommends llvm-22-dev clang-22 libclang-common-22-dev libpolly-22-dev \
+    && for attempt in 1 2 3; do apt-get update && apt-get install -y --no-install-recommends llvm-22-dev clang-22 libclang-common-22-dev libpolly-22-dev && break; if [ "$attempt" -eq 3 ]; then exit 1; fi; sleep 15; done \
     && rm -f llvm.sh \
     && rm -rf /var/lib/apt/lists/*
 
@@ -95,8 +105,9 @@ LABEL org.opencontainers.image.source="${BINLEX_IMAGE_SOURCE}"
 LABEL org.opencontainers.image.version="${BINLEX_IMAGE_VERSION}"
 LABEL org.opencontainers.image.revision="${BINLEX_IMAGE_REVISION}"
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+RUN set -eux; \
+    for attempt in 1 2 3; do \
+        apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
         libgcc-s1 \
         libmagic1 \
@@ -104,6 +115,10 @@ RUN apt-get update \
         python3 \
         python3-pip \
         python3-venv \
+        && break; \
+        if [ "$attempt" -eq 3 ]; then exit 1; fi; \
+        sleep 15; \
+    done \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /data/binlex-mcp /opt/binlex/processors /root/.config/binlex /root/.local/share/binlex/processors /samples
 
