@@ -24,7 +24,7 @@ RUN set -eux; \
         if [ "$attempt" -eq 3 ]; then exit 1; fi; \
         sleep 15; \
     done \
-    && wget -q https://apt.llvm.org/llvm.sh \
+    && curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o llvm.sh https://apt.llvm.org/llvm.sh \
     && chmod +x llvm.sh \
     && ./llvm.sh 22 \
     && for attempt in 1 2 3; do apt-get update && apt-get install -y --no-install-recommends llvm-22-dev clang-22 libclang-common-22-dev libpolly-22-dev && break; if [ "$attempt" -eq 3 ]; then exit 1; fi; sleep 15; done \
@@ -66,7 +66,7 @@ RUN set -eux; \
         if [ "$attempt" -eq 3 ]; then exit 1; fi; \
         sleep 15; \
     done \
-    && wget -q https://apt.llvm.org/llvm.sh \
+    && curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o llvm.sh https://apt.llvm.org/llvm.sh \
     && chmod +x llvm.sh \
     && ./llvm.sh 22 \
     && for attempt in 1 2 3; do apt-get update && apt-get install -y --no-install-recommends llvm-22-dev clang-22 libclang-common-22-dev libpolly-22-dev && break; if [ "$attempt" -eq 3 ]; then exit 1; fi; sleep 15; done \
