@@ -253,6 +253,12 @@ jobs:
           "LIBCLANG_PATH=$extractDir\bin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "$extractDir\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
+      - name: Configure Rust CRT (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: pwsh
+        run: |
+          "RUSTFLAGS=-C target-feature=+crt-static" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Run Unit Tests (Unix)
         if: ${{ matrix.os != 'windows-latest' && matrix.os != 'archlinux' }}
         shell: bash

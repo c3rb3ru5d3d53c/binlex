@@ -2,7 +2,8 @@ FROM ubuntu:24.04 AS builder
 
 RUN set -eux; \
     for attempt in 1 2 3; do \
-        apt-get update && apt-get install -y --no-install-recommends build-essential ca-certificates curl gnupg libprotobuf-dev libssl-dev lsb-release pkg-config protobuf-compiler software-properties-common && break; \
+        rm -rf /var/lib/apt/lists/*; \
+        apt-get -o Acquire::Retries=5 update && apt-get install -y --no-install-recommends build-essential ca-certificates curl gnupg libprotobuf-dev libssl-dev lsb-release pkg-config protobuf-compiler software-properties-common && break; \
         if [ "$attempt" -eq 3 ]; then exit 1; fi; \
         sleep 15; \
     done \
@@ -12,7 +13,7 @@ RUN set -eux; \
     && . /etc/os-release \
     && echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] https://apt.llvm.org/${VERSION_CODENAME}/ llvm-toolchain-${VERSION_CODENAME}-22 main" \
         > /etc/apt/sources.list.d/llvm.list \
-    && for attempt in 1 2 3; do apt-get update && apt-get install -y --no-install-recommends llvm-22-dev clang-22 libclang-common-22-dev libpolly-22-dev && break; if [ "$attempt" -eq 3 ]; then exit 1; fi; sleep 15; done \
+    && for attempt in 1 2 3; do rm -rf /var/lib/apt/lists/*; apt-get -o Acquire::Retries=5 update && apt-get install -y --no-install-recommends llvm-22-dev clang-22 libclang-common-22-dev libpolly-22-dev && break; if [ "$attempt" -eq 3 ]; then exit 1; fi; sleep 15; done \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain 1.94.0
@@ -40,7 +41,8 @@ LABEL org.opencontainers.image.revision="${BINLEX_IMAGE_REVISION}"
 
 RUN set -eux; \
     for attempt in 1 2 3; do \
-        apt-get update && apt-get install -y --no-install-recommends ca-certificates libgcc-s1 libstdc++6 linux-tools-generic procps && break; \
+        rm -rf /var/lib/apt/lists/*; \
+        apt-get -o Acquire::Retries=5 update && apt-get install -y --no-install-recommends ca-certificates libgcc-s1 libstdc++6 linux-tools-generic procps && break; \
         if [ "$attempt" -eq 3 ]; then exit 1; fi; \
         sleep 15; \
     done \
