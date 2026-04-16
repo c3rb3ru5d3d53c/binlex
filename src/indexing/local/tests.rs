@@ -66,6 +66,7 @@ fn build_single_return_graph() -> Graph {
     let mut config = Config::default();
     config.processors.enabled = true;
     config.processors.path = Some(processor_dir);
+    config.processors.idle_timeout_ms = 120_000;
     let embeddings = config
         .processors
         .ensure_processor("embeddings")

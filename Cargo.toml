@@ -50,7 +50,7 @@ winnow = "0.7.15"
 chrono = { version = "0.4.42", features = ["serde"] }
 rusqlite = { version = "0.37.0", features = ["bundled"] }
 yara-x = "1.14.0"
-inkwell = { version = "0.9.0", features = ["llvm22-1"] }
+inkwell = { version = "0.9.0", features = ["llvm22-1-force-dynamic"] }
 
 [dev-dependencies]
 tempfile = "3.23.0"
