@@ -22,7 +22,7 @@ RUN apt-get update \
     && wget -q https://apt.llvm.org/llvm.sh \
     && chmod +x llvm.sh \
     && ./llvm.sh 22 \
-    && apt-get install -y --no-install-recommends llvm-22-dev clang-22 libclang-common-22-dev libpolly-22-dev \
+    && for attempt in 1 2 3; do apt-get update && apt-get install -y --no-install-recommends llvm-22-dev clang-22 libclang-common-22-dev libpolly-22-dev && break; if [ "$attempt" -eq 3 ]; then exit 1; fi; sleep 15; done \
     && rm -f llvm.sh \
     && rm -rf /var/lib/apt/lists/*
 
