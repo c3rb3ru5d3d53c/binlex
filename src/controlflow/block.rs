@@ -33,6 +33,7 @@ use crate::hashing::TLSH;
 use crate::hex;
 use crate::imaging::Imaging;
 use crate::lifters::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson, LlvmNormalizedJson};
+#[cfg(not(target_os = "windows"))]
 use crate::lifters::vex::{Lifter as VexLifter, VexJson};
 use crate::metadata::Attributes;
 use serde::{Deserialize, Serialize};
@@ -480,6 +481,7 @@ impl<'block> Block<'block> {
             None
         };
 
+        #[cfg(not(target_os = "windows"))]
         let vex = if self.cfg.config.lifters.vex.enabled && self.cfg.config.blocks.lifters.vex.enabled {
             let mut lifter = VexLifter::new(self.cfg.config.clone());
             lifter.lift_block(self).ok()?;
@@ -489,6 +491,9 @@ impl<'block> Block<'block> {
         } else {
             None
         };
+
+        #[cfg(target_os = "windows")]
+        let vex = None;
 
         if llvm.is_none() && vex.is_none() {
             return None;
