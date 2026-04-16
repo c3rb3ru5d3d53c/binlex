@@ -121,9 +121,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential pkg-config libssl-dev make automake autoconf libtool curl gnupg software-properties-common
-          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o llvm.sh https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh ${{ env.LLVM_MAJOR_VERSION }}
+          sudo install -d /usr/share/keyrings
+          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor | sudo tee /usr/share/keyrings/llvm-archive-keyring.gpg >/dev/null
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] https://apt.llvm.org/${VERSION_CODENAME}/ llvm-toolchain-${VERSION_CODENAME}-${{ env.LLVM_MAJOR_VERSION }} main" | sudo tee /etc/apt/sources.list.d/llvm.list >/dev/null
+          sudo apt-get update
           sudo apt-get install -y llvm-22-dev clang-22 libclang-common-22-dev libpolly-22-dev
 
       - name: Configure LLVM Environment (Ubuntu)
@@ -493,9 +495,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential pkg-config libssl-dev make automake autoconf libtool curl gnupg software-properties-common
-          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o llvm.sh https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh ${{ env.LLVM_MAJOR_VERSION }}
+          sudo install -d /usr/share/keyrings
+          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor | sudo tee /usr/share/keyrings/llvm-archive-keyring.gpg >/dev/null
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] https://apt.llvm.org/${VERSION_CODENAME}/ llvm-toolchain-${VERSION_CODENAME}-${{ env.LLVM_MAJOR_VERSION }} main" | sudo tee /etc/apt/sources.list.d/llvm.list >/dev/null
+          sudo apt-get update
           sudo apt-get install -y llvm-22-dev clang-22 libclang-common-22-dev libpolly-22-dev
 
       - name: Configure LLVM Environment (Ubuntu)
@@ -1252,9 +1256,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential pkg-config libssl-dev make automake autoconf libtool curl gnupg software-properties-common
-          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o llvm.sh https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh ${{ env.LLVM_MAJOR_VERSION }}
+          sudo install -d /usr/share/keyrings
+          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor | sudo tee /usr/share/keyrings/llvm-archive-keyring.gpg >/dev/null
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] https://apt.llvm.org/${VERSION_CODENAME}/ llvm-toolchain-${VERSION_CODENAME}-${{ env.LLVM_MAJOR_VERSION }} main" | sudo tee /etc/apt/sources.list.d/llvm.list >/dev/null
+          sudo apt-get update
           sudo apt-get install -y llvm-22-dev clang-22 libclang-common-22-dev libpolly-22-dev
 
       - name: Configure LLVM Environment
