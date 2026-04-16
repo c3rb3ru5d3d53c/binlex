@@ -249,16 +249,22 @@ jobs:
             Write-Error "libxml2 static library not found: $libxmlStatic"
           }
           Copy-Item $libxmlStatic (Join-Path $extractDir "lib\xml2s.lib") -Force
-          $psapiLib = Join-Path $env:WindowsSdkDir ("Lib\" + $env:WindowsSDKLibVersion + "um\x64\psapi.lib")
-          if (-not (Test-Path $psapiLib)) {
-            Write-Error "psapi import library not found: $psapiLib"
+          $llvmLibDir = Join-Path $extractDir "lib"
+          $sdkLibRoots = @(
+            (Join-Path $env:WindowsSdkDir ("Lib\" + $env:WindowsSDKLibVersion + "um\x64")),
+            (Join-Path $env:WindowsSdkDir ("Lib\" + $env:WindowsSDKLibVersion + "ucrt\x64"))
+          )
+          foreach ($sdkLibRoot in $sdkLibRoots) {
+            if (-not (Test-Path $sdkLibRoot)) {
+              Write-Error "Windows SDK library directory not found: $sdkLibRoot"
+            }
+            Get-ChildItem -Path $sdkLibRoot -Filter *.lib | ForEach-Object {
+              $destination = Join-Path $llvmLibDir $_.Name
+              if (-not (Test-Path $destination)) {
+                Copy-Item $_.FullName $destination
+              }
+            }
           }
-          Copy-Item $psapiLib (Join-Path $extractDir "lib\psapi.lib") -Force
-          $shell32Lib = Join-Path $env:WindowsSdkDir ("Lib\" + $env:WindowsSDKLibVersion + "um\x64\shell32.lib")
-          if (-not (Test-Path $shell32Lib)) {
-            Write-Error "shell32 import library not found: $shell32Lib"
-          }
-          Copy-Item $shell32Lib (Join-Path $extractDir "lib\shell32.lib") -Force
           "LLVM_SYS_221_PREFIX=$extractDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "LIBCLANG_PATH=$extractDir\bin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "$extractDir\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
@@ -589,16 +595,22 @@ jobs:
             Write-Error "libxml2 static library not found: $libxmlStatic"
           }
           Copy-Item $libxmlStatic (Join-Path $extractDir "lib\xml2s.lib") -Force
-          $psapiLib = Join-Path $env:WindowsSdkDir ("Lib\" + $env:WindowsSDKLibVersion + "um\x64\psapi.lib")
-          if (-not (Test-Path $psapiLib)) {
-            Write-Error "psapi import library not found: $psapiLib"
+          $llvmLibDir = Join-Path $extractDir "lib"
+          $sdkLibRoots = @(
+            (Join-Path $env:WindowsSdkDir ("Lib\" + $env:WindowsSDKLibVersion + "um\x64")),
+            (Join-Path $env:WindowsSdkDir ("Lib\" + $env:WindowsSDKLibVersion + "ucrt\x64"))
+          )
+          foreach ($sdkLibRoot in $sdkLibRoots) {
+            if (-not (Test-Path $sdkLibRoot)) {
+              Write-Error "Windows SDK library directory not found: $sdkLibRoot"
+            }
+            Get-ChildItem -Path $sdkLibRoot -Filter *.lib | ForEach-Object {
+              $destination = Join-Path $llvmLibDir $_.Name
+              if (-not (Test-Path $destination)) {
+                Copy-Item $_.FullName $destination
+              }
+            }
           }
-          Copy-Item $psapiLib (Join-Path $extractDir "lib\psapi.lib") -Force
-          $shell32Lib = Join-Path $env:WindowsSdkDir ("Lib\" + $env:WindowsSDKLibVersion + "um\x64\shell32.lib")
-          if (-not (Test-Path $shell32Lib)) {
-            Write-Error "shell32 import library not found: $shell32Lib"
-          }
-          Copy-Item $shell32Lib (Join-Path $extractDir "lib\shell32.lib") -Force
           "LLVM_SYS_221_PREFIX=$extractDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "LIBCLANG_PATH=$extractDir\bin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "$extractDir\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
