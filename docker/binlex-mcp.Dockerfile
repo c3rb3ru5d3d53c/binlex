@@ -33,7 +33,7 @@ ENV PROTOC_INCLUDE=/usr/include
 
 WORKDIR /app
 
-RUN python3 -m pip install --break-system-packages --no-cache-dir --upgrade pip maturin[patchelf]
+RUN python3 -m pip install --break-system-packages --no-cache-dir maturin[patchelf]
 
 COPY . .
 
@@ -44,6 +44,7 @@ FROM ${UBUNTU_IMAGE} AS mcp-builder
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
+        build-essential \
         ca-certificates \
         curl \
         gnupg \
