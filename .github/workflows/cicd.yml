@@ -254,6 +254,11 @@ jobs:
             Write-Error "psapi import library not found: $psapiLib"
           }
           Copy-Item $psapiLib (Join-Path $extractDir "lib\psapi.lib") -Force
+          $shell32Lib = Join-Path $env:WindowsSdkDir ("Lib\" + $env:WindowsSDKLibVersion + "um\x64\shell32.lib")
+          if (-not (Test-Path $shell32Lib)) {
+            Write-Error "shell32 import library not found: $shell32Lib"
+          }
+          Copy-Item $shell32Lib (Join-Path $extractDir "lib\shell32.lib") -Force
           "LLVM_SYS_221_PREFIX=$extractDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "LIBCLANG_PATH=$extractDir\bin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "$extractDir\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
@@ -589,6 +594,11 @@ jobs:
             Write-Error "psapi import library not found: $psapiLib"
           }
           Copy-Item $psapiLib (Join-Path $extractDir "lib\psapi.lib") -Force
+          $shell32Lib = Join-Path $env:WindowsSdkDir ("Lib\" + $env:WindowsSDKLibVersion + "um\x64\shell32.lib")
+          if (-not (Test-Path $shell32Lib)) {
+            Write-Error "shell32 import library not found: $shell32Lib"
+          }
+          Copy-Item $shell32Lib (Join-Path $extractDir "lib\shell32.lib") -Force
           "LLVM_SYS_221_PREFIX=$extractDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "LIBCLANG_PATH=$extractDir\bin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "$extractDir\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
