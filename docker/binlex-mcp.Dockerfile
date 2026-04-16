@@ -9,6 +9,7 @@ RUN apt-get update \
         curl \
         gnupg \
         libprotobuf-dev \
+        libssl-dev \
         lsb-release \
         pkg-config \
         python3 \
@@ -49,7 +50,9 @@ RUN apt-get update \
         curl \
         gnupg \
         libprotobuf-dev \
+        libssl-dev \
         lsb-release \
+        pkg-config \
         protobuf-compiler \
         software-properties-common \
         wget \
