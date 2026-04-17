@@ -124,6 +124,7 @@ def chromosome_from_pattern(pattern: str, config) -> Chromosome:
 
 def selection_vectors(config, selection: SelectionRange) -> list[list[float]]:
     graph, addresses = disassemble_selection_graph(config, selection)
+    graph.process()
     vectors: list[list[float]] = []
     for address in addresses:
         processor = Instruction(address, graph).processor("embeddings")

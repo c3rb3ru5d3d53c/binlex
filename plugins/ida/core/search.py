@@ -15,23 +15,35 @@ from .disassembly import architecture_for_current_ida
 
 
 @dataclass
-class CompareRequest:
+class SearchRequest:
     corpora: list[str]
     limit: int
 
 
 def _architecture_string() -> str:
-    return str(architecture_for_current_ida())
+    arch = architecture_for_current_ida()
+    # Convert Architecture enum to simple string (e.g., Architecture.AMD64 -> "amd64")
+    arch_str = str(arch).split('.')[-1].lower()
+    return arch_str
 
 
 def _query_for_vector(vector: list[float], *, corpus: str, collection: Collection, architecture: str) -> str:
+    import ida_kernwin
+    collection_str = str(collection)
+    ida_kernwin.msg(f"[*] Collection type: {type(collection)}, str: '{collection_str}'\n")
+
     vector_json = json.dumps(vector, separators=(",", ":"))
-    return (
+    query = (
         f"vector:{vector_json} | "
-        f"collection:{collection.as_str()} | "
+        f"collection:{collection_str} | "
         f"corpus:{corpus} | "
         f"architecture:{architecture}"
     )
+
+    ida_kernwin.msg(f"[*] Full query length: {len(query)} chars\n")
+    ida_kernwin.msg(f"[*] Query (last 200 chars): ...{query[-200:]}\n")
+
+    return query
 
 
 def _symbol_names_for_hit(web, hit, *, architecture: str) -> list[str]:
@@ -40,35 +52,77 @@ def _symbol_names_for_hit(web, hit, *, architecture: str) -> list[str]:
         return [symbol]
 
     try:
-        payload = web.collection_symbols(
+        response = web.collection_symbols(
             hit.sha256(),
             hit.collection(),
             architecture,
             hit.address(),
         )
+        # response is a SymbolsResponse object with .symbols() method
+        symbols = response.symbols()  # Returns list of MetadataItem objects
+        names = []
+        for item in symbols:
+            # MetadataItem has .name() method
+            name = item.name().strip() if hasattr(item, 'name') else str(item).strip()
+            if name:
+                names.append(name)
+        return names
     except Exception:
-        return [""]
+        return []
 
-    symbols = payload.get("symbols", [])
-    names = []
-    for item in symbols:
-        name = str(item.get("name", "")).strip()
-        if name:
-            names.append(name)
-    return names or [""]
+
+def _corpora_for_hit(web, sha256: str, collection, address: int, search_corpus: str) -> list[str]:
+    """Get corpora for a hit - for now just use the search corpus."""
+    # Note: entity_corpora API method doesn't exist yet
+    # For now, we know the entity is in the corpus we searched
+    return [search_corpus] if search_corpus else []
+
+
+def _tags_for_hit(web, sha256: str, collection, address: int) -> list[str]:
+    """Fetch all tags for a specific entity."""
+    try:
+        response = web.collection_tags(sha256, collection, address)
+        # response is a TagsResponse object with .tags() method
+        tags = response.tags()  # Returns list of MetadataItem objects
+        return [tag.name() for tag in tags]
+    except Exception:
+        return []
+
+
+def _comments_for_hit(web, sha256: str, collection, address: int) -> list[dict]:
+    """Fetch all comments for a specific entity."""
+    try:
+        response = web.entity_comments(sha256, collection, address)
+        # response is an EntityCommentsResponse object with .items() method
+        comments = response.items()  # Returns list of EntityComment objects
+        result = []
+        for comment in comments:
+            user = comment.user()  # Returns MetadataUser object
+            result.append({
+                "username": user.username(),
+                "comment": comment.body(),
+                "timestamp": str(comment.timestamp()),  # This might need special handling
+            })
+        return result
+    except Exception:
+        return []
 
 
 def _dedupe_rows(rows: list[dict]) -> list[dict]:
     unique: list[dict] = []
     seen: set[tuple] = set()
     for row in rows:
+        # Use first symbol or empty string for deduplication
+        first_symbol = row.get("symbols", [""])[0] if row.get("symbols") else ""
+        # Use sorted corpora as tuple for consistent deduplication
+        corpora_tuple = tuple(sorted(row.get("corpora", [])))
         key = (
             int(row["local_address"]),
             int(row["local_function_address"]),
             int(row["match_address"]),
-            str(row["match_name"]),
+            str(first_symbol),
             str(row["sha256"]),
-            str(row["corpus"]),
+            corpora_tuple,
             str(row["collection"]),
         )
         if key in seen:
@@ -85,10 +139,13 @@ def _row(
     local_function_address: int | None,
     score: float,
     match_address: int,
-    match_name: str,
     sha256: str,
-    corpus: str,
+    corpora: list[str],
     collection: str,
+    tags: list[str],
+    comments: list[dict],
+    symbols: list[str],
+    architecture: str,
 ) -> dict:
     return {
         "local_address": local_address,
@@ -96,10 +153,13 @@ def _row(
         "local_function_address": local_function_address or local_address,
         "score": score,
         "match_address": match_address,
-        "match_name": match_name,
         "sha256": sha256,
-        "corpus": corpus,
+        "corpora": corpora,
         "collection": collection,
+        "tags": tags,
+        "comments": comments,
+        "symbols": symbols,
+        "architecture": architecture,
     }
 
 
@@ -125,11 +185,27 @@ def _search_rows(
             collection=collection,
             architecture=architecture,
         )
-        for item in web.search(query, top_k=limit, page=1):
-            hit = item.lhs() or item.rhs()
-            if hit is None:
-                continue
-            for match_name in _symbol_names_for_hit(web, hit, architecture=architecture):
+
+        # Debug: print query
+        import ida_kernwin
+        ida_kernwin.msg(f"[*] Search query: {query[:200]}...\n")
+
+        try:
+            search_results = web.search(query, top_k=limit, page=1)
+            result_count = 0
+
+            for item in search_results:
+                result_count += 1
+                hit = item.lhs() or item.rhs()
+                if hit is None:
+                    continue
+
+                # Fetch metadata
+                symbols = _symbol_names_for_hit(web, hit, architecture=architecture)
+                corpora = _corpora_for_hit(web, hit.sha256(), hit.collection(), hit.address(), corpus)
+                tags = _tags_for_hit(web, hit.sha256(), hit.collection(), hit.address())
+                comments = _comments_for_hit(web, hit.sha256(), hit.collection(), hit.address())
+
                 rows.append(
                     _row(
                         local_address=local_address,
@@ -137,16 +213,27 @@ def _search_rows(
                         local_function_address=local_function_address,
                         score=item.score(),
                         match_address=hit.address(),
-                        match_name=match_name,
                         sha256=hit.sha256(),
-                        corpus=hit.corpus(),
-                        collection=hit.collection().as_str(),
+                        corpora=corpora,
+                        collection=str(hit.collection()),
+                        tags=tags,
+                        comments=comments,
+                        symbols=symbols,
+                        architecture=architecture,
                     )
                 )
+
+            ida_kernwin.msg(f"[*] Search returned {result_count} results from corpus '{corpus}'\n")
+
+        except Exception as e:
+            ida_kernwin.msg(f"[!] Search error for corpus '{corpus}': {e}\n")
+            import traceback
+            traceback.print_exc()
+
     return _dedupe_rows(rows)
 
 
-def compare_block(plugin_config, request: CompareRequest) -> list[dict]:
+def search_block(plugin_config, request: SearchRequest) -> list[dict]:
     config = build_binlex_config(plugin_config)
     require_embeddings(config, target="block")
     context = resolve_block_context(config)
@@ -166,7 +253,7 @@ def compare_block(plugin_config, request: CompareRequest) -> list[dict]:
     )
 
 
-def compare_function(plugin_config, request: CompareRequest) -> list[dict]:
+def search_function(plugin_config, request: SearchRequest) -> list[dict]:
     config = build_binlex_config(plugin_config)
     require_embeddings(config, target="function")
     context = resolve_function_context(config)
@@ -186,13 +273,17 @@ def compare_function(plugin_config, request: CompareRequest) -> list[dict]:
     )
 
 
-def apply_match_rows(rows: list[dict]) -> tuple[int, list[str]]:
+def apply_search_results(rows: list[dict]) -> tuple[int, list[str]]:
     grouped: dict[int, set[str]] = {}
     first_rows: dict[int, dict] = {}
     conflicts: list[str] = []
 
     for row in rows:
-        match_name = row.get("match_name", "").strip()
+        # Get the first symbol if available, otherwise skip
+        symbols = row.get("symbols", [])
+        if not symbols:
+            continue
+        match_name = symbols[0].strip()
         if not match_name:
             continue
         function_address = int(row["local_function_address"])
@@ -221,7 +312,7 @@ def apply_match_rows(rows: list[dict]) -> tuple[int, list[str]]:
             f"name: {new_name}\n"
             f"score: {row['score']:.6f}\n"
             f"sha256: {row['sha256']}\n"
-            f"corpus: {row['corpus']}\n"
+            f"corpora: {', '.join(row.get('corpora', []))}\n"
             f"match_address: {hex(int(row['match_address']))}\n"
         )
         function = idaapi.get_func(function_address)

@@ -82,7 +82,7 @@ def build_disassembler(config) -> Disassembler:
     return Disassembler(
         architecture_for_current_ida(),
         mapped_image(),
-        executable_virtual_address_ranges(),
+        virtual_address_ranges(),
         config,
     )
 

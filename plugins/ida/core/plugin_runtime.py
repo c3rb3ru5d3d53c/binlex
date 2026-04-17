@@ -6,14 +6,15 @@ import ida_kernwin
 import idaapi
 import idc
 
-from .compare import apply_match_rows, compare_block, compare_function
-from .config import ensure_binlex_config_file, load_plugin_config, open_plugin_config_in_editor
+from .search import apply_search_results, search_block, search_function
+from .config import build_web_client, ensure_binlex_config_file, load_plugin_config, open_plugin_config_in_editor
 from .copying import copy_hex, copy_minhash, copy_pattern, copy_tlsh, copy_vector, copy_visual_hash
 from .indexing import index_block, index_function, index_functions
 from ui.config_editor import open_config_editor
-from ui.dialogs import prompt_compare, prompt_index, show_error, show_info
+from ui.dialogs import prompt_index, prompt_search, show_error, show_info
 from ui.launcher import open_launcher
 from ui.results import show_results
+from ui.yara_dialog import show_yara_creator
 
 
 ACTION_PREFIX = "binlex:mvp:"
@@ -52,6 +53,7 @@ class PluginController:
         self.registered_actions: list[str] = []
         self.attached_menu_actions: list[tuple[str, str]] = []
         self.action_handlers = []
+        self.yara_creator_form = None
 
     def msg(self, text: str) -> None:
         ida_kernwin.msg(f"[*] {text}\n")
@@ -82,9 +84,9 @@ class PluginController:
         self.register_action("config", "Config", self.action_config)
 
         self.register_action("index.block", "Block", self.action_index_block)
-        self.register_action("compare.block", "Block", self.action_compare_block)
+        self.register_action("search.block", "Block", self.action_search_block)
         self.register_action("index.function", "Function", self.action_index_function)
-        self.register_action("compare.function", "Function", self.action_compare_function)
+        self.register_action("search.function", "Function", self.action_search_function)
 
         self.register_action("copy.vector.block", "Vector", lambda: copy_vector(self.config, "block"))
         self.register_action("copy.minhash.block", "MinHash", lambda: copy_minhash(self.config, "block"))
@@ -113,6 +115,9 @@ class PluginController:
         self.register_action("copy.hex.function", "Hex", lambda: copy_hex(self.config, "function"))
         self.register_action("copy.pattern.function", "Pattern", lambda: copy_pattern(self.config, "function"))
 
+        # YARA pattern creator
+        self.register_action("create.yara", "YARA Pattern", self.action_create_yara)
+
     def register_main_menu_actions(self) -> None:
         return None
 
@@ -124,18 +129,22 @@ class PluginController:
             ("Binlex -> Config", lambda: self.run_safe(self.action_binlex_config)),
             ("Binlex -> Plugin -> Config", lambda: self.run_safe(self.action_config)),
             ("Binlex -> Index -> Functions", lambda: self.run_safe(self.action_index_functions)),
-            ("Binlex -> Compare -> Function", lambda: self.run_safe(self.action_compare_function)),
+            ("Binlex -> Search -> Function", lambda: self.run_safe(self.action_search_function)),
         ]
         open_launcher(commands)
 
     def attach_disasm_popup(self, widget, popup) -> None:
         selection = ida_kernwin.read_range_selection(widget)
         ida_kernwin.attach_action_to_popup(widget, popup, f"{ACTION_PREFIX}index.block", "Binlex/Index/")
-        ida_kernwin.attach_action_to_popup(widget, popup, f"{ACTION_PREFIX}compare.block", "Binlex/Compare/")
+        ida_kernwin.attach_action_to_popup(widget, popup, f"{ACTION_PREFIX}search.block", "Binlex/Search/")
 
         if idaapi.get_func(ida_kernwin.get_screen_ea()) is not None:
             ida_kernwin.attach_action_to_popup(widget, popup, f"{ACTION_PREFIX}index.function", "Binlex/Index/")
-            ida_kernwin.attach_action_to_popup(widget, popup, f"{ACTION_PREFIX}compare.function", "Binlex/Compare/")
+            ida_kernwin.attach_action_to_popup(widget, popup, f"{ACTION_PREFIX}search.function", "Binlex/Search/")
+
+        # Add YARA pattern creator
+        if selection[0]:
+            ida_kernwin.attach_action_to_popup(widget, popup, f"{ACTION_PREFIX}create.yara", "Binlex/Create/")
 
         for suffix in (
             "copy.vector.block",
@@ -177,7 +186,7 @@ class PluginController:
 
     def attach_pseudocode_popup(self, widget, popup) -> None:
         ida_kernwin.attach_action_to_popup(widget, popup, f"{ACTION_PREFIX}index.function", "Binlex/Index/")
-        ida_kernwin.attach_action_to_popup(widget, popup, f"{ACTION_PREFIX}compare.function", "Binlex/Compare/")
+        ida_kernwin.attach_action_to_popup(widget, popup, f"{ACTION_PREFIX}search.function", "Binlex/Search/")
         for suffix in (
             "copy.vector.function",
             "copy.minhash.function",
@@ -225,6 +234,10 @@ class PluginController:
         self.reload_config()
         return prompt_index(title, self.config, allow_index_blocks=allow_index_blocks)
 
+    def _run_search_dialog(self, title: str):
+        self.reload_config()
+        return prompt_search(title, self.config)
+
     def action_index_block(self) -> None:
         request = self._run_index_dialog("Binlex Index Block", allow_index_blocks=False)
         if request is None:
@@ -243,47 +256,71 @@ class PluginController:
             return
         show_info(index_functions(self.config, request))
 
-    def _run_compare_dialog(self, title: str):
-        self.reload_config()
-        return prompt_compare(title, self.config)
-
     def _show_results(self, title: str, rows: list[dict]) -> None:
+        web_client = build_web_client(self.config)
         show_results(
             title,
             rows,
             apply_one=self._apply_one_row,
             apply_many=self._apply_many_rows,
             jump_local=self._jump_local,
+            web_client=web_client,
         )
 
     def _jump_local(self, row: dict) -> None:
         idc.jumpto(int(row["local_function_address"]))
 
     def _apply_one_row(self, row: dict) -> None:
-        applied, conflicts = apply_match_rows([row])
+        applied, conflicts = apply_search_results([row])
         if conflicts:
             show_error("\n".join(conflicts))
             return
         show_info(f"applied {applied} name")
 
     def _apply_many_rows(self, rows: list[dict]) -> None:
-        applied, conflicts = apply_match_rows(rows)
+        applied, conflicts = apply_search_results(rows)
         message = f"applied {applied} name(s)"
         if conflicts:
             message += "\n\nSkipped:\n" + "\n".join(conflicts)
         show_info(message)
 
-    def action_compare_block(self) -> None:
-        request = self._run_compare_dialog("Binlex Compare Block")
+    def action_search_block(self) -> None:
+        request = self._run_search_dialog("Binlex Search Block")
         if request is None:
             return
-        self._show_results("Binlex Compare Block", compare_block(self.config, request))
+        self._show_results("Binlex Search Block", search_block(self.config, request))
 
-    def action_compare_function(self) -> None:
-        request = self._run_compare_dialog("Binlex Compare Function")
+    def action_search_function(self) -> None:
+        request = self._run_search_dialog("Binlex Search Function")
         if request is None:
             return
-        self._show_results("Binlex Compare Function", compare_function(self.config, request))
+        self._show_results("Binlex Search Function", search_function(self.config, request))
+
+    def action_create_yara(self) -> None:
+        """Create YARA pattern from selected instructions"""
+        # Get current widget (disassembly view)
+        widget = ida_kernwin.get_current_viewer()
+
+        # Get current selection
+        selection = ida_kernwin.read_range_selection(widget)
+
+        if not selection[0]:
+            show_error("Please select instructions to create YARA pattern")
+            return
+
+        start_ea, end_ea = selection[1], selection[2]
+
+        if start_ea >= end_ea:
+            show_error("Invalid selection for YARA pattern creator")
+            return
+
+        # If form already exists and is visible, update it instead of creating new one
+        if self.yara_creator_form is not None:
+            self.yara_creator_form.update_selection(start_ea, end_ea)
+        else:
+            # Create new form and store reference
+            self.yara_creator_form = show_yara_creator(start_ea, end_ea, self)
+            # Form will set itself to None when closed
 
 class BinlexPlugin(idaapi.plugin_t):
     flags = idaapi.PLUGIN_KEEP

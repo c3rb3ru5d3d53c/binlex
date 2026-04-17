@@ -11,9 +11,12 @@ use ::binlex::semantics::{
     SemanticTemporary as InnerSemanticTemporary, SemanticTerminator as InnerSemanticTerminator,
     SemanticTerminatorKind as InnerSemanticTerminatorKind, SemanticTrapKind as InnerTrapKind,
 };
+use pyo3::class::basic::CompareOp;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyModule, PyType};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
 
 fn json_value_to_py(py: Python<'_>, value: &serde_json::Value) -> PyResult<Py<PyAny>> {
@@ -29,6 +32,12 @@ fn py_to_json_value(py: Python<'_>, value: Py<PyAny>) -> PyResult<serde_json::Va
         .call_method1("dumps", (value,))?
         .extract::<String>()?;
     serde_json::from_str(&json_str).map_err(|error| PyValueError::new_err(error.to_string()))
+}
+
+fn hash_value<T: Hash>(value: &T) -> isize {
+    let mut hasher = DefaultHasher::new();
+    value.hash(&mut hasher);
+    hasher.finish() as isize
 }
 
 macro_rules! simple_enum_binding {
@@ -55,6 +64,21 @@ macro_rules! simple_enum_binding {
 
             pub fn __str__(&self) -> String {
                 format!("{:?}", self.inner)
+            }
+
+            pub fn __hash__(&self) -> isize {
+                hash_value(&self.inner)
+            }
+
+            pub fn __richcmp__(&self, other: PyRef<'_, Self>, op: CompareOp) -> bool {
+                match op {
+                    CompareOp::Eq => self.inner == other.inner,
+                    CompareOp::Ne => self.inner != other.inner,
+                    CompareOp::Lt => self.inner < other.inner,
+                    CompareOp::Le => self.inner <= other.inner,
+                    CompareOp::Gt => self.inner > other.inner,
+                    CompareOp::Ge => self.inner >= other.inner,
+                }
             }
         }
     };
@@ -249,6 +273,18 @@ impl SemanticAddressSpace {
             InnerAddressSpace::ArchSpecific { name } => format!("ArchSpecific({})", name),
         }
     }
+
+    pub fn __hash__(&self) -> isize {
+        hash_value(&self.inner)
+    }
+
+    pub fn __richcmp__(&self, other: PyRef<'_, Self>, op: CompareOp) -> bool {
+        match op {
+            CompareOp::Eq => self.inner == other.inner,
+            CompareOp::Ne => self.inner != other.inner,
+            _ => false,
+        }
+    }
 }
 
 #[pyclass(skip_from_py_object)]
@@ -300,6 +336,18 @@ impl SemanticFenceKind {
             InnerFenceKind::AcquireRelease => "AcquireRelease".to_string(),
             InnerFenceKind::SequentiallyConsistent => "SequentiallyConsistent".to_string(),
             InnerFenceKind::ArchSpecific { name } => format!("ArchSpecific({})", name),
+        }
+    }
+
+    pub fn __hash__(&self) -> isize {
+        hash_value(&self.inner)
+    }
+
+    pub fn __richcmp__(&self, other: PyRef<'_, Self>, op: CompareOp) -> bool {
+        match op {
+            CompareOp::Eq => self.inner == other.inner,
+            CompareOp::Ne => self.inner != other.inner,
+            _ => false,
         }
     }
 }
@@ -383,6 +431,18 @@ impl SemanticTrapKind {
             InnerTrapKind::Syscall => "Syscall".to_string(),
             InnerTrapKind::Interrupt => "Interrupt".to_string(),
             InnerTrapKind::ArchSpecific { name } => format!("ArchSpecific({})", name),
+        }
+    }
+
+    pub fn __hash__(&self) -> isize {
+        hash_value(&self.inner)
+    }
+
+    pub fn __richcmp__(&self, other: PyRef<'_, Self>, op: CompareOp) -> bool {
+        match op {
+            CompareOp::Eq => self.inner == other.inner,
+            CompareOp::Ne => self.inner != other.inner,
+            _ => false,
         }
     }
 }
@@ -482,6 +542,18 @@ impl SemanticDiagnosticKind {
             InnerSemanticDiagnosticKind::ArchSpecific { name } => format!("ArchSpecific({})", name),
         }
     }
+
+    pub fn __hash__(&self) -> isize {
+        hash_value(&self.inner)
+    }
+
+    pub fn __richcmp__(&self, other: PyRef<'_, Self>, op: CompareOp) -> bool {
+        match op {
+            CompareOp::Eq => self.inner == other.inner,
+            CompareOp::Ne => self.inner != other.inner,
+            _ => false,
+        }
+    }
 }
 
 macro_rules! value_wrapper {
@@ -496,6 +568,14 @@ macro_rules! value_wrapper {
                 Self {
                     inner: Arc::new(Mutex::new(inner)),
                 }
+            }
+
+            fn value_eq(&self, other: &Self) -> bool {
+                *self.inner.lock().unwrap() == *other.inner.lock().unwrap()
+            }
+
+            fn value_hash(&self) -> isize {
+                hash_value(&*self.inner.lock().unwrap())
             }
         }
     };
@@ -549,6 +629,18 @@ impl SemanticTemporary {
         println!("{}", self.json()?);
         Ok(())
     }
+
+    pub fn __hash__(&self) -> isize {
+        self.value_hash()
+    }
+
+    pub fn __richcmp__(&self, other: PyRef<'_, Self>, op: CompareOp) -> bool {
+        match op {
+            CompareOp::Eq => self.value_eq(&other),
+            CompareOp::Ne => !self.value_eq(&other),
+            _ => false,
+        }
+    }
 }
 
 #[pymethods]
@@ -587,6 +679,18 @@ impl SemanticDiagnostic {
     pub fn print(&self) -> PyResult<()> {
         println!("{}", self.json()?);
         Ok(())
+    }
+
+    pub fn __hash__(&self) -> isize {
+        self.value_hash()
+    }
+
+    pub fn __richcmp__(&self, other: PyRef<'_, Self>, op: CompareOp) -> bool {
+        match op {
+            CompareOp::Eq => self.value_eq(&other),
+            CompareOp::Ne => !self.value_eq(&other),
+            _ => false,
+        }
     }
 }
 
@@ -646,6 +750,18 @@ impl SemanticLocation {
     pub fn print(&self) -> PyResult<()> {
         println!("{}", self.json()?);
         Ok(())
+    }
+
+    pub fn __hash__(&self) -> isize {
+        self.value_hash()
+    }
+
+    pub fn __richcmp__(&self, other: PyRef<'_, Self>, op: CompareOp) -> bool {
+        match op {
+            CompareOp::Eq => self.value_eq(&other),
+            CompareOp::Ne => !self.value_eq(&other),
+            _ => false,
+        }
     }
 }
 
@@ -854,6 +970,18 @@ impl SemanticExpression {
         println!("{}", self.json()?);
         Ok(())
     }
+
+    pub fn __hash__(&self) -> isize {
+        self.value_hash()
+    }
+
+    pub fn __richcmp__(&self, other: PyRef<'_, Self>, op: CompareOp) -> bool {
+        match op {
+            CompareOp::Eq => self.value_eq(&other),
+            CompareOp::Ne => !self.value_eq(&other),
+            _ => false,
+        }
+    }
 }
 
 #[pymethods]
@@ -955,6 +1083,18 @@ impl SemanticEffect {
         println!("{}", self.json()?);
         Ok(())
     }
+
+    pub fn __hash__(&self) -> isize {
+        self.value_hash()
+    }
+
+    pub fn __richcmp__(&self, other: PyRef<'_, Self>, op: CompareOp) -> bool {
+        match op {
+            CompareOp::Eq => self.value_eq(&other),
+            CompareOp::Ne => !self.value_eq(&other),
+            _ => false,
+        }
+    }
 }
 
 #[pymethods]
@@ -1041,6 +1181,18 @@ impl SemanticTerminator {
     pub fn print(&self) -> PyResult<()> {
         println!("{}", self.json()?);
         Ok(())
+    }
+
+    pub fn __hash__(&self) -> isize {
+        self.value_hash()
+    }
+
+    pub fn __richcmp__(&self, other: PyRef<'_, Self>, op: CompareOp) -> bool {
+        match op {
+            CompareOp::Eq => self.value_eq(&other),
+            CompareOp::Ne => !self.value_eq(&other),
+            _ => false,
+        }
     }
 }
 
@@ -1150,6 +1302,18 @@ impl InstructionSemantics {
     }
     pub fn __str__(&self) -> PyResult<String> {
         self.json()
+    }
+
+    pub fn __hash__(&self) -> isize {
+        self.value_hash()
+    }
+
+    pub fn __richcmp__(&self, other: PyRef<'_, Self>, op: CompareOp) -> bool {
+        match op {
+            CompareOp::Eq => self.value_eq(&other),
+            CompareOp::Ne => !self.value_eq(&other),
+            _ => false,
+        }
     }
 }
 

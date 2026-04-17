@@ -242,9 +242,16 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             .function
             .get_first_basic_block()
             .expect("function should have entry block");
-        let entry_target = *block_map
-            .get(&function.address())
-            .ok_or_else(|| Error::other("function entry block is missing from llvm block map"))?;
+        let block_addresses = function.block_addresses();
+        let entry_address = block_addresses
+            .iter()
+            .copied()
+            .find(|address| *address == function.address())
+            .or_else(|| block_addresses.first().copied())
+            .ok_or_else(|| Error::other("function contains no basic blocks"))?;
+        let entry_target = *block_map.get(&entry_address).ok_or_else(|| {
+            Error::other("function entry block is missing from llvm block map")
+        })?;
         self.builder.position_at_end(entry);
         self.builder
             .build_unconditional_branch(entry_target)
@@ -596,6 +603,17 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         let addr = self.lower_expression(addr)?;
         let addr = self.to_i64(addr);
         let value = self.lower_expression(expression)?;
+        let value = match value.get_type().get_bit_width().cmp(&(bits as u32)) {
+            std::cmp::Ordering::Equal => value,
+            std::cmp::Ordering::Less => self
+                .builder
+                .build_int_z_extend(value, self.int_type(bits), "store_zext")
+                .map_err(|err| Error::other(err.to_string()))?,
+            std::cmp::Ordering::Greater => self
+                .builder
+                .build_int_truncate(value, self.int_type(bits), "store_trunc")
+                .map_err(|err| Error::other(err.to_string()))?,
+        };
         self.builder
             .build_call(helper, &[addr.into(), value.into()], "")
             .map_err(|err| Error::other(err.to_string()))?;
@@ -813,6 +831,24 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         right: IntValue<'ctx>,
         bits: u16,
     ) -> Result<IntValue<'ctx>, Error> {
+        let shift_amount = |right: IntValue<'ctx>| -> Result<IntValue<'ctx>, Error> {
+            let target = left.get_type();
+            let right_bits = right.get_type().get_bit_width();
+            let target_bits = target.get_bit_width();
+
+            if right_bits == target_bits {
+                Ok(right)
+            } else if right_bits < target_bits {
+                self.builder
+                    .build_int_z_extend(right, target, "shift_zext")
+                    .map_err(|err| Error::other(err.to_string()))
+            } else {
+                self.builder
+                    .build_int_truncate(right, target, "shift_trunc")
+                    .map_err(|err| Error::other(err.to_string()))
+            }
+        };
+
         match op {
             SemanticOperationBinary::Add | SemanticOperationBinary::AddWithCarry => self
                 .builder
@@ -856,15 +892,15 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 .map_err(|err| Error::other(err.to_string())),
             SemanticOperationBinary::Shl => self
                 .builder
-                .build_left_shift(left, right, "shltmp")
+                .build_left_shift(left, shift_amount(right)?, "shltmp")
                 .map_err(|err| Error::other(err.to_string())),
             SemanticOperationBinary::LShr => self
                 .builder
-                .build_right_shift(left, right, false, "lshrtmp")
+                .build_right_shift(left, shift_amount(right)?, false, "lshrtmp")
                 .map_err(|err| Error::other(err.to_string())),
             SemanticOperationBinary::AShr => self
                 .builder
-                .build_right_shift(left, right, true, "ashrtmp")
+                .build_right_shift(left, shift_amount(right)?, true, "ashrtmp")
                 .map_err(|err| Error::other(err.to_string())),
             _ => {
                 let helper = self.declare_value_helper(

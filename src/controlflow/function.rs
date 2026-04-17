@@ -294,6 +294,13 @@ impl<'function> Function<'function> {
             }
         }
 
+        if blocks.is_empty() {
+            return Err(Error::other(format!(
+                "Function -> 0x{:x}: contains no valid blocks",
+                address
+            )));
+        }
+
         Ok(Self {
             address,
             cfg,

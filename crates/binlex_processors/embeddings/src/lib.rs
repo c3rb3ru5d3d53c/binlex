@@ -1072,7 +1072,7 @@ pub fn registration() -> binlex::processor::ProcessorRegistration {
         &[Transport::IPC, Transport::HTTP],
         EmbeddingsProcessor::on_graph_options(),
         ConfigProcessor {
-            enabled: true,
+            enabled: false,
             instructions: ConfigProcessorTarget {
                 enabled: false,
                 options: BTreeMap::new(),
