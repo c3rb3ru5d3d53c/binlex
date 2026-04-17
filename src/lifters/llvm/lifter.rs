@@ -1,5 +1,8 @@
 use crate::controlflow::{Block, Function, Instruction};
+use crate::lifters::llvm::abi::coerce_int_value_width;
 use crate::lifters::llvm::optimizers::Optimizers;
+use crate::lifters::llvm::prepare::prepare_instruction_semantics;
+use crate::lifters::llvm::verify::verify_module;
 use crate::semantics::{
     InstructionSemantics, SemanticAddressSpace, SemanticEffect, SemanticExpression,
     SemanticFenceKind, SemanticLocation, SemanticOperationBinary, SemanticOperationCast,
@@ -7,7 +10,6 @@ use crate::semantics::{
 };
 use crate::Config;
 use inkwell::basic_block::BasicBlock;
-use inkwell::IntPredicate;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::memory_buffer::MemoryBuffer;
@@ -16,6 +18,7 @@ use inkwell::passes::PassBuilderOptions;
 use inkwell::targets::{CodeModel, InitializationConfig, RelocMode, Target, TargetMachine};
 use inkwell::types::{BasicMetadataTypeEnum, IntType};
 use inkwell::values::{BasicMetadataValueEnum, FunctionValue, IntValue, PointerValue};
+use inkwell::IntPredicate;
 use inkwell::OptimizationLevel;
 use std::collections::{BTreeSet, HashMap};
 use std::io::Error;
@@ -145,9 +148,7 @@ impl Lifter {
     }
 
     pub fn verify(&self) -> Result<(), Error> {
-        self.module
-            .verify()
-            .map_err(|err| Error::other(err.to_string()))
+        verify_module(&self.module)
     }
 
     fn add_void_function(&self, name: &str) -> FunctionValue<'static> {
@@ -249,9 +250,9 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             .find(|address| *address == function.address())
             .or_else(|| block_addresses.first().copied())
             .ok_or_else(|| Error::other("function contains no basic blocks"))?;
-        let entry_target = *block_map.get(&entry_address).ok_or_else(|| {
-            Error::other("function entry block is missing from llvm block map")
-        })?;
+        let entry_target = *block_map
+            .get(&entry_address)
+            .ok_or_else(|| Error::other("function entry block is missing from llvm block map"))?;
         self.builder.position_at_end(entry);
         self.builder
             .build_unconditional_branch(entry_target)
@@ -411,7 +412,8 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             .map_err(|err| Error::other(err.to_string()))?;
 
         if let Some(semantics) = instruction.semantics.as_ref() {
-            self.lower_semantics(semantics)?;
+            let prepared = prepare_instruction_semantics(semantics)?;
+            self.lower_semantics(&prepared)?;
         }
         Ok(())
     }
@@ -603,17 +605,13 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         let addr = self.lower_expression(addr)?;
         let addr = self.to_i64(addr);
         let value = self.lower_expression(expression)?;
-        let value = match value.get_type().get_bit_width().cmp(&(bits as u32)) {
-            std::cmp::Ordering::Equal => value,
-            std::cmp::Ordering::Less => self
-                .builder
-                .build_int_z_extend(value, self.int_type(bits), "store_zext")
-                .map_err(|err| Error::other(err.to_string()))?,
-            std::cmp::Ordering::Greater => self
-                .builder
-                .build_int_truncate(value, self.int_type(bits), "store_trunc")
-                .map_err(|err| Error::other(err.to_string()))?,
-        };
+        let value = coerce_int_value_width(
+            &self.builder,
+            value,
+            self.int_type(bits),
+            "store_zext",
+            "store_trunc",
+        )?;
         self.builder
             .build_call(helper, &[addr.into(), value.into()], "")
             .map_err(|err| Error::other(err.to_string()))?;
@@ -831,24 +829,6 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         right: IntValue<'ctx>,
         bits: u16,
     ) -> Result<IntValue<'ctx>, Error> {
-        let shift_amount = |right: IntValue<'ctx>| -> Result<IntValue<'ctx>, Error> {
-            let target = left.get_type();
-            let right_bits = right.get_type().get_bit_width();
-            let target_bits = target.get_bit_width();
-
-            if right_bits == target_bits {
-                Ok(right)
-            } else if right_bits < target_bits {
-                self.builder
-                    .build_int_z_extend(right, target, "shift_zext")
-                    .map_err(|err| Error::other(err.to_string()))
-            } else {
-                self.builder
-                    .build_int_truncate(right, target, "shift_trunc")
-                    .map_err(|err| Error::other(err.to_string()))
-            }
-        };
-
         match op {
             SemanticOperationBinary::Add | SemanticOperationBinary::AddWithCarry => self
                 .builder
@@ -892,15 +872,47 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 .map_err(|err| Error::other(err.to_string())),
             SemanticOperationBinary::Shl => self
                 .builder
-                .build_left_shift(left, shift_amount(right)?, "shltmp")
+                .build_left_shift(
+                    left,
+                    coerce_int_value_width(
+                        &self.builder,
+                        right,
+                        left.get_type(),
+                        "shift_zext",
+                        "shift_trunc",
+                    )?,
+                    "shltmp",
+                )
                 .map_err(|err| Error::other(err.to_string())),
             SemanticOperationBinary::LShr => self
                 .builder
-                .build_right_shift(left, shift_amount(right)?, false, "lshrtmp")
+                .build_right_shift(
+                    left,
+                    coerce_int_value_width(
+                        &self.builder,
+                        right,
+                        left.get_type(),
+                        "shift_zext",
+                        "shift_trunc",
+                    )?,
+                    false,
+                    "lshrtmp",
+                )
                 .map_err(|err| Error::other(err.to_string())),
             SemanticOperationBinary::AShr => self
                 .builder
-                .build_right_shift(left, shift_amount(right)?, true, "ashrtmp")
+                .build_right_shift(
+                    left,
+                    coerce_int_value_width(
+                        &self.builder,
+                        right,
+                        left.get_type(),
+                        "shift_zext",
+                        "shift_trunc",
+                    )?,
+                    true,
+                    "ashrtmp",
+                )
                 .map_err(|err| Error::other(err.to_string())),
             _ => {
                 let helper = self.declare_value_helper(
@@ -1357,9 +1369,7 @@ fn normalize_helper_names(
         if bytes[i] == b'@' {
             let start = i + 1;
             let mut end = start;
-            while end < bytes.len()
-                && (bytes[end].is_ascii_alphanumeric() || bytes[end] == b'_')
-            {
+            while end < bytes.len() && (bytes[end].is_ascii_alphanumeric() || bytes[end] == b'_') {
                 end += 1;
             }
             if end > start {
@@ -1470,7 +1480,8 @@ fn drop_unused_exit_blocks(lines: &[String]) -> Vec<String> {
     let mut i = 0usize;
     while i < lines.len() {
         let line = &lines[i];
-        if line.trim_start() == "exit:                                             ; No predecessors!"
+        if line.trim_start()
+            == "exit:                                             ; No predecessors!"
             || line.trim_start() == "exit:"
             || line.trim_start().starts_with("exit: ; No predecessors!")
         {

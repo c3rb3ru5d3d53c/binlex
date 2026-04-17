@@ -23,6 +23,7 @@
 pub mod capstone;
 pub mod cil;
 pub mod instruction;
+pub mod passes;
 
 pub use instruction::{
     InstructionSemantics, InstructionSemanticsJson, SemanticAddressSpace, SemanticDiagnostic,
