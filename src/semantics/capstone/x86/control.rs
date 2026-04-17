@@ -22,15 +22,15 @@
 
 extern crate capstone;
 
-use crate::Architecture;
 use crate::semantics::{
     InstructionSemantics, SemanticDiagnosticKind, SemanticEffect, SemanticExpression,
-    SemanticTerminator,
+    SemanticLocation, SemanticTerminator,
 };
+use crate::Architecture;
+use capstone::arch::x86::{X86Insn, X86Reg};
+use capstone::arch::ArchOperand;
 use capstone::Insn;
 use capstone::InsnId;
-use capstone::arch::ArchOperand;
-use capstone::arch::x86::X86Insn;
 
 use super::common;
 
@@ -166,7 +166,6 @@ pub fn build(
     }
 
     if is_conditional_jump(instruction) {
-        let mnemonic = instruction.mnemonic().unwrap_or("unknown");
         let true_target = operands
             .first()
             .and_then(|operand| common::operand_expr(machine, operand))
@@ -177,6 +176,23 @@ pub fn build(
             instruction.address() + instruction.bytes().len() as u64,
             common::pointer_bits(machine),
         );
+        if is_count_zero_jump(instruction) {
+            let counter = count_zero_jump_location(instruction, machine);
+            let counter_bits = common::location_bits(&counter);
+            return Some(common::complete(
+                SemanticTerminator::Branch {
+                    condition: common::compare(
+                        crate::semantics::SemanticOperationCompare::Eq,
+                        SemanticExpression::Read(Box::new(counter)),
+                        common::const_u64(0, counter_bits),
+                    ),
+                    true_target,
+                    false_target,
+                },
+                Vec::new(),
+            ));
+        }
+        let mnemonic = instruction.mnemonic().unwrap_or("unknown");
         if let Some(condition) = common::condition_from_mnemonic(mnemonic) {
             return Some(common::complete(
                 SemanticTerminator::Branch {
@@ -200,6 +216,57 @@ pub fn build(
                     instruction.address()
                 ),
             )],
+        ));
+    }
+
+    if is_loop_family(instruction) {
+        let true_target = operands
+            .first()
+            .and_then(|operand| common::operand_expr(machine, operand))
+            .unwrap_or_else(|| SemanticExpression::Undefined {
+                bits: common::pointer_bits(machine),
+            });
+        let false_target = common::const_u64(
+            instruction.address() + instruction.bytes().len() as u64,
+            common::pointer_bits(machine),
+        );
+        let counter = loop_counter_location(machine);
+        let counter_bits = common::location_bits(&counter);
+        let decremented_counter = common::sub(
+            SemanticExpression::Read(Box::new(counter.clone())),
+            common::const_u64(1, counter_bits),
+            counter_bits,
+        );
+        let counter_nonzero = common::compare(
+            crate::semantics::SemanticOperationCompare::Ne,
+            decremented_counter.clone(),
+            common::const_u64(0, counter_bits),
+        );
+        let condition = match instruction.id() {
+            InsnId(id) if id == X86Insn::X86_INS_LOOPE as u32 => {
+                common::and(counter_nonzero, common::flag_expr("zf"), 1)
+            }
+            InsnId(id) if id == X86Insn::X86_INS_LOOPNE as u32 => common::and(
+                counter_nonzero,
+                common::compare(
+                    crate::semantics::SemanticOperationCompare::Eq,
+                    common::flag_expr("zf"),
+                    common::bool_const(false),
+                ),
+                1,
+            ),
+            _ => counter_nonzero,
+        };
+        return Some(common::complete(
+            SemanticTerminator::Branch {
+                condition,
+                true_target,
+                false_target,
+            },
+            vec![SemanticEffect::Set {
+                dst: counter,
+                expression: decremented_counter,
+            }],
         ));
     }
 
@@ -258,6 +325,55 @@ fn is_conditional_jump(instruction: &Insn) -> bool {
             ]
             .contains(&id)
     )
+}
+
+fn is_loop_family(instruction: &Insn) -> bool {
+    matches!(
+        instruction.id(),
+        InsnId(id)
+            if [
+                X86Insn::X86_INS_LOOP as u32,
+                X86Insn::X86_INS_LOOPE as u32,
+                X86Insn::X86_INS_LOOPNE as u32,
+            ]
+            .contains(&id)
+    )
+}
+
+fn is_count_zero_jump(instruction: &Insn) -> bool {
+    matches!(
+        instruction.id(),
+        InsnId(id)
+            if [
+                X86Insn::X86_INS_JCXZ as u32,
+                X86Insn::X86_INS_JECXZ as u32,
+                X86Insn::X86_INS_JRCXZ as u32,
+            ]
+            .contains(&id)
+    )
+}
+
+fn count_zero_jump_location(instruction: &Insn, machine: Architecture) -> SemanticLocation {
+    match instruction.id() {
+        InsnId(id) if id == X86Insn::X86_INS_JCXZ as u32 => {
+            common::reg(common::reg_id_name(X86Reg::X86_REG_CX as u16), 16)
+        }
+        InsnId(id) if id == X86Insn::X86_INS_JECXZ as u32 => {
+            common::reg(common::reg_id_name(X86Reg::X86_REG_ECX as u16), 32)
+        }
+        InsnId(id) if id == X86Insn::X86_INS_JRCXZ as u32 => {
+            common::reg(common::reg_id_name(X86Reg::X86_REG_RCX as u16), 64)
+        }
+        _ => loop_counter_location(machine),
+    }
+}
+
+fn loop_counter_location(machine: Architecture) -> SemanticLocation {
+    match machine {
+        Architecture::AMD64 => common::reg(common::reg_id_name(X86Reg::X86_REG_RCX as u16), 64),
+        Architecture::I386 => common::reg(common::reg_id_name(X86Reg::X86_REG_ECX as u16), 32),
+        _ => common::reg(common::reg_id_name(X86Reg::X86_REG_CX as u16), 16),
+    }
 }
 
 fn is_call(instruction: &Insn) -> bool {

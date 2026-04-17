@@ -1,12 +1,15 @@
+pub mod abi;
 pub mod lifter;
 pub mod optimizers;
+pub mod prepare;
+pub mod verify;
 
 use serde::{Deserialize, Serialize};
 
-pub use lifter::Lifter;
-pub use optimizers::Optimizers;
 #[cfg(not(target_os = "windows"))]
 use super::vex::VexJson;
+pub use lifter::Lifter;
+pub use optimizers::Optimizers;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct LlvmNormalizedJson {
