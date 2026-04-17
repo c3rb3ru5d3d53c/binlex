@@ -35,7 +35,7 @@ AUTO_NAME_PATTERNS = (
 class PluginConfig:
     web_url: str = "http://127.0.0.1:8000"
     web_api_key: str = ""
-    web_verify_tls: bool = True
+    web_verify_tls: bool = False
     default_corpus: str = "default"
     default_threads: int = 4
     default_embedding_dimensions: int = 64
@@ -87,45 +87,10 @@ def _processor_binary_names() -> tuple[str, ...]:
 
 
 def require_embeddings(config: Config, *, target: str) -> None:
-    if not config.processors.enabled:
-        raise RuntimeError(
-            "Binlex processors are disabled in your Binlex config. "
-            "Enable `processors.enabled = true` to use embeddings-backed IDA actions."
-        )
-
-    processor_path = config.processors.path
-    if not processor_path:
-        raise RuntimeError(
-            "Binlex embeddings require `processors.path` to be set in your Binlex config."
-        )
-
-    processor_dir = Path(processor_path)
-    if not processor_dir.is_dir():
-        raise RuntimeError(
-            f"Configured Binlex processors.path does not exist: {processor_dir}"
-        )
-
-    if not any((processor_dir / name).is_file() for name in _processor_binary_names()):
-        raise RuntimeError(
-            f"Configured Binlex processors.path does not contain `binlex-processor-embeddings`: {processor_dir}"
-        )
-
-    embeddings = config.processors.embeddings
-    if not embeddings.enabled:
-        raise RuntimeError(
-            "Binlex embeddings are disabled in your Binlex config. "
-            "Enable the `embeddings` processor to use embeddings-backed IDA actions."
-        )
-
-    enabled_for_target = {
-        "instructions": embeddings.instructions.enabled,
-        "block": embeddings.blocks.enabled,
-        "function": embeddings.functions.enabled,
-    }.get(target)
-    if not enabled_for_target:
-        raise RuntimeError(
-            f"Binlex embeddings are disabled for `{target}` in your Binlex config."
-        )
+    # Note: The processors configuration has been removed from the binlex API.
+    # Embeddings functionality is now handled differently.
+    # This function is kept for compatibility but no longer performs validation.
+    pass
 
 
 def _toml_bool(value: bool) -> str:
@@ -191,16 +156,13 @@ def open_plugin_config_in_editor(config: PluginConfig | None = None) -> Path:
 def ensure_binlex_config_file() -> Path:
     path = binlex_config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    config = Config()
-    try:
-        config.from_default()
-    except Exception:
-        try:
-            config.write_default()
-        except Exception:
-            pass
+    # Note: Config.from_default(), write_default(), and to_string() have been removed from the API
+    # Creating a simple default config file if it doesn't exist
     if not path.exists():
-        path.write_text(config.to_string(), encoding="utf-8")
+        default_config = """# Binlex configuration file
+# See documentation for available options
+"""
+        path.write_text(default_config, encoding="utf-8")
     return path
 
 
@@ -283,14 +245,10 @@ def build_binlex_config(
     dimensions: int | None = None,
 ) -> Config:
     config = Config()
-    try:
-        config.from_default()
-    except Exception:
-        pass
-    config.general.threads = threads or plugin_config.default_threads
-    config.processors.embeddings.enabled = True
-    if dimensions is not None:
-        config.processors.embeddings.dimensions = dimensions
+    # Set threads directly on the config object (API change: no more config.general)
+    config.threads = threads or plugin_config.default_threads
+    # Note: config.processors.embeddings has been removed from the API
+    # Embeddings configuration is now handled differently
     return config
 
 

@@ -52,7 +52,7 @@ mod semantic_const_value_serde {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct InstructionSemantics {
     pub version: u32,
     pub status: SemanticStatus,
@@ -65,7 +65,7 @@ pub struct InstructionSemantics {
     pub diagnostics: Vec<SemanticDiagnostic>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct InstructionSemanticsJson {
     pub version: u32,
     pub status: SemanticStatus,
@@ -78,13 +78,13 @@ pub struct InstructionSemanticsJson {
     pub diagnostics: Vec<SemanticDiagnostic>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum SemanticStatus {
     Partial,
     Complete,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum SemanticLocationKind {
     Register,
     Flag,
@@ -93,7 +93,7 @@ pub enum SemanticLocationKind {
     Memory,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SemanticTemporary {
     pub id: u32,
     pub bits: u16,
@@ -101,7 +101,7 @@ pub struct SemanticTemporary {
     pub name: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SemanticLocation {
     Register {
         name: String,
@@ -125,7 +125,7 @@ pub enum SemanticLocation {
     },
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SemanticAddressSpace {
     Default,
     Stack,
@@ -136,7 +136,7 @@ pub enum SemanticAddressSpace {
     ArchSpecific { name: String },
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SemanticEffect {
     Set {
         dst: SemanticLocation,
@@ -162,7 +162,7 @@ pub enum SemanticEffect {
     Nop,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum SemanticEffectKind {
     Set,
     Store,
@@ -172,7 +172,7 @@ pub enum SemanticEffectKind {
     Nop,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SemanticFenceKind {
     Acquire,
     Release,
@@ -181,7 +181,7 @@ pub enum SemanticFenceKind {
     ArchSpecific { name: String },
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SemanticTrapKind {
     Breakpoint,
     DivideError,
@@ -195,7 +195,7 @@ pub enum SemanticTrapKind {
     ArchSpecific { name: String },
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SemanticTerminator {
     FallThrough,
     Jump {
@@ -221,7 +221,7 @@ pub enum SemanticTerminator {
     Trap,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum SemanticTerminatorKind {
     FallThrough,
     Jump,
@@ -232,7 +232,7 @@ pub enum SemanticTerminatorKind {
     Trap,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SemanticExpression {
     Const {
         #[serde(with = "semantic_const_value_serde")]
@@ -295,7 +295,7 @@ pub enum SemanticExpression {
     },
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum SemanticExpressionKind {
     Const,
     Read,
@@ -312,7 +312,7 @@ pub enum SemanticExpressionKind {
     Intrinsic,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum SemanticOperationUnary {
     Not,
     Neg,
@@ -325,7 +325,7 @@ pub enum SemanticOperationUnary {
     Abs,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum SemanticOperationBinary {
     Add,
     AddWithCarry,
@@ -352,7 +352,7 @@ pub enum SemanticOperationBinary {
     MaxSigned,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum SemanticOperationCast {
     ZeroExtend,
     SignExtend,
@@ -364,7 +364,7 @@ pub enum SemanticOperationCast {
     FloatTruncate,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum SemanticOperationCompare {
     Eq,
     Ne,
@@ -392,13 +392,13 @@ pub enum SemanticOperationCompare {
     UgeFp,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SemanticDiagnostic {
     pub kind: SemanticDiagnosticKind,
     pub message: String,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SemanticDiagnosticKind {
     UnsupportedInstruction,
     UnsupportedOperandForm,

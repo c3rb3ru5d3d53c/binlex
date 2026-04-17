@@ -18,9 +18,10 @@ from .context import resolve_block_context, resolve_function_context
 @dataclass
 class IndexRequest:
     corpora: list[str]
-    threads: int
-    dimensions: int
+    tags: list[str]
     index_blocks: bool
+    symbol_push_mode: str  # "none", "all", or "prefix"
+    symbol_prefix: str     # Only used when mode is "prefix"
 
 
 def _format_corpora(corpora: list[str]) -> str:
@@ -63,12 +64,21 @@ def _publish_symbol(web, sha256: str, collection, architecture: str, address: in
         pass
 
 
+def _should_push_symbol(request: IndexRequest, function_name: str) -> bool:
+    """Determine if a symbol should be pushed based on the request settings."""
+    if request.symbol_push_mode == "none":
+        return False
+    elif request.symbol_push_mode == "all":
+        return True
+    elif request.symbol_push_mode == "prefix":
+        if not request.symbol_prefix:
+            return True  # Empty prefix means push all
+        return function_name.startswith(request.symbol_prefix)
+    return False
+
+
 def index_block(plugin_config, request: IndexRequest) -> str:
-    config = build_binlex_config(
-        plugin_config,
-        threads=request.threads,
-        dimensions=request.dimensions,
-    )
+    config = build_binlex_config(plugin_config)
     require_embeddings(config, target="block")
     context = resolve_block_context(config)
     sha256 = _sample_sha256()
@@ -80,7 +90,16 @@ def index_block(plugin_config, request: IndexRequest) -> str:
     if not web.commit_index():
         raise RuntimeError("binlex-web refused block index commit")
 
-    if context.function_address is not None and is_meaningful_name(context.function_name):
+    # Add tags if specified
+    if request.tags:
+        for tag in request.tags:
+            try:
+                web.add_entity_tag(sha256, Collection.Block, context.address, tag)
+            except Exception:
+                pass  # Tag errors shouldn't fail indexing
+
+    # Publish symbol if requested
+    if _should_push_symbol(request, context.function_name) and context.function_address is not None and is_meaningful_name(context.function_name):
         _publish_symbol(
             web,
             sha256,
@@ -94,11 +113,7 @@ def index_block(plugin_config, request: IndexRequest) -> str:
 
 
 def index_function(plugin_config, request: IndexRequest) -> str:
-    config = build_binlex_config(
-        plugin_config,
-        threads=request.threads,
-        dimensions=request.dimensions,
-    )
+    config = build_binlex_config(plugin_config)
     require_embeddings(config, target="function")
     if request.index_blocks:
         require_embeddings(config, target="block")
@@ -109,7 +124,7 @@ def index_function(plugin_config, request: IndexRequest) -> str:
 
     if request.index_blocks:
         collections = [Collection.Function, Collection.Block]
-        if not web.index_graph(sha256, context.graph, collections=collections, corpora=request.corpora):
+        if not web.index_graph(sha256, context.graph._inner, collections=collections, corpora=request.corpora):
             raise RuntimeError("binlex-web refused graph indexing request")
     else:
         if not web.index_function(sha256, context.entity, corpora=request.corpora):
@@ -117,7 +132,25 @@ def index_function(plugin_config, request: IndexRequest) -> str:
     if not web.commit_index():
         raise RuntimeError("binlex-web refused function index commit")
 
-    if is_meaningful_name(context.function_name):
+    # Add tags if specified
+    if request.tags:
+        for tag in request.tags:
+            try:
+                web.add_entity_tag(sha256, Collection.Function, context.address, tag)
+            except Exception:
+                pass  # Tag errors shouldn't fail indexing
+
+        # Also tag blocks if indexing them
+        if request.index_blocks:
+            for block in context.entity.blocks():
+                for tag in request.tags:
+                    try:
+                        web.add_entity_tag(sha256, Collection.Block, block.address(), tag)
+                    except Exception:
+                        pass
+
+    # Publish symbols if requested
+    if _should_push_symbol(request, context.function_name) and is_meaningful_name(context.function_name):
         _publish_symbol(
             web,
             sha256,
@@ -141,11 +174,7 @@ def index_function(plugin_config, request: IndexRequest) -> str:
 
 
 def index_functions(plugin_config, request: IndexRequest) -> str:
-    config = build_binlex_config(
-        plugin_config,
-        threads=request.threads,
-        dimensions=request.dimensions,
-    )
+    config = build_binlex_config(plugin_config)
     require_embeddings(config, target="function")
     if request.index_blocks:
         require_embeddings(config, target="block")
@@ -157,36 +186,56 @@ def index_functions(plugin_config, request: IndexRequest) -> str:
     if request.index_blocks:
         collections.append(Collection.Block)
 
-    if not web.index_graph(sha256, graph, collections=collections, corpora=request.corpora):
+    if not web.index_graph(sha256, graph._inner, collections=collections, corpora=request.corpora):
         raise RuntimeError("binlex-web refused graph indexing request")
     if not web.commit_index():
         raise RuntimeError("binlex-web refused graph index commit")
 
+    # Add tags if specified
+    if request.tags:
+        for function in graph.functions():
+            for tag in request.tags:
+                try:
+                    web.add_entity_tag(sha256, Collection.Function, function.address(), tag)
+                except Exception:
+                    pass
+
+            # Also tag blocks if indexing them
+            if request.index_blocks:
+                for block in function.blocks():
+                    for tag in request.tags:
+                        try:
+                            web.add_entity_tag(sha256, Collection.Block, block.address(), tag)
+                        except Exception:
+                            pass
+
+    # Publish symbols if requested
     for function_address, function_name in _meaningful_function_names().items():
-        _publish_symbol(
-            web,
-            sha256,
-            Collection.Function,
-            architecture,
-            function_address,
-            function_name,
-        )
-        if not request.index_blocks:
-            continue
-        function = next(
-            (item for item in graph.functions() if item.address() == function_address),
-            None,
-        )
-        if function is None:
-            continue
-        for block in function.blocks():
+        if _should_push_symbol(request, function_name):
             _publish_symbol(
                 web,
                 sha256,
-                Collection.Block,
+                Collection.Function,
                 architecture,
-                block.address(),
+                function_address,
                 function_name,
             )
+            if not request.index_blocks:
+                continue
+            function = next(
+                (item for item in graph.functions() if item.address() == function_address),
+                None,
+            )
+            if function is None:
+                continue
+            for block in function.blocks():
+                _publish_symbol(
+                    web,
+                    sha256,
+                    Collection.Block,
+                    architecture,
+                    block.address(),
+                    function_name,
+                )
 
     return f"indexed {len(list(idautils.Functions()))} functions into corpora {_format_corpora(request.corpora)}"

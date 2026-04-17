@@ -825,7 +825,7 @@ jobs:
           cd plugins/ida/
           python -m pip install .
           python -m build
-          python -m plugin archive --output ../../dist/binlex-${{ env.BINLEX_VERSION }}-ida.zip
+          binlex-ida archive --output ../../dist/binlex-${{ env.BINLEX_VERSION }}-ida.zip
 
       - name: Upload IDA Plugin Artifacts
         if: matrix.package == 'ida-plugin'

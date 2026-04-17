@@ -120,6 +120,7 @@ fn apply_processor_cli_overrides(config: &mut binlex::Config, args: &Args) {
             .filter(|value| !value.is_empty())
             .map(ToString::to_string)
             .collect();
+        config.processors.enabled = !enabled.is_empty();
         for processor in config.processors.processors.values_mut() {
             processor.enabled = false;
         }
