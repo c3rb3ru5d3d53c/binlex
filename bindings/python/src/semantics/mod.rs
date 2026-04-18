@@ -1,11 +1,12 @@
-use ::binlex::semantics::{
+use binlex::semantics::{
     InstructionSemantics as InnerInstructionSemantics, SemanticAddressSpace as InnerAddressSpace,
     SemanticDiagnostic as InnerSemanticDiagnostic,
     SemanticDiagnosticKind as InnerSemanticDiagnosticKind, SemanticEffect as InnerSemanticEffect,
     SemanticEffectKind as InnerSemanticEffectKind, SemanticExpression as InnerSemanticExpr,
     SemanticExpressionKind as InnerSemanticExprKind, SemanticFenceKind as InnerFenceKind,
     SemanticLocation as InnerSemanticLocation, SemanticLocationKind as InnerSemanticLocationKind,
-    SemanticOperationBinary as InnerSemanticBinaryOp, SemanticOperationCast as InnerSemanticCastOp,
+    SemanticOperation as InnerSemanticOperation, SemanticOperationBinary as InnerSemanticBinaryOp,
+    SemanticOperationCast as InnerSemanticCastOp,
     SemanticOperationCompare as InnerSemanticCompareOp,
     SemanticOperationUnary as InnerSemanticUnaryOp, SemanticStatus as InnerSemanticStatus,
     SemanticTemporary as InnerSemanticTemporary, SemanticTerminator as InnerSemanticTerminator,
@@ -927,34 +928,146 @@ impl SemanticExpression {
     pub fn kind(&self) -> SemanticExpressionKind {
         SemanticExpressionKind::from_inner(self.inner.lock().unwrap().kind())
     }
-    pub fn binary_operation(&self) -> Option<SemanticOperationBinary> {
+
+    pub fn bits(&self) -> u16 {
+        self.inner.lock().unwrap().bits()
+    }
+
+    pub fn operation(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        match self.inner.lock().unwrap().operation() {
+            Some(InnerSemanticOperation::Binary(op)) => Some(
+                Py::new(py, SemanticOperationBinary::from_inner(op))
+                    .expect("binary operation wrapper allocation should succeed")
+                    .into_any(),
+            ),
+            Some(InnerSemanticOperation::Unary(op)) => Some(
+                Py::new(py, SemanticOperationUnary::from_inner(op))
+                    .expect("unary operation wrapper allocation should succeed")
+                    .into_any(),
+            ),
+            Some(InnerSemanticOperation::Cast(op)) => Some(
+                Py::new(py, SemanticOperationCast::from_inner(op))
+                    .expect("cast operation wrapper allocation should succeed")
+                    .into_any(),
+            ),
+            Some(InnerSemanticOperation::Compare(op)) => Some(
+                Py::new(py, SemanticOperationCompare::from_inner(op))
+                    .expect("compare operation wrapper allocation should succeed")
+                    .into_any(),
+            ),
+            None => None,
+        }
+    }
+
+    pub fn left(&self, py: Python<'_>) -> PyResult<Option<Py<SemanticExpression>>> {
+        let expression = self.inner.lock().unwrap().left().cloned();
+        expression
+            .map(|expression| Py::new(py, SemanticExpression::from_inner(expression)))
+            .transpose()
+    }
+
+    pub fn right(&self, py: Python<'_>) -> PyResult<Option<Py<SemanticExpression>>> {
+        let expression = self.inner.lock().unwrap().right().cloned();
+        expression
+            .map(|expression| Py::new(py, SemanticExpression::from_inner(expression)))
+            .transpose()
+    }
+
+    pub fn argument(&self, py: Python<'_>) -> PyResult<Option<Py<SemanticExpression>>> {
+        let expression = self.inner.lock().unwrap().argument().cloned();
+        expression
+            .map(|expression| Py::new(py, SemanticExpression::from_inner(expression)))
+            .transpose()
+    }
+
+    pub fn condition(&self, py: Python<'_>) -> PyResult<Option<Py<SemanticExpression>>> {
+        let expression = self.inner.lock().unwrap().condition().cloned();
+        expression
+            .map(|expression| Py::new(py, SemanticExpression::from_inner(expression)))
+            .transpose()
+    }
+
+    pub fn when_true(&self, py: Python<'_>) -> PyResult<Option<Py<SemanticExpression>>> {
+        let expression = self.inner.lock().unwrap().when_true().cloned();
+        expression
+            .map(|expression| Py::new(py, SemanticExpression::from_inner(expression)))
+            .transpose()
+    }
+
+    pub fn when_false(&self, py: Python<'_>) -> PyResult<Option<Py<SemanticExpression>>> {
+        let expression = self.inner.lock().unwrap().when_false().cloned();
+        expression
+            .map(|expression| Py::new(py, SemanticExpression::from_inner(expression)))
+            .transpose()
+    }
+
+    pub fn address(&self, py: Python<'_>) -> PyResult<Option<Py<SemanticExpression>>> {
+        let expression = self.inner.lock().unwrap().address().cloned();
+        expression
+            .map(|expression| Py::new(py, SemanticExpression::from_inner(expression)))
+            .transpose()
+    }
+
+    pub fn address_space(&self, py: Python<'_>) -> PyResult<Option<Py<SemanticAddressSpace>>> {
+        let space = self.inner.lock().unwrap().address_space().cloned();
+        space
+            .map(|space| Py::new(py, SemanticAddressSpace::from_inner(space)))
+            .transpose()
+    }
+
+    pub fn location(&self, py: Python<'_>) -> PyResult<Option<Py<SemanticLocation>>> {
+        let location = self.inner.lock().unwrap().location().cloned();
+        location
+            .map(|location| Py::new(py, SemanticLocation::from_inner(location)))
+            .transpose()
+    }
+
+    pub fn offset(&self) -> Option<u16> {
+        self.inner.lock().unwrap().offset()
+    }
+
+    pub fn parts(&self, py: Python<'_>) -> PyResult<Option<Vec<Py<SemanticExpression>>>> {
         self.inner
             .lock()
             .unwrap()
-            .binary_operation()
-            .map(SemanticOperationBinary::from_inner)
+            .parts()
+            .map(|parts| {
+                parts
+                    .iter()
+                    .cloned()
+                    .map(|part| Py::new(py, SemanticExpression::from_inner(part)))
+                    .collect()
+            })
+            .transpose()
     }
-    pub fn unary_operation(&self) -> Option<SemanticOperationUnary> {
+
+    pub fn name(&self) -> Option<String> {
         self.inner
             .lock()
             .unwrap()
-            .unary_operation()
-            .map(SemanticOperationUnary::from_inner)
+            .name()
+            .map(std::borrow::ToOwned::to_owned)
     }
-    pub fn cast_operation(&self) -> Option<SemanticOperationCast> {
+
+    pub fn arguments(&self, py: Python<'_>) -> PyResult<Option<Vec<Py<SemanticExpression>>>> {
         self.inner
             .lock()
             .unwrap()
-            .cast_operation()
-            .map(SemanticOperationCast::from_inner)
+            .arguments()
+            .map(|arguments| {
+                arguments
+                    .iter()
+                    .cloned()
+                    .map(|argument| Py::new(py, SemanticExpression::from_inner(argument)))
+                    .collect()
+            })
+            .transpose()
     }
-    pub fn compare_operation(&self) -> Option<SemanticOperationCompare> {
-        self.inner
-            .lock()
-            .unwrap()
-            .compare_operation()
-            .map(SemanticOperationCompare::from_inner)
+
+    pub fn value(&self) -> Option<u128> {
+        self.inner.lock().unwrap().value()
     }
+
     pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         json_value_to_py(
             py,
