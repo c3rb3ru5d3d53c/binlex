@@ -392,6 +392,14 @@ pub enum SemanticOperationCompare {
     UgeFp,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum SemanticOperation {
+    Binary(SemanticOperationBinary),
+    Unary(SemanticOperationUnary),
+    Cast(SemanticOperationCast),
+    Compare(SemanticOperationCompare),
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SemanticDiagnostic {
     pub kind: SemanticDiagnosticKind,
@@ -433,6 +441,16 @@ impl SemanticLocation {
             Self::ProgramCounter { .. } => SemanticLocationKind::ProgramCounter,
             Self::Temporary { .. } => SemanticLocationKind::Temporary,
             Self::Memory { .. } => SemanticLocationKind::Memory,
+        }
+    }
+
+    pub fn bits(&self) -> u16 {
+        match self {
+            Self::Register { bits, .. } => *bits,
+            Self::Flag { bits, .. } => *bits,
+            Self::ProgramCounter { bits } => *bits,
+            Self::Temporary { bits, .. } => *bits,
+            Self::Memory { bits, .. } => *bits,
         }
     }
 }
@@ -491,30 +509,130 @@ impl SemanticExpression {
         }
     }
 
-    pub fn binary_operation(&self) -> Option<SemanticOperationBinary> {
+    pub fn operation(&self) -> Option<SemanticOperation> {
         match self {
-            Self::Binary { op, .. } => Some(*op),
+            Self::Binary { op, .. } => Some(SemanticOperation::Binary(*op)),
+            Self::Unary { op, .. } => Some(SemanticOperation::Unary(*op)),
+            Self::Cast { op, .. } => Some(SemanticOperation::Cast(*op)),
+            Self::Compare { op, .. } => Some(SemanticOperation::Compare(*op)),
             _ => None,
         }
     }
 
-    pub fn unary_operation(&self) -> Option<SemanticOperationUnary> {
+    pub fn bits(&self) -> u16 {
         match self {
-            Self::Unary { op, .. } => Some(*op),
+            Self::Const { bits, .. } => *bits,
+            Self::Read(location) => location.bits(),
+            Self::Load { bits, .. } => *bits,
+            Self::Unary { bits, .. } => *bits,
+            Self::Binary { bits, .. } => *bits,
+            Self::Cast { bits, .. } => *bits,
+            Self::Compare { bits, .. } => *bits,
+            Self::Select { bits, .. } => *bits,
+            Self::Extract { bits, .. } => *bits,
+            Self::Concat { bits, .. } => *bits,
+            Self::Undefined { bits } => *bits,
+            Self::Poison { bits } => *bits,
+            Self::Intrinsic { bits, .. } => *bits,
+        }
+    }
+
+    pub fn left(&self) -> Option<&SemanticExpression> {
+        match self {
+            Self::Binary { left, .. } | Self::Compare { left, .. } => Some(left),
             _ => None,
         }
     }
 
-    pub fn cast_operation(&self) -> Option<SemanticOperationCast> {
+    pub fn right(&self) -> Option<&SemanticExpression> {
         match self {
-            Self::Cast { op, .. } => Some(*op),
+            Self::Binary { right, .. } | Self::Compare { right, .. } => Some(right),
             _ => None,
         }
     }
 
-    pub fn compare_operation(&self) -> Option<SemanticOperationCompare> {
+    pub fn argument(&self) -> Option<&SemanticExpression> {
         match self {
-            Self::Compare { op, .. } => Some(*op),
+            Self::Unary { arg, .. } | Self::Cast { arg, .. } | Self::Extract { arg, .. } => {
+                Some(arg)
+            }
+            _ => None,
+        }
+    }
+
+    pub fn condition(&self) -> Option<&SemanticExpression> {
+        match self {
+            Self::Select { condition, .. } => Some(condition),
+            _ => None,
+        }
+    }
+
+    pub fn when_true(&self) -> Option<&SemanticExpression> {
+        match self {
+            Self::Select { when_true, .. } => Some(when_true),
+            _ => None,
+        }
+    }
+
+    pub fn when_false(&self) -> Option<&SemanticExpression> {
+        match self {
+            Self::Select { when_false, .. } => Some(when_false),
+            _ => None,
+        }
+    }
+
+    pub fn address(&self) -> Option<&SemanticExpression> {
+        match self {
+            Self::Load { addr, .. } => Some(addr),
+            _ => None,
+        }
+    }
+
+    pub fn address_space(&self) -> Option<&SemanticAddressSpace> {
+        match self {
+            Self::Load { space, .. } => Some(space),
+            _ => None,
+        }
+    }
+
+    pub fn location(&self) -> Option<&SemanticLocation> {
+        match self {
+            Self::Read(location) => Some(location),
+            _ => None,
+        }
+    }
+
+    pub fn offset(&self) -> Option<u16> {
+        match self {
+            Self::Extract { lsb, .. } => Some(*lsb),
+            _ => None,
+        }
+    }
+
+    pub fn parts(&self) -> Option<&[SemanticExpression]> {
+        match self {
+            Self::Concat { parts, .. } => Some(parts),
+            _ => None,
+        }
+    }
+
+    pub fn name(&self) -> Option<&str> {
+        match self {
+            Self::Intrinsic { name, .. } => Some(name.as_str()),
+            _ => None,
+        }
+    }
+
+    pub fn arguments(&self) -> Option<&[SemanticExpression]> {
+        match self {
+            Self::Intrinsic { args, .. } => Some(args),
+            _ => None,
+        }
+    }
+
+    pub fn value(&self) -> Option<u128> {
+        match self {
+            Self::Const { value, .. } => Some(*value),
             _ => None,
         }
     }
