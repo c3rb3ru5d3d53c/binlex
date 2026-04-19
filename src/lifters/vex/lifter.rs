@@ -3,7 +3,6 @@ use std::io::{Error, ErrorKind};
 
 use serde::{Deserialize, Serialize};
 
-use crate::Config;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::core::Architecture;
 use crate::semantics::{
@@ -11,6 +10,7 @@ use crate::semantics::{
     SemanticExpression, SemanticLocation, SemanticOperationBinary, SemanticOperationCast,
     SemanticOperationCompare, SemanticOperationUnary, SemanticTerminator,
 };
+use crate::Config;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct InstructionRequest {
@@ -172,6 +172,10 @@ impl Lifter {
         self.rendered_override
             .clone()
             .unwrap_or_else(|| render_artifacts(self.artifacts.values()))
+    }
+
+    pub fn print(&self) {
+        println!("{}", self.text());
     }
 
     fn ensure_supported_architecture(&self, architecture: Architecture) -> Result<(), Error> {

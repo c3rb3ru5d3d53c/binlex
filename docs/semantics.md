@@ -372,7 +372,7 @@ for function in graph.functions() {
             if let Some(semantics) = instruction.semantics.as_ref() {
                 println!(
                     "0x{:x}: status={:?} effects={} terminator={:?}",
-                    instruction.address,
+                    instruction.address(),
                     semantics.status,
                     semantics.effects.len(),
                     semantics.terminator.kind(),
@@ -412,7 +412,7 @@ for function in graph.functions():
             if semantics is None:
                 continue
             print(
-                hex(instruction.address),
+                hex(instruction.address()),
                 semantics.status(),
                 len(semantics.effects()),
                 semantics.terminator().kind(),
@@ -427,6 +427,14 @@ enabled = false
 ```
 
 or by using `--minimal` in the CLI.
+
+If you want semantics to remain available through `instruction.semantics()` but omit them from
+serialized instruction JSON:
+
+```toml
+[binlex.instructions.semantics]
+enabled = false
+```
 
 ## Recommended Usage
 

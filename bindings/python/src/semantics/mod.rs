@@ -623,7 +623,7 @@ impl SemanticTemporary {
         )
     }
     pub fn json(&self) -> PyResult<String> {
-        serde_json::to_string_pretty(&*self.inner.lock().unwrap())
+        serde_json::to_string(&*self.inner.lock().unwrap())
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
     pub fn print(&self) -> PyResult<()> {
@@ -674,7 +674,7 @@ impl SemanticDiagnostic {
         )
     }
     pub fn json(&self) -> PyResult<String> {
-        serde_json::to_string_pretty(&*self.inner.lock().unwrap())
+        serde_json::to_string(&*self.inner.lock().unwrap())
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
     pub fn print(&self) -> PyResult<()> {
@@ -745,7 +745,7 @@ impl SemanticLocation {
         )
     }
     pub fn json(&self) -> PyResult<String> {
-        serde_json::to_string_pretty(&*self.inner.lock().unwrap())
+        serde_json::to_string(&*self.inner.lock().unwrap())
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
     pub fn print(&self) -> PyResult<()> {
@@ -1076,7 +1076,7 @@ impl SemanticExpression {
         )
     }
     pub fn json(&self) -> PyResult<String> {
-        serde_json::to_string_pretty(&*self.inner.lock().unwrap())
+        serde_json::to_string(&*self.inner.lock().unwrap())
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
     pub fn print(&self) -> PyResult<()> {
@@ -1189,7 +1189,7 @@ impl SemanticEffect {
         )
     }
     pub fn json(&self) -> PyResult<String> {
-        serde_json::to_string_pretty(&*self.inner.lock().unwrap())
+        serde_json::to_string(&*self.inner.lock().unwrap())
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
     pub fn print(&self) -> PyResult<()> {
@@ -1288,7 +1288,7 @@ impl SemanticTerminator {
         )
     }
     pub fn json(&self) -> PyResult<String> {
-        serde_json::to_string_pretty(&*self.inner.lock().unwrap())
+        serde_json::to_string(&*self.inner.lock().unwrap())
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
     pub fn print(&self) -> PyResult<()> {
@@ -1406,7 +1406,7 @@ impl InstructionSemantics {
         )
     }
     pub fn json(&self) -> PyResult<String> {
-        serde_json::to_string_pretty(&*self.inner.lock().unwrap())
+        serde_json::to_string(&*self.inner.lock().unwrap())
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
     pub fn print(&self) -> PyResult<()> {

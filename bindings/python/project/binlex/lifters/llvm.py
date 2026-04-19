@@ -48,6 +48,9 @@ class Lifter:
     def text(self):
         return self._inner.text()
 
+    def print(self):
+        return self._inner.print()
+
     def bitcode(self):
         return bytes(self._inner.bitcode())
 
@@ -117,6 +120,9 @@ class Optimizers:
 
     def text(self):
         return self._lifter.text()
+
+    def print(self):
+        return self._lifter.print()
 
     def bitcode(self):
         return self._lifter.bitcode()

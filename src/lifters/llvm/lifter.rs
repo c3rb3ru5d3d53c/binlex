@@ -1,4 +1,3 @@
-use crate::Config;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::lifters::llvm::abi::coerce_int_value_width;
 use crate::lifters::llvm::optimizers::Optimizers;
@@ -9,8 +8,7 @@ use crate::semantics::{
     SemanticFenceKind, SemanticLocation, SemanticOperationBinary, SemanticOperationCast,
     SemanticOperationCompare, SemanticOperationUnary, SemanticTerminator, SemanticTrapKind,
 };
-use inkwell::IntPredicate;
-use inkwell::OptimizationLevel;
+use crate::Config;
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
@@ -20,6 +18,8 @@ use inkwell::passes::PassBuilderOptions;
 use inkwell::targets::{CodeModel, InitializationConfig, RelocMode, Target, TargetMachine};
 use inkwell::types::{BasicMetadataTypeEnum, IntType};
 use inkwell::values::{BasicMetadataValueEnum, FunctionValue, IntValue, PointerValue};
+use inkwell::IntPredicate;
+use inkwell::OptimizationLevel;
 use std::collections::{BTreeSet, HashMap};
 use std::io::Error;
 use std::num::NonZeroU32;
@@ -93,6 +93,10 @@ impl Lifter {
 
     pub fn text(&self) -> String {
         self.module.print_to_string().to_string()
+    }
+
+    pub fn print(&self) {
+        println!("{}", self.text());
     }
 
     pub fn bitcode(&self) -> Vec<u8> {

@@ -52,10 +52,9 @@ class Instruction:
         result._config = config
         return result
 
-    @property
     def address(self):
         """Return the instruction address."""
-        return self._inner.address
+        return self._inner.address()
 
     def chromosome(self):
         """Return the chromosome derived from this instruction, if available."""

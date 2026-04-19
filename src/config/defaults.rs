@@ -24,9 +24,10 @@ use super::{
     Config, ConfigBlocks, ConfigChromosomes, ConfigData, ConfigDatabaseLocal, ConfigDatabases,
     ConfigDisassembler, ConfigDisassemblerSweep, ConfigEntityLifters, ConfigFile, ConfigFormats,
     ConfigFunctions, ConfigHashEnabled, ConfigHeuristicEntropy, ConfigHeuristicFeatures,
-    ConfigImaging, ConfigIndex, ConfigIndexLocal, ConfigInstructions, ConfigLifters,
-    ConfigLiftersLLVM, ConfigLiftersVex, ConfigMarkov, ConfigMinhash, ConfigMmap, ConfigMmapCache,
-    ConfigProcessors, ConfigSemantics, ConfigStorage, ConfigStorageLocal, ConfigTLSH,
+    ConfigImaging, ConfigIndex, ConfigIndexLocal, ConfigInstructions, ConfigInstructionsSemantics,
+    ConfigLifters, ConfigLiftersLLVM, ConfigLiftersVex, ConfigMarkov, ConfigMinhash, ConfigMmap,
+    ConfigMmapCache, ConfigProcessors, ConfigSemantics, ConfigStorage, ConfigStorageLocal,
+    ConfigTLSH,
 };
 use std::env;
 
@@ -88,6 +89,7 @@ impl Config {
             },
             instructions: ConfigInstructions {
                 enabled: false,
+                semantics: ConfigInstructionsSemantics::default(),
                 lifters: ConfigEntityLifters::default(),
             },
             blocks: ConfigBlocks {

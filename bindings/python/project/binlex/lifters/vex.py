@@ -25,6 +25,9 @@ class Lifter:
     def text(self):
         return self._inner.text()
 
+    def print(self):
+        return self._inner.print()
+
     def __str__(self):
         return self.text()
 

@@ -1,4 +1,4 @@
-use crate::lifters::llvm::abi::{coerce_expression_width, normalize_shift_binary};
+use crate::lifters::llvm::abi::{coerce_expression_width, normalize_binary, normalize_compare};
 use crate::semantics::passes::{normalize_instruction_semantics, validate_instruction_semantics};
 use crate::semantics::{
     InstructionSemantics, SemanticEffect, SemanticExpression, SemanticTerminator,
@@ -115,7 +115,7 @@ fn prepare_expression(expression: &SemanticExpression) -> SemanticExpression {
         } => {
             let left = prepare_expression(left);
             let right = prepare_expression(right);
-            let (left, right) = normalize_shift_binary(*op, left, right, *bits);
+            let (left, right) = normalize_binary(*op, left, right, *bits);
             SemanticExpression::Binary {
                 op: *op,
                 left: Box::new(left),
@@ -133,12 +133,17 @@ fn prepare_expression(expression: &SemanticExpression) -> SemanticExpression {
             left,
             right,
             bits,
-        } => SemanticExpression::Compare {
-            op: *op,
-            left: Box::new(prepare_expression(left)),
-            right: Box::new(prepare_expression(right)),
-            bits: *bits,
-        },
+        } => {
+            let left = prepare_expression(left);
+            let right = prepare_expression(right);
+            let (left, right) = normalize_compare(left, right);
+            SemanticExpression::Compare {
+                op: *op,
+                left: Box::new(left),
+                right: Box::new(right),
+                bits: *bits,
+            }
+        }
         SemanticExpression::Select {
             condition,
             when_true,
@@ -236,6 +241,84 @@ mod tests {
                     other => panic!("expected cast, got {:?}", other),
                 },
                 other => panic!("expected binary, got {:?}", other),
+            },
+            other => panic!("unexpected effect: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn truncates_mismatched_binary_operand_to_expression_width() {
+        let semantics = InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Complete,
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Set {
+                dst: SemanticLocation::Register {
+                    name: "dst".to_string(),
+                    bits: 32,
+                },
+                expression: SemanticExpression::Binary {
+                    op: SemanticOperationBinary::Xor,
+                    left: Box::new(SemanticExpression::Const { value: 7, bits: 32 }),
+                    right: Box::new(SemanticExpression::Const { value: 1, bits: 64 }),
+                    bits: 32,
+                },
+            }],
+            terminator: SemanticTerminator::FallThrough,
+            diagnostics: Vec::new(),
+        };
+
+        let prepared = prepare_instruction_semantics(&semantics).expect("prepare");
+        match &prepared.effects[0] {
+            SemanticEffect::Set { expression, .. } => match expression {
+                SemanticExpression::Binary { right, .. } => match right.as_ref() {
+                    SemanticExpression::Cast { bits, .. } => assert_eq!(*bits, 32),
+                    other => panic!("expected cast, got {:?}", other),
+                },
+                other => panic!("expected binary, got {:?}", other),
+            },
+            other => panic!("unexpected effect: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn truncates_mismatched_compare_constant_to_operand_width() {
+        let semantics = InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Complete,
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Set {
+                dst: SemanticLocation::Flag {
+                    name: "z".to_string(),
+                    bits: 1,
+                },
+                expression: SemanticExpression::Compare {
+                    op: crate::semantics::SemanticOperationCompare::Uge,
+                    left: Box::new(SemanticExpression::Read(Box::new(
+                        SemanticLocation::Register {
+                            name: "dst".to_string(),
+                            bits: 32,
+                        },
+                    ))),
+                    right: Box::new(SemanticExpression::Const {
+                        value: 40,
+                        bits: 64,
+                    }),
+                    bits: 1,
+                },
+            }],
+            terminator: SemanticTerminator::FallThrough,
+            diagnostics: Vec::new(),
+        };
+
+        let prepared = prepare_instruction_semantics(&semantics).expect("prepare");
+        match &prepared.effects[0] {
+            SemanticEffect::Set { expression, .. } => match expression {
+                SemanticExpression::Compare { right, .. } => match right.as_ref() {
+                    SemanticExpression::Cast { bits, .. } => assert_eq!(*bits, 32),
+                    other => panic!("expected cast, got {:?}", other),
+                },
+                other => panic!("expected compare, got {:?}", other),
             },
             other => panic!("unexpected effect: {:?}", other),
         }

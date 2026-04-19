@@ -20,8 +20,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::Architecture;
-use crate::Config;
 use crate::controlflow::Graph;
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeJson;
@@ -33,6 +31,8 @@ use crate::lifters::vex::{Lifter as VexLifter, VexJson};
 use crate::metadata::Attributes;
 use crate::semantics::InstructionSemantics;
 use crate::semantics::InstructionSemanticsJson;
+use crate::Architecture;
+use crate::Config;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Value;
@@ -196,6 +196,11 @@ impl Instruction {
         Ok(instruction.unwrap())
     }
 
+    /// Retrieves the address of the instruction.
+    pub fn address(&self) -> u64 {
+        self.address
+    }
+
     /// Retrieves the set of addresses for the blocks this instruction may branch to.
     ///
     /// # Returns
@@ -275,7 +280,11 @@ impl Instruction {
             to: self.to(),
             next: self.next(),
             processors: None,
-            semantics: self.semantics.as_ref().map(|semantics| semantics.process()),
+            semantics: if self.config.instructions.semantics.enabled {
+                self.semantics.as_ref().map(|semantics| semantics.process())
+            } else {
+                None
+            },
             attributes: None,
             lifters: self.lifters_json(),
         }
