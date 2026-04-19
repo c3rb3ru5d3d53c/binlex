@@ -75,6 +75,27 @@ pub fn partial_with_effects(
     }
 }
 
+pub fn partial_intrinsic_fallback(
+    instruction: &Insn,
+    terminator: SemanticTerminator,
+    effects: Vec<SemanticEffect>,
+) -> InstructionSemantics {
+    partial_with_effects(
+        terminator,
+        vec![diagnostic(
+            SemanticDiagnosticKind::ArchSpecific {
+                name: "x86.intrinsic_fallback".to_string(),
+            },
+            format!(
+                "0x{:x}: semantics use x86 intrinsic fallback ({})",
+                instruction.address(),
+                instruction.mnemonic().unwrap_or("unknown")
+            ),
+        )],
+        effects,
+    )
+}
+
 pub fn diagnostic(kind: SemanticDiagnosticKind, message: impl Into<String>) -> SemanticDiagnostic {
     SemanticDiagnostic {
         kind,

@@ -3,6 +3,7 @@ use std::io::{Error, ErrorKind};
 
 use serde::{Deserialize, Serialize};
 
+use crate::Config;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::core::Architecture;
 use crate::semantics::{
@@ -10,7 +11,6 @@ use crate::semantics::{
     SemanticExpression, SemanticLocation, SemanticOperationBinary, SemanticOperationCast,
     SemanticOperationCompare, SemanticOperationUnary, SemanticTerminator,
 };
-use crate::Config;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct InstructionRequest {
@@ -329,6 +329,56 @@ fn render_effect(effect: &SemanticEffect) -> String {
             render_expression(addr),
             render_expression(expression)
         ),
+        SemanticEffect::MemorySet {
+            space,
+            addr,
+            value,
+            count,
+            element_bits,
+            decrement,
+        } => format!(
+            "DIRTY MEMSET{}({}, {}, {}, {}, {})",
+            element_bits,
+            render_address_space(space),
+            render_expression(addr),
+            render_expression(count),
+            render_expression(value),
+            render_expression(decrement)
+        ),
+        SemanticEffect::MemoryCopy {
+            src_space,
+            src_addr,
+            dst_space,
+            dst_addr,
+            count,
+            element_bits,
+            decrement,
+        } => format!(
+            "DIRTY MEMCPY{}({}:{}, {}:{}, {}, {})",
+            element_bits,
+            render_address_space(src_space),
+            render_expression(src_addr),
+            render_address_space(dst_space),
+            render_expression(dst_addr),
+            render_expression(count),
+            render_expression(decrement)
+        ),
+        SemanticEffect::AtomicCmpXchg {
+            space,
+            addr,
+            expected,
+            desired,
+            bits,
+            observed,
+        } => format!(
+            "{} = DIRTY ATOMIC_CMPXCHG{}({}, {}, {}, {})",
+            render_location_write(observed),
+            bits,
+            render_address_space(space),
+            render_expression(addr),
+            render_expression(expected),
+            render_expression(desired)
+        ),
         SemanticEffect::Fence { kind } => format!("DIRTY fence({kind:?})"),
         SemanticEffect::Trap { kind } => format!("DIRTY trap({kind:?})"),
         SemanticEffect::Intrinsic {
@@ -536,6 +586,10 @@ fn render_binary_op(op: SemanticOperationBinary) -> &'static str {
         SemanticOperationBinary::Sub => "Sub",
         SemanticOperationBinary::SubWithBorrow => "SubWithBorrow",
         SemanticOperationBinary::Mul => "Mul",
+        SemanticOperationBinary::FAdd => "FAdd",
+        SemanticOperationBinary::FSub => "FSub",
+        SemanticOperationBinary::FMul => "FMul",
+        SemanticOperationBinary::FDiv => "FDiv",
         SemanticOperationBinary::UMulHigh => "UMulHigh",
         SemanticOperationBinary::SMulHigh => "SMulHigh",
         SemanticOperationBinary::UDiv => "UDiv",

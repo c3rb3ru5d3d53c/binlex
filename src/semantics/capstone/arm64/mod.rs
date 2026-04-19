@@ -212,10 +212,16 @@ fn build_integer(
         _ if mnemonic == "csel" => build_conditional_select(machine, operands, condition_code),
         _ if mnemonic == "cset" => build_cset(machine, operands, condition_code),
         _ if mnemonic == "csetm" => build_csetm(machine, operands, condition_code),
-        _ if mnemonic == "csinc" => build_conditional_select_increment(machine, operands, condition_code),
+        _ if mnemonic == "csinc" => {
+            build_conditional_select_increment(machine, operands, condition_code)
+        }
         _ if mnemonic == "cinc" => build_conditional_increment(machine, operands, condition_code),
-        _ if mnemonic == "csinv" => build_conditional_select_invert(machine, operands, condition_code),
-        _ if mnemonic == "csneg" => build_conditional_select_negate(machine, operands, condition_code),
+        _ if mnemonic == "csinv" => {
+            build_conditional_select_invert(machine, operands, condition_code)
+        }
+        _ if mnemonic == "csneg" => {
+            build_conditional_select_negate(machine, operands, condition_code)
+        }
         _ if mnemonic == "cneg" => build_conditional_negate(machine, operands, condition_code),
         _ if mnemonic == "fcsel" => build_conditional_select(machine, operands, condition_code),
         _ if mnemonic == "sxtw" => build_sign_extend_word(machine, operands),
@@ -227,18 +233,58 @@ fn build_integer(
         _ if mnemonic == "ror" => {
             build_shift_assign(machine, operands, SemanticOperationBinary::RotateRight)
         }
-        _ if mnemonic == "ubfx" => build_unsigned_bitfield_extract(machine, operands)
-            .or_else(|| build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![operand_location(machine, operands.first()?)?]))),
-        _ if mnemonic == "sbfx" => build_signed_bitfield_extract(machine, operands)
-            .or_else(|| build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![operand_location(machine, operands.first()?)?]))),
-        _ if mnemonic == "ubfiz" => build_unsigned_bitfield_insert(machine, operands)
-            .or_else(|| build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![operand_location(machine, operands.first()?)?]))),
-        _ if mnemonic == "bfi" => build_bitfield_insert(machine, operands)
-            .or_else(|| build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![operand_location(machine, operands.first()?)?]))),
-        _ if mnemonic == "bfxil" => build_bitfield_insert_low(machine, operands)
-            .or_else(|| build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![operand_location(machine, operands.first()?)?]))),
-        _ if mnemonic == "sbfiz" => build_signed_bitfield_insert(machine, operands)
-            .or_else(|| build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![operand_location(machine, operands.first()?)?]))),
+        _ if mnemonic == "ubfx" => {
+            build_unsigned_bitfield_extract(machine, operands).or_else(|| {
+                build_intrinsic_fallthrough(
+                    machine,
+                    instruction,
+                    operands,
+                    Some(vec![operand_location(machine, operands.first()?)?]),
+                )
+            })
+        }
+        _ if mnemonic == "sbfx" => build_signed_bitfield_extract(machine, operands).or_else(|| {
+            build_intrinsic_fallthrough(
+                machine,
+                instruction,
+                operands,
+                Some(vec![operand_location(machine, operands.first()?)?]),
+            )
+        }),
+        _ if mnemonic == "ubfiz" => {
+            build_unsigned_bitfield_insert(machine, operands).or_else(|| {
+                build_intrinsic_fallthrough(
+                    machine,
+                    instruction,
+                    operands,
+                    Some(vec![operand_location(machine, operands.first()?)?]),
+                )
+            })
+        }
+        _ if mnemonic == "bfi" => build_bitfield_insert(machine, operands).or_else(|| {
+            build_intrinsic_fallthrough(
+                machine,
+                instruction,
+                operands,
+                Some(vec![operand_location(machine, operands.first()?)?]),
+            )
+        }),
+        _ if mnemonic == "bfxil" => build_bitfield_insert_low(machine, operands).or_else(|| {
+            build_intrinsic_fallthrough(
+                machine,
+                instruction,
+                operands,
+                Some(vec![operand_location(machine, operands.first()?)?]),
+            )
+        }),
+        _ if mnemonic == "sbfiz" => build_signed_bitfield_insert(machine, operands).or_else(|| {
+            build_intrinsic_fallthrough(
+                machine,
+                instruction,
+                operands,
+                Some(vec![operand_location(machine, operands.first()?)?]),
+            )
+        }),
         _ if mnemonic == "madd" => build_madd(machine, operands),
         _ if mnemonic == "smaddl" => build_smaddl(machine, operands),
         _ if mnemonic == "smull" => build_smull(machine, operands),
@@ -249,7 +295,12 @@ fn build_integer(
         _ if mnemonic == "udiv" => build_udiv(machine, operands),
         _ if mnemonic == "umull" => build_umull(machine, operands),
         _ if mnemonic == "umaddl" => build_umaddl(machine, operands),
-        _ if mnemonic == "movi" => build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![operand_location(machine, operands.first()?)?])),
+        _ if mnemonic == "movi" => build_intrinsic_fallthrough(
+            machine,
+            instruction,
+            operands,
+            Some(vec![operand_location(machine, operands.first()?)?]),
+        ),
         id if id == Arm64Insn::ARM64_INS_CMP as u32 => build_compare_flags(machine, operands),
         _ if mnemonic == "cmn" => build_compare_add_flags(machine, operands),
         _ if mnemonic == "ccmp" => build_conditional_compare(machine, operands, condition_code),
@@ -273,19 +324,84 @@ fn build_integer(
         _ if mnemonic == "fsub" => build_fp_intrinsic_writeback(machine, instruction, operands),
         _ if mnemonic == "scvtf" => build_fp_intrinsic_writeback(machine, instruction, operands),
         _ if mnemonic == "ucvtf" => build_fp_intrinsic_writeback(machine, instruction, operands),
-        _ if mnemonic == "fcvtzs" => build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![operand_location(machine, operands.first()?)?])),
-        _ if mnemonic == "fcvtzu" => build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![operand_location(machine, operands.first()?)?])),
-        _ if mnemonic == "cmeq" => build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![operand_location(machine, operands.first()?)?])),
-        _ if mnemonic == "cmhi" => build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![operand_location(machine, operands.first()?)?])),
-        _ if mnemonic == "dup" => build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![operand_location(machine, operands.first()?)?])),
-        _ if mnemonic == "cnt" => build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![operand_location(machine, operands.first()?)?])),
-        _ if mnemonic == "addv" => build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![operand_location(machine, operands.first()?)?])),
-        _ if mnemonic == "ld1" => build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![operand_location(machine, operands.first()?)?])),
-        _ if mnemonic == "sshll" => build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![operand_location(machine, operands.first()?)?])),
-        _ if mnemonic == "uaddlv" => build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![operand_location(machine, operands.first()?)?])),
-        _ if mnemonic == "uzp1" => build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![operand_location(machine, operands.first()?)?])),
-        _ if mnemonic == "rev64" => build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![operand_location(machine, operands.first()?)?])),
-        _ if mnemonic == "extr" => build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![operand_location(machine, operands.first()?)?])),
+        _ if mnemonic == "fcvtzs" => build_intrinsic_fallthrough(
+            machine,
+            instruction,
+            operands,
+            Some(vec![operand_location(machine, operands.first()?)?]),
+        ),
+        _ if mnemonic == "fcvtzu" => build_intrinsic_fallthrough(
+            machine,
+            instruction,
+            operands,
+            Some(vec![operand_location(machine, operands.first()?)?]),
+        ),
+        _ if mnemonic == "cmeq" => build_intrinsic_fallthrough(
+            machine,
+            instruction,
+            operands,
+            Some(vec![operand_location(machine, operands.first()?)?]),
+        ),
+        _ if mnemonic == "cmhi" => build_intrinsic_fallthrough(
+            machine,
+            instruction,
+            operands,
+            Some(vec![operand_location(machine, operands.first()?)?]),
+        ),
+        _ if mnemonic == "dup" => build_intrinsic_fallthrough(
+            machine,
+            instruction,
+            operands,
+            Some(vec![operand_location(machine, operands.first()?)?]),
+        ),
+        _ if mnemonic == "cnt" => build_intrinsic_fallthrough(
+            machine,
+            instruction,
+            operands,
+            Some(vec![operand_location(machine, operands.first()?)?]),
+        ),
+        _ if mnemonic == "addv" => build_intrinsic_fallthrough(
+            machine,
+            instruction,
+            operands,
+            Some(vec![operand_location(machine, operands.first()?)?]),
+        ),
+        _ if mnemonic == "ld1" => build_intrinsic_fallthrough(
+            machine,
+            instruction,
+            operands,
+            Some(vec![operand_location(machine, operands.first()?)?]),
+        ),
+        _ if mnemonic == "sshll" => build_intrinsic_fallthrough(
+            machine,
+            instruction,
+            operands,
+            Some(vec![operand_location(machine, operands.first()?)?]),
+        ),
+        _ if mnemonic == "uaddlv" => build_intrinsic_fallthrough(
+            machine,
+            instruction,
+            operands,
+            Some(vec![operand_location(machine, operands.first()?)?]),
+        ),
+        _ if mnemonic == "uzp1" => build_intrinsic_fallthrough(
+            machine,
+            instruction,
+            operands,
+            Some(vec![operand_location(machine, operands.first()?)?]),
+        ),
+        _ if mnemonic == "rev64" => build_intrinsic_fallthrough(
+            machine,
+            instruction,
+            operands,
+            Some(vec![operand_location(machine, operands.first()?)?]),
+        ),
+        _ if mnemonic == "extr" => build_intrinsic_fallthrough(
+            machine,
+            instruction,
+            operands,
+            Some(vec![operand_location(machine, operands.first()?)?]),
+        ),
         _ if mnemonic == "mvn" => build_mvn(machine, operands),
         _ if mnemonic == "neg" => build_neg(machine, operands),
         _ if mnemonic == "uxtb" => build_zero_extend_byte(machine, operands),
@@ -297,7 +413,10 @@ fn build_integer(
             || mnemonic == "csdb"
             || mnemonic == "dmb" =>
         {
-            Some(complete(SemanticTerminator::FallThrough, vec![SemanticEffect::Nop]))
+            Some(complete(
+                SemanticTerminator::FallThrough,
+                vec![SemanticEffect::Nop],
+            ))
         }
         _ if mnemonic == "casal" || mnemonic == "cas" => build_intrinsic_fallthrough(
             machine,
@@ -317,15 +436,21 @@ fn build_integer(
                 .and_then(|operand| operand_location(machine, operand))
                 .map(|dst| vec![dst]),
         ),
-        _ if mnemonic == "umov" || mnemonic == "frintm" || mnemonic == "umlsl2" || mnemonic == "ext" => build_intrinsic_fallthrough(
-            machine,
-            instruction,
-            operands,
-            operands
-                .first()
-                .and_then(|operand| operand_location(machine, operand))
-                .map(|dst| vec![dst]),
-        ),
+        _ if mnemonic == "umov"
+            || mnemonic == "frintm"
+            || mnemonic == "umlsl2"
+            || mnemonic == "ext" =>
+        {
+            build_intrinsic_fallthrough(
+                machine,
+                instruction,
+                operands,
+                operands
+                    .first()
+                    .and_then(|operand| operand_location(machine, operand))
+                    .map(|dst| vec![dst]),
+            )
+        }
         _ => None,
     }
 }
@@ -336,14 +461,22 @@ fn build_memory(
     operands: &[ArchOperand],
 ) -> Option<InstructionSemantics> {
     match instruction.id().0 {
-        id if id == Arm64Insn::ARM64_INS_LDP as u32 => build_load_pair(machine, instruction, operands),
-        _ if instruction.mnemonic().unwrap_or("") == "ldpsw" => build_load_pair_signed_word(machine, instruction, operands),
-        id if id == Arm64Insn::ARM64_INS_STP as u32 => build_store_pair(machine, instruction, operands),
-        _ if instruction.mnemonic().unwrap_or("") == "stnp" => build_store_pair(machine, instruction, operands),
-        _ if instruction.mnemonic().unwrap_or("") == "ldaxp" => build_load_pair(machine, instruction, operands),
-        id if id == Arm64Insn::ARM64_INS_LDR as u32 => {
-            build_ldr(machine, instruction, operands)
+        id if id == Arm64Insn::ARM64_INS_LDP as u32 => {
+            build_load_pair(machine, instruction, operands)
         }
+        _ if instruction.mnemonic().unwrap_or("") == "ldpsw" => {
+            build_load_pair_signed_word(machine, instruction, operands)
+        }
+        id if id == Arm64Insn::ARM64_INS_STP as u32 => {
+            build_store_pair(machine, instruction, operands)
+        }
+        _ if instruction.mnemonic().unwrap_or("") == "stnp" => {
+            build_store_pair(machine, instruction, operands)
+        }
+        _ if instruction.mnemonic().unwrap_or("") == "ldaxp" => {
+            build_load_pair(machine, instruction, operands)
+        }
+        id if id == Arm64Insn::ARM64_INS_LDR as u32 => build_ldr(machine, instruction, operands),
         _ if instruction.mnemonic().unwrap_or("") == "ldapr" => {
             let dst = operand_location(machine, operands.first()?)?;
             let addr = effective_memory_address(instruction, operands.get(1)?, operands.get(2))?;
@@ -550,9 +683,10 @@ fn build_memory(
             operands,
             Some(vec![operand_location(machine, operands.first()?)?]),
         ),
-        _ if instruction.mnemonic().unwrap_or("") == "prfm" => {
-            Some(complete(SemanticTerminator::FallThrough, vec![SemanticEffect::Nop]))
-        }
+        _ if instruction.mnemonic().unwrap_or("") == "prfm" => Some(complete(
+            SemanticTerminator::FallThrough,
+            vec![SemanticEffect::Nop],
+        )),
         _ if instruction.mnemonic().unwrap_or("") == "strh" => {
             let src = operand_expression(operands.first()?)?;
             let addr = effective_base_plus_immediate(operands.get(1)?, operands.get(2))?;
@@ -1537,15 +1671,17 @@ fn build_conditional_compare(
         .into_iter()
         .zip(compare_flags)
         .zip(fallback_flags)
-        .map(|((name, compare_value), fallback_value)| SemanticEffect::Set {
-            dst: flag(name),
-            expression: SemanticExpression::Select {
-                condition: Box::new(condition.clone()),
-                when_true: Box::new(compare_value),
-                when_false: Box::new(bool_const(fallback_value)),
-                bits: 1,
+        .map(
+            |((name, compare_value), fallback_value)| SemanticEffect::Set {
+                dst: flag(name),
+                expression: SemanticExpression::Select {
+                    condition: Box::new(condition.clone()),
+                    when_true: Box::new(compare_value),
+                    when_false: Box::new(bool_const(fallback_value)),
+                    bits: 1,
+                },
             },
-        })
+        )
         .collect();
     let _ = machine;
     Some(complete(SemanticTerminator::FallThrough, effects))
@@ -1674,7 +1810,9 @@ fn build_fmov(
     operands: &[ArchOperand],
 ) -> Option<InstructionSemantics> {
     match (
-        operands.first().and_then(|operand| operand_location(machine, operand)),
+        operands
+            .first()
+            .and_then(|operand| operand_location(machine, operand)),
         operands.get(1).and_then(operand_expression),
     ) {
         (Some(dst), Some(src)) => Some(complete(
@@ -1752,12 +1890,7 @@ fn build_neg(machine: Architecture, operands: &[ArchOperand]) -> Option<Instruct
         SemanticTerminator::FallThrough,
         vec![SemanticEffect::Set {
             dst,
-            expression: binary(
-                SemanticOperationBinary::Sub,
-                const_u64(0, bits),
-                src,
-                bits,
-            ),
+            expression: binary(SemanticOperationBinary::Sub, const_u64(0, bits), src, bits),
         }],
     ))
 }
@@ -2191,7 +2324,10 @@ fn writeback_effect(
 }
 
 fn is_post_indexed(instruction: &Insn, writeback_operand: Option<&ArchOperand>) -> bool {
-    writeback_operand.is_some() || instruction.op_str().is_some_and(|op_str| op_str.contains("],"))
+    writeback_operand.is_some()
+        || instruction
+            .op_str()
+            .is_some_and(|op_str| op_str.contains("],"))
 }
 
 fn zero_extend_load(addr: SemanticExpression, load_bits: u16, dst_bits: u16) -> SemanticExpression {

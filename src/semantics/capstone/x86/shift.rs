@@ -39,19 +39,14 @@ pub fn build(
     instruction: &Insn,
     operands: &[ArchOperand],
 ) -> Option<InstructionSemantics> {
-    if matches!(instruction.mnemonic().unwrap_or_default(), "shld" | "shrd") {
-        let args = operands
-            .iter()
-            .filter_map(|operand| common::operand_expr(machine, operand))
-            .collect::<Vec<_>>();
-        return Some(common::complete(
-            SemanticTerminator::FallThrough,
-            vec![SemanticEffect::Intrinsic {
-                name: format!("x86.{}", instruction.mnemonic().unwrap_or("shift")),
-                args,
-                outputs: Vec::new(),
-            }],
-        ));
+    if matches!(instruction.mnemonic().unwrap_or_default(), "shld") {
+        return double_precision_shift(machine, operands, true);
+    }
+    if matches!(instruction.mnemonic().unwrap_or_default(), "shrd") {
+        return double_precision_shift(machine, operands, false);
+    }
+    if let Some(semantics) = bmi_shift(machine, instruction, operands) {
+        return Some(semantics);
     }
 
     let op = match instruction.id() {
@@ -263,4 +258,271 @@ pub fn build(
     }
 
     Some(common::complete(SemanticTerminator::FallThrough, effects))
+}
+
+fn bmi_shift(
+    machine: Architecture,
+    instruction: &Insn,
+    operands: &[ArchOperand],
+) -> Option<InstructionSemantics> {
+    let op = match instruction.id() {
+        InsnId(id) if id == X86Insn::X86_INS_SHLX as u32 => SemanticOperationBinary::Shl,
+        InsnId(id) if id == X86Insn::X86_INS_SHRX as u32 => SemanticOperationBinary::LShr,
+        InsnId(id) if id == X86Insn::X86_INS_SARX as u32 => SemanticOperationBinary::AShr,
+        InsnId(id) if id == X86Insn::X86_INS_RORX as u32 => SemanticOperationBinary::RotateRight,
+        _ => return None,
+    };
+
+    let dst = operands
+        .first()
+        .and_then(|operand| common::operand_location(machine, operand))?;
+    let src = operands
+        .get(1)
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let raw_count = operands
+        .get(2)
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let bits = common::location_bits(&dst);
+    if !matches!(bits, 32 | 64) {
+        return None;
+    }
+
+    let count_mask_bits = if bits == 64 { 6 } else { 5 };
+    let effective_count = SemanticExpression::Cast {
+        op: SemanticOperationCast::ZeroExtend,
+        arg: Box::new(SemanticExpression::Extract {
+            arg: Box::new(raw_count),
+            lsb: 0,
+            bits: count_mask_bits,
+        }),
+        bits,
+    };
+    let count_is_zero = common::compare(
+        SemanticOperationCompare::Eq,
+        effective_count.clone(),
+        common::const_u64(0, bits),
+    );
+    let shifted = SemanticExpression::Binary {
+        op,
+        left: Box::new(src.clone()),
+        right: Box::new(effective_count),
+        bits,
+    };
+
+    Some(common::complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Set {
+            dst,
+            expression: SemanticExpression::Select {
+                condition: Box::new(count_is_zero),
+                when_true: Box::new(src),
+                when_false: Box::new(shifted),
+                bits,
+            },
+        }],
+    ))
+}
+
+fn double_precision_shift(
+    machine: Architecture,
+    operands: &[ArchOperand],
+    left_shift: bool,
+) -> Option<InstructionSemantics> {
+    let dst = operands
+        .first()
+        .and_then(|operand| common::operand_location(machine, operand))?;
+    let dst_expr = operands
+        .first()
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let src_expr = operands
+        .get(1)
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let raw_count = operands
+        .get(2)
+        .and_then(|operand| common::operand_expr(machine, operand))
+        .unwrap_or_else(|| common::const_u64(1, 8));
+    let bits = common::location_bits(&dst);
+    let count_mask_bits = if bits == 64 { 6 } else { 5 };
+    let effective_count = SemanticExpression::Cast {
+        op: SemanticOperationCast::ZeroExtend,
+        arg: Box::new(SemanticExpression::Extract {
+            arg: Box::new(raw_count),
+            lsb: 0,
+            bits: count_mask_bits,
+        }),
+        bits,
+    };
+    let count_is_zero = common::compare(
+        SemanticOperationCompare::Eq,
+        effective_count.clone(),
+        common::const_u64(0, bits),
+    );
+    let count_is_one = common::compare(
+        SemanticOperationCompare::Eq,
+        effective_count.clone(),
+        common::const_u64(1, bits),
+    );
+    let inverse_count = common::sub(
+        common::const_u64(bits as u64, bits),
+        effective_count.clone(),
+        bits,
+    );
+    let shifted = if left_shift {
+        common::or(
+            SemanticExpression::Binary {
+                op: SemanticOperationBinary::Shl,
+                left: Box::new(dst_expr.clone()),
+                right: Box::new(effective_count.clone()),
+                bits,
+            },
+            SemanticExpression::Binary {
+                op: SemanticOperationBinary::LShr,
+                left: Box::new(src_expr),
+                right: Box::new(inverse_count),
+                bits,
+            },
+            bits,
+        )
+    } else {
+        common::or(
+            SemanticExpression::Binary {
+                op: SemanticOperationBinary::LShr,
+                left: Box::new(dst_expr.clone()),
+                right: Box::new(effective_count.clone()),
+                bits,
+            },
+            SemanticExpression::Binary {
+                op: SemanticOperationBinary::Shl,
+                left: Box::new(src_expr),
+                right: Box::new(inverse_count),
+                bits,
+            },
+            bits,
+        )
+    };
+    let result = SemanticExpression::Select {
+        condition: Box::new(count_is_zero.clone()),
+        when_true: Box::new(dst_expr.clone()),
+        when_false: Box::new(shifted.clone()),
+        bits,
+    };
+    let cf_computed = if left_shift {
+        SemanticExpression::Extract {
+            arg: Box::new(SemanticExpression::Binary {
+                op: SemanticOperationBinary::LShr,
+                left: Box::new(dst_expr.clone()),
+                right: Box::new(common::sub(
+                    common::const_u64(bits as u64, bits),
+                    effective_count.clone(),
+                    bits,
+                )),
+                bits,
+            }),
+            lsb: 0,
+            bits: 1,
+        }
+    } else {
+        SemanticExpression::Extract {
+            arg: Box::new(SemanticExpression::Binary {
+                op: SemanticOperationBinary::LShr,
+                left: Box::new(dst_expr.clone()),
+                right: Box::new(common::sub(
+                    effective_count.clone(),
+                    common::const_u64(1, bits),
+                    bits,
+                )),
+                bits,
+            }),
+            lsb: 0,
+            bits: 1,
+        }
+    };
+    let of_for_one = if left_shift {
+        common::xor(
+            common::extract_bit(shifted.clone(), bits.saturating_sub(1)),
+            cf_computed.clone(),
+            1,
+        )
+    } else {
+        common::xor(
+            common::extract_bit(dst_expr.clone(), bits.saturating_sub(1)),
+            common::extract_bit(shifted.clone(), bits.saturating_sub(1)),
+            1,
+        )
+    };
+    Some(common::complete(
+        SemanticTerminator::FallThrough,
+        vec![
+            SemanticEffect::Set {
+                dst,
+                expression: result.clone(),
+            },
+            SemanticEffect::Set {
+                dst: common::flag("cf"),
+                expression: SemanticExpression::Select {
+                    condition: Box::new(count_is_zero.clone()),
+                    when_true: Box::new(common::flag_expr("cf")),
+                    when_false: Box::new(cf_computed),
+                    bits: 1,
+                },
+            },
+            SemanticEffect::Set {
+                dst: common::flag("of"),
+                expression: SemanticExpression::Select {
+                    condition: Box::new(count_is_zero.clone()),
+                    when_true: Box::new(common::flag_expr("of")),
+                    when_false: Box::new(SemanticExpression::Select {
+                        condition: Box::new(count_is_one),
+                        when_true: Box::new(of_for_one),
+                        when_false: Box::new(SemanticExpression::Undefined { bits: 1 }),
+                        bits: 1,
+                    }),
+                    bits: 1,
+                },
+            },
+            SemanticEffect::Set {
+                dst: common::flag("zf"),
+                expression: SemanticExpression::Select {
+                    condition: Box::new(count_is_zero.clone()),
+                    when_true: Box::new(common::flag_expr("zf")),
+                    when_false: Box::new(common::compare(
+                        SemanticOperationCompare::Eq,
+                        result.clone(),
+                        common::const_u64(0, bits),
+                    )),
+                    bits: 1,
+                },
+            },
+            SemanticEffect::Set {
+                dst: common::flag("sf"),
+                expression: SemanticExpression::Select {
+                    condition: Box::new(count_is_zero.clone()),
+                    when_true: Box::new(common::flag_expr("sf")),
+                    when_false: Box::new(common::extract_bit(
+                        result.clone(),
+                        bits.saturating_sub(1),
+                    )),
+                    bits: 1,
+                },
+            },
+            SemanticEffect::Set {
+                dst: common::flag("pf"),
+                expression: SemanticExpression::Select {
+                    condition: Box::new(count_is_zero.clone()),
+                    when_true: Box::new(common::flag_expr("pf")),
+                    when_false: Box::new(common::parity_flag(result.clone())),
+                    bits: 1,
+                },
+            },
+            SemanticEffect::Set {
+                dst: common::flag("af"),
+                expression: SemanticExpression::Select {
+                    condition: Box::new(count_is_zero),
+                    when_true: Box::new(common::flag_expr("af")),
+                    when_false: Box::new(SemanticExpression::Undefined { bits: 1 }),
+                    bits: 1,
+                },
+            },
+        ],
+    ))
 }

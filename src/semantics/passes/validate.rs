@@ -1,9 +1,24 @@
 use crate::semantics::{
-    InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation, SemanticTerminator,
+    InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation, SemanticStatus,
+    SemanticTerminator,
 };
 use std::io::Error;
 
 pub fn validate_instruction_semantics(semantics: &InstructionSemantics) -> Result<(), Error> {
+    match semantics.status {
+        SemanticStatus::Complete if !semantics.diagnostics.is_empty() => {
+            return Err(Error::other(
+                "complete semantics must not carry diagnostics",
+            ));
+        }
+        SemanticStatus::Partial if semantics.diagnostics.is_empty() => {
+            return Err(Error::other(
+                "partial semantics must include at least one diagnostic",
+            ));
+        }
+        _ => {}
+    }
+
     for temporary in &semantics.temporaries {
         if temporary.bits == 0 {
             return Err(Error::other(format!(
@@ -38,6 +53,54 @@ fn validate_effect(effect: &SemanticEffect) -> Result<(), Error> {
             }
             validate_expression(addr)?;
             validate_expression(expression)?;
+        }
+        SemanticEffect::MemorySet {
+            addr,
+            value,
+            count,
+            element_bits,
+            decrement,
+            ..
+        } => {
+            if *element_bits == 0 {
+                return Err(Error::other("semantic memory-set has zero element width"));
+            }
+            validate_expression(addr)?;
+            validate_expression(value)?;
+            validate_expression(count)?;
+            validate_expression(decrement)?;
+        }
+        SemanticEffect::MemoryCopy {
+            src_addr,
+            dst_addr,
+            count,
+            element_bits,
+            decrement,
+            ..
+        } => {
+            if *element_bits == 0 {
+                return Err(Error::other("semantic memory-copy has zero element width"));
+            }
+            validate_expression(src_addr)?;
+            validate_expression(dst_addr)?;
+            validate_expression(count)?;
+            validate_expression(decrement)?;
+        }
+        SemanticEffect::AtomicCmpXchg {
+            addr,
+            expected,
+            desired,
+            bits,
+            observed,
+            ..
+        } => {
+            if *bits == 0 {
+                return Err(Error::other("semantic atomic compare-exchange has zero width"));
+            }
+            validate_expression(addr)?;
+            validate_expression(expected)?;
+            validate_expression(desired)?;
+            validate_location(observed)?;
         }
         SemanticEffect::Fence { .. } | SemanticEffect::Trap { .. } | SemanticEffect::Nop => {}
         SemanticEffect::Intrinsic { outputs, args, .. } => {
@@ -181,8 +244,8 @@ fn expression_bits(expression: &SemanticExpression) -> u16 {
 mod tests {
     use super::validate_instruction_semantics;
     use crate::semantics::{
-        InstructionSemantics, SemanticEffect, SemanticExpression, SemanticStatus,
-        SemanticTerminator,
+        InstructionSemantics, SemanticDiagnostic, SemanticDiagnosticKind, SemanticEffect,
+        SemanticExpression, SemanticStatus, SemanticTerminator,
     };
 
     #[test]
@@ -197,6 +260,37 @@ mod tests {
                 expression: SemanticExpression::Const { value: 0, bits: 64 },
                 bits: 0,
             }],
+            terminator: SemanticTerminator::FallThrough,
+            diagnostics: Vec::new(),
+        };
+
+        assert!(validate_instruction_semantics(&semantics).is_err());
+    }
+
+    #[test]
+    fn rejects_complete_semantics_with_diagnostics() {
+        let semantics = InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Complete,
+            temporaries: Vec::new(),
+            effects: Vec::new(),
+            terminator: SemanticTerminator::FallThrough,
+            diagnostics: vec![SemanticDiagnostic {
+                kind: SemanticDiagnosticKind::PartialFlags,
+                message: "flags are modeled conservatively".to_string(),
+            }],
+        };
+
+        assert!(validate_instruction_semantics(&semantics).is_err());
+    }
+
+    #[test]
+    fn rejects_partial_semantics_without_diagnostics() {
+        let semantics = InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Partial,
+            temporaries: Vec::new(),
+            effects: Vec::new(),
             terminator: SemanticTerminator::FallThrough,
             diagnostics: Vec::new(),
         };

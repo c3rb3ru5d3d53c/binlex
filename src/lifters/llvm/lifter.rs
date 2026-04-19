@@ -1,3 +1,4 @@
+use crate::Config;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::lifters::llvm::abi::coerce_int_value_width;
 use crate::lifters::llvm::optimizers::Optimizers;
@@ -8,7 +9,8 @@ use crate::semantics::{
     SemanticFenceKind, SemanticLocation, SemanticOperationBinary, SemanticOperationCast,
     SemanticOperationCompare, SemanticOperationUnary, SemanticTerminator, SemanticTrapKind,
 };
-use crate::Config;
+use inkwell::IntPredicate;
+use inkwell::OptimizationLevel;
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
@@ -18,8 +20,6 @@ use inkwell::passes::PassBuilderOptions;
 use inkwell::targets::{CodeModel, InitializationConfig, RelocMode, Target, TargetMachine};
 use inkwell::types::{BasicMetadataTypeEnum, IntType};
 use inkwell::values::{BasicMetadataValueEnum, FunctionValue, IntValue, PointerValue};
-use inkwell::IntPredicate;
-use inkwell::OptimizationLevel;
 use std::collections::{BTreeSet, HashMap};
 use std::io::Error;
 use std::num::NonZeroU32;
@@ -449,6 +449,124 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 expression,
                 bits,
             } => self.emit_store(space, addr, expression, *bits)?,
+            SemanticEffect::MemorySet {
+                space,
+                addr,
+                value,
+                count,
+                element_bits,
+                decrement,
+            } => {
+                let helper = self.declare_void_helper(
+                    &format!(
+                        "binlex_effect_memset_{}_{}",
+                        sanitize_symbol(&render_address_space(space)),
+                        element_bits
+                    ),
+                    &[
+                        self.context.i64_type().into(),
+                        self.context.i64_type().into(),
+                        self.int_type(*element_bits).into(),
+                        self.context.bool_type().into(),
+                    ],
+                    false,
+                );
+                let addr = self.lower_expression(addr)?;
+                let addr = self.to_i64(addr);
+                let count = self.lower_expression(count)?;
+                let count = self.to_i64(count);
+                let value = self.lower_expression(value)?;
+                let decrement = self.lower_expression(decrement)?;
+                let decrement = self.to_bool(decrement);
+                self.builder
+                    .build_call(
+                        helper,
+                        &[addr.into(), count.into(), value.into(), decrement.into()],
+                        "",
+                    )
+                    .map_err(|err| Error::other(err.to_string()))?;
+            }
+            SemanticEffect::MemoryCopy {
+                src_space,
+                src_addr,
+                dst_space,
+                dst_addr,
+                count,
+                element_bits,
+                decrement,
+            } => {
+                let helper = self.declare_void_helper(
+                    &format!(
+                        "binlex_effect_memcpy_{}_{}_{}",
+                        sanitize_symbol(&render_address_space(src_space)),
+                        sanitize_symbol(&render_address_space(dst_space)),
+                        element_bits
+                    ),
+                    &[
+                        self.context.i64_type().into(),
+                        self.context.i64_type().into(),
+                        self.context.i64_type().into(),
+                        self.context.bool_type().into(),
+                    ],
+                    false,
+                );
+                let src_addr = self.lower_expression(src_addr)?;
+                let src_addr = self.to_i64(src_addr);
+                let dst_addr = self.lower_expression(dst_addr)?;
+                let dst_addr = self.to_i64(dst_addr);
+                let count = self.lower_expression(count)?;
+                let count = self.to_i64(count);
+                let decrement = self.lower_expression(decrement)?;
+                let decrement = self.to_bool(decrement);
+                self.builder
+                    .build_call(
+                        helper,
+                        &[
+                            src_addr.into(),
+                            dst_addr.into(),
+                            count.into(),
+                            decrement.into(),
+                        ],
+                        "",
+                    )
+                    .map_err(|err| Error::other(err.to_string()))?;
+            }
+            SemanticEffect::AtomicCmpXchg {
+                space,
+                addr,
+                expected,
+                desired,
+                bits,
+                observed,
+            } => {
+                let helper = self.declare_value_helper(
+                    &format!(
+                        "binlex_effect_atomic_cmpxchg_{}_{}",
+                        sanitize_symbol(&render_address_space(space)),
+                        bits
+                    ),
+                    self.int_type(*bits),
+                    &[
+                        self.context.i64_type().into(),
+                        self.int_type(*bits).into(),
+                        self.int_type(*bits).into(),
+                    ],
+                    false,
+                );
+                let addr = self.lower_expression(addr)?;
+                let addr = self.to_i64(addr);
+                let expected = self.lower_expression(expected)?;
+                let desired = self.lower_expression(desired)?;
+                let observed_value = self.call_value(
+                    helper,
+                    &[addr.into(), expected.into(), desired.into()],
+                    "cmpxchg_observed",
+                )?;
+                let slot = self.slot_for_location(observed)?;
+                self.builder
+                    .build_store(slot, observed_value)
+                    .map_err(|err| Error::other(err.to_string()))?;
+            }
             SemanticEffect::Fence { kind } => {
                 let helper = self.declare_void_helper(
                     &format!("binlex_fence_{}", render_fence_kind(kind)),
@@ -1077,7 +1195,20 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         args: &[BasicMetadataTypeEnum<'ctx>],
         varargs: bool,
     ) -> FunctionValue<'ctx> {
-        let name = sanitize_symbol(name);
+        let args_suffix = args
+            .iter()
+            .map(|arg| match arg {
+                BasicMetadataTypeEnum::IntType(ty) => format!("i{}", ty.get_bit_width()),
+                _ => "x".to_string(),
+            })
+            .collect::<Vec<_>>()
+            .join("_");
+        let name = sanitize_symbol(&format!(
+            "{}__ret_i{}__args_{}",
+            name,
+            return_type.get_bit_width(),
+            args_suffix
+        ));
         self.module.get_function(&name).unwrap_or_else(|| {
             self.module
                 .add_function(&name, return_type.fn_type(args, varargs), None)

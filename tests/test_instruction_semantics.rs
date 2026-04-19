@@ -78,6 +78,25 @@ fn assert_complete_semantics(name: &str, architecture: Architecture, bytes: &[u8
     );
 }
 
+fn assert_partial_semantics(name: &str, architecture: Architecture, bytes: &[u8]) {
+    let instruction = disassemble_single(name, architecture, bytes);
+    let semantics = instruction
+        .semantics
+        .as_ref()
+        .unwrap_or_else(|| panic!("{name}: missing semantics"));
+
+    assert_eq!(
+        semantics.status,
+        SemanticStatus::Partial,
+        "{name}: expected partial semantics, got {:?}",
+        semantics.status
+    );
+    assert!(
+        !semantics.diagnostics.is_empty(),
+        "{name}: expected diagnostics for partial semantics"
+    );
+}
+
 fn partial_semantics(message: &str) -> InstructionSemantics {
     InstructionSemantics {
         version: 1,
@@ -110,6 +129,109 @@ fn integer_semantics_regressions_stay_complete() {
     let cases = [
         ("add eax, ebx", Architecture::I386, vec![0x01, 0xd8]),
         ("adc eax, ebx", Architecture::I386, vec![0x11, 0xd8]),
+        ("bsf ecx, eax", Architecture::I386, vec![0x0f, 0xbc, 0xc8]),
+        ("bsr ecx, eax", Architecture::I386, vec![0x0f, 0xbd, 0xc8]),
+        (
+            "tzcnt ecx, eax",
+            Architecture::AMD64,
+            vec![0xf3, 0x0f, 0xbc, 0xc8],
+        ),
+        (
+            "lzcnt ecx, eax",
+            Architecture::AMD64,
+            vec![0xf3, 0x0f, 0xbd, 0xc8],
+        ),
+        (
+            "blsi eax, ecx",
+            Architecture::AMD64,
+            vec![0xc4, 0xe2, 0x78, 0xf3, 0xd9],
+        ),
+        (
+            "blsmsk eax, ecx",
+            Architecture::AMD64,
+            vec![0xc4, 0xe2, 0x78, 0xf3, 0xd1],
+        ),
+        (
+            "blsr eax, ecx",
+            Architecture::AMD64,
+            vec![0xc4, 0xe2, 0x78, 0xf3, 0xc9],
+        ),
+        (
+            "bextr eax, ecx, 0x21",
+            Architecture::AMD64,
+            vec![0x8f, 0xea, 0x78, 0x10, 0xc1, 0x21, 0x00, 0x00, 0x00],
+        ),
+        (
+            "andn eax, ecx, edx",
+            Architecture::AMD64,
+            vec![0xc4, 0xe2, 0x70, 0xf2, 0xc2],
+        ),
+        (
+            "bzhi eax, ecx, edx",
+            Architecture::AMD64,
+            vec![0xc4, 0xe2, 0x68, 0xf5, 0xc1],
+        ),
+        (
+            "mulx eax, ebx, ecx",
+            Architecture::AMD64,
+            vec![0xc4, 0xe2, 0x63, 0xf6, 0xc1],
+        ),
+        (
+            "shlx eax, ebx, ecx",
+            Architecture::AMD64,
+            vec![0xc4, 0xe2, 0x71, 0xf7, 0xc3],
+        ),
+        (
+            "shrx eax, ebx, ecx",
+            Architecture::AMD64,
+            vec![0xc4, 0xe2, 0x73, 0xf7, 0xc3],
+        ),
+        (
+            "sarx eax, ebx, ecx",
+            Architecture::AMD64,
+            vec![0xc4, 0xe2, 0x72, 0xf7, 0xc3],
+        ),
+        (
+            "rorx eax, ebx, 7",
+            Architecture::AMD64,
+            vec![0xc4, 0xe3, 0x7b, 0xf0, 0xc3, 0x07],
+        ),
+        (
+            "pdep eax, ebx, ecx",
+            Architecture::AMD64,
+            vec![0xc4, 0xe2, 0x63, 0xf5, 0xc1],
+        ),
+        (
+            "pext eax, ebx, ecx",
+            Architecture::AMD64,
+            vec![0xc4, 0xe2, 0x62, 0xf5, 0xc1],
+        ),
+        ("bswap eax", Architecture::I386, vec![0x0f, 0xc8]),
+        (
+            "popcnt eax, ebx",
+            Architecture::AMD64,
+            vec![0xf3, 0x0f, 0xb8, 0xc3],
+        ),
+        (
+            "movbe eax, dword ptr [eax]",
+            Architecture::I386,
+            vec![0x0f, 0x38, 0xf0, 0x00],
+        ),
+        (
+            "movbe dword ptr [eax], ebx",
+            Architecture::I386,
+            vec![0x0f, 0x38, 0xf1, 0x18],
+        ),
+        (
+            "adcx eax, ebx",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x38, 0xf6, 0xc3],
+        ),
+        (
+            "adox eax, ebx",
+            Architecture::AMD64,
+            vec![0xf3, 0x0f, 0x38, 0xf6, 0xc3],
+        ),
         (
             "btc eax, 1",
             Architecture::I386,
@@ -117,19 +239,9 @@ fn integer_semantics_regressions_stay_complete() {
         ),
         ("xadd eax, ebx", Architecture::I386, vec![0x0f, 0xc1, 0xd8]),
         (
-            "lock xadd dword ptr [eax], ebx",
-            Architecture::I386,
-            vec![0xf0, 0x0f, 0xc1, 0x18],
-        ),
-        (
             "cmpxchg eax, ebx",
             Architecture::I386,
             vec![0x0f, 0xb1, 0xd8],
-        ),
-        (
-            "lock cmpxchg8b qword ptr [eax]",
-            Architecture::I386,
-            vec![0xf0, 0x0f, 0xc7, 0x08],
         ),
         ("shl eax, cl", Architecture::I386, vec![0xd3, 0xe0]),
         (
@@ -162,14 +274,19 @@ fn stack_and_string_semantics_regressions_stay_complete() {
             Architecture::I386,
             vec![0xc8, 0x10, 0x00, 0x01],
         ),
+        (
+            "lock cmpxchg8b qword ptr [eax]",
+            Architecture::I386,
+            vec![0xf0, 0x0f, 0xc7, 0x08],
+        ),
         ("stosb", Architecture::I386, vec![0xaa]),
         ("stosw", Architecture::I386, vec![0x66, 0xab]),
         ("stosd", Architecture::I386, vec![0xab]),
+        ("movsw", Architecture::I386, vec![0x66, 0xa5]),
+        ("scasd", Architecture::I386, vec![0xaf]),
         ("rep stosd", Architecture::I386, vec![0xf3, 0xab]),
         ("rep stosw", Architecture::I386, vec![0xf3, 0x66, 0xab]),
-        ("movsw", Architecture::I386, vec![0x66, 0xa5]),
         ("rep movsb", Architecture::I386, vec![0xf3, 0xa4]),
-        ("scasd", Architecture::I386, vec![0xaf]),
     ];
 
     for (name, architecture, bytes) in cases {
@@ -211,21 +328,6 @@ fn vector_and_scalar_fp_semantics_regressions_stay_complete() {
             vec![0xf2, 0x0f, 0x5d, 0xc1],
         ),
         (
-            "andps xmm0, xmm1",
-            Architecture::AMD64,
-            vec![0x0f, 0x54, 0xc1],
-        ),
-        (
-            "unpcklpd xmm0, xmm1",
-            Architecture::AMD64,
-            vec![0x66, 0x0f, 0x14, 0xc1],
-        ),
-        (
-            "pextrw eax, xmm0, 1",
-            Architecture::AMD64,
-            vec![0x66, 0x0f, 0xc5, 0xc0, 0x01],
-        ),
-        (
             "comisd xmm0, xmm1",
             Architecture::AMD64,
             vec![0x66, 0x0f, 0x2f, 0xc1],
@@ -245,6 +347,316 @@ fn vector_and_scalar_fp_semantics_regressions_stay_complete() {
             Architecture::AMD64,
             vec![0xf3, 0x0f, 0xe6, 0xc1],
         ),
+        (
+            "andps xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x0f, 0x54, 0xc1],
+        ),
+        (
+            "por xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0xeb, 0xc1],
+        ),
+        (
+            "pand xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0xdb, 0xc1],
+        ),
+        (
+            "pandn xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0xdf, 0xc1],
+        ),
+        (
+            "pxor xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0xef, 0xc1],
+        ),
+        (
+            "paddb xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0xfc, 0xc1],
+        ),
+        (
+            "paddw xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0xfd, 0xc1],
+        ),
+        (
+            "paddd xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0xfe, 0xc1],
+        ),
+        (
+            "psubb xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0xf8, 0xc1],
+        ),
+        (
+            "psubw xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0xf9, 0xc1],
+        ),
+        (
+            "psubd xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0xfa, 0xc1],
+        ),
+        (
+            "pcmpeqb xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x74, 0xc1],
+        ),
+        (
+            "pcmpeqw xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x75, 0xc1],
+        ),
+        (
+            "pcmpeqd xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x76, 0xc1],
+        ),
+        (
+            "pcmpgtb xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x64, 0xc1],
+        ),
+        (
+            "pcmpgtw xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x65, 0xc1],
+        ),
+        (
+            "pcmpgtd xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x66, 0xc1],
+        ),
+        (
+            "punpcklbw xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x60, 0xc1],
+        ),
+        (
+            "punpckhbw xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x68, 0xc1],
+        ),
+        (
+            "punpcklwd xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x61, 0xc1],
+        ),
+        (
+            "punpckhwd xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x69, 0xc1],
+        ),
+        (
+            "punpckldq xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x62, 0xc1],
+        ),
+        (
+            "punpckhdq xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x6a, 0xc1],
+        ),
+        (
+            "punpcklqdq xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x6c, 0xc1],
+        ),
+        (
+            "punpckhqdq xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x6d, 0xc1],
+        ),
+        (
+            "unpckhpd xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x15, 0xc1],
+        ),
+        (
+            "unpcklps xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x0f, 0x14, 0xc1],
+        ),
+        (
+            "unpckhps xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x0f, 0x15, 0xc1],
+        ),
+        (
+            "unpcklpd xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x14, 0xc1],
+        ),
+        (
+            "pextrb eax, xmm0, 1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x3a, 0x14, 0xc0, 0x01],
+        ),
+        (
+            "pextrd eax, xmm0, 1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x3a, 0x16, 0xc0, 0x01],
+        ),
+        (
+            "pinsrb xmm0, eax, 1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x3a, 0x20, 0xc0, 0x01],
+        ),
+        (
+            "pinsrd xmm0, eax, 1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x3a, 0x22, 0xc0, 0x01],
+        ),
+        (
+            "movmskps eax, xmm0",
+            Architecture::AMD64,
+            vec![0x0f, 0x50, 0xc0],
+        ),
+        (
+            "movmskpd eax, xmm0",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x50, 0xc0],
+        ),
+        (
+            "pmovmskb eax, xmm0",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0xd7, 0xc0],
+        ),
+        (
+            "movhlps xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x0f, 0x12, 0xc1],
+        ),
+        (
+            "movlhps xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x0f, 0x16, 0xc1],
+        ),
+        (
+            "movhpd xmm0, qword ptr [rax]",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x16, 0x00],
+        ),
+        (
+            "movlpd xmm0, qword ptr [rax]",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x12, 0x00],
+        ),
+        (
+            "movhps xmm0, qword ptr [rax]",
+            Architecture::AMD64,
+            vec![0x0f, 0x16, 0x00],
+        ),
+        (
+            "movlps xmm0, qword ptr [rax]",
+            Architecture::AMD64,
+            vec![0x0f, 0x12, 0x00],
+        ),
+        (
+            "pshufb xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x38, 0x00, 0xc1],
+        ),
+        (
+            "pmovsxbw xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x38, 0x20, 0xc1],
+        ),
+        (
+            "pmovsxbd xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x38, 0x21, 0xc1],
+        ),
+        (
+            "pmovsxbq xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x38, 0x22, 0xc1],
+        ),
+        (
+            "pmovsxwd xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x38, 0x23, 0xc1],
+        ),
+        (
+            "pmovsxwq xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x38, 0x24, 0xc1],
+        ),
+        (
+            "pmovsxdq xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x38, 0x25, 0xc1],
+        ),
+        (
+            "pmovzxbw xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x38, 0x30, 0xc1],
+        ),
+        (
+            "pmovzxbd xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x38, 0x31, 0xc1],
+        ),
+        (
+            "pmovzxbq xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x38, 0x32, 0xc1],
+        ),
+        (
+            "pmovzxwd xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x38, 0x33, 0xc1],
+        ),
+        (
+            "pmovzxwq xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x38, 0x34, 0xc1],
+        ),
+        (
+            "pmovzxdq xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x38, 0x35, 0xc1],
+        ),
+        (
+            "pshufd xmm0, xmm1, 0x1b",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x70, 0xc1, 0x1b],
+        ),
+        (
+            "pshufhw xmm0, xmm1, 0x1b",
+            Architecture::AMD64,
+            vec![0xf3, 0x0f, 0x70, 0xc1, 0x1b],
+        ),
+        (
+            "pshuflw xmm0, xmm1, 0x1b",
+            Architecture::AMD64,
+            vec![0xf2, 0x0f, 0x70, 0xc1, 0x1b],
+        ),
+        (
+            "pextrw eax, xmm0, 1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0xc5, 0xc0, 0x01],
+        ),
+        (
+            "pextrq rax, xmm0, 1",
+            Architecture::AMD64,
+            vec![0x66, 0x48, 0x0f, 0x3a, 0x16, 0xc0, 0x01],
+        ),
+        (
+            "pinsrq xmm0, rax, 1",
+            Architecture::AMD64,
+            vec![0x66, 0x48, 0x0f, 0x3a, 0x22, 0xc0, 0x01],
+        ),
+        (
+            "extractps eax, xmm0, 1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x3a, 0x17, 0xc0, 0x01],
+        ),
     ];
 
     for (name, architecture, bytes) in cases {
@@ -255,7 +667,11 @@ fn vector_and_scalar_fp_semantics_regressions_stay_complete() {
 #[test]
 fn arm64_common_semantics_regressions_stay_complete() {
     let cases = [
-        ("adrp x0, #0", Architecture::ARM64, vec![0x00, 0x00, 0x00, 0x90]),
+        (
+            "adrp x0, #0",
+            Architecture::ARM64,
+            vec![0x00, 0x00, 0x00, 0x90],
+        ),
         (
             "stp x29, x30, [sp, #-16]!",
             Architecture::ARM64,
@@ -266,87 +682,411 @@ fn arm64_common_semantics_regressions_stay_complete() {
             Architecture::ARM64,
             vec![0xfd, 0x7b, 0xc1, 0xa8],
         ),
-        ("ldrb w0, [x1]", Architecture::ARM64, vec![0x20, 0x00, 0x40, 0x39]),
-        ("strb w0, [x1]", Architecture::ARM64, vec![0x20, 0x00, 0x00, 0x39]),
-        ("ldrh w0, [x1]", Architecture::ARM64, vec![0x20, 0x00, 0x40, 0x79]),
-        ("ldrsw x0, [x1]", Architecture::ARM64, vec![0x20, 0x00, 0x80, 0xb9]),
-        ("ldursw x0, [x1, #8]", Architecture::ARM64, vec![0x20, 0x80, 0x80, 0xb8]),
-        ("ldur x0, [x1, #8]", Architecture::ARM64, vec![0x20, 0x80, 0x40, 0xf8]),
-        ("stur x0, [x1, #8]", Architecture::ARM64, vec![0x20, 0x80, 0x00, 0xf8]),
-        ("strh w0, [x1]", Architecture::ARM64, vec![0x20, 0x00, 0x00, 0x79]),
-        ("ldrsb x0, [x1]", Architecture::ARM64, vec![0x20, 0x00, 0x80, 0x39]),
-        ("ldrsh x0, [x1]", Architecture::ARM64, vec![0x20, 0x00, 0x80, 0x79]),
-        ("csel x0, x1, x2, eq", Architecture::ARM64, vec![0x20, 0x00, 0x82, 0x9a]),
-        ("cset x0, eq", Architecture::ARM64, vec![0xe0, 0x17, 0x9f, 0x9a]),
-        ("csetm x0, eq", Architecture::ARM64, vec![0xe0, 0x13, 0x9f, 0xda]),
-        ("csinc x0, x1, x2, eq", Architecture::ARM64, vec![0x20, 0x04, 0x82, 0x9a]),
-        ("csinv x0, x1, x2, eq", Architecture::ARM64, vec![0x20, 0x00, 0x82, 0xda]),
-        ("csneg x0, x1, x2, eq", Architecture::ARM64, vec![0x20, 0x04, 0x82, 0xda]),
-        ("cneg x0, x1, eq", Architecture::ARM64, vec![0x20, 0x14, 0x81, 0xda]),
-        ("cinc x0, x1, eq", Architecture::ARM64, vec![0x20, 0x14, 0x81, 0x9a]),
-        ("fcsel d0, d1, d2, eq", Architecture::ARM64, vec![0x20, 0x0c, 0x62, 0x1e]),
-        ("cmn x0, x1", Architecture::ARM64, vec![0x1f, 0x00, 0x01, 0xab]),
-        ("ccmp x0, x1, #0, eq", Architecture::ARM64, vec![0x00, 0x00, 0x41, 0xfa]),
-        ("sxtw x0, w1", Architecture::ARM64, vec![0x20, 0x7c, 0x40, 0x93]),
-        ("sxtb x0, w1", Architecture::ARM64, vec![0x20, 0x1c, 0x40, 0x93]),
-        ("sxth x0, w1", Architecture::ARM64, vec![0x20, 0x3c, 0x40, 0x93]),
-        ("asr x0, x1, #3", Architecture::ARM64, vec![0x20, 0xfc, 0x43, 0x93]),
-        ("ror x0, x1, #8", Architecture::ARM64, vec![0x20, 0x20, 0xc1, 0x93]),
-        ("lsl x0, x1, #3", Architecture::ARM64, vec![0x20, 0xf0, 0x7d, 0xd3]),
-        ("lsr x0, x1, #3", Architecture::ARM64, vec![0x20, 0xfc, 0x43, 0xd3]),
-        ("ubfx x0, x1, #4, #8", Architecture::ARM64, vec![0x20, 0x2c, 0x44, 0xd3]),
-        ("sbfx x0, x1, #4, #8", Architecture::ARM64, vec![0x20, 0x2c, 0x44, 0x93]),
-        ("ubfiz x0, x1, #4, #8", Architecture::ARM64, vec![0x20, 0x1c, 0x7c, 0xd3]),
-        ("bfxil x0, x1, #4, #8", Architecture::ARM64, vec![0x20, 0x2c, 0x44, 0xb3]),
-        ("bfi x0, x1, #4, #8", Architecture::ARM64, vec![0x20, 0x1c, 0x7c, 0xb3]),
-        ("sbfiz x0, x1, #4, #8", Architecture::ARM64, vec![0x20, 0x1c, 0x7c, 0x93]),
-        ("bics x0, x1, x2", Architecture::ARM64, vec![0x20, 0x00, 0x22, 0xea]),
-        ("bic x0, x1, x2", Architecture::ARM64, vec![0x20, 0x00, 0x22, 0x8a]),
-        ("sdiv x0, x1, x2", Architecture::ARM64, vec![0x20, 0x0c, 0xc2, 0x9a]),
-        ("udiv x0, x1, x2", Architecture::ARM64, vec![0x20, 0x08, 0xc2, 0x9a]),
-        ("neg x0, x1", Architecture::ARM64, vec![0xe0, 0x03, 0x01, 0xcb]),
-        ("mul x0, x1, x2", Architecture::ARM64, vec![0x20, 0x7c, 0x02, 0x9b]),
-        ("umulh x0, x1, x2", Architecture::ARM64, vec![0x20, 0x7c, 0xc2, 0x9b]),
-        ("msub x0, x1, x2, x3", Architecture::ARM64, vec![0x20, 0x8c, 0x02, 0x9b]),
-        ("madd x0, x1, x2, x3", Architecture::ARM64, vec![0x20, 0x0c, 0x02, 0x9b]),
-        ("umull x0, w1, w2", Architecture::ARM64, vec![0x20, 0x7c, 0xa2, 0x9b]),
-        ("umaddl x0, w1, w2, x3", Architecture::ARM64, vec![0x20, 0x0c, 0xa2, 0x9b]),
-        ("smull x0, w1, w2", Architecture::ARM64, vec![0x20, 0x7c, 0x22, 0x9b]),
-        ("smaddl x0, w1, w2, x3", Architecture::ARM64, vec![0x20, 0x0c, 0x22, 0x9b]),
-        ("fmov d0, d1", Architecture::ARM64, vec![0x20, 0x40, 0x60, 0x1e]),
-        ("fmov x0, d1", Architecture::ARM64, vec![0x20, 0x00, 0x66, 0x9e]),
-        ("fabs d0, d1", Architecture::ARM64, vec![0x20, 0xc0, 0x60, 0x1e]),
-        ("fneg d0, d1", Architecture::ARM64, vec![0x20, 0x40, 0x61, 0x1e]),
-        ("fcmp d0, d1", Architecture::ARM64, vec![0x00, 0x20, 0x61, 0x1e]),
-        ("fccmp d0, d1, #0, eq", Architecture::ARM64, vec![0x00, 0x04, 0x61, 0x1e]),
-        ("fadd d0, d1, d2", Architecture::ARM64, vec![0x20, 0x28, 0x62, 0x1e]),
-        ("fmadd d0, d1, d2, d3", Architecture::ARM64, vec![0x20, 0x0c, 0x42, 0x1f]),
-        ("fmsub d0, d1, d2, d3", Architecture::ARM64, vec![0x20, 0x8c, 0x42, 0x1f]),
-        ("fsub d0, d1, d2", Architecture::ARM64, vec![0x20, 0x38, 0x62, 0x1e]),
-        ("fdiv d0, d1, d2", Architecture::ARM64, vec![0x20, 0x18, 0x62, 0x1e]),
-        ("fmin d0, d1, d2", Architecture::ARM64, vec![0x20, 0x58, 0x62, 0x1e]),
-        ("fmax d0, d1, d2", Architecture::ARM64, vec![0x20, 0x48, 0x62, 0x1e]),
-        ("scvtf d0, x1", Architecture::ARM64, vec![0x20, 0x00, 0x62, 0x9e]),
-        ("ucvtf d0, x1", Architecture::ARM64, vec![0x20, 0x00, 0x63, 0x9e]),
-        ("fcvtzs x0, d1", Architecture::ARM64, vec![0x20, 0x00, 0x78, 0x9e]),
-        ("fcvtzu x0, d1", Architecture::ARM64, vec![0x20, 0x00, 0x79, 0x9e]),
-        ("cmeq v0.16b, v1.16b, v2.16b", Architecture::ARM64, vec![0x20, 0x8c, 0x22, 0x6e]),
-        ("cmhi v0.16b, v1.16b, v2.16b", Architecture::ARM64, vec![0x20, 0x34, 0x22, 0x6e]),
-        ("dup v0.16b, w1", Architecture::ARM64, vec![0x20, 0x0c, 0x01, 0x4e]),
-        ("cnt v0.16b, v1.16b", Architecture::ARM64, vec![0x20, 0x58, 0x20, 0x4e]),
-        ("addv b0, v1.16b", Architecture::ARM64, vec![0x20, 0xb8, 0x31, 0x4e]),
-        ("ld1 { v0.16b }, [x1]", Architecture::ARM64, vec![0x20, 0x70, 0x40, 0x4c]),
-        ("sshll v0.8h, v1.8b, #0", Architecture::ARM64, vec![0x20, 0xa4, 0x08, 0x0f]),
-        ("uaddlv h0, v1.16b", Architecture::ARM64, vec![0x20, 0x38, 0x30, 0x6e]),
-        ("uzp1 v0.16b, v1.16b, v2.16b", Architecture::ARM64, vec![0x20, 0x18, 0x02, 0x4e]),
-        ("rev64 v0.16b, v1.16b", Architecture::ARM64, vec![0x20, 0x08, 0x20, 0x4e]),
-        ("extr x0, x1, x2, #8", Architecture::ARM64, vec![0x20, 0x20, 0xc2, 0x93]),
-        ("ldurb w0, [x1, #8]", Architecture::ARM64, vec![0x20, 0x80, 0x40, 0x38]),
-        ("sturb w0, [x1, #8]", Architecture::ARM64, vec![0x20, 0x80, 0x00, 0x38]),
-        ("sturh w0, [x1, #8]", Architecture::ARM64, vec![0x20, 0x80, 0x00, 0x78]),
-        ("movi v0.16b, #0", Architecture::ARM64, vec![0x00, 0xe4, 0x00, 0x4f]),
-        ("fnmul d0, d1, d2", Architecture::ARM64, vec![0x20, 0x88, 0x62, 0x1e]),
-        ("mrs x0, TPIDR_EL0", Architecture::ARM64, vec![0x40, 0xd0, 0x3b, 0xd5]),
+        (
+            "ldrb w0, [x1]",
+            Architecture::ARM64,
+            vec![0x20, 0x00, 0x40, 0x39],
+        ),
+        (
+            "strb w0, [x1]",
+            Architecture::ARM64,
+            vec![0x20, 0x00, 0x00, 0x39],
+        ),
+        (
+            "ldrh w0, [x1]",
+            Architecture::ARM64,
+            vec![0x20, 0x00, 0x40, 0x79],
+        ),
+        (
+            "ldrsw x0, [x1]",
+            Architecture::ARM64,
+            vec![0x20, 0x00, 0x80, 0xb9],
+        ),
+        (
+            "ldursw x0, [x1, #8]",
+            Architecture::ARM64,
+            vec![0x20, 0x80, 0x80, 0xb8],
+        ),
+        (
+            "ldur x0, [x1, #8]",
+            Architecture::ARM64,
+            vec![0x20, 0x80, 0x40, 0xf8],
+        ),
+        (
+            "stur x0, [x1, #8]",
+            Architecture::ARM64,
+            vec![0x20, 0x80, 0x00, 0xf8],
+        ),
+        (
+            "strh w0, [x1]",
+            Architecture::ARM64,
+            vec![0x20, 0x00, 0x00, 0x79],
+        ),
+        (
+            "ldrsb x0, [x1]",
+            Architecture::ARM64,
+            vec![0x20, 0x00, 0x80, 0x39],
+        ),
+        (
+            "ldrsh x0, [x1]",
+            Architecture::ARM64,
+            vec![0x20, 0x00, 0x80, 0x79],
+        ),
+        (
+            "csel x0, x1, x2, eq",
+            Architecture::ARM64,
+            vec![0x20, 0x00, 0x82, 0x9a],
+        ),
+        (
+            "cset x0, eq",
+            Architecture::ARM64,
+            vec![0xe0, 0x17, 0x9f, 0x9a],
+        ),
+        (
+            "csetm x0, eq",
+            Architecture::ARM64,
+            vec![0xe0, 0x13, 0x9f, 0xda],
+        ),
+        (
+            "csinc x0, x1, x2, eq",
+            Architecture::ARM64,
+            vec![0x20, 0x04, 0x82, 0x9a],
+        ),
+        (
+            "csinv x0, x1, x2, eq",
+            Architecture::ARM64,
+            vec![0x20, 0x00, 0x82, 0xda],
+        ),
+        (
+            "csneg x0, x1, x2, eq",
+            Architecture::ARM64,
+            vec![0x20, 0x04, 0x82, 0xda],
+        ),
+        (
+            "cneg x0, x1, eq",
+            Architecture::ARM64,
+            vec![0x20, 0x14, 0x81, 0xda],
+        ),
+        (
+            "cinc x0, x1, eq",
+            Architecture::ARM64,
+            vec![0x20, 0x14, 0x81, 0x9a],
+        ),
+        (
+            "fcsel d0, d1, d2, eq",
+            Architecture::ARM64,
+            vec![0x20, 0x0c, 0x62, 0x1e],
+        ),
+        (
+            "cmn x0, x1",
+            Architecture::ARM64,
+            vec![0x1f, 0x00, 0x01, 0xab],
+        ),
+        (
+            "ccmp x0, x1, #0, eq",
+            Architecture::ARM64,
+            vec![0x00, 0x00, 0x41, 0xfa],
+        ),
+        (
+            "sxtw x0, w1",
+            Architecture::ARM64,
+            vec![0x20, 0x7c, 0x40, 0x93],
+        ),
+        (
+            "sxtb x0, w1",
+            Architecture::ARM64,
+            vec![0x20, 0x1c, 0x40, 0x93],
+        ),
+        (
+            "sxth x0, w1",
+            Architecture::ARM64,
+            vec![0x20, 0x3c, 0x40, 0x93],
+        ),
+        (
+            "asr x0, x1, #3",
+            Architecture::ARM64,
+            vec![0x20, 0xfc, 0x43, 0x93],
+        ),
+        (
+            "ror x0, x1, #8",
+            Architecture::ARM64,
+            vec![0x20, 0x20, 0xc1, 0x93],
+        ),
+        (
+            "lsl x0, x1, #3",
+            Architecture::ARM64,
+            vec![0x20, 0xf0, 0x7d, 0xd3],
+        ),
+        (
+            "lsr x0, x1, #3",
+            Architecture::ARM64,
+            vec![0x20, 0xfc, 0x43, 0xd3],
+        ),
+        (
+            "ubfx x0, x1, #4, #8",
+            Architecture::ARM64,
+            vec![0x20, 0x2c, 0x44, 0xd3],
+        ),
+        (
+            "sbfx x0, x1, #4, #8",
+            Architecture::ARM64,
+            vec![0x20, 0x2c, 0x44, 0x93],
+        ),
+        (
+            "ubfiz x0, x1, #4, #8",
+            Architecture::ARM64,
+            vec![0x20, 0x1c, 0x7c, 0xd3],
+        ),
+        (
+            "bfxil x0, x1, #4, #8",
+            Architecture::ARM64,
+            vec![0x20, 0x2c, 0x44, 0xb3],
+        ),
+        (
+            "bfi x0, x1, #4, #8",
+            Architecture::ARM64,
+            vec![0x20, 0x1c, 0x7c, 0xb3],
+        ),
+        (
+            "sbfiz x0, x1, #4, #8",
+            Architecture::ARM64,
+            vec![0x20, 0x1c, 0x7c, 0x93],
+        ),
+        (
+            "bics x0, x1, x2",
+            Architecture::ARM64,
+            vec![0x20, 0x00, 0x22, 0xea],
+        ),
+        (
+            "bic x0, x1, x2",
+            Architecture::ARM64,
+            vec![0x20, 0x00, 0x22, 0x8a],
+        ),
+        (
+            "sdiv x0, x1, x2",
+            Architecture::ARM64,
+            vec![0x20, 0x0c, 0xc2, 0x9a],
+        ),
+        (
+            "udiv x0, x1, x2",
+            Architecture::ARM64,
+            vec![0x20, 0x08, 0xc2, 0x9a],
+        ),
+        (
+            "neg x0, x1",
+            Architecture::ARM64,
+            vec![0xe0, 0x03, 0x01, 0xcb],
+        ),
+        (
+            "mul x0, x1, x2",
+            Architecture::ARM64,
+            vec![0x20, 0x7c, 0x02, 0x9b],
+        ),
+        (
+            "umulh x0, x1, x2",
+            Architecture::ARM64,
+            vec![0x20, 0x7c, 0xc2, 0x9b],
+        ),
+        (
+            "msub x0, x1, x2, x3",
+            Architecture::ARM64,
+            vec![0x20, 0x8c, 0x02, 0x9b],
+        ),
+        (
+            "madd x0, x1, x2, x3",
+            Architecture::ARM64,
+            vec![0x20, 0x0c, 0x02, 0x9b],
+        ),
+        (
+            "umull x0, w1, w2",
+            Architecture::ARM64,
+            vec![0x20, 0x7c, 0xa2, 0x9b],
+        ),
+        (
+            "umaddl x0, w1, w2, x3",
+            Architecture::ARM64,
+            vec![0x20, 0x0c, 0xa2, 0x9b],
+        ),
+        (
+            "smull x0, w1, w2",
+            Architecture::ARM64,
+            vec![0x20, 0x7c, 0x22, 0x9b],
+        ),
+        (
+            "smaddl x0, w1, w2, x3",
+            Architecture::ARM64,
+            vec![0x20, 0x0c, 0x22, 0x9b],
+        ),
+        (
+            "fmov d0, d1",
+            Architecture::ARM64,
+            vec![0x20, 0x40, 0x60, 0x1e],
+        ),
+        (
+            "fmov x0, d1",
+            Architecture::ARM64,
+            vec![0x20, 0x00, 0x66, 0x9e],
+        ),
+        (
+            "fabs d0, d1",
+            Architecture::ARM64,
+            vec![0x20, 0xc0, 0x60, 0x1e],
+        ),
+        (
+            "fneg d0, d1",
+            Architecture::ARM64,
+            vec![0x20, 0x40, 0x61, 0x1e],
+        ),
+        (
+            "fcmp d0, d1",
+            Architecture::ARM64,
+            vec![0x00, 0x20, 0x61, 0x1e],
+        ),
+        (
+            "fccmp d0, d1, #0, eq",
+            Architecture::ARM64,
+            vec![0x00, 0x04, 0x61, 0x1e],
+        ),
+        (
+            "fadd d0, d1, d2",
+            Architecture::ARM64,
+            vec![0x20, 0x28, 0x62, 0x1e],
+        ),
+        (
+            "fmadd d0, d1, d2, d3",
+            Architecture::ARM64,
+            vec![0x20, 0x0c, 0x42, 0x1f],
+        ),
+        (
+            "fmsub d0, d1, d2, d3",
+            Architecture::ARM64,
+            vec![0x20, 0x8c, 0x42, 0x1f],
+        ),
+        (
+            "fsub d0, d1, d2",
+            Architecture::ARM64,
+            vec![0x20, 0x38, 0x62, 0x1e],
+        ),
+        (
+            "fdiv d0, d1, d2",
+            Architecture::ARM64,
+            vec![0x20, 0x18, 0x62, 0x1e],
+        ),
+        (
+            "fmin d0, d1, d2",
+            Architecture::ARM64,
+            vec![0x20, 0x58, 0x62, 0x1e],
+        ),
+        (
+            "fmax d0, d1, d2",
+            Architecture::ARM64,
+            vec![0x20, 0x48, 0x62, 0x1e],
+        ),
+        (
+            "scvtf d0, x1",
+            Architecture::ARM64,
+            vec![0x20, 0x00, 0x62, 0x9e],
+        ),
+        (
+            "ucvtf d0, x1",
+            Architecture::ARM64,
+            vec![0x20, 0x00, 0x63, 0x9e],
+        ),
+        (
+            "fcvtzs x0, d1",
+            Architecture::ARM64,
+            vec![0x20, 0x00, 0x78, 0x9e],
+        ),
+        (
+            "fcvtzu x0, d1",
+            Architecture::ARM64,
+            vec![0x20, 0x00, 0x79, 0x9e],
+        ),
+        (
+            "cmeq v0.16b, v1.16b, v2.16b",
+            Architecture::ARM64,
+            vec![0x20, 0x8c, 0x22, 0x6e],
+        ),
+        (
+            "cmhi v0.16b, v1.16b, v2.16b",
+            Architecture::ARM64,
+            vec![0x20, 0x34, 0x22, 0x6e],
+        ),
+        (
+            "dup v0.16b, w1",
+            Architecture::ARM64,
+            vec![0x20, 0x0c, 0x01, 0x4e],
+        ),
+        (
+            "cnt v0.16b, v1.16b",
+            Architecture::ARM64,
+            vec![0x20, 0x58, 0x20, 0x4e],
+        ),
+        (
+            "addv b0, v1.16b",
+            Architecture::ARM64,
+            vec![0x20, 0xb8, 0x31, 0x4e],
+        ),
+        (
+            "ld1 { v0.16b }, [x1]",
+            Architecture::ARM64,
+            vec![0x20, 0x70, 0x40, 0x4c],
+        ),
+        (
+            "sshll v0.8h, v1.8b, #0",
+            Architecture::ARM64,
+            vec![0x20, 0xa4, 0x08, 0x0f],
+        ),
+        (
+            "uaddlv h0, v1.16b",
+            Architecture::ARM64,
+            vec![0x20, 0x38, 0x30, 0x6e],
+        ),
+        (
+            "uzp1 v0.16b, v1.16b, v2.16b",
+            Architecture::ARM64,
+            vec![0x20, 0x18, 0x02, 0x4e],
+        ),
+        (
+            "rev64 v0.16b, v1.16b",
+            Architecture::ARM64,
+            vec![0x20, 0x08, 0x20, 0x4e],
+        ),
+        (
+            "extr x0, x1, x2, #8",
+            Architecture::ARM64,
+            vec![0x20, 0x20, 0xc2, 0x93],
+        ),
+        (
+            "ldurb w0, [x1, #8]",
+            Architecture::ARM64,
+            vec![0x20, 0x80, 0x40, 0x38],
+        ),
+        (
+            "sturb w0, [x1, #8]",
+            Architecture::ARM64,
+            vec![0x20, 0x80, 0x00, 0x38],
+        ),
+        (
+            "sturh w0, [x1, #8]",
+            Architecture::ARM64,
+            vec![0x20, 0x80, 0x00, 0x78],
+        ),
+        (
+            "movi v0.16b, #0",
+            Architecture::ARM64,
+            vec![0x00, 0xe4, 0x00, 0x4f],
+        ),
+        (
+            "fnmul d0, d1, d2",
+            Architecture::ARM64,
+            vec![0x20, 0x88, 0x62, 0x1e],
+        ),
+        (
+            "mrs x0, TPIDR_EL0",
+            Architecture::ARM64,
+            vec![0x40, 0xd0, 0x3b, 0xd5],
+        ),
         (
             "movk x0, #0x1234, lsl #16",
             Architecture::ARM64,
@@ -362,13 +1102,25 @@ fn arm64_common_semantics_regressions_stay_complete() {
 #[test]
 fn system_and_io_semantics_regressions_stay_complete() {
     let cases = [
+        ("clc", Architecture::AMD64, vec![0xf8]),
+        ("stc", Architecture::AMD64, vec![0xf9]),
+        ("cmc", Architecture::AMD64, vec![0xf5]),
+        ("cld", Architecture::AMD64, vec![0xfc]),
+        ("std", Architecture::AMD64, vec![0xfd]),
+        ("lahf", Architecture::AMD64, vec![0x9f]),
+        ("sahf", Architecture::AMD64, vec![0x9e]),
         ("sti", Architecture::AMD64, vec![0xfb]),
+        ("cli", Architecture::AMD64, vec![0xfa]),
         ("pushfq", Architecture::AMD64, vec![0x9c]),
         ("popfq", Architecture::AMD64, vec![0x9d]),
         ("pushfd", Architecture::I386, vec![0x9c]),
         ("pause", Architecture::I386, vec![0xf3, 0x90]),
         ("insd", Architecture::AMD64, vec![0x6d]),
         ("outsd", Architecture::AMD64, vec![0x6f]),
+        ("rdtsc", Architecture::AMD64, vec![0x0f, 0x31]),
+        ("rdtscp", Architecture::AMD64, vec![0x0f, 0x01, 0xf9]),
+        ("rdrand eax", Architecture::AMD64, vec![0x0f, 0xc7, 0xf0]),
+        ("rdseed eax", Architecture::AMD64, vec![0x0f, 0xc7, 0xf8]),
         (
             "fimul word ptr [rax]",
             Architecture::AMD64,
@@ -378,6 +1130,15 @@ fn system_and_io_semantics_regressions_stay_complete() {
 
     for (name, architecture, bytes) in cases {
         assert_complete_semantics(name, architecture, &bytes);
+    }
+}
+
+#[test]
+fn accuracy_gated_semantics_regressions_stay_partial() {
+    let cases: [(&str, Architecture, Vec<u8>); 0] = [];
+
+    for (name, architecture, bytes) in cases {
+        assert_partial_semantics(name, architecture, &bytes);
     }
 }
 

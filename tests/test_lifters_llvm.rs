@@ -903,6 +903,125 @@ fn llvm_lifter_handles_supported_sse_vector_ops() {
 }
 
 #[test]
+fn llvm_lifter_handles_packed_integer_vector_ops() {
+    let graph = disassemble_graph(
+        Architecture::AMD64,
+        &[
+            0x66, 0x0F, 0xEB, 0xC1, // por xmm0, xmm1
+            0x66, 0x0F, 0xDB, 0xC1, // pand xmm0, xmm1
+            0x66, 0x0F, 0xDF, 0xC1, // pandn xmm0, xmm1
+            0x66, 0x0F, 0xEF, 0xC1, // pxor xmm0, xmm1
+            0x66, 0x0F, 0xFC, 0xC1, // paddb xmm0, xmm1
+            0x66, 0x0F, 0xFD, 0xC1, // paddw xmm0, xmm1
+            0x66, 0x0F, 0xFE, 0xC1, // paddd xmm0, xmm1
+            0x66, 0x0F, 0xF8, 0xC1, // psubb xmm0, xmm1
+            0x66, 0x0F, 0xF9, 0xC1, // psubw xmm0, xmm1
+            0x66, 0x0F, 0xFA, 0xC1, // psubd xmm0, xmm1
+            0x66, 0x0F, 0x74, 0xC1, // pcmpeqb xmm0, xmm1
+            0x66, 0x0F, 0x75, 0xC1, // pcmpeqw xmm0, xmm1
+            0x66, 0x0F, 0x76, 0xC1, // pcmpeqd xmm0, xmm1
+            0x66, 0x0F, 0x64, 0xC1, // pcmpgtb xmm0, xmm1
+            0x66, 0x0F, 0x65, 0xC1, // pcmpgtw xmm0, xmm1
+            0x66, 0x0F, 0x66, 0xC1, // pcmpgtd xmm0, xmm1
+            0xC3, // ret
+        ],
+    );
+
+    verify_all_entity_lifts(&graph);
+}
+
+#[test]
+fn llvm_lifter_handles_vector_unpack_extract_insert_and_masks() {
+    let graph = disassemble_graph(
+        Architecture::AMD64,
+        &[
+            0x66, 0x0F, 0x60, 0xC1, // punpcklbw xmm0, xmm1
+            0x66, 0x0F, 0x68, 0xC1, // punpckhbw xmm0, xmm1
+            0x66, 0x0F, 0x61, 0xC1, // punpcklwd xmm0, xmm1
+            0x66, 0x0F, 0x69, 0xC1, // punpckhwd xmm0, xmm1
+            0x66, 0x0F, 0x62, 0xC1, // punpckldq xmm0, xmm1
+            0x66, 0x0F, 0x6A, 0xC1, // punpckhdq xmm0, xmm1
+            0x66, 0x0F, 0x6C, 0xC1, // punpcklqdq xmm0, xmm1
+            0x66, 0x0F, 0x6D, 0xC1, // punpckhqdq xmm0, xmm1
+            0x66, 0x0F, 0x15, 0xC1, // unpckhpd xmm0, xmm1
+            0x0F, 0x14, 0xC1, // unpcklps xmm0, xmm1
+            0x0F, 0x15, 0xC1, // unpckhps xmm0, xmm1
+            0x66, 0x0F, 0x3A, 0x14, 0xC0, 0x01, // pextrb eax, xmm0, 1
+            0x66, 0x0F, 0x3A, 0x16, 0xC0, 0x01, // pextrd eax, xmm0, 1
+            0x66, 0x0F, 0x3A, 0x20, 0xC0, 0x01, // pinsrb xmm0, eax, 1
+            0x66, 0x0F, 0x3A, 0x22, 0xC0, 0x01, // pinsrd xmm0, eax, 1
+            0x0F, 0x50, 0xC0, // movmskps eax, xmm0
+            0x66, 0x0F, 0x50, 0xC0, // movmskpd eax, xmm0
+            0x66, 0x0F, 0xD7, 0xC0, // pmovmskb eax, xmm0
+            0xC3, // ret
+        ],
+    );
+
+    verify_all_entity_lifts(&graph);
+}
+
+#[test]
+fn llvm_lifter_handles_vector_widen_and_shuffle_ops() {
+    let graph = disassemble_graph(
+        Architecture::AMD64,
+        &[
+            0x66, 0x0F, 0x38, 0x20, 0xC1, // pmovsxbw xmm0, xmm1
+            0x66, 0x0F, 0x38, 0x21, 0xC1, // pmovsxbd xmm0, xmm1
+            0x66, 0x0F, 0x38, 0x22, 0xC1, // pmovsxbq xmm0, xmm1
+            0x66, 0x0F, 0x38, 0x23, 0xC1, // pmovsxwd xmm0, xmm1
+            0x66, 0x0F, 0x38, 0x24, 0xC1, // pmovsxwq xmm0, xmm1
+            0x66, 0x0F, 0x38, 0x25, 0xC1, // pmovsxdq xmm0, xmm1
+            0x66, 0x0F, 0x38, 0x30, 0xC1, // pmovzxbw xmm0, xmm1
+            0x66, 0x0F, 0x38, 0x31, 0xC1, // pmovzxbd xmm0, xmm1
+            0x66, 0x0F, 0x38, 0x32, 0xC1, // pmovzxbq xmm0, xmm1
+            0x66, 0x0F, 0x38, 0x33, 0xC1, // pmovzxwd xmm0, xmm1
+            0x66, 0x0F, 0x38, 0x34, 0xC1, // pmovzxwq xmm0, xmm1
+            0x66, 0x0F, 0x38, 0x35, 0xC1, // pmovzxdq xmm0, xmm1
+            0x66, 0x0F, 0x70, 0xC1, 0x1B, // pshufd xmm0, xmm1, 0x1b
+            0xF3, 0x0F, 0x70, 0xC1, 0x1B, // pshufhw xmm0, xmm1, 0x1b
+            0xF2, 0x0F, 0x70, 0xC1, 0x1B, // pshuflw xmm0, xmm1, 0x1b
+            0xC3, // ret
+        ],
+    );
+
+    verify_all_entity_lifts(&graph);
+}
+
+#[test]
+fn llvm_lifter_handles_partial_lane_move_vector_ops() {
+    let graph = disassemble_graph(
+        Architecture::AMD64,
+        &[
+            0x0F, 0x12, 0xC1, // movhlps xmm0, xmm1
+            0x0F, 0x16, 0xC1, // movlhps xmm0, xmm1
+            0x66, 0x0F, 0x16, 0x00, // movhpd xmm0, qword ptr [rax]
+            0x66, 0x0F, 0x12, 0x00, // movlpd xmm0, qword ptr [rax]
+            0x0F, 0x16, 0x00, // movhps xmm0, qword ptr [rax]
+            0x0F, 0x12, 0x00, // movlps xmm0, qword ptr [rax]
+            0xC3, // ret
+        ],
+    );
+
+    verify_all_entity_lifts(&graph);
+}
+
+#[test]
+fn llvm_lifter_handles_vector_byte_shuffle_and_remaining_extract_insert_ops() {
+    let graph = disassemble_graph(
+        Architecture::AMD64,
+        &[
+            0x66, 0x0F, 0x38, 0x00, 0xC1, // pshufb xmm0, xmm1
+            0x66, 0x48, 0x0F, 0x3A, 0x16, 0xC0, 0x01, // pextrq rax, xmm0, 1
+            0x66, 0x48, 0x0F, 0x3A, 0x22, 0xC0, 0x01, // pinsrq xmm0, rax, 1
+            0x66, 0x0F, 0x3A, 0x17, 0xC0, 0x01, // extractps eax, xmm0, 1
+            0xC3, // ret
+        ],
+    );
+
+    verify_all_entity_lifts(&graph);
+}
+
+#[test]
 fn llvm_lifter_handles_supported_scalar_fp_ops() {
     let graph = disassemble_graph(
         Architecture::AMD64,
@@ -946,6 +1065,10 @@ fn llvm_lifter_handles_supported_system_ops() {
             0xFB, // sti
             0x9C, // pushfq
             0x9D, // popfq
+            0x0F, 0x31, // rdtsc
+            0x0F, 0x01, 0xF9, // rdtscp
+            0x0F, 0xC7, 0xF0, // rdrand eax
+            0x0F, 0xC7, 0xF8, // rdseed eax
             0x0F, 0x05, // syscall
         ],
     );
@@ -1160,7 +1283,7 @@ fn llvm_lifter_preserves_unsupported_instruction_fallback() {
 
 #[test]
 fn llvm_supported_semantics_cases_are_complete() {
-    let cases: &[(&str, Architecture, &[u8])] = &[
+    let complete_cases: &[(&str, Architecture, &[u8])] = &[
         (
             "shift_rotate_i386",
             Architecture::I386,
@@ -1206,6 +1329,13 @@ fn llvm_supported_semantics_cases_are_complete() {
             "system_supported_amd64",
             Architecture::AMD64,
             &[
+                0xF8, // clc
+                0xF9, // stc
+                0xF5, // cmc
+                0xFC, // cld
+                0xFD, // std
+                0x9F, // lahf
+                0x9E, // sahf
                 0xF3, 0x90, // pause
                 0x0F, 0xAE, 0xE8, // lfence
                 0xFA, // cli
@@ -1252,9 +1382,50 @@ fn llvm_supported_semantics_cases_are_complete() {
                 0xC3, // ret
             ],
         ),
+        (
+            "repeat_and_atomic_i386",
+            Architecture::I386,
+            &[
+                0xF0, 0x0F, 0xC7, 0x08, // lock cmpxchg8b qword ptr [eax]
+                0xF3, 0xAB, // rep stosd
+                0xF3, 0x66, 0xAB, // rep stosw
+                0xF3, 0xA4, // rep movsb
+                0xC3, // ret
+            ],
+        ),
+        (
+            "bit_scan_bmi_amd64",
+            Architecture::AMD64,
+            &[
+                0x0F, 0xBC, 0xC8, // bsf ecx, eax
+                0x0F, 0xBD, 0xC8, // bsr ecx, eax
+                0xF3, 0x0F, 0xBC, 0xC8, // tzcnt ecx, eax
+                0xF3, 0x0F, 0xBD, 0xC8, // lzcnt ecx, eax
+                0xC4, 0xE2, 0x78, 0xF3, 0xD9, // blsi eax, ecx
+                0xC4, 0xE2, 0x78, 0xF3, 0xD1, // blsmsk eax, ecx
+                0xC4, 0xE2, 0x78, 0xF3, 0xC9, // blsr eax, ecx
+                0x8F, 0xEA, 0x78, 0x10, 0xC1, 0x21, 0x00, 0x00, 0x00, // bextr eax, ecx, 0x21
+                0xC4, 0xE2, 0x70, 0xF2, 0xC2, // andn eax, ecx, edx
+                0xC4, 0xE2, 0x68, 0xF5, 0xC1, // bzhi eax, ecx, edx
+                0xC4, 0xE2, 0x63, 0xF6, 0xC1, // mulx eax, ebx, ecx
+                0xC4, 0xE2, 0x71, 0xF7, 0xC3, // shlx eax, ebx, ecx
+                0xC4, 0xE2, 0x73, 0xF7, 0xC3, // shrx eax, ebx, ecx
+                0xC4, 0xE2, 0x72, 0xF7, 0xC3, // sarx eax, ebx, ecx
+                0xC4, 0xE3, 0x7B, 0xF0, 0xC3, 0x07, // rorx eax, ebx, 7
+                0xC4, 0xE2, 0x63, 0xF5, 0xC1, // pdep eax, ebx, ecx
+                0xC4, 0xE2, 0x62, 0xF5, 0xC1, // pext eax, ebx, ecx
+                0x0F, 0xC8, // bswap eax
+                0xF3, 0x0F, 0xB8, 0xC3, // popcnt eax, ebx
+                0x0F, 0x38, 0xF0, 0x00, // movbe eax, dword ptr [eax]
+                0x0F, 0x38, 0xF1, 0x18, // movbe dword ptr [eax], ebx
+                0x66, 0x0F, 0x38, 0xF6, 0xC3, // adcx eax, ebx
+                0xF3, 0x0F, 0x38, 0xF6, 0xC3, // adox eax, ebx
+                0xC3, // ret
+            ],
+        ),
     ];
 
-    for (name, architecture, bytes) in cases {
+    for (name, architecture, bytes) in complete_cases {
         let graph = disassemble_graph(*architecture, bytes);
         verify_instruction_and_block_lifts(&graph);
         for instruction in graph.instructions() {
@@ -1270,6 +1441,45 @@ fn llvm_supported_semantics_cases_are_complete() {
                 "{name}: instruction 0x{:x} is not complete",
                 instruction.address
             );
+        }
+    }
+}
+
+#[test]
+fn llvm_accuracy_gated_semantics_cases_remain_partial() {
+    let partial_cases: &[(&str, Architecture, &[u8], &[u64])] = &[];
+
+    for (name, architecture, bytes, partial_addresses) in partial_cases {
+        let graph = disassemble_graph(*architecture, bytes);
+        verify_instruction_and_block_lifts(&graph);
+        let expected = partial_addresses.iter().copied().collect::<BTreeSet<_>>();
+        for instruction in graph.instructions() {
+            let semantics = instruction.semantics.as_ref().unwrap_or_else(|| {
+                panic!(
+                    "{name}: instruction 0x{:x} missing semantics",
+                    instruction.address
+                )
+            });
+            if expected.contains(&instruction.address) {
+                assert_eq!(
+                    semantics.status,
+                    SemanticStatus::Partial,
+                    "{name}: instruction 0x{:x} should remain partial",
+                    instruction.address
+                );
+                assert!(
+                    !semantics.diagnostics.is_empty(),
+                    "{name}: instruction 0x{:x} should carry diagnostics",
+                    instruction.address
+                );
+            } else {
+                assert_eq!(
+                    semantics.status,
+                    SemanticStatus::Complete,
+                    "{name}: instruction 0x{:x} should stay complete",
+                    instruction.address
+                );
+            }
         }
     }
 }
