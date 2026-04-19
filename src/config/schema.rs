@@ -66,7 +66,14 @@ pub enum ConfigProcessorValue {
 pub struct ConfigInstructions {
     pub enabled: bool,
     #[serde(default)]
+    pub semantics: ConfigInstructionsSemantics,
+    #[serde(default)]
     pub lifters: ConfigEntityLifters,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigInstructionsSemantics {
+    pub enabled: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -308,6 +315,12 @@ impl Default for ConfigMarkov {
 impl Default for ConfigEntityLifterLLVMNormalized {
     fn default() -> Self {
         Self { enabled: false }
+    }
+}
+
+impl Default for ConfigInstructionsSemantics {
+    fn default() -> Self {
+        Self { enabled: true }
     }
 }
 

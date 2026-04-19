@@ -34,9 +34,11 @@ The easiest API is the object-bound convenience form:
 
 ```python
 llvm = function.lifters().llvm()
+llvm.print()
 print(llvm.text())
 
 vex = function.lifters().vex()
+vex.print()
 print(vex.text())
 ```
 
@@ -51,10 +53,12 @@ config = Config()
 
 llvm = LlvmLifter(config)
 llvm.lift_function(function)
+llvm.print()
 print(llvm.text())
 
 vex = VexLifter(config)
 vex.lift_function(function)
+vex.print()
 print(vex.text())
 ```
 
@@ -69,10 +73,12 @@ let config = Config::default();
 
 let mut llvm = LlvmLifter::new(config.clone());
 llvm.lift_function(&function)?;
+llvm.print();
 println!("{}", llvm.text());
 
 let mut vex = VexLifter::new(config);
 vex.lift_function(&function)?;
+vex.print();
 println!("{}", vex.text());
 ```
 
@@ -83,6 +89,7 @@ LLVM is the richer of the two lifters.
 It supports:
 
 - `text()`
+- `print()`
 - `bitcode()`
 - `normalized()`
 - `verify()`
@@ -93,6 +100,7 @@ It supports:
 ```python
 llvm = function.lifters().llvm()
 
+llvm.print()
 print(llvm.text())
 bitcode = llvm.bitcode()
 normalized_text = llvm.normalized().text()
@@ -104,6 +112,7 @@ normalized_text = llvm.normalized().text()
 let mut llvm = binlex::lifters::llvm::Lifter::new(config.clone());
 llvm.lift_function(&function)?;
 
+llvm.print();
 let text = llvm.text();
 let bitcode = llvm.bitcode();
 let normalized = llvm.normalized()?.text();
@@ -118,19 +127,21 @@ Python:
 ```python
 llvm = function.lifters().llvm()
 
-text = (
+optimized = (
     llvm
     .optimizers()
     .mem2reg()
     .instcombine()
     .cfg()
-    .text()
 )
+optimized.print()
+text = optimized.text()
 ```
 
 The result remains an LLVM artifact, so you can still call:
 
 - `text()`
+- `print()`
 - `bitcode()`
 - `normalized()`
 
@@ -148,6 +159,7 @@ Example:
 
 ```python
 llvm = function.lifters().llvm()
+llvm.normalized().print()
 print(llvm.normalized().text())
 ```
 
@@ -158,6 +170,7 @@ VEX is intentionally simpler.
 It currently exposes:
 
 - `text()`
+- `print()`
 
 That is the supported surface.
 
@@ -165,6 +178,7 @@ That is the supported surface.
 
 ```python
 vex = function.lifters().vex()
+vex.print()
 print(vex.text())
 ```
 
@@ -173,6 +187,7 @@ print(vex.text())
 ```rust
 let mut vex = binlex::lifters::vex::Lifter::new(config);
 vex.lift_function(&function)?;
+vex.print();
 println!("{}", vex.text());
 ```
 

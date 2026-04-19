@@ -287,19 +287,19 @@ impl Block {
     /// Returns the chromosome associated with this block.
     ///
     /// # Returns
-    /// - `PyResult<Option<Chromosome>>`: The chromosome associated with this block.
-    pub fn chromosome(&self, py: Python) -> PyResult<Option<Chromosome>> {
+    /// - `PyResult<Chromosome>`: The chromosome associated with this block.
+    pub fn chromosome(&self, py: Python) -> PyResult<Chromosome> {
         self.with_inner_block(py, |block| {
             let binding = self.cfg.borrow(py);
             let inner_config = binding.inner.lock().unwrap().config.clone();
             let inner_chromosome = block.chromosome();
-            Ok(Some(Chromosome {
+            Ok(Chromosome {
                 inner: Arc::new(Mutex::new(inner_chromosome)),
                 minhash_num_hashes: inner_config.chromosomes.minhash.number_of_hashes,
                 minhash_shingle_size: inner_config.chromosomes.minhash.shingle_size,
                 minhash_seed: inner_config.chromosomes.minhash.seed,
                 tlsh_minimum_byte_size: inner_config.chromosomes.tlsh.minimum_byte_size,
-            }))
+            })
         })
     }
 
@@ -358,8 +358,12 @@ impl Block {
 
     #[pyo3(text_signature = "($self)")]
     /// Calculates the entropy of the block.
-    pub fn entropy(&self, py: Python) -> PyResult<Option<f64>> {
-        self.with_inner_block(py, |block| Ok(block.entropy()))
+    pub fn entropy(&self, py: Python) -> PyResult<f64> {
+        self.with_inner_block(py, |block| {
+            block.entropy().ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("failed to compute block entropy")
+            })
+        })
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -401,21 +405,27 @@ impl Block {
 
     #[pyo3(text_signature = "($self)")]
     /// Retrieves the TLSH (Trend Micro Locality Sensitive Hash) of the block.
-    pub fn tlsh(&self, py: Python) -> PyResult<Option<TLSH>> {
+    pub fn tlsh(&self, py: Python) -> PyResult<TLSH> {
         self.with_inner_block(py, |block| {
-            Ok(block.tlsh().map(|hash| TLSH {
+            let hash = block.tlsh().ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("failed to compute block tlsh")
+            })?;
+            Ok(TLSH {
                 bytes: hash.bytes.into_owned(),
-            }))
+            })
         })
     }
 
     #[pyo3(text_signature = "($self)")]
     /// Retrieves the SHA-256 hash of the block.
-    pub fn sha256(&self, py: Python) -> PyResult<Option<SHA256>> {
+    pub fn sha256(&self, py: Python) -> PyResult<SHA256> {
         self.with_inner_block(py, |block| {
-            Ok(block.sha256().map(|hash| SHA256 {
+            let hash = block.sha256().ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("failed to compute block sha256")
+            })?;
+            Ok(SHA256 {
                 bytes: hash.bytes.into_owned(),
-            }))
+            })
         })
     }
 

@@ -178,7 +178,7 @@ Instructions are usually accessed through a block, but they can also be looked u
 for function in graph.functions():
     for block in function.blocks():
         for instruction in block.instructions():
-            print(hex(instruction.address), instruction.size())
+            print(hex(instruction.address()), instruction.size())
 ```
 
 ### Rust
@@ -187,7 +187,7 @@ for function in graph.functions():
 for function in graph.functions() {
     for block in function.blocks.values() {
         for instruction in block.instructions() {
-            println!("0x{:x} size={}", instruction.address, instruction.size());
+            println!("0x{:x} size={}", instruction.address(), instruction.size());
         }
     }
 }
@@ -247,7 +247,7 @@ for function in graph.functions():
         for instruction in block.instructions():
             semantics = instruction.semantics()
             if semantics is not None:
-                print(hex(instruction.address), semantics.status())
+                print(hex(instruction.address()), semantics.status())
 ```
 
 ### Lift one function

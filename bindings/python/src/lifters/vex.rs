@@ -60,6 +60,11 @@ impl Lifter {
         self.inner.lock().unwrap().text()
     }
 
+    #[pyo3(text_signature = "($self)")]
+    pub fn print(&self) {
+        self.inner.lock().unwrap().print();
+    }
+
     pub fn __str__(&self) -> String {
         self.text()
     }

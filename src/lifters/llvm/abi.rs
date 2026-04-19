@@ -39,6 +39,34 @@ pub fn normalize_shift_binary(
     }
 }
 
+pub fn normalize_binary(
+    op: SemanticOperationBinary,
+    left: SemanticExpression,
+    right: SemanticExpression,
+    bits: u16,
+) -> (SemanticExpression, SemanticExpression) {
+    let left = coerce_expression_width(left, bits);
+    let right = coerce_expression_width(right, bits);
+    normalize_shift_binary(op, left, right, bits)
+}
+
+pub fn normalize_compare(
+    left: SemanticExpression,
+    right: SemanticExpression,
+) -> (SemanticExpression, SemanticExpression) {
+    let left_bits = expression_bits(&left);
+    let right_bits = expression_bits(&right);
+    if left_bits == right_bits {
+        return (left, right);
+    }
+
+    match (&left, &right) {
+        (SemanticExpression::Const { .. }, _) => (coerce_expression_width(left, right_bits), right),
+        (_, SemanticExpression::Const { .. }) => (left, coerce_expression_width(right, left_bits)),
+        _ => (left, coerce_expression_width(right, left_bits)),
+    }
+}
+
 pub fn coerce_int_value_width<'ctx>(
     builder: &Builder<'ctx>,
     value: IntValue<'ctx>,
@@ -87,8 +115,8 @@ pub fn expression_bits(expression: &SemanticExpression) -> u16 {
 
 #[cfg(test)]
 mod tests {
-    use super::coerce_expression_width;
-    use crate::semantics::{SemanticExpression, SemanticOperationCast};
+    use super::{coerce_expression_width, normalize_binary, normalize_compare};
+    use crate::semantics::{SemanticExpression, SemanticOperationBinary, SemanticOperationCast};
 
     #[test]
     fn widens_expression_with_zero_extend() {
@@ -99,6 +127,46 @@ mod tests {
                 assert_eq!(bits, 32);
             }
             other => panic!("unexpected widened expression: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn normalizes_binary_operands_to_expression_width() {
+        let (left, right) = normalize_binary(
+            SemanticOperationBinary::Xor,
+            SemanticExpression::Const { value: 1, bits: 32 },
+            SemanticExpression::Const { value: 1, bits: 64 },
+            32,
+        );
+        assert!(matches!(left, SemanticExpression::Const { bits: 32, .. }));
+        match right {
+            SemanticExpression::Cast { op, bits, .. } => {
+                assert_eq!(op, SemanticOperationCast::Truncate);
+                assert_eq!(bits, 32);
+            }
+            other => panic!("unexpected normalized right operand: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn normalizes_compare_constant_to_non_constant_width() {
+        let (left, right) = normalize_compare(
+            SemanticExpression::Read(Box::new(crate::semantics::SemanticLocation::Register {
+                name: "w0".to_string(),
+                bits: 32,
+            })),
+            SemanticExpression::Const {
+                value: 40,
+                bits: 64,
+            },
+        );
+        assert!(matches!(left, SemanticExpression::Read(_)));
+        match right {
+            SemanticExpression::Cast { op, bits, .. } => {
+                assert_eq!(op, SemanticOperationCast::Truncate);
+                assert_eq!(bits, 32);
+            }
+            other => panic!("unexpected normalized compare right operand: {:?}", other),
         }
     }
 }

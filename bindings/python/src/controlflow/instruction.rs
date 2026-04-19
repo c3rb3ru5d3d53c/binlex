@@ -180,7 +180,7 @@ impl InstructionJsonDeserializer {
     }
 
     pub fn json(&self) -> PyResult<String> {
-        serde_json::to_string_pretty(&*self.inner.lock().unwrap())
+        serde_json::to_string(&*self.inner.lock().unwrap())
             .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
     }
 
@@ -241,9 +241,9 @@ impl Instruction {
         })
     }
 
-    #[getter]
+    #[pyo3(text_signature = "($self)")]
     /// Return the address of the instruction.
-    pub fn get_address(&self) -> u64 {
+    pub fn address(&self) -> u64 {
         self.address
     }
 
@@ -251,19 +251,19 @@ impl Instruction {
     /// Returns the chromosome associated with this instruction.
     ///
     /// # Returns
-    /// - `PyResult<Option<Chromosome>>`: The chromosome associated with this instruction.
-    pub fn chromosome(&self, py: Python) -> PyResult<Option<Chromosome>> {
+    /// - `PyResult<Chromosome>`: The chromosome associated with this instruction.
+    pub fn chromosome(&self, py: Python) -> PyResult<Chromosome> {
         self.with_inner_instruction(py, |instruction| {
             let binding = self.cfg.borrow(py);
             let inner_config = binding.inner.lock().unwrap().config.clone();
             let inner_chromosome = instruction.chromosome();
-            Ok(Some(Chromosome {
+            Ok(Chromosome {
                 inner: Arc::new(Mutex::new(inner_chromosome)),
                 minhash_num_hashes: inner_config.chromosomes.minhash.number_of_hashes,
                 minhash_shingle_size: inner_config.chromosomes.minhash.shingle_size,
                 minhash_seed: inner_config.chromosomes.minhash.seed,
                 tlsh_minimum_byte_size: inner_config.chromosomes.tlsh.minimum_byte_size,
-            }))
+            })
         })
     }
 

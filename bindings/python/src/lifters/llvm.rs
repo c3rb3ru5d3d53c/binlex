@@ -61,6 +61,11 @@ impl Lifter {
     }
 
     #[pyo3(text_signature = "($self)")]
+    pub fn print(&self) {
+        self.inner.lock().unwrap().print();
+    }
+
+    #[pyo3(text_signature = "($self)")]
     pub fn bitcode(&self) -> Vec<u8> {
         self.inner.lock().unwrap().bitcode()
     }
