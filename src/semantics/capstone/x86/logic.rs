@@ -41,6 +41,60 @@ pub fn build(
 ) -> Option<InstructionSemantics> {
     if matches!(
         instruction.id(),
+        InsnId(id) if id == X86Insn::X86_INS_ANDN as u32
+    ) {
+        let dst = operands
+            .first()
+            .and_then(|operand| common::operand_location(machine, operand))?;
+        let src1 = operands
+            .get(1)
+            .and_then(|operand| common::operand_expr(machine, operand))?;
+        let src2 = operands
+            .get(2)
+            .and_then(|operand| common::operand_expr(machine, operand))?;
+        let bits = common::location_bits(&dst);
+        let result = common::and(common::not(src1, bits), src2, bits);
+        return Some(common::complete(
+            SemanticTerminator::FallThrough,
+            vec![
+                SemanticEffect::Set {
+                    dst,
+                    expression: result.clone(),
+                },
+                SemanticEffect::Set {
+                    dst: common::flag("zf"),
+                    expression: common::compare(
+                        SemanticOperationCompare::Eq,
+                        result.clone(),
+                        common::const_u64(0, bits),
+                    ),
+                },
+                SemanticEffect::Set {
+                    dst: common::flag("sf"),
+                    expression: common::extract_bit(result.clone(), bits.saturating_sub(1)),
+                },
+                SemanticEffect::Set {
+                    dst: common::flag("cf"),
+                    expression: common::bool_const(false),
+                },
+                SemanticEffect::Set {
+                    dst: common::flag("of"),
+                    expression: common::bool_const(false),
+                },
+                SemanticEffect::Set {
+                    dst: common::flag("pf"),
+                    expression: common::parity_flag(result),
+                },
+                SemanticEffect::Set {
+                    dst: common::flag("af"),
+                    expression: SemanticExpression::Undefined { bits: 1 },
+                },
+            ],
+        ));
+    }
+
+    if matches!(
+        instruction.id(),
         InsnId(id) if id == X86Insn::X86_INS_TEST as u32
     ) {
         let left = operands

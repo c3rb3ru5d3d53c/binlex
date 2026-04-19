@@ -85,9 +85,18 @@ The main building blocks are:
 - `Complete`
 - `Partial`
 
+Use `Complete` only when the modeled effects are intended to be trusted as-is. In practice that
+means:
+
+- no missing architectural side effects that you know about
+- no attached diagnostics
+
 Use `Partial` when you can describe some of the instruction but not all of it. Attach
 `SemanticDiagnostic` values to explain what is missing. That is the preferred way to model
 unsupported or architecture-specific cases without inventing false precision.
+
+Use `Partial` for intrinsic-backed placeholders when the intrinsic is carrying architectural detail
+that is not yet modeled directly in the semantics IR.
 
 ## Rust Usage
 

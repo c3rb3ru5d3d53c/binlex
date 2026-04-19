@@ -148,6 +148,31 @@ pub enum SemanticEffect {
         expression: SemanticExpression,
         bits: u16,
     },
+    MemorySet {
+        space: SemanticAddressSpace,
+        addr: SemanticExpression,
+        value: SemanticExpression,
+        count: SemanticExpression,
+        element_bits: u16,
+        decrement: SemanticExpression,
+    },
+    MemoryCopy {
+        src_space: SemanticAddressSpace,
+        src_addr: SemanticExpression,
+        dst_space: SemanticAddressSpace,
+        dst_addr: SemanticExpression,
+        count: SemanticExpression,
+        element_bits: u16,
+        decrement: SemanticExpression,
+    },
+    AtomicCmpXchg {
+        space: SemanticAddressSpace,
+        addr: SemanticExpression,
+        expected: SemanticExpression,
+        desired: SemanticExpression,
+        bits: u16,
+        observed: SemanticLocation,
+    },
     Fence {
         kind: SemanticFenceKind,
     },
@@ -166,6 +191,9 @@ pub enum SemanticEffect {
 pub enum SemanticEffectKind {
     Set,
     Store,
+    MemorySet,
+    MemoryCopy,
+    AtomicCmpXchg,
     Fence,
     Trap,
     Intrinsic,
@@ -332,6 +360,10 @@ pub enum SemanticOperationBinary {
     Sub,
     SubWithBorrow,
     Mul,
+    FAdd,
+    FSub,
+    FMul,
+    FDiv,
     UMulHigh,
     SMulHigh,
     UDiv,
@@ -460,6 +492,9 @@ impl SemanticEffect {
         match self {
             Self::Set { .. } => SemanticEffectKind::Set,
             Self::Store { .. } => SemanticEffectKind::Store,
+            Self::MemorySet { .. } => SemanticEffectKind::MemorySet,
+            Self::MemoryCopy { .. } => SemanticEffectKind::MemoryCopy,
+            Self::AtomicCmpXchg { .. } => SemanticEffectKind::AtomicCmpXchg,
             Self::Fence { .. } => SemanticEffectKind::Fence,
             Self::Trap { .. } => SemanticEffectKind::Trap,
             Self::Intrinsic { .. } => SemanticEffectKind::Intrinsic,
@@ -471,6 +506,8 @@ impl SemanticEffect {
         match self {
             Self::Set { expression, .. } => Some(expression),
             Self::Store { expression, .. } => Some(expression),
+            Self::MemorySet { value, .. } => Some(value),
+            Self::AtomicCmpXchg { desired, .. } => Some(desired),
             _ => None,
         }
     }

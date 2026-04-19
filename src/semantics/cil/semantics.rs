@@ -79,10 +79,7 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
                 SemanticTerminator::Branch {
                     condition: compare(SemanticOperationCompare::Ne, value, const_u64(0, 64)),
                     true_target: const_u64(true_target, 64),
-                    false_target: const_u64(
-                        instruction.next().unwrap_or(instruction.address),
-                        64,
-                    ),
+                    false_target: const_u64(instruction.next().unwrap_or(instruction.address), 64),
                 },
                 effects,
             );
@@ -93,10 +90,7 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
                 SemanticTerminator::Branch {
                     condition: compare(SemanticOperationCompare::Eq, value, const_u64(0, 64)),
                     true_target: const_u64(true_target, 64),
-                    false_target: const_u64(
-                        instruction.next().unwrap_or(instruction.address),
-                        64,
-                    ),
+                    false_target: const_u64(instruction.next().unwrap_or(instruction.address), 64),
                 },
                 effects,
             );
@@ -109,10 +103,7 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
                 SemanticTerminator::Branch {
                     condition: compare(SemanticOperationCompare::Eq, left, right),
                     true_target: const_u64(true_target, 64),
-                    false_target: const_u64(
-                        instruction.next().unwrap_or(instruction.address),
-                        64,
-                    ),
+                    false_target: const_u64(instruction.next().unwrap_or(instruction.address), 64),
                 },
                 effects,
             );
@@ -125,10 +116,7 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
                 SemanticTerminator::Branch {
                     condition: compare(SemanticOperationCompare::Ne, left, right),
                     true_target: const_u64(true_target, 64),
-                    false_target: const_u64(
-                        instruction.next().unwrap_or(instruction.address),
-                        64,
-                    ),
+                    false_target: const_u64(instruction.next().unwrap_or(instruction.address), 64),
                 },
                 effects,
             );
@@ -141,10 +129,7 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
                 SemanticTerminator::Branch {
                     condition: compare(SemanticOperationCompare::Slt, left, right),
                     true_target: const_u64(true_target, 64),
-                    false_target: const_u64(
-                        instruction.next().unwrap_or(instruction.address),
-                        64,
-                    ),
+                    false_target: const_u64(instruction.next().unwrap_or(instruction.address), 64),
                 },
                 effects,
             );
@@ -157,10 +142,7 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
                 SemanticTerminator::Branch {
                     condition: compare(SemanticOperationCompare::Ult, left, right),
                     true_target: const_u64(true_target, 64),
-                    false_target: const_u64(
-                        instruction.next().unwrap_or(instruction.address),
-                        64,
-                    ),
+                    false_target: const_u64(instruction.next().unwrap_or(instruction.address), 64),
                 },
                 effects,
             );
@@ -173,10 +155,7 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
                 SemanticTerminator::Branch {
                     condition: compare(SemanticOperationCompare::Sgt, left, right),
                     true_target: const_u64(true_target, 64),
-                    false_target: const_u64(
-                        instruction.next().unwrap_or(instruction.address),
-                        64,
-                    ),
+                    false_target: const_u64(instruction.next().unwrap_or(instruction.address), 64),
                 },
                 effects,
             );
@@ -189,10 +168,7 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
                 SemanticTerminator::Branch {
                     condition: compare(SemanticOperationCompare::Uge, left, right),
                     true_target: const_u64(true_target, 64),
-                    false_target: const_u64(
-                        instruction.next().unwrap_or(instruction.address),
-                        64,
-                    ),
+                    false_target: const_u64(instruction.next().unwrap_or(instruction.address), 64),
                 },
                 effects,
             );
@@ -205,10 +181,7 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
                 SemanticTerminator::Branch {
                     condition: compare(SemanticOperationCompare::Ugt, left, right),
                     true_target: const_u64(true_target, 64),
-                    false_target: const_u64(
-                        instruction.next().unwrap_or(instruction.address),
-                        64,
-                    ),
+                    false_target: const_u64(instruction.next().unwrap_or(instruction.address), 64),
                 },
                 effects,
             );
@@ -221,10 +194,7 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
                 SemanticTerminator::Branch {
                     condition: compare(SemanticOperationCompare::Sle, left, right),
                     true_target: const_u64(true_target, 64),
-                    false_target: const_u64(
-                        instruction.next().unwrap_or(instruction.address),
-                        64,
-                    ),
+                    false_target: const_u64(instruction.next().unwrap_or(instruction.address), 64),
                 },
                 effects,
             );
@@ -237,10 +207,7 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
                 SemanticTerminator::Branch {
                     condition: compare(SemanticOperationCompare::Ule, left, right),
                     true_target: const_u64(true_target, 64),
-                    false_target: const_u64(
-                        instruction.next().unwrap_or(instruction.address),
-                        64,
-                    ),
+                    false_target: const_u64(instruction.next().unwrap_or(instruction.address), 64),
                 },
                 effects,
             );
@@ -253,10 +220,7 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
                 SemanticTerminator::Branch {
                     condition: compare(SemanticOperationCompare::Sge, left, right),
                     true_target: const_u64(true_target, 64),
-                    false_target: const_u64(
-                        instruction.next().unwrap_or(instruction.address),
-                        64,
-                    ),
+                    false_target: const_u64(instruction.next().unwrap_or(instruction.address), 64),
                 },
                 effects,
             );
@@ -480,20 +444,12 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
         }
         Mnemonic::Not => {
             let (mut effects, value) = pop_stack();
-            effects.extend(push_effects(unary(
-                SemanticOperationUnary::Not,
-                value,
-                64,
-            )));
+            effects.extend(push_effects(unary(SemanticOperationUnary::Not, value, 64)));
             complete_with_effects(SemanticTerminator::FallThrough, effects)
         }
         Mnemonic::Neg => {
             let (mut effects, value) = pop_stack();
-            effects.extend(push_effects(unary(
-                SemanticOperationUnary::Neg,
-                value,
-                64,
-            )));
+            effects.extend(push_effects(unary(SemanticOperationUnary::Neg, value, 64)));
             complete_with_effects(SemanticTerminator::FallThrough, effects)
         }
         Mnemonic::Ceq => {
@@ -616,8 +572,12 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
         Mnemonic::LdcI47 => push_expression(const_u64(7, 64)),
         Mnemonic::LdcI48 => push_expression(const_u64(8, 64)),
         Mnemonic::LdcI4M1 => push_expression(const_u64(u64::MAX, 64)),
-        Mnemonic::LdcI4S => push_expression(const_u64(sign_extend(operand_value(instruction), 8), 64)),
-        Mnemonic::LdcI4 => push_expression(const_u64(sign_extend(operand_value(instruction), 32), 64)),
+        Mnemonic::LdcI4S => {
+            push_expression(const_u64(sign_extend(operand_value(instruction), 8), 64))
+        }
+        Mnemonic::LdcI4 => {
+            push_expression(const_u64(sign_extend(operand_value(instruction), 32), 64))
+        }
         Mnemonic::LdcI8 => push_expression(const_u64(operand_value(instruction), 64)),
         Mnemonic::LdcR4 => push_expression(const_u64(operand_value(instruction), 64)),
         Mnemonic::LdcR8 => push_expression(const_u64(operand_value(instruction), 64)),
@@ -628,9 +588,9 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
         Mnemonic::LdArgS | Mnemonic::LdArg => {
             push_expression(read(cil_argument(operand_value(instruction) as u32)))
         }
-        Mnemonic::LdArgAS | Mnemonic::LdArgA => {
-            push_expression(read(cil_argument_address(operand_value(instruction) as u32)))
-        }
+        Mnemonic::LdArgAS | Mnemonic::LdArgA => push_expression(read(cil_argument_address(
+            operand_value(instruction) as u32,
+        ))),
         Mnemonic::LdLoc0 => push_expression(read(cil_local(0))),
         Mnemonic::LdLoc1 => push_expression(read(cil_local(1))),
         Mnemonic::LdLoc2 => push_expression(read(cil_local(2))),
@@ -1175,99 +1135,83 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
                 },
             )
         }
-        Mnemonic::Volatile => complete_with_effects(
-            SemanticTerminator::FallThrough,
-            vec![SemanticEffect::Nop],
-        ),
-        Mnemonic::Constrained => complete_with_effects(
-            SemanticTerminator::FallThrough,
-            vec![SemanticEffect::Nop],
-        ),
-        Mnemonic::Cpobj => complete_with_effects(
-            SemanticTerminator::FallThrough,
-            vec![SemanticEffect::Nop],
-        ),
+        Mnemonic::Volatile => {
+            complete_with_effects(SemanticTerminator::FallThrough, vec![SemanticEffect::Nop])
+        }
+        Mnemonic::Constrained => {
+            complete_with_effects(SemanticTerminator::FallThrough, vec![SemanticEffect::Nop])
+        }
+        Mnemonic::Cpobj => {
+            complete_with_effects(SemanticTerminator::FallThrough, vec![SemanticEffect::Nop])
+        }
         Mnemonic::LdToken => push_expression(const_u64(operand_value(instruction), 64)),
         mnemonic
-            if matches!(
-                mnemonic,
-                    | Mnemonic::AddOvf
-                    | Mnemonic::AddOvfUn
-                    
-                    | Mnemonic::MulOvf
-                    | Mnemonic::MulOvfUn
-                    | Mnemonic::RemUn
-                    
-                    | Mnemonic::SubOvf
-                    | Mnemonic::SubOvfUn
-                    
-                    | Mnemonic::Cgt
-                    | Mnemonic::ConvI
-                    | Mnemonic::ConvOvfI
-                    | Mnemonic::ConvOvfIUn
-                    | Mnemonic::ConvOvfI1
-                    | Mnemonic::ConvOvfI1Un
-                    | Mnemonic::ConvOvfI2
-                    | Mnemonic::ConvOvfI2Un
-                    | Mnemonic::ConvOvfI4
-                    | Mnemonic::ConvOvfI4Un
-                    | Mnemonic::ConvOvfI8
-                    | Mnemonic::ConvOvfI8Un
-                    | Mnemonic::ConvOvfU
-                    | Mnemonic::ConvOvfUUn
-                    | Mnemonic::ConvOvfU1
-                    | Mnemonic::ConvOvfU1Un
-                    | Mnemonic::ConvOvfU2
-                    | Mnemonic::ConvOvfU2Un
-                    | Mnemonic::ConvOvfU4
-                    | Mnemonic::ConvOvfU4Un
-                    | Mnemonic::ConvOvfU8
-                    | Mnemonic::ConvOvfU8Un
-                    | Mnemonic::ConvRUn
-                    | Mnemonic::ConvR4
-                    | Mnemonic::ConvU
-                    | Mnemonic::ConvU1
-                    
-                    | Mnemonic::CastClass
-                    | Mnemonic::CkInite
-                    | Mnemonic::CpBlk
-                    | Mnemonic::End
-                    | Mnemonic::EndFilter
-                    | Mnemonic::InitBlk
-                    
-                    | Mnemonic::Jmp
-                    | Mnemonic::LdElmI
-                    | Mnemonic::LdElmI1
-                    | Mnemonic::LdElmI2
-                    | Mnemonic::LdElmU8
-                    | Mnemonic::LdElmR4
-                    | Mnemonic::LdIndI
-                    | Mnemonic::LdIndI1
-                    | Mnemonic::LdIndI2
-                    
-                    | Mnemonic::LdVirtFtn
-                    | Mnemonic::Leave
-                    | Mnemonic::LeaveS
-                    | Mnemonic::LocAlloc
-                    | Mnemonic::MkRefAny
-                    
-                    | Mnemonic::No
-                    | Mnemonic::ReadOnly
-                    | Mnemonic::RefAnyType
-                    | Mnemonic::RefAnyVal
-                    | Mnemonic::ReThrow
-                    | Mnemonic::SizeOf
-                    | Mnemonic::StElemI
-                    | Mnemonic::StElemI1
-                    | Mnemonic::StElemI8
-                    | Mnemonic::StElemR4
-                    | Mnemonic::StElemR8
-                    
-                    
-                    | Mnemonic::Tail
-                    | Mnemonic::Unaligned
-                    | Mnemonic::Unbox
-            ) =>
+            if matches!(mnemonic, |Mnemonic::AddOvf| Mnemonic::AddOvfUn
+                | Mnemonic::MulOvf
+                | Mnemonic::MulOvfUn
+                | Mnemonic::RemUn
+                | Mnemonic::SubOvf
+                | Mnemonic::SubOvfUn
+                | Mnemonic::Cgt
+                | Mnemonic::ConvI
+                | Mnemonic::ConvOvfI
+                | Mnemonic::ConvOvfIUn
+                | Mnemonic::ConvOvfI1
+                | Mnemonic::ConvOvfI1Un
+                | Mnemonic::ConvOvfI2
+                | Mnemonic::ConvOvfI2Un
+                | Mnemonic::ConvOvfI4
+                | Mnemonic::ConvOvfI4Un
+                | Mnemonic::ConvOvfI8
+                | Mnemonic::ConvOvfI8Un
+                | Mnemonic::ConvOvfU
+                | Mnemonic::ConvOvfUUn
+                | Mnemonic::ConvOvfU1
+                | Mnemonic::ConvOvfU1Un
+                | Mnemonic::ConvOvfU2
+                | Mnemonic::ConvOvfU2Un
+                | Mnemonic::ConvOvfU4
+                | Mnemonic::ConvOvfU4Un
+                | Mnemonic::ConvOvfU8
+                | Mnemonic::ConvOvfU8Un
+                | Mnemonic::ConvRUn
+                | Mnemonic::ConvR4
+                | Mnemonic::ConvU
+                | Mnemonic::ConvU1
+                | Mnemonic::CastClass
+                | Mnemonic::CkInite
+                | Mnemonic::CpBlk
+                | Mnemonic::End
+                | Mnemonic::EndFilter
+                | Mnemonic::InitBlk
+                | Mnemonic::Jmp
+                | Mnemonic::LdElmI
+                | Mnemonic::LdElmI1
+                | Mnemonic::LdElmI2
+                | Mnemonic::LdElmU8
+                | Mnemonic::LdElmR4
+                | Mnemonic::LdIndI
+                | Mnemonic::LdIndI1
+                | Mnemonic::LdIndI2
+                | Mnemonic::LdVirtFtn
+                | Mnemonic::Leave
+                | Mnemonic::LeaveS
+                | Mnemonic::LocAlloc
+                | Mnemonic::MkRefAny
+                | Mnemonic::No
+                | Mnemonic::ReadOnly
+                | Mnemonic::RefAnyType
+                | Mnemonic::RefAnyVal
+                | Mnemonic::ReThrow
+                | Mnemonic::SizeOf
+                | Mnemonic::StElemI
+                | Mnemonic::StElemI1
+                | Mnemonic::StElemI8
+                | Mnemonic::StElemR4
+                | Mnemonic::StElemR8
+                | Mnemonic::Tail
+                | Mnemonic::Unaligned
+                | Mnemonic::Unbox) =>
         {
             complete_intrinsic(instruction, format!("cil.{:?}", mnemonic))
         }
@@ -1626,12 +1570,7 @@ fn push_effects(expression: SemanticExpression) -> Vec<SemanticEffect> {
 fn pop_stack() -> (Vec<SemanticEffect>, SemanticExpression) {
     let sp = cil_stack_pointer();
     let sp_read = read(sp.clone());
-    let prev_sp = binary(
-        SemanticOperationBinary::Sub,
-        sp_read,
-        const_u64(8, 64),
-        64,
-    );
+    let prev_sp = binary(SemanticOperationBinary::Sub, sp_read, const_u64(8, 64), 64);
     let value = SemanticExpression::Load {
         space: SemanticAddressSpace::Stack,
         addr: Box::new(prev_sp.clone()),
@@ -1648,12 +1587,7 @@ fn pop_stack() -> (Vec<SemanticEffect>, SemanticExpression) {
 
 fn peek_stack() -> (Vec<SemanticEffect>, SemanticExpression) {
     let sp_read = read(cil_stack_pointer());
-    let top_addr = binary(
-        SemanticOperationBinary::Sub,
-        sp_read,
-        const_u64(8, 64),
-        64,
-    );
+    let top_addr = binary(SemanticOperationBinary::Sub, sp_read, const_u64(8, 64), 64);
     (
         Vec::new(),
         SemanticExpression::Load {

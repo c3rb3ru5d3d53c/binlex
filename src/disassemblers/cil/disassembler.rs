@@ -78,11 +78,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         }
     }
 
-    fn log_semantics_debug(
-        &self,
-        semantics: &InstructionSemantics,
-        instruction: &Instruction,
-    ) {
+    fn log_semantics_debug(&self, semantics: &InstructionSemantics, instruction: &Instruction) {
         let effectively_partial = self.has_effectively_partial_semantics(semantics);
         if !effectively_partial {
             return;

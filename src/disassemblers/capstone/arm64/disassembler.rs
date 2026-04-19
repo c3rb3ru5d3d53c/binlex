@@ -36,8 +36,8 @@ use capstone::RegId;
 use capstone::arch::ArchOperand;
 use capstone::arch::arm64::{Arm64Extender, Arm64Insn, Arm64OperandType, Arm64Shift};
 use capstone::prelude::*;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::io::{Error, ErrorKind};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -333,7 +333,8 @@ impl<'disassembler> Disassembler<'disassembler> {
                         .iter()
                         .copied()
                         .filter(|address| {
-                            !cfg.functions.is_valid(*address) && !cfg.is_instruction_address(*address)
+                            !cfg.functions.is_valid(*address)
+                                && !cfg.is_instruction_address(*address)
                         })
                         .collect();
                     if function_addresses.is_empty() {
@@ -395,7 +396,8 @@ impl<'disassembler> Disassembler<'disassembler> {
             let blocks_valid = self.metrics.blocks_valid.load(Ordering::Relaxed);
             let blocks_invalid = self.metrics.blocks_invalid.load(Ordering::Relaxed);
             let blocks_dedup_skipped = self.metrics.blocks_dedup_skipped.load(Ordering::Relaxed);
-            let instructions_processed = self.metrics.instructions_processed.load(Ordering::Relaxed);
+            let instructions_processed =
+                self.metrics.instructions_processed.load(Ordering::Relaxed);
             let instructions_valid = self.metrics.instructions_valid.load(Ordering::Relaxed);
             let instructions_invalid = self.metrics.instructions_invalid.load(Ordering::Relaxed);
             let shared_tail_splits = self.metrics.shared_tail_splits.load(Ordering::Relaxed);

@@ -46,13 +46,6 @@ pub fn build(
         InsnId(id) if id == X86Insn::X86_INS_POP as u32 => pop(machine, instruction, operands),
         InsnId(id) if id == X86Insn::X86_INS_LEAVE as u32 => leave(machine, instruction),
         InsnId(id) if id == X86Insn::X86_INS_ENTER as u32 => enter(machine, instruction, operands),
-        _ if instruction
-            .mnemonic()
-            .unwrap_or_default()
-            .starts_with("rep stosw") =>
-        {
-            rep_stosw(machine)
-        }
         _ => None,
     }
 }
@@ -141,34 +134,6 @@ fn enter(
     });
 
     Some(common::complete(SemanticTerminator::FallThrough, effects))
-}
-
-fn rep_stosw(machine: Architecture) -> Option<InstructionSemantics> {
-    let di_reg = match machine {
-        Architecture::AMD64 => X86Reg::X86_REG_RDI as u16,
-        Architecture::I386 => X86Reg::X86_REG_EDI as u16,
-        _ => X86Reg::X86_REG_RDI as u16,
-    };
-    let cx_reg = match machine {
-        Architecture::AMD64 => X86Reg::X86_REG_RCX as u16,
-        Architecture::I386 => X86Reg::X86_REG_ECX as u16,
-        _ => X86Reg::X86_REG_RCX as u16,
-    };
-    let pointer_bits = common::pointer_bits(machine);
-    let di = common::reg(common::reg_id_name(di_reg), pointer_bits);
-    let cx = common::reg(common::reg_id_name(cx_reg), pointer_bits);
-    Some(common::complete(
-        SemanticTerminator::FallThrough,
-        vec![SemanticEffect::Intrinsic {
-            name: "x86.rep.stosw".to_string(),
-            args: vec![
-                SemanticExpression::Read(Box::new(di.clone())),
-                SemanticExpression::Read(Box::new(cx.clone())),
-                common::reg_expr(X86Reg::X86_REG_AX as u16, 16),
-            ],
-            outputs: vec![di, cx],
-        }],
-    ))
 }
 
 fn push(

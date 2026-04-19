@@ -20,6 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use crate::Architecture;
+use crate::Config;
 use crate::controlflow::Graph;
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeJson;
@@ -31,8 +33,6 @@ use crate::lifters::vex::{Lifter as VexLifter, VexJson};
 use crate::metadata::Attributes;
 use crate::semantics::InstructionSemantics;
 use crate::semantics::InstructionSemanticsJson;
-use crate::Architecture;
-use crate::Config;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Value;
