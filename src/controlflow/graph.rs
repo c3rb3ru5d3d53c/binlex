@@ -867,10 +867,7 @@ impl Graph {
                 for processor in &remote_processors {
                     crate::io::stderr::Stderr::print_debug(
                         &self.config,
-                        format!(
-                            "graph-stage invoking processor {}",
-                            processor.name()
-                        ),
+                        format!("graph-stage invoking processor {}", processor.name()),
                     );
                     let Some(fanout) = processor.process_graph(self) else {
                         crate::io::stderr::Stderr::print_debug(

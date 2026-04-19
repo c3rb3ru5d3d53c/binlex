@@ -39,7 +39,8 @@ impl Architecture {
         let inner = match value {
             0x00 => InnerArchitecture::AMD64,
             0x01 => InnerArchitecture::I386,
-            0x02 => InnerArchitecture::CIL,
+            0x02 => InnerArchitecture::ARM64,
+            0x03 => InnerArchitecture::CIL,
             _ => InnerArchitecture::UNKNOWN,
         };
         Architecture { inner }

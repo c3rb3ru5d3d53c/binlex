@@ -34,10 +34,12 @@ pub enum Architecture {
     AMD64 = 0x00,
     /// 32-bit Intel architecture.
     I386 = 0x01,
+    /// 64-bit ARM architecture.
+    ARM64 = 0x02,
     /// CIL
-    CIL = 0x02,
+    CIL = 0x03,
     /// Unknown architecture.
-    UNKNOWN = 0x03,
+    UNKNOWN = 0x04,
 }
 
 impl<'de> Deserialize<'de> for Architecture {
@@ -61,7 +63,7 @@ impl Serialize for Architecture {
 
 impl Architecture {
     pub const fn all() -> &'static [Self] {
-        &[Self::AMD64, Self::I386, Self::CIL]
+        &[Self::AMD64, Self::I386, Self::ARM64, Self::CIL]
     }
 
     pub fn to_vec() -> Vec<String> {
@@ -78,6 +80,7 @@ impl Architecture {
         match s.to_lowercase().as_str() {
             "amd64" => Ok(Architecture::AMD64),
             "i386" => Ok(Architecture::I386),
+            "arm64" | "aarch64" => Ok(Architecture::ARM64),
             "cil" => Ok(Architecture::CIL),
             _ => Err(Error::new(
                 ErrorKind::InvalidInput,
@@ -93,6 +96,7 @@ impl fmt::Display for Architecture {
         let architecture = match self {
             Architecture::AMD64 => "amd64",
             Architecture::I386 => "i386",
+            Architecture::ARM64 => "arm64",
             Architecture::CIL => "cil",
             Architecture::UNKNOWN => "unknown",
         };
@@ -106,6 +110,7 @@ impl FromStr for Architecture {
         match s {
             "amd64" => Ok(Architecture::AMD64),
             "i386" => Ok(Architecture::I386),
+            "arm64" | "aarch64" => Ok(Architecture::ARM64),
             "cil" => Ok(Architecture::CIL),
             _ => Err(Error::new(
                 ErrorKind::InvalidInput,

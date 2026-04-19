@@ -115,13 +115,13 @@ impl PyMachoSlice {
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn architecture(&self) -> Option<Architecture> {
+    pub fn architecture(&self) -> Architecture {
         let architecture = self
             .with_slice(|slice: InnerMachoSlice<'_>| slice.architecture())
-            .flatten()?;
-        Some(Architecture {
+            .unwrap_or(binlex::Architecture::UNKNOWN);
+        Architecture {
             inner: architecture,
-        })
+        }
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -260,13 +260,12 @@ impl MACHO {
     }
 
     #[pyo3(text_signature = "($self, slice)")]
-    /// Return the architecture for a given slice, if available.
-    pub fn architecture(&self, slice: usize) -> Option<Architecture> {
+    /// Return the architecture for a given slice.
+    pub fn architecture(&self, slice: usize) -> Architecture {
         let architecture = self.inner.lock().unwrap().architecture(slice);
-        architecture.as_ref()?;
-        Some(Architecture {
-            inner: architecture.unwrap(),
-        })
+        Architecture {
+            inner: architecture,
+        }
     }
 
     #[pyo3(text_signature = "($self, slice)")]
@@ -290,7 +289,7 @@ impl MACHO {
             .executable_virtual_address_ranges(slice)
     }
 
-    #[pyo3(text_signature = "($self)")]
+    #[pyo3(text_signature = "($self, slice)")]
     /// Return an `Image` view over the selected slice.
     pub fn image(&self, py: Python<'_>, slice: usize) -> PyResult<Py<Image>> {
         let result = self

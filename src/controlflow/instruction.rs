@@ -310,12 +310,9 @@ impl Instruction {
             lifter.lift_instruction(self).ok()?;
 
             let normalized = if self.config.instructions.lifters.llvm.normalized.enabled {
-                lifter
-                    .normalized()
-                    .ok()
-                    .map(|artifact| LlvmNormalizedJson {
-                        text: artifact.text(),
-                    })
+                lifter.normalized().ok().map(|artifact| LlvmNormalizedJson {
+                    text: artifact.text(),
+                })
             } else {
                 None
             };
@@ -329,7 +326,8 @@ impl Instruction {
         };
 
         #[cfg(not(target_os = "windows"))]
-        let vex = if self.config.lifters.vex.enabled && self.config.instructions.lifters.vex.enabled {
+        let vex = if self.config.lifters.vex.enabled && self.config.instructions.lifters.vex.enabled
+        {
             let mut lifter = VexLifter::new(self.config.clone());
             lifter.lift_instruction(self).ok()?;
             Some(VexJson {

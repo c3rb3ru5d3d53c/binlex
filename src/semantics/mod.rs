@@ -29,7 +29,7 @@ pub use instruction::{
     InstructionSemantics, InstructionSemanticsJson, SemanticAddressSpace, SemanticDiagnostic,
     SemanticDiagnosticKind, SemanticEffect, SemanticEffectKind, SemanticExpression,
     SemanticExpressionKind, SemanticFenceKind, SemanticLocation, SemanticLocationKind,
-    SemanticOperation, SemanticOperationBinary, SemanticOperationCast,
-    SemanticOperationCompare, SemanticOperationUnary, SemanticStatus, SemanticTemporary,
-    SemanticTerminator, SemanticTerminatorKind, SemanticTrapKind,
+    SemanticOperation, SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
+    SemanticOperationUnary, SemanticStatus, SemanticTemporary, SemanticTerminator,
+    SemanticTerminatorKind, SemanticTrapKind,
 };
