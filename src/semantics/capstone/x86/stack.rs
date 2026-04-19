@@ -44,10 +44,103 @@ pub fn build(
     match instruction.id() {
         InsnId(id) if id == X86Insn::X86_INS_PUSH as u32 => push(machine, instruction, operands),
         InsnId(id) if id == X86Insn::X86_INS_POP as u32 => pop(machine, instruction, operands),
+        InsnId(id) if id == X86Insn::X86_INS_PUSHAL as u32 => pushal(machine),
+        InsnId(id) if id == X86Insn::X86_INS_POPAL as u32 => popal(machine),
         InsnId(id) if id == X86Insn::X86_INS_LEAVE as u32 => leave(machine, instruction),
         InsnId(id) if id == X86Insn::X86_INS_ENTER as u32 => enter(machine, instruction, operands),
         _ => None,
     }
+}
+
+fn pushal(machine: Architecture) -> Option<InstructionSemantics> {
+    if !matches!(machine, Architecture::I386) {
+        return None;
+    }
+    let sp = stack_pointer_location(machine);
+    let old_sp = SemanticExpression::Read(Box::new(sp.clone()));
+    let esp = common::reg_expr(X86Reg::X86_REG_ESP as u16, 32);
+    let regs = [
+        common::reg_expr(X86Reg::X86_REG_EAX as u16, 32),
+        common::reg_expr(X86Reg::X86_REG_ECX as u16, 32),
+        common::reg_expr(X86Reg::X86_REG_EDX as u16, 32),
+        common::reg_expr(X86Reg::X86_REG_EBX as u16, 32),
+        esp,
+        common::reg_expr(X86Reg::X86_REG_EBP as u16, 32),
+        common::reg_expr(X86Reg::X86_REG_ESI as u16, 32),
+        common::reg_expr(X86Reg::X86_REG_EDI as u16, 32),
+    ];
+    let mut effects = Vec::new();
+    for (index, reg) in regs.into_iter().enumerate() {
+        effects.push(SemanticEffect::Store {
+            space: SemanticAddressSpace::Stack,
+            addr: common::sub(
+                old_sp.clone(),
+                common::const_u64(((index + 1) * 4) as u64, 32),
+                32,
+            ),
+            expression: reg,
+            bits: 32,
+        });
+    }
+    effects.push(SemanticEffect::Set {
+        dst: sp,
+        expression: common::sub(old_sp, common::const_u64(32, 32), 32),
+    });
+    Some(common::complete(SemanticTerminator::FallThrough, effects))
+}
+
+fn popal(machine: Architecture) -> Option<InstructionSemantics> {
+    if !matches!(machine, Architecture::I386) {
+        return None;
+    }
+    let sp = stack_pointer_location(machine);
+    let old_sp = SemanticExpression::Read(Box::new(sp.clone()));
+    let loads = |offset: u64| SemanticExpression::Load {
+        space: SemanticAddressSpace::Stack,
+        addr: Box::new(common::add(
+            old_sp.clone(),
+            common::const_u64(offset, 32),
+            32,
+        )),
+        bits: 32,
+    };
+    Some(common::complete(
+        SemanticTerminator::FallThrough,
+        vec![
+            SemanticEffect::Set {
+                dst: common::reg(common::reg_id_name(X86Reg::X86_REG_EDI as u16), 32),
+                expression: loads(0),
+            },
+            SemanticEffect::Set {
+                dst: common::reg(common::reg_id_name(X86Reg::X86_REG_ESI as u16), 32),
+                expression: loads(4),
+            },
+            SemanticEffect::Set {
+                dst: common::reg(common::reg_id_name(X86Reg::X86_REG_EBP as u16), 32),
+                expression: loads(8),
+            },
+            SemanticEffect::Set {
+                dst: common::reg(common::reg_id_name(X86Reg::X86_REG_EBX as u16), 32),
+                expression: loads(16),
+            },
+            SemanticEffect::Set {
+                dst: common::reg(common::reg_id_name(X86Reg::X86_REG_EDX as u16), 32),
+                expression: loads(20),
+            },
+            SemanticEffect::Set {
+                dst: common::reg(common::reg_id_name(X86Reg::X86_REG_ECX as u16), 32),
+                expression: loads(24),
+            },
+            SemanticEffect::Set {
+                dst: common::reg(common::reg_id_name(X86Reg::X86_REG_EAX as u16), 32),
+                expression: loads(28),
+            },
+            SemanticEffect::Set {
+                dst: sp,
+                expression: common::add(old_sp, common::const_u64(32, 32), 32),
+            },
+        ],
+    ))
 }
 
 fn enter(
