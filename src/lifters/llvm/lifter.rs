@@ -1,3 +1,4 @@
+use crate::Config;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::lifters::llvm::abi::coerce_int_value_width;
 use crate::lifters::llvm::optimizers::Optimizers;
@@ -8,7 +9,8 @@ use crate::semantics::{
     SemanticFenceKind, SemanticLocation, SemanticOperationBinary, SemanticOperationCast,
     SemanticOperationCompare, SemanticOperationUnary, SemanticTerminator, SemanticTrapKind,
 };
-use crate::Config;
+use inkwell::IntPredicate;
+use inkwell::OptimizationLevel;
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
@@ -18,8 +20,6 @@ use inkwell::passes::PassBuilderOptions;
 use inkwell::targets::{CodeModel, InitializationConfig, RelocMode, Target, TargetMachine};
 use inkwell::types::{BasicMetadataTypeEnum, IntType};
 use inkwell::values::{BasicMetadataValueEnum, FunctionValue, IntValue, PointerValue};
-use inkwell::IntPredicate;
-use inkwell::OptimizationLevel;
 use std::collections::{BTreeSet, HashMap};
 use std::io::Error;
 use std::num::NonZeroU32;

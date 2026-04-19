@@ -278,10 +278,7 @@ class MACHO:
             return self._inner.sizeofheaders()
 
         def architecture(self):
-            architecture = self._inner.architecture()
-            if architecture is None:
-                return None
-            return Architecture.from_binding(architecture)
+            return Architecture.from_binding(self._inner.architecture())
 
         def entrypoint_virtual_addresses(self):
             return self._inner.entrypoint_virtual_addresses()
@@ -347,11 +344,8 @@ class MACHO:
         return self._inner.sizeofheaders(slice)
 
     def architecture(self, slice):
-        """Return the architecture declared for `slice`, if present."""
-        architecture = self._inner.architecture(slice)
-        if architecture is None:
-            return None
-        return Architecture.from_binding(architecture)
+        """Return the architecture declared for `slice`."""
+        return Architecture.from_binding(self._inner.architecture(slice))
 
     def entrypoint_virtual_addresses(self, slice):
         """Return all discovered entrypoint virtual addresses for `slice`."""

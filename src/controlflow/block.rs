@@ -463,12 +463,9 @@ impl<'block> Block<'block> {
             lifter.lift_block(self).ok()?;
 
             let normalized = if self.cfg.config.blocks.lifters.llvm.normalized.enabled {
-                lifter
-                    .normalized()
-                    .ok()
-                    .map(|artifact| LlvmNormalizedJson {
-                        text: artifact.text(),
-                    })
+                lifter.normalized().ok().map(|artifact| LlvmNormalizedJson {
+                    text: artifact.text(),
+                })
             } else {
                 None
             };
@@ -482,15 +479,16 @@ impl<'block> Block<'block> {
         };
 
         #[cfg(not(target_os = "windows"))]
-        let vex = if self.cfg.config.lifters.vex.enabled && self.cfg.config.blocks.lifters.vex.enabled {
-            let mut lifter = VexLifter::new(self.cfg.config.clone());
-            lifter.lift_block(self).ok()?;
-            Some(VexJson {
-                text: lifter.text(),
-            })
-        } else {
-            None
-        };
+        let vex =
+            if self.cfg.config.lifters.vex.enabled && self.cfg.config.blocks.lifters.vex.enabled {
+                let mut lifter = VexLifter::new(self.cfg.config.clone());
+                lifter.lift_block(self).ok()?;
+                Some(VexJson {
+                    text: lifter.text(),
+                })
+            } else {
+                None
+            };
 
         #[cfg(not(target_os = "windows"))]
         if llvm.is_none() && vex.is_none() {

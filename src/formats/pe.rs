@@ -720,6 +720,7 @@ impl PE {
         match self.pe.header().machine() {
             MachineType::I386 => Architecture::I386,
             MachineType::AMD64 => Architecture::AMD64,
+            MachineType::ARM64 => Architecture::ARM64,
             _ => Architecture::UNKNOWN,
         }
     }

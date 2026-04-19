@@ -177,6 +177,10 @@ impl Lifter {
     fn ensure_supported_architecture(&self, architecture: Architecture) -> Result<(), Error> {
         match architecture {
             Architecture::AMD64 | Architecture::I386 | Architecture::CIL => Ok(()),
+            Architecture::ARM64 => Err(Error::new(
+                ErrorKind::InvalidInput,
+                format!("unsupported VEX architecture: {}", architecture),
+            )),
             Architecture::UNKNOWN => Err(Error::new(
                 ErrorKind::InvalidInput,
                 format!("unsupported VEX architecture: {}", architecture),
@@ -198,7 +202,9 @@ impl Lifter {
         Ok(match request {
             Request::Instruction { instruction, .. } => render_instruction_artifact(&instruction),
             Request::Block { block, .. } => render_block_artifact(&block),
-            Request::Function { address, blocks, .. } => render_function_artifact(address, &blocks),
+            Request::Function {
+                address, blocks, ..
+            } => render_function_artifact(address, &blocks),
         })
     }
 
@@ -232,7 +238,6 @@ impl Lifter {
                 .collect::<Result<Vec<_>, _>>()?,
         })
     }
-
 }
 
 fn render_function_artifact(address: u64, blocks: &[BlockRequest]) -> String {
@@ -302,7 +307,11 @@ fn render_diagnostic(diagnostic: &SemanticDiagnostic) -> String {
 fn render_effect(effect: &SemanticEffect) -> String {
     match effect {
         SemanticEffect::Set { dst, expression } => {
-            format!("{} = {}", render_location_write(dst), render_expression(expression))
+            format!(
+                "{} = {}",
+                render_location_write(dst),
+                render_expression(expression)
+            )
         }
         SemanticEffect::Store {
             space,
@@ -466,12 +475,9 @@ fn render_expression(expression: &SemanticExpression) -> String {
             render_expression(when_true),
             render_expression(when_false)
         ),
-        SemanticExpression::Extract { arg, lsb, bits } => format!(
-            "Extract({}, {}, {})",
-            render_expression(arg),
-            lsb,
-            bits
-        ),
+        SemanticExpression::Extract { arg, lsb, bits } => {
+            format!("Extract({}, {}, {})", render_expression(arg), lsb, bits)
+        }
         SemanticExpression::Concat { parts, .. } => format!(
             "Concat({})",
             parts
