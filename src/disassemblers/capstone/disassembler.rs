@@ -24,6 +24,7 @@ extern crate capstone;
 use crate::Architecture;
 use crate::Config;
 use crate::controlflow::Graph;
+use crate::disassemblers::capstone::arm64::disassembler::Disassembler as Arm64Disassembler;
 use crate::disassemblers::capstone::x86::Disassembler as X86Disassembler;
 use crate::formats::Image;
 use std::collections::{BTreeMap, BTreeSet};
@@ -38,35 +39,41 @@ pub trait ArchDisassembler {
 }
 
 pub enum DisassemblerBackend<'a> {
+    Arm64(Arm64Disassembler<'a>),
     X86(X86Disassembler<'a>),
 }
 
 impl ArchDisassembler for DisassemblerBackend<'_> {
     fn disassemble_sweep(&self) -> BTreeSet<u64> {
         match self {
+            DisassemblerBackend::Arm64(d) => d.disassemble_sweep(),
             DisassemblerBackend::X86(d) => d.disassemble_sweep(),
         }
     }
     fn disassemble_instruction(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error> {
         match self {
+            DisassemblerBackend::Arm64(d) => d.disassemble_instruction(address, cfg),
             DisassemblerBackend::X86(d) => d.disassemble_instruction(address, cfg),
         }
     }
 
     fn disassemble_block(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error> {
         match self {
+            DisassemblerBackend::Arm64(d) => d.disassemble_block(address, cfg),
             DisassemblerBackend::X86(d) => d.disassemble_block(address, cfg),
         }
     }
 
     fn disassemble_function(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error> {
         match self {
+            DisassemblerBackend::Arm64(d) => d.disassemble_function(address, cfg),
             DisassemblerBackend::X86(d) => d.disassemble_function(address, cfg),
         }
     }
 
     fn disassemble(&self, addresses: BTreeSet<u64>, cfg: &mut Graph) -> Result<(), Error> {
         match self {
+            DisassemblerBackend::Arm64(d) => d.disassemble(addresses, cfg),
             DisassemblerBackend::X86(d) => d.disassemble(addresses, cfg),
         }
     }
@@ -103,6 +110,16 @@ impl<'a> Disassembler<'a> {
         config: Config,
     ) -> Result<Self, Error> {
         let backend = match machine {
+            Architecture::ARM64 => {
+                let disasm = Arm64Disassembler::new(
+                    machine,
+                    image,
+                    executable_address_ranges.clone(),
+                    config,
+                )
+                .map_err(|_| Error::other("failed to create ARM64 disassembler"))?;
+                DisassemblerBackend::Arm64(disasm)
+            }
             Architecture::AMD64 | Architecture::I386 => {
                 let disasm =
                     X86Disassembler::new(machine, image, executable_address_ranges.clone(), config)

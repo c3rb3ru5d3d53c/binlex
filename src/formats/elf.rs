@@ -90,6 +90,7 @@ impl ELF {
         let architecture = match self.elf.header().machine_type() {
             62 => Architecture::AMD64,
             3 => Architecture::I386,
+            183 => Architecture::ARM64,
             _ => Architecture::UNKNOWN,
         };
         architecture

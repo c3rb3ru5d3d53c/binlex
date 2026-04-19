@@ -22,15 +22,15 @@
 
 extern crate capstone;
 
+use crate::Architecture;
 use crate::semantics::{
     InstructionSemantics, SemanticDiagnosticKind, SemanticEffect, SemanticExpression,
     SemanticLocation, SemanticTerminator,
 };
-use crate::Architecture;
-use capstone::arch::x86::{X86Insn, X86Reg};
-use capstone::arch::ArchOperand;
 use capstone::Insn;
 use capstone::InsnId;
+use capstone::arch::ArchOperand;
+use capstone::arch::x86::{X86Insn, X86Reg};
 
 use super::common;
 

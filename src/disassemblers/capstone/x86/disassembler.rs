@@ -62,6 +62,8 @@ pub struct Disassembler<'disassembler> {
 }
 
 impl<'disassembler> Disassembler<'disassembler> {
+    const FUNCTION_GROUP_SIZE: usize = 4;
+
     fn log_semantics_debug(&self, semantics: &InstructionSemantics, instruction: &Insn) {
         if semantics.status == SemanticStatus::Complete && semantics.diagnostics.is_empty() {
             return;
@@ -108,6 +110,22 @@ impl<'disassembler> Disassembler<'disassembler> {
             executable_address_ranges,
             config,
         })
+    }
+
+    fn group_function_addresses(addresses: &BTreeSet<u64>) -> Vec<Vec<u64>> {
+        let mut groups = Vec::new();
+        let mut current = Vec::with_capacity(Self::FUNCTION_GROUP_SIZE);
+        for address in addresses {
+            current.push(*address);
+            if current.len() == Self::FUNCTION_GROUP_SIZE {
+                groups.push(current);
+                current = Vec::with_capacity(Self::FUNCTION_GROUP_SIZE);
+            }
+        }
+        if !current.is_empty() {
+            groups.push(current);
+        }
+        groups
     }
 
     pub fn is_executable_address(&self, address: u64) -> bool {
@@ -205,7 +223,8 @@ impl<'disassembler> Disassembler<'disassembler> {
                 let function_addresses = cfg.functions.dequeue_all();
                 cfg.functions
                     .insert_processed_extend(function_addresses.clone());
-                let graphs: Vec<Graph> = function_addresses
+                let function_groups = Self::group_function_addresses(&function_addresses);
+                let graphs: Vec<Graph> = function_groups
                     .par_iter()
                     .map_init(
                         || {
@@ -217,10 +236,12 @@ impl<'disassembler> Disassembler<'disassembler> {
                             )
                             .ok()
                         },
-                        |disasm, address| {
+                        |disasm, addresses| {
                             let mut graph = Graph::new(external_machine, graph_config.clone());
                             if let Some(disasm) = disasm.as_ref() {
-                                let _ = disasm.disassemble_function(*address, &mut graph);
+                                for address in addresses {
+                                    let _ = disasm.disassemble_function(*address, &mut graph);
+                                }
                             }
                             graph
                         },

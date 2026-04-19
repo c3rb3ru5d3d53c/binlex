@@ -87,7 +87,7 @@ impl<'a> MachoSlice<'a> {
         self.macho.sizeofheaders(self.index)
     }
 
-    pub fn architecture(&self) -> Option<Architecture> {
+    pub fn architecture(&self) -> Architecture {
         self.macho.architecture(self.index)
     }
 
@@ -317,7 +317,8 @@ impl MACHO {
     /// # Returns
     /// A `Option<u64>` representing the entrypoint of the binary.
     pub fn entrypoint_virtual_address(&self, slice: usize) -> Option<u64> {
-        Some(self.imagebase(slice)? + self.macho.iter().nth(slice)?.main_command()?.entrypoint())
+        let entrypoint_file_offset = self.macho.iter().nth(slice)?.main_command()?.entrypoint();
+        self.file_offset_to_virtual_address(entrypoint_file_offset, slice)
     }
 
     /// Returns the imagebase of the MachO binary by index.
@@ -340,9 +341,9 @@ impl MACHO {
     /// A `Option<u64>` representing the size of the headers for the MachO slice.
     pub fn sizeofheaders(&self, slice: usize) -> Option<u64> {
         let binding = self.macho.iter().nth(slice)?;
-        let architecture = self.architecture(slice)?;
+        let architecture = self.architecture(slice);
         let macho_header_size: u32 = match architecture {
-            Architecture::AMD64 => 32,
+            Architecture::AMD64 | Architecture::ARM64 => 32,
             Architecture::I386 => 28,
             _ => {
                 return None;
@@ -354,18 +355,17 @@ impl MACHO {
     /// Returns the architecture of the MachO binary by index.
     ///
     /// # Returns
-    /// A `Option<Architecture>` representing the architecture of the binary.
-    pub fn architecture(&self, slice: usize) -> Option<Architecture> {
-        let cpu_type = self.macho.iter().nth(slice).map(|b| b.header().cpu_type());
-        cpu_type.as_ref()?;
-        let architecture = match cpu_type.unwrap() {
+    /// An `Architecture` representing the architecture of the binary.
+    pub fn architecture(&self, slice: usize) -> Architecture {
+        let Some(cpu_type) = self.macho.iter().nth(slice).map(|b| b.header().cpu_type()) else {
+            return Architecture::UNKNOWN;
+        };
+        match cpu_type {
             MachoCpuType::X86 => Architecture::I386,
             MachoCpuType::X86_64 => Architecture::AMD64,
-            _ => {
-                return None;
-            }
-        };
-        Some(architecture)
+            MachoCpuType::ARM64 => Architecture::ARM64,
+            _ => Architecture::UNKNOWN,
+        }
     }
 
     /// Checks if the symbol n_type is a function.

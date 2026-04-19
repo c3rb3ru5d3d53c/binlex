@@ -466,12 +466,9 @@ impl<'function> Function<'function> {
             lifter.lift_function(self).ok()?;
 
             let normalized = if self.cfg.config.functions.lifters.llvm.normalized.enabled {
-                lifter
-                    .normalized()
-                    .ok()
-                    .map(|artifact| LlvmNormalizedJson {
-                        text: artifact.text(),
-                    })
+                lifter.normalized().ok().map(|artifact| LlvmNormalizedJson {
+                    text: artifact.text(),
+                })
             } else {
                 None
             };
@@ -485,7 +482,9 @@ impl<'function> Function<'function> {
         };
 
         #[cfg(not(target_os = "windows"))]
-        let vex = if self.cfg.config.lifters.vex.enabled && self.cfg.config.functions.lifters.vex.enabled {
+        let vex = if self.cfg.config.lifters.vex.enabled
+            && self.cfg.config.functions.lifters.vex.enabled
+        {
             let mut lifter = VexLifter::new(self.cfg.config.clone());
             lifter.lift_function(self).ok()?;
             Some(VexJson {
