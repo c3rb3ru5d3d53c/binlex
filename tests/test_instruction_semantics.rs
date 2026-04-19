@@ -127,6 +127,10 @@ fn complete_semantics() -> InstructionSemantics {
 #[test]
 fn integer_semantics_regressions_stay_complete() {
     let cases = [
+        ("aaa", Architecture::I386, vec![0x37]),
+        ("aad", Architecture::I386, vec![0xd5, 0x0a]),
+        ("aam", Architecture::I386, vec![0xd4, 0x0a]),
+        ("aas", Architecture::I386, vec![0x3f]),
         ("add eax, ebx", Architecture::I386, vec![0x01, 0xd8]),
         ("adc eax, ebx", Architecture::I386, vec![0x11, 0xd8]),
         ("bsf ecx, eax", Architecture::I386, vec![0x0f, 0xbc, 0xc8]),
@@ -243,7 +247,16 @@ fn integer_semantics_regressions_stay_complete() {
             Architecture::I386,
             vec![0x0f, 0xb1, 0xd8],
         ),
+        (
+            "cmpxchg16b [rax]",
+            Architecture::AMD64,
+            vec![0x48, 0x0f, 0xc7, 0x08],
+        ),
         ("shl eax, cl", Architecture::I386, vec![0xd3, 0xe0]),
+        ("rcl eax, 1", Architecture::I386, vec![0xd1, 0xd0]),
+        ("rcr eax, 1", Architecture::I386, vec![0xd1, 0xd8]),
+        ("rcl rax, 1", Architecture::AMD64, vec![0x48, 0xd1, 0xd0]),
+        ("rcr rax, 1", Architecture::AMD64, vec![0x48, 0xd1, 0xd8]),
         (
             "shld eax, edx, cl",
             Architecture::I386,
@@ -279,14 +292,34 @@ fn stack_and_string_semantics_regressions_stay_complete() {
             Architecture::I386,
             vec![0xf0, 0x0f, 0xc7, 0x08],
         ),
+        ("pushal", Architecture::I386, vec![0x60]),
+        ("popal", Architecture::I386, vec![0x61]),
         ("stosb", Architecture::I386, vec![0xaa]),
         ("stosw", Architecture::I386, vec![0x66, 0xab]),
         ("stosd", Architecture::I386, vec![0xab]),
+        ("stosq", Architecture::AMD64, vec![0x48, 0xab]),
+        ("movsb", Architecture::I386, vec![0xa4]),
         ("movsw", Architecture::I386, vec![0x66, 0xa5]),
+        ("movsd", Architecture::I386, vec![0xa5]),
+        ("movsq", Architecture::AMD64, vec![0x48, 0xa5]),
+        ("lodsb", Architecture::I386, vec![0xac]),
+        ("lodsw", Architecture::I386, vec![0x66, 0xad]),
+        ("lodsd", Architecture::I386, vec![0xad]),
+        ("lodsq", Architecture::AMD64, vec![0x48, 0xad]),
+        ("scasb", Architecture::I386, vec![0xae]),
+        ("scasw", Architecture::I386, vec![0x66, 0xaf]),
         ("scasd", Architecture::I386, vec![0xaf]),
+        ("scasq", Architecture::AMD64, vec![0x48, 0xaf]),
+        ("cmpsb", Architecture::I386, vec![0xa6]),
+        ("cmpsw", Architecture::I386, vec![0x66, 0xa7]),
+        ("cmpsd", Architecture::I386, vec![0xa7]),
+        ("cmpsq", Architecture::AMD64, vec![0x48, 0xa7]),
         ("rep stosd", Architecture::I386, vec![0xf3, 0xab]),
         ("rep stosw", Architecture::I386, vec![0xf3, 0x66, 0xab]),
         ("rep movsb", Architecture::I386, vec![0xf3, 0xa4]),
+        ("rep movsw", Architecture::I386, vec![0xf3, 0x66, 0xa5]),
+        ("rep movsd", Architecture::I386, vec![0xf3, 0xa5]),
+        ("rep movsq", Architecture::AMD64, vec![0xf3, 0x48, 0xa5]),
     ];
 
     for (name, architecture, bytes) in cases {
@@ -301,6 +334,96 @@ fn vector_and_scalar_fp_semantics_regressions_stay_complete() {
             "movsd xmm0, xmm1",
             Architecture::AMD64,
             vec![0xf2, 0x0f, 0x10, 0xc1],
+        ),
+        (
+            "vmovsd xmm0, xmm2, xmm1",
+            Architecture::AMD64,
+            vec![0xc5, 0xeb, 0x10, 0xc1],
+        ),
+        (
+            "movss xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0xf3, 0x0f, 0x10, 0xc1],
+        ),
+        (
+            "movss xmm0, dword ptr [rax]",
+            Architecture::AMD64,
+            vec![0xf3, 0x0f, 0x10, 0x00],
+        ),
+        (
+            "movapd xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x28, 0xc1],
+        ),
+        (
+            "vmovdqa xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0xc5, 0xf9, 0x6f, 0xc1],
+        ),
+        (
+            "movdq2q mm0, xmm1",
+            Architecture::AMD64,
+            vec![0xf2, 0x0f, 0xd6, 0xc1],
+        ),
+        (
+            "movq2dq xmm0, mm1",
+            Architecture::AMD64,
+            vec![0xf3, 0x0f, 0xd6, 0xc1],
+        ),
+        (
+            "movntdq xmmword ptr [rax], xmm0",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0xe7, 0x00],
+        ),
+        (
+            "movntpd xmmword ptr [rax], xmm0",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x2b, 0x00],
+        ),
+        (
+            "movntps xmmword ptr [rax], xmm0",
+            Architecture::AMD64,
+            vec![0x0f, 0x2b, 0x00],
+        ),
+        (
+            "movntq qword ptr [rax], mm0",
+            Architecture::AMD64,
+            vec![0x0f, 0xe7, 0x00],
+        ),
+        (
+            "movnti dword ptr [rax], eax",
+            Architecture::AMD64,
+            vec![0x0f, 0xc3, 0x00],
+        ),
+        (
+            "vmovntdq xmmword ptr [rax], xmm0",
+            Architecture::AMD64,
+            vec![0xc5, 0xf9, 0xe7, 0x00],
+        ),
+        (
+            "movupd xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x10, 0xc1],
+        ),
+        (
+            "lddqu xmm0, xmmword ptr [rax]",
+            Architecture::AMD64,
+            vec![0xf2, 0x0f, 0xf0, 0x00],
+        ),
+        (
+            "movddup xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0xf2, 0x0f, 0x12, 0xc1],
+        ),
+        (
+            "movshdup xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0xf3, 0x0f, 0x16, 0xc1],
+        ),
+        (
+            "movsldup xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0xf3, 0x0f, 0x12, 0xc1],
         ),
         (
             "addsd xmm0, xmm1",
@@ -353,6 +476,26 @@ fn vector_and_scalar_fp_semantics_regressions_stay_complete() {
             vec![0x0f, 0x54, 0xc1],
         ),
         (
+            "andpd xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x54, 0xc1],
+        ),
+        (
+            "andnpd xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x55, 0xc1],
+        ),
+        (
+            "andnps xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x0f, 0x55, 0xc1],
+        ),
+        (
+            "vpandn xmm0, xmm2, xmm1",
+            Architecture::AMD64,
+            vec![0xc5, 0xe9, 0xdf, 0xc1],
+        ),
+        (
             "por xmm0, xmm1",
             Architecture::AMD64,
             vec![0x66, 0x0f, 0xeb, 0xc1],
@@ -388,6 +531,26 @@ fn vector_and_scalar_fp_semantics_regressions_stay_complete() {
             vec![0x66, 0x0f, 0xfe, 0xc1],
         ),
         (
+            "paddq xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0xd4, 0xc1],
+        ),
+        (
+            "pavgb xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0xe0, 0xc1],
+        ),
+        (
+            "vpaddb xmm0, xmm2, xmm1",
+            Architecture::AMD64,
+            vec![0xc5, 0xe9, 0xfc, 0xc1],
+        ),
+        (
+            "pavgw xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0xe3, 0xc1],
+        ),
+        (
             "psubb xmm0, xmm1",
             Architecture::AMD64,
             vec![0x66, 0x0f, 0xf8, 0xc1],
@@ -401,6 +564,56 @@ fn vector_and_scalar_fp_semantics_regressions_stay_complete() {
             "psubd xmm0, xmm1",
             Architecture::AMD64,
             vec![0x66, 0x0f, 0xfa, 0xc1],
+        ),
+        (
+            "psubq xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0xfb, 0xc1],
+        ),
+        (
+            "psllw xmm0, 1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x71, 0xf0, 0x01],
+        ),
+        (
+            "pslld xmm0, 1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x72, 0xf0, 0x01],
+        ),
+        (
+            "psllq xmm0, 1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x73, 0xf0, 0x01],
+        ),
+        (
+            "psraw xmm0, 1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x71, 0xe0, 0x01],
+        ),
+        (
+            "psrad xmm0, 1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x72, 0xe0, 0x01],
+        ),
+        (
+            "psrlw xmm0, 1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x71, 0xd0, 0x01],
+        ),
+        (
+            "psrld xmm0, 1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x72, 0xd0, 0x01],
+        ),
+        (
+            "psrlq xmm0, 1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x73, 0xd0, 0x01],
+        ),
+        (
+            "pslldq xmm0, 1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x73, 0xf8, 0x01],
         ),
         (
             "pcmpeqb xmm0, xmm1",
@@ -431,6 +644,136 @@ fn vector_and_scalar_fp_semantics_regressions_stay_complete() {
             "pcmpgtd xmm0, xmm1",
             Architecture::AMD64,
             vec![0x66, 0x0f, 0x66, 0xc1],
+        ),
+        (
+            "pmaxsb xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x38, 0x3c, 0xc1],
+        ),
+        (
+            "pmaxsd xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x38, 0x3d, 0xc1],
+        ),
+        (
+            "pmaxsw xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0xee, 0xc1],
+        ),
+        (
+            "pmaxub xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0xde, 0xc1],
+        ),
+        (
+            "pmaxud xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x38, 0x3f, 0xc1],
+        ),
+        (
+            "pmaxuw xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x38, 0x3e, 0xc1],
+        ),
+        (
+            "pminsb xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x38, 0x38, 0xc1],
+        ),
+        (
+            "pminsd xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x38, 0x39, 0xc1],
+        ),
+        (
+            "pminsw xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0xea, 0xc1],
+        ),
+        (
+            "pminub xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0xda, 0xc1],
+        ),
+        (
+            "pminud xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x38, 0x3b, 0xc1],
+        ),
+        (
+            "pminuw xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x38, 0x3a, 0xc1],
+        ),
+        (
+            "pmaddwd xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0xf5, 0xc1],
+        ),
+        (
+            "vpmaddwd xmm0, xmm2, xmm1",
+            Architecture::AMD64,
+            vec![0xc5, 0xe9, 0xf5, 0xc1],
+        ),
+        (
+            "vpackssdw xmm0, xmm2, xmm1",
+            Architecture::AMD64,
+            vec![0xc5, 0xe9, 0x6b, 0xc1],
+        ),
+        (
+            "vpacksswb xmm0, xmm2, xmm1",
+            Architecture::AMD64,
+            vec![0xc5, 0xe9, 0x63, 0xc1],
+        ),
+        (
+            "vpackuswb xmm0, xmm2, xmm1",
+            Architecture::AMD64,
+            vec![0xc5, 0xe9, 0x67, 0xc1],
+        ),
+        (
+            "pmulhw xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0xe5, 0xc1],
+        ),
+        (
+            "vpmulhw xmm0, xmm2, xmm1",
+            Architecture::AMD64,
+            vec![0xc5, 0xe9, 0xe5, 0xc1],
+        ),
+        (
+            "pmulld xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x38, 0x40, 0xc1],
+        ),
+        (
+            "pmullw xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0xd5, 0xc1],
+        ),
+        (
+            "pmuludq xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0xf4, 0xc1],
+        ),
+        (
+            "packssdw xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x6b, 0xc1],
+        ),
+        (
+            "packsswb xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x63, 0xc1],
+        ),
+        (
+            "packuswb xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x67, 0xc1],
+        ),
+        (
+            "palignr xmm0, xmm1, 8",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x3a, 0x0f, 0xc1, 0x08],
         ),
         (
             "punpcklbw xmm0, xmm1",
@@ -498,9 +841,29 @@ fn vector_and_scalar_fp_semantics_regressions_stay_complete() {
             vec![0x66, 0x0f, 0x3a, 0x14, 0xc0, 0x01],
         ),
         (
+            "vpextrb eax, xmm0, 1",
+            Architecture::AMD64,
+            vec![0xc4, 0xe3, 0x79, 0x14, 0xc0, 0x01],
+        ),
+        (
             "pextrd eax, xmm0, 1",
             Architecture::AMD64,
             vec![0x66, 0x0f, 0x3a, 0x16, 0xc0, 0x01],
+        ),
+        (
+            "vpextrd eax, xmm0, 1",
+            Architecture::AMD64,
+            vec![0xc4, 0xe3, 0x79, 0x16, 0xc0, 0x01],
+        ),
+        (
+            "vpextrq rax, xmm0, 1",
+            Architecture::AMD64,
+            vec![0xc4, 0xe3, 0xf9, 0x16, 0xc0, 0x01],
+        ),
+        (
+            "vpextrw eax, xmm0, 1",
+            Architecture::AMD64,
+            vec![0xc5, 0xf9, 0xc5, 0xc0, 0x01],
         ),
         (
             "pinsrb xmm0, eax, 1",
@@ -526,6 +889,56 @@ fn vector_and_scalar_fp_semantics_regressions_stay_complete() {
             "pmovmskb eax, xmm0",
             Architecture::AMD64,
             vec![0x66, 0x0f, 0xd7, 0xc0],
+        ),
+        (
+            "vpmovmskb eax, xmm0",
+            Architecture::AMD64,
+            vec![0xc5, 0xf9, 0xd7, 0xc0],
+        ),
+        (
+            "vextracti128 xmm0, ymm1, 1",
+            Architecture::AMD64,
+            vec![0xc4, 0xe3, 0x7d, 0x39, 0xc8, 0x01],
+        ),
+        (
+            "vperm2i128 ymm0, ymm2, ymm1, 0x31",
+            Architecture::AMD64,
+            vec![0xc4, 0xe3, 0x6d, 0x46, 0xc1, 0x31],
+        ),
+        (
+            "vpermq ymm0, ymm1, 0x1b",
+            Architecture::AMD64,
+            vec![0xc4, 0xe3, 0xfd, 0x00, 0xc1, 0x1b],
+        ),
+        (
+            "vpbroadcastb xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0xc4, 0xe2, 0x79, 0x78, 0xc1],
+        ),
+        (
+            "vpsignw xmm0, xmm2, xmm1",
+            Architecture::AMD64,
+            vec![0xc4, 0xe2, 0x69, 0x09, 0xc1],
+        ),
+        (
+            "ptest xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0x66, 0x0f, 0x38, 0x17, 0xc1],
+        ),
+        (
+            "vptest xmm0, xmm1",
+            Architecture::AMD64,
+            vec![0xc4, 0xe2, 0x79, 0x17, 0xc1],
+        ),
+        (
+            "vpcmpeqq xmm0, xmm2, xmm1",
+            Architecture::AMD64,
+            vec![0xc4, 0xe2, 0x69, 0x29, 0xc1],
+        ),
+        (
+            "vpminub xmm0, xmm2, xmm1",
+            Architecture::AMD64,
+            vec![0xc5, 0xe9, 0xda, 0xc1],
         ),
         (
             "movhlps xmm0, xmm1",
@@ -561,6 +974,31 @@ fn vector_and_scalar_fp_semantics_regressions_stay_complete() {
             "pshufb xmm0, xmm1",
             Architecture::AMD64,
             vec![0x66, 0x0f, 0x38, 0x00, 0xc1],
+        ),
+        (
+            "vpshufd xmm0, xmm1, 0x1b",
+            Architecture::AMD64,
+            vec![0xc5, 0xf9, 0x70, 0xc1, 0x1b],
+        ),
+        (
+            "vpslldq xmm0, xmm1, 1",
+            Architecture::AMD64,
+            vec![0xc5, 0xf9, 0x73, 0xf9, 0x01],
+        ),
+        (
+            "vpsrldq xmm0, xmm1, 1",
+            Architecture::AMD64,
+            vec![0xc5, 0xf9, 0x73, 0xd9, 0x01],
+        ),
+        (
+            "vpunpcklbw xmm0, xmm2, xmm1",
+            Architecture::AMD64,
+            vec![0xc5, 0xe9, 0x60, 0xc1],
+        ),
+        (
+            "vpunpckhwd xmm0, xmm2, xmm1",
+            Architecture::AMD64,
+            vec![0xc5, 0xe9, 0x69, 0xc1],
         ),
         (
             "pmovsxbw xmm0, xmm1",
@@ -636,6 +1074,11 @@ fn vector_and_scalar_fp_semantics_regressions_stay_complete() {
             "pshuflw xmm0, xmm1, 0x1b",
             Architecture::AMD64,
             vec![0xf2, 0x0f, 0x70, 0xc1, 0x1b],
+        ),
+        (
+            "pshufw mm0, mm1, 0x1b",
+            Architecture::AMD64,
+            vec![0x0f, 0x70, 0xc1, 0x1b],
         ),
         (
             "pextrw eax, xmm0, 1",
@@ -1114,11 +1557,81 @@ fn system_and_io_semantics_regressions_stay_complete() {
         ("pushfq", Architecture::AMD64, vec![0x9c]),
         ("popfq", Architecture::AMD64, vec![0x9d]),
         ("pushfd", Architecture::I386, vec![0x9c]),
+        ("popfd", Architecture::I386, vec![0x9d]),
         ("pause", Architecture::I386, vec![0xf3, 0x90]),
+        (
+            "prefetchnta byte ptr [rax]",
+            Architecture::AMD64,
+            vec![0x0f, 0x18, 0x00],
+        ),
+        (
+            "prefetcht0 byte ptr [rax]",
+            Architecture::AMD64,
+            vec![0x0f, 0x18, 0x08],
+        ),
+        (
+            "prefetcht1 byte ptr [rax]",
+            Architecture::AMD64,
+            vec![0x0f, 0x18, 0x10],
+        ),
+        (
+            "prefetcht2 byte ptr [rax]",
+            Architecture::AMD64,
+            vec![0x0f, 0x18, 0x18],
+        ),
+        (
+            "prefetchw byte ptr [rax]",
+            Architecture::AMD64,
+            vec![0x0f, 0x0d, 0x08],
+        ),
+        ("endbr32", Architecture::I386, vec![0xf3, 0x0f, 0x1e, 0xfb]),
+        ("endbr64", Architecture::AMD64, vec![0xf3, 0x0f, 0x1e, 0xfa]),
+        ("wait", Architecture::I386, vec![0x9b]),
+        ("verr ax", Architecture::I386, vec![0x0f, 0x00, 0xe0]),
+        ("verw ax", Architecture::I386, vec![0x0f, 0x00, 0xe8]),
+        ("mfence", Architecture::AMD64, vec![0x0f, 0xae, 0xf0]),
+        ("sfence", Architecture::AMD64, vec![0x0f, 0xae, 0xf8]),
+        (
+            "clflush byte ptr [rax]",
+            Architecture::AMD64,
+            vec![0x0f, 0xae, 0x38],
+        ),
+        ("clts", Architecture::AMD64, vec![0x0f, 0x06]),
+        ("invd", Architecture::AMD64, vec![0x0f, 0x08]),
+        (
+            "invlpg byte ptr [rax]",
+            Architecture::AMD64,
+            vec![0x0f, 0x01, 0x38],
+        ),
+        ("wbinvd", Architecture::AMD64, vec![0x0f, 0x09]),
+        ("cpuid", Architecture::AMD64, vec![0x0f, 0xa2]),
+        (
+            "ldmxcsr dword ptr [rax]",
+            Architecture::AMD64,
+            vec![0x0f, 0xae, 0x10],
+        ),
+        (
+            "stmxcsr dword ptr [rax]",
+            Architecture::AMD64,
+            vec![0x0f, 0xae, 0x18],
+        ),
+        ("fxsave [rax]", Architecture::AMD64, vec![0x0f, 0xae, 0x00]),
+        (
+            "fxsave64 [rax]",
+            Architecture::AMD64,
+            vec![0x48, 0x0f, 0xae, 0x00],
+        ),
+        ("fxrstor [rax]", Architecture::AMD64, vec![0x0f, 0xae, 0x08]),
+        (
+            "fxrstor64 [rax]",
+            Architecture::AMD64,
+            vec![0x48, 0x0f, 0xae, 0x08],
+        ),
         ("insd", Architecture::AMD64, vec![0x6d]),
         ("outsd", Architecture::AMD64, vec![0x6f]),
         ("rdtsc", Architecture::AMD64, vec![0x0f, 0x31]),
         ("rdtscp", Architecture::AMD64, vec![0x0f, 0x01, 0xf9]),
+        ("sysenter", Architecture::AMD64, vec![0x0f, 0x34]),
         ("rdrand eax", Architecture::AMD64, vec![0x0f, 0xc7, 0xf0]),
         ("rdseed eax", Architecture::AMD64, vec![0x0f, 0xc7, 0xf8]),
         (

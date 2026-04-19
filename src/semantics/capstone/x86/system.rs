@@ -25,7 +25,7 @@ extern crate capstone;
 use crate::Architecture;
 use crate::semantics::{
     InstructionSemantics, SemanticAddressSpace, SemanticEffect, SemanticExpression,
-    SemanticFenceKind, SemanticOperationCast, SemanticOperationBinary, SemanticTerminator,
+    SemanticFenceKind, SemanticOperationBinary, SemanticOperationCast, SemanticTerminator,
     SemanticTrapKind,
 };
 use capstone::Insn;
@@ -38,25 +38,66 @@ use super::common;
 pub fn build(
     machine: Architecture,
     instruction: &Insn,
-    _operands: &[ArchOperand],
+    operands: &[ArchOperand],
 ) -> Option<InstructionSemantics> {
+    let mnemonic = instruction.mnemonic().unwrap_or_default();
     if matches!(instruction.mnemonic().unwrap_or_default(), "pushfd") {
         return pushf(machine, 32);
     }
-    if matches!(instruction.mnemonic().unwrap_or_default(), "pause") {
+    if matches!(mnemonic, "popfd" | "popf") {
+        return popf(machine, 32);
+    }
+    if matches!(mnemonic, "pause") {
+        return Some(common::complete(
+            SemanticTerminator::FallThrough,
+            vec![SemanticEffect::Nop],
+        ));
+    }
+    if matches!(
+        mnemonic,
+        "prefetch" | "prefetchnta" | "prefetcht0" | "prefetcht1" | "prefetcht2" | "prefetchw"
+    ) {
+        return Some(common::complete(
+            SemanticTerminator::FallThrough,
+            vec![SemanticEffect::Nop],
+        ));
+    }
+    if matches!(mnemonic, "endbr32" | "endbr64" | "wait") {
         return Some(common::complete(
             SemanticTerminator::FallThrough,
             vec![SemanticEffect::Nop],
         ));
     }
 
+    if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_MFENCE as u32) {
+        return Some(fence(SemanticFenceKind::SequentiallyConsistent));
+    }
+    if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_SFENCE as u32) {
+        return Some(fence(SemanticFenceKind::Release));
+    }
     if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_LFENCE as u32) {
-        return Some(common::complete(
-            SemanticTerminator::FallThrough,
-            vec![SemanticEffect::Fence {
-                kind: SemanticFenceKind::Acquire,
-            }],
-        ));
+        return Some(fence(SemanticFenceKind::Acquire));
+    }
+    if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_CLFLUSH as u32) {
+        return Some(fence(SemanticFenceKind::ArchSpecific {
+            name: "x86.clflush".to_string(),
+        }));
+    }
+    if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_CLTS as u32) {
+        return Some(clts());
+    }
+    if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_INVD as u32) {
+        return Some(fence(SemanticFenceKind::ArchSpecific {
+            name: "x86.invd".to_string(),
+        }));
+    }
+    if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_INVLPG as u32) {
+        return invlpg(machine, operands);
+    }
+    if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_WBINVD as u32) {
+        return Some(fence(SemanticFenceKind::ArchSpecific {
+            name: "x86.wbinvd".to_string(),
+        }));
     }
     if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_CLC as u32) {
         return Some(set_flag("cf", false));
@@ -102,6 +143,45 @@ pub fn build(
     if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_POPFQ as u32) {
         return popf(machine, 64);
     }
+    if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_LDMXCSR as u32) {
+        return ldmxcsr(machine, operands);
+    }
+    if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_STMXCSR as u32) {
+        return stmxcsr(machine, operands);
+    }
+    if matches!(
+        instruction.id(),
+        InsnId(id) if id == X86Insn::X86_INS_FXSAVE as u32
+    ) {
+        return fxsave(machine, operands, false);
+    }
+    if matches!(
+        instruction.id(),
+        InsnId(id) if id == X86Insn::X86_INS_FXSAVE64 as u32
+    ) {
+        return fxsave(machine, operands, true);
+    }
+    if matches!(
+        instruction.id(),
+        InsnId(id) if id == X86Insn::X86_INS_FXRSTOR as u32
+    ) {
+        return fxrstor(machine, operands, false);
+    }
+    if matches!(
+        instruction.id(),
+        InsnId(id) if id == X86Insn::X86_INS_FXRSTOR64 as u32
+    ) {
+        return fxrstor(machine, operands, true);
+    }
+    if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_CPUID as u32) {
+        return Some(cpuid());
+    }
+    if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_VERR as u32) {
+        return verr_verw(machine, operands, "x86.verr");
+    }
+    if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_VERW as u32) {
+        return verr_verw(machine, operands, "x86.verw");
+    }
     if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_INSD as u32) {
         return insd(machine);
     }
@@ -115,10 +195,10 @@ pub fn build(
         return Some(rdtscp());
     }
     if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_RDRAND as u32) {
-        return random_value(machine, "rdrand", _operands);
+        return random_value(machine, "rdrand", operands);
     }
     if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_RDSEED as u32) {
-        return random_value(machine, "rdseed", _operands);
+        return random_value(machine, "rdseed", operands);
     }
 
     let trap = match instruction.id() {
@@ -126,6 +206,11 @@ pub fn build(
         InsnId(id) if id == X86Insn::X86_INS_INT as u32 => Some(SemanticTrapKind::Interrupt),
         InsnId(id) if id == X86Insn::X86_INS_UD2 as u32 => Some(SemanticTrapKind::InvalidOpcode),
         InsnId(id) if id == X86Insn::X86_INS_SYSCALL as u32 => Some(SemanticTrapKind::Syscall),
+        InsnId(id) if id == X86Insn::X86_INS_SYSENTER as u32 => {
+            Some(SemanticTrapKind::ArchSpecific {
+                name: "x86.sysenter".to_string(),
+            })
+        }
         _ => None,
     }?;
 
@@ -133,6 +218,13 @@ pub fn build(
         SemanticTerminator::Trap,
         vec![SemanticEffect::Trap { kind: trap }],
     ))
+}
+
+fn fence(kind: SemanticFenceKind) -> InstructionSemantics {
+    common::complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Fence { kind }],
+    )
 }
 
 fn set_flag(name: &str, value: bool) -> InstructionSemantics {
@@ -143,6 +235,31 @@ fn set_flag(name: &str, value: bool) -> InstructionSemantics {
             expression: common::bool_const(value),
         }],
     )
+}
+
+fn clts() -> InstructionSemantics {
+    common::complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Intrinsic {
+            name: "x86.clts".to_string(),
+            args: Vec::new(),
+            outputs: Vec::new(),
+        }],
+    )
+}
+
+fn invlpg(machine: Architecture, operands: &[ArchOperand]) -> Option<InstructionSemantics> {
+    let addr = operands
+        .first()
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    Some(common::complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Intrinsic {
+            name: "x86.invlpg".to_string(),
+            args: vec![addr],
+            outputs: Vec::new(),
+        }],
+    ))
 }
 
 fn lahf() -> InstructionSemantics {
@@ -172,6 +289,286 @@ fn sahf() -> InstructionSemantics {
     )
 }
 
+fn ldmxcsr(machine: Architecture, operands: &[ArchOperand]) -> Option<InstructionSemantics> {
+    let src = operands
+        .first()
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    Some(common::complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Set {
+            dst: mxcsr_location(),
+            expression: src,
+        }],
+    ))
+}
+
+fn stmxcsr(machine: Architecture, operands: &[ArchOperand]) -> Option<InstructionSemantics> {
+    let dst = operands
+        .first()
+        .and_then(|operand| common::operand_location(machine, operand))?;
+    Some(common::complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Set {
+            dst,
+            expression: SemanticExpression::Read(Box::new(mxcsr_location())),
+        }],
+    ))
+}
+
+fn fxsave(
+    machine: Architecture,
+    operands: &[ArchOperand],
+    wide_pointers: bool,
+) -> Option<InstructionSemantics> {
+    let base = memory_operand_addr(machine, operands.first()?)?;
+    let pointer_bits = common::pointer_bits(machine);
+    let mut effects = vec![
+        store_default(base.clone(), 0, pointer_bits, read_reg("x87_fcw", 16), 16),
+        store_default(base.clone(), 2, pointer_bits, x87_status_word_image(), 16),
+        store_default(base.clone(), 4, pointer_bits, read_reg("x87_ftw", 8), 8),
+        store_default(base.clone(), 5, pointer_bits, undefined(8), 8),
+        store_default(base.clone(), 6, pointer_bits, read_reg("x87_fop", 16), 16),
+    ];
+
+    if wide_pointers {
+        effects.push(store_default(
+            base.clone(),
+            8,
+            pointer_bits,
+            read_reg("x87_fip", 64),
+            64,
+        ));
+        effects.push(store_default(
+            base.clone(),
+            16,
+            pointer_bits,
+            read_reg("x87_fdp", 64),
+            64,
+        ));
+    } else {
+        effects.push(store_default(
+            base.clone(),
+            8,
+            pointer_bits,
+            read_reg("x87_fip", 32),
+            32,
+        ));
+        effects.push(store_default(
+            base.clone(),
+            12,
+            pointer_bits,
+            read_reg("x87_fcs", 16),
+            16,
+        ));
+        effects.push(store_default(
+            base.clone(),
+            14,
+            pointer_bits,
+            undefined(16),
+            16,
+        ));
+        effects.push(store_default(
+            base.clone(),
+            16,
+            pointer_bits,
+            read_reg("x87_fdp", 32),
+            32,
+        ));
+        effects.push(store_default(
+            base.clone(),
+            20,
+            pointer_bits,
+            read_reg("x87_fds", 16),
+            16,
+        ));
+        effects.push(store_default(
+            base.clone(),
+            22,
+            pointer_bits,
+            undefined(16),
+            16,
+        ));
+    }
+
+    effects.push(store_default(
+        base.clone(),
+        24,
+        pointer_bits,
+        SemanticExpression::Read(Box::new(mxcsr_location())),
+        32,
+    ));
+    effects.push(store_default(
+        base.clone(),
+        28,
+        pointer_bits,
+        read_reg("mxcsr_mask", 32),
+        32,
+    ));
+
+    for index in 0..8u64 {
+        let offset = 32 + index * 16;
+        effects.push(store_default(
+            base.clone(),
+            offset,
+            pointer_bits,
+            read_reg(&format!("x87_st{index}"), 80),
+            80,
+        ));
+        effects.push(store_default(
+            base.clone(),
+            offset + 10,
+            pointer_bits,
+            undefined(48),
+            48,
+        ));
+    }
+
+    let xmm_count = if matches!(machine, Architecture::AMD64) {
+        16
+    } else {
+        8
+    };
+    for index in 0..xmm_count {
+        effects.push(store_default(
+            base.clone(),
+            160 + (index as u64) * 16,
+            pointer_bits,
+            read_reg(
+                &common::reg_id_name(X86Reg::X86_REG_XMM0 as u16 + index as u16),
+                128,
+            ),
+            128,
+        ));
+    }
+
+    let used_tail = 160 + (xmm_count as u64) * 16;
+    for offset in (used_tail..512).step_by(16) {
+        let bits = ((512 - offset).min(16) * 8) as u16;
+        effects.push(store_default(
+            base.clone(),
+            offset,
+            pointer_bits,
+            undefined(bits),
+            bits,
+        ));
+    }
+
+    Some(common::complete(SemanticTerminator::FallThrough, effects))
+}
+
+fn fxrstor(
+    machine: Architecture,
+    operands: &[ArchOperand],
+    wide_pointers: bool,
+) -> Option<InstructionSemantics> {
+    let base = memory_operand_addr(machine, operands.first()?)?;
+    let pointer_bits = common::pointer_bits(machine);
+    let fsw = load_default(base.clone(), 2, pointer_bits, 16);
+    let mut effects = vec![
+        set_reg(
+            "x87_fcw",
+            16,
+            load_default(base.clone(), 0, pointer_bits, 16),
+        ),
+        set_reg("x87_ftw", 8, load_default(base.clone(), 4, pointer_bits, 8)),
+        set_reg(
+            "x87_fop",
+            16,
+            load_default(base.clone(), 6, pointer_bits, 16),
+        ),
+        set_reg(
+            "mxcsr_mask",
+            32,
+            load_default(base.clone(), 28, pointer_bits, 32),
+        ),
+        SemanticEffect::Set {
+            dst: mxcsr_location(),
+            expression: load_default(base.clone(), 24, pointer_bits, 32),
+        },
+        unpack_flag_from_word("x87_c0", fsw.clone(), 8),
+        unpack_flag_from_word("x87_c1", fsw.clone(), 9),
+        unpack_flag_from_word("x87_c2", fsw.clone(), 10),
+        SemanticEffect::Set {
+            dst: read_reg_location("x87_top", 3),
+            expression: SemanticExpression::Extract {
+                arg: Box::new(SemanticExpression::Binary {
+                    op: SemanticOperationBinary::LShr,
+                    left: Box::new(fsw.clone()),
+                    right: Box::new(common::const_u64(11, 16)),
+                    bits: 16,
+                }),
+                lsb: 0,
+                bits: 3,
+            },
+        },
+        unpack_flag_from_word("x87_c3", fsw, 14),
+    ];
+
+    if wide_pointers {
+        effects.push(set_reg(
+            "x87_fip",
+            64,
+            load_default(base.clone(), 8, pointer_bits, 64),
+        ));
+        effects.push(set_reg(
+            "x87_fdp",
+            64,
+            load_default(base.clone(), 16, pointer_bits, 64),
+        ));
+    } else {
+        effects.push(set_reg(
+            "x87_fip",
+            32,
+            load_default(base.clone(), 8, pointer_bits, 32),
+        ));
+        effects.push(set_reg(
+            "x87_fcs",
+            16,
+            load_default(base.clone(), 12, pointer_bits, 16),
+        ));
+        effects.push(set_reg(
+            "x87_fdp",
+            32,
+            load_default(base.clone(), 16, pointer_bits, 32),
+        ));
+        effects.push(set_reg(
+            "x87_fds",
+            16,
+            load_default(base.clone(), 20, pointer_bits, 16),
+        ));
+    }
+
+    for index in 0..8u64 {
+        let st = load_default(base.clone(), 32 + index * 16, pointer_bits, 80);
+        let mm = SemanticExpression::Extract {
+            arg: Box::new(st.clone()),
+            lsb: 0,
+            bits: 64,
+        };
+        effects.push(set_reg(&format!("x87_st{index}"), 80, st));
+        effects.push(set_reg(
+            &common::reg_id_name(X86Reg::X86_REG_MM0 as u16 + index as u16),
+            64,
+            mm,
+        ));
+    }
+
+    let xmm_count = if matches!(machine, Architecture::AMD64) {
+        16
+    } else {
+        8
+    };
+    for index in 0..xmm_count {
+        effects.push(set_reg(
+            &common::reg_id_name(X86Reg::X86_REG_XMM0 as u16 + index as u16),
+            128,
+            load_default(base.clone(), 160 + (index as u64) * 16, pointer_bits, 128),
+        ));
+    }
+
+    Some(common::complete(SemanticTerminator::FallThrough, effects))
+}
+
 fn insd(machine: Architecture) -> Option<InstructionSemantics> {
     let di = string_index_location(machine, true);
     let port = io_port_location();
@@ -195,6 +592,66 @@ fn insd(machine: Architecture) -> Option<InstructionSemantics> {
                 expression: next_index_value(di, 4, machine),
             },
         ],
+    ))
+}
+
+fn cpuid() -> InstructionSemantics {
+    let leaf = SemanticExpression::Read(Box::new(common::reg(
+        common::reg_id_name(X86Reg::X86_REG_EAX as u16),
+        32,
+    )));
+    let subleaf = SemanticExpression::Read(Box::new(common::reg(
+        common::reg_id_name(X86Reg::X86_REG_ECX as u16),
+        32,
+    )));
+
+    let cpuid_result = |register: &str| SemanticExpression::Intrinsic {
+        name: format!("x86.cpuid.{register}"),
+        args: vec![leaf.clone(), subleaf.clone()],
+        bits: 32,
+    };
+
+    common::complete(
+        SemanticTerminator::FallThrough,
+        vec![
+            SemanticEffect::Set {
+                dst: common::reg(common::reg_id_name(X86Reg::X86_REG_EAX as u16), 32),
+                expression: cpuid_result("eax"),
+            },
+            SemanticEffect::Set {
+                dst: common::reg(common::reg_id_name(X86Reg::X86_REG_EBX as u16), 32),
+                expression: cpuid_result("ebx"),
+            },
+            SemanticEffect::Set {
+                dst: common::reg(common::reg_id_name(X86Reg::X86_REG_ECX as u16), 32),
+                expression: cpuid_result("ecx"),
+            },
+            SemanticEffect::Set {
+                dst: common::reg(common::reg_id_name(X86Reg::X86_REG_EDX as u16), 32),
+                expression: cpuid_result("edx"),
+            },
+        ],
+    )
+}
+
+fn verr_verw(
+    machine: Architecture,
+    operands: &[ArchOperand],
+    name: &str,
+) -> Option<InstructionSemantics> {
+    let selector = operands
+        .first()
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    Some(common::complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Set {
+            dst: common::flag("zf"),
+            expression: SemanticExpression::Intrinsic {
+                name: name.to_string(),
+                args: vec![selector],
+                bits: 1,
+            },
+        }],
     ))
 }
 
@@ -488,6 +945,105 @@ fn unpack_flag_from_byte(name: &str, byte: SemanticExpression, bit: u16) -> Sema
 
 fn io_port_location() -> crate::semantics::SemanticLocation {
     common::reg(common::reg_id_name(X86Reg::X86_REG_DX as u16), 16)
+}
+
+fn read_reg_location(name: &str, bits: u16) -> crate::semantics::SemanticLocation {
+    common::reg(name.to_string(), bits)
+}
+
+fn read_reg(name: &str, bits: u16) -> SemanticExpression {
+    SemanticExpression::Read(Box::new(read_reg_location(name, bits)))
+}
+
+fn set_reg(name: &str, bits: u16, expression: SemanticExpression) -> SemanticEffect {
+    SemanticEffect::Set {
+        dst: read_reg_location(name, bits),
+        expression,
+    }
+}
+
+fn undefined(bits: u16) -> SemanticExpression {
+    SemanticExpression::Undefined { bits }
+}
+
+fn memory_operand_addr(machine: Architecture, operand: &ArchOperand) -> Option<SemanticExpression> {
+    match common::operand_location(machine, operand)? {
+        crate::semantics::SemanticLocation::Memory { addr, .. } => Some(*addr),
+        _ => None,
+    }
+}
+
+fn addr_with_offset(
+    base: SemanticExpression,
+    offset: u64,
+    pointer_bits: u16,
+) -> SemanticExpression {
+    if offset == 0 {
+        base
+    } else {
+        common::add(base, common::const_u64(offset, pointer_bits), pointer_bits)
+    }
+}
+
+fn store_default(
+    base: SemanticExpression,
+    offset: u64,
+    pointer_bits: u16,
+    expression: SemanticExpression,
+    bits: u16,
+) -> SemanticEffect {
+    SemanticEffect::Store {
+        space: SemanticAddressSpace::Default,
+        addr: addr_with_offset(base, offset, pointer_bits),
+        expression,
+        bits,
+    }
+}
+
+fn load_default(
+    base: SemanticExpression,
+    offset: u64,
+    pointer_bits: u16,
+    bits: u16,
+) -> SemanticExpression {
+    SemanticExpression::Load {
+        space: SemanticAddressSpace::Default,
+        addr: Box::new(addr_with_offset(base, offset, pointer_bits)),
+        bits,
+    }
+}
+
+fn x87_status_word_image() -> SemanticExpression {
+    let top_bits = SemanticExpression::Cast {
+        op: SemanticOperationCast::ZeroExtend,
+        arg: Box::new(read_reg("x87_top", 3)),
+        bits: 16,
+    };
+    let top_shifted = SemanticExpression::Binary {
+        op: SemanticOperationBinary::Shl,
+        left: Box::new(top_bits),
+        right: Box::new(common::const_u64(11, 16)),
+        bits: 16,
+    };
+    let mut word = common::const_u64(0, 16);
+    for (name, bit) in [("x87_c0", 8), ("x87_c1", 9), ("x87_c2", 10), ("x87_c3", 14)] {
+        let shifted = SemanticExpression::Binary {
+            op: SemanticOperationBinary::Shl,
+            left: Box::new(SemanticExpression::Cast {
+                op: SemanticOperationCast::ZeroExtend,
+                arg: Box::new(read_reg(name, 1)),
+                bits: 16,
+            }),
+            right: Box::new(common::const_u64(bit, 16)),
+            bits: 16,
+        };
+        word = common::or(word, shifted, 16);
+    }
+    common::or(word, top_shifted, 16)
+}
+
+fn mxcsr_location() -> crate::semantics::SemanticLocation {
+    common::reg("mxcsr".to_string(), 32)
 }
 
 fn string_index_location(

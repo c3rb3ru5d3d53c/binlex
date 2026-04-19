@@ -52,7 +52,9 @@ pub fn build(
         InsnId(id) if id == X86Insn::X86_INS_BSR as u32 => bit_scan(machine, operands, true),
         InsnId(id) if id == X86Insn::X86_INS_TZCNT as u32 => count_zeros(machine, operands, false),
         InsnId(id) if id == X86Insn::X86_INS_LZCNT as u32 => count_zeros(machine, operands, true),
-        InsnId(id) if id == X86Insn::X86_INS_BLSI as u32 => bls(machine, operands, BlsKind::Isolate),
+        InsnId(id) if id == X86Insn::X86_INS_BLSI as u32 => {
+            bls(machine, operands, BlsKind::Isolate)
+        }
         InsnId(id) if id == X86Insn::X86_INS_BLSMSK as u32 => bls(machine, operands, BlsKind::Mask),
         InsnId(id) if id == X86Insn::X86_INS_BLSR as u32 => bls(machine, operands, BlsKind::Reset),
         InsnId(id) if id == X86Insn::X86_INS_BEXTR as u32 => bextr(machine, operands),
@@ -699,7 +701,11 @@ fn pdep_pext(
     ))
 }
 
-fn pdep_expression(src: SemanticExpression, mask: SemanticExpression, bits: u16) -> SemanticExpression {
+fn pdep_expression(
+    src: SemanticExpression,
+    mask: SemanticExpression,
+    bits: u16,
+) -> SemanticExpression {
     let mut low_to_high_parts = Vec::with_capacity(bits as usize);
     let mut rank = common::const_u64(0, bits);
     for bit in 0..bits {
@@ -730,7 +736,11 @@ fn pdep_expression(src: SemanticExpression, mask: SemanticExpression, bits: u16)
     SemanticExpression::Concat { parts, bits }
 }
 
-fn pext_expression(src: SemanticExpression, mask: SemanticExpression, bits: u16) -> SemanticExpression {
+fn pext_expression(
+    src: SemanticExpression,
+    mask: SemanticExpression,
+    bits: u16,
+) -> SemanticExpression {
     let mut outputs = vec![common::bool_const(false); bits as usize];
     let mut rank = common::const_u64(0, bits);
     for src_bit_index in 0..bits {

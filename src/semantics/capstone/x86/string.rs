@@ -40,11 +40,17 @@ pub fn build(
     _operands: &[ArchOperand],
 ) -> Option<InstructionSemantics> {
     let mnemonic = instruction.mnemonic().unwrap_or_default();
-    if matches!(mnemonic, "rep stosd" | "rep stosw" | "rep movsb") {
+    if matches!(
+        mnemonic,
+        "rep stosd" | "rep stosw" | "rep movsb" | "rep movsw" | "rep movsd" | "rep movsq"
+    ) {
         return match mnemonic {
             "rep stosd" => rep_stos(machine, 32),
             "rep stosw" => rep_stos(machine, 16),
             "rep movsb" => rep_movsb(machine),
+            "rep movsw" => rep_movs(machine, 16),
+            "rep movsd" => rep_movs(machine, 32),
+            "rep movsq" => rep_movs(machine, 64),
             _ => None,
         };
     }
@@ -53,8 +59,23 @@ pub fn build(
         InsnId(id) if id == X86Insn::X86_INS_STOSB as u32 => stos(machine, 8),
         InsnId(id) if id == X86Insn::X86_INS_STOSW as u32 => stos(machine, 16),
         InsnId(id) if id == X86Insn::X86_INS_STOSD as u32 => stos(machine, 32),
-        InsnId(id) if id == X86Insn::X86_INS_MOVSW as u32 => movsw(machine),
-        InsnId(id) if id == X86Insn::X86_INS_SCASD as u32 => scasd(machine),
+        InsnId(id) if id == X86Insn::X86_INS_STOSQ as u32 => stos(machine, 64),
+        InsnId(id) if id == X86Insn::X86_INS_MOVSB as u32 => movs(machine, 8),
+        InsnId(id) if id == X86Insn::X86_INS_MOVSW as u32 => movs(machine, 16),
+        InsnId(id) if id == X86Insn::X86_INS_MOVSD as u32 => movs(machine, 32),
+        InsnId(id) if id == X86Insn::X86_INS_MOVSQ as u32 => movs(machine, 64),
+        InsnId(id) if id == X86Insn::X86_INS_LODSB as u32 => lods(machine, 8),
+        InsnId(id) if id == X86Insn::X86_INS_LODSW as u32 => lods(machine, 16),
+        InsnId(id) if id == X86Insn::X86_INS_LODSD as u32 => lods(machine, 32),
+        InsnId(id) if id == X86Insn::X86_INS_LODSQ as u32 => lods(machine, 64),
+        InsnId(id) if id == X86Insn::X86_INS_SCASB as u32 => scas(machine, 8),
+        InsnId(id) if id == X86Insn::X86_INS_SCASD as u32 => scas(machine, 32),
+        InsnId(id) if id == X86Insn::X86_INS_SCASQ as u32 => scas(machine, 64),
+        InsnId(id) if id == X86Insn::X86_INS_SCASW as u32 => scas(machine, 16),
+        InsnId(id) if id == X86Insn::X86_INS_CMPSB as u32 => cmps(machine, 8),
+        InsnId(id) if id == X86Insn::X86_INS_CMPSW as u32 => cmps(machine, 16),
+        InsnId(id) if id == X86Insn::X86_INS_CMPSD as u32 => cmps(machine, 32),
+        InsnId(id) if id == X86Insn::X86_INS_CMPSQ as u32 => cmps(machine, 64),
         _ => None,
     }
 }
@@ -87,6 +108,10 @@ fn rep_stos(machine: Architecture, bits: u16) -> Option<InstructionSemantics> {
 }
 
 fn rep_movsb(machine: Architecture) -> Option<InstructionSemantics> {
+    rep_movs(machine, 8)
+}
+
+fn rep_movs(machine: Architecture, bits: u16) -> Option<InstructionSemantics> {
     let si = index_reg(machine, false);
     let di = index_reg(machine, true);
     let cx = counter_reg(machine);
@@ -100,16 +125,16 @@ fn rep_movsb(machine: Architecture) -> Option<InstructionSemantics> {
                 dst_space: SemanticAddressSpace::Default,
                 dst_addr: SemanticExpression::Read(Box::new(di.clone())),
                 count: count.clone(),
-                element_bits: 8,
+                element_bits: bits,
                 decrement: common::flag_expr("df"),
             },
             SemanticEffect::Set {
                 dst: si.clone(),
-                expression: repeated_index_value(si, count.clone(), 1, machine),
+                expression: repeated_index_value(si, count.clone(), bits / 8, machine),
             },
             SemanticEffect::Set {
                 dst: di.clone(),
-                expression: repeated_index_value(di, count.clone(), 1, machine),
+                expression: repeated_index_value(di, count.clone(), bits / 8, machine),
             },
             SemanticEffect::Set {
                 dst: cx,
@@ -141,7 +166,7 @@ fn stos(machine: Architecture, bits: u16) -> Option<InstructionSemantics> {
     ))
 }
 
-fn movsw(machine: Architecture) -> Option<InstructionSemantics> {
+fn movs(machine: Architecture, bits: u16) -> Option<InstructionSemantics> {
     let si = index_reg(machine, false);
     let di = index_reg(machine, true);
     let src_addr = SemanticExpression::Read(Box::new(si.clone()));
@@ -155,32 +180,54 @@ fn movsw(machine: Architecture) -> Option<InstructionSemantics> {
                 expression: SemanticExpression::Load {
                     space: SemanticAddressSpace::Default,
                     addr: Box::new(src_addr),
-                    bits: 16,
+                    bits,
                 },
-                bits: 16,
+                bits,
             },
             SemanticEffect::Set {
                 dst: si.clone(),
-                expression: next_index_value(si, 2, machine),
+                expression: next_index_value(si, bits / 8, machine),
             },
             SemanticEffect::Set {
                 dst: di.clone(),
-                expression: next_index_value(di, 2, machine),
+                expression: next_index_value(di, bits / 8, machine),
             },
         ],
     ))
 }
 
-fn scasd(machine: Architecture) -> Option<InstructionSemantics> {
+fn lods(machine: Architecture, bits: u16) -> Option<InstructionSemantics> {
+    let si = index_reg(machine, false);
+    let acc = accumulator_reg(machine, bits)?;
+    Some(common::complete(
+        SemanticTerminator::FallThrough,
+        vec![
+            SemanticEffect::Set {
+                dst: acc,
+                expression: SemanticExpression::Load {
+                    space: SemanticAddressSpace::Default,
+                    addr: Box::new(SemanticExpression::Read(Box::new(si.clone()))),
+                    bits,
+                },
+            },
+            SemanticEffect::Set {
+                dst: si.clone(),
+                expression: next_index_value(si, bits / 8, machine),
+            },
+        ],
+    ))
+}
+
+fn scas(machine: Architecture, bits: u16) -> Option<InstructionSemantics> {
     let di = index_reg(machine, true);
-    let acc = accumulator_reg(machine, 32)?;
+    let acc = accumulator_reg(machine, bits)?;
     let mem = SemanticExpression::Load {
         space: SemanticAddressSpace::Default,
         addr: Box::new(SemanticExpression::Read(Box::new(di.clone()))),
-        bits: 32,
+        bits,
     };
     let acc_expr = SemanticExpression::Read(Box::new(acc));
-    let diff = common::sub(acc_expr.clone(), mem.clone(), 32);
+    let diff = common::sub(acc_expr.clone(), mem.clone(), bits);
     Some(common::complete(
         SemanticTerminator::FallThrough,
         vec![
@@ -189,12 +236,12 @@ fn scasd(machine: Architecture) -> Option<InstructionSemantics> {
                 expression: common::compare(
                     SemanticOperationCompare::Eq,
                     diff.clone(),
-                    common::const_u64(0, 32),
+                    common::const_u64(0, bits),
                 ),
             },
             SemanticEffect::Set {
                 dst: common::flag("sf"),
-                expression: common::extract_bit(diff.clone(), 31),
+                expression: common::extract_bit(diff.clone(), bits - 1),
             },
             SemanticEffect::Set {
                 dst: common::flag("cf"),
@@ -206,7 +253,7 @@ fn scasd(machine: Architecture) -> Option<InstructionSemantics> {
             },
             SemanticEffect::Set {
                 dst: common::flag("of"),
-                expression: common::sub_overflow(acc_expr.clone(), mem.clone(), diff.clone(), 32),
+                expression: common::sub_overflow(acc_expr.clone(), mem.clone(), diff.clone(), bits),
             },
             SemanticEffect::Set {
                 dst: common::flag("pf"),
@@ -214,11 +261,72 @@ fn scasd(machine: Architecture) -> Option<InstructionSemantics> {
             },
             SemanticEffect::Set {
                 dst: common::flag("af"),
-                expression: common::auxiliary_flag(acc_expr, mem, diff, 32),
+                expression: common::auxiliary_flag(acc_expr, mem, diff, bits),
             },
             SemanticEffect::Set {
                 dst: di.clone(),
-                expression: next_index_value(di, 4, machine),
+                expression: next_index_value(di, bits / 8, machine),
+            },
+        ],
+    ))
+}
+
+fn cmps(machine: Architecture, bits: u16) -> Option<InstructionSemantics> {
+    let si = index_reg(machine, false);
+    let di = index_reg(machine, true);
+    let lhs = SemanticExpression::Load {
+        space: SemanticAddressSpace::Default,
+        addr: Box::new(SemanticExpression::Read(Box::new(si.clone()))),
+        bits,
+    };
+    let rhs = SemanticExpression::Load {
+        space: SemanticAddressSpace::Default,
+        addr: Box::new(SemanticExpression::Read(Box::new(di.clone()))),
+        bits,
+    };
+    let diff = common::sub(lhs.clone(), rhs.clone(), bits);
+    Some(common::complete(
+        SemanticTerminator::FallThrough,
+        vec![
+            SemanticEffect::Set {
+                dst: common::flag("zf"),
+                expression: common::compare(
+                    SemanticOperationCompare::Eq,
+                    diff.clone(),
+                    common::const_u64(0, bits),
+                ),
+            },
+            SemanticEffect::Set {
+                dst: common::flag("sf"),
+                expression: common::extract_bit(diff.clone(), bits - 1),
+            },
+            SemanticEffect::Set {
+                dst: common::flag("cf"),
+                expression: common::compare(
+                    SemanticOperationCompare::Ult,
+                    lhs.clone(),
+                    rhs.clone(),
+                ),
+            },
+            SemanticEffect::Set {
+                dst: common::flag("of"),
+                expression: common::sub_overflow(lhs.clone(), rhs.clone(), diff.clone(), bits),
+            },
+            SemanticEffect::Set {
+                dst: common::flag("pf"),
+                expression: common::parity_flag(diff.clone()),
+            },
+            SemanticEffect::Set {
+                dst: common::flag("af"),
+                expression: common::auxiliary_flag(lhs, rhs, diff, bits),
+            },
+            SemanticEffect::Set {
+                dst: si.clone(),
+                expression: next_index_value(si, bits / 8, machine),
+            },
+            SemanticEffect::Set {
+                dst: di.clone(),
+                expression: next_index_value(di, bits / 8, machine),
             },
         ],
     ))
@@ -254,7 +362,11 @@ fn repeated_index_value(
     machine: Architecture,
 ) -> SemanticExpression {
     let pointer_bits = common::pointer_bits(machine);
-    let step = common::mul(count, common::const_u64(bytes as u64, pointer_bits), pointer_bits);
+    let step = common::mul(
+        count,
+        common::const_u64(bytes as u64, pointer_bits),
+        pointer_bits,
+    );
     let current = SemanticExpression::Read(Box::new(index));
     SemanticExpression::Select {
         condition: Box::new(common::flag_expr("df")),
@@ -281,6 +393,7 @@ fn accumulator_reg(machine: Architecture, bits: u16) -> Option<crate::semantics:
         (Architecture::AMD64, 8) | (Architecture::I386, 8) => X86Reg::X86_REG_AL as u16,
         (Architecture::AMD64, 16) | (Architecture::I386, 16) => X86Reg::X86_REG_AX as u16,
         (Architecture::AMD64, 32) | (Architecture::I386, 32) => X86Reg::X86_REG_EAX as u16,
+        (Architecture::AMD64, 64) => X86Reg::X86_REG_RAX as u16,
         _ => return None,
     };
     Some(common::reg(common::reg_id_name(register), bits))

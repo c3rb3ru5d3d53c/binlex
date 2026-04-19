@@ -43,8 +43,25 @@ pub fn build(
     if matches!(instruction.mnemonic().unwrap_or_default(), "lock cmpxchg8b") {
         return lock_cmpxchg8b(machine, operands);
     }
+    if matches!(
+        instruction.mnemonic().unwrap_or_default(),
+        "lock cmpxchg16b"
+    ) {
+        return lock_cmpxchg16b(machine, operands);
+    }
 
     match instruction.id() {
+        InsnId(id)
+            if [
+                X86Insn::X86_INS_AAA as u32,
+                X86Insn::X86_INS_AAD as u32,
+                X86Insn::X86_INS_AAM as u32,
+                X86Insn::X86_INS_AAS as u32,
+            ]
+            .contains(&id) =>
+        {
+            ascii_adjust(machine, instruction, operands)
+        }
         InsnId(id) if id == X86Insn::X86_INS_NOP as u32 => Some(common::complete(
             SemanticTerminator::FallThrough,
             vec![SemanticEffect::Nop],
@@ -56,6 +73,9 @@ pub fn build(
         InsnId(id) if id == X86Insn::X86_INS_XCHG as u32 => exchange(machine, operands),
         InsnId(id) if id == X86Insn::X86_INS_XADD as u32 => exchange_add(machine, operands),
         InsnId(id) if id == X86Insn::X86_INS_CMPXCHG as u32 => compare_exchange(machine, operands),
+        InsnId(id) if id == X86Insn::X86_INS_CMPXCHG16B as u32 => {
+            lock_cmpxchg16b(machine, operands)
+        }
         InsnId(id) if id == X86Insn::X86_INS_MOVZX as u32 => movx(machine, operands, false),
         InsnId(id)
             if id == X86Insn::X86_INS_MOVSX as u32 || id == X86Insn::X86_INS_MOVSXD as u32 =>
@@ -99,9 +119,12 @@ pub fn build(
                 },
             )
         }
-        InsnId(id) if id == X86Insn::X86_INS_BSWAP as u32 => {
-            unary_op(machine, instruction, operands, SemanticOperationUnary::ByteSwap)
-        }
+        InsnId(id) if id == X86Insn::X86_INS_BSWAP as u32 => unary_op(
+            machine,
+            instruction,
+            operands,
+            SemanticOperationUnary::ByteSwap,
+        ),
         InsnId(id) if id == X86Insn::X86_INS_POPCNT as u32 => popcnt(machine, operands),
         InsnId(id) if [X86Insn::X86_INS_CMP as u32].contains(&id) => {
             cmp_like(machine, instruction, operands, "x86.cmp")
@@ -134,8 +157,213 @@ pub fn build(
     }
 }
 
+fn ascii_adjust(
+    _machine: Architecture,
+    instruction: &Insn,
+    operands: &[ArchOperand],
+) -> Option<InstructionSemantics> {
+    let al_reg = common::reg(common::reg_id_name(X86Reg::X86_REG_AL as u16), 8);
+    let ah_reg = common::reg(common::reg_id_name(X86Reg::X86_REG_AH as u16), 8);
+    let al = SemanticExpression::Read(Box::new(al_reg.clone()));
+    let ah = SemanticExpression::Read(Box::new(ah_reg.clone()));
+
+    match instruction.id() {
+        InsnId(id) if id == X86Insn::X86_INS_AAA as u32 || id == X86Insn::X86_INS_AAS as u32 => {
+            let low_nibble = SemanticExpression::Extract {
+                arg: Box::new(al.clone()),
+                lsb: 0,
+                bits: 4,
+            };
+            let decimal_adjust = common::or(
+                common::compare(
+                    SemanticOperationCompare::Ugt,
+                    low_nibble,
+                    SemanticExpression::Const { value: 9, bits: 4 },
+                ),
+                common::flag_expr("af"),
+                1,
+            );
+            let adjusted_al = if id == X86Insn::X86_INS_AAA as u32 {
+                common::add(al.clone(), common::const_u64(6, 8), 8)
+            } else {
+                common::sub(al.clone(), common::const_u64(6, 8), 8)
+            };
+            let adjusted_ah = if id == X86Insn::X86_INS_AAA as u32 {
+                common::add(ah.clone(), common::const_u64(1, 8), 8)
+            } else {
+                common::sub(ah.clone(), common::const_u64(1, 8), 8)
+            };
+            let masked_al = common::and(adjusted_al, common::const_u64(0x0f, 8), 8);
+            return Some(common::complete(
+                SemanticTerminator::FallThrough,
+                vec![
+                    SemanticEffect::Set {
+                        dst: al_reg,
+                        expression: SemanticExpression::Select {
+                            condition: Box::new(decimal_adjust.clone()),
+                            when_true: Box::new(masked_al),
+                            when_false: Box::new(common::and(al, common::const_u64(0x0f, 8), 8)),
+                            bits: 8,
+                        },
+                    },
+                    SemanticEffect::Set {
+                        dst: ah_reg,
+                        expression: SemanticExpression::Select {
+                            condition: Box::new(decimal_adjust.clone()),
+                            when_true: Box::new(adjusted_ah),
+                            when_false: Box::new(ah),
+                            bits: 8,
+                        },
+                    },
+                    SemanticEffect::Set {
+                        dst: common::flag("af"),
+                        expression: decimal_adjust.clone(),
+                    },
+                    SemanticEffect::Set {
+                        dst: common::flag("cf"),
+                        expression: decimal_adjust,
+                    },
+                    SemanticEffect::Set {
+                        dst: common::flag("of"),
+                        expression: SemanticExpression::Undefined { bits: 1 },
+                    },
+                    SemanticEffect::Set {
+                        dst: common::flag("sf"),
+                        expression: SemanticExpression::Undefined { bits: 1 },
+                    },
+                    SemanticEffect::Set {
+                        dst: common::flag("zf"),
+                        expression: SemanticExpression::Undefined { bits: 1 },
+                    },
+                    SemanticEffect::Set {
+                        dst: common::flag("pf"),
+                        expression: SemanticExpression::Undefined { bits: 1 },
+                    },
+                ],
+            ));
+        }
+        InsnId(id) if id == X86Insn::X86_INS_AAD as u32 => {
+            let base = operands
+                .first()
+                .and_then(|operand| common::operand_expr(_machine, operand))
+                .unwrap_or_else(|| common::const_u64(10, 8));
+            let ah_term = SemanticExpression::Binary {
+                op: SemanticOperationBinary::Mul,
+                left: Box::new(ah),
+                right: Box::new(base.clone()),
+                bits: 8,
+            };
+            let result = common::add(ah_term, al, 8);
+            return Some(common::complete(
+                SemanticTerminator::FallThrough,
+                vec![
+                    SemanticEffect::Set {
+                        dst: common::reg(common::reg_id_name(X86Reg::X86_REG_AL as u16), 8),
+                        expression: result.clone(),
+                    },
+                    SemanticEffect::Set {
+                        dst: common::reg(common::reg_id_name(X86Reg::X86_REG_AH as u16), 8),
+                        expression: common::const_u64(0, 8),
+                    },
+                    SemanticEffect::Set {
+                        dst: common::flag("zf"),
+                        expression: common::compare(
+                            SemanticOperationCompare::Eq,
+                            result.clone(),
+                            common::const_u64(0, 8),
+                        ),
+                    },
+                    SemanticEffect::Set {
+                        dst: common::flag("sf"),
+                        expression: common::extract_bit(result.clone(), 7),
+                    },
+                    SemanticEffect::Set {
+                        dst: common::flag("pf"),
+                        expression: common::parity_flag(result),
+                    },
+                    SemanticEffect::Set {
+                        dst: common::flag("cf"),
+                        expression: SemanticExpression::Undefined { bits: 1 },
+                    },
+                    SemanticEffect::Set {
+                        dst: common::flag("of"),
+                        expression: SemanticExpression::Undefined { bits: 1 },
+                    },
+                    SemanticEffect::Set {
+                        dst: common::flag("af"),
+                        expression: SemanticExpression::Undefined { bits: 1 },
+                    },
+                ],
+            ));
+        }
+        InsnId(id) if id == X86Insn::X86_INS_AAM as u32 => {
+            let base = operands
+                .first()
+                .and_then(|operand| common::operand_expr(_machine, operand))
+                .unwrap_or_else(|| common::const_u64(10, 8));
+            let quotient = SemanticExpression::Binary {
+                op: SemanticOperationBinary::UDiv,
+                left: Box::new(al.clone()),
+                right: Box::new(base.clone()),
+                bits: 8,
+            };
+            let remainder = SemanticExpression::Binary {
+                op: SemanticOperationBinary::URem,
+                left: Box::new(al),
+                right: Box::new(base),
+                bits: 8,
+            };
+            return Some(common::complete(
+                SemanticTerminator::FallThrough,
+                vec![
+                    SemanticEffect::Set {
+                        dst: common::reg(common::reg_id_name(X86Reg::X86_REG_AH as u16), 8),
+                        expression: quotient,
+                    },
+                    SemanticEffect::Set {
+                        dst: common::reg(common::reg_id_name(X86Reg::X86_REG_AL as u16), 8),
+                        expression: remainder.clone(),
+                    },
+                    SemanticEffect::Set {
+                        dst: common::flag("zf"),
+                        expression: common::compare(
+                            SemanticOperationCompare::Eq,
+                            remainder.clone(),
+                            common::const_u64(0, 8),
+                        ),
+                    },
+                    SemanticEffect::Set {
+                        dst: common::flag("sf"),
+                        expression: common::extract_bit(remainder.clone(), 7),
+                    },
+                    SemanticEffect::Set {
+                        dst: common::flag("pf"),
+                        expression: common::parity_flag(remainder),
+                    },
+                    SemanticEffect::Set {
+                        dst: common::flag("cf"),
+                        expression: SemanticExpression::Undefined { bits: 1 },
+                    },
+                    SemanticEffect::Set {
+                        dst: common::flag("of"),
+                        expression: SemanticExpression::Undefined { bits: 1 },
+                    },
+                    SemanticEffect::Set {
+                        dst: common::flag("af"),
+                        expression: SemanticExpression::Undefined { bits: 1 },
+                    },
+                ],
+            ));
+        }
+        _ => {}
+    }
+    None
+}
+
 fn lock_cmpxchg8b(machine: Architecture, operands: &[ArchOperand]) -> Option<InstructionSemantics> {
-    let dst = operands.first().and_then(|operand| common::operand_location(machine, operand))?;
+    let dst = operands
+        .first()
+        .and_then(|operand| common::operand_location(machine, operand))?;
     let addr = match dst {
         crate::semantics::SemanticLocation::Memory { addr, .. } => *addr,
         _ => return None,
@@ -154,7 +382,11 @@ fn lock_cmpxchg8b(machine: Architecture, operands: &[ArchOperand]) -> Option<Ins
     };
     let observed_tmp = crate::semantics::SemanticLocation::Temporary { id: 0, bits: 64 };
     let observed_expr = SemanticExpression::Read(Box::new(observed_tmp.clone()));
-    let equal = common::compare(SemanticOperationCompare::Eq, accumulator.clone(), observed_expr.clone());
+    let equal = common::compare(
+        SemanticOperationCompare::Eq,
+        accumulator.clone(),
+        observed_expr.clone(),
+    );
     let observed_low = SemanticExpression::Extract {
         arg: Box::new(observed_expr.clone()),
         lsb: 0,
@@ -198,6 +430,91 @@ fn lock_cmpxchg8b(machine: Architecture, operands: &[ArchOperand]) -> Option<Ins
                     when_true: Box::new(edx),
                     when_false: Box::new(observed_high),
                     bits: 32,
+                },
+            },
+            SemanticEffect::Set {
+                dst: common::flag("zf"),
+                expression: equal,
+            },
+        ],
+        terminator: SemanticTerminator::FallThrough,
+        diagnostics: Vec::new(),
+    })
+}
+
+fn lock_cmpxchg16b(
+    machine: Architecture,
+    operands: &[ArchOperand],
+) -> Option<InstructionSemantics> {
+    let dst = operands
+        .first()
+        .and_then(|operand| common::operand_location(machine, operand))?;
+    let addr = match dst {
+        crate::semantics::SemanticLocation::Memory { addr, .. } => *addr,
+        _ => return None,
+    };
+    let rax = common::reg_expr(X86Reg::X86_REG_RAX as u16, 64);
+    let rdx = common::reg_expr(X86Reg::X86_REG_RDX as u16, 64);
+    let rbx = common::reg_expr(X86Reg::X86_REG_RBX as u16, 64);
+    let rcx = common::reg_expr(X86Reg::X86_REG_RCX as u16, 64);
+    let accumulator = SemanticExpression::Concat {
+        parts: vec![rdx.clone(), rax.clone()],
+        bits: 128,
+    };
+    let replacement = SemanticExpression::Concat {
+        parts: vec![rcx, rbx],
+        bits: 128,
+    };
+    let observed_tmp = crate::semantics::SemanticLocation::Temporary { id: 1, bits: 128 };
+    let observed_expr = SemanticExpression::Read(Box::new(observed_tmp.clone()));
+    let equal = common::compare(
+        SemanticOperationCompare::Eq,
+        accumulator.clone(),
+        observed_expr.clone(),
+    );
+    let observed_low = SemanticExpression::Extract {
+        arg: Box::new(observed_expr.clone()),
+        lsb: 0,
+        bits: 64,
+    };
+    let observed_high = SemanticExpression::Extract {
+        arg: Box::new(observed_expr.clone()),
+        lsb: 64,
+        bits: 64,
+    };
+    Some(InstructionSemantics {
+        version: 1,
+        status: crate::semantics::SemanticStatus::Complete,
+        temporaries: vec![SemanticTemporary {
+            id: 1,
+            bits: 128,
+            name: Some("lock_cmpxchg16b_observed".to_string()),
+        }],
+        effects: vec![
+            SemanticEffect::AtomicCmpXchg {
+                space: crate::semantics::SemanticAddressSpace::Default,
+                addr,
+                expected: accumulator.clone(),
+                desired: replacement,
+                bits: 128,
+                observed: observed_tmp,
+            },
+            SemanticEffect::Set {
+                dst: common::reg(common::reg_id_name(X86Reg::X86_REG_RAX as u16), 64),
+                expression: SemanticExpression::Select {
+                    condition: Box::new(equal.clone()),
+                    when_true: Box::new(rax),
+                    when_false: Box::new(observed_low),
+                    bits: 64,
+                },
+            },
+            SemanticEffect::Set {
+                dst: common::reg(common::reg_id_name(X86Reg::X86_REG_RDX as u16), 64),
+                expression: SemanticExpression::Select {
+                    condition: Box::new(equal.clone()),
+                    when_true: Box::new(rdx),
+                    when_false: Box::new(observed_high),
+                    bits: 64,
                 },
             },
             SemanticEffect::Set {
@@ -682,12 +999,8 @@ fn adcx_adox(
         ),
         1,
     );
-    let overflow_out = common::add_overflow(
-        left.clone(),
-        right_with_carry.clone(),
-        result.clone(),
-        bits,
-    );
+    let overflow_out =
+        common::add_overflow(left.clone(), right_with_carry.clone(), result.clone(), bits);
 
     let mut effects = vec![SemanticEffect::Set {
         dst,

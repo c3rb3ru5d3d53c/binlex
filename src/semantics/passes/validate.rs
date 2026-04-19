@@ -95,7 +95,9 @@ fn validate_effect(effect: &SemanticEffect) -> Result<(), Error> {
             ..
         } => {
             if *bits == 0 {
-                return Err(Error::other("semantic atomic compare-exchange has zero width"));
+                return Err(Error::other(
+                    "semantic atomic compare-exchange has zero width",
+                ));
             }
             validate_expression(addr)?;
             validate_expression(expected)?;

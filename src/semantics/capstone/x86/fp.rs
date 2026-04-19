@@ -75,6 +75,7 @@ pub fn build(
 
     match instruction.id() {
         InsnId(id) if id == X86Insn::X86_INS_MOVSD as u32 => movsd(machine, operands),
+        InsnId(id) if id == X86Insn::X86_INS_VMOVSD as u32 => vmovsd(machine, operands),
         InsnId(id) if id == X86Insn::X86_INS_MINSD as u32 => {
             scalar_fp(machine, instruction, operands)
         }
@@ -134,6 +135,49 @@ fn movsd(machine: Architecture, operands: &[ArchOperand]) -> Option<InstructionS
     } else {
         SemanticExpression::Extract {
             arg: Box::new(src),
+            lsb: 0,
+            bits: dst_bits,
+        }
+    };
+    Some(common::complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Set { dst, expression }],
+    ))
+}
+
+fn vmovsd(machine: Architecture, operands: &[ArchOperand]) -> Option<InstructionSemantics> {
+    if operands.len() == 2 {
+        return movsd(machine, operands);
+    }
+    let dst = operands
+        .first()
+        .and_then(|operand| common::operand_location(machine, operand))?;
+    let dst_bits = common::location_bits(&dst);
+    let upper_src = operands
+        .get(1)
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let low_src = operands
+        .get(2)
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let expression = if dst_bits > 64 {
+        SemanticExpression::Concat {
+            parts: vec![
+                SemanticExpression::Extract {
+                    arg: Box::new(upper_src),
+                    lsb: 64,
+                    bits: dst_bits - 64,
+                },
+                SemanticExpression::Extract {
+                    arg: Box::new(low_src),
+                    lsb: 0,
+                    bits: 64,
+                },
+            ],
+            bits: dst_bits,
+        }
+    } else {
+        SemanticExpression::Extract {
+            arg: Box::new(low_src),
             lsb: 0,
             bits: dst_bits,
         }
@@ -405,7 +449,10 @@ fn x87_pop_effects(count: u8) -> Vec<SemanticEffect> {
     effects
 }
 
-fn x87_pop_with_replacement(target_index: u8, replacement: SemanticExpression) -> Vec<SemanticEffect> {
+fn x87_pop_with_replacement(
+    target_index: u8,
+    replacement: SemanticExpression,
+) -> Vec<SemanticEffect> {
     let mut effects = Vec::new();
     for index in 0..8u8 {
         let expression = match index {
@@ -706,11 +753,8 @@ fn scalar_fp(
                 left.clone(),
                 right.clone(),
             );
-            let left_is_min = common::compare(
-                SemanticOperationCompare::Olt,
-                left.clone(),
-                right.clone(),
-            );
+            let left_is_min =
+                common::compare(SemanticOperationCompare::Olt, left.clone(), right.clone());
             SemanticExpression::Select {
                 condition: Box::new(unordered),
                 when_true: Box::new(right.clone()),
