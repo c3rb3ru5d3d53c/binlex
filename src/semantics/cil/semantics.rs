@@ -23,8 +23,10 @@
 use crate::disassemblers::cil::Instruction;
 use crate::disassemblers::cil::Mnemonic;
 use crate::semantics::{
-    InstructionSemantics, SemanticDiagnostic, SemanticDiagnosticKind, SemanticEffect,
-    SemanticExpression, SemanticStatus, SemanticTerminator, SemanticTrapKind,
+    InstructionSemantics, SemanticAddressSpace, SemanticDiagnostic, SemanticDiagnosticKind,
+    SemanticEffect, SemanticExpression, SemanticLocation, SemanticOperationBinary,
+    SemanticOperationCast, SemanticOperationCompare, SemanticOperationUnary, SemanticStatus,
+    SemanticTerminator, SemanticTrapKind,
 };
 
 pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
@@ -49,13 +51,13 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
             status: SemanticStatus::Complete,
             temporaries: Vec::new(),
             effects: vec![SemanticEffect::Intrinsic {
-                name: format!("cil.{:?}", instruction.mnemonic),
+                name: format!("dotnet.{:?}", instruction.mnemonic),
                 args: operand_args(instruction),
                 outputs: Vec::new(),
             }],
             terminator: SemanticTerminator::Call {
                 target: SemanticExpression::Intrinsic {
-                    name: format!("cil.{:?}.target", instruction.mnemonic),
+                    name: format!("dotnet.{:?}.target", instruction.mnemonic),
                     args: operand_args(instruction),
                     bits: 64,
                 },
@@ -71,6 +73,194 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
 
     if instruction.is_conditional_jump() {
         let true_target = instruction.to().iter().next().copied().unwrap_or_default();
+        if matches!(instruction.mnemonic, Mnemonic::BrTrue | Mnemonic::BrTrueS) {
+            let (effects, value) = pop_stack();
+            return complete_with_effects(
+                SemanticTerminator::Branch {
+                    condition: compare(SemanticOperationCompare::Ne, value, const_u64(0, 64)),
+                    true_target: const_u64(true_target, 64),
+                    false_target: const_u64(
+                        instruction.next().unwrap_or(instruction.address),
+                        64,
+                    ),
+                },
+                effects,
+            );
+        }
+        if matches!(instruction.mnemonic, Mnemonic::BrFalse | Mnemonic::BrFalseS) {
+            let (effects, value) = pop_stack();
+            return complete_with_effects(
+                SemanticTerminator::Branch {
+                    condition: compare(SemanticOperationCompare::Eq, value, const_u64(0, 64)),
+                    true_target: const_u64(true_target, 64),
+                    false_target: const_u64(
+                        instruction.next().unwrap_or(instruction.address),
+                        64,
+                    ),
+                },
+                effects,
+            );
+        }
+        if matches!(instruction.mnemonic, Mnemonic::Beq | Mnemonic::BeqS) {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            return complete_with_effects(
+                SemanticTerminator::Branch {
+                    condition: compare(SemanticOperationCompare::Eq, left, right),
+                    true_target: const_u64(true_target, 64),
+                    false_target: const_u64(
+                        instruction.next().unwrap_or(instruction.address),
+                        64,
+                    ),
+                },
+                effects,
+            );
+        }
+        if matches!(instruction.mnemonic, Mnemonic::BneUn | Mnemonic::BneUnS) {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            return complete_with_effects(
+                SemanticTerminator::Branch {
+                    condition: compare(SemanticOperationCompare::Ne, left, right),
+                    true_target: const_u64(true_target, 64),
+                    false_target: const_u64(
+                        instruction.next().unwrap_or(instruction.address),
+                        64,
+                    ),
+                },
+                effects,
+            );
+        }
+        if matches!(instruction.mnemonic, Mnemonic::Blt | Mnemonic::BltS) {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            return complete_with_effects(
+                SemanticTerminator::Branch {
+                    condition: compare(SemanticOperationCompare::Slt, left, right),
+                    true_target: const_u64(true_target, 64),
+                    false_target: const_u64(
+                        instruction.next().unwrap_or(instruction.address),
+                        64,
+                    ),
+                },
+                effects,
+            );
+        }
+        if matches!(instruction.mnemonic, Mnemonic::BltUn | Mnemonic::BltUnS) {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            return complete_with_effects(
+                SemanticTerminator::Branch {
+                    condition: compare(SemanticOperationCompare::Ult, left, right),
+                    true_target: const_u64(true_target, 64),
+                    false_target: const_u64(
+                        instruction.next().unwrap_or(instruction.address),
+                        64,
+                    ),
+                },
+                effects,
+            );
+        }
+        if matches!(instruction.mnemonic, Mnemonic::Bgt | Mnemonic::BgtS) {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            return complete_with_effects(
+                SemanticTerminator::Branch {
+                    condition: compare(SemanticOperationCompare::Sgt, left, right),
+                    true_target: const_u64(true_target, 64),
+                    false_target: const_u64(
+                        instruction.next().unwrap_or(instruction.address),
+                        64,
+                    ),
+                },
+                effects,
+            );
+        }
+        if matches!(instruction.mnemonic, Mnemonic::BgeUn | Mnemonic::BgeUnS) {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            return complete_with_effects(
+                SemanticTerminator::Branch {
+                    condition: compare(SemanticOperationCompare::Uge, left, right),
+                    true_target: const_u64(true_target, 64),
+                    false_target: const_u64(
+                        instruction.next().unwrap_or(instruction.address),
+                        64,
+                    ),
+                },
+                effects,
+            );
+        }
+        if matches!(instruction.mnemonic, Mnemonic::BgtUn | Mnemonic::BgtUnS) {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            return complete_with_effects(
+                SemanticTerminator::Branch {
+                    condition: compare(SemanticOperationCompare::Ugt, left, right),
+                    true_target: const_u64(true_target, 64),
+                    false_target: const_u64(
+                        instruction.next().unwrap_or(instruction.address),
+                        64,
+                    ),
+                },
+                effects,
+            );
+        }
+        if matches!(instruction.mnemonic, Mnemonic::Ble | Mnemonic::BleS) {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            return complete_with_effects(
+                SemanticTerminator::Branch {
+                    condition: compare(SemanticOperationCompare::Sle, left, right),
+                    true_target: const_u64(true_target, 64),
+                    false_target: const_u64(
+                        instruction.next().unwrap_or(instruction.address),
+                        64,
+                    ),
+                },
+                effects,
+            );
+        }
+        if matches!(instruction.mnemonic, Mnemonic::BleUn | Mnemonic::BleUnS) {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            return complete_with_effects(
+                SemanticTerminator::Branch {
+                    condition: compare(SemanticOperationCompare::Ule, left, right),
+                    true_target: const_u64(true_target, 64),
+                    false_target: const_u64(
+                        instruction.next().unwrap_or(instruction.address),
+                        64,
+                    ),
+                },
+                effects,
+            );
+        }
+        if matches!(instruction.mnemonic, Mnemonic::Bge | Mnemonic::BgeS) {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            return complete_with_effects(
+                SemanticTerminator::Branch {
+                    condition: compare(SemanticOperationCompare::Sge, left, right),
+                    true_target: const_u64(true_target, 64),
+                    false_target: const_u64(
+                        instruction.next().unwrap_or(instruction.address),
+                        64,
+                    ),
+                },
+                effects,
+            );
+        }
         return InstructionSemantics {
             version: 1,
             status: SemanticStatus::Complete,
@@ -135,43 +325,884 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
             terminator: SemanticTerminator::Trap,
             diagnostics: Vec::new(),
         },
+        Mnemonic::DUP => {
+            let (mut effects, value) = peek_stack();
+            effects.extend(push_effects(value));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::Pop => {
+            let (effects, _) = pop_stack();
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::Add => {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.extend(push_effects(binary(
+                SemanticOperationBinary::Add,
+                left,
+                right,
+                64,
+            )));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::Mul => {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.extend(push_effects(binary(
+                SemanticOperationBinary::Mul,
+                left,
+                right,
+                64,
+            )));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::Div => {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.extend(push_effects(binary(
+                SemanticOperationBinary::SDiv,
+                left,
+                right,
+                64,
+            )));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::DivUn => {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.extend(push_effects(binary(
+                SemanticOperationBinary::UDiv,
+                left,
+                right,
+                64,
+            )));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::And => {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.extend(push_effects(binary(
+                SemanticOperationBinary::And,
+                left,
+                right,
+                64,
+            )));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::Or => {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.extend(push_effects(binary(
+                SemanticOperationBinary::Or,
+                left,
+                right,
+                64,
+            )));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::Xor => {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.extend(push_effects(binary(
+                SemanticOperationBinary::Xor,
+                left,
+                right,
+                64,
+            )));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::Sub => {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.extend(push_effects(binary(
+                SemanticOperationBinary::Sub,
+                left,
+                right,
+                64,
+            )));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::Rem => {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.extend(push_effects(binary(
+                SemanticOperationBinary::SRem,
+                left,
+                right,
+                64,
+            )));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::Shl => {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.extend(push_effects(binary(
+                SemanticOperationBinary::Shl,
+                left,
+                right,
+                64,
+            )));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::Shr => {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.extend(push_effects(binary(
+                SemanticOperationBinary::AShr,
+                left,
+                right,
+                64,
+            )));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::ShrUn => {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.extend(push_effects(binary(
+                SemanticOperationBinary::LShr,
+                left,
+                right,
+                64,
+            )));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::Not => {
+            let (mut effects, value) = pop_stack();
+            effects.extend(push_effects(unary(
+                SemanticOperationUnary::Not,
+                value,
+                64,
+            )));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::Neg => {
+            let (mut effects, value) = pop_stack();
+            effects.extend(push_effects(unary(
+                SemanticOperationUnary::Neg,
+                value,
+                64,
+            )));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::Ceq => {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.extend(push_effects(bool_to_i64(compare(
+                SemanticOperationCompare::Eq,
+                left,
+                right,
+            ))));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::CgtUn => {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.extend(push_effects(bool_to_i64(compare(
+                SemanticOperationCompare::Ugt,
+                left,
+                right,
+            ))));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::Cgt => {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.extend(push_effects(bool_to_i64(compare(
+                SemanticOperationCompare::Sgt,
+                left,
+                right,
+            ))));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::CltUn => {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.extend(push_effects(bool_to_i64(compare(
+                SemanticOperationCompare::Ult,
+                left,
+                right,
+            ))));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::Clt => {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.extend(push_effects(bool_to_i64(compare(
+                SemanticOperationCompare::Slt,
+                left,
+                right,
+            ))));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::ConvI4 => {
+            let (mut effects, value) = pop_stack();
+            effects.extend(push_effects(sign_extend_i32(value)));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::ConvI2 => {
+            let (mut effects, value) = pop_stack();
+            effects.extend(push_effects(sign_extend_i16(value)));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::ConvI1 => {
+            let (mut effects, value) = pop_stack();
+            effects.extend(push_effects(sign_extend_i8(value)));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::ConvI8 => {
+            let (mut effects, value) = pop_stack();
+            effects.extend(push_effects(sign_extend_i64(value)));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::ConvU2 => {
+            let (mut effects, value) = pop_stack();
+            effects.extend(push_effects(zero_extend_i16(value)));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::ConvU1 => {
+            let (mut effects, value) = pop_stack();
+            effects.extend(push_effects(zero_extend_i8(value)));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::ConvU4 => {
+            let (mut effects, value) = pop_stack();
+            effects.extend(push_effects(zero_extend_i32(value)));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::ConvU => {
+            let (mut effects, value) = pop_stack();
+            effects.extend(push_effects(zero_extend_i64(value)));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::ConvU8 => {
+            let (mut effects, value) = pop_stack();
+            effects.extend(push_effects(zero_extend_i64(value)));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::ConvR8 => {
+            let (mut effects, value) = pop_stack();
+            effects.extend(push_effects(SemanticExpression::Intrinsic {
+                name: "cil.conv.r8".to_string(),
+                args: vec![value],
+                bits: 64,
+            }));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::LdNull => push_expression(const_u64(0, 64)),
+        Mnemonic::LdcI40 => push_expression(const_u64(0, 64)),
+        Mnemonic::LdcI41 => push_expression(const_u64(1, 64)),
+        Mnemonic::LdcI42 => push_expression(const_u64(2, 64)),
+        Mnemonic::LdcI43 => push_expression(const_u64(3, 64)),
+        Mnemonic::LdcI44 => push_expression(const_u64(4, 64)),
+        Mnemonic::LdcI45 => push_expression(const_u64(5, 64)),
+        Mnemonic::LdcI46 => push_expression(const_u64(6, 64)),
+        Mnemonic::LdcI47 => push_expression(const_u64(7, 64)),
+        Mnemonic::LdcI48 => push_expression(const_u64(8, 64)),
+        Mnemonic::LdcI4M1 => push_expression(const_u64(u64::MAX, 64)),
+        Mnemonic::LdcI4S => push_expression(const_u64(sign_extend(operand_value(instruction), 8), 64)),
+        Mnemonic::LdcI4 => push_expression(const_u64(sign_extend(operand_value(instruction), 32), 64)),
+        Mnemonic::LdcI8 => push_expression(const_u64(operand_value(instruction), 64)),
+        Mnemonic::LdcR4 => push_expression(const_u64(operand_value(instruction), 64)),
+        Mnemonic::LdcR8 => push_expression(const_u64(operand_value(instruction), 64)),
+        Mnemonic::LdArg0 => push_expression(read(cil_argument(0))),
+        Mnemonic::LdArg1 => push_expression(read(cil_argument(1))),
+        Mnemonic::LdArg2 => push_expression(read(cil_argument(2))),
+        Mnemonic::LdArg3 => push_expression(read(cil_argument(3))),
+        Mnemonic::LdArgS | Mnemonic::LdArg => {
+            push_expression(read(cil_argument(operand_value(instruction) as u32)))
+        }
+        Mnemonic::LdArgAS | Mnemonic::LdArgA => {
+            push_expression(read(cil_argument_address(operand_value(instruction) as u32)))
+        }
+        Mnemonic::LdLoc0 => push_expression(read(cil_local(0))),
+        Mnemonic::LdLoc1 => push_expression(read(cil_local(1))),
+        Mnemonic::LdLoc2 => push_expression(read(cil_local(2))),
+        Mnemonic::LdLoc3 => push_expression(read(cil_local(3))),
+        Mnemonic::LdLocS | Mnemonic::LdLoc => {
+            push_expression(read(cil_local(operand_value(instruction) as u32)))
+        }
+        Mnemonic::LdLocAS | Mnemonic::LdLocA => {
+            push_expression(read(cil_local_address(operand_value(instruction) as u32)))
+        }
+        Mnemonic::LdFtn => push_expression(SemanticExpression::Intrinsic {
+            name: "cil.ldftn".to_string(),
+            args: vec![const_u64(operand_value(instruction), 32)],
+            bits: 64,
+        }),
+        Mnemonic::StLoc0 => pop_to_location(cil_local(0)),
+        Mnemonic::StLoc1 => pop_to_location(cil_local(1)),
+        Mnemonic::StLoc2 => pop_to_location(cil_local(2)),
+        Mnemonic::StLoc3 => pop_to_location(cil_local(3)),
+        Mnemonic::StLocS | Mnemonic::SLoc => {
+            pop_to_location(cil_local(operand_value(instruction) as u32))
+        }
+        Mnemonic::StArgS | Mnemonic::StArg => {
+            pop_to_location(cil_argument(operand_value(instruction) as u32))
+        }
+        Mnemonic::LdStr => push_expression(const_u64(operand_value(instruction), 64)),
+        Mnemonic::LdLen => {
+            let (effects, array) = pop_stack();
+            push_with_prefix(
+                effects,
+                SemanticExpression::Intrinsic {
+                    name: "cil.array.len".to_string(),
+                    args: vec![array],
+                    bits: 64,
+                },
+            )
+        }
+        Mnemonic::LdElmRef => {
+            let (mut effects, index) = pop_stack();
+            let (mut more_effects, array) = pop_stack();
+            effects.append(&mut more_effects);
+            push_with_prefix(
+                effects,
+                SemanticExpression::Load {
+                    space: SemanticAddressSpace::Heap,
+                    addr: Box::new(cil_array_element_address(array, index)),
+                    bits: 64,
+                },
+            )
+        }
+        Mnemonic::LdElmU1 => {
+            let (mut effects, index) = pop_stack();
+            let (mut more_effects, array) = pop_stack();
+            effects.append(&mut more_effects);
+            push_with_prefix(
+                effects,
+                zero_extend_i8(SemanticExpression::Load {
+                    space: SemanticAddressSpace::Heap,
+                    addr: Box::new(cil_array_element_address(array, index)),
+                    bits: 8,
+                }),
+            )
+        }
+        Mnemonic::LdElmU4 => {
+            let (mut effects, index) = pop_stack();
+            let (mut more_effects, array) = pop_stack();
+            effects.append(&mut more_effects);
+            push_with_prefix(
+                effects,
+                zero_extend_i32(SemanticExpression::Load {
+                    space: SemanticAddressSpace::Heap,
+                    addr: Box::new(cil_array_element_address(array, index)),
+                    bits: 32,
+                }),
+            )
+        }
+        Mnemonic::LdElmU2 => {
+            let (mut effects, index) = pop_stack();
+            let (mut more_effects, array) = pop_stack();
+            effects.append(&mut more_effects);
+            push_with_prefix(
+                effects,
+                zero_extend_i16(SemanticExpression::Load {
+                    space: SemanticAddressSpace::Heap,
+                    addr: Box::new(cil_array_element_address(array, index)),
+                    bits: 16,
+                }),
+            )
+        }
+        Mnemonic::LdElmI4 => {
+            let (mut effects, index) = pop_stack();
+            let (mut more_effects, array) = pop_stack();
+            effects.append(&mut more_effects);
+            push_with_prefix(
+                effects,
+                sign_extend_i32(SemanticExpression::Load {
+                    space: SemanticAddressSpace::Heap,
+                    addr: Box::new(cil_array_element_address(array, index)),
+                    bits: 32,
+                }),
+            )
+        }
+        Mnemonic::LdElm => {
+            let (mut effects, index) = pop_stack();
+            let (mut more_effects, array) = pop_stack();
+            effects.append(&mut more_effects);
+            push_with_prefix(
+                effects,
+                SemanticExpression::Load {
+                    space: SemanticAddressSpace::Heap,
+                    addr: Box::new(cil_array_element_address(array, index)),
+                    bits: 64,
+                },
+            )
+        }
+        Mnemonic::LdElmR8 => {
+            let (mut effects, index) = pop_stack();
+            let (mut more_effects, array) = pop_stack();
+            effects.append(&mut more_effects);
+            push_with_prefix(
+                effects,
+                SemanticExpression::Load {
+                    space: SemanticAddressSpace::Heap,
+                    addr: Box::new(cil_array_element_address(array, index)),
+                    bits: 64,
+                },
+            )
+        }
+        Mnemonic::LdElmA => {
+            let (mut effects, index) = pop_stack();
+            let (mut more_effects, array) = pop_stack();
+            effects.append(&mut more_effects);
+            push_with_prefix(effects, cil_array_element_address(array, index))
+        }
+        Mnemonic::LdIndRef => {
+            let (effects, address) = pop_stack();
+            push_with_prefix(
+                effects,
+                SemanticExpression::Load {
+                    space: SemanticAddressSpace::Default,
+                    addr: Box::new(address),
+                    bits: 64,
+                },
+            )
+        }
+        Mnemonic::LdIndU1 => {
+            let (effects, address) = pop_stack();
+            push_with_prefix(
+                effects,
+                zero_extend_i8(SemanticExpression::Load {
+                    space: SemanticAddressSpace::Default,
+                    addr: Box::new(address),
+                    bits: 8,
+                }),
+            )
+        }
+        Mnemonic::LdIndU2 => {
+            let (effects, address) = pop_stack();
+            push_with_prefix(
+                effects,
+                zero_extend_i16(SemanticExpression::Load {
+                    space: SemanticAddressSpace::Default,
+                    addr: Box::new(address),
+                    bits: 16,
+                }),
+            )
+        }
+        Mnemonic::LdIndU4 => {
+            let (effects, address) = pop_stack();
+            push_with_prefix(
+                effects,
+                zero_extend_i32(SemanticExpression::Load {
+                    space: SemanticAddressSpace::Default,
+                    addr: Box::new(address),
+                    bits: 32,
+                }),
+            )
+        }
+        Mnemonic::LdIndI4 => {
+            let (effects, address) = pop_stack();
+            push_with_prefix(
+                effects,
+                sign_extend_i32(SemanticExpression::Load {
+                    space: SemanticAddressSpace::Default,
+                    addr: Box::new(address),
+                    bits: 32,
+                }),
+            )
+        }
+        Mnemonic::LdIndU8 => {
+            let (effects, address) = pop_stack();
+            push_with_prefix(
+                effects,
+                zero_extend_i64(SemanticExpression::Load {
+                    space: SemanticAddressSpace::Default,
+                    addr: Box::new(address),
+                    bits: 64,
+                }),
+            )
+        }
+        Mnemonic::LdIndR4 => {
+            let (effects, address) = pop_stack();
+            push_with_prefix(
+                effects,
+                SemanticExpression::Load {
+                    space: SemanticAddressSpace::Default,
+                    addr: Box::new(address),
+                    bits: 32,
+                },
+            )
+        }
+        Mnemonic::LdIndR8 => {
+            let (effects, address) = pop_stack();
+            push_with_prefix(
+                effects,
+                SemanticExpression::Load {
+                    space: SemanticAddressSpace::Default,
+                    addr: Box::new(address),
+                    bits: 64,
+                },
+            )
+        }
+        Mnemonic::LdObj => {
+            let (effects, address) = pop_stack();
+            push_with_prefix(
+                effects,
+                SemanticExpression::Load {
+                    space: SemanticAddressSpace::Default,
+                    addr: Box::new(address),
+                    bits: 64,
+                },
+            )
+        }
+        Mnemonic::LdFld => {
+            let token = operand_value(instruction) as u32;
+            let (effects, object) = pop_stack();
+            push_with_prefix(
+                effects,
+                SemanticExpression::Load {
+                    space: SemanticAddressSpace::Heap,
+                    addr: Box::new(cil_field_address(token, Some(object))),
+                    bits: 64,
+                },
+            )
+        }
+        Mnemonic::LdFldA => {
+            let token = operand_value(instruction) as u32;
+            let (effects, object) = pop_stack();
+            push_with_prefix(effects, cil_field_address(token, Some(object)))
+        }
+        Mnemonic::LdSFld => push_expression(SemanticExpression::Load {
+            space: SemanticAddressSpace::Global,
+            addr: Box::new(cil_field_address(operand_value(instruction) as u32, None)),
+            bits: 64,
+        }),
+        Mnemonic::LdSFldA => {
+            push_expression(cil_field_address(operand_value(instruction) as u32, None))
+        }
+        Mnemonic::StFld => {
+            let token = operand_value(instruction) as u32;
+            let (mut effects, value) = pop_stack();
+            let (mut more_effects, object) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.push(SemanticEffect::Store {
+                space: SemanticAddressSpace::Heap,
+                addr: cil_field_address(token, Some(object)),
+                expression: value,
+                bits: 64,
+            });
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::StSFld => {
+            let token = operand_value(instruction) as u32;
+            let (mut effects, value) = pop_stack();
+            effects.push(SemanticEffect::Store {
+                space: SemanticAddressSpace::Global,
+                addr: cil_field_address(token, None),
+                expression: value,
+                bits: 64,
+            });
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::StIndI4 => {
+            let (mut effects, value) = pop_stack();
+            let (mut more_effects, address) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.push(SemanticEffect::Store {
+                space: SemanticAddressSpace::Default,
+                addr: address,
+                expression: truncate_i32(value),
+                bits: 32,
+            });
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::StIndI1 => {
+            let (mut effects, value) = pop_stack();
+            let (mut more_effects, address) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.push(SemanticEffect::Store {
+                space: SemanticAddressSpace::Default,
+                addr: address,
+                expression: truncate_i8(value),
+                bits: 8,
+            });
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::StIndI2 => {
+            let (mut effects, value) = pop_stack();
+            let (mut more_effects, address) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.push(SemanticEffect::Store {
+                space: SemanticAddressSpace::Default,
+                addr: address,
+                expression: truncate_i16(value),
+                bits: 16,
+            });
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::StIndI8 => {
+            let (mut effects, value) = pop_stack();
+            let (mut more_effects, address) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.push(SemanticEffect::Store {
+                space: SemanticAddressSpace::Default,
+                addr: address,
+                expression: value,
+                bits: 64,
+            });
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::StIndI => {
+            let (mut effects, value) = pop_stack();
+            let (mut more_effects, address) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.push(SemanticEffect::Store {
+                space: SemanticAddressSpace::Default,
+                addr: address,
+                expression: value,
+                bits: 64,
+            });
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::StIndRef => {
+            let (mut effects, value) = pop_stack();
+            let (mut more_effects, address) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.push(SemanticEffect::Store {
+                space: SemanticAddressSpace::Default,
+                addr: address,
+                expression: value,
+                bits: 64,
+            });
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::StIndR8 => {
+            let (mut effects, value) = pop_stack();
+            let (mut more_effects, address) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.push(SemanticEffect::Store {
+                space: SemanticAddressSpace::Default,
+                addr: address,
+                expression: value,
+                bits: 64,
+            });
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::StIndR4 => {
+            let (mut effects, value) = pop_stack();
+            let (mut more_effects, address) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.push(SemanticEffect::Store {
+                space: SemanticAddressSpace::Default,
+                addr: address,
+                expression: truncate_i32(value),
+                bits: 32,
+            });
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::StObj => {
+            let (mut effects, value) = pop_stack();
+            let (mut more_effects, address) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.push(SemanticEffect::Store {
+                space: SemanticAddressSpace::Default,
+                addr: address,
+                expression: value,
+                bits: 64,
+            });
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::NewArr => {
+            let token = operand_value(instruction) as u32;
+            let (effects, length) = pop_stack();
+            push_with_prefix(
+                effects,
+                SemanticExpression::Intrinsic {
+                    name: "cil.newarr".to_string(),
+                    args: vec![length, const_u64(token as u64, 32)],
+                    bits: 64,
+                },
+            )
+        }
+        Mnemonic::NewObj => {
+            let token = operand_value(instruction) as u32;
+            let mut effects = vec![SemanticEffect::Intrinsic {
+                name: "dotnet.newobj".to_string(),
+                args: vec![const_u64(token as u64, 32)],
+                outputs: Vec::new(),
+            }];
+            effects.extend(push_effects(SemanticExpression::Intrinsic {
+                name: "dotnet.newobj.result".to_string(),
+                args: vec![const_u64(token as u64, 32)],
+                bits: 64,
+            }));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::Box => {
+            let token = operand_value(instruction) as u32;
+            let (effects, value) = pop_stack();
+            push_with_prefix(
+                effects,
+                SemanticExpression::Intrinsic {
+                    name: "cil.box".to_string(),
+                    args: vec![value, const_u64(token as u64, 32)],
+                    bits: 64,
+                },
+            )
+        }
+        Mnemonic::InitObj => {
+            let token = operand_value(instruction) as u32;
+            let (mut effects, address) = pop_stack();
+            effects.push(SemanticEffect::Intrinsic {
+                name: "dotnet.initobj".to_string(),
+                args: vec![address, const_u64(token as u64, 32)],
+                outputs: Vec::new(),
+            });
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::IsInst => {
+            let token = operand_value(instruction) as u32;
+            let (effects, value) = pop_stack();
+            push_with_prefix(
+                effects,
+                SemanticExpression::Intrinsic {
+                    name: "cil.isinst".to_string(),
+                    args: vec![value, const_u64(token as u64, 32)],
+                    bits: 64,
+                },
+            )
+        }
+        Mnemonic::StElemREF => {
+            let (mut effects, value) = pop_stack();
+            let (mut more_effects, index) = pop_stack();
+            let (mut array_effects, array) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.append(&mut array_effects);
+            effects.push(SemanticEffect::Store {
+                space: SemanticAddressSpace::Heap,
+                addr: cil_array_element_address(array, index),
+                expression: value,
+                bits: 64,
+            });
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::StElemI1 => {
+            let (mut effects, value) = pop_stack();
+            let (mut more_effects, index) = pop_stack();
+            let (mut array_effects, array) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.append(&mut array_effects);
+            effects.push(SemanticEffect::Store {
+                space: SemanticAddressSpace::Heap,
+                addr: cil_array_element_address(array, index),
+                expression: truncate_i8(value),
+                bits: 8,
+            });
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::StElemI4 => {
+            let (mut effects, value) = pop_stack();
+            let (mut more_effects, index) = pop_stack();
+            let (mut array_effects, array) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.append(&mut array_effects);
+            effects.push(SemanticEffect::Store {
+                space: SemanticAddressSpace::Heap,
+                addr: cil_array_element_address(array, index),
+                expression: truncate_i32(value),
+                bits: 32,
+            });
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::StElemI2 => {
+            let (mut effects, value) = pop_stack();
+            let (mut more_effects, index) = pop_stack();
+            let (mut array_effects, array) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.append(&mut array_effects);
+            effects.push(SemanticEffect::Store {
+                space: SemanticAddressSpace::Heap,
+                addr: cil_array_element_address(array, index),
+                expression: truncate_i16(value),
+                bits: 16,
+            });
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::StElem => {
+            let (mut effects, value) = pop_stack();
+            let (mut more_effects, index) = pop_stack();
+            let (mut array_effects, array) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.append(&mut array_effects);
+            effects.push(SemanticEffect::Store {
+                space: SemanticAddressSpace::Heap,
+                addr: cil_array_element_address(array, index),
+                expression: value,
+                bits: 64,
+            });
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::CastClass => {
+            let token = operand_value(instruction) as u32;
+            let (effects, value) = pop_stack();
+            push_with_prefix(
+                effects,
+                SemanticExpression::Intrinsic {
+                    name: "cil.castclass".to_string(),
+                    args: vec![value, const_u64(token as u64, 32)],
+                    bits: 64,
+                },
+            )
+        }
+        Mnemonic::UnboxAny => {
+            let token = operand_value(instruction) as u32;
+            let (effects, value) = pop_stack();
+            push_with_prefix(
+                effects,
+                SemanticExpression::Intrinsic {
+                    name: "cil.unbox.any".to_string(),
+                    args: vec![value, const_u64(token as u64, 32)],
+                    bits: 64,
+                },
+            )
+        }
+        Mnemonic::Volatile => complete_with_effects(
+            SemanticTerminator::FallThrough,
+            vec![SemanticEffect::Nop],
+        ),
+        Mnemonic::Constrained => complete_with_effects(
+            SemanticTerminator::FallThrough,
+            vec![SemanticEffect::Nop],
+        ),
+        Mnemonic::Cpobj => complete_with_effects(
+            SemanticTerminator::FallThrough,
+            vec![SemanticEffect::Nop],
+        ),
+        Mnemonic::LdToken => push_expression(const_u64(operand_value(instruction), 64)),
         mnemonic
             if matches!(
                 mnemonic,
-                Mnemonic::LdNull
-                    | Mnemonic::DUP
-                    | Mnemonic::Pop
-                    | Mnemonic::Add
                     | Mnemonic::AddOvf
                     | Mnemonic::AddOvfUn
-                    | Mnemonic::And
-                    | Mnemonic::Div
-                    | Mnemonic::DivUn
-                    | Mnemonic::Mul
+                    
                     | Mnemonic::MulOvf
                     | Mnemonic::MulOvfUn
-                    | Mnemonic::Neg
-                    | Mnemonic::Not
-                    | Mnemonic::Or
-                    | Mnemonic::Rem
                     | Mnemonic::RemUn
-                    | Mnemonic::Shl
-                    | Mnemonic::Shr
-                    | Mnemonic::ShrUn
-                    | Mnemonic::Sub
+                    
                     | Mnemonic::SubOvf
                     | Mnemonic::SubOvfUn
-                    | Mnemonic::Xor
-                    | Mnemonic::Ceq
+                    
                     | Mnemonic::Cgt
-                    | Mnemonic::CgtUn
-                    | Mnemonic::Clt
-                    | Mnemonic::CltUn
                     | Mnemonic::ConvI
-                    | Mnemonic::ConvI1
-                    | Mnemonic::ConvI2
-                    | Mnemonic::ConvI4
-                    | Mnemonic::ConvI8
                     | Mnemonic::ConvOvfI
                     | Mnemonic::ConvOvfIUn
                     | Mnemonic::ConvOvfI1
@@ -194,134 +1225,48 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
                     | Mnemonic::ConvOvfU8Un
                     | Mnemonic::ConvRUn
                     | Mnemonic::ConvR4
-                    | Mnemonic::ConvR8
                     | Mnemonic::ConvU
                     | Mnemonic::ConvU1
-                    | Mnemonic::ConvU2
-                    | Mnemonic::ConvU4
-                    | Mnemonic::ConvU8
-                    | Mnemonic::LdcI4
-                    | Mnemonic::LdcI40
-                    | Mnemonic::LdcI41
-                    | Mnemonic::LdcI42
-                    | Mnemonic::LdcI43
-                    | Mnemonic::LdcI44
-                    | Mnemonic::LdcI45
-                    | Mnemonic::LdcI46
-                    | Mnemonic::LdcI47
-                    | Mnemonic::LdcI48
-                    | Mnemonic::LdcI4M1
-                    | Mnemonic::LdcI4S
-                    | Mnemonic::LdcI8
-                    | Mnemonic::LdcR4
-                    | Mnemonic::LdcR8
-                    | Mnemonic::LdArg0
-                    | Mnemonic::LdArg1
-                    | Mnemonic::LdArg2
-                    | Mnemonic::LdArg3
-                    | Mnemonic::LdArgS
-                    | Mnemonic::LdArg
-                    | Mnemonic::LdArgA
-                    | Mnemonic::LdArgAS
-                    | Mnemonic::LdLoc0
-                    | Mnemonic::LdLoc1
-                    | Mnemonic::LdLoc2
-                    | Mnemonic::LdLoc3
-                    | Mnemonic::LdLocS
-                    | Mnemonic::LdLoc
-                    | Mnemonic::LdLocA
-                    | Mnemonic::LdLocAS
-                    | Mnemonic::StLoc0
-                    | Mnemonic::StLoc1
-                    | Mnemonic::StLoc2
-                    | Mnemonic::StLoc3
-                    | Mnemonic::StLocS
-                    | Mnemonic::SLoc
-                    | Mnemonic::StArg
-                    | Mnemonic::StArgS
-                    | Mnemonic::Box
+                    
                     | Mnemonic::CastClass
                     | Mnemonic::CkInite
-                    | Mnemonic::Constrained
                     | Mnemonic::CpBlk
-                    | Mnemonic::Cpobj
                     | Mnemonic::End
                     | Mnemonic::EndFilter
                     | Mnemonic::InitBlk
-                    | Mnemonic::InitObj
-                    | Mnemonic::IsInst
+                    
                     | Mnemonic::Jmp
-                    | Mnemonic::LdElm
                     | Mnemonic::LdElmI
                     | Mnemonic::LdElmI1
                     | Mnemonic::LdElmI2
-                    | Mnemonic::LdElmI4
                     | Mnemonic::LdElmU8
                     | Mnemonic::LdElmR4
-                    | Mnemonic::LdElmR8
-                    | Mnemonic::LdElmRef
-                    | Mnemonic::LdElmU1
-                    | Mnemonic::LdElmU2
-                    | Mnemonic::LdElmU4
-                    | Mnemonic::LdElmA
-                    | Mnemonic::LdFld
-                    | Mnemonic::LdFldA
-                    | Mnemonic::LdFtn
                     | Mnemonic::LdIndI
                     | Mnemonic::LdIndI1
                     | Mnemonic::LdIndI2
-                    | Mnemonic::LdIndI4
-                    | Mnemonic::LdIndU8
-                    | Mnemonic::LdIndR4
-                    | Mnemonic::LdIndR8
-                    | Mnemonic::LdIndRef
-                    | Mnemonic::LdIndU1
-                    | Mnemonic::LdIndU2
-                    | Mnemonic::LdIndU4
-                    | Mnemonic::LdLen
-                    | Mnemonic::LdObj
-                    | Mnemonic::LdSFld
-                    | Mnemonic::LdSFldA
-                    | Mnemonic::LdStr
-                    | Mnemonic::LdToken
+                    
                     | Mnemonic::LdVirtFtn
                     | Mnemonic::Leave
                     | Mnemonic::LeaveS
                     | Mnemonic::LocAlloc
                     | Mnemonic::MkRefAny
-                    | Mnemonic::NewArr
-                    | Mnemonic::NewObj
+                    
                     | Mnemonic::No
                     | Mnemonic::ReadOnly
                     | Mnemonic::RefAnyType
                     | Mnemonic::RefAnyVal
                     | Mnemonic::ReThrow
                     | Mnemonic::SizeOf
-                    | Mnemonic::StElem
                     | Mnemonic::StElemI
                     | Mnemonic::StElemI1
-                    | Mnemonic::StElemI2
-                    | Mnemonic::StElemI4
                     | Mnemonic::StElemI8
                     | Mnemonic::StElemR4
                     | Mnemonic::StElemR8
-                    | Mnemonic::StElemREF
-                    | Mnemonic::StFld
-                    | Mnemonic::StIndI
-                    | Mnemonic::StIndI1
-                    | Mnemonic::StIndI2
-                    | Mnemonic::StIndI4
-                    | Mnemonic::StIndI8
-                    | Mnemonic::StIndR4
-                    | Mnemonic::StIndR8
-                    | Mnemonic::StIndRef
-                    | Mnemonic::StObj
-                    | Mnemonic::StSFld
+                    
+                    
                     | Mnemonic::Tail
                     | Mnemonic::Unaligned
                     | Mnemonic::Unbox
-                    | Mnemonic::UnboxAny
-                    | Mnemonic::Volatile
             ) =>
         {
             complete_intrinsic(instruction, format!("cil.{:?}", mnemonic))
@@ -361,6 +1306,27 @@ fn complete_intrinsic(instruction: &Instruction<'_>, name: String) -> Instructio
     }
 }
 
+fn push_expression(expression: SemanticExpression) -> InstructionSemantics {
+    complete_with_effects(SemanticTerminator::FallThrough, push_effects(expression))
+}
+
+fn push_with_prefix(
+    mut effects: Vec<SemanticEffect>,
+    expression: SemanticExpression,
+) -> InstructionSemantics {
+    effects.extend(push_effects(expression));
+    complete_with_effects(SemanticTerminator::FallThrough, effects)
+}
+
+fn pop_to_location(dst: SemanticLocation) -> InstructionSemantics {
+    let (mut effects, value) = pop_stack();
+    effects.push(SemanticEffect::Set {
+        dst,
+        expression: value,
+    });
+    complete_with_effects(SemanticTerminator::FallThrough, effects)
+}
+
 fn operand_args(instruction: &Instruction<'_>) -> Vec<SemanticExpression> {
     if instruction.operand_size() == 0 {
         return Vec::new();
@@ -384,4 +1350,324 @@ fn diagnostic(kind: SemanticDiagnosticKind, message: &str) -> SemanticDiagnostic
         kind,
         message: message.to_string(),
     }
+}
+
+fn complete_with_effects(
+    terminator: SemanticTerminator,
+    effects: Vec<SemanticEffect>,
+) -> InstructionSemantics {
+    InstructionSemantics {
+        version: 1,
+        status: SemanticStatus::Complete,
+        temporaries: Vec::new(),
+        effects,
+        terminator,
+        diagnostics: Vec::new(),
+    }
+}
+
+fn cil_stack_pointer() -> SemanticLocation {
+    SemanticLocation::Register {
+        name: "cil.stack.sp".to_string(),
+        bits: 64,
+    }
+}
+
+fn cil_argument(index: u32) -> SemanticLocation {
+    SemanticLocation::Register {
+        name: format!("cil.arg.{index}"),
+        bits: 64,
+    }
+}
+
+fn cil_argument_address(index: u32) -> SemanticLocation {
+    SemanticLocation::Register {
+        name: format!("cil.arg.addr.{index}"),
+        bits: 64,
+    }
+}
+
+fn cil_local(index: u32) -> SemanticLocation {
+    SemanticLocation::Register {
+        name: format!("cil.local.{index}"),
+        bits: 64,
+    }
+}
+
+fn cil_local_address(index: u32) -> SemanticLocation {
+    SemanticLocation::Register {
+        name: format!("cil.local.addr.{index}"),
+        bits: 64,
+    }
+}
+
+fn read(location: SemanticLocation) -> SemanticExpression {
+    SemanticExpression::Read(Box::new(location))
+}
+
+fn cil_field_address(token: u32, object: Option<SemanticExpression>) -> SemanticExpression {
+    let mut args = Vec::new();
+    if let Some(object) = object {
+        args.push(object);
+    }
+    args.push(const_u64(token as u64, 32));
+    SemanticExpression::Intrinsic {
+        name: "cil.field.addr".to_string(),
+        args,
+        bits: 64,
+    }
+}
+
+fn cil_array_element_address(
+    array: SemanticExpression,
+    index: SemanticExpression,
+) -> SemanticExpression {
+    SemanticExpression::Intrinsic {
+        name: "cil.array.elem.addr".to_string(),
+        args: vec![array, index],
+        bits: 64,
+    }
+}
+
+fn compare(
+    op: SemanticOperationCompare,
+    left: SemanticExpression,
+    right: SemanticExpression,
+) -> SemanticExpression {
+    SemanticExpression::Compare {
+        op,
+        left: Box::new(left),
+        right: Box::new(right),
+        bits: 1,
+    }
+}
+
+fn bool_to_i64(condition: SemanticExpression) -> SemanticExpression {
+    SemanticExpression::Select {
+        condition: Box::new(condition),
+        when_true: Box::new(const_u64(1, 64)),
+        when_false: Box::new(const_u64(0, 64)),
+        bits: 64,
+    }
+}
+
+fn sign_extend_i32(value: SemanticExpression) -> SemanticExpression {
+    SemanticExpression::Cast {
+        op: SemanticOperationCast::SignExtend,
+        arg: Box::new(SemanticExpression::Extract {
+            arg: Box::new(value),
+            lsb: 0,
+            bits: 32,
+        }),
+        bits: 64,
+    }
+}
+
+fn sign_extend_i16(value: SemanticExpression) -> SemanticExpression {
+    SemanticExpression::Cast {
+        op: SemanticOperationCast::SignExtend,
+        arg: Box::new(SemanticExpression::Extract {
+            arg: Box::new(value),
+            lsb: 0,
+            bits: 16,
+        }),
+        bits: 64,
+    }
+}
+
+fn sign_extend_i8(value: SemanticExpression) -> SemanticExpression {
+    SemanticExpression::Cast {
+        op: SemanticOperationCast::SignExtend,
+        arg: Box::new(SemanticExpression::Extract {
+            arg: Box::new(value),
+            lsb: 0,
+            bits: 8,
+        }),
+        bits: 64,
+    }
+}
+
+fn sign_extend_i64(value: SemanticExpression) -> SemanticExpression {
+    SemanticExpression::Cast {
+        op: SemanticOperationCast::SignExtend,
+        arg: Box::new(SemanticExpression::Extract {
+            arg: Box::new(value),
+            lsb: 0,
+            bits: 64,
+        }),
+        bits: 64,
+    }
+}
+
+fn zero_extend_i16(value: SemanticExpression) -> SemanticExpression {
+    SemanticExpression::Cast {
+        op: SemanticOperationCast::ZeroExtend,
+        arg: Box::new(SemanticExpression::Extract {
+            arg: Box::new(value),
+            lsb: 0,
+            bits: 16,
+        }),
+        bits: 64,
+    }
+}
+
+fn zero_extend_i32(value: SemanticExpression) -> SemanticExpression {
+    SemanticExpression::Cast {
+        op: SemanticOperationCast::ZeroExtend,
+        arg: Box::new(SemanticExpression::Extract {
+            arg: Box::new(value),
+            lsb: 0,
+            bits: 32,
+        }),
+        bits: 64,
+    }
+}
+
+fn zero_extend_i8(value: SemanticExpression) -> SemanticExpression {
+    SemanticExpression::Cast {
+        op: SemanticOperationCast::ZeroExtend,
+        arg: Box::new(SemanticExpression::Extract {
+            arg: Box::new(value),
+            lsb: 0,
+            bits: 8,
+        }),
+        bits: 64,
+    }
+}
+
+fn zero_extend_i64(value: SemanticExpression) -> SemanticExpression {
+    SemanticExpression::Cast {
+        op: SemanticOperationCast::ZeroExtend,
+        arg: Box::new(SemanticExpression::Extract {
+            arg: Box::new(value),
+            lsb: 0,
+            bits: 64,
+        }),
+        bits: 64,
+    }
+}
+
+fn truncate_i32(value: SemanticExpression) -> SemanticExpression {
+    SemanticExpression::Extract {
+        arg: Box::new(value),
+        lsb: 0,
+        bits: 32,
+    }
+}
+
+fn truncate_i16(value: SemanticExpression) -> SemanticExpression {
+    SemanticExpression::Extract {
+        arg: Box::new(value),
+        lsb: 0,
+        bits: 16,
+    }
+}
+
+fn truncate_i8(value: SemanticExpression) -> SemanticExpression {
+    SemanticExpression::Extract {
+        arg: Box::new(value),
+        lsb: 0,
+        bits: 8,
+    }
+}
+
+fn const_u64(value: u64, bits: u16) -> SemanticExpression {
+    SemanticExpression::Const {
+        value: value as u128,
+        bits,
+    }
+}
+
+fn binary(
+    op: SemanticOperationBinary,
+    left: SemanticExpression,
+    right: SemanticExpression,
+    bits: u16,
+) -> SemanticExpression {
+    SemanticExpression::Binary {
+        op,
+        left: Box::new(left),
+        right: Box::new(right),
+        bits,
+    }
+}
+
+fn unary(op: SemanticOperationUnary, arg: SemanticExpression, bits: u16) -> SemanticExpression {
+    SemanticExpression::Unary {
+        op,
+        arg: Box::new(arg),
+        bits,
+    }
+}
+
+fn push_effects(expression: SemanticExpression) -> Vec<SemanticEffect> {
+    let sp = cil_stack_pointer();
+    let sp_read = read(sp.clone());
+    let next_sp = binary(
+        SemanticOperationBinary::Add,
+        sp_read.clone(),
+        const_u64(8, 64),
+        64,
+    );
+    vec![
+        SemanticEffect::Store {
+            space: SemanticAddressSpace::Stack,
+            addr: sp_read,
+            expression,
+            bits: 64,
+        },
+        SemanticEffect::Set {
+            dst: sp,
+            expression: next_sp,
+        },
+    ]
+}
+
+fn pop_stack() -> (Vec<SemanticEffect>, SemanticExpression) {
+    let sp = cil_stack_pointer();
+    let sp_read = read(sp.clone());
+    let prev_sp = binary(
+        SemanticOperationBinary::Sub,
+        sp_read,
+        const_u64(8, 64),
+        64,
+    );
+    let value = SemanticExpression::Load {
+        space: SemanticAddressSpace::Stack,
+        addr: Box::new(prev_sp.clone()),
+        bits: 64,
+    };
+    (
+        vec![SemanticEffect::Set {
+            dst: sp,
+            expression: prev_sp,
+        }],
+        value,
+    )
+}
+
+fn peek_stack() -> (Vec<SemanticEffect>, SemanticExpression) {
+    let sp_read = read(cil_stack_pointer());
+    let top_addr = binary(
+        SemanticOperationBinary::Sub,
+        sp_read,
+        const_u64(8, 64),
+        64,
+    );
+    (
+        Vec::new(),
+        SemanticExpression::Load {
+            space: SemanticAddressSpace::Stack,
+            addr: Box::new(top_addr),
+            bits: 64,
+        },
+    )
+}
+
+fn sign_extend(value: u64, source_bits: u16) -> u64 {
+    if source_bits == 0 || source_bits >= 64 {
+        return value;
+    }
+    let shift = 64 - source_bits;
+    (((value << shift) as i64) >> shift) as u64
 }

@@ -66,6 +66,7 @@ fn parse_architecture_override(value: Option<&str>) -> Option<Architecture> {
     match value.map(str::trim).filter(|value| !value.is_empty()) {
         Some("AMD64") => Some(Architecture::AMD64),
         Some("I386") => Some(Architecture::I386),
+        Some("ARM64") | Some("AARCH64") => Some(Architecture::ARM64),
         Some("CIL") => Some(Architecture::CIL),
         _ => None,
     }

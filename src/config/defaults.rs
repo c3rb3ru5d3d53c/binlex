@@ -25,9 +25,8 @@ use super::{
     ConfigDisassembler, ConfigDisassemblerSweep, ConfigEntityLifters, ConfigFile, ConfigFormats,
     ConfigFunctions, ConfigHashEnabled, ConfigHeuristicEntropy, ConfigHeuristicFeatures,
     ConfigImaging, ConfigIndex, ConfigIndexLocal, ConfigInstructions, ConfigLifters,
-    ConfigLiftersLLVM, ConfigLiftersVex, ConfigMarkov, ConfigMinhash, ConfigMmap,
-    ConfigMmapCache, ConfigProcessors, ConfigSemantics, ConfigStorage, ConfigStorageLocal,
-    ConfigTLSH,
+    ConfigLiftersLLVM, ConfigLiftersVex, ConfigMarkov, ConfigMinhash, ConfigMmap, ConfigMmapCache,
+    ConfigProcessors, ConfigSemantics, ConfigStorage, ConfigStorageLocal, ConfigTLSH,
 };
 use std::env;
 

@@ -1142,10 +1142,12 @@ fn llvm_lifter_preserves_unsupported_instruction_fallback() {
         .as_ref()
         .expect("unsupported instruction should still have fallback semantics");
     assert_eq!(semantics.status, binlex::semantics::SemanticStatus::Partial);
-    assert!(semantics
-        .diagnostics
-        .iter()
-        .any(|diagnostic| diagnostic.kind == SemanticDiagnosticKind::UnsupportedInstruction));
+    assert!(
+        semantics
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.kind == SemanticDiagnosticKind::UnsupportedInstruction)
+    );
 
     let mut instruction_lifter = Lifter::new(Config::default());
     instruction_lifter

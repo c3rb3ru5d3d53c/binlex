@@ -32,6 +32,7 @@ class Architecture(str, Enum):
 
     AMD64 = "amd64"
     I386 = "i386"
+    ARM64 = "arm64"
     CIL = "cil"
 
     def to_binding(self) -> _ArchitectureBinding:

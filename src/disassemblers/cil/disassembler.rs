@@ -46,14 +46,52 @@ pub struct Disassembler<'disassembler> {
 }
 
 impl<'disassembler> Disassembler<'disassembler> {
-    fn log_semantics_debug(&self, semantics: &InstructionSemantics, address: u64) {
-        if semantics.status == SemanticStatus::Complete && semantics.diagnostics.is_empty() {
+    fn is_cil_intrinsic_expression(expression: &semantics::SemanticExpression) -> bool {
+        matches!(
+            expression,
+            semantics::SemanticExpression::Intrinsic { name, .. } if name.starts_with("cil.")
+        )
+    }
+
+    fn has_effectively_partial_semantics(&self, semantics: &InstructionSemantics) -> bool {
+        if semantics.status != SemanticStatus::Complete || !semantics.diagnostics.is_empty() {
+            return true;
+        }
+
+        if semantics.effects.iter().any(|effect| {
+            matches!(
+                effect,
+                semantics::SemanticEffect::Intrinsic { name, .. } if name.starts_with("cil.")
+            )
+        }) {
+            return true;
+        }
+
+        match &semantics.terminator {
+            semantics::SemanticTerminator::Branch { condition, .. } => {
+                Self::is_cil_intrinsic_expression(condition)
+            }
+            semantics::SemanticTerminator::Call { target, .. } => {
+                Self::is_cil_intrinsic_expression(target)
+            }
+            _ => false,
+        }
+    }
+
+    fn log_semantics_debug(
+        &self,
+        semantics: &InstructionSemantics,
+        instruction: &Instruction,
+    ) {
+        let effectively_partial = self.has_effectively_partial_semantics(semantics);
+        if !effectively_partial {
             return;
         }
 
         let summary = if semantics.diagnostics.is_empty() {
             format!(
-                "mnemonic_partial_without_diagnostics, effects={}, terminator={:?}",
+                "cil_intrinsic_only_semantics, mnemonic={:?}, effects={}, terminator={:?}",
+                instruction.mnemonic,
                 semantics.effects.len(),
                 semantics.terminator.kind()
             )
@@ -70,7 +108,13 @@ impl<'disassembler> Disassembler<'disassembler> {
             &self.config,
             format!(
                 "0x{:x}: semantics status={:?}, diagnostics={}",
-                address, semantics.status, summary
+                instruction.address,
+                if effectively_partial {
+                    SemanticStatus::Partial
+                } else {
+                    semantics.status
+                },
+                summary
             ),
         );
     }
@@ -163,7 +207,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         cfginstruction.functions = self.get_instruction_functions(&instruction);
         if cfg.config.semantics.enabled {
             let semantics = semantics::cil::build(&instruction);
-            self.log_semantics_debug(&semantics, cfginstruction.address);
+            self.log_semantics_debug(&semantics, &instruction);
             cfginstruction.semantics = Some(semantics);
         }
 

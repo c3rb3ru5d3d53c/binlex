@@ -126,7 +126,7 @@ fn collect_attributes(
         Magic::MACHO => {
             if let Ok(macho) = MACHO::from_bytes(bytes.to_vec(), config) {
                 for (slice_index, _) in macho.slices().enumerate() {
-                    if macho.architecture(slice_index) != Some(architecture) {
+                    if macho.architecture(slice_index) != architecture {
                         continue;
                     }
                     for symbol in macho.symbols(slice_index).into_values() {
@@ -315,7 +315,7 @@ fn analyze_macho(
     let slices: Vec<_> = macho.slices().collect();
     let available_architectures: Vec<Architecture> = slices
         .iter()
-        .filter_map(|slice| slice.architecture())
+        .map(|slice| slice.architecture())
         .filter(|architecture| *architecture != Architecture::UNKNOWN)
         .collect();
     let selected_architecture = match requested_architecture {
@@ -341,9 +341,7 @@ fn analyze_macho(
     let mut merged_graph: Option<Graph> = None;
 
     for slice in slices {
-        let Some(detected_architecture) = slice.architecture() else {
-            continue;
-        };
+        let detected_architecture = slice.architecture();
         if detected_architecture == Architecture::UNKNOWN {
             continue;
         }
@@ -357,16 +355,22 @@ fn analyze_macho(
         let image = mapped.mmap().map_err(|error| {
             ServerError::processor(format!("failed to map macho image: {}", error))
         })?;
+        let executable_ranges = slice.executable_virtual_address_ranges();
+        let entrypoints = slice
+            .entrypoint_virtual_addresses()
+            .into_iter()
+            .filter(|address| {
+                executable_ranges
+                    .iter()
+                    .any(|(start, end)| *address >= *start && *address < *end)
+            })
+            .collect();
         let mut cfg = Graph::new(architecture, config.clone());
-        let disassembler = Disassembler::new(
-            architecture,
-            image,
-            slice.executable_virtual_address_ranges(),
-            config.clone(),
-        )
-        .map_err(|error| ServerError::processor(error.to_string()))?;
+        let disassembler =
+            Disassembler::new(architecture, image, executable_ranges, config.clone())
+                .map_err(|error| ServerError::processor(error.to_string()))?;
         disassembler
-            .disassemble(slice.entrypoint_virtual_addresses(), &mut cfg)
+            .disassemble(entrypoints, &mut cfg)
             .map_err(|error| ServerError::processor(error.to_string()))?;
         if let Some(existing) = &mut merged_graph {
             existing.merge(&mut cfg);
@@ -406,7 +410,7 @@ fn analyze_code(
 
     let mut cfg = Graph::new(architecture, config.clone());
     match architecture {
-        Architecture::AMD64 | Architecture::I386 => {
+        Architecture::ARM64 | Architecture::AMD64 | Architecture::I386 => {
             let disassembler = Disassembler::new(
                 architecture,
                 &data,

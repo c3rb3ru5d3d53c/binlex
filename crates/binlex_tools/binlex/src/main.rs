@@ -489,10 +489,9 @@ fn process_output(
     {
         match cfg.process_graph() {
             Ok(()) => Stderr::print_debug(&cfg.config, "process_graph completed"),
-            Err(error) => Stderr::print_debug(
-                &cfg.config,
-                format!("process_graph failed: {}", error),
-            ),
+            Err(error) => {
+                Stderr::print_debug(&cfg.config, format!("process_graph failed: {}", error))
+            }
         }
     }
     if !binlex::processor::enabled_processors_for_target(
@@ -554,11 +553,8 @@ fn process_output(
                     .valid()
                     .iter()
                     .filter(|entry| {
-                        cfg.processor_outputs(
-                            binlex::processor::ProcessorTarget::Block,
-                            **entry,
-                        )
-                        .is_some()
+                        cfg.processor_outputs(binlex::processor::ProcessorTarget::Block, **entry)
+                            .is_some()
                     })
                     .count()
             ),
@@ -599,11 +595,8 @@ fn process_output(
                     .valid()
                     .iter()
                     .filter(|entry| {
-                        cfg.processor_outputs(
-                            binlex::processor::ProcessorTarget::Function,
-                            **entry,
-                        )
-                        .is_some()
+                        cfg.processor_outputs(binlex::processor::ProcessorTarget::Function, **entry)
+                            .is_some()
                     })
                     .count()
             ),
@@ -939,7 +932,7 @@ fn process_code(
     entrypoints.insert(0x00);
 
     match architecture {
-        Architecture::AMD64 | Architecture::I386 => {
+        Architecture::ARM64 | Architecture::AMD64 | Architecture::I386 => {
             let disassembly_started_at = Instant::now();
             let disassembler = match Disassembler::new(
                 architecture,
@@ -1017,13 +1010,13 @@ fn process_macho(
     });
     print_stage_timing(&config, "macho.new", macho_started_at);
 
-    for slice in macho.slices() {
+    for (slice_index, slice) in macho.slices().enumerate() {
         let architecture = slice.architecture();
-        if architecture.is_none() {
-            continue;
-        }
-        let architecture = architecture.unwrap();
         if architecture == Architecture::UNKNOWN {
+            Stderr::print_debug(
+                &config,
+                format!("macho slice {}: skipping unknown architecture", slice_index),
+            );
             continue;
         }
 
@@ -1040,12 +1033,25 @@ fn process_macho(
         }
 
         let function_symbols = get_macho_function_symbols(&macho, read_stdin);
+        Stderr::print_debug(
+            &config,
+            format!(
+                "macho slice {}: architecture={}, function_symbols={}",
+                slice_index,
+                architecture,
+                function_symbols.len()
+            ),
+        );
 
         // for (_, symbol) in &function_symbols {
         //     attributes.push(Attribute::Symbol(symbol.process().clone()));
         // }
 
         let image_started_at = Instant::now();
+        Stderr::print_debug(
+            &config,
+            format!("macho slice {}: mapping image", slice_index),
+        );
         let mut mapped_file = slice.image().unwrap_or_else(|error| {
             eprintln!("{}", error);
             process::exit(1)
@@ -1058,15 +1064,46 @@ fn process_macho(
         print_stage_timing(&config, "macho.image", image_started_at);
 
         let executable_address_ranges = slice.executable_virtual_address_ranges();
+        Stderr::print_debug(
+            &config,
+            format!(
+                "macho slice {}: executable ranges={} image_size={} bytes",
+                slice_index,
+                executable_address_ranges.len(),
+                image.len()
+            ),
+        );
 
         let mut entrypoints = BTreeSet::<u64>::new();
-
-        entrypoints.extend(slice.entrypoint_virtual_addresses());
+        entrypoints.extend(
+            slice
+                .entrypoint_virtual_addresses()
+                .into_iter()
+                .filter(|address| {
+                    executable_address_ranges
+                        .iter()
+                        .any(|(start, end)| *address >= *start && *address < *end)
+                }),
+        );
+        Stderr::print_debug(
+            &config,
+            format!(
+                "macho slice {}: filtered entrypoints={:?}",
+                slice_index, entrypoints
+            ),
+        );
 
         let runtime_config = config.clone();
         let mut cfg = Graph::new(architecture, runtime_config.clone());
 
         let disassembly_started_at = Instant::now();
+        Stderr::print_debug(
+            &config,
+            format!(
+                "macho slice {}: creating disassembler for {}",
+                slice_index, architecture
+            ),
+        );
         let disassembler = match Disassembler::new(
             architecture,
             image,
@@ -1080,12 +1117,30 @@ fn process_macho(
             }
         };
 
+        Stderr::print_debug(
+            &config,
+            format!(
+                "macho slice {}: starting disassembly with {} seed entrypoints",
+                slice_index,
+                entrypoints.len()
+            ),
+        );
         disassembler
             .disassemble(entrypoints, &mut cfg)
             .unwrap_or_else(|error| {
                 eprintln!("{}", error);
                 process::exit(1);
             });
+        Stderr::print_debug(
+            &config,
+            format!(
+                "macho slice {}: disassembly finished instructions={} blocks={} functions={}",
+                slice_index,
+                cfg.instructions.valid().iter().count(),
+                cfg.blocks.valid().iter().count(),
+                cfg.functions.valid().iter().count()
+            ),
+        );
         print_stage_timing(&config, "macho.disassemble", disassembly_started_at);
 
         let output_started_at = Instant::now();
@@ -1184,7 +1239,7 @@ fn main() {
     } else {
         let architecture = args.architecture.unwrap();
         match architecture {
-            Architecture::AMD64 | Architecture::I386 | Architecture::CIL => {
+            Architecture::ARM64 | Architecture::AMD64 | Architecture::I386 | Architecture::CIL => {
                 Stderr::print_debug(&config, "processing code");
                 process_code(
                     &args,
