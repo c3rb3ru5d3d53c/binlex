@@ -46,6 +46,8 @@ pub struct Disassembler<'disassembler> {
 }
 
 impl<'disassembler> Disassembler<'disassembler> {
+    const FUNCTION_GROUP_SIZE: usize = 4;
+
     fn has_effectively_partial_semantics(&self, semantics: &InstructionSemantics) -> bool {
         if semantics.status != SemanticStatus::Complete || !semantics.diagnostics.is_empty() {
             return true;
@@ -119,6 +121,22 @@ impl<'disassembler> Disassembler<'disassembler> {
         self.executable_address_ranges
             .iter()
             .any(|(start, end)| address >= *start && address <= *end)
+    }
+
+    fn group_function_addresses(addresses: &BTreeSet<u64>) -> Vec<Vec<u64>> {
+        let mut groups = Vec::new();
+        let mut current = Vec::with_capacity(Self::FUNCTION_GROUP_SIZE);
+        for address in addresses {
+            current.push(*address);
+            if current.len() == Self::FUNCTION_GROUP_SIZE {
+                groups.push(current);
+                current = Vec::with_capacity(Self::FUNCTION_GROUP_SIZE);
+            }
+        }
+        if !current.is_empty() {
+            groups.push(current);
+        }
+        groups
     }
 
     fn get_instruction_functions(&self, instruction: &Instruction) -> BTreeSet<u64> {
@@ -315,31 +333,37 @@ impl<'disassembler> Disassembler<'disassembler> {
         let external_metadata_token_addresses = self.metadata_token_addresses.clone();
 
         let external_config = self.config.clone();
+        let graph_config = cfg.config.clone();
 
         pool.install(|| {
             while !cfg.functions.queue.is_empty() {
                 let function_addresses = cfg.functions.dequeue_all();
                 cfg.functions
                     .insert_processed_extend(function_addresses.clone());
-                let graphs: Vec<Graph> = function_addresses
+                let function_groups = Self::group_function_addresses(&function_addresses);
+                let graphs: Vec<Graph> = function_groups
                     .par_iter()
-                    .map(|address| {
-                        let machine = external_machine;
-                        let executable_address_ranges = external_executable_address_ranges.clone();
-                        let metadata_token_addresses = external_metadata_token_addresses.clone();
-                        let image = external_image;
-                        let mut graph = Graph::new(machine, cfg.config.clone());
-                        if let Ok(disasm) = Disassembler::new(
-                            machine,
-                            image,
-                            metadata_token_addresses,
-                            executable_address_ranges,
-                            external_config.clone(),
-                        ) {
-                            let _ = disasm.disassemble_function(*address, &mut graph);
-                        }
-                        graph
-                    })
+                    .map_init(
+                        || {
+                            Disassembler::new(
+                                external_machine,
+                                external_image,
+                                external_metadata_token_addresses.clone(),
+                                external_executable_address_ranges.clone(),
+                                external_config.clone(),
+                            )
+                            .ok()
+                        },
+                        |disasm, addresses| {
+                            let mut graph = Graph::new(external_machine, graph_config.clone());
+                            if let Some(disasm) = disasm.as_ref() {
+                                for address in addresses {
+                                    let _ = disasm.disassemble_function(*address, &mut graph);
+                                }
+                            }
+                            graph
+                        },
+                    )
                     .collect();
                 for mut graph in graphs {
                     cfg.merge(&mut graph);

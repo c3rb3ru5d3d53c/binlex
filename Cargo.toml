@@ -57,6 +57,10 @@ yara-x = "1.14.0"
 
 [dev-dependencies]
 tempfile = "3.23.0"
+unicorn-engine = { version = "2.1.5", default-features = false, features = ["arch_x86"] }
+unicorn-engine-sys = "2.1.5"
+num-bigint = "0.4.6"
+num-traits = "0.2.19"
 
 [workspace]
 members = [

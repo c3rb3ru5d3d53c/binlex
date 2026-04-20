@@ -1,4 +1,7 @@
-use super::common::assert_complete_semantics;
+use super::common::{
+    I386Fixture, I386Register, WideI386Fixture, assert_amd64_semantics_match_unicorn,
+    assert_complete_semantics, interpret_amd64_wide_semantics,
+};
 use crate::Architecture;
 
 #[test]
@@ -778,5 +781,638 @@ fn vector_and_scalar_fp_semantics_regressions_stay_complete() {
 
     for (name, architecture, bytes) in cases {
         assert_complete_semantics(name, architecture, &bytes);
+    }
+}
+
+fn vec128(bytes: [u8; 16]) -> u128 {
+    u128::from_le_bytes(bytes)
+}
+
+fn vec256(low: [u8; 16], high: [u8; 16]) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(32);
+    bytes.extend_from_slice(&low);
+    bytes.extend_from_slice(&high);
+    bytes
+}
+
+#[test]
+fn vector_integer_and_move_semantics_match_unicorn_transitions() {
+    let xmm0 = vec128([
+        0x10, 0x80, 0x20, 0x70, 0x30, 0x60, 0x40, 0x50, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
+        0x11, 0x22,
+    ]);
+    let xmm1 = vec128([
+        0x01, 0xff, 0x02, 0xfe, 0x03, 0xfd, 0x04, 0xfc, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00,
+        0x99, 0x88,
+    ]);
+    let mask = vec128([
+        0x00, 0x81, 0x02, 0x83, 0x04, 0x85, 0x06, 0x87, 0x08, 0x89, 0x0a, 0x8b, 0x0c, 0x8d,
+        0x0e, 0x8f,
+    ]);
+    let mem128 = vec![
+        0xde, 0xad, 0xbe, 0xef, 0x10, 0x32, 0x54, 0x76, 0x98, 0xba, 0xdc, 0xfe, 0x13, 0x57,
+        0x9b, 0xdf,
+    ];
+
+    let cases = [
+        (
+            "movapd xmm0, xmm1",
+            vec![0x66, 0x0f, 0x28, 0xc1],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Xmm0, xmm0),
+                    (I386Register::Xmm1, xmm1),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "movntdq xmmword ptr [rax], xmm0",
+            vec![0x66, 0x0f, 0xe7, 0x00],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Rax, 0x3000),
+                    (I386Register::Xmm0, xmm0),
+                ],
+                eflags: 1 << 1,
+                memory: vec![(0x3000, vec![0; 16])],
+            },
+        ),
+        (
+            "lddqu xmm0, xmmword ptr [rax]",
+            vec![0xf2, 0x0f, 0xf0, 0x00],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Rax, 0x3000),
+                    (I386Register::Xmm0, 0),
+                ],
+                eflags: 1 << 1,
+                memory: vec![(0x3000, mem128.clone())],
+            },
+        ),
+        (
+            "movddup xmm0, xmm1",
+            vec![0xf2, 0x0f, 0x12, 0xc1],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Xmm0, 0),
+                    (I386Register::Xmm1, xmm1),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "movshdup xmm0, xmm1",
+            vec![0xf3, 0x0f, 0x16, 0xc1],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Xmm0, 0),
+                    (I386Register::Xmm1, xmm1),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "movsldup xmm0, xmm1",
+            vec![0xf3, 0x0f, 0x12, 0xc1],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Xmm0, 0),
+                    (I386Register::Xmm1, xmm1),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "andpd xmm0, xmm1",
+            vec![0x66, 0x0f, 0x54, 0xc1],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Xmm0, xmm0),
+                    (I386Register::Xmm1, xmm1),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "andnps xmm0, xmm1",
+            vec![0x0f, 0x55, 0xc1],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Xmm0, xmm0),
+                    (I386Register::Xmm1, xmm1),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "por xmm0, xmm1",
+            vec![0x66, 0x0f, 0xeb, 0xc1],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Xmm0, xmm0),
+                    (I386Register::Xmm1, xmm1),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "pandn xmm0, xmm1",
+            vec![0x66, 0x0f, 0xdf, 0xc1],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Xmm0, xmm0),
+                    (I386Register::Xmm1, xmm1),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "paddb xmm0, xmm1",
+            vec![0x66, 0x0f, 0xfc, 0xc1],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Xmm0, xmm0),
+                    (I386Register::Xmm1, xmm1),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "paddd xmm0, xmm1",
+            vec![0x66, 0x0f, 0xfe, 0xc1],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Xmm0, xmm0),
+                    (I386Register::Xmm1, xmm1),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "pavgb xmm0, xmm1",
+            vec![0x66, 0x0f, 0xe0, 0xc1],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Xmm0, xmm0),
+                    (I386Register::Xmm1, xmm1),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "psubw xmm0, xmm1",
+            vec![0x66, 0x0f, 0xf9, 0xc1],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Xmm0, xmm0),
+                    (I386Register::Xmm1, xmm1),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "psllq xmm0, 1",
+            vec![0x66, 0x0f, 0x73, 0xf0, 0x01],
+            I386Fixture {
+                registers: vec![(I386Register::Xmm0, xmm0)],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "psrad xmm0, 1",
+            vec![0x66, 0x0f, 0x72, 0xe0, 0x01],
+            I386Fixture {
+                registers: vec![(I386Register::Xmm0, xmm0)],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "psrldq xmm0, 1",
+            vec![0x66, 0x0f, 0x73, 0xd8, 0x01],
+            I386Fixture {
+                registers: vec![(I386Register::Xmm0, xmm0)],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "pcmpeqb xmm0, xmm1",
+            vec![0x66, 0x0f, 0x74, 0xc1],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Xmm0, xmm0),
+                    (I386Register::Xmm1, xmm1),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "pcmpgtw xmm0, xmm1",
+            vec![0x66, 0x0f, 0x65, 0xc1],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Xmm0, xmm0),
+                    (I386Register::Xmm1, xmm1),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "pmaxub xmm0, xmm1",
+            vec![0x66, 0x0f, 0xde, 0xc1],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Xmm0, xmm0),
+                    (I386Register::Xmm1, xmm1),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "pminsw xmm0, xmm1",
+            vec![0x66, 0x0f, 0xea, 0xc1],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Xmm0, xmm0),
+                    (I386Register::Xmm1, xmm1),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "pmaddwd xmm0, xmm1",
+            vec![0x66, 0x0f, 0xf5, 0xc1],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Xmm0, xmm0),
+                    (I386Register::Xmm1, xmm1),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "pmulhw xmm0, xmm1",
+            vec![0x66, 0x0f, 0xe5, 0xc1],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Xmm0, xmm0),
+                    (I386Register::Xmm1, xmm1),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "pmuludq xmm0, xmm1",
+            vec![0x66, 0x0f, 0xf4, 0xc1],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Xmm0, xmm0),
+                    (I386Register::Xmm1, xmm1),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "packsswb xmm0, xmm1",
+            vec![0x66, 0x0f, 0x63, 0xc1],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Xmm0, xmm0),
+                    (I386Register::Xmm1, xmm1),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "punpcklbw xmm0, xmm1",
+            vec![0x66, 0x0f, 0x60, 0xc1],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Xmm0, xmm0),
+                    (I386Register::Xmm1, xmm1),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "pextrd eax, xmm0, 1",
+            vec![0x66, 0x0f, 0x3a, 0x16, 0xc0, 0x01],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Eax, 0),
+                    (I386Register::Xmm0, xmm0),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "pinsrd xmm0, eax, 1",
+            vec![0x66, 0x0f, 0x3a, 0x22, 0xc0, 0x01],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Eax, 0x1234_5678),
+                    (I386Register::Xmm0, xmm0),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "pmovmskb eax, xmm0",
+            vec![0x66, 0x0f, 0xd7, 0xc0],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Eax, 0),
+                    (I386Register::Xmm0, xmm0),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "ptest xmm0, xmm1",
+            vec![0x66, 0x0f, 0x38, 0x17, 0xc1],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Xmm0, xmm0),
+                    (I386Register::Xmm1, xmm1),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "movhlps xmm0, xmm1",
+            vec![0x0f, 0x12, 0xc1],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Xmm0, xmm0),
+                    (I386Register::Xmm1, xmm1),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "movhpd xmm0, qword ptr [rax]",
+            vec![0x66, 0x0f, 0x16, 0x00],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Rax, 0x3000),
+                    (I386Register::Xmm0, xmm0),
+                ],
+                eflags: 1 << 1,
+                memory: vec![(0x3000, mem128[..8].to_vec())],
+            },
+        ),
+        (
+            "pshufb xmm0, xmm1",
+            vec![0x66, 0x0f, 0x38, 0x00, 0xc1],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Xmm0, xmm0),
+                    (I386Register::Xmm1, mask),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "pmovsxbw xmm0, xmm1",
+            vec![0x66, 0x0f, 0x38, 0x20, 0xc1],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Xmm0, 0),
+                    (I386Register::Xmm1, xmm1),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "pmovzxdq xmm0, xmm1",
+            vec![0x66, 0x0f, 0x38, 0x35, 0xc1],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Xmm0, 0),
+                    (I386Register::Xmm1, xmm1),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+    ];
+
+    for (name, bytes, fixture) in cases {
+        assert_amd64_semantics_match_unicorn(name, &bytes, fixture);
+    }
+}
+
+// Unicorn 2.1.5 rejects these AVX YMM forms with `INSN_INVALID`, so keep them
+// as semantics-only wide regressions until a reliable execution oracle is
+// available for 256-bit x86 vectors in this environment.
+#[test]
+fn vector_ymm_semantics_wide_regressions() {
+    let ymm0 = vec256(
+        [
+            0x10, 0x80, 0x20, 0x70, 0x30, 0x60, 0x40, 0x50, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
+            0x11, 0x22,
+        ],
+        [
+            0x01, 0x81, 0x02, 0x82, 0x03, 0x83, 0x04, 0x84, 0x05, 0x85, 0x06, 0x86, 0x07, 0x87,
+            0x08, 0x88,
+        ],
+    );
+    let ymm1 = vec256(
+        [
+            0x01, 0xff, 0x02, 0xfe, 0x03, 0xfd, 0x04, 0xfc, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00,
+            0x99, 0x88,
+        ],
+        [
+            0xf0, 0x0f, 0xe1, 0x1e, 0xd2, 0x2d, 0xc3, 0x3c, 0xb4, 0x4b, 0xa5, 0x5a, 0x96, 0x69,
+            0x87, 0x78,
+        ],
+    );
+    let ymm2 = vec256(
+        [
+            0xde, 0xad, 0xbe, 0xef, 0x10, 0x32, 0x54, 0x76, 0x98, 0xba, 0xdc, 0xfe, 0x13, 0x57,
+            0x9b, 0xdf,
+        ],
+        [
+            0x24, 0x42, 0x66, 0x81, 0xa5, 0xc3, 0xe7, 0xff, 0x18, 0x36, 0x54, 0x72, 0x90, 0xab,
+            0xcd, 0xef,
+        ],
+    );
+
+    let cases = [
+        (
+            "vextracti128 xmm0, ymm1, 1",
+            vec![0xc4, 0xe3, 0x7d, 0x39, 0xc8, 0x01],
+            WideI386Fixture {
+                base: I386Fixture {
+                    registers: vec![(I386Register::Xmm0, 0)],
+                    eflags: 1 << 1,
+                    memory: vec![],
+                },
+                wide_registers: vec![(I386Register::Ymm1, ymm1.clone())],
+            },
+            Some(("reg_122", vec![
+                0xf0, 0x0f, 0xe1, 0x1e, 0xd2, 0x2d, 0xc3, 0x3c, 0xb4, 0x4b, 0xa5, 0x5a, 0x96, 0x69, 0x87, 0x78,
+            ])),
+            None,
+        ),
+        (
+            "vperm2i128 ymm0, ymm2, ymm1, 0x31",
+            vec![0xc4, 0xe3, 0x6d, 0x46, 0xc1, 0x31],
+            WideI386Fixture {
+                base: I386Fixture {
+                    registers: vec![],
+                    eflags: 1 << 1,
+                    memory: vec![],
+                },
+                wide_registers: vec![
+                    (I386Register::Ymm0, vec![0; 32]),
+                    (I386Register::Ymm1, ymm1.clone()),
+                    (I386Register::Ymm2, ymm2.clone()),
+                ],
+            },
+            Some(("reg_154", vec![
+                0x24, 0x42, 0x66, 0x81, 0xa5, 0xc3, 0xe7, 0xff, 0x18, 0x36, 0x54, 0x72, 0x90, 0xab, 0xcd, 0xef,
+                0xf0, 0x0f, 0xe1, 0x1e, 0xd2, 0x2d, 0xc3, 0x3c, 0xb4, 0x4b, 0xa5, 0x5a, 0x96, 0x69, 0x87, 0x78,
+            ])),
+            None,
+        ),
+        (
+            "vpermq ymm0, ymm1, 0x1b",
+            vec![0xc4, 0xe3, 0xfd, 0x00, 0xc1, 0x1b],
+            WideI386Fixture {
+                base: I386Fixture {
+                    registers: vec![],
+                    eflags: 1 << 1,
+                    memory: vec![],
+                },
+                wide_registers: vec![
+                    (I386Register::Ymm0, vec![0; 32]),
+                    (I386Register::Ymm1, ymm1.clone()),
+                ],
+            },
+            Some(("reg_154", vec![
+                0xb4, 0x4b, 0xa5, 0x5a, 0x96, 0x69, 0x87, 0x78, 0xf0, 0x0f, 0xe1, 0x1e, 0xd2, 0x2d, 0xc3, 0x3c,
+                0x55, 0x44, 0x33, 0x22, 0x11, 0x00, 0x99, 0x88, 0x01, 0xff, 0x02, 0xfe, 0x03, 0xfd, 0x04, 0xfc,
+            ])),
+            None,
+        ),
+        (
+            "vpshufd ymm0, ymm1, 0x1b",
+            vec![0xc5, 0xfd, 0x70, 0xc1, 0x1b],
+            WideI386Fixture {
+                base: I386Fixture {
+                    registers: vec![],
+                    eflags: 1 << 1,
+                    memory: vec![],
+                },
+                wide_registers: vec![
+                    (I386Register::Ymm0, vec![0; 32]),
+                    (I386Register::Ymm1, ymm1.clone()),
+                ],
+            },
+            Some(("reg_154", vec![
+                0x11, 0x00, 0x99, 0x88, 0x55, 0x44, 0x33, 0x22, 0x03, 0xfd, 0x04, 0xfc, 0x01, 0xff, 0x02, 0xfe,
+                0x96, 0x69, 0x87, 0x78, 0xb4, 0x4b, 0xa5, 0x5a, 0xd2, 0x2d, 0xc3, 0x3c, 0xf0, 0x0f, 0xe1, 0x1e,
+            ])),
+            None,
+        ),
+        (
+            "vptest ymm0, ymm1",
+            vec![0xc4, 0xe2, 0x7d, 0x17, 0xc1],
+            WideI386Fixture {
+                base: I386Fixture {
+                    registers: vec![],
+                    eflags: 1 << 1,
+                    memory: vec![],
+                },
+                wide_registers: vec![
+                    (I386Register::Ymm0, ymm0.clone()),
+                    (I386Register::Ymm1, ymm1.clone()),
+                ],
+            },
+            None,
+            Some((false, false)),
+        ),
+        (
+            "vpmovmskb eax, ymm0",
+            vec![0xc5, 0xfd, 0xd7, 0xc0],
+            WideI386Fixture {
+                base: I386Fixture {
+                    registers: vec![(I386Register::Eax, 0)],
+                    eflags: 1 << 1,
+                    memory: vec![],
+                },
+                wide_registers: vec![(I386Register::Ymm0, ymm0.clone())],
+            },
+            Some(("reg_19", vec![0x02, 0x3f, 0xaa, 0xaa])),
+            None,
+        ),
+        (
+            "vpunpcklbw ymm0, ymm2, ymm1",
+            vec![0xc5, 0xed, 0x60, 0xc1],
+            WideI386Fixture {
+                base: I386Fixture {
+                    registers: vec![],
+                    eflags: 1 << 1,
+                    memory: vec![],
+                },
+                wide_registers: vec![
+                    (I386Register::Ymm0, vec![0; 32]),
+                    (I386Register::Ymm1, ymm1),
+                    (I386Register::Ymm2, ymm2),
+                ],
+            },
+            Some(("reg_154", vec![
+                0xde, 0x01, 0xad, 0xff, 0xbe, 0x02, 0xef, 0xfe, 0x10, 0x03, 0x32, 0xfd, 0x54, 0x04, 0x76, 0xfc,
+                0x24, 0xf0, 0x42, 0x0f, 0x66, 0xe1, 0x81, 0x1e, 0xa5, 0xd2, 0xc3, 0x2d, 0xe7, 0xc3, 0xff, 0x3c,
+            ])),
+            None,
+        ),
+    ];
+
+    for (name, bytes, fixture, expected_register, expected_flags) in cases {
+        let (registers, flags) = interpret_amd64_wide_semantics(name, &bytes, fixture);
+        if let Some((register, expected)) = expected_register {
+            assert_eq!(
+                registers.get(register).expect("register should exist"),
+                &expected,
+                "{name}: register {register} mismatch",
+            );
+        }
+        if let Some((zf, cf)) = expected_flags {
+            assert_eq!(flags.zf, zf, "{name}: zf mismatch");
+            assert_eq!(flags.cf, cf, "{name}: cf mismatch");
+        }
     }
 }

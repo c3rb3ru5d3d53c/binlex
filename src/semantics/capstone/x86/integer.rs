@@ -680,6 +680,7 @@ fn compare_exchange(
         64 => X86Reg::X86_REG_RAX as u16,
         _ => return None,
     };
+    let accumulator_location = common::reg(common::reg_id_name(accumulator_reg), bits);
     let accumulator = common::reg_expr(accumulator_reg, bits);
     let equal = common::compare(
         SemanticOperationCompare::Eq,
@@ -687,62 +688,62 @@ fn compare_exchange(
         observed.clone(),
     );
     let diff = common::sub(accumulator.clone(), observed.clone(), bits);
-    Some(common::complete(
-        SemanticTerminator::FallThrough,
-        vec![
-            SemanticEffect::Set {
-                dst: dst.clone(),
-                expression: SemanticExpression::Select {
-                    condition: Box::new(equal.clone()),
-                    when_true: Box::new(src),
-                    when_false: Box::new(observed.clone()),
-                    bits,
-                },
+    let mut effects = vec![SemanticEffect::Set {
+        dst: dst.clone(),
+        expression: SemanticExpression::Select {
+            condition: Box::new(equal.clone()),
+            when_true: Box::new(src),
+            when_false: Box::new(observed.clone()),
+            bits,
+        },
+    }];
+    if dst != accumulator_location {
+        effects.push(SemanticEffect::Set {
+            dst: accumulator_location,
+            expression: SemanticExpression::Select {
+                condition: Box::new(equal.clone()),
+                when_true: Box::new(accumulator.clone()),
+                when_false: Box::new(observed.clone()),
+                bits,
             },
-            SemanticEffect::Set {
-                dst: common::reg(common::reg_id_name(accumulator_reg), bits),
-                expression: SemanticExpression::Select {
-                    condition: Box::new(equal.clone()),
-                    when_true: Box::new(accumulator.clone()),
-                    when_false: Box::new(observed.clone()),
-                    bits,
-                },
-            },
-            SemanticEffect::Set {
-                dst: common::flag("zf"),
-                expression: equal.clone(),
-            },
-            SemanticEffect::Set {
-                dst: common::flag("cf"),
-                expression: common::compare(
-                    SemanticOperationCompare::Ult,
-                    accumulator.clone(),
-                    observed.clone(),
-                ),
-            },
-            SemanticEffect::Set {
-                dst: common::flag("sf"),
-                expression: common::extract_bit(diff.clone(), bits.saturating_sub(1)),
-            },
-            SemanticEffect::Set {
-                dst: common::flag("of"),
-                expression: common::sub_overflow(
-                    accumulator.clone(),
-                    observed.clone(),
-                    diff.clone(),
-                    bits,
-                ),
-            },
-            SemanticEffect::Set {
-                dst: common::flag("pf"),
-                expression: common::parity_flag(diff.clone()),
-            },
-            SemanticEffect::Set {
-                dst: common::flag("af"),
-                expression: common::auxiliary_flag(accumulator, observed, diff, bits),
-            },
-        ],
-    ))
+        });
+    }
+    effects.extend([
+        SemanticEffect::Set {
+            dst: common::flag("zf"),
+            expression: equal.clone(),
+        },
+        SemanticEffect::Set {
+            dst: common::flag("cf"),
+            expression: common::compare(
+                SemanticOperationCompare::Ult,
+                accumulator.clone(),
+                observed.clone(),
+            ),
+        },
+        SemanticEffect::Set {
+            dst: common::flag("sf"),
+            expression: common::extract_bit(diff.clone(), bits.saturating_sub(1)),
+        },
+        SemanticEffect::Set {
+            dst: common::flag("of"),
+            expression: common::sub_overflow(
+                accumulator.clone(),
+                observed.clone(),
+                diff.clone(),
+                bits,
+            ),
+        },
+        SemanticEffect::Set {
+            dst: common::flag("pf"),
+            expression: common::parity_flag(diff.clone()),
+        },
+        SemanticEffect::Set {
+            dst: common::flag("af"),
+            expression: common::auxiliary_flag(accumulator, observed, diff, bits),
+        },
+    ]);
+    Some(common::complete(SemanticTerminator::FallThrough, effects))
 }
 
 fn movx(
