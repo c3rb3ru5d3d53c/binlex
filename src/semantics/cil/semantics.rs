@@ -51,13 +51,13 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
             status: SemanticStatus::Complete,
             temporaries: Vec::new(),
             effects: vec![SemanticEffect::Intrinsic {
-                name: format!("dotnet.{:?}", instruction.mnemonic),
+                name: format!("cil.{:?}", instruction.mnemonic),
                 args: operand_args(instruction),
                 outputs: Vec::new(),
             }],
             terminator: SemanticTerminator::Call {
                 target: SemanticExpression::Intrinsic {
-                    name: format!("dotnet.{:?}.target", instruction.mnemonic),
+                    name: format!("cil.{:?}.target", instruction.mnemonic),
                     args: operand_args(instruction),
                     bits: 64,
                 },
@@ -310,6 +310,9 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
             )));
             complete_with_effects(SemanticTerminator::FallThrough, effects)
         }
+        Mnemonic::AddOvf | Mnemonic::AddOvfUn => {
+            push_runtime_binary_intrinsic(instruction, "cil.add.ovf")
+        }
         Mnemonic::Mul => {
             let (mut effects, right) = pop_stack();
             let (mut more_effects, left) = pop_stack();
@@ -321,6 +324,9 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
                 64,
             )));
             complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::MulOvf | Mnemonic::MulOvfUn => {
+            push_runtime_binary_intrinsic(instruction, "cil.mul.ovf")
         }
         Mnemonic::Div => {
             let (mut effects, right) = pop_stack();
@@ -394,12 +400,27 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
             )));
             complete_with_effects(SemanticTerminator::FallThrough, effects)
         }
+        Mnemonic::SubOvf | Mnemonic::SubOvfUn => {
+            push_runtime_binary_intrinsic(instruction, "cil.sub.ovf")
+        }
         Mnemonic::Rem => {
             let (mut effects, right) = pop_stack();
             let (mut more_effects, left) = pop_stack();
             effects.append(&mut more_effects);
             effects.extend(push_effects(binary(
                 SemanticOperationBinary::SRem,
+                left,
+                right,
+                64,
+            )));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::RemUn => {
+            let (mut effects, right) = pop_stack();
+            let (mut more_effects, left) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.extend(push_effects(binary(
+                SemanticOperationBinary::URem,
                 left,
                 right,
                 64,
@@ -527,6 +548,11 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
             effects.extend(push_effects(sign_extend_i64(value)));
             complete_with_effects(SemanticTerminator::FallThrough, effects)
         }
+        Mnemonic::ConvI => {
+            let (mut effects, value) = pop_stack();
+            effects.extend(push_effects(sign_extend_i64(value)));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
         Mnemonic::ConvU2 => {
             let (mut effects, value) = pop_stack();
             effects.extend(push_effects(zero_extend_i16(value)));
@@ -552,11 +578,36 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
             effects.extend(push_effects(zero_extend_i64(value)));
             complete_with_effects(SemanticTerminator::FallThrough, effects)
         }
+        Mnemonic::ConvOvfI
+        | Mnemonic::ConvOvfIUn
+        | Mnemonic::ConvOvfI1
+        | Mnemonic::ConvOvfI1Un
+        | Mnemonic::ConvOvfI2
+        | Mnemonic::ConvOvfI2Un
+        | Mnemonic::ConvOvfI4
+        | Mnemonic::ConvOvfI4Un
+        | Mnemonic::ConvOvfI8
+        | Mnemonic::ConvOvfI8Un
+        | Mnemonic::ConvOvfU
+        | Mnemonic::ConvOvfUUn
+        | Mnemonic::ConvOvfU1
+        | Mnemonic::ConvOvfU1Un
+        | Mnemonic::ConvOvfU2
+        | Mnemonic::ConvOvfU2Un
+        | Mnemonic::ConvOvfU4
+        | Mnemonic::ConvOvfU4Un
+        | Mnemonic::ConvOvfU8
+        | Mnemonic::ConvOvfU8Un
+        | Mnemonic::ConvRUn
+        | Mnemonic::ConvR4 => push_runtime_unary_intrinsic(
+            instruction,
+            &format!("cil.{:?}", instruction.mnemonic).to_lowercase(),
+        ),
         Mnemonic::ConvR8 => {
             let (mut effects, value) = pop_stack();
-            effects.extend(push_effects(SemanticExpression::Intrinsic {
-                name: "cil.conv.r8".to_string(),
-                args: vec![value],
+            effects.extend(push_effects(SemanticExpression::Cast {
+                op: SemanticOperationCast::IntToFloat,
+                arg: Box::new(value),
                 bits: 64,
             }));
             complete_with_effects(SemanticTerminator::FallThrough, effects)
@@ -601,6 +652,11 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
         Mnemonic::LdLocAS | Mnemonic::LdLocA => {
             push_expression(read(cil_local_address(operand_value(instruction) as u32)))
         }
+        Mnemonic::ArgList => push_expression(SemanticExpression::Intrinsic {
+            name: "cil.arglist".to_string(),
+            args: Vec::new(),
+            bits: 64,
+        }),
         Mnemonic::LdFtn => push_expression(SemanticExpression::Intrinsic {
             name: "cil.ldftn".to_string(),
             args: vec![const_u64(operand_value(instruction), 32)],
@@ -621,9 +677,9 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
             let (effects, array) = pop_stack();
             push_with_prefix(
                 effects,
-                SemanticExpression::Intrinsic {
-                    name: "cil.array.len".to_string(),
-                    args: vec![array],
+                SemanticExpression::Load {
+                    space: SemanticAddressSpace::Heap,
+                    addr: Box::new(cil_array_length_address(array)),
                     bits: 64,
                 },
             )
@@ -680,6 +736,32 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
                 }),
             )
         }
+        Mnemonic::LdElmI1 => {
+            let (mut effects, index) = pop_stack();
+            let (mut more_effects, array) = pop_stack();
+            effects.append(&mut more_effects);
+            push_with_prefix(
+                effects,
+                sign_extend_i8(SemanticExpression::Load {
+                    space: SemanticAddressSpace::Heap,
+                    addr: Box::new(cil_array_element_address(array, index)),
+                    bits: 8,
+                }),
+            )
+        }
+        Mnemonic::LdElmI2 => {
+            let (mut effects, index) = pop_stack();
+            let (mut more_effects, array) = pop_stack();
+            effects.append(&mut more_effects);
+            push_with_prefix(
+                effects,
+                sign_extend_i16(SemanticExpression::Load {
+                    space: SemanticAddressSpace::Heap,
+                    addr: Box::new(cil_array_element_address(array, index)),
+                    bits: 16,
+                }),
+            )
+        }
         Mnemonic::LdElmI4 => {
             let (mut effects, index) = pop_stack();
             let (mut more_effects, array) = pop_stack();
@@ -716,6 +798,45 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
                     space: SemanticAddressSpace::Heap,
                     addr: Box::new(cil_array_element_address(array, index)),
                     bits: 64,
+                },
+            )
+        }
+        Mnemonic::LdElmI => {
+            let (mut effects, index) = pop_stack();
+            let (mut more_effects, array) = pop_stack();
+            effects.append(&mut more_effects);
+            push_with_prefix(
+                effects,
+                sign_extend_i64(SemanticExpression::Load {
+                    space: SemanticAddressSpace::Heap,
+                    addr: Box::new(cil_array_element_address(array, index)),
+                    bits: 64,
+                }),
+            )
+        }
+        Mnemonic::LdElmU8 => {
+            let (mut effects, index) = pop_stack();
+            let (mut more_effects, array) = pop_stack();
+            effects.append(&mut more_effects);
+            push_with_prefix(
+                effects,
+                zero_extend_i64(SemanticExpression::Load {
+                    space: SemanticAddressSpace::Heap,
+                    addr: Box::new(cil_array_element_address(array, index)),
+                    bits: 64,
+                }),
+            )
+        }
+        Mnemonic::LdElmR4 => {
+            let (mut effects, index) = pop_stack();
+            let (mut more_effects, array) = pop_stack();
+            effects.append(&mut more_effects);
+            push_with_prefix(
+                effects,
+                SemanticExpression::Load {
+                    space: SemanticAddressSpace::Heap,
+                    addr: Box::new(cil_array_element_address(array, index)),
+                    bits: 32,
                 },
             )
         }
@@ -758,6 +879,28 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
                 }),
             )
         }
+        Mnemonic::LdIndI1 => {
+            let (effects, address) = pop_stack();
+            push_with_prefix(
+                effects,
+                sign_extend_i8(SemanticExpression::Load {
+                    space: SemanticAddressSpace::Default,
+                    addr: Box::new(address),
+                    bits: 8,
+                }),
+            )
+        }
+        Mnemonic::LdIndI2 => {
+            let (effects, address) = pop_stack();
+            push_with_prefix(
+                effects,
+                sign_extend_i16(SemanticExpression::Load {
+                    space: SemanticAddressSpace::Default,
+                    addr: Box::new(address),
+                    bits: 16,
+                }),
+            )
+        }
         Mnemonic::LdIndU4 => {
             let (effects, address) = pop_stack();
             push_with_prefix(
@@ -785,6 +928,17 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
             push_with_prefix(
                 effects,
                 zero_extend_i64(SemanticExpression::Load {
+                    space: SemanticAddressSpace::Default,
+                    addr: Box::new(address),
+                    bits: 64,
+                }),
+            )
+        }
+        Mnemonic::LdIndI => {
+            let (effects, address) = pop_stack();
+            push_with_prefix(
+                effects,
+                sign_extend_i64(SemanticExpression::Load {
                     space: SemanticAddressSpace::Default,
                     addr: Box::new(address),
                     bits: 64,
@@ -983,25 +1137,28 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
         }
         Mnemonic::NewArr => {
             let token = operand_value(instruction) as u32;
-            let (effects, length) = pop_stack();
-            push_with_prefix(
-                effects,
-                SemanticExpression::Intrinsic {
-                    name: "cil.newarr".to_string(),
-                    args: vec![length, const_u64(token as u64, 32)],
-                    bits: 64,
-                },
-            )
+            let (mut effects, length) = pop_stack();
+            effects.push(SemanticEffect::Intrinsic {
+                name: "cil.newarr".to_string(),
+                args: vec![length.clone(), const_u64(token as u64, 32)],
+                outputs: Vec::new(),
+            });
+            effects.extend(push_effects(SemanticExpression::Intrinsic {
+                name: "cil.newarr.result".to_string(),
+                args: vec![length, const_u64(token as u64, 32)],
+                bits: 64,
+            }));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
         }
         Mnemonic::NewObj => {
             let token = operand_value(instruction) as u32;
             let mut effects = vec![SemanticEffect::Intrinsic {
-                name: "dotnet.newobj".to_string(),
+                name: "cil.newobj".to_string(),
                 args: vec![const_u64(token as u64, 32)],
                 outputs: Vec::new(),
             }];
             effects.extend(push_effects(SemanticExpression::Intrinsic {
-                name: "dotnet.newobj.result".to_string(),
+                name: "cil.newobj.result".to_string(),
                 args: vec![const_u64(token as u64, 32)],
                 bits: 64,
             }));
@@ -1009,21 +1166,24 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
         }
         Mnemonic::Box => {
             let token = operand_value(instruction) as u32;
-            let (effects, value) = pop_stack();
-            push_with_prefix(
-                effects,
-                SemanticExpression::Intrinsic {
-                    name: "cil.box".to_string(),
-                    args: vec![value, const_u64(token as u64, 32)],
-                    bits: 64,
-                },
-            )
+            let (mut effects, value) = pop_stack();
+            effects.push(SemanticEffect::Intrinsic {
+                name: "cil.box".to_string(),
+                args: vec![value.clone(), const_u64(token as u64, 32)],
+                outputs: Vec::new(),
+            });
+            effects.extend(push_effects(SemanticExpression::Intrinsic {
+                name: "cil.box.result".to_string(),
+                args: vec![value, const_u64(token as u64, 32)],
+                bits: 64,
+            }));
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
         }
         Mnemonic::InitObj => {
             let token = operand_value(instruction) as u32;
             let (mut effects, address) = pop_stack();
             effects.push(SemanticEffect::Intrinsic {
-                name: "dotnet.initobj".to_string(),
+                name: "cil.initobj".to_string(),
                 args: vec![address, const_u64(token as u64, 32)],
                 outputs: Vec::new(),
             });
@@ -1034,9 +1194,14 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
             let (effects, value) = pop_stack();
             push_with_prefix(
                 effects,
-                SemanticExpression::Intrinsic {
-                    name: "cil.isinst".to_string(),
-                    args: vec![value, const_u64(token as u64, 32)],
+                SemanticExpression::Select {
+                    condition: Box::new(SemanticExpression::Intrinsic {
+                        name: "cil.isinst.test".to_string(),
+                        args: vec![value.clone(), const_u64(token as u64, 32)],
+                        bits: 1,
+                    }),
+                    when_true: Box::new(value),
+                    when_false: Box::new(const_u64(0, 64)),
                     bits: 64,
                 },
             )
@@ -1066,6 +1231,62 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
                 addr: cil_array_element_address(array, index),
                 expression: truncate_i8(value),
                 bits: 8,
+            });
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::StElemI => {
+            let (mut effects, value) = pop_stack();
+            let (mut more_effects, index) = pop_stack();
+            let (mut array_effects, array) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.append(&mut array_effects);
+            effects.push(SemanticEffect::Store {
+                space: SemanticAddressSpace::Heap,
+                addr: cil_array_element_address(array, index),
+                expression: value,
+                bits: 64,
+            });
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::StElemI8 => {
+            let (mut effects, value) = pop_stack();
+            let (mut more_effects, index) = pop_stack();
+            let (mut array_effects, array) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.append(&mut array_effects);
+            effects.push(SemanticEffect::Store {
+                space: SemanticAddressSpace::Heap,
+                addr: cil_array_element_address(array, index),
+                expression: value,
+                bits: 64,
+            });
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::StElemR4 => {
+            let (mut effects, value) = pop_stack();
+            let (mut more_effects, index) = pop_stack();
+            let (mut array_effects, array) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.append(&mut array_effects);
+            effects.push(SemanticEffect::Store {
+                space: SemanticAddressSpace::Heap,
+                addr: cil_array_element_address(array, index),
+                expression: truncate_i32(value),
+                bits: 32,
+            });
+            complete_with_effects(SemanticTerminator::FallThrough, effects)
+        }
+        Mnemonic::StElemR8 => {
+            let (mut effects, value) = pop_stack();
+            let (mut more_effects, index) = pop_stack();
+            let (mut array_effects, array) = pop_stack();
+            effects.append(&mut more_effects);
+            effects.append(&mut array_effects);
+            effects.push(SemanticEffect::Store {
+                space: SemanticAddressSpace::Heap,
+                addr: cil_array_element_address(array, index),
+                expression: value,
+                bits: 64,
             });
             complete_with_effects(SemanticTerminator::FallThrough, effects)
         }
@@ -1128,9 +1349,13 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
             let (effects, value) = pop_stack();
             push_with_prefix(
                 effects,
-                SemanticExpression::Intrinsic {
-                    name: "cil.unbox.any".to_string(),
-                    args: vec![value, const_u64(token as u64, 32)],
+                SemanticExpression::Load {
+                    space: SemanticAddressSpace::Default,
+                    addr: Box::new(SemanticExpression::Intrinsic {
+                        name: "cil.unbox".to_string(),
+                        args: vec![value, const_u64(token as u64, 32)],
+                        bits: 64,
+                    }),
                     bits: 64,
                 },
             )
@@ -1145,76 +1370,120 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
             complete_with_effects(SemanticTerminator::FallThrough, vec![SemanticEffect::Nop])
         }
         Mnemonic::LdToken => push_expression(const_u64(operand_value(instruction), 64)),
-        mnemonic
-            if matches!(mnemonic, |Mnemonic::AddOvf| Mnemonic::AddOvfUn
-                | Mnemonic::MulOvf
-                | Mnemonic::MulOvfUn
-                | Mnemonic::RemUn
-                | Mnemonic::SubOvf
-                | Mnemonic::SubOvfUn
-                | Mnemonic::Cgt
-                | Mnemonic::ConvI
-                | Mnemonic::ConvOvfI
-                | Mnemonic::ConvOvfIUn
-                | Mnemonic::ConvOvfI1
-                | Mnemonic::ConvOvfI1Un
-                | Mnemonic::ConvOvfI2
-                | Mnemonic::ConvOvfI2Un
-                | Mnemonic::ConvOvfI4
-                | Mnemonic::ConvOvfI4Un
-                | Mnemonic::ConvOvfI8
-                | Mnemonic::ConvOvfI8Un
-                | Mnemonic::ConvOvfU
-                | Mnemonic::ConvOvfUUn
-                | Mnemonic::ConvOvfU1
-                | Mnemonic::ConvOvfU1Un
-                | Mnemonic::ConvOvfU2
-                | Mnemonic::ConvOvfU2Un
-                | Mnemonic::ConvOvfU4
-                | Mnemonic::ConvOvfU4Un
-                | Mnemonic::ConvOvfU8
-                | Mnemonic::ConvOvfU8Un
-                | Mnemonic::ConvRUn
-                | Mnemonic::ConvR4
-                | Mnemonic::ConvU
-                | Mnemonic::ConvU1
-                | Mnemonic::CastClass
-                | Mnemonic::CkInite
-                | Mnemonic::CpBlk
-                | Mnemonic::End
-                | Mnemonic::EndFilter
-                | Mnemonic::InitBlk
-                | Mnemonic::Jmp
-                | Mnemonic::LdElmI
-                | Mnemonic::LdElmI1
-                | Mnemonic::LdElmI2
-                | Mnemonic::LdElmU8
-                | Mnemonic::LdElmR4
-                | Mnemonic::LdIndI
-                | Mnemonic::LdIndI1
-                | Mnemonic::LdIndI2
-                | Mnemonic::LdVirtFtn
-                | Mnemonic::Leave
-                | Mnemonic::LeaveS
-                | Mnemonic::LocAlloc
-                | Mnemonic::MkRefAny
-                | Mnemonic::No
-                | Mnemonic::ReadOnly
-                | Mnemonic::RefAnyType
-                | Mnemonic::RefAnyVal
-                | Mnemonic::ReThrow
-                | Mnemonic::SizeOf
-                | Mnemonic::StElemI
-                | Mnemonic::StElemI1
-                | Mnemonic::StElemI8
-                | Mnemonic::StElemR4
-                | Mnemonic::StElemR8
-                | Mnemonic::Tail
-                | Mnemonic::Unaligned
-                | Mnemonic::Unbox) =>
-        {
-            complete_intrinsic(instruction, format!("cil.{:?}", mnemonic))
+        Mnemonic::LdVirtFtn => {
+            let token = operand_value(instruction) as u32;
+            let (effects, object) = pop_stack();
+            push_with_prefix(
+                effects,
+                SemanticExpression::Intrinsic {
+                    name: "cil.ldvirtftn".to_string(),
+                    args: vec![object, const_u64(token as u64, 32)],
+                    bits: 64,
+                },
+            )
         }
+        Mnemonic::LocAlloc => {
+            let (effects, size) = pop_stack();
+            push_with_prefix(
+                effects,
+                SemanticExpression::Intrinsic {
+                    name: "cil.localloc".to_string(),
+                    args: vec![size],
+                    bits: 64,
+                },
+            )
+        }
+        Mnemonic::MkRefAny => {
+            let token = operand_value(instruction) as u32;
+            let (effects, address) = pop_stack();
+            push_with_prefix(
+                effects,
+                SemanticExpression::Intrinsic {
+                    name: "cil.mkrefany".to_string(),
+                    args: vec![address, const_u64(token as u64, 32)],
+                    bits: 64,
+                },
+            )
+        }
+        Mnemonic::RefAnyType => {
+            let (effects, typed_ref) = pop_stack();
+            push_with_prefix(
+                effects,
+                SemanticExpression::Intrinsic {
+                    name: "cil.refanytype".to_string(),
+                    args: vec![typed_ref],
+                    bits: 64,
+                },
+            )
+        }
+        Mnemonic::RefAnyVal => {
+            let token = operand_value(instruction) as u32;
+            let (effects, typed_ref) = pop_stack();
+            push_with_prefix(
+                effects,
+                SemanticExpression::Intrinsic {
+                    name: "cil.refanyval".to_string(),
+                    args: vec![typed_ref, const_u64(token as u64, 32)],
+                    bits: 64,
+                },
+            )
+        }
+        Mnemonic::SizeOf => push_expression(SemanticExpression::Intrinsic {
+            name: "cil.sizeof".to_string(),
+            args: vec![const_u64(operand_value(instruction), 32)],
+            bits: 64,
+        }),
+        Mnemonic::Unbox => {
+            let token = operand_value(instruction) as u32;
+            let (effects, boxed) = pop_stack();
+            push_with_prefix(
+                effects,
+                SemanticExpression::Intrinsic {
+                    name: "cil.unbox".to_string(),
+                    args: vec![boxed, const_u64(token as u64, 32)],
+                    bits: 64,
+                },
+            )
+        }
+        Mnemonic::CkInite => push_runtime_unary_intrinsic(instruction, "cil.ckfinite"),
+        Mnemonic::CpBlk => effect_runtime_ternary_intrinsic(instruction, "cil.cpblk"),
+        Mnemonic::InitBlk => effect_runtime_ternary_intrinsic(instruction, "cil.initblk"),
+        Mnemonic::No | Mnemonic::ReadOnly | Mnemonic::Tail | Mnemonic::Unaligned => {
+            complete_with_effects(SemanticTerminator::FallThrough, vec![SemanticEffect::Nop])
+        }
+        Mnemonic::End => InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Complete,
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Trap {
+                kind: SemanticTrapKind::ArchSpecific {
+                    name: "cil.endfinally".to_string(),
+                },
+            }],
+            terminator: SemanticTerminator::Trap,
+            diagnostics: Vec::new(),
+        },
+        Mnemonic::EndFilter => {
+            let (mut effects, value) = pop_stack();
+            effects.push(SemanticEffect::Intrinsic {
+                name: "cil.endfilter".to_string(),
+                args: vec![value],
+                outputs: Vec::new(),
+            });
+            complete_with_effects(SemanticTerminator::Trap, effects)
+        }
+        Mnemonic::ReThrow => InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Complete,
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Trap {
+                kind: SemanticTrapKind::ArchSpecific {
+                    name: "cil.rethrow".to_string(),
+                },
+            }],
+            terminator: SemanticTerminator::Trap,
+            diagnostics: Vec::new(),
+        },
         _ => InstructionSemantics {
             version: 1,
             status: SemanticStatus::Partial,
@@ -1235,19 +1504,56 @@ pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
     }
 }
 
-fn complete_intrinsic(instruction: &Instruction<'_>, name: String) -> InstructionSemantics {
-    InstructionSemantics {
-        version: 1,
-        status: SemanticStatus::Complete,
-        temporaries: Vec::new(),
-        effects: vec![SemanticEffect::Intrinsic {
-            name,
-            args: operand_args(instruction),
-            outputs: Vec::new(),
-        }],
-        terminator: SemanticTerminator::FallThrough,
-        diagnostics: Vec::new(),
-    }
+fn push_runtime_unary_intrinsic(instruction: &Instruction<'_>, name: &str) -> InstructionSemantics {
+    let (effects, value) = pop_stack();
+    let mut args = vec![value];
+    args.extend(operand_args(instruction));
+    push_with_prefix(
+        effects,
+        SemanticExpression::Intrinsic {
+            name: name.to_string(),
+            args,
+            bits: 64,
+        },
+    )
+}
+
+fn push_runtime_binary_intrinsic(
+    instruction: &Instruction<'_>,
+    name: &str,
+) -> InstructionSemantics {
+    let (mut effects, right) = pop_stack();
+    let (mut more_effects, left) = pop_stack();
+    effects.append(&mut more_effects);
+    let mut args = vec![left, right];
+    args.extend(operand_args(instruction));
+    push_with_prefix(
+        effects,
+        SemanticExpression::Intrinsic {
+            name: name.to_string(),
+            args,
+            bits: 64,
+        },
+    )
+}
+
+fn effect_runtime_ternary_intrinsic(
+    instruction: &Instruction<'_>,
+    name: &str,
+) -> InstructionSemantics {
+    let (mut effects, third) = pop_stack();
+    let (mut more_effects, second) = pop_stack();
+    let (mut first_effects, first) = pop_stack();
+    effects.append(&mut more_effects);
+    effects.append(&mut first_effects);
+    let mut args = vec![first, second, third];
+    args.extend(operand_args(instruction));
+    effects.push(SemanticEffect::Intrinsic {
+        name: name.to_string(),
+        args,
+        outputs: Vec::new(),
+    });
+    complete_with_effects(SemanticTerminator::FallThrough, effects)
 }
 
 fn push_expression(expression: SemanticExpression) -> InstructionSemantics {
@@ -1369,6 +1675,14 @@ fn cil_array_element_address(
     SemanticExpression::Intrinsic {
         name: "cil.array.elem.addr".to_string(),
         args: vec![array, index],
+        bits: 64,
+    }
+}
+
+fn cil_array_length_address(array: SemanticExpression) -> SemanticExpression {
+    SemanticExpression::Intrinsic {
+        name: "cil.array.length.addr".to_string(),
+        args: vec![array],
         bits: 64,
     }
 }

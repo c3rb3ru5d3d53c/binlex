@@ -46,36 +46,11 @@ pub struct Disassembler<'disassembler> {
 }
 
 impl<'disassembler> Disassembler<'disassembler> {
-    fn is_cil_intrinsic_expression(expression: &semantics::SemanticExpression) -> bool {
-        matches!(
-            expression,
-            semantics::SemanticExpression::Intrinsic { name, .. } if name.starts_with("cil.")
-        )
-    }
-
     fn has_effectively_partial_semantics(&self, semantics: &InstructionSemantics) -> bool {
         if semantics.status != SemanticStatus::Complete || !semantics.diagnostics.is_empty() {
             return true;
         }
-
-        if semantics.effects.iter().any(|effect| {
-            matches!(
-                effect,
-                semantics::SemanticEffect::Intrinsic { name, .. } if name.starts_with("cil.")
-            )
-        }) {
-            return true;
-        }
-
-        match &semantics.terminator {
-            semantics::SemanticTerminator::Branch { condition, .. } => {
-                Self::is_cil_intrinsic_expression(condition)
-            }
-            semantics::SemanticTerminator::Call { target, .. } => {
-                Self::is_cil_intrinsic_expression(target)
-            }
-            _ => false,
-        }
+        false
     }
 
     fn log_semantics_debug(&self, semantics: &InstructionSemantics, instruction: &Instruction) {
