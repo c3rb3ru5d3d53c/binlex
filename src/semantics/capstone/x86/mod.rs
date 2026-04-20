@@ -40,6 +40,9 @@ use crate::semantics::InstructionSemantics;
 use capstone::Insn;
 use capstone::arch::ArchOperand;
 
+#[cfg(test)]
+mod tests;
+
 pub fn build(
     machine: Architecture,
     instruction: &Insn,

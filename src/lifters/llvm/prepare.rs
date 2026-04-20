@@ -1,7 +1,7 @@
 use crate::lifters::llvm::abi::{coerce_expression_width, normalize_binary, normalize_compare};
-use crate::semantics::passes::{normalize_instruction_semantics, validate_instruction_semantics};
 use crate::semantics::{
     InstructionSemantics, SemanticEffect, SemanticExpression, SemanticTerminator,
+    normalize_instruction_semantics, validate_instruction_semantics,
 };
 use std::io::Error;
 

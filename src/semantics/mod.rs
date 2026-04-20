@@ -22,14 +22,14 @@
 
 pub mod capstone;
 pub mod cil;
-pub mod instruction;
-pub mod passes;
+pub mod ir;
 
-pub use instruction::{
+pub use ir::{
     InstructionSemantics, InstructionSemanticsJson, SemanticAddressSpace, SemanticDiagnostic,
     SemanticDiagnosticKind, SemanticEffect, SemanticEffectKind, SemanticExpression,
     SemanticExpressionKind, SemanticFenceKind, SemanticLocation, SemanticLocationKind,
     SemanticOperation, SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
     SemanticOperationUnary, SemanticStatus, SemanticTemporary, SemanticTerminator,
-    SemanticTerminatorKind, SemanticTrapKind,
+    SemanticTerminatorKind, SemanticTrapKind, normalize_instruction_semantics,
+    validate_instruction_semantics,
 };

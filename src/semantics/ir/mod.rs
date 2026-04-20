@@ -20,42 +20,17 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod arithmetic;
-pub mod common;
-pub mod control;
-pub mod memory;
-pub mod object;
-pub mod runtime;
-pub mod stack;
+pub mod instruction;
+pub mod normalize;
+pub mod validate;
 
-#[cfg(test)]
-mod tests;
-
-use crate::disassemblers::cil::Instruction;
-use crate::semantics::InstructionSemantics;
-
-pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
-    if let Some(semantics) = control::build(instruction) {
-        return semantics;
-    }
-    if let Some(semantics) = stack::build(instruction) {
-        return semantics;
-    }
-    if let Some(semantics) = arithmetic::build(instruction) {
-        return semantics;
-    }
-    if let Some(semantics) = memory::build(instruction) {
-        return semantics;
-    }
-    if let Some(semantics) = object::build(instruction) {
-        return semantics;
-    }
-    if let Some(semantics) = runtime::build(instruction) {
-        return semantics;
-    }
-
-    common::partial_intrinsic_fallthrough(
-        instruction,
-        "CIL stack effects currently modeled as intrinsics",
-    )
-}
+pub use instruction::{
+    InstructionSemantics, InstructionSemanticsJson, SemanticAddressSpace, SemanticDiagnostic,
+    SemanticDiagnosticKind, SemanticEffect, SemanticEffectKind, SemanticExpression,
+    SemanticExpressionKind, SemanticFenceKind, SemanticLocation, SemanticLocationKind,
+    SemanticOperation, SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
+    SemanticOperationUnary, SemanticStatus, SemanticTemporary, SemanticTerminator,
+    SemanticTerminatorKind, SemanticTrapKind,
+};
+pub use normalize::normalize_instruction_semantics;
+pub use validate::validate_instruction_semantics;

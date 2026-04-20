@@ -20,42 +20,29 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod arithmetic;
-pub mod common;
-pub mod control;
-pub mod memory;
-pub mod object;
-pub mod runtime;
-pub mod stack;
+use super::*;
 
-#[cfg(test)]
-mod tests;
-
-use crate::disassemblers::cil::Instruction;
-use crate::semantics::InstructionSemantics;
-
-pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
-    if let Some(semantics) = control::build(instruction) {
-        return semantics;
+pub(super) fn build(
+    machine: Architecture,
+    instruction: &Insn,
+    operands: &[ArchOperand],
+) -> Option<InstructionSemantics> {
+    match instruction.mnemonic().unwrap_or("") {
+        "madd" => build_madd(machine, operands),
+        "smaddl" => build_smaddl(machine, operands),
+        "smull" => build_smull(machine, operands),
+        "smulh" => build_smulh(machine, operands),
+        "smsubl" => build_smsubl(machine, operands),
+        "msub" => build_msub(machine, operands),
+        "mul" => build_mul(machine, operands),
+        "mneg" => build_mneg(machine, operands),
+        "umulh" => build_umulh(machine, operands),
+        "sdiv" => build_sdiv(machine, operands),
+        "udiv" => build_udiv(machine, operands),
+        "umull" => build_umull(machine, operands),
+        "umaddl" => build_umaddl(machine, operands),
+        "umsubl" => build_umsubl(machine, operands),
+        "umnegl" => build_umnegl(machine, operands),
+        _ => None,
     }
-    if let Some(semantics) = stack::build(instruction) {
-        return semantics;
-    }
-    if let Some(semantics) = arithmetic::build(instruction) {
-        return semantics;
-    }
-    if let Some(semantics) = memory::build(instruction) {
-        return semantics;
-    }
-    if let Some(semantics) = object::build(instruction) {
-        return semantics;
-    }
-    if let Some(semantics) = runtime::build(instruction) {
-        return semantics;
-    }
-
-    common::partial_intrinsic_fallthrough(
-        instruction,
-        "CIL stack effects currently modeled as intrinsics",
-    )
 }
