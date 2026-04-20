@@ -1,0 +1,27 @@
+use super::common::assert_complete_semantics;
+
+#[test]
+fn control_semantics_regressions_stay_complete() {
+    let cases = [
+        ("call", vec![0x28, 0x01, 0x00, 0x00, 0x0a]),
+        ("calli", vec![0x29, 0x01, 0x00, 0x00, 0x11]),
+        ("callvirt", vec![0x6f, 0x01, 0x00, 0x00, 0x0a]),
+        ("brtrue.s", vec![0x2d, 0x00]),
+        ("brfalse.s", vec![0x2c, 0x00]),
+        ("beq.s", vec![0x2e, 0x00]),
+        ("bne.un.s", vec![0x33, 0x00]),
+        ("bgt.s", vec![0x30, 0x00]),
+        ("ble.un.s", vec![0x36, 0x00]),
+        ("br.s", vec![0x2b, 0x00]),
+        ("leave.s", vec![0xde, 0x00]),
+        ("jmp", vec![0x27, 0x01, 0x00, 0x00, 0x0a]),
+        (
+            "switch",
+            vec![0x45, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+        ),
+    ];
+
+    for (name, bytes) in cases {
+        assert_complete_semantics(name, &bytes);
+    }
+}
