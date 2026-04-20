@@ -426,8 +426,8 @@ fn bls(
         BlsKind::Mask => common::xor(src.clone(), src_minus_one.clone(), bits),
         BlsKind::Reset => common::and(src.clone(), src_minus_one, bits),
     };
-    let src_nonzero = common::compare(
-        SemanticOperationCompare::Ne,
+    let src_zero = common::compare(
+        SemanticOperationCompare::Eq,
         src.clone(),
         common::const_u64(0, bits),
     );
@@ -440,7 +440,7 @@ fn bls(
             },
             SemanticEffect::Set {
                 dst: common::flag("cf"),
-                expression: src_nonzero,
+                expression: src_zero,
             },
             SemanticEffect::Set {
                 dst: common::flag("zf"),

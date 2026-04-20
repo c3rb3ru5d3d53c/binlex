@@ -1,3 +1,4 @@
+mod bit;
 mod common;
 mod fp;
 mod integer;

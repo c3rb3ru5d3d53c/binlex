@@ -2157,7 +2157,29 @@ fn avx_unpack(
         InsnId(id) if id == X86Insn::X86_INS_VPUNPCKHQDQ as u32 => (64, true),
         _ => return None,
     };
-    let expression = interleave_lanes(bits, lane_bits, &left, &right, high_half)?;
+    let expression = if bits == 256 {
+        SemanticExpression::Concat {
+            parts: vec![
+                interleave_lanes(
+                    128,
+                    lane_bits,
+                    &extract_range(&left, 128, 128),
+                    &extract_range(&right, 128, 128),
+                    high_half,
+                )?,
+                interleave_lanes(
+                    128,
+                    lane_bits,
+                    &extract_range(&left, 0, 128),
+                    &extract_range(&right, 0, 128),
+                    high_half,
+                )?,
+            ],
+            bits,
+        }
+    } else {
+        interleave_lanes(bits, lane_bits, &left, &right, high_half)?
+    };
     Some(common::complete(
         SemanticTerminator::FallThrough,
         vec![SemanticEffect::Set { dst, expression }],
