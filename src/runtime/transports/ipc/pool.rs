@@ -564,78 +564,32 @@ mod tests {
     use super::validate_hello;
     use crate::processor::ProcessorOs;
     use crate::runtime::transports::ipc::protocol::{Hello, HelloProcessor, VERSION};
-    use std::path::PathBuf;
-    use std::process::Command;
-    use std::sync::OnceLock;
-
-    fn embeddings_processor_path(manifest_dir: &std::path::Path) -> PathBuf {
-        let binary_name = if cfg!(windows) {
-            "binlex-processor-embeddings.exe"
-        } else {
-            "binlex-processor-embeddings"
-        };
-        manifest_dir.join("target").join("debug").join(binary_name)
-    }
-
-    fn ensure_embeddings_processor_built() {
-        static BUILT: OnceLock<()> = OnceLock::new();
-
-        BUILT.get_or_init(|| {
-            let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            let processor_path = embeddings_processor_path(&manifest_dir);
-            if processor_path.exists() {
-                return;
-            }
-
-            let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-            let mut command = Command::new(cargo);
-            command.current_dir(&manifest_dir);
-            command.env_remove("RUSTC_WRAPPER");
-            if let Ok(rustc) = std::env::var("RUSTC") {
-                command.env("RUSTC", rustc);
-            }
-            command.args([
-                "build",
-                "-p",
-                "binlex-processor-embeddings",
-                "--bin",
-                "binlex-processor-embeddings",
-            ]);
-            let status = command
-                .status()
-                .expect("cargo should build binlex-processor-embeddings");
-            assert!(
-                status.success(),
-                "binlex-processor-embeddings binary should build"
-            );
-        });
-    }
+    const TEST_BACKEND_NAME: &str = "binlex-processor-test";
+    const TEST_PROCESSOR_NAME: &str = "test-processor";
 
     #[test]
     fn validate_hello_accepts_matching_os_negotiation() {
-        ensure_embeddings_processor_built();
         let hello = Hello {
             protocol_version: VERSION,
-            backend_name: "binlex-processor-embeddings".to_string(),
+            backend_name: TEST_BACKEND_NAME.to_string(),
             binlex_version: crate::VERSION.to_string(),
             host_os: ProcessorOs::current(),
-            processor_name: "embeddings".to_string(),
+            processor_name: TEST_PROCESSOR_NAME.to_string(),
             supported_ids: vec![1],
             processors: vec![HelloProcessor {
                 id: 1,
-                name: "embeddings".to_string(),
+                name: TEST_PROCESSOR_NAME.to_string(),
                 requires: ">=2.0.0 <3.0.0".to_string(),
                 os: vec![ProcessorOs::current()],
             }],
             pid: 1,
         };
 
-        assert!(validate_hello(&hello, "binlex-processor-embeddings", "embeddings", 1).is_ok());
+        assert!(validate_hello(&hello, TEST_BACKEND_NAME, TEST_PROCESSOR_NAME, 1).is_ok());
     }
 
     #[test]
     fn validate_hello_rejects_processor_os_mismatch() {
-        ensure_embeddings_processor_built();
         let unsupported = match ProcessorOs::current() {
             ProcessorOs::Linux => ProcessorOs::Windows,
             ProcessorOs::Macos => ProcessorOs::Windows,
@@ -643,21 +597,21 @@ mod tests {
         };
         let hello = Hello {
             protocol_version: VERSION,
-            backend_name: "binlex-processor-embeddings".to_string(),
+            backend_name: TEST_BACKEND_NAME.to_string(),
             binlex_version: crate::VERSION.to_string(),
             host_os: ProcessorOs::current(),
-            processor_name: "embeddings".to_string(),
+            processor_name: TEST_PROCESSOR_NAME.to_string(),
             supported_ids: vec![1],
             processors: vec![HelloProcessor {
                 id: 1,
-                name: "embeddings".to_string(),
+                name: TEST_PROCESSOR_NAME.to_string(),
                 requires: ">=2.0.0 <3.0.0".to_string(),
                 os: vec![unsupported],
             }],
             pid: 1,
         };
 
-        let error = validate_hello(&hello, "binlex-processor-embeddings", "embeddings", 1)
+        let error = validate_hello(&hello, TEST_BACKEND_NAME, TEST_PROCESSOR_NAME, 1)
             .expect_err("hello should be rejected when processor os metadata excludes host os");
         assert!(error.to_string().contains("advertised unsupported os list"));
     }

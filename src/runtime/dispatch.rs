@@ -210,12 +210,13 @@ mod tests {
     use super::{HostRuntime, WorkerLaunch, resolve_worker_launches_for_runtime};
 
     static PATH_ENV_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+    const TEST_PROCESSOR_BACKEND: &str = "binlex-processor-test";
 
     fn processor_stub_path(directory: &std::path::Path) -> PathBuf {
         let filename = if cfg!(windows) {
-            "binlex-processor-embeddings.exe"
+            "binlex-processor-test.exe"
         } else {
-            "binlex-processor-embeddings"
+            "binlex-processor-test"
         };
         directory.join(filename)
     }
@@ -229,7 +230,7 @@ mod tests {
         std::fs::write(&processor, b"stub").expect("processor stub should be written");
 
         let launches = resolve_worker_launches_for_runtime(
-            "binlex-processor-embeddings",
+            TEST_PROCESSOR_BACKEND,
             Some(tempdir.to_string_lossy().as_ref()),
             &HostRuntime::Native,
         )
@@ -263,7 +264,7 @@ mod tests {
         }
 
         let launches = resolve_worker_launches_for_runtime(
-            "binlex-processor-embeddings",
+            TEST_PROCESSOR_BACKEND,
             Some("/definitely/missing/binlex/processors"),
             &HostRuntime::Native,
         )

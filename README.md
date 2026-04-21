@@ -33,7 +33,7 @@ Binlex extracts instructions, basic blocks, and functions from binaries and emit
 - 📈 Normalization and feature pipelines for ML-oriented similarity workflows
 - 🧰 Interfaces: CLI, Rust API, Python API/bindings, and IDA plugin
 - ⚙️ Processor framework in Rust with fast external execution over `ipc` and `http`
-- 🧠 Built-in processors include `vex` and `embeddings`; you can also build and share your own
+- 🧠 Build you own Rust processors to perform additional analysis
 - 🎯 Tooling for YARA generation, symbol ingestion, and batch JSON workflows
 
 ## Supported Targets 🌐

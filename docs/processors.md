@@ -220,7 +220,6 @@ Use `on_graph(...)` when the analysis needs the whole graph at once.
 
 Typical examples:
 
-- embeddings
 - whole-function CFG features
 - ranking or scoring that compares many entities together
 
