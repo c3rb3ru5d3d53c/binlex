@@ -150,7 +150,7 @@ fn chromosome_json_includes_mask_and_masked_when_enabled() {
 #[test]
 fn imaging_direct_accessors_ignore_config_flags() {
     let mut config = Config::default();
-    config.disable_imaging_hashing();
+    config.disable_hashing();
 
     let data = [0x00, 0x22, 0x44, 0x88, 0xaa, 0xcc, 0xee, 0xff];
     let png = PNG::with_options(&data, Palette::Grayscale, 2, 4, config.clone());

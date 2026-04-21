@@ -8,76 +8,12 @@ use crate::metadata::{Attribute, SymbolType};
 use crate::{Architecture, Config};
 use chrono::{TimeZone, Utc};
 use serde_json::json;
-use std::path::PathBuf;
-use std::process::Command;
-use std::sync::OnceLock;
-
-fn embeddings_processor_path(manifest_dir: &std::path::Path) -> PathBuf {
-    let binary_name = if cfg!(windows) {
-        "binlex-processor-embeddings.exe"
-    } else {
-        "binlex-processor-embeddings"
-    };
-    manifest_dir.join("target").join("debug").join(binary_name)
-}
-
-fn embeddings_processor_dir() -> String {
-    static PROCESSOR_DIR: OnceLock<String> = OnceLock::new();
-
-    PROCESSOR_DIR
-        .get_or_init(|| {
-            let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            let processor_path = embeddings_processor_path(&manifest_dir);
-            if !processor_path.exists() {
-                let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-                let mut command = Command::new(cargo);
-                command.current_dir(&manifest_dir);
-                command.env_remove("RUSTC_WRAPPER");
-                if let Ok(rustc) = std::env::var("RUSTC") {
-                    command.env("RUSTC", rustc);
-                }
-                command.args([
-                    "build",
-                    "-p",
-                    "binlex-processor-embeddings",
-                    "--bin",
-                    "binlex-processor-embeddings",
-                ]);
-                let status = command
-                    .status()
-                    .expect("cargo should build binlex-processor-embeddings");
-                assert!(
-                    status.success(),
-                    "binlex-processor-embeddings binary should build"
-                );
-            }
-
-            processor_path
-                .parent()
-                .expect("processor binary should have a parent directory")
-                .to_string_lossy()
-                .into_owned()
-        })
-        .clone()
-}
 
 fn build_single_return_graph() -> Graph {
-    let processor_dir = embeddings_processor_dir();
     let mut config = Config::default();
-    config.processors.enabled = true;
-    config.processors.path = Some(processor_dir);
-    config.processors.idle_timeout_ms = 120_000;
-    let embeddings = config
-        .processors
-        .ensure_processor("embeddings")
-        .expect("embeddings processor config should exist");
-    embeddings.enabled = true;
-    embeddings.instructions.enabled = false;
-    embeddings.blocks.enabled = false;
-    embeddings.functions.enabled = false;
-    embeddings.graph.enabled = true;
-    embeddings.transport.ipc.enabled = true;
-    embeddings.transport.http.enabled = false;
+    config.embeddings.llvm.device = "cpu".to_string();
+    config.blocks.embeddings.llvm.enabled = true;
+    config.functions.embeddings.llvm.enabled = true;
     let mut graph = Graph::new(Architecture::AMD64, config.clone());
     let mut instruction = Instruction::create(0x1000, Architecture::AMD64, config);
     instruction.bytes = vec![0xC3];
