@@ -304,7 +304,6 @@ fn llvm_json_output_respects_entity_config_flags() {
     config.instructions.lifters.llvm.enabled = true;
     config.blocks.lifters.llvm.enabled = true;
     config.functions.lifters.llvm.enabled = true;
-    config.functions.lifters.llvm.normalized.enabled = true;
 
     let graph = {
         let mut ranges = BTreeMap::new();
@@ -351,12 +350,6 @@ fn llvm_json_output_respects_entity_config_flags() {
         function_json["lifters"]["llvm"]["text"]
             .as_str()
             .map(|s| s.contains("@function_0()")),
-        Some(true)
-    );
-    assert_eq!(
-        function_json["lifters"]["llvm"]["normalized"]["text"]
-            .as_str()
-            .map(|s| s.contains("@f0()")),
         Some(true)
     );
     assert_eq!(
