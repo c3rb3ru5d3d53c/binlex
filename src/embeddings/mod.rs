@@ -41,9 +41,6 @@ impl<'a> InstructionEmbeddings<'a> {
     }
 
     pub fn llvm(&self) -> Option<Vec<f32>> {
-        if !self.instruction.config.instructions.embeddings.llvm.enabled {
-            return None;
-        }
         match llvm::instruction::embed(self.instruction) {
             Ok(vector) => Some(vector),
             Err(error) => {
@@ -67,9 +64,6 @@ impl<'a, 'b> BlockEmbeddings<'a, 'b> {
     }
 
     pub fn llvm(&self) -> Option<Vec<f32>> {
-        if !self.block.cfg.config.blocks.embeddings.llvm.enabled {
-            return None;
-        }
         match llvm::block::embed(self.block) {
             Ok(vector) => Some(vector),
             Err(error) => {
@@ -93,9 +87,6 @@ impl<'a, 'b> FunctionEmbeddings<'a, 'b> {
     }
 
     pub fn llvm(&self) -> Option<Vec<f32>> {
-        if !self.function.cfg.config.functions.embeddings.llvm.enabled {
-            return None;
-        }
         match llvm::function::embed(self.function) {
             Ok(vector) => Some(vector),
             Err(error) => {
