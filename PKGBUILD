@@ -50,5 +50,4 @@ package() {
   install -Dm755 "$builddir/target/release/binlex-yara" "$pkgdir/usr/bin/binlex-yara"
   install -Dm755 "$builddir/target/release/binlex-server" "$pkgdir/usr/bin/binlex-server"
   install -Dm755 "$builddir/target/release/binlex-web" "$pkgdir/usr/bin/binlex-web"
-  install -Dm755 "$builddir/target/release/binlex-processor-embeddings" "$pkgdir/usr/bin/binlex-processor-embeddings"
 }
