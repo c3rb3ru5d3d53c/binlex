@@ -1,17 +1,19 @@
-use crate::controlflow::{Graph, GraphSnapshot};
+use crate::controlflow::Graph;
 use crate::disassemblers::capstone::Disassembler;
 use crate::disassemblers::cil::Disassembler as CILDisassembler;
 use crate::formats::{ELF, File, MACHO, PE};
+use crate::indexing::Collection;
 use crate::metadata::Attributes;
-use crate::server::dto::AnalyzeRequest;
+use crate::server::dto::{AnalyzeRequest, AnalyzeResponse, AnalyzeSelectedVectors};
 use crate::server::error::ServerError;
 use crate::{Architecture, Config, Magic};
 use base64::Engine;
 use ring::digest::{SHA256, digest};
 use std::collections::{BTreeMap, BTreeSet};
+use std::time::Instant;
 use tracing::info;
 
-pub fn execute(config: &Config, request: AnalyzeRequest) -> Result<GraphSnapshot, ServerError> {
+pub fn execute(config: &Config, request: AnalyzeRequest) -> Result<AnalyzeResponse, ServerError> {
     let data = base64::engine::general_purpose::STANDARD
         .decode(&request.data)
         .map_err(|error| ServerError::processor(format!("invalid base64 payload: {}", error)))?;
@@ -32,6 +34,7 @@ pub fn execute(config: &Config, request: AnalyzeRequest) -> Result<GraphSnapshot
         .transpose()?
         .flatten();
     let corpora = normalize_corpora(&request.corpora);
+    let collections = normalize_collections(&request.collections);
 
     match selected_magic {
         Magic::PE => analyze_pe(
@@ -40,6 +43,7 @@ pub fn execute(config: &Config, request: AnalyzeRequest) -> Result<GraphSnapshot
             data,
             selected_magic,
             corpora,
+            collections,
         ),
         Magic::ELF => analyze_elf(
             &mut analysis_config,
@@ -47,6 +51,7 @@ pub fn execute(config: &Config, request: AnalyzeRequest) -> Result<GraphSnapshot
             data,
             selected_magic,
             corpora,
+            collections,
         ),
         Magic::MACHO => analyze_macho(
             &mut analysis_config,
@@ -54,6 +59,7 @@ pub fn execute(config: &Config, request: AnalyzeRequest) -> Result<GraphSnapshot
             data,
             selected_magic,
             corpora,
+            collections,
         ),
         Magic::CODE => analyze_code(
             &mut analysis_config,
@@ -61,6 +67,7 @@ pub fn execute(config: &Config, request: AnalyzeRequest) -> Result<GraphSnapshot
             data,
             selected_magic,
             corpora,
+            collections,
         ),
         Magic::PNG => Err(ServerError::unsupported_media(
             "png inputs do not produce a control-flow graph".to_string(),
@@ -99,9 +106,104 @@ fn normalize_corpora(values: &[String]) -> Vec<String> {
         .collect()
 }
 
+fn normalize_collections(values: &[Collection]) -> BTreeSet<Collection> {
+    if values.is_empty() {
+        Collection::all().iter().copied().collect()
+    } else {
+        values.iter().copied().collect()
+    }
+}
+
 fn digest_hex(data: &[u8]) -> String {
     let digest = digest(&SHA256, data);
     crate::hex::encode(digest.as_ref())
+}
+
+fn selector_value<'a>(
+    value: &'a serde_json::Value,
+    selector: &str,
+) -> Option<&'a serde_json::Value> {
+    let mut current = value;
+    for part in selector.split('.') {
+        if part.is_empty() {
+            return None;
+        }
+        let mut remainder = part;
+        let key_end = remainder.find('[').unwrap_or(remainder.len());
+        if key_end > 0 {
+            current = current.get(&remainder[..key_end])?;
+            remainder = &remainder[key_end..];
+        }
+        while !remainder.is_empty() {
+            let after_open = remainder.strip_prefix('[')?;
+            let close = after_open.find(']')?;
+            let index = after_open[..close].parse::<usize>().ok()?;
+            current = current.get(index)?;
+            remainder = &after_open[close + 1..];
+        }
+    }
+    Some(current)
+}
+
+fn selector_vector(value: &serde_json::Value, selector: &str) -> Option<Vec<f32>> {
+    let vector = selector_value(value, selector)?.as_array()?;
+    vector
+        .iter()
+        .map(|value| value.as_f64().map(|item| item as f32))
+        .collect()
+}
+
+fn selected_vector_selector(config: &Config) -> Option<&'static str> {
+    if config.instructions.embeddings.llvm.enabled
+        || config.blocks.embeddings.llvm.enabled
+        || config.functions.embeddings.llvm.enabled
+    {
+        Some("embeddings.llvm.vector")
+    } else {
+        None
+    }
+}
+
+fn collect_selected_vectors(
+    graph: &Graph,
+    selector: Option<&str>,
+    collections: &BTreeSet<Collection>,
+) -> Result<AnalyzeSelectedVectors, ServerError> {
+    let Some(selector) = selector else {
+        return Ok(AnalyzeSelectedVectors::default());
+    };
+    let mut selected = AnalyzeSelectedVectors::default();
+    if collections.contains(&Collection::Instruction)
+        && graph.config.instructions.embeddings.llvm.enabled
+    {
+        for instruction in graph.instructions() {
+            let value = serde_json::to_value(instruction.process())
+                .map_err(|error| ServerError::processor(error.to_string()))?;
+            if let Some(vector) = selector_vector(&value, selector) {
+                selected.instructions.insert(instruction.address, vector);
+            }
+        }
+    }
+    if collections.contains(&Collection::Block) && graph.config.blocks.embeddings.llvm.enabled {
+        for block in graph.blocks() {
+            let value = serde_json::to_value(block.process())
+                .map_err(|error| ServerError::processor(error.to_string()))?;
+            if let Some(vector) = selector_vector(&value, selector) {
+                selected.blocks.insert(block.address(), vector);
+            }
+        }
+    }
+    if collections.contains(&Collection::Function) && graph.config.functions.embeddings.llvm.enabled
+    {
+        for function in graph.functions() {
+            let value = serde_json::to_value(function.process())
+                .map_err(|error| ServerError::processor(error.to_string()))?;
+            if let Some(vector) = selector_vector(&value, selector) {
+                selected.functions.insert(function.address, vector);
+            }
+        }
+    }
+    Ok(selected)
 }
 
 fn collect_attributes(
@@ -148,25 +250,42 @@ fn finalize_graph(
     data: &[u8],
     _attributes: &Attributes,
     corpora: &[String],
-) -> Result<GraphSnapshot, ServerError> {
-    let embeddings = cfg.config.processors.processor("embeddings");
+    collections: &BTreeSet<Collection>,
+) -> Result<AnalyzeResponse, ServerError> {
     info!(
-        "analyze finalize sha256={} corpora={:?} embeddings_enabled={} graph_enabled={} complete_enabled={}",
+        "analyze finalize sha256={} corpora={:?} function_embeddings_enabled={} embedding_dimensions={} embedding_device={}",
         digest_hex(data),
         corpora,
-        embeddings
-            .map(|processor| processor.enabled)
-            .unwrap_or(false),
-        embeddings
-            .map(|processor| processor.graph.enabled)
-            .unwrap_or(false),
-        embeddings
-            .map(|processor| processor.complete.enabled)
-            .unwrap_or(false),
+        cfg.config.functions.embeddings.llvm.enabled,
+        cfg.config.embeddings.llvm.dimensions,
+        cfg.config.embeddings.llvm.device,
     );
+    let total_started_at = Instant::now();
     cfg.process()
         .map_err(|error| ServerError::processor(error.to_string()))?;
-    Ok(cfg.snapshot())
+    let selector_started_at = Instant::now();
+    let selector = selected_vector_selector(&cfg.config).map(ToString::to_string);
+    let selected = collect_selected_vectors(cfg, selector.as_deref(), collections)?;
+    let selected_elapsed = selector_started_at.elapsed();
+    let snapshot_started_at = Instant::now();
+    let snapshot = cfg.snapshot();
+    let snapshot_elapsed = snapshot_started_at.elapsed();
+    info!(
+        "analyze response build sha256={} selector={:?} selected_counts=in:{} bl:{} fn:{} selected_elapsed_ms={} snapshot_elapsed_ms={} total_elapsed_ms={}",
+        digest_hex(data),
+        selector,
+        selected.instructions.len(),
+        selected.blocks.len(),
+        selected.functions.len(),
+        selected_elapsed.as_millis(),
+        snapshot_elapsed.as_millis(),
+        total_started_at.elapsed().as_millis(),
+    );
+    Ok(AnalyzeResponse {
+        snapshot,
+        selector,
+        selected,
+    })
 }
 
 #[cfg(test)]
@@ -183,6 +302,7 @@ mod tests {
             magic: Some(Magic::CODE.to_string()),
             architecture: Some("amd64".to_string()),
             corpora: vec!["default".to_string()],
+            collections: Vec::new(),
         };
         let json: Value = serde_json::to_value(request).expect("request should serialize");
         assert!(json.get("config").is_none());
@@ -202,7 +322,8 @@ fn analyze_pe(
     data: Vec<u8>,
     magic: Magic,
     corpora: Vec<String>,
-) -> Result<GraphSnapshot, ServerError> {
+    collections: BTreeSet<Collection>,
+) -> Result<AnalyzeResponse, ServerError> {
     let pe = PE::from_bytes(data.clone(), config.clone())
         .map_err(|error| ServerError::processor(format!("failed to parse pe image: {}", error)))?;
     let architecture = requested_architecture.unwrap_or(pe.architecture());
@@ -259,7 +380,7 @@ fn analyze_pe(
     }
 
     let attributes = collect_attributes(&data, architecture, config.clone(), magic);
-    finalize_graph(&mut cfg, &data, &attributes, &corpora)
+    finalize_graph(&mut cfg, &data, &attributes, &corpora, &collections)
 }
 
 fn analyze_elf(
@@ -268,7 +389,8 @@ fn analyze_elf(
     data: Vec<u8>,
     magic: Magic,
     corpora: Vec<String>,
-) -> Result<GraphSnapshot, ServerError> {
+    collections: BTreeSet<Collection>,
+) -> Result<AnalyzeResponse, ServerError> {
     let elf = ELF::from_bytes(data.clone(), config.clone())
         .map_err(|error| ServerError::processor(format!("failed to parse elf image: {}", error)))?;
     let architecture = requested_architecture.unwrap_or(elf.architecture());
@@ -298,7 +420,7 @@ fn analyze_elf(
         .map_err(|error| ServerError::processor(error.to_string()))?;
 
     let attributes = collect_attributes(&data, architecture, config.clone(), magic);
-    finalize_graph(&mut cfg, &data, &attributes, &corpora)
+    finalize_graph(&mut cfg, &data, &attributes, &corpora, &collections)
 }
 
 fn analyze_macho(
@@ -307,7 +429,8 @@ fn analyze_macho(
     data: Vec<u8>,
     magic: Magic,
     corpora: Vec<String>,
-) -> Result<GraphSnapshot, ServerError> {
+    collections: BTreeSet<Collection>,
+) -> Result<AnalyzeResponse, ServerError> {
     let macho = MACHO::from_bytes(data.clone(), config.clone()).map_err(|error| {
         ServerError::processor(format!("failed to parse macho image: {}", error))
     })?;
@@ -383,7 +506,7 @@ fn analyze_macho(
         ServerError::processor("requested macho architecture not found".to_string())
     })?;
     let attributes = collect_attributes(&data, selected_architecture, config.clone(), magic);
-    finalize_graph(&mut graph, &data, &attributes, &corpora)
+    finalize_graph(&mut graph, &data, &attributes, &corpora, &collections)
 }
 
 fn analyze_code(
@@ -392,7 +515,8 @@ fn analyze_code(
     data: Vec<u8>,
     magic: Magic,
     corpora: Vec<String>,
-) -> Result<GraphSnapshot, ServerError> {
+    collections: BTreeSet<Collection>,
+) -> Result<AnalyzeResponse, ServerError> {
     let architecture = requested_architecture.ok_or_else(|| {
         ServerError::processor("architecture is required for code analysis".to_string())
     })?;
@@ -443,5 +567,5 @@ fn analyze_code(
     }
 
     let attributes = collect_attributes(&data, architecture, config.clone(), magic);
-    finalize_graph(&mut cfg, &data, &attributes, &corpora)
+    finalize_graph(&mut cfg, &data, &attributes, &corpora, &collections)
 }

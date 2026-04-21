@@ -12,15 +12,8 @@ pub use lifter::Lifter;
 pub use optimizers::Optimizers;
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct LlvmNormalizedJson {
-    pub text: String,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
 pub struct LlvmJson {
     pub text: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub normalized: Option<LlvmNormalizedJson>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

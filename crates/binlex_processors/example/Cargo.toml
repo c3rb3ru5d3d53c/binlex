@@ -1,0 +1,17 @@
+[package]
+name = "binlex-processor-example"
+version.workspace = true
+edition = "2024"
+
+[lib]
+name = "binlex_processor_example"
+path = "src/lib.rs"
+
+[[bin]]
+name = "binlex-processor-example"
+path = "src/main.rs"
+
+[dependencies]
+binlex = { path = "../../.." }
+serde = { version = "1.0.217", features = ["derive"] }
+serde_json = "1.0.137"

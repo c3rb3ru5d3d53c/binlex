@@ -14,6 +14,7 @@ use axum::routing::{get, post};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::net::SocketAddr;
+use std::time::Instant;
 use tracing::info;
 use utoipa::openapi::InfoBuilder;
 use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
@@ -227,6 +228,7 @@ async fn analyze(
 
     let request: AnalyzeRequest = decode_request(&headers, &body)
         .map_err(|error| error.with_request_id(request_id.to_string()))?;
+    let analyze_started_at = Instant::now();
     let response = match binlex::server::analyze::execute(&state.config, request) {
         Ok(response) => response,
         Err(error) => {
@@ -241,6 +243,17 @@ async fn analyze(
             return Err(error.with_request_id(request_id.to_string()));
         }
     };
+    state.log(format!(
+        "request analyze response ready request_id={} remote_addr={} remote_port={} selected_counts=in:{} bl:{} fn:{} elapsed_ms={}",
+        request_id,
+        remote.ip(),
+        remote.port(),
+        response.selected.instructions.len(),
+        response.selected.blocks.len(),
+        response.selected.functions.len(),
+        analyze_started_at.elapsed().as_millis(),
+    ));
+    let encode_started_at = Instant::now();
     let encoded = match encode_response(state.config.processors.compression, &headers, &response) {
         Ok(response) => response,
         Err(error) => {
@@ -256,10 +269,12 @@ async fn analyze(
         }
     };
     state.log(format!(
-        "request complete route=/api/v1/analyze request_id={} remote_addr={} remote_port={} status=200",
+        "request complete route=/api/v1/analyze request_id={} remote_addr={} remote_port={} status=200 analyze_elapsed_ms={} encode_elapsed_ms={}",
         request_id,
         remote.ip(),
-        remote.port()
+        remote.port(),
+        analyze_started_at.elapsed().as_millis(),
+        encode_started_at.elapsed().as_millis(),
     ));
     Ok(encoded)
 }
@@ -546,10 +561,21 @@ fn encode_response<T: serde::Serialize>(
     value: &T,
 ) -> Result<Response, ServerError> {
     if compression && accepts_lz4(headers) {
+        let serialize_started_at = Instant::now();
         let json = serde_json::to_vec(value).map_err(ServerError::json)?;
+        let serialize_elapsed = serialize_started_at.elapsed();
+        let compress_started_at = Instant::now();
         let compressed = lz4::block::compress(&json, None, false).map_err(|error| {
             ServerError::processor(format!("response compression failed: {}", error))
         })?;
+        let compress_elapsed = compress_started_at.elapsed();
+        info!(
+            "encode_response compression=true json_bytes={} compressed_bytes={} serialize_elapsed_ms={} compress_elapsed_ms={}",
+            json.len(),
+            compressed.len(),
+            serialize_elapsed.as_millis(),
+            compress_elapsed.as_millis(),
+        );
         let mut payload = Vec::with_capacity(4 + compressed.len());
         payload.extend_from_slice(&(json.len() as u32).to_le_bytes());
         payload.extend_from_slice(&compressed);
@@ -564,7 +590,12 @@ fn encode_response<T: serde::Serialize>(
         );
         Ok((StatusCode::OK, response_headers, payload).into_response())
     } else {
+        let serialize_started_at = Instant::now();
         let value = serde_json::to_value(value).map_err(ServerError::json)?;
+        info!(
+            "encode_response compression=false serialize_elapsed_ms={}",
+            serialize_started_at.elapsed().as_millis(),
+        );
         Ok((StatusCode::OK, Json(value)).into_response())
     }
 }

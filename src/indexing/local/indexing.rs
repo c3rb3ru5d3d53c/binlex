@@ -421,6 +421,21 @@ impl LocalIndex {
         attributes: &[Attribute],
         username: &str,
     ) -> Result<(), Error> {
+        self.block_json_many_as_with_markov(
+            corpora, block, vector, sha256, None, attributes, username,
+        )
+    }
+
+    pub fn block_json_many_as_with_markov(
+        &self,
+        corpora: &[String],
+        block: &BlockJson,
+        vector: &[f32],
+        sha256: &str,
+        markov: Option<f64>,
+        attributes: &[Attribute],
+        username: &str,
+    ) -> Result<(), Error> {
         let json =
             serde_json::to_value(block).map_err(|error| Error::Serialization(error.to_string()))?;
         self.index_many(
@@ -438,7 +453,7 @@ impl LocalIndex {
                 average_instructions_per_block: None,
                 number_of_instructions: Some(block.number_of_instructions as u64),
                 number_of_blocks: None,
-                markov: None,
+                markov,
                 entropy: block.entropy,
                 chromosome_entropy: None,
                 contiguous: Some(block.contiguous),

@@ -177,10 +177,7 @@ fn scalar_fp_semantics_match_unicorn_transitions() {
             "cvtdq2pd xmm0, xmm1",
             vec![0xf3, 0x0f, 0xe6, 0xc1],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Xmm0, 0),
-                    (I386Register::Xmm1, int_pairs),
-                ],
+                registers: vec![(I386Register::Xmm0, 0), (I386Register::Xmm1, int_pairs)],
                 eflags: 1 << 1,
                 memory: vec![],
             },

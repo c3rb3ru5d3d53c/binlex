@@ -32,57 +32,18 @@ fn build_single_return_graph() -> Graph {
 fn graph_options_enable_functions_and_blocks() {
     let options = <EmbeddingsProcessor as GraphProcessor>::on_graph_options();
     assert!(!options.instructions);
-    assert!(options.blocks);
-    assert!(options.functions);
+    assert!(!options.blocks);
+    assert!(!options.functions);
 }
 
 #[test]
 fn execute_returns_function_vectors() {
+    let graph = build_single_return_graph();
     let request: EmbeddingsRequest = serde_json::from_value(serde_json::json!({
         "dimensions": 8,
         "device": "cpu",
         "threads": 1,
-        "instructions": [],
-        "blocks": [],
-        "functions": [{
-            "address": 0x1000u64,
-            "data": {
-                "type": "function",
-                "address": 0x1000u64,
-                "architecture": "amd64",
-                "blocks": [0x1000u64],
-                "number_of_instructions": 1,
-                "number_of_blocks": 1,
-                "cyclomatic_complexity": 0,
-                "average_instructions_per_block": 1.0,
-                "size": 1,
-                "bytes": "c3",
-                "contiguous": true,
-                "cfg_blocks": [{
-                    "address": 0x1000u64,
-                    "chromosome": {
-                        "pattern": "c3",
-                        "mask": "00",
-                        "entropy": 0.0,
-                        "vector": [3]
-                    },
-                    "entropy": 0.0,
-                    "size": 1,
-                    "edges": 0,
-                    "number_of_instructions": 1,
-                    "call_count": 0,
-                    "direct_call_count": 0,
-                    "indirect_call_count": 0,
-                    "conditional": false,
-                    "is_return": true,
-                    "is_trap": false,
-                    "contiguous": true,
-                    "next": null,
-                    "to": [],
-                    "blocks": []
-                }]
-            }
-        }]
+        "graph": graph.snapshot()
     }))
     .expect("request should deserialize");
 

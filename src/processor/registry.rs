@@ -203,7 +203,7 @@ static REGISTRATIONS: Lazy<Mutex<HashMap<Option<String>, Vec<ProcessorRegistrati
     Lazy::new(|| Mutex::new(HashMap::new()));
 
 fn is_supported_external_processor(registration: &ProcessorRegistration) -> bool {
-    registration.name != "vex"
+    registration.name != "vex" && registration.name != "embeddings"
 }
 
 fn config_key(configured_directory: Option<&str>) -> Option<String> {
@@ -567,7 +567,10 @@ mod tests {
     #[test]
     fn vex_processor_is_no_longer_supported_externally() {
         assert!(!is_supported_external_processor(&registration("vex")));
-        assert!(is_supported_external_processor(&registration("embeddings")));
+        assert!(!is_supported_external_processor(&registration(
+            "embeddings"
+        )));
+        assert!(is_supported_external_processor(&registration("example")));
     }
 }
 

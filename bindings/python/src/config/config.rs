@@ -399,45 +399,6 @@ impl ConfigEntityLifterLLVM {
             _ => {}
         }
     }
-
-    #[getter]
-    pub fn get_normalized(&self) -> ConfigEntityLifterLLVMNormalized {
-        ConfigEntityLifterLLVMNormalized {
-            inner: Arc::clone(&self.inner),
-            entity: self.entity,
-        }
-    }
-}
-
-#[pyclass]
-pub struct ConfigEntityLifterLLVMNormalized {
-    pub inner: Arc<Mutex<InnerConfig>>,
-    pub entity: &'static str,
-}
-
-#[pymethods]
-impl ConfigEntityLifterLLVMNormalized {
-    #[getter]
-    pub fn get_enabled(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
-        match self.entity {
-            "instructions" => inner.instructions.lifters.llvm.normalized.enabled,
-            "blocks" => inner.blocks.lifters.llvm.normalized.enabled,
-            "functions" => inner.functions.lifters.llvm.normalized.enabled,
-            _ => false,
-        }
-    }
-
-    #[setter]
-    pub fn set_enabled(&mut self, value: bool) {
-        let mut inner = self.inner.lock().unwrap();
-        match self.entity {
-            "instructions" => inner.instructions.lifters.llvm.normalized.enabled = value,
-            "blocks" => inner.blocks.lifters.llvm.normalized.enabled = value,
-            "functions" => inner.functions.lifters.llvm.normalized.enabled = value,
-            _ => {}
-        }
-    }
 }
 
 #[pyclass]
@@ -466,6 +427,54 @@ impl ConfigEntityLifterVex {
             "instructions" => inner.instructions.lifters.vex.enabled = value,
             "blocks" => inner.blocks.lifters.vex.enabled = value,
             "functions" => inner.functions.lifters.vex.enabled = value,
+            _ => {}
+        }
+    }
+}
+
+#[pyclass]
+pub struct ConfigEntityEmbeddings {
+    pub inner: Arc<Mutex<InnerConfig>>,
+    pub entity: &'static str,
+}
+
+#[pymethods]
+impl ConfigEntityEmbeddings {
+    #[getter]
+    pub fn get_llvm(&self) -> ConfigEntityEmbeddingsLLVM {
+        ConfigEntityEmbeddingsLLVM {
+            inner: Arc::clone(&self.inner),
+            entity: self.entity,
+        }
+    }
+}
+
+#[pyclass]
+pub struct ConfigEntityEmbeddingsLLVM {
+    pub inner: Arc<Mutex<InnerConfig>>,
+    pub entity: &'static str,
+}
+
+#[pymethods]
+impl ConfigEntityEmbeddingsLLVM {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        match self.entity {
+            "instructions" => inner.instructions.embeddings.llvm.enabled,
+            "blocks" => inner.blocks.embeddings.llvm.enabled,
+            "functions" => inner.functions.embeddings.llvm.enabled,
+            _ => false,
+        }
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        match self.entity {
+            "instructions" => inner.instructions.embeddings.llvm.enabled = value,
+            "blocks" => inner.blocks.embeddings.llvm.enabled = value,
+            "functions" => inner.functions.embeddings.llvm.enabled = value,
             _ => {}
         }
     }
@@ -528,6 +537,14 @@ impl ConfigFunctions {
     #[getter]
     pub fn get_lifters(&self) -> ConfigEntityLifters {
         ConfigEntityLifters {
+            inner: Arc::clone(&self.inner),
+            entity: "functions",
+        }
+    }
+
+    #[getter]
+    pub fn get_embeddings(&self) -> ConfigEntityEmbeddings {
+        ConfigEntityEmbeddings {
             inner: Arc::clone(&self.inner),
             entity: "functions",
         }
@@ -826,6 +843,14 @@ impl ConfigBlocks {
             entity: "blocks",
         }
     }
+
+    #[getter]
+    pub fn get_embeddings(&self) -> ConfigEntityEmbeddings {
+        ConfigEntityEmbeddings {
+            inner: Arc::clone(&self.inner),
+            entity: "blocks",
+        }
+    }
 }
 
 #[pyclass]
@@ -850,6 +875,14 @@ impl ConfigInstructions {
     #[getter]
     pub fn get_lifters(&self) -> ConfigEntityLifters {
         ConfigEntityLifters {
+            inner: Arc::clone(&self.inner),
+            entity: "instructions",
+        }
+    }
+
+    #[getter]
+    pub fn get_embeddings(&self) -> ConfigEntityEmbeddings {
+        ConfigEntityEmbeddings {
             inner: Arc::clone(&self.inner),
             entity: "instructions",
         }
@@ -1185,137 +1218,27 @@ pub struct ConfigImaging {
 #[pymethods]
 impl ConfigImaging {
     #[getter]
-    pub fn get_sha256(&self) -> ConfigImagingHashingSHA256 {
-        ConfigImagingHashingSHA256 {
+    pub fn get_tlsh(&self) -> ConfigImagingTLSH {
+        ConfigImagingTLSH {
             inner: Arc::clone(&self.inner),
         }
     }
 
     #[getter]
-    pub fn get_tlsh(&self) -> ConfigImagingHashingTLSH {
-        ConfigImagingHashingTLSH {
-            inner: Arc::clone(&self.inner),
-        }
-    }
-
-    #[getter]
-    pub fn get_minhash(&self) -> ConfigImagingHashingMinhash {
-        ConfigImagingHashingMinhash {
-            inner: Arc::clone(&self.inner),
-        }
-    }
-
-    #[getter]
-    pub fn get_ahash(&self) -> ConfigImagingHashingAHash {
-        ConfigImagingHashingAHash {
-            inner: Arc::clone(&self.inner),
-        }
-    }
-
-    #[getter]
-    pub fn get_dhash(&self) -> ConfigImagingHashingDHash {
-        ConfigImagingHashingDHash {
-            inner: Arc::clone(&self.inner),
-        }
-    }
-
-    #[getter]
-    pub fn get_phash(&self) -> ConfigImagingHashingPHash {
-        ConfigImagingHashingPHash {
+    pub fn get_minhash(&self) -> ConfigImagingMinhash {
+        ConfigImagingMinhash {
             inner: Arc::clone(&self.inner),
         }
     }
 }
 
 #[pyclass]
-pub struct ConfigImagingHashing {
+pub struct ConfigImagingTLSH {
     pub inner: Arc<Mutex<InnerConfig>>,
 }
 
 #[pymethods]
-impl ConfigImagingHashing {
-    #[getter]
-    pub fn get_sha256(&self) -> ConfigImagingHashingSHA256 {
-        ConfigImagingHashingSHA256 {
-            inner: Arc::clone(&self.inner),
-        }
-    }
-
-    #[getter]
-    pub fn get_tlsh(&self) -> ConfigImagingHashingTLSH {
-        ConfigImagingHashingTLSH {
-            inner: Arc::clone(&self.inner),
-        }
-    }
-
-    #[getter]
-    pub fn get_minhash(&self) -> ConfigImagingHashingMinhash {
-        ConfigImagingHashingMinhash {
-            inner: Arc::clone(&self.inner),
-        }
-    }
-
-    #[getter]
-    pub fn get_ahash(&self) -> ConfigImagingHashingAHash {
-        ConfigImagingHashingAHash {
-            inner: Arc::clone(&self.inner),
-        }
-    }
-
-    #[getter]
-    pub fn get_dhash(&self) -> ConfigImagingHashingDHash {
-        ConfigImagingHashingDHash {
-            inner: Arc::clone(&self.inner),
-        }
-    }
-
-    #[getter]
-    pub fn get_phash(&self) -> ConfigImagingHashingPHash {
-        ConfigImagingHashingPHash {
-            inner: Arc::clone(&self.inner),
-        }
-    }
-}
-
-#[pyclass]
-pub struct ConfigImagingHashingSHA256 {
-    pub inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigImagingHashingSHA256 {
-    #[getter]
-    pub fn get_enabled(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
-        inner.imaging.sha256.enabled
-    }
-
-    #[setter]
-    pub fn set_enabled(&mut self, value: bool) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.imaging.sha256.enabled = value;
-    }
-}
-
-#[pyclass]
-pub struct ConfigImagingHashingTLSH {
-    pub inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigImagingHashingTLSH {
-    #[getter]
-    pub fn get_enabled(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
-        inner.imaging.tlsh.enabled
-    }
-
-    #[setter]
-    pub fn set_enabled(&mut self, value: bool) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.imaging.tlsh.enabled = value;
-    }
-
+impl ConfigImagingTLSH {
     #[getter]
     pub fn get_minimum_byte_size(&self) -> usize {
         let inner = self.inner.lock().unwrap();
@@ -1330,24 +1253,12 @@ impl ConfigImagingHashingTLSH {
 }
 
 #[pyclass]
-pub struct ConfigImagingHashingMinhash {
+pub struct ConfigImagingMinhash {
     pub inner: Arc<Mutex<InnerConfig>>,
 }
 
 #[pymethods]
-impl ConfigImagingHashingMinhash {
-    #[getter]
-    pub fn get_enabled(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
-        inner.imaging.minhash.enabled
-    }
-
-    #[setter]
-    pub fn set_enabled(&mut self, value: bool) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.imaging.minhash.enabled = value;
-    }
-
+impl ConfigImagingMinhash {
     #[getter]
     pub fn get_number_of_hashes(&self) -> usize {
         let inner = self.inner.lock().unwrap();
@@ -1406,66 +1317,6 @@ impl ConfigImagingHashingMinhash {
     pub fn set_seed(&mut self, value: u64) {
         let mut inner = self.inner.lock().unwrap();
         inner.imaging.minhash.seed = value;
-    }
-}
-
-#[pyclass]
-pub struct ConfigImagingHashingAHash {
-    pub inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigImagingHashingAHash {
-    #[getter]
-    pub fn get_enabled(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
-        inner.imaging.ahash.enabled
-    }
-
-    #[setter]
-    pub fn set_enabled(&mut self, value: bool) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.imaging.ahash.enabled = value;
-    }
-}
-
-#[pyclass]
-pub struct ConfigImagingHashingDHash {
-    pub inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigImagingHashingDHash {
-    #[getter]
-    pub fn get_enabled(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
-        inner.imaging.dhash.enabled
-    }
-
-    #[setter]
-    pub fn set_enabled(&mut self, value: bool) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.imaging.dhash.enabled = value;
-    }
-}
-
-#[pyclass]
-pub struct ConfigImagingHashingPHash {
-    pub inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigImagingHashingPHash {
-    #[getter]
-    pub fn get_enabled(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
-        inner.imaging.phash.enabled
-    }
-
-    #[setter]
-    pub fn set_enabled(&mut self, value: bool) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.imaging.phash.enabled = value;
     }
 }
 
@@ -1543,6 +1394,53 @@ impl ConfigLiftersVex {
     }
 }
 
+#[pyclass]
+pub struct ConfigEmbeddings {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigEmbeddings {
+    #[getter]
+    pub fn get_llvm(&self) -> ConfigEmbeddingsLLVM {
+        ConfigEmbeddingsLLVM {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+}
+
+#[pyclass]
+pub struct ConfigEmbeddingsLLVM {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigEmbeddingsLLVM {
+    #[getter]
+    pub fn get_dimensions(&self) -> usize {
+        let inner = self.inner.lock().unwrap();
+        inner.embeddings.llvm.dimensions
+    }
+
+    #[setter]
+    pub fn set_dimensions(&mut self, value: usize) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.embeddings.llvm.dimensions = value.max(1);
+    }
+
+    #[getter]
+    pub fn get_device(&self) -> String {
+        let inner = self.inner.lock().unwrap();
+        inner.embeddings.llvm.device.clone()
+    }
+
+    #[setter]
+    pub fn set_device(&mut self, value: String) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.embeddings.llvm.device = value;
+    }
+}
+
 /// Top-level mutable configuration object for binlex analysis behavior.
 #[pyclass]
 pub struct Config {
@@ -1602,6 +1500,14 @@ impl Config {
     /// Return the processor execution configuration group.
     pub fn get_processors(&self) -> PyResult<ConfigProcessors> {
         Ok(ConfigProcessors {
+            inner: Arc::clone(&self.inner),
+        })
+    }
+
+    #[getter]
+    /// Return the embeddings configuration group.
+    pub fn get_embeddings(&self) -> PyResult<ConfigEmbeddings> {
+        Ok(ConfigEmbeddings {
             inner: Arc::clone(&self.inner),
         })
     }
@@ -2459,13 +2365,19 @@ impl ConfigProcessors {
 pub fn register_config(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Config>()?;
     m.add_class::<ConfigSemantics>()?;
+    m.add_class::<ConfigEntityEmbeddings>()?;
+    m.add_class::<ConfigEntityEmbeddingsLLVM>()?;
     m.add_class::<ConfigEntityLifters>()?;
     m.add_class::<ConfigEntityLifterLLVM>()?;
-    m.add_class::<ConfigEntityLifterLLVMNormalized>()?;
     m.add_class::<ConfigEntityLifterVex>()?;
     m.add_class::<ConfigLifters>()?;
     m.add_class::<ConfigLiftersLLVM>()?;
     m.add_class::<ConfigLiftersVex>()?;
+    m.add_class::<ConfigEmbeddings>()?;
+    m.add_class::<ConfigEmbeddingsLLVM>()?;
+    m.add_class::<ConfigFunctions>()?;
+    m.add_class::<ConfigBlocks>()?;
+    m.add_class::<ConfigInstructions>()?;
     m.add_class::<ConfigProcessorTarget>()?;
     m.add_class::<ConfigProcessorTransports>()?;
     m.add_class::<ConfigProcessorTransport>()?;

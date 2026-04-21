@@ -144,7 +144,7 @@ jobs:
           pacman-key --init
           pacman-key --populate archlinux
           pacman -Syu --noconfirm
-          pacman -S --noconfirm --needed base-devel pkgconf openssl zstd lz4 make automake autoconf libtool clang llvm curl git python rust protobuf
+          pacman -S --noconfirm --needed base-devel pkgconf openssl zstd lz4 make automake autoconf libtool cmake clang llvm curl git python rust protobuf
           id -u builder >/dev/null 2>&1 || useradd --create-home --shell /bin/bash builder
 
       - name: Configure LLVM Environment (Arch Linux)
@@ -342,7 +342,6 @@ jobs:
           copy target\release\binlex-mcp.exe dist\
           copy target\release\binlex-server.exe dist\
           copy target\release\binlex-web.exe dist\
-          copy target\release\binlex-processor-embeddings.exe dist\
           copy target\release\binlex-yara.exe dist\
           copy target\release\binlex-symbols.exe dist\
           copy target\release\binlex-image.exe dist\
@@ -355,7 +354,6 @@ jobs:
           cp target/release/binlex-mcp dist/
           cp target/release/binlex-server dist/
           cp target/release/binlex-web dist/
-          cp target/release/binlex-processor-embeddings dist/
           cp target/release/binlex-yara dist/
           cp target/release/binlex-symbols dist/
           cp target/release/binlex-image dist/
@@ -368,7 +366,6 @@ jobs:
           cp target/release/binlex-mcp dist/
           cp target/release/binlex-server dist/
           cp target/release/binlex-web dist/
-          cp target/release/binlex-processor-embeddings dist/
           cp target/release/binlex-yara dist/
           cp target/release/binlex-symbols dist/
           cp target/release/binlex-image dist/
@@ -384,7 +381,6 @@ jobs:
           cp /tmp/binlex-build/target/release/binlex-mcp dist/
           cp /tmp/binlex-build/target/release/binlex-server dist/
           cp /tmp/binlex-build/target/release/binlex-web dist/
-          cp /tmp/binlex-build/target/release/binlex-processor-embeddings dist/
           cp /tmp/binlex-build/target/release/binlex-yara dist/
           cp /tmp/binlex-build/target/release/binlex-symbols dist/
           cp /tmp/binlex-build/target/release/binlex-image dist/

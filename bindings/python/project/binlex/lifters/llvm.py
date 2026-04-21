@@ -34,16 +34,19 @@ class Lifter:
         self._inner = _LifterBinding(config) if _inner is None else _inner
 
     def lift_instruction(self, instruction):
-        self._inner.lift_instruction(instruction._inner)
-        return self
+        if self._inner.lift_instruction(instruction._inner):
+            return self
+        return None
 
     def lift_block(self, block):
-        self._inner.lift_block(block._inner)
-        return self
+        if self._inner.lift_block(block._inner):
+            return self
+        return None
 
     def lift_function(self, function):
-        self._inner.lift_function(function._inner)
-        return self
+        if self._inner.lift_function(function._inner):
+            return self
+        return None
 
     def text(self):
         return self._inner.text()
@@ -55,28 +58,49 @@ class Lifter:
         return bytes(self._inner.bitcode())
 
     def normalized(self):
-        return self.__class__(self._config, _inner=self._inner.normalized())
+        inner = self._inner.normalized()
+        if inner is None:
+            return None
+        return self.__class__(self._config, _inner=inner)
 
     def optimizers(self):
         return Optimizers(self)
 
     def mem2reg(self):
-        return self.__class__(self._config, _inner=self._inner.mem2reg())
+        inner = self._inner.mem2reg()
+        if inner is None:
+            return None
+        return self.__class__(self._config, _inner=inner)
 
     def instcombine(self):
-        return self.__class__(self._config, _inner=self._inner.instcombine())
+        inner = self._inner.instcombine()
+        if inner is None:
+            return None
+        return self.__class__(self._config, _inner=inner)
 
     def cfg(self):
-        return self.__class__(self._config, _inner=self._inner.cfg())
+        inner = self._inner.cfg()
+        if inner is None:
+            return None
+        return self.__class__(self._config, _inner=inner)
 
     def gvn(self):
-        return self.__class__(self._config, _inner=self._inner.gvn())
+        inner = self._inner.gvn()
+        if inner is None:
+            return None
+        return self.__class__(self._config, _inner=inner)
 
     def sroa(self):
-        return self.__class__(self._config, _inner=self._inner.sroa())
+        inner = self._inner.sroa()
+        if inner is None:
+            return None
+        return self.__class__(self._config, _inner=inner)
 
     def dce(self):
-        return self.__class__(self._config, _inner=self._inner.dce())
+        inner = self._inner.dce()
+        if inner is None:
+            return None
+        return self.__class__(self._config, _inner=inner)
 
     def verify(self):
         return self._inner.verify()
@@ -95,46 +119,63 @@ class Optimizers:
         return self
 
     def mem2reg(self):
-        self._lifter = self._lifter.mem2reg()
+        if self._lifter is not None:
+            self._lifter = self._lifter.mem2reg()
         return self
 
     def instcombine(self):
-        self._lifter = self._lifter.instcombine()
+        if self._lifter is not None:
+            self._lifter = self._lifter.instcombine()
         return self
 
     def cfg(self):
-        self._lifter = self._lifter.cfg()
+        if self._lifter is not None:
+            self._lifter = self._lifter.cfg()
         return self
 
     def gvn(self):
-        self._lifter = self._lifter.gvn()
+        if self._lifter is not None:
+            self._lifter = self._lifter.gvn()
         return self
 
     def sroa(self):
-        self._lifter = self._lifter.sroa()
+        if self._lifter is not None:
+            self._lifter = self._lifter.sroa()
         return self
 
     def dce(self):
-        self._lifter = self._lifter.dce()
+        if self._lifter is not None:
+            self._lifter = self._lifter.dce()
         return self
 
     def text(self):
+        if self._lifter is None:
+            return None
         return self._lifter.text()
 
     def print(self):
+        if self._lifter is None:
+            return None
         return self._lifter.print()
 
     def bitcode(self):
+        if self._lifter is None:
+            return None
         return self._lifter.bitcode()
 
     def normalized(self):
+        if self._lifter is None:
+            return None
         return self._lifter.normalized()
 
     def verify(self):
+        if self._lifter is None:
+            return None
         return self._lifter.verify()
 
     def __str__(self):
-        return self.text()
+        text = self.text()
+        return "" if text is None else text
 
 
 __all__ = ["Lifter", "Optimizers"]

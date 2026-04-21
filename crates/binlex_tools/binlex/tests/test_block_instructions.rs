@@ -1,5 +1,6 @@
 #![cfg(not(target_os = "windows"))]
 
+use binlex::Config;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -95,4 +96,62 @@ fn test_block_instructions_are_emitted_as_addresses() {
 
     let _ = fs::remove_file(input_path);
     let _ = fs::remove_file(output_path);
+}
+
+#[test]
+fn test_function_embeddings_are_emitted_from_config() {
+    let binlex = binlex_binary();
+    let input_path = temp_path("input-embeddings.bin");
+    let output_path = temp_path("output-embeddings.jsonl");
+    let config_path = temp_path("binlex-embeddings.toml");
+
+    fs::write(&input_path, [0xC3]).expect("input file should be written");
+    let mut config = Config::new();
+    config.embeddings.llvm.device = "cpu".to_string();
+    config.functions.embeddings.llvm.enabled = true;
+    fs::write(
+        &config_path,
+        toml::to_string(&config).expect("config should serialize"),
+    )
+    .expect("config file should be written");
+
+    let status = Command::new(&binlex)
+        .args([
+            "--input",
+            input_path.to_string_lossy().as_ref(),
+            "--output",
+            output_path.to_string_lossy().as_ref(),
+            "--config",
+            config_path.to_string_lossy().as_ref(),
+            "--architecture",
+            "amd64",
+            "--minimal",
+        ])
+        .status()
+        .expect("binlex should run");
+
+    assert!(status.success(), "binlex should exit successfully");
+
+    let output = fs::read_to_string(&output_path).expect("output should be readable");
+    let function = output
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("line should be json"))
+        .find(|value| value.get("type").and_then(|value| value.as_str()) == Some("function"))
+        .expect("function output should exist");
+
+    let vector = function
+        .get("embeddings")
+        .and_then(|value| value.get("llvm"))
+        .and_then(|value| value.get("vector"))
+        .and_then(|value| value.as_array())
+        .expect("function embeddings.llvm.vector should exist");
+
+    assert!(
+        !vector.is_empty(),
+        "function embeddings vector should not be empty"
+    );
+
+    let _ = fs::remove_file(input_path);
+    let _ = fs::remove_file(output_path);
+    let _ = fs::remove_file(config_path);
 }

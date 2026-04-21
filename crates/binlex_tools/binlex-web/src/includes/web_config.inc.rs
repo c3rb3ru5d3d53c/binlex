@@ -485,7 +485,7 @@ fn default_batch_sample_download_max_total_bytes() -> usize {
 }
 
 fn default_vector_selector() -> String {
-    "processors.embeddings.vector".to_string()
+    "embeddings.llvm.vector".to_string()
 }
 
 fn default_download_json_max_bytes() -> usize {

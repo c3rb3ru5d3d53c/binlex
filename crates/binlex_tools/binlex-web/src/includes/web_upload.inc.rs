@@ -121,6 +121,99 @@ async fn upload_status(
         })?;
     Ok(Json(UploadStatusResponse::from(record)))
 }
+const UPLOAD_INDEX_COMMIT_BATCH_SIZE: usize = 512;
+
+fn index_selected_vectors(
+    index: &LocalIndex,
+    graph: &Graph,
+    selected: &binlex::server::dto::AnalyzeSelectedVectors,
+    corpora: &[String],
+    sha256: &str,
+    collections: &[Collection],
+    username: &str,
+) -> Result<usize, AppError> {
+    let mut indexed = 0usize;
+    let mut staged_since_commit = 0usize;
+    for collection in collections {
+        match collection {
+            Collection::Function => {
+                for function in graph.functions() {
+                    let Some(vector) = selected.functions.get(&function.address) else {
+                        continue;
+                    };
+                    let json = function.process();
+                    index
+                        .function_json_many_as(corpora, &json, vector, sha256, &[], username)
+                        .map_err(|error| AppError::new(error.to_string()))?;
+                    indexed += 1;
+                    staged_since_commit += 1;
+                    if staged_since_commit >= UPLOAD_INDEX_COMMIT_BATCH_SIZE {
+                        index
+                            .commit()
+                            .map_err(|error| AppError::new(error.to_string()))?;
+                        staged_since_commit = 0;
+                    }
+                }
+            }
+            Collection::Block => {
+                for function in graph.functions() {
+                    let function_markov = function.markov();
+                    for block in function.blocks() {
+                        let Some(vector) = selected.blocks.get(&block.address()) else {
+                            continue;
+                        };
+                        let json = block.process();
+                        index
+                            .block_json_many_as_with_markov(
+                                corpora,
+                                &json,
+                                vector,
+                                sha256,
+                                function_markov.get(&block.address()).copied(),
+                                &[],
+                                username,
+                            )
+                            .map_err(|error| AppError::new(error.to_string()))?;
+                        indexed += 1;
+                        staged_since_commit += 1;
+                        if staged_since_commit >= UPLOAD_INDEX_COMMIT_BATCH_SIZE {
+                            index
+                                .commit()
+                                .map_err(|error| AppError::new(error.to_string()))?;
+                            staged_since_commit = 0;
+                        }
+                    }
+                }
+            }
+            Collection::Instruction => {
+                for instruction in graph.instructions() {
+                    let Some(vector) = selected.instructions.get(&instruction.address) else {
+                        continue;
+                    };
+                    let json = instruction.process();
+                    index
+                        .instruction_json_many_as(corpora, &json, vector, sha256, &[], username)
+                        .map_err(|error| AppError::new(error.to_string()))?;
+                    indexed += 1;
+                    staged_since_commit += 1;
+                    if staged_since_commit >= UPLOAD_INDEX_COMMIT_BATCH_SIZE {
+                        index
+                            .commit()
+                            .map_err(|error| AppError::new(error.to_string()))?;
+                        staged_since_commit = 0;
+                    }
+                }
+            }
+        }
+    }
+    if staged_since_commit > 0 {
+        index
+            .commit()
+            .map_err(|error| AppError::new(error.to_string()))?;
+    }
+    Ok(indexed)
+}
+
 fn ingest_upload(
     state: &AppState,
     form: UploadForm,
@@ -258,6 +351,7 @@ fn ingest_upload(
     let username_for_background = username.to_string();
     let selector = configured_selector(state);
     let collections = default_collections(&state.ui.index.local);
+    let analysis_config = state.analysis_config.clone();
     let spawn_result = thread::Builder::new()
         .name("binlex-web-upload-analyze".to_string())
         .spawn(move || {
@@ -279,14 +373,50 @@ fn ingest_upload(
                 request_id_for_background, sha256_for_background, corpora_for_background, tags_for_background
             );
             let analyze_started_at = std::time::Instant::now();
-            match client.analyze_bytes_with_corpora_and_request_id(
+            match client.analyze_bytes_response_with_corpora_collections_and_request_id(
                 &bytes,
                 magic_override,
                 architecture_override,
                 &corpora_for_background,
+                &collections,
                 Some(&request_id_for_background),
             ) {
-                Ok(graph) => {
+                Ok(response) => {
+                    let response_selector = response.selector.clone();
+                    let selected_vectors = response.selected;
+                    let snapshot = response.snapshot;
+                    let configured_selector = selector.clone();
+                    let selector = response_selector
+                        .clone()
+                        .unwrap_or_else(|| configured_selector.clone());
+                    if response_selector.as_deref() != Some(configured_selector.as_str()) {
+                        warn!(
+                            "upload selector mismatch request_id={} sha256={} configured_selector={} response_selector={:?}",
+                            request_id_for_background,
+                            sha256_for_background,
+                            configured_selector,
+                            response_selector
+                        );
+                    }
+                    let graph = match Graph::from_snapshot(snapshot, analysis_config.clone()) {
+                        Ok(graph) => graph,
+                        Err(error) => {
+                            let error_message =
+                                format!("failed to reconstruct analyzed graph: {}", error);
+                            let _ = write_sample_status(
+                                database.as_ref(),
+                                &sha256_for_background,
+                                SampleStatus::Failed,
+                                Some(error_message.clone()),
+                                Some(&request_id_for_background),
+                            );
+                            warn!(
+                                "upload graph reconstruction failed request_id={} sha256={} error={}",
+                                request_id_for_background, sha256_for_background, error
+                            );
+                            return;
+                        }
+                    };
                     let analyze_elapsed = analyze_started_at.elapsed();
                     let function_count = graph.functions().len();
                     let block_count = graph.blocks().len();
@@ -326,11 +456,66 @@ fn ingest_upload(
                         &sha256_for_background,
                         &graph,
                         &[],
-                        Some(&selector),
-                        Some(&collections),
+                        None,
+                        None,
                         &username_for_background,
                     ) {
-                        let error_message = format!("failed to index analyzed graph: {}", error);
+                        let error_message =
+                            format!("failed to persist analyzed graph snapshot: {}", error);
+                        if let Err(status_error) = write_sample_status(
+                            database.as_ref(),
+                            &sha256_for_background,
+                            SampleStatus::Failed,
+                            Some(error_message.clone()),
+                            Some(&request_id_for_background),
+                        ) {
+                            warn!(
+                                "upload status failed write failed request_id={} sha256={} error={}",
+                                request_id_for_background, sha256_for_background, status_error
+                            );
+                        }
+                        warn!(
+                            "upload graph snapshot staging failed request_id={} sha256={} error={}",
+                            request_id_for_background, sha256_for_background, error
+                        );
+                        return;
+                    }
+                    let indexed_entity_count = match index_selected_vectors(
+                        &index,
+                        &graph,
+                        &selected_vectors,
+                        &corpora_for_background,
+                        &sha256_for_background,
+                        &collections,
+                        &username_for_background,
+                    ) {
+                        Ok(indexed) => indexed,
+                        Err(error) => {
+                            let error_message = format!("failed to index analyzed graph: {}", error);
+                            if let Err(status_error) = write_sample_status(
+                                database.as_ref(),
+                                &sha256_for_background,
+                                SampleStatus::Failed,
+                                Some(error_message.clone()),
+                                Some(&request_id_for_background),
+                            ) {
+                                warn!(
+                                    "upload status failed write failed request_id={} sha256={} error={}",
+                                    request_id_for_background, sha256_for_background, status_error
+                                );
+                            }
+                            warn!(
+                                "upload indexing failed request_id={} sha256={} error={}",
+                                request_id_for_background, sha256_for_background, error
+                            );
+                            return;
+                        }
+                    };
+                    if indexed_entity_count == 0 {
+                        let error_message = format!(
+                            "selector {} returned no vectors for collections {:?}",
+                            selector, collections
+                        );
                         if let Err(status_error) = write_sample_status(
                             database.as_ref(),
                             &sha256_for_background,
@@ -345,7 +530,7 @@ fn ingest_upload(
                         }
                         warn!(
                             "upload indexing failed request_id={} sha256={} error={}",
-                            request_id_for_background, sha256_for_background, error
+                            request_id_for_background, sha256_for_background, error_message
                         );
                         return;
                     }

@@ -1,12 +1,13 @@
 use crate::controlflow::{Block, Function, Instruction};
 use crate::Config;
+use binlex::io::Stderr;
 use binlex::lifters::vex::Lifter as InnerLifter;
-use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use std::sync::{Arc, Mutex};
 
 #[pyclass(unsendable)]
 pub struct Lifter {
+    pub config: binlex::Config,
     pub inner: Arc<Mutex<InnerLifter>>,
 }
 
@@ -16,43 +17,66 @@ impl Lifter {
     #[pyo3(text_signature = "(config)")]
     pub fn new(py: Python<'_>, config: Py<Config>) -> Self {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
-        let inner = InnerLifter::new(inner_config);
+        let inner = InnerLifter::new(inner_config.clone());
         Self {
+            config: inner_config,
             inner: Arc::new(Mutex::new(inner)),
         }
     }
 
     #[pyo3(text_signature = "($self, instruction)")]
-    pub fn lift_instruction(&self, py: Python<'_>, instruction: &Instruction) -> PyResult<()> {
-        instruction.with_inner_instruction(py, |inner| {
-            self.inner
-                .lock()
-                .unwrap()
-                .lift_instruction(inner)
-                .map_err(|err| PyRuntimeError::new_err(err.to_string()))
-        })
+    pub fn lift_instruction(&self, py: Python<'_>, instruction: &Instruction) -> bool {
+        match instruction.with_inner_instruction(py, |inner| {
+            Ok(self.inner.lock().unwrap().lift_instruction(inner))
+        }) {
+            Ok(Ok(())) => true,
+            Ok(Err(err)) => {
+                Stderr::print_debug(
+                    &self.config,
+                    format!("vex lift instruction failed: {}", err),
+                );
+                false
+            }
+            Err(err) => {
+                Stderr::print_debug(
+                    &self.config,
+                    format!("vex lift instruction failed: {}", err),
+                );
+                false
+            }
+        }
     }
 
     #[pyo3(text_signature = "($self, block)")]
-    pub fn lift_block(&self, py: Python<'_>, block: &Block) -> PyResult<()> {
-        block.with_inner_block(py, |inner| {
-            self.inner
-                .lock()
-                .unwrap()
-                .lift_block(inner)
-                .map_err(|err| PyRuntimeError::new_err(err.to_string()))
-        })
+    pub fn lift_block(&self, py: Python<'_>, block: &Block) -> bool {
+        match block.with_inner_block(py, |inner| Ok(self.inner.lock().unwrap().lift_block(inner))) {
+            Ok(Ok(())) => true,
+            Ok(Err(err)) => {
+                Stderr::print_debug(&self.config, format!("vex lift block failed: {}", err));
+                false
+            }
+            Err(err) => {
+                Stderr::print_debug(&self.config, format!("vex lift block failed: {}", err));
+                false
+            }
+        }
     }
 
     #[pyo3(text_signature = "($self, function)")]
-    pub fn lift_function(&self, py: Python<'_>, function: &Function) -> PyResult<()> {
-        function.with_inner_function(py, |inner| {
-            self.inner
-                .lock()
-                .unwrap()
-                .lift_function(inner)
-                .map_err(|err| PyRuntimeError::new_err(err.to_string()))
-        })
+    pub fn lift_function(&self, py: Python<'_>, function: &Function) -> bool {
+        match function.with_inner_function(py, |inner| {
+            Ok(self.inner.lock().unwrap().lift_function(inner))
+        }) {
+            Ok(Ok(())) => true,
+            Ok(Err(err)) => {
+                Stderr::print_debug(&self.config, format!("vex lift function failed: {}", err));
+                false
+            }
+            Err(err) => {
+                Stderr::print_debug(&self.config, format!("vex lift function failed: {}", err));
+                false
+            }
+        }
     }
 
     #[pyo3(text_signature = "($self)")]

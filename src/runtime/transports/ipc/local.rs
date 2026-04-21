@@ -1,4 +1,5 @@
 use std::env;
+use std::io::ErrorKind;
 use std::path::Path;
 
 use interprocess::local_socket::{
@@ -9,9 +10,22 @@ use rand::{RngCore, SeedableRng, rngs::SmallRng};
 use crate::runtime::error::ProcessorError;
 
 pub fn bind_listener(prefix: &str) -> Result<(String, Listener), ProcessorError> {
-    let name = generated_name(prefix);
-    let listener = listener_for_name(&name)?;
-    Ok((name, listener))
+    let primary = generated_name(prefix);
+    match listener_for_name(&primary) {
+        Ok(listener) => Ok((primary, listener)),
+        Err(ProcessorError::Io(error))
+            if !Path::new(&primary).is_absolute()
+                && matches!(
+                    error.kind(),
+                    ErrorKind::PermissionDenied | ErrorKind::AddrNotAvailable | ErrorKind::Other
+                ) =>
+        {
+            let fallback = generated_filesystem_name(prefix);
+            let listener = listener_for_name(&fallback)?;
+            Ok((fallback, listener))
+        }
+        Err(error) => Err(error),
+    }
 }
 
 pub fn connect(name: &str) -> Result<Stream, ProcessorError> {
@@ -41,9 +55,18 @@ fn generated_name(prefix: &str) -> String {
     if GenericNamespaced::is_supported() {
         format!("{}-{}-{}", prefix, std::process::id(), suffix)
     } else {
-        env::temp_dir()
-            .join(format!("{}-{}-{}.sock", prefix, std::process::id(), suffix))
-            .to_string_lossy()
-            .into_owned()
+        generated_filesystem_name_with_suffix(prefix, suffix)
     }
+}
+
+fn generated_filesystem_name(prefix: &str) -> String {
+    let mut rng = SmallRng::from_entropy();
+    generated_filesystem_name_with_suffix(prefix, rng.next_u64())
+}
+
+fn generated_filesystem_name_with_suffix(prefix: &str, suffix: u64) -> String {
+    env::temp_dir()
+        .join(format!("{}-{}-{}.sock", prefix, std::process::id(), suffix))
+        .to_string_lossy()
+        .into_owned()
 }
