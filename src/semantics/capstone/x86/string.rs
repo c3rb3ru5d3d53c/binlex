@@ -62,7 +62,9 @@ pub fn build(
         InsnId(id) if id == X86Insn::X86_INS_STOSQ as u32 => stos(machine, 64),
         InsnId(id) if id == X86Insn::X86_INS_MOVSB as u32 => movs(machine, 8),
         InsnId(id) if id == X86Insn::X86_INS_MOVSW as u32 => movs(machine, 16),
-        InsnId(id) if id == X86Insn::X86_INS_MOVSD as u32 && operands.is_empty() => movs(machine, 32),
+        InsnId(id) if id == X86Insn::X86_INS_MOVSD as u32 && operands.is_empty() => {
+            movs(machine, 32)
+        }
         InsnId(id) if id == X86Insn::X86_INS_MOVSQ as u32 => movs(machine, 64),
         InsnId(id) if id == X86Insn::X86_INS_LODSB as u32 => lods(machine, 8),
         InsnId(id) if id == X86Insn::X86_INS_LODSW as u32 => lods(machine, 16),

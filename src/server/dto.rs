@@ -1,4 +1,6 @@
+use crate::indexing::Collection;
 use serde_json::Value;
+use std::collections::BTreeMap;
 
 use crate::controlflow::{BlockJson, FunctionJson, GraphSnapshot, InstructionJson};
 
@@ -33,6 +35,27 @@ pub struct AnalyzeRequest {
     pub architecture: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub corpora: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub collections: Vec<Collection>,
+}
+
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct AnalyzeSelectedVectors {
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub instructions: BTreeMap<u64, Vec<f32>>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub blocks: BTreeMap<u64, Vec<f32>>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub functions: BTreeMap<u64, Vec<f32>>,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct AnalyzeResponse {
+    pub snapshot: GraphSnapshot,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selector: Option<String>,
+    #[serde(default)]
+    pub selected: AnalyzeSelectedVectors,
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]

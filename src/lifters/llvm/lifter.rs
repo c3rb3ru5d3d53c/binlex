@@ -1,5 +1,6 @@
 use crate::Config;
 use crate::controlflow::{Block, Function, Instruction};
+use crate::io::Stderr;
 use crate::lifters::llvm::abi::coerce_int_value_width;
 use crate::lifters::llvm::optimizers::Optimizers;
 use crate::lifters::llvm::prepare::prepare_instruction_semantics;
@@ -14,6 +15,10 @@ use inkwell::OptimizationLevel;
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
+use inkwell::llvm_sys::core::{
+    LLVMContextSetDiagnosticHandler, LLVMDisposeMessage, LLVMGetDiagInfoDescription,
+};
+use inkwell::llvm_sys::prelude::LLVMDiagnosticInfoRef;
 use inkwell::memory_buffer::MemoryBuffer;
 use inkwell::module::Module;
 use inkwell::passes::PassBuilderOptions;
@@ -21,6 +26,8 @@ use inkwell::targets::{CodeModel, InitializationConfig, RelocMode, Target, Targe
 use inkwell::types::{BasicMetadataTypeEnum, IntType};
 use inkwell::values::{BasicMetadataValueEnum, FunctionValue, IntValue, PointerValue};
 use std::collections::{BTreeSet, HashMap};
+use std::ffi::CStr;
+use std::ffi::c_void;
 use std::io::Error;
 use std::num::NonZeroU32;
 
@@ -29,6 +36,29 @@ pub struct Lifter {
     context: &'static Context,
     module: Module<'static>,
     emitted: BTreeSet<String>,
+}
+
+#[derive(Default)]
+struct DiagnosticCapture {
+    messages: Vec<String>,
+}
+
+extern "C" fn capture_diagnostic(diagnostic_info: LLVMDiagnosticInfoRef, opaque: *mut c_void) {
+    if opaque.is_null() {
+        return;
+    }
+    let capture = unsafe { &mut *(opaque as *mut DiagnosticCapture) };
+    let description = unsafe { LLVMGetDiagInfoDescription(diagnostic_info) };
+    if description.is_null() {
+        return;
+    }
+    let message = unsafe { CStr::from_ptr(description) }
+        .to_string_lossy()
+        .into_owned();
+    unsafe {
+        LLVMDisposeMessage(description);
+    }
+    capture.messages.push(message);
 }
 
 struct LoweringContext<'ctx, 'm> {
@@ -132,7 +162,7 @@ impl Lifter {
     }
 
     pub fn instcombine(&self) -> Result<Self, Error> {
-        self.run_function_pass("instcombine")
+        self.run_function_pass("instcombine<no-verify-fixpoint>")
     }
 
     pub fn cfg(&self) -> Result<Self, Error> {
@@ -200,15 +230,59 @@ impl Lifter {
     fn run_function_pass(&self, pass_pipeline: &str) -> Result<Self, Error> {
         let optimized = self.duplicate()?;
         let machine = optimized.target_machine()?;
+        let context = optimized.module.get_context();
+        let mut diagnostics = DiagnosticCapture::default();
+        unsafe {
+            LLVMContextSetDiagnosticHandler(
+                context.raw(),
+                Some(capture_diagnostic),
+                (&mut diagnostics as *mut DiagnosticCapture).cast(),
+            );
+        }
         for function in optimized.module.get_functions() {
             if function.get_first_basic_block().is_none() {
                 continue;
             }
             let options = PassBuilderOptions::create();
             options.set_verify_each(optimized.config.lifters.llvm.verify);
-            function
-                .run_passes(pass_pipeline, &machine, options)
-                .map_err(|err| Error::other(err.to_string()))?;
+            if let Err(error) = function.run_passes(pass_pipeline, &machine, options) {
+                let function_name = function.get_name().to_string_lossy().into_owned();
+                let diagnostic = diagnostics
+                    .messages
+                    .last()
+                    .cloned()
+                    .unwrap_or_else(|| error.to_string());
+                Stderr::print_debug(
+                    &optimized.config,
+                    format!(
+                        "llvm pass pipeline={} function={} failed: {}",
+                        pass_pipeline, function_name, diagnostic
+                    ),
+                );
+                unsafe {
+                    LLVMContextSetDiagnosticHandler(context.raw(), None, std::ptr::null_mut());
+                }
+                return Err(Error::other(format!(
+                    "llvm pass {} failed for {}: {}",
+                    pass_pipeline, function_name, diagnostic
+                )));
+            }
+        }
+        unsafe {
+            LLVMContextSetDiagnosticHandler(context.raw(), None, std::ptr::null_mut());
+        }
+        if let Some(diagnostic) = diagnostics
+            .messages
+            .iter()
+            .find(|message| !message.is_empty())
+        {
+            Stderr::print_debug(
+                &optimized.config,
+                format!(
+                    "llvm pass pipeline={} diagnostic: {}",
+                    pass_pipeline, diagnostic
+                ),
+            );
         }
         optimized.verify_if_enabled()?;
         Ok(optimized)

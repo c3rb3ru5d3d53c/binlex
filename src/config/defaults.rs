@@ -22,12 +22,13 @@
 
 use super::{
     Config, ConfigBlocks, ConfigChromosomes, ConfigData, ConfigDatabaseLocal, ConfigDatabases,
-    ConfigDisassembler, ConfigDisassemblerSweep, ConfigEntityLifters, ConfigFile, ConfigFormats,
-    ConfigFunctions, ConfigHashEnabled, ConfigHeuristicEntropy, ConfigHeuristicFeatures,
-    ConfigImaging, ConfigIndex, ConfigIndexLocal, ConfigInstructions, ConfigInstructionsSemantics,
-    ConfigLifters, ConfigLiftersLLVM, ConfigLiftersVex, ConfigMarkov, ConfigMinhash, ConfigMmap,
-    ConfigMmapCache, ConfigProcessors, ConfigSemantics, ConfigStorage, ConfigStorageLocal,
-    ConfigTLSH,
+    ConfigDisassembler, ConfigDisassemblerSweep, ConfigEmbeddings, ConfigEntityEmbeddings,
+    ConfigEntityLifters, ConfigFile, ConfigFormats, ConfigFunctions, ConfigHashEnabled,
+    ConfigHeuristicEntropy, ConfigHeuristicFeatures, ConfigImaging, ConfigImagingMinhash,
+    ConfigImagingTLSH, ConfigIndex, ConfigIndexLocal, ConfigInstructions,
+    ConfigInstructionsSemantics, ConfigLifters, ConfigLiftersLLVM, ConfigLiftersVex, ConfigMarkov,
+    ConfigMinhash, ConfigMmap, ConfigMmapCache, ConfigProcessors, ConfigSemantics, ConfigStorage,
+    ConfigStorageLocal, ConfigTLSH,
 };
 use std::env;
 
@@ -70,27 +71,22 @@ impl Config {
                 },
             },
             imaging: ConfigImaging {
-                sha256: ConfigHashEnabled { enabled: true },
-                tlsh: ConfigTLSH {
-                    enabled: true,
+                tlsh: ConfigImagingTLSH {
                     minimum_byte_size: 50,
                 },
-                minhash: ConfigMinhash {
-                    enabled: true,
+                minhash: ConfigImagingMinhash {
                     number_of_hashes: 64,
                     shingle_size: 4,
                     maximum_byte_size_enabled: false,
                     maximum_byte_size: 50,
                     seed: 0,
                 },
-                ahash: ConfigHashEnabled { enabled: true },
-                dhash: ConfigHashEnabled { enabled: true },
-                phash: ConfigHashEnabled { enabled: true },
             },
             instructions: ConfigInstructions {
                 enabled: false,
                 semantics: ConfigInstructionsSemantics::default(),
                 lifters: ConfigEntityLifters::default(),
+                embeddings: ConfigEntityEmbeddings::default(),
             },
             blocks: ConfigBlocks {
                 enabled: true,
@@ -109,6 +105,7 @@ impl Config {
                 },
                 entropy: ConfigHeuristicEntropy { enabled: true },
                 lifters: ConfigEntityLifters::default(),
+                embeddings: ConfigEntityEmbeddings::default(),
             },
             functions: ConfigFunctions {
                 enabled: true,
@@ -133,6 +130,7 @@ impl Config {
                     max_iterations: 100,
                 },
                 lifters: ConfigEntityLifters::default(),
+                embeddings: ConfigEntityEmbeddings::default(),
             },
             chromosomes: ConfigChromosomes {
                 mask: ConfigHashEnabled { enabled: false },
@@ -162,6 +160,7 @@ impl Config {
                 sweep: ConfigDisassemblerSweep { enabled: true },
             },
             lifters: ConfigLifters::default(),
+            embeddings: ConfigEmbeddings::default(),
             processors: ConfigProcessors::default(),
         })
     }
@@ -174,20 +173,10 @@ impl Config {
     }
 
     pub fn disable_hashing(&mut self) {
-        self.disable_imaging_hashing();
         self.disable_block_hashing();
         self.disable_function_hashing();
         self.disable_chromosome_hashing();
         self.disable_file_hashing();
-    }
-
-    pub fn disable_imaging_hashing(&mut self) {
-        self.imaging.sha256.enabled = false;
-        self.imaging.tlsh.enabled = false;
-        self.imaging.minhash.enabled = false;
-        self.imaging.ahash.enabled = false;
-        self.imaging.dhash.enabled = false;
-        self.imaging.phash.enabled = false;
     }
 
     pub fn disable_chromosome_heuristics(&mut self) {
@@ -269,7 +258,8 @@ impl Config {
     }
 
     pub fn default_local_database_path() -> String {
-        dirs::config_dir()
+        dirs::data_local_dir()
+            .or_else(dirs::data_dir)
             .unwrap_or_else(|| env::temp_dir())
             .join(DIRECTORY)
             .join("local.db")

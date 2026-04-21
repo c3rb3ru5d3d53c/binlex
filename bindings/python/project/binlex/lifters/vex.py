@@ -11,16 +11,19 @@ class Lifter:
         self._inner = _LifterBinding(config) if _inner is None else _inner
 
     def lift_instruction(self, instruction):
-        self._inner.lift_instruction(instruction._inner)
-        return self
+        if self._inner.lift_instruction(instruction._inner):
+            return self
+        return None
 
     def lift_block(self, block):
-        self._inner.lift_block(block._inner)
-        return self
+        if self._inner.lift_block(block._inner):
+            return self
+        return None
 
     def lift_function(self, function):
-        self._inner.lift_function(function._inner)
-        return self
+        if self._inner.lift_function(function._inner):
+            return self
+        return None
 
     def text(self):
         return self._inner.text()

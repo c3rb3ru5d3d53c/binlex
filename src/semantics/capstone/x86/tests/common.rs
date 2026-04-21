@@ -187,7 +187,8 @@ pub(super) fn interpret_amd64_wide_semantics(
     let semantics = semantics(name, Architecture::AMD64, bytes);
     let (written_registers, _) = written_state(&semantics);
     let tracked_registers = tracked_registers_for_wide_fixture(&fixture, &written_registers);
-    let interpreted = interpret_amd64_semantics_wide(bytes, &semantics, &fixture, &tracked_registers);
+    let interpreted =
+        interpret_amd64_semantics_wide(bytes, &semantics, &fixture, &tracked_registers);
     let registers = interpreted
         .transition
         .post
@@ -328,7 +329,8 @@ fn assert_amd64_semantics_match_unicorn_wide_impl(
             .cloned()
             .unwrap_or_else(BigUint::zero);
         assert_eq!(
-            unicorn_value, interpreted_value,
+            unicorn_value,
+            interpreted_value,
             "{name}: register {register} mismatch\nunicorn: 0x{}\nsemantics: 0x{}",
             unicorn_value.to_str_radix(16),
             interpreted_value.to_str_radix(16)
@@ -409,7 +411,11 @@ fn unicorn_x86_single_instruction(
         0,
     )
     .expect("execute one i386 instruction");
-    let post = snapshot_i386_state(architecture, &emu, read_unicorn_memory(&emu, watched_memory));
+    let post = snapshot_i386_state(
+        architecture,
+        &emu,
+        read_unicorn_memory(&emu, watched_memory),
+    );
     I386Execution {
         transition: I386Transition { pre, post },
         memory_writes: watched_memory.to_vec(),
@@ -512,9 +518,18 @@ fn unicorn_amd64_single_instruction_wide(
     emu.reg_write(RegisterX86::EFLAGS, fixture.base.eflags as u64)
         .expect("seed eflags");
 
-    let pre = snapshot_x86_state_wide(&emu, tracked_registers, fixture_memory_map(&fixture.base.memory));
-    emu.emu_start(I386_CODE_ADDRESS, I386_CODE_ADDRESS + bytes.len() as u64, 0, 0)
-        .expect("execute one instruction");
+    let pre = snapshot_x86_state_wide(
+        &emu,
+        tracked_registers,
+        fixture_memory_map(&fixture.base.memory),
+    );
+    emu.emu_start(
+        I386_CODE_ADDRESS,
+        I386_CODE_ADDRESS + bytes.len() as u64,
+        0,
+        0,
+    )
+    .expect("execute one instruction");
     let post = snapshot_x86_state_wide(&emu, tracked_registers, BTreeMap::new());
     I386ExecutionWide {
         transition: I386TransitionWide { pre, post },
@@ -775,7 +790,12 @@ fn interpret_amd64_semantics_wide(
 
     let mut registers = tracked_registers
         .iter()
-        .map(|register| (x86_common::reg_id_name(register.capstone_reg_id()), BigUint::zero()))
+        .map(|register| {
+            (
+                x86_common::reg_id_name(register.capstone_reg_id()),
+                BigUint::zero(),
+            )
+        })
         .collect::<BTreeMap<_, _>>();
     for (register, value) in &fixture.base.registers {
         write_register_value_wide(
@@ -908,10 +928,13 @@ fn eval_expression_wide(
             SemanticLocation::Register { name, bits } => {
                 mask_to_bits_wide(read_register_value_wide(registers, name, *bits), *bits)
             }
-            SemanticLocation::Flag { name, .. } => flags.get(name).cloned().unwrap_or_else(BigUint::zero),
-            SemanticLocation::Temporary { id, bits } => {
-                mask_to_bits_wide(temporaries.get(id).cloned().unwrap_or_else(BigUint::zero), *bits)
+            SemanticLocation::Flag { name, .. } => {
+                flags.get(name).cloned().unwrap_or_else(BigUint::zero)
             }
+            SemanticLocation::Temporary { id, bits } => mask_to_bits_wide(
+                temporaries.get(id).cloned().unwrap_or_else(BigUint::zero),
+                *bits,
+            ),
             other => panic!("unsupported wide read location: {other:?}"),
         },
         SemanticExpression::Load { addr, bits, .. } => {
@@ -923,7 +946,9 @@ fn eval_expression_wide(
         SemanticExpression::Unary { op, arg, bits } => {
             let value = eval_expression_wide(arg, registers, flags, memory, temporaries);
             match op {
-                SemanticOperationUnary::Not => mask_to_bits_wide(mask_for_bits_wide(*bits) ^ value, *bits),
+                SemanticOperationUnary::Not => {
+                    mask_to_bits_wide(mask_for_bits_wide(*bits) ^ value, *bits)
+                }
                 SemanticOperationUnary::Neg => {
                     let modulus = BigUint::one() << (*bits as usize);
                     mask_to_bits_wide(modulus - mask_to_bits_wide(value, *bits), *bits)
@@ -934,13 +959,22 @@ fn eval_expression_wide(
                 SemanticOperationUnary::CountTrailingZeros => BigUint::from(
                     count_trailing_zeros_wide(mask_to_bits_wide(value, *bits), *bits) as u64,
                 ),
-                SemanticOperationUnary::PopCount => {
-                    BigUint::from(value.to_bytes_le().iter().map(|byte| byte.count_ones() as u64).sum::<u64>())
-                }
+                SemanticOperationUnary::PopCount => BigUint::from(
+                    value
+                        .to_bytes_le()
+                        .iter()
+                        .map(|byte| byte.count_ones() as u64)
+                        .sum::<u64>(),
+                ),
                 other => panic!("unsupported wide unary op: {other:?}"),
             }
         }
-        SemanticExpression::Binary { op, left, right, bits } => {
+        SemanticExpression::Binary {
+            op,
+            left,
+            right,
+            bits,
+        } => {
             let left = eval_expression_wide(left, registers, flags, memory, temporaries);
             let right = eval_expression_wide(right, registers, flags, memory, temporaries);
             let value = match op {
@@ -961,15 +995,19 @@ fn eval_expression_wide(
                 SemanticOperationBinary::LShr => left >> shift_amount(&right),
                 SemanticOperationBinary::AShr => arithmetic_shift_right_wide(left, right, *bits),
                 SemanticOperationBinary::MinUnsigned => left.min(right),
-                SemanticOperationBinary::MinSigned => match compare_signed_wide(&left, &right, *bits) {
-                    std::cmp::Ordering::Greater => right,
-                    _ => left,
-                },
+                SemanticOperationBinary::MinSigned => {
+                    match compare_signed_wide(&left, &right, *bits) {
+                        std::cmp::Ordering::Greater => right,
+                        _ => left,
+                    }
+                }
                 SemanticOperationBinary::MaxUnsigned => left.max(right),
-                SemanticOperationBinary::MaxSigned => match compare_signed_wide(&left, &right, *bits) {
-                    std::cmp::Ordering::Less => right,
-                    _ => left,
-                },
+                SemanticOperationBinary::MaxSigned => {
+                    match compare_signed_wide(&left, &right, *bits) {
+                        std::cmp::Ordering::Less => right,
+                        _ => left,
+                    }
+                }
                 other => panic!("unsupported wide binary op: {other:?}"),
             };
             mask_to_bits_wide(value, *bits)
@@ -986,7 +1024,9 @@ fn eval_expression_wide(
                 other => panic!("unsupported wide cast op: {other:?}"),
             }
         }
-        SemanticExpression::Compare { op, left, right, .. } => {
+        SemanticExpression::Compare {
+            op, left, right, ..
+        } => {
             let compare_bits = arg_bits(left);
             let left = eval_expression_wide(left, registers, flags, memory, temporaries);
             let right = eval_expression_wide(right, registers, flags, memory, temporaries);
@@ -1013,16 +1053,22 @@ fn eval_expression_wide(
             };
             BigUint::from(value as u8)
         }
-        SemanticExpression::Select { condition, when_true, when_false, .. } => {
+        SemanticExpression::Select {
+            condition,
+            when_true,
+            when_false,
+            ..
+        } => {
             if !eval_expression_wide(condition, registers, flags, memory, temporaries).is_zero() {
                 eval_expression_wide(when_true, registers, flags, memory, temporaries)
             } else {
                 eval_expression_wide(when_false, registers, flags, memory, temporaries)
             }
         }
-        SemanticExpression::Extract { arg, lsb, bits } => {
-            mask_to_bits_wide(eval_expression_wide(arg, registers, flags, memory, temporaries) >> (*lsb as usize), *bits)
-        }
+        SemanticExpression::Extract { arg, lsb, bits } => mask_to_bits_wide(
+            eval_expression_wide(arg, registers, flags, memory, temporaries) >> (*lsb as usize),
+            *bits,
+        ),
         SemanticExpression::Concat { parts, bits } => {
             let mut value = BigUint::zero();
             let mut shift = 0usize;
@@ -1092,18 +1138,18 @@ fn eval_expression(
                 SemanticOperationBinary::Add => left.wrapping_add(right),
                 SemanticOperationBinary::Sub => left.wrapping_sub(right),
                 SemanticOperationBinary::Mul => left.wrapping_mul(right),
-                SemanticOperationBinary::FAdd => {
-                    u128::from((f64::from_bits(left as u64) + f64::from_bits(right as u64)).to_bits())
-                }
-                SemanticOperationBinary::FSub => {
-                    u128::from((f64::from_bits(left as u64) - f64::from_bits(right as u64)).to_bits())
-                }
-                SemanticOperationBinary::FMul => {
-                    u128::from((f64::from_bits(left as u64) * f64::from_bits(right as u64)).to_bits())
-                }
-                SemanticOperationBinary::FDiv => {
-                    u128::from((f64::from_bits(left as u64) / f64::from_bits(right as u64)).to_bits())
-                }
+                SemanticOperationBinary::FAdd => u128::from(
+                    (f64::from_bits(left as u64) + f64::from_bits(right as u64)).to_bits(),
+                ),
+                SemanticOperationBinary::FSub => u128::from(
+                    (f64::from_bits(left as u64) - f64::from_bits(right as u64)).to_bits(),
+                ),
+                SemanticOperationBinary::FMul => u128::from(
+                    (f64::from_bits(left as u64) * f64::from_bits(right as u64)).to_bits(),
+                ),
+                SemanticOperationBinary::FDiv => u128::from(
+                    (f64::from_bits(left as u64) / f64::from_bits(right as u64)).to_bits(),
+                ),
                 SemanticOperationBinary::And => left & right,
                 SemanticOperationBinary::Or => left | right,
                 SemanticOperationBinary::Xor => left ^ right,
@@ -1177,10 +1223,12 @@ fn eval_expression(
                     (f64::from_bits(left as u64).is_nan() || f64::from_bits(right as u64).is_nan())
                         as u128
                 }
-                SemanticOperationCompare::Oeq => ordered_fp_compare(left as u64, right as u64, |l, r| l == r)
-                    as u128,
-                SemanticOperationCompare::Olt => ordered_fp_compare(left as u64, right as u64, |l, r| l < r)
-                    as u128,
+                SemanticOperationCompare::Oeq => {
+                    ordered_fp_compare(left as u64, right as u64, |l, r| l == r) as u128
+                }
+                SemanticOperationCompare::Olt => {
+                    ordered_fp_compare(left as u64, right as u64, |l, r| l < r) as u128
+                }
                 other => panic!("unsupported i386 test compare op: {other:?}"),
             }
         }
@@ -1343,7 +1391,10 @@ fn float_to_int_bits(value: u64, bits: u16) -> u128 {
 }
 
 fn int_to_float_bits(value: u128, from_bits: u16, bits: u16) -> u128 {
-    assert_eq!(bits, 64, "only f64 int-to-float is supported in x86 fp tests");
+    assert_eq!(
+        bits, 64,
+        "only f64 int-to-float is supported in x86 fp tests"
+    );
     let signed = if from_bits == 32 {
         (mask_to_bits(value, 32) as u32 as i32) as f64
     } else if from_bits == 64 {
@@ -1776,23 +1827,39 @@ fn count_trailing_zeros_wide(value: BigUint, bits: u16) -> u16 {
 fn load_le_value_wide(memory: &BTreeMap<u64, u8>, address: u64, bits: u16) -> BigUint {
     let byte_len = bits.div_ceil(8) as usize;
     let bytes = (0..byte_len)
-        .map(|index| memory.get(&(address + index as u64)).copied().unwrap_or_default())
+        .map(|index| {
+            memory
+                .get(&(address + index as u64))
+                .copied()
+                .unwrap_or_default()
+        })
         .collect::<Vec<_>>();
     mask_to_bits_wide(BigUint::from_bytes_le(&bytes), bits)
 }
 
 fn read_flag_wide(flags: &BTreeMap<String, BigUint>, name: &str) -> bool {
-    !flags.get(name).cloned().unwrap_or_else(BigUint::zero).is_zero()
+    !flags
+        .get(name)
+        .cloned()
+        .unwrap_or_else(BigUint::zero)
+        .is_zero()
 }
 
-fn read_register_value_wide(registers: &BTreeMap<String, BigUint>, name: &str, bits: u16) -> BigUint {
+fn read_register_value_wide(
+    registers: &BTreeMap<String, BigUint>,
+    name: &str,
+    bits: u16,
+) -> BigUint {
     if let Some(value) = registers.get(name) {
         return mask_to_bits_wide(value.clone(), bits);
     }
 
     let eax_name = x86_common::reg_id_name(X86Reg::X86_REG_EAX as u16);
     let rax_name = x86_common::reg_id_name(X86Reg::X86_REG_RAX as u16);
-    let eax_value = registers.get(&eax_name).cloned().unwrap_or_else(BigUint::zero);
+    let eax_value = registers
+        .get(&eax_name)
+        .cloned()
+        .unwrap_or_else(BigUint::zero);
     let esp_name = x86_common::reg_id_name(X86Reg::X86_REG_ESP as u16);
     let rsp_name = x86_common::reg_id_name(X86Reg::X86_REG_RSP as u16);
 
@@ -1806,39 +1873,76 @@ fn read_register_value_wide(registers: &BTreeMap<String, BigUint>, name: &str, b
         return mask_to_bits_wide(eax_value, 8);
     }
     if name == rax_name {
-        return mask_to_bits_wide(registers.get(&eax_name).cloned().unwrap_or_else(BigUint::zero), bits);
+        return mask_to_bits_wide(
+            registers
+                .get(&eax_name)
+                .cloned()
+                .unwrap_or_else(BigUint::zero),
+            bits,
+        );
     }
     if name == eax_name {
-        return mask_to_bits_wide(registers.get(&rax_name).cloned().unwrap_or_else(BigUint::zero), bits);
+        return mask_to_bits_wide(
+            registers
+                .get(&rax_name)
+                .cloned()
+                .unwrap_or_else(BigUint::zero),
+            bits,
+        );
     }
     if name == rsp_name {
-        return mask_to_bits_wide(registers.get(&esp_name).cloned().unwrap_or_else(BigUint::zero), bits);
+        return mask_to_bits_wide(
+            registers
+                .get(&esp_name)
+                .cloned()
+                .unwrap_or_else(BigUint::zero),
+            bits,
+        );
     }
     if name == esp_name {
-        return mask_to_bits_wide(registers.get(&rsp_name).cloned().unwrap_or_else(BigUint::zero), bits);
+        return mask_to_bits_wide(
+            registers
+                .get(&rsp_name)
+                .cloned()
+                .unwrap_or_else(BigUint::zero),
+            bits,
+        );
     }
     registers.get(name).cloned().unwrap_or_else(BigUint::zero)
 }
 
-fn write_register_value_wide(registers: &mut BTreeMap<String, BigUint>, name: &str, value: BigUint) {
+fn write_register_value_wide(
+    registers: &mut BTreeMap<String, BigUint>,
+    name: &str,
+    value: BigUint,
+) {
     let eax_name = x86_common::reg_id_name(X86Reg::X86_REG_EAX as u16);
     let rax_name = x86_common::reg_id_name(X86Reg::X86_REG_RAX as u16);
     let esp_name = x86_common::reg_id_name(X86Reg::X86_REG_ESP as u16);
     let rsp_name = x86_common::reg_id_name(X86Reg::X86_REG_RSP as u16);
     if name == x86_common::reg_id_name(X86Reg::X86_REG_AX as u16) {
-        let current = registers.get(&eax_name).cloned().unwrap_or_else(BigUint::zero);
+        let current = registers
+            .get(&eax_name)
+            .cloned()
+            .unwrap_or_else(BigUint::zero);
         let next = ((&current >> 16usize) << 16usize) | mask_to_bits_wide(value, 16);
         registers.insert(eax_name, next);
         return;
     }
     if name == x86_common::reg_id_name(X86Reg::X86_REG_AL as u16) {
-        let current = registers.get(&eax_name).cloned().unwrap_or_else(BigUint::zero);
+        let current = registers
+            .get(&eax_name)
+            .cloned()
+            .unwrap_or_else(BigUint::zero);
         let next = ((&current >> 8usize) << 8usize) | mask_to_bits_wide(value, 8);
         registers.insert(eax_name, next);
         return;
     }
     if name == x86_common::reg_id_name(X86Reg::X86_REG_AH as u16) {
-        let current = registers.get(&eax_name).cloned().unwrap_or_else(BigUint::zero);
+        let current = registers
+            .get(&eax_name)
+            .cloned()
+            .unwrap_or_else(BigUint::zero);
         let low = mask_to_bits_wide(current.clone(), 8);
         let high = (&current >> 16usize) << 16usize;
         registers.insert(
@@ -1884,7 +1988,7 @@ fn write_register_value_wide(registers: &mut BTreeMap<String, BigUint>, name: &s
 
 impl I386Register {
     fn all_for_arch(architecture: Architecture) -> Vec<Self> {
-    let mut registers = vec![
+        let mut registers = vec![
             Self::Eax,
             Self::Ebx,
             Self::Ecx,

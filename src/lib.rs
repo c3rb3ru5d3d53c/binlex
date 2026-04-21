@@ -27,6 +27,7 @@ pub mod controlflow;
 pub mod core;
 pub mod databases;
 pub mod disassemblers;
+pub mod embeddings;
 pub mod formats;
 pub mod genetics;
 pub mod hashing;

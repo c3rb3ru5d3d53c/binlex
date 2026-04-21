@@ -23,11 +23,12 @@
 use crate::Architecture;
 use crate::Config;
 use crate::controlflow::Graph;
+use crate::embeddings::EmbeddingsJson;
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeJson;
 use crate::hex;
 use crate::imaging::Imaging;
-use crate::lifters::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson, LlvmNormalizedJson};
+use crate::lifters::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
 #[cfg(not(target_os = "windows"))]
 use crate::lifters::vex::{Lifter as VexLifter, VexJson};
 use crate::metadata::Attributes;
@@ -137,6 +138,9 @@ pub struct InstructionJson {
     /// Optional processor outputs attached by post-processing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub processors: Option<BTreeMap<String, Value>>,
+    /// Optional embeddings attached directly to this instruction.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub embeddings: Option<EmbeddingsJson>,
     /// Optional canonical semantics for later lifting.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub semantics: Option<InstructionSemanticsJson>,
@@ -280,6 +284,7 @@ impl Instruction {
             to: self.to(),
             next: self.next(),
             processors: None,
+            embeddings: None,
             semantics: if self.config.instructions.semantics.enabled {
                 self.semantics.as_ref().map(|semantics| semantics.process())
             } else {
@@ -304,6 +309,11 @@ impl Instruction {
                 );
             }
         }
+        if self.config.instructions.embeddings.llvm.enabled {
+            if let Some(vector) = self.embeddings().llvm() {
+                json.embeddings = Some(EmbeddingsJson::llvm(vector));
+            }
+        }
 
         json
     }
@@ -318,17 +328,8 @@ impl Instruction {
             let mut lifter = LlvmLifter::new(self.config.clone());
             lifter.lift_instruction(self).ok()?;
 
-            let normalized = if self.config.instructions.lifters.llvm.normalized.enabled {
-                lifter.normalized().ok().map(|artifact| LlvmNormalizedJson {
-                    text: artifact.text(),
-                })
-            } else {
-                None
-            };
-
             Some(LlvmJson {
                 text: lifter.text(),
-                normalized,
             })
         } else {
             None

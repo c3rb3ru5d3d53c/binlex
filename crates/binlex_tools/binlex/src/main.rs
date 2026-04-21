@@ -44,6 +44,7 @@ use binlex::io::Stdin;
 use binlex::io::Stdout;
 use binlex::metadata::Attributes;
 use binlex::metadata::Tag;
+use binlex::processor::{ProcessorTarget, apply_output};
 use clap::Parser;
 use rayon::ThreadPoolBuilder;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -503,6 +504,24 @@ fn process_output(
         let _ = cfg.process_complete();
     }
 
+    let block_output_count = cfg
+        .blocks
+        .valid()
+        .iter()
+        .filter(|entry| {
+            cfg.processor_outputs(ProcessorTarget::Block, **entry)
+                .is_some()
+        })
+        .count();
+    let function_output_count = cfg
+        .functions
+        .valid()
+        .iter()
+        .filter(|entry| {
+            cfg.processor_outputs(ProcessorTarget::Function, **entry)
+                .is_some()
+        })
+        .count();
     if cfg.config.instructions.enabled {
         let _ = cfg.process_instructions();
         instructions = cfg
@@ -549,14 +568,7 @@ fn process_output(
             &cfg.config,
             format!(
                 "block processor outputs attached to {} blocks",
-                cfg.blocks
-                    .valid()
-                    .iter()
-                    .filter(|entry| {
-                        cfg.processor_outputs(binlex::processor::ProcessorTarget::Block, **entry)
-                            .is_some()
-                    })
-                    .count()
+                block_output_count
             ),
         );
         blocks = cfg
@@ -576,7 +588,18 @@ fn process_output(
                 for attribute in &attributes.values {
                     block_attributes.push(attribute.clone());
                 }
-                block.process_with_attributes(block_attributes)
+                let mut raw = block.process_with_attributes(block_attributes);
+                if let Some(outputs) = cfg.processor_outputs(ProcessorTarget::Block, block.address)
+                {
+                    for (processor_name, output) in &outputs {
+                        apply_output(
+                            raw.processors.get_or_insert_with(Default::default),
+                            processor_name,
+                            output,
+                        );
+                    }
+                }
+                raw
             })
             .filter_map(|raw| serde_json::to_string(&raw).ok())
             .map(|js| LZ4String::new(&js))
@@ -591,14 +614,7 @@ fn process_output(
             &cfg.config,
             format!(
                 "function processor outputs attached to {} functions",
-                cfg.functions
-                    .valid()
-                    .iter()
-                    .filter(|entry| {
-                        cfg.processor_outputs(binlex::processor::ProcessorTarget::Function, **entry)
-                            .is_some()
-                    })
-                    .count()
+                function_output_count
             ),
         );
         let function_outputs = cfg
@@ -618,7 +634,19 @@ fn process_output(
                 for attribute in &attributes.values {
                     function_attributes.push(attribute.clone());
                 }
-                function.process_with_attributes(function_attributes)
+                let mut raw = function.process_with_attributes(function_attributes);
+                if let Some(outputs) =
+                    cfg.processor_outputs(ProcessorTarget::Function, function.address)
+                {
+                    for (processor_name, output) in &outputs {
+                        apply_output(
+                            raw.processors.get_or_insert_with(Default::default),
+                            processor_name,
+                            output,
+                        );
+                    }
+                }
+                raw
             })
             .filter_map(|raw| serde_json::to_string(&raw).ok())
             .collect::<Vec<String>>();

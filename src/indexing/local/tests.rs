@@ -470,7 +470,7 @@ fn selector_graph_round_trip() {
     let vector = {
         let functions = graph.functions();
         let processed = serde_json::to_value(functions[0].process()).expect("serialize function");
-        selector_vector(&processed, "processors.embeddings.vector").expect("function vector")
+        selector_vector(&processed, "embeddings.llvm.vector").expect("function vector")
     };
     let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
         .expect("create local index client");
@@ -481,7 +481,7 @@ fn selector_graph_round_trip() {
             "feedface",
             &graph,
             &[],
-            Some("processors.embeddings.vector"),
+            Some("embeddings.llvm.vector"),
             None,
         )
         .expect("stage graph with selector");
@@ -715,7 +715,7 @@ fn repeat_graph_indexing_does_not_duplicate_search_results() {
     let vector = {
         let functions = graph.functions();
         let processed = serde_json::to_value(functions[0].process()).expect("serialize function");
-        selector_vector(&processed, "processors.embeddings.vector").expect("function vector")
+        selector_vector(&processed, "embeddings.llvm.vector").expect("function vector")
     };
 
     for _ in 0..3 {
@@ -724,7 +724,7 @@ fn repeat_graph_indexing_does_not_duplicate_search_results() {
                 "repeat-sha",
                 &graph,
                 &[],
-                Some("processors.embeddings.vector"),
+                Some("embeddings.llvm.vector"),
                 None,
             )
             .expect("stage graph with selector");
@@ -1805,7 +1805,7 @@ fn rejects_selector_vectors_with_wrong_configured_dimensions() {
             "feedface",
             &graph,
             &[],
-            Some("processors.embeddings.vector"),
+            Some("embeddings.llvm.vector"),
             None,
         )
         .expect_err("reject selector vector length mismatch");

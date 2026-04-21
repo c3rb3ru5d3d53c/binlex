@@ -32,6 +32,7 @@ use binlex::controlflow::Function as InnerFunction;
 use binlex::controlflow::FunctionJsonDeserializer as InnerFunctionJsonDeserializer;
 use binlex::hex;
 use binlex::imaging::Imaging as InnerImaging;
+use binlex::io::Stderr;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::Py;
@@ -369,6 +370,25 @@ impl Function {
         self.with_inner_function(py, |function| {
             Ok(function.imaging().map(Imaging::from_inner))
         })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the LLVM embedding vector for this function, if available.
+    pub fn embedding(&self, py: Python) -> PyResult<Option<Vec<f32>>> {
+        let config = self.cfg.borrow(py).inner.lock().unwrap().config.clone();
+        match self.with_inner_function(py, |function| Ok(function.embeddings().llvm())) {
+            Ok(result) => Ok(result),
+            Err(error) => {
+                Stderr::print_debug(
+                    &config,
+                    format!(
+                        "llvm function embedding skipped address=0x{:x} error={}",
+                        self.address, error
+                    ),
+                );
+                Ok(None)
+            }
+        }
     }
 
     #[pyo3(text_signature = "($self)")]

@@ -185,7 +185,7 @@ fn run_index_local(config: &Config, args: &IndexLocalArgs) -> Result<(), Box<dyn
     let selector = args
         .selector
         .clone()
-        .unwrap_or_else(|| "processors.embeddings.vector".to_string());
+        .unwrap_or_else(|| "embeddings.llvm.vector".to_string());
     let iterations = normalize_iterations(args.iterations);
     let mut durations = Vec::with_capacity(iterations);
     let analysis = analyze_sample(
@@ -251,7 +251,7 @@ fn run_pipeline_local(config: &Config, args: &PipelineLocalArgs) -> Result<(), B
     let selector = args
         .selector
         .clone()
-        .unwrap_or_else(|| "processors.embeddings.vector".to_string());
+        .unwrap_or_else(|| "embeddings.llvm.vector".to_string());
     let iterations = normalize_iterations(args.iterations);
     let mut durations = Vec::with_capacity(iterations);
     for iteration in 0..iterations {
@@ -309,7 +309,7 @@ fn run_pipeline_remote(config: &Config, args: &PipelineRemoteArgs) -> Result<(),
     let selector = args
         .selector
         .clone()
-        .unwrap_or_else(|| "processors.embeddings.vector".to_string());
+        .unwrap_or_else(|| "embeddings.llvm.vector".to_string());
     let iterations = normalize_iterations(args.iterations);
     let mut durations = Vec::with_capacity(iterations);
     for iteration in 0..iterations {
@@ -386,12 +386,13 @@ fn analyze_sample(
         magic: magic.map(ToOwned::to_owned),
         architecture: architecture.map(ToOwned::to_owned),
         corpora: corpora.to_vec(),
+        collections: Vec::new(),
     };
     let started_at = Instant::now();
-    let snapshot = analyze::execute(config, request)
+    let response = analyze::execute(config, request)
         .map_err(|error| std::io::Error::other(format!("{:?}", error)))?;
     let analyze_elapsed = started_at.elapsed();
-    let graph = Graph::from_snapshot(snapshot, config.clone())?;
+    let graph = Graph::from_snapshot(response.snapshot, config.clone())?;
     let sha256 = binlex::hashing::SHA256::new(bytes)
         .hexdigest()
         .ok_or_else(|| std::io::Error::other("failed to compute sha256"))?;

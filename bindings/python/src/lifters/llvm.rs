@@ -1,12 +1,13 @@
 use crate::controlflow::{Block, Function, Instruction};
 use crate::Config;
+use binlex::io::Stderr;
 use binlex::lifters::llvm::Lifter as InnerLifter;
-use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use std::sync::{Arc, Mutex};
 
 #[pyclass(unsendable)]
 pub struct Lifter {
+    pub config: binlex::Config,
     pub inner: Arc<Mutex<InnerLifter>>,
 }
 
@@ -16,43 +17,66 @@ impl Lifter {
     #[pyo3(text_signature = "(config)")]
     pub fn new(py: Python<'_>, config: Py<Config>) -> Self {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
-        let inner = InnerLifter::new(inner_config);
+        let inner = InnerLifter::new(inner_config.clone());
         Self {
+            config: inner_config,
             inner: Arc::new(Mutex::new(inner)),
         }
     }
 
     #[pyo3(text_signature = "($self, instruction)")]
-    pub fn lift_instruction(&self, py: Python<'_>, instruction: &Instruction) -> PyResult<()> {
-        instruction.with_inner_instruction(py, |inner| {
-            self.inner
-                .lock()
-                .unwrap()
-                .lift_instruction(inner)
-                .map_err(|err| PyRuntimeError::new_err(err.to_string()))
-        })
+    pub fn lift_instruction(&self, py: Python<'_>, instruction: &Instruction) -> bool {
+        match instruction.with_inner_instruction(py, |inner| {
+            Ok(self.inner.lock().unwrap().lift_instruction(inner))
+        }) {
+            Ok(Ok(())) => true,
+            Ok(Err(err)) => {
+                Stderr::print_debug(
+                    &self.config,
+                    format!("llvm lift instruction failed: {}", err),
+                );
+                false
+            }
+            Err(err) => {
+                Stderr::print_debug(
+                    &self.config,
+                    format!("llvm lift instruction failed: {}", err),
+                );
+                false
+            }
+        }
     }
 
     #[pyo3(text_signature = "($self, block)")]
-    pub fn lift_block(&self, py: Python<'_>, block: &Block) -> PyResult<()> {
-        block.with_inner_block(py, |inner| {
-            self.inner
-                .lock()
-                .unwrap()
-                .lift_block(inner)
-                .map_err(|err| PyRuntimeError::new_err(err.to_string()))
-        })
+    pub fn lift_block(&self, py: Python<'_>, block: &Block) -> bool {
+        match block.with_inner_block(py, |inner| Ok(self.inner.lock().unwrap().lift_block(inner))) {
+            Ok(Ok(())) => true,
+            Ok(Err(err)) => {
+                Stderr::print_debug(&self.config, format!("llvm lift block failed: {}", err));
+                false
+            }
+            Err(err) => {
+                Stderr::print_debug(&self.config, format!("llvm lift block failed: {}", err));
+                false
+            }
+        }
     }
 
     #[pyo3(text_signature = "($self, function)")]
-    pub fn lift_function(&self, py: Python<'_>, function: &Function) -> PyResult<()> {
-        function.with_inner_function(py, |inner| {
-            self.inner
-                .lock()
-                .unwrap()
-                .lift_function(inner)
-                .map_err(|err| PyRuntimeError::new_err(err.to_string()))
-        })
+    pub fn lift_function(&self, py: Python<'_>, function: &Function) -> bool {
+        match function.with_inner_function(py, |inner| {
+            Ok(self.inner.lock().unwrap().lift_function(inner))
+        }) {
+            Ok(Ok(())) => true,
+            Ok(Err(err)) => {
+                Stderr::print_debug(&self.config, format!("llvm lift function failed: {}", err));
+                false
+            }
+            Err(err) => {
+                Stderr::print_debug(&self.config, format!("llvm lift function failed: {}", err));
+                false
+            }
+        }
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -71,104 +95,112 @@ impl Lifter {
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn normalized(&self) -> PyResult<Self> {
-        let inner = self
-            .inner
-            .lock()
-            .unwrap()
-            .normalized()
-            .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
-        Ok(Self {
-            inner: Arc::new(Mutex::new(inner)),
-        })
+    pub fn normalized(&self) -> Option<Self> {
+        match self.inner.lock().unwrap().normalized() {
+            Ok(inner) => Some(Self {
+                config: self.config.clone(),
+                inner: Arc::new(Mutex::new(inner)),
+            }),
+            Err(err) => {
+                Stderr::print_debug(&self.config, format!("llvm normalize failed: {}", err));
+                None
+            }
+        }
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn mem2reg(&self) -> PyResult<Self> {
-        let inner = self
-            .inner
-            .lock()
-            .unwrap()
-            .mem2reg()
-            .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
-        Ok(Self {
-            inner: Arc::new(Mutex::new(inner)),
-        })
+    pub fn mem2reg(&self) -> Option<Self> {
+        match self.inner.lock().unwrap().mem2reg() {
+            Ok(inner) => Some(Self {
+                config: self.config.clone(),
+                inner: Arc::new(Mutex::new(inner)),
+            }),
+            Err(err) => {
+                Stderr::print_debug(&self.config, format!("llvm mem2reg failed: {}", err));
+                None
+            }
+        }
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn instcombine(&self) -> PyResult<Self> {
-        let inner = self
-            .inner
-            .lock()
-            .unwrap()
-            .instcombine()
-            .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
-        Ok(Self {
-            inner: Arc::new(Mutex::new(inner)),
-        })
+    pub fn instcombine(&self) -> Option<Self> {
+        match self.inner.lock().unwrap().instcombine() {
+            Ok(inner) => Some(Self {
+                config: self.config.clone(),
+                inner: Arc::new(Mutex::new(inner)),
+            }),
+            Err(err) => {
+                Stderr::print_debug(&self.config, format!("llvm instcombine failed: {}", err));
+                None
+            }
+        }
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn cfg(&self) -> PyResult<Self> {
-        let inner = self
-            .inner
-            .lock()
-            .unwrap()
-            .cfg()
-            .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
-        Ok(Self {
-            inner: Arc::new(Mutex::new(inner)),
-        })
+    pub fn cfg(&self) -> Option<Self> {
+        match self.inner.lock().unwrap().cfg() {
+            Ok(inner) => Some(Self {
+                config: self.config.clone(),
+                inner: Arc::new(Mutex::new(inner)),
+            }),
+            Err(err) => {
+                Stderr::print_debug(&self.config, format!("llvm cfg failed: {}", err));
+                None
+            }
+        }
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn gvn(&self) -> PyResult<Self> {
-        let inner = self
-            .inner
-            .lock()
-            .unwrap()
-            .gvn()
-            .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
-        Ok(Self {
-            inner: Arc::new(Mutex::new(inner)),
-        })
+    pub fn gvn(&self) -> Option<Self> {
+        match self.inner.lock().unwrap().gvn() {
+            Ok(inner) => Some(Self {
+                config: self.config.clone(),
+                inner: Arc::new(Mutex::new(inner)),
+            }),
+            Err(err) => {
+                Stderr::print_debug(&self.config, format!("llvm gvn failed: {}", err));
+                None
+            }
+        }
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn sroa(&self) -> PyResult<Self> {
-        let inner = self
-            .inner
-            .lock()
-            .unwrap()
-            .sroa()
-            .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
-        Ok(Self {
-            inner: Arc::new(Mutex::new(inner)),
-        })
+    pub fn sroa(&self) -> Option<Self> {
+        match self.inner.lock().unwrap().sroa() {
+            Ok(inner) => Some(Self {
+                config: self.config.clone(),
+                inner: Arc::new(Mutex::new(inner)),
+            }),
+            Err(err) => {
+                Stderr::print_debug(&self.config, format!("llvm sroa failed: {}", err));
+                None
+            }
+        }
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn dce(&self) -> PyResult<Self> {
-        let inner = self
-            .inner
-            .lock()
-            .unwrap()
-            .dce()
-            .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
-        Ok(Self {
-            inner: Arc::new(Mutex::new(inner)),
-        })
+    pub fn dce(&self) -> Option<Self> {
+        match self.inner.lock().unwrap().dce() {
+            Ok(inner) => Some(Self {
+                config: self.config.clone(),
+                inner: Arc::new(Mutex::new(inner)),
+            }),
+            Err(err) => {
+                Stderr::print_debug(&self.config, format!("llvm dce failed: {}", err));
+                None
+            }
+        }
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn verify(&self) -> PyResult<bool> {
-        self.inner
-            .lock()
-            .unwrap()
-            .verify()
-            .map(|_| true)
-            .map_err(|err| PyRuntimeError::new_err(err.to_string()))
+    pub fn verify(&self) -> Option<bool> {
+        match self.inner.lock().unwrap().verify() {
+            Ok(()) => Some(true),
+            Err(err) => {
+                Stderr::print_debug(&self.config, format!("llvm verify failed: {}", err));
+                None
+            }
+        }
     }
 
     pub fn __str__(&self) -> String {

@@ -1,8 +1,9 @@
 use super::{Error, decode_response, normalize_url};
 use crate::controlflow::{BlockJson, FunctionJson, Graph, GraphSnapshot, InstructionJson};
+use crate::indexing::Collection;
 use crate::server::dto::{
-    AnalyzeRequest, HealthResponse, LZ4_CONTENT_ENCODING, OCTET_STREAM_CONTENT_TYPE,
-    ProcessEntityRequest, ProcessGraphRequest, ProcessorHttpRequest,
+    AnalyzeRequest, AnalyzeResponse, HealthResponse, LZ4_CONTENT_ENCODING,
+    OCTET_STREAM_CONTENT_TYPE, ProcessEntityRequest, ProcessGraphRequest, ProcessorHttpRequest,
 };
 use crate::server::request_id::X_REQUEST_ID;
 use base64::Engine;
@@ -11,6 +12,7 @@ use reqwest::header::{ACCEPT, CONTENT_ENCODING, CONTENT_TYPE, HeaderName};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::Path;
+use std::time::Duration;
 
 const SERVER_VERSION_PATH: &str = "/api/v1/version";
 const SERVER_PROCESSORS_PREFIX: &str = "/api/v1/processors/";
@@ -137,11 +139,51 @@ impl Server {
         corpora: &[String],
         request_id: Option<&str>,
     ) -> Result<Graph, Error> {
+        let response = self.analyze_bytes_response_with_corpora_collections_and_request_id(
+            data,
+            magic,
+            architecture,
+            corpora,
+            &[],
+            request_id,
+        )?;
+        Graph::from_snapshot(response.snapshot, self.config.clone())
+            .map_err(|error| Error::Graph(error.to_string()))
+    }
+
+    pub fn analyze_bytes_response_with_corpora_and_request_id(
+        &self,
+        data: &[u8],
+        magic: Option<crate::Magic>,
+        architecture: Option<crate::Architecture>,
+        corpora: &[String],
+        request_id: Option<&str>,
+    ) -> Result<AnalyzeResponse, Error> {
+        self.analyze_bytes_response_with_corpora_collections_and_request_id(
+            data,
+            magic,
+            architecture,
+            corpora,
+            &[],
+            request_id,
+        )
+    }
+
+    pub fn analyze_bytes_response_with_corpora_collections_and_request_id(
+        &self,
+        data: &[u8],
+        magic: Option<crate::Magic>,
+        architecture: Option<crate::Architecture>,
+        corpora: &[String],
+        collections: &[Collection],
+        request_id: Option<&str>,
+    ) -> Result<AnalyzeResponse, Error> {
         let request = AnalyzeRequest {
             data: base64::engine::general_purpose::STANDARD.encode(data),
             magic: magic.map(|value| value.to_string()),
             architecture: architecture.map(|value| value.to_string()),
             corpora: corpora.to_vec(),
+            collections: collections.to_vec(),
         };
         let client = self.http_client()?;
         let body = encode_request(&request, self.compression)?;
@@ -173,9 +215,7 @@ impl Server {
             .body(body)
             .send()
             .map_err(|error| Error::Io(error.to_string()))?;
-        let snapshot: GraphSnapshot = decode_response(response)?;
-        Graph::from_snapshot(snapshot, self.config.clone())
-            .map_err(|error| Error::Graph(error.to_string()))
+        decode_response(response)
     }
 
     pub fn process_graph(&self, graph: &Graph) -> Result<Graph, Error> {
@@ -398,6 +438,7 @@ impl Server {
         HttpClient::builder()
             .danger_accept_invalid_certs(!self.verify)
             .user_agent(format!("binlex/{}", crate::VERSION))
+            .timeout(Duration::from_secs(300))
             .build()
             .map_err(|error| Error::Protocol(error.to_string()))
     }

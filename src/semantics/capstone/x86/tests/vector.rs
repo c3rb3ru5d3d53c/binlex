@@ -798,20 +798,20 @@ fn vec256(low: [u8; 16], high: [u8; 16]) -> Vec<u8> {
 #[test]
 fn vector_integer_and_move_semantics_match_unicorn_transitions() {
     let xmm0 = vec128([
-        0x10, 0x80, 0x20, 0x70, 0x30, 0x60, 0x40, 0x50, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
-        0x11, 0x22,
+        0x10, 0x80, 0x20, 0x70, 0x30, 0x60, 0x40, 0x50, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x11,
+        0x22,
     ]);
     let xmm1 = vec128([
-        0x01, 0xff, 0x02, 0xfe, 0x03, 0xfd, 0x04, 0xfc, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00,
-        0x99, 0x88,
+        0x01, 0xff, 0x02, 0xfe, 0x03, 0xfd, 0x04, 0xfc, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00, 0x99,
+        0x88,
     ]);
     let mask = vec128([
-        0x00, 0x81, 0x02, 0x83, 0x04, 0x85, 0x06, 0x87, 0x08, 0x89, 0x0a, 0x8b, 0x0c, 0x8d,
-        0x0e, 0x8f,
+        0x00, 0x81, 0x02, 0x83, 0x04, 0x85, 0x06, 0x87, 0x08, 0x89, 0x0a, 0x8b, 0x0c, 0x8d, 0x0e,
+        0x8f,
     ]);
     let mem128 = vec![
-        0xde, 0xad, 0xbe, 0xef, 0x10, 0x32, 0x54, 0x76, 0x98, 0xba, 0xdc, 0xfe, 0x13, 0x57,
-        0x9b, 0xdf,
+        0xde, 0xad, 0xbe, 0xef, 0x10, 0x32, 0x54, 0x76, 0x98, 0xba, 0xdc, 0xfe, 0x13, 0x57, 0x9b,
+        0xdf,
     ];
 
     let cases = [
@@ -819,10 +819,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "movapd xmm0, xmm1",
             vec![0x66, 0x0f, 0x28, 0xc1],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Xmm0, xmm0),
-                    (I386Register::Xmm1, xmm1),
-                ],
+                registers: vec![(I386Register::Xmm0, xmm0), (I386Register::Xmm1, xmm1)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -831,10 +828,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "movntdq xmmword ptr [rax], xmm0",
             vec![0x66, 0x0f, 0xe7, 0x00],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Rax, 0x3000),
-                    (I386Register::Xmm0, xmm0),
-                ],
+                registers: vec![(I386Register::Rax, 0x3000), (I386Register::Xmm0, xmm0)],
                 eflags: 1 << 1,
                 memory: vec![(0x3000, vec![0; 16])],
             },
@@ -843,10 +837,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "lddqu xmm0, xmmword ptr [rax]",
             vec![0xf2, 0x0f, 0xf0, 0x00],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Rax, 0x3000),
-                    (I386Register::Xmm0, 0),
-                ],
+                registers: vec![(I386Register::Rax, 0x3000), (I386Register::Xmm0, 0)],
                 eflags: 1 << 1,
                 memory: vec![(0x3000, mem128.clone())],
             },
@@ -855,10 +846,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "movddup xmm0, xmm1",
             vec![0xf2, 0x0f, 0x12, 0xc1],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Xmm0, 0),
-                    (I386Register::Xmm1, xmm1),
-                ],
+                registers: vec![(I386Register::Xmm0, 0), (I386Register::Xmm1, xmm1)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -867,10 +855,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "movshdup xmm0, xmm1",
             vec![0xf3, 0x0f, 0x16, 0xc1],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Xmm0, 0),
-                    (I386Register::Xmm1, xmm1),
-                ],
+                registers: vec![(I386Register::Xmm0, 0), (I386Register::Xmm1, xmm1)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -879,10 +864,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "movsldup xmm0, xmm1",
             vec![0xf3, 0x0f, 0x12, 0xc1],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Xmm0, 0),
-                    (I386Register::Xmm1, xmm1),
-                ],
+                registers: vec![(I386Register::Xmm0, 0), (I386Register::Xmm1, xmm1)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -891,10 +873,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "andpd xmm0, xmm1",
             vec![0x66, 0x0f, 0x54, 0xc1],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Xmm0, xmm0),
-                    (I386Register::Xmm1, xmm1),
-                ],
+                registers: vec![(I386Register::Xmm0, xmm0), (I386Register::Xmm1, xmm1)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -903,10 +882,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "andnps xmm0, xmm1",
             vec![0x0f, 0x55, 0xc1],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Xmm0, xmm0),
-                    (I386Register::Xmm1, xmm1),
-                ],
+                registers: vec![(I386Register::Xmm0, xmm0), (I386Register::Xmm1, xmm1)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -915,10 +891,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "por xmm0, xmm1",
             vec![0x66, 0x0f, 0xeb, 0xc1],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Xmm0, xmm0),
-                    (I386Register::Xmm1, xmm1),
-                ],
+                registers: vec![(I386Register::Xmm0, xmm0), (I386Register::Xmm1, xmm1)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -927,10 +900,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "pandn xmm0, xmm1",
             vec![0x66, 0x0f, 0xdf, 0xc1],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Xmm0, xmm0),
-                    (I386Register::Xmm1, xmm1),
-                ],
+                registers: vec![(I386Register::Xmm0, xmm0), (I386Register::Xmm1, xmm1)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -939,10 +909,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "paddb xmm0, xmm1",
             vec![0x66, 0x0f, 0xfc, 0xc1],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Xmm0, xmm0),
-                    (I386Register::Xmm1, xmm1),
-                ],
+                registers: vec![(I386Register::Xmm0, xmm0), (I386Register::Xmm1, xmm1)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -951,10 +918,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "paddd xmm0, xmm1",
             vec![0x66, 0x0f, 0xfe, 0xc1],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Xmm0, xmm0),
-                    (I386Register::Xmm1, xmm1),
-                ],
+                registers: vec![(I386Register::Xmm0, xmm0), (I386Register::Xmm1, xmm1)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -963,10 +927,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "pavgb xmm0, xmm1",
             vec![0x66, 0x0f, 0xe0, 0xc1],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Xmm0, xmm0),
-                    (I386Register::Xmm1, xmm1),
-                ],
+                registers: vec![(I386Register::Xmm0, xmm0), (I386Register::Xmm1, xmm1)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -975,10 +936,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "psubw xmm0, xmm1",
             vec![0x66, 0x0f, 0xf9, 0xc1],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Xmm0, xmm0),
-                    (I386Register::Xmm1, xmm1),
-                ],
+                registers: vec![(I386Register::Xmm0, xmm0), (I386Register::Xmm1, xmm1)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -1014,10 +972,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "pcmpeqb xmm0, xmm1",
             vec![0x66, 0x0f, 0x74, 0xc1],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Xmm0, xmm0),
-                    (I386Register::Xmm1, xmm1),
-                ],
+                registers: vec![(I386Register::Xmm0, xmm0), (I386Register::Xmm1, xmm1)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -1026,10 +981,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "pcmpgtw xmm0, xmm1",
             vec![0x66, 0x0f, 0x65, 0xc1],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Xmm0, xmm0),
-                    (I386Register::Xmm1, xmm1),
-                ],
+                registers: vec![(I386Register::Xmm0, xmm0), (I386Register::Xmm1, xmm1)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -1038,10 +990,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "pmaxub xmm0, xmm1",
             vec![0x66, 0x0f, 0xde, 0xc1],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Xmm0, xmm0),
-                    (I386Register::Xmm1, xmm1),
-                ],
+                registers: vec![(I386Register::Xmm0, xmm0), (I386Register::Xmm1, xmm1)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -1050,10 +999,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "pminsw xmm0, xmm1",
             vec![0x66, 0x0f, 0xea, 0xc1],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Xmm0, xmm0),
-                    (I386Register::Xmm1, xmm1),
-                ],
+                registers: vec![(I386Register::Xmm0, xmm0), (I386Register::Xmm1, xmm1)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -1062,10 +1008,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "pmaddwd xmm0, xmm1",
             vec![0x66, 0x0f, 0xf5, 0xc1],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Xmm0, xmm0),
-                    (I386Register::Xmm1, xmm1),
-                ],
+                registers: vec![(I386Register::Xmm0, xmm0), (I386Register::Xmm1, xmm1)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -1074,10 +1017,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "pmulhw xmm0, xmm1",
             vec![0x66, 0x0f, 0xe5, 0xc1],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Xmm0, xmm0),
-                    (I386Register::Xmm1, xmm1),
-                ],
+                registers: vec![(I386Register::Xmm0, xmm0), (I386Register::Xmm1, xmm1)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -1086,10 +1026,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "pmuludq xmm0, xmm1",
             vec![0x66, 0x0f, 0xf4, 0xc1],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Xmm0, xmm0),
-                    (I386Register::Xmm1, xmm1),
-                ],
+                registers: vec![(I386Register::Xmm0, xmm0), (I386Register::Xmm1, xmm1)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -1098,10 +1035,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "packsswb xmm0, xmm1",
             vec![0x66, 0x0f, 0x63, 0xc1],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Xmm0, xmm0),
-                    (I386Register::Xmm1, xmm1),
-                ],
+                registers: vec![(I386Register::Xmm0, xmm0), (I386Register::Xmm1, xmm1)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -1110,10 +1044,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "punpcklbw xmm0, xmm1",
             vec![0x66, 0x0f, 0x60, 0xc1],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Xmm0, xmm0),
-                    (I386Register::Xmm1, xmm1),
-                ],
+                registers: vec![(I386Register::Xmm0, xmm0), (I386Register::Xmm1, xmm1)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -1122,10 +1053,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "pextrd eax, xmm0, 1",
             vec![0x66, 0x0f, 0x3a, 0x16, 0xc0, 0x01],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Eax, 0),
-                    (I386Register::Xmm0, xmm0),
-                ],
+                registers: vec![(I386Register::Eax, 0), (I386Register::Xmm0, xmm0)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -1134,10 +1062,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "pinsrd xmm0, eax, 1",
             vec![0x66, 0x0f, 0x3a, 0x22, 0xc0, 0x01],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Eax, 0x1234_5678),
-                    (I386Register::Xmm0, xmm0),
-                ],
+                registers: vec![(I386Register::Eax, 0x1234_5678), (I386Register::Xmm0, xmm0)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -1146,10 +1071,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "pmovmskb eax, xmm0",
             vec![0x66, 0x0f, 0xd7, 0xc0],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Eax, 0),
-                    (I386Register::Xmm0, xmm0),
-                ],
+                registers: vec![(I386Register::Eax, 0), (I386Register::Xmm0, xmm0)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -1158,10 +1080,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "ptest xmm0, xmm1",
             vec![0x66, 0x0f, 0x38, 0x17, 0xc1],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Xmm0, xmm0),
-                    (I386Register::Xmm1, xmm1),
-                ],
+                registers: vec![(I386Register::Xmm0, xmm0), (I386Register::Xmm1, xmm1)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -1170,10 +1089,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "movhlps xmm0, xmm1",
             vec![0x0f, 0x12, 0xc1],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Xmm0, xmm0),
-                    (I386Register::Xmm1, xmm1),
-                ],
+                registers: vec![(I386Register::Xmm0, xmm0), (I386Register::Xmm1, xmm1)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -1182,10 +1098,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "movhpd xmm0, qword ptr [rax]",
             vec![0x66, 0x0f, 0x16, 0x00],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Rax, 0x3000),
-                    (I386Register::Xmm0, xmm0),
-                ],
+                registers: vec![(I386Register::Rax, 0x3000), (I386Register::Xmm0, xmm0)],
                 eflags: 1 << 1,
                 memory: vec![(0x3000, mem128[..8].to_vec())],
             },
@@ -1194,10 +1107,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "pshufb xmm0, xmm1",
             vec![0x66, 0x0f, 0x38, 0x00, 0xc1],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Xmm0, xmm0),
-                    (I386Register::Xmm1, mask),
-                ],
+                registers: vec![(I386Register::Xmm0, xmm0), (I386Register::Xmm1, mask)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -1206,10 +1116,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "pmovsxbw xmm0, xmm1",
             vec![0x66, 0x0f, 0x38, 0x20, 0xc1],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Xmm0, 0),
-                    (I386Register::Xmm1, xmm1),
-                ],
+                registers: vec![(I386Register::Xmm0, 0), (I386Register::Xmm1, xmm1)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -1218,10 +1125,7 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             "pmovzxdq xmm0, xmm1",
             vec![0x66, 0x0f, 0x38, 0x35, 0xc1],
             I386Fixture {
-                registers: vec![
-                    (I386Register::Xmm0, 0),
-                    (I386Register::Xmm1, xmm1),
-                ],
+                registers: vec![(I386Register::Xmm0, 0), (I386Register::Xmm1, xmm1)],
                 eflags: 1 << 1,
                 memory: vec![],
             },
@@ -1281,9 +1185,13 @@ fn vector_ymm_semantics_wide_regressions() {
                 },
                 wide_registers: vec![(I386Register::Ymm1, ymm1.clone())],
             },
-            Some(("reg_122", vec![
-                0xf0, 0x0f, 0xe1, 0x1e, 0xd2, 0x2d, 0xc3, 0x3c, 0xb4, 0x4b, 0xa5, 0x5a, 0x96, 0x69, 0x87, 0x78,
-            ])),
+            Some((
+                "reg_122",
+                vec![
+                    0xf0, 0x0f, 0xe1, 0x1e, 0xd2, 0x2d, 0xc3, 0x3c, 0xb4, 0x4b, 0xa5, 0x5a, 0x96,
+                    0x69, 0x87, 0x78,
+                ],
+            )),
             None,
         ),
         (
@@ -1301,10 +1209,14 @@ fn vector_ymm_semantics_wide_regressions() {
                     (I386Register::Ymm2, ymm2.clone()),
                 ],
             },
-            Some(("reg_154", vec![
-                0x24, 0x42, 0x66, 0x81, 0xa5, 0xc3, 0xe7, 0xff, 0x18, 0x36, 0x54, 0x72, 0x90, 0xab, 0xcd, 0xef,
-                0xf0, 0x0f, 0xe1, 0x1e, 0xd2, 0x2d, 0xc3, 0x3c, 0xb4, 0x4b, 0xa5, 0x5a, 0x96, 0x69, 0x87, 0x78,
-            ])),
+            Some((
+                "reg_154",
+                vec![
+                    0x24, 0x42, 0x66, 0x81, 0xa5, 0xc3, 0xe7, 0xff, 0x18, 0x36, 0x54, 0x72, 0x90,
+                    0xab, 0xcd, 0xef, 0xf0, 0x0f, 0xe1, 0x1e, 0xd2, 0x2d, 0xc3, 0x3c, 0xb4, 0x4b,
+                    0xa5, 0x5a, 0x96, 0x69, 0x87, 0x78,
+                ],
+            )),
             None,
         ),
         (
@@ -1321,10 +1233,14 @@ fn vector_ymm_semantics_wide_regressions() {
                     (I386Register::Ymm1, ymm1.clone()),
                 ],
             },
-            Some(("reg_154", vec![
-                0xb4, 0x4b, 0xa5, 0x5a, 0x96, 0x69, 0x87, 0x78, 0xf0, 0x0f, 0xe1, 0x1e, 0xd2, 0x2d, 0xc3, 0x3c,
-                0x55, 0x44, 0x33, 0x22, 0x11, 0x00, 0x99, 0x88, 0x01, 0xff, 0x02, 0xfe, 0x03, 0xfd, 0x04, 0xfc,
-            ])),
+            Some((
+                "reg_154",
+                vec![
+                    0xb4, 0x4b, 0xa5, 0x5a, 0x96, 0x69, 0x87, 0x78, 0xf0, 0x0f, 0xe1, 0x1e, 0xd2,
+                    0x2d, 0xc3, 0x3c, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00, 0x99, 0x88, 0x01, 0xff,
+                    0x02, 0xfe, 0x03, 0xfd, 0x04, 0xfc,
+                ],
+            )),
             None,
         ),
         (
@@ -1341,10 +1257,14 @@ fn vector_ymm_semantics_wide_regressions() {
                     (I386Register::Ymm1, ymm1.clone()),
                 ],
             },
-            Some(("reg_154", vec![
-                0x11, 0x00, 0x99, 0x88, 0x55, 0x44, 0x33, 0x22, 0x03, 0xfd, 0x04, 0xfc, 0x01, 0xff, 0x02, 0xfe,
-                0x96, 0x69, 0x87, 0x78, 0xb4, 0x4b, 0xa5, 0x5a, 0xd2, 0x2d, 0xc3, 0x3c, 0xf0, 0x0f, 0xe1, 0x1e,
-            ])),
+            Some((
+                "reg_154",
+                vec![
+                    0x11, 0x00, 0x99, 0x88, 0x55, 0x44, 0x33, 0x22, 0x03, 0xfd, 0x04, 0xfc, 0x01,
+                    0xff, 0x02, 0xfe, 0x96, 0x69, 0x87, 0x78, 0xb4, 0x4b, 0xa5, 0x5a, 0xd2, 0x2d,
+                    0xc3, 0x3c, 0xf0, 0x0f, 0xe1, 0x1e,
+                ],
+            )),
             None,
         ),
         (
@@ -1393,10 +1313,14 @@ fn vector_ymm_semantics_wide_regressions() {
                     (I386Register::Ymm2, ymm2),
                 ],
             },
-            Some(("reg_154", vec![
-                0xde, 0x01, 0xad, 0xff, 0xbe, 0x02, 0xef, 0xfe, 0x10, 0x03, 0x32, 0xfd, 0x54, 0x04, 0x76, 0xfc,
-                0x24, 0xf0, 0x42, 0x0f, 0x66, 0xe1, 0x81, 0x1e, 0xa5, 0xd2, 0xc3, 0x2d, 0xe7, 0xc3, 0xff, 0x3c,
-            ])),
+            Some((
+                "reg_154",
+                vec![
+                    0xde, 0x01, 0xad, 0xff, 0xbe, 0x02, 0xef, 0xfe, 0x10, 0x03, 0x32, 0xfd, 0x54,
+                    0x04, 0x76, 0xfc, 0x24, 0xf0, 0x42, 0x0f, 0x66, 0xe1, 0x81, 0x1e, 0xa5, 0xd2,
+                    0xc3, 0x2d, 0xe7, 0xc3, 0xff, 0x3c,
+                ],
+            )),
             None,
         ),
     ];

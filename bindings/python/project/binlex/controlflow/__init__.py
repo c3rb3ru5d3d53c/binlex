@@ -120,6 +120,10 @@ class Instruction:
         """Return convenience accessors for lifting this instruction."""
         return _Lifters(self)
 
+    def embeddings(self):
+        """Return convenience accessors for embeddings derived from this instruction."""
+        return _Embeddings(self)
+
 
 class InstructionJsonDeserializer:
     """Deserialize a serialized instruction JSON payload into typed accessors."""
@@ -328,6 +332,10 @@ class Block:
         """Return convenience accessors for lifting this block."""
         return _Lifters(self)
 
+    def embeddings(self):
+        """Return convenience accessors for embeddings derived from this block."""
+        return _Embeddings(self)
+
 
 class Function:
     """Function wrapper backed by the native control-flow engine."""
@@ -458,6 +466,10 @@ class Function:
         """Return convenience accessors for lifting this function."""
         return _Lifters(self)
 
+    def embeddings(self):
+        """Return convenience accessors for embeddings derived from this function."""
+        return _Embeddings(self)
+
 class _Lifters:
     """Convenience accessor namespace for controlflow-object lifters."""
 
@@ -472,11 +484,11 @@ class _Lifters:
             raise RuntimeError("controlflow object is missing associated Config")
         lifter = Lifter(config)
         if isinstance(self._owner, Instruction):
-            lifter.lift_instruction(self._owner)
+            lifter = lifter.lift_instruction(self._owner)
         elif isinstance(self._owner, Block):
-            lifter.lift_block(self._owner)
+            lifter = lifter.lift_block(self._owner)
         elif isinstance(self._owner, Function):
-            lifter.lift_function(self._owner)
+            lifter = lifter.lift_function(self._owner)
         else:
             raise TypeError(f"unsupported lifter owner: {type(self._owner)!r}")
         return lifter
@@ -489,14 +501,24 @@ class _Lifters:
             raise RuntimeError("controlflow object is missing associated Config")
         lifter = Lifter(config)
         if isinstance(self._owner, Instruction):
-            lifter.lift_instruction(self._owner)
+            lifter = lifter.lift_instruction(self._owner)
         elif isinstance(self._owner, Block):
-            lifter.lift_block(self._owner)
+            lifter = lifter.lift_block(self._owner)
         elif isinstance(self._owner, Function):
-            lifter.lift_function(self._owner)
+            lifter = lifter.lift_function(self._owner)
         else:
             raise TypeError(f"unsupported lifter owner: {type(self._owner)!r}")
         return lifter
+
+
+class _Embeddings:
+    """Convenience accessor namespace for controlflow-object embeddings."""
+
+    def __init__(self, owner):
+        self._owner = owner
+
+    def llvm(self):
+        return self._owner._inner.embedding()
 
 
 class BlockJsonDeserializer:

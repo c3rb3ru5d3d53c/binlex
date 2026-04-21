@@ -32,6 +32,7 @@ use binlex::controlflow::InstructionJson as InnerInstructionJson;
 use binlex::genetics::Chromosome as InnerChromosome;
 use binlex::hex;
 use binlex::imaging::Imaging as InnerImaging;
+use binlex::io::Stderr;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use std::collections::BTreeSet;
@@ -309,6 +310,25 @@ impl Instruction {
         self.with_inner_instruction(py, |instruction| {
             Ok(Imaging::from_inner(instruction.imaging()))
         })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the LLVM embedding vector for this instruction, if available.
+    pub fn embedding(&self, py: Python) -> PyResult<Option<Vec<f32>>> {
+        let config = self.cfg.borrow(py).inner.lock().unwrap().config.clone();
+        match self.with_inner_instruction(py, |instruction| Ok(instruction.embeddings().llvm())) {
+            Ok(result) => Ok(result),
+            Err(error) => {
+                Stderr::print_debug(
+                    &config,
+                    format!(
+                        "llvm instruction embedding skipped address=0x{:x} error={}",
+                        self.address, error
+                    ),
+                );
+                Ok(None)
+            }
+        }
     }
 
     #[pyo3(text_signature = "($self)")]

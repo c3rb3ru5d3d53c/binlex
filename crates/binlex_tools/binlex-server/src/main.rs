@@ -6,7 +6,7 @@ use axum::serve;
 use binlex::config::DIRECTORY;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
-use tracing::{info, warn};
+use tracing::info;
 
 mod routes;
 
@@ -62,6 +62,8 @@ struct Args {
     processes: Option<usize>,
     #[arg(long)]
     processor_directory: Option<String>,
+    #[arg(long, value_delimiter = ',')]
+    embeddings: Option<Vec<String>>,
     #[arg(long)]
     debug: bool,
 }
@@ -132,6 +134,41 @@ fn apply_processor_cli_overrides(config: &mut binlex::Config, args: &Args) {
     }
 }
 
+fn apply_embedding_cli_overrides(
+    config: &mut binlex::Config,
+    args: &Args,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let Some(backends) = args.embeddings.as_ref() else {
+        return Ok(());
+    };
+
+    config.instructions.embeddings.llvm.enabled = false;
+    config.blocks.embeddings.llvm.enabled = false;
+    config.functions.embeddings.llvm.enabled = false;
+
+    for backend in backends
+        .iter()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    {
+        match backend {
+            "llvm" => {
+                config.blocks.embeddings.llvm.enabled = true;
+                config.functions.embeddings.llvm.enabled = true;
+            }
+            "none" => {}
+            other => {
+                return Err(Box::new(Error::other(format!(
+                    "unsupported embeddings backend '{}'; supported values: llvm, none",
+                    other
+                ))));
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn ensure_config_exists(path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
     if path.exists() {
         return Ok(());
@@ -186,12 +223,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let binlex_config_path = resolve_binlex_config_path(&loaded.server.binlex_config);
     let mut config = binlex::Config::load(Some(binlex_config_path.as_path()))?;
     apply_processor_cli_overrides(&mut config, &args);
-    let embeddings_registered = binlex::processor::processor_registration_by_name_for_config(
-        &config.processors,
-        "embeddings",
-    )
-    .is_some();
-    let embeddings_config = config.processors.processor("embeddings").cloned();
+    apply_embedding_cli_overrides(&mut config, &args)?;
     tracing_subscriber::fmt()
         .with_target(false)
         .with_max_level(if loaded.server.debug {
@@ -204,72 +236,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = binlex::server::state::AppState::new(config.clone(), loaded.server.debug)?;
     let router = routes::build_router(state);
     info!(
-        "listening on {} debug={} processors_path={:?} embeddings_registered={} embeddings_enabled={} embeddings_graph_enabled={} embeddings_complete_enabled={}",
+        "listening on {} debug={} processors_path={:?} function_embeddings_enabled={} embedding_dimensions={} embedding_device={}",
         loaded.server.bind,
         loaded.server.debug,
         config.processors.path,
-        embeddings_registered,
-        embeddings_config
-            .as_ref()
-            .map(|processor| processor.enabled)
-            .unwrap_or(false),
-        embeddings_config
-            .as_ref()
-            .map(|processor| processor.graph.enabled)
-            .unwrap_or(false),
-        embeddings_config
-            .as_ref()
-            .map(|processor| processor.complete.enabled)
-            .unwrap_or(false),
+        config.functions.embeddings.llvm.enabled,
+        config.embeddings.llvm.dimensions,
+        config.embeddings.llvm.device,
     );
-    if !embeddings_registered {
-        for diagnostic in
-            binlex::processor::processor_discovery_diagnostics_for_config(&config.processors)
-        {
-            match diagnostic.status {
-                binlex::processor::ProcessorDiscoveryStatus::Registered { name } => {
-                    info!(
-                        "processor discovery candidate={:?} status=registered name={}",
-                        diagnostic.candidate, name
-                    );
-                }
-                binlex::processor::ProcessorDiscoveryStatus::DuplicateName { name } => {
-                    warn!(
-                        "processor discovery candidate={:?} status=duplicate_name name={}",
-                        diagnostic.candidate, name
-                    );
-                }
-                binlex::processor::ProcessorDiscoveryStatus::SpawnFailed { error } => {
-                    warn!(
-                        "processor discovery candidate={:?} status=spawn_failed error={}",
-                        diagnostic.candidate, error
-                    );
-                }
-                binlex::processor::ProcessorDiscoveryStatus::DescribeFailed { status, stderr } => {
-                    warn!(
-                        "processor discovery candidate={:?} status=describe_failed exit_status={} stderr={:?}",
-                        diagnostic.candidate, status, stderr
-                    );
-                }
-                binlex::processor::ProcessorDiscoveryStatus::InvalidRegistrationJson {
-                    error,
-                    stdout,
-                    stderr,
-                } => {
-                    warn!(
-                        "processor discovery candidate={:?} status=invalid_registration_json error={} stdout={:?} stderr={:?}",
-                        diagnostic.candidate, error, stdout, stderr
-                    );
-                }
-                binlex::processor::ProcessorDiscoveryStatus::InvalidRegistrationMetadata => {
-                    warn!(
-                        "processor discovery candidate={:?} status=invalid_registration_metadata",
-                        diagnostic.candidate
-                    );
-                }
-            }
-        }
-    }
 
     let listener = tokio::net::TcpListener::bind(bind).await?;
     serve(
@@ -282,7 +256,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{SERVER_FILE_NAME, ServerConfigFile, ServerRuntimeConfig};
+    use super::{
+        Args, SERVER_FILE_NAME, ServerConfigFile, ServerRuntimeConfig,
+        apply_embedding_cli_overrides,
+    };
+    use clap::Parser;
 
     #[test]
     fn server_config_uses_server_specific_file_name() {
@@ -308,5 +286,34 @@ mod tests {
             .expect("server config should serialize");
         assert!(toml.contains("[binlex-server]"));
         assert!(!toml.contains("[server]"));
+    }
+
+    #[test]
+    fn embeddings_cli_override_enables_function_llvm_embeddings() {
+        let args = Args::parse_from(["binlex-server", "--embeddings", "llvm"]);
+        let mut config = binlex::Config::default();
+        config.blocks.embeddings.llvm.enabled = false;
+        config.functions.embeddings.llvm.enabled = false;
+
+        apply_embedding_cli_overrides(&mut config, &args).expect("override should apply");
+
+        assert!(config.functions.embeddings.llvm.enabled);
+        assert!(config.blocks.embeddings.llvm.enabled);
+        assert!(!config.instructions.embeddings.llvm.enabled);
+    }
+
+    #[test]
+    fn embeddings_cli_override_none_disables_embeddings() {
+        let args = Args::parse_from(["binlex-server", "--embeddings", "none"]);
+        let mut config = binlex::Config::default();
+        config.instructions.embeddings.llvm.enabled = true;
+        config.blocks.embeddings.llvm.enabled = true;
+        config.functions.embeddings.llvm.enabled = true;
+
+        apply_embedding_cli_overrides(&mut config, &args).expect("override should apply");
+
+        assert!(!config.instructions.embeddings.llvm.enabled);
+        assert!(!config.blocks.embeddings.llvm.enabled);
+        assert!(!config.functions.embeddings.llvm.enabled);
     }
 }

@@ -69,6 +69,8 @@ pub struct ConfigInstructions {
     pub semantics: ConfigInstructionsSemantics,
     #[serde(default)]
     pub lifters: ConfigEntityLifters,
+    #[serde(default)]
+    pub embeddings: ConfigEntityEmbeddings,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -85,6 +87,8 @@ pub struct ConfigBlocks {
     pub entropy: ConfigHeuristicEntropy,
     #[serde(default)]
     pub lifters: ConfigEntityLifters,
+    #[serde(default)]
+    pub embeddings: ConfigEntityEmbeddings,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -109,6 +113,19 @@ pub struct ConfigFunctions {
     pub markov: ConfigMarkov,
     #[serde(default)]
     pub lifters: ConfigEntityLifters,
+    #[serde(default)]
+    pub embeddings: ConfigEntityEmbeddings,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigEntityEmbeddings {
+    #[serde(default)]
+    pub llvm: ConfigEntityEmbeddingsLLVM,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigEntityEmbeddingsLLVM {
+    pub enabled: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -121,13 +138,6 @@ pub struct ConfigEntityLifters {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigEntityLifterLLVM {
-    pub enabled: bool,
-    #[serde(default)]
-    pub normalized: ConfigEntityLifterLLVMNormalized,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigEntityLifterLLVMNormalized {
     pub enabled: bool,
 }
 
@@ -150,12 +160,22 @@ pub struct ConfigFormats {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigImaging {
-    pub sha256: ConfigHashEnabled,
-    pub tlsh: ConfigTLSH,
-    pub minhash: ConfigMinhash,
-    pub ahash: ConfigHashEnabled,
-    pub dhash: ConfigHashEnabled,
-    pub phash: ConfigHashEnabled,
+    pub tlsh: ConfigImagingTLSH,
+    pub minhash: ConfigImagingMinhash,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigImagingTLSH {
+    pub minimum_byte_size: usize,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigImagingMinhash {
+    pub number_of_hashes: usize,
+    pub shingle_size: usize,
+    pub maximum_byte_size_enabled: bool,
+    pub maximum_byte_size: usize,
+    pub seed: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -164,6 +184,18 @@ pub struct ConfigLifters {
     pub llvm: ConfigLiftersLLVM,
     #[serde(default)]
     pub vex: ConfigLiftersVex,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigEmbeddings {
+    #[serde(default)]
+    pub llvm: ConfigEmbeddingsLLVM,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigEmbeddingsLLVM {
+    pub dimensions: usize,
+    pub device: String,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -205,6 +237,8 @@ pub struct ConfigData {
     pub disassembler: ConfigDisassembler,
     #[serde(default)]
     pub lifters: ConfigLifters,
+    #[serde(default)]
+    pub embeddings: ConfigEmbeddings,
     #[serde(default)]
     pub processors: ConfigProcessors,
 }
@@ -312,12 +346,6 @@ impl Default for ConfigMarkov {
     }
 }
 
-impl Default for ConfigEntityLifterLLVMNormalized {
-    fn default() -> Self {
-        Self { enabled: false }
-    }
-}
-
 impl Default for ConfigInstructionsSemantics {
     fn default() -> Self {
         Self { enabled: true }
@@ -326,10 +354,7 @@ impl Default for ConfigInstructionsSemantics {
 
 impl Default for ConfigEntityLifterLLVM {
     fn default() -> Self {
-        Self {
-            enabled: false,
-            normalized: ConfigEntityLifterLLVMNormalized::default(),
-        }
+        Self { enabled: false }
     }
 }
 
@@ -360,6 +385,37 @@ impl Default for ConfigLiftersLLVM {
 impl Default for ConfigLiftersVex {
     fn default() -> Self {
         Self { enabled: true }
+    }
+}
+
+impl Default for ConfigEntityEmbeddingsLLVM {
+    fn default() -> Self {
+        Self { enabled: false }
+    }
+}
+
+impl Default for ConfigEntityEmbeddings {
+    fn default() -> Self {
+        Self {
+            llvm: ConfigEntityEmbeddingsLLVM::default(),
+        }
+    }
+}
+
+impl Default for ConfigEmbeddingsLLVM {
+    fn default() -> Self {
+        Self {
+            dimensions: 64,
+            device: "cpu".to_string(),
+        }
+    }
+}
+
+impl Default for ConfigEmbeddings {
+    fn default() -> Self {
+        Self {
+            llvm: ConfigEmbeddingsLLVM::default(),
+        }
     }
 }
 

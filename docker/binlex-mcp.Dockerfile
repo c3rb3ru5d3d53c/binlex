@@ -90,6 +90,9 @@ COPY . .
 RUN set -eux; \
     cargo build --release -p binlex-mcp --bin binlex-mcp; \
     for manifest in $(find crates/binlex_processors -mindepth 2 -maxdepth 2 -name Cargo.toml | sort); do \
+        case "$manifest" in \
+            */embeddings/Cargo.toml) continue ;; \
+        esac; \
         cargo build --release --manifest-path "$manifest"; \
     done; \
     mkdir -p /tmp/binlex-processors; \

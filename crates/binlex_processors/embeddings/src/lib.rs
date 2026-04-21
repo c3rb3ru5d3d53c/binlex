@@ -1,34 +1,66 @@
-use burn::tensor::{Tensor, TensorData};
-use burn::{Dispatch, DispatchDevice};
-use rayon::prelude::*;
-use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
-use std::collections::{BTreeMap, BTreeSet};
-use std::hash::{Hash, Hasher};
-use std::sync::OnceLock;
-use twox_hash::XxHash64;
+// MIT License
+//
+// Copyright (c) [2025] [c3rb3ru5d3d53c]
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
+/*
+Weights:
+
+- functions = 0.50 semantic/dataflow + 0.30 control-flow + 0.20 sequence/subgraph
+- blocks = 0.60 semantic/dataflow + 0.15 control-flow + 0.25 sequence/subgraph
+*/
+
+use binlex::Config;
 use binlex::config::{
     ConfigProcessor, ConfigProcessorTarget, ConfigProcessorTransport, ConfigProcessorTransports,
 };
-use binlex::controlflow::{BlockJson, Function, FunctionJson, Graph, InstructionJson};
+use binlex::controlflow::{Block, Function, Graph, GraphSnapshot};
 use binlex::core::Architecture;
 use binlex::core::{OperatingSystem, Transport};
-use binlex::genetics::ChromosomeJson;
-use binlex::math::stats::{max_or_zero, normalize_l2, weighted_histogram, weighted_mean};
+use binlex::io::Stderr;
+use binlex::lifters::llvm::Lifter as LlvmLifter;
+use binlex::math::stats::normalize_l2;
 use binlex::processor::{
     GraphProcessor, GraphProcessorFanout, OnGraphOptions, ProcessorContext,
     external_processor_registration,
 };
 use binlex::runtime::{Processor, ProcessorError};
+use burn::tensor::{Tensor, TensorData};
+use burn::{Dispatch, DispatchDevice};
+use inkwell::context::Context;
+use inkwell::memory_buffer::MemoryBuffer;
+use inkwell::module::Module;
+use inkwell::values::{BasicValue, CallSiteValue, FunctionValue, InstructionOpcode, Operand};
+use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+use std::collections::{BTreeMap, HashMap};
+use std::hash::{Hash, Hasher};
+use std::io::Error;
+use std::sync::OnceLock;
+use twox_hash::XxHash64;
 
 const DEFAULT_DIMENSIONS: usize = 64;
-const NIBBLE_BUCKETS: usize = 16;
-const TRANSITION_BUCKETS: usize = 16;
+const HASH_BUCKETS: usize = 64;
+const SEQUENCE_BUCKETS: usize = 96;
 const DEGREE_BUCKETS: usize = 8;
-const SIZE_BUCKETS: usize = 8;
-const INSTRUCTION_BUCKETS: usize = 8;
-const CALL_BUCKETS: usize = 8;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct EmbeddingsRequest {
@@ -38,12 +70,7 @@ pub struct EmbeddingsRequest {
     pub device: Option<String>,
     #[serde(default)]
     pub threads: Option<usize>,
-    #[serde(default)]
-    pub instructions: Vec<EmbeddingEntityInput>,
-    #[serde(default)]
-    pub blocks: Vec<EmbeddingEntityInput>,
-    #[serde(default)]
-    pub functions: Vec<EmbeddingEntityInput>,
+    pub graph: GraphSnapshot,
 }
 
 #[derive(Default)]
@@ -53,12 +80,6 @@ pub struct EmbeddingsProcessor;
 struct EmbeddingModelConfig {
     dimensions: usize,
     device: EmbeddingDevice,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct EmbeddingEntityInput {
-    address: u64,
-    data: Value,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -72,38 +93,16 @@ enum EmbeddingDevice {
     Rocm,
 }
 
-static AUTO_GPU_DEVICE: OnceLock<EmbeddingDevice> = OnceLock::new();
-
-#[derive(Default)]
 struct FeatureFamilies {
-    chromosome: Vec<f32>,
-    scalar: Vec<f32>,
-    cfg: Vec<f32>,
+    semantic: Vec<f32>,
+    control_flow: Vec<f32>,
+    sequence: Vec<f32>,
+    semantic_weight: f32,
+    control_flow_weight: f32,
+    sequence_weight: f32,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-struct FunctionCfgBlock {
-    address: u64,
-    chromosome: ChromosomeJson,
-    #[serde(default)]
-    entropy: Option<f64>,
-    size: usize,
-    edges: usize,
-    number_of_instructions: usize,
-    call_count: usize,
-    direct_call_count: usize,
-    indirect_call_count: usize,
-    conditional: bool,
-    is_return: bool,
-    is_trap: bool,
-    contiguous: bool,
-    #[serde(default)]
-    next: Option<u64>,
-    #[serde(default)]
-    to: Vec<u64>,
-    #[serde(default)]
-    blocks: Vec<u64>,
-}
+static AUTO_GPU_DEVICE: OnceLock<EmbeddingDevice> = OnceLock::new();
 
 fn parse_device(value: Option<&str>) -> EmbeddingDevice {
     match value.unwrap_or("cpu").trim().to_ascii_lowercase().as_str() {
@@ -128,60 +127,6 @@ fn gpu_probe_candidates() -> &'static [EmbeddingDevice] {
     }
 }
 
-fn chromosome_histogram(vector: &[u8]) -> Vec<f32> {
-    let mut histogram = vec![0.0f32; NIBBLE_BUCKETS];
-    if vector.is_empty() {
-        return histogram;
-    }
-
-    for nibble in vector {
-        let bucket = (*nibble as usize) % NIBBLE_BUCKETS;
-        histogram[bucket] += 1.0;
-    }
-
-    let total = vector.len() as f32;
-    for value in &mut histogram {
-        *value /= total;
-    }
-    histogram
-}
-
-fn chromosome_transitions(vector: &[u8]) -> Vec<f32> {
-    let mut histogram = vec![0.0f32; TRANSITION_BUCKETS];
-    if vector.len() < 2 {
-        return histogram;
-    }
-
-    for window in vector.windows(2) {
-        let transition = ((window[0] << 4) | window[1]) as usize;
-        histogram[transition % TRANSITION_BUCKETS] += 1.0;
-    }
-
-    let total = (vector.len() - 1) as f32;
-    for value in &mut histogram {
-        *value /= total;
-    }
-    histogram
-}
-
-fn chromosome_feature_vector(chromosome: Option<&ChromosomeJson>) -> Vec<f32> {
-    let mut features = Vec::with_capacity(NIBBLE_BUCKETS + TRANSITION_BUCKETS + 4);
-    if let Some(chromosome) = chromosome {
-        features.extend(chromosome_histogram(&chromosome.vector));
-        features.extend(chromosome_transitions(&chromosome.vector));
-        features.push((chromosome.vector.len() as f32 / 512.0).clamp(0.0, 1.0));
-        features.push((chromosome.pattern.len() as f32 / 1024.0).clamp(0.0, 1.0));
-        features.push((chromosome.entropy.unwrap_or_default() as f32 / 8.0).clamp(0.0, 1.0));
-        features.push(1.0);
-    } else {
-        features.extend(std::iter::repeat_n(
-            0.0,
-            NIBBLE_BUCKETS + TRANSITION_BUCKETS + 4,
-        ));
-    }
-    features
-}
-
 fn push_scaled(features: &mut Vec<f32>, value: f32, scale: f32) {
     let scale = if scale <= 0.0 { 1.0 } else { scale };
     features.push((value / scale).clamp(0.0, 1.0));
@@ -191,446 +136,585 @@ fn push_bool(features: &mut Vec<f32>, flag: bool) {
     features.push(if flag { 1.0 } else { 0.0 });
 }
 
-fn instruction_features(instruction: &InstructionJson) -> FeatureFamilies {
-    let mut scalar = Vec::with_capacity(16);
-    push_scaled(&mut scalar, instruction.edges as f32, 8.0);
-    push_scaled(&mut scalar, instruction.size as f32, 16.0);
-    push_scaled(&mut scalar, instruction.functions.len() as f32, 8.0);
-    push_scaled(&mut scalar, instruction.blocks.len() as f32, 8.0);
-    push_scaled(&mut scalar, instruction.to.len() as f32, 8.0);
-    push_bool(&mut scalar, instruction.is_call);
-    push_bool(&mut scalar, instruction.is_return);
-    push_bool(&mut scalar, instruction.is_jump);
-    push_bool(&mut scalar, instruction.is_trap);
-    push_bool(&mut scalar, instruction.is_conditional);
-    push_bool(&mut scalar, instruction.is_prologue);
-    push_bool(&mut scalar, instruction.is_block_start);
-    push_bool(&mut scalar, instruction.is_function_start);
-    push_bool(&mut scalar, instruction.has_indirect_target);
-    push_bool(&mut scalar, instruction.next.is_some());
-    FeatureFamilies {
-        chromosome: chromosome_feature_vector(Some(&instruction.chromosome)),
-        scalar,
-        cfg: Vec::new(),
-    }
+fn extend_weighted(features: &mut Vec<f32>, values: impl IntoIterator<Item = f32>, weight: f32) {
+    features.extend(values.into_iter().map(|value| value * weight));
 }
 
-fn block_features(block: &BlockJson) -> FeatureFamilies {
-    let mut scalar = Vec::with_capacity(12);
-    push_scaled(&mut scalar, block.entropy.unwrap_or_default() as f32, 8.0);
-    push_scaled(&mut scalar, block.edges as f32, 16.0);
-    push_scaled(&mut scalar, block.size as f32, 4096.0);
-    push_scaled(&mut scalar, block.number_of_instructions as f32, 256.0);
-    push_scaled(&mut scalar, block.functions.len() as f32, 32.0);
-    push_scaled(&mut scalar, block.blocks.len() as f32, 32.0);
-    push_scaled(&mut scalar, block.instructions.len() as f32, 256.0);
-    push_scaled(&mut scalar, block.to.len() as f32, 16.0);
-    push_bool(&mut scalar, block.conditional);
-    push_bool(&mut scalar, block.contiguous);
-    push_bool(&mut scalar, block.next.is_some());
-    FeatureFamilies {
-        chromosome: chromosome_feature_vector(Some(&block.chromosome)),
-        scalar,
-        cfg: Vec::new(),
-    }
+fn optimize_lifter(lifter: LlvmLifter) -> Result<LlvmLifter, Error> {
+    lifter
+        .optimizers()?
+        .mem2reg()?
+        .sroa()?
+        .gvn()?
+        .cfg()?
+        .dce()?
+        .into_lifter()
+        .normalized()
 }
 
-fn function_features(function: &FunctionJson) -> FeatureFamilies {
-    let mut scalar = Vec::with_capacity(13);
+fn canonical_function_bitcode(function: &Function<'_>) -> Result<Vec<u8>, Error> {
+    let mut lifter = LlvmLifter::new(function.cfg.config.clone());
+    lifter.lift_function(function)?;
+    let optimized = optimize_lifter(lifter)?;
+    Ok(optimized.bitcode())
+}
+
+fn canonical_block_bitcode(block: &Block<'_>) -> Result<Vec<u8>, Error> {
+    let mut lifter = LlvmLifter::new(block.cfg.config.clone());
+    lifter.lift_block(block)?;
+    let optimized = optimize_lifter(lifter)?;
+    Ok(optimized.bitcode())
+}
+
+fn parse_module_from_bitcode<'ctx>(
+    context: &'ctx Context,
+    bitcode: &[u8],
+) -> Result<Module<'ctx>, Error> {
+    let buffer = MemoryBuffer::create_from_memory_range_copy(bitcode, "binlex-embedding.bc");
+    Module::parse_bitcode_from_buffer(&buffer, context)
+        .map_err(|error| Error::other(error.to_string()))
+}
+
+fn primary_defined_function<'ctx>(module: &Module<'ctx>) -> Option<FunctionValue<'ctx>> {
+    module
+        .get_functions()
+        .find(|function| function.get_first_basic_block().is_some())
+}
+
+fn opcode_token(opcode: InstructionOpcode) -> String {
+    format!("{opcode:?}").to_ascii_lowercase()
+}
+
+fn helper_family(name: &str) -> String {
+    if name == "binlex_instruction_address" {
+        return "binlex_instruction_address".to_string();
+    }
+    for prefix in [
+        "binlex_effect_cil_",
+        "binlex_expr_cil_",
+        "binlex_term_",
+        "binlex_effect_",
+        "binlex_expr_",
+        "binlex_load_",
+        "binlex_store_",
+        "binlex_fence_",
+        "binlex_trap_",
+    ] {
+        if name.starts_with(prefix) {
+            return prefix.trim_end_matches('_').to_string();
+        }
+    }
+    name.to_string()
+}
+
+fn hash_bucket<T: Hash>(value: &T, buckets: usize, seed: u64) -> usize {
+    let mut hasher = XxHash64::with_seed(seed);
+    value.hash(&mut hasher);
+    (hasher.finish() as usize) % buckets.max(1)
+}
+
+fn hashed_feature_bag(values: &[String], buckets: usize, seed: u64) -> Vec<f32> {
+    let mut result = vec![0.0f32; buckets.max(1)];
+    if values.is_empty() {
+        return result;
+    }
+    for value in values {
+        let bucket = hash_bucket(value, result.len(), seed);
+        result[bucket] += 1.0;
+    }
+    let total = values.len() as f32;
+    for value in &mut result {
+        *value /= total;
+    }
+    result
+}
+
+fn numeric_histogram(values: &[f32], buckets: usize, scale: f32) -> Vec<f32> {
+    let mut result = vec![0.0f32; buckets.max(1)];
+    if values.is_empty() {
+        return result;
+    }
+    let scale = if scale <= 0.0 { 1.0 } else { scale };
+    for value in values {
+        let bucket = ((*value / scale) as usize).min(result.len() - 1);
+        result[bucket] += 1.0;
+    }
+    let total = values.len() as f32;
+    for value in &mut result {
+        *value /= total;
+    }
+    result
+}
+
+fn build_ngrams(tokens: &[String], size: usize) -> Vec<String> {
+    if tokens.len() < size || size == 0 {
+        return Vec::new();
+    }
+    tokens
+        .windows(size)
+        .map(|window| window.join("->"))
+        .collect::<Vec<_>>()
+}
+
+fn count_block_successors<'ctx>(function: FunctionValue<'ctx>) -> HashMap<String, usize> {
+    let mut successors = HashMap::new();
+    for block in function.get_basic_blocks() {
+        let count = block
+            .get_terminator()
+            .map(|terminator| {
+                terminator
+                    .get_operands()
+                    .filter(|operand| matches!(operand, Some(Operand::Block(_))))
+                    .count()
+            })
+            .unwrap_or(0);
+        successors.insert(block.get_name().to_string_lossy().into_owned(), count);
+    }
+    successors
+}
+
+fn semantic_features_from_module<'ctx>(
+    function: FunctionValue<'ctx>,
+) -> (Vec<f32>, Vec<String>, Vec<String>) {
+    let mut opcodes = Vec::new();
+    let mut helpers = Vec::new();
+    let mut total_operands = 0f32;
+    let mut constant_operands = 0f32;
+    let mut block_operands = 0f32;
+    let mut instruction_operands = 0f32;
+
+    for block in function.get_basic_blocks() {
+        let mut instruction = block.get_first_instruction();
+        while let Some(current) = instruction {
+            opcodes.push(opcode_token(current.get_opcode()));
+            total_operands += current.get_num_operands() as f32;
+
+            for operand in current.get_operands() {
+                match operand {
+                    Some(Operand::Block(_)) => {
+                        block_operands += 1.0;
+                    }
+                    Some(Operand::Value(value)) => {
+                        if value.is_const() {
+                            constant_operands += 1.0;
+                        }
+                        if value.as_instruction_value().is_some() {
+                            instruction_operands += 1.0;
+                        }
+                    }
+                    None => {}
+                }
+            }
+
+            if let Ok(callsite) = CallSiteValue::try_from(current) {
+                if let Some(callee) = callsite.get_called_fn_value() {
+                    let name = callee.get_name().to_string_lossy().into_owned();
+                    if !name.is_empty() {
+                        helpers.push(helper_family(&name));
+                    }
+                }
+            }
+
+            instruction = current.get_next_instruction();
+        }
+    }
+
+    let instruction_count = opcodes.len().max(1) as f32;
+    let opcode_features = hashed_feature_bag(&opcodes, HASH_BUCKETS, 0x51CA_A11A);
+    let helper_features = hashed_feature_bag(&helpers, HASH_BUCKETS / 2, 0xB1B1_00E7);
+
+    let mut dataflow = Vec::new();
+    let phi_count = opcodes
+        .iter()
+        .filter(|opcode| opcode.as_str() == "phi")
+        .count() as f32;
+    let select_count = opcodes
+        .iter()
+        .filter(|opcode| opcode.as_str() == "select")
+        .count() as f32;
+    let load_count = opcodes
+        .iter()
+        .filter(|opcode| opcode.as_str() == "load")
+        .count() as f32;
+    let store_count = opcodes
+        .iter()
+        .filter(|opcode| opcode.as_str() == "store")
+        .count() as f32;
+    let gep_count = opcodes
+        .iter()
+        .filter(|opcode| opcode.as_str() == "getelementptr")
+        .count() as f32;
+    let alloca_count = opcodes
+        .iter()
+        .filter(|opcode| opcode.as_str() == "alloca")
+        .count() as f32;
+    let cast_count = opcodes
+        .iter()
+        .filter(|opcode| {
+            matches!(
+                opcode.as_str(),
+                "trunc" | "zext" | "sext" | "bitcast" | "ptrtoint" | "inttoptr"
+            )
+        })
+        .count() as f32;
+    let arithmetic_count = opcodes
+        .iter()
+        .filter(|opcode| {
+            matches!(
+                opcode.as_str(),
+                "add" | "sub" | "mul" | "udiv" | "sdiv" | "urem" | "srem"
+            )
+        })
+        .count() as f32;
+    let bitwise_count = opcodes
+        .iter()
+        .filter(|opcode| {
+            matches!(
+                opcode.as_str(),
+                "and" | "or" | "xor" | "shl" | "lshr" | "ashr"
+            )
+        })
+        .count() as f32;
+    let compare_count = opcodes
+        .iter()
+        .filter(|opcode| matches!(opcode.as_str(), "icmp" | "fcmp"))
+        .count() as f32;
+    let call_count = opcodes
+        .iter()
+        .filter(|opcode| opcode.as_str() == "call")
+        .count() as f32;
+    let branch_count = opcodes
+        .iter()
+        .filter(|opcode| matches!(opcode.as_str(), "br" | "switch"))
+        .count() as f32;
+    let return_count = opcodes
+        .iter()
+        .filter(|opcode| opcode.as_str() == "ret")
+        .count() as f32;
+    let unreachable_count = opcodes
+        .iter()
+        .filter(|opcode| opcode.as_str() == "unreachable")
+        .count() as f32;
+
+    for value in [
+        phi_count,
+        select_count,
+        load_count,
+        store_count,
+        gep_count,
+        alloca_count,
+        cast_count,
+        arithmetic_count,
+        bitwise_count,
+        compare_count,
+        call_count,
+        branch_count,
+        return_count,
+        unreachable_count,
+    ] {
+        push_scaled(&mut dataflow, value, instruction_count);
+    }
+
+    let helper_count = helpers.len().max(1) as f32;
+    let mut call_features = Vec::new();
+    push_scaled(&mut call_features, call_count, instruction_count);
     push_scaled(
-        &mut scalar,
-        function.entropy.unwrap_or_default() as f32,
-        8.0,
+        &mut call_features,
+        helpers
+            .iter()
+            .filter(|helper| helper.starts_with("binlex_term_"))
+            .count() as f32,
+        helper_count,
     );
-    push_scaled(&mut scalar, function.edges as f32, 256.0);
-    push_scaled(&mut scalar, function.size as f32, 65536.0);
-    push_scaled(&mut scalar, function.number_of_instructions as f32, 4096.0);
-    push_scaled(&mut scalar, function.number_of_blocks as f32, 512.0);
-    push_scaled(&mut scalar, function.cyclomatic_complexity as f32, 256.0);
     push_scaled(
-        &mut scalar,
-        function.average_instructions_per_block as f32,
-        128.0,
+        &mut call_features,
+        helpers
+            .iter()
+            .filter(|helper| helper.starts_with("binlex_effect_"))
+            .count() as f32,
+        helper_count,
     );
-    push_scaled(&mut scalar, function.functions.len() as f32, 64.0);
-    push_scaled(&mut scalar, function.blocks.len() as f32, 512.0);
-    push_bool(&mut scalar, function.contiguous);
-    push_bool(&mut scalar, function.bytes.is_some());
-    push_bool(&mut scalar, function.chromosome.is_some());
-    FeatureFamilies {
-        chromosome: chromosome_feature_vector(function.chromosome.as_ref()),
-        scalar,
-        cfg: Vec::new(),
-    }
-}
+    push_scaled(
+        &mut call_features,
+        helpers
+            .iter()
+            .filter(|helper| helper.starts_with("binlex_expr_"))
+            .count() as f32,
+        helper_count,
+    );
 
-fn function_cfg_features(value: &Value) -> Vec<f32> {
+    let mut memory_features = Vec::new();
+    push_scaled(&mut memory_features, load_count, instruction_count);
+    push_scaled(&mut memory_features, store_count, instruction_count);
+    push_scaled(&mut memory_features, gep_count, instruction_count);
+    push_scaled(&mut memory_features, alloca_count, instruction_count);
+    push_scaled(
+        &mut memory_features,
+        constant_operands,
+        total_operands.max(1.0),
+    );
+    push_scaled(
+        &mut memory_features,
+        instruction_operands,
+        total_operands.max(1.0),
+    );
+    push_scaled(
+        &mut memory_features,
+        block_operands,
+        total_operands.max(1.0),
+    );
+
+    let mut effect_features = Vec::new();
+    push_scaled(&mut effect_features, branch_count, instruction_count);
+    push_scaled(&mut effect_features, return_count, instruction_count);
+    push_scaled(&mut effect_features, unreachable_count, instruction_count);
+    push_scaled(
+        &mut effect_features,
+        helpers
+            .iter()
+            .filter(|helper| helper.starts_with("binlex_trap_"))
+            .count() as f32,
+        helper_count,
+    );
+    push_scaled(
+        &mut effect_features,
+        helpers
+            .iter()
+            .filter(|helper| helper.starts_with("binlex_fence_"))
+            .count() as f32,
+        helper_count,
+    );
+
     let mut features = Vec::new();
-    let Some(cfg_blocks_value) = value.get("cfg_blocks") else {
-        features.extend(std::iter::repeat_n(
-            0.0,
-            NIBBLE_BUCKETS
-                + TRANSITION_BUCKETS
-                + DEGREE_BUCKETS * 2
-                + SIZE_BUCKETS
-                + INSTRUCTION_BUCKETS
-                + CALL_BUCKETS
-                + CALL_BUCKETS * 2
-                + 19,
-        ));
-        return features;
-    };
+    extend_weighted(&mut features, opcode_features, 0.25);
+    extend_weighted(&mut features, dataflow, 0.30);
+    extend_weighted(&mut features, memory_features, 0.20);
+    extend_weighted(&mut features, call_features, 0.15);
+    extend_weighted(&mut features, effect_features, 0.10);
+    extend_weighted(&mut features, helper_features, 0.10);
 
-    let Ok(cfg_blocks) = serde_json::from_value::<Vec<FunctionCfgBlock>>(cfg_blocks_value.clone())
-    else {
-        features.extend(std::iter::repeat_n(
-            0.0,
-            NIBBLE_BUCKETS
-                + TRANSITION_BUCKETS
-                + DEGREE_BUCKETS * 2
-                + SIZE_BUCKETS
-                + INSTRUCTION_BUCKETS
-                + CALL_BUCKETS
-                + CALL_BUCKETS * 2
-                + 19,
-        ));
-        return features;
-    };
+    (features, opcodes, helpers)
+}
 
-    if cfg_blocks.is_empty() {
-        features.extend(std::iter::repeat_n(
-            0.0,
-            NIBBLE_BUCKETS
-                + TRANSITION_BUCKETS
-                + DEGREE_BUCKETS * 2
-                + SIZE_BUCKETS
-                + INSTRUCTION_BUCKETS
-                + CALL_BUCKETS
-                + CALL_BUCKETS * 2
-                + 19,
-        ));
-        return features;
-    }
+fn control_flow_features_for_function_module<'ctx>(function: FunctionValue<'ctx>) -> Vec<f32> {
+    let blocks = function.get_basic_blocks();
+    let block_count = blocks.len().max(1) as f32;
+    let successor_counts = count_block_successors(function);
+    let mut indegree = HashMap::<String, usize>::new();
+    let mut outdegrees = Vec::with_capacity(blocks.len());
+    let mut indegrees = Vec::with_capacity(blocks.len());
+    let mut instruction_counts = Vec::with_capacity(blocks.len());
+    let mut conditional_count = 0usize;
+    let mut exit_count = 0usize;
+    let mut return_count = 0usize;
+    let mut unreachable_count = 0usize;
+    let mut switch_count = 0usize;
+    let mut invoke_count = 0usize;
+    let mut backedge_count = 0usize;
+    let mut loop_header_count = 0usize;
 
-    let mut nibble = vec![0.0f32; NIBBLE_BUCKETS];
-    let mut transitions = vec![0.0f32; TRANSITION_BUCKETS];
-    let mut indegree = BTreeMap::<u64, usize>::new();
-    let mut block_index = BTreeSet::<u64>::new();
-    let mut outdegrees = Vec::with_capacity(cfg_blocks.len());
-    let mut instruction_counts = Vec::with_capacity(cfg_blocks.len());
-    let mut block_sizes = Vec::with_capacity(cfg_blocks.len());
-    let mut entropies = Vec::with_capacity(cfg_blocks.len());
-    let mut edge_counts = Vec::with_capacity(cfg_blocks.len());
-    let mut call_counts = Vec::with_capacity(cfg_blocks.len());
-    let mut call_densities = Vec::with_capacity(cfg_blocks.len());
-    let mut direct_call_counts = Vec::with_capacity(cfg_blocks.len());
-    let mut indirect_call_counts = Vec::with_capacity(cfg_blocks.len());
-    let mut direct_call_densities = Vec::with_capacity(cfg_blocks.len());
-    let mut indirect_call_densities = Vec::with_capacity(cfg_blocks.len());
-    let mut base_weights = Vec::with_capacity(cfg_blocks.len());
-    let mut conditional = 0usize;
-    let mut exits = 0usize;
-    let mut fallthroughs = 0usize;
-    let mut backedges = 0usize;
-    let mut call_blocks = 0usize;
-    let mut indirect_call_blocks = 0usize;
-    let mut return_exits = 0usize;
-    let mut trap_exits = 0usize;
-    let mut self_loops = 0usize;
-    let mut loop_headers = 0usize;
+    let name_to_index = blocks
+        .iter()
+        .enumerate()
+        .map(|(index, block)| (block.get_name().to_string_lossy().into_owned(), index))
+        .collect::<HashMap<_, _>>();
 
-    for block in &cfg_blocks {
-        block_index.insert(block.address);
-        for (bucket, value) in chromosome_histogram(&block.chromosome.vector)
-            .into_iter()
-            .enumerate()
-        {
-            nibble[bucket] += value;
+    for block in &blocks {
+        let name = block.get_name().to_string_lossy().into_owned();
+        let mut instruction = block.get_first_instruction();
+        let mut instruction_total = 0usize;
+        while let Some(current) = instruction {
+            instruction_total += 1;
+            instruction = current.get_next_instruction();
         }
-        for (bucket, value) in chromosome_transitions(&block.chromosome.vector)
-            .into_iter()
-            .enumerate()
-        {
-            transitions[bucket] += value;
-        }
+        instruction_counts.push(instruction_total as f32);
 
-        let successors = block.blocks.len() as f32;
-        outdegrees.push(successors);
-        instruction_counts.push(block.number_of_instructions as f32);
-        block_sizes.push(block.size as f32);
-        entropies.push(block.entropy.unwrap_or_default() as f32);
-        edge_counts.push(block.edges as f32);
-        call_counts.push(block.call_count as f32);
-        direct_call_counts.push(block.direct_call_count as f32);
-        indirect_call_counts.push(block.indirect_call_count as f32);
-        let call_density = if block.number_of_instructions == 0 {
-            0.0
-        } else {
-            block.call_count as f32 / block.number_of_instructions as f32
-        };
-        let direct_call_density = if block.number_of_instructions == 0 {
-            0.0
-        } else {
-            block.direct_call_count as f32 / block.number_of_instructions as f32
-        };
-        let indirect_call_density = if block.number_of_instructions == 0 {
-            0.0
-        } else {
-            block.indirect_call_count as f32 / block.number_of_instructions as f32
-        };
-        call_densities.push(call_density);
-        direct_call_densities.push(direct_call_density);
-        indirect_call_densities.push(indirect_call_density);
-        if block.call_count > 0 {
-            call_blocks += 1;
-        }
-        if block.indirect_call_count > 0 {
-            indirect_call_blocks += 1;
-        }
-        let mut weight = 1.0f32;
-        weight += (block.number_of_instructions as f32 / 8.0).min(2.0);
-        weight += (block.edges as f32 / 4.0).min(2.0);
-        if block.conditional {
-            weight += 0.5;
-        }
-        if block.call_count > 0 {
-            weight += 0.5;
-        }
-        if block.indirect_call_count > 0 {
-            weight += 0.5;
-        }
-        if block.next.is_some() {
-            weight += 0.25;
-        }
-        base_weights.push(weight);
-        if block.conditional {
-            conditional += 1;
-        }
-        if block.next.is_some() {
-            fallthroughs += 1;
-        }
-        if block.blocks.is_empty() {
-            exits += 1;
-        }
-        if block.is_return {
-            return_exits += 1;
-        }
-        if block.is_trap {
-            trap_exits += 1;
-        }
-        for successor in &block.blocks {
-            *indegree.entry(*successor).or_default() += 1;
-            if *successor <= block.address {
-                backedges += 1;
-                if *successor == block.address {
-                    self_loops += 1;
+        let outdegree = *successor_counts.get(&name).unwrap_or(&0) as f32;
+        outdegrees.push(outdegree);
+
+        let terminator = block.get_terminator();
+        if let Some(terminator) = terminator {
+            match terminator.get_opcode() {
+                InstructionOpcode::Br => {
+                    if terminator.is_conditional().unwrap_or(false) {
+                        conditional_count += 1;
+                    }
+                }
+                InstructionOpcode::Switch => {
+                    conditional_count += 1;
+                    switch_count += 1;
+                }
+                InstructionOpcode::Invoke => {
+                    invoke_count += 1;
+                }
+                InstructionOpcode::Return => {
+                    return_count += 1;
+                }
+                InstructionOpcode::Unreachable => {
+                    unreachable_count += 1;
+                }
+                _ => {}
+            }
+
+            for operand in terminator.get_operands() {
+                if let Some(Operand::Block(target)) = operand {
+                    let target_name = target.get_name().to_string_lossy().into_owned();
+                    *indegree.entry(target_name.clone()).or_default() += 1;
+                    if let (Some(source_index), Some(target_index)) =
+                        (name_to_index.get(&name), name_to_index.get(&target_name))
+                    {
+                        if target_index <= source_index {
+                            backedge_count += 1;
+                        }
+                    }
                 }
             }
         }
     }
 
-    let block_count = cfg_blocks.len() as f32;
-    for value in &mut nibble {
-        *value /= block_count;
-    }
-    for value in &mut transitions {
-        *value /= block_count;
-    }
-    features.extend(nibble);
-    features.extend(transitions);
-
-    let mut indegrees = Vec::with_capacity(cfg_blocks.len());
-    let mut interior_edges = 0usize;
-    let mut weights = Vec::with_capacity(cfg_blocks.len());
-    for block in &cfg_blocks {
-        let indegree_value = *indegree.get(&block.address).unwrap_or(&0) as f32;
+    for block in &blocks {
+        let name = block.get_name().to_string_lossy().into_owned();
+        let indegree_value = *indegree.get(&name).unwrap_or(&0) as f32;
         indegrees.push(indegree_value);
-        let receives_backedge = block.blocks.iter().any(|target| *target <= block.address)
-            || cfg_blocks.iter().any(|candidate| {
-                candidate
-                    .blocks
-                    .iter()
-                    .any(|target| *target == block.address && candidate.address >= block.address)
-            });
-        if receives_backedge && !block.blocks.is_empty() {
-            loop_headers += 1;
+        if *successor_counts.get(&name).unwrap_or(&0) == 0 {
+            exit_count += 1;
         }
-        let mut weight = base_weights[weights.len()];
-        weight += (indegree_value / 4.0).min(2.0);
-        if block.address == cfg_blocks[0].address {
-            weight += 0.75;
-        }
-        if block.blocks.is_empty() {
-            weight += 0.5;
-        }
-        weights.push(weight);
-        interior_edges += block
-            .blocks
-            .iter()
-            .filter(|target| block_index.contains(target))
-            .count();
-    }
-
-    let weight_sum = weights.iter().sum::<f32>().max(1.0);
-    for (block, weight) in cfg_blocks.iter().zip(weights.iter()) {
-        let normalized_weight = *weight / weight_sum;
-        let block_histogram = chromosome_histogram(&block.chromosome.vector);
-        let block_transitions = chromosome_transitions(&block.chromosome.vector);
-        for (bucket, value) in block_histogram.into_iter().enumerate() {
-            features[bucket] += value * normalized_weight;
-        }
-        for (bucket, value) in block_transitions.into_iter().enumerate() {
-            features[NIBBLE_BUCKETS + bucket] += value * normalized_weight;
+        if indegree_value > 0.0 && *successor_counts.get(&name).unwrap_or(&0) > 0 {
+            loop_header_count += 1;
         }
     }
 
-    features.extend(weighted_histogram(
-        &outdegrees,
-        &weights,
-        DEGREE_BUCKETS,
-        1.0,
-    ));
-    features.extend(weighted_histogram(
-        &indegrees,
-        &weights,
-        DEGREE_BUCKETS,
-        1.0,
-    ));
-    features.extend(weighted_histogram(
-        &block_sizes,
-        &weights,
-        SIZE_BUCKETS,
-        32.0,
-    ));
-    features.extend(weighted_histogram(
-        &instruction_counts,
-        &weights,
-        INSTRUCTION_BUCKETS,
-        2.0,
-    ));
-    features.extend(weighted_histogram(
-        &call_counts,
-        &weights,
-        CALL_BUCKETS,
-        1.0,
-    ));
-    features.extend(weighted_histogram(
-        &direct_call_counts,
-        &weights,
-        CALL_BUCKETS,
-        1.0,
-    ));
-    features.extend(weighted_histogram(
-        &indirect_call_counts,
-        &weights,
-        CALL_BUCKETS,
-        1.0,
-    ));
-
-    let entry_block = &cfg_blocks[0];
-    let entry_outdegree = entry_block.blocks.len() as f32;
-    let entry_indegree = *indegree.get(&entry_block.address).unwrap_or(&0) as f32;
-    let entry_call_density = if entry_block.number_of_instructions == 0 {
-        0.0
-    } else {
-        entry_block.call_count as f32 / entry_block.number_of_instructions as f32
-    };
-    let entry_indirect_call_density = if entry_block.number_of_instructions == 0 {
-        0.0
-    } else {
-        entry_block.indirect_call_count as f32 / entry_block.number_of_instructions as f32
-    };
-
-    push_scaled(&mut features, interior_edges as f32, 2048.0);
-    push_scaled(&mut features, weighted_mean(&outdegrees, &weights), 8.0);
-    push_scaled(&mut features, max_or_zero(&outdegrees), 8.0);
-    push_scaled(&mut features, weighted_mean(&indegrees, &weights), 8.0);
-    push_scaled(&mut features, max_or_zero(&indegrees), 8.0);
+    let mut features = Vec::new();
+    features.extend(numeric_histogram(&outdegrees, DEGREE_BUCKETS, 1.0));
+    features.extend(numeric_histogram(&indegrees, DEGREE_BUCKETS, 1.0));
+    features.extend(numeric_histogram(&instruction_counts, DEGREE_BUCKETS, 2.0));
+    push_scaled(&mut features, function.count_basic_blocks() as f32, 256.0);
+    push_scaled(&mut features, outdegrees.iter().sum::<f32>(), 1024.0);
     push_scaled(
         &mut features,
-        weighted_mean(&instruction_counts, &weights),
-        128.0,
-    );
-    push_scaled(&mut features, weighted_mean(&entropies, &weights), 8.0);
-    push_scaled(&mut features, weighted_mean(&edge_counts, &weights), 16.0);
-    push_scaled(&mut features, weighted_mean(&call_counts, &weights), 8.0);
-    push_scaled(&mut features, weighted_mean(&call_densities, &weights), 1.0);
-    push_scaled(
-        &mut features,
-        weighted_mean(&direct_call_counts, &weights),
-        8.0,
+        (outdegrees.iter().sum::<f32>() - function.count_basic_blocks() as f32 + 2.0).max(0.0),
+        512.0,
     );
     push_scaled(
         &mut features,
-        weighted_mean(&indirect_call_counts, &weights),
-        8.0,
+        instruction_counts.iter().sum::<f32>() / block_count,
+        64.0,
     );
-    push_scaled(
-        &mut features,
-        weighted_mean(&direct_call_densities, &weights),
-        1.0,
-    );
-    push_scaled(
-        &mut features,
-        weighted_mean(&indirect_call_densities, &weights),
-        1.0,
-    );
-    push_scaled(&mut features, entry_outdegree, 8.0);
-    push_scaled(&mut features, entry_indegree, 8.0);
-    push_scaled(
-        &mut features,
-        entry_block.number_of_instructions as f32,
-        128.0,
-    );
-    push_scaled(&mut features, entry_block.size as f32, 512.0);
-    push_scaled(
-        &mut features,
-        entry_block.entropy.unwrap_or_default() as f32,
-        8.0,
-    );
-    push_scaled(&mut features, entry_call_density, 1.0);
-    push_scaled(&mut features, entry_indirect_call_density, 1.0);
-    push_bool(&mut features, entry_block.conditional);
-    push_bool(&mut features, entry_block.is_return);
-    push_bool(&mut features, entry_block.is_trap);
-    push_scaled(&mut features, conditional as f32 / block_count, 1.0);
-    push_scaled(&mut features, call_blocks as f32 / block_count, 1.0);
-    push_scaled(
-        &mut features,
-        indirect_call_blocks as f32 / block_count,
-        1.0,
-    );
-    push_scaled(&mut features, exits as f32 / block_count, 1.0);
-    push_scaled(&mut features, return_exits as f32 / block_count, 1.0);
-    push_scaled(&mut features, trap_exits as f32 / block_count, 1.0);
-    push_scaled(&mut features, fallthroughs as f32 / block_count, 1.0);
-    push_scaled(&mut features, backedges as f32, 256.0);
-    push_scaled(&mut features, backedges as f32 / block_count, 8.0);
-    push_scaled(&mut features, self_loops as f32 / block_count, 8.0);
-    push_scaled(&mut features, loop_headers as f32 / block_count, 1.0);
+    push_scaled(&mut features, conditional_count as f32 / block_count, 1.0);
+    push_scaled(&mut features, exit_count as f32 / block_count, 1.0);
+    push_scaled(&mut features, return_count as f32 / block_count, 1.0);
+    push_scaled(&mut features, unreachable_count as f32 / block_count, 1.0);
+    push_scaled(&mut features, switch_count as f32 / block_count, 1.0);
+    push_scaled(&mut features, invoke_count as f32 / block_count, 1.0);
+    push_scaled(&mut features, backedge_count as f32, 256.0);
+    push_scaled(&mut features, loop_header_count as f32 / block_count, 1.0);
     features
 }
 
-fn extract_features(value: &Value) -> FeatureFamilies {
-    match value.get("type").and_then(Value::as_str) {
-        Some("instruction") => serde_json::from_value::<InstructionJson>(value.clone())
-            .map(|instruction| instruction_features(&instruction))
-            .unwrap_or_default(),
-        Some("block") => serde_json::from_value::<BlockJson>(value.clone())
-            .map(|block| block_features(&block))
-            .unwrap_or_default(),
-        Some("function") => serde_json::from_value::<FunctionJson>(value.clone())
-            .map(|function| {
-                let mut features = function_features(&function);
-                features.cfg = function_cfg_features(value);
-                features
-            })
-            .unwrap_or_default(),
-        _ => FeatureFamilies {
-            scalar: vec![0.0],
-            ..Default::default()
-        },
+fn control_flow_features_for_block_module<'ctx>(function: FunctionValue<'ctx>) -> Vec<f32> {
+    let block = function
+        .get_first_basic_block()
+        .expect("lifted block module should have an entry block");
+    let mut instruction = block.get_first_instruction();
+    let mut instruction_count = 0usize;
+    let mut terminator_opcode = InstructionOpcode::Return;
+    let mut operand_blocks = 0usize;
+    while let Some(current) = instruction {
+        instruction_count += 1;
+        if current.is_terminator() {
+            terminator_opcode = current.get_opcode();
+            operand_blocks = current
+                .get_operands()
+                .filter(|operand| matches!(operand, Some(Operand::Block(_))))
+                .count();
+        }
+        instruction = current.get_next_instruction();
     }
+
+    let mut features = Vec::new();
+    push_scaled(&mut features, operand_blocks as f32, 16.0);
+    push_scaled(&mut features, instruction_count as f32, 128.0);
+    push_bool(
+        &mut features,
+        matches!(
+            terminator_opcode,
+            InstructionOpcode::Br | InstructionOpcode::Switch
+        ),
+    );
+    push_bool(
+        &mut features,
+        terminator_opcode == InstructionOpcode::Return,
+    );
+    push_bool(
+        &mut features,
+        terminator_opcode == InstructionOpcode::Unreachable,
+    );
+    push_bool(
+        &mut features,
+        terminator_opcode == InstructionOpcode::Invoke,
+    );
+    features
+}
+
+fn sequence_features_from_tokens(opcodes: &[String], helpers: &[String]) -> Vec<f32> {
+    let opcode_bigrams = build_ngrams(opcodes, 2);
+    let opcode_trigrams = build_ngrams(opcodes, 3);
+    let helper_bigrams = build_ngrams(helpers, 2);
+    let mut features = Vec::new();
+    extend_weighted(
+        &mut features,
+        hashed_feature_bag(&opcode_bigrams, SEQUENCE_BUCKETS, 0x0FC0_DE22),
+        0.50,
+    );
+    extend_weighted(
+        &mut features,
+        hashed_feature_bag(&helper_bigrams, SEQUENCE_BUCKETS / 2, 0xA11E_E221),
+        0.20,
+    );
+    extend_weighted(
+        &mut features,
+        hashed_feature_bag(&opcode_trigrams, SEQUENCE_BUCKETS, 0xCF61_A11C),
+        0.30,
+    );
+    features
+}
+
+fn function_features(function: &Function<'_>) -> Result<FeatureFamilies, Error> {
+    let bitcode = canonical_function_bitcode(function)?;
+    let context = Context::create();
+    let module = parse_module_from_bitcode(&context, &bitcode)?;
+    let llvm_function =
+        primary_defined_function(&module).ok_or_else(|| Error::other("missing lifted function"))?;
+    let (semantic, opcodes, helpers) = semantic_features_from_module(llvm_function);
+    let control_flow = control_flow_features_for_function_module(llvm_function);
+    let sequence = sequence_features_from_tokens(&opcodes, &helpers);
+    Ok(FeatureFamilies {
+        semantic,
+        control_flow,
+        sequence,
+        semantic_weight: 0.50,
+        control_flow_weight: 0.30,
+        sequence_weight: 0.20,
+    })
+}
+
+fn block_features(block: &Block<'_>) -> Result<FeatureFamilies, Error> {
+    let bitcode = canonical_block_bitcode(block)?;
+    let context = Context::create();
+    let module = parse_module_from_bitcode(&context, &bitcode)?;
+    let llvm_function =
+        primary_defined_function(&module).ok_or_else(|| Error::other("missing lifted block"))?;
+    let (semantic, opcodes, helpers) = semantic_features_from_module(llvm_function);
+    let control_flow = control_flow_features_for_block_module(llvm_function);
+    let sequence = sequence_features_from_tokens(&opcodes, &helpers);
+    Ok(FeatureFamilies {
+        semantic,
+        control_flow,
+        sequence,
+        semantic_weight: 0.60,
+        control_flow_weight: 0.15,
+        sequence_weight: 0.25,
+    })
 }
 
 fn burn_project(
@@ -684,8 +768,6 @@ fn resolve_burn_device(device_preference: EmbeddingDevice) -> DispatchDevice {
         EmbeddingDevice::Cuda => DispatchDevice::Cuda(Default::default()),
         EmbeddingDevice::Vulkan => DispatchDevice::Vulkan(Default::default()),
         EmbeddingDevice::Gpu => resolve_burn_device(detect_gpu_device()),
-        // These config values are accepted, but this build is currently wired to
-        // CUDA/Vulkan for real GPU execution. Unsupported selections fall back to CPU.
         EmbeddingDevice::Metal | EmbeddingDevice::WebGpu | EmbeddingDevice::Rocm => {
             DispatchDevice::NdArray(Default::default())
         }
@@ -726,48 +808,33 @@ fn smooth_vector(values: &mut [f32]) {
     }
 }
 
-fn embed(value: &Value, config: &EmbeddingModelConfig) -> Vec<f32> {
+fn embed_families(families: FeatureFamilies, config: &EmbeddingModelConfig) -> Vec<f32> {
     let dimensions = config.dimensions.max(1);
-    let families = extract_features(value);
-    let chromosome = burn_project(&families.chromosome, dimensions, 0xC0DEC0DE, config.device);
-    let scalar = burn_project(&families.scalar, dimensions, 0x51CA1A5E, config.device);
-    let cfg = burn_project(&families.cfg, dimensions, 0xCF6CF6CF, config.device);
-
-    let mut chromosome_weight = if families.chromosome.is_empty() {
-        0.0
-    } else {
-        0.45
-    };
-    let mut scalar_weight = if families.scalar.is_empty() {
-        0.0
-    } else {
-        0.30
-    };
-    let mut cfg_weight = if families.cfg.is_empty() { 0.0 } else { 0.25 };
-    let total_weight = chromosome_weight + scalar_weight + cfg_weight;
-    if total_weight == 0.0 {
-        return vec![0.0; dimensions];
-    }
-    chromosome_weight /= total_weight;
-    scalar_weight /= total_weight;
-    cfg_weight /= total_weight;
+    let semantic = burn_project(&families.semantic, dimensions, 0x5E6A_6D1C, config.device);
+    let control_flow = burn_project(
+        &families.control_flow,
+        dimensions,
+        0xCF6C_F10A,
+        config.device,
+    );
+    let sequence = burn_project(&families.sequence, dimensions, 0x5E9A_0001, config.device);
 
     let mut vector = vec![0.0f32; dimensions];
     for index in 0..dimensions {
-        vector[index] = chromosome[index] * chromosome_weight
-            + scalar[index] * scalar_weight
-            + cfg[index] * cfg_weight;
+        vector[index] = semantic[index] * families.semantic_weight
+            + control_flow[index] * families.control_flow_weight
+            + sequence[index] * families.sequence_weight;
     }
     smooth_vector(&mut vector);
     normalize_l2(&mut vector);
     vector
 }
 
-fn processor_config(config: &binlex::Config) -> Option<&ConfigProcessor> {
+fn processor_config(config: &Config) -> Option<&ConfigProcessor> {
     config.processors.processor(EmbeddingsProcessor::NAME)
 }
 
-fn configured_dimensions(config: &binlex::Config) -> usize {
+fn configured_dimensions(config: &Config) -> usize {
     processor_config(config)
         .and_then(|processor| processor.option_integer("dimensions"))
         .and_then(|value| usize::try_from(value).ok())
@@ -784,11 +851,11 @@ fn configured_dimensions_from_context<C: ProcessorContext>(context: &C) -> usize
         .unwrap_or(DEFAULT_DIMENSIONS)
 }
 
-fn configured_device(config: &binlex::Config) -> EmbeddingDevice {
+fn configured_device(config: &Config) -> EmbeddingDevice {
     parse_device(processor_config(config).and_then(|processor| processor.option_string("device")))
 }
 
-fn configured_threads(config: &binlex::Config) -> usize {
+fn configured_threads(config: &Config) -> usize {
     processor_config(config)
         .and_then(|processor| processor.option_integer("threads"))
         .and_then(|value| usize::try_from(value).ok())
@@ -823,6 +890,79 @@ fn configured_threads_from_context<C: ProcessorContext>(context: &C) -> usize {
         })
 }
 
+fn graph_from_snapshot(snapshot: GraphSnapshot) -> Result<Graph, ProcessorError> {
+    let mut config = Config::default();
+    config.processors.enabled = false;
+    config.lifters.llvm.verify = false;
+    Graph::from_snapshot(snapshot, config)
+        .map_err(|error| ProcessorError::Protocol(error.to_string()))
+}
+
+fn embed_graph(
+    graph: &Graph,
+    config: &EmbeddingModelConfig,
+    threads: usize,
+) -> Result<GraphProcessorFanout, ProcessorError> {
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(threads.max(1))
+        .build()
+        .map_err(|error: rayon::ThreadPoolBuildError| {
+            ProcessorError::Protocol(error.to_string())
+        })?;
+
+    Ok(pool.install(|| GraphProcessorFanout {
+        instructions: BTreeMap::new(),
+        blocks: graph
+            .blocks()
+            .into_par_iter()
+            .filter_map(|block| {
+                let features = match block_features(&block) {
+                    Ok(features) => features,
+                    Err(error) => {
+                        Stderr::print_debug(
+                            &graph.config,
+                            format!(
+                                "embeddings skipped block address=0x{:x} error={}",
+                                block.address(),
+                                error
+                            ),
+                        );
+                        return None;
+                    }
+                };
+                Some((
+                    block.address(),
+                    json!({ "vector": embed_families(features, config) }),
+                ))
+            })
+            .collect(),
+        functions: graph
+            .functions()
+            .into_par_iter()
+            .filter_map(|function| {
+                let features = match function_features(&function) {
+                    Ok(features) => features,
+                    Err(error) => {
+                        Stderr::print_debug(
+                            &graph.config,
+                            format!(
+                                "embeddings skipped function address=0x{:x} error={}",
+                                function.address(),
+                                error
+                            ),
+                        );
+                        return None;
+                    }
+                };
+                Some((
+                    function.address(),
+                    json!({ "vector": embed_families(features, config) }),
+                ))
+            })
+            .collect(),
+    }))
+}
+
 impl Processor for EmbeddingsProcessor {
     const NAME: &'static str = "embeddings";
     type Request = EmbeddingsRequest;
@@ -849,44 +989,8 @@ impl Processor for EmbeddingsProcessor {
                     .map(|parallelism| parallelism.get())
                     .unwrap_or(1)
             });
-        let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(threads)
-            .build()
-            .map_err(|error: rayon::ThreadPoolBuildError| {
-                ProcessorError::Protocol(error.to_string())
-            })?;
-        Ok(pool.install(|| GraphProcessorFanout {
-            instructions: request
-                .instructions
-                .into_par_iter()
-                .map(|item| {
-                    (
-                        item.address,
-                        json!({ "vector": embed(&item.data, &config) }),
-                    )
-                })
-                .collect(),
-            blocks: request
-                .blocks
-                .into_par_iter()
-                .map(|item| {
-                    (
-                        item.address,
-                        json!({ "vector": embed(&item.data, &config) }),
-                    )
-                })
-                .collect(),
-            functions: request
-                .functions
-                .into_par_iter()
-                .map(|item| {
-                    (
-                        item.address,
-                        json!({ "vector": embed(&item.data, &config) }),
-                    )
-                })
-                .collect(),
-        }))
+        let graph = graph_from_snapshot(request.graph)?;
+        embed_graph(&graph, &config, threads)
     }
 }
 
@@ -894,8 +998,8 @@ impl GraphProcessor for EmbeddingsProcessor {
     fn on_graph_options() -> OnGraphOptions {
         OnGraphOptions {
             instructions: false,
-            blocks: true,
-            functions: true,
+            blocks: false,
+            functions: false,
         }
     }
 
@@ -908,61 +1012,14 @@ impl GraphProcessor for EmbeddingsProcessor {
                 "embeddings processor only supports graph-stage requests".to_string(),
             ));
         }
-        let instructions = data
-            .get("instructions")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|value| {
-                let address = value.get("address")?.as_u64()?;
-                Some(EmbeddingEntityInput {
-                    address,
-                    data: value,
-                })
-            })
-            .collect();
-        let blocks = data
-            .get("blocks")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|value| {
-                let address = value.get("address")?.as_u64()?;
-                Some(EmbeddingEntityInput {
-                    address,
-                    data: value,
-                })
-            })
-            .collect();
-        let functions = data
-            .get("functions")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|value| {
-                let address = value.get("address")?.as_u64()?;
-                Some(EmbeddingEntityInput {
-                    address,
-                    data: value,
-                })
-            })
-            .collect();
-
+        let graph = serde_json::from_value::<GraphSnapshot>(data)
+            .map_err(|error| ProcessorError::Serialization(error.to_string()))?;
         Ok(EmbeddingsRequest {
             dimensions: Some(configured_dimensions_from_context(context)),
             device: Some(configured_device_from_context(context)),
             threads: Some(configured_threads_from_context(context)),
-            instructions,
-            blocks,
-            functions,
+            graph,
         })
-    }
-
-    fn function_message(function: &Function<'_>) -> Option<Value> {
-        function_embedding_input(function).ok()
     }
 
     fn on_graph(graph: &Graph) -> Option<GraphProcessorFanout> {
@@ -970,93 +1027,8 @@ impl GraphProcessor for EmbeddingsProcessor {
             dimensions: configured_dimensions(&graph.config),
             device: configured_device(&graph.config),
         };
-        let threads = configured_threads(&graph.config);
-        let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(threads)
-            .build()
-            .ok()?;
-
-        Some(pool.install(|| {
-            GraphProcessorFanout {
-                instructions: graph
-                    .instructions()
-                    .into_par_iter()
-                    .filter_map(|instruction| {
-                        let data = serde_json::to_value(instruction.process_base()).ok()?;
-                        Some((
-                            instruction.address,
-                            json!({ "vector": embed(&data, &config) }),
-                        ))
-                    })
-                    .collect(),
-                blocks: graph
-                    .blocks()
-                    .into_par_iter()
-                    .filter_map(|block| {
-                        let data = serde_json::to_value(block.process_base()).ok()?;
-                        Some((block.address(), json!({ "vector": embed(&data, &config) })))
-                    })
-                    .collect(),
-                functions: graph
-                    .functions()
-                    .into_par_iter()
-                    .filter_map(|function| {
-                        let data = function_embedding_input(&function).ok()?;
-                        Some((
-                            function.address(),
-                            json!({ "vector": embed(&data, &config) }),
-                        ))
-                    })
-                    .collect(),
-            }
-        }))
+        embed_graph(graph, &config, configured_threads(&graph.config)).ok()
     }
-}
-
-fn function_embedding_input(function: &Function<'_>) -> Result<Value, serde_json::Error> {
-    let mut data = serde_json::to_value(function.process_base())?;
-    let cfg_blocks = function
-        .blocks()
-        .into_iter()
-        .map(|block| {
-            let instructions = block.instructions();
-            let call_count = instructions
-                .iter()
-                .filter(|instruction| instruction.is_call)
-                .count();
-            let direct_call_count = instructions
-                .iter()
-                .filter(|instruction| instruction.is_call && !instruction.has_indirect_target)
-                .count();
-            let indirect_call_count = instructions
-                .iter()
-                .filter(|instruction| instruction.is_call && instruction.has_indirect_target)
-                .count();
-            FunctionCfgBlock {
-                call_count,
-                direct_call_count,
-                indirect_call_count,
-                address: block.address(),
-                chromosome: block.chromosome_json(),
-                entropy: block.entropy(),
-                size: block.size(),
-                edges: block.edges(),
-                number_of_instructions: block.number_of_instructions(),
-                conditional: block.terminator.is_conditional,
-                is_return: block.terminator.is_return,
-                is_trap: block.terminator.is_trap,
-                contiguous: block.contiguous(),
-                next: block.next(),
-                to: block.to().into_iter().collect(),
-                blocks: block.blocks().into_iter().collect(),
-            }
-        })
-        .collect::<Vec<_>>();
-
-    if let Value::Object(ref mut map) = data {
-        map.insert("cfg_blocks".to_string(), serde_json::to_value(cfg_blocks)?);
-    }
-    Ok(data)
 }
 
 pub fn registration() -> binlex::processor::ProcessorRegistration {
@@ -1068,7 +1040,12 @@ pub fn registration() -> binlex::processor::ProcessorRegistration {
             OperatingSystem::LINUX,
             OperatingSystem::MACOS,
         ],
-        &[Architecture::AMD64, Architecture::I386, Architecture::CIL],
+        &[
+            Architecture::AMD64,
+            Architecture::I386,
+            Architecture::ARM64,
+            Architecture::CIL,
+        ],
         &[Transport::IPC, Transport::HTTP],
         EmbeddingsProcessor::on_graph_options(),
         ConfigProcessor {

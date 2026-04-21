@@ -1,3 +1,18 @@
+fn configure_analysis_embeddings(config: &mut Config, ui: &BinlexWebConfig) {
+    if ui.index.local.selector != "embeddings.llvm.vector" {
+        return;
+    }
+    if ui.index.local.instructions {
+        config.instructions.embeddings.llvm.enabled = true;
+    }
+    if ui.index.local.blocks {
+        config.blocks.embeddings.llvm.enabled = true;
+    }
+    if ui.index.local.functions {
+        config.functions.embeddings.llvm.enabled = true;
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let mut config = WebConfigFile::load()?;
@@ -32,6 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut analysis_config = Config::default();
     analysis_config.index.local.dimensions = Some(64);
+    configure_analysis_embeddings(&mut analysis_config, &config.binlex_web);
     let index_root = PathBuf::from(expand_path(&config.binlex_web.index.local.path));
     let client = Server::new(
         analysis_config.clone(),

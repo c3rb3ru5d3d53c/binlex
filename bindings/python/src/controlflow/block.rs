@@ -32,6 +32,7 @@ use binlex::controlflow::Block as InnerBlock;
 use binlex::controlflow::BlockJsonDeserializer as InnerBlockJsonDeserializer;
 use binlex::hex;
 use binlex::imaging::Imaging as InnerImaging;
+use binlex::io::Stderr;
 use binlex::Architecture as InnerArchitecture;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
@@ -330,6 +331,25 @@ impl Block {
     /// Return the imaging pipeline for the block bytes.
     pub fn imaging(&self, py: Python) -> PyResult<Imaging> {
         self.with_inner_block(py, |block| Ok(Imaging::from_inner(block.imaging())))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the LLVM embedding vector for this block, if available.
+    pub fn embedding(&self, py: Python) -> PyResult<Option<Vec<f32>>> {
+        let config = self.cfg.borrow(py).inner.lock().unwrap().config.clone();
+        match self.with_inner_block(py, |block| Ok(block.embeddings().llvm())) {
+            Ok(result) => Ok(result),
+            Err(error) => {
+                Stderr::print_debug(
+                    &config,
+                    format!(
+                        "llvm block embedding skipped address=0x{:x} error={}",
+                        self.address, error
+                    ),
+                );
+                Ok(None)
+            }
+        }
     }
 
     #[pyo3(text_signature = "($self)")]
