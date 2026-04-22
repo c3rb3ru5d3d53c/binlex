@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 use crate::genetics::AllelePair;
-use crate::hashing::{MinHash32, SHA256, TLSH};
+use crate::hashing::{MinHash32, SSDeep, SHA256, TLSH};
 use crate::imaging::Imaging;
 use crate::Config;
 use binlex::genetics::Chromosome as InnerChromosome;
@@ -141,6 +141,15 @@ impl Chromosome {
     pub fn sha256(&self) -> Option<SHA256> {
         let chromosome = self.inner.lock().unwrap();
         chromosome.sha256().map(|_| SHA256 {
+            bytes: chromosome.masked(),
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the ssdeep helper for the chromosome, if available.
+    pub fn ssdeep(&self) -> Option<SSDeep> {
+        let chromosome = self.inner.lock().unwrap();
+        chromosome.ssdeep().map(|_| SSDeep {
             bytes: chromosome.masked(),
         })
     }

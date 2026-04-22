@@ -24,7 +24,7 @@ use crate::controlflow::json_value_to_py;
 use crate::controlflow::Block;
 use crate::controlflow::Graph;
 use crate::genetics::Chromosome;
-use crate::hashing::{MinHash32, SHA256, TLSH};
+use crate::hashing::{MinHash32, SSDeep, SHA256, TLSH};
 use crate::imaging::Imaging;
 use crate::Architecture;
 use crate::Config;
@@ -162,6 +162,12 @@ impl FunctionJsonDeserializer {
     /// Return the MinHash value for the function, if available.
     pub fn minhash(&self) -> Option<String> {
         self.inner.lock().unwrap().minhash()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the ssdeep value for the function, if available.
+    pub fn ssdeep(&self) -> Option<String> {
+        self.inner.lock().unwrap().ssdeep()
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -502,6 +508,16 @@ impl Function {
                 num_hashes: function.cfg.config.functions.minhash.number_of_hashes,
                 shingle_size: function.cfg.config.functions.minhash.shingle_size,
                 seed: function.cfg.config.functions.minhash.seed,
+            }))
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Returns the ssdeep helper for this function, if available.
+    pub fn ssdeep(&self, py: Python) -> PyResult<Option<SSDeep>> {
+        self.with_inner_function(py, |function| {
+            Ok(function.ssdeep().map(|hash| SSDeep {
+                bytes: hash.bytes.into_owned(),
             }))
         })
     }

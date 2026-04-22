@@ -40,6 +40,7 @@ use crate::formats::cli::TinyHeader;
 use crate::formats::cli::TypeDefEntry;
 use crate::formats::cli::TypeRefEntry;
 use crate::hashing::SHA256;
+use crate::hashing::SSDeep;
 use crate::hashing::TLSH;
 use crate::imaging::Imaging;
 use lief::Binary;
@@ -1165,6 +1166,12 @@ impl PE {
     #[allow(dead_code)]
     pub fn sha256(&self) -> Option<SHA256<'_>> {
         self.file.sha256()
+    }
+
+    /// Returns the ssdeep hash value of the PE file.
+    #[allow(dead_code)]
+    pub fn ssdeep(&self) -> Option<SSDeep<'_>> {
+        self.file.ssdeep()
     }
 
     /// Returns the underlying file metadata helper associated with the PE.
