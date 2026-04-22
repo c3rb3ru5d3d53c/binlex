@@ -52,6 +52,7 @@ impl AppState {
         if path.starts_with("/api/v1/admin/")
             || (method == axum::http::Method::POST && path == "/api/v1/corpora")
             || (path.starts_with("/api/v1/comments/") && method == axum::http::Method::DELETE)
+            || (path.starts_with("/api/v1/projects/") && method == axum::http::Method::DELETE)
         {
             return RouteAccessPolicy::Admin;
         }
@@ -75,6 +76,7 @@ impl AppState {
                 | (&axum::http::Method::DELETE, "/api/v1/symbols/collection")
                 | (&axum::http::Method::PUT, "/api/v1/symbols/collection")
                 | (&axum::http::Method::POST, "/api/v1/comments/add")
+                | (&axum::http::Method::POST, "/api/v1/projects")
                 | (&axum::http::Method::GET, "/api/v1/profile")
                 | (&axum::http::Method::DELETE, "/api/v1/profile")
                 | (&axum::http::Method::POST, "/api/v1/profile/password")
@@ -86,6 +88,18 @@ impl AppState {
                 | (&axum::http::Method::POST, "/api/v1/profile/key/regenerate")
                 | (&axum::http::Method::POST, "/api/v1/profile/recovery/regenerate")
         ) {
+            return RouteAccessPolicy::Authenticated;
+        }
+        if method == axum::http::Method::POST
+            && path.starts_with("/api/v1/projects/")
+            && path.ends_with("/samples")
+        {
+            return RouteAccessPolicy::Authenticated;
+        }
+        if method == axum::http::Method::DELETE
+            && path.starts_with("/api/v1/projects/")
+            && path.contains("/samples/")
+        {
             return RouteAccessPolicy::Authenticated;
         }
         RouteAccessPolicy::Public

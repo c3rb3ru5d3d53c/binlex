@@ -93,6 +93,7 @@ struct UploadForm {
     bytes: Vec<u8>,
     format: Option<String>,
     architecture: Option<String>,
+    mode: Option<String>,
     corpus: Vec<String>,
     tags: Vec<String>,
 }
@@ -172,6 +173,8 @@ struct UploadResponse {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schema(example = "upload exceeds max size of 209715200 bytes")]
     error: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    stored: Option<bool>,
 }
 
 #[derive(Deserialize, IntoParams, ToSchema)]
@@ -310,6 +313,131 @@ struct SearchRowResponse {
     collection_tag_count: usize,
     #[serde(default)]
     collection_comment_count: usize,
+    #[serde(default)]
+    sample_project_count: usize,
+}
+
+#[derive(Deserialize, Serialize, IntoParams, ToSchema)]
+struct ProjectsSearchParams {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sha256: String,
+    #[serde(default)]
+    #[schema(nullable = true, example = "alice")]
+    username: Option<String>,
+    #[serde(default)]
+    #[schema(nullable = true, example = "ida")]
+    tool: Option<String>,
+    #[serde(default)]
+    #[schema(nullable = true, example = "8d2c")]
+    project_sha256: Option<String>,
+    #[serde(default)]
+    limit: Option<usize>,
+    #[serde(default)]
+    page: Option<usize>,
+}
+
+#[derive(Deserialize, Serialize, IntoParams, ToSchema)]
+struct ProjectAssignmentsSearchParams {
+    #[serde(default)]
+    #[schema(nullable = true, example = "d60f")]
+    sample_sha256: Option<String>,
+    #[serde(default)]
+    limit: Option<usize>,
+    #[serde(default)]
+    page: Option<usize>,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct ProjectAssignmentCreateRequest {
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sample_sha256: String,
+    #[serde(default)]
+    #[schema(example = "analyzed")]
+    sample_state: Option<String>,
+}
+
+#[derive(Deserialize, IntoParams, ToSchema)]
+struct ProjectPathParams {
+    #[schema(example = "8d2ce6ef4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    project_sha256: String,
+}
+
+#[allow(dead_code)]
+#[derive(Deserialize, IntoParams, ToSchema)]
+struct ProjectSamplePathParams {
+    #[schema(example = "8d2ce6ef4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    project_sha256: String,
+    #[schema(example = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    sample_sha256: String,
+}
+
+#[derive(Serialize, ToSchema)]
+struct ProjectSummaryResponse {
+    project_sha256: String,
+    tool: String,
+    original_filename: String,
+    size_bytes: u64,
+    content_type: String,
+    container_format: String,
+    uploaded_by: MetadataUserResponse,
+    uploaded_timestamp: String,
+}
+
+#[derive(Serialize, ToSchema)]
+struct ProjectAssignedSampleResponse {
+    sample_sha256: String,
+    sample_state: String,
+    assigned_by: MetadataUserResponse,
+    assigned_timestamp: String,
+}
+
+#[derive(Serialize, ToSchema)]
+struct ProjectsResponse {
+    sha256: String,
+    projects: Vec<ProjectSummaryResponse>,
+    page: usize,
+    limit: usize,
+    total_results: usize,
+    has_next: bool,
+}
+
+#[derive(Serialize, ToSchema)]
+struct ProjectAssignedSamplesResponse {
+    project_sha256: String,
+    samples: Vec<ProjectAssignedSampleResponse>,
+    page: usize,
+    limit: usize,
+    total_results: usize,
+    has_next: bool,
+}
+
+#[derive(Serialize, ToSchema)]
+struct ProjectUploadResponse {
+    ok: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    project_sha256: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, IntoParams, ToSchema)]
+struct SamplesSearchParams {
+    #[serde(default)]
+    #[schema(nullable = true, example = "d60f")]
+    q: Option<String>,
+    #[serde(default)]
+    limit: Option<usize>,
+    #[serde(default)]
+    page: Option<usize>,
+}
+
+#[derive(Serialize, ToSchema)]
+struct SamplesSearchResponse {
+    samples: Vec<String>,
+    page: usize,
+    limit: usize,
+    total_results: usize,
+    has_next: bool,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -732,6 +860,7 @@ pub(crate) struct ResultRow {
     pub(crate) group_end: bool,
     pub(crate) collection_tag_count: usize,
     pub(crate) collection_comment_count: usize,
+    pub(crate) sample_project_count: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -789,6 +918,12 @@ struct DownloadJsonParams {
     collection: String,
     #[schema(example = 4198400)]
     address: u64,
+}
+
+#[derive(Deserialize, IntoParams, ToSchema)]
+struct DownloadProjectPathParams {
+    #[schema(example = "8d2ce6ef4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5")]
+    project_sha256: String,
 }
 
 #[derive(Serialize, ToSchema)]

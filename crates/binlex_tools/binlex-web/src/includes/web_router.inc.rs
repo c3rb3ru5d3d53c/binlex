@@ -145,12 +145,35 @@ async fn run_server(
         .route("/api/v1/admin/comments", get(admin_comments_api))
         .route("/api/v1/search", post(search_api))
         .route("/api/v1/search/detail", get(search_detail_api))
+        .route("/api/v1/projects", post(project_upload_api))
+        .route(
+            "/api/v1/projects/search",
+            get(project_search_api),
+        )
+        .route("/api/v1/samples/search", get(sample_sha256_search_api))
+        .route(
+            "/api/v1/projects/{project_sha256}",
+            axum::routing::delete(delete_project_api),
+        )
+        .route(
+            "/api/v1/projects/{project_sha256}/samples",
+            post(project_assignment_create_api),
+        )
+        .route(
+            "/api/v1/projects/{project_sha256}/samples/search",
+            get(project_assignments_search_api),
+        )
+        .route(
+            "/api/v1/projects/{project_sha256}/samples/{sample_sha256}",
+            axum::routing::delete(project_assignment_delete_api),
+        )
         .route("/api/v1/graph", get(graph_api))
         .route("/api/v1/yara/render", post(action_yara_api))
         .route("/api/v1/corpora", get(search_corpora_api).post(add_corpus_api))
         .route("/api/v1/download/sample", get(download_sample))
         .route("/api/v1/download/samples", get(download_samples))
         .route("/api/v1/download/json", get(download_json))
+        .route("/api/v1/download/project/{project_sha256}", get(download_project_api))
         .merge(SwaggerUi::new("/api/v1/docs").url("/api/v1/openapi.json", ApiDoc::openapi()))
         .layer(middleware::from_fn(binlex::server::request_id::middleware))
         .layer(middleware::from_fn_with_state(

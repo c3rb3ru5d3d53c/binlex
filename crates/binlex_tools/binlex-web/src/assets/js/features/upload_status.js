@@ -9,7 +9,7 @@ function openUploadStatusModal(state, payload = {}) {
   if (!modal || !icon || !title || !text || !extra || !closeButton || !searchButton) return;
 
   icon.classList.remove("uploading", "success", "failed");
-  icon.classList.add(state === "success" || state === "failed" ? state : "uploading");
+  icon.classList.add(state === "success" || state === "stored" || state === "failed" ? (state === "stored" ? "success" : state) : "uploading");
   modal.hidden = false;
   extra.innerHTML = "";
   closeButton.hidden = state === "uploading" || state === "pending" || state === "processing";
@@ -47,6 +47,12 @@ function openUploadStatusModal(state, payload = {}) {
       extra.innerHTML = renderUploadStatusSha(payload.sha256);
       searchButton.hidden = false;
       searchButton.dataset.sha256 = payload.sha256;
+    }
+  } else if (state === "stored") {
+    title.textContent = "Upload Complete";
+    text.textContent = "The sample was uploaded successfully.";
+    if (payload.sha256) {
+      extra.innerHTML = renderUploadStatusSha(payload.sha256);
     }
   } else {
     title.textContent = "Upload Failed";

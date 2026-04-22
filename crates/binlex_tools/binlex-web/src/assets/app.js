@@ -94,6 +94,14 @@ if (typeof document !== "undefined") {
     closeCommentsPopover();
   });
 
+  document.addEventListener("click", (event) => {
+    const popover = getProjectsPopover();
+    if (!popover || popover.hidden) return;
+    if (popover.contains(event.target)) return;
+    if (activeProjectsTrigger && activeProjectsTrigger.contains(event.target)) return;
+    closeProjectsPopover();
+  });
+
   document.addEventListener("submit", (event) => {
     handleEnhancedFormSubmit(event);
   });
@@ -153,6 +161,10 @@ if (typeof window !== "undefined") {
     if (commentsPopover && !commentsPopover.hidden) {
       positionCommentsPopover(activeCommentsTrigger, commentsPopover);
     }
+    const projectsPopover = getProjectsPopover();
+    if (projectsPopover && !projectsPopover.hidden) {
+      positionProjectsPopover(activeProjectsTrigger, projectsPopover);
+    }
     const columnsPopover = getColumnsPopover();
     if (columnsPopover && !columnsPopover.hidden) {
       positionColumnsPopover(activeColumnsTrigger, columnsPopover);
@@ -189,6 +201,11 @@ if (typeof window !== "undefined") {
       return;
     }
     closeCommentsPopover();
+    const projectsPopover = getProjectsPopover();
+    if (projectsPopover && !projectsPopover.hidden && projectsPopover.contains(event.target)) {
+      return;
+    }
+    closeProjectsPopover();
     const columnsPopover = getColumnsPopover();
     if (columnsPopover && !columnsPopover.hidden && columnsPopover.contains(event.target)) {
       return;

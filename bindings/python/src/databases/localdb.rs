@@ -43,6 +43,12 @@ impl SampleStatus {
         inner: binlex::databases::SampleStatus::Canceled,
     };
 
+    #[allow(non_upper_case_globals)]
+    #[classattr]
+    pub const STORED: Self = Self {
+        inner: binlex::databases::SampleStatus::Stored,
+    };
+
     pub fn __str__(&self) -> &'static str {
         match self.inner {
             binlex::databases::SampleStatus::Pending => "pending",
@@ -50,6 +56,7 @@ impl SampleStatus {
             binlex::databases::SampleStatus::Complete => "complete",
             binlex::databases::SampleStatus::Failed => "failed",
             binlex::databases::SampleStatus::Canceled => "canceled",
+            binlex::databases::SampleStatus::Stored => "stored",
         }
     }
 }

@@ -1,6 +1,74 @@
 use super::*;
 
 impl LocalDB {
+    pub fn sample_sha256_search(
+        &self,
+        query: &str,
+        page: usize,
+        page_size: usize,
+    ) -> Result<crate::databases::localdb::CountedPage<SampleSha256Record>, Error> {
+        let page = page.max(1);
+        let page_size = page_size.max(1);
+        let offset = (page - 1) * page_size;
+        let limit = page_size + 1;
+        let pattern = if query.trim().is_empty() {
+            "%".to_string()
+        } else {
+            format!("{}%", query.trim().to_ascii_lowercase())
+        };
+        let total_rows = self.sqlite.query(
+            "SELECT COUNT(*) AS count
+             FROM (
+                SELECT sha256 FROM sample_status
+                UNION
+                SELECT DISTINCT sha256 FROM entity_metadata
+             )
+             WHERE LOWER(sha256) LIKE ?1",
+            &[SQLiteValue::Text(pattern.clone())],
+        )?;
+        let total_results = total_rows
+            .first()
+            .and_then(|row| row.get("count"))
+            .and_then(|value| value.as_i64())
+            .unwrap_or(0)
+            .max(0) as usize;
+        let rows = self.sqlite.query(
+            "SELECT sha256
+             FROM (
+                SELECT sha256 FROM sample_status
+                UNION
+                SELECT DISTINCT sha256 FROM entity_metadata
+             )
+             WHERE LOWER(sha256) LIKE ?1
+             ORDER BY sha256 ASC
+             LIMIT ?2 OFFSET ?3",
+            &[
+                SQLiteValue::Text(pattern),
+                SQLiteValue::Integer(limit as i64),
+                SQLiteValue::Integer(offset as i64),
+            ],
+        )?;
+        let has_next = rows.len() > page_size;
+        let items = rows
+            .into_iter()
+            .take(page_size)
+            .filter_map(|row| {
+                row.get("sha256")
+                    .and_then(|value| value.as_str())
+                    .map(|sha256| SampleSha256Record {
+                        sha256: sha256.to_string(),
+                    })
+            })
+            .collect::<Vec<_>>();
+        Ok(crate::databases::localdb::CountedPage {
+            items,
+            page,
+            page_size,
+            total_results,
+            has_next,
+        })
+    }
+
     pub fn sample_status_get(&self, sha256: &str) -> Result<Option<SampleStatusRecord>, Error> {
         let rows = self.sqlite.query(
             "SELECT sha256, status, timestamp, error_message, id FROM sample_status WHERE sha256 = ?1",

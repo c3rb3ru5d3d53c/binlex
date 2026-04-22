@@ -41,16 +41,18 @@ pub enum SampleStatus {
     Complete,
     Failed,
     Canceled,
+    Stored,
 }
 
 impl SampleStatus {
-    fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::Pending => "pending",
             Self::Processing => "processing",
             Self::Complete => "complete",
             Self::Failed => "failed",
             Self::Canceled => "canceled",
+            Self::Stored => "stored",
         }
     }
 
@@ -61,6 +63,7 @@ impl SampleStatus {
             "complete" => Ok(Self::Complete),
             "failed" => Ok(Self::Failed),
             "canceled" => Ok(Self::Canceled),
+            "stored" => Ok(Self::Stored),
             _ => Err(Error(format!("invalid sample status {}", value))),
         }
     }
@@ -165,6 +168,48 @@ pub struct TagCatalogSearchPage {
     pub items: Vec<TagCatalogRecord>,
     pub total_results: usize,
     pub has_next: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectRecord {
+    pub project_sha256: String,
+    pub tool: String,
+    pub original_filename: String,
+    pub storage_key: String,
+    pub size_bytes: u64,
+    pub content_type: String,
+    pub container_format: String,
+    pub visibility: String,
+    pub uploaded_by: String,
+    pub uploaded_timestamp: String,
+    pub updated_timestamp: String,
+    pub is_deleted: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectAssignmentRecord {
+    pub assignment_sha256: String,
+    pub project_sha256: String,
+    pub sample_sha256: String,
+    pub sample_state: String,
+    pub assigned_by: String,
+    pub assigned_timestamp: String,
+    pub updated_timestamp: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectSearchParams {
+    pub sample_sha256: String,
+    pub username: Option<String>,
+    pub tool: Option<String>,
+    pub project_sha256: Option<String>,
+    pub page: usize,
+    pub page_size: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SampleSha256Record {
+    pub sha256: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -325,6 +370,7 @@ mod auth;
 mod comments;
 mod core;
 mod corpus;
+mod projects;
 mod tags;
 
 fn generate_secret() -> String {
