@@ -25,6 +25,7 @@ use crate::entropy;
 use crate::genetics::AllelePair;
 use crate::hashing::MinHash32;
 use crate::hashing::SHA256;
+use crate::hashing::SSDeep;
 use crate::hashing::TLSH;
 use crate::hex;
 use crate::imaging::Imaging;
@@ -53,6 +54,9 @@ pub struct ChromosomeJson {
     /// The SHA-256 hash of the masked chromosome bytes, if enabled.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sha256: Option<String>,
+    /// The ssdeep fuzzy hash of the masked chromosome bytes, if enabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssdeep: Option<String>,
     /// The MinHash of the masked chromosome bytes, if enabled.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub minhash: Option<String>,
@@ -239,6 +243,11 @@ impl Chromosome {
         Some(SHA256::from_bytes(self.masked()))
     }
 
+    /// Computes the ssdeep hash of the masked chromosome bytes.
+    pub fn ssdeep(&self) -> Option<SSDeep<'static>> {
+        Some(SSDeep::from_bytes(self.masked()))
+    }
+
     /// Computes the entropy of the masked chromosome bytes.
     pub fn entropy(&self) -> Option<f64> {
         entropy::shannon(&self.masked())
@@ -265,6 +274,11 @@ impl Chromosome {
             },
             sha256: if self.config.chromosomes.sha256.enabled {
                 self.sha256().and_then(|hash| hash.hexdigest())
+            } else {
+                None
+            },
+            ssdeep: if self.config.chromosomes.ssdeep.enabled {
+                self.ssdeep().and_then(|hash| hash.hexdigest())
             } else {
                 None
             },

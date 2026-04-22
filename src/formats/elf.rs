@@ -26,6 +26,7 @@ use crate::formats::File;
 use crate::formats::Image;
 use crate::formats::Symbol as BlSymbol;
 use crate::hashing::SHA256;
+use crate::hashing::SSDeep;
 use crate::hashing::TLSH;
 use crate::imaging::Imaging;
 use lief::Binary;
@@ -215,6 +216,11 @@ impl ELF {
 
     pub fn sha256(&self) -> Option<SHA256<'_>> {
         self.file.sha256()
+    }
+
+    #[allow(dead_code)]
+    pub fn ssdeep(&self) -> Option<SSDeep<'_>> {
+        self.file.ssdeep()
     }
 
     /// Returns the entropy of the ELF file.

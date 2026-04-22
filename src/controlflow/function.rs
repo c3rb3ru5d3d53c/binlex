@@ -31,6 +31,7 @@ use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeJson;
 use crate::hashing::MinHash32;
 use crate::hashing::SHA256;
+use crate::hashing::SSDeep;
 use crate::hashing::TLSH;
 use crate::hex;
 use crate::imaging::Imaging;
@@ -84,6 +85,9 @@ pub struct FunctionJson {
     /// The SHA-256 hash of the function, if enabled.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sha256: Option<String>,
+    /// The ssdeep fuzzy hash of the function, if enabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssdeep: Option<String>,
     /// The MinHash of the function, if enabled.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub minhash: Option<String>,
@@ -178,6 +182,11 @@ impl FunctionJsonDeserializer {
     #[allow(dead_code)]
     pub fn sha256(&self) -> Option<String> {
         self.json.sha256.clone()
+    }
+
+    #[allow(dead_code)]
+    pub fn ssdeep(&self) -> Option<String> {
+        self.json.ssdeep.clone()
     }
 
     #[allow(dead_code)]
@@ -370,6 +379,11 @@ impl<'function> Function<'function> {
         } else {
             None
         };
+        let ssdeep = if self.cfg.config.functions.ssdeep.enabled {
+            self.ssdeep().and_then(|hash| hash.hexdigest())
+        } else {
+            None
+        };
         let tlsh = if self.cfg.config.functions.tlsh.enabled {
             self.tlsh().and_then(|hash| hash.hexdigest())
         } else {
@@ -401,6 +415,7 @@ impl<'function> Function<'function> {
             average_instructions_per_block: self.average_instructions_per_block(),
             entropy,
             sha256,
+            ssdeep,
             minhash,
             tlsh,
             markov,
@@ -759,6 +774,14 @@ impl<'function> Function<'function> {
             return None;
         }
         self.bytes().map(SHA256::from_bytes)
+    }
+
+    /// Computes the ssdeep hash of the function's bytes, if contiguous.
+    pub fn ssdeep(&self) -> Option<SSDeep<'static>> {
+        if !self.contiguous() {
+            return None;
+        }
+        self.bytes().map(SSDeep::from_bytes)
     }
 
     /// Computes the entropy of the function's bytes.

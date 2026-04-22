@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::hashing::{SHA256, TLSH};
+use crate::hashing::{SSDeep, SHA256, TLSH};
 use crate::Config;
 use crate::Magic;
 use binlex::formats::file::File as InnerFile;
@@ -57,6 +57,14 @@ impl File {
     /// Return the SHA-256 helper for the file, if available.
     pub fn sha256(&self) -> Option<SHA256> {
         self.inner.sha256().map(|hash| SHA256 {
+            bytes: hash.bytes.into_owned(),
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the ssdeep helper for the file, if available.
+    pub fn ssdeep(&self) -> Option<SSDeep> {
+        self.inner.ssdeep().map(|hash| SSDeep {
             bytes: hash.bytes.into_owned(),
         })
     }

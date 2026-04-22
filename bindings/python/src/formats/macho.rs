@@ -22,7 +22,7 @@
 
 use crate::formats::File;
 use crate::formats::Image;
-use crate::hashing::{SHA256, TLSH};
+use crate::hashing::{SSDeep, SHA256, TLSH};
 use crate::imaging::Imaging;
 use crate::Architecture;
 use crate::Config;
@@ -328,6 +328,13 @@ impl MACHO {
     #[pyo3(text_signature = "($self)")]
     pub fn sha256(&self) -> Option<SHA256> {
         self.inner.lock().unwrap().sha256().map(|hash| SHA256 {
+            bytes: hash.bytes.into_owned(),
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn ssdeep(&self) -> Option<SSDeep> {
+        self.inner.lock().unwrap().ssdeep().map(|hash| SSDeep {
             bytes: hash.bytes.into_owned(),
         })
     }

@@ -24,7 +24,7 @@ use crate::controlflow::graph::Graph;
 use crate::controlflow::json_value_to_py;
 use crate::controlflow::Instruction;
 use crate::genetics::Chromosome;
-use crate::hashing::{MinHash32, SHA256, TLSH};
+use crate::hashing::{MinHash32, SSDeep, SHA256, TLSH};
 use crate::imaging::Imaging;
 use crate::Architecture;
 use crate::Config;
@@ -112,6 +112,12 @@ impl BlockJsonDeserializer {
     /// Return the SHA-256 digest for the block, if available.
     pub fn sha256(&self) -> Option<String> {
         self.inner.lock().unwrap().sha256()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the ssdeep value for the block, if available.
+    pub fn ssdeep(&self) -> Option<String> {
+        self.inner.lock().unwrap().ssdeep()
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -459,6 +465,19 @@ impl Block {
                 shingle_size: block.cfg.config.blocks.minhash.shingle_size,
                 seed: block.cfg.config.blocks.minhash.seed,
             }))
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Returns the ssdeep helper for this block.
+    pub fn ssdeep(&self, py: Python) -> PyResult<SSDeep> {
+        self.with_inner_block(py, |block| {
+            let hash = block.ssdeep().ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("failed to compute block ssdeep")
+            })?;
+            Ok(SSDeep {
+                bytes: hash.bytes.into_owned(),
+            })
         })
     }
 
