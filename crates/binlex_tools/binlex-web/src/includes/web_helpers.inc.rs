@@ -71,3 +71,42 @@ fn parse_architecture_override(value: Option<&str>) -> Option<Architecture> {
         _ => None,
     }
 }
+
+fn project_tool_extensions(tool: &str) -> &'static [&'static str] {
+    match tool {
+        "ida" => &["i64", "idb"],
+        "binja" => &["bndb"],
+        "ghidra" => &["gbf", "gzf"],
+        _ => &[],
+    }
+}
+
+fn detect_project_tool(filename: &str) -> Option<&'static str> {
+    match filename
+        .rsplit('.')
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "i64" | "idb" => Some("ida"),
+        "bndb" => Some("binja"),
+        "gbf" | "gzf" => Some("ghidra"),
+        _ => None,
+    }
+}
+
+fn content_type_for_filename(filename: &str) -> &'static str {
+    match filename
+        .rsplit('.')
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "i64" | "idb" | "bndb" | "gbf" | "gzf" => "application/octet-stream",
+        _ => "application/octet-stream",
+    }
+}

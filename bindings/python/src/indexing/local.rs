@@ -281,6 +281,31 @@ impl LocalIndex {
         Ok(PyBytes::new(py, &data))
     }
 
+    #[pyo3(text_signature = "($self, sha256, data)")]
+    pub fn project_put(&self, sha256: String, data: Bound<'_, PyBytes>) -> PyResult<()> {
+        let bytes = data.as_bytes();
+        self.inner
+            .lock()
+            .unwrap()
+            .project_put(&sha256, bytes)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    #[pyo3(text_signature = "($self, sha256)")]
+    pub fn project_get<'py>(
+        &self,
+        py: Python<'py>,
+        sha256: String,
+    ) -> PyResult<Bound<'py, PyBytes>> {
+        let data = self
+            .inner
+            .lock()
+            .unwrap()
+            .project_get(&sha256)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(PyBytes::new(py, &data))
+    }
+
     #[pyo3(signature = (sha256, graph, attributes=None, selector=None, collections=None, corpora=None, username=None), text_signature = "($self, sha256, graph, attributes=None, selector=None, collections=None, corpora=None, username=None)")]
     pub fn graph(
         &self,

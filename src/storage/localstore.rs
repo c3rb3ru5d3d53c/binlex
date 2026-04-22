@@ -133,6 +133,18 @@ impl LocalStore {
         self.object_exists(&sample_data_path(sha256))
     }
 
+    pub fn project_put(&self, sha256: &str, data: &[u8]) -> Result<(), Error> {
+        self.object_put(&project_data_path(sha256), data)
+    }
+
+    pub fn project_get(&self, sha256: &str) -> Result<Vec<u8>, Error> {
+        self.object_get(&project_data_path(sha256))
+    }
+
+    pub fn project_exists(&self, sha256: &str) -> Result<bool, Error> {
+        self.object_exists(&project_data_path(sha256))
+    }
+
     pub fn sample_json_put<T: Serialize>(
         &self,
         sha256: &str,
@@ -162,4 +174,8 @@ fn sample_data_path(sha256: &str) -> String {
 
 fn sample_json_path(sha256: &str, name: &str) -> String {
     format!("samples/{0}/{0}.{1}.json", sha256, name)
+}
+
+fn project_data_path(sha256: &str) -> String {
+    format!("projects/{0}/{0}", sha256)
 }

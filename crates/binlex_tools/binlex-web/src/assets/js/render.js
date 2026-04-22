@@ -129,6 +129,16 @@ function renderCommentsCell(row) {
   return `<div class="comments-cell"><button type="button" class="comments-popover-trigger" data-result-key="${escapeHtml(resultKey)}" onclick="event.stopPropagation(); toggleCommentsPopover(this)">${escapeHtml(triggerLabel)}</button></div>`;
 }
 
+function renderProjectsCell(row) {
+  const resultKey = resultRowKey(row);
+  const count = Number(row?.sample_project_count || 0);
+  const triggerLabel = count > 0 ? `+${count}` : "+";
+  if (!canWrite()) {
+    return `<div class="projects-cell"><span class="projects-popover-trigger readonly-count">${escapeHtml(triggerLabel)}</span></div>`;
+  }
+  return `<div class="projects-cell"><button type="button" class="projects-popover-trigger" data-result-key="${escapeHtml(resultKey)}" onclick="event.stopPropagation(); toggleProjectsPopover(this)">${escapeHtml(triggerLabel)}</button></div>`;
+}
+
 function formatScoreValue(score) {
   if (score == null || !Number.isFinite(Number(score))) return "";
   const value = Number(score);
@@ -328,6 +338,7 @@ function resultColumnDefinitions() {
     { id: "collection", label: "collection" },
     { id: "symbol", label: "symbols" },
     { id: "tags", label: "tags" },
+    { id: "projects", label: "projects" },
     { id: "comments", label: "comments" },
     { id: "address", label: "address" },
     { id: "action", label: "action" },
@@ -514,6 +525,8 @@ function renderResultCell(columnId, row, data) {
       return `<td class="tags-cell-td">${renderTagsCell(row)}</td>`;
     case "comments":
       return `<td class="comments-cell-td">${renderCommentsCell(row)}</td>`;
+    case "projects":
+      return `<td class="projects-cell-td">${renderProjectsCell(row)}</td>`;
     case "address":
       return `<td>${renderResultCopyPill(`0x${Number(row.address).toString(16)}`, `0x${Number(row.address).toString(16)}`)}</td>`;
     case "action":

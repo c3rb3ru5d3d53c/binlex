@@ -164,6 +164,10 @@ impl WebResult {
     pub fn comment_count(&self) -> usize {
         self.inner.collection_comment_count
     }
+
+    pub fn project_count(&self) -> usize {
+        self.inner.sample_project_count
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -199,6 +203,8 @@ pub struct WebUploadResponse {
     pub sha256: Option<String>,
     #[serde(default)]
     pub error: Option<String>,
+    #[serde(default)]
+    pub stored: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -402,6 +408,57 @@ pub struct WebSearchRowResponse {
     pub collection_tag_count: usize,
     #[serde(default)]
     pub collection_comment_count: usize,
+    #[serde(default)]
+    pub sample_project_count: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct WebProjectSummaryResponse {
+    pub project_sha256: String,
+    pub tool: String,
+    pub original_filename: String,
+    pub size_bytes: u64,
+    pub content_type: String,
+    pub container_format: String,
+    pub uploaded_by: WebMetadataUserResponse,
+    pub uploaded_timestamp: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct WebProjectsResponse {
+    pub sha256: String,
+    pub projects: Vec<WebProjectSummaryResponse>,
+    pub page: usize,
+    pub limit: usize,
+    pub total_results: usize,
+    pub has_next: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct WebProjectAssignedSampleResponse {
+    pub sample_sha256: String,
+    pub sample_state: String,
+    pub assigned_by: WebMetadataUserResponse,
+    pub assigned_timestamp: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct WebProjectAssignedSamplesResponse {
+    pub project_sha256: String,
+    pub samples: Vec<WebProjectAssignedSampleResponse>,
+    pub page: usize,
+    pub limit: usize,
+    pub total_results: usize,
+    pub has_next: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct WebProjectUploadResponse {
+    pub ok: bool,
+    #[serde(default)]
+    pub project_sha256: Option<String>,
+    #[serde(default)]
+    pub error: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -1500,6 +1557,100 @@ impl Web {
                 ("collection", collection.as_str().to_string()),
                 ("address", address.to_string()),
             ],
+            None,
+        )
+    }
+
+    pub fn search_projects(
+        &self,
+        sample_sha256: &str,
+        username: Option<&str>,
+        tool: Option<&str>,
+        project_sha256: Option<&str>,
+        limit: Option<usize>,
+        page: Option<usize>,
+    ) -> Result<WebProjectsResponse, WebError> {
+        let mut query = vec![("sha256", sample_sha256.to_string())];
+        if let Some(value) = username {
+            query.push(("username", value.to_string()));
+        }
+        if let Some(value) = tool {
+            query.push(("tool", value.to_string()));
+        }
+        if let Some(value) = project_sha256 {
+            query.push(("project_sha256", value.to_string()));
+        }
+        if let Some(value) = limit {
+            query.push(("limit", value.to_string()));
+        }
+        if let Some(value) = page {
+            query.push(("page", value.to_string()));
+        }
+        self.get_json("/api/v1/projects/search", &query, None)
+    }
+
+    pub fn search_project_assignments(
+        &self,
+        project_sha256: &str,
+        sample_sha256: Option<&str>,
+        limit: Option<usize>,
+        page: Option<usize>,
+    ) -> Result<WebProjectAssignedSamplesResponse, WebError> {
+        let mut query = Vec::new();
+        if let Some(value) = sample_sha256 {
+            query.push(("sample_sha256", value.to_string()));
+        }
+        if let Some(value) = limit {
+            query.push(("limit", value.to_string()));
+        }
+        if let Some(value) = page {
+            query.push(("page", value.to_string()));
+        }
+        self.get_json(
+            &format!("/api/v1/projects/{project_sha256}/samples/search"),
+            &query,
+            None,
+        )
+    }
+
+    pub fn assign_project_sample(
+        &self,
+        project_sha256: &str,
+        sample_sha256: &str,
+        sample_state: Option<&str>,
+    ) -> Result<WebIndexActionResponse, WebError> {
+        #[derive(Serialize)]
+        struct Request<'a> {
+            sample_sha256: &'a str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            sample_state: Option<&'a str>,
+        }
+        self.post_json(
+            &format!("/api/v1/projects/{project_sha256}/samples"),
+            &Request {
+                sample_sha256,
+                sample_state,
+            },
+            None,
+        )
+    }
+
+    pub fn unassign_project_sample(
+        &self,
+        project_sha256: &str,
+        sample_sha256: &str,
+    ) -> Result<WebIndexActionResponse, WebError> {
+        self.send_without_body(
+            Method::DELETE,
+            &format!("/api/v1/projects/{project_sha256}/samples/{sample_sha256}"),
+            None,
+        )
+    }
+
+    pub fn download_project(&self, project_sha256: &str) -> Result<Vec<u8>, WebError> {
+        self.get_bytes(
+            &format!("/api/v1/download/project/{project_sha256}"),
+            &[],
             None,
         )
     }

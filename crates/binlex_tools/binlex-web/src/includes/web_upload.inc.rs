@@ -21,6 +21,7 @@ async fn upload(
                 "sample uploads are disabled. Request ID: {}",
                 request_id
             )),
+            stored: None,
         }));
     }
     let mut form = UploadForm::default();
@@ -53,6 +54,12 @@ async fn upload(
                     form.architecture = Some(value);
                 }
             }
+            "mode" => {
+                let value = field.text().await.unwrap_or_default();
+                if !value.trim().is_empty() {
+                    form.mode = Some(value);
+                }
+            }
             "corpus" => form.corpus.push(field.text().await.unwrap_or_default()),
             "tag" => form.tags.push(field.text().await.unwrap_or_default()),
             _ => {}
@@ -66,6 +73,7 @@ async fn upload(
                 "upload exceeds max size of {} bytes. Request ID: {}",
                 state.ui.upload.sample.max_bytes, request_id
             )),
+            stored: None,
         }));
     }
 
@@ -225,6 +233,47 @@ fn ingest_upload(
             ok: false,
             sha256: None,
             error: Some("no data was provided".to_string()),
+            stored: None,
+        };
+    }
+
+    if matches!(form.mode.as_deref(), Some("store")) {
+        let sha256 = match state.index.sample_put(&form.bytes) {
+            Ok(sha256) => sha256,
+            Err(error) => {
+                return UploadResponse {
+                    ok: false,
+                    sha256: None,
+                    error: Some(format!(
+                        "failed to store sample: {} Request ID: {}",
+                        error, request_id
+                    )),
+                    stored: None,
+                };
+            }
+        };
+        if let Err(error) = write_sample_status(
+            state.database.as_ref(),
+            &sha256,
+            SampleStatus::Stored,
+            None,
+            Some(request_id),
+        ) {
+            return UploadResponse {
+                ok: false,
+                sha256: Some(sha256),
+                error: Some(format!(
+                    "failed to write stored sample status: {} Request ID: {}",
+                    error, request_id
+                )),
+                stored: None,
+            };
+        }
+        return UploadResponse {
+            ok: true,
+            sha256: Some(sha256),
+            error: None,
+            stored: Some(true),
         };
     }
 
@@ -235,6 +284,7 @@ fn ingest_upload(
                 ok: false,
                 sha256: None,
                 error: Some(format!("{} Request ID: {}", error, request_id)),
+                stored: None,
             };
         }
     };
@@ -245,6 +295,7 @@ fn ingest_upload(
                 ok: false,
                 sha256: None,
                 error: Some(format!("{} Request ID: {}", error, request_id)),
+                stored: None,
             };
         }
     };
@@ -277,6 +328,7 @@ fn ingest_upload(
                 "shellcode format cannot be used for detected {} input. Request ID: {}",
                 detected_magic, request_id
             )),
+            stored: None,
         };
     }
     if matches!(magic_override, Some(Magic::CODE)) && architecture_override.is_none() {
@@ -287,6 +339,7 @@ fn ingest_upload(
                 "shellcode uploads require an architecture value. Request ID: {}",
                 request_id
             )),
+            stored: None,
         };
     }
 
@@ -310,6 +363,7 @@ fn ingest_upload(
                     "failed to store sample: {} Request ID: {}",
                     error, request_id
                 )),
+                stored: None,
             };
         }
     };
@@ -337,6 +391,7 @@ fn ingest_upload(
                 "failed to queue upload analysis status: {} Request ID: {}",
                 error, request_id
             )),
+            stored: None,
         };
     }
 
@@ -703,6 +758,7 @@ fn ingest_upload(
                 "failed to queue upload analysis: {} Request ID: {}",
                 error, request_id
             )),
+            stored: None,
         });
 
     if let Err(response) = spawn_result {
@@ -722,6 +778,7 @@ fn ingest_upload(
         ok: true,
         sha256: Some(sha256),
         error: None,
+        stored: None,
     }
 }
 
@@ -749,6 +806,7 @@ impl UploadStatusResponse {
             SampleStatus::Complete => "complete",
             SampleStatus::Failed => "failed",
             SampleStatus::Canceled => "canceled",
+            SampleStatus::Stored => "stored",
         }
     }
 }

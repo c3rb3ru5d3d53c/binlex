@@ -74,6 +74,7 @@ include!("includes/web_tags.inc.rs");
 include!("includes/web_comments.inc.rs");
 include!("includes/web_search.inc.rs");
 include!("includes/web_upload.inc.rs");
+include!("includes/web_projects.inc.rs");
 include!("includes/web_download.inc.rs");
 include!("includes/web_test.inc.rs");
 include!("includes/web_openapi_error.inc.rs");

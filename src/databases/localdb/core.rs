@@ -204,6 +204,30 @@ impl LocalDB {
                 timestamp TEXT NOT NULL,
                 expires TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS projects (
+                project_sha256 TEXT PRIMARY KEY NOT NULL,
+                tool TEXT NOT NULL,
+                original_filename TEXT NOT NULL,
+                storage_key TEXT NOT NULL,
+                size_bytes INTEGER NOT NULL,
+                content_type TEXT NOT NULL,
+                container_format TEXT NOT NULL,
+                visibility TEXT NOT NULL DEFAULT 'public',
+                uploaded_by TEXT NOT NULL DEFAULT '',
+                uploaded_timestamp TEXT NOT NULL,
+                updated_timestamp TEXT NOT NULL,
+                is_deleted INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS project_sample_assignments (
+                assignment_sha256 TEXT PRIMARY KEY NOT NULL,
+                project_sha256 TEXT NOT NULL,
+                sample_sha256 TEXT NOT NULL,
+                sample_state TEXT NOT NULL DEFAULT 'analyzed',
+                assigned_by TEXT NOT NULL DEFAULT '',
+                assigned_timestamp TEXT NOT NULL,
+                updated_timestamp TEXT NOT NULL,
+                UNIQUE(project_sha256, sample_sha256)
+            );
             CREATE INDEX IF NOT EXISTS idx_corpora_catalog_corpus ON corpora_catalog (corpus);
             CREATE INDEX IF NOT EXISTS idx_tags_tag ON tags (tag);
             CREATE INDEX IF NOT EXISTS idx_entity_corpora_lookup ON entity_corpora (sha256, collection, architecture, address);
@@ -215,7 +239,11 @@ impl LocalDB {
             CREATE INDEX IF NOT EXISTS idx_symbols_symbol ON symbols (symbol);
             CREATE INDEX IF NOT EXISTS idx_entity_symbols_lookup ON entity_symbols (sha256, collection, architecture, address, symbol);
             CREATE INDEX IF NOT EXISTS idx_recovery_codes_username ON recovery_codes (username);
-            CREATE INDEX IF NOT EXISTS idx_captchas_expires ON captchas (expires);",
+            CREATE INDEX IF NOT EXISTS idx_captchas_expires ON captchas (expires);
+            CREATE INDEX IF NOT EXISTS idx_projects_project_sha256 ON projects (project_sha256, uploaded_timestamp DESC);
+            CREATE INDEX IF NOT EXISTS idx_projects_tool_uploaded_timestamp ON projects (tool, uploaded_timestamp DESC);
+            CREATE INDEX IF NOT EXISTS idx_project_sample_assignments_sample_sha256 ON project_sample_assignments (sample_sha256, updated_timestamp DESC);
+            CREATE INDEX IF NOT EXISTS idx_project_sample_assignments_project_sha256 ON project_sample_assignments (project_sha256, updated_timestamp DESC);",
         )?;
         for statement in [
             "ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''",
@@ -229,6 +257,7 @@ impl LocalDB {
             "ALTER TABLE entity_corpora ADD COLUMN username TEXT NOT NULL DEFAULT ''",
             "ALTER TABLE corpora_catalog ADD COLUMN username TEXT NOT NULL DEFAULT ''",
             "ALTER TABLE symbols ADD COLUMN username TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE sample_status ADD COLUMN id TEXT NULL",
         ] {
             match self.sqlite.execute(statement, &[]) {
                 Ok(_) => {}

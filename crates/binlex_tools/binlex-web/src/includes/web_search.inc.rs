@@ -187,6 +187,7 @@ pub(crate) fn build_search_row_response(row: &ResultRow) -> SearchRowResponse {
         corpora_count: result.corpora().len(),
         collection_tag_count: row.collection_tag_count,
         collection_comment_count: row.collection_comment_count,
+        sample_project_count: row.sample_project_count,
     }
 }
 
@@ -408,6 +409,16 @@ fn build_page_data(
                     .map_err(|error| {
                         AppError::with_request_id(error.to_string(), request_id.to_string())
                     })?;
+                let project_counts = state
+                    .database
+                    .sample_project_counts(
+                        &rows.iter()
+                            .map(|row| row.result.sha256().to_string())
+                            .collect::<Vec<_>>(),
+                    )
+                    .map_err(|error| {
+                        AppError::with_request_id(error.to_string(), request_id.to_string())
+                    })?;
                 for row in &mut rows {
                     row.collection_tag_count = *tag_counts
                         .get(&(
@@ -423,6 +434,8 @@ fn build_page_data(
                             row.result.address(),
                         ))
                         .unwrap_or(&0);
+                    row.sample_project_count =
+                        *project_counts.get(row.result.sha256()).unwrap_or(&0);
                     let username = row.result.username();
                     if !username.is_empty()
                         && let Some(user) = state.database.user_get(username).ok().flatten()
@@ -495,8 +508,9 @@ fn build_page_data(
         upload_selected_corpora,
         upload_tag_options,
         upload_selected_tags,
-        uploads_enabled: state.ui.upload.sample.enabled,
-        upload_button_enabled: state.ui.upload.sample.enabled && can_write,
+        uploads_enabled: state.ui.upload.sample.enabled || state.ui.upload.project_files.enabled,
+        upload_button_enabled:
+            (state.ui.upload.sample.enabled || state.ui.upload.project_files.enabled) && can_write,
         sample_downloads_enabled: state.ui.download.sample.enabled
             || state.ui.download.samples.enabled,
         auth_bootstrap_required,
@@ -736,6 +750,7 @@ fn execute_stream_search(
                     grouped: false,
                     group_end: false,
                     collection_tag_count: 0,
+                    sample_project_count: 0,
                 })
                 .collect::<Vec<_>>();
             Ok(SearchPage {
@@ -764,6 +779,7 @@ fn execute_stream_search(
                     grouped: true,
                     group_end: false,
                     collection_tag_count: 0,
+                    sample_project_count: 0,
                 });
                 rows.push(ResultRow {
                     side: RowSide::Rhs,
@@ -774,6 +790,7 @@ fn execute_stream_search(
                     grouped: true,
                     group_end: true,
                     collection_tag_count: 0,
+                    sample_project_count: 0,
                 });
             }
             Ok(SearchPage {

@@ -33,6 +33,7 @@
       <div class="action-row">
         <form method="post" action="/api/v1/upload/sample" enctype="multipart/form-data" class="upload-form" id="upload-form">
           <input id="upload-input" type="file" name="data" class="hidden-file">
+          <input id="upload-mode" type="hidden" name="mode" value="">
           <input id="upload-format" type="hidden" name="format" value="">
           <input id="upload-architecture" type="hidden" name="architecture" value="">
           <button class="secondary upload-button" type="button"{% if !upload_button_enabled %} disabled{% endif %}{% if upload_button_enabled %} onclick="openUploadModal()"{% endif %}>Upload</button>

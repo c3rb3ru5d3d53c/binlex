@@ -270,6 +270,11 @@ const uploadCorporaRequests = new Set();
 let uploadCorporaSearchHandle = null;
 const uploadTagRequests = new Set();
 let uploadTagSearchHandle = null;
+const uploadProjectSampleRequests = new Set();
+let uploadProjectAvailablePage = 1;
+let uploadProjectAvailableLoadedQuery = "";
+let uploadProjectAvailableValues = [];
+let uploadProjectSelectedValues = [];
 
 async function loadUploadTags(query = "", force = false) {
   const root = getUploadTagRoot();
@@ -289,6 +294,52 @@ async function loadUploadTags(query = "", force = false) {
     console.error("binlex-web upload tags search failed", error);
   } finally {
     uploadTagRequests.delete(requestKey);
+  }
+}
+
+function uploadProjectAvailableQuery() {
+  return String(document.getElementById("upload-project-available-search")?.value || "").trim();
+}
+
+function uploadProjectSelectedQuery() {
+  return String(document.getElementById("upload-project-selected-search")?.value || "").trim().toLowerCase();
+}
+
+function setUploadProjectSelectedValues(values) {
+  uploadProjectSelectedValues = Array.from(new Set((values || []).map((value) => String(value || "").trim()).filter(Boolean)));
+  renderUploadProjectPicker();
+}
+
+function filteredUploadProjectAvailable() {
+  const selected = new Set(uploadProjectSelectedValues);
+  return uploadProjectAvailableValues.filter((value) => !selected.has(value));
+}
+
+function filteredUploadProjectSelected() {
+  const needle = uploadProjectSelectedQuery();
+  return uploadProjectSelectedValues.filter((value) => !needle || value.toLowerCase().includes(needle));
+}
+
+async function loadUploadProjectSamples(query = "", page = 1, force = false) {
+  const normalizedQuery = String(query || "").trim();
+  const requestKey = `${normalizedQuery.toLowerCase()}:${page}`;
+  if (uploadProjectSampleRequests.has(requestKey)) return;
+  if (!force && uploadProjectAvailableLoadedQuery === normalizedQuery && uploadProjectAvailablePage === page) return;
+  uploadProjectSampleRequests.add(requestKey);
+  try {
+    const payload = await fetchJsonWithCredentials(`/api/v1/samples/search?${new URLSearchParams({
+      q: normalizedQuery,
+      limit: "8",
+      page: String(page),
+    }).toString()}`);
+    uploadProjectAvailableValues = Array.isArray(payload?.samples) ? payload.samples : [];
+    uploadProjectAvailablePage = Number(payload?.page || page);
+    uploadProjectAvailableLoadedQuery = normalizedQuery;
+    renderUploadProjectPicker();
+  } catch (error) {
+    console.error("binlex-web upload project sample search failed", error);
+  } finally {
+    uploadProjectSampleRequests.delete(requestKey);
   }
 }
 
@@ -420,6 +471,26 @@ function renderUploadTagPicker() {
   renderUploadTagCreateInline();
 }
 
+function uploadProjectPickerItemHtml(value, direction, active, handler) {
+  const arrow = direction === "selected" ? "&larr;" : "&rarr;";
+  const activeClass = active ? " active" : "";
+  return `<div class="upload-corpus-item${activeClass}"><span class="upload-corpus-item-name" title="${escapeHtml(value)}">${escapeHtml(abbreviateHex(value))}</span><div class="upload-corpus-item-actions"><button type="button" class="symbol-picker-copy" onclick="event.stopPropagation(); copyPickerValue(this,'${escapeHtml(encodeURIComponent(value))}')">Copy</button><button type="button" class="symbol-picker-move" onclick="${handler}('${encodeURIComponent(value)}')">${arrow}</button></div></div>`;
+}
+
+function renderUploadProjectPicker() {
+  const availableList = document.getElementById("upload-project-available-list");
+  const selectedList = document.getElementById("upload-project-selected-list");
+  if (!(availableList instanceof HTMLElement) || !(selectedList instanceof HTMLElement)) return;
+  const available = filteredUploadProjectAvailable();
+  const selected = filteredUploadProjectSelected();
+  availableList.innerHTML = available.length === 0
+    ? '<div class="upload-corpus-empty">No available samples.</div>'
+    : available.map((value, index) => uploadProjectPickerItemHtml(value, "available", index === 0, "selectUploadProjectSample")).join("");
+  selectedList.innerHTML = selected.length === 0
+    ? '<div class="upload-corpus-empty">No assigned samples.</div>'
+    : selected.map((value, index) => uploadProjectPickerItemHtml(value, "selected", index === 0, "unselectUploadProjectSample")).join("");
+}
+
 function selectUploadCorpus(encodedValue) {
   const decoded = decodeURIComponent(String(encodedValue || ""));
   const value = findUploadCorpusByName(decoded) || decoded.trim();
@@ -453,6 +524,22 @@ function unselectUploadTag(encodedValue) {
   const value = decodeURIComponent(String(encodedValue || "")).trim();
   if (!value) return;
   setSelectedUploadTagValues(selectedUploadTagValues().filter((item) => item !== value));
+}
+
+function selectUploadProjectSample(encodedValue) {
+  const value = decodeURIComponent(String(encodedValue || "")).trim();
+  if (!value) return;
+  const next = uploadProjectSelectedValues.slice();
+  if (!next.includes(value)) {
+    next.push(value);
+  }
+  setUploadProjectSelectedValues(next);
+}
+
+function unselectUploadProjectSample(encodedValue) {
+  const value = decodeURIComponent(String(encodedValue || "")).trim();
+  if (!value) return;
+  setUploadProjectSelectedValues(uploadProjectSelectedValues.filter((item) => item !== value));
 }
 
 function handleUploadCorpusAvailableKeydown(event) {
@@ -498,6 +585,30 @@ function handleUploadTagSelectedKeydown(event) {
   const selected = filteredSelectedUploadTags();
   if (selected.length > 0) {
     unselectUploadTag(encodeURIComponent(selected[0]));
+  }
+}
+
+function handleUploadProjectAvailableInput() {
+  loadUploadProjectSamples(uploadProjectAvailableQuery(), 1, true).catch((error) => {
+    console.error("binlex-web upload project sample search failed", error);
+  });
+}
+
+function handleUploadProjectAvailableKeydown(event) {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  const available = filteredUploadProjectAvailable();
+  if (available.length > 0) {
+    selectUploadProjectSample(encodeURIComponent(available[0]));
+  }
+}
+
+function handleUploadProjectSelectedKeydown(event) {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  const selected = filteredUploadProjectSelected();
+  if (selected.length > 0) {
+    unselectUploadProjectSample(encodeURIComponent(selected[0]));
   }
 }
 
@@ -716,11 +827,46 @@ function initializeProfilePictureCrop() {
   stage.addEventListener("pointercancel", endProfilePictureCropDrag);
 }
 
-function openUploadModal() {
+function activeUploadSurfaceTab() {
+  return String(document.querySelector("[data-upload-surface-tabs='1']")?.dataset?.activeTab || "analyze");
+}
+
+function toggleUploadSurfaceTab(tab) {
+  const root = document.querySelector("[data-upload-surface-tabs='1']");
+  if (!(root instanceof HTMLElement)) return;
+  const normalized = ["analyze", "store", "project"].includes(String(tab || "")) ? String(tab) : "analyze";
+  root.dataset.activeTab = normalized;
+  root.querySelectorAll("[data-upload-surface-tab]").forEach((button) => {
+    if (!(button instanceof HTMLElement)) return;
+    button.classList.toggle("is-active", String(button.dataset.uploadSurfaceTab || "") === normalized);
+  });
+  document.querySelectorAll("[data-upload-surface-panel]").forEach((panel) => {
+    if (!(panel instanceof HTMLElement)) return;
+    panel.hidden = String(panel.dataset.uploadSurfacePanel || "") !== normalized;
+  });
+  updateUploadModalState();
+}
+
+function openUploadModal(tab = "analyze", sampleSha256 = "") {
   const modal = document.getElementById("upload-modal");
   if (!modal) return;
   modal.hidden = false;
   installDropzone();
+  toggleUploadSurfaceTab(tab);
+  const prefill = document.getElementById("upload-project-prefill");
+  if (sampleSha256 && isSha256SearchValue(sampleSha256)) {
+    setUploadProjectSelectedValues([sampleSha256]);
+  } else if (tab !== "project") {
+    setUploadProjectSelectedValues([]);
+  }
+  uploadProjectAvailablePage = 1;
+  uploadProjectAvailableLoadedQuery = "";
+  uploadProjectAvailableValues = [];
+  if (prefill instanceof HTMLElement) {
+    prefill.textContent = sampleSha256 && isSha256SearchValue(sampleSha256)
+      ? `Prefilled sample SHA256: ${sampleSha256}`
+      : "";
+  }
   const uploadMetadataRoot = document.querySelector("[data-upload-metadata-root='1']");
   if (uploadMetadataRoot instanceof HTMLElement) {
     toggleUploadMetadataTab(String(uploadMetadataRoot.dataset.activeTab || "tags"));
@@ -729,6 +875,8 @@ function openUploadModal() {
   loadUploadCorpora("", true).catch((error) => console.error("binlex-web upload corpora search failed", error));
   renderUploadTagPicker();
   loadUploadTags("", true).catch((error) => console.error("binlex-web upload tags search failed", error));
+  renderUploadProjectPicker();
+  loadUploadProjectSamples("", 1, true).catch((error) => console.error("binlex-web upload project sample search failed", error));
   updateUploadModalState();
 }
 
@@ -767,6 +915,7 @@ function mirrorUploadFileList(files) {
 }
 
 function updateUploadModalState() {
+  const mode = activeUploadSurfaceTab();
   const format = document.querySelector('input[name="upload-format"]:checked')?.value || "Auto";
   const shellcode = format === "Shellcode";
   setSingleOptionVisible("upload-architecture", "Auto", !shellcode);
@@ -780,42 +929,84 @@ function updateUploadModalState() {
   const file = document.getElementById("upload-file-picker")?.files?.length || 0;
   const submit = document.getElementById("upload-submit");
   const tip = document.getElementById("upload-modal-tip");
-  if (tip) tip.textContent = "";
+  const dropzoneTitle = document.getElementById("upload-dropzone-title");
+  const dropzoneSubtitle = document.getElementById("upload-dropzone-subtitle");
+  if (dropzoneTitle) {
+    dropzoneTitle.textContent = mode === "store"
+      ? "To Upload a Sample to Store"
+      : mode === "project"
+        ? "To Upload an IDA, Binja or Ghidra Project"
+        : "Click to Upload or Drag and Drop";
+  }
+  if (dropzoneSubtitle) {
+    const subtitle = mode === "store" || mode === "project"
+      ? "Click or Drag and Drop"
+      : "";
+    dropzoneSubtitle.textContent = subtitle;
+    dropzoneSubtitle.hidden = !subtitle;
+  }
+  if (tip) {
+    tip.textContent = mode === "store"
+      ? ""
+      : "";
+  }
   if (submit) {
-    submit.disabled = file === 0 || (shellcode && !arch);
+    submit.disabled = file === 0 || (mode === "analyze" && shellcode && !arch);
   }
 }
 
 async function submitUploadModal() {
+  const mode = activeUploadSurfaceTab();
   const format = document.querySelector('input[name="upload-format"]:checked')?.value || "Auto";
   const arch = document.querySelector('input[name="upload-architecture"]:checked')?.value || "Auto";
+  const modeTarget = document.getElementById("upload-mode");
   const formatTarget = document.getElementById("upload-format");
   const archTarget = document.getElementById("upload-architecture");
+  if (modeTarget) modeTarget.value = mode === "analyze" ? "" : mode;
   if (formatTarget) formatTarget.value = format === "Auto" ? "" : format;
   if (archTarget) archTarget.value = arch === "Auto" ? "" : arch;
   const form = document.getElementById("upload-form");
   if (!(form instanceof HTMLFormElement)) return;
   const formData = new FormData(form);
-  formData.delete("corpus");
-  selectedUploadCorpusValues().forEach((value) => {
-    formData.append("corpus", value);
-  });
-  formData.delete("tag");
-  selectedUploadTagValues().forEach((value) => {
-    formData.append("tag", value);
-  });
+  if (mode === "analyze") {
+    formData.delete("corpus");
+    selectedUploadCorpusValues().forEach((value) => {
+      formData.append("corpus", value);
+    });
+    formData.delete("tag");
+    selectedUploadTagValues().forEach((value) => {
+      formData.append("tag", value);
+    });
+  } else {
+    formData.delete("corpus");
+    formData.delete("tag");
+  }
+  if (mode === "project") {
+    formData.delete("sha256");
+    uploadProjectSelectedValues.forEach((value) => formData.append("sha256", value));
+  }
   const submit = document.getElementById("upload-submit");
   if (submit) submit.disabled = true;
   closeUploadModal();
   openUploadStatusModal("uploading");
   try {
-    const response = await fetch("/api/v1/index/sample", {
+    const endpoint = mode === "project" ? "/api/v1/projects" : "/api/v1/index/sample";
+    const response = await fetch(endpoint, {
       method: "POST",
       body: formData,
     });
     const payload = await response.json();
     if (!response.ok || !payload.ok) {
       openUploadStatusModal("failed", { error: payload.error || "The upload failed." });
+      return;
+    }
+    if (mode === "store" || payload.stored) {
+      setUploadedSha256State(payload.sha256 || "");
+      openUploadStatusModal("stored", { sha256: payload.sha256 || "" });
+      return;
+    }
+    if (mode === "project") {
+      openUploadStatusModal("success", { sha256: payload.project_sha256 || "" });
       return;
     }
     setUploadedSha256State(payload.sha256 || "");
