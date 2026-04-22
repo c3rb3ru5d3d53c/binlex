@@ -27,6 +27,7 @@ pub mod dhash;
 pub mod minhash;
 pub mod phash;
 pub mod sha256;
+pub mod ssdeep;
 pub mod tlsh;
 
 use crate::hashing::ahash::ahash_init;
@@ -34,6 +35,7 @@ use crate::hashing::dhash::dhash_init;
 use crate::hashing::minhash::minhash_init;
 use crate::hashing::phash::phash_init;
 use crate::hashing::sha256::sha256_init;
+use crate::hashing::ssdeep::ssdeep_init;
 use crate::hashing::tlsh::tlsh_init;
 
 pub use crate::hashing::ahash::AHash;
@@ -41,6 +43,7 @@ pub use crate::hashing::dhash::DHash;
 pub use crate::hashing::minhash::MinHash32;
 pub use crate::hashing::phash::PHash;
 pub use crate::hashing::sha256::SHA256;
+pub use crate::hashing::ssdeep::SSDeep;
 pub use crate::hashing::tlsh::TLSH;
 
 use pyo3::{prelude::*, wrap_pymodule};
@@ -52,12 +55,14 @@ pub fn hashing_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pymodule!(dhash_init))?;
     m.add_wrapped(wrap_pymodule!(phash_init))?;
     m.add_wrapped(wrap_pymodule!(sha256_init))?;
+    m.add_wrapped(wrap_pymodule!(ssdeep_init))?;
     m.add_wrapped(wrap_pymodule!(tlsh_init))?;
     m.add_wrapped(wrap_pymodule!(minhash_init))?;
     m.add_class::<AHash>()?;
     m.add_class::<DHash>()?;
     m.add_class::<PHash>()?;
     m.add_class::<SHA256>()?;
+    m.add_class::<SSDeep>()?;
     m.add_class::<MinHash32>()?;
     m.add_class::<TLSH>()?;
     py.import("sys")?

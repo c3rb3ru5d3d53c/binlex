@@ -32,7 +32,7 @@ from binlex_bindings.binlex.controlflow import Instruction as _InstructionBindin
 from binlex_bindings.binlex.controlflow import InstructionJsonDeserializer as _InstructionJsonDeserializerBinding
 
 from binlex.core.architecture import _coerce_architecture
-from binlex.hashing import MinHash32, SHA256, TLSH
+from binlex.hashing import MinHash32, SHA256, SSDeep, TLSH
 from binlex.imaging import Imaging
 
 
@@ -304,6 +304,10 @@ class Block:
         """Return the MinHash object for this block, if available."""
         return self._inner.minhash()
 
+    def ssdeep(self):
+        """Return the ssdeep object for this block, if available."""
+        return self._inner.ssdeep()
+
     def end(self):
         """Return the ending address of this block."""
         return self._inner.end()
@@ -429,6 +433,10 @@ class Function:
     def minhash(self):
         """Return the MinHash object for this function, if available."""
         return self._inner.minhash()
+
+    def ssdeep(self):
+        """Return the ssdeep object for this function, if available."""
+        return self._inner.ssdeep()
 
     def markov(self):
         """Return normalized Markov importance scores for each block."""
@@ -563,6 +571,10 @@ class BlockJsonDeserializer:
         """Return the SHA-256 digest for the block, if available."""
         return self._inner.sha256()
 
+    def ssdeep(self):
+        """Return the ssdeep digest for the block, if available."""
+        return self._inner.ssdeep()
+
     def edges(self):
         """Return the number of outgoing control-flow edges."""
         return self._inner.edges()
@@ -693,6 +705,10 @@ class FunctionJsonDeserializer:
     def tlsh(self):
         """Return the TLSH digest for the function, if available."""
         return self._inner.tlsh()
+
+    def ssdeep(self):
+        """Return the ssdeep digest for the function, if available."""
+        return self._inner.ssdeep()
 
     def markov(self):
         """Return the Markov importance scores for the function, if available."""

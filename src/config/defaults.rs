@@ -63,6 +63,7 @@ impl Config {
             formats: ConfigFormats {
                 file: ConfigFile {
                     sha256: ConfigHashEnabled { enabled: true },
+                    ssdeep: ConfigHashEnabled { enabled: false },
                     tlsh: ConfigTLSH {
                         enabled: true,
                         minimum_byte_size: 50,
@@ -91,6 +92,7 @@ impl Config {
             blocks: ConfigBlocks {
                 enabled: true,
                 sha256: ConfigHashEnabled { enabled: true },
+                ssdeep: ConfigHashEnabled { enabled: false },
                 tlsh: ConfigTLSH {
                     enabled: false,
                     minimum_byte_size: 50,
@@ -110,6 +112,7 @@ impl Config {
             functions: ConfigFunctions {
                 enabled: true,
                 sha256: ConfigHashEnabled { enabled: true },
+                ssdeep: ConfigHashEnabled { enabled: false },
                 tlsh: ConfigTLSH {
                     enabled: false,
                     minimum_byte_size: 50,
@@ -136,6 +139,7 @@ impl Config {
                 mask: ConfigHashEnabled { enabled: false },
                 masked: ConfigHashEnabled { enabled: false },
                 sha256: ConfigHashEnabled { enabled: true },
+                ssdeep: ConfigHashEnabled { enabled: false },
                 tlsh: ConfigTLSH {
                     enabled: false,
                     minimum_byte_size: 50,
@@ -186,12 +190,14 @@ impl Config {
 
     pub fn disable_block_hashing(&mut self) {
         self.blocks.sha256.enabled = false;
+        self.blocks.ssdeep.enabled = false;
         self.blocks.tlsh.enabled = false;
         self.blocks.minhash.enabled = false;
     }
 
     pub fn disable_file_hashing(&mut self) {
         self.formats.file.sha256.enabled = false;
+        self.formats.file.ssdeep.enabled = false;
         self.formats.file.tlsh.enabled = false;
     }
 
@@ -208,12 +214,14 @@ impl Config {
 
     pub fn disable_chromosome_hashing(&mut self) {
         self.chromosomes.sha256.enabled = false;
+        self.chromosomes.ssdeep.enabled = false;
         self.chromosomes.tlsh.enabled = false;
         self.chromosomes.minhash.enabled = false;
     }
 
     pub fn disable_function_hashing(&mut self) {
         self.functions.sha256.enabled = false;
+        self.functions.ssdeep.enabled = false;
         self.functions.tlsh.enabled = false;
         self.functions.minhash.enabled = false;
     }

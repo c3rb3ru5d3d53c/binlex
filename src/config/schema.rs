@@ -82,6 +82,7 @@ pub struct ConfigInstructionsSemantics {
 pub struct ConfigBlocks {
     pub enabled: bool,
     pub sha256: ConfigHashEnabled,
+    pub ssdeep: ConfigHashEnabled,
     pub tlsh: ConfigTLSH,
     pub minhash: ConfigMinhash,
     pub entropy: ConfigHeuristicEntropy,
@@ -96,6 +97,7 @@ pub struct ConfigChromosomes {
     pub mask: ConfigHashEnabled,
     pub masked: ConfigHashEnabled,
     pub sha256: ConfigHashEnabled,
+    pub ssdeep: ConfigHashEnabled,
     pub tlsh: ConfigTLSH,
     pub minhash: ConfigMinhash,
     pub vector: ConfigHeuristicFeatures,
@@ -106,6 +108,7 @@ pub struct ConfigChromosomes {
 pub struct ConfigFunctions {
     pub enabled: bool,
     pub sha256: ConfigHashEnabled,
+    pub ssdeep: ConfigHashEnabled,
     pub tlsh: ConfigTLSH,
     pub minhash: ConfigMinhash,
     pub entropy: ConfigHeuristicEntropy,
@@ -149,6 +152,7 @@ pub struct ConfigEntityLifterVex {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigFile {
     pub sha256: ConfigHashEnabled,
+    pub ssdeep: ConfigHashEnabled,
     pub tlsh: ConfigTLSH,
     pub entropy: ConfigHeuristicEntropy,
 }

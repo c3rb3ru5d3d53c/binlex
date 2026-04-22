@@ -30,6 +30,7 @@ use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeJson;
 use crate::hashing::MinHash32;
 use crate::hashing::SHA256;
+use crate::hashing::SSDeep;
 use crate::hashing::TLSH;
 use crate::hex;
 use crate::imaging::Imaging;
@@ -88,6 +89,9 @@ pub struct BlockJson {
     /// The SHA-256 hash of the block, if enabled.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sha256: Option<String>,
+    /// The ssdeep fuzzy hash of the block, if enabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssdeep: Option<String>,
     /// The MinHash of the block, if enabled.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub minhash: Option<String>,
@@ -155,6 +159,11 @@ impl BlockJsonDeserializer {
     #[allow(dead_code)]
     pub fn tlsh(&self) -> Option<String> {
         self.json.tlsh.clone()
+    }
+
+    #[allow(dead_code)]
+    pub fn ssdeep(&self) -> Option<String> {
+        self.json.ssdeep.clone()
     }
 
     #[allow(dead_code)]
@@ -372,6 +381,11 @@ impl<'block> Block<'block> {
         } else {
             None
         };
+        let ssdeep = if self.cfg.config.blocks.ssdeep.enabled {
+            self.ssdeep().and_then(|hash| hash.hexdigest())
+        } else {
+            None
+        };
         let minhash = if self.cfg.config.blocks.minhash.enabled {
             self.minhash().and_then(|hash| hash.hexdigest())
         } else {
@@ -400,6 +414,7 @@ impl<'block> Block<'block> {
             blocks,
             entropy,
             sha256,
+            ssdeep,
             minhash,
             tlsh,
             contiguous: true,
@@ -751,6 +766,11 @@ impl<'block> Block<'block> {
     /// Returns `Some(SHA256)` containing the hash object.
     pub fn sha256(&self) -> Option<SHA256<'static>> {
         Some(SHA256::from_bytes(self.bytes()))
+    }
+
+    /// Computes the ssdeep hash of the block's bytes.
+    pub fn ssdeep(&self) -> Option<SSDeep<'static>> {
+        Some(SSDeep::from_bytes(self.bytes()))
     }
 
     /// Retrieves the size of the block in bytes.
