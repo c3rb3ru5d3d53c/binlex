@@ -24,6 +24,7 @@ use crate::Config;
 use crate::Magic;
 use crate::entropy;
 use crate::hashing::sha256::SHA256;
+use crate::hashing::ssdeep::SSDeep;
 use crate::hashing::tlsh::TLSH;
 use crate::metadata::Attribute;
 use serde::{Deserialize, Serialize};
@@ -55,6 +56,9 @@ pub struct FileJson {
     /// The SHA-256 hash of the file, if available.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sha256: Option<String>,
+    /// The ssdeep fuzzy hash of the file, if available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssdeep: Option<String>,
     /// The TLSH (Trend Micro Locality Sensitive Hash) of the file, if available.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tlsh: Option<String>,
@@ -155,6 +159,15 @@ impl File {
         Some(SHA256::new(&self.data))
     }
 
+    /// Computes the ssdeep hash of the file's data.
+    #[allow(dead_code)]
+    pub fn ssdeep(&self) -> Option<SSDeep<'_>> {
+        if self.size() == 0 {
+            return None;
+        }
+        Some(SSDeep::new(&self.data))
+    }
+
     /// Computes the SHA-256 hash of the file's data.
     ///
     /// # Returns
@@ -252,6 +265,11 @@ impl File {
             magic: self.magic().to_string(),
             sha256: if self.config.formats.file.sha256.enabled {
                 self.sha256().and_then(|hash| hash.hexdigest())
+            } else {
+                None
+            },
+            ssdeep: if self.config.formats.file.ssdeep.enabled {
+                self.ssdeep().and_then(|hash| hash.hexdigest())
             } else {
                 None
             },

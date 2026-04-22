@@ -26,6 +26,7 @@ use crate::formats::File;
 use crate::formats::Image;
 use crate::formats::Symbol as BlSymbol;
 use crate::hashing::SHA256;
+use crate::hashing::SSDeep;
 use crate::hashing::TLSH;
 use crate::imaging::Imaging;
 use lief::Binary;
@@ -587,6 +588,12 @@ impl MACHO {
     #[allow(dead_code)]
     pub fn sha256(&self) -> Option<SHA256<'_>> {
         self.file.sha256()
+    }
+
+    /// Returns the ssdeep hash value of the MACHO file.
+    #[allow(dead_code)]
+    pub fn ssdeep(&self) -> Option<SSDeep<'_>> {
+        self.file.ssdeep()
     }
 
     /// Returns the underlying file metadata helper associated with the Mach-O.

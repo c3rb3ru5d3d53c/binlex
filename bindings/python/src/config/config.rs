@@ -75,6 +75,13 @@ impl ConfigChromosomes {
     }
 
     #[getter]
+    pub fn get_ssdeep(&self) -> ConfigChromosomesHashingSSDeep {
+        ConfigChromosomesHashingSSDeep {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
     pub fn get_tlsh(&self) -> ConfigChromosomesHashingTLSH {
         ConfigChromosomesHashingTLSH {
             inner: Arc::clone(&self.inner),
@@ -113,6 +120,13 @@ impl ConfigChromosomesHashing {
     #[getter]
     pub fn get_sha256(&self) -> ConfigChromosomesHashingSHA256 {
         ConfigChromosomesHashingSHA256 {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
+    pub fn get_ssdeep(&self) -> ConfigChromosomesHashingSSDeep {
+        ConfigChromosomesHashingSSDeep {
             inner: Arc::clone(&self.inner),
         }
     }
@@ -229,6 +243,26 @@ impl ConfigChromosomesHashingSHA256 {
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
         inner.chromosomes.sha256.enabled = value;
+    }
+}
+
+#[pyclass]
+pub struct ConfigChromosomesHashingSSDeep {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigChromosomesHashingSSDeep {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.chromosomes.ssdeep.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.chromosomes.ssdeep.enabled = value;
     }
 }
 
@@ -495,6 +529,13 @@ impl ConfigFunctions {
     }
 
     #[getter]
+    pub fn get_ssdeep(&self) -> ConfigFunctionsHashingSSDeep {
+        ConfigFunctionsHashingSSDeep {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
     pub fn get_tlsh(&self) -> ConfigFunctionsHashingTLSH {
         ConfigFunctionsHashingTLSH {
             inner: Arc::clone(&self.inner),
@@ -561,6 +602,13 @@ impl ConfigFunctionsHashing {
     #[getter]
     pub fn get_sha256(&self) -> ConfigFunctionsHashingSHA256 {
         ConfigFunctionsHashingSHA256 {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
+    pub fn get_ssdeep(&self) -> ConfigFunctionsHashingSSDeep {
+        ConfigFunctionsHashingSSDeep {
             inner: Arc::clone(&self.inner),
         }
     }
@@ -673,6 +721,26 @@ impl ConfigFunctionsHashingSHA256 {
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
         inner.functions.sha256.enabled = value;
+    }
+}
+
+#[pyclass]
+pub struct ConfigFunctionsHashingSSDeep {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigFunctionsHashingSSDeep {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.functions.ssdeep.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.functions.ssdeep.enabled = value;
     }
 }
 
@@ -804,6 +872,13 @@ impl ConfigBlocks {
     }
 
     #[getter]
+    pub fn get_ssdeep(&self) -> ConfigBlocksHashingSSDeep {
+        ConfigBlocksHashingSSDeep {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
     pub fn get_tlsh(&self) -> ConfigBlocksHashingTLSH {
         ConfigBlocksHashingTLSH {
             inner: Arc::clone(&self.inner),
@@ -904,6 +979,13 @@ impl ConfigBlocksHashing {
     }
 
     #[getter]
+    pub fn get_ssdeep(&self) -> ConfigBlocksHashingSSDeep {
+        ConfigBlocksHashingSSDeep {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
     pub fn get_tlsh(&self) -> ConfigBlocksHashingTLSH {
         ConfigBlocksHashingTLSH {
             inner: Arc::clone(&self.inner),
@@ -955,6 +1037,26 @@ impl ConfigBlocksHashingSHA256 {
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
         inner.blocks.sha256.enabled = value;
+    }
+}
+
+#[pyclass]
+pub struct ConfigBlocksHashingSSDeep {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigBlocksHashingSSDeep {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.blocks.ssdeep.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.blocks.ssdeep.enabled = value;
     }
 }
 
@@ -1102,6 +1204,13 @@ impl ConfigFormatsFile {
     }
 
     #[getter]
+    pub fn get_ssdeep(&self) -> ConfigFormatsFileHashingSSDeep {
+        ConfigFormatsFileHashingSSDeep {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
     pub fn get_tlsh(&self) -> ConfigFormatsFileHashingTLSH {
         ConfigFormatsFileHashingTLSH {
             inner: Arc::clone(&self.inner),
@@ -1126,6 +1235,13 @@ impl ConfigFormatsFileHashing {
     #[getter]
     pub fn get_sha256(&self) -> ConfigFormatsFileHashingSHA256 {
         ConfigFormatsFileHashingSHA256 {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
+    pub fn get_ssdeep(&self) -> ConfigFormatsFileHashingSSDeep {
+        ConfigFormatsFileHashingSSDeep {
             inner: Arc::clone(&self.inner),
         }
     }
@@ -1175,6 +1291,26 @@ impl ConfigFormatsFileHashingSHA256 {
     pub fn set_enabled(&mut self, value: bool) {
         let mut inner = self.inner.lock().unwrap();
         inner.formats.file.sha256.enabled = value;
+    }
+}
+
+#[pyclass]
+pub struct ConfigFormatsFileHashingSSDeep {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pymethods]
+impl ConfigFormatsFileHashingSSDeep {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.formats.file.ssdeep.enabled
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.formats.file.ssdeep.enabled = value;
     }
 }
 
