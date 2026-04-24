@@ -145,6 +145,7 @@ async fn run_server(
         .route("/api/v1/admin/comments", get(admin_comments_api))
         .route("/api/v1/search", post(search_api))
         .route("/api/v1/search/detail", get(search_detail_api))
+        .route("/api/v1/llvm/render", get(action_llvm_render_api))
         .route("/api/v1/projects", post(project_upload_api))
         .route(
             "/api/v1/projects/search",

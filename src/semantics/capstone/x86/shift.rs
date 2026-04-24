@@ -103,11 +103,6 @@ pub fn build(
         effective_count.clone(),
         common::const_u64(0, bits),
     );
-    let count_is_one = common::compare(
-        SemanticOperationCompare::Eq,
-        effective_count.clone(),
-        common::const_u64(1, bits),
-    );
     let shifted = SemanticExpression::Binary {
         op,
         left: Box::new(left.clone()),
@@ -180,12 +175,7 @@ pub fn build(
     let of_expression = SemanticExpression::Select {
         condition: Box::new(count_is_zero.clone()),
         when_true: Box::new(common::flag_expr("of")),
-        when_false: Box::new(SemanticExpression::Select {
-            condition: Box::new(count_is_one),
-            when_true: Box::new(of_formula),
-            when_false: Box::new(SemanticExpression::Undefined { bits: 1 }),
-            bits: 1,
-        }),
+        when_false: Box::new(of_formula),
         bits: 1,
     };
 
@@ -481,11 +471,6 @@ fn double_precision_shift(
         effective_count.clone(),
         common::const_u64(0, bits),
     );
-    let count_is_one = common::compare(
-        SemanticOperationCompare::Eq,
-        effective_count.clone(),
-        common::const_u64(1, bits),
-    );
     let inverse_count = common::sub(
         common::const_u64(bits as u64, bits),
         effective_count.clone(),
@@ -595,12 +580,7 @@ fn double_precision_shift(
                 expression: SemanticExpression::Select {
                     condition: Box::new(count_is_zero.clone()),
                     when_true: Box::new(common::flag_expr("of")),
-                    when_false: Box::new(SemanticExpression::Select {
-                        condition: Box::new(count_is_one),
-                        when_true: Box::new(of_for_one),
-                        when_false: Box::new(SemanticExpression::Undefined { bits: 1 }),
-                        bits: 1,
-                    }),
+                    when_false: Box::new(of_for_one),
                     bits: 1,
                 },
             },

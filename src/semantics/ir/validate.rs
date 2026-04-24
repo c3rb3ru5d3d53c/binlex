@@ -105,6 +105,14 @@ fn validate_effect(effect: &SemanticEffect) -> Result<(), Error> {
             validate_location(observed)?;
         }
         SemanticEffect::Fence { .. } | SemanticEffect::Trap { .. } | SemanticEffect::Nop => {}
+        SemanticEffect::Architecture { outputs, args, .. } => {
+            for output in outputs {
+                validate_location(output)?;
+            }
+            for arg in args {
+                validate_expression(arg)?;
+            }
+        }
         SemanticEffect::Intrinsic { outputs, args, .. } => {
             for output in outputs {
                 validate_location(output)?;
@@ -208,6 +216,7 @@ fn validate_expression(expression: &SemanticExpression) -> Result<(), Error> {
             validate_expression(when_false)?;
         }
         SemanticExpression::Concat { parts, .. }
+        | SemanticExpression::Architecture { args: parts, .. }
         | SemanticExpression::Intrinsic { args: parts, .. } => {
             for part in parts {
                 validate_expression(part)?;
@@ -231,6 +240,7 @@ fn expression_bits(expression: &SemanticExpression) -> u16 {
         | SemanticExpression::Concat { bits, .. }
         | SemanticExpression::Undefined { bits }
         | SemanticExpression::Poison { bits }
+        | SemanticExpression::Architecture { bits, .. }
         | SemanticExpression::Intrinsic { bits, .. } => *bits,
         SemanticExpression::Read(location) => match location.as_ref() {
             SemanticLocation::Register { bits, .. }

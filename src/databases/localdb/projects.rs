@@ -5,7 +5,21 @@ fn normalize_project_tool(value: &str) -> Result<String, Error> {
         "ida" => Ok("ida".to_string()),
         "binja" => Ok("binja".to_string()),
         "ghidra" => Ok("ghidra".to_string()),
+        "bundle" => Ok("bundle".to_string()),
         _ => Err(Error(format!("invalid project tool {}", value))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_project_tool;
+
+    #[test]
+    fn normalize_project_tool_accepts_bundle() {
+        assert_eq!(
+            normalize_project_tool("bundle").expect("bundle should normalize"),
+            "bundle"
+        );
     }
 }
 

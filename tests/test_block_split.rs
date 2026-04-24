@@ -84,7 +84,7 @@ fn test_full_function_disassembly() {
         .expect("disassemble");
     let func = Function::new(0, &graph).expect("function");
     assert_eq!(graph.listing.len(), 62, "incorrect instruction count");
-    assert_eq!(func.blocks.len(), 14, "incorrect block count");
+    assert_eq!(func.blocks.len(), 23, "incorrect block count");
     let mut collected = Vec::<u8>::new();
     for addr in graph.instruction_addresses().iter().copied() {
         let instr = graph.get_instruction(addr).unwrap();

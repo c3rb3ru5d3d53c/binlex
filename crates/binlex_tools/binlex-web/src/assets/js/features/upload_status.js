@@ -23,7 +23,7 @@ function openUploadStatusModal(state, payload = {}) {
     title.textContent = "Analysis Pending";
     text.textContent = "The sample was uploaded successfully. Binlex accepted analysis and is waiting for processing to begin.";
     if (payload.sha256) {
-      extra.innerHTML = renderUploadStatusSha(payload.sha256);
+      extra.innerHTML = renderUploadStatusValue("SHA256", payload.sha256);
     }
   } else if (state === "processing") {
     if (payload.allowSearchNow) {
@@ -34,37 +34,45 @@ function openUploadStatusModal(state, payload = {}) {
       text.textContent = "Binlex is analyzing and indexing the sample.";
     }
     if (payload.sha256) {
-      extra.innerHTML = renderUploadStatusSha(payload.sha256);
+      extra.innerHTML = renderUploadStatusValue("SHA256", payload.sha256);
       if (payload.allowSearchNow) {
         searchButton.hidden = false;
         searchButton.dataset.sha256 = payload.sha256;
       }
     }
   } else if (state === "success") {
-    title.textContent = "Analysis Complete";
-    text.textContent = "The sample was uploaded, analyzed, and indexed successfully.";
-    if (payload.sha256) {
-      extra.innerHTML = renderUploadStatusSha(payload.sha256);
-      searchButton.hidden = false;
-      searchButton.dataset.sha256 = payload.sha256;
+    if (payload.kind === "project") {
+      title.textContent = "Project Upload Complete";
+      text.textContent = "The project artifact was uploaded successfully.";
+      if (payload.sha256) {
+        extra.innerHTML = renderUploadStatusValue("Project SHA256", payload.sha256);
+      }
+    } else {
+      title.textContent = "Analysis Complete";
+      text.textContent = "The sample was uploaded, analyzed, and indexed successfully.";
+      if (payload.sha256) {
+        extra.innerHTML = renderUploadStatusValue("SHA256", payload.sha256);
+        searchButton.hidden = false;
+        searchButton.dataset.sha256 = payload.sha256;
+      }
     }
   } else if (state === "stored") {
     title.textContent = "Upload Complete";
     text.textContent = "The sample was uploaded successfully.";
     if (payload.sha256) {
-      extra.innerHTML = renderUploadStatusSha(payload.sha256);
+      extra.innerHTML = renderUploadStatusValue("SHA256", payload.sha256);
     }
   } else {
     title.textContent = "Upload Failed";
     text.textContent = payload.error || "The upload failed.";
     if (payload.sha256) {
-      extra.innerHTML = renderUploadStatusSha(payload.sha256);
+      extra.innerHTML = renderUploadStatusValue("SHA256", payload.sha256);
     }
   }
 }
 
-function renderUploadStatusSha(sha256) {
-  return `<div class="upload-status-sha"><span>SHA256</span><div class="upload-status-sha-row"><input class="menu-search upload-status-sha-value" id="upload-status-sha-value" type="text" value="${escapeHtml(sha256)}" readonly><button type="button" class="symbol-picker-copy upload-status-copy" onclick="copyUploadSha(this)" data-sha256="${escapeHtml(sha256)}">Copy</button></div></div>`;
+function renderUploadStatusValue(label, value) {
+  return `<div class="upload-status-sha"><span>${escapeHtml(label)}</span><div class="upload-status-sha-row"><input class="menu-search upload-status-sha-value" id="upload-status-sha-value" type="text" value="${escapeHtml(value)}" readonly><button type="button" class="symbol-picker-copy upload-status-copy" onclick="copyUploadSha(this)" data-sha256="${escapeHtml(value)}">Copy</button></div></div>`;
 }
 
 let uploadStatusPollToken = 0;

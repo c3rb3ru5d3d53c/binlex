@@ -332,7 +332,9 @@ async function loadUploadProjectSamples(query = "", page = 1, force = false) {
       limit: "8",
       page: String(page),
     }).toString()}`);
-    uploadProjectAvailableValues = Array.isArray(payload?.samples) ? payload.samples : [];
+    uploadProjectAvailableValues = Array.isArray(payload?.samples)
+      ? payload.samples.map((item) => metadataItemName(item)).filter((item) => item)
+      : [];
     uploadProjectAvailablePage = Number(payload?.page || page);
     uploadProjectAvailableLoadedQuery = normalizedQuery;
     renderUploadProjectPicker();
@@ -935,7 +937,7 @@ function updateUploadModalState() {
     dropzoneTitle.textContent = mode === "store"
       ? "To Upload a Sample to Store"
       : mode === "project"
-        ? "To Upload an IDA, Binja or Ghidra Project"
+        ? "To Upload a Project or Analysis Bundle"
         : "Click to Upload or Drag and Drop";
   }
   if (dropzoneSubtitle) {
@@ -1006,7 +1008,10 @@ async function submitUploadModal() {
       return;
     }
     if (mode === "project") {
-      openUploadStatusModal("success", { sha256: payload.project_sha256 || "" });
+      openUploadStatusModal("success", {
+        kind: "project",
+        sha256: payload.project_sha256 || "",
+      });
       return;
     }
     setUploadedSha256State(payload.sha256 || "");

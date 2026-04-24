@@ -23,12 +23,13 @@
 use crate::Architecture;
 use crate::Config;
 use crate::controlflow::Graph;
+use crate::controlflow::Llvm as LlvmView;
 use crate::embeddings::EmbeddingsJson;
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeJson;
 use crate::hex;
 use crate::imaging::Imaging;
-use crate::lifters::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
+use crate::lifters::llvm::{LiftersJson, LlvmJson};
 #[cfg(not(target_os = "windows"))]
 use crate::lifters::vex::{Lifter as VexLifter, VexJson};
 use crate::metadata::Attributes;
@@ -323,14 +324,14 @@ impl Instruction {
         self.process().processors.unwrap_or_default()
     }
 
+    /// Return an LLVM builder for this instruction.
+    pub fn llvm(&self) -> LlvmView<'_> {
+        LlvmView::instruction(self)
+    }
+
     fn lifters_json(&self) -> Option<LiftersJson> {
         let llvm = if self.config.instructions.lifters.llvm.enabled {
-            let mut lifter = LlvmLifter::new(self.config.clone());
-            lifter.lift_instruction(self).ok()?;
-
-            Some(LlvmJson {
-                text: lifter.text(),
-            })
+            Some(LlvmJson { text: self.llvm().text().ok()? })
         } else {
             None
         };

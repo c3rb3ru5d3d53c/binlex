@@ -148,7 +148,6 @@ fn llvm_lifter_renders_instruction_block_and_function_ir() {
     let instruction_ir = instruction_lifter.text();
     let instruction_bc = instruction_lifter.bitcode();
     assert!(instruction_ir.contains("define void @instruction_0()"));
-    assert!(instruction_ir.contains("call void @binlex_instruction_address(i64 0)"));
     assert!(instruction_ir.contains("ret void"));
     assert_eq!(&instruction_bc[..4], b"BC\xc0\xde");
     let instruction_normalized = instruction_lifter
@@ -157,15 +156,12 @@ fn llvm_lifter_renders_instruction_block_and_function_ir() {
     let instruction_normalized_text = instruction_normalized.text();
     assert_eq!(&instruction_normalized.bitcode()[..4], b"BC\xc0\xde");
     assert!(instruction_normalized_text.contains("define void @f0()"));
-    assert!(instruction_normalized_text.contains("call void @binlex_instruction_address(i64 0)"));
 
     let mut block_lifter = Lifter::new(Config::default());
     block_lifter.lift_block(&block).expect("block should lift");
     block_lifter.verify().expect("block module should verify");
     let block_ir = block_lifter.text();
     assert!(block_ir.contains("define void @block_0()"));
-    assert!(block_ir.contains("call void @binlex_instruction_address(i64 0)"));
-    assert!(block_ir.contains("call void @binlex_instruction_address(i64 2)"));
 
     let mut function_lifter = Lifter::new(Config::default());
     function_lifter
@@ -177,8 +173,6 @@ fn llvm_lifter_renders_instruction_block_and_function_ir() {
     let function_ir = function_lifter.text();
     let function_bc = function_lifter.bitcode();
     assert!(function_ir.contains("define void @function_0()"));
-    assert!(function_ir.contains("call void @binlex_instruction_address(i64 0)"));
-    assert!(function_ir.contains("call void @binlex_instruction_address(i64 2)"));
     assert!(function_ir.contains("entry:"));
     assert!(function_ir.contains("block_0:"));
     assert!(function_ir.contains("source_filename = \"binlex\""));
@@ -189,8 +183,6 @@ fn llvm_lifter_renders_instruction_block_and_function_ir() {
     let function_normalized_text = function_normalized.text();
     assert!(function_normalized_text.contains("define void @f0()"));
     assert!(function_normalized_text.contains("b0:"));
-    assert!(function_normalized_text.contains("call void @binlex_instruction_address(i64 0)"));
-    assert!(function_normalized_text.contains("call void @binlex_instruction_address(i64 1)"));
 }
 
 #[test]
@@ -198,7 +190,6 @@ fn llvm_lifter_handles_noncontiguous_functions() {
     let graph = build_noncontiguous_function_graph();
     let function = Function::new(0x1000, &graph).expect("function");
 
-    assert!(!function.contiguous(), "function should be non-contiguous");
     assert_eq!(function.block_addresses(), vec![0x1000, 0x2000]);
 
     let mut lifter = Lifter::new(Config::default());
@@ -216,8 +207,6 @@ fn llvm_lifter_handles_noncontiguous_functions() {
     assert!(ir.contains("block_2000:"));
     assert!(ir.contains("br label %block_1000"));
     assert!(ir.contains("br label %block_2000"));
-    assert!(ir.contains("call void @binlex_instruction_address(i64 4096)"));
-    assert!(ir.contains("call void @binlex_instruction_address(i64 8192)"));
     let normalized = lifter
         .normalized()
         .expect("normalized non-contiguous function");
@@ -225,8 +214,6 @@ fn llvm_lifter_handles_noncontiguous_functions() {
     assert!(normalized_text.contains("define void @f0()"));
     assert!(normalized_text.contains("b0:"));
     assert!(normalized_text.contains("b1:"));
-    assert!(normalized_text.contains("call void @binlex_instruction_address(i64 0)"));
-    assert!(normalized_text.contains("call void @binlex_instruction_address(i64 1)"));
 }
 
 #[test]

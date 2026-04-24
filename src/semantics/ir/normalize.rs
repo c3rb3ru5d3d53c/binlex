@@ -79,6 +79,15 @@ fn normalize_effect(effect: &SemanticEffect) -> SemanticEffect {
         },
         SemanticEffect::Fence { kind } => SemanticEffect::Fence { kind: kind.clone() },
         SemanticEffect::Trap { kind } => SemanticEffect::Trap { kind: kind.clone() },
+        SemanticEffect::Architecture {
+            name,
+            args,
+            outputs,
+        } => SemanticEffect::Architecture {
+            name: name.clone(),
+            args: args.iter().map(normalize_expression).collect(),
+            outputs: outputs.iter().map(normalize_location).collect(),
+        },
         SemanticEffect::Intrinsic {
             name,
             args,
@@ -217,6 +226,13 @@ fn normalize_expression(expression: &SemanticExpression) -> SemanticExpression {
         },
         SemanticExpression::Undefined { bits } => SemanticExpression::Undefined { bits: *bits },
         SemanticExpression::Poison { bits } => SemanticExpression::Poison { bits: *bits },
+        SemanticExpression::Architecture { name, args, bits } => {
+            SemanticExpression::Architecture {
+                name: name.clone(),
+                args: args.iter().map(normalize_expression).collect(),
+                bits: *bits,
+            }
+        }
         SemanticExpression::Intrinsic { name, args, bits } => SemanticExpression::Intrinsic {
             name: name.clone(),
             args: args.iter().map(normalize_expression).collect(),

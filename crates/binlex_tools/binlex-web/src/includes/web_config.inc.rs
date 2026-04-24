@@ -138,7 +138,7 @@ struct WebUploadProjectFilesConfig {
     allowed_types: Vec<String>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct WebDownloadSampleConfig {
     #[serde(default = "default_true")]
     enabled: bool,
@@ -176,7 +176,7 @@ struct WebDownloadJsonConfig {
     max_bytes: usize,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct WebDownloadProjectFilesConfig {
     #[serde(default = "default_true")]
     enabled: bool,
@@ -396,6 +396,24 @@ impl Default for WebDownloadJsonConfig {
     }
 }
 
+impl Default for WebDownloadSampleConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_true(),
+            max_bytes: default_sample_download_max_bytes(),
+        }
+    }
+}
+
+impl Default for WebDownloadProjectFilesConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_true(),
+            max_bytes: default_project_download_max_bytes(),
+        }
+    }
+}
+
 impl Default for WebApiCorporaConfig {
     fn default() -> Self {
         Self {
@@ -547,7 +565,7 @@ fn default_project_upload_max_bytes() -> usize {
 }
 
 fn default_project_download_max_bytes() -> usize {
-    512 * 1024 * 1024
+    200 * 1024 * 1024
 }
 
 fn default_batch_sample_download_max_count() -> usize {

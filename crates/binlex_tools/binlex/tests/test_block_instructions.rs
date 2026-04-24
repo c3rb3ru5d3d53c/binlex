@@ -19,6 +19,12 @@ fn temp_path(name: &str) -> PathBuf {
     std::env::temp_dir().join(format!("binlex-{name}-{nanos}-{}", std::process::id()))
 }
 
+fn command_with_temp_config(binary: &PathBuf, config_home: &PathBuf) -> Command {
+    let mut command = Command::new(binary);
+    command.env("XDG_CONFIG_HOME", config_home);
+    command
+}
+
 fn binlex_binary() -> PathBuf {
     static BINLEX_PATH: OnceLock<PathBuf> = OnceLock::new();
 
@@ -51,10 +57,11 @@ fn test_block_instructions_are_emitted_as_addresses() {
     let binlex = binlex_binary();
     let input_path = temp_path("input.bin");
     let output_path = temp_path("output.jsonl");
+    let config_home = temp_path("config-home");
 
     fs::write(&input_path, [0xC3]).expect("input file should be written");
 
-    let status = Command::new(&binlex)
+    let status = command_with_temp_config(&binlex, &config_home)
         .args([
             "--input",
             input_path.to_string_lossy().as_ref(),
@@ -96,6 +103,7 @@ fn test_block_instructions_are_emitted_as_addresses() {
 
     let _ = fs::remove_file(input_path);
     let _ = fs::remove_file(output_path);
+    let _ = fs::remove_dir_all(config_home);
 }
 
 #[test]
@@ -104,6 +112,7 @@ fn test_function_embeddings_are_emitted_from_config() {
     let input_path = temp_path("input-embeddings.bin");
     let output_path = temp_path("output-embeddings.jsonl");
     let config_path = temp_path("binlex-embeddings.toml");
+    let config_home = temp_path("config-home-embeddings");
 
     fs::write(&input_path, [0xC3]).expect("input file should be written");
     let mut config = Config::new();
@@ -115,7 +124,7 @@ fn test_function_embeddings_are_emitted_from_config() {
     )
     .expect("config file should be written");
 
-    let status = Command::new(&binlex)
+    let status = command_with_temp_config(&binlex, &config_home)
         .args([
             "--input",
             input_path.to_string_lossy().as_ref(),
@@ -154,4 +163,5 @@ fn test_function_embeddings_are_emitted_from_config() {
     let _ = fs::remove_file(input_path);
     let _ = fs::remove_file(output_path);
     let _ = fs::remove_file(config_path);
+    let _ = fs::remove_dir_all(config_home);
 }

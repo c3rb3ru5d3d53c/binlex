@@ -1508,6 +1508,33 @@ impl ConfigLiftersLLVM {
         let mut inner = self.inner.lock().unwrap();
         inner.lifters.llvm.verify = value;
     }
+
+    #[getter]
+    pub fn get_mode(&self) -> String {
+        let inner = self.inner.lock().unwrap();
+        match inner.lifters.llvm.mode {
+            binlex::lifters::llvm::Mode::Reconstruct => "reconstruct",
+            binlex::lifters::llvm::Mode::Intrinsic => "intrinsic",
+            binlex::lifters::llvm::Mode::Semantic => "semantic",
+        }
+        .to_string()
+    }
+
+    #[setter]
+    pub fn set_mode(&mut self, value: String) -> PyResult<()> {
+        let mut inner = self.inner.lock().unwrap();
+        inner.lifters.llvm.mode = match value.as_str() {
+            "reconstruct" => binlex::lifters::llvm::Mode::Reconstruct,
+            "intrinsic" => binlex::lifters::llvm::Mode::Intrinsic,
+            "semantic" => binlex::lifters::llvm::Mode::Semantic,
+            _ => {
+                return Err(PyRuntimeError::new_err(format!(
+                    "invalid llvm mode: {value}"
+                )));
+            }
+        };
+        Ok(())
+    }
 }
 
 #[pyclass]
@@ -1590,6 +1617,13 @@ impl Config {
     pub fn new() -> Self {
         Self {
             inner: Arc::new(Mutex::new(InnerConfig::new())),
+        }
+    }
+
+    pub fn clone(&self) -> Self {
+        let inner = self.inner.lock().unwrap().clone();
+        Self {
+            inner: Arc::new(Mutex::new(inner)),
         }
     }
 

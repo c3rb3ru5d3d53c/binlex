@@ -129,9 +129,7 @@ pub fn build(
         InsnId(id) if [X86Insn::X86_INS_CMP as u32].contains(&id) => {
             cmp_like(machine, instruction, operands, "x86.cmp")
         }
-        InsnId(id) if id == X86Insn::X86_INS_SBB as u32 => {
-            binary(machine, instruction, operands, SemanticOperationBinary::Sub)
-        }
+        InsnId(id) if id == X86Insn::X86_INS_SBB as u32 => sbb(machine, operands),
         InsnId(id) if id == X86Insn::X86_INS_ADC as u32 => adc(machine, operands),
         InsnId(id) if id == X86Insn::X86_INS_ADCX as u32 => adcx_adox(machine, operands, true),
         InsnId(id) if id == X86Insn::X86_INS_ADOX as u32 => adcx_adox(machine, operands, false),
@@ -967,6 +965,77 @@ fn adc(machine: Architecture, operands: &[ArchOperand]) -> Option<InstructionSem
     ))
 }
 
+fn sbb(machine: Architecture, operands: &[ArchOperand]) -> Option<InstructionSemantics> {
+    let dst = operands
+        .first()
+        .and_then(|operand| common::operand_location(machine, operand))?;
+    let left = operands
+        .first()
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let right = operands
+        .get(1)
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let bits = common::location_bits(&dst);
+    let borrow_in = SemanticExpression::Cast {
+        op: SemanticOperationCast::ZeroExtend,
+        arg: Box::new(common::flag_expr("cf")),
+        bits,
+    };
+    let right_with_borrow = common::add(right.clone(), borrow_in.clone(), bits);
+    let result = common::sub(left.clone(), right_with_borrow.clone(), bits);
+    let carry_out = common::or(
+        common::compare(SemanticOperationCompare::Ult, left.clone(), right_with_borrow.clone()),
+        common::and(
+            common::flag_expr("cf"),
+            common::compare(SemanticOperationCompare::Eq, left.clone(), right_with_borrow.clone()),
+            1,
+        ),
+        1,
+    );
+    Some(common::complete(
+        SemanticTerminator::FallThrough,
+        vec![
+            SemanticEffect::Set {
+                dst,
+                expression: result.clone(),
+            },
+            SemanticEffect::Set {
+                dst: common::flag("zf"),
+                expression: common::compare(
+                    SemanticOperationCompare::Eq,
+                    result.clone(),
+                    common::const_u64(0, bits),
+                ),
+            },
+            SemanticEffect::Set {
+                dst: common::flag("sf"),
+                expression: common::extract_bit(result.clone(), bits.saturating_sub(1)),
+            },
+            SemanticEffect::Set {
+                dst: common::flag("cf"),
+                expression: carry_out,
+            },
+            SemanticEffect::Set {
+                dst: common::flag("of"),
+                expression: common::sub_overflow(
+                    left.clone(),
+                    right_with_borrow.clone(),
+                    result.clone(),
+                    bits,
+                ),
+            },
+            SemanticEffect::Set {
+                dst: common::flag("pf"),
+                expression: common::parity_flag(result.clone()),
+            },
+            SemanticEffect::Set {
+                dst: common::flag("af"),
+                expression: common::auxiliary_flag(left, right_with_borrow, result, bits),
+            },
+        ],
+    ))
+}
+
 fn adcx_adox(
     machine: Architecture,
     operands: &[ArchOperand],
@@ -1447,7 +1516,7 @@ fn imul_explicit(machine: Architecture, operands: &[ArchOperand]) -> Option<Inst
             },
             SemanticEffect::Set {
                 dst: common::flag("pf"),
-                expression: SemanticExpression::Undefined { bits: 1 },
+                expression: common::parity_flag(common::extract_low_byte(low.clone())),
             },
             SemanticEffect::Set {
                 dst: common::flag("af"),
@@ -1572,7 +1641,31 @@ fn imul_implicit(machine: Architecture, operands: &[ArchOperand]) -> Option<Inst
         },
         SemanticEffect::Set {
             dst: common::flag("pf"),
-            expression: SemanticExpression::Undefined { bits: 1 },
+            expression: common::parity_flag(common::extract_low_byte(
+                SemanticExpression::Extract {
+                    arg: Box::new(SemanticExpression::Binary {
+                        op: SemanticOperationBinary::Mul,
+                        left: Box::new(SemanticExpression::Cast {
+                            op: SemanticOperationCast::SignExtend,
+                            arg: Box::new(common::reg_expr(acc_reg, bits)),
+                            bits: full_bits,
+                        }),
+                        right: Box::new(SemanticExpression::Cast {
+                            op: SemanticOperationCast::SignExtend,
+                            arg: Box::new(
+                                operands
+                                    .first()
+                                    .and_then(|operand| common::operand_expr(machine, operand))
+                                    .unwrap(),
+                            ),
+                            bits: full_bits,
+                        }),
+                        bits: full_bits,
+                    }),
+                    lsb: 0,
+                    bits: result_bits,
+                },
+            )),
         },
         SemanticEffect::Set {
             dst: common::flag("af"),
@@ -1639,7 +1732,7 @@ fn mul(machine: Architecture, operands: &[ArchOperand]) -> Option<InstructionSem
         effects.push(SemanticEffect::Set {
             dst: common::reg(common::reg_id_name(high_reg), bits),
             expression: SemanticExpression::Extract {
-                arg: Box::new(wide_product),
+                arg: Box::new(wide_product.clone()),
                 lsb: bits,
                 bits,
             },
@@ -1664,7 +1757,13 @@ fn mul(machine: Architecture, operands: &[ArchOperand]) -> Option<InstructionSem
         },
         SemanticEffect::Set {
             dst: common::flag("pf"),
-            expression: SemanticExpression::Undefined { bits: 1 },
+            expression: common::parity_flag(common::extract_low_byte(
+                SemanticExpression::Extract {
+                    arg: Box::new(wide_product.clone()),
+                    lsb: 0,
+                    bits: result_bits,
+                },
+            )),
         },
         SemanticEffect::Set {
             dst: common::flag("af"),

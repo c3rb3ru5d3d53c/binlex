@@ -253,8 +253,7 @@ for function in graph.functions():
 ### Lift one function
 
 ```python
-llvm = function.lifters().llvm()
-print(llvm.text())
+print(function.llvm().text())
 ```
 
 ## Suggested Next Docs

@@ -263,6 +263,7 @@ fn bit_scan(
     let dst = operands
         .first()
         .and_then(|operand| common::operand_location(machine, operand))?;
+    let dst_expr = SemanticExpression::Read(Box::new(dst.clone()));
     let src = operands
         .get(1)
         .and_then(|operand| common::operand_expr(machine, operand))?;
@@ -296,7 +297,7 @@ fn bit_scan(
                 dst,
                 expression: SemanticExpression::Select {
                     condition: Box::new(src_is_zero.clone()),
-                    when_true: Box::new(SemanticExpression::Undefined { bits }),
+                    when_true: Box::new(dst_expr),
                     when_false: Box::new(scan),
                     bits,
                 },

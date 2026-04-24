@@ -255,6 +255,7 @@ fn ingest_upload(
         if let Err(error) = write_sample_status(
             state.database.as_ref(),
             &sha256,
+            username,
             SampleStatus::Stored,
             None,
             Some(request_id),
@@ -376,6 +377,7 @@ fn ingest_upload(
     if let Err(error) = write_sample_status(
         state.database.as_ref(),
         &sha256,
+        username,
         SampleStatus::Pending,
         None,
         Some(request_id),
@@ -414,6 +416,7 @@ fn ingest_upload(
             if let Err(error) = write_sample_status(
                 database.as_ref(),
                 &sha256_for_background,
+                &username_for_background,
                 SampleStatus::Processing,
                 None,
                 Some(&request_id_for_background),
@@ -461,6 +464,7 @@ fn ingest_upload(
                             let _ = write_sample_status(
                                 database.as_ref(),
                                 &sha256_for_background,
+                                &username_for_background,
                                 SampleStatus::Failed,
                                 Some(error_message.clone()),
                                 Some(&request_id_for_background),
@@ -520,6 +524,7 @@ fn ingest_upload(
                         if let Err(status_error) = write_sample_status(
                             database.as_ref(),
                             &sha256_for_background,
+                            &username_for_background,
                             SampleStatus::Failed,
                             Some(error_message.clone()),
                             Some(&request_id_for_background),
@@ -550,6 +555,7 @@ fn ingest_upload(
                             if let Err(status_error) = write_sample_status(
                                 database.as_ref(),
                                 &sha256_for_background,
+                                &username_for_background,
                                 SampleStatus::Failed,
                                 Some(error_message.clone()),
                                 Some(&request_id_for_background),
@@ -574,6 +580,7 @@ fn ingest_upload(
                         if let Err(status_error) = write_sample_status(
                             database.as_ref(),
                             &sha256_for_background,
+                            &username_for_background,
                             SampleStatus::Failed,
                             Some(error_message.clone()),
                             Some(&request_id_for_background),
@@ -608,6 +615,7 @@ fn ingest_upload(
                         if let Err(status_error) = write_sample_status(
                             database.as_ref(),
                             &sha256_for_background,
+                            &username_for_background,
                             SampleStatus::Failed,
                             Some(error_message.clone()),
                             Some(&request_id_for_background),
@@ -679,6 +687,7 @@ fn ingest_upload(
                             let _ = write_sample_status(
                                 database.as_ref(),
                                 &sha256_for_background,
+                                &username_for_background,
                                 SampleStatus::Failed,
                                 Some(error_message.clone()),
                                 Some(&request_id_for_background),
@@ -707,6 +716,7 @@ fn ingest_upload(
                     if let Err(error) = write_sample_status(
                         database.as_ref(),
                         &sha256_for_background,
+                        &username_for_background,
                         SampleStatus::Complete,
                         None,
                         Some(&request_id_for_background),
@@ -735,6 +745,7 @@ fn ingest_upload(
                     if let Err(status_error) = write_sample_status(
                         database.as_ref(),
                         &sha256_for_background,
+                        &username_for_background,
                         SampleStatus::Failed,
                         Some(error.to_string()),
                         Some(&request_id_for_background),
@@ -766,6 +777,7 @@ fn ingest_upload(
             let _ = write_sample_status(
                 state.database.as_ref(),
                 sha256,
+                username,
                 SampleStatus::Failed,
                 response.error.clone(),
                 Some(request_id),
@@ -785,12 +797,14 @@ fn ingest_upload(
 fn write_sample_status(
     database: &LocalDB,
     sha256: &str,
+    username: &str,
     status: SampleStatus,
     error_message: Option<String>,
     id: Option<&str>,
 ) -> Result<(), binlex::databases::localdb::Error> {
     database.sample_status_set(&SampleStatusRecord {
         sha256: sha256.to_string(),
+        username: username.to_string(),
         status,
         timestamp: Utc::now().to_rfc3339(),
         error_message,

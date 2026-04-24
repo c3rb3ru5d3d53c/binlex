@@ -72,10 +72,18 @@ impl SampleStatus {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SampleStatusRecord {
     pub sha256: String,
+    pub username: String,
     pub status: SampleStatus,
     pub timestamp: String,
     pub error_message: Option<String>,
     pub id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SampleOriginRecord {
+    pub sha256: String,
+    pub username: String,
+    pub timestamp: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -806,6 +814,7 @@ mod tests {
         let db = LocalDB::new(&config).expect("create local db");
         let record = SampleStatusRecord {
             sha256: "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5".to_string(),
+            username: "admin".to_string(),
             status: SampleStatus::Processing,
             timestamp: "2026-03-31T21:00:00Z".to_string(),
             error_message: None,

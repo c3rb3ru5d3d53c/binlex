@@ -57,6 +57,7 @@
         admin_user_delete_api,
         search_api,
         action_yara_api,
+        action_llvm_render_api,
         search_detail_api,
         graph_api,
         add_corpus_api,

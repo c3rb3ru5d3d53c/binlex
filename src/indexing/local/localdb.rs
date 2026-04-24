@@ -526,6 +526,7 @@ impl LocalIndex {
         self.localdb
             .sample_status_set(&SampleStatusRecord {
                 sha256,
+                username: String::new(),
                 status,
                 timestamp: timestamp
                     .map(ToString::to_string)

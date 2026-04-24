@@ -485,21 +485,7 @@ class _Lifters:
         self._owner = owner
 
     def llvm(self):
-        from binlex.lifters.llvm import Lifter
-
-        config = getattr(self._owner, "_config", None)
-        if config is None:
-            raise RuntimeError("controlflow object is missing associated Config")
-        lifter = Lifter(config)
-        if isinstance(self._owner, Instruction):
-            lifter = lifter.lift_instruction(self._owner)
-        elif isinstance(self._owner, Block):
-            lifter = lifter.lift_block(self._owner)
-        elif isinstance(self._owner, Function):
-            lifter = lifter.lift_function(self._owner)
-        else:
-            raise TypeError(f"unsupported lifter owner: {type(self._owner)!r}")
-        return lifter
+        return _LLVM(self._owner)
 
     def vex(self):
         from binlex.lifters.vex import Lifter
@@ -516,6 +502,64 @@ class _Lifters:
             lifter = lifter.lift_function(self._owner)
         else:
             raise TypeError(f"unsupported lifter owner: {type(self._owner)!r}")
+        return lifter
+
+
+class _LLVM:
+    """Small builder for entity-bound LLVM rendering."""
+
+    def __init__(self, owner, mode=None):
+        self._owner = owner
+        self._mode = mode
+
+    def reconstruct(self):
+        return self.__class__(self._owner, mode="reconstruct")
+
+    def intrinsic(self):
+        return self.__class__(self._owner, mode="intrinsic")
+
+    def semantic(self):
+        return self.__class__(self._owner, mode="semantic")
+
+    def text(self):
+        lifter = self._lift()
+        return lifter.text()
+
+    def print(self):
+        lifter = self._lift()
+        return lifter.print()
+
+    def bitcode(self):
+        lifter = self._lift()
+        return lifter.bitcode()
+
+    def object(self):
+        lifter = self._lift()
+        return lifter.object()
+
+    def lifter(self):
+        return self._lift()
+
+    def _lift(self):
+        from binlex.lifters.llvm import Lifter
+
+        config = getattr(self._owner, "_config", None)
+        if config is None:
+            raise RuntimeError("controlflow object is missing associated Config")
+        if self._mode is not None:
+            config = config.clone()
+            config.lifters.llvm.mode = self._mode
+        lifter = Lifter(config)
+        if isinstance(self._owner, Instruction):
+            lifter = lifter.lift_instruction(self._owner)
+        elif isinstance(self._owner, Block):
+            lifter = lifter.lift_block(self._owner)
+        elif isinstance(self._owner, Function):
+            lifter = lifter.lift_function(self._owner)
+        else:
+            raise TypeError(f"unsupported llvm owner: {type(self._owner)!r}")
+        if lifter is None:
+            raise RuntimeError("llvm lift failed")
         return lifter
 
 

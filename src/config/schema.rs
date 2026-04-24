@@ -20,6 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use crate::lifters::llvm::Mode as LlvmMode;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::ops::{Deref, DerefMut};
@@ -206,6 +207,8 @@ pub struct ConfigEmbeddingsLLVM {
 pub struct ConfigLiftersLLVM {
     pub module_name: String,
     pub verify: bool,
+    #[serde(default)]
+    pub mode: LlvmMode,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -382,6 +385,7 @@ impl Default for ConfigLiftersLLVM {
         Self {
             module_name: "binlex".to_string(),
             verify: true,
+            mode: LlvmMode::Reconstruct,
         }
     }
 }

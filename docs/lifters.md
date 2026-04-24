@@ -33,9 +33,11 @@ That means:
 The easiest API is the object-bound convenience form:
 
 ```python
-llvm = function.lifters().llvm()
-llvm.print()
-print(llvm.text())
+function.llvm().print()
+print(function.llvm().text())
+print(function.llvm().reconstruct().text())
+print(function.llvm().intrinsic().text())
+print(function.llvm().semantic().text())
 
 vex = function.lifters().vex()
 vex.print()
@@ -71,6 +73,11 @@ use binlex::lifters::vex::Lifter as VexLifter;
 
 let config = Config::default();
 
+println!("{}", function.llvm().text()?);
+println!("{}", function.llvm().reconstruct().text()?);
+println!("{}", function.llvm().intrinsic().text()?);
+println!("{}", function.llvm().semantic().text()?);
+
 let mut llvm = LlvmLifter::new(config.clone());
 llvm.lift_function(&function)?;
 llvm.print();
@@ -98,11 +105,11 @@ It supports:
 ### Python
 
 ```python
-llvm = function.lifters().llvm()
+function.llvm().print()
+print(function.llvm().text())
+bitcode = function.llvm().bitcode()
 
-llvm.print()
-print(llvm.text())
-bitcode = llvm.bitcode()
+llvm = function.llvm().reconstruct().lifter()
 normalized_text = llvm.normalized().text()
 ```
 
@@ -125,7 +132,7 @@ LLVM exposes an optimizer namespace so users can choose their own pass chain.
 Python:
 
 ```python
-llvm = function.lifters().llvm()
+llvm = function.llvm().reconstruct().lifter()
 
 optimized = (
     llvm
@@ -158,7 +165,7 @@ It is useful when you want:
 Example:
 
 ```python
-llvm = function.lifters().llvm()
+llvm = function.llvm().reconstruct().lifter()
 llvm.normalized().print()
 print(llvm.normalized().text())
 ```

@@ -245,4 +245,33 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&root);
     }
+
+    #[test]
+    fn detect_project_tool_supports_bundle_zip() {
+        assert_eq!(detect_project_tool("analysis-bundle.zip"), Some("bundle"));
+        assert_eq!(
+            content_type_for_filename("analysis-bundle.zip"),
+            "application/zip"
+        );
+        assert!(project_tool_extensions("bundle").contains(&"zip"));
+    }
+
+    #[test]
+    fn render_entity_llvm_ir_returns_raw_llvm_text() {
+        let root = std::env::temp_dir().join(format!(
+            "binlex-web-main-render-llvm-ir-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let sha256 = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5";
+        let state = build_test_state(&root, sha256);
+
+        let ir = render_entity_llvm_ir(&state, sha256, Collection::Function, "amd64", 0x1000)
+            .expect("render llvm ir");
+
+        assert!(ir.contains("define void"));
+        assert!(ir.contains("@function_"));
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

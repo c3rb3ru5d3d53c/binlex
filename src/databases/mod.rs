@@ -19,6 +19,7 @@ pub use localdb::ProjectRecord;
 pub use localdb::ProjectSearchParams;
 pub use localdb::RoleRecord;
 pub use localdb::SampleCommentRecord;
+pub use localdb::SampleOriginRecord;
 pub use localdb::SampleSha256Record;
 pub use localdb::SampleStatus;
 pub use localdb::SampleStatusRecord;

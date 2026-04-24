@@ -223,6 +223,21 @@ function buildResultActionTree(row, sampleDownloadsEnabled, query) {
       "text/plain"
     ));
   }
+  if (["instructions", "blocks", "functions"].includes(String(row.collection || ""))) {
+    copyChildren.push(actionFetchCopyText(
+      "LLVM IR",
+      `/api/v1/llvm/render?${new URLSearchParams({
+        sha256: row.sha256 || "",
+        collection: row.collection || "",
+        architecture: row.architecture || "",
+        address: String(Number(row.address || 0)),
+      }).toString()}`,
+      "GET",
+      null,
+      null,
+      "text/plain"
+    ));
+  }
   const chromosome = row?.json?.chromosome;
   if (chromosome && typeof chromosome === "object") {
     const chromosomeChildren = [];

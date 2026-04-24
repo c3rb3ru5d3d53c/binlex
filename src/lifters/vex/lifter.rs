@@ -381,6 +381,27 @@ fn render_effect(effect: &SemanticEffect) -> String {
         ),
         SemanticEffect::Fence { kind } => format!("DIRTY fence({kind:?})"),
         SemanticEffect::Trap { kind } => format!("DIRTY trap({kind:?})"),
+        SemanticEffect::Architecture {
+            name,
+            args,
+            outputs,
+        } => {
+            let args = args
+                .iter()
+                .map(render_expression)
+                .collect::<Vec<_>>()
+                .join(", ");
+            if outputs.is_empty() {
+                format!("ARCH {}({})", name, args)
+            } else {
+                let outputs = outputs
+                    .iter()
+                    .map(render_location_write)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{outputs} = ARCH {name}({args})")
+            }
+        }
         SemanticEffect::Intrinsic {
             name,
             args,
@@ -542,6 +563,14 @@ fn render_expression(expression: &SemanticExpression) -> String {
         ),
         SemanticExpression::Undefined { bits } => format!("Undefined({bits})"),
         SemanticExpression::Poison { bits } => format!("Poison({bits})"),
+        SemanticExpression::Architecture { name, args, .. } => format!(
+            "ARCH {}({})",
+            name,
+            args.iter()
+                .map(render_expression)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
         SemanticExpression::Intrinsic { name, args, .. } => format!(
             "{}({})",
             name,
@@ -556,6 +585,7 @@ fn render_expression(expression: &SemanticExpression) -> String {
 fn render_address_space(space: &SemanticAddressSpace) -> String {
     match space {
         SemanticAddressSpace::Default => "default".to_string(),
+        SemanticAddressSpace::State => "state".to_string(),
         SemanticAddressSpace::Stack => "stack".to_string(),
         SemanticAddressSpace::Heap => "heap".to_string(),
         SemanticAddressSpace::Global => "global".to_string(),
