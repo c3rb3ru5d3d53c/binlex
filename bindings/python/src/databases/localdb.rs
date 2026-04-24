@@ -294,6 +294,7 @@ impl LocalDB {
             .unwrap()
             .sample_status_set(&binlex::databases::SampleStatusRecord {
                 sha256,
+                username: String::new(),
                 status: status.inner,
                 timestamp,
                 error_message,

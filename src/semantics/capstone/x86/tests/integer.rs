@@ -273,6 +273,32 @@ fn integer_semantics_match_unicorn_transitions() {
                 memory: vec![],
             },
         ),
+        (
+            "div ecx",
+            vec![0xf7, 0xf1],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Eax, 100),
+                    (I386Register::Ecx, 5),
+                    (I386Register::Edx, 0),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
+        (
+            "idiv ecx",
+            vec![0xf7, 0xf9],
+            I386Fixture {
+                registers: vec![
+                    (I386Register::Eax, 0xffff_ff9c),
+                    (I386Register::Ecx, 5),
+                    (I386Register::Edx, 0xffff_ffff),
+                ],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+        ),
     ];
 
     for (name, bytes, fixture) in cases {

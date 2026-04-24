@@ -214,7 +214,7 @@ fn vmovsd_semantics_preserve_upper_lane_from_second_source() {
     let xmm0 = transition
         .post
         .registers
-        .get("reg_122")
+        .get("xmm0")
         .copied()
         .expect("xmm0 should be present");
     assert_eq!(

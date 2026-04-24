@@ -57,6 +57,9 @@ class Lifter:
     def bitcode(self):
         return bytes(self._inner.bitcode())
 
+    def object(self):
+        return bytes(self._inner.object())
+
     def normalized(self):
         inner = self._inner.normalized()
         if inner is None:
@@ -65,42 +68,6 @@ class Lifter:
 
     def optimizers(self):
         return Optimizers(self)
-
-    def mem2reg(self):
-        inner = self._inner.mem2reg()
-        if inner is None:
-            return None
-        return self.__class__(self._config, _inner=inner)
-
-    def instcombine(self):
-        inner = self._inner.instcombine()
-        if inner is None:
-            return None
-        return self.__class__(self._config, _inner=inner)
-
-    def cfg(self):
-        inner = self._inner.cfg()
-        if inner is None:
-            return None
-        return self.__class__(self._config, _inner=inner)
-
-    def gvn(self):
-        inner = self._inner.gvn()
-        if inner is None:
-            return None
-        return self.__class__(self._config, _inner=inner)
-
-    def sroa(self):
-        inner = self._inner.sroa()
-        if inner is None:
-            return None
-        return self.__class__(self._config, _inner=inner)
-
-    def dce(self):
-        inner = self._inner.dce()
-        if inner is None:
-            return None
-        return self.__class__(self._config, _inner=inner)
 
     def verify(self):
         return self._inner.verify()
@@ -120,33 +87,39 @@ class Optimizers:
 
     def mem2reg(self):
         if self._lifter is not None:
-            self._lifter = self._lifter.mem2reg()
+            self._lifter = self._apply("mem2reg")
         return self
 
     def instcombine(self):
         if self._lifter is not None:
-            self._lifter = self._lifter.instcombine()
+            self._lifter = self._apply("instcombine")
         return self
 
     def cfg(self):
         if self._lifter is not None:
-            self._lifter = self._lifter.cfg()
+            self._lifter = self._apply("cfg")
         return self
 
     def gvn(self):
         if self._lifter is not None:
-            self._lifter = self._lifter.gvn()
+            self._lifter = self._apply("gvn")
         return self
 
     def sroa(self):
         if self._lifter is not None:
-            self._lifter = self._lifter.sroa()
+            self._lifter = self._apply("sroa")
         return self
 
     def dce(self):
         if self._lifter is not None:
-            self._lifter = self._lifter.dce()
+            self._lifter = self._apply("dce")
         return self
+
+    def _apply(self, name):
+        inner = getattr(self._lifter._inner, name)()
+        if inner is None:
+            return None
+        return self._lifter.__class__(self._lifter._config, _inner=inner)
 
     def text(self):
         if self._lifter is None:
@@ -162,6 +135,11 @@ class Optimizers:
         if self._lifter is None:
             return None
         return self._lifter.bitcode()
+
+    def object(self):
+        if self._lifter is None:
+            return None
+        return self._lifter.object()
 
     def normalized(self):
         if self._lifter is None:

@@ -30,6 +30,7 @@ use crate::semantics::{
 };
 use capstone::Insn;
 use capstone::arch::ArchOperand;
+use capstone::arch::x86::X86Reg;
 use capstone::arch::x86::X86OperandType;
 
 pub fn partial(
@@ -184,7 +185,60 @@ pub fn reg(name: impl Into<String>, bits: u16) -> SemanticLocation {
 }
 
 pub fn reg_id_name(reg_id: u16) -> String {
-    format!("reg_{}", reg_id)
+    match reg_id {
+        x if x == X86Reg::X86_REG_AL as u16 => "al".to_string(),
+        x if x == X86Reg::X86_REG_AH as u16 => "ah".to_string(),
+        x if x == X86Reg::X86_REG_AX as u16 => "ax".to_string(),
+        x if x == X86Reg::X86_REG_EAX as u16 => "eax".to_string(),
+        x if x == X86Reg::X86_REG_RAX as u16 => "rax".to_string(),
+        x if x == X86Reg::X86_REG_BL as u16 => "bl".to_string(),
+        x if x == X86Reg::X86_REG_BH as u16 => "bh".to_string(),
+        x if x == X86Reg::X86_REG_BX as u16 => "bx".to_string(),
+        x if x == X86Reg::X86_REG_EBX as u16 => "ebx".to_string(),
+        x if x == X86Reg::X86_REG_RBX as u16 => "rbx".to_string(),
+        x if x == X86Reg::X86_REG_CL as u16 => "cl".to_string(),
+        x if x == X86Reg::X86_REG_CH as u16 => "ch".to_string(),
+        x if x == X86Reg::X86_REG_CX as u16 => "cx".to_string(),
+        x if x == X86Reg::X86_REG_ECX as u16 => "ecx".to_string(),
+        x if x == X86Reg::X86_REG_RCX as u16 => "rcx".to_string(),
+        x if x == X86Reg::X86_REG_DL as u16 => "dl".to_string(),
+        x if x == X86Reg::X86_REG_DH as u16 => "dh".to_string(),
+        x if x == X86Reg::X86_REG_DX as u16 => "dx".to_string(),
+        x if x == X86Reg::X86_REG_EDX as u16 => "edx".to_string(),
+        x if x == X86Reg::X86_REG_RDX as u16 => "rdx".to_string(),
+        x if x == X86Reg::X86_REG_SI as u16 => "si".to_string(),
+        x if x == X86Reg::X86_REG_ESI as u16 => "esi".to_string(),
+        x if x == X86Reg::X86_REG_RSI as u16 => "rsi".to_string(),
+        x if x == X86Reg::X86_REG_DI as u16 => "di".to_string(),
+        x if x == X86Reg::X86_REG_EDI as u16 => "edi".to_string(),
+        x if x == X86Reg::X86_REG_RDI as u16 => "rdi".to_string(),
+        x if x == X86Reg::X86_REG_BP as u16 => "bp".to_string(),
+        x if x == X86Reg::X86_REG_EBP as u16 => "ebp".to_string(),
+        x if x == X86Reg::X86_REG_RBP as u16 => "rbp".to_string(),
+        x if x == X86Reg::X86_REG_SP as u16 => "sp".to_string(),
+        x if x == X86Reg::X86_REG_ESP as u16 => "esp".to_string(),
+        x if x == X86Reg::X86_REG_RSP as u16 => "rsp".to_string(),
+        x if x == X86Reg::X86_REG_IP as u16 => "ip".to_string(),
+        x if x == X86Reg::X86_REG_EIP as u16 => "eip".to_string(),
+        x if x == X86Reg::X86_REG_RIP as u16 => "rip".to_string(),
+        x if x == X86Reg::X86_REG_XMM0 as u16 => "xmm0".to_string(),
+        x if x == X86Reg::X86_REG_XMM1 as u16 => "xmm1".to_string(),
+        x if x == X86Reg::X86_REG_XMM2 as u16 => "xmm2".to_string(),
+        x if x == X86Reg::X86_REG_XMM3 as u16 => "xmm3".to_string(),
+        x if x == X86Reg::X86_REG_XMM4 as u16 => "xmm4".to_string(),
+        x if x == X86Reg::X86_REG_XMM5 as u16 => "xmm5".to_string(),
+        x if x == X86Reg::X86_REG_XMM6 as u16 => "xmm6".to_string(),
+        x if x == X86Reg::X86_REG_XMM7 as u16 => "xmm7".to_string(),
+        x if x == X86Reg::X86_REG_MM0 as u16 => "mm0".to_string(),
+        x if x == X86Reg::X86_REG_MM1 as u16 => "mm1".to_string(),
+        x if x == X86Reg::X86_REG_MM2 as u16 => "mm2".to_string(),
+        x if x == X86Reg::X86_REG_MM3 as u16 => "mm3".to_string(),
+        x if x == X86Reg::X86_REG_MM4 as u16 => "mm4".to_string(),
+        x if x == X86Reg::X86_REG_MM5 as u16 => "mm5".to_string(),
+        x if x == X86Reg::X86_REG_MM6 as u16 => "mm6".to_string(),
+        x if x == X86Reg::X86_REG_MM7 as u16 => "mm7".to_string(),
+        _ => format!("reg_{}", reg_id),
+    }
 }
 
 pub fn reg_expr(reg_id: u16, bits: u16) -> SemanticExpression {

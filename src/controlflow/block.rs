@@ -23,6 +23,7 @@
 use crate::Architecture;
 use crate::Config;
 use crate::controlflow::Instruction;
+use crate::controlflow::Llvm as LlvmView;
 use crate::controlflow::graph::Graph;
 use crate::embeddings::EmbeddingsJson;
 use crate::entropy;
@@ -34,7 +35,7 @@ use crate::hashing::SSDeep;
 use crate::hashing::TLSH;
 use crate::hex;
 use crate::imaging::Imaging;
-use crate::lifters::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
+use crate::lifters::llvm::{LiftersJson, LlvmJson};
 #[cfg(not(target_os = "windows"))]
 use crate::lifters::vex::{Lifter as VexLifter, VexJson};
 use crate::metadata::Attributes;
@@ -482,14 +483,14 @@ impl<'block> Block<'block> {
         self.process().processors.unwrap_or_default()
     }
 
+    /// Return an LLVM builder for this block.
+    pub fn llvm(&self) -> LlvmView<'_> {
+        LlvmView::block(self)
+    }
+
     fn lifters_json(&self) -> Option<LiftersJson> {
         let llvm = if self.cfg.config.blocks.lifters.llvm.enabled {
-            let mut lifter = LlvmLifter::new(self.cfg.config.clone());
-            lifter.lift_block(self).ok()?;
-
-            Some(LlvmJson {
-                text: lifter.text(),
-            })
+            Some(LlvmJson { text: self.llvm().text().ok()? })
         } else {
             None
         };
@@ -611,22 +612,16 @@ impl<'block> Block<'block> {
     /// Returns `Some(u64)` containing the address of the next block if it is
     /// conditional or has specific ending conditions. Returns `None` otherwise.
     pub fn next(&self) -> Option<u64> {
-        if !self.terminator.is_conditional {
-            return None;
-        }
-        if self.terminator.address == self.address {
-            return None;
-        }
-        if self.terminator.is_block_start {
-            return Some(self.terminator.address);
-        }
         if self.terminator.is_return {
             return None;
         }
         if self.terminator.is_trap {
             return None;
         }
-        if self.terminator.is_block_start {
+        if self.terminator.is_jump && !self.terminator.is_conditional {
+            return None;
+        }
+        if self.terminator.is_block_start && self.address != self.terminator.address {
             return Some(self.terminator.address);
         }
         self.terminator.next()

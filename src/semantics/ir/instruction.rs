@@ -128,6 +128,7 @@ pub enum SemanticLocation {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SemanticAddressSpace {
     Default,
+    State,
     Stack,
     Heap,
     Global,
@@ -179,6 +180,11 @@ pub enum SemanticEffect {
     Trap {
         kind: SemanticTrapKind,
     },
+    Architecture {
+        name: String,
+        args: Vec<SemanticExpression>,
+        outputs: Vec<SemanticLocation>,
+    },
     Intrinsic {
         name: String,
         args: Vec<SemanticExpression>,
@@ -196,6 +202,7 @@ pub enum SemanticEffectKind {
     AtomicCmpXchg,
     Fence,
     Trap,
+    Architecture,
     Intrinsic,
     Nop,
 }
@@ -316,6 +323,11 @@ pub enum SemanticExpression {
     Poison {
         bits: u16,
     },
+    Architecture {
+        name: String,
+        args: Vec<SemanticExpression>,
+        bits: u16,
+    },
     Intrinsic {
         name: String,
         args: Vec<SemanticExpression>,
@@ -337,6 +349,7 @@ pub enum SemanticExpressionKind {
     Concat,
     Undefined,
     Poison,
+    Architecture,
     Intrinsic,
 }
 
@@ -497,6 +510,7 @@ impl SemanticEffect {
             Self::AtomicCmpXchg { .. } => SemanticEffectKind::AtomicCmpXchg,
             Self::Fence { .. } => SemanticEffectKind::Fence,
             Self::Trap { .. } => SemanticEffectKind::Trap,
+            Self::Architecture { .. } => SemanticEffectKind::Architecture,
             Self::Intrinsic { .. } => SemanticEffectKind::Intrinsic,
             Self::Nop => SemanticEffectKind::Nop,
         }
@@ -542,6 +556,7 @@ impl SemanticExpression {
             Self::Concat { .. } => SemanticExpressionKind::Concat,
             Self::Undefined { .. } => SemanticExpressionKind::Undefined,
             Self::Poison { .. } => SemanticExpressionKind::Poison,
+            Self::Architecture { .. } => SemanticExpressionKind::Architecture,
             Self::Intrinsic { .. } => SemanticExpressionKind::Intrinsic,
         }
     }
@@ -570,6 +585,7 @@ impl SemanticExpression {
             Self::Concat { bits, .. } => *bits,
             Self::Undefined { bits } => *bits,
             Self::Poison { bits } => *bits,
+            Self::Architecture { bits, .. } => *bits,
             Self::Intrinsic { bits, .. } => *bits,
         }
     }
@@ -655,6 +671,7 @@ impl SemanticExpression {
 
     pub fn name(&self) -> Option<&str> {
         match self {
+            Self::Architecture { name, .. } => Some(name.as_str()),
             Self::Intrinsic { name, .. } => Some(name.as_str()),
             _ => None,
         }
@@ -662,6 +679,7 @@ impl SemanticExpression {
 
     pub fn arguments(&self) -> Option<&[SemanticExpression]> {
         match self {
+            Self::Architecture { args, .. } => Some(args),
             Self::Intrinsic { args, .. } => Some(args),
             _ => None,
         }

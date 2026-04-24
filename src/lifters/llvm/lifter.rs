@@ -1,4 +1,5 @@
 use crate::Config;
+use crate::Architecture;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::io::Stderr;
 use crate::lifters::llvm::abi::coerce_int_value_width;
@@ -10,6 +11,7 @@ use crate::semantics::{
     SemanticFenceKind, SemanticLocation, SemanticOperationBinary, SemanticOperationCast,
     SemanticOperationCompare, SemanticOperationUnary, SemanticTerminator, SemanticTrapKind,
 };
+use inkwell::attributes::AttributeLoc;
 use inkwell::IntPredicate;
 use inkwell::OptimizationLevel;
 use inkwell::basic_block::BasicBlock;
@@ -23,8 +25,9 @@ use inkwell::memory_buffer::MemoryBuffer;
 use inkwell::module::Module;
 use inkwell::passes::PassBuilderOptions;
 use inkwell::targets::{CodeModel, InitializationConfig, RelocMode, Target, TargetMachine};
-use inkwell::types::{BasicMetadataTypeEnum, IntType};
+use inkwell::types::{AnyType, BasicMetadataTypeEnum, IntType};
 use inkwell::values::{BasicMetadataValueEnum, FunctionValue, IntValue, PointerValue};
+use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap};
 use std::ffi::CStr;
 use std::ffi::c_void;
@@ -36,6 +39,7 @@ pub struct Lifter {
     context: &'static Context,
     module: Module<'static>,
     emitted: BTreeSet<String>,
+    architecture: Option<Architecture>,
 }
 
 #[derive(Default)]
@@ -66,7 +70,13 @@ struct LoweringContext<'ctx, 'm> {
     module: &'m Module<'ctx>,
     builder: Builder<'ctx>,
     function: FunctionValue<'ctx>,
+    function_name: String,
     slots: HashMap<String, PointerValue<'ctx>>,
+    slot_locations: HashMap<String, SemanticLocation>,
+    written_locations: BTreeSet<String>,
+    native_return_adjust: Option<u16>,
+    body_begin_emitted: bool,
+    cached_flags_register: RefCell<Option<IntValue<'ctx>>>,
 }
 
 impl Lifter {
@@ -78,10 +88,13 @@ impl Lifter {
             context,
             module,
             emitted: BTreeSet::new(),
+            architecture: None,
         }
     }
 
     pub fn lift_instruction(&mut self, instruction: &Instruction) -> Result<(), Error> {
+        self.architecture.get_or_insert(instruction.architecture);
+        self.bind_architecture()?;
         let name = format!("instruction_{:x}", instruction.address);
         if !self.emitted.insert(name.clone()) {
             return Ok(());
@@ -95,6 +108,8 @@ impl Lifter {
     }
 
     pub fn lift_block(&mut self, block: &Block<'_>) -> Result<(), Error> {
+        self.architecture.get_or_insert(block.architecture());
+        self.bind_architecture()?;
         let name = format!("block_{:x}", block.address());
         if !self.emitted.insert(name.clone()) {
             return Ok(());
@@ -110,6 +125,8 @@ impl Lifter {
     }
 
     pub fn lift_function(&mut self, function: &Function<'_>) -> Result<(), Error> {
+        self.architecture.get_or_insert(function.architecture());
+        self.bind_architecture()?;
         let name = format!("function_{:x}", function.address());
         if !self.emitted.insert(name.clone()) {
             return Ok(());
@@ -117,6 +134,7 @@ impl Lifter {
         let llvm_function = self.add_void_function(&name);
         let mut lowering = self.lowering_context(llvm_function);
         lowering.lower_function(function)?;
+        lowering.finish()?;
         self.verify_if_enabled()?;
         Ok(())
     }
@@ -134,6 +152,15 @@ impl Lifter {
         buffer.as_slice().to_vec()
     }
 
+    pub fn object(&self) -> Result<Vec<u8>, Error> {
+        let codegen = self.mem2reg().unwrap_or_else(|_| self.duplicate().expect("duplicate lifter"));
+        let machine = codegen.target_machine()?;
+        let buffer = machine
+            .write_to_memory_buffer(&codegen.module, inkwell::targets::FileType::Object)
+            .map_err(|err| Error::other(err.to_string()))?;
+        Ok(buffer.as_slice().to_vec())
+    }
+
     pub fn normalized(&self) -> Result<Self, Error> {
         let context: &'static Context = Box::leak(Box::new(Context::create()));
         let normalized = normalize_ir_text(&self.text());
@@ -148,6 +175,7 @@ impl Lifter {
             context,
             module,
             emitted: self.emitted.clone(),
+            architecture: self.architecture,
         };
         normalized.verify_if_enabled()?;
         Ok(normalized)
@@ -190,7 +218,12 @@ impl Lifter {
             return function;
         }
         let fn_type = self.context.void_type().fn_type(&[], false);
-        self.module.add_function(name, fn_type, None)
+        let function = self.module.add_function(name, fn_type, None);
+        function.add_attribute(
+            AttributeLoc::Function,
+            self.context.create_string_attribute("frame-pointer", "none"),
+        );
+        function
     }
 
     fn lowering_context(&self, function: FunctionValue<'static>) -> LoweringContext<'static, '_> {
@@ -202,7 +235,13 @@ impl Lifter {
             module: &self.module,
             builder,
             function,
+            function_name: function.get_name().to_string_lossy().into_owned(),
             slots: HashMap::new(),
+            slot_locations: HashMap::new(),
+            written_locations: BTreeSet::new(),
+            native_return_adjust: None,
+            body_begin_emitted: false,
+            cached_flags_register: RefCell::new(None),
         }
     }
 
@@ -224,6 +263,7 @@ impl Lifter {
             context,
             module,
             emitted: self.emitted.clone(),
+            architecture: self.architecture,
         })
     }
 
@@ -291,7 +331,12 @@ impl Lifter {
     fn target_machine(&self) -> Result<TargetMachine, Error> {
         Target::initialize_native(&InitializationConfig::default())
             .map_err(|err| Error::other(err.to_string()))?;
-        let triple = TargetMachine::get_default_triple();
+        let triple_string = match self.architecture.unwrap_or(Architecture::AMD64) {
+            Architecture::I386 => "i386-pc-linux-gnu",
+            Architecture::AMD64 => "x86_64-pc-linux-gnu",
+            _ => "x86_64-pc-linux-gnu",
+        };
+        let triple = inkwell::targets::TargetTriple::create(triple_string);
         let target = Target::from_triple(&triple).map_err(|err| Error::other(err.to_string()))?;
         target
             .create_target_machine(
@@ -303,6 +348,17 @@ impl Lifter {
                 CodeModel::Default,
             )
             .ok_or_else(|| Error::other("failed to create llvm target machine"))
+    }
+
+    fn bind_architecture(&self) -> Result<(), Error> {
+        let triple_string = match self.architecture.unwrap_or(Architecture::AMD64) {
+            Architecture::I386 => "i386-pc-linux-gnu",
+            Architecture::AMD64 => "x86_64-pc-linux-gnu",
+            _ => "x86_64-pc-linux-gnu",
+        };
+        self.module
+            .set_triple(&inkwell::targets::TargetTriple::create(triple_string));
+        Ok(())
     }
 }
 
@@ -316,7 +372,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             block_map.insert(block.address(), llvm_block);
         }
 
-        let exit_block = self.context.append_basic_block(self.function, "exit");
+        let mut exit_block = None;
         let entry = self
             .function
             .get_first_basic_block()
@@ -350,15 +406,12 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 .and_then(|current| current.get_terminator())
                 .is_none()
             {
-                self.lower_block_cfg_terminator(&block, &block_map, exit_block)?;
+                self.lower_block_cfg_terminator(&block, &block_map, &mut exit_block)?;
             }
         }
 
-        self.builder.position_at_end(exit_block);
-        if exit_block.get_terminator().is_none() {
-            self.builder
-                .build_return(None)
-                .map_err(|err| Error::other(err.to_string()))?;
+        if let Some(exit_block) = exit_block {
+            self.builder.position_at_end(exit_block);
         }
         Ok(())
     }
@@ -370,9 +423,15 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             .and_then(|block| block.get_terminator())
             .is_none();
         if needs_return {
-            self.builder
-                .build_return(None)
-                .map_err(|err| Error::other(err.to_string()))?;
+            self.sync_slots_to_architecture()?;
+            self.emit_body_marker("body_end")?;
+            if let Some(adjust) = self.native_return_adjust {
+                self.emit_native_return(adjust)?;
+            } else {
+                self.builder
+                    .build_return(None)
+                    .map_err(|err| Error::other(err.to_string()))?;
+            }
         }
         Ok(())
     }
@@ -381,19 +440,8 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         &mut self,
         block: &Block<'_>,
         block_map: &HashMap<u64, BasicBlock<'ctx>>,
-        exit_block: BasicBlock<'ctx>,
+        exit_block: &mut Option<BasicBlock<'ctx>>,
     ) -> Result<(), Error> {
-        let fallback_jump_target = block
-            .to()
-            .iter()
-            .next()
-            .and_then(|address| block_map.get(address).copied())
-            .unwrap_or(exit_block);
-        let fallback_fallthrough_target = block
-            .next()
-            .and_then(|address| block_map.get(&address).copied())
-            .unwrap_or(exit_block);
-
         let Some(semantics) = block.terminator.semantics.as_ref() else {
             if block.terminator.is_return {
                 self.builder
@@ -404,10 +452,20 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     "conditional block terminator requires semantics for llvm lowering",
                 ));
             } else if block.terminator.is_jump {
+                let fallback_jump_target = block
+                    .to()
+                    .iter()
+                    .next()
+                    .and_then(|address| block_map.get(address).copied())
+                    .unwrap_or_else(|| self.ensure_exit_block(exit_block));
                 self.builder
                     .build_unconditional_branch(fallback_jump_target)
                     .map_err(|err| Error::other(err.to_string()))?;
             } else {
+                let fallback_fallthrough_target = block
+                    .next()
+                    .and_then(|address| block_map.get(&address).copied())
+                    .unwrap_or_else(|| self.ensure_exit_block(exit_block));
                 self.builder
                     .build_unconditional_branch(fallback_fallthrough_target)
                     .map_err(|err| Error::other(err.to_string()))?;
@@ -417,11 +475,21 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
 
         match &semantics.terminator {
             SemanticTerminator::FallThrough => {
+                let fallback_fallthrough_target = block
+                    .next()
+                    .and_then(|address| block_map.get(&address).copied())
+                    .unwrap_or_else(|| self.ensure_exit_block(exit_block));
                 self.builder
                     .build_unconditional_branch(fallback_fallthrough_target)
                     .map_err(|err| Error::other(err.to_string()))?;
             }
             SemanticTerminator::Jump { target } => {
+                let fallback_jump_target = block
+                    .to()
+                    .iter()
+                    .next()
+                    .and_then(|address| block_map.get(address).copied())
+                    .unwrap_or_else(|| self.ensure_exit_block(exit_block));
                 let target = self
                     .resolve_block_target(target, block_map)
                     .unwrap_or(fallback_jump_target);
@@ -434,6 +502,16 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 true_target,
                 false_target,
             } => {
+                let fallback_jump_target = block
+                    .to()
+                    .iter()
+                    .next()
+                    .and_then(|address| block_map.get(address).copied())
+                    .unwrap_or_else(|| self.ensure_exit_block(exit_block));
+                let fallback_fallthrough_target = block
+                    .next()
+                    .and_then(|address| block_map.get(&address).copied())
+                    .unwrap_or_else(|| self.ensure_exit_block(exit_block));
                 let condition = self.lower_expression(condition)?;
                 let condition = self.to_bool(condition);
                 let true_target = self
@@ -451,7 +529,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     let target = block
                         .next()
                         .and_then(|address| block_map.get(&address).copied())
-                        .unwrap_or(exit_block);
+                        .unwrap_or_else(|| self.ensure_exit_block(exit_block));
                     self.builder
                         .build_unconditional_branch(target)
                         .map_err(|err| Error::other(err.to_string()))?;
@@ -475,25 +553,247 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         Ok(())
     }
 
-    fn lower_instruction(&mut self, instruction: &Instruction) -> Result<(), Error> {
-        let helper = self.declare_void_helper(
-            "binlex_instruction_address",
-            &[self.context.i64_type().into()],
-            false,
-        );
-        let address = self
-            .context
-            .i64_type()
-            .const_int(instruction.address, false);
-        self.builder
-            .build_call(helper, &[address.into()], "")
-            .map_err(|err| Error::other(err.to_string()))?;
+    fn ensure_exit_block(
+        &self,
+        exit_block: &mut Option<BasicBlock<'ctx>>,
+    ) -> BasicBlock<'ctx> {
+        if let Some(block) = *exit_block {
+            block
+        } else {
+            let block = self.context.append_basic_block(self.function, "exit");
+            *exit_block = Some(block);
+            block
+        }
+    }
 
+    fn lower_instruction(&mut self, instruction: &Instruction) -> Result<(), Error> {
         if let Some(semantics) = instruction.semantics.as_ref() {
+            *self.cached_flags_register.borrow_mut() = None;
             let prepared = prepare_instruction_semantics(semantics)?;
+            self.emit_body_marker_if_needed()?;
+            self.seed_instruction_inputs(&prepared)?;
             self.lower_semantics(&prepared)?;
+            *self.cached_flags_register.borrow_mut() = None;
         }
         Ok(())
+    }
+
+    fn emit_body_marker_if_needed(&mut self) -> Result<(), Error> {
+        if !self.body_begin_emitted {
+            self.emit_body_marker("body_begin")?;
+            self.body_begin_emitted = true;
+        }
+        Ok(())
+    }
+
+    fn seed_instruction_inputs(&mut self, semantics: &InstructionSemantics) -> Result<(), Error> {
+        let mut registers = Vec::<SemanticLocation>::new();
+        let mut program_counters = Vec::<SemanticLocation>::new();
+        let mut flags = Vec::<SemanticLocation>::new();
+        for effect in &semantics.effects {
+            self.collect_effect_reads(effect, &mut registers, &mut program_counters, &mut flags);
+        }
+        self.collect_terminator_reads(
+            &semantics.terminator,
+            &mut registers,
+            &mut program_counters,
+            &mut flags,
+        );
+
+        for location in flags {
+            let _ = self.slot_for_location(&location)?;
+        }
+        for location in registers {
+            let _ = self.slot_for_location(&location)?;
+        }
+        for location in program_counters {
+            let _ = self.slot_for_location(&location)?;
+        }
+        Ok(())
+    }
+
+    fn collect_effect_reads(
+        &self,
+        effect: &SemanticEffect,
+        registers: &mut Vec<SemanticLocation>,
+        program_counters: &mut Vec<SemanticLocation>,
+        flags: &mut Vec<SemanticLocation>,
+    ) {
+        match effect {
+            SemanticEffect::Set { dst, expression } => {
+                self.collect_expression_reads(expression, registers, program_counters, flags);
+                if let Some((parent_name, parent_bits, _)) = self.x86_parent_register_alias(dst) {
+                    push_unique_location(
+                        registers,
+                        SemanticLocation::Register {
+                            name: parent_name,
+                            bits: parent_bits,
+                        },
+                    );
+                }
+            }
+            SemanticEffect::Store {
+                addr, expression, ..
+            } => {
+                self.collect_expression_reads(addr, registers, program_counters, flags);
+                self.collect_expression_reads(expression, registers, program_counters, flags);
+            }
+            SemanticEffect::MemorySet {
+                addr,
+                value,
+                count,
+                decrement,
+                ..
+            } => {
+                self.collect_expression_reads(addr, registers, program_counters, flags);
+                self.collect_expression_reads(value, registers, program_counters, flags);
+                self.collect_expression_reads(count, registers, program_counters, flags);
+                self.collect_expression_reads(decrement, registers, program_counters, flags);
+            }
+            SemanticEffect::MemoryCopy {
+                src_addr,
+                dst_addr,
+                count,
+                decrement,
+                ..
+            } => {
+                self.collect_expression_reads(src_addr, registers, program_counters, flags);
+                self.collect_expression_reads(dst_addr, registers, program_counters, flags);
+                self.collect_expression_reads(count, registers, program_counters, flags);
+                self.collect_expression_reads(decrement, registers, program_counters, flags);
+            }
+            SemanticEffect::AtomicCmpXchg {
+                addr,
+                expected,
+                desired,
+                ..
+            } => {
+                self.collect_expression_reads(addr, registers, program_counters, flags);
+                self.collect_expression_reads(expected, registers, program_counters, flags);
+                self.collect_expression_reads(desired, registers, program_counters, flags);
+            }
+            SemanticEffect::Architecture { args, .. }
+            | SemanticEffect::Intrinsic { args, .. } => {
+                for arg in args {
+                    self.collect_expression_reads(arg, registers, program_counters, flags);
+                }
+            }
+            SemanticEffect::Fence { .. } | SemanticEffect::Trap { .. } | SemanticEffect::Nop => {}
+        }
+    }
+
+    fn collect_terminator_reads(
+        &self,
+        terminator: &SemanticTerminator,
+        registers: &mut Vec<SemanticLocation>,
+        program_counters: &mut Vec<SemanticLocation>,
+        flags: &mut Vec<SemanticLocation>,
+    ) {
+        match terminator {
+            SemanticTerminator::Jump { target } => {
+                self.collect_expression_reads(target, registers, program_counters, flags);
+            }
+            SemanticTerminator::Branch {
+                condition,
+                true_target,
+                false_target,
+            } => {
+                self.collect_expression_reads(condition, registers, program_counters, flags);
+                self.collect_expression_reads(true_target, registers, program_counters, flags);
+                self.collect_expression_reads(false_target, registers, program_counters, flags);
+            }
+            SemanticTerminator::Call {
+                target,
+                return_target,
+                ..
+            } => {
+                self.collect_expression_reads(target, registers, program_counters, flags);
+                if let Some(return_target) = return_target {
+                    self.collect_expression_reads(
+                        return_target,
+                        registers,
+                        program_counters,
+                        flags,
+                    );
+                }
+            }
+            SemanticTerminator::Return { expression } => {
+                if let Some(expression) = expression {
+                    self.collect_expression_reads(
+                        expression,
+                        registers,
+                        program_counters,
+                        flags,
+                    );
+                }
+            }
+            SemanticTerminator::FallThrough
+            | SemanticTerminator::Trap
+            | SemanticTerminator::Unreachable => {}
+        }
+    }
+
+    fn collect_expression_reads(
+        &self,
+        expression: &SemanticExpression,
+        registers: &mut Vec<SemanticLocation>,
+        program_counters: &mut Vec<SemanticLocation>,
+        flags: &mut Vec<SemanticLocation>,
+    ) {
+        match expression {
+            SemanticExpression::Read(location) => match location.as_ref() {
+                SemanticLocation::Register { .. } => {
+                    push_unique_location(registers, location.as_ref().clone());
+                }
+                SemanticLocation::ProgramCounter { .. } => {
+                    push_unique_location(program_counters, location.as_ref().clone());
+                }
+                SemanticLocation::Flag { .. } => {
+                    push_unique_location(flags, location.as_ref().clone());
+                }
+                SemanticLocation::Memory { addr, .. } => {
+                    self.collect_expression_reads(addr, registers, program_counters, flags);
+                }
+                SemanticLocation::Temporary { .. } => {}
+            },
+            SemanticExpression::Load { addr, .. } => {
+                self.collect_expression_reads(addr, registers, program_counters, flags);
+            }
+            SemanticExpression::Unary { arg, .. }
+            | SemanticExpression::Cast { arg, .. }
+            | SemanticExpression::Extract { arg, .. } => {
+                self.collect_expression_reads(arg, registers, program_counters, flags);
+            }
+            SemanticExpression::Binary { left, right, .. }
+            | SemanticExpression::Compare { left, right, .. } => {
+                self.collect_expression_reads(left, registers, program_counters, flags);
+                self.collect_expression_reads(right, registers, program_counters, flags);
+            }
+            SemanticExpression::Select {
+                condition,
+                when_true,
+                when_false,
+                ..
+            } => {
+                self.collect_expression_reads(condition, registers, program_counters, flags);
+                self.collect_expression_reads(when_true, registers, program_counters, flags);
+                self.collect_expression_reads(when_false, registers, program_counters, flags);
+            }
+            SemanticExpression::Concat { parts, .. } => {
+                for part in parts {
+                    self.collect_expression_reads(part, registers, program_counters, flags);
+                }
+            }
+            SemanticExpression::Intrinsic { args, .. }
+            | SemanticExpression::Architecture { args, .. } => {
+                for arg in args {
+                    self.collect_expression_reads(arg, registers, program_counters, flags);
+                }
+            }
+            SemanticExpression::Const { .. }
+            | SemanticExpression::Undefined { .. }
+            | SemanticExpression::Poison { .. } => {}
+        }
     }
 
     fn lower_semantics(&mut self, semantics: &InstructionSemantics) -> Result<(), Error> {
@@ -511,10 +811,21 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 }
                 _ => {
                     let value = self.lower_expression(expression)?;
+                    let value = coerce_int_value_width(
+                        &self.builder,
+                        value,
+                        self.location_type(dst),
+                        "set_dst_zext",
+                        "set_dst_trunc",
+                    )?;
                     let slot = self.slot_for_location(dst)?;
                     self.builder
                         .build_store(slot, value)
                         .map_err(|err| Error::other(err.to_string()))?;
+                    self.written_locations.insert(render_location(dst));
+                    if let SemanticLocation::Register { name, bits } = dst {
+                        self.merge_partial_register_write(name, *bits, value)?;
+                    }
                 }
             },
             SemanticEffect::Store {
@@ -531,6 +842,9 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 element_bits,
                 decrement,
             } => {
+                if self.try_direct_memory_set(space, addr, value, count, *element_bits, decrement)? {
+                    return Ok(());
+                }
                 let helper = self.declare_void_helper(
                     &format!(
                         "binlex_effect_memset_{}_{}",
@@ -569,6 +883,17 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 element_bits,
                 decrement,
             } => {
+                if self.try_direct_memory_copy(
+                    src_space,
+                    src_addr,
+                    dst_space,
+                    dst_addr,
+                    count,
+                    *element_bits,
+                    decrement,
+                )? {
+                    return Ok(());
+                }
                 let helper = self.declare_void_helper(
                     &format!(
                         "binlex_effect_memcpy_{}_{}_{}",
@@ -672,6 +997,17 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .build_call(helper, &args, "")
                     .map_err(|err| Error::other(err.to_string()))?;
             }
+            SemanticEffect::Architecture { name, args, .. } => {
+                let helper = self.declare_void_helper(
+                    &format!("binlex_arch_effect_{}", sanitize_symbol(name)),
+                    &[],
+                    true,
+                );
+                let args = self.lower_arg_values(args)?;
+                self.builder
+                    .build_call(helper, &args, "")
+                    .map_err(|err| Error::other(err.to_string()))?;
+            }
             SemanticEffect::Nop => {}
         }
         Ok(())
@@ -755,7 +1091,12 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .map_err(|err| Error::other(err.to_string()))?;
             }
             SemanticTerminator::Return { expression } => {
-                if let Some(expression) = expression {
+                if let Some(adjust) = expression
+                    .as_ref()
+                    .and_then(Self::const_return_adjust)
+                {
+                    self.native_return_adjust = Some(adjust);
+                } else if let Some(expression) = expression {
                     let value = self.lower_expression(expression)?;
                     let helper = self.declare_void_helper(
                         "binlex_term_return",
@@ -782,6 +1123,13 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         Ok(())
     }
 
+    fn const_return_adjust(expression: &SemanticExpression) -> Option<u16> {
+        match expression {
+            SemanticExpression::Const { value, .. } => u16::try_from(*value).ok(),
+            _ => None,
+        }
+    }
+
     fn emit_store(
         &mut self,
         space: &SemanticAddressSpace,
@@ -789,6 +1137,9 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         expression: &SemanticExpression,
         bits: u16,
     ) -> Result<(), Error> {
+        if let Some(()) = self.try_direct_store(space, addr, expression, bits)? {
+            return Ok(());
+        }
         let helper = self.declare_void_helper(
             &format!(
                 "binlex_store_{}_{}",
@@ -824,6 +1175,9 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             }
             SemanticExpression::Read(location) => self.read_location(location),
             SemanticExpression::Load { space, addr, bits } => {
+                if let Some(value) = self.try_direct_load(space, addr, *bits)? {
+                    return Ok(value);
+                }
                 let helper = self.declare_value_helper(
                     &format!(
                         "binlex_load_{}_{}",
@@ -880,6 +1234,9 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .into_int_value())
             }
             SemanticExpression::Extract { arg, lsb, bits } => {
+                if let Some(value) = self.try_lower_i386_div_extract(arg, *lsb, *bits)? {
+                    return Ok(value);
+                }
                 let arg = self.lower_expression(arg)?;
                 let shifted = self
                     .builder
@@ -935,12 +1292,129 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 let args = self.lower_arg_values(args)?;
                 self.call_value(helper, &args, "intrinsicexpr")
             }
+            SemanticExpression::Architecture { name, args, bits, .. } => {
+                let helper = self.declare_value_helper(
+                    &format!("binlex_arch_expr_{}", sanitize_symbol(name)),
+                    self.int_type(*bits),
+                    &[],
+                    true,
+                );
+                let args = self.lower_arg_values(args)?;
+                self.call_value(helper, &args, "archexpr")
+            }
         }
+    }
+
+    fn try_lower_i386_div_extract(
+        &mut self,
+        arg: &SemanticExpression,
+        lsb: u16,
+        bits: u16,
+    ) -> Result<Option<IntValue<'ctx>>, Error> {
+        let is_i386 = matches!(
+            self.module.get_triple().as_str().to_str(),
+            Ok(triple) if triple.starts_with("i386")
+        );
+        if !is_i386 || lsb != 0 || bits != 32 {
+            return Ok(None);
+        }
+        let (signed, remainder, dividend, divisor) = match arg {
+            SemanticExpression::Binary {
+                op,
+                left,
+                right,
+                bits: 64,
+            } => match op {
+                SemanticOperationBinary::UDiv => (false, false, &**left, &**right),
+                SemanticOperationBinary::SDiv => (true, false, &**left, &**right),
+                SemanticOperationBinary::URem => (false, true, &**left, &**right),
+                SemanticOperationBinary::SRem => (true, true, &**left, &**right),
+                _ => return Ok(None),
+            },
+            _ => return Ok(None),
+        };
+        let (high, low) = match dividend {
+            SemanticExpression::Concat { parts, bits: 64 } if parts.len() == 2 => {
+                (&parts[0], &parts[1])
+            }
+            _ => return Ok(None),
+        };
+        let divisor = match divisor {
+            SemanticExpression::Cast { arg, bits: 64, .. } => &**arg,
+            _ => return Ok(None),
+        };
+        let ty = self.context.i32_type();
+        let low_value = self.lower_expression(low)?;
+        let low_value = self.lower_cast(SemanticOperationCast::ZeroExtend, low_value, 32)?;
+        let high_value = self.lower_expression(high)?;
+        let high_value = self.lower_cast(SemanticOperationCast::ZeroExtend, high_value, 32)?;
+        let divisor_value = self.lower_expression(divisor)?;
+        let divisor_value =
+            self.lower_cast(SemanticOperationCast::ZeroExtend, divisor_value, 32)?;
+        let low_slot = self.build_entry_alloca(ty, "div_low_slot")?;
+        let high_slot = self.build_entry_alloca(ty, "div_high_slot")?;
+        let divisor_slot = self.build_entry_alloca(ty, "div_divisor_slot")?;
+        let out_slot = self.build_entry_alloca(ty, "div_out_slot")?;
+        self.builder
+            .build_store(low_slot, low_value)
+            .map_err(|err| Error::other(err.to_string()))?;
+        self.builder
+            .build_store(high_slot, high_value)
+            .map_err(|err| Error::other(err.to_string()))?;
+        self.builder
+            .build_store(divisor_slot, divisor_value)
+            .map_err(|err| Error::other(err.to_string()))?;
+        let fn_ty = self.context.void_type().fn_type(
+            &[
+                self.context.ptr_type(inkwell::AddressSpace::default()).into(),
+                self.context.ptr_type(inkwell::AddressSpace::default()).into(),
+                self.context.ptr_type(inkwell::AddressSpace::default()).into(),
+                self.context.ptr_type(inkwell::AddressSpace::default()).into(),
+            ],
+            false,
+        );
+        let div_mnemonic = if signed { "idivl" } else { "divl" };
+        let store_reg = if remainder { "%edx" } else { "%eax" };
+        let asm = self.context.create_inline_asm(
+            fn_ty,
+            format!("movl $0, %eax; movl $1, %edx; {div_mnemonic} $2; movl {store_reg}, $3"),
+            "*m,*m,*m,*m,~{eax},~{edx},~{dirflag},~{fpsr},~{flags}".to_string(),
+            true,
+            false,
+            None,
+            false,
+        );
+        let call = self
+            .builder
+            .build_indirect_call(
+                fn_ty,
+                asm,
+                &[
+                    low_slot.into(),
+                    high_slot.into(),
+                    divisor_slot.into(),
+                    out_slot.into(),
+                ],
+                "",
+            )
+            .map_err(|err| Error::other(err.to_string()))?;
+        for index in 0..4 {
+            call.add_attribute(AttributeLoc::Param(index), self.elementtype_attribute(ty));
+        }
+        Ok(Some(
+            self.builder
+                .build_load(ty, out_slot, "div_extract")
+                .map_err(|err| Error::other(err.to_string()))?
+                .into_int_value(),
+        ))
     }
 
     fn read_location(&mut self, location: &SemanticLocation) -> Result<IntValue<'ctx>, Error> {
         match location {
             SemanticLocation::Memory { space, addr, bits } => {
+                if let Some(value) = self.try_direct_load(space, addr, *bits)? {
+                    return Ok(value);
+                }
                 let helper = self.declare_value_helper(
                     &format!(
                         "binlex_load_{}_{}",
@@ -965,6 +1439,336 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .into_int_value())
             }
         }
+    }
+
+    fn try_direct_load(
+        &mut self,
+        space: &SemanticAddressSpace,
+        addr: &SemanticExpression,
+        bits: u16,
+    ) -> Result<Option<IntValue<'ctx>>, Error> {
+        if !matches!(
+            space,
+            SemanticAddressSpace::Default | SemanticAddressSpace::Stack
+        ) {
+            return Ok(None);
+        }
+        let ptr = self.direct_pointer_from_expression(addr)?;
+        let value = self
+            .builder
+            .build_load(self.int_type(bits), ptr, "direct_loadtmp")
+            .map_err(|err| Error::other(err.to_string()))?
+            .into_int_value();
+        Ok(Some(value))
+    }
+
+    fn try_direct_store(
+        &mut self,
+        space: &SemanticAddressSpace,
+        addr: &SemanticExpression,
+        expression: &SemanticExpression,
+        bits: u16,
+    ) -> Result<Option<()>, Error> {
+        if !matches!(
+            space,
+            SemanticAddressSpace::Default | SemanticAddressSpace::Stack
+        ) {
+            return Ok(None);
+        }
+        let ptr = self.direct_pointer_from_expression(addr)?;
+        let value = self.lower_expression(expression)?;
+        let value = coerce_int_value_width(
+            &self.builder,
+            value,
+            self.int_type(bits),
+            "direct_store_zext",
+            "direct_store_trunc",
+        )?;
+        self.builder
+            .build_store(ptr, value)
+            .map_err(|err| Error::other(err.to_string()))?;
+        Ok(Some(()))
+    }
+
+    fn try_direct_memory_set(
+        &mut self,
+        space: &SemanticAddressSpace,
+        addr: &SemanticExpression,
+        value: &SemanticExpression,
+        count: &SemanticExpression,
+        element_bits: u16,
+        decrement: &SemanticExpression,
+    ) -> Result<bool, Error> {
+        if !matches!(space, SemanticAddressSpace::Default) {
+            return Ok(false);
+        }
+
+        let pointer_int_type = self.pointer_int_type();
+        let lowered_addr = self.lower_expression(addr)?;
+        let base_addr = coerce_int_value_width(
+            &self.builder,
+            lowered_addr,
+            pointer_int_type,
+            "memset_addr_zext",
+            "memset_addr_trunc",
+        )?;
+        let lowered_count = self.lower_expression(count)?;
+        let count = coerce_int_value_width(
+            &self.builder,
+            lowered_count,
+            pointer_int_type,
+            "memset_count_zext",
+            "memset_count_trunc",
+        )?;
+        let lowered_decrement = self.lower_expression(decrement)?;
+        let decrement = self.to_bool(lowered_decrement);
+        let lowered_value = self.lower_expression(value)?;
+        let value = coerce_int_value_width(
+            &self.builder,
+            lowered_value,
+            self.int_type(element_bits),
+            "memset_value_zext",
+            "memset_value_trunc",
+        )?;
+        self.build_counted_memory_loop(
+            "memset",
+            base_addr,
+            None,
+            count,
+            element_bits,
+            decrement,
+            |this, dst_ptr, _| {
+                this.builder
+                    .build_store(dst_ptr, value)
+                    .map_err(|err| Error::other(err.to_string()))?;
+                Ok(())
+            },
+        )?;
+        Ok(true)
+    }
+
+    fn try_direct_memory_copy(
+        &mut self,
+        src_space: &SemanticAddressSpace,
+        src_addr: &SemanticExpression,
+        dst_space: &SemanticAddressSpace,
+        dst_addr: &SemanticExpression,
+        count: &SemanticExpression,
+        element_bits: u16,
+        decrement: &SemanticExpression,
+    ) -> Result<bool, Error> {
+        if !matches!(src_space, SemanticAddressSpace::Default)
+            || !matches!(dst_space, SemanticAddressSpace::Default)
+        {
+            return Ok(false);
+        }
+
+        let pointer_int_type = self.pointer_int_type();
+        let lowered_src_addr = self.lower_expression(src_addr)?;
+        let src_addr = coerce_int_value_width(
+            &self.builder,
+            lowered_src_addr,
+            pointer_int_type,
+            "memcpy_src_zext",
+            "memcpy_src_trunc",
+        )?;
+        let lowered_dst_addr = self.lower_expression(dst_addr)?;
+        let dst_addr = coerce_int_value_width(
+            &self.builder,
+            lowered_dst_addr,
+            pointer_int_type,
+            "memcpy_dst_zext",
+            "memcpy_dst_trunc",
+        )?;
+        let lowered_count = self.lower_expression(count)?;
+        let count = coerce_int_value_width(
+            &self.builder,
+            lowered_count,
+            pointer_int_type,
+            "memcpy_count_zext",
+            "memcpy_count_trunc",
+        )?;
+        let lowered_decrement = self.lower_expression(decrement)?;
+        let decrement = self.to_bool(lowered_decrement);
+        self.build_counted_memory_loop(
+            "memcpy",
+            dst_addr,
+            Some(src_addr),
+            count,
+            element_bits,
+            decrement,
+            |this, dst_ptr, src_ptr| {
+                let src_ptr = src_ptr.expect("memory copy loop requires a source pointer");
+                let value = this
+                    .builder
+                    .build_load(this.int_type(element_bits), src_ptr, "memcpy_load")
+                    .map_err(|err| Error::other(err.to_string()))?;
+                this.builder
+                    .build_store(dst_ptr, value)
+                    .map_err(|err| Error::other(err.to_string()))?;
+                Ok(())
+            },
+        )?;
+        Ok(true)
+    }
+
+    fn build_counted_memory_loop<F>(
+        &mut self,
+        loop_name: &str,
+        dst_base: IntValue<'ctx>,
+        src_base: Option<IntValue<'ctx>>,
+        count: IntValue<'ctx>,
+        element_bits: u16,
+        decrement: IntValue<'ctx>,
+        mut body: F,
+    ) -> Result<(), Error>
+    where
+        F: FnMut(
+            &mut Self,
+            PointerValue<'ctx>,
+            Option<PointerValue<'ctx>>,
+        ) -> Result<(), Error>,
+    {
+        let pointer_int_type = self.pointer_int_type();
+        let element_bytes = pointer_int_type.const_int((element_bits / 8) as u64, false);
+        let zero = pointer_int_type.const_zero();
+        let one = pointer_int_type.const_int(1, false);
+
+        let current_block = self
+            .builder
+            .get_insert_block()
+            .ok_or_else(|| Error::other("memory loop requires an insertion block"))?;
+        let loop_cond = self
+            .context
+            .append_basic_block(self.function, &format!("{loop_name}_cond"));
+        let loop_body = self
+            .context
+            .append_basic_block(self.function, &format!("{loop_name}_body"));
+        let loop_exit = self
+            .context
+            .append_basic_block(self.function, &format!("{loop_name}_exit"));
+
+        self.builder.position_at_end(current_block);
+        let index_slot = self
+            .builder
+            .build_alloca(pointer_int_type, &format!("{loop_name}_index"))
+            .map_err(|err| Error::other(err.to_string()))?;
+        self.builder
+            .build_store(index_slot, zero)
+            .map_err(|err| Error::other(err.to_string()))?;
+        self.builder
+            .build_unconditional_branch(loop_cond)
+            .map_err(|err| Error::other(err.to_string()))?;
+
+        self.builder.position_at_end(loop_cond);
+        let index = self
+            .builder
+            .build_load(pointer_int_type, index_slot, &format!("{loop_name}_index_load"))
+            .map_err(|err| Error::other(err.to_string()))?
+            .into_int_value();
+        let keep_going = self
+            .builder
+            .build_int_compare(IntPredicate::ULT, index, count, &format!("{loop_name}_keep_going"))
+            .map_err(|err| Error::other(err.to_string()))?;
+        self.builder
+            .build_conditional_branch(keep_going, loop_body, loop_exit)
+            .map_err(|err| Error::other(err.to_string()))?;
+
+        self.builder.position_at_end(loop_body);
+        let offset = self
+            .builder
+            .build_int_mul(index, element_bytes, &format!("{loop_name}_offset"))
+            .map_err(|err| Error::other(err.to_string()))?;
+        let dst_addr = self.directional_memory_address(
+            dst_base,
+            offset,
+            decrement,
+            &format!("{loop_name}_dst"),
+        )?;
+        let dst_ptr = self
+            .builder
+            .build_int_to_ptr(
+                dst_addr,
+                self.context.ptr_type(inkwell::AddressSpace::default()),
+                &format!("{loop_name}_dst_ptr"),
+            )
+            .map_err(|err| Error::other(err.to_string()))?;
+        let src_ptr = if let Some(src_base) = src_base {
+            let src_addr = self.directional_memory_address(
+                src_base,
+                offset,
+                decrement,
+                &format!("{loop_name}_src"),
+            )?;
+            Some(
+                self.builder
+                    .build_int_to_ptr(
+                        src_addr,
+                        self.context.ptr_type(inkwell::AddressSpace::default()),
+                        &format!("{loop_name}_src_ptr"),
+                    )
+                    .map_err(|err| Error::other(err.to_string()))?,
+            )
+        } else {
+            None
+        };
+        body(self, dst_ptr, src_ptr)?;
+        let next_index = self
+            .builder
+            .build_int_add(index, one, &format!("{loop_name}_next_index"))
+            .map_err(|err| Error::other(err.to_string()))?;
+        self.builder
+            .build_store(index_slot, next_index)
+            .map_err(|err| Error::other(err.to_string()))?;
+        self.builder
+            .build_unconditional_branch(loop_cond)
+            .map_err(|err| Error::other(err.to_string()))?;
+
+        self.builder.position_at_end(loop_exit);
+        Ok(())
+    }
+
+    fn directional_memory_address(
+        &self,
+        base: IntValue<'ctx>,
+        offset: IntValue<'ctx>,
+        decrement: IntValue<'ctx>,
+        name: &str,
+    ) -> Result<IntValue<'ctx>, Error> {
+        let forward = self
+            .builder
+            .build_int_add(base, offset, &format!("{name}_forward"))
+            .map_err(|err| Error::other(err.to_string()))?;
+        let backward = self
+            .builder
+            .build_int_sub(base, offset, &format!("{name}_backward"))
+            .map_err(|err| Error::other(err.to_string()))?;
+        self.builder
+            .build_select(decrement, backward, forward, &format!("{name}_select"))
+            .map_err(|err| Error::other(err.to_string()))
+            .map(|value| value.into_int_value())
+    }
+
+    fn direct_pointer_from_expression(
+        &mut self,
+        expression: &SemanticExpression,
+    ) -> Result<PointerValue<'ctx>, Error> {
+        let address = self.lower_expression(expression)?;
+        let pointer_int_type = self.pointer_int_type();
+        let address = coerce_int_value_width(
+            &self.builder,
+            address,
+            pointer_int_type,
+            "direct_ptr_zext",
+            "direct_ptr_trunc",
+        )?;
+        self.builder
+            .build_int_to_ptr(
+                address,
+                self.context.ptr_type(inkwell::AddressSpace::default()),
+                "direct_ptr",
+            )
+            .map_err(|err| Error::other(err.to_string()))
     }
 
     fn lower_arg_values(
@@ -1006,6 +1810,66 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 .builder
                 .build_int_neg(arg, "negtmp")
                 .map_err(|err| Error::other(err.to_string())),
+            SemanticOperationUnary::ByteSwap => {
+                let name = format!("llvm.bswap.i{}", bits);
+                let function = self.module.get_function(&name).unwrap_or_else(|| {
+                    self.module.add_function(
+                        &name,
+                        self.int_type(bits)
+                            .fn_type(&[self.int_type(bits).into()], false),
+                        None,
+                    )
+                });
+                self.call_value(function, &[arg.into()], "bswaptmp")
+            }
+            SemanticOperationUnary::CountLeadingZeros => {
+                let name = format!("llvm.ctlz.i{}", bits);
+                let function = self.module.get_function(&name).unwrap_or_else(|| {
+                    self.module.add_function(
+                        &name,
+                        self.int_type(bits).fn_type(
+                            &[self.int_type(bits).into(), self.context.bool_type().into()],
+                            false,
+                        ),
+                        None,
+                    )
+                });
+                self.call_value(
+                    function,
+                    &[arg.into(), self.context.bool_type().const_zero().into()],
+                    "ctlztmp",
+                )
+            }
+            SemanticOperationUnary::CountTrailingZeros => {
+                let name = format!("llvm.cttz.i{}", bits);
+                let function = self.module.get_function(&name).unwrap_or_else(|| {
+                    self.module.add_function(
+                        &name,
+                        self.int_type(bits).fn_type(
+                            &[self.int_type(bits).into(), self.context.bool_type().into()],
+                            false,
+                        ),
+                        None,
+                    )
+                });
+                self.call_value(
+                    function,
+                    &[arg.into(), self.context.bool_type().const_zero().into()],
+                    "cttztmp",
+                )
+            }
+            SemanticOperationUnary::PopCount => {
+                let name = format!("llvm.ctpop.i{}", bits);
+                let function = self.module.get_function(&name).unwrap_or_else(|| {
+                    self.module.add_function(
+                        &name,
+                        self.int_type(bits)
+                            .fn_type(&[self.int_type(bits).into()], false),
+                        None,
+                    )
+                });
+                self.call_value(function, &[arg.into()], "ctpoptmp")
+            }
             _ => {
                 let helper = self.declare_value_helper(
                     &format!("binlex_unary_{:?}", op).to_lowercase(),
@@ -1110,6 +1974,56 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     "ashrtmp",
                 )
                 .map_err(|err| Error::other(err.to_string())),
+            SemanticOperationBinary::RotateLeft => {
+                let name = format!("llvm.fshl.i{}", bits);
+                let function = self.module.get_function(&name).unwrap_or_else(|| {
+                    self.module.add_function(
+                        &name,
+                        self.int_type(bits).fn_type(
+                            &[
+                                self.int_type(bits).into(),
+                                self.int_type(bits).into(),
+                                self.int_type(bits).into(),
+                            ],
+                            false,
+                        ),
+                        None,
+                    )
+                });
+                let right = coerce_int_value_width(
+                    &self.builder,
+                    right,
+                    left.get_type(),
+                    "rotate_zext",
+                    "rotate_trunc",
+                )?;
+                self.call_value(function, &[left.into(), left.into(), right.into()], "roltmp")
+            }
+            SemanticOperationBinary::RotateRight => {
+                let name = format!("llvm.fshr.i{}", bits);
+                let function = self.module.get_function(&name).unwrap_or_else(|| {
+                    self.module.add_function(
+                        &name,
+                        self.int_type(bits).fn_type(
+                            &[
+                                self.int_type(bits).into(),
+                                self.int_type(bits).into(),
+                                self.int_type(bits).into(),
+                            ],
+                            false,
+                        ),
+                        None,
+                    )
+                });
+                let right = coerce_int_value_width(
+                    &self.builder,
+                    right,
+                    left.get_type(),
+                    "rotate_zext",
+                    "rotate_trunc",
+                )?;
+                self.call_value(function, &[left.into(), left.into(), right.into()], "rortmp")
+            }
             _ => {
                 let helper = self.declare_value_helper(
                     &format!("binlex_binary_{:?}", op).to_lowercase(),
@@ -1220,13 +2134,109 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         if let Some(slot) = self.slots.get(&key) {
             return Ok(*slot);
         }
+        if let Some((parent_name, parent_bits, _)) = self.x86_parent_register_alias(location) {
+            let parent = SemanticLocation::Register {
+                name: parent_name,
+                bits: parent_bits,
+            };
+            let parent_key = render_location(&parent);
+            if !self.slots.contains_key(&parent_key) {
+                let _ = self.slot_for_location(&parent)?;
+            }
+        }
         let ty = self.location_type(location);
         let slot = self.build_entry_alloca(ty, &sanitize_symbol(&key))?;
+        let initial = self.initial_location_value(location)?;
         self.builder
-            .build_store(slot, ty.const_zero())
+            .build_store(slot, initial)
             .map_err(|err| Error::other(err.to_string()))?;
         self.slots.insert(key, slot);
+        self.slot_locations
+            .insert(render_location(location), location.clone());
         Ok(slot)
+    }
+
+    fn merge_partial_register_write(
+        &mut self,
+        name: &str,
+        bits: u16,
+        value: IntValue<'ctx>,
+    ) -> Result<(), Error> {
+        let location = SemanticLocation::Register {
+            name: name.to_string(),
+            bits,
+        };
+        let Some((parent_name, parent_bits, shift)) = self.x86_parent_register_alias(&location)
+        else {
+            return Ok(());
+        };
+        let parent = SemanticLocation::Register {
+            name: parent_name,
+            bits: parent_bits,
+        };
+        let parent_slot = self.slot_for_location(&parent)?;
+        let parent_key = render_location(&parent);
+        let parent_value = self
+            .builder
+            .build_load(self.int_type(parent_bits), parent_slot, "partial_parent")
+            .map_err(|err| Error::other(err.to_string()))?
+            .into_int_value();
+        let parent_type = self.int_type(parent_bits);
+        let value = coerce_int_value_width(
+            &self.builder,
+            value,
+            parent_type,
+            "partial_merge_zext",
+            "partial_merge_trunc",
+        )?;
+        let shifted = if shift == 0 {
+            value
+        } else {
+            self.builder
+                .build_left_shift(
+                    value,
+                    parent_type.const_int(shift as u64, false),
+                    "partial_shift",
+                )
+                .map_err(|err| Error::other(err.to_string()))?
+        };
+        let bit_mask = if bits == 64 {
+            u64::MAX
+        } else {
+            ((1u64 << bits) - 1) << shift
+        };
+        let cleared = self
+            .builder
+            .build_and(
+                parent_value,
+                parent_type.const_int(!bit_mask, false),
+                "partial_cleared",
+            )
+            .map_err(|err| Error::other(err.to_string()))?;
+        let merged = self
+            .builder
+            .build_or(cleared, shifted, "partial_merged")
+            .map_err(|err| Error::other(err.to_string()))?;
+        self.builder
+            .build_store(parent_slot, merged)
+            .map_err(|err| Error::other(err.to_string()))?;
+        self.written_locations.insert(parent_key);
+        Ok(())
+    }
+
+    fn initial_location_value(
+        &self,
+        location: &SemanticLocation,
+    ) -> Result<IntValue<'ctx>, Error> {
+        match location {
+            SemanticLocation::Register { name, bits } => {
+                self.read_native_register(name, *bits).or_else(|_| Ok(self.int_type(*bits).const_zero()))
+            }
+            SemanticLocation::Flag { name, bits } => self
+                .read_native_flag(name, *bits)
+                .or_else(|_| Ok(self.int_type(*bits).const_zero())),
+            _ => Ok(self.location_type(location).const_zero()),
+        }
     }
 
     fn build_entry_alloca(
@@ -1247,6 +2257,598 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         builder
             .build_alloca(ty, name)
             .map_err(|err| Error::other(err.to_string()))
+    }
+
+    fn elementtype_attribute(&self, ty: IntType<'ctx>) -> inkwell::attributes::Attribute {
+        let kind_id = inkwell::attributes::Attribute::get_named_enum_kind_id("elementtype");
+        self.context.create_type_attribute(kind_id, ty.as_any_type_enum())
+    }
+
+    fn emit_body_marker(&self, suffix: &str) -> Result<(), Error> {
+        let symbol = sanitize_symbol(&format!("{}__{}", self.function_name, suffix));
+        let fn_ty = self.context.void_type().fn_type(&[], false);
+        let asm = self.context.create_inline_asm(
+            fn_ty,
+            format!(".globl {symbol}\n{symbol}:\nnop"),
+            "~{memory},~{dirflag},~{fpsr},~{flags}".to_string(),
+            true,
+            false,
+            None,
+            false,
+        );
+        self.builder
+            .build_indirect_call(fn_ty, asm, &[], "")
+            .map_err(|err| Error::other(err.to_string()))?;
+        Ok(())
+    }
+
+    fn emit_native_return(&self, adjust: u16) -> Result<(), Error> {
+        if adjust == 0 {
+            self.builder
+                .build_return(None)
+                .map_err(|err| Error::other(err.to_string()))?;
+            return Ok(());
+        }
+        let fn_ty = self.context.void_type().fn_type(&[], false);
+        let asm = self.context.create_inline_asm(
+            fn_ty,
+            format!("ret $${adjust}"),
+            "".to_string(),
+            true,
+            false,
+            None,
+            false,
+        );
+        self.builder
+            .build_indirect_call(fn_ty, asm, &[], "")
+            .map_err(|err| Error::other(err.to_string()))?;
+        self.builder
+            .build_unreachable()
+            .map_err(|err| Error::other(err.to_string()))?;
+        Ok(())
+    }
+
+    fn read_native_register(&self, name: &str, bits: u16) -> Result<IntValue<'ctx>, Error> {
+        if let Some(value) = self.read_native_frame_anchored_register(name, bits)? {
+            return Ok(value);
+        }
+        let Some(register) = self.x86_register_asm_name(name, bits) else {
+            return Err(Error::other(format!(
+                "unsupported native register read: {name}/{bits}"
+            )));
+        };
+        let ty = self.int_type(bits);
+        if bits == 128 && register.starts_with("xmm") {
+            let slot = self.build_entry_alloca(ty, "regread_xmm_slot")?;
+            let fn_ty = self.context.void_type().fn_type(
+                &[self.context.ptr_type(inkwell::AddressSpace::default()).into()],
+                false,
+            );
+            let asm = self.context.create_inline_asm(
+                fn_ty,
+                format!("movdqu %{register}, $0"),
+                format!("=*m,~{{{register}}}"),
+                true,
+                false,
+                None,
+                false,
+            );
+            let call = self
+                .builder
+                .build_indirect_call(fn_ty, asm, &[slot.into()], "regread")
+                .map_err(|err| Error::other(err.to_string()))?;
+            call.add_attribute(AttributeLoc::Param(0), self.elementtype_attribute(ty));
+            return self
+                .builder
+                .build_load(ty, slot, "regread_xmm_value")
+                .map_err(|err| Error::other(err.to_string()))
+                .map(|value| value.into_int_value());
+        }
+        let fn_ty = ty.fn_type(&[], false);
+        let asm = self.context.create_inline_asm(
+            fn_ty,
+            format!("mov{} %{}, $0", self.asm_width_suffix(bits), register),
+            format!("=r,~{{{register}}}"),
+            true,
+            false,
+            None,
+            false,
+        );
+        self.builder
+            .build_indirect_call(fn_ty, asm, &[], "regread")
+            .map_err(|err| Error::other(err.to_string()))?
+            .try_as_basic_value()
+            .basic()
+            .ok_or_else(|| Error::other("expected value result from register read"))
+            .map(|value| value.into_int_value())
+    }
+
+    fn read_native_frame_anchored_register(
+        &self,
+        name: &str,
+        bits: u16,
+    ) -> Result<Option<IntValue<'ctx>>, Error> {
+        let triple_is_64 = matches!(
+            self.module.get_triple().as_str().to_str(),
+            Ok(triple) if triple.starts_with("x86_64")
+        );
+
+        let frame_register = match (triple_is_64, name) {
+            (false, "esp" | "sp" | "ebp" | "bp") => Some(("ebp", 32u16)),
+            (true, "rsp" | "sp" | "rbp" | "bp") => Some(("rbp", 64u16)),
+            _ => None,
+        };
+        let Some((frame_register, frame_bits)) = frame_register else {
+            return Ok(None);
+        };
+
+        let frame_value = {
+            let ty = self.int_type(frame_bits);
+            let fn_ty = ty.fn_type(&[], false);
+            let asm = self.context.create_inline_asm(
+                fn_ty,
+                format!("mov{} %{}, $0", self.asm_width_suffix(frame_bits), frame_register),
+                format!("=r,~{{{frame_register}}}"),
+                true,
+                false,
+                None,
+                false,
+            );
+            self.builder
+                .build_indirect_call(fn_ty, asm, &[], "frameread")
+                .map_err(|err| Error::other(err.to_string()))?
+                .try_as_basic_value()
+                .basic()
+                .ok_or_else(|| Error::other("expected value result from frame register read"))?
+                .into_int_value()
+        };
+
+        let native_bits = if triple_is_64 { 64u16 } else { 32u16 };
+        let native_ty = self.int_type(native_bits);
+        let frame_value = coerce_int_value_width(
+            &self.builder,
+            frame_value,
+            native_ty,
+            "frame_zext",
+            "frame_trunc",
+        )?;
+
+        let saved_frame_value = {
+            let ptr = self
+                .builder
+                .build_int_to_ptr(
+                    frame_value,
+                    self.context.ptr_type(inkwell::AddressSpace::default()),
+                    "recover_bp_ptr",
+                )
+                .map_err(|err| Error::other(err.to_string()))?;
+            self.builder
+                .build_load(native_ty, ptr, "recover_bp_saved")
+                .map_err(|err| Error::other(err.to_string()))?
+                .into_int_value()
+        };
+        let uses_saved_frame = self
+            .builder
+            .build_int_compare(
+                IntPredicate::UGT,
+                saved_frame_value,
+                frame_value,
+                "recover_bp_uses_saved",
+            )
+            .map_err(|err| Error::other(err.to_string()))?;
+        let original_frame_value = self
+            .builder
+            .build_select(
+                uses_saved_frame,
+                saved_frame_value,
+                frame_value,
+                "recover_bp_original",
+            )
+            .map_err(|err| Error::other(err.to_string()))?
+            .into_int_value();
+
+        let stack_bias = native_ty.const_int((native_bits / 8) as u64, false);
+        let recovered = match (triple_is_64, name) {
+            (false, "esp" | "sp") | (true, "rsp" | "sp") => self
+                .builder
+                .build_int_add(frame_value, stack_bias, "recover_sp_original")
+                .map_err(|err| Error::other(err.to_string()))?,
+            (false, "ebp" | "bp") | (true, "rbp" | "bp") => original_frame_value,
+            _ => return Ok(None),
+        };
+
+        let result_ty = self.int_type(bits);
+        let result = coerce_int_value_width(
+            &self.builder,
+            recovered,
+            result_ty,
+            "frame_reg_zext",
+            "frame_reg_trunc",
+        )?;
+        Ok(Some(result))
+    }
+
+    fn read_native_flags_register(&self) -> Result<IntValue<'ctx>, Error> {
+        let is_64 = matches!(self.module.get_triple().as_str().to_str(), Ok(triple) if triple.starts_with("x86_64"));
+        let ty = if is_64 {
+            self.context.i64_type()
+        } else {
+            self.context.i32_type()
+        };
+        let slot = self.build_entry_alloca(ty, "flagsread_slot")?;
+        let fn_ty = self.context.void_type().fn_type(
+            &[self.context.ptr_type(inkwell::AddressSpace::default()).into()],
+            false,
+        );
+        let asm = self.context.create_inline_asm(
+            fn_ty,
+            if is_64 {
+                "pushfq; popq $0".to_string()
+            } else {
+                "pushfd; popl $0".to_string()
+            },
+            "=*m,~{dirflag},~{fpsr},~{flags}".to_string(),
+            true,
+            false,
+            None,
+            false,
+        );
+        let call = self
+            .builder
+            .build_indirect_call(fn_ty, asm, &[slot.into()], "flagsread")
+            .map_err(|err| Error::other(err.to_string()))?;
+        call.add_attribute(AttributeLoc::Param(0), self.elementtype_attribute(ty));
+        self.builder
+            .build_load(ty, slot, "flagsread_value")
+            .map_err(|err| Error::other(err.to_string()))
+            .map(|value| value.into_int_value())
+    }
+
+    fn read_native_flag(&self, name: &str, bits: u16) -> Result<IntValue<'ctx>, Error> {
+        let bit = match name {
+            "cf" => 0,
+            "pf" => 2,
+            "af" => 4,
+            "zf" => 6,
+            "sf" => 7,
+            "if" => 9,
+            "df" => 10,
+            "of" => 11,
+            _ => return Err(Error::other(format!("unsupported native flag read: {name}"))),
+        };
+        let flags = if let Some(flags) = *self.cached_flags_register.borrow() {
+            flags
+        } else {
+            let flags = self.read_native_flags_register()?;
+            *self.cached_flags_register.borrow_mut() = Some(flags);
+            flags
+        };
+        let shifted = self
+            .builder
+            .build_right_shift(
+                flags,
+                flags.get_type().const_int(bit, false),
+                false,
+                "flagread_shift",
+            )
+            .map_err(|err| Error::other(err.to_string()))?;
+        let truncated = self
+            .builder
+            .build_int_truncate(shifted, self.int_type(bits), "flagread_trunc")
+            .map_err(|err| Error::other(err.to_string()))?;
+        Ok(truncated)
+    }
+
+    fn write_native_register(
+        &self,
+        register: &str,
+        bits: u16,
+        value: IntValue<'ctx>,
+    ) -> Result<(), Error> {
+        let ty = self.int_type(bits);
+        let value = coerce_int_value_width(
+            &self.builder,
+            value,
+            ty,
+            "regwrite_zext",
+            "regwrite_trunc",
+        )?;
+        if bits == 128 && register.starts_with("xmm") {
+            let slot = self.build_entry_alloca(ty, "regwrite_xmm_slot")?;
+            self.builder
+                .build_store(slot, value)
+                .map_err(|err| Error::other(err.to_string()))?;
+            let fn_ty = self.context.void_type().fn_type(
+                &[self.context.ptr_type(inkwell::AddressSpace::default()).into()],
+                false,
+            );
+            let asm = self.context.create_inline_asm(
+                fn_ty,
+                format!("movdqu $0, %{register}"),
+                format!("*m,~{{{register}}}"),
+                true,
+                false,
+                None,
+                false,
+            );
+            let call = self
+                .builder
+                .build_indirect_call(fn_ty, asm, &[slot.into()], "")
+                .map_err(|err| Error::other(err.to_string()))?;
+            call.add_attribute(AttributeLoc::Param(0), self.elementtype_attribute(ty));
+            return Ok(());
+        }
+        if matches!(register, "ebp" | "rbp" | "bp") {
+            let fn_ty = self.context.void_type().fn_type(&[ty.into()], false);
+            let asm = self.context.create_inline_asm(
+                fn_ty,
+                format!("mov{} $0, %{}", self.asm_width_suffix(bits), register),
+                "r".to_string(),
+                true,
+                false,
+                None,
+                false,
+            );
+            self.builder
+                .build_indirect_call(fn_ty, asm, &[value.into()], "")
+                .map_err(|err| Error::other(err.to_string()))?;
+            return Ok(());
+        }
+        if matches!(register, "esp" | "rsp" | "sp") {
+            let slot = self.build_entry_alloca(ty, "regwrite_stack_slot")?;
+            self.builder
+                .build_store(slot, value)
+                .map_err(|err| Error::other(err.to_string()))?;
+            let fn_ty = self
+                .context
+                .void_type()
+                .fn_type(&[self.context.ptr_type(inkwell::AddressSpace::default()).into()], false);
+            let asm = self.context.create_inline_asm(
+                fn_ty,
+                format!("mov{} $0, %{}", self.asm_width_suffix(bits), register),
+                format!("*m,~{{{register}}}"),
+                true,
+                false,
+                None,
+                false,
+            );
+            let call = self
+                .builder
+                .build_indirect_call(fn_ty, asm, &[slot.into()], "")
+                .map_err(|err| Error::other(err.to_string()))?;
+            call.add_attribute(AttributeLoc::Param(0), self.elementtype_attribute(ty));
+            return Ok(());
+        }
+        let fn_ty = self
+            .context
+            .void_type()
+            .fn_type(&[ty.into()], false);
+        let asm = self.context.create_inline_asm(
+            fn_ty,
+            format!("mov{} $0, %{}", self.asm_width_suffix(bits), register),
+            format!("r,~{{{register}}}"),
+            true,
+            false,
+            None,
+            false,
+        );
+        self.builder
+            .build_indirect_call(fn_ty, asm, &[value.into()], "")
+            .map_err(|err| Error::other(err.to_string()))?;
+        Ok(())
+    }
+
+    fn write_native_flags_register(&self, value: IntValue<'ctx>) -> Result<(), Error> {
+        let is_64 = matches!(self.module.get_triple().as_str().to_str(), Ok(triple) if triple.starts_with("x86_64"));
+        let bits = if is_64 { 64u16 } else { 32u16 };
+        let ty = self.int_type(bits);
+        let value = coerce_int_value_width(
+            &self.builder,
+            value,
+            ty,
+            "flagswrite_zext",
+            "flagswrite_trunc",
+        )?;
+        let slot = self.build_entry_alloca(ty, "flagswrite_slot")?;
+        self.builder
+            .build_store(slot, value)
+            .map_err(|err| Error::other(err.to_string()))?;
+        let fn_ty = self
+            .context
+            .void_type()
+            .fn_type(&[self.context.ptr_type(inkwell::AddressSpace::default()).into()], false);
+        let asm = self.context.create_inline_asm(
+            fn_ty,
+            if is_64 {
+                "pushq $0; popfq".to_string()
+            } else {
+                "pushl $0; popfd".to_string()
+            },
+            "*m,~{dirflag},~{fpsr},~{flags}".to_string(),
+            true,
+            false,
+            None,
+            false,
+        );
+        let call = self
+            .builder
+            .build_indirect_call(fn_ty, asm, &[slot.into()], "")
+            .map_err(|err| Error::other(err.to_string()))?;
+        call.add_attribute(AttributeLoc::Param(0), self.elementtype_attribute(ty));
+        Ok(())
+    }
+
+    fn sync_slots_to_architecture(&self) -> Result<(), Error> {
+        let mut flags_value = self.context.i32_type().const_int(1 << 1, false);
+        let mut has_flags = false;
+        for (flag, bit) in [
+            ("cf", 0u64),
+            ("pf", 2),
+            ("af", 4),
+            ("zf", 6),
+            ("sf", 7),
+            ("if", 9),
+            ("df", 10),
+            ("of", 11),
+        ] {
+            let key = render_location(&SemanticLocation::Flag {
+                name: flag.to_string(),
+                bits: 1,
+            });
+            let Some(slot) = self.slots.get(&key) else {
+                continue;
+            };
+            has_flags = true;
+            let bit_value = self
+                .builder
+                .build_load(self.context.bool_type(), *slot, "sync_flag")
+                .map_err(|err| Error::other(err.to_string()))?
+                .into_int_value();
+            let bit_value = self
+                .builder
+                .build_int_z_extend(bit_value, self.context.i32_type(), "sync_flag_zext")
+                .map_err(|err| Error::other(err.to_string()))?;
+            let shifted = self
+                .builder
+                .build_left_shift(
+                    bit_value,
+                    self.context.i32_type().const_int(bit, false),
+                    "sync_flag_shift",
+                )
+                .map_err(|err| Error::other(err.to_string()))?;
+            flags_value = self
+                .builder
+                .build_or(flags_value, shifted, "sync_flag_or")
+                .map_err(|err| Error::other(err.to_string()))?;
+        }
+
+        let mut register_writes = Vec::new();
+        for (key, slot) in &self.slots {
+            if !self.written_locations.contains(key) {
+                continue;
+            }
+            let Some(SemanticLocation::Register { name, bits }) = self.slot_locations.get(key) else {
+                continue;
+            };
+            if self
+                .x86_parent_register_alias(&SemanticLocation::Register {
+                    name: name.clone(),
+                    bits: *bits,
+                })
+                .is_some()
+            {
+                continue;
+            }
+            let Some(register) = self.x86_register_asm_name(name, *bits) else {
+                continue;
+            };
+            register_writes.push((name.clone(), *bits, register, *slot));
+        }
+        register_writes.sort_by_key(|(name, _, _, _)| {
+            if matches!(name.as_str(), "esp" | "rsp" | "sp") {
+                0u8
+            } else {
+                1u8
+            }
+        });
+        if has_flags
+            && [
+                "cf", "pf", "af", "zf", "sf", "if", "df", "of",
+            ]
+            .iter()
+            .any(|flag| {
+                self.written_locations.contains(&render_location(&SemanticLocation::Flag {
+                    name: (*flag).to_string(),
+                    bits: 1,
+                }))
+            })
+        {
+            self.write_native_flags_register(flags_value)?;
+        }
+        for (_, bits, register, slot) in register_writes {
+            let value = self
+                .builder
+                .build_load(self.int_type(bits), slot, "sync_reg")
+                .map_err(|err| Error::other(err.to_string()))?
+                .into_int_value();
+            self.write_native_register(register, bits, value)?;
+        }
+        Ok(())
+    }
+
+    fn asm_width_suffix(&self, bits: u16) -> &'static str {
+        match bits {
+            8 => "b",
+            16 => "w",
+            32 => "l",
+            64 => "q",
+            _ => "q",
+        }
+    }
+
+    fn x86_register_asm_name(&self, name: &str, bits: u16) -> Option<&'static str> {
+        match bits {
+            8 if name == "al" => Some("al"),
+            8 if name == "ah" => Some("ah"),
+            8 if name == "bl" => Some("bl"),
+            8 if name == "bh" => Some("bh"),
+            8 if name == "cl" => Some("cl"),
+            8 if name == "ch" => Some("ch"),
+            8 if name == "dl" => Some("dl"),
+            8 if name == "dh" => Some("dh"),
+            16 if name == "ax" => Some("ax"),
+            16 if name == "bx" => Some("bx"),
+            16 if name == "cx" => Some("cx"),
+            16 if name == "dx" => Some("dx"),
+            16 if name == "si" => Some("si"),
+            16 if name == "di" => Some("di"),
+            16 if name == "sp" => Some("sp"),
+            16 if name == "bp" => Some("bp"),
+            32 if name == "eax" => Some("eax"),
+            32 if name == "ebx" => Some("ebx"),
+            32 if name == "ecx" => Some("ecx"),
+            32 if name == "edx" => Some("edx"),
+            32 if name == "esi" => Some("esi"),
+            32 if name == "edi" => Some("edi"),
+            32 if name == "esp" => Some("esp"),
+            32 if name == "ebp" => Some("ebp"),
+            64 if name == "rax" => Some("rax"),
+            64 if name == "rbx" => Some("rbx"),
+            64 if name == "rcx" => Some("rcx"),
+            64 if name == "rdx" => Some("rdx"),
+            64 if name == "rsi" => Some("rsi"),
+            64 if name == "rdi" => Some("rdi"),
+            64 if name == "rsp" => Some("rsp"),
+            64 if name == "rbp" => Some("rbp"),
+            128 if name == "xmm0" => Some("xmm0"),
+            128 if name == "xmm1" => Some("xmm1"),
+            128 if name == "xmm2" => Some("xmm2"),
+            _ => None,
+        }
+    }
+
+    fn x86_parent_register_alias(
+        &self,
+        location: &SemanticLocation,
+    ) -> Option<(String, u16, u16)> {
+        let SemanticLocation::Register { name, bits } = location else {
+            return None;
+        };
+        match *bits {
+            8 if name == "al" => Some(("eax".to_string(), 32, 0)),
+            8 if name == "ah" => Some(("eax".to_string(), 32, 8)),
+            16 if name == "ax" => Some(("eax".to_string(), 32, 0)),
+            8 if name == "bl" => Some(("ebx".to_string(), 32, 0)),
+            8 if name == "bh" => Some(("ebx".to_string(), 32, 8)),
+            16 if name == "bx" => Some(("ebx".to_string(), 32, 0)),
+            8 if name == "cl" => Some(("ecx".to_string(), 32, 0)),
+            8 if name == "ch" => Some(("ecx".to_string(), 32, 8)),
+            16 if name == "cx" => Some(("ecx".to_string(), 32, 0)),
+            8 if name == "dl" => Some(("edx".to_string(), 32, 0)),
+            8 if name == "dh" => Some(("edx".to_string(), 32, 8)),
+            16 if name == "dx" => Some(("edx".to_string(), 32, 0)),
+            _ => None,
+        }
     }
 
     fn declare_void_helper(
@@ -1301,6 +2903,13 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 .context
                 .custom_width_int_type(NonZeroU32::new(n as u32).expect("non-zero width"))
                 .expect("valid integer width"),
+        }
+    }
+
+    fn pointer_int_type(&self) -> IntType<'ctx> {
+        match self.module.get_triple().as_str().to_str() {
+            Ok(triple) if triple.starts_with("x86_64") => self.context.i64_type(),
+            _ => self.context.i32_type(),
         }
     }
 
@@ -1370,6 +2979,12 @@ fn sanitize_symbol(name: &str) -> String {
         .collect()
 }
 
+fn push_unique_location(locations: &mut Vec<SemanticLocation>, location: SemanticLocation) {
+    if !locations.iter().any(|existing| existing == &location) {
+        locations.push(location);
+    }
+}
+
 fn render_location(location: &SemanticLocation) -> String {
     match location {
         SemanticLocation::Register { name, bits } => format!("reg_{}_{}", name, bits),
@@ -1385,6 +3000,7 @@ fn render_location(location: &SemanticLocation) -> String {
 fn render_address_space(space: &SemanticAddressSpace) -> String {
     match space {
         SemanticAddressSpace::Default => "default".to_string(),
+        SemanticAddressSpace::State => "state".to_string(),
         SemanticAddressSpace::Stack => "stack".to_string(),
         SemanticAddressSpace::Heap => "heap".to_string(),
         SemanticAddressSpace::Global => "global".to_string(),

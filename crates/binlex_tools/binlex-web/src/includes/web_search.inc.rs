@@ -90,6 +90,46 @@ async fn action_yara_api(
 
 #[utoipa::path(
     get,
+    path = "/api/v1/llvm/render",
+    tag = "Action",
+    params(SearchDetailParams),
+    responses(
+        (status = 200, description = "Rendered raw LLVM IR for a single indexed entity.", content_type = "text/plain", body = String),
+        (status = 400, description = "Invalid request.", body = ApiErrorResponse)
+    )
+)]
+async fn action_llvm_render_api(
+    State(state): State<Arc<AppState>>,
+    Extension(request_id): Extension<RequestId>,
+    Query(params): Query<SearchDetailParams>,
+) -> Result<impl IntoResponse, AppError> {
+    let collection = parse_collection(&params.collection)
+        .ok_or_else(|| AppError::with_request_id("invalid collection", request_id.to_string()))?;
+    let state_for_action = state.clone();
+    let request_id_for_action = request_id.to_string();
+    let payload = task::spawn_blocking(move || {
+        render_entity_llvm_ir(
+            state_for_action.as_ref(),
+            &params.sha256,
+            collection,
+            &params.architecture,
+            params.address,
+        )
+        .map_err(|error| AppError::with_request_id(error.to_string(), request_id_for_action))
+    })
+    .await
+    .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))??;
+    Ok((
+        [(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("text/plain; charset=utf-8"),
+        )],
+        payload,
+    ))
+}
+
+#[utoipa::path(
+    get,
     path = "/api/v1/search/detail",
     tag = "Search",
     params(SearchDetailParams),
@@ -306,6 +346,66 @@ fn build_search_row_detail_response(result: &SearchResult) -> SearchRowDetailRes
         corpora: result.corpora().to_vec(),
         corpora_count: result.corpora().len(),
     }
+}
+
+fn render_entity_llvm_ir(
+    state: &AppState,
+    sha256: &str,
+    collection: Collection,
+    architecture: &str,
+    address: u64,
+) -> Result<String, AppError> {
+    let sha256 = sha256.trim();
+    let architecture = architecture.trim();
+    if !is_sha256(sha256) {
+        return Err(AppError::new("invalid sha256"));
+    }
+    if architecture.is_empty() {
+        return Err(AppError::new("architecture is required"));
+    }
+    let graph = state
+        .index
+        .graph_by_sha256(sha256)
+        .map_err(|error| AppError::new(error.to_string()))?;
+    if !graph.architecture.to_string().eq_ignore_ascii_case(architecture) {
+        return Err(AppError::new(
+            "requested architecture does not match indexed graph",
+        ));
+    }
+
+    let mut config = state.analysis_config.clone();
+    match collection {
+        Collection::Instruction => config.instructions.lifters.llvm.enabled = true,
+        Collection::Block => config.blocks.lifters.llvm.enabled = true,
+        Collection::Function => config.functions.lifters.llvm.enabled = true,
+    }
+
+    let mut lifter = binlex::lifters::llvm::Lifter::new(config);
+    match collection {
+        Collection::Instruction => {
+            let instruction = graph
+                .get_instruction(address)
+                .ok_or_else(|| AppError::new("instruction not found"))?;
+            lifter
+                .lift_instruction(&instruction)
+                .map_err(|error| AppError::new(error.to_string()))?;
+        }
+        Collection::Block => {
+            let block = binlex::controlflow::Block::new(address, &graph)
+                .map_err(|error| AppError::new(error.to_string()))?;
+            lifter
+                .lift_block(&block)
+                .map_err(|error| AppError::new(error.to_string()))?;
+        }
+        Collection::Function => {
+            let function = binlex::controlflow::Function::new(address, &graph)
+                .map_err(|error| AppError::new(error.to_string()))?;
+            lifter
+                .lift_function(&function)
+                .map_err(|error| AppError::new(error.to_string()))?;
+        }
+    }
+    Ok(lifter.text())
 }
 fn build_page_data(
     state: &AppState,

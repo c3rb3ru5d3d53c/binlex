@@ -102,6 +102,7 @@ pub fn expression_bits(expression: &SemanticExpression) -> u16 {
         | SemanticExpression::Concat { bits, .. }
         | SemanticExpression::Undefined { bits }
         | SemanticExpression::Poison { bits }
+        | SemanticExpression::Architecture { bits, .. }
         | SemanticExpression::Intrinsic { bits, .. } => *bits,
         SemanticExpression::Read(location) => match location.as_ref() {
             crate::semantics::SemanticLocation::Register { bits, .. }

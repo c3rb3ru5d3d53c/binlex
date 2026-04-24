@@ -137,8 +137,22 @@ pub fn build(
     if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_STI as u32) {
         return Some(set_flag("if", true));
     }
+    if matches!(
+        instruction.id(),
+        InsnId(id)
+            if id == X86Insn::X86_INS_PUSHF as u32 || id == X86Insn::X86_INS_PUSHFD as u32
+    ) {
+        return pushf(machine, 32);
+    }
     if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_PUSHFQ as u32) {
         return pushf(machine, 64);
+    }
+    if matches!(
+        instruction.id(),
+        InsnId(id)
+            if id == X86Insn::X86_INS_POPF as u32 || id == X86Insn::X86_INS_POPFD as u32
+    ) {
+        return popf(machine, 32);
     }
     if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_POPFQ as u32) {
         return popf(machine, 64);
@@ -240,7 +254,7 @@ fn set_flag(name: &str, value: bool) -> InstructionSemantics {
 fn clts() -> InstructionSemantics {
     common::complete(
         SemanticTerminator::FallThrough,
-        vec![SemanticEffect::Intrinsic {
+        vec![SemanticEffect::Architecture {
             name: "x86.clts".to_string(),
             args: Vec::new(),
             outputs: Vec::new(),
@@ -254,7 +268,7 @@ fn invlpg(machine: Architecture, operands: &[ArchOperand]) -> Option<Instruction
         .and_then(|operand| common::operand_expr(machine, operand))?;
     Some(common::complete(
         SemanticTerminator::FallThrough,
-        vec![SemanticEffect::Intrinsic {
+        vec![SemanticEffect::Architecture {
             name: "x86.invlpg".to_string(),
             args: vec![addr],
             outputs: Vec::new(),
@@ -605,32 +619,18 @@ fn cpuid() -> InstructionSemantics {
         32,
     )));
 
-    let cpuid_result = |register: &str| SemanticExpression::Intrinsic {
-        name: format!("x86.cpuid.{register}"),
-        args: vec![leaf.clone(), subleaf.clone()],
-        bits: 32,
-    };
-
     common::complete(
         SemanticTerminator::FallThrough,
-        vec![
-            SemanticEffect::Set {
-                dst: common::reg(common::reg_id_name(X86Reg::X86_REG_EAX as u16), 32),
-                expression: cpuid_result("eax"),
-            },
-            SemanticEffect::Set {
-                dst: common::reg(common::reg_id_name(X86Reg::X86_REG_EBX as u16), 32),
-                expression: cpuid_result("ebx"),
-            },
-            SemanticEffect::Set {
-                dst: common::reg(common::reg_id_name(X86Reg::X86_REG_ECX as u16), 32),
-                expression: cpuid_result("ecx"),
-            },
-            SemanticEffect::Set {
-                dst: common::reg(common::reg_id_name(X86Reg::X86_REG_EDX as u16), 32),
-                expression: cpuid_result("edx"),
-            },
-        ],
+        vec![SemanticEffect::Architecture {
+            name: "x86.cpuid".to_string(),
+            args: vec![leaf, subleaf],
+            outputs: vec![
+                common::reg(common::reg_id_name(X86Reg::X86_REG_EAX as u16), 32),
+                common::reg(common::reg_id_name(X86Reg::X86_REG_EBX as u16), 32),
+                common::reg(common::reg_id_name(X86Reg::X86_REG_ECX as u16), 32),
+                common::reg(common::reg_id_name(X86Reg::X86_REG_EDX as u16), 32),
+            ],
+        }],
     )
 }
 
@@ -644,13 +644,10 @@ fn verr_verw(
         .and_then(|operand| common::operand_expr(machine, operand))?;
     Some(common::complete(
         SemanticTerminator::FallThrough,
-        vec![SemanticEffect::Set {
-            dst: common::flag("zf"),
-            expression: SemanticExpression::Intrinsic {
-                name: name.to_string(),
-                args: vec![selector],
-                bits: 1,
-            },
+        vec![SemanticEffect::Architecture {
+            name: name.to_string(),
+            args: vec![selector],
+            outputs: vec![common::flag("zf")],
         }],
     ))
 }
@@ -682,69 +679,31 @@ fn outsd(machine: Architecture) -> Option<InstructionSemantics> {
 }
 
 fn rdtsc() -> InstructionSemantics {
-    let value = SemanticExpression::Intrinsic {
-        name: "x86.rdtsc".to_string(),
-        args: Vec::new(),
-        bits: 64,
-    };
     common::complete(
         SemanticTerminator::FallThrough,
-        vec![
-            SemanticEffect::Set {
-                dst: common::reg(common::reg_id_name(X86Reg::X86_REG_EAX as u16), 32),
-                expression: SemanticExpression::Extract {
-                    arg: Box::new(value.clone()),
-                    lsb: 0,
-                    bits: 32,
-                },
-            },
-            SemanticEffect::Set {
-                dst: common::reg(common::reg_id_name(X86Reg::X86_REG_EDX as u16), 32),
-                expression: SemanticExpression::Extract {
-                    arg: Box::new(value),
-                    lsb: 32,
-                    bits: 32,
-                },
-            },
-        ],
+        vec![SemanticEffect::Architecture {
+            name: "x86.rdtsc".to_string(),
+            args: Vec::new(),
+            outputs: vec![
+                common::reg(common::reg_id_name(X86Reg::X86_REG_EAX as u16), 32),
+                common::reg(common::reg_id_name(X86Reg::X86_REG_EDX as u16), 32),
+            ],
+        }],
     )
 }
 
 fn rdtscp() -> InstructionSemantics {
-    let value = SemanticExpression::Intrinsic {
-        name: "x86.rdtscp".to_string(),
-        args: Vec::new(),
-        bits: 64,
-    };
-    let aux = SemanticExpression::Intrinsic {
-        name: "x86.rdtscp_aux".to_string(),
-        args: Vec::new(),
-        bits: 32,
-    };
     common::complete(
         SemanticTerminator::FallThrough,
-        vec![
-            SemanticEffect::Set {
-                dst: common::reg(common::reg_id_name(X86Reg::X86_REG_EAX as u16), 32),
-                expression: SemanticExpression::Extract {
-                    arg: Box::new(value.clone()),
-                    lsb: 0,
-                    bits: 32,
-                },
-            },
-            SemanticEffect::Set {
-                dst: common::reg(common::reg_id_name(X86Reg::X86_REG_EDX as u16), 32),
-                expression: SemanticExpression::Extract {
-                    arg: Box::new(value),
-                    lsb: 32,
-                    bits: 32,
-                },
-            },
-            SemanticEffect::Set {
-                dst: common::reg(common::reg_id_name(X86Reg::X86_REG_ECX as u16), 32),
-                expression: aux,
-            },
-        ],
+        vec![SemanticEffect::Architecture {
+            name: "x86.rdtscp".to_string(),
+            args: Vec::new(),
+            outputs: vec![
+                common::reg(common::reg_id_name(X86Reg::X86_REG_EAX as u16), 32),
+                common::reg(common::reg_id_name(X86Reg::X86_REG_EDX as u16), 32),
+                common::reg(common::reg_id_name(X86Reg::X86_REG_ECX as u16), 32),
+            ],
+        }],
     )
 }
 
@@ -756,33 +715,14 @@ fn random_value(
     let dst = operands
         .first()
         .and_then(|operand| common::operand_location(machine, operand))?;
-    let bits = common::location_bits(&dst);
-    let ready = SemanticExpression::Intrinsic {
-        name: format!("x86.{name}.ready"),
-        args: Vec::new(),
-        bits: 1,
-    };
-    let data = SemanticExpression::Intrinsic {
-        name: format!("x86.{name}.data"),
-        args: Vec::new(),
-        bits,
-    };
-    let result = SemanticExpression::Select {
-        condition: Box::new(ready.clone()),
-        when_true: Box::new(data),
-        when_false: Box::new(SemanticExpression::Const { value: 0, bits }),
-        bits,
-    };
+    let _bits = common::location_bits(&dst);
     Some(common::complete(
         SemanticTerminator::FallThrough,
         vec![
-            SemanticEffect::Set {
-                dst,
-                expression: result,
-            },
-            SemanticEffect::Set {
-                dst: common::flag("cf"),
-                expression: ready,
+            SemanticEffect::Architecture {
+                name: format!("x86.{name}"),
+                args: Vec::new(),
+                outputs: vec![dst, common::flag("cf")],
             },
             SemanticEffect::Set {
                 dst: common::flag("of"),

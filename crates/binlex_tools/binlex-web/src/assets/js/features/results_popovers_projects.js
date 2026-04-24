@@ -1,5 +1,30 @@
 let activeProjectsTrigger = null;
 let activeProjectsResultKey = null;
+let projectsFilterInputHandle = null;
+
+function captureProjectsPopoverFocus(root) {
+  const active = document.activeElement;
+  if (!(root instanceof HTMLElement) || !(active instanceof HTMLInputElement) || !root.contains(active)) {
+    return null;
+  }
+  return {
+    key: String(active.dataset.projectFilter || ""),
+    value: String(active.value || ""),
+    selectionStart: typeof active.selectionStart === "number" ? active.selectionStart : null,
+    selectionEnd: typeof active.selectionEnd === "number" ? active.selectionEnd : null,
+  };
+}
+
+function restoreProjectsPopoverFocus(root, snapshot) {
+  if (!(root instanceof HTMLElement) || !snapshot?.key) return;
+  const input = root.querySelector(`.symbol-popover-search[data-project-filter="${CSS.escape(snapshot.key)}"]`);
+  if (!(input instanceof HTMLInputElement)) return;
+  if (String(input.value || "") !== String(snapshot.value || "")) return;
+  input.focus();
+  if (typeof snapshot.selectionStart === "number" && typeof snapshot.selectionEnd === "number") {
+    input.setSelectionRange(snapshot.selectionStart, snapshot.selectionEnd);
+  }
+}
 
 function currentProjectsPopoverTrigger() {
   if (!activeProjectsResultKey) return null;
@@ -99,11 +124,14 @@ async function loadProjectAssignmentsByKey(resultKey, force = false) {
     });
     if (state.assignment_query) query.set("sample_sha256", state.assignment_query);
     const payload = await fetchJsonWithCredentials(`/api/v1/projects/${encodeURIComponent(state.selected_project_sha256)}/samples/search?${query.toString()}`);
+    if (row.project_assignments_request_key !== requestKey) return;
     row.project_assignments = Array.isArray(payload?.samples) ? payload.samples : [];
     row.project_assignments_loaded = true;
   } catch (error) {
+    if (row.project_assignments_request_key !== requestKey) return;
     row.project_assignments_error = error instanceof Error ? error.message : "Unable to load assignments.";
   } finally {
+    if (row.project_assignments_request_key !== requestKey) return;
     row.project_assignments_loading = false;
     if (activeProjectsResultKey === resultKey) {
       renderProjectsPopover();
@@ -128,11 +156,14 @@ async function loadAvailableSamplesByKey(resultKey, force = false) {
       page: "1",
     });
     const payload = await fetchJsonWithCredentials(`/api/v1/samples/search?${query.toString()}`);
+    if (row.project_available_samples_request_key !== requestKey) return;
     row.project_available_samples = Array.isArray(payload?.samples) ? payload.samples : [];
     row.project_available_samples_loaded = true;
   } catch (error) {
+    if (row.project_available_samples_request_key !== requestKey) return;
     row.project_available_samples_error = error instanceof Error ? error.message : "Unable to load available samples.";
   } finally {
+    if (row.project_available_samples_request_key !== requestKey) return;
     row.project_available_samples_loading = false;
     if (activeProjectsResultKey === resultKey) {
       renderProjectsPopover();
@@ -166,45 +197,50 @@ function renderProjectCard(item, resultKey, selected) {
   const projectSha256 = String(item?.project_sha256 || "");
   const label = `${String(item?.tool || "").toUpperCase()} ${abbreviateHex(projectSha256)}`;
   const activeClass = selected ? " active" : "";
-  const filename = String(item?.original_filename || "");
   const uploader = String(item?.uploaded_by?.username || "");
   return `<div class="symbol-picker-item${activeClass}" onclick="selectProjectForAssignments('${escapeHtml(resultKey)}','${escapeHtml(projectSha256)}')">
     <span class="symbol-picker-name" title="${escapeHtml(projectSha256)}">${escapeHtml(label)}</span>
-    ${filename ? `<span class="symbol-picker-name" title="${escapeHtml(filename)}">${escapeHtml(filename)}</span>` : ""}
     ${uploader ? `<span class="symbol-picker-name" title="${escapeHtml(uploader)}">${escapeHtml(uploader)}</span>` : ""}
     <div class="symbol-picker-actions">
       <button type="button" class="symbol-picker-copy" onclick="event.stopPropagation(); copyPickerValue(this,'${escapeHtml(encodeURIComponent(projectSha256))}')">Copy</button>
-      <button type="button" class="symbol-picker-move" onclick="event.stopPropagation(); window.location.href='/api/v1/download/project/${escapeHtml(projectSha256)}'">DL</button>
+      <button type="button" class="symbol-picker-move" onclick="event.stopPropagation(); window.location.href='/api/v1/download/project/${escapeHtml(projectSha256)}'">Download</button>
     </div>
   </div>`;
 }
 
-function renderAvailableSampleRow(sampleSha256, resultKey) {
-  const normalized = String(sampleSha256 || "");
+function renderAvailableSampleRow(item, resultKey) {
+  const normalized = metadataItemName(item);
   return `<div class="symbol-picker-item">
     <span class="symbol-picker-name" title="${escapeHtml(normalized)}">${escapeHtml(abbreviateHex(normalized))}</span>
     <div class="symbol-picker-actions">
       <button type="button" class="symbol-picker-copy" onclick="event.stopPropagation(); copyPickerValue(this,'${escapeHtml(encodeURIComponent(normalized))}')">Copy</button>
       <button type="button" class="symbol-picker-move" onclick="event.stopPropagation(); assignProjectSample('${escapeHtml(resultKey)}','${escapeHtml(normalized)}')">→</button>
-    </div>
+    </div>${metadataTooltipHtml(item, "created")}
   </div>`;
 }
 
 function renderProjectAssignmentRow(item, resultKey) {
   const sampleSha256 = String(item?.sample_sha256 || "");
+  const metadataItem = {
+    name: sampleSha256,
+    created_by: item?.created_by || { username: "", profile_picture: null },
+    created_timestamp: String(item?.created_timestamp || ""),
+    assigned_by: item?.assigned_by || null,
+    assigned_timestamp: item?.assigned_timestamp || null,
+  };
   return `<div class="symbol-picker-item">
     <span class="symbol-picker-name" title="${escapeHtml(sampleSha256)}">${escapeHtml(abbreviateHex(sampleSha256))}</span>
     <div class="symbol-picker-actions">
       <button type="button" class="symbol-picker-copy" onclick="event.stopPropagation(); copyPickerValue(this,'${escapeHtml(encodeURIComponent(sampleSha256))}')">Copy</button>
       <button type="button" class="symbol-picker-move" onclick="event.stopPropagation(); unassignProjectSample('${escapeHtml(resultKey)}','${escapeHtml(sampleSha256)}')">←</button>
-    </div>
+    </div>${metadataTooltipHtml(metadataItem, "full")}
   </div>`;
 }
 
 function renderProjectsToolFilter(selectedValue) {
   const normalized = String(selectedValue || "").trim().toLowerCase();
   const current = normalized || "any";
-  const options = ["any", "ida", "binja", "ghidra"];
+  const options = ["any", "ida", "binja", "ghidra", "bundle"];
   return `<details class="multiselect modal-select" data-single-select="projects-tool-filter" data-single-label="Tool">
     <summary>Tool: ${escapeHtml(current)}</summary>
     <div class="menu">
@@ -223,8 +259,11 @@ function projectsPopoverContent(row) {
   const projects = Array.isArray(row.projects) ? row.projects : [];
   const assignedSet = new Set((Array.isArray(row.project_assignments) ? row.project_assignments : []).map((item) => String(item?.sample_sha256 || "")));
   const availableSamples = (Array.isArray(row.project_available_samples) ? row.project_available_samples : [])
-    .map((value) => String(value || ""))
-    .filter((value) => value && !assignedSet.has(value));
+    .filter((item) => metadataItemName(item))
+    .map((item) => normalizeMetadataItems([item])[0] || item)
+    .filter((item) => item)
+    .map((item) => ({ ...item, name: metadataItemName(item) }))
+    .filter((item) => item.name && !assignedSet.has(item.name));
   const assignments = Array.isArray(row.project_assignments) ? row.project_assignments : [];
   const projectItems = projects.length
     ? projects.map((item) => renderProjectCard(item, resultRowKey(row), String(item?.project_sha256 || "") === state.selected_project_sha256)).join("")
@@ -273,6 +312,7 @@ function renderProjectsPopover() {
   const popover = ensureProjectsPopover();
   const body = popover?.querySelector?.(".symbol-popover-body");
   if (!(popover instanceof HTMLElement) || !(body instanceof HTMLElement)) return;
+  const focusSnapshot = captureProjectsPopoverFocus(body);
   const row = activeProjectsResultKey ? findSearchRowByKey(activeProjectsResultKey) : null;
   if (!row) {
     closeProjectsPopover();
@@ -289,6 +329,7 @@ function renderProjectsPopover() {
     body.innerHTML = projectsPopoverContent(row);
     initializeModalSelectStacking();
     body.querySelectorAll(".symbol-popover-search").forEach((input) => {
+      input.addEventListener("input", () => handleProjectsFilterInput(input, true));
       input.addEventListener("change", () => handleProjectsFilterInput(input));
       input.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
@@ -307,6 +348,7 @@ function renderProjectsPopover() {
         loadProjectAssignmentsByKey(activeProjectsResultKey).catch((error) => console.error("binlex-web project assignments load failed", error));
       }
     }
+    restoreProjectsPopoverFocus(body, focusSnapshot);
   }
   const trigger = currentProjectsPopoverTrigger();
   if (trigger) {
@@ -316,12 +358,23 @@ function renderProjectsPopover() {
   positionProjectsPopover(trigger || activeProjectsTrigger, popover);
 }
 
-function handleProjectsFilterInput(input) {
+function handleProjectsFilterInput(input, debounced = false) {
   const row = activeProjectsResultKey ? findSearchRowByKey(activeProjectsResultKey) : null;
   if (!row || !(input instanceof HTMLInputElement)) return;
   const state = projectsPopoverState(row);
   const key = String(input.dataset.projectFilter || "");
   state[key] = String(input.value || "").trim();
+  if (projectsFilterInputHandle) {
+    clearTimeout(projectsFilterInputHandle);
+    projectsFilterInputHandle = null;
+  }
+  if (debounced && (key === "available_query" || key === "assignment_query" || key === "project_sha256" || key === "username")) {
+    projectsFilterInputHandle = setTimeout(() => {
+      projectsFilterInputHandle = null;
+      handleProjectsFilterInput(input);
+    }, 140);
+    return;
+  }
   if (key === "project_sha256" || key === "username" || key === "tool") {
     row.projects_loaded = false;
     loadProjectsByKey(activeProjectsResultKey, true).catch((error) => console.error("binlex-web projects filter failed", error));

@@ -95,6 +95,17 @@ impl Lifter {
     }
 
     #[pyo3(text_signature = "($self)")]
+    pub fn object(&self) -> Option<Vec<u8>> {
+        match self.inner.lock().unwrap().object() {
+            Ok(bytes) => Some(bytes),
+            Err(err) => {
+                Stderr::print_debug(&self.config, format!("llvm object failed: {}", err));
+                None
+            }
+        }
+    }
+
+    #[pyo3(text_signature = "($self)")]
     pub fn normalized(&self) -> Option<Self> {
         match self.inner.lock().unwrap().normalized() {
             Ok(inner) => Some(Self {

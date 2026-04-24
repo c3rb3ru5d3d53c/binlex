@@ -325,7 +325,7 @@ struct ProjectsSearchParams {
     #[schema(nullable = true, example = "alice")]
     username: Option<String>,
     #[serde(default)]
-    #[schema(nullable = true, example = "ida")]
+    #[schema(nullable = true, example = "bundle")]
     tool: Option<String>,
     #[serde(default)]
     #[schema(nullable = true, example = "8d2c")]
@@ -387,6 +387,8 @@ struct ProjectSummaryResponse {
 struct ProjectAssignedSampleResponse {
     sample_sha256: String,
     sample_state: String,
+    created_by: MetadataUserResponse,
+    created_timestamp: String,
     assigned_by: MetadataUserResponse,
     assigned_timestamp: String,
 }
@@ -433,7 +435,7 @@ struct SamplesSearchParams {
 
 #[derive(Serialize, ToSchema)]
 struct SamplesSearchResponse {
-    samples: Vec<String>,
+    samples: Vec<MetadataItemResponse>,
     page: usize,
     limit: usize,
     total_results: usize,

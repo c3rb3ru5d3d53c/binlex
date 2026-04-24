@@ -230,6 +230,11 @@ impl SemanticAddressSpace {
     };
     #[allow(non_upper_case_globals)]
     #[classattr]
+    pub const State: Self = Self {
+        inner: InnerAddressSpace::State,
+    };
+    #[allow(non_upper_case_globals)]
+    #[classattr]
     pub const Stack: Self = Self {
         inner: InnerAddressSpace::Stack,
     };
@@ -266,6 +271,7 @@ impl SemanticAddressSpace {
     pub fn __str__(&self) -> String {
         match &self.inner {
             InnerAddressSpace::Default => "Default".to_string(),
+            InnerAddressSpace::State => "State".to_string(),
             InnerAddressSpace::Stack => "Stack".to_string(),
             InnerAddressSpace::Heap => "Heap".to_string(),
             InnerAddressSpace::Global => "Global".to_string(),

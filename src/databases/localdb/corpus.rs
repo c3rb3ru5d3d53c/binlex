@@ -71,7 +71,7 @@ impl LocalDB {
 
     pub fn sample_status_get(&self, sha256: &str) -> Result<Option<SampleStatusRecord>, Error> {
         let rows = self.sqlite.query(
-            "SELECT sha256, status, timestamp, error_message, id FROM sample_status WHERE sha256 = ?1",
+            "SELECT sha256, username, status, timestamp, error_message, id FROM sample_status WHERE sha256 = ?1",
             &[SQLiteValue::Text(sha256.to_string())],
         )?;
         let Some(row) = rows.into_iter().next() else {
@@ -87,6 +87,11 @@ impl LocalDB {
                 .get("sha256")
                 .and_then(|value| value.as_str())
                 .ok_or_else(|| Error("sample status row is missing sha256".to_string()))?
+                .to_string(),
+            username: row
+                .get("username")
+                .and_then(|value| value.as_str())
+                .unwrap_or_default()
                 .to_string(),
             status,
             timestamp: row
@@ -105,17 +110,57 @@ impl LocalDB {
         }))
     }
 
+    pub fn sample_origin_get(&self, sha256: &str) -> Result<Option<SampleOriginRecord>, Error> {
+        let normalized = sha256.trim().to_string();
+        let rows = self.sqlite.query(
+            "SELECT sha256, username, timestamp
+             FROM entity_metadata
+             WHERE sha256 = ?1
+             ORDER BY timestamp ASC, address ASC
+             LIMIT 1",
+            &[SQLiteValue::Text(normalized.clone())],
+        )?;
+        if let Some(row) = rows.into_iter().next() {
+            return Ok(Some(SampleOriginRecord {
+                sha256: row
+                    .get("sha256")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or_default()
+                    .to_string(),
+                username: row
+                    .get("username")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or_default()
+                    .to_string(),
+                timestamp: row
+                    .get("timestamp")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or_default()
+                    .to_string(),
+            }));
+        }
+        self.sample_status_get(&normalized).map(|record| {
+            record.map(|item| SampleOriginRecord {
+                sha256: item.sha256,
+                username: item.username,
+                timestamp: item.timestamp,
+            })
+        })
+    }
+
     pub fn sample_status_set(&self, status: &SampleStatusRecord) -> Result<(), Error> {
         self.sqlite.execute(
-            "INSERT INTO sample_status (sha256, status, timestamp, error_message, id)
-             VALUES (?1, ?2, ?3, ?4, ?5)
+            "INSERT INTO sample_status (sha256, username, status, timestamp, error_message, id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
              ON CONFLICT(sha256) DO UPDATE SET
+               username = excluded.username,
                status = excluded.status,
                timestamp = excluded.timestamp,
                error_message = excluded.error_message,
                id = excluded.id",
             &[
                 SQLiteValue::Text(status.sha256.clone()),
+                SQLiteValue::Text(status.username.clone()),
                 SQLiteValue::Text(status.status.as_str().to_string()),
                 SQLiteValue::Text(status.timestamp.clone()),
                 status

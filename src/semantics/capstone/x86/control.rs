@@ -40,8 +40,11 @@ pub fn build(
     operands: &[ArchOperand],
 ) -> Option<InstructionSemantics> {
     if is_return(instruction) {
+        let expression = operands
+            .first()
+            .and_then(|operand| common::operand_expr(machine, operand));
         return Some(common::complete(
-            SemanticTerminator::Return { expression: None },
+            SemanticTerminator::Return { expression },
             Vec::new(),
         ));
     }
@@ -239,7 +242,7 @@ pub fn build(
         );
         let counter_nonzero = common::compare(
             crate::semantics::SemanticOperationCompare::Ne,
-            decremented_counter.clone(),
+            SemanticExpression::Read(Box::new(counter.clone())),
             common::const_u64(0, counter_bits),
         );
         let condition = match instruction.id() {

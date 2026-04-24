@@ -77,6 +77,7 @@ fn project_tool_extensions(tool: &str) -> &'static [&'static str] {
         "ida" => &["i64", "idb"],
         "binja" => &["bndb"],
         "ghidra" => &["gbf", "gzf"],
+        "bundle" => &["zip"],
         _ => &[],
     }
 }
@@ -93,6 +94,7 @@ fn detect_project_tool(filename: &str) -> Option<&'static str> {
         "i64" | "idb" => Some("ida"),
         "bndb" => Some("binja"),
         "gbf" | "gzf" => Some("ghidra"),
+        "zip" => Some("bundle"),
         _ => None,
     }
 }
@@ -106,6 +108,7 @@ fn content_type_for_filename(filename: &str) -> &'static str {
         .to_ascii_lowercase()
         .as_str()
     {
+        "zip" => "application/zip",
         "i64" | "idb" | "bndb" | "gbf" | "gzf" => "application/octet-stream",
         _ => "application/octet-stream",
     }

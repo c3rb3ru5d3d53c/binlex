@@ -1186,7 +1186,7 @@ fn vector_ymm_semantics_wide_regressions() {
                 wide_registers: vec![(I386Register::Ymm1, ymm1.clone())],
             },
             Some((
-                "reg_122",
+                "xmm0",
                 vec![
                     0xf0, 0x0f, 0xe1, 0x1e, 0xd2, 0x2d, 0xc3, 0x3c, 0xb4, 0x4b, 0xa5, 0x5a, 0x96,
                     0x69, 0x87, 0x78,
@@ -1210,7 +1210,7 @@ fn vector_ymm_semantics_wide_regressions() {
                 ],
             },
             Some((
-                "reg_154",
+                "ymm0",
                 vec![
                     0x24, 0x42, 0x66, 0x81, 0xa5, 0xc3, 0xe7, 0xff, 0x18, 0x36, 0x54, 0x72, 0x90,
                     0xab, 0xcd, 0xef, 0xf0, 0x0f, 0xe1, 0x1e, 0xd2, 0x2d, 0xc3, 0x3c, 0xb4, 0x4b,
@@ -1234,7 +1234,7 @@ fn vector_ymm_semantics_wide_regressions() {
                 ],
             },
             Some((
-                "reg_154",
+                "ymm0",
                 vec![
                     0xb4, 0x4b, 0xa5, 0x5a, 0x96, 0x69, 0x87, 0x78, 0xf0, 0x0f, 0xe1, 0x1e, 0xd2,
                     0x2d, 0xc3, 0x3c, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00, 0x99, 0x88, 0x01, 0xff,
@@ -1258,7 +1258,7 @@ fn vector_ymm_semantics_wide_regressions() {
                 ],
             },
             Some((
-                "reg_154",
+                "ymm0",
                 vec![
                     0x11, 0x00, 0x99, 0x88, 0x55, 0x44, 0x33, 0x22, 0x03, 0xfd, 0x04, 0xfc, 0x01,
                     0xff, 0x02, 0xfe, 0x96, 0x69, 0x87, 0x78, 0xb4, 0x4b, 0xa5, 0x5a, 0xd2, 0x2d,
@@ -1295,7 +1295,7 @@ fn vector_ymm_semantics_wide_regressions() {
                 },
                 wide_registers: vec![(I386Register::Ymm0, ymm0.clone())],
             },
-            Some(("reg_19", vec![0x02, 0x3f, 0xaa, 0xaa])),
+            Some(("eax", vec![0x02, 0x3f, 0xaa, 0xaa])),
             None,
         ),
         (
@@ -1314,7 +1314,7 @@ fn vector_ymm_semantics_wide_regressions() {
                 ],
             },
             Some((
-                "reg_154",
+                "ymm0",
                 vec![
                     0xde, 0x01, 0xad, 0xff, 0xbe, 0x02, 0xef, 0xfe, 0x10, 0x03, 0x32, 0xfd, 0x54,
                     0x04, 0x76, 0xfc, 0x24, 0xf0, 0x42, 0x0f, 0x66, 0xe1, 0x81, 0x1e, 0xa5, 0xd2,
@@ -1328,9 +1328,14 @@ fn vector_ymm_semantics_wide_regressions() {
     for (name, bytes, fixture, expected_register, expected_flags) in cases {
         let (registers, flags) = interpret_amd64_wide_semantics(name, &bytes, fixture);
         if let Some((register, expected)) = expected_register {
+            let actual = registers.get(register).unwrap_or_else(|| {
+                panic!(
+                    "{name}: register {register} should exist; available: {:?}",
+                    registers.keys().collect::<Vec<_>>()
+                )
+            });
             assert_eq!(
-                registers.get(register).expect("register should exist"),
-                &expected,
+                actual, &expected,
                 "{name}: register {register} mismatch",
             );
         }

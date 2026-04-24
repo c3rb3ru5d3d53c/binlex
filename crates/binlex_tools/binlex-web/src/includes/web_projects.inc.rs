@@ -102,22 +102,33 @@ async fn sample_sha256_search_api(
         .limit
         .unwrap_or(state.ui.api.projects.default_page_size)
         .clamp(1, state.ui.api.projects.max_page_size.max(1));
-    let database = state.database.clone();
+    let state_for_query = state.clone();
     let request_id_for_query = request_id.to_string();
     let query = q.clone();
     let result = task::spawn_blocking(move || {
-        database
+        let page = state_for_query
+            .database
             .sample_sha256_search(&query, page, limit)
-            .map_err(|error| AppError::with_request_id(error.to_string(), request_id_for_query))
+            .map_err(|error| AppError::with_request_id(error.to_string(), request_id_for_query.clone()))?;
+        let page_number = page.page;
+        let page_size = page.page_size;
+        let total_results = page.total_results;
+        let has_next = page.has_next;
+        let samples = page
+            .items
+            .into_iter()
+            .map(|item| build_sample_metadata_item_response(state_for_query.as_ref(), &item.sha256))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok((page_number, page_size, total_results, has_next, samples))
     })
     .await
     .map_err(|error| AppError::with_request_id(error.to_string(), request_id.to_string()))??;
     Ok(Json(SamplesSearchResponse {
-        samples: result.items.into_iter().map(|item| item.sha256).collect(),
-        page: result.page,
-        limit: result.page_size,
-        total_results: result.total_results,
-        has_next: result.has_next,
+        samples: result.4,
+        page: result.0,
+        limit: result.1,
+        total_results: result.2,
+        has_next: result.3,
     }))
 }
 
@@ -176,8 +187,8 @@ async fn project_assignments_search_api(
         samples: page_data
             .items
             .into_iter()
-            .map(build_project_assigned_sample_response)
-            .collect(),
+            .map(|record| build_project_assigned_sample_response(state.as_ref(), record))
+            .collect::<Result<Vec<_>, _>>()?,
         page: page_data.page,
         limit: page_data.page_size,
         total_results: page_data.total_results,
@@ -438,12 +449,6 @@ async fn download_project_api(
     Extension(request_id): Extension<RequestId>,
     Path(params): Path<DownloadProjectPathParams>,
 ) -> Result<impl IntoResponse, AppError> {
-    if !state.ui.download.project_files.enabled {
-        return Err(AppError::with_request_id(
-            "project downloads are disabled",
-            request_id.to_string(),
-        ));
-    }
     if !is_sha256(params.project_sha256.trim()) {
         return Err(AppError::with_request_id(
             "invalid project sha256",
@@ -502,17 +507,48 @@ fn build_project_summary_response(record: binlex::databases::ProjectRecord) -> P
 }
 
 fn build_project_assigned_sample_response(
+    state: &AppState,
     record: binlex::databases::ProjectAssignmentRecord,
-) -> ProjectAssignedSampleResponse {
-    ProjectAssignedSampleResponse {
+) -> Result<ProjectAssignedSampleResponse, AppError> {
+    let created = sample_origin_metadata(state, &record.sample_sha256)?;
+    Ok(ProjectAssignedSampleResponse {
         sample_sha256: record.sample_sha256,
         sample_state: record.sample_state,
-        assigned_by: MetadataUserResponse {
-            username: record.assigned_by,
-            profile_picture: None,
-        },
+        created_by: metadata_user_response(
+            state,
+            created.as_ref().map(|item| item.username.as_str()).unwrap_or(""),
+        ),
+        created_timestamp: created.map(|item| item.timestamp).unwrap_or_default(),
+        assigned_by: metadata_user_response(state, &record.assigned_by),
         assigned_timestamp: record.assigned_timestamp,
-    }
+    })
+}
+
+fn sample_origin_metadata(
+    state: &AppState,
+    sample_sha256: &str,
+) -> Result<Option<binlex::databases::SampleOriginRecord>, AppError> {
+    Ok(state
+        .database
+        .sample_origin_get(sample_sha256)
+        .map_err(|error| AppError::new(error.to_string()))?)
+}
+
+fn build_sample_metadata_item_response(
+    state: &AppState,
+    sample_sha256: &str,
+) -> Result<MetadataItemResponse, AppError> {
+    let created = sample_origin_metadata(state, sample_sha256)?;
+    Ok(MetadataItemResponse {
+        name: sample_sha256.to_string(),
+        created_by: metadata_user_response(
+            state,
+            created.as_ref().map(|item| item.username.as_str()).unwrap_or(""),
+        ),
+        created_timestamp: created.map(|item| item.timestamp).unwrap_or_default(),
+        assigned_by: None,
+        assigned_timestamp: None,
+    })
 }
 
 async fn ensure_sample_exists(

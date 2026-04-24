@@ -41,11 +41,17 @@ pub(super) enum I386Register {
     Eax,
     Rax,
     Ebx,
+    Rbx,
     Ecx,
+    Rcx,
     Edx,
+    Rdx,
     Esi,
+    Rsi,
     Edi,
+    Rdi,
     Ebp,
+    Rbp,
     Esp,
     Rsp,
     Xmm0,
@@ -170,6 +176,31 @@ pub(super) fn assert_amd64_semantics_match_unicorn(name: &str, bytes: &[u8], fix
     assert_x86_semantics_match_unicorn(name, Architecture::AMD64, bytes, fixture);
 }
 
+pub(super) fn assert_i386_instruction_roundtrip_match_unicorn(
+    name: &str,
+    bytes: &[u8],
+    fixture: I386Fixture,
+) {
+    assert_x86_instruction_roundtrip_match_unicorn(name, Architecture::I386, bytes, fixture);
+}
+
+pub(super) fn assert_amd64_instruction_roundtrip_match_unicorn(
+    name: &str,
+    bytes: &[u8],
+    fixture: I386Fixture,
+) {
+    assert_x86_instruction_roundtrip_match_unicorn(name, Architecture::AMD64, bytes, fixture);
+}
+
+fn assert_x86_instruction_roundtrip_match_unicorn(
+    name: &str,
+    architecture: Architecture,
+    bytes: &[u8],
+    fixture: I386Fixture,
+) {
+    assert_x86_semantics_match_unicorn(name, architecture, bytes, fixture);
+}
+
 #[allow(dead_code)]
 pub(super) fn assert_amd64_wide_semantics_match_unicorn(
     name: &str,
@@ -220,8 +251,28 @@ fn assert_x86_semantics_match_unicorn(
 ) {
     let semantics = semantics(name, architecture, bytes);
     let interpreted = interpret_i386_semantics(architecture, bytes, &semantics, fixture.clone());
-    let unicorn =
-        unicorn_x86_single_instruction(architecture, bytes, fixture, &interpreted.memory_writes);
+    let instruction_count = if semantics
+        .effects
+        .iter()
+        .any(|effect| {
+            matches!(
+                effect,
+                SemanticEffect::MemorySet { .. } | SemanticEffect::MemoryCopy { .. }
+            )
+        }) {
+        0
+    } else {
+        1
+    };
+    let unicorn = unicorn_x86_execution(
+        architecture,
+        bytes,
+        fixture,
+        &interpreted.memory_writes,
+        I386_CODE_ADDRESS,
+        I386_CODE_ADDRESS + bytes.len() as u64,
+        instruction_count,
+    );
 
     assert_eq!(
         unicorn.transition.pre, interpreted.transition.pre,
@@ -372,25 +423,29 @@ fn tracked_registers_for_wide_fixture(
     tracked
 }
 
-fn unicorn_x86_single_instruction(
+fn unicorn_x86_execution(
     architecture: Architecture,
     bytes: &[u8],
     fixture: I386Fixture,
     watched_memory: &[(u64, usize)],
+    start_address: u64,
+    end_address: u64,
+    instruction_count: usize,
 ) -> I386Execution {
     let mode = match architecture {
         Architecture::AMD64 => Mode::MODE_64,
         _ => Mode::MODE_32,
     };
+    let code_address = unicorn_code_address(start_address);
+    let code_map_size = unicorn_code_map_size(code_address, bytes, end_address);
     let mut emu = Unicorn::new(Arch::X86, mode).expect("unicorn x86 instance");
-    emu.mem_map(I386_CODE_ADDRESS, I386_CODE_PAGE_SIZE, Prot::ALL)
+    emu.mem_map(code_address, code_map_size, Prot::ALL)
         .expect("map i386 code page");
     emu.mem_map(I386_STACK_ADDRESS, I386_STACK_PAGE_SIZE, Prot::ALL)
         .expect("map i386 stack page");
     emu.mem_map(I386_DATA_ADDRESS, I386_DATA_PAGE_SIZE, Prot::ALL)
         .expect("map i386 data page");
-    emu.mem_write(I386_CODE_ADDRESS, bytes)
-        .expect("write i386 instruction bytes");
+    write_unicorn_code_bytes(&mut emu, code_address, bytes, "write i386 instruction bytes");
     for (register, value) in &fixture.registers {
         seed_unicorn_register(&mut emu, *register, *value);
     }
@@ -398,19 +453,14 @@ fn unicorn_x86_single_instruction(
         emu.mem_write(*address, bytes)
             .unwrap_or_else(|error| panic!("seed memory at 0x{address:x}: {error:?}"));
     }
-    emu.reg_write(RegisterX86::EIP, I386_CODE_ADDRESS)
+    emu.reg_write(RegisterX86::EIP, start_address)
         .expect("seed eip");
     emu.reg_write(RegisterX86::EFLAGS, fixture.eflags as u64)
         .expect("seed eflags");
 
     let pre = snapshot_i386_state(architecture, &emu, fixture_memory_map(&fixture.memory));
-    emu.emu_start(
-        I386_CODE_ADDRESS,
-        I386_CODE_ADDRESS + bytes.len() as u64,
-        0,
-        0,
-    )
-    .expect("execute one i386 instruction");
+    emu.emu_start(start_address, end_address, 0, instruction_count)
+        .expect("execute x86 code");
     let post = snapshot_i386_state(
         architecture,
         &emu,
@@ -421,7 +471,6 @@ fn unicorn_x86_single_instruction(
         memory_writes: watched_memory.to_vec(),
     }
 }
-
 fn snapshot_i386_state(
     architecture: Architecture,
     emu: &Unicorn<'_, ()>,
@@ -431,7 +480,7 @@ fn snapshot_i386_state(
         .into_iter()
         .map(|register| {
             (
-                x86_common::reg_id_name(register.capstone_reg_id()),
+                stable_register_name(register).to_string(),
                 read_unicorn_register(emu, register),
             )
         })
@@ -493,15 +542,15 @@ fn unicorn_amd64_single_instruction_wide(
     fixture: &WideI386Fixture,
     tracked_registers: &[I386Register],
 ) -> I386ExecutionWide {
+    let code_map_size = unicorn_code_map_size(I386_CODE_ADDRESS, bytes, I386_CODE_ADDRESS + bytes.len() as u64);
     let mut emu = Unicorn::new(Arch::X86, Mode::MODE_64).expect("unicorn x86 instance");
-    emu.mem_map(I386_CODE_ADDRESS, I386_CODE_PAGE_SIZE, Prot::ALL)
+    emu.mem_map(I386_CODE_ADDRESS, code_map_size, Prot::ALL)
         .expect("map code page");
     emu.mem_map(I386_STACK_ADDRESS, I386_STACK_PAGE_SIZE, Prot::ALL)
         .expect("map stack page");
     emu.mem_map(I386_DATA_ADDRESS, I386_DATA_PAGE_SIZE, Prot::ALL)
         .expect("map data page");
-    emu.mem_write(I386_CODE_ADDRESS, bytes)
-        .expect("write instruction bytes");
+    write_unicorn_code_bytes(&mut emu, I386_CODE_ADDRESS, bytes, "write instruction bytes");
     for (register, value) in &fixture.base.registers {
         seed_unicorn_register(&mut emu, *register, *value);
     }
@@ -536,6 +585,35 @@ fn unicorn_amd64_single_instruction_wide(
     }
 }
 
+fn write_unicorn_code_bytes(
+    emu: &mut Unicorn<'_, ()>,
+    address: u64,
+    bytes: &[u8],
+    context: &str,
+) {
+    if emu.mem_write(address, bytes).is_ok() {
+        return;
+    }
+    for (offset, byte) in bytes.iter().enumerate() {
+        emu.mem_write(address + offset as u64, &[*byte]).unwrap_or_else(|error| {
+            panic!("{context} at +0x{offset:x}: {error:?}");
+        });
+    }
+}
+
+fn unicorn_code_address(start_address: u64) -> u64 {
+    let page = I386_CODE_PAGE_SIZE;
+    start_address & !(page - 1)
+}
+
+fn unicorn_code_map_size(code_address: u64, bytes: &[u8], end_address: u64) -> u64 {
+    let minimum = I386_CODE_PAGE_SIZE as usize;
+    let span = end_address.saturating_sub(code_address) as usize;
+    let needed = bytes.len().max(span).max(minimum);
+    let page = I386_CODE_PAGE_SIZE as usize;
+    needed.next_multiple_of(page) as u64
+}
+
 #[allow(dead_code)]
 fn snapshot_x86_state_wide(
     emu: &Unicorn<'_, ()>,
@@ -546,7 +624,7 @@ fn snapshot_x86_state_wide(
         .iter()
         .map(|register| {
             (
-                x86_common::reg_id_name(register.capstone_reg_id()),
+                stable_register_name(*register).to_string(),
                 read_unicorn_register_wide(emu, *register),
             )
         })
@@ -582,22 +660,12 @@ fn interpret_i386_semantics(
     semantics: &InstructionSemantics,
     fixture: I386Fixture,
 ) -> I386Execution {
-    assert_eq!(
-        semantics.terminator,
-        SemanticTerminator::FallThrough,
-        "i386 conformance helper only supports fallthrough instructions"
-    );
-
     let mut registers = I386Register::all_for_arch(architecture)
         .into_iter()
-        .map(|register| (x86_common::reg_id_name(register.capstone_reg_id()), 0u128))
+        .map(|register| (stable_register_name(register).to_string(), 0u128))
         .collect::<BTreeMap<_, _>>();
     for (register, value) in &fixture.registers {
-        write_register_value(
-            &mut registers,
-            &x86_common::reg_id_name(register.capstone_reg_id()),
-            *value as u128,
-        );
+        write_register_value(&mut registers, stable_register_name(*register), *value as u128);
     }
     let mut flags = BTreeMap::<String, u128>::new();
     let decoded = decode_eflags(fixture.eflags);
@@ -762,9 +830,35 @@ fn interpret_i386_semantics(
         of: read_flag(&flags, "of"),
         df: read_flag(&flags, "df"),
     };
+    let stack_register = match architecture {
+        Architecture::AMD64 => stable_register_name(I386Register::Rsp),
+        _ => stable_register_name(I386Register::Esp),
+    };
+    let post_eip = match &semantics.terminator {
+        SemanticTerminator::FallThrough => I386_CODE_ADDRESS as u32 + bytes.len() as u32,
+        SemanticTerminator::Return { expression } => {
+            let stack_pointer = read_register_value(&registers, stack_register, 32) as u64;
+            let return_target = u32::from_le_bytes(
+                load_le_bytes(&post_memory, stack_pointer, 32)
+                    .try_into()
+                    .expect("return target should be 4 bytes"),
+            );
+            let extra = expression
+                .as_ref()
+                .map(|expr| eval_expression(expr, &registers, &flags, &post_memory, &temporaries))
+                .unwrap_or_default();
+            write_register_value(
+                &mut registers,
+                stack_register,
+                stack_pointer as u128 + 4 + extra,
+            );
+            return_target
+        }
+        other => panic!("unsupported i386 test terminator: {other:?}"),
+    };
     let post = I386CpuState {
         registers,
-        eip: I386_CODE_ADDRESS as u32 + bytes.len() as u32,
+        eip: post_eip,
         eflags: encode_modeled_eflags(post_flags),
         flags: post_flags,
         memory: post_memory,
@@ -791,23 +885,20 @@ fn interpret_amd64_semantics_wide(
     let mut registers = tracked_registers
         .iter()
         .map(|register| {
-            (
-                x86_common::reg_id_name(register.capstone_reg_id()),
-                BigUint::zero(),
-            )
+            (stable_register_name(*register).to_string(), BigUint::zero())
         })
         .collect::<BTreeMap<_, _>>();
     for (register, value) in &fixture.base.registers {
         write_register_value_wide(
             &mut registers,
-            &x86_common::reg_id_name(register.capstone_reg_id()),
+            stable_register_name(*register),
             BigUint::from(*value),
         );
     }
     for (register, bytes) in &fixture.wide_registers {
         write_register_value_wide(
             &mut registers,
-            &x86_common::reg_id_name(register.capstone_reg_id()),
+            stable_register_name(*register),
             BigUint::from_bytes_le(bytes),
         );
     }
@@ -1138,6 +1229,26 @@ fn eval_expression(
                 SemanticOperationBinary::Add => left.wrapping_add(right),
                 SemanticOperationBinary::Sub => left.wrapping_sub(right),
                 SemanticOperationBinary::Mul => left.wrapping_mul(right),
+                SemanticOperationBinary::UDiv => {
+                    let lhs = mask_to_bits(left, *bits);
+                    let rhs = mask_to_bits(right, *bits);
+                    lhs / rhs
+                }
+                SemanticOperationBinary::SDiv => {
+                    let lhs = sign_extend(left, *bits, 128) as i128;
+                    let rhs = sign_extend(right, *bits, 128) as i128;
+                    (lhs / rhs) as u128
+                }
+                SemanticOperationBinary::URem => {
+                    let lhs = mask_to_bits(left, *bits);
+                    let rhs = mask_to_bits(right, *bits);
+                    lhs % rhs
+                }
+                SemanticOperationBinary::SRem => {
+                    let lhs = sign_extend(left, *bits, 128) as i128;
+                    let rhs = sign_extend(right, *bits, 128) as i128;
+                    (lhs % rhs) as u128
+                }
                 SemanticOperationBinary::FAdd => u128::from(
                     (f64::from_bits(left as u64) + f64::from_bits(right as u64)).to_bits(),
                 ),
@@ -1158,6 +1269,34 @@ fn eval_expression(
                 }
                 SemanticOperationBinary::LShr => {
                     left.wrapping_shr((right & u32::MAX as u128) as u32)
+                }
+                SemanticOperationBinary::RotateLeft => {
+                    let shift = (right & u32::MAX as u128) as u32;
+                    let width = *bits as u32;
+                    if width == 0 {
+                        left
+                    } else {
+                        let value = mask_to_bits(left, *bits);
+                        let amount = shift % width;
+                        mask_to_bits(
+                            (value << amount) | (value >> ((width - amount) % width)),
+                            *bits,
+                        )
+                    }
+                }
+                SemanticOperationBinary::RotateRight => {
+                    let shift = (right & u32::MAX as u128) as u32;
+                    let width = *bits as u32;
+                    if width == 0 {
+                        left
+                    } else {
+                        let value = mask_to_bits(left, *bits);
+                        let amount = shift % width;
+                        mask_to_bits(
+                            (value >> amount) | (value << ((width - amount) % width)),
+                            *bits,
+                        )
+                    }
                 }
                 SemanticOperationBinary::AShr => arithmetic_shift_right(left, right, *bits),
                 SemanticOperationBinary::MinUnsigned => left.min(right),
@@ -1258,6 +1397,9 @@ fn eval_expression(
             }
             mask_to_bits(value, *bits)
         }
+        SemanticExpression::Undefined { bits } | SemanticExpression::Poison { bits } => {
+            mask_to_bits(0, *bits)
+        }
         other => panic!("unsupported i386 test expression: {other:?}"),
     }
 }
@@ -1313,7 +1455,8 @@ fn arg_bits(expression: &SemanticExpression) -> u16 {
         | SemanticExpression::Concat { bits, .. }
         | SemanticExpression::Undefined { bits }
         | SemanticExpression::Poison { bits }
-        | SemanticExpression::Intrinsic { bits, .. } => *bits,
+        | SemanticExpression::Intrinsic { bits, .. }
+        | SemanticExpression::Architecture { bits, .. } => *bits,
         SemanticExpression::Read(location) => location.bits(),
     }
 }
@@ -1567,8 +1710,17 @@ fn read_register_value(registers: &BTreeMap<String, u128>, name: &str, bits: u16
     if name == x86_common::reg_id_name(X86Reg::X86_REG_AL as u16) {
         return mask_to_bits(eax_value, 8);
     }
+    if name == x86_common::reg_id_name(X86Reg::X86_REG_CX as u16) {
+        return mask_to_bits(registers.get(&ecx_name).copied().unwrap_or_default(), 16);
+    }
+    if name == x86_common::reg_id_name(X86Reg::X86_REG_CH as u16) {
+        return mask_to_bits(registers.get(&ecx_name).copied().unwrap_or_default() >> 8, 8);
+    }
+    if name == x86_common::reg_id_name(X86Reg::X86_REG_CL as u16) {
+        return mask_to_bits(registers.get(&ecx_name).copied().unwrap_or_default(), 8);
+    }
     if name == rax_name {
-        return mask_to_bits(registers.get(&eax_name).copied().unwrap_or_default(), bits);
+        return mask_to_bits(registers.get(&rax_name).copied().unwrap_or_default(), bits);
     }
     if name == eax_name {
         return mask_to_bits(registers.get(&rax_name).copied().unwrap_or_default(), bits);
@@ -1589,7 +1741,7 @@ fn read_register_value(registers: &BTreeMap<String, u128>, name: &str, bits: u16
         }
     }
     if name == rsp_name {
-        return mask_to_bits(registers.get(&esp_name).copied().unwrap_or_default(), bits);
+        return mask_to_bits(registers.get(&rsp_name).copied().unwrap_or_default(), bits);
     }
     if name == esp_name {
         return mask_to_bits(registers.get(&rsp_name).copied().unwrap_or_default(), bits);
@@ -1699,12 +1851,64 @@ fn normalize_register_name(name: &str) -> String {
         || name == x86_common::reg_id_name(X86Reg::X86_REG_AH as u16)
         || name == x86_common::reg_id_name(X86Reg::X86_REG_AL as u16)
     {
-        return x86_common::reg_id_name(X86Reg::X86_REG_EAX as u16);
+        return "eax".to_string();
     }
-    if name == x86_common::reg_id_name(X86Reg::X86_REG_RAX as u16) {
-        return x86_common::reg_id_name(X86Reg::X86_REG_RAX as u16);
+    for register in [
+        I386Register::Eax,
+        I386Register::Rax,
+        I386Register::Ebx,
+        I386Register::Rbx,
+        I386Register::Ecx,
+        I386Register::Rcx,
+        I386Register::Edx,
+        I386Register::Rdx,
+        I386Register::Esi,
+        I386Register::Rsi,
+        I386Register::Edi,
+        I386Register::Rdi,
+        I386Register::Ebp,
+        I386Register::Rbp,
+        I386Register::Esp,
+        I386Register::Rsp,
+        I386Register::Xmm0,
+        I386Register::Xmm1,
+        I386Register::Xmm2,
+        I386Register::Ymm0,
+        I386Register::Ymm1,
+        I386Register::Ymm2,
+    ] {
+        if name == x86_common::reg_id_name(register.capstone_reg_id()) {
+            return stable_register_name(register).to_string();
+        }
     }
     name.to_string()
+}
+
+fn stable_register_name(register: I386Register) -> &'static str {
+    match register {
+        I386Register::Eax => "eax",
+        I386Register::Rax => "rax",
+        I386Register::Ebx => "ebx",
+        I386Register::Rbx => "rbx",
+        I386Register::Ecx => "ecx",
+        I386Register::Rcx => "rcx",
+        I386Register::Edx => "edx",
+        I386Register::Rdx => "rdx",
+        I386Register::Esi => "esi",
+        I386Register::Rsi => "rsi",
+        I386Register::Edi => "edi",
+        I386Register::Rdi => "rdi",
+        I386Register::Ebp => "ebp",
+        I386Register::Rbp => "rbp",
+        I386Register::Esp => "esp",
+        I386Register::Rsp => "rsp",
+        I386Register::Xmm0 => "xmm0",
+        I386Register::Xmm1 => "xmm1",
+        I386Register::Xmm2 => "xmm2",
+        I386Register::Ymm0 => "ymm0",
+        I386Register::Ymm1 => "ymm1",
+        I386Register::Ymm2 => "ymm2",
+    }
 }
 
 fn is_directly_undefined(expression: &SemanticExpression) -> bool {
@@ -1719,11 +1923,17 @@ fn register_by_name(name: &str) -> Option<I386Register> {
         I386Register::Eax,
         I386Register::Rax,
         I386Register::Ebx,
+        I386Register::Rbx,
         I386Register::Ecx,
+        I386Register::Rcx,
         I386Register::Edx,
+        I386Register::Rdx,
         I386Register::Esi,
+        I386Register::Rsi,
         I386Register::Edi,
+        I386Register::Rdi,
         I386Register::Ebp,
+        I386Register::Rbp,
         I386Register::Esp,
         I386Register::Rsp,
         I386Register::Xmm0,
@@ -1734,7 +1944,10 @@ fn register_by_name(name: &str) -> Option<I386Register> {
         I386Register::Ymm2,
     ]
     .into_iter()
-    .find(|register| x86_common::reg_id_name(register.capstone_reg_id()) == name)
+    .find(|register| {
+        stable_register_name(*register) == name
+            || x86_common::reg_id_name(register.capstone_reg_id()) == name
+    })
 }
 
 fn mask_for_bits_wide(bits: u16) -> BigUint {
@@ -1850,6 +2063,12 @@ fn read_register_value_wide(
     name: &str,
     bits: u16,
 ) -> BigUint {
+    let normalized = if name.starts_with("reg_") {
+        normalize_register_name(name)
+    } else {
+        name.to_string()
+    };
+    let name = normalized.as_str();
     if let Some(value) = registers.get(name) {
         return mask_to_bits_wide(value.clone(), bits);
     }
@@ -1875,7 +2094,7 @@ fn read_register_value_wide(
     if name == rax_name {
         return mask_to_bits_wide(
             registers
-                .get(&eax_name)
+                .get(&rax_name)
                 .cloned()
                 .unwrap_or_else(BigUint::zero),
             bits,
@@ -1893,7 +2112,7 @@ fn read_register_value_wide(
     if name == rsp_name {
         return mask_to_bits_wide(
             registers
-                .get(&esp_name)
+                .get(&rsp_name)
                 .cloned()
                 .unwrap_or_else(BigUint::zero),
             bits,
@@ -1916,6 +2135,12 @@ fn write_register_value_wide(
     name: &str,
     value: BigUint,
 ) {
+    let normalized = if name.starts_with("reg_") {
+        normalize_register_name(name)
+    } else {
+        name.to_string()
+    };
+    let name = normalized.as_str();
     let eax_name = x86_common::reg_id_name(X86Reg::X86_REG_EAX as u16);
     let rax_name = x86_common::reg_id_name(X86Reg::X86_REG_RAX as u16);
     let esp_name = x86_common::reg_id_name(X86Reg::X86_REG_ESP as u16);
@@ -2003,6 +2228,12 @@ impl I386Register {
         ];
         if matches!(architecture, Architecture::AMD64) {
             registers.push(Self::Rax);
+            registers.push(Self::Rbx);
+            registers.push(Self::Rcx);
+            registers.push(Self::Rdx);
+            registers.push(Self::Rsi);
+            registers.push(Self::Rdi);
+            registers.push(Self::Rbp);
             registers.push(Self::Rsp);
         }
         registers
@@ -2013,11 +2244,17 @@ impl I386Register {
             Self::Eax => X86Reg::X86_REG_EAX as u16,
             Self::Rax => X86Reg::X86_REG_RAX as u16,
             Self::Ebx => X86Reg::X86_REG_EBX as u16,
+            Self::Rbx => X86Reg::X86_REG_RBX as u16,
             Self::Ecx => X86Reg::X86_REG_ECX as u16,
+            Self::Rcx => X86Reg::X86_REG_RCX as u16,
             Self::Edx => X86Reg::X86_REG_EDX as u16,
+            Self::Rdx => X86Reg::X86_REG_RDX as u16,
             Self::Esi => X86Reg::X86_REG_ESI as u16,
+            Self::Rsi => X86Reg::X86_REG_RSI as u16,
             Self::Edi => X86Reg::X86_REG_EDI as u16,
+            Self::Rdi => X86Reg::X86_REG_RDI as u16,
             Self::Ebp => X86Reg::X86_REG_EBP as u16,
+            Self::Rbp => X86Reg::X86_REG_RBP as u16,
             Self::Esp => X86Reg::X86_REG_ESP as u16,
             Self::Rsp => X86Reg::X86_REG_RSP as u16,
             Self::Xmm0 => X86Reg::X86_REG_XMM0 as u16,
@@ -2034,11 +2271,17 @@ impl I386Register {
             Self::Eax => RegisterX86::EAX,
             Self::Rax => RegisterX86::RAX,
             Self::Ebx => RegisterX86::EBX,
+            Self::Rbx => RegisterX86::RBX,
             Self::Ecx => RegisterX86::ECX,
+            Self::Rcx => RegisterX86::RCX,
             Self::Edx => RegisterX86::EDX,
+            Self::Rdx => RegisterX86::RDX,
             Self::Esi => RegisterX86::ESI,
+            Self::Rsi => RegisterX86::RSI,
             Self::Edi => RegisterX86::EDI,
+            Self::Rdi => RegisterX86::RDI,
             Self::Ebp => RegisterX86::EBP,
+            Self::Rbp => RegisterX86::RBP,
             Self::Esp => RegisterX86::ESP,
             Self::Rsp => RegisterX86::RSP,
             Self::Xmm0 => RegisterX86::XMM0,
@@ -2052,7 +2295,14 @@ impl I386Register {
 
     fn bit_width(self) -> u16 {
         match self {
-            Self::Rax | Self::Rsp => 64,
+            Self::Rax
+            | Self::Rbx
+            | Self::Rcx
+            | Self::Rdx
+            | Self::Rsi
+            | Self::Rdi
+            | Self::Rbp
+            | Self::Rsp => 64,
             Self::Xmm0 | Self::Xmm1 | Self::Xmm2 => 128,
             Self::Ymm0 | Self::Ymm1 | Self::Ymm2 => 256,
             _ => 32,

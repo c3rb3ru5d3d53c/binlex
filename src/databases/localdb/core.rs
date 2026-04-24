@@ -21,6 +21,7 @@ impl LocalDB {
         self.sqlite.execute_batch(
             "CREATE TABLE IF NOT EXISTS sample_status (
                 sha256 TEXT PRIMARY KEY NOT NULL,
+                username TEXT NOT NULL DEFAULT '',
                 status TEXT NOT NULL,
                 timestamp TEXT NOT NULL,
                 error_message TEXT NULL,
@@ -257,6 +258,7 @@ impl LocalDB {
             "ALTER TABLE entity_corpora ADD COLUMN username TEXT NOT NULL DEFAULT ''",
             "ALTER TABLE corpora_catalog ADD COLUMN username TEXT NOT NULL DEFAULT ''",
             "ALTER TABLE symbols ADD COLUMN username TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE sample_status ADD COLUMN username TEXT NOT NULL DEFAULT ''",
             "ALTER TABLE sample_status ADD COLUMN id TEXT NULL",
         ] {
             match self.sqlite.execute(statement, &[]) {

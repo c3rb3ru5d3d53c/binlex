@@ -25,6 +25,8 @@ use crate::Config;
 use crate::controlflow::Block;
 use crate::controlflow::Graph;
 use crate::controlflow::GraphQueue;
+use crate::controlflow::Instruction;
+use crate::controlflow::Llvm as LlvmView;
 use crate::embeddings::EmbeddingsJson;
 use crate::entropy;
 use crate::genetics::Chromosome;
@@ -35,7 +37,7 @@ use crate::hashing::SSDeep;
 use crate::hashing::TLSH;
 use crate::hex;
 use crate::imaging::Imaging;
-use crate::lifters::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
+use crate::lifters::llvm::{LiftersJson, LlvmJson};
 #[cfg(not(target_os = "windows"))]
 use crate::lifters::vex::{Lifter as VexLifter, VexJson};
 use crate::metadata::Attributes;
@@ -485,14 +487,14 @@ impl<'function> Function<'function> {
         self.process().processors.unwrap_or_default()
     }
 
+    /// Return an LLVM builder for this function.
+    pub fn llvm(&self) -> LlvmView<'_> {
+        LlvmView::function(self)
+    }
+
     fn lifters_json(&self) -> Option<LiftersJson> {
         let llvm = if self.cfg.config.functions.lifters.llvm.enabled {
-            let mut lifter = LlvmLifter::new(self.cfg.config.clone());
-            lifter.lift_function(self).ok()?;
-
-            Some(LlvmJson {
-                text: lifter.text(),
-            })
+            Some(LlvmJson { text: self.llvm().text().ok()? })
         } else {
             None
         };
@@ -677,6 +679,49 @@ impl<'function> Function<'function> {
             .collect()
     }
 
+    /// Retrieves all blocks that fall within the contiguous reconstruction region.
+    ///
+    /// This includes local directly reached code that may extend beyond the
+    /// function's original CFG-owned blocks but still belongs to the same
+    /// contiguous reconstruction span.
+    pub fn reconstruction_blocks(&self) -> Vec<Block<'_>> {
+        let Some(end) = self.effective_end() else {
+            return self.blocks();
+        };
+
+        let mut result = Vec::<Block<'_>>::new();
+        let mut seen = std::collections::BTreeSet::<u64>::new();
+        for entry in self.cfg.listing.range(self.address..end) {
+            let address = *entry.key();
+            if !seen.insert(address) {
+                continue;
+            }
+            if let Ok(block) = Block::new(address, self.cfg) {
+                if block.address() >= self.address && block.end() <= end {
+                    result.push(block);
+                }
+            }
+        }
+        result
+    }
+
+    /// Retrieves all instructions that fall within the contiguous reconstruction
+    /// region, whether or not they were promoted to CFG block starts.
+    pub fn reconstruction_instructions(&self) -> Vec<Instruction> {
+        let Some(end) = self.effective_end() else {
+            return Vec::new();
+        };
+
+        let mut result = Vec::<Instruction>::new();
+        for entry in self.cfg.listing.range(self.address..end) {
+            let address = *entry.key();
+            if let Ok(instruction) = Instruction::new(address, self.cfg) {
+                result.push(instruction);
+            }
+        }
+        result
+    }
+
     /// Retrieves the blocks associated with this function.
     ///
     /// # Returns
@@ -703,16 +748,9 @@ impl<'function> Function<'function> {
     ///
     /// Returns `Some(usize)` if the function is contiguous; otherwise, `None`.
     pub fn size(&self) -> usize {
-        if self.blocks.is_empty() {
-            return 0;
-        }
-        let end = self
-            .blocks
-            .values()
-            .map(|b| b.address + b.size() as u64)
-            .max()
-            .unwrap_or(self.address);
-        (end - self.address) as usize
+        self.effective_end()
+            .map(|end| (end - self.address) as usize)
+            .unwrap_or(0)
     }
 
     /// Retrieves the address of the function's last instruction, if contiguous.
@@ -724,10 +762,7 @@ impl<'function> Function<'function> {
         if !self.contiguous() {
             return None;
         }
-        if let Some((_, block)) = self.blocks.iter().last() {
-            return Some(block.end());
-        }
-        None
+        self.effective_end()
     }
 
     /// Retrieves the raw bytes of the function, if contiguous.
@@ -736,26 +771,80 @@ impl<'function> Function<'function> {
     ///
     /// Returns `Some(Vec<u8>)` containing the bytes, or `None` if the function is not contiguous.
     pub fn bytes(&self) -> Option<Vec<u8>> {
+        self.collect_region_bytes(self.effective_end()?)
+    }
+
+    fn collect_region_bytes(&self, end: u64) -> Option<Vec<u8>> {
+        if end < self.address {
+            return None;
+        }
+
+        let mut bytes = Vec::<u8>::new();
+        let mut pc = self.address;
+        while pc < end {
+            let instruction = self.cfg.get_instruction(pc)?;
+            bytes.extend(&instruction.bytes);
+            pc += instruction.size() as u64;
+        }
+        Some(bytes)
+    }
+
+    fn effective_end(&self) -> Option<u64> {
         if self.blocks.is_empty() {
             return None;
         }
-        let end = self
+
+        let mut end = self
             .blocks
             .values()
             .map(|b| b.address + b.size() as u64)
             .max()
             .unwrap_or(self.address);
-        let mut bytes = Vec::<u8>::new();
-        let mut pc = self.address;
-        while pc < end {
-            let instruction = match self.cfg.get_instruction(pc) {
-                Some(i) => i,
-                None => return None,
+
+        let mut queue: Vec<u64> = self.functions().values().copied().collect();
+        let mut visited = std::collections::BTreeSet::<u64>::new();
+
+        while let Some(callee_address) = queue.pop() {
+            if !visited.insert(callee_address) {
+                continue;
+            }
+            if callee_address < self.address {
+                continue;
+            }
+            let callee = match Function::new(callee_address, self.cfg) {
+                Ok(function) => function,
+                Err(_) => continue,
             };
-            bytes.extend(&instruction.bytes);
-            pc += instruction.size() as u64;
+            let callee_end = callee
+                .blocks
+                .values()
+                .map(|b| b.address + b.size() as u64)
+                .max()
+                .unwrap_or(callee_address);
+
+            self.collect_region_bytes(callee_end)?;
+
+            if callee_end > end {
+                end = callee_end;
+            }
+
+            queue.extend(callee.functions().values().copied());
         }
-        Some(bytes)
+
+        if self
+            .cfg
+            .listing
+            .range(self.address..end)
+            .any(|entry| entry.value().has_indirect_target())
+        {
+            let mut pc = end;
+            while let Some(instruction) = self.cfg.get_instruction(pc) {
+                pc += instruction.size() as u64;
+                end = pc;
+            }
+        }
+
+        Some(end)
     }
 
     /// Returns an imaging pipeline for the function bytes when the function is contiguous.
@@ -955,22 +1044,6 @@ impl<'function> Function<'function> {
     ///
     /// Returns `true` if the function is contiguous; otherwise, `false`.
     pub fn contiguous(&self) -> bool {
-        if self.blocks.is_empty() {
-            return false;
-        }
-        let end = self
-            .blocks
-            .values()
-            .map(|b| b.address + b.size() as u64)
-            .max()
-            .unwrap_or(self.address);
-        let mut pc = self.address;
-        while pc < end {
-            match self.cfg.get_instruction(pc) {
-                Some(instr) => pc += instr.size() as u64,
-                None => return false,
-            }
-        }
-        true
+        self.effective_end().is_some()
     }
 }
