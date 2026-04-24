@@ -8,24 +8,25 @@ use crate::semantics::{
     SemanticOperationUnary, SemanticStatus, SemanticTerminator,
 };
 use crate::{Architecture, Config};
-use capstone::arch::x86::X86Reg;
 use num_bigint::BigUint;
 use num_traits::{One, ToPrimitive, Zero};
-use unicorn_engine::Unicorn;
-use unicorn_engine::unicorn_const::{Arch, Mode, Prot};
-use unicorn_engine_sys::RegisterX86;
 
-use super::super::common as x86_common;
+use super::memory::{fixture_memory_map, load_le_bytes, load_le_value, value_to_le_bytes};
+use super::registers::{
+    normalize_register_name, read_register_value, read_register_value_wide, register_by_name,
+    stable_register_name, write_register_value, write_register_value_wide,
+};
+use super::unicorn::{decode_eflags, unicorn_amd64_single_instruction_wide, unicorn_x86_execution};
 
-const I386_CODE_ADDRESS: u64 = 0x1000;
-const I386_CODE_PAGE_SIZE: u64 = 0x1000;
-const I386_STACK_ADDRESS: u64 = 0x2000;
-const I386_STACK_PAGE_SIZE: u64 = 0x1000;
-const I386_DATA_ADDRESS: u64 = 0x3000;
-const I386_DATA_PAGE_SIZE: u64 = 0x2000;
+pub(crate) const I386_CODE_ADDRESS: u64 = 0x1000;
+pub(crate) const I386_CODE_PAGE_SIZE: u64 = 0x1000;
+pub(crate) const I386_STACK_ADDRESS: u64 = 0x2000;
+pub(crate) const I386_STACK_PAGE_SIZE: u64 = 0x1000;
+pub(crate) const I386_DATA_ADDRESS: u64 = 0x3000;
+pub(crate) const I386_DATA_PAGE_SIZE: u64 = 0x2000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) struct X86Flags {
+pub(crate) struct X86Flags {
     pub cf: bool,
     pub pf: bool,
     pub af: bool,
@@ -37,7 +38,7 @@ pub(super) struct X86Flags {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum I386Register {
+pub(crate) enum I386Register {
     Eax,
     Rax,
     Ebx,
@@ -63,7 +64,7 @@ pub(super) enum I386Register {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct I386CpuState {
+pub(crate) struct I386CpuState {
     pub registers: BTreeMap<String, u128>,
     pub eip: u32,
     pub eflags: u32,
@@ -72,51 +73,51 @@ pub(super) struct I386CpuState {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct I386Transition {
+pub(crate) struct I386Transition {
     pub pre: I386CpuState,
     pub post: I386CpuState,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct I386Execution {
-    transition: I386Transition,
-    memory_writes: Vec<(u64, usize)>,
+pub(crate) struct I386Execution {
+    pub(crate) transition: I386Transition,
+    pub(crate) memory_writes: Vec<(u64, usize)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct I386CpuStateWide {
-    registers: BTreeMap<String, BigUint>,
-    eip: u32,
-    eflags: u32,
-    flags: X86Flags,
-    memory: BTreeMap<u64, u8>,
+pub(crate) struct I386CpuStateWide {
+    pub(crate) registers: BTreeMap<String, BigUint>,
+    pub(crate) eip: u32,
+    pub(crate) eflags: u32,
+    pub(crate) flags: X86Flags,
+    pub(crate) memory: BTreeMap<u64, u8>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct I386TransitionWide {
-    pre: I386CpuStateWide,
-    post: I386CpuStateWide,
+pub(crate) struct I386TransitionWide {
+    pub(crate) pre: I386CpuStateWide,
+    pub(crate) post: I386CpuStateWide,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct I386ExecutionWide {
-    transition: I386TransitionWide,
+pub(crate) struct I386ExecutionWide {
+    pub(crate) transition: I386TransitionWide,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct I386Fixture {
+pub(crate) struct I386Fixture {
     pub registers: Vec<(I386Register, u128)>,
     pub eflags: u32,
     pub memory: Vec<(u64, Vec<u8>)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct WideI386Fixture {
+pub(crate) struct WideI386Fixture {
     pub base: I386Fixture,
     pub wide_registers: Vec<(I386Register, Vec<u8>)>,
 }
 
-pub(super) fn disassemble_x86_single(
+pub(crate) fn disassemble_x86_single(
     name: &str,
     architecture: Architecture,
     bytes: &[u8],
@@ -134,7 +135,7 @@ pub(super) fn disassemble_x86_single(
     graph.get_instruction(0).expect("instruction should exist")
 }
 
-pub(super) fn semantics(
+pub(crate) fn semantics(
     name: &str,
     architecture: Architecture,
     bytes: &[u8],
@@ -144,7 +145,7 @@ pub(super) fn semantics(
         .expect("instruction should have semantics")
 }
 
-pub(super) fn assert_complete_semantics(name: &str, architecture: Architecture, bytes: &[u8]) {
+pub(crate) fn assert_complete_semantics(name: &str, architecture: Architecture, bytes: &[u8]) {
     let semantics = semantics(name, architecture, bytes);
     assert_eq!(
         semantics.status,
@@ -168,15 +169,15 @@ pub(super) fn assert_complete_semantics(name: &str, architecture: Architecture, 
     );
 }
 
-pub(super) fn assert_i386_semantics_match_unicorn(name: &str, bytes: &[u8], fixture: I386Fixture) {
+pub(crate) fn assert_i386_semantics_match_unicorn(name: &str, bytes: &[u8], fixture: I386Fixture) {
     assert_x86_semantics_match_unicorn(name, Architecture::I386, bytes, fixture);
 }
 
-pub(super) fn assert_amd64_semantics_match_unicorn(name: &str, bytes: &[u8], fixture: I386Fixture) {
+pub(crate) fn assert_amd64_semantics_match_unicorn(name: &str, bytes: &[u8], fixture: I386Fixture) {
     assert_x86_semantics_match_unicorn(name, Architecture::AMD64, bytes, fixture);
 }
 
-pub(super) fn assert_i386_instruction_roundtrip_match_unicorn(
+pub(crate) fn assert_i386_instruction_roundtrip_match_unicorn(
     name: &str,
     bytes: &[u8],
     fixture: I386Fixture,
@@ -184,7 +185,7 @@ pub(super) fn assert_i386_instruction_roundtrip_match_unicorn(
     assert_x86_instruction_roundtrip_match_unicorn(name, Architecture::I386, bytes, fixture);
 }
 
-pub(super) fn assert_amd64_instruction_roundtrip_match_unicorn(
+pub(crate) fn assert_amd64_instruction_roundtrip_match_unicorn(
     name: &str,
     bytes: &[u8],
     fixture: I386Fixture,
@@ -202,7 +203,7 @@ fn assert_x86_instruction_roundtrip_match_unicorn(
 }
 
 #[allow(dead_code)]
-pub(super) fn assert_amd64_wide_semantics_match_unicorn(
+pub(crate) fn assert_amd64_wide_semantics_match_unicorn(
     name: &str,
     bytes: &[u8],
     fixture: WideI386Fixture,
@@ -210,7 +211,7 @@ pub(super) fn assert_amd64_wide_semantics_match_unicorn(
     assert_amd64_semantics_match_unicorn_wide_impl(name, bytes, fixture);
 }
 
-pub(super) fn interpret_amd64_wide_semantics(
+pub(crate) fn interpret_amd64_wide_semantics(
     name: &str,
     bytes: &[u8],
     fixture: WideI386Fixture,
@@ -234,7 +235,7 @@ pub(super) fn interpret_amd64_wide_semantics(
     (registers, interpreted.transition.post.flags)
 }
 
-pub(super) fn interpret_amd64_semantics(
+pub(crate) fn interpret_amd64_semantics(
     name: &str,
     bytes: &[u8],
     fixture: I386Fixture,
@@ -421,237 +422,6 @@ fn tracked_registers_for_wide_fixture(
         }
     }
     tracked
-}
-
-fn unicorn_x86_execution(
-    architecture: Architecture,
-    bytes: &[u8],
-    fixture: I386Fixture,
-    watched_memory: &[(u64, usize)],
-    start_address: u64,
-    end_address: u64,
-    instruction_count: usize,
-) -> I386Execution {
-    let mode = match architecture {
-        Architecture::AMD64 => Mode::MODE_64,
-        _ => Mode::MODE_32,
-    };
-    let code_address = unicorn_code_address(start_address);
-    let code_map_size = unicorn_code_map_size(code_address, bytes, end_address);
-    let mut emu = Unicorn::new(Arch::X86, mode).expect("unicorn x86 instance");
-    emu.mem_map(code_address, code_map_size, Prot::ALL)
-        .expect("map i386 code page");
-    emu.mem_map(I386_STACK_ADDRESS, I386_STACK_PAGE_SIZE, Prot::ALL)
-        .expect("map i386 stack page");
-    emu.mem_map(I386_DATA_ADDRESS, I386_DATA_PAGE_SIZE, Prot::ALL)
-        .expect("map i386 data page");
-    write_unicorn_code_bytes(&mut emu, code_address, bytes, "write i386 instruction bytes");
-    for (register, value) in &fixture.registers {
-        seed_unicorn_register(&mut emu, *register, *value);
-    }
-    for (address, bytes) in &fixture.memory {
-        emu.mem_write(*address, bytes)
-            .unwrap_or_else(|error| panic!("seed memory at 0x{address:x}: {error:?}"));
-    }
-    emu.reg_write(RegisterX86::EIP, start_address)
-        .expect("seed eip");
-    emu.reg_write(RegisterX86::EFLAGS, fixture.eflags as u64)
-        .expect("seed eflags");
-
-    let pre = snapshot_i386_state(architecture, &emu, fixture_memory_map(&fixture.memory));
-    emu.emu_start(start_address, end_address, 0, instruction_count)
-        .expect("execute x86 code");
-    let post = snapshot_i386_state(
-        architecture,
-        &emu,
-        read_unicorn_memory(&emu, watched_memory),
-    );
-    I386Execution {
-        transition: I386Transition { pre, post },
-        memory_writes: watched_memory.to_vec(),
-    }
-}
-fn snapshot_i386_state(
-    architecture: Architecture,
-    emu: &Unicorn<'_, ()>,
-    memory: BTreeMap<u64, u8>,
-) -> I386CpuState {
-    let registers = I386Register::all_for_arch(architecture)
-        .into_iter()
-        .map(|register| {
-            (
-                stable_register_name(register).to_string(),
-                read_unicorn_register(emu, register),
-            )
-        })
-        .collect::<BTreeMap<_, _>>();
-    let eip = emu.reg_read(RegisterX86::EIP).expect("read eip") as u32;
-    let eflags = emu.reg_read(RegisterX86::EFLAGS).expect("read eflags") as u32;
-    I386CpuState {
-        registers,
-        eip,
-        eflags,
-        flags: decode_eflags(eflags),
-        memory,
-    }
-}
-
-fn decode_eflags(eflags: u32) -> X86Flags {
-    X86Flags {
-        cf: (eflags & (1 << 0)) != 0,
-        pf: (eflags & (1 << 2)) != 0,
-        af: (eflags & (1 << 4)) != 0,
-        zf: (eflags & (1 << 6)) != 0,
-        sf: (eflags & (1 << 7)) != 0,
-        if_flag: (eflags & (1 << 9)) != 0,
-        of: (eflags & (1 << 11)) != 0,
-        df: (eflags & (1 << 10)) != 0,
-    }
-}
-
-fn seed_unicorn_register(emu: &mut Unicorn<'_, ()>, register: I386Register, value: u128) {
-    match register.bit_width() {
-        128 => emu
-            .reg_write_long(register.unicorn_register(), &value.to_le_bytes())
-            .unwrap_or_else(|error| panic!("seed {register:?}: {error:?}")),
-        _ => emu
-            .reg_write(register.unicorn_register(), value as u64)
-            .unwrap_or_else(|error| panic!("seed {register:?}: {error:?}")),
-    }
-}
-
-fn read_unicorn_register(emu: &Unicorn<'_, ()>, register: I386Register) -> u128 {
-    match register.bit_width() {
-        128 => {
-            let bytes = emu
-                .reg_read_long(register.unicorn_register())
-                .unwrap_or_else(|error| panic!("read {register:?}: {error:?}"));
-            let mut value_bytes = [0u8; 16];
-            value_bytes.copy_from_slice(&bytes);
-            u128::from_le_bytes(value_bytes)
-        }
-        _ => emu
-            .reg_read(register.unicorn_register())
-            .unwrap_or_else(|error| panic!("read {register:?}: {error:?}")) as u128,
-    }
-}
-
-#[allow(dead_code)]
-fn unicorn_amd64_single_instruction_wide(
-    bytes: &[u8],
-    fixture: &WideI386Fixture,
-    tracked_registers: &[I386Register],
-) -> I386ExecutionWide {
-    let code_map_size = unicorn_code_map_size(I386_CODE_ADDRESS, bytes, I386_CODE_ADDRESS + bytes.len() as u64);
-    let mut emu = Unicorn::new(Arch::X86, Mode::MODE_64).expect("unicorn x86 instance");
-    emu.mem_map(I386_CODE_ADDRESS, code_map_size, Prot::ALL)
-        .expect("map code page");
-    emu.mem_map(I386_STACK_ADDRESS, I386_STACK_PAGE_SIZE, Prot::ALL)
-        .expect("map stack page");
-    emu.mem_map(I386_DATA_ADDRESS, I386_DATA_PAGE_SIZE, Prot::ALL)
-        .expect("map data page");
-    write_unicorn_code_bytes(&mut emu, I386_CODE_ADDRESS, bytes, "write instruction bytes");
-    for (register, value) in &fixture.base.registers {
-        seed_unicorn_register(&mut emu, *register, *value);
-    }
-    for (register, value) in &fixture.wide_registers {
-        emu.reg_write_long(register.unicorn_register(), value)
-            .unwrap_or_else(|error| panic!("seed {register:?}: {error:?}"));
-    }
-    for (address, bytes) in &fixture.base.memory {
-        emu.mem_write(*address, bytes)
-            .unwrap_or_else(|error| panic!("seed memory at 0x{address:x}: {error:?}"));
-    }
-    emu.reg_write(RegisterX86::EIP, I386_CODE_ADDRESS)
-        .expect("seed eip");
-    emu.reg_write(RegisterX86::EFLAGS, fixture.base.eflags as u64)
-        .expect("seed eflags");
-
-    let pre = snapshot_x86_state_wide(
-        &emu,
-        tracked_registers,
-        fixture_memory_map(&fixture.base.memory),
-    );
-    emu.emu_start(
-        I386_CODE_ADDRESS,
-        I386_CODE_ADDRESS + bytes.len() as u64,
-        0,
-        0,
-    )
-    .expect("execute one instruction");
-    let post = snapshot_x86_state_wide(&emu, tracked_registers, BTreeMap::new());
-    I386ExecutionWide {
-        transition: I386TransitionWide { pre, post },
-    }
-}
-
-fn write_unicorn_code_bytes(
-    emu: &mut Unicorn<'_, ()>,
-    address: u64,
-    bytes: &[u8],
-    context: &str,
-) {
-    if emu.mem_write(address, bytes).is_ok() {
-        return;
-    }
-    for (offset, byte) in bytes.iter().enumerate() {
-        emu.mem_write(address + offset as u64, &[*byte]).unwrap_or_else(|error| {
-            panic!("{context} at +0x{offset:x}: {error:?}");
-        });
-    }
-}
-
-fn unicorn_code_address(start_address: u64) -> u64 {
-    let page = I386_CODE_PAGE_SIZE;
-    start_address & !(page - 1)
-}
-
-fn unicorn_code_map_size(code_address: u64, bytes: &[u8], end_address: u64) -> u64 {
-    let minimum = I386_CODE_PAGE_SIZE as usize;
-    let span = end_address.saturating_sub(code_address) as usize;
-    let needed = bytes.len().max(span).max(minimum);
-    let page = I386_CODE_PAGE_SIZE as usize;
-    needed.next_multiple_of(page) as u64
-}
-
-#[allow(dead_code)]
-fn snapshot_x86_state_wide(
-    emu: &Unicorn<'_, ()>,
-    tracked_registers: &[I386Register],
-    memory: BTreeMap<u64, u8>,
-) -> I386CpuStateWide {
-    let registers = tracked_registers
-        .iter()
-        .map(|register| {
-            (
-                stable_register_name(*register).to_string(),
-                read_unicorn_register_wide(emu, *register),
-            )
-        })
-        .collect();
-    let eip = emu.reg_read(RegisterX86::EIP).expect("read eip") as u32;
-    let eflags = emu.reg_read(RegisterX86::EFLAGS).expect("read eflags") as u32;
-    I386CpuStateWide {
-        registers,
-        eip,
-        eflags,
-        flags: decode_eflags(eflags),
-        memory,
-    }
-}
-
-#[allow(dead_code)]
-fn read_unicorn_register_wide(emu: &Unicorn<'_, ()>, register: I386Register) -> BigUint {
-    match register.bit_width() {
-        128 | 256 => BigUint::from_bytes_le(
-            &emu.reg_read_long(register.unicorn_register())
-                .unwrap_or_else(|error| panic!("read {register:?}: {error:?}")),
-        ),
-        _ => BigUint::from(
-            emu.reg_read(register.unicorn_register())
-                .unwrap_or_else(|error| panic!("read {register:?}: {error:?}")),
-        ),
-    }
 }
 
 fn interpret_i386_semantics(
@@ -1422,7 +1192,7 @@ fn mask_for_bits(bits: u16) -> u128 {
     }
 }
 
-fn mask_to_bits(value: u128, bits: u16) -> u128 {
+pub(crate) fn mask_to_bits(value: u128, bits: u16) -> u128 {
     value & mask_for_bits(bits)
 }
 
@@ -1623,331 +1393,11 @@ fn flag_value(flags: &X86Flags, name: &str) -> bool {
     }
 }
 
-fn fixture_memory_map(regions: &[(u64, Vec<u8>)]) -> BTreeMap<u64, u8> {
-    let mut memory = BTreeMap::new();
-    for (address, bytes) in regions {
-        for (offset, byte) in bytes.iter().copied().enumerate() {
-            memory.insert(address + offset as u64, byte);
-        }
-    }
-    memory
-}
-
-fn value_to_le_bytes(value: u128, bits: u16) -> Vec<u8> {
-    let byte_len = bits.div_ceil(8) as usize;
-    (0..byte_len)
-        .map(|index| ((value >> (index * 8)) & 0xff) as u8)
-        .collect()
-}
-
-fn load_le_value(memory: &BTreeMap<u64, u8>, address: u64, bits: u16) -> u128 {
-    let byte_len = bits.div_ceil(8) as usize;
-    let mut value = 0u128;
-    for index in 0..byte_len {
-        let byte = memory
-            .get(&(address + index as u64))
-            .copied()
-            .unwrap_or_default() as u128;
-        value |= byte << (index * 8);
-    }
-    mask_to_bits(value, bits)
-}
-
-fn load_le_bytes(memory: &BTreeMap<u64, u8>, address: u64, bits: u16) -> Vec<u8> {
-    let byte_len = bits.div_ceil(8) as usize;
-    (0..byte_len)
-        .map(|index| {
-            memory
-                .get(&(address + index as u64))
-                .copied()
-                .unwrap_or_default()
-        })
-        .collect()
-}
-
-fn read_unicorn_memory(emu: &Unicorn<'_, ()>, ranges: &[(u64, usize)]) -> BTreeMap<u64, u8> {
-    let mut memory = BTreeMap::new();
-    for (address, size) in ranges {
-        let bytes = emu
-            .mem_read_as_vec(*address, *size)
-            .unwrap_or_else(|error| panic!("read memory at 0x{address:x}: {error:?}"));
-        for (offset, byte) in bytes.into_iter().enumerate() {
-            memory.insert(address + offset as u64, byte);
-        }
-    }
-    memory
-}
-
-fn read_register_value(registers: &BTreeMap<String, u128>, name: &str, bits: u16) -> u128 {
-    if let Some(value) = registers.get(name) {
-        return mask_to_bits(*value, bits);
-    }
-
-    let eax_name = x86_common::reg_id_name(X86Reg::X86_REG_EAX as u16);
-    let rax_name = x86_common::reg_id_name(X86Reg::X86_REG_RAX as u16);
-    let eax_value = registers.get(&eax_name).copied().unwrap_or_default();
-    let ebx_name = x86_common::reg_id_name(X86Reg::X86_REG_EBX as u16);
-    let rbx_name = x86_common::reg_id_name(X86Reg::X86_REG_RBX as u16);
-    let ecx_name = x86_common::reg_id_name(X86Reg::X86_REG_ECX as u16);
-    let rcx_name = x86_common::reg_id_name(X86Reg::X86_REG_RCX as u16);
-    let edx_name = x86_common::reg_id_name(X86Reg::X86_REG_EDX as u16);
-    let rdx_name = x86_common::reg_id_name(X86Reg::X86_REG_RDX as u16);
-    let esi_name = x86_common::reg_id_name(X86Reg::X86_REG_ESI as u16);
-    let rsi_name = x86_common::reg_id_name(X86Reg::X86_REG_RSI as u16);
-    let edi_name = x86_common::reg_id_name(X86Reg::X86_REG_EDI as u16);
-    let rdi_name = x86_common::reg_id_name(X86Reg::X86_REG_RDI as u16);
-    let ebp_name = x86_common::reg_id_name(X86Reg::X86_REG_EBP as u16);
-    let rbp_name = x86_common::reg_id_name(X86Reg::X86_REG_RBP as u16);
-    let esp_name = x86_common::reg_id_name(X86Reg::X86_REG_ESP as u16);
-    let rsp_name = x86_common::reg_id_name(X86Reg::X86_REG_RSP as u16);
-
-    if name == x86_common::reg_id_name(X86Reg::X86_REG_AX as u16) {
-        return mask_to_bits(eax_value, 16);
-    }
-    if name == x86_common::reg_id_name(X86Reg::X86_REG_AH as u16) {
-        return mask_to_bits(eax_value >> 8, 8);
-    }
-    if name == x86_common::reg_id_name(X86Reg::X86_REG_AL as u16) {
-        return mask_to_bits(eax_value, 8);
-    }
-    if name == x86_common::reg_id_name(X86Reg::X86_REG_CX as u16) {
-        return mask_to_bits(registers.get(&ecx_name).copied().unwrap_or_default(), 16);
-    }
-    if name == x86_common::reg_id_name(X86Reg::X86_REG_CH as u16) {
-        return mask_to_bits(registers.get(&ecx_name).copied().unwrap_or_default() >> 8, 8);
-    }
-    if name == x86_common::reg_id_name(X86Reg::X86_REG_CL as u16) {
-        return mask_to_bits(registers.get(&ecx_name).copied().unwrap_or_default(), 8);
-    }
-    if name == rax_name {
-        return mask_to_bits(registers.get(&rax_name).copied().unwrap_or_default(), bits);
-    }
-    if name == eax_name {
-        return mask_to_bits(registers.get(&rax_name).copied().unwrap_or_default(), bits);
-    }
-    for (wide, narrow) in [
-        (&rbx_name, &ebx_name),
-        (&rcx_name, &ecx_name),
-        (&rdx_name, &edx_name),
-        (&rsi_name, &esi_name),
-        (&rdi_name, &edi_name),
-        (&rbp_name, &ebp_name),
-    ] {
-        if name == *wide {
-            return mask_to_bits(registers.get(narrow).copied().unwrap_or_default(), bits);
-        }
-        if name == *narrow {
-            return mask_to_bits(registers.get(wide).copied().unwrap_or_default(), bits);
-        }
-    }
-    if name == rsp_name {
-        return mask_to_bits(registers.get(&rsp_name).copied().unwrap_or_default(), bits);
-    }
-    if name == esp_name {
-        return mask_to_bits(registers.get(&rsp_name).copied().unwrap_or_default(), bits);
-    }
-
-    panic!("unknown register read: {name}");
-}
-
-fn write_register_value(registers: &mut BTreeMap<String, u128>, name: &str, value: u128) {
-    let eax_name = x86_common::reg_id_name(X86Reg::X86_REG_EAX as u16);
-    let rax_name = x86_common::reg_id_name(X86Reg::X86_REG_RAX as u16);
-    let ebx_name = x86_common::reg_id_name(X86Reg::X86_REG_EBX as u16);
-    let rbx_name = x86_common::reg_id_name(X86Reg::X86_REG_RBX as u16);
-    let ecx_name = x86_common::reg_id_name(X86Reg::X86_REG_ECX as u16);
-    let rcx_name = x86_common::reg_id_name(X86Reg::X86_REG_RCX as u16);
-    let edx_name = x86_common::reg_id_name(X86Reg::X86_REG_EDX as u16);
-    let rdx_name = x86_common::reg_id_name(X86Reg::X86_REG_RDX as u16);
-    let esi_name = x86_common::reg_id_name(X86Reg::X86_REG_ESI as u16);
-    let rsi_name = x86_common::reg_id_name(X86Reg::X86_REG_RSI as u16);
-    let edi_name = x86_common::reg_id_name(X86Reg::X86_REG_EDI as u16);
-    let rdi_name = x86_common::reg_id_name(X86Reg::X86_REG_RDI as u16);
-    let ebp_name = x86_common::reg_id_name(X86Reg::X86_REG_EBP as u16);
-    let rbp_name = x86_common::reg_id_name(X86Reg::X86_REG_RBP as u16);
-    let esp_name = x86_common::reg_id_name(X86Reg::X86_REG_ESP as u16);
-    let rsp_name = x86_common::reg_id_name(X86Reg::X86_REG_RSP as u16);
-    if name == x86_common::reg_id_name(X86Reg::X86_REG_AX as u16) {
-        let current = registers.get(&eax_name).copied().unwrap_or_default();
-        let next = (current & !0xffff) | mask_to_bits(value, 16);
-        registers.insert(eax_name, next);
-        return;
-    }
-    if name == x86_common::reg_id_name(X86Reg::X86_REG_AL as u16) {
-        let current = registers.get(&eax_name).copied().unwrap_or_default();
-        let next = (current & !0xff) | mask_to_bits(value, 8);
-        registers.insert(eax_name, next);
-        return;
-    }
-    if name == x86_common::reg_id_name(X86Reg::X86_REG_AH as u16) {
-        let current = registers.get(&eax_name).copied().unwrap_or_default();
-        let next = (current & !(0xff << 8)) | (mask_to_bits(value, 8) << 8);
-        registers.insert(eax_name, next);
-        return;
-    }
-    if name == eax_name {
-        let masked = mask_to_bits(value, 32);
-        registers.insert(eax_name, masked);
-        if registers.contains_key(&rax_name) {
-            registers.insert(rax_name, masked);
-        }
-        return;
-    }
-    if name == rax_name {
-        let masked = mask_to_bits(value, 64);
-        registers.insert(rax_name, masked);
-        if registers.contains_key(&eax_name) {
-            registers.insert(eax_name, mask_to_bits(masked, 32));
-        }
-        return;
-    }
-    for (wide, narrow) in [
-        (&rbx_name, &ebx_name),
-        (&rcx_name, &ecx_name),
-        (&rdx_name, &edx_name),
-        (&rsi_name, &esi_name),
-        (&rdi_name, &edi_name),
-        (&rbp_name, &ebp_name),
-    ] {
-        if name == *narrow {
-            let masked = mask_to_bits(value, 32);
-            registers.insert((*narrow).clone(), masked);
-            if registers.contains_key(wide) {
-                registers.insert((*wide).clone(), masked);
-            }
-            return;
-        }
-        if name == *wide {
-            let masked = mask_to_bits(value, 64);
-            registers.insert((*wide).clone(), masked);
-            if registers.contains_key(narrow) {
-                registers.insert((*narrow).clone(), mask_to_bits(masked, 32));
-            }
-            return;
-        }
-    }
-    if name == esp_name {
-        let masked = mask_to_bits(value, 32);
-        registers.insert(esp_name, masked);
-        if registers.contains_key(&rsp_name) {
-            registers.insert(rsp_name, masked);
-        }
-        return;
-    }
-    if name == rsp_name {
-        let masked = mask_to_bits(value, 64);
-        registers.insert(rsp_name, masked);
-        if registers.contains_key(&esp_name) {
-            registers.insert(esp_name, mask_to_bits(masked, 32));
-        }
-        return;
-    }
-
-    registers.insert(name.to_string(), value);
-}
-
-fn normalize_register_name(name: &str) -> String {
-    if name == x86_common::reg_id_name(X86Reg::X86_REG_AX as u16)
-        || name == x86_common::reg_id_name(X86Reg::X86_REG_AH as u16)
-        || name == x86_common::reg_id_name(X86Reg::X86_REG_AL as u16)
-    {
-        return "eax".to_string();
-    }
-    for register in [
-        I386Register::Eax,
-        I386Register::Rax,
-        I386Register::Ebx,
-        I386Register::Rbx,
-        I386Register::Ecx,
-        I386Register::Rcx,
-        I386Register::Edx,
-        I386Register::Rdx,
-        I386Register::Esi,
-        I386Register::Rsi,
-        I386Register::Edi,
-        I386Register::Rdi,
-        I386Register::Ebp,
-        I386Register::Rbp,
-        I386Register::Esp,
-        I386Register::Rsp,
-        I386Register::Xmm0,
-        I386Register::Xmm1,
-        I386Register::Xmm2,
-        I386Register::Ymm0,
-        I386Register::Ymm1,
-        I386Register::Ymm2,
-    ] {
-        if name == x86_common::reg_id_name(register.capstone_reg_id()) {
-            return stable_register_name(register).to_string();
-        }
-    }
-    name.to_string()
-}
-
-fn stable_register_name(register: I386Register) -> &'static str {
-    match register {
-        I386Register::Eax => "eax",
-        I386Register::Rax => "rax",
-        I386Register::Ebx => "ebx",
-        I386Register::Rbx => "rbx",
-        I386Register::Ecx => "ecx",
-        I386Register::Rcx => "rcx",
-        I386Register::Edx => "edx",
-        I386Register::Rdx => "rdx",
-        I386Register::Esi => "esi",
-        I386Register::Rsi => "rsi",
-        I386Register::Edi => "edi",
-        I386Register::Rdi => "rdi",
-        I386Register::Ebp => "ebp",
-        I386Register::Rbp => "rbp",
-        I386Register::Esp => "esp",
-        I386Register::Rsp => "rsp",
-        I386Register::Xmm0 => "xmm0",
-        I386Register::Xmm1 => "xmm1",
-        I386Register::Xmm2 => "xmm2",
-        I386Register::Ymm0 => "ymm0",
-        I386Register::Ymm1 => "ymm1",
-        I386Register::Ymm2 => "ymm2",
-    }
-}
-
 fn is_directly_undefined(expression: &SemanticExpression) -> bool {
     matches!(
         expression,
         SemanticExpression::Undefined { .. } | SemanticExpression::Poison { .. }
     )
-}
-
-fn register_by_name(name: &str) -> Option<I386Register> {
-    [
-        I386Register::Eax,
-        I386Register::Rax,
-        I386Register::Ebx,
-        I386Register::Rbx,
-        I386Register::Ecx,
-        I386Register::Rcx,
-        I386Register::Edx,
-        I386Register::Rdx,
-        I386Register::Esi,
-        I386Register::Rsi,
-        I386Register::Edi,
-        I386Register::Rdi,
-        I386Register::Ebp,
-        I386Register::Rbp,
-        I386Register::Esp,
-        I386Register::Rsp,
-        I386Register::Xmm0,
-        I386Register::Xmm1,
-        I386Register::Xmm2,
-        I386Register::Ymm0,
-        I386Register::Ymm1,
-        I386Register::Ymm2,
-    ]
-    .into_iter()
-    .find(|register| {
-        stable_register_name(*register) == name
-            || x86_common::reg_id_name(register.capstone_reg_id()) == name
-    })
 }
 
 fn mask_for_bits_wide(bits: u16) -> BigUint {
@@ -1958,7 +1408,7 @@ fn mask_for_bits_wide(bits: u16) -> BigUint {
     }
 }
 
-fn mask_to_bits_wide(value: BigUint, bits: u16) -> BigUint {
+pub(crate) fn mask_to_bits_wide(value: BigUint, bits: u16) -> BigUint {
     value & mask_for_bits_wide(bits)
 }
 
@@ -2056,256 +1506,4 @@ fn read_flag_wide(flags: &BTreeMap<String, BigUint>, name: &str) -> bool {
         .cloned()
         .unwrap_or_else(BigUint::zero)
         .is_zero()
-}
-
-fn read_register_value_wide(
-    registers: &BTreeMap<String, BigUint>,
-    name: &str,
-    bits: u16,
-) -> BigUint {
-    let normalized = if name.starts_with("reg_") {
-        normalize_register_name(name)
-    } else {
-        name.to_string()
-    };
-    let name = normalized.as_str();
-    if let Some(value) = registers.get(name) {
-        return mask_to_bits_wide(value.clone(), bits);
-    }
-
-    let eax_name = x86_common::reg_id_name(X86Reg::X86_REG_EAX as u16);
-    let rax_name = x86_common::reg_id_name(X86Reg::X86_REG_RAX as u16);
-    let eax_value = registers
-        .get(&eax_name)
-        .cloned()
-        .unwrap_or_else(BigUint::zero);
-    let esp_name = x86_common::reg_id_name(X86Reg::X86_REG_ESP as u16);
-    let rsp_name = x86_common::reg_id_name(X86Reg::X86_REG_RSP as u16);
-
-    if name == x86_common::reg_id_name(X86Reg::X86_REG_AX as u16) {
-        return mask_to_bits_wide(eax_value, 16);
-    }
-    if name == x86_common::reg_id_name(X86Reg::X86_REG_AH as u16) {
-        return mask_to_bits_wide(eax_value >> 8usize, 8);
-    }
-    if name == x86_common::reg_id_name(X86Reg::X86_REG_AL as u16) {
-        return mask_to_bits_wide(eax_value, 8);
-    }
-    if name == rax_name {
-        return mask_to_bits_wide(
-            registers
-                .get(&rax_name)
-                .cloned()
-                .unwrap_or_else(BigUint::zero),
-            bits,
-        );
-    }
-    if name == eax_name {
-        return mask_to_bits_wide(
-            registers
-                .get(&rax_name)
-                .cloned()
-                .unwrap_or_else(BigUint::zero),
-            bits,
-        );
-    }
-    if name == rsp_name {
-        return mask_to_bits_wide(
-            registers
-                .get(&rsp_name)
-                .cloned()
-                .unwrap_or_else(BigUint::zero),
-            bits,
-        );
-    }
-    if name == esp_name {
-        return mask_to_bits_wide(
-            registers
-                .get(&rsp_name)
-                .cloned()
-                .unwrap_or_else(BigUint::zero),
-            bits,
-        );
-    }
-    registers.get(name).cloned().unwrap_or_else(BigUint::zero)
-}
-
-fn write_register_value_wide(
-    registers: &mut BTreeMap<String, BigUint>,
-    name: &str,
-    value: BigUint,
-) {
-    let normalized = if name.starts_with("reg_") {
-        normalize_register_name(name)
-    } else {
-        name.to_string()
-    };
-    let name = normalized.as_str();
-    let eax_name = x86_common::reg_id_name(X86Reg::X86_REG_EAX as u16);
-    let rax_name = x86_common::reg_id_name(X86Reg::X86_REG_RAX as u16);
-    let esp_name = x86_common::reg_id_name(X86Reg::X86_REG_ESP as u16);
-    let rsp_name = x86_common::reg_id_name(X86Reg::X86_REG_RSP as u16);
-    if name == x86_common::reg_id_name(X86Reg::X86_REG_AX as u16) {
-        let current = registers
-            .get(&eax_name)
-            .cloned()
-            .unwrap_or_else(BigUint::zero);
-        let next = ((&current >> 16usize) << 16usize) | mask_to_bits_wide(value, 16);
-        registers.insert(eax_name, next);
-        return;
-    }
-    if name == x86_common::reg_id_name(X86Reg::X86_REG_AL as u16) {
-        let current = registers
-            .get(&eax_name)
-            .cloned()
-            .unwrap_or_else(BigUint::zero);
-        let next = ((&current >> 8usize) << 8usize) | mask_to_bits_wide(value, 8);
-        registers.insert(eax_name, next);
-        return;
-    }
-    if name == x86_common::reg_id_name(X86Reg::X86_REG_AH as u16) {
-        let current = registers
-            .get(&eax_name)
-            .cloned()
-            .unwrap_or_else(BigUint::zero);
-        let low = mask_to_bits_wide(current.clone(), 8);
-        let high = (&current >> 16usize) << 16usize;
-        registers.insert(
-            eax_name,
-            high | (mask_to_bits_wide(value, 8) << 8usize) | low,
-        );
-        return;
-    }
-    if name == eax_name {
-        let masked = mask_to_bits_wide(value, 32);
-        registers.insert(eax_name.clone(), masked.clone());
-        if registers.contains_key(&rax_name) {
-            registers.insert(rax_name, masked);
-        }
-        return;
-    }
-    if name == rax_name {
-        let masked = mask_to_bits_wide(value, 64);
-        registers.insert(rax_name.clone(), masked.clone());
-        if registers.contains_key(&eax_name) {
-            registers.insert(eax_name, mask_to_bits_wide(masked, 32));
-        }
-        return;
-    }
-    if name == esp_name {
-        let masked = mask_to_bits_wide(value, 32);
-        registers.insert(esp_name.clone(), masked.clone());
-        if registers.contains_key(&rsp_name) {
-            registers.insert(rsp_name, masked);
-        }
-        return;
-    }
-    if name == rsp_name {
-        let masked = mask_to_bits_wide(value, 64);
-        registers.insert(rsp_name.clone(), masked.clone());
-        if registers.contains_key(&esp_name) {
-            registers.insert(esp_name, mask_to_bits_wide(masked, 32));
-        }
-        return;
-    }
-    registers.insert(name.to_string(), value);
-}
-
-impl I386Register {
-    fn all_for_arch(architecture: Architecture) -> Vec<Self> {
-        let mut registers = vec![
-            Self::Eax,
-            Self::Ebx,
-            Self::Ecx,
-            Self::Edx,
-            Self::Esi,
-            Self::Edi,
-            Self::Ebp,
-            Self::Esp,
-            Self::Xmm0,
-            Self::Xmm1,
-            Self::Xmm2,
-        ];
-        if matches!(architecture, Architecture::AMD64) {
-            registers.push(Self::Rax);
-            registers.push(Self::Rbx);
-            registers.push(Self::Rcx);
-            registers.push(Self::Rdx);
-            registers.push(Self::Rsi);
-            registers.push(Self::Rdi);
-            registers.push(Self::Rbp);
-            registers.push(Self::Rsp);
-        }
-        registers
-    }
-
-    fn capstone_reg_id(self) -> u16 {
-        match self {
-            Self::Eax => X86Reg::X86_REG_EAX as u16,
-            Self::Rax => X86Reg::X86_REG_RAX as u16,
-            Self::Ebx => X86Reg::X86_REG_EBX as u16,
-            Self::Rbx => X86Reg::X86_REG_RBX as u16,
-            Self::Ecx => X86Reg::X86_REG_ECX as u16,
-            Self::Rcx => X86Reg::X86_REG_RCX as u16,
-            Self::Edx => X86Reg::X86_REG_EDX as u16,
-            Self::Rdx => X86Reg::X86_REG_RDX as u16,
-            Self::Esi => X86Reg::X86_REG_ESI as u16,
-            Self::Rsi => X86Reg::X86_REG_RSI as u16,
-            Self::Edi => X86Reg::X86_REG_EDI as u16,
-            Self::Rdi => X86Reg::X86_REG_RDI as u16,
-            Self::Ebp => X86Reg::X86_REG_EBP as u16,
-            Self::Rbp => X86Reg::X86_REG_RBP as u16,
-            Self::Esp => X86Reg::X86_REG_ESP as u16,
-            Self::Rsp => X86Reg::X86_REG_RSP as u16,
-            Self::Xmm0 => X86Reg::X86_REG_XMM0 as u16,
-            Self::Xmm1 => X86Reg::X86_REG_XMM1 as u16,
-            Self::Xmm2 => X86Reg::X86_REG_XMM2 as u16,
-            Self::Ymm0 => X86Reg::X86_REG_YMM0 as u16,
-            Self::Ymm1 => X86Reg::X86_REG_YMM1 as u16,
-            Self::Ymm2 => X86Reg::X86_REG_YMM2 as u16,
-        }
-    }
-
-    fn unicorn_register(self) -> RegisterX86 {
-        match self {
-            Self::Eax => RegisterX86::EAX,
-            Self::Rax => RegisterX86::RAX,
-            Self::Ebx => RegisterX86::EBX,
-            Self::Rbx => RegisterX86::RBX,
-            Self::Ecx => RegisterX86::ECX,
-            Self::Rcx => RegisterX86::RCX,
-            Self::Edx => RegisterX86::EDX,
-            Self::Rdx => RegisterX86::RDX,
-            Self::Esi => RegisterX86::ESI,
-            Self::Rsi => RegisterX86::RSI,
-            Self::Edi => RegisterX86::EDI,
-            Self::Rdi => RegisterX86::RDI,
-            Self::Ebp => RegisterX86::EBP,
-            Self::Rbp => RegisterX86::RBP,
-            Self::Esp => RegisterX86::ESP,
-            Self::Rsp => RegisterX86::RSP,
-            Self::Xmm0 => RegisterX86::XMM0,
-            Self::Xmm1 => RegisterX86::XMM1,
-            Self::Xmm2 => RegisterX86::XMM2,
-            Self::Ymm0 => RegisterX86::YMM0,
-            Self::Ymm1 => RegisterX86::YMM1,
-            Self::Ymm2 => RegisterX86::YMM2,
-        }
-    }
-
-    fn bit_width(self) -> u16 {
-        match self {
-            Self::Rax
-            | Self::Rbx
-            | Self::Rcx
-            | Self::Rdx
-            | Self::Rsi
-            | Self::Rdi
-            | Self::Rbp
-            | Self::Rsp => 64,
-            Self::Xmm0 | Self::Xmm1 | Self::Xmm2 => 128,
-            Self::Ymm0 | Self::Ymm1 | Self::Ymm2 => 256,
-            _ => 32,
-        }
-    }
 }
