@@ -229,6 +229,25 @@ fn interpret_arm64_semantics(
                     &pre_memory,
                 ) as u64)
             }
+            SemanticTerminator::Call { ref target, .. } => {
+                relocate_code_target(eval_expression(
+                    target,
+                    &pre.registers,
+                    &temporaries,
+                    &pre_memory,
+                ) as u64)
+            }
+            SemanticTerminator::Return { ref expression } => expression
+                .as_ref()
+                .map(|expression| {
+                    eval_expression(expression, &pre.registers, &temporaries, &pre_memory) as u64
+                })
+                .unwrap_or_else(|| {
+                    pre.registers
+                        .get(&semantic_name_for_arch_register("x30"))
+                        .copied()
+                        .unwrap_or_default() as u64
+                }),
             ref other => panic!("unsupported arm64 conformance terminator: {other:?}"),
         },
         memory: post_memory,
