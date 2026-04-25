@@ -329,12 +329,12 @@ impl Lifter {
     }
 
     fn target_machine(&self) -> Result<TargetMachine, Error> {
-        Target::initialize_native(&InitializationConfig::default())
-            .map_err(|err| Error::other(err.to_string()))?;
+        Target::initialize_all(&InitializationConfig::default());
         let triple_string = match self.architecture.unwrap_or(Architecture::AMD64) {
-            Architecture::I386 => "i386-pc-linux-gnu",
-            Architecture::AMD64 => "x86_64-pc-linux-gnu",
-            _ => "x86_64-pc-linux-gnu",
+            Architecture::I386 => "i386-unknown-unknown",
+            Architecture::AMD64 => "x86_64-unknown-unknown",
+            Architecture::ARM64 => "aarch64-unknown-unknown",
+            _ => "x86_64-unknown-unknown",
         };
         let triple = inkwell::targets::TargetTriple::create(triple_string);
         let target = Target::from_triple(&triple).map_err(|err| Error::other(err.to_string()))?;
@@ -352,9 +352,10 @@ impl Lifter {
 
     fn bind_architecture(&self) -> Result<(), Error> {
         let triple_string = match self.architecture.unwrap_or(Architecture::AMD64) {
-            Architecture::I386 => "i386-pc-linux-gnu",
-            Architecture::AMD64 => "x86_64-pc-linux-gnu",
-            _ => "x86_64-pc-linux-gnu",
+            Architecture::I386 => "i386-unknown-unknown",
+            Architecture::AMD64 => "x86_64-unknown-unknown",
+            Architecture::ARM64 => "aarch64-unknown-unknown",
+            _ => "x86_64-unknown-unknown",
         };
         self.module
             .set_triple(&inkwell::targets::TargetTriple::create(triple_string));

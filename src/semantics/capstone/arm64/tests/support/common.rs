@@ -6,7 +6,7 @@ use crate::lifters::llvm::Lifter;
 use crate::semantics::{InstructionSemantics, SemanticStatus};
 use crate::{Architecture, Config};
 
-pub(super) fn disassemble_arm64_single(name: &str, bytes: &[u8]) -> Instruction {
+pub(crate) fn disassemble_arm64_single(name: &str, bytes: &[u8]) -> Instruction {
     let config = Config::default();
     let mut ranges = BTreeMap::new();
     ranges.insert(0, bytes.len() as u64);
@@ -20,13 +20,13 @@ pub(super) fn disassemble_arm64_single(name: &str, bytes: &[u8]) -> Instruction 
     graph.get_instruction(0).expect("instruction should exist")
 }
 
-pub(super) fn semantics(name: &str, bytes: &[u8]) -> InstructionSemantics {
+pub(crate) fn semantics(name: &str, bytes: &[u8]) -> InstructionSemantics {
     disassemble_arm64_single(name, bytes)
         .semantics
         .expect("instruction should have semantics")
 }
 
-pub(super) fn assert_complete_semantics(name: &str, bytes: &[u8]) -> InstructionSemantics {
+pub(crate) fn assert_complete_semantics(name: &str, bytes: &[u8]) -> InstructionSemantics {
     let semantics = semantics(name, bytes);
     assert_eq!(
         semantics.status,
@@ -51,7 +51,7 @@ pub(super) fn assert_complete_semantics(name: &str, bytes: &[u8]) -> Instruction
     semantics
 }
 
-pub(super) fn lift_instruction_to_llvm(name: &str, bytes: &[u8]) -> String {
+pub(crate) fn lift_instruction_to_llvm(name: &str, bytes: &[u8]) -> String {
     let instruction = disassemble_arm64_single(name, bytes);
     let mut lifter = Lifter::new(Config::default());
     lifter

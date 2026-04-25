@@ -648,7 +648,9 @@ fn render_cast_op(op: SemanticOperationCast) -> &'static str {
         SemanticOperationCast::Truncate => "Truncate",
         SemanticOperationCast::Bitcast => "Bitcast",
         SemanticOperationCast::IntToFloat => "IntToFloat",
+        SemanticOperationCast::UIntToFloat => "UIntToFloat",
         SemanticOperationCast::FloatToInt => "FloatToInt",
+        SemanticOperationCast::FloatToUInt => "FloatToUInt",
         SemanticOperationCast::FloatExtend => "FloatExtend",
         SemanticOperationCast::FloatTruncate => "FloatTruncate",
     }
