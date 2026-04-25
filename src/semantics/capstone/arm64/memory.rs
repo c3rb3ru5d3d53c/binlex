@@ -46,7 +46,7 @@ pub(super) fn build(
         id if id == Arm64Insn::ARM64_INS_LDR as u32 => build_ldr(machine, instruction, operands),
         _ if instruction.mnemonic().unwrap_or("") == "ldur" => {
             let dst = operand_location(machine, operands.first()?)?;
-            let addr = effective_base_plus_immediate(operands.get(1)?, operands.get(2))?;
+            let addr = memory_address(operands.get(1)?)?;
             Some(complete(
                 SemanticTerminator::FallThrough,
                 vec![SemanticEffect::Set {
@@ -66,14 +66,14 @@ pub(super) fn build(
                 dst: dst.clone(),
                 expression: sign_extend_load(addr, 32, dst.bits()),
             }];
-            if let Some(writeback) = writeback_effect(operands.get(1)?, operands.get(2)) {
+            if let Some(writeback) = writeback_effect(instruction, operands.get(1)?, operands.get(2)) {
                 effects.push(writeback);
             }
             Some(complete(SemanticTerminator::FallThrough, effects))
         }
         _ if instruction.mnemonic().unwrap_or("") == "ldrsh" => {
             let dst = operand_location(machine, operands.first()?)?;
-            let addr = effective_base_plus_immediate(operands.get(1)?, operands.get(2))?;
+            let addr = memory_address(operands.get(1)?)?;
             Some(complete(
                 SemanticTerminator::FallThrough,
                 vec![SemanticEffect::Set {
@@ -87,7 +87,7 @@ pub(super) fn build(
         }
         _ if instruction.mnemonic().unwrap_or("") == "ldursw" => {
             let dst = operand_location(machine, operands.first()?)?;
-            let addr = effective_base_plus_immediate(operands.get(1)?, operands.get(2))?;
+            let addr = memory_address(operands.get(1)?)?;
             Some(complete(
                 SemanticTerminator::FallThrough,
                 vec![SemanticEffect::Set {
@@ -104,7 +104,7 @@ pub(super) fn build(
         }
         _ if instruction.mnemonic().unwrap_or("") == "ldrsb" => {
             let dst = operand_location(machine, operands.first()?)?;
-            let addr = effective_base_plus_immediate(operands.get(1)?, operands.get(2))?;
+            let addr = base_immediate_load_address(operands.get(1)?, operands.get(2))?;
             Some(complete(
                 SemanticTerminator::FallThrough,
                 vec![SemanticEffect::Set {
@@ -118,7 +118,7 @@ pub(super) fn build(
         }
         _ if instruction.mnemonic().unwrap_or("") == "ldursb" => {
             let dst = operand_location(machine, operands.first()?)?;
-            let addr = effective_base_plus_immediate(operands.get(1)?, operands.get(2))?;
+            let addr = memory_address(operands.get(1)?)?;
             Some(complete(
                 SemanticTerminator::FallThrough,
                 vec![SemanticEffect::Set {
@@ -134,13 +134,21 @@ pub(super) fn build(
                 dst: dst.clone(),
                 expression: zero_extend_load(addr, 16, dst.bits()),
             }];
-            if let Some(writeback) = writeback_effect(operands.get(1)?, operands.get(2)) {
+            if let Some(writeback) = writeback_effect(instruction, operands.get(1)?, operands.get(2)) {
                 effects.push(writeback);
             }
             Some(complete(SemanticTerminator::FallThrough, effects))
         }
         _ if instruction.mnemonic().unwrap_or("") == "ldurh" => {
-            build_zero_extend_load_base_immediate(machine, operands, 16)
+            let dst = operand_location(machine, operands.first()?)?;
+            let addr = memory_address(operands.get(1)?)?;
+            Some(complete(
+                SemanticTerminator::FallThrough,
+                vec![SemanticEffect::Set {
+                    dst: dst.clone(),
+                    expression: zero_extend_load(addr, 16, dst.bits()),
+                }],
+            ))
         }
         _ if instruction.mnemonic().unwrap_or("") == "ldtrh" => {
             build_zero_extend_load_base_immediate(machine, operands, 16)
@@ -166,7 +174,7 @@ pub(super) fn build(
         }
         _ if instruction.mnemonic().unwrap_or("") == "stur" => {
             let src = operand_expression(operands.first()?)?;
-            let addr = effective_base_plus_immediate(operands.get(1)?, operands.get(2))?;
+            let addr = memory_address(operands.get(1)?)?;
             Some(complete(
                 SemanticTerminator::FallThrough,
                 vec![SemanticEffect::Store {
@@ -184,14 +192,14 @@ pub(super) fn build(
                 dst: dst.clone(),
                 expression: zero_extend_load(addr, 8, dst.bits()),
             }];
-            if let Some(writeback) = writeback_effect(operands.get(1)?, operands.get(2)) {
+            if let Some(writeback) = writeback_effect(instruction, operands.get(1)?, operands.get(2)) {
                 effects.push(writeback);
             }
             Some(complete(SemanticTerminator::FallThrough, effects))
         }
         _ if instruction.mnemonic().unwrap_or("") == "ldurb" => {
             let dst = operand_location(machine, operands.first()?)?;
-            let addr = effective_base_plus_immediate(operands.get(1)?, operands.get(2))?;
+            let addr = memory_address(operands.get(1)?)?;
             Some(complete(
                 SemanticTerminator::FallThrough,
                 vec![SemanticEffect::Set {
@@ -209,14 +217,14 @@ pub(super) fn build(
                 expression: truncate_to_bits(src, 8),
                 bits: 8,
             }];
-            if let Some(writeback) = writeback_effect(operands.get(1)?, operands.get(2)) {
+            if let Some(writeback) = writeback_effect(instruction, operands.get(1)?, operands.get(2)) {
                 effects.push(writeback);
             }
             Some(complete(SemanticTerminator::FallThrough, effects))
         }
         _ if instruction.mnemonic().unwrap_or("") == "sturb" => {
             let src = operand_expression(operands.first()?)?;
-            let addr = effective_base_plus_immediate(operands.get(1)?, operands.get(2))?;
+            let addr = memory_address(operands.get(1)?)?;
             Some(complete(
                 SemanticTerminator::FallThrough,
                 vec![SemanticEffect::Store {
@@ -229,7 +237,7 @@ pub(super) fn build(
         }
         _ if instruction.mnemonic().unwrap_or("") == "sttr" => {
             let src = operand_expression(operands.first()?)?;
-            let addr = effective_base_plus_immediate(operands.get(1)?, operands.get(2))?;
+            let addr = base_immediate_load_address(operands.get(1)?, operands.get(2))?;
             Some(complete(
                 SemanticTerminator::FallThrough,
                 vec![SemanticEffect::Store {
@@ -242,7 +250,7 @@ pub(super) fn build(
         }
         _ if instruction.mnemonic().unwrap_or("") == "sttrb" => {
             let src = operand_expression(operands.first()?)?;
-            let addr = effective_base_plus_immediate(operands.get(1)?, operands.get(2))?;
+            let addr = base_immediate_load_address(operands.get(1)?, operands.get(2))?;
             Some(complete(
                 SemanticTerminator::FallThrough,
                 vec![SemanticEffect::Store {
@@ -255,7 +263,7 @@ pub(super) fn build(
         }
         _ if instruction.mnemonic().unwrap_or("") == "sttrh" => {
             let src = operand_expression(operands.first()?)?;
-            let addr = effective_base_plus_immediate(operands.get(1)?, operands.get(2))?;
+            let addr = base_immediate_load_address(operands.get(1)?, operands.get(2))?;
             Some(complete(
                 SemanticTerminator::FallThrough,
                 vec![SemanticEffect::Store {
@@ -268,7 +276,7 @@ pub(super) fn build(
         }
         _ if instruction.mnemonic().unwrap_or("") == "sturh" => {
             let src = operand_expression(operands.first()?)?;
-            let addr = effective_base_plus_immediate(operands.get(1)?, operands.get(2))?;
+            let addr = memory_address(operands.get(1)?)?;
             Some(complete(
                 SemanticTerminator::FallThrough,
                 vec![SemanticEffect::Store {
@@ -281,7 +289,7 @@ pub(super) fn build(
         }
         _ if instruction.mnemonic().unwrap_or("") == "strh" => {
             let src = operand_expression(operands.first()?)?;
-            let addr = effective_base_plus_immediate(operands.get(1)?, operands.get(2))?;
+            let addr = memory_address(operands.get(1)?)?;
             Some(complete(
                 SemanticTerminator::FallThrough,
                 vec![SemanticEffect::Store {

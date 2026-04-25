@@ -53,7 +53,7 @@ pub(super) fn build(
                     bits: dst.bits(),
                 },
             }];
-            if let Some(writeback) = writeback_effect(operands.get(1)?, operands.get(2)) {
+            if let Some(writeback) = writeback_effect(instruction, operands.get(1)?, operands.get(2)) {
                 effects.push(writeback);
             }
             Some(complete(SemanticTerminator::FallThrough, effects))
@@ -65,7 +65,7 @@ pub(super) fn build(
                 dst: dst.clone(),
                 expression: zero_extend_load(addr, 8, dst.bits()),
             }];
-            if let Some(writeback) = writeback_effect(operands.get(1)?, operands.get(2)) {
+            if let Some(writeback) = writeback_effect(instruction, operands.get(1)?, operands.get(2)) {
                 effects.push(writeback);
             }
             Some(complete(SemanticTerminator::FallThrough, effects))
@@ -95,7 +95,7 @@ pub(super) fn build(
                 expression: truncate_to_bits(src, 16),
                 bits: 16,
             }];
-            if let Some(writeback) = writeback_effect(operands.get(1)?, operands.get(2)) {
+            if let Some(writeback) = writeback_effect(instruction, operands.get(1)?, operands.get(2)) {
                 effects.push(writeback);
             }
             Some(complete(SemanticTerminator::FallThrough, effects))
@@ -109,7 +109,7 @@ pub(super) fn build(
                 expression: src.clone(),
                 bits: src.bits(),
             }];
-            if let Some(writeback) = writeback_effect(operands.get(1)?, operands.get(2)) {
+            if let Some(writeback) = writeback_effect(instruction, operands.get(1)?, operands.get(2)) {
                 effects.push(writeback);
             }
             Some(complete(SemanticTerminator::FallThrough, effects))
@@ -123,7 +123,7 @@ pub(super) fn build(
                 expression: truncate_to_bits(src, 8),
                 bits: 8,
             }];
-            if let Some(writeback) = writeback_effect(operands.get(1)?, operands.get(2)) {
+            if let Some(writeback) = writeback_effect(instruction, operands.get(1)?, operands.get(2)) {
                 effects.push(writeback);
             }
             Some(complete(SemanticTerminator::FallThrough, effects))

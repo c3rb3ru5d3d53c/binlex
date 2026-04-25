@@ -537,6 +537,18 @@ class _LLVM:
         lifter = self._lift()
         return lifter.object()
 
+    def normalized(self):
+        lifter = self._lift()
+        return lifter.normalized()
+
+    def optimizers(self):
+        lifter = self._lift()
+        return lifter.optimizers()
+
+    def verify(self):
+        lifter = self._lift()
+        return lifter.verify()
+
     def lifter(self):
         return self._lift()
 

@@ -1,4 +1,4 @@
-use super::common::assert_complete_semantics;
+use super::super::support::assert_complete_semantics;
 
 #[test]
 fn integer_semantics_regressions_stay_complete() {
@@ -31,6 +31,7 @@ fn integer_semantics_regressions_stay_complete() {
         ("rev x0, x1", vec![0x20, 0x0c, 0xc0, 0xda]),
         ("rev16 x0, x1", vec![0x20, 0x04, 0xc0, 0xda]),
         ("rev32 x0, x1", vec![0x20, 0x08, 0xc0, 0xda]),
+        ("extr w8, w0, w8, #1", vec![0x08, 0x04, 0x88, 0x13]),
     ];
 
     for (name, bytes) in cases {

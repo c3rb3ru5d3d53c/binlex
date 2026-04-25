@@ -21,6 +21,70 @@
 // SOFTWARE.
 
 use super::*;
+use crate::semantics::SemanticLocation;
+
+const TPIDR_EL0_SEMANTIC_NAME: &str = "arm64_sysreg_tpidr_el0";
+const FPCR_SEMANTIC_NAME: &str = "arm64_sysreg_fpcr";
+
+fn instruction_mentions_tpidr_el0(instruction: &Insn) -> bool {
+    instruction
+        .op_str()
+        .is_some_and(|op_str| op_str.to_ascii_lowercase().contains("tpidr_el0"))
+}
+
+fn instruction_mentions_fpcr(instruction: &Insn) -> bool {
+    instruction
+        .op_str()
+        .is_some_and(|op_str| op_str.to_ascii_lowercase().contains("fpcr"))
+}
+
+fn build_mrs(machine: Architecture, instruction: &Insn, operands: &[ArchOperand]) -> Option<InstructionSemantics> {
+    let semantic_name = if instruction_mentions_tpidr_el0(instruction) {
+        TPIDR_EL0_SEMANTIC_NAME
+    } else if instruction_mentions_fpcr(instruction) {
+        FPCR_SEMANTIC_NAME
+    } else {
+        return build_intrinsic_fallthrough(
+            machine,
+            instruction,
+            operands,
+            Some(vec![operand_location(machine, operands.first()?)?]),
+        );
+    };
+    let dst = operand_location(machine, operands.first()?)?;
+    Some(complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Set {
+            dst,
+            expression: SemanticExpression::Read(Box::new(SemanticLocation::Register {
+                name: semantic_name.to_string(),
+                bits: 64,
+            })),
+        }],
+    ))
+}
+
+fn build_msr(machine: Architecture, instruction: &Insn, operands: &[ArchOperand]) -> Option<InstructionSemantics> {
+    let semantic_name = if instruction_mentions_tpidr_el0(instruction) {
+        TPIDR_EL0_SEMANTIC_NAME
+    } else if instruction_mentions_fpcr(instruction) {
+        FPCR_SEMANTIC_NAME
+    } else {
+        return build_effect_intrinsic(instruction, operands, Vec::new(), String::from("arm64.msr"));
+    };
+    let _ = machine;
+    let src = operand_expression(operands.get(1)?)?;
+    Some(complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Set {
+            dst: SemanticLocation::Register {
+                name: semantic_name.to_string(),
+                bits: 64,
+            },
+            expression: src,
+        }],
+    ))
+}
 
 pub(super) fn build(
     machine: Architecture,
@@ -32,9 +96,7 @@ pub(super) fn build(
             SemanticTerminator::FallThrough,
             vec![SemanticEffect::Nop],
         )),
-        "msr" => {
-            build_effect_intrinsic(instruction, operands, Vec::new(), String::from("arm64.msr"))
-        }
+        "msr" => build_msr(machine, instruction, operands),
         "svc" => Some(InstructionSemantics {
             version: 1,
             status: SemanticStatus::Complete,
@@ -45,12 +107,7 @@ pub(super) fn build(
             terminator: SemanticTerminator::Trap,
             diagnostics: Vec::new(),
         }),
-        "mrs" => build_intrinsic_fallthrough(
-            machine,
-            instruction,
-            operands,
-            Some(vec![operand_location(machine, operands.first()?)?]),
-        ),
+        "mrs" => build_mrs(machine, instruction, operands),
         "prfm" => Some(complete(
             SemanticTerminator::FallThrough,
             vec![SemanticEffect::Nop],

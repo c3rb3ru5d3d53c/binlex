@@ -1,4 +1,4 @@
-use super::common::assert_complete_semantics;
+use super::super::support::assert_complete_semantics;
 
 #[test]
 fn control_semantics_regressions_stay_complete() {
@@ -14,6 +14,8 @@ fn control_semantics_regressions_stay_complete() {
         ("fcsel d0, d1, d2, eq", vec![0x20, 0x0c, 0x62, 0x1e]),
         ("cmn x0, x1", vec![0x1f, 0x00, 0x01, 0xab]),
         ("ccmp x0, x1, #0, eq", vec![0x00, 0x00, 0x41, 0xfa]),
+        ("ccmn x0, x1, #0, eq", vec![0x00, 0x00, 0x41, 0xba]),
+        ("tbz w0, #3, #0x10", vec![0x80, 0x00, 0x18, 0x36]),
         ("svc #0", vec![0x01, 0x00, 0x00, 0xd4]),
     ];
 

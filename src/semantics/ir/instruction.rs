@@ -404,7 +404,9 @@ pub enum SemanticOperationCast {
     Truncate,
     Bitcast,
     IntToFloat,
+    UIntToFloat,
     FloatToInt,
+    FloatToUInt,
     FloatExtend,
     FloatTruncate,
 }

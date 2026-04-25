@@ -1,4 +1,4 @@
-use super::common::assert_complete_semantics;
+use super::super::support::assert_complete_semantics;
 
 #[test]
 fn memory_semantics_regressions_stay_complete() {

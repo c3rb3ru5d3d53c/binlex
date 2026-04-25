@@ -29,6 +29,7 @@ use crate::genetics::Chromosome;
 use crate::io::Stderr;
 use crate::semantics;
 use crate::semantics::InstructionSemantics;
+use crate::semantics::SemanticEffect;
 use crate::semantics::SemanticStatus;
 use arch::x86::X86OpMem;
 use arch::x86::X86Reg::{X86_REG_EBP, X86_REG_ESP, X86_REG_RBP, X86_REG_RIP, X86_REG_RSP};
@@ -65,24 +66,64 @@ impl<'disassembler> Disassembler<'disassembler> {
     const FUNCTION_GROUP_SIZE: usize = 4;
 
     fn log_semantics_debug(&self, semantics: &InstructionSemantics, instruction: &Insn) {
-        if semantics.status == SemanticStatus::Complete && semantics.diagnostics.is_empty() {
+        let has_intrinsic_effect = semantics
+            .effects
+            .iter()
+            .any(|effect| matches!(effect, SemanticEffect::Intrinsic { .. }));
+        let intrinsic_effects = semantics
+            .effects
+            .iter()
+            .filter_map(|effect| match effect {
+                SemanticEffect::Intrinsic { name, .. } => Some(name.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        if semantics.status == SemanticStatus::Complete
+            && semantics.diagnostics.is_empty()
+            && !has_intrinsic_effect
+        {
             return;
         }
 
+        let bytes = instruction
+            .bytes()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<Vec<_>>()
+            .join("");
+
         let summary = if semantics.diagnostics.is_empty() {
             format!(
-                "no diagnostics; mnemonic={}; effects={}; terminator={:?}",
+                "no diagnostics; mnemonic={}; op_str={}; bytes={}; effects={}; intrinsic_effects={}; terminator={:?}",
                 instruction.mnemonic().unwrap_or("unknown"),
+                instruction.op_str().unwrap_or(""),
+                bytes,
                 semantics.effects.len(),
+                if intrinsic_effects.is_empty() {
+                    "none".to_string()
+                } else {
+                    intrinsic_effects.join(",")
+                },
                 semantics.terminator.kind()
             )
         } else {
-            semantics
+            format!(
+                "mnemonic={}; op_str={}; bytes={}; intrinsic_effects={}; {}",
+                instruction.mnemonic().unwrap_or("unknown"),
+                instruction.op_str().unwrap_or(""),
+                bytes,
+                if intrinsic_effects.is_empty() {
+                    "none".to_string()
+                } else {
+                    intrinsic_effects.join(",")
+                },
+                semantics
                 .diagnostics
                 .iter()
                 .map(|diagnostic| diagnostic.message.as_str())
                 .collect::<Vec<_>>()
                 .join("; ")
+            )
         };
 
         Stderr::print_debug(
