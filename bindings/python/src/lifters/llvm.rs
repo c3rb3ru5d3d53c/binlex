@@ -1,4 +1,6 @@
 use crate::controlflow::{Block, Function, Instruction};
+use crate::semantics::InstructionSemantics as PyInstructionSemantics;
+use crate::Architecture;
 use crate::Config;
 use binlex::io::Stderr;
 use binlex::lifters::llvm::Lifter as InnerLifter;
@@ -8,18 +10,21 @@ use std::sync::{Arc, Mutex};
 #[pyclass(unsendable)]
 pub struct Lifter {
     pub config: binlex::Config,
+    pub architecture: binlex::Architecture,
     pub inner: Arc<Mutex<InnerLifter>>,
 }
 
 #[pymethods]
 impl Lifter {
     #[new]
-    #[pyo3(text_signature = "(config)")]
-    pub fn new(py: Python<'_>, config: Py<Config>) -> Self {
+    #[pyo3(text_signature = "(architecture, config)")]
+    pub fn new(py: Python<'_>, architecture: Py<Architecture>, config: Py<Config>) -> Self {
+        let inner_architecture = architecture.borrow(py).inner;
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
-        let inner = InnerLifter::new(inner_config.clone());
+        let inner = InnerLifter::new(inner_architecture, inner_config.clone());
         Self {
             config: inner_config,
+            architecture: inner_architecture,
             inner: Arc::new(Mutex::new(inner)),
         }
     }
@@ -79,6 +84,18 @@ impl Lifter {
         }
     }
 
+    #[pyo3(text_signature = "($self, semantics)")]
+    pub fn lift_semantics(&self, _py: Python<'_>, semantics: &PyInstructionSemantics) -> bool {
+        let semantics = semantics.inner.lock().unwrap().clone();
+        match self.inner.lock().unwrap().lift_semantics(&semantics) {
+            Ok(()) => true,
+            Err(err) => {
+                Stderr::print_debug(&self.config, format!("llvm lift semantics failed: {}", err));
+                false
+            }
+        }
+    }
+
     #[pyo3(text_signature = "($self)")]
     pub fn text(&self) -> String {
         self.inner.lock().unwrap().text()
@@ -110,6 +127,7 @@ impl Lifter {
         match self.inner.lock().unwrap().normalized() {
             Ok(inner) => Some(Self {
                 config: self.config.clone(),
+                architecture: self.architecture,
                 inner: Arc::new(Mutex::new(inner)),
             }),
             Err(err) => {
@@ -124,6 +142,7 @@ impl Lifter {
         match self.inner.lock().unwrap().mem2reg() {
             Ok(inner) => Some(Self {
                 config: self.config.clone(),
+                architecture: self.architecture,
                 inner: Arc::new(Mutex::new(inner)),
             }),
             Err(err) => {
@@ -138,6 +157,7 @@ impl Lifter {
         match self.inner.lock().unwrap().instcombine() {
             Ok(inner) => Some(Self {
                 config: self.config.clone(),
+                architecture: self.architecture,
                 inner: Arc::new(Mutex::new(inner)),
             }),
             Err(err) => {
@@ -152,6 +172,7 @@ impl Lifter {
         match self.inner.lock().unwrap().cfg() {
             Ok(inner) => Some(Self {
                 config: self.config.clone(),
+                architecture: self.architecture,
                 inner: Arc::new(Mutex::new(inner)),
             }),
             Err(err) => {
@@ -166,6 +187,7 @@ impl Lifter {
         match self.inner.lock().unwrap().gvn() {
             Ok(inner) => Some(Self {
                 config: self.config.clone(),
+                architecture: self.architecture,
                 inner: Arc::new(Mutex::new(inner)),
             }),
             Err(err) => {
@@ -180,6 +202,7 @@ impl Lifter {
         match self.inner.lock().unwrap().sroa() {
             Ok(inner) => Some(Self {
                 config: self.config.clone(),
+                architecture: self.architecture,
                 inner: Arc::new(Mutex::new(inner)),
             }),
             Err(err) => {
@@ -194,6 +217,7 @@ impl Lifter {
         match self.inner.lock().unwrap().dce() {
             Ok(inner) => Some(Self {
                 config: self.config.clone(),
+                architecture: self.architecture,
                 inner: Arc::new(Mutex::new(inner)),
             }),
             Err(err) => {

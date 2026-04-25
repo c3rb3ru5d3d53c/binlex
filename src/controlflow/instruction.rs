@@ -206,6 +206,11 @@ impl Instruction {
         self.address
     }
 
+    /// Replaces the canonical semantics attached to this instruction.
+    pub fn set_semantics(&mut self, semantics: InstructionSemantics) {
+        self.semantics = Some(semantics);
+    }
+
     /// Retrieves the set of addresses for the blocks this instruction may branch to.
     ///
     /// # Returns

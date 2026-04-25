@@ -39,7 +39,7 @@ pub struct Lifter {
     context: &'static Context,
     module: Module<'static>,
     emitted: BTreeSet<String>,
-    architecture: Option<Architecture>,
+    architecture: Architecture,
 }
 
 #[derive(Default)]
@@ -89,7 +89,7 @@ struct LoweringSummaryEntry {
 }
 
 impl Lifter {
-    pub fn new(config: Config) -> Self {
+    pub fn new(architecture: Architecture, config: Config) -> Self {
         let context: &'static Context = Box::leak(Box::new(Context::create()));
         let module = context.create_module(&config.lifters.llvm.module_name);
         Self {
@@ -97,12 +97,18 @@ impl Lifter {
             context,
             module,
             emitted: BTreeSet::new(),
-            architecture: None,
+            architecture,
         }
     }
 
     pub fn lift_instruction(&mut self, instruction: &Instruction) -> Result<(), Error> {
-        self.architecture.get_or_insert(instruction.architecture);
+        if self.architecture != instruction.architecture {
+            return Err(Error::other(format!(
+                "llvm lift instruction architecture mismatch: lifter={} instruction={}",
+                self.architecture.to_string(),
+                instruction.architecture.to_string()
+            )));
+        }
         self.bind_architecture()?;
         let name = format!("instruction_{:x}", instruction.address);
         if !self.emitted.insert(name.clone()) {
@@ -117,7 +123,13 @@ impl Lifter {
     }
 
     pub fn lift_block(&mut self, block: &Block<'_>) -> Result<(), Error> {
-        self.architecture.get_or_insert(block.architecture());
+        if self.architecture != block.architecture() {
+            return Err(Error::other(format!(
+                "llvm lift block architecture mismatch: lifter={} block={}",
+                self.architecture.to_string(),
+                block.architecture().to_string()
+            )));
+        }
         self.bind_architecture()?;
         let name = format!("block_{:x}", block.address());
         if !self.emitted.insert(name.clone()) {
@@ -134,7 +146,13 @@ impl Lifter {
     }
 
     pub fn lift_function(&mut self, function: &Function<'_>) -> Result<(), Error> {
-        self.architecture.get_or_insert(function.architecture());
+        if self.architecture != function.architecture() {
+            return Err(Error::other(format!(
+                "llvm lift function architecture mismatch: lifter={} function={}",
+                self.architecture.to_string(),
+                function.architecture().to_string()
+            )));
+        }
         self.bind_architecture()?;
         let name = format!("function_{:x}", function.address());
         if !self.emitted.insert(name.clone()) {
@@ -143,6 +161,20 @@ impl Lifter {
         let llvm_function = self.add_void_function(&name);
         let mut lowering = self.lowering_context(llvm_function);
         lowering.lower_function(function)?;
+        lowering.finish()?;
+        self.verify_if_enabled()?;
+        Ok(())
+    }
+
+    pub fn lift_semantics(&mut self, semantics: &InstructionSemantics) -> Result<(), Error> {
+        self.bind_architecture()?;
+        let name = format!("semantics_{}", self.emitted.len());
+        if !self.emitted.insert(name.clone()) {
+            return Ok(());
+        }
+        let function = self.add_void_function(&name);
+        let mut lowering = self.lowering_context(function);
+        lowering.lower_instruction_semantics(semantics)?;
         lowering.finish()?;
         self.verify_if_enabled()?;
         Ok(())
@@ -342,7 +374,7 @@ impl Lifter {
 
     fn target_machine(&self) -> Result<TargetMachine, Error> {
         Target::initialize_all(&InitializationConfig::default());
-        let triple_string = match self.architecture.unwrap_or(Architecture::AMD64) {
+        let triple_string = match self.architecture {
             Architecture::I386 => "i386-unknown-unknown",
             Architecture::AMD64 => "x86_64-unknown-unknown",
             Architecture::ARM64 => "aarch64-unknown-unknown",
@@ -363,7 +395,7 @@ impl Lifter {
     }
 
     fn bind_architecture(&self) -> Result<(), Error> {
-        let triple_string = match self.architecture.unwrap_or(Architecture::AMD64) {
+        let triple_string = match self.architecture {
             Architecture::I386 => "i386-unknown-unknown",
             Architecture::AMD64 => "x86_64-unknown-unknown",
             Architecture::ARM64 => "aarch64-unknown-unknown",
@@ -652,6 +684,34 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             *self.cached_flags_register.borrow_mut() = None;
         }
         self.current_instruction_address = None;
+        Ok(())
+    }
+
+    fn lower_instruction_semantics(
+        &mut self,
+        semantics: &InstructionSemantics,
+    ) -> Result<(), Error> {
+        if self.debug
+            && (matches!(semantics.status, crate::semantics::SemanticStatus::Partial)
+                || !semantics.diagnostics.is_empty())
+        {
+            let diagnostics = semantics
+                .diagnostics
+                .iter()
+                .map(|diagnostic| format!("{:?}: {}", diagnostic.kind, diagnostic.message))
+                .collect::<Vec<_>>()
+                .join(" | ");
+            self.record_semantic_lowering(
+                "semantics_status",
+                format!("status={:?} diagnostics=[{}]", semantics.status, diagnostics),
+            );
+        }
+        *self.cached_flags_register.borrow_mut() = None;
+        let prepared = prepare_instruction_semantics(semantics)?;
+        self.emit_body_marker_if_needed()?;
+        self.seed_instruction_inputs(&prepared)?;
+        self.lower_semantics(&prepared)?;
+        *self.cached_flags_register.borrow_mut() = None;
         Ok(())
     }
 
@@ -2089,8 +2149,30 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         right: IntValue<'ctx>,
         bits: u16,
     ) -> Result<IntValue<'ctx>, Error> {
+        let binary_helper = |this: &mut Self| {
+            let helper_name = format!("binlex_binary_{:?}", op).to_lowercase();
+            let helper = this.declare_value_helper(
+                &helper_name,
+                this.int_type(bits),
+                &[left.get_type().into(), right.get_type().into()],
+                false,
+            );
+            this.record_semantic_lowering(
+                "binary_helper",
+                format!(
+                    "{:?} bits={} helper={}",
+                    op,
+                    bits,
+                    helper.get_name().to_string_lossy()
+                ),
+            );
+            this.call_value(helper, &[left.into(), right.into()], "binarytmp")
+        };
         match op {
             SemanticOperationBinary::FAdd => {
+                if !matches!(bits, 32 | 64) {
+                    return binary_helper(self);
+                }
                 let float_type = self.float_type(bits)?;
                 let left = self.int_bits_to_float(left, float_type, "fadd_lhs")?;
                 let right = self.int_bits_to_float(right, float_type, "fadd_rhs")?;
@@ -2101,6 +2183,9 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 self.float_to_int_bits(sum, self.int_type(bits), "fadd_bits")
             }
             SemanticOperationBinary::FSub => {
+                if !matches!(bits, 32 | 64) {
+                    return binary_helper(self);
+                }
                 let float_type = self.float_type(bits)?;
                 let left = self.int_bits_to_float(left, float_type, "fsub_lhs")?;
                 let right = self.int_bits_to_float(right, float_type, "fsub_rhs")?;
@@ -2111,6 +2196,9 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 self.float_to_int_bits(difference, self.int_type(bits), "fsub_bits")
             }
             SemanticOperationBinary::FMul => {
+                if !matches!(bits, 32 | 64) {
+                    return binary_helper(self);
+                }
                 let float_type = self.float_type(bits)?;
                 let left = self.int_bits_to_float(left, float_type, "fmul_lhs")?;
                 let right = self.int_bits_to_float(right, float_type, "fmul_rhs")?;
@@ -2121,6 +2209,9 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 self.float_to_int_bits(product, self.int_type(bits), "fmul_bits")
             }
             SemanticOperationBinary::FDiv => {
+                if !matches!(bits, 32 | 64) {
+                    return binary_helper(self);
+                }
                 let float_type = self.float_type(bits)?;
                 let left = self.int_bits_to_float(left, float_type, "fdiv_lhs")?;
                 let right = self.int_bits_to_float(right, float_type, "fdiv_rhs")?;
@@ -2272,25 +2363,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 )?;
                 self.call_value(function, &[left.into(), left.into(), right.into()], "rortmp")
             }
-            _ => {
-                let helper_name = format!("binlex_binary_{:?}", op).to_lowercase();
-                let helper = self.declare_value_helper(
-                    &helper_name,
-                    self.int_type(bits),
-                    &[left.get_type().into(), right.get_type().into()],
-                    false,
-                );
-                self.record_semantic_lowering(
-                    "binary_helper",
-                    format!(
-                        "{:?} bits={} helper={}",
-                        op,
-                        bits,
-                        helper.get_name().to_string_lossy()
-                    ),
-                );
-                self.call_value(helper, &[left.into(), right.into()], "binarytmp")
-            }
+            _ => binary_helper(self),
         }
     }
 
@@ -2302,6 +2375,26 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     ) -> Result<IntValue<'ctx>, Error> {
         let target = self.int_type(bits);
         let source_bits = arg.get_type().get_bit_width();
+        let cast_helper = |this: &mut Self| {
+            let helper_name = format!("binlex_cast_{:?}", op).to_lowercase();
+            let helper = this.declare_value_helper(
+                &helper_name,
+                target,
+                &[arg.get_type().into()],
+                false,
+            );
+            this.record_semantic_lowering(
+                "cast_helper",
+                format!(
+                    "{:?} {}->{} helper={}",
+                    op,
+                    source_bits,
+                    bits,
+                    helper.get_name().to_string_lossy()
+                ),
+            );
+            this.call_value(helper, &[arg.into()], "casttmp")
+        };
         match op {
             SemanticOperationCast::ZeroExtend => {
                 if source_bits == bits as u32 {
@@ -2339,6 +2432,9 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 }
             }
             SemanticOperationCast::IntToFloat => {
+                if !matches!(bits, 32 | 64) {
+                    return cast_helper(self);
+                }
                 let float_type = self.float_type(bits)?;
                 let float = self
                     .builder
@@ -2347,6 +2443,9 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 self.float_to_int_bits(float, target, "sitofp_bits")
             }
             SemanticOperationCast::UIntToFloat => {
+                if !matches!(bits, 32 | 64) {
+                    return cast_helper(self);
+                }
                 let float_type = self.float_type(bits)?;
                 let float = self
                     .builder
@@ -2355,6 +2454,9 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 self.float_to_int_bits(float, target, "uitofp_bits")
             }
             SemanticOperationCast::FloatToInt => {
+                if !matches!(source_bits as u16, 32 | 64) {
+                    return cast_helper(self);
+                }
                 let float_type = self.float_type(source_bits as u16)?;
                 let float = self.int_bits_to_float(arg, float_type, "fptosi_arg")?;
                 let ordered = self
@@ -2422,6 +2524,9 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .map(|value| value.into_int_value())
             }
             SemanticOperationCast::FloatToUInt => {
+                if !matches!(source_bits as u16, 32 | 64) {
+                    return cast_helper(self);
+                }
                 let float_type = self.float_type(source_bits as u16)?;
                 let float = self.int_bits_to_float(arg, float_type, "fptoui_arg")?;
                 let ordered = self
@@ -2479,26 +2584,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .map_err(|err| Error::other(err.to_string()))
                     .map(|value| value.into_int_value())
             }
-            _ => {
-                let helper_name = format!("binlex_cast_{:?}", op).to_lowercase();
-                let helper = self.declare_value_helper(
-                    &helper_name,
-                    target,
-                    &[arg.get_type().into()],
-                    false,
-                );
-                self.record_semantic_lowering(
-                    "cast_helper",
-                    format!(
-                        "{:?} {}->{} helper={}",
-                        op,
-                        source_bits,
-                        bits,
-                        helper.get_name().to_string_lossy()
-                    ),
-                );
-                self.call_value(helper, &[arg.into()], "casttmp")
-            }
+            _ => cast_helper(self),
         }
     }
 
@@ -2508,6 +2594,26 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         left: IntValue<'ctx>,
         right: IntValue<'ctx>,
     ) -> Result<IntValue<'ctx>, Error> {
+        let compare_helper = |this: &mut Self| {
+            let helper_name = format!("binlex_compare_{:?}", op).to_lowercase();
+            let helper = this.declare_value_helper(
+                &helper_name,
+                this.context.bool_type(),
+                &[left.get_type().into(), right.get_type().into()],
+                false,
+            );
+            this.record_semantic_lowering(
+                "compare_helper",
+                format!(
+                    "{:?} lhs_bits={} rhs_bits={} helper={}",
+                    op,
+                    left.get_type().get_bit_width(),
+                    right.get_type().get_bit_width(),
+                    helper.get_name().to_string_lossy()
+                ),
+            );
+            this.call_value(helper, &[left.into(), right.into()], "cmptmp")
+        };
         let predicate = match op {
             SemanticOperationCompare::Eq => Some(IntPredicate::EQ),
             SemanticOperationCompare::Ne => Some(IntPredicate::NE),
@@ -2526,38 +2632,30 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 .build_int_compare(predicate, left, right, "cmptmp")
                 .map_err(|err| Error::other(err.to_string()))
         } else {
-            let float_type = self.float_type(left.get_type().get_bit_width() as u16)?;
-            let left = self.int_bits_to_float(left, float_type, "fcmp_lhs")?;
-            let right = self.int_bits_to_float(right, float_type, "fcmp_rhs")?;
-            let predicate = match op {
-                SemanticOperationCompare::Oeq => inkwell::FloatPredicate::OEQ,
-                SemanticOperationCompare::Oge => inkwell::FloatPredicate::OGE,
-                SemanticOperationCompare::Olt => inkwell::FloatPredicate::OLT,
-                SemanticOperationCompare::Unordered => inkwell::FloatPredicate::UNO,
-                _ => {
-                    let helper_name = format!("binlex_compare_{:?}", op).to_lowercase();
-                    let helper = self.declare_value_helper(
-                        &helper_name,
-                        self.context.bool_type(),
-                        &[self.int_type(float_type.get_bit_width() as u16).into(); 2],
-                        false,
-                    );
-                    self.record_semantic_lowering(
-                        "compare_helper",
-                        format!(
-                            "{:?} lhs_bits={} rhs_bits={} helper={}",
-                            op,
-                            float_type.get_bit_width(),
-                            float_type.get_bit_width(),
-                            helper.get_name().to_string_lossy()
-                        ),
-                    );
-                    return self.call_value(helper, &[left.into(), right.into()], "cmptmp");
+            match op {
+                SemanticOperationCompare::Oeq
+                | SemanticOperationCompare::Oge
+                | SemanticOperationCompare::Olt
+                | SemanticOperationCompare::Unordered => {
+                    if !matches!(left.get_type().get_bit_width(), 32 | 64) {
+                        return compare_helper(self);
+                    }
+                    let float_type = self.float_type(left.get_type().get_bit_width() as u16)?;
+                    let left = self.int_bits_to_float(left, float_type, "fcmp_lhs")?;
+                    let right = self.int_bits_to_float(right, float_type, "fcmp_rhs")?;
+                    let predicate = match op {
+                        SemanticOperationCompare::Oeq => inkwell::FloatPredicate::OEQ,
+                        SemanticOperationCompare::Oge => inkwell::FloatPredicate::OGE,
+                        SemanticOperationCompare::Olt => inkwell::FloatPredicate::OLT,
+                        SemanticOperationCompare::Unordered => inkwell::FloatPredicate::UNO,
+                        _ => unreachable!("matched above"),
+                    };
+                    self.builder
+                        .build_float_compare(predicate, left, right, "cmptmp")
+                        .map_err(|err| Error::other(err.to_string()))
                 }
-            };
-            self.builder
-                .build_float_compare(predicate, left, right, "cmptmp")
-                .map_err(|err| Error::other(err.to_string()))
+                _ => compare_helper(self),
+            }
         }
     }
 

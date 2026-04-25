@@ -364,6 +364,25 @@ impl Instruction {
         })
     }
 
+    #[pyo3(text_signature = "($self, semantics)")]
+    /// Replace the canonical semantics attached to this instruction and persist it in the CFG.
+    pub fn set_semantics(
+        &self,
+        py: Python<'_>,
+        semantics: Py<PyInstructionSemantics>,
+    ) -> PyResult<()> {
+        let replacement = semantics.borrow(py).inner.lock().unwrap().clone();
+        let mut updated = self.with_inner_instruction(py, |instruction| Ok(instruction.clone()))?;
+        updated.set_semantics(replacement);
+        {
+            let binding = self.cfg.borrow(py);
+            let mut inner = binding.inner.lock().unwrap();
+            inner.update_instruction(updated.clone());
+        }
+        *self.inner.lock().unwrap() = Some(updated);
+        Ok(())
+    }
+
     #[pyo3(text_signature = "($self)")]
     /// Convert the instruction to a Python dictionary.
     pub fn to_dict(&self, py: Python) -> PyResult<Py<PyAny>> {
