@@ -53,7 +53,7 @@ pub(crate) fn assert_complete_semantics(name: &str, bytes: &[u8]) -> Instruction
 
 pub(crate) fn lift_instruction_to_llvm(name: &str, bytes: &[u8]) -> String {
     let instruction = disassemble_arm64_single(name, bytes);
-    let mut lifter = Lifter::new(Config::default());
+    let mut lifter = Lifter::new(crate::Architecture::ARM64, Config::default());
     lifter
         .lift_instruction(&instruction)
         .unwrap_or_else(|error| panic!("{name}: instruction should lift: {error}"));

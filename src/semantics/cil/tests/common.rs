@@ -53,7 +53,7 @@ pub(super) fn assert_complete_semantics(name: &str, bytes: &[u8]) -> Instruction
 
 pub(super) fn lift_instruction_to_llvm(name: &str, bytes: &[u8]) -> String {
     let instruction = disassemble_cil_single(name, bytes);
-    let mut lifter = Lifter::new(Config::default());
+    let mut lifter = Lifter::new(crate::Architecture::CIL, Config::default());
     lifter
         .lift_instruction(&instruction)
         .unwrap_or_else(|error| panic!("{name}: instruction should lift: {error}"));

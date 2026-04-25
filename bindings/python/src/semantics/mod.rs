@@ -621,6 +621,15 @@ impl SemanticTemporary {
     pub fn name(&self) -> Option<String> {
         self.inner.lock().unwrap().name.clone()
     }
+    pub fn set_id(&mut self, id: u32) {
+        self.inner.lock().unwrap().set_id(id);
+    }
+    pub fn set_bits(&mut self, bits: u16) {
+        self.inner.lock().unwrap().set_bits(bits);
+    }
+    pub fn set_name(&mut self, name: Option<String>) {
+        self.inner.lock().unwrap().set_name(name);
+    }
     pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         json_value_to_py(
             py,
@@ -671,6 +680,15 @@ impl SemanticDiagnostic {
     }
     pub fn message(&self) -> String {
         self.inner.lock().unwrap().message.clone()
+    }
+    pub fn set_kind(&mut self, py: Python<'_>, kind: Py<SemanticDiagnosticKind>) {
+        self.inner
+            .lock()
+            .unwrap()
+            .set_kind(kind.borrow(py).inner.clone());
+    }
+    pub fn set_message(&mut self, message: String) {
+        self.inner.lock().unwrap().set_message(message);
     }
     pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         json_value_to_py(
@@ -752,6 +770,19 @@ impl SemanticLocation {
             | InnerSemanticLocation::Flag { name, .. } => Some(name.clone()),
             _ => None,
         }
+    }
+    pub fn set_kind(&mut self, py: Python<'_>, kind: Py<SemanticLocationKind>) {
+        self.inner.lock().unwrap().set_kind(kind.borrow(py).inner);
+    }
+    pub fn set_bits(&mut self, bits: u16) {
+        self.inner.lock().unwrap().set_bits(bits);
+    }
+    pub fn set_name(&mut self, name: String) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .set_name(name)
+            .map_err(PyValueError::new_err)
     }
     pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         json_value_to_py(
@@ -1084,6 +1115,195 @@ impl SemanticExpression {
         self.inner.lock().unwrap().value()
     }
 
+    pub fn set_kind(&mut self, py: Python<'_>, kind: Py<SemanticExpressionKind>) {
+        self.inner.lock().unwrap().set_kind(kind.borrow(py).inner);
+    }
+
+    pub fn set_operation(&mut self, py: Python<'_>, operation: Py<PyAny>) -> PyResult<()> {
+        let operation = if let Ok(op) = operation.extract::<Py<SemanticOperationBinary>>(py) {
+            InnerSemanticOperation::Binary(op.borrow(py).inner)
+        } else if let Ok(op) = operation.extract::<Py<SemanticOperationUnary>>(py) {
+            InnerSemanticOperation::Unary(op.borrow(py).inner)
+        } else if let Ok(op) = operation.extract::<Py<SemanticOperationCast>>(py) {
+            InnerSemanticOperation::Cast(op.borrow(py).inner)
+        } else if let Ok(op) = operation.extract::<Py<SemanticOperationCompare>>(py) {
+            InnerSemanticOperation::Compare(op.borrow(py).inner)
+        } else {
+            return Err(PyValueError::new_err(
+                "operation must be a semantic binary, unary, cast, or compare operation",
+            ));
+        };
+        self.inner
+            .lock()
+            .unwrap()
+            .set_operation(operation)
+            .map_err(PyValueError::new_err)
+    }
+
+    pub fn set_bits(&mut self, bits: u16) {
+        self.inner.lock().unwrap().set_bits(bits);
+    }
+
+    pub fn set_left(&mut self, py: Python<'_>, expression: Py<SemanticExpression>) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .set_left(expression.borrow(py).inner.lock().unwrap().clone())
+            .map_err(PyValueError::new_err)
+    }
+
+    pub fn set_right(
+        &mut self,
+        py: Python<'_>,
+        expression: Py<SemanticExpression>,
+    ) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .set_right(expression.borrow(py).inner.lock().unwrap().clone())
+            .map_err(PyValueError::new_err)
+    }
+
+    pub fn set_argument(
+        &mut self,
+        py: Python<'_>,
+        expression: Py<SemanticExpression>,
+    ) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .set_argument(expression.borrow(py).inner.lock().unwrap().clone())
+            .map_err(PyValueError::new_err)
+    }
+
+    pub fn set_condition(
+        &mut self,
+        py: Python<'_>,
+        expression: Py<SemanticExpression>,
+    ) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .set_condition(expression.borrow(py).inner.lock().unwrap().clone())
+            .map_err(PyValueError::new_err)
+    }
+
+    pub fn set_when_true(
+        &mut self,
+        py: Python<'_>,
+        expression: Py<SemanticExpression>,
+    ) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .set_when_true(expression.borrow(py).inner.lock().unwrap().clone())
+            .map_err(PyValueError::new_err)
+    }
+
+    pub fn set_when_false(
+        &mut self,
+        py: Python<'_>,
+        expression: Py<SemanticExpression>,
+    ) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .set_when_false(expression.borrow(py).inner.lock().unwrap().clone())
+            .map_err(PyValueError::new_err)
+    }
+
+    pub fn set_address(
+        &mut self,
+        py: Python<'_>,
+        expression: Py<SemanticExpression>,
+    ) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .set_address(expression.borrow(py).inner.lock().unwrap().clone())
+            .map_err(PyValueError::new_err)
+    }
+
+    pub fn set_address_space(
+        &mut self,
+        py: Python<'_>,
+        space: Py<SemanticAddressSpace>,
+    ) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .set_address_space(space.borrow(py).inner.clone())
+            .map_err(PyValueError::new_err)
+    }
+
+    pub fn set_location(
+        &mut self,
+        py: Python<'_>,
+        location: Py<SemanticLocation>,
+    ) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .set_location(location.borrow(py).inner.lock().unwrap().clone())
+            .map_err(PyValueError::new_err)
+    }
+
+    pub fn set_offset(&mut self, offset: u16) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .set_offset(offset)
+            .map_err(PyValueError::new_err)
+    }
+
+    pub fn set_parts(
+        &mut self,
+        py: Python<'_>,
+        parts: Vec<Py<SemanticExpression>>,
+    ) -> PyResult<()> {
+        let parts = parts
+            .into_iter()
+            .map(|part| part.borrow(py).inner.lock().unwrap().clone())
+            .collect();
+        self.inner
+            .lock()
+            .unwrap()
+            .set_parts(parts)
+            .map_err(PyValueError::new_err)
+    }
+
+    pub fn set_name(&mut self, name: String) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .set_name(name)
+            .map_err(PyValueError::new_err)
+    }
+
+    pub fn set_arguments(
+        &mut self,
+        py: Python<'_>,
+        arguments: Vec<Py<SemanticExpression>>,
+    ) -> PyResult<()> {
+        let arguments = arguments
+            .into_iter()
+            .map(|argument| argument.borrow(py).inner.lock().unwrap().clone())
+            .collect();
+        self.inner
+            .lock()
+            .unwrap()
+            .set_arguments(arguments)
+            .map_err(PyValueError::new_err)
+    }
+
+    pub fn set_value(&mut self, value: u128) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .set_value(value)
+            .map_err(PyValueError::new_err)
+    }
+
     pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         json_value_to_py(
             py,
@@ -1207,6 +1427,31 @@ impl SemanticEffect {
             .map(|location| Py::new(py, SemanticLocation::from_inner(location)))
             .transpose()
     }
+    pub fn set_kind(&mut self, py: Python<'_>, kind: Py<SemanticEffectKind>) {
+        self.inner.lock().unwrap().set_kind(kind.borrow(py).inner);
+    }
+    pub fn set_expression(
+        &mut self,
+        py: Python<'_>,
+        expression: Py<SemanticExpression>,
+    ) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .set_expression(expression.borrow(py).inner.lock().unwrap().clone())
+            .map_err(PyValueError::new_err)
+    }
+    pub fn set_location(
+        &mut self,
+        py: Python<'_>,
+        location: Py<SemanticLocation>,
+    ) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .set_location(location.borrow(py).inner.lock().unwrap().clone())
+            .map_err(PyValueError::new_err)
+    }
     pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         json_value_to_py(
             py,
@@ -1305,6 +1550,125 @@ impl SemanticTerminator {
     }
     pub fn kind(&self) -> SemanticTerminatorKind {
         SemanticTerminatorKind::from_inner(self.inner.lock().unwrap().kind())
+    }
+    pub fn condition(&self, py: Python<'_>) -> PyResult<Option<Py<SemanticExpression>>> {
+        let expression = self.inner.lock().unwrap().condition().cloned();
+        expression
+            .map(|expression| Py::new(py, SemanticExpression::from_inner(expression)))
+            .transpose()
+    }
+    pub fn true_target(&self, py: Python<'_>) -> PyResult<Option<Py<SemanticExpression>>> {
+        let expression = self.inner.lock().unwrap().true_target().cloned();
+        expression
+            .map(|expression| Py::new(py, SemanticExpression::from_inner(expression)))
+            .transpose()
+    }
+    pub fn false_target(&self, py: Python<'_>) -> PyResult<Option<Py<SemanticExpression>>> {
+        let expression = self.inner.lock().unwrap().false_target().cloned();
+        expression
+            .map(|expression| Py::new(py, SemanticExpression::from_inner(expression)))
+            .transpose()
+    }
+    pub fn target(&self, py: Python<'_>) -> PyResult<Option<Py<SemanticExpression>>> {
+        let expression = self.inner.lock().unwrap().target().cloned();
+        expression
+            .map(|expression| Py::new(py, SemanticExpression::from_inner(expression)))
+            .transpose()
+    }
+    pub fn return_target(&self, py: Python<'_>) -> PyResult<Option<Py<SemanticExpression>>> {
+        let expression = self.inner.lock().unwrap().return_target().cloned();
+        expression
+            .map(|expression| Py::new(py, SemanticExpression::from_inner(expression)))
+            .transpose()
+    }
+    pub fn does_return(&self) -> Option<bool> {
+        self.inner.lock().unwrap().does_return()
+    }
+    pub fn return_expression(&self, py: Python<'_>) -> PyResult<Option<Py<SemanticExpression>>> {
+        let expression = self.inner.lock().unwrap().return_expression().cloned();
+        expression
+            .map(|expression| Py::new(py, SemanticExpression::from_inner(expression)))
+            .transpose()
+    }
+    pub fn set_kind(&mut self, py: Python<'_>, kind: Py<SemanticTerminatorKind>) {
+        self.inner.lock().unwrap().set_kind(kind.borrow(py).inner);
+    }
+    pub fn set_condition(
+        &mut self,
+        py: Python<'_>,
+        expression: Py<SemanticExpression>,
+    ) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .set_condition(expression.borrow(py).inner.lock().unwrap().clone())
+            .map_err(PyValueError::new_err)
+    }
+    pub fn set_true_target(
+        &mut self,
+        py: Python<'_>,
+        expression: Py<SemanticExpression>,
+    ) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .set_true_target(expression.borrow(py).inner.lock().unwrap().clone())
+            .map_err(PyValueError::new_err)
+    }
+    pub fn set_false_target(
+        &mut self,
+        py: Python<'_>,
+        expression: Py<SemanticExpression>,
+    ) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .set_false_target(expression.borrow(py).inner.lock().unwrap().clone())
+            .map_err(PyValueError::new_err)
+    }
+    pub fn set_target(
+        &mut self,
+        py: Python<'_>,
+        expression: Py<SemanticExpression>,
+    ) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .set_target(expression.borrow(py).inner.lock().unwrap().clone())
+            .map_err(PyValueError::new_err)
+    }
+    pub fn set_return_target(
+        &mut self,
+        py: Python<'_>,
+        expression: Option<Py<SemanticExpression>>,
+    ) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .set_return_target(
+                expression.map(|item| item.borrow(py).inner.lock().unwrap().clone()),
+            )
+            .map_err(PyValueError::new_err)
+    }
+    pub fn set_does_return(&mut self, does_return: Option<bool>) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .set_does_return(does_return)
+            .map_err(PyValueError::new_err)
+    }
+    pub fn set_return_expression(
+        &mut self,
+        py: Python<'_>,
+        expression: Option<Py<SemanticExpression>>,
+    ) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .set_return_expression(
+                expression.map(|item| item.borrow(py).inner.lock().unwrap().clone()),
+            )
+            .map_err(PyValueError::new_err)
     }
     pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         json_value_to_py(
@@ -1423,6 +1787,39 @@ impl InstructionSemantics {
             .cloned()
             .map(|item| Py::new(py, SemanticDiagnostic::from_inner(item)))
             .collect()
+    }
+    pub fn set_version(&mut self, version: u32) {
+        self.inner.lock().unwrap().set_version(version);
+    }
+    pub fn set_status(&mut self, py: Python<'_>, status: Py<SemanticStatus>) {
+        self.inner.lock().unwrap().set_status(status.borrow(py).inner);
+    }
+    pub fn set_temporaries(&mut self, py: Python<'_>, temporaries: Vec<Py<SemanticTemporary>>) {
+        let temporaries = temporaries
+            .into_iter()
+            .map(|item| item.borrow(py).inner.lock().unwrap().clone())
+            .collect();
+        self.inner.lock().unwrap().set_temporaries(temporaries);
+    }
+    pub fn set_effects(&mut self, py: Python<'_>, effects: Vec<Py<SemanticEffect>>) {
+        let effects = effects
+            .into_iter()
+            .map(|item| item.borrow(py).inner.lock().unwrap().clone())
+            .collect();
+        self.inner.lock().unwrap().set_effects(effects);
+    }
+    pub fn set_terminator(&mut self, py: Python<'_>, terminator: Py<SemanticTerminator>) {
+        self.inner
+            .lock()
+            .unwrap()
+            .set_terminator(terminator.borrow(py).inner.lock().unwrap().clone());
+    }
+    pub fn set_diagnostics(&mut self, py: Python<'_>, diagnostics: Vec<Py<SemanticDiagnostic>>) {
+        let diagnostics = diagnostics
+            .into_iter()
+            .map(|item| item.borrow(py).inner.lock().unwrap().clone())
+            .collect();
+        self.inner.lock().unwrap().set_diagnostics(diagnostics);
     }
     pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         json_value_to_py(

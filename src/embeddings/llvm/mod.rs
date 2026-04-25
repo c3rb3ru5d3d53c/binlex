@@ -91,21 +91,21 @@ fn optimize_lifter(lifter: LlvmLifter) -> Result<LlvmLifter, Error> {
 }
 
 pub(crate) fn canonical_instruction_bitcode(instruction: &Instruction) -> Result<Vec<u8>, Error> {
-    let mut lifter = LlvmLifter::new(instruction.config.clone());
+    let mut lifter = LlvmLifter::new(instruction.architecture, instruction.config.clone());
     lifter.lift_instruction(instruction)?;
     let optimized = optimize_lifter(lifter)?;
     Ok(optimized.bitcode())
 }
 
 pub(crate) fn canonical_block_bitcode(block: &Block<'_>) -> Result<Vec<u8>, Error> {
-    let mut lifter = LlvmLifter::new(block.cfg.config.clone());
+    let mut lifter = LlvmLifter::new(block.architecture(), block.cfg.config.clone());
     lifter.lift_block(block)?;
     let optimized = optimize_lifter(lifter)?;
     Ok(optimized.bitcode())
 }
 
 pub(crate) fn canonical_function_bitcode(function: &Function<'_>) -> Result<Vec<u8>, Error> {
-    let mut lifter = LlvmLifter::new(function.cfg.config.clone());
+    let mut lifter = LlvmLifter::new(function.architecture(), function.cfg.config.clone());
     lifter.lift_function(function)?;
     let optimized = optimize_lifter(lifter)?;
     Ok(optimized.bitcode())

@@ -1,4 +1,5 @@
 use crate::Config;
+use crate::Architecture;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::lifters::llvm::{Lifter as LlvmLifter, Mode as LlvmMode};
 use std::io::Error;
@@ -81,13 +82,21 @@ impl<'a> Llvm<'a> {
         if let Some(mode) = self.mode {
             config.lifters.llvm.mode = mode;
         }
-        let mut lifter = LlvmLifter::new(config);
+        let mut lifter = LlvmLifter::new(self.architecture(), config);
         match self.entity {
             EntityRef::Instruction(instruction) => lifter.lift_instruction(instruction)?,
             EntityRef::Block(block) => lifter.lift_block(block)?,
             EntityRef::Function(function) => lifter.lift_function(function)?,
         }
         Ok(lifter)
+    }
+
+    fn architecture(&self) -> Architecture {
+        match self.entity {
+            EntityRef::Instruction(instruction) => instruction.architecture,
+            EntityRef::Block(block) => block.architecture(),
+            EntityRef::Function(function) => function.architecture(),
+        }
     }
 
     fn config(&self) -> Config {

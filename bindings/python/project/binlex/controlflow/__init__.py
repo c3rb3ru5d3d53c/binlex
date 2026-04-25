@@ -100,6 +100,12 @@ class Instruction:
         """Return canonical semantics for this instruction, if present."""
         return self._inner.semantics()
 
+    def set_semantics(self, semantics):
+        """Replace the canonical semantics for this instruction inside the graph."""
+        inner = getattr(semantics, "_inner", semantics)
+        self._inner.set_semantics(inner)
+        return self
+
     def to_dict(self):
         """Convert the instruction to a Python dictionary."""
         return self._inner.to_dict()
@@ -493,7 +499,7 @@ class _Lifters:
         config = getattr(self._owner, "_config", None)
         if config is None:
             raise RuntimeError("controlflow object is missing associated Config")
-        lifter = Lifter(config)
+        lifter = Lifter(self._owner.architecture(), config)
         if isinstance(self._owner, Instruction):
             lifter = lifter.lift_instruction(self._owner)
         elif isinstance(self._owner, Block):
@@ -561,7 +567,7 @@ class _LLVM:
         if self._mode is not None:
             config = config.clone()
             config.lifters.llvm.mode = self._mode
-        lifter = Lifter(config)
+        lifter = Lifter(self._owner.architecture(), config)
         if isinstance(self._owner, Instruction):
             lifter = lifter.lift_instruction(self._owner)
         elif isinstance(self._owner, Block):

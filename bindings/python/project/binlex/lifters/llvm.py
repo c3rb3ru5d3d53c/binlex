@@ -23,15 +23,22 @@
 """LLVM lifter wrappers backed by the Rust core implementation."""
 
 from binlex import Config
+from binlex.core import Architecture
+from binlex.semantics import InstructionSemantics
 from binlex_bindings.binlex.lifters.llvm import Lifter as _LifterBinding
 
 
 class Lifter:
     """Lift instructions, blocks, and functions into LLVM-style IR."""
 
-    def __init__(self, config, _inner=None):
+    def __init__(self, architecture, config, _inner=None):
+        self._architecture = architecture
         self._config = config
-        self._inner = _LifterBinding(config) if _inner is None else _inner
+        if _inner is None:
+            architecture = architecture.to_binding() if isinstance(architecture, Architecture) else architecture
+            self._inner = _LifterBinding(architecture, config)
+        else:
+            self._inner = _inner
 
     def lift_instruction(self, instruction):
         if self._inner.lift_instruction(instruction._inner):
@@ -45,6 +52,12 @@ class Lifter:
 
     def lift_function(self, function):
         if self._inner.lift_function(function._inner):
+            return self
+        return None
+
+    def lift_semantics(self, semantics):
+        inner = getattr(semantics, "_inner", semantics)
+        if self._inner.lift_semantics(inner):
             return self
         return None
 
@@ -64,7 +77,7 @@ class Lifter:
         inner = self._inner.normalized()
         if inner is None:
             return None
-        return self.__class__(self._config, _inner=inner)
+        return self.__class__(self._architecture, self._config, _inner=inner)
 
     def optimizers(self):
         return Optimizers(self)
@@ -119,7 +132,7 @@ class Optimizers:
         inner = getattr(self._lifter._inner, name)()
         if inner is None:
             return None
-        return self._lifter.__class__(self._lifter._config, _inner=inner)
+        return self._lifter.__class__(self._lifter._architecture, self._lifter._config, _inner=inner)
 
     def text(self):
         if self._lifter is None:
