@@ -13,3 +13,6 @@ test.py
 input.ll
 output.s
 *.log
+*.ll
+*.s
+experiments/
