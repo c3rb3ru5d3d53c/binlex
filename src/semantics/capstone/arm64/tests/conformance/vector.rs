@@ -100,8 +100,32 @@ fn vector_semantics_match_unicorn_transitions() {
             },
         ),
         (
+            "movi v0.2s, #2",
+            vec![0x40, 0x04, 0x00, 0x0f],
+            Arm64Fixture {
+                registers: vec![],
+                memory: vec![],
+            },
+        ),
+        (
             "movi d0, #0000000000000000",
             vec![0x00, 0xe4, 0x00, 0x2f],
+            Arm64Fixture {
+                registers: vec![],
+                memory: vec![],
+            },
+        ),
+        (
+            "movi d0, #0xffffffffffffffff",
+            vec![0xe0, 0xe7, 0x07, 0x2f],
+            Arm64Fixture {
+                registers: vec![],
+                memory: vec![],
+            },
+        ),
+        (
+            "movi v2.2d, #0xffffffffffffffff",
+            vec![0xe2, 0xe7, 0x07, 0x6f],
             Arm64Fixture {
                 registers: vec![],
                 memory: vec![],
@@ -124,6 +148,16 @@ fn vector_semantics_match_unicorn_transitions() {
             },
         ),
         (
+            "rev64 v0.16b, v1.16b",
+            vec![0x20, 0x08, 0x20, 0x4e],
+            Arm64Fixture {
+                registers: vec![
+                    ("v1", 0x1122_3344_5566_7788_99aa_bbcc_ddee_ff00u128),
+                ],
+                memory: vec![],
+            },
+        ),
+        (
             "rev64 v0.2s, v1.2s",
             vec![0x20, 0x08, 0xa0, 0x0e],
             Arm64Fixture {
@@ -136,6 +170,38 @@ fn vector_semantics_match_unicorn_transitions() {
             vec![0x20, 0x58, 0x20, 0x0e],
             Arm64Fixture {
                 registers: vec![("v1", 0x0000_0000_0000_0000_f0ff_5501_7f80_0000u128)],
+                memory: vec![],
+            },
+        ),
+        (
+            "cnt v0.16b, v1.16b",
+            vec![0x20, 0x58, 0x20, 0x4e],
+            Arm64Fixture {
+                registers: vec![
+                    ("v1", 0xf0ff_5501_7f80_0000_1122_3344_5566_7788u128),
+                ],
+                memory: vec![],
+            },
+        ),
+        (
+            "cmeq v0.16b, v1.16b, v2.16b",
+            vec![0x20, 0x8c, 0x22, 0x6e],
+            Arm64Fixture {
+                registers: vec![
+                    ("v1", 0x100f_0e0d_0c0b_0a09_0807_0605_0403_0201u128),
+                    ("v2", 0x1001_0e0d_0cff_0a09_aa07_0605_0400_0201u128),
+                ],
+                memory: vec![],
+            },
+        ),
+        (
+            "cmhi v0.16b, v1.16b, v2.16b",
+            vec![0x20, 0x34, 0x22, 0x6e],
+            Arm64Fixture {
+                registers: vec![
+                    ("v1", 0x100f_0e0d_0c0b_0a09_0807_0605_0403_0201u128),
+                    ("v2", 0x0f10_0e00_0cff_0a09_aa08_0604_0402_0100u128),
+                ],
                 memory: vec![],
             },
         ),
@@ -157,6 +223,17 @@ fn vector_semantics_match_unicorn_transitions() {
                 registers: vec![
                     ("v1", 0x0000_0000_0000_0000_0000_0004_0000_0002u128),
                     ("v2", 0x0000_0000_0000_0000_0000_0003_0000_0005u128),
+                ],
+                memory: vec![],
+            },
+        ),
+        (
+            "uzp1 v0.16b, v1.16b, v2.16b",
+            vec![0x20, 0x18, 0x02, 0x4e],
+            Arm64Fixture {
+                registers: vec![
+                    ("v1", 0x0f0e_0d0c_0b0a_0908_0706_0504_0302_0100u128),
+                    ("v2", 0x1f1e_1d1c_1b1a_1918_1716_1514_1312_1110u128),
                 ],
                 memory: vec![],
             },
@@ -185,6 +262,16 @@ fn vector_semantics_match_unicorn_transitions() {
             vec![0x20, 0x38, 0x30, 0x2e],
             Arm64Fixture {
                 registers: vec![("v1", 0x0000_0000_0000_0000_0807_0605_0403_0201u128)],
+                memory: vec![],
+            },
+        ),
+        (
+            "uaddlv h0, v1.16b",
+            vec![0x20, 0x38, 0x30, 0x6e],
+            Arm64Fixture {
+                registers: vec![
+                    ("v1", 0x100f_0e0d_0c0b_0a09_0807_0605_0403_0201u128),
+                ],
                 memory: vec![],
             },
         ),
@@ -267,6 +354,22 @@ fn vector_semantics_match_unicorn_transitions() {
             },
         ),
         (
+            "fabs d0, d1",
+            vec![0x20, 0xc0, 0x60, 0x1e],
+            Arm64Fixture {
+                registers: vec![("d1", 0xc008_0000_0000_0000)],
+                memory: vec![],
+            },
+        ),
+        (
+            "fneg d0, d1",
+            vec![0x20, 0x40, 0x61, 0x1e],
+            Arm64Fixture {
+                registers: vec![("d1", 0x4008_0000_0000_0000)],
+                memory: vec![],
+            },
+        ),
+        (
             "fadd d0, d1, d2",
             vec![0x20, 0x28, 0x62, 0x1e],
             Arm64Fixture {
@@ -291,6 +394,17 @@ fn vector_semantics_match_unicorn_transitions() {
         (
             "fmul d0, d1, d2",
             vec![0x20, 0x08, 0x62, 0x1e],
+            Arm64Fixture {
+                registers: vec![
+                    ("d1", 0x4008_0000_0000_0000),
+                    ("d2", 0x4014_0000_0000_0000),
+                ],
+                memory: vec![],
+            },
+        ),
+        (
+            "fnmul d0, d1, d2",
+            vec![0x20, 0x88, 0x62, 0x1e],
             Arm64Fixture {
                 registers: vec![
                     ("d1", 0x4008_0000_0000_0000),

@@ -17,7 +17,7 @@ pub(crate) fn assert_arm64_semantics_match_unicorn(name: &str, bytes: &[u8], fix
         .into_iter()
         .filter(|name| is_vector_semantic_register(name))
         .collect::<Vec<_>>();
-    let interpreted = interpret_arm64_semantics(bytes, &semantics, &fixture, &tracked_registers);
+    let interpreted = interpret_arm64_semantics(name, bytes, &semantics, &fixture, &tracked_registers);
     let unicorn = unicorn_arm64_execution(
         name,
         bytes,
@@ -114,6 +114,7 @@ pub(crate) fn assert_arm64_semantics_match_unicorn(name: &str, bytes: &[u8], fix
 }
 
 fn interpret_arm64_semantics(
+    instruction_name: &str,
     bytes: &[u8],
     semantics: &InstructionSemantics,
     fixture: &Arm64Fixture,
@@ -153,14 +154,15 @@ fn interpret_arm64_semantics(
                         ),
                     );
                 }
-                SemanticLocation::Register { name, bits }
-                | SemanticLocation::Flag { name, bits } => {
+                SemanticLocation::Register { name: dst_name, bits }
+                | SemanticLocation::Flag { name: dst_name, bits } => {
+                    let value = mask_to_bits(
+                        eval_expression(expression, &registers, &temporaries, &pre_memory),
+                        *bits,
+                    );
                     register_writes.push((
-                        name.clone(),
-                        mask_to_bits(
-                            eval_expression(expression, &registers, &temporaries, &pre_memory),
-                            *bits,
-                        ),
+                        dst_name.clone(),
+                        relocate_adr_like_result(instruction_name, value, expression),
                     ));
                 }
                 other => panic!("unsupported arm64 conformance destination: {other:?}"),
@@ -238,6 +240,20 @@ fn interpret_arm64_semantics(
     }
 }
 
+fn relocate_adr_like_result(
+    instruction_name: &str,
+    value: u128,
+    expression: &SemanticExpression,
+) -> u128 {
+    if !matches!(expression, SemanticExpression::Const { .. }) {
+        return value;
+    }
+    if instruction_name.starts_with("adr ") || instruction_name.starts_with("adrp ") {
+        return relocate_code_target(value as u64) as u128;
+    }
+    value
+}
+
 fn eval_expression(
     expression: &SemanticExpression,
     registers: &BTreeMap<String, u128>,
@@ -301,6 +317,8 @@ fn eval_expression(
             let arg = eval_expression(arg, registers, temporaries, memory);
             let value = match op {
                 SemanticOperationUnary::Not => !arg,
+                SemanticOperationUnary::Abs => float_abs_with_width(arg, *bits),
+                SemanticOperationUnary::Neg => float_neg_with_width(arg, *bits),
                 SemanticOperationUnary::BitReverse => bit_reverse_with_width(arg, *bits),
                 SemanticOperationUnary::CountLeadingZeros => count_leading_zeros_with_width(arg, *bits),
                 SemanticOperationUnary::PopCount => (mask_to_bits(arg, *bits)).count_ones() as u128,
@@ -560,6 +578,22 @@ fn float_div_with_width(left: u128, right: u128, bits: u16) -> u128 {
         32 => (f32::from_bits(left as u32) / f32::from_bits(right as u32)).to_bits() as u128,
         64 => (f64::from_bits(left as u64) / f64::from_bits(right as u64)).to_bits() as u128,
         _ => panic!("unsupported arm64 floating div width: {bits}"),
+    }
+}
+
+fn float_abs_with_width(value: u128, bits: u16) -> u128 {
+    match bits {
+        32 => f32::from_bits(value as u32).abs().to_bits() as u128,
+        64 => f64::from_bits(value as u64).abs().to_bits() as u128,
+        _ => panic!("unsupported arm64 floating abs width: {bits}"),
+    }
+}
+
+fn float_neg_with_width(value: u128, bits: u16) -> u128 {
+    match bits {
+        32 => (-f32::from_bits(value as u32)).to_bits() as u128,
+        64 => (-f64::from_bits(value as u64)).to_bits() as u128,
+        _ => panic!("unsupported arm64 floating neg width: {bits}"),
     }
 }
 
