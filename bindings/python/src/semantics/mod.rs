@@ -743,6 +743,16 @@ impl SemanticLocation {
     pub fn kind(&self) -> SemanticLocationKind {
         SemanticLocationKind::from_inner(self.inner.lock().unwrap().kind())
     }
+    pub fn bits(&self) -> u16 {
+        self.inner.lock().unwrap().bits()
+    }
+    pub fn name(&self) -> Option<String> {
+        match &*self.inner.lock().unwrap() {
+            InnerSemanticLocation::Register { name, .. }
+            | InnerSemanticLocation::Flag { name, .. } => Some(name.clone()),
+            _ => None,
+        }
+    }
     pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         json_value_to_py(
             py,
@@ -1185,6 +1195,16 @@ impl SemanticEffect {
         let expression = self.inner.lock().unwrap().expression().cloned();
         expression
             .map(|expression| Py::new(py, SemanticExpression::from_inner(expression)))
+            .transpose()
+    }
+    pub fn location(&self, py: Python<'_>) -> PyResult<Option<Py<SemanticLocation>>> {
+        let location = match &*self.inner.lock().unwrap() {
+            InnerSemanticEffect::Set { dst, .. } => Some(dst.clone()),
+            InnerSemanticEffect::AtomicCmpXchg { observed, .. } => Some(observed.clone()),
+            _ => None,
+        };
+        location
+            .map(|location| Py::new(py, SemanticLocation::from_inner(location)))
             .transpose()
     }
     pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {

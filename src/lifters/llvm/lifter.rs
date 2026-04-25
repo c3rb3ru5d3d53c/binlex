@@ -25,10 +25,10 @@ use inkwell::memory_buffer::MemoryBuffer;
 use inkwell::module::Module;
 use inkwell::passes::PassBuilderOptions;
 use inkwell::targets::{CodeModel, InitializationConfig, RelocMode, Target, TargetMachine};
-use inkwell::types::{AnyType, BasicMetadataTypeEnum, IntType};
-use inkwell::values::{BasicMetadataValueEnum, FunctionValue, IntValue, PointerValue};
+use inkwell::types::{AnyType, BasicMetadataTypeEnum, FloatType, IntType};
+use inkwell::values::{BasicMetadataValueEnum, FloatValue, FunctionValue, IntValue, PointerValue};
 use std::cell::RefCell;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ffi::CStr;
 use std::ffi::c_void;
 use std::io::Error;
@@ -68,15 +68,24 @@ extern "C" fn capture_diagnostic(diagnostic_info: LLVMDiagnosticInfoRef, opaque:
 struct LoweringContext<'ctx, 'm> {
     context: &'ctx Context,
     module: &'m Module<'ctx>,
+    debug: bool,
     builder: Builder<'ctx>,
     function: FunctionValue<'ctx>,
     function_name: String,
+    current_instruction_address: Option<u64>,
+    lowering_summary: BTreeMap<(String, String), LoweringSummaryEntry>,
     slots: HashMap<String, PointerValue<'ctx>>,
     slot_locations: HashMap<String, SemanticLocation>,
     written_locations: BTreeSet<String>,
     native_return_adjust: Option<u16>,
     body_begin_emitted: bool,
     cached_flags_register: RefCell<Option<IntValue<'ctx>>>,
+}
+
+#[derive(Default)]
+struct LoweringSummaryEntry {
+    count: usize,
+    sample_addresses: Vec<u64>,
 }
 
 impl Lifter {
@@ -233,9 +242,12 @@ impl Lifter {
         LoweringContext {
             context: self.context,
             module: &self.module,
+            debug: self.config.debug,
             builder,
             function,
             function_name: function.get_name().to_string_lossy().into_owned(),
+            current_instruction_address: None,
+            lowering_summary: BTreeMap::new(),
             slots: HashMap::new(),
             slot_locations: HashMap::new(),
             written_locations: BTreeSet::new(),
@@ -364,6 +376,52 @@ impl Lifter {
 }
 
 impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
+    fn record_semantic_lowering(&mut self, kind: &str, detail: impl Into<String>) {
+        if !self.debug {
+            return;
+        }
+        let detail = detail.into();
+        let entry = self
+            .lowering_summary
+            .entry((kind.to_string(), detail))
+            .or_default();
+        entry.count += 1;
+        if let Some(address) = self.current_instruction_address {
+            if !entry.sample_addresses.contains(&address) && entry.sample_addresses.len() < 5 {
+                entry.sample_addresses.push(address);
+            }
+        }
+    }
+
+    fn emit_lowering_summary(&self) {
+        if !self.debug || self.lowering_summary.is_empty() {
+            return;
+        }
+        for ((kind, detail), entry) in self
+            .lowering_summary
+            .iter()
+            .filter(|((kind, _), _)| kind != "terminator_helper")
+        {
+            let addresses = if entry.sample_addresses.is_empty() {
+                "[]".to_string()
+            } else {
+                format!(
+                    "[{}]",
+                    entry
+                        .sample_addresses
+                        .iter()
+                        .map(|address| format!("0x{address:x}"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            };
+            Stderr::print(format!(
+                "llvm semantic summary function={} kind={} count={} sample_addresses={} detail={}",
+                self.function_name, kind, entry.count, addresses, detail
+            ));
+        }
+    }
+
     fn lower_function(&mut self, function: &Function<'_>) -> Result<(), Error> {
         let mut block_map = HashMap::<u64, BasicBlock<'ctx>>::new();
         for block in function.blocks() {
@@ -434,6 +492,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .map_err(|err| Error::other(err.to_string()))?;
             }
         }
+        self.emit_lowering_summary();
         Ok(())
     }
 
@@ -568,7 +627,23 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     }
 
     fn lower_instruction(&mut self, instruction: &Instruction) -> Result<(), Error> {
+        self.current_instruction_address = Some(instruction.address);
         if let Some(semantics) = instruction.semantics.as_ref() {
+            if self.debug
+                && (matches!(semantics.status, crate::semantics::SemanticStatus::Partial)
+                    || !semantics.diagnostics.is_empty())
+            {
+                let diagnostics = semantics
+                    .diagnostics
+                    .iter()
+                    .map(|diagnostic| format!("{:?}: {}", diagnostic.kind, diagnostic.message))
+                    .collect::<Vec<_>>()
+                    .join(" | ");
+                self.record_semantic_lowering(
+                    "semantics_status",
+                    format!("status={:?} diagnostics=[{}]", semantics.status, diagnostics),
+                );
+            }
             *self.cached_flags_register.borrow_mut() = None;
             let prepared = prepare_instruction_semantics(semantics)?;
             self.emit_body_marker_if_needed()?;
@@ -576,6 +651,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             self.lower_semantics(&prepared)?;
             *self.cached_flags_register.borrow_mut() = None;
         }
+        self.current_instruction_address = None;
         Ok(())
     }
 
@@ -846,12 +922,22 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 if self.try_direct_memory_set(space, addr, value, count, *element_bits, decrement)? {
                     return Ok(());
                 }
-                let helper = self.declare_void_helper(
-                    &format!(
-                        "binlex_effect_memset_{}_{}",
-                        sanitize_symbol(&render_address_space(space)),
-                        element_bits
+                let helper_name = format!(
+                    "binlex_effect_memset_{}_{}",
+                    sanitize_symbol(&render_address_space(space)),
+                    element_bits
+                );
+                self.record_semantic_lowering(
+                    "effect_helper",
+                    format!(
+                        "MemorySet bits={} space={} helper={}",
+                        element_bits,
+                        render_address_space(space),
+                        helper_name
                     ),
+                );
+                let helper = self.declare_void_helper(
+                    &helper_name,
                     &[
                         self.context.i64_type().into(),
                         self.context.i64_type().into(),
@@ -895,13 +981,24 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 )? {
                     return Ok(());
                 }
-                let helper = self.declare_void_helper(
-                    &format!(
-                        "binlex_effect_memcpy_{}_{}_{}",
-                        sanitize_symbol(&render_address_space(src_space)),
-                        sanitize_symbol(&render_address_space(dst_space)),
-                        element_bits
+                let helper_name = format!(
+                    "binlex_effect_memcpy_{}_{}_{}",
+                    sanitize_symbol(&render_address_space(src_space)),
+                    sanitize_symbol(&render_address_space(dst_space)),
+                    element_bits
+                );
+                self.record_semantic_lowering(
+                    "effect_helper",
+                    format!(
+                        "MemoryCopy bits={} src_space={} dst_space={} helper={}",
+                        element_bits,
+                        render_address_space(src_space),
+                        render_address_space(dst_space),
+                        helper_name
                     ),
+                );
+                let helper = self.declare_void_helper(
+                    &helper_name,
                     &[
                         self.context.i64_type().into(),
                         self.context.i64_type().into(),
@@ -939,12 +1036,22 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 bits,
                 observed,
             } => {
-                let helper = self.declare_value_helper(
-                    &format!(
-                        "binlex_effect_atomic_cmpxchg_{}_{}",
-                        sanitize_symbol(&render_address_space(space)),
-                        bits
+                let helper_name = format!(
+                    "binlex_effect_atomic_cmpxchg_{}_{}",
+                    sanitize_symbol(&render_address_space(space)),
+                    bits
+                );
+                self.record_semantic_lowering(
+                    "effect_helper",
+                    format!(
+                        "AtomicCmpXchg bits={} space={} helper={}",
+                        bits,
+                        render_address_space(space),
+                        helper_name
                     ),
+                );
+                let helper = self.declare_value_helper(
+                    &helper_name,
                     self.int_type(*bits),
                     &[
                         self.context.i64_type().into(),
@@ -968,42 +1075,46 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .map_err(|err| Error::other(err.to_string()))?;
             }
             SemanticEffect::Fence { kind } => {
-                let helper = self.declare_void_helper(
-                    &format!("binlex_fence_{}", render_fence_kind(kind)),
-                    &[],
-                    false,
+                let helper_name = format!("binlex_fence_{}", render_fence_kind(kind));
+                self.record_semantic_lowering(
+                    "effect_helper",
+                    format!("Fence {} helper={}", render_fence_kind(kind), helper_name),
                 );
+                let helper = self.declare_void_helper(&helper_name, &[], false);
                 self.builder
                     .build_call(helper, &[], "")
                     .map_err(|err| Error::other(err.to_string()))?;
             }
             SemanticEffect::Trap { kind } => {
-                let helper = self.declare_void_helper(
-                    &format!("binlex_trap_{}", render_trap_kind(kind)),
-                    &[],
-                    false,
+                let helper_name = format!("binlex_trap_{}", render_trap_kind(kind));
+                self.record_semantic_lowering(
+                    "effect_helper",
+                    format!("Trap {} helper={}", render_trap_kind(kind), helper_name),
                 );
+                let helper = self.declare_void_helper(&helper_name, &[], false);
                 self.builder
                     .build_call(helper, &[], "")
                     .map_err(|err| Error::other(err.to_string()))?;
             }
             SemanticEffect::Intrinsic { name, args, .. } => {
-                let helper = self.declare_void_helper(
-                    &format!("binlex_effect_{}", sanitize_symbol(name)),
-                    &[],
-                    true,
+                let helper_name = format!("binlex_effect_{}", sanitize_symbol(name));
+                self.record_semantic_lowering(
+                    "effect_intrinsic",
+                    format!("name={} args={} helper={}", name, args.len(), helper_name),
                 );
+                let helper = self.declare_void_helper(&helper_name, &[], true);
                 let args = self.lower_arg_values(args)?;
                 self.builder
                     .build_call(helper, &args, "")
                     .map_err(|err| Error::other(err.to_string()))?;
             }
             SemanticEffect::Architecture { name, args, .. } => {
-                let helper = self.declare_void_helper(
-                    &format!("binlex_arch_effect_{}", sanitize_symbol(name)),
-                    &[],
-                    true,
+                let helper_name = format!("binlex_arch_effect_{}", sanitize_symbol(name));
+                self.record_semantic_lowering(
+                    "effect_architecture",
+                    format!("name={} args={} helper={}", name, args.len(), helper_name),
                 );
+                let helper = self.declare_void_helper(&helper_name, &[], true);
                 let args = self.lower_arg_values(args)?;
                 self.builder
                     .build_call(helper, &args, "")
@@ -1018,6 +1129,10 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         match terminator {
             SemanticTerminator::FallThrough => {}
             SemanticTerminator::Jump { target } => {
+                self.record_semantic_lowering(
+                    "terminator_helper",
+                    "Jump helper=binlex_term_jump",
+                );
                 let helper = self.declare_void_helper(
                     "binlex_term_jump",
                     &[self.context.i64_type().into()],
@@ -1034,6 +1149,10 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 true_target,
                 false_target,
             } => {
+                self.record_semantic_lowering(
+                    "terminator_helper",
+                    "Branch helper=binlex_term_branch",
+                );
                 let helper = self.declare_void_helper(
                     "binlex_term_branch",
                     &[
@@ -1062,6 +1181,10 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 return_target,
                 does_return,
             } => {
+                self.record_semantic_lowering(
+                    "terminator_helper",
+                    format!("Call helper=binlex_term_call does_return={}", does_return.unwrap_or(true)),
+                );
                 let helper = self.declare_void_helper(
                     "binlex_term_call",
                     &[
@@ -1098,6 +1221,10 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 {
                     self.native_return_adjust = Some(adjust);
                 } else if let Some(expression) = expression {
+                    self.record_semantic_lowering(
+                        "terminator_helper",
+                        "Return helper=binlex_term_return",
+                    );
                     let value = self.lower_expression(expression)?;
                     let helper = self.declare_void_helper(
                         "binlex_term_return",
@@ -1115,6 +1242,10 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .map_err(|err| Error::other(err.to_string()))?;
             }
             SemanticTerminator::Trap => {
+                self.record_semantic_lowering(
+                    "terminator_helper",
+                    "Trap helper=binlex_term_trap",
+                );
                 let helper = self.declare_void_helper("binlex_term_trap", &[], false);
                 self.builder
                     .build_call(helper, &[], "")
@@ -1142,13 +1273,25 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             return Ok(());
         }
         let helper = self.declare_void_helper(
-            &format!(
-                "binlex_store_{}_{}",
-                sanitize_symbol(&render_address_space(space)),
-                bits
-            ),
+            &{
+                let helper_name = format!(
+                    "binlex_store_{}_{}",
+                    sanitize_symbol(&render_address_space(space)),
+                    bits
+                );
+                helper_name
+            },
             &[self.context.i64_type().into(), self.int_type(bits).into()],
             false,
+        );
+        self.record_semantic_lowering(
+            "store_helper",
+            format!(
+                "space={} bits={} helper={}",
+                render_address_space(space),
+                bits,
+                helper.get_name().to_string_lossy()
+            ),
         );
         let addr = self.lower_expression(addr)?;
         let addr = self.to_i64(addr);
@@ -1180,14 +1323,26 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     return Ok(value);
                 }
                 let helper = self.declare_value_helper(
-                    &format!(
-                        "binlex_load_{}_{}",
-                        sanitize_symbol(&render_address_space(space)),
-                        bits
-                    ),
+                    &{
+                        let helper_name = format!(
+                            "binlex_load_{}_{}",
+                            sanitize_symbol(&render_address_space(space)),
+                            bits
+                        );
+                        helper_name
+                    },
                     self.int_type(*bits),
                     &[self.context.i64_type().into()],
                     false,
+                );
+                self.record_semantic_lowering(
+                    "load_helper",
+                    format!(
+                        "space={} bits={} helper={}",
+                        render_address_space(space),
+                        bits,
+                        helper.get_name().to_string_lossy()
+                    ),
                 );
                 let addr = self.lower_expression(addr)?;
                 let addr = self.to_i64(addr);
@@ -1284,21 +1439,43 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 Ok(self.int_type(*bits).const_zero())
             }
             SemanticExpression::Intrinsic { name, args, bits } => {
+                let helper_name = format!("binlex_expr_{}", sanitize_symbol(name));
                 let helper = self.declare_value_helper(
-                    &format!("binlex_expr_{}", sanitize_symbol(name)),
+                    &helper_name,
                     self.int_type(*bits),
                     &[],
                     true,
+                );
+                self.record_semantic_lowering(
+                    "expression_intrinsic",
+                    format!(
+                        "name={} bits={} args={} helper={}",
+                        name,
+                        bits,
+                        args.len(),
+                        helper.get_name().to_string_lossy()
+                    ),
                 );
                 let args = self.lower_arg_values(args)?;
                 self.call_value(helper, &args, "intrinsicexpr")
             }
             SemanticExpression::Architecture { name, args, bits, .. } => {
+                let helper_name = format!("binlex_arch_expr_{}", sanitize_symbol(name));
                 let helper = self.declare_value_helper(
-                    &format!("binlex_arch_expr_{}", sanitize_symbol(name)),
+                    &helper_name,
                     self.int_type(*bits),
                     &[],
                     true,
+                );
+                self.record_semantic_lowering(
+                    "expression_architecture",
+                    format!(
+                        "name={} bits={} args={} helper={}",
+                        name,
+                        bits,
+                        args.len(),
+                        helper.get_name().to_string_lossy()
+                    ),
                 );
                 let args = self.lower_arg_values(args)?;
                 self.call_value(helper, &args, "archexpr")
@@ -1417,14 +1594,26 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     return Ok(value);
                 }
                 let helper = self.declare_value_helper(
-                    &format!(
-                        "binlex_load_{}_{}",
-                        sanitize_symbol(&render_address_space(space)),
-                        bits
-                    ),
+                    &{
+                        let helper_name = format!(
+                            "binlex_load_{}_{}",
+                            sanitize_symbol(&render_address_space(space)),
+                            bits
+                        );
+                        helper_name
+                    },
                     self.int_type(*bits),
                     &[self.context.i64_type().into()],
                     false,
+                );
+                self.record_semantic_lowering(
+                    "load_helper",
+                    format!(
+                        "space={} bits={} helper={}",
+                        render_address_space(space),
+                        bits,
+                        helper.get_name().to_string_lossy()
+                    ),
                 );
                 let addr = self.lower_expression(addr)?;
                 let addr = self.to_i64(addr);
@@ -1797,7 +1986,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     }
 
     fn lower_unary(
-        &self,
+        &mut self,
         op: SemanticOperationUnary,
         arg: IntValue<'ctx>,
         bits: u16,
@@ -1872,11 +2061,21 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 self.call_value(function, &[arg.into()], "ctpoptmp")
             }
             _ => {
+                let helper_name = format!("binlex_unary_{:?}", op).to_lowercase();
                 let helper = self.declare_value_helper(
-                    &format!("binlex_unary_{:?}", op).to_lowercase(),
+                    &helper_name,
                     self.int_type(bits),
                     &[arg.get_type().into()],
                     false,
+                );
+                self.record_semantic_lowering(
+                    "unary_helper",
+                    format!(
+                        "{:?} bits={} helper={}",
+                        op,
+                        bits,
+                        helper.get_name().to_string_lossy()
+                    ),
                 );
                 self.call_value(helper, &[arg.into()], "unarytmp")
             }
@@ -1884,13 +2083,53 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     }
 
     fn lower_binary(
-        &self,
+        &mut self,
         op: SemanticOperationBinary,
         left: IntValue<'ctx>,
         right: IntValue<'ctx>,
         bits: u16,
     ) -> Result<IntValue<'ctx>, Error> {
         match op {
+            SemanticOperationBinary::FAdd => {
+                let float_type = self.float_type(bits)?;
+                let left = self.int_bits_to_float(left, float_type, "fadd_lhs")?;
+                let right = self.int_bits_to_float(right, float_type, "fadd_rhs")?;
+                let sum = self
+                    .builder
+                    .build_float_add(left, right, "faddtmp")
+                    .map_err(|err| Error::other(err.to_string()))?;
+                self.float_to_int_bits(sum, self.int_type(bits), "fadd_bits")
+            }
+            SemanticOperationBinary::FSub => {
+                let float_type = self.float_type(bits)?;
+                let left = self.int_bits_to_float(left, float_type, "fsub_lhs")?;
+                let right = self.int_bits_to_float(right, float_type, "fsub_rhs")?;
+                let difference = self
+                    .builder
+                    .build_float_sub(left, right, "fsubtmp")
+                    .map_err(|err| Error::other(err.to_string()))?;
+                self.float_to_int_bits(difference, self.int_type(bits), "fsub_bits")
+            }
+            SemanticOperationBinary::FMul => {
+                let float_type = self.float_type(bits)?;
+                let left = self.int_bits_to_float(left, float_type, "fmul_lhs")?;
+                let right = self.int_bits_to_float(right, float_type, "fmul_rhs")?;
+                let product = self
+                    .builder
+                    .build_float_mul(left, right, "fmultmp")
+                    .map_err(|err| Error::other(err.to_string()))?;
+                self.float_to_int_bits(product, self.int_type(bits), "fmul_bits")
+            }
+            SemanticOperationBinary::FDiv => {
+                let float_type = self.float_type(bits)?;
+                let left = self.int_bits_to_float(left, float_type, "fdiv_lhs")?;
+                let right = self.int_bits_to_float(right, float_type, "fdiv_rhs")?;
+                let quotient = self
+                    .builder
+                    .build_float_div(left, right, "fdivtmp")
+                    .map_err(|err| Error::other(err.to_string()))?;
+                self.float_to_int_bits(quotient, self.int_type(bits), "fdiv_bits")
+            }
             SemanticOperationBinary::Add | SemanticOperationBinary::AddWithCarry => self
                 .builder
                 .build_int_add(left, right, "addtmp")
@@ -1976,6 +2215,10 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 )
                 .map_err(|err| Error::other(err.to_string())),
             SemanticOperationBinary::RotateLeft => {
+                self.record_semantic_lowering(
+                    "binary_intrinsic",
+                    format!("RotateLeft bits={} via llvm.fshl.i{}", bits, bits),
+                );
                 let name = format!("llvm.fshl.i{}", bits);
                 let function = self.module.get_function(&name).unwrap_or_else(|| {
                     self.module.add_function(
@@ -2001,6 +2244,10 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 self.call_value(function, &[left.into(), left.into(), right.into()], "roltmp")
             }
             SemanticOperationBinary::RotateRight => {
+                self.record_semantic_lowering(
+                    "binary_intrinsic",
+                    format!("RotateRight bits={} via llvm.fshr.i{}", bits, bits),
+                );
                 let name = format!("llvm.fshr.i{}", bits);
                 let function = self.module.get_function(&name).unwrap_or_else(|| {
                     self.module.add_function(
@@ -2026,11 +2273,21 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 self.call_value(function, &[left.into(), left.into(), right.into()], "rortmp")
             }
             _ => {
+                let helper_name = format!("binlex_binary_{:?}", op).to_lowercase();
                 let helper = self.declare_value_helper(
-                    &format!("binlex_binary_{:?}", op).to_lowercase(),
+                    &helper_name,
                     self.int_type(bits),
                     &[left.get_type().into(), right.get_type().into()],
                     false,
+                );
+                self.record_semantic_lowering(
+                    "binary_helper",
+                    format!(
+                        "{:?} bits={} helper={}",
+                        op,
+                        bits,
+                        helper.get_name().to_string_lossy()
+                    ),
                 );
                 self.call_value(helper, &[left.into(), right.into()], "binarytmp")
             }
@@ -2038,7 +2295,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     }
 
     fn lower_cast(
-        &self,
+        &mut self,
         op: SemanticOperationCast,
         arg: IntValue<'ctx>,
         bits: u16,
@@ -2081,12 +2338,164 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                         .map_err(|err| Error::other(err.to_string()))
                 }
             }
+            SemanticOperationCast::IntToFloat => {
+                let float_type = self.float_type(bits)?;
+                let float = self
+                    .builder
+                    .build_signed_int_to_float(arg, float_type, "sitofptmp")
+                    .map_err(|err| Error::other(err.to_string()))?;
+                self.float_to_int_bits(float, target, "sitofp_bits")
+            }
+            SemanticOperationCast::UIntToFloat => {
+                let float_type = self.float_type(bits)?;
+                let float = self
+                    .builder
+                    .build_unsigned_int_to_float(arg, float_type, "uitofptmp")
+                    .map_err(|err| Error::other(err.to_string()))?;
+                self.float_to_int_bits(float, target, "uitofp_bits")
+            }
+            SemanticOperationCast::FloatToInt => {
+                let float_type = self.float_type(source_bits as u16)?;
+                let float = self.int_bits_to_float(arg, float_type, "fptosi_arg")?;
+                let ordered = self
+                    .builder
+                    .build_float_compare(
+                        inkwell::FloatPredicate::ORD,
+                        float,
+                        float,
+                        "fptosi_ord",
+                    )
+                    .map_err(|err| Error::other(err.to_string()))?;
+                let min_float = match bits {
+                    32 => float_type.const_float(i32::MIN as f64),
+                    64 => float_type.const_float(i64::MIN as f64),
+                    _ => {
+                        return Err(Error::other(format!(
+                            "unsupported float-to-int destination width: {}",
+                            bits
+                        )))
+                    }
+                };
+                let max_float = match bits {
+                    32 => float_type.const_float(i32::MAX as f64),
+                    64 => float_type.const_float(i64::MAX as f64),
+                    _ => unreachable!(),
+                };
+                let ge_min = self
+                    .builder
+                    .build_float_compare(
+                        inkwell::FloatPredicate::OGE,
+                        float,
+                        min_float,
+                        "fptosi_ge_min",
+                    )
+                    .map_err(|err| Error::other(err.to_string()))?;
+                let le_max = self
+                    .builder
+                    .build_float_compare(
+                        inkwell::FloatPredicate::OLE,
+                        float,
+                        max_float,
+                        "fptosi_le_max",
+                    )
+                    .map_err(|err| Error::other(err.to_string()))?;
+                let in_range = self
+                    .builder
+                    .build_and(ordered, ge_min, "fptosi_ord_min")
+                    .map_err(|err| Error::other(err.to_string()))?;
+                let in_range = self
+                    .builder
+                    .build_and(in_range, le_max, "fptosi_in_range")
+                    .map_err(|err| Error::other(err.to_string()))?;
+                let converted = self
+                    .builder
+                    .build_float_to_signed_int(float, target, "fptositmp")
+                    .map_err(|err| Error::other(err.to_string()))?;
+                let fallback = match bits {
+                    32 => target.const_int(i32::MIN as u32 as u64, false),
+                    64 => target.const_int(i64::MIN as u64, false),
+                    _ => unreachable!(),
+                };
+                self.builder
+                    .build_select(in_range, converted, fallback, "fptosi_select")
+                    .map_err(|err| Error::other(err.to_string()))
+                    .map(|value| value.into_int_value())
+            }
+            SemanticOperationCast::FloatToUInt => {
+                let float_type = self.float_type(source_bits as u16)?;
+                let float = self.int_bits_to_float(arg, float_type, "fptoui_arg")?;
+                let ordered = self
+                    .builder
+                    .build_float_compare(
+                        inkwell::FloatPredicate::ORD,
+                        float,
+                        float,
+                        "fptoui_ord",
+                    )
+                    .map_err(|err| Error::other(err.to_string()))?;
+                let min_float = float_type.const_float(-1.0);
+                let max_float = match bits {
+                    32 => float_type.const_float(u32::MAX as f64),
+                    64 => float_type.const_float(u64::MAX as f64),
+                    _ => {
+                        return Err(Error::other(format!(
+                            "unsupported float-to-uint destination width: {}",
+                            bits
+                        )))
+                    }
+                };
+                let gt_min = self
+                    .builder
+                    .build_float_compare(
+                        inkwell::FloatPredicate::OGT,
+                        float,
+                        min_float,
+                        "fptoui_gt_min",
+                    )
+                    .map_err(|err| Error::other(err.to_string()))?;
+                let le_max = self
+                    .builder
+                    .build_float_compare(
+                        inkwell::FloatPredicate::OLE,
+                        float,
+                        max_float,
+                        "fptoui_le_max",
+                    )
+                    .map_err(|err| Error::other(err.to_string()))?;
+                let in_range = self
+                    .builder
+                    .build_and(ordered, gt_min, "fptoui_ord_min")
+                    .map_err(|err| Error::other(err.to_string()))?;
+                let in_range = self
+                    .builder
+                    .build_and(in_range, le_max, "fptoui_in_range")
+                    .map_err(|err| Error::other(err.to_string()))?;
+                let converted = self
+                    .builder
+                    .build_float_to_unsigned_int(float, target, "fptouitmp")
+                    .map_err(|err| Error::other(err.to_string()))?;
+                self.builder
+                    .build_select(in_range, converted, target.const_zero(), "fptoui_select")
+                    .map_err(|err| Error::other(err.to_string()))
+                    .map(|value| value.into_int_value())
+            }
             _ => {
+                let helper_name = format!("binlex_cast_{:?}", op).to_lowercase();
                 let helper = self.declare_value_helper(
-                    &format!("binlex_cast_{:?}", op).to_lowercase(),
+                    &helper_name,
                     target,
                     &[arg.get_type().into()],
                     false,
+                );
+                self.record_semantic_lowering(
+                    "cast_helper",
+                    format!(
+                        "{:?} {}->{} helper={}",
+                        op,
+                        source_bits,
+                        bits,
+                        helper.get_name().to_string_lossy()
+                    ),
                 );
                 self.call_value(helper, &[arg.into()], "casttmp")
             }
@@ -2094,7 +2503,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     }
 
     fn lower_compare(
-        &self,
+        &mut self,
         op: SemanticOperationCompare,
         left: IntValue<'ctx>,
         right: IntValue<'ctx>,
@@ -2117,13 +2526,38 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 .build_int_compare(predicate, left, right, "cmptmp")
                 .map_err(|err| Error::other(err.to_string()))
         } else {
-            let helper = self.declare_value_helper(
-                &format!("binlex_compare_{:?}", op).to_lowercase(),
-                self.context.bool_type(),
-                &[left.get_type().into(), right.get_type().into()],
-                false,
-            );
-            self.call_value(helper, &[left.into(), right.into()], "cmptmp")
+            let float_type = self.float_type(left.get_type().get_bit_width() as u16)?;
+            let left = self.int_bits_to_float(left, float_type, "fcmp_lhs")?;
+            let right = self.int_bits_to_float(right, float_type, "fcmp_rhs")?;
+            let predicate = match op {
+                SemanticOperationCompare::Oeq => inkwell::FloatPredicate::OEQ,
+                SemanticOperationCompare::Oge => inkwell::FloatPredicate::OGE,
+                SemanticOperationCompare::Olt => inkwell::FloatPredicate::OLT,
+                SemanticOperationCompare::Unordered => inkwell::FloatPredicate::UNO,
+                _ => {
+                    let helper_name = format!("binlex_compare_{:?}", op).to_lowercase();
+                    let helper = self.declare_value_helper(
+                        &helper_name,
+                        self.context.bool_type(),
+                        &[self.int_type(float_type.get_bit_width() as u16).into(); 2],
+                        false,
+                    );
+                    self.record_semantic_lowering(
+                        "compare_helper",
+                        format!(
+                            "{:?} lhs_bits={} rhs_bits={} helper={}",
+                            op,
+                            float_type.get_bit_width(),
+                            float_type.get_bit_width(),
+                            helper.get_name().to_string_lossy()
+                        ),
+                    );
+                    return self.call_value(helper, &[left.into(), right.into()], "cmptmp");
+                }
+            };
+            self.builder
+                .build_float_compare(predicate, left, right, "cmptmp")
+                .map_err(|err| Error::other(err.to_string()))
         }
     }
 
@@ -2265,12 +2699,11 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         self.context.create_type_attribute(kind_id, ty.as_any_type_enum())
     }
 
-    fn emit_body_marker(&self, suffix: &str) -> Result<(), Error> {
-        let symbol = sanitize_symbol(&format!("{}__{}", self.function_name, suffix));
+    fn emit_body_marker(&self, _suffix: &str) -> Result<(), Error> {
         let fn_ty = self.context.void_type().fn_type(&[], false);
         let asm = self.context.create_inline_asm(
             fn_ty,
-            format!(".globl {symbol}\n{symbol}:\nnop"),
+            "nop".to_string(),
             "~{memory},~{dirflag},~{fpsr},~{flags}".to_string(),
             true,
             false,
@@ -2905,6 +3338,41 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 .custom_width_int_type(NonZeroU32::new(n as u32).expect("non-zero width"))
                 .expect("valid integer width"),
         }
+    }
+
+    fn float_type(&self, bits: u16) -> Result<FloatType<'ctx>, Error> {
+        match bits {
+            32 => Ok(self.context.f32_type()),
+            64 => Ok(self.context.f64_type()),
+            _ => Err(Error::other(format!(
+                "unsupported floating-point width for llvm lowering: {}",
+                bits
+            ))),
+        }
+    }
+
+    fn int_bits_to_float(
+        &self,
+        value: IntValue<'ctx>,
+        float_type: FloatType<'ctx>,
+        name: &str,
+    ) -> Result<FloatValue<'ctx>, Error> {
+        self.builder
+            .build_bit_cast(value, float_type, name)
+            .map_err(|err| Error::other(err.to_string()))
+            .map(|value| value.into_float_value())
+    }
+
+    fn float_to_int_bits(
+        &self,
+        value: FloatValue<'ctx>,
+        int_type: IntType<'ctx>,
+        name: &str,
+    ) -> Result<IntValue<'ctx>, Error> {
+        self.builder
+            .build_bit_cast(value, int_type, name)
+            .map_err(|err| Error::other(err.to_string()))
+            .map(|value| value.into_int_value())
     }
 
     fn pointer_int_type(&self) -> IntType<'ctx> {
