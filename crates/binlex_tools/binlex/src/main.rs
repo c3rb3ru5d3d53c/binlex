@@ -37,6 +37,7 @@ use binlex::formats::ELF;
 use binlex::formats::File as BLFile;
 use binlex::formats::MACHO;
 use binlex::formats::Symbol;
+use binlex::formats::SymbolKind;
 use binlex::formats::pe::PE;
 use binlex::io::JSON;
 use binlex::io::Stderr;
@@ -282,7 +283,7 @@ fn get_elf_function_symbols(elf: &ELF, read_stdin: bool) -> BTreeMap<u64, Symbol
             }
             let symbol = Symbol::new(
                 address.unwrap(),
-                symbol_type.unwrap().to_string(),
+                parse_symbol_kind(symbol_type.unwrap()),
                 name.unwrap().to_string(),
             );
             symbols.insert(address.unwrap(), symbol);
@@ -380,7 +381,7 @@ fn get_macho_function_symbols(macho: &MACHO, read_stdin: bool) -> BTreeMap<u64, 
             }
             let symbol = Symbol::new(
                 address.unwrap(),
-                symbol_type.unwrap().to_string(),
+                parse_symbol_kind(symbol_type.unwrap()),
                 name.unwrap().to_string(),
             );
             symbols.insert(address.unwrap(), symbol);
@@ -464,7 +465,7 @@ fn get_pe_function_symbols(pe: &PE, read_stdin: bool) -> BTreeMap<u64, Symbol> {
             }
             let symbol = Symbol::new(
                 address.unwrap(),
-                symbol_type.unwrap().to_string(),
+                parse_symbol_kind(symbol_type.unwrap()),
                 name.unwrap().to_string(),
             );
             symbols.insert(address.unwrap(), symbol);
@@ -472,6 +473,15 @@ fn get_pe_function_symbols(pe: &PE, read_stdin: bool) -> BTreeMap<u64, Symbol> {
     }
 
     symbols
+}
+
+fn parse_symbol_kind(value: &str) -> SymbolKind {
+    match value {
+        "function" => SymbolKind::Function,
+        "import" => SymbolKind::Import,
+        "export" => SymbolKind::Export,
+        _ => SymbolKind::Unknown,
+    }
 }
 
 fn process_output(

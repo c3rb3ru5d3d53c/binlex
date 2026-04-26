@@ -1,6 +1,10 @@
-use std::collections::BTreeSet;
-use std::fs;
-use std::path::Path;
+use std::collections::{BTreeMap, BTreeSet};
+
+use super::samples::{Arm64Sample, sample_registry};
+use super::support::{Arm64Fixture, unicorn_arm64_execution};
+use crate::controlflow::Graph;
+use crate::disassemblers::capstone::Disassembler;
+use crate::{Architecture, Config};
 
 const ARM64_SPEC_MNEMONICS: &str = r#"
 abs
@@ -1059,174 +1063,43 @@ zip1
 zip2
 "#;
 
-mod adc;
-mod add;
-mod addv;
-mod adrp;
-mod and;
-mod asr;
-mod b;
-mod b_cc;
-mod b_cs;
-mod b_eq;
-mod b_ge;
-mod b_gt;
-mod b_hi;
-mod b_hs;
-mod b_le;
-mod b_lo;
-mod b_ls;
-mod b_lt;
-mod b_mi;
-mod b_ne;
-mod b_pl;
-mod b_vc;
-mod b_vs;
-mod bfi;
-mod bfxil;
-mod bic;
-mod bics;
-mod bl;
-mod blr;
-mod br;
-mod cbnz;
-mod cbz;
-mod ccmn;
-mod ccmp;
-mod cinc;
-mod clz;
-mod cmeq;
-mod cmhi;
-mod cmn;
-mod cmp;
-mod cneg;
-mod cnt;
-mod csel;
-mod cset;
-mod csetm;
-mod csinc;
-mod csinv;
-mod csneg;
-mod dup;
-mod eon;
-mod eor;
-mod extr;
-mod fabs;
-mod fadd;
-mod fccmp;
-mod fcmp;
-mod fcmpe;
-mod fcvtzs;
-mod fcvtzu;
-mod fdiv;
-mod fmadd;
-mod fmax;
-mod fmin;
-mod fmov;
-mod fmsub;
-mod fmul;
-mod fneg;
-mod fnmul;
-mod fsub;
-mod ld1;
-mod ldar;
-mod ldarb;
-mod ldarh;
-mod ldnp;
-mod ldp;
-mod ldpsw;
-mod ldr;
-mod ldrb;
-mod ldrh;
-mod ldrsb;
-mod ldrsh;
-mod ldrsw;
-mod ldtr;
-mod ldtrb;
-mod ldtrh;
-mod ldtrsb;
-mod ldtrsh;
-mod ldtrsw;
-mod ldur;
-mod ldurb;
-mod ldurh;
-mod ldursb;
-mod ldursh;
-mod ldursw;
-mod lsl;
-mod lsr;
-mod madd;
-mod mneg;
-mod mov;
-mod movi;
-mod movk;
-mod movn;
-mod movz;
-mod mrs;
-mod msr;
-mod msub;
-mod mul;
-mod mvn;
-mod neg;
-mod orn;
-mod orr;
-mod rbit;
-mod rev16;
-mod rev32;
-mod rev64;
-mod rev;
-mod ret;
-mod ror;
-mod sbc;
-mod sbfiz;
-mod sbfx;
-mod scvtf;
-mod sdiv;
-mod smaddl;
-mod smsubl;
-mod smulh;
-mod smull;
-mod sshll;
-mod stlrh;
-mod stnp;
-mod stp;
-mod str;
-mod strb;
-mod strh;
-mod sttr;
-mod sttrb;
-mod sttrh;
-mod stur;
-mod sturb;
-mod sturh;
-mod sub;
-mod sxtb;
-mod sxth;
-mod sxtw;
-mod tbnz;
-mod tbz;
-mod tst;
-mod uaddlv;
-mod ubfiz;
-mod ubfx;
-mod ucvtf;
-mod udiv;
-mod umaddl;
-mod umsubl;
-mod umulh;
-mod umull;
-mod uxtb;
-mod uxth;
-mod uzp1;
-
-const ARM64_IGNORED_MNEMONICS: &[&str] = &[
-    // Hardware-specific, privileged, trap, or exception-state instructions.
+const ARM64_HARDWARE_IGNORED_MNEMONICS: &[&str] = &[
+    // Hardware-specific, privileged, trap, or hidden-state mnemonics.
+    "addg",
+    "addpt",
     "at",
+    "autda",
+    "autdb",
+    "autdza",
+    "autdzb",
+    "autia",
+    "autia1716",
+    "autia171615",
+    "autiasp",
+    "autiasppc",
+    "autiaz",
+    "autib",
+    "autib1716",
+    "autib171615",
+    "autibsp",
+    "autibsppc",
+    "autibz",
+    "autiza",
+    "autizb",
+    "blraa",
+    "blraaz",
+    "blrab",
+    "blrabz",
+    "braa",
+    "braaz",
+    "brab",
+    "brabz",
     "bc_cond",
     "brb",
     "brk",
     "bti",
     "cfp",
+    "chkfeat",
     "clrbhb",
     "clrex",
     "cosp",
@@ -1276,46 +1149,92 @@ const ARM64_IGNORED_MNEMONICS: &[&str] = &[
     "yield",
 ];
 
+const ARM64_HIGH_PRI_MNEMONICS: &[&str] = &[
+    "b_al", "cmge", "cmgt", "ext", "fcvt", "fmaxv", "fminv", "ins", "ld2", "ld3", "ld4", "ldxr",
+    "movi", "movz", "mvni", "nop", "not", "sbcs", "smax", "smaxp", "smaxv", "smin", "sminp",
+    "sminv", "smov", "st1", "stlr", "stlxr", "subs", "umax", "umaxp", "umaxv", "umin", "uminp",
+    "uminv", "umov", "ushr",
+];
+
 #[test]
 fn arm64_conformance_mnemonic_coverage_stats() {
-    let directory = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("src/semantics/capstone/arm64/tests/conformance");
     let spec_mnemonics = ARM64_SPEC_MNEMONICS
         .lines()
         .map(str::trim)
         .filter(|line| !line.is_empty())
         .map(str::to_string)
         .collect::<BTreeSet<_>>();
-    let ignored_mnemonics = ARM64_IGNORED_MNEMONICS
+    let hardware_ignored_mnemonics = ARM64_HARDWARE_IGNORED_MNEMONICS
         .iter()
         .map(|mnemonic| (*mnemonic).to_string())
+        .collect::<BTreeSet<_>>();
+
+    let completeness_samples: BTreeMap<String, &'static [Arm64Sample]> = sample_registry();
+    let mut covered_files = completeness_samples
+        .iter()
+        .filter(|(_, samples): &(&String, &&'static [Arm64Sample])| {
+            samples.iter().any(|sample| sample.fixture.is_some())
+        })
+        .map(|(mnemonic, _): (&String, &&'static [Arm64Sample])| mnemonic.clone())
+        .collect::<BTreeSet<_>>();
+    let mut sampled_mnemonics = completeness_samples
+        .keys()
+        .cloned()
+        .collect::<BTreeSet<_>>();
+
+    if covered_files.iter().any(|name: &String| {
+        name.starts_with("b_") && !matches!(name.as_str(), "b" | "bl" | "blr" | "br")
+    }) {
+        covered_files.insert("b_cond".to_string());
+    }
+    if sampled_mnemonics.iter().any(|name: &String| {
+        name.starts_with("b_") && !matches!(name.as_str(), "b" | "bl" | "blr" | "br")
+    }) {
+        sampled_mnemonics.insert("b_cond".to_string());
+    }
+
+    let uncovered_non_hardware = spec_mnemonics
+        .difference(&hardware_ignored_mnemonics)
+        .filter(|mnemonic| !covered_files.contains(*mnemonic))
+        .cloned()
+        .collect::<Vec<_>>();
+    let (capstone_unsupported_mnemonics, unicorn_unsupported_mnemonics) =
+        auto_classify_conformance_unsupported(&uncovered_non_hardware, &completeness_samples);
+    let ignored_mnemonics = hardware_ignored_mnemonics
+        .union(&capstone_unsupported_mnemonics)
+        .cloned()
+        .collect::<BTreeSet<_>>()
+        .union(&unicorn_unsupported_mnemonics)
+        .cloned()
         .collect::<BTreeSet<_>>();
     let effective_spec_mnemonics = spec_mnemonics
         .difference(&ignored_mnemonics)
         .cloned()
         .collect::<BTreeSet<_>>();
-
-    let mut covered_files = fs::read_dir(&directory)
-        .expect("read arm64 conformance directory")
-        .filter_map(Result::ok)
-        .filter_map(|entry| {
-            let path = entry.path();
-            (path.extension().is_some_and(|ext| ext == "rs")
-                && path.file_name().is_some_and(|name| name != "mod.rs"))
-            .then(|| path.file_stem().unwrap().to_string_lossy().to_string())
-        })
-        .collect::<BTreeSet<_>>();
-
-    if covered_files.iter().any(|name| {
-        name.starts_with("b_") && !matches!(name.as_str(), "b" | "bl" | "blr" | "br")
-    }) {
-        covered_files.insert("b_cond".to_string());
-    }
-
+    let unsampled = effective_spec_mnemonics
+        .difference(&sampled_mnemonics)
+        .cloned()
+        .collect::<Vec<_>>();
     let missing = effective_spec_mnemonics
         .difference(&covered_files)
         .cloned()
         .collect::<Vec<_>>();
+    let high_pri_uncovered = ARM64_HIGH_PRI_MNEMONICS
+        .iter()
+        .filter_map(|mnemonic| {
+            let mnemonic = (*mnemonic).to_string();
+            effective_spec_mnemonics
+                .contains(&mnemonic)
+                .then_some(mnemonic)
+                .filter(|mnemonic| !covered_files.contains(mnemonic))
+        })
+        .collect::<Vec<_>>();
+    let mut prioritized_uncovered = high_pri_uncovered.clone();
+    for mnemonic in &missing {
+        if !prioritized_uncovered.contains(mnemonic) {
+            prioritized_uncovered.push(mnemonic.clone());
+        }
+    }
     let extra = covered_files
         .difference(&effective_spec_mnemonics)
         .cloned()
@@ -1323,19 +1242,154 @@ fn arm64_conformance_mnemonic_coverage_stats() {
 
     println!("arm64 conformance coverage stats");
     println!("spec mnemonics: {}", spec_mnemonics.len());
-    println!("ignored mnemonics: {}", ignored_mnemonics.len());
-    println!("effective spec mnemonics: {}", effective_spec_mnemonics.len());
+    println!(
+        "hardware ignored mnemonics: {}",
+        hardware_ignored_mnemonics.len()
+    );
+    println!(
+        "capstone unsupported mnemonics: {}",
+        capstone_unsupported_mnemonics.len()
+    );
+    if !capstone_unsupported_mnemonics.is_empty() {
+        println!(
+            "capstone unsupported: {}",
+            capstone_unsupported_mnemonics
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+    println!(
+        "unicorn unsupported mnemonics: {}",
+        unicorn_unsupported_mnemonics.len()
+    );
+    if !unicorn_unsupported_mnemonics.is_empty() {
+        println!(
+            "unicorn unsupported: {}",
+            unicorn_unsupported_mnemonics
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+    println!("total ignored mnemonics: {}", ignored_mnemonics.len());
+    println!(
+        "effective spec mnemonics: {}",
+        effective_spec_mnemonics.len()
+    );
+    println!(
+        "sampled mnemonics: {}",
+        effective_spec_mnemonics
+            .intersection(&sampled_mnemonics)
+            .count()
+    );
+    println!("unsampled mnemonics: {}", unsampled.len());
     println!(
         "covered mnemonics: {}",
-        effective_spec_mnemonics.intersection(&covered_files).count()
+        effective_spec_mnemonics
+            .intersection(&covered_files)
+            .count()
     );
     println!("missing mnemonics: {}", missing.len());
-    println!("extra mnemonic files: {}", extra.len());
+    println!("extra covered mnemonics: {}", extra.len());
     if !extra.is_empty() {
         println!("extra: {}", extra.join(", "));
     }
     println!(
-        "next 10 missing: {}",
-        missing.iter().take(10).cloned().collect::<Vec<_>>().join(", ")
+        "next 10 unsampled: {}",
+        unsampled
+            .iter()
+            .take(10)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ")
     );
+    println!(
+        "high pri uncovered: {}",
+        high_pri_uncovered
+            .iter()
+            .take(10)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    println!(
+        "next 10 uncovered: {}",
+        prioritized_uncovered
+            .iter()
+            .take(10)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+}
+
+fn auto_classify_conformance_unsupported(
+    mnemonics: &[String],
+    samples: &BTreeMap<String, &'static [Arm64Sample]>,
+) -> (BTreeSet<String>, BTreeSet<String>) {
+    let mut capstone_unsupported = BTreeSet::new();
+    let mut unicorn_unsupported = BTreeSet::new();
+    for mnemonic in mnemonics {
+        let Some(mnemonic_samples) = samples.get(mnemonic) else {
+            continue;
+        };
+        if !mnemonic_samples
+            .iter()
+            .any(|sample| arm64_capstone_supports(sample.bytes))
+        {
+            capstone_unsupported.insert(mnemonic.clone());
+            continue;
+        }
+        if !mnemonic_samples
+            .iter()
+            .any(|sample| arm64_unicorn_supports(sample.bytes))
+        {
+            unicorn_unsupported.insert(mnemonic.clone());
+        }
+    }
+    (capstone_unsupported, unicorn_unsupported)
+}
+
+fn arm64_capstone_supports(bytes: &[u8]) -> bool {
+    let config = Config::default();
+    let mut ranges = BTreeMap::new();
+    ranges.insert(0, bytes.len() as u64);
+    let mut graph = Graph::new(Architecture::ARM64, config.clone());
+    let Ok(disassembler) = Disassembler::from_bytes(Architecture::ARM64, bytes, ranges, config)
+    else {
+        return false;
+    };
+    disassembler.disassemble_instruction(0, &mut graph).is_ok()
+}
+
+fn arm64_unicorn_supports(bytes: &[u8]) -> bool {
+    let fixture = generic_arm64_probe_fixture();
+    let hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let result = std::panic::catch_unwind(|| {
+        unicorn_arm64_execution("arm64_conformance_probe", bytes, &fixture, &[], &[], &[])
+    })
+    .is_ok();
+    std::panic::set_hook(hook);
+    result
+}
+
+fn generic_arm64_probe_fixture() -> Arm64Fixture {
+    const GENERAL_REGS: &[&str] = &[
+        "x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13",
+        "x14", "x15", "x16", "x17", "x18", "x19", "x20", "x21", "x22", "x23", "x24", "x25", "x26",
+        "x27", "x28", "x29", "x30", "sp",
+    ];
+    let mut registers = GENERAL_REGS
+        .iter()
+        .map(|name| (*name, 0x3000u128))
+        .collect::<Vec<_>>();
+    registers.extend([("n", 0), ("z", 0), ("c", 0), ("v", 0)]);
+    Arm64Fixture {
+        registers,
+        memory: vec![(0x3000, vec![0u8; 0x1000])],
+    }
 }

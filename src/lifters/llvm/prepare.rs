@@ -1,8 +1,7 @@
 use crate::lifters::llvm::abi::{coerce_expression_width, normalize_binary, normalize_compare};
 use crate::semantics::{
     InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation, SemanticTemporary,
-    SemanticTerminator,
-    normalize_instruction_semantics, validate_instruction_semantics,
+    SemanticTerminator, normalize_instruction_semantics, validate_instruction_semantics,
 };
 use std::collections::{HashMap, HashSet};
 use std::io::Error;
@@ -17,6 +16,8 @@ pub fn prepare_instruction_semantics(
     Ok(InstructionSemantics {
         version: normalized.version,
         status: normalized.status,
+        abi: normalized.abi,
+        encoding: normalized.encoding.clone(),
         temporaries,
         effects: snapshot_effects
             .iter()
@@ -148,7 +149,9 @@ fn collect_written_loads(semantics: &InstructionSemantics) -> HashSet<SemanticEx
                     });
                 }
             }
-            SemanticEffect::Store { space, addr, bits, .. } => {
+            SemanticEffect::Store {
+                space, addr, bits, ..
+            } => {
                 writes.insert(SemanticExpression::Load {
                     space: space.clone(),
                     addr: Box::new(addr.clone()),
@@ -213,14 +216,12 @@ fn collect_effect_reads(effect: &SemanticEffect, reads: &mut HashSet<SemanticLoc
             collect_expression_reads(expected, reads);
             collect_expression_reads(desired, reads);
         }
-        SemanticEffect::Architecture { args, .. } | SemanticEffect::Intrinsic { args, .. } => {
+        SemanticEffect::Intrinsic { args, .. } => {
             for arg in args {
                 collect_expression_reads(arg, reads);
             }
         }
-        SemanticEffect::Fence { .. }
-        | SemanticEffect::Trap { .. }
-        | SemanticEffect::Nop => {}
+        SemanticEffect::Fence { .. } | SemanticEffect::Trap { .. } | SemanticEffect::Nop => {}
     }
 }
 
@@ -267,18 +268,19 @@ fn collect_effect_loads(effect: &SemanticEffect, reads: &mut HashSet<SemanticExp
             collect_expression_loads(expected, reads);
             collect_expression_loads(desired, reads);
         }
-        SemanticEffect::Architecture { args, .. } | SemanticEffect::Intrinsic { args, .. } => {
+        SemanticEffect::Intrinsic { args, .. } => {
             for arg in args {
                 collect_expression_loads(arg, reads);
             }
         }
-        SemanticEffect::Fence { .. }
-        | SemanticEffect::Trap { .. }
-        | SemanticEffect::Nop => {}
+        SemanticEffect::Fence { .. } | SemanticEffect::Trap { .. } | SemanticEffect::Nop => {}
     }
 }
 
-fn collect_terminator_reads(terminator: &SemanticTerminator, reads: &mut HashSet<SemanticLocation>) {
+fn collect_terminator_reads(
+    terminator: &SemanticTerminator,
+    reads: &mut HashSet<SemanticLocation>,
+) {
     match terminator {
         SemanticTerminator::Jump { target } => collect_expression_reads(target, reads),
         SemanticTerminator::Branch {
@@ -347,7 +349,10 @@ fn collect_terminator_loads(
     }
 }
 
-fn collect_expression_reads(expression: &SemanticExpression, reads: &mut HashSet<SemanticLocation>) {
+fn collect_expression_reads(
+    expression: &SemanticExpression,
+    reads: &mut HashSet<SemanticLocation>,
+) {
     match expression {
         SemanticExpression::Read(location) => {
             reads.insert(location.as_ref().clone());
@@ -372,15 +377,15 @@ fn collect_expression_reads(expression: &SemanticExpression, reads: &mut HashSet
             collect_expression_reads(when_true, reads);
             collect_expression_reads(when_false, reads);
         }
-        SemanticExpression::Cast { arg, .. }
-        | SemanticExpression::Extract { arg, .. } => collect_expression_reads(arg, reads),
+        SemanticExpression::Cast { arg, .. } | SemanticExpression::Extract { arg, .. } => {
+            collect_expression_reads(arg, reads)
+        }
         SemanticExpression::Concat { parts, .. } => {
             for part in parts {
                 collect_expression_reads(part, reads);
             }
         }
-        SemanticExpression::Intrinsic { args, .. }
-        | SemanticExpression::Architecture { args, .. } => {
+        SemanticExpression::Intrinsic { args, .. } => {
             for arg in args {
                 collect_expression_reads(arg, reads);
             }
@@ -391,7 +396,10 @@ fn collect_expression_reads(expression: &SemanticExpression, reads: &mut HashSet
     }
 }
 
-fn collect_expression_loads(expression: &SemanticExpression, reads: &mut HashSet<SemanticExpression>) {
+fn collect_expression_loads(
+    expression: &SemanticExpression,
+    reads: &mut HashSet<SemanticExpression>,
+) {
     match expression {
         SemanticExpression::Read(_) => {}
         SemanticExpression::Load { space, addr, bits } => {
@@ -425,8 +433,7 @@ fn collect_expression_loads(expression: &SemanticExpression, reads: &mut HashSet
                 collect_expression_loads(part, reads);
             }
         }
-        SemanticExpression::Intrinsic { args, .. }
-        | SemanticExpression::Architecture { args, .. } => {
+        SemanticExpression::Intrinsic { args, .. } => {
             for arg in args {
                 collect_expression_loads(arg, reads);
             }
@@ -533,18 +540,6 @@ fn prepare_effect(
         },
         SemanticEffect::Fence { kind } => SemanticEffect::Fence { kind: kind.clone() },
         SemanticEffect::Trap { kind } => SemanticEffect::Trap { kind: kind.clone() },
-        SemanticEffect::Architecture {
-            name,
-            args,
-            outputs,
-        } => SemanticEffect::Architecture {
-            name: name.clone(),
-            args: args
-                .iter()
-                .map(|expression| prepare_expression(expression, snapshots, load_snapshots))
-                .collect(),
-            outputs: outputs.clone(),
-        },
         SemanticEffect::Intrinsic {
             name,
             args,
@@ -696,16 +691,6 @@ fn prepare_expression(
         },
         SemanticExpression::Undefined { bits } => SemanticExpression::Undefined { bits: *bits },
         SemanticExpression::Poison { bits } => SemanticExpression::Poison { bits: *bits },
-        SemanticExpression::Architecture { name, args, bits } => {
-            SemanticExpression::Architecture {
-                name: name.clone(),
-                args: args
-                    .iter()
-                    .map(|expression| prepare_expression(expression, snapshots, load_snapshots))
-                    .collect(),
-                bits: *bits,
-            }
-        }
         SemanticExpression::Intrinsic { name, args, bits } => SemanticExpression::Intrinsic {
             name: name.clone(),
             args: args
@@ -730,6 +715,8 @@ mod tests {
         let semantics = InstructionSemantics {
             version: 1,
             status: SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
             temporaries: Vec::new(),
             effects: vec![SemanticEffect::Store {
                 space: SemanticAddressSpace::Default,
@@ -759,6 +746,8 @@ mod tests {
         let semantics = InstructionSemantics {
             version: 1,
             status: SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
             temporaries: Vec::new(),
             effects: vec![SemanticEffect::Set {
                 dst: SemanticLocation::Register {
@@ -794,6 +783,8 @@ mod tests {
         let semantics = InstructionSemantics {
             version: 1,
             status: SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
             temporaries: Vec::new(),
             effects: vec![SemanticEffect::Set {
                 dst: SemanticLocation::Register {
@@ -829,6 +820,8 @@ mod tests {
         let semantics = InstructionSemantics {
             version: 1,
             status: SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
             temporaries: Vec::new(),
             effects: vec![SemanticEffect::Set {
                 dst: SemanticLocation::Flag {

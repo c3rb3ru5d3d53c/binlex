@@ -254,7 +254,7 @@ fn set_flag(name: &str, value: bool) -> InstructionSemantics {
 fn clts() -> InstructionSemantics {
     common::complete(
         SemanticTerminator::FallThrough,
-        vec![SemanticEffect::Architecture {
+        vec![SemanticEffect::Intrinsic {
             name: "x86.clts".to_string(),
             args: Vec::new(),
             outputs: Vec::new(),
@@ -268,7 +268,7 @@ fn invlpg(machine: Architecture, operands: &[ArchOperand]) -> Option<Instruction
         .and_then(|operand| common::operand_expr(machine, operand))?;
     Some(common::complete(
         SemanticTerminator::FallThrough,
-        vec![SemanticEffect::Architecture {
+        vec![SemanticEffect::Intrinsic {
             name: "x86.invlpg".to_string(),
             args: vec![addr],
             outputs: Vec::new(),
@@ -621,7 +621,7 @@ fn cpuid() -> InstructionSemantics {
 
     common::complete(
         SemanticTerminator::FallThrough,
-        vec![SemanticEffect::Architecture {
+        vec![SemanticEffect::Intrinsic {
             name: "x86.cpuid".to_string(),
             args: vec![leaf, subleaf],
             outputs: vec![
@@ -644,7 +644,7 @@ fn verr_verw(
         .and_then(|operand| common::operand_expr(machine, operand))?;
     Some(common::complete(
         SemanticTerminator::FallThrough,
-        vec![SemanticEffect::Architecture {
+        vec![SemanticEffect::Intrinsic {
             name: name.to_string(),
             args: vec![selector],
             outputs: vec![common::flag("zf")],
@@ -681,7 +681,7 @@ fn outsd(machine: Architecture) -> Option<InstructionSemantics> {
 fn rdtsc() -> InstructionSemantics {
     common::complete(
         SemanticTerminator::FallThrough,
-        vec![SemanticEffect::Architecture {
+        vec![SemanticEffect::Intrinsic {
             name: "x86.rdtsc".to_string(),
             args: Vec::new(),
             outputs: vec![
@@ -695,7 +695,7 @@ fn rdtsc() -> InstructionSemantics {
 fn rdtscp() -> InstructionSemantics {
     common::complete(
         SemanticTerminator::FallThrough,
-        vec![SemanticEffect::Architecture {
+        vec![SemanticEffect::Intrinsic {
             name: "x86.rdtscp".to_string(),
             args: Vec::new(),
             outputs: vec![
@@ -719,7 +719,7 @@ fn random_value(
     Some(common::complete(
         SemanticTerminator::FallThrough,
         vec![
-            SemanticEffect::Architecture {
+            SemanticEffect::Intrinsic {
                 name: format!("x86.{name}"),
                 args: Vec::new(),
                 outputs: vec![dst, common::flag("cf")],

@@ -39,12 +39,13 @@ use crate::formats::cli::StreamHeader;
 use crate::formats::cli::TinyHeader;
 use crate::formats::cli::TypeDefEntry;
 use crate::formats::cli::TypeRefEntry;
+use crate::formats::{Symbol as BlSymbol, symbol::SymbolKind};
 use crate::hashing::SHA256;
 use crate::hashing::SSDeep;
 use crate::hashing::TLSH;
 use crate::imaging::Imaging;
 use lief::Binary;
-use lief::generic::Section;
+use lief::generic::{Section, Symbol};
 use lief::pe::data_directory::Type as DATA_DIRECTORY;
 use lief::pe::debug::Entries;
 use lief::pe::headers::MachineType;
@@ -63,6 +64,122 @@ pub struct PE {
 }
 
 impl PE {
+    fn coff_symbol_name(&self, name_bytes: &[u8; 8], string_table: &[u8]) -> Option<String> {
+        if name_bytes[..4] == [0, 0, 0, 0] {
+            let offset =
+                u32::from_le_bytes([name_bytes[4], name_bytes[5], name_bytes[6], name_bytes[7]])
+                    as usize;
+            if offset < 4 || offset >= string_table.len() {
+                return None;
+            }
+            let tail = &string_table[offset..];
+            let end = tail
+                .iter()
+                .position(|byte| *byte == 0)
+                .unwrap_or(tail.len());
+            if end == 0 {
+                return None;
+            }
+            return String::from_utf8(tail[..end].to_vec()).ok();
+        }
+
+        let end = name_bytes
+            .iter()
+            .position(|byte| *byte == 0)
+            .unwrap_or(name_bytes.len());
+        if end == 0 {
+            return None;
+        }
+        String::from_utf8(name_bytes[..end].to_vec()).ok()
+    }
+
+    fn coff_symbol_kind(symbol_type: u16) -> SymbolKind {
+        if (symbol_type & 0x20) != 0 {
+            SymbolKind::Function
+        } else {
+            SymbolKind::Unknown
+        }
+    }
+
+    fn coff_symbols(&self) -> BTreeMap<u64, BlSymbol> {
+        const COFF_SYMBOL_SIZE: usize = 18;
+
+        let mut symbols = BTreeMap::<u64, BlSymbol>::new();
+        let pointer = self.pe.header().pointerto_symbol_table() as usize;
+        let count = self.pe.header().numberof_symbols() as usize;
+        if pointer == 0 || count == 0 {
+            return symbols;
+        }
+
+        let table_size = match count.checked_mul(COFF_SYMBOL_SIZE) {
+            Some(size) => size,
+            None => return symbols,
+        };
+        let table_end = match pointer.checked_add(table_size) {
+            Some(end) => end,
+            None => return symbols,
+        };
+        if table_end > self.file.data.len() {
+            return symbols;
+        }
+
+        let string_table = if table_end + 4 <= self.file.data.len() {
+            let size = u32::from_le_bytes(
+                self.file.data[table_end..table_end + 4]
+                    .try_into()
+                    .expect("slice with exact length"),
+            ) as usize;
+            if size >= 4 && table_end + size <= self.file.data.len() {
+                &self.file.data[table_end..table_end + size]
+            } else {
+                &self.file.data[table_end..]
+            }
+        } else {
+            &[]
+        };
+
+        let sections = self.pe.sections().collect::<Vec<_>>();
+        let mut index = 0usize;
+        while index < count {
+            let offset = pointer + (index * COFF_SYMBOL_SIZE);
+            let record = &self.file.data[offset..offset + COFF_SYMBOL_SIZE];
+
+            let name_bytes: [u8; 8] = record[0..8].try_into().expect("exact name slice");
+            let value = u32::from_le_bytes(record[8..12].try_into().expect("exact value slice"));
+            let section_number =
+                i16::from_le_bytes(record[12..14].try_into().expect("exact section slice"));
+            let symbol_type =
+                u16::from_le_bytes(record[14..16].try_into().expect("exact type slice"));
+            let aux_symbols = record[17] as usize;
+
+            if section_number > 0 {
+                if let Some(name) = self.coff_symbol_name(&name_bytes, string_table) {
+                    let section_index = (section_number - 1) as usize;
+                    if let Some(section) = sections.get(section_index) {
+                        let address = self.imagebase() + section.virtual_address() + value as u64;
+                        symbols.entry(address).or_insert_with(|| BlSymbol {
+                            name,
+                            address,
+                            kind: Self::coff_symbol_kind(symbol_type),
+                        });
+                    }
+                }
+            }
+
+            index += 1 + aux_symbols;
+        }
+
+        symbols
+    }
+
+    fn normalize_symbol_address(&self, raw: u64) -> u64 {
+        if raw >= self.imagebase() {
+            raw
+        } else {
+            self.imagebase() + raw
+        }
+    }
+
     fn dotnet_clr_runtime_directory(&self) -> Option<lief::pe::DataDirectory<'_>> {
         let directory = self
             .pe
@@ -1210,5 +1327,45 @@ impl PE {
             addresses.insert(address);
         }
         addresses
+    }
+
+    pub fn symbols(&self) -> BTreeMap<u64, BlSymbol> {
+        let mut symbols = self.coff_symbols();
+
+        if let Some(export) = self.pe.export() {
+            for entry in export.entries() {
+                let name = entry.name();
+                if name.is_empty() {
+                    continue;
+                }
+                let address = self.imagebase() + entry.address() as u64;
+                symbols.insert(
+                    address,
+                    BlSymbol {
+                        name,
+                        address,
+                        kind: SymbolKind::Export,
+                    },
+                );
+            }
+        }
+
+        for import in self.pe.imports() {
+            let library = import.name();
+            for entry in import.entries() {
+                let name = entry.name();
+                if name.is_empty() {
+                    continue;
+                }
+                let address = self.normalize_symbol_address(entry.iat_address());
+                symbols.entry(address).or_insert_with(|| BlSymbol {
+                    name: format!("{library}!{name}"),
+                    address,
+                    kind: SymbolKind::Import,
+                });
+            }
+        }
+
+        symbols
     }
 }

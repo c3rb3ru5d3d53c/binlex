@@ -33,6 +33,8 @@ pub(crate) fn build(instruction: &Instruction<'_>) -> Option<InstructionSemantic
         return Some(InstructionSemantics {
             version: 1,
             status: SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
             temporaries: Vec::new(),
             effects: Vec::new(),
             terminator: if matches!(instruction.mnemonic, Mnemonic::Throw) {
@@ -48,6 +50,8 @@ pub(crate) fn build(instruction: &Instruction<'_>) -> Option<InstructionSemantic
         return Some(InstructionSemantics {
             version: 1,
             status: SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
             temporaries: Vec::new(),
             effects: vec![SemanticEffect::Intrinsic {
                 name: format!("cil.{:?}", instruction.mnemonic),
@@ -227,6 +231,8 @@ pub(crate) fn build(instruction: &Instruction<'_>) -> Option<InstructionSemantic
         return Some(InstructionSemantics {
             version: 1,
             status: SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
             temporaries: Vec::new(),
             effects: vec![SemanticEffect::Intrinsic {
                 name: format!("cil.{:?}", instruction.mnemonic),
@@ -257,6 +263,8 @@ pub(crate) fn build(instruction: &Instruction<'_>) -> Option<InstructionSemantic
         return Some(InstructionSemantics {
             version: 1,
             status: SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
             temporaries: Vec::new(),
             effects: Vec::new(),
             terminator: SemanticTerminator::Jump {

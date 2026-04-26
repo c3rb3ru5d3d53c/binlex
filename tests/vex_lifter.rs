@@ -70,9 +70,14 @@ fn instruction(address: u64, bytes: &[u8]) -> Instruction {
         functions: BTreeSet::new(),
         to: BTreeSet::new(),
         edges: 0,
+        mnemonic: String::new(),
+        disassembly: String::new(),
+        operands: Vec::new(),
         semantics: Some(InstructionSemantics {
             version: 1,
             status: SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
             temporaries: Vec::new(),
             effects: vec![SemanticEffect::Set {
                 dst: SemanticLocation::ProgramCounter { bits: 64 },

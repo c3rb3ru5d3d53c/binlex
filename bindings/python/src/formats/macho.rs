@@ -22,6 +22,7 @@
 
 use crate::formats::File;
 use crate::formats::Image;
+use crate::formats::Symbol as PySymbol;
 use crate::hashing::{SSDeep, SHA256, TLSH};
 use crate::imaging::Imaging;
 use crate::Architecture;
@@ -122,6 +123,15 @@ impl PyMachoSlice {
         Architecture {
             inner: architecture,
         }
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn symbols(&self, py: Python<'_>) -> PyResult<Vec<Py<PySymbol>>> {
+        self.with_slice(|slice: InnerMachoSlice<'_>| slice.symbols())
+            .unwrap_or_default()
+            .into_values()
+            .map(|symbol| Py::new(py, PySymbol::from_inner(symbol)))
+            .collect()
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -266,6 +276,17 @@ impl MACHO {
         Architecture {
             inner: architecture,
         }
+    }
+
+    #[pyo3(text_signature = "($self, slice)")]
+    pub fn symbols(&self, py: Python<'_>, slice: usize) -> PyResult<Vec<Py<PySymbol>>> {
+        self.inner
+            .lock()
+            .unwrap()
+            .symbols(slice)
+            .into_values()
+            .map(|symbol| Py::new(py, PySymbol::from_inner(symbol)))
+            .collect()
     }
 
     #[pyo3(text_signature = "($self, slice)")]

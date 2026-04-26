@@ -1,6 +1,4 @@
-use super::common::{
-    I386Fixture, I386Register, assert_amd64_instruction_roundtrip_match_unicorn,
-};
+use super::common::{I386Fixture, I386Register, assert_amd64_instruction_roundtrip_match_unicorn};
 
 #[test]
 fn amd64_roundtrip_pxor_xmm0_xmm1_matches_unicorn() {

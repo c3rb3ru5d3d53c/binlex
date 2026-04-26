@@ -24,7 +24,7 @@ use crate::Architecture;
 use crate::Config;
 use crate::formats::File;
 use crate::formats::Image;
-use crate::formats::Symbol as BlSymbol;
+use crate::formats::{Symbol as BlSymbol, symbol::SymbolKind};
 use crate::hashing::SHA256;
 use crate::hashing::SSDeep;
 use crate::hashing::TLSH;
@@ -390,9 +390,9 @@ impl MACHO {
             symbols.insert(
                 symbol.value(),
                 BlSymbol {
-                    symbol_type: "function".to_string(),
                     name: symbol.name(),
                     address: symbol.value(),
+                    kind: SymbolKind::Function,
                 },
             );
         }

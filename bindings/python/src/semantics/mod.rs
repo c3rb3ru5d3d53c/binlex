@@ -1,4 +1,6 @@
+use crate::lifters::llvm_abi::Abi as PyAbi;
 use binlex::semantics::{
+    InstructionEncoding as InnerInstructionEncoding,
     InstructionSemantics as InnerInstructionSemantics, SemanticAddressSpace as InnerAddressSpace,
     SemanticDiagnostic as InnerSemanticDiagnostic,
     SemanticDiagnosticKind as InnerSemanticDiagnosticKind, SemanticEffect as InnerSemanticEffect,
@@ -590,6 +592,7 @@ macro_rules! value_wrapper {
 
 value_wrapper!(SemanticTemporary, InnerSemanticTemporary);
 value_wrapper!(SemanticDiagnostic, InnerSemanticDiagnostic);
+value_wrapper!(InstructionEncoding, InnerInstructionEncoding);
 value_wrapper!(SemanticLocation, InnerSemanticLocation);
 value_wrapper!(SemanticExpression, InnerSemanticExpr);
 value_wrapper!(SemanticEffect, InnerSemanticEffect);
@@ -689,6 +692,91 @@ impl SemanticDiagnostic {
     }
     pub fn set_message(&mut self, message: String) {
         self.inner.lock().unwrap().set_message(message);
+    }
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        json_value_to_py(
+            py,
+            &serde_json::to_value(&*self.inner.lock().unwrap())
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?,
+        )
+    }
+    pub fn json(&self) -> PyResult<String> {
+        serde_json::to_string(&*self.inner.lock().unwrap())
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+    pub fn print(&self) -> PyResult<()> {
+        println!("{}", self.json()?);
+        Ok(())
+    }
+
+    pub fn __hash__(&self) -> isize {
+        self.value_hash()
+    }
+
+    pub fn __richcmp__(&self, other: PyRef<'_, Self>, op: CompareOp) -> bool {
+        match op {
+            CompareOp::Eq => self.value_eq(&other),
+            CompareOp::Ne => !self.value_eq(&other),
+            _ => false,
+        }
+    }
+}
+
+#[pymethods]
+impl InstructionEncoding {
+    #[new]
+    #[pyo3(signature = (architecture, mnemonic, disassembly, address, bytes=None))]
+    pub fn new(
+        architecture: String,
+        mnemonic: String,
+        disassembly: String,
+        address: u64,
+        bytes: Option<Vec<u8>>,
+    ) -> Self {
+        Self::from_inner(InnerInstructionEncoding {
+            architecture,
+            mnemonic,
+            disassembly,
+            address,
+            bytes: bytes.unwrap_or_default(),
+        })
+    }
+    #[classmethod]
+    pub fn from_dict(_cls: &Bound<'_, PyType>, py: Python<'_>, data: Py<PyAny>) -> PyResult<Self> {
+        let value = py_to_json_value(py, data)?;
+        let inner = serde_json::from_value(value)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        Ok(Self::from_inner(inner))
+    }
+    pub fn architecture(&self) -> String {
+        self.inner.lock().unwrap().architecture.clone()
+    }
+    pub fn mnemonic(&self) -> String {
+        self.inner.lock().unwrap().mnemonic.clone()
+    }
+    pub fn disassembly(&self) -> String {
+        self.inner.lock().unwrap().disassembly.clone()
+    }
+    pub fn address(&self) -> u64 {
+        self.inner.lock().unwrap().address
+    }
+    pub fn bytes(&self) -> Vec<u8> {
+        self.inner.lock().unwrap().bytes.clone()
+    }
+    pub fn set_architecture(&mut self, architecture: String) {
+        self.inner.lock().unwrap().architecture = architecture;
+    }
+    pub fn set_mnemonic(&mut self, mnemonic: String) {
+        self.inner.lock().unwrap().mnemonic = mnemonic;
+    }
+    pub fn set_disassembly(&mut self, disassembly: String) {
+        self.inner.lock().unwrap().disassembly = disassembly;
+    }
+    pub fn set_address(&mut self, address: u64) {
+        self.inner.lock().unwrap().address = address;
+    }
+    pub fn set_bytes(&mut self, bytes: Vec<u8>) {
+        self.inner.lock().unwrap().bytes = bytes;
     }
     pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         json_value_to_py(
@@ -1236,11 +1324,7 @@ impl SemanticExpression {
             .map_err(PyValueError::new_err)
     }
 
-    pub fn set_location(
-        &mut self,
-        py: Python<'_>,
-        location: Py<SemanticLocation>,
-    ) -> PyResult<()> {
+    pub fn set_location(&mut self, py: Python<'_>, location: Py<SemanticLocation>) -> PyResult<()> {
         self.inner
             .lock()
             .unwrap()
@@ -1441,11 +1525,7 @@ impl SemanticEffect {
             .set_expression(expression.borrow(py).inner.lock().unwrap().clone())
             .map_err(PyValueError::new_err)
     }
-    pub fn set_location(
-        &mut self,
-        py: Python<'_>,
-        location: Py<SemanticLocation>,
-    ) -> PyResult<()> {
+    pub fn set_location(&mut self, py: Python<'_>, location: Py<SemanticLocation>) -> PyResult<()> {
         self.inner
             .lock()
             .unwrap()
@@ -1645,9 +1725,7 @@ impl SemanticTerminator {
         self.inner
             .lock()
             .unwrap()
-            .set_return_target(
-                expression.map(|item| item.borrow(py).inner.lock().unwrap().clone()),
-            )
+            .set_return_target(expression.map(|item| item.borrow(py).inner.lock().unwrap().clone()))
             .map_err(PyValueError::new_err)
     }
     pub fn set_does_return(&mut self, does_return: Option<bool>) -> PyResult<()> {
@@ -1702,16 +1780,20 @@ impl SemanticTerminator {
 #[pymethods]
 impl InstructionSemantics {
     #[new]
-    #[pyo3(signature = (version, status, temporaries=None, effects=None, terminator=None, diagnostics=None))]
+    #[pyo3(signature = (version, status, abi=None, encoding=None, temporaries=None, effects=None, terminator=None, diagnostics=None))]
     pub fn new(
         py: Python<'_>,
         version: u32,
         status: Py<SemanticStatus>,
+        abi: Option<Py<PyAbi>>,
+        encoding: Option<Py<InstructionEncoding>>,
         temporaries: Option<Vec<Py<SemanticTemporary>>>,
         effects: Option<Vec<Py<SemanticEffect>>>,
         terminator: Option<Py<SemanticTerminator>>,
         diagnostics: Option<Vec<Py<SemanticDiagnostic>>>,
     ) -> Self {
+        let abi = abi.map(|item| item.borrow(py).inner);
+        let encoding = encoding.map(|item| item.borrow(py).inner.lock().unwrap().clone());
         let temporaries = temporaries
             .unwrap_or_default()
             .into_iter()
@@ -1733,6 +1815,8 @@ impl InstructionSemantics {
         Self::from_inner(InnerInstructionSemantics {
             version,
             status: status.borrow(py).inner,
+            abi,
+            encoding,
             temporaries,
             effects,
             terminator,
@@ -1751,6 +1835,18 @@ impl InstructionSemantics {
     }
     pub fn status(&self) -> SemanticStatus {
         SemanticStatus::from_inner(self.inner.lock().unwrap().status)
+    }
+    pub fn abi(&self) -> Option<PyAbi> {
+        self.inner.lock().unwrap().abi.map(|item| PyAbi { inner: item })
+    }
+    pub fn encoding(&self, py: Python<'_>) -> PyResult<Option<Py<InstructionEncoding>>> {
+        self.inner
+            .lock()
+            .unwrap()
+            .encoding
+            .clone()
+            .map(|item| Py::new(py, InstructionEncoding::from_inner(item)))
+            .transpose()
     }
     pub fn temporaries(&self, py: Python<'_>) -> PyResult<Vec<Py<SemanticTemporary>>> {
         self.inner
@@ -1792,7 +1888,18 @@ impl InstructionSemantics {
         self.inner.lock().unwrap().set_version(version);
     }
     pub fn set_status(&mut self, py: Python<'_>, status: Py<SemanticStatus>) {
-        self.inner.lock().unwrap().set_status(status.borrow(py).inner);
+        self.inner
+            .lock()
+            .unwrap()
+            .set_status(status.borrow(py).inner);
+    }
+    pub fn set_abi(&mut self, py: Python<'_>, abi: Option<Py<PyAbi>>) {
+        let abi = abi.map(|item| item.borrow(py).inner);
+        self.inner.lock().unwrap().set_abi(abi);
+    }
+    pub fn set_encoding(&mut self, py: Python<'_>, encoding: Option<Py<InstructionEncoding>>) {
+        let encoding = encoding.map(|item| item.borrow(py).inner.lock().unwrap().clone());
+        self.inner.lock().unwrap().set_encoding(encoding);
     }
     pub fn set_temporaries(&mut self, py: Python<'_>, temporaries: Vec<Py<SemanticTemporary>>) {
         let temporaries = temporaries
@@ -1871,6 +1978,7 @@ pub fn semantics_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<SemanticDiagnosticKind>()?;
     m.add_class::<SemanticTemporary>()?;
     m.add_class::<SemanticDiagnostic>()?;
+    m.add_class::<InstructionEncoding>()?;
     m.add_class::<SemanticLocation>()?;
     m.add_class::<SemanticExpression>()?;
     m.add_class::<SemanticEffect>()?;

@@ -1,6 +1,4 @@
-use super::super::support::{
-    I386Fixture, I386Register, assert_i386_semantics_match_unicorn,
-};
+use super::super::support::{I386Fixture, I386Register, assert_i386_semantics_match_unicorn};
 
 #[test]
 fn integer_semantics_match_unicorn_transitions() {

@@ -309,6 +309,8 @@ fn leave(machine: Architecture, _instruction: &Insn) -> Option<InstructionSemant
     Some(InstructionSemantics {
         version: 1,
         status: crate::semantics::SemanticStatus::Complete,
+        abi: None,
+        encoding: None,
         temporaries: vec![SemanticTemporary {
             id: 0,
             bits: pointer_bits,

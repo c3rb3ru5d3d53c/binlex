@@ -494,7 +494,9 @@ impl<'function> Function<'function> {
 
     fn lifters_json(&self) -> Option<LiftersJson> {
         let llvm = if self.cfg.config.functions.lifters.llvm.enabled {
-            Some(LlvmJson { text: self.llvm().text().ok()? })
+            Some(LlvmJson {
+                text: self.llvm().text().ok()?,
+            })
         } else {
             None
         };

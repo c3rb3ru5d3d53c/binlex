@@ -1,6 +1,5 @@
 use super::super::support::{
-    I386Fixture, I386Register, assert_amd64_semantics_match_unicorn,
-    interpret_amd64_semantics,
+    I386Fixture, I386Register, assert_amd64_semantics_match_unicorn, interpret_amd64_semantics,
 };
 
 fn vec128(low: u64, high: u64) -> u128 {

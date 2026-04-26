@@ -22,6 +22,7 @@
 
 use crate::formats::File;
 use crate::formats::Image;
+use crate::formats::Symbol as PySymbol;
 use crate::hashing::{SSDeep, SHA256, TLSH};
 use crate::imaging::Imaging;
 use crate::Architecture;
@@ -162,6 +163,17 @@ impl ELF {
     #[pyo3(text_signature = "($self)")]
     pub fn size(&self) -> u64 {
         self.inner.lock().unwrap().size()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn symbols(&self, py: Python<'_>) -> PyResult<Vec<Py<PySymbol>>> {
+        self.inner
+            .lock()
+            .unwrap()
+            .symbols()
+            .into_values()
+            .map(|symbol| Py::new(py, PySymbol::from_inner(symbol)))
+            .collect()
     }
 
     #[pyo3(text_signature = "($self)")]

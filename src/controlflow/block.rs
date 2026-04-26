@@ -490,7 +490,9 @@ impl<'block> Block<'block> {
 
     fn lifters_json(&self) -> Option<LiftersJson> {
         let llvm = if self.cfg.config.blocks.lifters.llvm.enabled {
-            Some(LlvmJson { text: self.llvm().text().ok()? })
+            Some(LlvmJson {
+                text: self.llvm().text().ok()?,
+            })
         } else {
             None
         };

@@ -24,7 +24,7 @@ use crate::Architecture;
 use crate::Config;
 use crate::formats::File;
 use crate::formats::Image;
-use crate::formats::Symbol as BlSymbol;
+use crate::formats::{Symbol as BlSymbol, symbol::SymbolKind};
 use crate::hashing::SHA256;
 use crate::hashing::SSDeep;
 use crate::hashing::TLSH;
@@ -98,7 +98,7 @@ impl ELF {
     }
 
     pub fn entrypoint_virtual_address(&self) -> u64 {
-        self.imagebase() + self.elf.header().entrypoint()
+        self.elf.header().entrypoint()
     }
 
     pub fn imagebase(&self) -> u64 {
@@ -120,7 +120,7 @@ impl ELF {
     pub fn export_virtual_addresses(&self) -> BTreeSet<u64> {
         let mut result = BTreeSet::<u64>::new();
         for symbol in self.elf.exported_symbols() {
-            result.insert(self.imagebase() + symbol.value());
+            result.insert(symbol.value());
         }
         result
     }
@@ -134,11 +134,11 @@ impl ELF {
             .filter(|symbol| symbol.get_type() == ElfSymbolType::FUNC)
             .map(|symbol| {
                 (
-                    (self.imagebase() + symbol.value()),
+                    symbol.value(),
                     BlSymbol {
-                        symbol_type: "function".to_string(),
                         name: symbol.name(),
-                        address: self.imagebase() + symbol.value(),
+                        address: symbol.value(),
+                        kind: SymbolKind::Function,
                     },
                 )
             })
@@ -157,7 +157,7 @@ impl ELF {
             let start = segment.file_offset();
             let end = start + segment.physical_size();
             if file_offset >= start && file_offset < end {
-                let segment_virtual_address = self.imagebase() + segment.virtual_address();
+                let segment_virtual_address = segment.virtual_address();
                 return Some(segment_virtual_address + (file_offset - start));
             }
         }
@@ -177,7 +177,7 @@ impl ELF {
         tempmap.write(&self.file.data[0..self.elf.header().header_size() as usize])?;
 
         for segment in self.elf.segments() {
-            let segment_virtual_address = self.imagebase() + segment.virtual_address();
+            let segment_virtual_address = segment.virtual_address();
 
             if segment_virtual_address > tempmap.size()? {
                 let padding_length = segment_virtual_address - tempmap.size()?;
@@ -253,7 +253,7 @@ impl ELF {
         let mut result = BTreeMap::<u64, u64>::new();
         for section in self.elf.sections() {
             if section.flags().contains(Flags::EXECINSTR) {
-                let start = self.imagebase() + section.virtual_address();
+                let start = section.virtual_address();
                 let end = start + section.size();
                 result.insert(start, end);
             }

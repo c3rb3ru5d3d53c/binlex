@@ -1,4 +1,6 @@
-use super::super::support::{I386Fixture, I386Register, WideI386Fixture, interpret_amd64_wide_semantics};
+use super::super::support::{
+    I386Fixture, I386Register, WideI386Fixture, interpret_amd64_wide_semantics,
+};
 
 fn vec256(low: [u8; 16], high: [u8; 16]) -> Vec<u8> {
     [low.as_slice(), high.as_slice()].concat()
@@ -201,10 +203,7 @@ fn vector_ymm_semantics_wide_regressions() {
                     registers.keys().collect::<Vec<_>>()
                 )
             });
-            assert_eq!(
-                actual, &expected,
-                "{name}: register {register} mismatch",
-            );
+            assert_eq!(actual, &expected, "{name}: register {register} mismatch",);
         }
         if let Some((zf, cf)) = expected_flags {
             assert_eq!(flags.zf, zf, "{name}: zf mismatch");

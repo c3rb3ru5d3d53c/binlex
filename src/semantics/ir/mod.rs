@@ -25,12 +25,12 @@ pub mod normalize;
 pub mod validate;
 
 pub use instruction::{
-    InstructionSemantics, InstructionSemanticsJson, SemanticAddressSpace, SemanticDiagnostic,
-    SemanticDiagnosticKind, SemanticEffect, SemanticEffectKind, SemanticExpression,
-    SemanticExpressionKind, SemanticFenceKind, SemanticLocation, SemanticLocationKind,
-    SemanticOperation, SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
-    SemanticOperationUnary, SemanticStatus, SemanticTemporary, SemanticTerminator,
-    SemanticTerminatorKind, SemanticTrapKind,
+    InstructionEncoding, InstructionSemantics, InstructionSemanticsJson, SemanticAddressSpace,
+    SemanticDiagnostic, SemanticDiagnosticKind, SemanticEffect, SemanticEffectKind,
+    SemanticExpression, SemanticExpressionKind, SemanticFenceKind, SemanticLocation,
+    SemanticLocationKind, SemanticOperation, SemanticOperationBinary, SemanticOperationCast,
+    SemanticOperationCompare, SemanticOperationUnary, SemanticStatus, SemanticTemporary,
+    SemanticTerminator, SemanticTerminatorKind, SemanticTrapKind,
 };
 pub use normalize::normalize_instruction_semantics;
 pub use validate::validate_instruction_semantics;

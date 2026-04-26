@@ -30,8 +30,8 @@ use crate::semantics::{
 };
 use capstone::Insn;
 use capstone::arch::ArchOperand;
-use capstone::arch::x86::X86Reg;
 use capstone::arch::x86::X86OperandType;
+use capstone::arch::x86::X86Reg;
 
 pub fn partial(
     terminator: SemanticTerminator,
@@ -40,6 +40,8 @@ pub fn partial(
     InstructionSemantics {
         version: 1,
         status: SemanticStatus::Partial,
+        abi: None,
+        encoding: None,
         temporaries: Vec::new(),
         effects: Vec::new(),
         terminator,
@@ -54,6 +56,8 @@ pub fn complete(
     InstructionSemantics {
         version: 1,
         status: SemanticStatus::Complete,
+        abi: None,
+        encoding: None,
         temporaries: Vec::new(),
         effects,
         terminator,
@@ -69,6 +73,8 @@ pub fn partial_with_effects(
     InstructionSemantics {
         version: 1,
         status: SemanticStatus::Partial,
+        abi: None,
+        encoding: None,
         temporaries: Vec::new(),
         effects,
         terminator,
@@ -212,6 +218,9 @@ pub fn reg_id_name(reg_id: u16) -> String {
         x if x == X86Reg::X86_REG_DI as u16 => "di".to_string(),
         x if x == X86Reg::X86_REG_EDI as u16 => "edi".to_string(),
         x if x == X86Reg::X86_REG_RDI as u16 => "rdi".to_string(),
+        x if x == X86Reg::X86_REG_R8 as u16 => "r8".to_string(),
+        x if x == X86Reg::X86_REG_R9 as u16 => "r9".to_string(),
+        x if x == X86Reg::X86_REG_R10 as u16 => "r10".to_string(),
         x if x == X86Reg::X86_REG_BP as u16 => "bp".to_string(),
         x if x == X86Reg::X86_REG_EBP as u16 => "ebp".to_string(),
         x if x == X86Reg::X86_REG_RBP as u16 => "rbp".to_string(),

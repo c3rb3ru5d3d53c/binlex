@@ -1,5 +1,5 @@
-mod common;
 mod builders;
+mod common;
 mod compare;
 mod fixtures;
 mod memory;

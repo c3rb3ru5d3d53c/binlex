@@ -76,15 +76,19 @@ fn arm64_semantics_lower_to_llvm() {
     assert!(!movi_reg_ir.contains("@binlex_effect_arm64_movi"));
     let movi_small_ir = lift_instruction_to_llvm("movi v1.8b, #1", &[0x21, 0xe4, 0x00, 0x0f]);
     assert!(!movi_small_ir.contains("@binlex_effect_arm64_movi"));
-    let movi_2d_zero_ir = lift_instruction_to_llvm("movi v0.2d, #0000000000000000", &[0x00, 0xe4, 0x00, 0x6f]);
+    let movi_2d_zero_ir =
+        lift_instruction_to_llvm("movi v0.2d, #0000000000000000", &[0x00, 0xe4, 0x00, 0x6f]);
     assert!(!movi_2d_zero_ir.contains("@binlex_effect_arm64_movi"));
-    let movi_2d_ff_ir = lift_instruction_to_llvm("movi v0.2d, #0xffffffffffffffff", &[0xe0, 0xe7, 0x07, 0x6f]);
+    let movi_2d_ff_ir =
+        lift_instruction_to_llvm("movi v0.2d, #0xffffffffffffffff", &[0xe0, 0xe7, 0x07, 0x6f]);
     assert!(!movi_2d_ff_ir.contains("@binlex_effect_arm64_movi"));
-    let movi_2d_v2_ir = lift_instruction_to_llvm("movi v2.2d, #0xffffffffffffffff", &[0xe2, 0xe7, 0x07, 0x6f]);
+    let movi_2d_v2_ir =
+        lift_instruction_to_llvm("movi v2.2d, #0xffffffffffffffff", &[0xe2, 0xe7, 0x07, 0x6f]);
     assert!(!movi_2d_v2_ir.contains("@binlex_effect_arm64_movi"));
     let movi_2s_ir = lift_instruction_to_llvm("movi v0.2s, #1", &[0x20, 0x04, 0x00, 0x0f]);
     assert!(!movi_2s_ir.contains("@binlex_effect_arm64_movi"));
-    let movi_d_ir = lift_instruction_to_llvm("movi d0, #0000000000000000", &[0x00, 0xe4, 0x00, 0x2f]);
+    let movi_d_ir =
+        lift_instruction_to_llvm("movi d0, #0000000000000000", &[0x00, 0xe4, 0x00, 0x2f]);
     assert!(!movi_d_ir.contains("@binlex_effect_arm64_movi"));
 
     let dup_ir = lift_instruction_to_llvm("dup v0.16b, w1", &[0x20, 0x0c, 0x01, 0x4e]);
@@ -124,10 +128,13 @@ fn arm64_semantics_lower_to_llvm() {
 
     let sshll_ir = lift_instruction_to_llvm("sshll v0.8h, v1.8b, #0", &[0x20, 0xa4, 0x08, 0x0f]);
     assert!(!sshll_ir.contains("@binlex_effect_arm64_sshll"));
-    let sshll_wide_ir = lift_instruction_to_llvm("sshll v0.4s, v1.4h, #0", &[0x20, 0xa4, 0x10, 0x0f]);
+    let sshll_wide_ir =
+        lift_instruction_to_llvm("sshll v0.4s, v1.4h, #0", &[0x20, 0xa4, 0x10, 0x0f]);
     assert!(!sshll_wide_ir.contains("@binlex_effect_arm64_sshll"));
-    let sshll_wide_alt_ir = lift_instruction_to_llvm("sshll v1.4s, v0.4h, #0", &[0x01, 0xa4, 0x10, 0x0f]);
+    let sshll_wide_alt_ir =
+        lift_instruction_to_llvm("sshll v1.4s, v0.4h, #0", &[0x01, 0xa4, 0x10, 0x0f]);
     assert!(!sshll_wide_alt_ir.contains("@binlex_effect_arm64_sshll"));
-    let sshll_widest_ir = lift_instruction_to_llvm("sshll v0.2d, v1.2s, #0", &[0x20, 0xa4, 0x20, 0x0f]);
+    let sshll_widest_ir =
+        lift_instruction_to_llvm("sshll v0.2d, v1.2s, #0", &[0x20, 0xa4, 0x20, 0x0f]);
     assert!(!sshll_widest_ir.contains("@binlex_effect_arm64_sshll"));
 }

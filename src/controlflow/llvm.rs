@@ -1,5 +1,5 @@
-use crate::Config;
 use crate::Architecture;
+use crate::Config;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::lifters::llvm::{Lifter as LlvmLifter, Mode as LlvmMode};
 use std::io::Error;

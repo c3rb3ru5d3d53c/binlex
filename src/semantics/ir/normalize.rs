@@ -6,6 +6,8 @@ pub fn normalize_instruction_semantics(semantics: &InstructionSemantics) -> Inst
     InstructionSemantics {
         version: semantics.version,
         status: semantics.status,
+        abi: semantics.abi,
+        encoding: semantics.encoding.clone(),
         temporaries: semantics.temporaries.clone(),
         effects: semantics.effects.iter().map(normalize_effect).collect(),
         terminator: normalize_terminator(&semantics.terminator),
@@ -79,15 +81,6 @@ fn normalize_effect(effect: &SemanticEffect) -> SemanticEffect {
         },
         SemanticEffect::Fence { kind } => SemanticEffect::Fence { kind: kind.clone() },
         SemanticEffect::Trap { kind } => SemanticEffect::Trap { kind: kind.clone() },
-        SemanticEffect::Architecture {
-            name,
-            args,
-            outputs,
-        } => SemanticEffect::Architecture {
-            name: name.clone(),
-            args: args.iter().map(normalize_expression).collect(),
-            outputs: outputs.iter().map(normalize_location).collect(),
-        },
         SemanticEffect::Intrinsic {
             name,
             args,
@@ -226,13 +219,6 @@ fn normalize_expression(expression: &SemanticExpression) -> SemanticExpression {
         },
         SemanticExpression::Undefined { bits } => SemanticExpression::Undefined { bits: *bits },
         SemanticExpression::Poison { bits } => SemanticExpression::Poison { bits: *bits },
-        SemanticExpression::Architecture { name, args, bits } => {
-            SemanticExpression::Architecture {
-                name: name.clone(),
-                args: args.iter().map(normalize_expression).collect(),
-                bits: *bits,
-            }
-        }
         SemanticExpression::Intrinsic { name, args, bits } => SemanticExpression::Intrinsic {
             name: name.clone(),
             args: args.iter().map(normalize_expression).collect(),
