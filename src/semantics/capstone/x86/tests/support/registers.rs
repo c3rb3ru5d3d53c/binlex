@@ -5,12 +5,16 @@ use num_bigint::BigUint;
 use num_traits::Zero;
 use unicorn_engine_sys::RegisterX86;
 
-use crate::semantics::capstone::x86::common as x86_common;
 use crate::Architecture;
+use crate::semantics::capstone::x86::common as x86_common;
 
 use super::common::{I386Register, mask_to_bits, mask_to_bits_wide};
 
-pub(crate) fn read_register_value(registers: &BTreeMap<String, u128>, name: &str, bits: u16) -> u128 {
+pub(crate) fn read_register_value(
+    registers: &BTreeMap<String, u128>,
+    name: &str,
+    bits: u16,
+) -> u128 {
     if let Some(value) = registers.get(name) {
         return mask_to_bits(*value, bits);
     }
@@ -46,7 +50,10 @@ pub(crate) fn read_register_value(registers: &BTreeMap<String, u128>, name: &str
         return mask_to_bits(registers.get(&ecx_name).copied().unwrap_or_default(), 16);
     }
     if name == x86_common::reg_id_name(X86Reg::X86_REG_CH as u16) {
-        return mask_to_bits(registers.get(&ecx_name).copied().unwrap_or_default() >> 8, 8);
+        return mask_to_bits(
+            registers.get(&ecx_name).copied().unwrap_or_default() >> 8,
+            8,
+        );
     }
     if name == x86_common::reg_id_name(X86Reg::X86_REG_CL as u16) {
         return mask_to_bits(registers.get(&ecx_name).copied().unwrap_or_default(), 8);
@@ -82,7 +89,11 @@ pub(crate) fn read_register_value(registers: &BTreeMap<String, u128>, name: &str
     panic!("unknown register read: {name}");
 }
 
-pub(crate) fn write_register_value(registers: &mut BTreeMap<String, u128>, name: &str, value: u128) {
+pub(crate) fn write_register_value(
+    registers: &mut BTreeMap<String, u128>,
+    name: &str,
+    value: u128,
+) {
     let eax_name = x86_common::reg_id_name(X86Reg::X86_REG_EAX as u16);
     let rax_name = x86_common::reg_id_name(X86Reg::X86_REG_RAX as u16);
     let ebx_name = x86_common::reg_id_name(X86Reg::X86_REG_EBX as u16);

@@ -23,7 +23,33 @@
 use crate::metadata::Attribute;
 use serde::{Deserialize, Serialize};
 use serde_json;
+use std::fmt;
 use std::io::Error;
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum SymbolKind {
+    Function,
+    Import,
+    Export,
+    Unknown,
+}
+
+impl SymbolKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Function => "function",
+            Self::Import => "import",
+            Self::Export => "export",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+impl fmt::Display for SymbolKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
 
 /// Represents a JSON-serializable structure containing metadata about a function symbol.
 #[derive(Serialize, Deserialize)]
@@ -70,17 +96,17 @@ pub struct Symbol {
     pub name: String,
     /// The virtual address of the function symbol.
     pub address: u64,
-    /// The type of symbol
-    pub symbol_type: String,
+    /// The kind of symbol.
+    pub kind: SymbolKind,
 }
 
 impl Symbol {
     #[allow(dead_code)]
-    pub fn new(address: u64, symbol_type: String, name: String) -> Self {
+    pub fn new(address: u64, kind: SymbolKind, name: String) -> Self {
         Self {
             name,
             address,
-            symbol_type,
+            kind,
         }
     }
 
@@ -92,7 +118,7 @@ impl Symbol {
     pub fn process(&self) -> SymbolJson {
         SymbolJson {
             type_: "symbol".to_string(),
-            symbol_type: self.symbol_type.clone(),
+            symbol_type: self.kind.to_string(),
             name: self.name.clone(),
             address: self.address,
             username: String::new(),

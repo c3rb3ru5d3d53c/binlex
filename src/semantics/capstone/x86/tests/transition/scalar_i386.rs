@@ -1,6 +1,4 @@
-use super::common::{
-    I386Fixture, I386Register, assert_i386_instruction_roundtrip_match_unicorn,
-};
+use super::common::{I386Fixture, I386Register, assert_i386_instruction_roundtrip_match_unicorn};
 
 #[test]
 fn i386_roundtrip_nop_matches_unicorn() {

@@ -41,6 +41,8 @@ pub(crate) fn build(instruction: &Instruction<'_>) -> Option<InstructionSemantic
         Mnemonic::Break => Some(InstructionSemantics {
             version: 1,
             status: crate::semantics::SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
             temporaries: Vec::new(),
             effects: vec![SemanticEffect::Trap {
                 kind: SemanticTrapKind::Breakpoint,

@@ -1,6 +1,4 @@
-use super::common::{
-    I386Fixture, I386Register, assert_i386_instruction_roundtrip_match_unicorn,
-};
+use super::common::{I386Fixture, I386Register, assert_i386_instruction_roundtrip_match_unicorn};
 
 #[test]
 fn i386_roundtrip_movsb_matches_unicorn() {
@@ -54,10 +52,7 @@ fn i386_roundtrip_movsw_matches_unicorn() {
                 (I386Register::Esp, 0x2fc0),
             ],
             eflags: 1 << 1,
-            memory: vec![
-                (0x3110, vec![0x34, 0x12]),
-                (0x3210, vec![0x00, 0x00]),
-            ],
+            memory: vec![(0x3110, vec![0x34, 0x12]), (0x3210, vec![0x00, 0x00])],
         },
     );
 }

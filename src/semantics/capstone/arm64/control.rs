@@ -82,6 +82,8 @@ pub(super) fn build(instruction: &Insn, operands: &[ArchOperand]) -> Option<Inst
         id if id == Arm64Insn::ARM64_INS_BRK as u32 => Some(InstructionSemantics {
             version: 1,
             status: SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
             temporaries: Vec::new(),
             effects: vec![SemanticEffect::Trap {
                 kind: SemanticTrapKind::Breakpoint,

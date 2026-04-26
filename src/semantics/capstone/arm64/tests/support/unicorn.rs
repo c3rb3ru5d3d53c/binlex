@@ -42,8 +42,11 @@ pub(crate) fn unicorn_arm64_execution(
         .expect("write arm64 instruction bytes");
     emu.reg_write(RegisterARM64::PC, ARM64_CODE_ADDRESS)
         .expect("seed pc");
-    emu.reg_write(RegisterARM64::SP, ARM64_STACK_ADDRESS + ARM64_PAGE_SIZE - 0x10)
-        .expect("seed sp");
+    emu.reg_write(
+        RegisterARM64::SP,
+        ARM64_STACK_ADDRESS + ARM64_PAGE_SIZE - 0x10,
+    )
+    .expect("seed sp");
     if use_vector_program {
         emu.reg_write(RegisterARM64::X27, ARM64_VECTOR_INPUT_ADDRESS)
             .expect("seed vector input pointer");
@@ -66,11 +69,7 @@ pub(crate) fn unicorn_arm64_execution(
             .unwrap_or_else(|error| panic!("seed memory at 0x{address:x}: {error:?}"));
     }
 
-    let pre = snapshot_arm64_state(
-        &emu,
-        tracked_registers,
-        fixture_memory_map(&fixture.memory),
-    );
+    let pre = snapshot_arm64_state(&emu, tracked_registers, fixture_memory_map(&fixture.memory));
     let instruction_count = if use_vector_program {
         (program.len() / 4) as usize
     } else {
@@ -121,6 +120,7 @@ pub(crate) fn semantic_name_for_arch_register(register: &str) -> String {
         "q0" | "v0" => Arm64Reg::ARM64_REG_V0,
         "q1" | "v1" => Arm64Reg::ARM64_REG_V1,
         "q2" | "v2" => Arm64Reg::ARM64_REG_V2,
+        "q3" | "v3" => Arm64Reg::ARM64_REG_V3,
         "w0" => Arm64Reg::ARM64_REG_W0,
         "w1" => Arm64Reg::ARM64_REG_W1,
         "w2" => Arm64Reg::ARM64_REG_W2,
@@ -233,11 +233,25 @@ fn semantic_name_to_unicorn_register(name: &str) -> RegisterARM64 {
         name if name == format!("reg_{}", Arm64Reg::ARM64_REG_S0 as u32) => RegisterARM64::S0,
         name if name == format!("reg_{}", Arm64Reg::ARM64_REG_S1 as u32) => RegisterARM64::S1,
         name if name == format!("reg_{}", Arm64Reg::ARM64_REG_Q0 as u32)
-            || name == format!("reg_{}", Arm64Reg::ARM64_REG_V0 as u32) => RegisterARM64::V0,
+            || name == format!("reg_{}", Arm64Reg::ARM64_REG_V0 as u32) =>
+        {
+            RegisterARM64::V0
+        }
         name if name == format!("reg_{}", Arm64Reg::ARM64_REG_Q1 as u32)
-            || name == format!("reg_{}", Arm64Reg::ARM64_REG_V1 as u32) => RegisterARM64::V1,
+            || name == format!("reg_{}", Arm64Reg::ARM64_REG_V1 as u32) =>
+        {
+            RegisterARM64::V1
+        }
         name if name == format!("reg_{}", Arm64Reg::ARM64_REG_Q2 as u32)
-            || name == format!("reg_{}", Arm64Reg::ARM64_REG_V2 as u32) => RegisterARM64::V2,
+            || name == format!("reg_{}", Arm64Reg::ARM64_REG_V2 as u32) =>
+        {
+            RegisterARM64::V2
+        }
+        name if name == format!("reg_{}", Arm64Reg::ARM64_REG_Q3 as u32)
+            || name == format!("reg_{}", Arm64Reg::ARM64_REG_V3 as u32) =>
+        {
+            RegisterARM64::V3
+        }
         name if name == format!("reg_{}", Arm64Reg::ARM64_REG_X0 as u32) => RegisterARM64::X0,
         name if name == format!("reg_{}", Arm64Reg::ARM64_REG_X1 as u32) => RegisterARM64::X1,
         name if name == format!("reg_{}", Arm64Reg::ARM64_REG_X2 as u32) => RegisterARM64::X2,
@@ -270,7 +284,7 @@ fn semantic_name_to_unicorn_register(name: &str) -> RegisterARM64 {
         name if name == format!("reg_{}", Arm64Reg::ARM64_REG_X29 as u32) => RegisterARM64::FP,
         name if name == format!("reg_{}", Arm64Reg::ARM64_REG_X30 as u32) => RegisterARM64::LR,
         name if name == format!("reg_{}", Arm64Reg::ARM64_REG_SP as u32) => RegisterARM64::SP,
-        other => panic!("unsupported tracked arm64 semantic register: {other}"),
+        other => arch_register_to_unicorn(other),
     }
 }
 
@@ -289,6 +303,7 @@ fn arch_register_to_unicorn(register: &str) -> RegisterARM64 {
         "q0" | "v0" => RegisterARM64::V0,
         "q1" | "v1" => RegisterARM64::V1,
         "q2" | "v2" => RegisterARM64::V2,
+        "q3" | "v3" => RegisterARM64::V3,
         "w0" => RegisterARM64::W0,
         "w1" => RegisterARM64::W1,
         "w2" => RegisterARM64::W2,
@@ -406,7 +421,10 @@ fn read_arm64_register(emu: &Unicorn<'_, ()>, name: &str) -> u128 {
 }
 
 fn is_long_arm64_register(register: RegisterARM64) -> bool {
-    matches!(register, RegisterARM64::V0 | RegisterARM64::V1 | RegisterARM64::V2)
+    matches!(
+        register,
+        RegisterARM64::V0 | RegisterARM64::V1 | RegisterARM64::V2 | RegisterARM64::V3
+    )
 }
 
 fn build_arm64_program(
@@ -436,6 +454,13 @@ fn build_arm64_program(
     {
         program.extend_from_slice(&[0x62, 0x0b, 0xc0, 0x3d]);
     }
+    if fixture
+        .registers
+        .iter()
+        .any(|(register, _)| matches!(*register, "v3" | "q3"))
+    {
+        program.extend_from_slice(&[0x63, 0x0f, 0xc0, 0x3d]);
+    }
     program.extend_from_slice(bytes);
     if watched_vector_registers
         .iter()
@@ -455,15 +480,22 @@ fn build_arm64_program(
     {
         program.extend_from_slice(&[0x82, 0x0b, 0x80, 0x3d]);
     }
+    if watched_vector_registers
+        .iter()
+        .any(|name| name == &semantic_name_for_arch_register("v3"))
+    {
+        program.extend_from_slice(&[0x83, 0x0f, 0x80, 0x3d]);
+    }
     program
 }
 
 fn uses_vector_program(fixture: &Arm64Fixture, watched_vector_registers: &[String]) -> bool {
-    fixture
-        .registers
-        .iter()
-        .any(|(register, _)| matches!(*register, "v0" | "v1" | "v2" | "q0" | "q1" | "q2"))
-        || !watched_vector_registers.is_empty()
+    fixture.registers.iter().any(|(register, _)| {
+        matches!(
+            *register,
+            "v0" | "v1" | "v2" | "v3" | "q0" | "q1" | "q2" | "q3"
+        )
+    }) || !watched_vector_registers.is_empty()
 }
 
 fn seed_vector_fixture_memory(emu: &mut Unicorn<'_, ()>, fixture: &Arm64Fixture) {
@@ -472,6 +504,7 @@ fn seed_vector_fixture_memory(emu: &mut Unicorn<'_, ()>, fixture: &Arm64Fixture)
             "v0" | "q0" => ARM64_VECTOR_INPUT_ADDRESS,
             "v1" | "q1" => ARM64_VECTOR_INPUT_ADDRESS + 16,
             "v2" | "q2" => ARM64_VECTOR_INPUT_ADDRESS + 32,
+            "v3" | "q3" => ARM64_VECTOR_INPUT_ADDRESS + 48,
             _ => continue,
         };
         emu.mem_write(address, &value.to_le_bytes())
@@ -498,6 +531,12 @@ fn watched_vector_memory_ranges(watched_vector_registers: &[String]) -> Vec<(u64
         .any(|name| name == &semantic_name_for_arch_register("v2"))
     {
         ranges.push((ARM64_VECTOR_OUTPUT_ADDRESS + 32, 16));
+    }
+    if watched_vector_registers
+        .iter()
+        .any(|name| name == &semantic_name_for_arch_register("v3"))
+    {
+        ranges.push((ARM64_VECTOR_OUTPUT_ADDRESS + 48, 16));
     }
     ranges
 }

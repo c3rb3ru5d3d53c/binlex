@@ -450,6 +450,9 @@ impl Graph {
             instruction.is_trap = json.is_trap;
             instruction.has_indirect_target = json.has_indirect_target;
             instruction.edges = json.edges;
+            instruction.mnemonic = json.mnemonic;
+            instruction.disassembly = json.disassembly;
+            instruction.operands = json.operands;
             instruction.bytes =
                 crate::hex::decode(&json.bytes).map_err(|error| Error::other(error.to_string()))?;
             instruction.chromosome_mask = if json.chromosome.mask.is_empty() {
@@ -650,6 +653,15 @@ impl Graph {
         }
         if existing.pattern.is_empty() {
             existing.pattern = incoming.pattern;
+        }
+        if existing.mnemonic.is_empty() {
+            existing.mnemonic = incoming.mnemonic;
+        }
+        if existing.disassembly.is_empty() {
+            existing.disassembly = incoming.disassembly;
+        }
+        if existing.operands.is_empty() {
+            existing.operands = incoming.operands;
         }
         existing.semantics =
             Graph::merge_instruction_semantics(existing.semantics, incoming.semantics);

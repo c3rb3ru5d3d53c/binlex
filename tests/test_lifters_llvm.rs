@@ -74,7 +74,8 @@ fn verify_all_entity_lifts(graph: &Graph) {
             block_lifter.verify().expect("block module should verify");
 
             for instruction in block.instructions() {
-                let mut instruction_lifter = Lifter::new(instruction.architecture, Config::default());
+                let mut instruction_lifter =
+                    Lifter::new(instruction.architecture, Config::default());
                 instruction_lifter
                     .lift_instruction(&instruction)
                     .expect("instruction should lift");

@@ -22,10 +22,10 @@
 
 use crate::Architecture;
 use crate::semantics::{
-    InstructionSemantics, SemanticAddressSpace, SemanticDiagnostic, SemanticDiagnosticKind,
-    SemanticEffect, SemanticExpression, SemanticLocation, SemanticOperationBinary,
-    SemanticOperationCast, SemanticOperationCompare, SemanticOperationUnary, SemanticStatus,
-    SemanticTerminator,
+    InstructionEncoding, InstructionSemantics, SemanticAddressSpace, SemanticDiagnostic,
+    SemanticDiagnosticKind, SemanticEffect, SemanticExpression, SemanticLocation,
+    SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
+    SemanticOperationUnary, SemanticStatus, SemanticTerminator,
 };
 use capstone::Insn;
 use capstone::RegId;
@@ -409,22 +409,34 @@ pub(super) fn build_movn(
 pub(super) fn build_adc(
     machine: Architecture,
     operands: &[ArchOperand],
+    update_flags: bool,
 ) -> Option<InstructionSemantics> {
     let dst = operand_location(machine, operands.first()?)?;
     let left = operand_expression(operands.get(1)?)?;
     let right = operand_expression(operands.get(2)?)?;
     let bits = location_bits(&dst);
     let carry = zero_extend_to_bits(flag_expr("c"), bits);
+    let right_with_carry = binary(SemanticOperationBinary::Add, right, carry, bits);
     let expression = binary(
         SemanticOperationBinary::Add,
-        binary(SemanticOperationBinary::Add, left, right, bits),
-        carry,
+        left.clone(),
+        right_with_carry.clone(),
         bits,
     );
-    Some(complete(
-        SemanticTerminator::FallThrough,
-        vec![SemanticEffect::Set { dst, expression }],
-    ))
+    let mut effects = vec![SemanticEffect::Set {
+        dst: dst.clone(),
+        expression: expression.clone(),
+    }];
+    if update_flags {
+        effects.extend(arithmetic_flag_effects(
+            SemanticOperationBinary::Add,
+            left,
+            right_with_carry,
+            expression,
+        ));
+    }
+    let _ = machine;
+    Some(complete(SemanticTerminator::FallThrough, effects))
 }
 
 pub(super) fn build_sbc(
@@ -589,8 +601,12 @@ pub(super) fn build_conditional_select(
     let when_true = operand_expression(operands.get(1)?)?;
     let when_false = operand_expression(operands.get(2)?)?;
     let bits = location_bits(&dst);
-    let condition =
-        condition_from_cc(operands.get(3).and_then(operand_immediate).or(condition_code)?)?;
+    let condition = condition_from_cc(
+        operands
+            .get(3)
+            .and_then(operand_immediate)
+            .or(condition_code)?,
+    )?;
     Some(complete(
         SemanticTerminator::FallThrough,
         vec![SemanticEffect::Set {
@@ -612,8 +628,12 @@ pub(super) fn build_cset(
 ) -> Option<InstructionSemantics> {
     let dst = operand_location(machine, operands.first()?)?;
     let bits = location_bits(&dst);
-    let condition =
-        condition_from_cc(operands.get(1).and_then(operand_immediate).or(condition_code)?)?;
+    let condition = condition_from_cc(
+        operands
+            .get(1)
+            .and_then(operand_immediate)
+            .or(condition_code)?,
+    )?;
     Some(complete(
         SemanticTerminator::FallThrough,
         vec![SemanticEffect::Set {
@@ -635,8 +655,12 @@ pub(super) fn build_csetm(
 ) -> Option<InstructionSemantics> {
     let dst = operand_location(machine, operands.first()?)?;
     let bits = location_bits(&dst);
-    let condition =
-        condition_from_cc(operands.get(1).and_then(operand_immediate).or(condition_code)?)?;
+    let condition = condition_from_cc(
+        operands
+            .get(1)
+            .and_then(operand_immediate)
+            .or(condition_code)?,
+    )?;
     Some(complete(
         SemanticTerminator::FallThrough,
         vec![SemanticEffect::Set {
@@ -660,8 +684,12 @@ pub(super) fn build_conditional_select_increment(
     let when_true = operand_expression(operands.get(1)?)?;
     let base_false = operand_expression(operands.get(2)?)?;
     let bits = location_bits(&dst);
-    let condition =
-        condition_from_cc(operands.get(3).and_then(operand_immediate).or(condition_code)?)?;
+    let condition = condition_from_cc(
+        operands
+            .get(3)
+            .and_then(operand_immediate)
+            .or(condition_code)?,
+    )?;
     let when_false = binary(
         SemanticOperationBinary::Add,
         base_false,
@@ -690,8 +718,12 @@ pub(super) fn build_conditional_increment(
     let dst = operand_location(machine, operands.first()?)?;
     let base = operand_expression(operands.get(1)?)?;
     let bits = location_bits(&dst);
-    let condition =
-        condition_from_cc(operands.get(2).and_then(operand_immediate).or(condition_code)?)?;
+    let condition = condition_from_cc(
+        operands
+            .get(2)
+            .and_then(operand_immediate)
+            .or(condition_code)?,
+    )?;
     let incremented = binary(
         SemanticOperationBinary::Add,
         base.clone(),
@@ -712,6 +744,39 @@ pub(super) fn build_conditional_increment(
     ))
 }
 
+pub(super) fn build_conditional_invert(
+    machine: Architecture,
+    operands: &[ArchOperand],
+    condition_code: Option<u64>,
+) -> Option<InstructionSemantics> {
+    let dst = operand_location(machine, operands.first()?)?;
+    let base = operand_expression(operands.get(1)?)?;
+    let bits = location_bits(&dst);
+    let condition = condition_from_cc(
+        operands
+            .get(2)
+            .and_then(operand_immediate)
+            .or(condition_code)?,
+    )?;
+    let inverted = SemanticExpression::Unary {
+        op: SemanticOperationUnary::Not,
+        arg: Box::new(base.clone()),
+        bits,
+    };
+    Some(complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Set {
+            dst,
+            expression: SemanticExpression::Select {
+                condition: Box::new(condition),
+                when_true: Box::new(inverted),
+                when_false: Box::new(base),
+                bits,
+            },
+        }],
+    ))
+}
+
 pub(super) fn build_conditional_select_invert(
     machine: Architecture,
     operands: &[ArchOperand],
@@ -721,8 +786,12 @@ pub(super) fn build_conditional_select_invert(
     let when_true = operand_expression(operands.get(1)?)?;
     let false_src = operand_expression(operands.get(2)?)?;
     let bits = location_bits(&dst);
-    let condition =
-        condition_from_cc(operands.get(3).and_then(operand_immediate).or(condition_code)?)?;
+    let condition = condition_from_cc(
+        operands
+            .get(3)
+            .and_then(operand_immediate)
+            .or(condition_code)?,
+    )?;
     let when_false = SemanticExpression::Unary {
         op: SemanticOperationUnary::Not,
         arg: Box::new(false_src),
@@ -750,8 +819,12 @@ pub(super) fn build_conditional_negate(
     let dst = operand_location(machine, operands.first()?)?;
     let src = operand_expression(operands.get(1)?)?;
     let bits = location_bits(&dst);
-    let condition =
-        condition_from_cc(operands.get(2).and_then(operand_immediate).or(condition_code)?)?;
+    let condition = condition_from_cc(
+        operands
+            .get(2)
+            .and_then(operand_immediate)
+            .or(condition_code)?,
+    )?;
     let negated = binary(
         SemanticOperationBinary::Sub,
         const_u64(0, bits),
@@ -772,6 +845,35 @@ pub(super) fn build_conditional_negate(
     ))
 }
 
+pub(super) fn build_abs(
+    machine: Architecture,
+    operands: &[ArchOperand],
+) -> Option<InstructionSemantics> {
+    let dst = operand_location(machine, operands.first()?)?;
+    let src = operand_expression(operands.get(1)?)?;
+    let bits = location_bits(&dst);
+    let zero = const_u64(0, bits);
+    let negative = binary(
+        SemanticOperationBinary::Sub,
+        zero.clone(),
+        src.clone(),
+        bits,
+    );
+    let _ = machine;
+    Some(complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Set {
+            dst,
+            expression: SemanticExpression::Select {
+                condition: Box::new(sign_bit(src.clone())),
+                when_true: Box::new(negative),
+                when_false: Box::new(src),
+                bits,
+            },
+        }],
+    ))
+}
+
 pub(super) fn build_conditional_select_negate(
     machine: Architecture,
     operands: &[ArchOperand],
@@ -781,8 +883,12 @@ pub(super) fn build_conditional_select_negate(
     let when_true = operand_expression(operands.get(1)?)?;
     let false_src = operand_expression(operands.get(2)?)?;
     let bits = location_bits(&dst);
-    let condition =
-        condition_from_cc(operands.get(3).and_then(operand_immediate).or(condition_code)?)?;
+    let condition = condition_from_cc(
+        operands
+            .get(3)
+            .and_then(operand_immediate)
+            .or(condition_code)?,
+    )?;
     let when_false = binary(
         SemanticOperationBinary::Sub,
         const_u64(0, bits),
@@ -1359,8 +1465,12 @@ pub(super) fn build_conditional_compare(
     let left = operand_expression(operands.first()?)?;
     let right = operand_expression(operands.get(1)?)?;
     let fallback_nzcv = operand_immediate(operands.get(2)?)?;
-    let condition =
-        condition_from_cc(operands.get(3).and_then(operand_immediate).or(condition_code)?)?;
+    let condition = condition_from_cc(
+        operands
+            .get(3)
+            .and_then(operand_immediate)
+            .or(condition_code)?,
+    )?;
     let result = binary(op, left.clone(), right.clone(), left.bits());
     let compare_flags = arithmetic_flag_values(op, left, right, result);
     let fallback_flags = [
@@ -1430,8 +1540,12 @@ pub(super) fn build_fccmp(
     let left = operand_expression(operands.first()?)?;
     let right = operand_expression(operands.get(1)?)?;
     let fallback_nzcv = operand_immediate(operands.get(2)?)?;
-    let condition =
-        condition_from_cc(operands.get(3).and_then(operand_immediate).or(condition_code)?)?;
+    let condition = condition_from_cc(
+        operands
+            .get(3)
+            .and_then(operand_immediate)
+            .or(condition_code)?,
+    )?;
     let compare_flags = fp_compare_flag_values(left, right);
     let fallback_flags = [
         ((fallback_nzcv >> 3) & 1) != 0,
@@ -1444,15 +1558,17 @@ pub(super) fn build_fccmp(
         .into_iter()
         .zip(compare_flags)
         .zip(fallback_flags)
-        .map(|((name, compare_value), fallback_value)| SemanticEffect::Set {
-            dst: flag(name),
-            expression: SemanticExpression::Select {
-                condition: Box::new(condition.clone()),
-                when_true: Box::new(compare_value),
-                when_false: Box::new(bool_const(fallback_value)),
-                bits: 1,
+        .map(
+            |((name, compare_value), fallback_value)| SemanticEffect::Set {
+                dst: flag(name),
+                expression: SemanticExpression::Select {
+                    condition: Box::new(condition.clone()),
+                    when_true: Box::new(compare_value),
+                    when_false: Box::new(bool_const(fallback_value)),
+                    bits: 1,
+                },
             },
-        })
+        )
         .collect();
     let _ = machine;
     Some(complete(SemanticTerminator::FallThrough, effects))
@@ -1590,7 +1706,10 @@ pub(super) fn build_fp_minmax(
     ))
 }
 
-pub(super) fn build_fnmul(machine: Architecture, operands: &[ArchOperand]) -> Option<InstructionSemantics> {
+pub(super) fn build_fnmul(
+    machine: Architecture,
+    operands: &[ArchOperand],
+) -> Option<InstructionSemantics> {
     let dst = operand_location(machine, operands.first()?)?;
     let left = operand_expression(operands.get(1)?)?;
     let right = operand_expression(operands.get(2)?)?;
@@ -1621,7 +1740,10 @@ pub(super) fn build_fnmul(machine: Architecture, operands: &[ArchOperand]) -> Op
     ))
 }
 
-pub(super) fn build_fmadd(machine: Architecture, operands: &[ArchOperand]) -> Option<InstructionSemantics> {
+pub(super) fn build_fmadd(
+    machine: Architecture,
+    operands: &[ArchOperand],
+) -> Option<InstructionSemantics> {
     let dst = operand_location(machine, operands.first()?)?;
     let left = operand_expression(operands.get(1)?)?;
     let right = operand_expression(operands.get(2)?)?;
@@ -1648,7 +1770,10 @@ pub(super) fn build_fmadd(machine: Architecture, operands: &[ArchOperand]) -> Op
     ))
 }
 
-pub(super) fn build_fmsub(machine: Architecture, operands: &[ArchOperand]) -> Option<InstructionSemantics> {
+pub(super) fn build_fmsub(
+    machine: Architecture,
+    operands: &[ArchOperand],
+) -> Option<InstructionSemantics> {
     let dst = operand_location(machine, operands.first()?)?;
     let left = operand_expression(operands.get(1)?)?;
     let right = operand_expression(operands.get(2)?)?;
@@ -1675,7 +1800,10 @@ pub(super) fn build_fmsub(machine: Architecture, operands: &[ArchOperand]) -> Op
     ))
 }
 
-pub(super) fn build_scvtf(machine: Architecture, operands: &[ArchOperand]) -> Option<InstructionSemantics> {
+pub(super) fn build_scvtf(
+    machine: Architecture,
+    operands: &[ArchOperand],
+) -> Option<InstructionSemantics> {
     let dst = operand_location(machine, operands.first()?)?;
     let src = operand_expression(operands.get(1)?)?;
     let bits = location_bits(&dst);
@@ -1693,7 +1821,10 @@ pub(super) fn build_scvtf(machine: Architecture, operands: &[ArchOperand]) -> Op
     ))
 }
 
-pub(super) fn build_ucvtf(machine: Architecture, operands: &[ArchOperand]) -> Option<InstructionSemantics> {
+pub(super) fn build_ucvtf(
+    machine: Architecture,
+    operands: &[ArchOperand],
+) -> Option<InstructionSemantics> {
     let dst = operand_location(machine, operands.first()?)?;
     let src = operand_expression(operands.get(1)?)?;
     let bits = location_bits(&dst);
@@ -1711,7 +1842,10 @@ pub(super) fn build_ucvtf(machine: Architecture, operands: &[ArchOperand]) -> Op
     ))
 }
 
-pub(super) fn build_fcvtzs(machine: Architecture, operands: &[ArchOperand]) -> Option<InstructionSemantics> {
+pub(super) fn build_fcvtzs(
+    machine: Architecture,
+    operands: &[ArchOperand],
+) -> Option<InstructionSemantics> {
     let dst = operand_location(machine, operands.first()?)?;
     let src = operand_expression(operands.get(1)?)?;
     let bits = location_bits(&dst);
@@ -1729,7 +1863,10 @@ pub(super) fn build_fcvtzs(machine: Architecture, operands: &[ArchOperand]) -> O
     ))
 }
 
-pub(super) fn build_fcvtzu(machine: Architecture, operands: &[ArchOperand]) -> Option<InstructionSemantics> {
+pub(super) fn build_fcvtzu(
+    machine: Architecture,
+    operands: &[ArchOperand],
+) -> Option<InstructionSemantics> {
     let dst = operand_location(machine, operands.first()?)?;
     let src = operand_expression(operands.get(1)?)?;
     let bits = location_bits(&dst);
@@ -1820,7 +1957,8 @@ pub(super) fn build_fmov(
 ) -> Option<InstructionSemantics> {
     let Some(dst) = operands
         .first()
-        .and_then(|operand| operand_location(machine, operand)) else {
+        .and_then(|operand| operand_location(machine, operand))
+    else {
         return build_intrinsic_fallthrough(machine, instruction, operands, None);
     };
     let bits = location_bits(&dst);
@@ -1837,24 +1975,19 @@ pub(super) fn build_fmov(
             _ => operand_expression(operands.get(1)?)?,
         },
         _ => {
-            return build_intrinsic_fallthrough(
-                machine,
-                instruction,
-                operands,
-                Some(vec![dst]),
-            );
+            return build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![dst]));
         }
     };
     Some(complete(
-            SemanticTerminator::FallThrough,
-            vec![SemanticEffect::Set {
-                dst,
-                expression: src,
-            }],
-        ))
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Set {
+            dst,
+            expression: src,
+        }],
+    ))
 }
 
-fn parse_vector_arrangement(op_str: &str) -> Option<(u16, u16)> {
+pub(super) fn parse_vector_arrangement(op_str: &str) -> Option<(u16, u16)> {
     if op_str.contains(".16b") {
         Some((16, 8))
     } else if op_str.contains(".8b") {
@@ -1874,7 +2007,11 @@ fn parse_vector_arrangement(op_str: &str) -> Option<(u16, u16)> {
     }
 }
 
-fn zero_extend_if_needed(expression: SemanticExpression, src_bits: u16, dst_bits: u16) -> SemanticExpression {
+pub(super) fn zero_extend_if_needed(
+    expression: SemanticExpression,
+    src_bits: u16,
+    dst_bits: u16,
+) -> SemanticExpression {
     if src_bits == dst_bits {
         expression
     } else {
@@ -1967,7 +2104,11 @@ pub(super) fn build_uzp1(
         .into_iter()
         .rev()
         .map(|(from_left, lane)| SemanticExpression::Extract {
-            arg: Box::new(if from_left { left.clone() } else { right.clone() }),
+            arg: Box::new(if from_left {
+                left.clone()
+            } else {
+                right.clone()
+            }),
             lsb: lane * lane_bits,
             bits: lane_bits,
         })
@@ -2114,9 +2255,7 @@ pub(super) fn build_dup(
         lsb: 0,
         bits: lane_bits,
     };
-    let parts = (0..lane_count)
-        .map(|_| lane.clone())
-        .collect::<Vec<_>>();
+    let parts = (0..lane_count).map(|_| lane.clone()).collect::<Vec<_>>();
     let arrangement_bits = lane_count * lane_bits;
     let expression = zero_extend_if_needed(
         SemanticExpression::Concat {
@@ -2129,6 +2268,190 @@ pub(super) fn build_dup(
     Some(complete(
         SemanticTerminator::FallThrough,
         vec![SemanticEffect::Set { dst, expression }],
+    ))
+}
+
+pub(super) fn build_addp(
+    machine: Architecture,
+    instruction: &Insn,
+    operands: &[ArchOperand],
+) -> Option<InstructionSemantics> {
+    let dst = operand_location(machine, operands.first()?)?;
+    let left = operand_expression(operands.get(1)?)?;
+    let right = operand_expression(operands.get(2)?)?;
+    let Some(op_str) = instruction.op_str() else {
+        return build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![dst]));
+    };
+    let (src_lanes, lane_bits, dst_lanes) = if op_str.contains(".16b") {
+        (16u16, 8u16, 16u16)
+    } else if op_str.contains(".8h") {
+        (8u16, 16u16, 8u16)
+    } else if op_str.contains(".4s") {
+        (4u16, 32u16, 4u16)
+    } else if op_str.contains(".2d") {
+        (2u16, 64u16, 2u16)
+    } else {
+        return build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![dst]));
+    };
+    if dst_lanes != src_lanes {
+        return build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![dst]));
+    }
+    let mut parts = Vec::new();
+    for lane in (0..(src_lanes / 2)).rev() {
+        let r0 = SemanticExpression::Extract {
+            arg: Box::new(right.clone()),
+            lsb: lane * 2 * lane_bits,
+            bits: lane_bits,
+        };
+        let r1 = SemanticExpression::Extract {
+            arg: Box::new(right.clone()),
+            lsb: (lane * 2 + 1) * lane_bits,
+            bits: lane_bits,
+        };
+        parts.push(binary(SemanticOperationBinary::Add, r0, r1, lane_bits));
+    }
+    for lane in (0..(src_lanes / 2)).rev() {
+        let l0 = SemanticExpression::Extract {
+            arg: Box::new(left.clone()),
+            lsb: lane * 2 * lane_bits,
+            bits: lane_bits,
+        };
+        let l1 = SemanticExpression::Extract {
+            arg: Box::new(left.clone()),
+            lsb: (lane * 2 + 1) * lane_bits,
+            bits: lane_bits,
+        };
+        parts.push(binary(SemanticOperationBinary::Add, l0, l1, lane_bits));
+    }
+    Some(complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Set {
+            dst: dst.clone(),
+            expression: SemanticExpression::Concat {
+                parts,
+                bits: dst.bits(),
+            },
+        }],
+    ))
+}
+
+pub(super) fn build_addhn(
+    machine: Architecture,
+    instruction: &Insn,
+    operands: &[ArchOperand],
+) -> Option<InstructionSemantics> {
+    let dst = operand_location(machine, operands.first()?)?;
+    let left = operand_expression(operands.get(1)?)?;
+    let right = operand_expression(operands.get(2)?)?;
+    let Some(op_str) = instruction.op_str() else {
+        return build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![dst]));
+    };
+    let (lane_count, src_lane_bits, dst_lane_bits) =
+        if op_str.contains(".8b") && op_str.contains(".8h") {
+            (8u16, 16u16, 8u16)
+        } else if op_str.contains(".4h") && op_str.contains(".4s") {
+            (4u16, 32u16, 16u16)
+        } else if op_str.contains(".2s") && op_str.contains(".2d") {
+            (2u16, 64u16, 32u16)
+        } else {
+            return build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![dst]));
+        };
+    let mut parts = Vec::new();
+    for lane in (0..lane_count).rev() {
+        let sum = binary(
+            SemanticOperationBinary::Add,
+            SemanticExpression::Extract {
+                arg: Box::new(left.clone()),
+                lsb: lane * src_lane_bits,
+                bits: src_lane_bits,
+            },
+            SemanticExpression::Extract {
+                arg: Box::new(right.clone()),
+                lsb: lane * src_lane_bits,
+                bits: src_lane_bits,
+            },
+            src_lane_bits,
+        );
+        parts.push(SemanticExpression::Extract {
+            arg: Box::new(sum),
+            lsb: dst_lane_bits,
+            bits: dst_lane_bits,
+        });
+    }
+    Some(complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Set {
+            dst: dst.clone(),
+            expression: SemanticExpression::Concat {
+                parts,
+                bits: dst.bits(),
+            },
+        }],
+    ))
+}
+
+pub(super) fn build_addhn2(
+    machine: Architecture,
+    instruction: &Insn,
+    operands: &[ArchOperand],
+) -> Option<InstructionSemantics> {
+    let dst = operand_location(machine, operands.first()?)?;
+    let current_dst = operand_expression(operands.first()?)?;
+    let left = operand_expression(operands.get(1)?)?;
+    let right = operand_expression(operands.get(2)?)?;
+    let Some(op_str) = instruction.op_str() else {
+        return build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![dst]));
+    };
+    let (lane_count, src_lane_bits, dst_lane_bits, low_half_bits) =
+        if op_str.contains(".16b") && op_str.contains(".8h") {
+            (8u16, 16u16, 8u16, 64u16)
+        } else if op_str.contains(".8h") && op_str.contains(".4s") {
+            (4u16, 32u16, 16u16, 64u16)
+        } else if op_str.contains(".4s") && op_str.contains(".2d") {
+            (2u16, 64u16, 32u16, 64u16)
+        } else {
+            return build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![dst]));
+        };
+    let mut upper_parts = Vec::new();
+    for lane in (0..lane_count).rev() {
+        let sum = binary(
+            SemanticOperationBinary::Add,
+            SemanticExpression::Extract {
+                arg: Box::new(left.clone()),
+                lsb: lane * src_lane_bits,
+                bits: src_lane_bits,
+            },
+            SemanticExpression::Extract {
+                arg: Box::new(right.clone()),
+                lsb: lane * src_lane_bits,
+                bits: src_lane_bits,
+            },
+            src_lane_bits,
+        );
+        upper_parts.push(SemanticExpression::Extract {
+            arg: Box::new(sum),
+            lsb: dst_lane_bits,
+            bits: dst_lane_bits,
+        });
+    }
+    let upper = SemanticExpression::Concat {
+        parts: upper_parts,
+        bits: low_half_bits,
+    };
+    let lower = SemanticExpression::Extract {
+        arg: Box::new(current_dst),
+        lsb: 0,
+        bits: low_half_bits,
+    };
+    Some(complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Set {
+            dst,
+            expression: SemanticExpression::Concat {
+                parts: vec![upper, lower],
+                bits: 128,
+            },
+        }],
     ))
 }
 
@@ -2256,15 +2579,16 @@ pub(super) fn build_sshll(
     let Some(op_str) = instruction.op_str() else {
         return build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![dst]));
     };
-    let (lane_count, src_lane_bits, dst_lane_bits) = if op_str.contains(".8h") && op_str.contains(".8b") {
-        (8u16, 8u16, 16u16)
-    } else if op_str.contains(".4s") && op_str.contains(".4h") {
-        (4u16, 16u16, 32u16)
-    } else if op_str.contains(".2d") && op_str.contains(".2s") {
-        (2u16, 32u16, 64u16)
-    } else {
-        return build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![dst]));
-    };
+    let (lane_count, src_lane_bits, dst_lane_bits) =
+        if op_str.contains(".8h") && op_str.contains(".8b") {
+            (8u16, 8u16, 16u16)
+        } else if op_str.contains(".4s") && op_str.contains(".4h") {
+            (4u16, 16u16, 32u16)
+        } else if op_str.contains(".2d") && op_str.contains(".2s") {
+            (2u16, 32u16, 64u16)
+        } else {
+            return build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![dst]));
+        };
     if shift != 0 {
         return build_intrinsic_fallthrough(machine, instruction, operands, Some(vec![dst]));
     }
@@ -3184,6 +3508,8 @@ pub(super) fn complete(
     InstructionSemantics {
         version: 1,
         status: SemanticStatus::Complete,
+        abi: None,
+        encoding: None,
         temporaries: Vec::new(),
         effects,
         terminator,
@@ -3191,10 +3517,16 @@ pub(super) fn complete(
     }
 }
 
-pub(super) fn unsupported_fallthrough(instruction: &Insn, message: &str) -> InstructionSemantics {
+pub(super) fn unsupported_fallthrough(
+    machine: Architecture,
+    instruction: &Insn,
+    message: &str,
+) -> InstructionSemantics {
     InstructionSemantics {
         version: 1,
         status: SemanticStatus::Partial,
+        abi: None,
+        encoding: Some(instruction_encoding(machine, instruction)),
         temporaries: Vec::new(),
         effects: Vec::new(),
         terminator: SemanticTerminator::FallThrough,
@@ -3207,6 +3539,24 @@ pub(super) fn unsupported_fallthrough(instruction: &Insn, message: &str) -> Inst
                 instruction.mnemonic().unwrap_or("unknown")
             ),
         )],
+    }
+}
+
+pub(super) fn instruction_encoding(
+    machine: Architecture,
+    instruction: &Insn,
+) -> InstructionEncoding {
+    let mnemonic = instruction.mnemonic().unwrap_or("unknown").to_string();
+    let disassembly = match instruction.op_str() {
+        Some(op_str) if !op_str.is_empty() => format!("{mnemonic} {op_str}"),
+        _ => mnemonic.clone(),
+    };
+    InstructionEncoding {
+        architecture: machine.to_string(),
+        mnemonic,
+        disassembly,
+        address: instruction.address(),
+        bytes: instruction.bytes().to_vec(),
     }
 }
 

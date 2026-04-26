@@ -1,5 +1,9 @@
-use crate::semantics::InstructionSemantics;
+use crate::semantics::{InstructionSemantics, SemanticStatus};
 
-pub(crate) fn assert_complete_semantics(name: &str, bytes: &[u8]) -> InstructionSemantics {
-    super::common::assert_complete_semantics(name, bytes)
+pub(crate) fn assert_semantics_status(
+    name: &str,
+    bytes: &[u8],
+    expected_status: SemanticStatus,
+) -> InstructionSemantics {
+    super::common::assert_semantics_status(name, bytes, expected_status)
 }

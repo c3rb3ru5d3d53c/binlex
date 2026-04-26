@@ -27,11 +27,13 @@ pub mod file;
 pub mod image;
 pub mod macho;
 pub mod pe;
+pub mod symbol;
 
 use crate::formats::file::file_init;
 use crate::formats::image::image_init;
 use crate::formats::macho::macho_init;
 use crate::formats::pe::pe_init;
+use crate::formats::symbol::symbol_init;
 
 pub use crate::formats::elf::ELF;
 pub use crate::formats::file::File;
@@ -39,6 +41,8 @@ pub use crate::formats::image::Image;
 pub use crate::formats::macho::PyMachoSlice;
 pub use crate::formats::macho::MACHO;
 pub use crate::formats::pe::PE;
+pub use crate::formats::symbol::Symbol;
+pub use crate::formats::symbol::SymbolKind;
 
 use pyo3::{prelude::*, wrap_pymodule};
 
@@ -49,12 +53,15 @@ pub fn formats_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pymodule!(image_init))?;
     m.add_wrapped(wrap_pymodule!(pe_init))?;
     m.add_wrapped(wrap_pymodule!(macho_init))?;
+    m.add_wrapped(wrap_pymodule!(symbol_init))?;
     m.add_class::<PE>()?;
     m.add_class::<File>()?;
     m.add_class::<Image>()?;
     m.add_class::<ELF>()?;
     m.add_class::<MACHO>()?;
     m.add_class::<PyMachoSlice>()?;
+    m.add_class::<Symbol>()?;
+    m.add_class::<SymbolKind>()?;
     py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.formats", m)?;

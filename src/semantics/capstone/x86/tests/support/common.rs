@@ -252,15 +252,12 @@ fn assert_x86_semantics_match_unicorn(
 ) {
     let semantics = semantics(name, architecture, bytes);
     let interpreted = interpret_i386_semantics(architecture, bytes, &semantics, fixture.clone());
-    let instruction_count = if semantics
-        .effects
-        .iter()
-        .any(|effect| {
-            matches!(
-                effect,
-                SemanticEffect::MemorySet { .. } | SemanticEffect::MemoryCopy { .. }
-            )
-        }) {
+    let instruction_count = if semantics.effects.iter().any(|effect| {
+        matches!(
+            effect,
+            SemanticEffect::MemorySet { .. } | SemanticEffect::MemoryCopy { .. }
+        )
+    }) {
         0
     } else {
         1
@@ -435,7 +432,11 @@ fn interpret_i386_semantics(
         .map(|register| (stable_register_name(register).to_string(), 0u128))
         .collect::<BTreeMap<_, _>>();
     for (register, value) in &fixture.registers {
-        write_register_value(&mut registers, stable_register_name(*register), *value as u128);
+        write_register_value(
+            &mut registers,
+            stable_register_name(*register),
+            *value as u128,
+        );
     }
     let mut flags = BTreeMap::<String, u128>::new();
     let decoded = decode_eflags(fixture.eflags);
@@ -654,9 +655,7 @@ fn interpret_amd64_semantics_wide(
 
     let mut registers = tracked_registers
         .iter()
-        .map(|register| {
-            (stable_register_name(*register).to_string(), BigUint::zero())
-        })
+        .map(|register| (stable_register_name(*register).to_string(), BigUint::zero()))
         .collect::<BTreeMap<_, _>>();
     for (register, value) in &fixture.base.registers {
         write_register_value_wide(
@@ -1225,8 +1224,7 @@ fn arg_bits(expression: &SemanticExpression) -> u16 {
         | SemanticExpression::Concat { bits, .. }
         | SemanticExpression::Undefined { bits }
         | SemanticExpression::Poison { bits }
-        | SemanticExpression::Intrinsic { bits, .. }
-        | SemanticExpression::Architecture { bits, .. } => *bits,
+        | SemanticExpression::Intrinsic { bits, .. } => *bits,
         SemanticExpression::Read(location) => location.bits(),
     }
 }

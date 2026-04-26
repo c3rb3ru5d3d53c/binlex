@@ -398,6 +398,8 @@ fn lock_cmpxchg8b(machine: Architecture, operands: &[ArchOperand]) -> Option<Ins
     Some(InstructionSemantics {
         version: 1,
         status: crate::semantics::SemanticStatus::Complete,
+        abi: None,
+        encoding: None,
         temporaries: vec![SemanticTemporary {
             id: 0,
             bits: 64,
@@ -483,6 +485,8 @@ fn lock_cmpxchg16b(
     Some(InstructionSemantics {
         version: 1,
         status: crate::semantics::SemanticStatus::Complete,
+        abi: None,
+        encoding: None,
         temporaries: vec![SemanticTemporary {
             id: 1,
             bits: 128,
@@ -984,10 +988,18 @@ fn sbb(machine: Architecture, operands: &[ArchOperand]) -> Option<InstructionSem
     let right_with_borrow = common::add(right.clone(), borrow_in.clone(), bits);
     let result = common::sub(left.clone(), right_with_borrow.clone(), bits);
     let carry_out = common::or(
-        common::compare(SemanticOperationCompare::Ult, left.clone(), right_with_borrow.clone()),
+        common::compare(
+            SemanticOperationCompare::Ult,
+            left.clone(),
+            right_with_borrow.clone(),
+        ),
         common::and(
             common::flag_expr("cf"),
-            common::compare(SemanticOperationCompare::Eq, left.clone(), right_with_borrow.clone()),
+            common::compare(
+                SemanticOperationCompare::Eq,
+                left.clone(),
+                right_with_borrow.clone(),
+            ),
             1,
         ),
         1,

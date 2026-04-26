@@ -8,10 +8,10 @@ use unicorn_engine_sys::RegisterX86;
 use crate::Architecture;
 
 use super::common::{
-    I386CpuState, I386CpuStateWide, I386Execution, I386ExecutionWide, I386Fixture,
-    I386Register, I386Transition, I386TransitionWide, WideI386Fixture, X86Flags,
     I386_CODE_ADDRESS, I386_CODE_PAGE_SIZE, I386_DATA_ADDRESS, I386_DATA_PAGE_SIZE,
-    I386_STACK_ADDRESS, I386_STACK_PAGE_SIZE,
+    I386_STACK_ADDRESS, I386_STACK_PAGE_SIZE, I386CpuState, I386CpuStateWide, I386Execution,
+    I386ExecutionWide, I386Fixture, I386Register, I386Transition, I386TransitionWide,
+    WideI386Fixture, X86Flags,
 };
 use super::memory::fixture_memory_map;
 use super::registers::stable_register_name;
@@ -38,7 +38,12 @@ pub(crate) fn unicorn_x86_execution(
         .expect("map i386 stack page");
     emu.mem_map(I386_DATA_ADDRESS, I386_DATA_PAGE_SIZE, Prot::ALL)
         .expect("map i386 data page");
-    write_unicorn_code_bytes(&mut emu, code_address, bytes, "write i386 instruction bytes");
+    write_unicorn_code_bytes(
+        &mut emu,
+        code_address,
+        bytes,
+        "write i386 instruction bytes",
+    );
     for (register, value) in &fixture.registers {
         seed_unicorn_register(&mut emu, *register, *value);
     }
@@ -103,7 +108,11 @@ pub(crate) fn decode_eflags(eflags: u32) -> X86Flags {
     }
 }
 
-pub(crate) fn seed_unicorn_register(emu: &mut Unicorn<'_, ()>, register: I386Register, value: u128) {
+pub(crate) fn seed_unicorn_register(
+    emu: &mut Unicorn<'_, ()>,
+    register: I386Register,
+    value: u128,
+) {
     match register.bit_width() {
         128 => emu
             .reg_write_long(register.unicorn_register(), &value.to_le_bytes())
@@ -135,7 +144,11 @@ pub(crate) fn unicorn_amd64_single_instruction_wide(
     fixture: &WideI386Fixture,
     tracked_registers: &[I386Register],
 ) -> I386ExecutionWide {
-    let code_map_size = unicorn_code_map_size(I386_CODE_ADDRESS, bytes, I386_CODE_ADDRESS + bytes.len() as u64);
+    let code_map_size = unicorn_code_map_size(
+        I386_CODE_ADDRESS,
+        bytes,
+        I386_CODE_ADDRESS + bytes.len() as u64,
+    );
     let mut emu = Unicorn::new(Arch::X86, Mode::MODE_64).expect("unicorn x86 instance");
     emu.mem_map(I386_CODE_ADDRESS, code_map_size, Prot::ALL)
         .expect("map code page");
@@ -143,7 +156,12 @@ pub(crate) fn unicorn_amd64_single_instruction_wide(
         .expect("map stack page");
     emu.mem_map(I386_DATA_ADDRESS, I386_DATA_PAGE_SIZE, Prot::ALL)
         .expect("map data page");
-    write_unicorn_code_bytes(&mut emu, I386_CODE_ADDRESS, bytes, "write instruction bytes");
+    write_unicorn_code_bytes(
+        &mut emu,
+        I386_CODE_ADDRESS,
+        bytes,
+        "write instruction bytes",
+    );
     for (register, value) in &fixture.base.registers {
         seed_unicorn_register(&mut emu, *register, *value);
     }
@@ -188,9 +206,10 @@ pub(crate) fn write_unicorn_code_bytes(
         return;
     }
     for (offset, byte) in bytes.iter().enumerate() {
-        emu.mem_write(address + offset as u64, &[*byte]).unwrap_or_else(|error| {
-            panic!("{context} at +0x{offset:x}: {error:?}");
-        });
+        emu.mem_write(address + offset as u64, &[*byte])
+            .unwrap_or_else(|error| {
+                panic!("{context} at +0x{offset:x}: {error:?}");
+            });
     }
 }
 
@@ -245,7 +264,10 @@ pub(crate) fn read_unicorn_register_wide(emu: &Unicorn<'_, ()>, register: I386Re
     }
 }
 
-pub(crate) fn read_unicorn_memory(emu: &Unicorn<'_, ()>, ranges: &[(u64, usize)]) -> BTreeMap<u64, u8> {
+pub(crate) fn read_unicorn_memory(
+    emu: &Unicorn<'_, ()>,
+    ranges: &[(u64, usize)],
+) -> BTreeMap<u64, u8> {
     let mut memory = BTreeMap::new();
     for (address, size) in ranges {
         let bytes = emu

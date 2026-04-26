@@ -38,3 +38,4 @@ pub use pe::PE;
 pub use symbol::Symbol;
 pub use symbol::SymbolIoJson;
 pub use symbol::SymbolJson;
+pub use symbol::SymbolKind;

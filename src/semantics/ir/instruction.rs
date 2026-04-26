@@ -20,6 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use crate::abi::Abi;
 use serde::{Deserialize, Serialize};
 
 mod semantic_const_value_serde {
@@ -56,6 +57,10 @@ mod semantic_const_value_serde {
 pub struct InstructionSemantics {
     pub version: u32,
     pub status: SemanticStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub abi: Option<Abi>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub encoding: Option<InstructionEncoding>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub temporaries: Vec<SemanticTemporary>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -69,6 +74,10 @@ pub struct InstructionSemantics {
 pub struct InstructionSemanticsJson {
     pub version: u32,
     pub status: SemanticStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub abi: Option<Abi>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub encoding: Option<InstructionEncoding>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub temporaries: Vec<SemanticTemporary>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -76,6 +85,16 @@ pub struct InstructionSemanticsJson {
     pub terminator: SemanticTerminator,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub diagnostics: Vec<SemanticDiagnostic>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct InstructionEncoding {
+    pub architecture: String,
+    pub mnemonic: String,
+    pub disassembly: String,
+    pub address: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub bytes: Vec<u8>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -180,11 +199,6 @@ pub enum SemanticEffect {
     Trap {
         kind: SemanticTrapKind,
     },
-    Architecture {
-        name: String,
-        args: Vec<SemanticExpression>,
-        outputs: Vec<SemanticLocation>,
-    },
     Intrinsic {
         name: String,
         args: Vec<SemanticExpression>,
@@ -202,7 +216,6 @@ pub enum SemanticEffectKind {
     AtomicCmpXchg,
     Fence,
     Trap,
-    Architecture,
     Intrinsic,
     Nop,
 }
@@ -323,11 +336,6 @@ pub enum SemanticExpression {
     Poison {
         bits: u16,
     },
-    Architecture {
-        name: String,
-        args: Vec<SemanticExpression>,
-        bits: u16,
-    },
     Intrinsic {
         name: String,
         args: Vec<SemanticExpression>,
@@ -349,7 +357,6 @@ pub enum SemanticExpressionKind {
     Concat,
     Undefined,
     Poison,
-    Architecture,
     Intrinsic,
 }
 
@@ -472,6 +479,8 @@ impl InstructionSemantics {
         InstructionSemanticsJson {
             version: self.version,
             status: self.status,
+            abi: self.abi,
+            encoding: self.encoding.clone(),
             temporaries: self.temporaries.clone(),
             effects: self.effects.clone(),
             terminator: self.terminator.clone(),
@@ -485,6 +494,14 @@ impl InstructionSemantics {
 
     pub fn set_status(&mut self, status: SemanticStatus) {
         self.status = status;
+    }
+
+    pub fn set_encoding(&mut self, encoding: Option<InstructionEncoding>) {
+        self.encoding = encoding;
+    }
+
+    pub fn set_abi(&mut self, abi: Option<Abi>) {
+        self.abi = abi;
     }
 
     pub fn set_temporaries(&mut self, temporaries: Vec<SemanticTemporary>) {
@@ -568,7 +585,6 @@ impl SemanticEffect {
             Self::AtomicCmpXchg { .. } => SemanticEffectKind::AtomicCmpXchg,
             Self::Fence { .. } => SemanticEffectKind::Fence,
             Self::Trap { .. } => SemanticEffectKind::Trap,
-            Self::Architecture { .. } => SemanticEffectKind::Architecture,
             Self::Intrinsic { .. } => SemanticEffectKind::Intrinsic,
             Self::Nop => SemanticEffectKind::Nop,
         }
@@ -599,10 +615,12 @@ impl SemanticEffect {
     pub fn set_expression(&mut self, expression: SemanticExpression) -> Result<(), &'static str> {
         match self {
             Self::Set {
-                expression: current, ..
+                expression: current,
+                ..
             }
             | Self::Store {
-                expression: current, ..
+                expression: current,
+                ..
             }
             | Self::MemorySet { value: current, .. }
             | Self::AtomicCmpXchg {
@@ -736,7 +754,10 @@ impl SemanticTerminator {
 
     pub fn set_target(&mut self, target: SemanticExpression) -> Result<(), &'static str> {
         match self {
-            Self::Jump { target: current } | Self::Call { target: current, .. } => {
+            Self::Jump { target: current }
+            | Self::Call {
+                target: current, ..
+            } => {
                 *current = target;
                 Ok(())
             }
@@ -804,7 +825,6 @@ impl SemanticExpression {
             Self::Concat { .. } => SemanticExpressionKind::Concat,
             Self::Undefined { .. } => SemanticExpressionKind::Undefined,
             Self::Poison { .. } => SemanticExpressionKind::Poison,
-            Self::Architecture { .. } => SemanticExpressionKind::Architecture,
             Self::Intrinsic { .. } => SemanticExpressionKind::Intrinsic,
         }
     }
@@ -833,7 +853,6 @@ impl SemanticExpression {
             Self::Concat { bits, .. } => *bits,
             Self::Undefined { bits } => *bits,
             Self::Poison { bits } => *bits,
-            Self::Architecture { bits, .. } => *bits,
             Self::Intrinsic { bits, .. } => *bits,
         }
     }
@@ -919,7 +938,6 @@ impl SemanticExpression {
 
     pub fn name(&self) -> Option<&str> {
         match self {
-            Self::Architecture { name, .. } => Some(name.as_str()),
             Self::Intrinsic { name, .. } => Some(name.as_str()),
             _ => None,
         }
@@ -927,7 +945,6 @@ impl SemanticExpression {
 
     pub fn arguments(&self) -> Option<&[SemanticExpression]> {
         match self {
-            Self::Architecture { args, .. } => Some(args),
             Self::Intrinsic { args, .. } => Some(args),
             _ => None,
         }
@@ -968,7 +985,6 @@ impl SemanticExpression {
             | Self::Concat { bits: current, .. }
             | Self::Undefined { bits: current }
             | Self::Poison { bits: current }
-            | Self::Architecture { bits: current, .. }
             | Self::Intrinsic { bits: current, .. } => *current = bits,
             Self::Read(location) => location.set_bits(bits),
         }
@@ -1007,8 +1023,7 @@ impl SemanticExpression {
     pub fn set_condition(&mut self, expression: SemanticExpression) -> Result<(), &'static str> {
         match self {
             Self::Select {
-                condition: current,
-                ..
+                condition: current, ..
             } => {
                 *current = Box::new(expression);
                 Ok(())
@@ -1020,8 +1035,7 @@ impl SemanticExpression {
     pub fn set_when_true(&mut self, expression: SemanticExpression) -> Result<(), &'static str> {
         match self {
             Self::Select {
-                when_true: current,
-                ..
+                when_true: current, ..
             } => {
                 *current = Box::new(expression);
                 Ok(())
@@ -1053,10 +1067,7 @@ impl SemanticExpression {
         }
     }
 
-    pub fn set_address_space(
-        &mut self,
-        space: SemanticAddressSpace,
-    ) -> Result<(), &'static str> {
+    pub fn set_address_space(&mut self, space: SemanticAddressSpace) -> Result<(), &'static str> {
         match self {
             Self::Load { space: current, .. } => {
                 *current = space;
@@ -1098,11 +1109,11 @@ impl SemanticExpression {
 
     pub fn set_name(&mut self, name: impl Into<String>) -> Result<(), &'static str> {
         match self {
-            Self::Architecture { name: current, .. } | Self::Intrinsic { name: current, .. } => {
+            Self::Intrinsic { name: current, .. } => {
                 *current = name.into();
                 Ok(())
             }
-            _ => Err("expression name is only valid for architecture and intrinsic expressions"),
+            _ => Err("expression name is only valid for intrinsic expressions"),
         }
     }
 
@@ -1111,13 +1122,11 @@ impl SemanticExpression {
         arguments: Vec<SemanticExpression>,
     ) -> Result<(), &'static str> {
         match self {
-            Self::Architecture { args, .. } | Self::Intrinsic { args, .. } => {
+            Self::Intrinsic { args, .. } => {
                 *args = arguments;
                 Ok(())
             }
-            _ => {
-                Err("expression arguments are only valid for architecture and intrinsic expressions")
-            }
+            _ => Err("expression arguments are only valid for intrinsic expressions"),
         }
     }
 
@@ -1183,9 +1192,9 @@ fn default_location_for_kind(kind: SemanticLocationKind, bits: u16) -> SemanticL
 fn default_expression_for_kind(kind: SemanticExpressionKind, bits: u16) -> SemanticExpression {
     match kind {
         SemanticExpressionKind::Const => SemanticExpression::Const { value: 0, bits },
-        SemanticExpressionKind::Read => {
-            SemanticExpression::Read(Box::new(default_location_for_kind(SemanticLocationKind::Temporary, bits)))
-        }
+        SemanticExpressionKind::Read => SemanticExpression::Read(Box::new(
+            default_location_for_kind(SemanticLocationKind::Temporary, bits),
+        )),
         SemanticExpressionKind::Load => SemanticExpression::Load {
             space: SemanticAddressSpace::Default,
             addr: Box::new(default_const(64)),
@@ -1230,11 +1239,6 @@ fn default_expression_for_kind(kind: SemanticExpressionKind, bits: u16) -> Seman
         },
         SemanticExpressionKind::Undefined => SemanticExpression::Undefined { bits },
         SemanticExpressionKind::Poison => SemanticExpression::Poison { bits },
-        SemanticExpressionKind::Architecture => SemanticExpression::Architecture {
-            name: String::new(),
-            args: Vec::new(),
-            bits,
-        },
         SemanticExpressionKind::Intrinsic => SemanticExpression::Intrinsic {
             name: String::new(),
             args: Vec::new(),
@@ -1286,11 +1290,6 @@ fn default_effect_for_kind(kind: SemanticEffectKind) -> SemanticEffect {
         SemanticEffectKind::Trap => SemanticEffect::Trap {
             kind: SemanticTrapKind::Breakpoint,
         },
-        SemanticEffectKind::Architecture => SemanticEffect::Architecture {
-            name: String::new(),
-            args: Vec::new(),
-            outputs: Vec::new(),
-        },
         SemanticEffectKind::Intrinsic => SemanticEffect::Intrinsic {
             name: String::new(),
             args: Vec::new(),
@@ -1327,6 +1326,8 @@ impl InstructionSemanticsJson {
         InstructionSemantics {
             version: self.version,
             status: self.status,
+            abi: self.abi,
+            encoding: self.encoding,
             temporaries: self.temporaries,
             effects: self.effects,
             terminator: self.terminator,
@@ -1337,13 +1338,25 @@ impl InstructionSemanticsJson {
 
 #[cfg(test)]
 mod tests {
-    use super::{InstructionSemantics, SemanticExpression, SemanticStatus, SemanticTerminator};
+    use super::{
+        InstructionEncoding, InstructionSemantics, SemanticExpression, SemanticStatus,
+        SemanticTerminator,
+    };
+    use crate::Abi;
 
     #[test]
     fn semantic_const_json_serializes_u128_as_string() {
         let semantics = InstructionSemantics {
             version: 1,
             status: SemanticStatus::Complete,
+            abi: Some(Abi::SysV),
+            encoding: Some(InstructionEncoding {
+                architecture: "arm64".to_string(),
+                mnemonic: "ld4".to_string(),
+                disassembly: "ld4 {v0.16b, v1.16b}, [x3]".to_string(),
+                address: 0x4010,
+                bytes: vec![0x60, 0x00, 0x40, 0x4c],
+            }),
             temporaries: Vec::new(),
             effects: Vec::new(),
             terminator: SemanticTerminator::Return {
@@ -1374,6 +1387,13 @@ mod tests {
         let payload = serde_json::json!({
             "version": 1,
             "status": "Complete",
+            "encoding": {
+                "architecture": "arm64",
+                "mnemonic": "ld4",
+                "disassembly": "ld4 {v0.16b, v1.16b}, [x3]",
+                "address": 16400,
+                "bytes": [96, 0, 64, 76]
+            },
             "terminator": {
                 "Return": {
                     "expression": {
@@ -1402,5 +1422,15 @@ mod tests {
             }
             other => panic!("unexpected terminator: {:?}", other),
         }
+        assert_eq!(
+            semantics.encoding,
+            Some(InstructionEncoding {
+                architecture: "arm64".to_string(),
+                mnemonic: "ld4".to_string(),
+                disassembly: "ld4 {v0.16b, v1.16b}, [x3]".to_string(),
+                address: 16400,
+                bytes: vec![96, 0, 64, 76],
+            })
+        );
     }
 }

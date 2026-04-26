@@ -43,7 +43,9 @@ pub(super) fn build(
             SemanticOperationBinary::Add,
             mnemonic == "adds",
         ),
-        _ if mnemonic == "adc" => build_adc(machine, operands),
+        _ if mnemonic == "adc" || mnemonic == "adcs" => {
+            build_adc(machine, operands, mnemonic == "adcs")
+        }
         id if id == Arm64Insn::ARM64_INS_SUB as u32 || mnemonic == "subs" => build_binary_assign(
             machine,
             operands,
@@ -78,6 +80,7 @@ pub(super) fn build(
             build_conditional_select_increment(machine, operands, condition_code)
         }
         _ if mnemonic == "cinc" => build_conditional_increment(machine, operands, condition_code),
+        _ if mnemonic == "cinv" => build_conditional_invert(machine, operands, condition_code),
         _ if mnemonic == "csinv" => {
             build_conditional_select_invert(machine, operands, condition_code)
         }
@@ -86,6 +89,7 @@ pub(super) fn build(
         }
         _ if mnemonic == "cneg" => build_conditional_negate(machine, operands, condition_code),
         _ if mnemonic == "fcsel" => build_conditional_select(machine, operands, condition_code),
+        _ if mnemonic == "abs" => build_abs(machine, operands),
         _ if mnemonic == "sxtw" => build_sign_extend_word(machine, operands),
         _ if mnemonic == "sxtb" => build_sign_extend_byte(machine, operands),
         _ if mnemonic == "sxth" => build_sign_extend_halfword(machine, operands),

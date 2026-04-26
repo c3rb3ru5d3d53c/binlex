@@ -1,6 +1,4 @@
-use super::common::{
-    I386Fixture, I386Register, assert_i386_instruction_roundtrip_match_unicorn,
-};
+use super::common::{I386Fixture, I386Register, assert_i386_instruction_roundtrip_match_unicorn};
 
 #[test]
 fn i386_roundtrip_xchg_ptr_ebx_plus_4_eax_matches_unicorn() {

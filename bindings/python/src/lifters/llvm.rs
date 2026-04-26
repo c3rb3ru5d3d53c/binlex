@@ -1,10 +1,12 @@
 use crate::controlflow::{Block, Function, Instruction};
+use crate::lifters::llvm_abi::llvm_abi_init;
 use crate::semantics::InstructionSemantics as PyInstructionSemantics;
 use crate::Architecture;
 use crate::Config;
 use binlex::io::Stderr;
 use binlex::lifters::llvm::Lifter as InnerLifter;
 use pyo3::prelude::*;
+use pyo3::wrap_pymodule;
 use std::sync::{Arc, Mutex};
 
 #[pyclass(unsendable)]
@@ -247,6 +249,7 @@ impl Lifter {
 #[pyo3(name = "llvm")]
 pub fn llvm_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Lifter>()?;
+    m.add_wrapped(wrap_pymodule!(llvm_abi_init))?;
     py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.lifters.llvm", m)?;

@@ -25,7 +25,10 @@ extern crate capstone;
 use crate::Architecture;
 use crate::Config;
 use crate::controlflow::graph::Graph;
-use crate::controlflow::instruction::Instruction;
+use crate::controlflow::{
+    FloatOperand, ImmediateOperand, Instruction, MemoryOperand, Operand, OperandKind,
+    RegisterOperand, SpecialOperand,
+};
 use crate::genetics::Chromosome;
 use crate::io::Stderr;
 use crate::semantics;
@@ -38,6 +41,7 @@ use capstone::arch::arm64::{Arm64Extender, Arm64Insn, Arm64OperandType, Arm64Shi
 use capstone::prelude::*;
 use rayon::ThreadPoolBuilder;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::io::{Error, ErrorKind};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -160,11 +164,11 @@ impl<'disassembler> Disassembler<'disassembler> {
                     intrinsic_effects.join(",")
                 },
                 semantics
-                .diagnostics
-                .iter()
-                .map(|diagnostic| diagnostic.message.as_str())
-                .collect::<Vec<_>>()
-                .join("; ")
+                    .diagnostics
+                    .iter()
+                    .map(|diagnostic| diagnostic.message.as_str())
+                    .collect::<Vec<_>>()
+                    .join("; ")
             )
         };
 
@@ -248,6 +252,165 @@ impl<'disassembler> Disassembler<'disassembler> {
             groups.push(current);
         }
         groups
+    }
+
+    fn register_name(&self, reg: RegId) -> Option<String> {
+        if reg.0 == 0 {
+            return None;
+        }
+        self.cs.reg_name(reg)
+    }
+
+    fn special_operand_fields() -> BTreeMap<String, Value> {
+        BTreeMap::new()
+    }
+
+    fn parse_system_register_operands(&self, instruction: &Insn) -> Vec<Operand> {
+        let mnemonic = instruction.mnemonic().unwrap_or("").to_ascii_lowercase();
+        let parts: Vec<_> = instruction
+            .op_str()
+            .unwrap_or("")
+            .split(',')
+            .map(|part| part.trim())
+            .filter(|part| !part.is_empty())
+            .collect();
+
+        match mnemonic.as_str() {
+            "mrs" if parts.len() >= 2 => vec![
+                Operand {
+                    kind: OperandKind::Register(RegisterOperand {
+                        name: parts[0].to_ascii_lowercase(),
+                    }),
+                },
+                Operand {
+                    kind: OperandKind::Special(SpecialOperand {
+                        kind: "reg_mrs".to_string(),
+                        fields: BTreeMap::from([(
+                            "sysreg".to_string(),
+                            Value::from(parts[1].to_string()),
+                        )]),
+                    }),
+                },
+            ],
+            "msr" if parts.len() >= 2 => vec![
+                Operand {
+                    kind: OperandKind::Special(SpecialOperand {
+                        kind: "reg_msr".to_string(),
+                        fields: BTreeMap::from([(
+                            "sysreg".to_string(),
+                            Value::from(parts[0].to_string()),
+                        )]),
+                    }),
+                },
+                Operand {
+                    kind: OperandKind::Register(RegisterOperand {
+                        name: parts[1].to_ascii_lowercase(),
+                    }),
+                },
+            ],
+            _ => Vec::new(),
+        }
+    }
+
+    fn normalize_operand(&self, operand: &ArchOperand) -> Option<Operand> {
+        let ArchOperand::Arm64Operand(op) = operand else {
+            return None;
+        };
+        let kind = match &op.op_type {
+            Arm64OperandType::Reg(reg) => {
+                let name = self.register_name(*reg)?;
+                OperandKind::Register(RegisterOperand { name })
+            }
+            Arm64OperandType::Imm(value) | Arm64OperandType::Cimm(value) => {
+                OperandKind::Immediate(ImmediateOperand {
+                    value: *value as i128,
+                })
+            }
+            Arm64OperandType::Mem(mem) => OperandKind::Memory(MemoryOperand {
+                base: self.register_name(mem.base()),
+                index: self.register_name(mem.index()),
+                scale: None,
+                displacement: mem.disp() as i64,
+                space: None,
+                segment: None,
+            }),
+            Arm64OperandType::Fp(value) => OperandKind::Float(FloatOperand { value: *value }),
+            Arm64OperandType::RegMrs(sysreg) => {
+                let mut fields = Self::special_operand_fields();
+                fields.insert("sysreg".to_string(), Value::from(format!("{:?}", sysreg)));
+                OperandKind::Special(SpecialOperand {
+                    kind: "reg_mrs".to_string(),
+                    fields,
+                })
+            }
+            Arm64OperandType::RegMsr(sysreg) => {
+                let mut fields = Self::special_operand_fields();
+                fields.insert("sysreg".to_string(), Value::from(format!("{:?}", sysreg)));
+                OperandKind::Special(SpecialOperand {
+                    kind: "reg_msr".to_string(),
+                    fields,
+                })
+            }
+            Arm64OperandType::Pstate(pstate) => {
+                let mut fields = Self::special_operand_fields();
+                fields.insert("pstate".to_string(), Value::from(format!("{:?}", pstate)));
+                OperandKind::Special(SpecialOperand {
+                    kind: "pstate".to_string(),
+                    fields,
+                })
+            }
+            Arm64OperandType::Sys(sys) => {
+                let mut fields = Self::special_operand_fields();
+                fields.insert("sys".to_string(), Value::from(format!("{:?}", sys)));
+                OperandKind::Special(SpecialOperand {
+                    kind: "sys".to_string(),
+                    fields,
+                })
+            }
+            Arm64OperandType::Prefetch(prefetch) => {
+                let mut fields = Self::special_operand_fields();
+                fields.insert(
+                    "prefetch".to_string(),
+                    Value::from(format!("{:?}", prefetch)),
+                );
+                OperandKind::Special(SpecialOperand {
+                    kind: "prefetch".to_string(),
+                    fields,
+                })
+            }
+            Arm64OperandType::Barrier(barrier) => {
+                let mut fields = Self::special_operand_fields();
+                fields.insert("barrier".to_string(), Value::from(format!("{:?}", barrier)));
+                OperandKind::Special(SpecialOperand {
+                    kind: "barrier".to_string(),
+                    fields,
+                })
+            }
+            Arm64OperandType::Invalid => {
+                let fields = Self::special_operand_fields();
+                OperandKind::Special(SpecialOperand {
+                    kind: "invalid".to_string(),
+                    fields,
+                })
+            }
+        };
+        Some(Operand { kind })
+    }
+
+    fn normalize_instruction_operands(&self, operands: &[ArchOperand]) -> Vec<Operand> {
+        operands
+            .iter()
+            .filter_map(|operand| self.normalize_operand(operand))
+            .collect()
+    }
+
+    fn disassembly_text(&self, instruction: &Insn) -> String {
+        match instruction.op_str() {
+            Some(op_str) if !op_str.is_empty() => {
+                format!("{} {}", instruction.mnemonic().unwrap_or(""), op_str)
+            }
+            _ => instruction.mnemonic().unwrap_or("").to_string(),
+        }
     }
 
     pub fn is_executable_address(&self, address: u64) -> bool {
@@ -648,7 +811,21 @@ impl<'disassembler> Disassembler<'disassembler> {
         blinstruction.bytes = instruction.bytes().to_vec();
         blinstruction.chromosome_mask = instruction_mask;
         blinstruction.pattern = instruction_signature;
+        blinstruction.mnemonic = instruction.mnemonic().unwrap_or("").to_string();
+        blinstruction.disassembly = self.disassembly_text(instruction);
         blinstruction.has_indirect_target = self.has_indirect_controlflow_target(instruction);
+        let mnemonic = instruction.mnemonic().unwrap_or("").to_ascii_lowercase();
+        let operands = if matches!(mnemonic.as_str(), "mrs" | "msr") {
+            Vec::new()
+        } else {
+            self.get_instruction_operands(instruction)
+                .unwrap_or_default()
+        };
+        blinstruction.operands = if matches!(mnemonic.as_str(), "mrs" | "msr") {
+            self.parse_system_register_operands(instruction)
+        } else {
+            self.normalize_instruction_operands(&operands)
+        };
 
         if let Some(addr) = self.get_conditional_jump_immutable(instruction) {
             blinstruction.to.insert(addr);
@@ -689,9 +866,6 @@ impl<'disassembler> Disassembler<'disassembler> {
 
         if cfg.config.semantics.enabled {
             let semantics_started_at = Instant::now();
-            let operands = self
-                .get_instruction_operands(instruction)
-                .unwrap_or_default();
             let condition_code = self
                 .get_instruction_condition_code(instruction)
                 .ok()
@@ -991,7 +1165,6 @@ impl<'disassembler> Disassembler<'disassembler> {
                 || id == Arm64Insn::ARM64_INS_HLT as u32
                 || id == Arm64Insn::ARM64_INS_HVC as u32
                 || id == Arm64Insn::ARM64_INS_SMC as u32
-                || id == Arm64Insn::ARM64_INS_SVC as u32
         )
     }
 

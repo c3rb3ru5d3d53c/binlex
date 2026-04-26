@@ -20,6 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+pub mod abi;
 pub mod clients;
 pub mod compression;
 pub mod config;
@@ -47,6 +48,7 @@ pub mod server;
 pub mod storage;
 pub mod util;
 
+pub use abi::Abi;
 pub use config::AUTHOR;
 pub use config::Config;
 pub use config::VERSION;

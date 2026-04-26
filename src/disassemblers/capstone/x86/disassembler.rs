@@ -24,7 +24,10 @@ extern crate capstone;
 use crate::Architecture;
 use crate::Config;
 use crate::controlflow::graph::Graph;
-use crate::controlflow::instruction::Instruction;
+use crate::controlflow::{
+    ImmediateOperand, Instruction, MemoryOperand, Operand, OperandKind, RegisterOperand,
+    SpecialOperand,
+};
 use crate::genetics::Chromosome;
 use crate::io::Stderr;
 use crate::semantics;
@@ -42,6 +45,7 @@ use capstone::arch::x86::X86OperandType;
 use capstone::prelude::*;
 use rayon::ThreadPoolBuilder;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Error;
 use std::io::ErrorKind;
@@ -118,11 +122,11 @@ impl<'disassembler> Disassembler<'disassembler> {
                     intrinsic_effects.join(",")
                 },
                 semantics
-                .diagnostics
-                .iter()
-                .map(|diagnostic| diagnostic.message.as_str())
-                .collect::<Vec<_>>()
-                .join("; ")
+                    .diagnostics
+                    .iter()
+                    .map(|diagnostic| diagnostic.message.as_str())
+                    .collect::<Vec<_>>()
+                    .join("; ")
             )
         };
 
@@ -167,6 +171,64 @@ impl<'disassembler> Disassembler<'disassembler> {
             groups.push(current);
         }
         groups
+    }
+
+    fn register_name(&self, reg: RegId) -> Option<String> {
+        if reg.0 == 0 {
+            return None;
+        }
+        self.cs.reg_name(reg)
+    }
+
+    fn normalize_memory_operand(&self, mem: X86OpMem) -> MemoryOperand {
+        MemoryOperand {
+            base: self.register_name(mem.base()),
+            index: self.register_name(mem.index()),
+            scale: Some(mem.scale()),
+            displacement: mem.disp(),
+            space: None,
+            segment: self.register_name(mem.segment()),
+        }
+    }
+
+    fn normalize_operand(&self, operand: &ArchOperand) -> Option<Operand> {
+        let ArchOperand::X86Operand(op) = operand else {
+            return None;
+        };
+        let kind = match op.op_type {
+            X86OperandType::Reg(reg) => OperandKind::Register(RegisterOperand {
+                name: self.register_name(reg)?,
+            }),
+            X86OperandType::Imm(value) => OperandKind::Immediate(ImmediateOperand {
+                value: value as i128,
+            }),
+            X86OperandType::Mem(mem) => OperandKind::Memory(self.normalize_memory_operand(mem)),
+            X86OperandType::Invalid => {
+                let mut fields = BTreeMap::new();
+                fields.insert("size".to_string(), Value::from(op.size));
+                OperandKind::Special(SpecialOperand {
+                    kind: "invalid".to_string(),
+                    fields,
+                })
+            }
+        };
+        Some(Operand { kind })
+    }
+
+    fn normalize_instruction_operands(&self, operands: &[ArchOperand]) -> Vec<Operand> {
+        operands
+            .iter()
+            .filter_map(|operand| self.normalize_operand(operand))
+            .collect()
+    }
+
+    fn disassembly_text(&self, instruction: &Insn) -> String {
+        match instruction.op_str() {
+            Some(op_str) if !op_str.is_empty() => {
+                format!("{} {}", instruction.mnemonic().unwrap_or(""), op_str)
+            }
+            _ => instruction.mnemonic().unwrap_or("").to_string(),
+        }
     }
 
     pub fn is_executable_address(&self, address: u64) -> bool {
@@ -397,7 +459,13 @@ impl<'disassembler> Disassembler<'disassembler> {
         blinstruction.bytes = instruction.bytes().to_vec();
         blinstruction.chromosome_mask = instruction_mask;
         blinstruction.pattern = instruction_signature;
+        blinstruction.mnemonic = instruction.mnemonic().unwrap_or("").to_string();
+        blinstruction.disassembly = self.disassembly_text(instruction);
         blinstruction.has_indirect_target = self.has_indirect_controlflow_target(instruction);
+        let operands = self
+            .get_instruction_operands(instruction)
+            .unwrap_or_default();
+        blinstruction.operands = self.normalize_instruction_operands(&operands);
 
         if let Some(addr) = self.get_conditional_jump_immutable(instruction) {
             blinstruction.to.insert(addr);
@@ -431,9 +499,6 @@ impl<'disassembler> Disassembler<'disassembler> {
         }
 
         if cfg.config.semantics.enabled {
-            let operands = self
-                .get_instruction_operands(instruction)
-                .unwrap_or_default();
             let semantics = semantics::capstone::x86::build(self.machine, instruction, &operands);
             self.log_semantics_debug(&semantics, instruction);
             blinstruction.semantics = Some(semantics);

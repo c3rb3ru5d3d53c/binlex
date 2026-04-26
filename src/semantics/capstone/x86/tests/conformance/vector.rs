@@ -1,6 +1,4 @@
-use super::super::support::{
-    I386Fixture, I386Register, assert_amd64_semantics_match_unicorn,
-};
+use super::super::support::{I386Fixture, I386Register, assert_amd64_semantics_match_unicorn};
 
 fn vec128(bytes: [u8; 16]) -> u128 {
     u128::from_le_bytes(bytes)

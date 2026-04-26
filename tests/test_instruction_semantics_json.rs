@@ -27,9 +27,14 @@ fn instruction_with_semantics(config: Config) -> Instruction {
         functions: BTreeSet::new(),
         to: BTreeSet::new(),
         edges: 0,
+        mnemonic: String::new(),
+        disassembly: String::new(),
+        operands: Vec::new(),
         semantics: Some(InstructionSemantics {
             version: 1,
             status: SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
             temporaries: Vec::new(),
             effects: vec![SemanticEffect::Set {
                 dst: SemanticLocation::Register {

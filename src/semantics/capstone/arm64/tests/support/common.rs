@@ -26,12 +26,17 @@ pub(crate) fn semantics(name: &str, bytes: &[u8]) -> InstructionSemantics {
         .expect("instruction should have semantics")
 }
 
-pub(crate) fn assert_complete_semantics(name: &str, bytes: &[u8]) -> InstructionSemantics {
+pub(crate) fn assert_semantics_status(
+    name: &str,
+    bytes: &[u8],
+    expected_status: SemanticStatus,
+) -> InstructionSemantics {
     let semantics = semantics(name, bytes);
     assert_eq!(
         semantics.status,
-        SemanticStatus::Complete,
-        "{name}: expected complete semantics, got {:?} with diagnostics {:?}",
+        expected_status,
+        "{name}: expected {:?} semantics, got {:?} with diagnostics {:?}",
+        expected_status,
         semantics.status,
         semantics
             .diagnostics
@@ -39,15 +44,17 @@ pub(crate) fn assert_complete_semantics(name: &str, bytes: &[u8]) -> Instruction
             .map(|diagnostic| diagnostic.message.clone())
             .collect::<Vec<_>>()
     );
-    assert!(
-        semantics.diagnostics.is_empty(),
-        "{name}: expected no diagnostics, got {:?}",
-        semantics
-            .diagnostics
-            .iter()
-            .map(|diagnostic| diagnostic.message.clone())
-            .collect::<Vec<_>>()
-    );
+    if expected_status == SemanticStatus::Complete {
+        assert!(
+            semantics.diagnostics.is_empty(),
+            "{name}: expected no diagnostics, got {:?}",
+            semantics
+                .diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.message.clone())
+                .collect::<Vec<_>>()
+        );
+    }
     semantics
 }
 
