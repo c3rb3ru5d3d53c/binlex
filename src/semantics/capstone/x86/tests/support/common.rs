@@ -145,22 +145,19 @@ pub(crate) fn semantics(
         .expect("instruction should have semantics")
 }
 
-pub(crate) fn assert_complete_semantics(name: &str, architecture: Architecture, bytes: &[u8]) {
+pub(crate) fn assert_semantics_status(
+    name: &str,
+    architecture: Architecture,
+    bytes: &[u8],
+    expected_status: SemanticStatus,
+) {
     let semantics = semantics(name, architecture, bytes);
     assert_eq!(
         semantics.status,
-        SemanticStatus::Complete,
-        "{name}: expected complete semantics, got {:?} with diagnostics {:?}",
+        expected_status,
+        "{name}: expected {:?} semantics, got {:?} with diagnostics {:?}",
+        expected_status,
         semantics.status,
-        semantics
-            .diagnostics
-            .iter()
-            .map(|diagnostic| diagnostic.message.clone())
-            .collect::<Vec<_>>()
-    );
-    assert!(
-        semantics.diagnostics.is_empty(),
-        "{name}: expected no diagnostics, got {:?}",
         semantics
             .diagnostics
             .iter()

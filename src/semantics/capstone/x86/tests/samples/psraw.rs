@@ -1,11 +1,17 @@
-use super::super::support::assert_complete_semantics;
-use crate::Architecture;
+use super::{X86Sample, assert_sample_statuses};
+use crate::{Architecture, semantics::SemanticStatus};
+
+pub(crate) const SAMPLES: &[X86Sample] = &[X86Sample {
+    mnemonic: "psraw",
+    instruction: "psraw xmm0, 1",
+    architecture: Architecture::AMD64,
+    bytes: &[0x66, 0x0f, 0x71, 0xe0, 0x01],
+    expected_status: Some(SemanticStatus::Complete),
+    semantics_fixture: None,
+    roundtrip_fixture: None,
+}];
 
 #[test]
-fn psraw_semantics_stay_complete() {
-    assert_complete_semantics(
-        "psraw xmm0, 1",
-        Architecture::AMD64,
-        &[0x66, 0x0f, 0x71, 0xe0, 0x01],
-    );
+fn psraw_semantics_regressions_stay_complete() {
+    assert_sample_statuses(SAMPLES);
 }

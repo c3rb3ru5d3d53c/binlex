@@ -1,15 +1,16 @@
-use super::super::support::{
-    I386Fixture, I386Register, assert_amd64_instruction_roundtrip_match_unicorn,
-    assert_i386_instruction_roundtrip_match_unicorn,
-};
+use super::{I386Register, X86FixtureSpec, X86Sample, assert_roundtrip_cases};
+use crate::Architecture;
 
-#[test]
-fn i386_roundtrip_cmovz_eax_ebx_matches_unicorn() {
-    assert_i386_instruction_roundtrip_match_unicorn(
-        "cmovz eax, ebx",
-        &[0x0f, 0x44, 0xc3],
-        I386Fixture {
-            registers: vec![
+pub(crate) const SAMPLES: &[X86Sample] = &[
+    X86Sample {
+        mnemonic: "cmovz",
+        instruction: "cmovz eax, ebx",
+        architecture: Architecture::I386,
+        bytes: &[0x0f, 0x44, 0xc3],
+        expected_status: None,
+        semantics_fixture: None,
+        roundtrip_fixture: Some(X86FixtureSpec {
+            registers: &[
                 (I386Register::Eax, 0x1122_3344),
                 (I386Register::Ebx, 0x5566_7788),
                 (I386Register::Ecx, 0x99aa_bbcc),
@@ -20,18 +21,18 @@ fn i386_roundtrip_cmovz_eax_ebx_matches_unicorn() {
                 (I386Register::Esp, 0x2ff0),
             ],
             eflags: 0x246,
-            memory: vec![],
-        },
-    );
-}
-
-#[test]
-fn amd64_roundtrip_cmovz_rax_rbx_matches_unicorn() {
-    assert_amd64_instruction_roundtrip_match_unicorn(
-        "cmovz rax, rbx",
-        &[0x48, 0x0f, 0x44, 0xc3],
-        I386Fixture {
-            registers: vec![
+            memory: &[],
+        }),
+    },
+    X86Sample {
+        mnemonic: "cmovz",
+        instruction: "cmovz rax, rbx",
+        architecture: Architecture::AMD64,
+        bytes: &[0x48, 0x0f, 0x44, 0xc3],
+        expected_status: None,
+        semantics_fixture: None,
+        roundtrip_fixture: Some(X86FixtureSpec {
+            registers: &[
                 (I386Register::Rax, 0x1122_3344_5566_7788),
                 (I386Register::Rbx, 0x8877_6655_4433_2211),
                 (I386Register::Ecx, 0x99aa_bbcc),
@@ -42,7 +43,12 @@ fn amd64_roundtrip_cmovz_rax_rbx_matches_unicorn() {
                 (I386Register::Rsp, 0x2ff0),
             ],
             eflags: 0x246,
-            memory: vec![],
-        },
-    );
+            memory: &[],
+        }),
+    },
+];
+
+#[test]
+fn cmovz_roundtrip_matches_unicorn() {
+    assert_roundtrip_cases(SAMPLES);
 }

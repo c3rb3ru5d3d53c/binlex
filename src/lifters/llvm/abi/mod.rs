@@ -119,8 +119,8 @@ pub fn expression_bits(expression: &SemanticExpression) -> u16 {
 #[cfg(test)]
 mod tests {
     use super::{coerce_expression_width, normalize_binary, normalize_compare};
-    use crate::{Abi, Architecture};
     use crate::semantics::{SemanticExpression, SemanticOperationBinary, SemanticOperationCast};
+    use crate::{Abi, Architecture};
 
     #[test]
     fn abi_support_is_architecture_aware() {
