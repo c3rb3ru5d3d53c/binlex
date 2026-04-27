@@ -1,69 +1,55 @@
-use super::{
-    I386Register, X86RuntimeFixtureSpec, X86RuntimeSample, assert_runtime_roundtrip_cases,
-    assert_runtime_sample_statuses,
-};
+use super::{I386Register, X86FixtureSpec, X86Sample, assert_roundtrip_cases, assert_sample_statuses};
 use crate::{Architecture, semantics::SemanticStatus};
 
-fn status_samples() -> Vec<X86RuntimeSample> {
-    let mut samples = Vec::new();
-    {
-        let cases = [
-            ("rcr eax, 1", Architecture::I386, vec![0xd1, 0xd8]),
-            ("rcr rax, 1", Architecture::AMD64, vec![0x48, 0xd1, 0xd8]),
-        ];
-
-        for (name, architecture, bytes) in cases {
-            samples.push(X86RuntimeSample {
-                mnemonic: "rcr",
-                instruction: name,
-                architecture: architecture,
-                bytes: (&bytes).to_vec(),
-                expected_status: Some(SemanticStatus::Complete),
-                semantics_fixture: None,
-                roundtrip_fixture: None,
-            });
-        }
-    }
-    samples
-}
-
-fn roundtrip_samples() -> Vec<X86RuntimeSample> {
-    let mut samples = Vec::new();
-    {
-        samples.push(X86RuntimeSample {
-            mnemonic: "rcr",
-            instruction: "rcr eax, 1",
-            architecture: Architecture::I386,
-            bytes: (&[0xd1, 0xd8]).to_vec(),
-            expected_status: None,
-            semantics_fixture: None,
-            roundtrip_fixture: Some(X86RuntimeFixtureSpec {
-                registers: vec![
-                    (I386Register::Eax, 0x8123_4567),
-                    (I386Register::Ebx, 0x5566_7788),
-                    (I386Register::Ecx, 0x99aa_bbcc),
-                    (I386Register::Edx, 0xddee_ff00),
-                    (I386Register::Esi, 0x1234_5678),
-                    (I386Register::Edi, 0x8765_4321),
-                    (I386Register::Ebp, 0x2ff0),
-                    (I386Register::Esp, 0x2ff0),
-                ],
-                eflags: 0x203,
-                memory: vec![],
-            }),
-        });
-    }
-    samples
-}
+pub(crate) const SAMPLES: &[X86Sample] = &[
+    X86Sample {
+        mnemonic: "rcr",
+        instruction: "rcr eax, 1",
+        architecture: Architecture::I386,
+        bytes: &[0xd1, 0xd8],
+        expected_status: Some(SemanticStatus::Complete),
+        semantics_fixture: None,
+        roundtrip_fixture: None,
+    },
+    X86Sample {
+        mnemonic: "rcr",
+        instruction: "rcr rax, 1",
+        architecture: Architecture::AMD64,
+        bytes: &[0x48, 0xd1, 0xd8],
+        expected_status: Some(SemanticStatus::Complete),
+        semantics_fixture: None,
+        roundtrip_fixture: None,
+    },
+    X86Sample {
+        mnemonic: "rcr",
+        instruction: "rcr eax, 1",
+        architecture: Architecture::I386,
+        bytes: &[0xd1, 0xd8],
+        expected_status: None,
+        semantics_fixture: None,
+        roundtrip_fixture: Some(X86FixtureSpec {
+            registers: &[
+                (I386Register::Eax, 0x8123_4567),
+                (I386Register::Ebx, 0x5566_7788),
+                (I386Register::Ecx, 0x99aa_bbcc),
+                (I386Register::Edx, 0xddee_ff00),
+                (I386Register::Esi, 0x1234_5678),
+                (I386Register::Edi, 0x8765_4321),
+                (I386Register::Ebp, 0x2ff0),
+                (I386Register::Esp, 0x2ff0),
+            ],
+            eflags: 0x203,
+            memory: &[],
+        }),
+    },
+];
 
 #[test]
 fn rcr_semantics_regressions_stay_complete() {
-    let samples = status_samples();
-    assert_runtime_sample_statuses(&samples);
+    assert_sample_statuses(SAMPLES);
 }
 
 #[test]
 fn rcr_roundtrip_matches_unicorn() {
-    let samples = roundtrip_samples();
-    assert_runtime_roundtrip_cases(&samples);
+    assert_roundtrip_cases(SAMPLES);
 }
