@@ -8,8 +8,6 @@ fn integer_semantics_regressions_stay_complete() {
         ("aad", Architecture::I386, vec![0xd5, 0x0a]),
         ("aam", Architecture::I386, vec![0xd4, 0x0a]),
         ("aas", Architecture::I386, vec![0x3f]),
-        ("add eax, ebx", Architecture::I386, vec![0x01, 0xd8]),
-        ("adc eax, ebx", Architecture::I386, vec![0x11, 0xd8]),
         ("bsf ecx, eax", Architecture::I386, vec![0x0f, 0xbc, 0xc8]),
         ("bsr ecx, eax", Architecture::I386, vec![0x0f, 0xbd, 0xc8]),
         (
@@ -130,20 +128,6 @@ fn integer_semantics_regressions_stay_complete() {
             vec![0x48, 0x0f, 0xc7, 0x08],
         ),
         ("shl eax, cl", Architecture::I386, vec![0xd3, 0xe0]),
-        ("rcl eax, 1", Architecture::I386, vec![0xd1, 0xd0]),
-        ("rcr eax, 1", Architecture::I386, vec![0xd1, 0xd8]),
-        ("rcl rax, 1", Architecture::AMD64, vec![0x48, 0xd1, 0xd0]),
-        ("rcr rax, 1", Architecture::AMD64, vec![0x48, 0xd1, 0xd8]),
-        (
-            "shld eax, edx, cl",
-            Architecture::I386,
-            vec![0x0f, 0xa5, 0xd0],
-        ),
-        (
-            "shrd eax, edx, cl",
-            Architecture::I386,
-            vec![0x0f, 0xad, 0xd0],
-        ),
     ];
 
     for (name, architecture, bytes) in cases {

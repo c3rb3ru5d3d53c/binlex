@@ -15,4 +15,5 @@ output.s
 *.log
 *.ll
 *.s
-experiments/
+/experiments/
+/samples/

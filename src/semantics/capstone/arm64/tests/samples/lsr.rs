@@ -1,0 +1,42 @@
+use super::{Arm64FixtureSpec, Arm64Sample, assert_conformance_cases, assert_sample_statuses};
+use crate::semantics::SemanticStatus;
+
+pub(crate) const SAMPLES: &[Arm64Sample] = &[
+    Arm64Sample {
+        mnemonic: "lsr",
+        instruction: "lsr	x0, x1, #3",
+        bytes: &[0x20, 0xfc, 0x43, 0xd3],
+        expected_status: Some(SemanticStatus::Complete),
+        fixture: None,
+    },
+    Arm64Sample {
+        mnemonic: "lsr",
+        instruction: "lsr	x0, x1, #3",
+        bytes: &[0x20, 0xfc, 0x43, 0xd3],
+        expected_status: Some(SemanticStatus::Complete),
+        fixture: Some(Arm64FixtureSpec {
+            registers: &[("x1", 0xf123_4567_89ab_cdef)],
+            memory: &[],
+        }),
+    },
+    Arm64Sample {
+        mnemonic: "lsr",
+        instruction: "lsr	w0, w1, #3",
+        bytes: &[0x20, 0x7c, 0x03, 0x53],
+        expected_status: Some(SemanticStatus::Complete),
+        fixture: Some(Arm64FixtureSpec {
+            registers: &[("w1", 0xf234_5678)],
+            memory: &[],
+        }),
+    },
+];
+
+#[test]
+fn lsr_semantics_regressions_stay_complete() {
+    assert_sample_statuses(SAMPLES);
+}
+
+#[test]
+fn lsr_semantics_match_unicorn_transitions() {
+    assert_conformance_cases(SAMPLES);
+}

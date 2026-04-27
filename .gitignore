@@ -4,7 +4,7 @@ dist/
 target/
 deps/
 Cargo.lock
-samples/
+/samples/
 *.yara
 *.exe
 *.dll
