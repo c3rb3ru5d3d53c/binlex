@@ -19,3 +19,4 @@ __pycache__/
 *.pyc
 data/
 .codex
+/references/
