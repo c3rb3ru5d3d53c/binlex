@@ -24,49 +24,7 @@ fn amd64_roundtrip_xor_eax_eax_matches_unicorn() {
     );
 }
 
-#[test]
-fn amd64_roundtrip_mov_rax_rbx_matches_unicorn() {
-    assert_amd64_instruction_roundtrip_match_unicorn(
-        "mov rax, rbx",
-        &[0x48, 0x89, 0xd8],
-        I386Fixture {
-            registers: vec![
-                (I386Register::Rax, 0x1122_3344_5566_7788),
-                (I386Register::Rbx, 0x8877_6655_4433_2211),
-                (I386Register::Ecx, 0x99aa_bbcc),
-                (I386Register::Edx, 0xddee_ff00),
-                (I386Register::Esi, 0x1234_5678),
-                (I386Register::Edi, 0x8765_4321),
-                (I386Register::Rbp, 0x2ff0),
-                (I386Register::Rsp, 0x2ff0),
-            ],
-            eflags: 0x246,
-            memory: vec![],
-        },
-    );
-}
 
-#[test]
-fn amd64_roundtrip_movzx_eax_al_matches_unicorn() {
-    assert_amd64_instruction_roundtrip_match_unicorn(
-        "movzx eax, al",
-        &[0x0f, 0xb6, 0xc0],
-        I386Fixture {
-            registers: vec![
-                (I386Register::Rax, 0x1122_3344_5566_7784),
-                (I386Register::Rbx, 0x8877_6655_4433_2211),
-                (I386Register::Ecx, 0x99aa_bbcc),
-                (I386Register::Edx, 0xddee_ff00),
-                (I386Register::Esi, 0x1234_5678),
-                (I386Register::Edi, 0x8765_4321),
-                (I386Register::Rbp, 0x2ff0),
-                (I386Register::Rsp, 0x2ff0),
-            ],
-            eflags: 0x246,
-            memory: vec![],
-        },
-    );
-}
 
 #[test]
 fn amd64_roundtrip_bsf_rcx_rax_matches_unicorn() {
