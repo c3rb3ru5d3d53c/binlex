@@ -1,25 +1,27 @@
-use super::super::support::{
-    I386Fixture, I386Register, assert_complete_semantics,
-    assert_i386_instruction_roundtrip_match_unicorn,
+use super::{
+    I386Register, X86FixtureSpec, X86Sample, assert_roundtrip_cases, assert_sample_statuses,
 };
-use crate::Architecture;
+use crate::{Architecture, semantics::SemanticStatus};
 
-#[test]
-fn pslld_semantics_stay_complete() {
-    assert_complete_semantics(
-        "pslld xmm0, 1",
-        Architecture::AMD64,
-        &[0x66, 0x0f, 0x72, 0xf0, 0x01],
-    );
-}
-
-#[test]
-fn i386_roundtrip_pslld_xmm0_4_matches_unicorn() {
-    assert_i386_instruction_roundtrip_match_unicorn(
-        "pslld xmm0, 4",
-        &[0x66, 0x0f, 0x72, 0xf0, 0x04],
-        I386Fixture {
-            registers: vec![
+pub(crate) const SAMPLES: &[X86Sample] = &[
+    X86Sample {
+        mnemonic: "pslld",
+        instruction: "pslld xmm0, 1",
+        architecture: Architecture::AMD64,
+        bytes: &[0x66, 0x0f, 0x72, 0xf0, 0x01],
+        expected_status: Some(SemanticStatus::Complete),
+        semantics_fixture: None,
+        roundtrip_fixture: None,
+    },
+    X86Sample {
+        mnemonic: "pslld",
+        instruction: "pslld xmm0, 4",
+        architecture: Architecture::I386,
+        bytes: &[0x66, 0x0f, 0x72, 0xf0, 0x04],
+        expected_status: None,
+        semantics_fixture: None,
+        roundtrip_fixture: Some(X86FixtureSpec {
+            registers: &[
                 (I386Register::Eax, 0x1122_3344),
                 (I386Register::Ebx, 0x3000),
                 (I386Register::Ecx, 0x99aa_bbcc),
@@ -34,7 +36,17 @@ fn i386_roundtrip_pslld_xmm0_4_matches_unicorn() {
                 ),
             ],
             eflags: 0x202,
-            memory: vec![],
-        },
-    );
+            memory: &[],
+        }),
+    },
+];
+
+#[test]
+fn pslld_semantics_regressions_stay_complete() {
+    assert_sample_statuses(SAMPLES);
+}
+
+#[test]
+fn pslld_roundtrip_matches_unicorn() {
+    assert_roundtrip_cases(SAMPLES);
 }

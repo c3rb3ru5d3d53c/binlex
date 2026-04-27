@@ -1277,8 +1277,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         if matches!(
             self.current_semantics_abi,
             Some(Abi::LinuxSyscall | Abi::WindowsSyscall)
-        )
-            && matches!(terminator, SemanticTerminator::Trap)
+        ) && matches!(terminator, SemanticTerminator::Trap)
         {
             return Ok(());
         }
@@ -1708,7 +1707,12 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             .into();
         let result = self
             .builder
-            .build_indirect_call(fn_type, asm, &[rax, rdi, rsi, rdx, r10, r8, r9], "linux_syscall")
+            .build_indirect_call(
+                fn_type,
+                asm,
+                &[rax, rdi, rsi, rdx, r10, r8, r9],
+                "linux_syscall",
+            )
             .map_err(|err| Error::other(err.to_string()))?
             .try_as_basic_value()
             .basic()
@@ -1774,12 +1778,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             .into();
         let result = self
             .builder
-            .build_indirect_call(
-                fn_type,
-                asm,
-                &[rax, r10, rdx, r8, r9],
-                "windows_syscall",
-            )
+            .build_indirect_call(fn_type, asm, &[rax, r10, rdx, r8, r9], "windows_syscall")
             .map_err(|err| Error::other(err.to_string()))?
             .try_as_basic_value()
             .basic()
@@ -1895,7 +1894,12 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             .into();
         let result = self
             .builder
-            .build_indirect_call(fn_type, asm, &[eax, ebx, ecx, edx, esi, edi, ebp], "linux_syscall")
+            .build_indirect_call(
+                fn_type,
+                asm,
+                &[eax, ebx, ecx, edx, esi, edi, ebp],
+                "linux_syscall",
+            )
             .map_err(|err| Error::other(err.to_string()))?
             .try_as_basic_value()
             .basic()
@@ -2023,7 +2027,12 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             .into();
         let result = self
             .builder
-            .build_indirect_call(fn_type, asm, &[eax, ebx, ecx, edx, esi, edi, ebp], "linux_sysenter")
+            .build_indirect_call(
+                fn_type,
+                asm,
+                &[eax, ebx, ecx, edx, esi, edi, ebp],
+                "linux_sysenter",
+            )
             .map_err(|err| Error::other(err.to_string()))?
             .try_as_basic_value()
             .basic()
@@ -2042,10 +2051,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             "Trap x86.sysenter lowered as native i386 windows syscall",
         );
         let i32_type = self.context.i32_type();
-        let fn_type = i32_type.fn_type(
-            &[i32_type.into(), i32_type.into(), i32_type.into()],
-            false,
-        );
+        let fn_type = i32_type.fn_type(&[i32_type.into(), i32_type.into(), i32_type.into()], false);
         let asm = self.context.create_inline_asm(
             fn_type,
             "sysenter".to_string(),
@@ -5243,8 +5249,9 @@ mod encoding_tests {
             effects: vec![
                 SemanticEffect::Set {
                     dst: SemanticLocation::Register {
-                        name: crate::lifters::llvm::abi::x86::linux_syscall::amd64::RAX_SEMANTIC_NAME
-                            .to_string(),
+                        name:
+                            crate::lifters::llvm::abi::x86::linux_syscall::amd64::RAX_SEMANTIC_NAME
+                                .to_string(),
                         bits: 64,
                     },
                     expression: SemanticExpression::Const { value: 1, bits: 64 },
@@ -5423,8 +5430,9 @@ mod encoding_tests {
             effects: vec![
                 SemanticEffect::Set {
                     dst: SemanticLocation::Register {
-                        name: crate::lifters::llvm::abi::x86::linux_syscall::i386::EAX_SEMANTIC_NAME
-                            .to_string(),
+                        name:
+                            crate::lifters::llvm::abi::x86::linux_syscall::i386::EAX_SEMANTIC_NAME
+                                .to_string(),
                         bits: 32,
                     },
                     expression: SemanticExpression::Const { value: 4, bits: 32 },
@@ -5459,11 +5467,15 @@ mod encoding_tests {
             effects: vec![
                 SemanticEffect::Set {
                     dst: SemanticLocation::Register {
-                        name: crate::lifters::llvm::abi::x86::windows_syscall::i386::EAX_SEMANTIC_NAME
-                            .to_string(),
+                        name:
+                            crate::lifters::llvm::abi::x86::windows_syscall::i386::EAX_SEMANTIC_NAME
+                                .to_string(),
                         bits: 32,
                     },
-                    expression: SemanticExpression::Const { value: 0x55, bits: 32 },
+                    expression: SemanticExpression::Const {
+                        value: 0x55,
+                        bits: 32,
+                    },
                 },
                 SemanticEffect::Trap {
                     kind: crate::semantics::SemanticTrapKind::Interrupt,
@@ -5495,8 +5507,9 @@ mod encoding_tests {
             effects: vec![
                 SemanticEffect::Set {
                     dst: SemanticLocation::Register {
-                        name: crate::lifters::llvm::abi::x86::linux_syscall::i386::EAX_SEMANTIC_NAME
-                            .to_string(),
+                        name:
+                            crate::lifters::llvm::abi::x86::linux_syscall::i386::EAX_SEMANTIC_NAME
+                                .to_string(),
                         bits: 32,
                     },
                     expression: SemanticExpression::Const { value: 4, bits: 32 },
@@ -5533,11 +5546,15 @@ mod encoding_tests {
             effects: vec![
                 SemanticEffect::Set {
                     dst: SemanticLocation::Register {
-                        name: crate::lifters::llvm::abi::x86::windows_syscall::i386::EAX_SEMANTIC_NAME
-                            .to_string(),
+                        name:
+                            crate::lifters::llvm::abi::x86::windows_syscall::i386::EAX_SEMANTIC_NAME
+                                .to_string(),
                         bits: 32,
                     },
-                    expression: SemanticExpression::Const { value: 0x55, bits: 32 },
+                    expression: SemanticExpression::Const {
+                        value: 0x55,
+                        bits: 32,
+                    },
                 },
                 SemanticEffect::Trap {
                     kind: crate::semantics::SemanticTrapKind::ArchSpecific {

@@ -1,11 +1,17 @@
-use super::super::support::assert_complete_semantics;
-use crate::Architecture;
+use super::{X86Sample, assert_sample_statuses};
+use crate::{Architecture, semantics::SemanticStatus};
+
+pub(crate) const SAMPLES: &[X86Sample] = &[X86Sample {
+    mnemonic: "pmovzxwq",
+    instruction: "pmovzxwq xmm0, xmm1",
+    architecture: Architecture::AMD64,
+    bytes: &[0x66, 0x0f, 0x38, 0x34, 0xc1],
+    expected_status: Some(SemanticStatus::Complete),
+    semantics_fixture: None,
+    roundtrip_fixture: None,
+}];
 
 #[test]
-fn pmovzxwq_semantics_stay_complete() {
-    assert_complete_semantics(
-        "pmovzxwq xmm0, xmm1",
-        Architecture::AMD64,
-        &[0x66, 0x0f, 0x38, 0x34, 0xc1],
-    );
+fn pmovzxwq_semantics_regressions_stay_complete() {
+    assert_sample_statuses(SAMPLES);
 }

@@ -1837,7 +1837,11 @@ impl InstructionSemantics {
         SemanticStatus::from_inner(self.inner.lock().unwrap().status)
     }
     pub fn abi(&self) -> Option<PyAbi> {
-        self.inner.lock().unwrap().abi.map(|item| PyAbi { inner: item })
+        self.inner
+            .lock()
+            .unwrap()
+            .abi
+            .map(|item| PyAbi { inner: item })
     }
     pub fn encoding(&self, py: Python<'_>) -> PyResult<Option<Py<InstructionEncoding>>> {
         self.inner
