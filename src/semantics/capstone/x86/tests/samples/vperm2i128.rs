@@ -1,5 +1,7 @@
-use super::{X86Sample, assert_sample_statuses};
+use super::{I386Fixture, I386Register, X86Sample, assert_sample_statuses};
 use crate::{Architecture, semantics::SemanticStatus};
+
+use super::super::support::{WideI386Fixture, interpret_amd64_wide_semantics};
 
 pub(crate) const SAMPLES: &[X86Sample] = &[X86Sample {
     mnemonic: "vperm2i128",
@@ -14,4 +16,44 @@ pub(crate) const SAMPLES: &[X86Sample] = &[X86Sample {
 #[test]
 fn vperm2i128_semantics_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
+}
+
+#[test]
+fn vperm2i128_semantics_wide_regression_stays_stable() {
+    let ymm1 = vec![
+        0x01, 0xff, 0x02, 0xfe, 0x03, 0xfd, 0x04, 0xfc, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00, 0x99,
+        0x88, 0xf0, 0x0f, 0xe1, 0x1e, 0xd2, 0x2d, 0xc3, 0x3c, 0xb4, 0x4b, 0xa5, 0x5a, 0x96, 0x69,
+        0x87, 0x78,
+    ];
+    let ymm2 = vec![
+        0xde, 0xad, 0xbe, 0xef, 0x10, 0x32, 0x54, 0x76, 0x98, 0xba, 0xdc, 0xfe, 0x13, 0x57, 0x9b,
+        0xdf, 0x24, 0x42, 0x66, 0x81, 0xa5, 0xc3, 0xe7, 0xff, 0x18, 0x36, 0x54, 0x72, 0x90, 0xab,
+        0xcd, 0xef,
+    ];
+
+    let (registers, _) = interpret_amd64_wide_semantics(
+        "vperm2i128 ymm0, ymm2, ymm1, 0x31",
+        SAMPLES[0].bytes,
+        WideI386Fixture {
+            base: I386Fixture {
+                registers: vec![],
+                eflags: 1 << 1,
+                memory: vec![],
+            },
+            wide_registers: vec![
+                (I386Register::Ymm0, vec![0; 32]),
+                (I386Register::Ymm1, ymm1),
+                (I386Register::Ymm2, ymm2),
+            ],
+        },
+    );
+
+    assert_eq!(
+        registers.get("ymm0"),
+        Some(&vec![
+            0x24, 0x42, 0x66, 0x81, 0xa5, 0xc3, 0xe7, 0xff, 0x18, 0x36, 0x54, 0x72, 0x90, 0xab,
+            0xcd, 0xef, 0xf0, 0x0f, 0xe1, 0x1e, 0xd2, 0x2d, 0xc3, 0x3c, 0xb4, 0x4b, 0xa5, 0x5a,
+            0x96, 0x69, 0x87, 0x78,
+        ])
+    );
 }
