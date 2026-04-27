@@ -1,72 +1,65 @@
 use super::{
-    I386Register, X86RuntimeFixtureSpec, X86RuntimeSample, assert_runtime_conformance_cases,
-    assert_runtime_sample_statuses,
+    I386Register, X86FixtureSpec, X86Sample, assert_conformance_cases, assert_sample_statuses,
 };
 use crate::{Architecture, semantics::SemanticStatus};
 
 use super::super::support::{I386Fixture, interpret_amd64_semantics};
 
-fn vec128(low: u64, high: u64) -> u128 {
-    (u128::from(high) << 64) | u128::from(low)
+const fn vec128(low: u64, high: u64) -> u128 {
+    ((high as u128) << 64) | (low as u128)
 }
 
-fn status_samples() -> Vec<X86RuntimeSample> {
-    vec![
-        X86RuntimeSample {
-            mnemonic: "movsd",
-            instruction: "movsd xmm0, xmm1",
-            architecture: Architecture::AMD64,
-            bytes: vec![0xf2, 0x0f, 0x10, 0xc1],
-            expected_status: Some(SemanticStatus::Complete),
-            semantics_fixture: None,
-            roundtrip_fixture: None,
-        },
-        X86RuntimeSample {
-            mnemonic: "movsd",
-            instruction: "vmovsd xmm0, xmm2, xmm1",
-            architecture: Architecture::AMD64,
-            bytes: vec![0xc5, 0xeb, 0x10, 0xc1],
-            expected_status: Some(SemanticStatus::Complete),
-            semantics_fixture: None,
-            roundtrip_fixture: None,
-        },
-    ]
-}
-
-fn conformance_samples() -> Vec<X86RuntimeSample> {
-    let lhs = 3.5f64.to_bits();
-    let rhs = (-1.25f64).to_bits();
-    let upper_a = 0x1122_3344_5566_7788u64;
-    let upper_b = 0x99aa_bbcc_ddee_ff00u64;
-
-    vec![X86RuntimeSample {
+pub(crate) const SAMPLES: &[X86Sample] = &[
+    X86Sample {
         mnemonic: "movsd",
         instruction: "movsd xmm0, xmm1",
         architecture: Architecture::AMD64,
-        bytes: vec![0xf2, 0x0f, 0x10, 0xc1],
+        bytes: &[0xf2, 0x0f, 0x10, 0xc1],
+        expected_status: Some(SemanticStatus::Complete),
+        semantics_fixture: None,
+        roundtrip_fixture: None,
+    },
+    X86Sample {
+        mnemonic: "movsd",
+        instruction: "vmovsd xmm0, xmm2, xmm1",
+        architecture: Architecture::AMD64,
+        bytes: &[0xc5, 0xeb, 0x10, 0xc1],
+        expected_status: Some(SemanticStatus::Complete),
+        semantics_fixture: None,
+        roundtrip_fixture: None,
+    },
+    X86Sample {
+        mnemonic: "movsd",
+        instruction: "movsd xmm0, xmm1",
+        architecture: Architecture::AMD64,
+        bytes: &[0xf2, 0x0f, 0x10, 0xc1],
         expected_status: None,
-        semantics_fixture: Some(X86RuntimeFixtureSpec {
-            registers: vec![
-                (I386Register::Xmm0, vec128(lhs, upper_a)),
-                (I386Register::Xmm1, vec128(rhs, upper_b)),
+        semantics_fixture: Some(X86FixtureSpec {
+            registers: &[
+                (
+                    I386Register::Xmm0,
+                    vec128(3.5f64.to_bits(), 0x1122_3344_5566_7788),
+                ),
+                (
+                    I386Register::Xmm1,
+                    vec128((-1.25f64).to_bits(), 0x99aa_bbcc_ddee_ff00),
+                ),
             ],
             eflags: 1 << 1,
-            memory: vec![],
+            memory: &[],
         }),
         roundtrip_fixture: None,
-    }]
-}
+    },
+];
 
 #[test]
 fn movsd_semantics_regressions_stay_complete() {
-    let samples = status_samples();
-    assert_runtime_sample_statuses(&samples);
+    assert_sample_statuses(SAMPLES);
 }
 
 #[test]
 fn movsd_semantics_match_unicorn_transitions() {
-    let samples = conformance_samples();
-    assert_runtime_conformance_cases(&samples);
+    assert_conformance_cases(SAMPLES);
 }
 
 // Unicorn 2.1.5 mis-models `vmovsd xmm0, xmm2, xmm1` for the tested VEX form:

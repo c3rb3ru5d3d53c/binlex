@@ -1,133 +1,101 @@
 use super::{
-    I386Register, X86RuntimeFixtureSpec, X86RuntimeSample, assert_runtime_conformance_cases,
-    assert_runtime_roundtrip_cases, assert_runtime_sample_statuses,
+    I386Register, X86FixtureSpec, X86Sample, assert_conformance_cases, assert_roundtrip_cases,
+    assert_sample_statuses,
 };
 use crate::{Architecture, semantics::SemanticStatus};
 
-fn status_samples() -> Vec<X86RuntimeSample> {
-    let mut samples = Vec::new();
-    {
-        samples.push(X86RuntimeSample {
-            mnemonic: "por",
-            instruction: "por xmm0, xmm1",
-            architecture: Architecture::AMD64,
-            bytes: (&[0x66, 0x0f, 0xeb, 0xc1]).to_vec(),
-            expected_status: Some(SemanticStatus::Complete),
-            semantics_fixture: None,
-            roundtrip_fixture: None,
-        });
-    }
-    samples
-}
-
-fn conformance_samples() -> Vec<X86RuntimeSample> {
-    let mut samples = Vec::new();
-    {
-        let xmm0 = u128::from_le_bytes([
-            0x10, 0x80, 0x20, 0x70, 0x30, 0x60, 0x40, 0x50, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
-            0x11, 0x22,
-        ]);
-        let xmm1 = u128::from_le_bytes([
-            0x01, 0xff, 0x02, 0xfe, 0x03, 0xfd, 0x04, 0xfc, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00,
-            0x99, 0x88,
-        ]);
-
-        samples.push(X86RuntimeSample {
-            mnemonic: "por",
-            instruction: "por xmm0, xmm1",
-            architecture: Architecture::AMD64,
-            bytes: (&[0x66, 0x0f, 0xeb, 0xc1]).to_vec(),
-            expected_status: None,
-            semantics_fixture: Some(X86RuntimeFixtureSpec {
-                registers: vec![(I386Register::Xmm0, xmm0), (I386Register::Xmm1, xmm1)],
-                eflags: 1 << 1,
-                memory: vec![],
-            }),
-            roundtrip_fixture: None,
-        });
-    }
-    samples
-}
-
-fn roundtrip_samples() -> Vec<X86RuntimeSample> {
-    let mut samples = Vec::new();
-    {
-        samples.push(X86RuntimeSample {
-            mnemonic: "por",
-            instruction: "por xmm0, xmm1",
-            architecture: Architecture::I386,
-            bytes: (&[0x66, 0x0f, 0xeb, 0xc1]).to_vec(),
-            expected_status: None,
-            semantics_fixture: None,
-            roundtrip_fixture: Some(X86RuntimeFixtureSpec {
-                registers: vec![
-                    (I386Register::Eax, 0x1122_3344),
-                    (I386Register::Ebx, 0x3000),
-                    (I386Register::Ecx, 0x99aa_bbcc),
-                    (I386Register::Edx, 0xddee_ff00),
-                    (I386Register::Esi, 0x1234_5678),
-                    (I386Register::Edi, 0x8765_4321),
-                    (I386Register::Ebp, 0x2ff0),
-                    (I386Register::Esp, 0x2ff0),
-                    (
-                        I386Register::Xmm0,
-                        0x1122_3344_5566_7788_99aa_bbcc_ddee_ff00,
-                    ),
-                    (
-                        I386Register::Xmm1,
-                        0xff00_ee11_dd22_cc33_bb44_aa55_9966_8877,
-                    ),
-                ],
-                eflags: 0x202,
-                memory: vec![],
-            }),
-        });
-    }
-    {
-        samples.push(X86RuntimeSample {
-            mnemonic: "por",
-            instruction: "por xmm0, xmm1",
-            architecture: Architecture::AMD64,
-            bytes: (&[0x66, 0x0f, 0xeb, 0xc1]).to_vec(),
-            expected_status: None,
-            semantics_fixture: None,
-            roundtrip_fixture: Some(X86RuntimeFixtureSpec {
-                registers: vec![
-                    (I386Register::Rax, 0x1122_3344_5566_7788),
-                    (I386Register::Rbx, 0x3000),
-                    (I386Register::Rbp, 0x2ff0),
-                    (I386Register::Rsp, 0x2ff0),
-                    (
-                        I386Register::Xmm0,
-                        0x1122_3344_5566_7788_99aa_bbcc_ddee_ff00,
-                    ),
-                    (
-                        I386Register::Xmm1,
-                        0xff00_ee11_dd22_cc33_bb44_aa55_9966_8877,
-                    ),
-                ],
-                eflags: 0x202,
-                memory: vec![],
-            }),
-        });
-    }
-    samples
-}
+pub(crate) const SAMPLES: &[X86Sample] = &[
+    X86Sample {
+        mnemonic: "por",
+        instruction: "por xmm0, xmm1",
+        architecture: Architecture::AMD64,
+        bytes: &[0x66, 0x0f, 0xeb, 0xc1],
+        expected_status: Some(SemanticStatus::Complete),
+        semantics_fixture: Some(X86FixtureSpec {
+            registers: &[
+                (
+                    I386Register::Xmm0,
+                    0x10_80_20_70_30_60_40_50_aa_bb_cc_dd_ee_ff_11_22,
+                ),
+                (
+                    I386Register::Xmm1,
+                    0x01_ff_02_fe_03_fd_04_fc_55_44_33_22_11_00_99_88,
+                ),
+            ],
+            eflags: 1 << 1,
+            memory: &[],
+        }),
+        roundtrip_fixture: None,
+    },
+    X86Sample {
+        mnemonic: "por",
+        instruction: "por xmm0, xmm1",
+        architecture: Architecture::I386,
+        bytes: &[0x66, 0x0f, 0xeb, 0xc1],
+        expected_status: None,
+        semantics_fixture: None,
+        roundtrip_fixture: Some(X86FixtureSpec {
+            registers: &[
+                (I386Register::Eax, 0x1122_3344),
+                (I386Register::Ebx, 0x3000),
+                (I386Register::Ecx, 0x99aa_bbcc),
+                (I386Register::Edx, 0xddee_ff00),
+                (I386Register::Esi, 0x1234_5678),
+                (I386Register::Edi, 0x8765_4321),
+                (I386Register::Ebp, 0x2ff0),
+                (I386Register::Esp, 0x2ff0),
+                (
+                    I386Register::Xmm0,
+                    0x1122_3344_5566_7788_99aa_bbcc_ddee_ff00,
+                ),
+                (
+                    I386Register::Xmm1,
+                    0xff00_ee11_dd22_cc33_bb44_aa55_9966_8877,
+                ),
+            ],
+            eflags: 0x202,
+            memory: &[],
+        }),
+    },
+    X86Sample {
+        mnemonic: "por",
+        instruction: "por xmm0, xmm1",
+        architecture: Architecture::AMD64,
+        bytes: &[0x66, 0x0f, 0xeb, 0xc1],
+        expected_status: None,
+        semantics_fixture: None,
+        roundtrip_fixture: Some(X86FixtureSpec {
+            registers: &[
+                (I386Register::Rax, 0x1122_3344_5566_7788),
+                (I386Register::Rbx, 0x3000),
+                (I386Register::Rbp, 0x2ff0),
+                (I386Register::Rsp, 0x2ff0),
+                (
+                    I386Register::Xmm0,
+                    0x1122_3344_5566_7788_99aa_bbcc_ddee_ff00,
+                ),
+                (
+                    I386Register::Xmm1,
+                    0xff00_ee11_dd22_cc33_bb44_aa55_9966_8877,
+                ),
+            ],
+            eflags: 0x202,
+            memory: &[],
+        }),
+    },
+];
 
 #[test]
 fn por_semantics_regressions_stay_complete() {
-    let samples = status_samples();
-    assert_runtime_sample_statuses(&samples);
+    assert_sample_statuses(SAMPLES);
 }
 
 #[test]
 fn por_semantics_match_unicorn_transitions() {
-    let samples = conformance_samples();
-    assert_runtime_conformance_cases(&samples);
+    assert_conformance_cases(SAMPLES);
 }
 
 #[test]
 fn por_roundtrip_matches_unicorn() {
-    let samples = roundtrip_samples();
-    assert_runtime_roundtrip_cases(&samples);
+    assert_roundtrip_cases(SAMPLES);
 }
