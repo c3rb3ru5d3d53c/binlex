@@ -1,0 +1,36 @@
+use super::{Arm64FixtureSpec, Arm64Sample, assert_conformance_cases, assert_sample_statuses};
+use crate::semantics::SemanticStatus;
+
+pub(crate) const SAMPLES: &[Arm64Sample] = &[
+    Arm64Sample {
+        mnemonic: "fmsub",
+        instruction: "fmsub	d0, d1, d2, d3",
+        bytes: &[0x20, 0x8c, 0x42, 0x1f],
+        expected_status: Some(SemanticStatus::Complete),
+        fixture: None,
+    },
+    Arm64Sample {
+        mnemonic: "fmsub",
+        instruction: "fmsub	d0, d1, d2, d3",
+        bytes: &[0x20, 0x8c, 0x42, 0x1f],
+        expected_status: Some(SemanticStatus::Complete),
+        fixture: Some(Arm64FixtureSpec {
+            registers: &[
+                ("d1", 0x4000_0000_0000_0000),
+                ("d2", 0x4008_0000_0000_0000),
+                ("d3", 0x4014_0000_0000_0000),
+            ],
+            memory: &[],
+        }),
+    },
+];
+
+#[test]
+fn fmsub_semantics_regressions_stay_complete() {
+    assert_sample_statuses(SAMPLES);
+}
+
+#[test]
+fn fmsub_semantics_match_unicorn_transitions() {
+    assert_conformance_cases(SAMPLES);
+}

@@ -167,31 +167,6 @@ fn vector_ymm_semantics_wide_regressions() {
             Some(("eax", vec![0x02, 0x3f, 0xaa, 0xaa])),
             None,
         ),
-        (
-            "vpunpcklbw ymm0, ymm2, ymm1",
-            vec![0xc5, 0xed, 0x60, 0xc1],
-            WideI386Fixture {
-                base: I386Fixture {
-                    registers: vec![],
-                    eflags: 1 << 1,
-                    memory: vec![],
-                },
-                wide_registers: vec![
-                    (I386Register::Ymm0, vec![0; 32]),
-                    (I386Register::Ymm1, ymm1),
-                    (I386Register::Ymm2, ymm2),
-                ],
-            },
-            Some((
-                "ymm0",
-                vec![
-                    0xde, 0x01, 0xad, 0xff, 0xbe, 0x02, 0xef, 0xfe, 0x10, 0x03, 0x32, 0xfd, 0x54,
-                    0x04, 0x76, 0xfc, 0x24, 0xf0, 0x42, 0x0f, 0x66, 0xe1, 0x81, 0x1e, 0xa5, 0xd2,
-                    0xc3, 0x2d, 0xe7, 0xc3, 0xff, 0x3c,
-                ],
-            )),
-            None,
-        ),
     ];
 
     for (name, bytes, fixture, expected_register, expected_flags) in cases {

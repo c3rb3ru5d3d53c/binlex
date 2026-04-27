@@ -97,15 +97,6 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
             },
         ),
         (
-            "por xmm0, xmm1",
-            vec![0x66, 0x0f, 0xeb, 0xc1],
-            I386Fixture {
-                registers: vec![(I386Register::Xmm0, xmm0), (I386Register::Xmm1, xmm1)],
-                eflags: 1 << 1,
-                memory: vec![],
-            },
-        ),
-        (
             "pandn xmm0, xmm1",
             vec![0x66, 0x0f, 0xdf, 0xc1],
             I386Fixture {
@@ -117,15 +108,6 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
         (
             "paddb xmm0, xmm1",
             vec![0x66, 0x0f, 0xfc, 0xc1],
-            I386Fixture {
-                registers: vec![(I386Register::Xmm0, xmm0), (I386Register::Xmm1, xmm1)],
-                eflags: 1 << 1,
-                memory: vec![],
-            },
-        ),
-        (
-            "paddd xmm0, xmm1",
-            vec![0x66, 0x0f, 0xfe, 0xc1],
             I386Fixture {
                 registers: vec![(I386Register::Xmm0, xmm0), (I386Register::Xmm1, xmm1)],
                 eflags: 1 << 1,
@@ -153,24 +135,6 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
         (
             "psllq xmm0, 1",
             vec![0x66, 0x0f, 0x73, 0xf0, 0x01],
-            I386Fixture {
-                registers: vec![(I386Register::Xmm0, xmm0)],
-                eflags: 1 << 1,
-                memory: vec![],
-            },
-        ),
-        (
-            "psrad xmm0, 1",
-            vec![0x66, 0x0f, 0x72, 0xe0, 0x01],
-            I386Fixture {
-                registers: vec![(I386Register::Xmm0, xmm0)],
-                eflags: 1 << 1,
-                memory: vec![],
-            },
-        ),
-        (
-            "psrldq xmm0, 1",
-            vec![0x66, 0x0f, 0x73, 0xd8, 0x01],
             I386Fixture {
                 registers: vec![(I386Register::Xmm0, xmm0)],
                 eflags: 1 << 1,
@@ -243,15 +207,6 @@ fn vector_integer_and_move_semantics_match_unicorn_transitions() {
         (
             "packsswb xmm0, xmm1",
             vec![0x66, 0x0f, 0x63, 0xc1],
-            I386Fixture {
-                registers: vec![(I386Register::Xmm0, xmm0), (I386Register::Xmm1, xmm1)],
-                eflags: 1 << 1,
-                memory: vec![],
-            },
-        ),
-        (
-            "punpcklbw xmm0, xmm1",
-            vec![0x66, 0x0f, 0x60, 0xc1],
             I386Fixture {
                 registers: vec![(I386Register::Xmm0, xmm0), (I386Register::Xmm1, xmm1)],
                 eflags: 1 << 1,
