@@ -51,11 +51,6 @@ jobs:
             container: "null"
             asset: linux-x86_64
             archive_ext: tar.gz
-          - os: archlinux
-            runner: ubuntu-latest
-            container: '{"image":"archlinux:latest"}'
-            asset: archlinux-x86_64
-            archive_ext: tar.gz
           - os: macos-14
             runner: macos-14
             container: "null"
@@ -100,11 +95,9 @@ jobs:
           test "${TAG_VERSION}" = "${BINLEX_VERSION}"
 
       - name: Set up Rust
-        if: ${{ matrix.os != 'archlinux' }}
         uses: dtolnay/rust-toolchain@stable
 
       - name: Set up Protoc
-        if: ${{ matrix.os != 'archlinux' }}
         uses: arduino/setup-protoc@v3
         with:
           version: ${{ env.PROTOC_VERSION }}
@@ -113,7 +106,7 @@ jobs:
       - name: Cache Rust Build Artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: ${{ matrix.os == 'archlinux' && 'archlinux-native' || format('native-{0}', matrix.os) }}
+          shared-key: ${{ format('native-{0}', matrix.os) }}
           cache-provider: github
 
       - name: Install Dependencies (Ubuntu)
@@ -135,57 +128,6 @@ jobs:
           echo "LLVM_SYS_221_PREFIX=/usr/lib/llvm-22" >> "$GITHUB_ENV"
           echo "/usr/lib/llvm-22/bin" >> "$GITHUB_PATH"
           /usr/lib/llvm-22/bin/llvm-config --version
-
-      - name: Install Dependencies (Arch Linux)
-        if: ${{ matrix.os == 'archlinux' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          pacman-key --init
-          pacman-key --populate archlinux
-          pacman -Syu --noconfirm
-          pacman -S --noconfirm --needed base-devel pkgconf openssl zstd lz4 make automake autoconf libtool cmake clang llvm curl git python rust protobuf
-          id -u builder >/dev/null 2>&1 || useradd --create-home --shell /bin/bash builder
-
-      - name: Configure LLVM Environment (Arch Linux)
-        if: ${{ matrix.os == 'archlinux' }}
-        shell: bash
-        run: |
-          echo "LLVM_SYS_221_PREFIX=/usr" >> "$GITHUB_ENV"
-          echo "/usr/bin" >> "$GITHUB_PATH"
-          llvm-config --version
-
-      - name: Prepare Arch Build Workspace
-        if: ${{ matrix.os == 'archlinux' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf /tmp/binlex-build
-          mkdir -p /tmp/binlex-build
-          cp -a "$GITHUB_WORKSPACE"/. /tmp/binlex-build/
-          chown -R builder:builder /tmp/binlex-build
-
-      - name: Configure Arch Linker Wrapper
-        if: ${{ matrix.os == 'archlinux' }}
-        shell: bash
-        run: |
-          cat > "$GITHUB_WORKSPACE/binlex-arch-linker-wrapper" <<'EOF'
-          #!/bin/bash
-          set -euo pipefail
-
-          args=()
-          for arg in "$@"; do
-            if [[ "$arg" == "-Wl,--as-needed" ]]; then
-              args+=("-Wl,--no-as-needed")
-            else
-              args+=("$arg")
-            fi
-          done
-
-          exec x86_64-linux-gnu-gcc "${args[@]}"
-          EOF
-          chmod +x "$GITHUB_WORKSPACE/binlex-arch-linker-wrapper"
-          echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=$GITHUB_WORKSPACE/binlex-arch-linker-wrapper" >> "$GITHUB_ENV"
 
       - name: Install Dependencies (macOS)
         if: startsWith(matrix.os, 'macos-')
@@ -276,30 +218,11 @@ jobs:
           "RUSTFLAGS=-C target-feature=+crt-static" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Run Unit Tests (Unix)
-        if: ${{ matrix.os != 'windows-latest' && matrix.os != 'archlinux' }}
+        if: ${{ matrix.os != 'windows-latest' }}
         shell: bash
         run: |
           for attempt in 1 2 3; do
             cargo test --workspace --exclude binlex-python && break
-            echo "Attempt $attempt failed, retrying in 15s..."
-            sleep 15
-          done
-
-      - name: Run Unit Tests (Arch Linux)
-        if: ${{ matrix.os == 'archlinux' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          for attempt in 1 2 3; do
-            runuser -u builder -- env \
-              PATH="/usr/bin:${PATH}" \
-              LLVM_SYS_221_PREFIX="/usr" \
-              CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER="${CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER}" \
-              CARGO_BUILD_JOBS=2 \
-              bash -lc "cd /tmp/binlex-build && cargo test --workspace --exclude binlex-python" && break
-            if [[ "$attempt" -eq 3 ]]; then
-              exit 1
-            fi
             echo "Attempt $attempt failed, retrying in 15s..."
             sleep 15
           done
@@ -311,18 +234,6 @@ jobs:
       - name: Build Project (Ubuntu)
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: make deb
-
-      - name: Build Project (Arch Linux)
-        if: ${{ matrix.os == 'archlinux' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          runuser -u builder -- env \
-            PATH="/usr/bin:${PATH}" \
-            LLVM_SYS_221_PREFIX="/usr" \
-            CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER="${CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER}" \
-            CARGO_BUILD_JOBS=2 \
-            bash -lc "cd /tmp/binlex-build && makepkg"
 
       - name: Build Project (macOS)
         if: startsWith(matrix.os, 'macos-')
@@ -371,21 +282,6 @@ jobs:
           cp target/release/binlex-image dist/
           cp target/release/binlex-hash dist/
           cp target/debian/*.deb dist/
-
-      - name: Copy Binary (Arch Linux)
-        if: ${{ matrix.os == 'archlinux' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          cp /tmp/binlex-build/target/release/binlex dist/
-          cp /tmp/binlex-build/target/release/binlex-mcp dist/
-          cp /tmp/binlex-build/target/release/binlex-server dist/
-          cp /tmp/binlex-build/target/release/binlex-web dist/
-          cp /tmp/binlex-build/target/release/binlex-yara dist/
-          cp /tmp/binlex-build/target/release/binlex-symbols dist/
-          cp /tmp/binlex-build/target/release/binlex-image dist/
-          cp /tmp/binlex-build/target/release/binlex-hash dist/
-          cp /tmp/binlex-build/*.pkg.tar.zst dist/
 
       - name: Package Native Artifacts (Unix)
         if: ${{ matrix.os != 'windows-latest' }}
