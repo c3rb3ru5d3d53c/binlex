@@ -25,7 +25,7 @@ extern crate capstone;
 use crate::Architecture;
 use crate::semantics::{
     InstructionSemantics, SemanticEffect, SemanticExpression, SemanticOperationBinary,
-    SemanticOperationCast, SemanticOperationCompare, SemanticTerminator,
+    SemanticOperationCast, SemanticOperationCompare, SemanticOperationUnary, SemanticTerminator,
 };
 use capstone::Insn;
 use capstone::InsnId;
@@ -104,17 +104,29 @@ pub fn build(
         InsnId(id)
             if [
                 X86Insn::X86_INS_PMOVSXBW as u32,
+                X86Insn::X86_INS_VPMOVSXBW as u32,
                 X86Insn::X86_INS_PMOVSXBD as u32,
+                X86Insn::X86_INS_VPMOVSXBD as u32,
                 X86Insn::X86_INS_PMOVSXBQ as u32,
+                X86Insn::X86_INS_VPMOVSXBQ as u32,
                 X86Insn::X86_INS_PMOVSXWD as u32,
+                X86Insn::X86_INS_VPMOVSXWD as u32,
                 X86Insn::X86_INS_PMOVSXWQ as u32,
+                X86Insn::X86_INS_VPMOVSXWQ as u32,
                 X86Insn::X86_INS_PMOVSXDQ as u32,
+                X86Insn::X86_INS_VPMOVSXDQ as u32,
                 X86Insn::X86_INS_PMOVZXBW as u32,
+                X86Insn::X86_INS_VPMOVZXBW as u32,
                 X86Insn::X86_INS_PMOVZXBD as u32,
+                X86Insn::X86_INS_VPMOVZXBD as u32,
                 X86Insn::X86_INS_PMOVZXBQ as u32,
+                X86Insn::X86_INS_VPMOVZXBQ as u32,
                 X86Insn::X86_INS_PMOVZXWD as u32,
+                X86Insn::X86_INS_VPMOVZXWD as u32,
                 X86Insn::X86_INS_PMOVZXWQ as u32,
+                X86Insn::X86_INS_VPMOVZXWQ as u32,
                 X86Insn::X86_INS_PMOVZXDQ as u32,
+                X86Insn::X86_INS_VPMOVZXDQ as u32,
             ]
             .contains(&id) =>
         {
@@ -212,6 +224,7 @@ pub fn build(
                 X86Insn::X86_INS_PCMPGTB as u32,
                 X86Insn::X86_INS_PCMPGTW as u32,
                 X86Insn::X86_INS_PCMPGTD as u32,
+                X86Insn::X86_INS_PCMPGTQ as u32,
             ]
             .contains(&id) =>
         {
@@ -228,10 +241,43 @@ pub fn build(
             }
         }
         InsnId(id)
+            if [X86Insn::X86_INS_PADDUSB as u32, X86Insn::X86_INS_PADDUSW as u32].contains(&id) =>
+        {
+            packed_unsigned_saturating_add(machine, instruction, operands)
+        }
+        InsnId(id)
+            if [X86Insn::X86_INS_VPADDUSB as u32, X86Insn::X86_INS_VPADDUSW as u32]
+                .contains(&id) =>
+        {
+            avx_packed_unsigned_saturating_add(machine, instruction, operands)
+        }
+        InsnId(id)
+            if [X86Insn::X86_INS_PADDSB as u32, X86Insn::X86_INS_PADDSW as u32].contains(&id) =>
+        {
+            packed_signed_saturating_add(machine, instruction, operands)
+        }
+        InsnId(id)
+            if [X86Insn::X86_INS_VPADDSB as u32, X86Insn::X86_INS_VPADDSW as u32]
+                .contains(&id) =>
+        {
+            avx_packed_signed_saturating_add(machine, instruction, operands)
+        }
+        InsnId(id)
+            if [
+                X86Insn::X86_INS_PABSB as u32,
+                X86Insn::X86_INS_PABSW as u32,
+                X86Insn::X86_INS_PABSD as u32,
+            ]
+            .contains(&id) =>
+        {
+            packed_abs(machine, instruction, operands)
+        }
+        InsnId(id)
             if [
                 X86Insn::X86_INS_VPADDB as u32,
                 X86Insn::X86_INS_VPADDW as u32,
                 X86Insn::X86_INS_VPADDD as u32,
+                X86Insn::X86_INS_VPADDQ as u32,
                 X86Insn::X86_INS_VPSUBB as u32,
                 X86Insn::X86_INS_VPSUBW as u32,
                 X86Insn::X86_INS_VPSUBD as u32,
@@ -243,6 +289,7 @@ pub fn build(
                 X86Insn::X86_INS_VPCMPGTB as u32,
                 X86Insn::X86_INS_VPCMPGTW as u32,
                 X86Insn::X86_INS_VPCMPGTD as u32,
+                X86Insn::X86_INS_VPCMPGTQ as u32,
             ]
             .contains(&id) =>
         {
@@ -263,21 +310,62 @@ pub fn build(
         {
             packed_average(machine, instruction, operands)
         }
+        InsnId(id)
+            if [
+                X86Insn::X86_INS_PHADDW as u32,
+                X86Insn::X86_INS_PHADDD as u32,
+                X86Insn::X86_INS_PHADDSW as u32,
+                X86Insn::X86_INS_PHSUBW as u32,
+                X86Insn::X86_INS_PHSUBD as u32,
+            ]
+            .contains(&id) =>
+        {
+            packed_horizontal(machine, instruction, operands)
+        }
+        InsnId(id)
+            if [
+                X86Insn::X86_INS_VPHADDW as u32,
+                X86Insn::X86_INS_VPHADDD as u32,
+                X86Insn::X86_INS_VPHADDSW as u32,
+            ]
+            .contains(&id) =>
+        {
+            avx_packed_horizontal(machine, instruction, operands)
+        }
+        InsnId(id)
+            if [
+                X86Insn::X86_INS_PSIGNB as u32,
+                X86Insn::X86_INS_PSIGNW as u32,
+                X86Insn::X86_INS_PSIGND as u32,
+            ]
+            .contains(&id) =>
+        {
+            packed_sign(machine, instruction, operands)
+        }
+        InsnId(id)
+            if [X86Insn::X86_INS_PSUBUSB as u32, X86Insn::X86_INS_PSUBUSW as u32].contains(&id) =>
+        {
+            packed_unsigned_saturating_sub(machine, instruction, operands)
+        }
         InsnId(id) if id == X86Insn::X86_INS_VPMINUB as u32 => {
             avx_binary(machine, operands, SemanticOperationBinary::MinUnsigned)
         }
         InsnId(id)
             if [
                 X86Insn::X86_INS_PMULHW as u32,
+                X86Insn::X86_INS_PMULHUW as u32,
                 X86Insn::X86_INS_PMULLW as u32,
                 X86Insn::X86_INS_PMULLD as u32,
                 X86Insn::X86_INS_PMULUDQ as u32,
                 X86Insn::X86_INS_PMADDWD as u32,
+                X86Insn::X86_INS_PMADDUBSW as u32,
+                X86Insn::X86_INS_PMULHRSW as u32,
             ]
             .contains(&id) =>
         {
             packed_multiply(machine, instruction, operands)
         }
+        InsnId(id) if id == X86Insn::X86_INS_PSADBW as u32 => psadbw(machine, operands),
         InsnId(id)
             if [
                 X86Insn::X86_INS_VPMADDWD as u32,
@@ -309,6 +397,8 @@ pub fn build(
             if [
                 X86Insn::X86_INS_VPSLLDQ as u32,
                 X86Insn::X86_INS_VPSRLDQ as u32,
+                X86Insn::X86_INS_VPSLLQ as u32,
+                X86Insn::X86_INS_VPSRLQ as u32,
             ]
             .contains(&id) =>
         {
@@ -374,6 +464,7 @@ pub fn build(
                 avx_unpack(machine, instruction, operands)
             }
         }
+        InsnId(id) if id == X86Insn::X86_INS_KMOVW as u32 => assign(machine, operands),
         InsnId(id)
             if [
                 X86Insn::X86_INS_PEXTRW as u32,
@@ -396,6 +487,7 @@ pub fn build(
                 X86Insn::X86_INS_PINSRD as u32,
                 X86Insn::X86_INS_PINSRQ as u32,
                 X86Insn::X86_INS_PINSRW as u32,
+                X86Insn::X86_INS_VPINSRW as u32,
             ]
             .contains(&id) =>
         {
@@ -412,16 +504,26 @@ pub fn build(
         {
             movemask(machine, instruction, operands)
         }
+        InsnId(id) if id == X86Insn::X86_INS_MASKMOVQ as u32 => maskmovq(machine, operands),
+        InsnId(id) if id == X86Insn::X86_INS_VINSERTF128 as u32 => vinsertf128(machine, operands),
         InsnId(id) if id == X86Insn::X86_INS_VEXTRACTI128 as u32 => vextracti128(machine, operands),
         InsnId(id) if id == X86Insn::X86_INS_VPERM2I128 as u32 => vperm2i128(machine, operands),
         InsnId(id) if id == X86Insn::X86_INS_VPERMQ as u32 => vpermq(machine, operands),
         InsnId(id) if id == X86Insn::X86_INS_VPBROADCASTB as u32 => vpbroadcastb(machine, operands),
         InsnId(id) if id == X86Insn::X86_INS_VPSIGNW as u32 => vpsignw(machine, operands),
+        InsnId(id) if id == X86Insn::X86_INS_VZEROUPPER as u32 => Some(vzeroupper()),
         InsnId(id) if id == X86Insn::X86_INS_XORPS as u32 => {
             binary(machine, operands, SemanticOperationBinary::Xor)
         }
         InsnId(id) if id == X86Insn::X86_INS_ANDPS as u32 => {
             binary(machine, operands, SemanticOperationBinary::And)
+        }
+        _ if matches!(
+            instruction.mnemonic().unwrap_or_default(),
+            "vmaskmovps" | "vmaskmovpd"
+        ) =>
+        {
+            vmaskmov(machine, instruction, operands)
         }
         _ => None,
     }
@@ -443,37 +545,73 @@ fn packed_widen(
         InsnId(id) if id == X86Insn::X86_INS_PMOVSXBW as u32 => {
             (8, 16, SemanticOperationCast::SignExtend)
         }
+        InsnId(id) if id == X86Insn::X86_INS_VPMOVSXBW as u32 => {
+            (8, 16, SemanticOperationCast::SignExtend)
+        }
         InsnId(id) if id == X86Insn::X86_INS_PMOVSXBD as u32 => {
+            (8, 32, SemanticOperationCast::SignExtend)
+        }
+        InsnId(id) if id == X86Insn::X86_INS_VPMOVSXBD as u32 => {
             (8, 32, SemanticOperationCast::SignExtend)
         }
         InsnId(id) if id == X86Insn::X86_INS_PMOVSXBQ as u32 => {
             (8, 64, SemanticOperationCast::SignExtend)
         }
+        InsnId(id) if id == X86Insn::X86_INS_VPMOVSXBQ as u32 => {
+            (8, 64, SemanticOperationCast::SignExtend)
+        }
         InsnId(id) if id == X86Insn::X86_INS_PMOVSXWD as u32 => {
+            (16, 32, SemanticOperationCast::SignExtend)
+        }
+        InsnId(id) if id == X86Insn::X86_INS_VPMOVSXWD as u32 => {
             (16, 32, SemanticOperationCast::SignExtend)
         }
         InsnId(id) if id == X86Insn::X86_INS_PMOVSXWQ as u32 => {
             (16, 64, SemanticOperationCast::SignExtend)
         }
+        InsnId(id) if id == X86Insn::X86_INS_VPMOVSXWQ as u32 => {
+            (16, 64, SemanticOperationCast::SignExtend)
+        }
         InsnId(id) if id == X86Insn::X86_INS_PMOVSXDQ as u32 => {
+            (32, 64, SemanticOperationCast::SignExtend)
+        }
+        InsnId(id) if id == X86Insn::X86_INS_VPMOVSXDQ as u32 => {
             (32, 64, SemanticOperationCast::SignExtend)
         }
         InsnId(id) if id == X86Insn::X86_INS_PMOVZXBW as u32 => {
             (8, 16, SemanticOperationCast::ZeroExtend)
         }
+        InsnId(id) if id == X86Insn::X86_INS_VPMOVZXBW as u32 => {
+            (8, 16, SemanticOperationCast::ZeroExtend)
+        }
         InsnId(id) if id == X86Insn::X86_INS_PMOVZXBD as u32 => {
+            (8, 32, SemanticOperationCast::ZeroExtend)
+        }
+        InsnId(id) if id == X86Insn::X86_INS_VPMOVZXBD as u32 => {
             (8, 32, SemanticOperationCast::ZeroExtend)
         }
         InsnId(id) if id == X86Insn::X86_INS_PMOVZXBQ as u32 => {
             (8, 64, SemanticOperationCast::ZeroExtend)
         }
+        InsnId(id) if id == X86Insn::X86_INS_VPMOVZXBQ as u32 => {
+            (8, 64, SemanticOperationCast::ZeroExtend)
+        }
         InsnId(id) if id == X86Insn::X86_INS_PMOVZXWD as u32 => {
+            (16, 32, SemanticOperationCast::ZeroExtend)
+        }
+        InsnId(id) if id == X86Insn::X86_INS_VPMOVZXWD as u32 => {
             (16, 32, SemanticOperationCast::ZeroExtend)
         }
         InsnId(id) if id == X86Insn::X86_INS_PMOVZXWQ as u32 => {
             (16, 64, SemanticOperationCast::ZeroExtend)
         }
+        InsnId(id) if id == X86Insn::X86_INS_VPMOVZXWQ as u32 => {
+            (16, 64, SemanticOperationCast::ZeroExtend)
+        }
         InsnId(id) if id == X86Insn::X86_INS_PMOVZXDQ as u32 => {
+            (32, 64, SemanticOperationCast::ZeroExtend)
+        }
+        InsnId(id) if id == X86Insn::X86_INS_VPMOVZXDQ as u32 => {
             (32, 64, SemanticOperationCast::ZeroExtend)
         }
         _ => return None,
@@ -722,26 +860,47 @@ fn avx_packed_shift(
         .get(2)
         .and_then(|operand| common::operand_expr(machine, operand))?;
     let bits = common::location_bits(&dst);
-    let left_shift = match instruction.id() {
-        InsnId(id) if id == X86Insn::X86_INS_VPSLLDQ as u32 => true,
-        InsnId(id) if id == X86Insn::X86_INS_VPSRLDQ as u32 => false,
-        _ => return None,
-    };
-    let expression = if bits == 256 {
-        SemanticExpression::Concat {
-            parts: vec![
-                shift_bytes(
-                    extract_range(&src, 128, 128),
-                    count.clone(),
-                    128,
-                    left_shift,
-                ),
-                shift_bytes(extract_range(&src, 0, 128), count, 128, left_shift),
-            ],
-            bits,
+    let expression = match instruction.id() {
+        InsnId(id) if id == X86Insn::X86_INS_VPSLLDQ as u32 => {
+            if bits == 256 {
+                SemanticExpression::Concat {
+                    parts: vec![
+                        shift_bytes(
+                            extract_range(&src, 128, 128),
+                            count.clone(),
+                            128,
+                            true,
+                        ),
+                        shift_bytes(extract_range(&src, 0, 128), count, 128, true),
+                    ],
+                    bits,
+                }
+            } else {
+                shift_bytes(src, count, bits, true)
+            }
         }
-    } else {
-        shift_bytes(src, count, bits, left_shift)
+        InsnId(id) if id == X86Insn::X86_INS_VPSRLDQ as u32 => {
+            if bits == 256 {
+                SemanticExpression::Concat {
+                    parts: vec![
+                        shift_bytes(
+                            extract_range(&src, 128, 128),
+                            count.clone(),
+                            128,
+                            false,
+                        ),
+                        shift_bytes(extract_range(&src, 0, 128), count, 128, false),
+                    ],
+                    bits,
+                }
+            } else {
+                shift_bytes(src, count, bits, false)
+            }
+        }
+        InsnId(id) if [X86Insn::X86_INS_VPSLLQ as u32, X86Insn::X86_INS_VPSRLQ as u32].contains(&id) => {
+            packed_lane_shift(instruction, bits, &src, count)?
+        }
+        _ => return None,
     };
     Some(common::complete(
         SemanticTerminator::FallThrough,
@@ -1031,10 +1190,18 @@ fn packed_lane_shift(
     let (lane_bits, op) = match instruction.id() {
         InsnId(id) if id == X86Insn::X86_INS_PSLLW as u32 => (16, SemanticOperationBinary::Shl),
         InsnId(id) if id == X86Insn::X86_INS_PSLLD as u32 => (32, SemanticOperationBinary::Shl),
-        InsnId(id) if id == X86Insn::X86_INS_PSLLQ as u32 => (64, SemanticOperationBinary::Shl),
+        InsnId(id)
+            if [X86Insn::X86_INS_PSLLQ as u32, X86Insn::X86_INS_VPSLLQ as u32].contains(&id) =>
+        {
+            (64, SemanticOperationBinary::Shl)
+        }
         InsnId(id) if id == X86Insn::X86_INS_PSRLW as u32 => (16, SemanticOperationBinary::LShr),
         InsnId(id) if id == X86Insn::X86_INS_PSRLD as u32 => (32, SemanticOperationBinary::LShr),
-        InsnId(id) if id == X86Insn::X86_INS_PSRLQ as u32 => (64, SemanticOperationBinary::LShr),
+        InsnId(id)
+            if [X86Insn::X86_INS_PSRLQ as u32, X86Insn::X86_INS_VPSRLQ as u32].contains(&id) =>
+        {
+            (64, SemanticOperationBinary::LShr)
+        }
         InsnId(id) if id == X86Insn::X86_INS_PSRAW as u32 => (16, SemanticOperationBinary::AShr),
         InsnId(id) if id == X86Insn::X86_INS_PSRAD as u32 => (32, SemanticOperationBinary::AShr),
         _ => return None,
@@ -1294,7 +1461,12 @@ fn packed_lane_op(
             32
         }
         InsnId(id)
-            if [X86Insn::X86_INS_PADDQ as u32, X86Insn::X86_INS_PSUBQ as u32].contains(&id) =>
+            if [
+                X86Insn::X86_INS_PADDQ as u32,
+                X86Insn::X86_INS_PSUBQ as u32,
+                X86Insn::X86_INS_PCMPGTQ as u32,
+            ]
+            .contains(&id) =>
         {
             64
         }
@@ -1396,6 +1568,7 @@ fn packed_lane_op(
                     X86Insn::X86_INS_PCMPGTB as u32,
                     X86Insn::X86_INS_PCMPGTW as u32,
                     X86Insn::X86_INS_PCMPGTD as u32,
+                    X86Insn::X86_INS_PCMPGTQ as u32,
                 ]
                 .contains(&id) =>
             {
@@ -1463,8 +1636,10 @@ fn avx_packed_lane_op(
         }
         InsnId(id)
             if [
+                X86Insn::X86_INS_VPADDQ as u32,
                 X86Insn::X86_INS_VPSUBQ as u32,
                 X86Insn::X86_INS_VPCMPEQQ as u32,
+                X86Insn::X86_INS_VPCMPGTQ as u32,
             ]
             .contains(&id) =>
         {
@@ -1483,6 +1658,7 @@ fn avx_packed_lane_op(
                     X86Insn::X86_INS_VPADDB as u32,
                     X86Insn::X86_INS_VPADDW as u32,
                     X86Insn::X86_INS_VPADDD as u32,
+                    X86Insn::X86_INS_VPADDQ as u32,
                 ]
                 .contains(&id) =>
             {
@@ -1515,6 +1691,7 @@ fn avx_packed_lane_op(
                     X86Insn::X86_INS_VPCMPGTB as u32,
                     X86Insn::X86_INS_VPCMPGTW as u32,
                     X86Insn::X86_INS_VPCMPGTD as u32,
+                    X86Insn::X86_INS_VPCMPGTQ as u32,
                 ]
                 .contains(&id) =>
             {
@@ -1526,6 +1703,292 @@ fn avx_packed_lane_op(
     Some(common::complete(
         SemanticTerminator::FallThrough,
         vec![SemanticEffect::Set { dst, expression }],
+    ))
+}
+
+fn packed_unsigned_saturating_add(
+    machine: Architecture,
+    instruction: &Insn,
+    operands: &[ArchOperand],
+) -> Option<InstructionSemantics> {
+    let dst = operands
+        .first()
+        .and_then(|operand| common::operand_location(machine, operand))?;
+    let left = operands
+        .first()
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let right = operands
+        .get(1)
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let bits = common::location_bits(&dst);
+    let lane_bits = match instruction.id() {
+        InsnId(id) if id == X86Insn::X86_INS_PADDUSB as u32 => 8,
+        InsnId(id) if id == X86Insn::X86_INS_PADDUSW as u32 => 16,
+        _ => return None,
+    };
+    if bits == 0 || bits % lane_bits != 0 {
+        return None;
+    }
+
+    let ext_bits = lane_bits + 1;
+    let max_lane_value = (1u64 << lane_bits) - 1;
+    let max_ext = common::const_u64(max_lane_value, ext_bits);
+    let lane_count = bits / lane_bits;
+    let mut parts = Vec::with_capacity(lane_count as usize);
+    for lane in (0..lane_count).rev() {
+        let lhs = SemanticExpression::Cast {
+            op: SemanticOperationCast::ZeroExtend,
+            arg: Box::new(extract_lane(&left, lane_bits, lane)),
+            bits: ext_bits,
+        };
+        let rhs = SemanticExpression::Cast {
+            op: SemanticOperationCast::ZeroExtend,
+            arg: Box::new(extract_lane(&right, lane_bits, lane)),
+            bits: ext_bits,
+        };
+        let sum = SemanticExpression::Binary {
+            op: SemanticOperationBinary::Add,
+            left: Box::new(lhs),
+            right: Box::new(rhs),
+            bits: ext_bits,
+        };
+        parts.push(SemanticExpression::Select {
+            condition: Box::new(common::compare(
+                SemanticOperationCompare::Ugt,
+                sum.clone(),
+                max_ext.clone(),
+            )),
+            when_true: Box::new(common::const_u64(max_lane_value, lane_bits)),
+            when_false: Box::new(truncate_to_bits(sum, lane_bits)),
+            bits: lane_bits,
+        });
+    }
+    Some(common::complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Set {
+            dst,
+            expression: SemanticExpression::Concat { parts, bits },
+        }],
+    ))
+}
+
+fn packed_signed_saturating_add(
+    machine: Architecture,
+    instruction: &Insn,
+    operands: &[ArchOperand],
+) -> Option<InstructionSemantics> {
+    let dst = operands
+        .first()
+        .and_then(|operand| common::operand_location(machine, operand))?;
+    let left = operands
+        .first()
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let right = operands
+        .get(1)
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let bits = common::location_bits(&dst);
+    let lane_bits = match instruction.id() {
+        InsnId(id) if id == X86Insn::X86_INS_PADDSB as u32 => 8,
+        InsnId(id) if id == X86Insn::X86_INS_PADDSW as u32 => 16,
+        _ => return None,
+    };
+    if bits == 0 || bits % lane_bits != 0 {
+        return None;
+    }
+
+    let ext_bits = lane_bits + 1;
+    let lane_count = bits / lane_bits;
+    let mut parts = Vec::with_capacity(lane_count as usize);
+    for lane in (0..lane_count).rev() {
+        let lhs = SemanticExpression::Cast {
+            op: SemanticOperationCast::SignExtend,
+            arg: Box::new(extract_lane(&left, lane_bits, lane)),
+            bits: ext_bits,
+        };
+        let rhs = SemanticExpression::Cast {
+            op: SemanticOperationCast::SignExtend,
+            arg: Box::new(extract_lane(&right, lane_bits, lane)),
+            bits: ext_bits,
+        };
+        let sum = SemanticExpression::Binary {
+            op: SemanticOperationBinary::Add,
+            left: Box::new(lhs),
+            right: Box::new(rhs),
+            bits: ext_bits,
+        };
+        parts.push(saturate_lane(sum, ext_bits, lane_bits, PackKind::Signed));
+    }
+    Some(common::complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Set {
+            dst,
+            expression: SemanticExpression::Concat { parts, bits },
+        }],
+    ))
+}
+
+fn avx_packed_unsigned_saturating_add(
+    machine: Architecture,
+    instruction: &Insn,
+    operands: &[ArchOperand],
+) -> Option<InstructionSemantics> {
+    let dst = operands
+        .first()
+        .and_then(|operand| common::operand_location(machine, operand))?;
+    let left = operands
+        .get(1)
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let right = operands
+        .get(2)
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let bits = common::location_bits(&dst);
+    let lane_bits = match instruction.id() {
+        InsnId(id) if id == X86Insn::X86_INS_VPADDUSB as u32 => 8,
+        InsnId(id) if id == X86Insn::X86_INS_VPADDUSW as u32 => 16,
+        _ => return None,
+    };
+    if bits == 0 || bits % lane_bits != 0 {
+        return None;
+    }
+    let ext_bits = lane_bits + 1;
+    let max_lane_value = (1u64 << lane_bits) - 1;
+    let max_ext = common::const_u64(max_lane_value, ext_bits);
+    let lane_count = bits / lane_bits;
+    let mut parts = Vec::with_capacity(lane_count as usize);
+    for lane in (0..lane_count).rev() {
+        let lhs = SemanticExpression::Cast {
+            op: SemanticOperationCast::ZeroExtend,
+            arg: Box::new(extract_lane(&left, lane_bits, lane)),
+            bits: ext_bits,
+        };
+        let rhs = SemanticExpression::Cast {
+            op: SemanticOperationCast::ZeroExtend,
+            arg: Box::new(extract_lane(&right, lane_bits, lane)),
+            bits: ext_bits,
+        };
+        let sum = SemanticExpression::Binary {
+            op: SemanticOperationBinary::Add,
+            left: Box::new(lhs),
+            right: Box::new(rhs),
+            bits: ext_bits,
+        };
+        parts.push(SemanticExpression::Select {
+            condition: Box::new(common::compare(
+                SemanticOperationCompare::Ugt,
+                sum.clone(),
+                max_ext.clone(),
+            )),
+            when_true: Box::new(common::const_u64(max_lane_value, lane_bits)),
+            when_false: Box::new(truncate_to_bits(sum, lane_bits)),
+            bits: lane_bits,
+        });
+    }
+    Some(common::complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Set {
+            dst,
+            expression: SemanticExpression::Concat { parts, bits },
+        }],
+    ))
+}
+
+fn avx_packed_signed_saturating_add(
+    machine: Architecture,
+    instruction: &Insn,
+    operands: &[ArchOperand],
+) -> Option<InstructionSemantics> {
+    let dst = operands
+        .first()
+        .and_then(|operand| common::operand_location(machine, operand))?;
+    let left = operands
+        .get(1)
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let right = operands
+        .get(2)
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let bits = common::location_bits(&dst);
+    let lane_bits = match instruction.id() {
+        InsnId(id) if id == X86Insn::X86_INS_VPADDSB as u32 => 8,
+        InsnId(id) if id == X86Insn::X86_INS_VPADDSW as u32 => 16,
+        _ => return None,
+    };
+    if bits == 0 || bits % lane_bits != 0 {
+        return None;
+    }
+    let ext_bits = lane_bits + 1;
+    let lane_count = bits / lane_bits;
+    let mut parts = Vec::with_capacity(lane_count as usize);
+    for lane in (0..lane_count).rev() {
+        let lhs = SemanticExpression::Cast {
+            op: SemanticOperationCast::SignExtend,
+            arg: Box::new(extract_lane(&left, lane_bits, lane)),
+            bits: ext_bits,
+        };
+        let rhs = SemanticExpression::Cast {
+            op: SemanticOperationCast::SignExtend,
+            arg: Box::new(extract_lane(&right, lane_bits, lane)),
+            bits: ext_bits,
+        };
+        let sum = SemanticExpression::Binary {
+            op: SemanticOperationBinary::Add,
+            left: Box::new(lhs),
+            right: Box::new(rhs),
+            bits: ext_bits,
+        };
+        parts.push(saturate_lane(sum, ext_bits, lane_bits, PackKind::Signed));
+    }
+    Some(common::complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Set {
+            dst,
+            expression: SemanticExpression::Concat { parts, bits },
+        }],
+    ))
+}
+
+fn packed_abs(
+    machine: Architecture,
+    instruction: &Insn,
+    operands: &[ArchOperand],
+) -> Option<InstructionSemantics> {
+    let dst = operands
+        .first()
+        .and_then(|operand| common::operand_location(machine, operand))?;
+    let src = operands
+        .get(1)
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let bits = common::location_bits(&dst);
+    let lane_bits = match instruction.id() {
+        InsnId(id) if id == X86Insn::X86_INS_PABSB as u32 => 8,
+        InsnId(id) if id == X86Insn::X86_INS_PABSW as u32 => 16,
+        InsnId(id) if id == X86Insn::X86_INS_PABSD as u32 => 32,
+        _ => return None,
+    };
+    if bits == 0 || bits % lane_bits != 0 {
+        return None;
+    }
+
+    let lane_count = bits / lane_bits;
+    let mut parts = Vec::with_capacity(lane_count as usize);
+    for lane in (0..lane_count).rev() {
+        let value = extract_lane(&src, lane_bits, lane);
+        parts.push(SemanticExpression::Select {
+            condition: Box::new(common::extract_bit(value.clone(), lane_bits - 1)),
+            when_true: Box::new(SemanticExpression::Unary {
+                op: SemanticOperationUnary::Neg,
+                arg: Box::new(value.clone()),
+                bits: lane_bits,
+            }),
+            when_false: Box::new(value),
+            bits: lane_bits,
+        });
+    }
+    Some(common::complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Set {
+            dst,
+            expression: SemanticExpression::Concat { parts, bits },
+        }],
     ))
 }
 
@@ -1795,6 +2258,257 @@ fn packed_average(
     ))
 }
 
+fn packed_horizontal(
+    machine: Architecture,
+    instruction: &Insn,
+    operands: &[ArchOperand],
+) -> Option<InstructionSemantics> {
+    let dst = operands
+        .first()
+        .and_then(|operand| common::operand_location(machine, operand))?;
+    let left = operands
+        .first()
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let right = operands
+        .get(1)
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let bits = common::location_bits(&dst);
+    let (lane_bits, op, saturating) = match instruction.id() {
+        InsnId(id) if id == X86Insn::X86_INS_PHADDW as u32 => {
+            (16, SemanticOperationBinary::Add, false)
+        }
+        InsnId(id) if id == X86Insn::X86_INS_PHADDD as u32 => {
+            (32, SemanticOperationBinary::Add, false)
+        }
+        InsnId(id) if id == X86Insn::X86_INS_PHADDSW as u32 => {
+            (16, SemanticOperationBinary::Add, true)
+        }
+        InsnId(id) if id == X86Insn::X86_INS_PHSUBW as u32 => {
+            (16, SemanticOperationBinary::Sub, false)
+        }
+        InsnId(id) if id == X86Insn::X86_INS_PHSUBD as u32 => {
+            (32, SemanticOperationBinary::Sub, false)
+        }
+        _ => return None,
+    };
+    if bits == 0 || bits % lane_bits != 0 {
+        return None;
+    }
+
+    let lane_count = bits / lane_bits;
+    if lane_count % 2 != 0 {
+        return None;
+    }
+    let pair_count = lane_count / 2;
+    let mut lanes = Vec::with_capacity(lane_count as usize);
+    for pair in 0..pair_count {
+        lanes.push(horizontal_pair_result(
+            &left,
+            lane_bits,
+            pair * 2,
+            op,
+            saturating,
+        ));
+    }
+    for pair in 0..pair_count {
+        lanes.push(horizontal_pair_result(
+            &right,
+            lane_bits,
+            pair * 2,
+            op,
+            saturating,
+        ));
+    }
+    let parts = lanes.into_iter().rev().collect::<Vec<_>>();
+    Some(common::complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Set {
+            dst,
+            expression: SemanticExpression::Concat { parts, bits },
+        }],
+    ))
+}
+
+fn avx_packed_horizontal(
+    machine: Architecture,
+    instruction: &Insn,
+    operands: &[ArchOperand],
+) -> Option<InstructionSemantics> {
+    let dst = operands
+        .first()
+        .and_then(|operand| common::operand_location(machine, operand))?;
+    let left = operands
+        .get(1)
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let right = operands
+        .get(2)
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let bits = common::location_bits(&dst);
+    let (lane_bits, op, saturating) = match instruction.id() {
+        InsnId(id) if id == X86Insn::X86_INS_VPHADDW as u32 => {
+            (16, SemanticOperationBinary::Add, false)
+        }
+        InsnId(id) if id == X86Insn::X86_INS_VPHADDD as u32 => {
+            (32, SemanticOperationBinary::Add, false)
+        }
+        InsnId(id) if id == X86Insn::X86_INS_VPHADDSW as u32 => {
+            (16, SemanticOperationBinary::Add, true)
+        }
+        _ => return None,
+    };
+    if bits == 0 || bits % lane_bits != 0 {
+        return None;
+    }
+    let lane_count = bits / lane_bits;
+    if lane_count % 2 != 0 {
+        return None;
+    }
+    let pair_count = lane_count / 2;
+    let mut lanes = Vec::with_capacity(lane_count as usize);
+    for pair in 0..pair_count {
+        lanes.push(horizontal_pair_result(
+            &left,
+            lane_bits,
+            pair * 2,
+            op,
+            saturating,
+        ));
+    }
+    for pair in 0..pair_count {
+        lanes.push(horizontal_pair_result(
+            &right,
+            lane_bits,
+            pair * 2,
+            op,
+            saturating,
+        ));
+    }
+    let parts = lanes.into_iter().rev().collect::<Vec<_>>();
+    Some(common::complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Set {
+            dst,
+            expression: SemanticExpression::Concat { parts, bits },
+        }],
+    ))
+}
+
+fn packed_sign(
+    machine: Architecture,
+    instruction: &Insn,
+    operands: &[ArchOperand],
+) -> Option<InstructionSemantics> {
+    let dst = operands
+        .first()
+        .and_then(|operand| common::operand_location(machine, operand))?;
+    let left = operands
+        .first()
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let right = operands
+        .get(1)
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let bits = common::location_bits(&dst);
+    let lane_bits = match instruction.id() {
+        InsnId(id) if id == X86Insn::X86_INS_PSIGNB as u32 => 8,
+        InsnId(id) if id == X86Insn::X86_INS_PSIGNW as u32 => 16,
+        InsnId(id) if id == X86Insn::X86_INS_PSIGND as u32 => 32,
+        _ => return None,
+    };
+    if bits == 0 || bits % lane_bits != 0 {
+        return None;
+    }
+
+    let lane_count = bits / lane_bits;
+    let mut parts = Vec::with_capacity(lane_count as usize);
+    for lane in (0..lane_count).rev() {
+        let value = extract_lane(&left, lane_bits, lane);
+        let control = extract_lane(&right, lane_bits, lane);
+        let is_zero = common::compare(
+            SemanticOperationCompare::Eq,
+            control.clone(),
+            common::const_u64(0, lane_bits),
+        );
+        let is_negative = common::extract_bit(control, lane_bits - 1);
+        parts.push(SemanticExpression::Select {
+            condition: Box::new(is_zero),
+            when_true: Box::new(common::const_u64(0, lane_bits)),
+            when_false: Box::new(SemanticExpression::Select {
+                condition: Box::new(is_negative),
+                when_true: Box::new(SemanticExpression::Unary {
+                    op: SemanticOperationUnary::Neg,
+                    arg: Box::new(value.clone()),
+                    bits: lane_bits,
+                }),
+                when_false: Box::new(value),
+                bits: lane_bits,
+            }),
+            bits: lane_bits,
+        });
+    }
+    Some(common::complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Set {
+            dst,
+            expression: SemanticExpression::Concat { parts, bits },
+        }],
+    ))
+}
+
+fn packed_unsigned_saturating_sub(
+    machine: Architecture,
+    instruction: &Insn,
+    operands: &[ArchOperand],
+) -> Option<InstructionSemantics> {
+    let dst = operands
+        .first()
+        .and_then(|operand| common::operand_location(machine, operand))?;
+    let left = operands
+        .first()
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let right = operands
+        .get(1)
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let bits = common::location_bits(&dst);
+    let lane_bits = match instruction.id() {
+        InsnId(id) if id == X86Insn::X86_INS_PSUBUSB as u32 => 8,
+        InsnId(id) if id == X86Insn::X86_INS_PSUBUSW as u32 => 16,
+        _ => return None,
+    };
+    if bits == 0 || bits % lane_bits != 0 {
+        return None;
+    }
+
+    let lane_count = bits / lane_bits;
+    let mut parts = Vec::with_capacity(lane_count as usize);
+    for lane in (0..lane_count).rev() {
+        let lhs = extract_lane(&left, lane_bits, lane);
+        let rhs = extract_lane(&right, lane_bits, lane);
+        let diff = SemanticExpression::Binary {
+            op: SemanticOperationBinary::Sub,
+            left: Box::new(lhs.clone()),
+            right: Box::new(rhs.clone()),
+            bits: lane_bits,
+        };
+        parts.push(SemanticExpression::Select {
+            condition: Box::new(common::compare(
+                SemanticOperationCompare::Ult,
+                lhs,
+                rhs,
+            )),
+            when_true: Box::new(common::const_u64(0, lane_bits)),
+            when_false: Box::new(diff),
+            bits: lane_bits,
+        });
+    }
+    Some(common::complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Set {
+            dst,
+            expression: SemanticExpression::Concat { parts, bits },
+        }],
+    ))
+}
+
 fn packed_multiply(
     machine: Architecture,
     instruction: &Insn,
@@ -1812,6 +2526,9 @@ fn packed_multiply(
     let bits = common::location_bits(&dst);
     let expression = match instruction.id() {
         InsnId(id) if id == X86Insn::X86_INS_PMULHW as u32 => packed_mul_high(bits, &left, &right),
+        InsnId(id) if id == X86Insn::X86_INS_PMULHUW as u32 => {
+            packed_mul_high_unsigned(bits, &left, &right)
+        }
         InsnId(id) if id == X86Insn::X86_INS_PMULLW as u32 => {
             packed_mul_low(bits, &left, &right, 16)
         }
@@ -1820,6 +2537,20 @@ fn packed_multiply(
         }
         InsnId(id) if id == X86Insn::X86_INS_PMULUDQ as u32 => packed_muludq(bits, &left, &right),
         InsnId(id) if id == X86Insn::X86_INS_PMADDWD as u32 => packed_maddwd(bits, &left, &right),
+        InsnId(id) if id == X86Insn::X86_INS_PMADDUBSW as u32 => Some(
+            SemanticExpression::Intrinsic {
+                name: "x86.pmaddubsw".to_string(),
+                args: vec![left.clone(), right.clone()],
+                bits,
+            },
+        ),
+        InsnId(id) if id == X86Insn::X86_INS_PMULHRSW as u32 => Some(
+            SemanticExpression::Intrinsic {
+                name: "x86.pmulhrsw".to_string(),
+                args: vec![left.clone(), right.clone()],
+                bits,
+            },
+        ),
         _ => return None,
     }?;
     Some(common::complete(
@@ -1893,6 +2624,66 @@ fn packed_mul_high(
         });
     }
     Some(SemanticExpression::Concat { parts, bits })
+}
+
+fn packed_mul_high_unsigned(
+    bits: u16,
+    left: &SemanticExpression,
+    right: &SemanticExpression,
+) -> Option<SemanticExpression> {
+    if bits == 0 || bits % 16 != 0 {
+        return None;
+    }
+    let lane_count = bits / 16;
+    let mut parts = Vec::with_capacity(lane_count as usize);
+    for lane in (0..lane_count).rev() {
+        let lhs = SemanticExpression::Cast {
+            op: SemanticOperationCast::ZeroExtend,
+            arg: Box::new(extract_lane(left, 16, lane)),
+            bits: 32,
+        };
+        let rhs = SemanticExpression::Cast {
+            op: SemanticOperationCast::ZeroExtend,
+            arg: Box::new(extract_lane(right, 16, lane)),
+            bits: 32,
+        };
+        let product = SemanticExpression::Binary {
+            op: SemanticOperationBinary::Mul,
+            left: Box::new(lhs),
+            right: Box::new(rhs),
+            bits: 32,
+        };
+        parts.push(SemanticExpression::Extract {
+            arg: Box::new(product),
+            lsb: 16,
+            bits: 16,
+        });
+    }
+    Some(SemanticExpression::Concat { parts, bits })
+}
+
+fn psadbw(machine: Architecture, operands: &[ArchOperand]) -> Option<InstructionSemantics> {
+    let dst = operands
+        .first()
+        .and_then(|operand| common::operand_location(machine, operand))?;
+    let left = operands
+        .first()
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let right = operands
+        .get(1)
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let bits = common::location_bits(&dst);
+    Some(common::complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Set {
+            dst,
+            expression: SemanticExpression::Intrinsic {
+                name: "x86.psadbw".to_string(),
+                args: vec![left, right],
+                bits,
+            },
+        }],
+    ))
 }
 
 fn packed_mul_low(
@@ -2264,6 +3055,7 @@ fn packed_insert(
         InsnId(id) if id == X86Insn::X86_INS_PINSRW as u32 => 16,
         InsnId(id) if id == X86Insn::X86_INS_PINSRD as u32 => 32,
         InsnId(id) if id == X86Insn::X86_INS_PINSRQ as u32 => 64,
+        InsnId(id) if id == X86Insn::X86_INS_VPINSRW as u32 => 16,
         _ => return None,
     };
     let shift = SemanticExpression::Binary {
@@ -2526,6 +3318,59 @@ fn vextracti128(machine: Architecture, operands: &[ArchOperand]) -> Option<Instr
     ))
 }
 
+fn vinsertf128(machine: Architecture, operands: &[ArchOperand]) -> Option<InstructionSemantics> {
+    let dst = operands
+        .first()
+        .and_then(|operand| common::operand_location(machine, operand))?;
+    let base = operands
+        .get(1)
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let inserted = operands
+        .get(2)
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let control = operands.get(3)?;
+    let ArchOperand::X86Operand(control) = control else {
+        return None;
+    };
+    let X86OperandType::Imm(imm) = control.op_type else {
+        return None;
+    };
+    let lower = extract_range(&base, 0, 128);
+    let upper = extract_range(&base, 128, 128);
+    let expression = if (imm as u8 & 0x1) == 0 {
+        SemanticExpression::Concat {
+            parts: vec![upper, extract_range(&inserted, 0, 128)],
+            bits: 256,
+        }
+    } else {
+        SemanticExpression::Concat {
+            parts: vec![extract_range(&inserted, 0, 128), lower],
+            bits: 256,
+        }
+    };
+    Some(common::complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Set { dst, expression }],
+    ))
+}
+
+fn maskmovq(machine: Architecture, operands: &[ArchOperand]) -> Option<InstructionSemantics> {
+    let mask = operands
+        .first()
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let data = operands
+        .get(1)
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    Some(common::complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Intrinsic {
+            name: "x86.maskmovq".to_string(),
+            args: vec![mask, data],
+            outputs: vec![],
+        }],
+    ))
+}
+
 fn vperm2i128(machine: Architecture, operands: &[ArchOperand]) -> Option<InstructionSemantics> {
     let dst = operands
         .first()
@@ -2645,7 +3490,7 @@ fn vpsignw(machine: Architecture, operands: &[ArchOperand]) -> Option<Instructio
             when_false: Box::new(SemanticExpression::Select {
                 condition: Box::new(is_negative),
                 when_true: Box::new(SemanticExpression::Unary {
-                    op: crate::semantics::SemanticOperationUnary::Neg,
+                    op: SemanticOperationUnary::Neg,
                     arg: Box::new(value.clone()),
                     bits: 16,
                 }),
@@ -2662,6 +3507,62 @@ fn vpsignw(machine: Architecture, operands: &[ArchOperand]) -> Option<Instructio
             expression: SemanticExpression::Concat { parts, bits },
         }],
     ))
+}
+
+fn vmaskmov(
+    machine: Architecture,
+    instruction: &Insn,
+    operands: &[ArchOperand],
+) -> Option<InstructionSemantics> {
+    let mnemonic = instruction.mnemonic().unwrap_or_default();
+    let dst = operands
+        .first()
+        .and_then(|operand| common::operand_location(machine, operand))?;
+    let bits = common::location_bits(&dst);
+    if is_memory_operand(operands.first()?) {
+        let mask = operands
+            .get(1)
+            .and_then(|operand| common::operand_expr(machine, operand))?;
+        let data = operands
+            .get(2)
+            .and_then(|operand| common::operand_expr(machine, operand))?;
+        return Some(common::complete(
+            SemanticTerminator::FallThrough,
+            vec![SemanticEffect::Intrinsic {
+                name: format!("x86.{mnemonic}"),
+                args: vec![mask, data],
+                outputs: vec![dst],
+            }],
+        ));
+    }
+    let mask = operands
+        .get(1)
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    let src = operands
+        .get(2)
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    Some(common::complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Set {
+            dst,
+            expression: SemanticExpression::Intrinsic {
+                name: format!("x86.{mnemonic}"),
+                args: vec![mask, src],
+                bits,
+            },
+        }],
+    ))
+}
+
+fn vzeroupper() -> InstructionSemantics {
+    common::complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Intrinsic {
+            name: "x86.vzeroupper".to_string(),
+            args: Vec::new(),
+            outputs: Vec::new(),
+        }],
+    )
 }
 
 fn shuffle_dwords(bits: u16, src: &SemanticExpression, imm: u8) -> Option<SemanticExpression> {
@@ -2754,6 +3655,44 @@ fn extract_range(vector: &SemanticExpression, lsb: u16, bits: u16) -> SemanticEx
         arg: Box::new(vector.clone()),
         lsb,
         bits,
+    }
+}
+
+fn horizontal_pair_result(
+    vector: &SemanticExpression,
+    lane_bits: u16,
+    first_lane: u16,
+    op: SemanticOperationBinary,
+    saturating: bool,
+) -> SemanticExpression {
+    let left = extract_lane(vector, lane_bits, first_lane);
+    let right = extract_lane(vector, lane_bits, first_lane + 1);
+    if saturating {
+        let ext_bits = lane_bits + 1;
+        let lhs = SemanticExpression::Cast {
+            op: SemanticOperationCast::SignExtend,
+            arg: Box::new(left),
+            bits: ext_bits,
+        };
+        let rhs = SemanticExpression::Cast {
+            op: SemanticOperationCast::SignExtend,
+            arg: Box::new(right),
+            bits: ext_bits,
+        };
+        let result = SemanticExpression::Binary {
+            op,
+            left: Box::new(lhs),
+            right: Box::new(rhs),
+            bits: ext_bits,
+        };
+        saturate_lane(result, ext_bits, lane_bits, PackKind::Signed)
+    } else {
+        SemanticExpression::Binary {
+            op,
+            left: Box::new(left),
+            right: Box::new(right),
+            bits: lane_bits,
+        }
     }
 }
 

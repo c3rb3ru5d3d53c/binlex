@@ -157,10 +157,18 @@ pub fn build(
     if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_POPFQ as u32) {
         return popf(machine, 64);
     }
-    if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_LDMXCSR as u32) {
+    if matches!(
+        instruction.id(),
+        InsnId(id)
+            if id == X86Insn::X86_INS_LDMXCSR as u32 || id == X86Insn::X86_INS_VLDMXCSR as u32
+    ) {
         return ldmxcsr(machine, operands);
     }
-    if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_STMXCSR as u32) {
+    if matches!(
+        instruction.id(),
+        InsnId(id)
+            if id == X86Insn::X86_INS_STMXCSR as u32 || id == X86Insn::X86_INS_VSTMXCSR as u32
+    ) {
         return stmxcsr(machine, operands);
     }
     if matches!(
@@ -189,6 +197,12 @@ pub fn build(
     }
     if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_CPUID as u32) {
         return Some(cpuid());
+    }
+    if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_XGETBV as u32) {
+        return Some(xgetbv());
+    }
+    if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_LAR as u32) {
+        return lar(machine, operands);
     }
     if matches!(instruction.id(), InsnId(id) if id == X86Insn::X86_INS_VERR as u32) {
         return verr_verw(machine, operands, "x86.verr");
@@ -745,6 +759,37 @@ fn random_value(
                 expression: common::bool_const(false),
             },
         ],
+    ))
+}
+
+fn xgetbv() -> InstructionSemantics {
+    common::complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Intrinsic {
+            name: "x86.xgetbv".to_string(),
+            args: Vec::new(),
+            outputs: vec![
+                common::reg(common::reg_id_name(X86Reg::X86_REG_EAX as u16), 32),
+                common::reg(common::reg_id_name(X86Reg::X86_REG_EDX as u16), 32),
+            ],
+        }],
+    )
+}
+
+fn lar(machine: Architecture, operands: &[ArchOperand]) -> Option<InstructionSemantics> {
+    let dst = operands
+        .first()
+        .and_then(|operand| common::operand_location(machine, operand))?;
+    let src = operands
+        .get(1)
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    Some(common::complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Intrinsic {
+            name: "x86.lar".to_string(),
+            args: vec![src],
+            outputs: vec![dst, common::flag("zf")],
+        }],
     ))
 }
 

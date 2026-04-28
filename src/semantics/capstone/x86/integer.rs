@@ -57,6 +57,7 @@ pub fn build(
                 X86Insn::X86_INS_AAD as u32,
                 X86Insn::X86_INS_AAM as u32,
                 X86Insn::X86_INS_AAS as u32,
+                X86Insn::X86_INS_DAA as u32,
             ]
             .contains(&id) =>
         {
@@ -126,6 +127,7 @@ pub fn build(
             SemanticOperationUnary::ByteSwap,
         ),
         InsnId(id) if id == X86Insn::X86_INS_POPCNT as u32 => popcnt(machine, operands),
+        InsnId(id) if id == X86Insn::X86_INS_CRC32 as u32 => crc32(machine, operands),
         InsnId(id) if [X86Insn::X86_INS_CMP as u32].contains(&id) => {
             cmp_like(machine, instruction, operands, "x86.cmp")
         }
@@ -151,6 +153,7 @@ pub fn build(
         InsnId(id) if id == X86Insn::X86_INS_MULX as u32 => mulx(machine, operands),
         InsnId(id) if id == X86Insn::X86_INS_DIV as u32 => div(machine, operands, false),
         InsnId(id) if id == X86Insn::X86_INS_IDIV as u32 => div(machine, operands, true),
+        InsnId(id) if id == X86Insn::X86_INS_XLATB as u32 => xlat(machine),
         _ => None,
     }
 }
@@ -353,9 +356,71 @@ fn ascii_adjust(
                 ],
             ));
         }
+        InsnId(id) if id == X86Insn::X86_INS_DAA as u32 => {
+            return Some(common::complete(
+                SemanticTerminator::FallThrough,
+                vec![SemanticEffect::Intrinsic {
+                    name: "x86.daa".to_string(),
+                    args: Vec::new(),
+                    outputs: vec![
+                        common::reg(common::reg_id_name(X86Reg::X86_REG_AL as u16), 8),
+                        common::flag("af"),
+                        common::flag("cf"),
+                        common::flag("of"),
+                        common::flag("sf"),
+                        common::flag("zf"),
+                        common::flag("pf"),
+                    ],
+                }],
+            ));
+        }
         _ => {}
     }
     None
+}
+
+fn crc32(machine: Architecture, operands: &[ArchOperand]) -> Option<InstructionSemantics> {
+    let dst = operands
+        .first()
+        .and_then(|operand| common::operand_location(machine, operand))?;
+    let src = operands
+        .get(1)
+        .and_then(|operand| common::operand_expr(machine, operand))?;
+    Some(common::complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Intrinsic {
+            name: "x86.crc32".to_string(),
+            args: vec![src],
+            outputs: vec![dst],
+        }],
+    ))
+}
+
+fn xlat(machine: Architecture) -> Option<InstructionSemantics> {
+    let pointer_bits = common::pointer_bits(machine);
+    let base_reg = if matches!(machine, Architecture::AMD64) {
+        X86Reg::X86_REG_RBX
+    } else {
+        X86Reg::X86_REG_EBX
+    };
+    let base = common::reg_expr(base_reg as u16, pointer_bits);
+    let index = SemanticExpression::Cast {
+        op: SemanticOperationCast::ZeroExtend,
+        arg: Box::new(common::reg_expr(X86Reg::X86_REG_AL as u16, 8)),
+        bits: pointer_bits,
+    };
+    let addr = common::add(base, index, pointer_bits);
+    Some(common::complete(
+        SemanticTerminator::FallThrough,
+        vec![SemanticEffect::Set {
+            dst: common::reg(common::reg_id_name(X86Reg::X86_REG_AL as u16), 8),
+            expression: SemanticExpression::Load {
+                space: crate::semantics::SemanticAddressSpace::Default,
+                addr: Box::new(addr),
+                bits: 8,
+            },
+        }],
+    ))
 }
 
 fn lock_cmpxchg8b(machine: Architecture, operands: &[ArchOperand]) -> Option<InstructionSemantics> {
