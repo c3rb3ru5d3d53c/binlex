@@ -215,11 +215,40 @@ impl<'disassembler> Disassembler<'disassembler> {
         Some(Operand { kind })
     }
 
-    fn normalize_instruction_operands(&self, operands: &[ArchOperand]) -> Vec<Operand> {
-        operands
+    fn normalize_instruction_operands(
+        &self,
+        instruction: &Insn,
+        operands: &[ArchOperand],
+    ) -> Vec<Operand> {
+        let mut normalized = operands
             .iter()
             .filter_map(|operand| self.normalize_operand(operand))
-            .collect()
+            .collect::<Vec<_>>();
+        self.rewrite_raw_controlflow_immediates(instruction, &mut normalized);
+        normalized
+    }
+
+    fn rewrite_raw_controlflow_immediates(&self, instruction: &Insn, operands: &mut [Operand]) {
+        if !Self::has_pc_relative_controlflow_immediate(instruction) {
+            return;
+        }
+        let Some(Operand {
+            kind: OperandKind::Immediate(immediate),
+        }) = operands.get_mut(0)
+        else {
+            return;
+        };
+        let next_address = instruction.address() as i128 + instruction.bytes().len() as i128;
+        immediate.value -= next_address;
+    }
+
+    fn has_pc_relative_controlflow_immediate(instruction: &Insn) -> bool {
+        if Self::is_conditional_jump_instruction(instruction)
+            || Self::is_unconditional_jump_instruction(instruction)
+        {
+            return true;
+        }
+        instruction.id() == InsnId(X86Insn::X86_INS_CALL as u32)
     }
 
     fn disassembly_text(&self, instruction: &Insn) -> String {
@@ -465,7 +494,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         let operands = self
             .get_instruction_operands(instruction)
             .unwrap_or_default();
-        blinstruction.operands = self.normalize_instruction_operands(&operands);
+        blinstruction.operands = self.normalize_instruction_operands(instruction, &operands);
 
         if let Some(addr) = self.get_conditional_jump_immutable(instruction) {
             blinstruction.to.insert(addr);
@@ -1838,5 +1867,34 @@ impl<'disassembler> Disassembler<'disassembler> {
                 .map_err(|e| Error::new(ErrorKind::Other, format!("capstone error: {:?}", e))),
             _ => Err(Error::new(ErrorKind::Other, "unsupported architecture")),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn branch_immediates_stay_raw_in_operands() {
+        let bytes = [0x75, 0x05];
+        let disassembler = Disassembler::new(
+            Architecture::AMD64,
+            &bytes,
+            BTreeMap::from([(0, bytes.len() as u64)]),
+            Config::default(),
+        )
+        .expect("x86 disassembler should construct");
+        let instructions = disassembler
+            .disassemble_instructions(0, 1)
+            .expect("instruction should decode");
+        let instruction = instructions.iter().next().expect("one instruction expected");
+        let operands = disassembler
+            .get_instruction_operands(instruction)
+            .expect("operands should decode");
+        let normalized = disassembler.normalize_instruction_operands(instruction, &operands);
+        let OperandKind::Immediate(immediate) = &normalized[0].kind else {
+            panic!("expected immediate operand");
+        };
+        assert_eq!(immediate.value, 5);
     }
 }

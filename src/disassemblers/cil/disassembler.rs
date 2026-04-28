@@ -192,6 +192,10 @@ impl<'disassembler> Disassembler<'disassembler> {
                 .expect("failed to parse CIL chromosome pattern")
                 .mask();
         cfginstruction.edges = instruction.edges();
+        cfginstruction.mnemonic = instruction.mnemonic_text();
+        cfginstruction.disassembly = instruction.disassembly_text(&self.metadata_token_addresses);
+        cfginstruction.operands =
+            instruction.normalized_operands(&self.metadata_token_addresses);
         cfginstruction.to = instruction.to();
         cfginstruction.functions = self.get_instruction_functions(&instruction);
         if cfg.config.semantics.enabled {

@@ -471,6 +471,97 @@ impl Mnemonic {
         ]
     }
 
+    pub fn name(&self) -> String {
+        match self {
+            Self::Br => "br".to_string(),
+            Self::BrS => "br.s".to_string(),
+            Self::BrFalse => "brfalse".to_string(),
+            Self::BrFalseS => "brfalse.s".to_string(),
+            Self::BrTrue => "brtrue".to_string(),
+            Self::BrTrueS => "brtrue.s".to_string(),
+            Self::Beq => "beq".to_string(),
+            Self::BeqS => "beq.s".to_string(),
+            Self::Bge => "bge".to_string(),
+            Self::BgeS => "bge.s".to_string(),
+            Self::BgeUn => "bge.un".to_string(),
+            Self::BgeUnS => "bge.un.s".to_string(),
+            Self::Bgt => "bgt".to_string(),
+            Self::BgtS => "bgt.s".to_string(),
+            Self::BgtUn => "bgt.un".to_string(),
+            Self::BgtUnS => "bgt.un.s".to_string(),
+            Self::Ble => "ble".to_string(),
+            Self::BleS => "ble.s".to_string(),
+            Self::BleUn => "ble.un".to_string(),
+            Self::BleUnS => "ble.un.s".to_string(),
+            Self::Blt => "blt".to_string(),
+            Self::BltS => "blt.s".to_string(),
+            Self::BltUn => "blt.un".to_string(),
+            Self::BltUnS => "blt.un.s".to_string(),
+            Self::BneUn => "bne.un".to_string(),
+            Self::BneUnS => "bne.un.s".to_string(),
+            Self::Leave => "leave".to_string(),
+            Self::LeaveS => "leave.s".to_string(),
+            Self::AddOvf => "add.ovf".to_string(),
+            Self::AddOvfUn => "add.ovf.un".to_string(),
+            Self::MulOvf => "mul.ovf".to_string(),
+            Self::MulOvfUn => "mul.ovf.un".to_string(),
+            Self::SubOvf => "sub.ovf".to_string(),
+            Self::SubOvfUn => "sub.ovf.un".to_string(),
+            Self::End => "endfinally".to_string(),
+            Self::Constrained => "constrained.".to_string(),
+            Self::No => "no.".to_string(),
+            Self::ReadOnly => "readonly.".to_string(),
+            Self::Tail => "tail.".to_string(),
+            Self::Unaligned => "unaligned.".to_string(),
+            Self::Volatile => "volatile.".to_string(),
+            Self::CkInite => "ckfinite".to_string(),
+            Self::SLoc => "stloc".to_string(),
+            Self::LdIndU8 => "ldind.i8".to_string(),
+            Self::LdElmU8 => "ldelem.i8".to_string(),
+            Self::StElemREF => "stelem.ref".to_string(),
+            mnemonic => {
+                let variant = format!("{mnemonic:?}");
+                if let Some(rest) = variant.strip_prefix("LdArgA") {
+                    return format!("ldarga{}", short_suffix(rest));
+                }
+                if let Some(rest) = variant.strip_prefix("LdArg") {
+                    return format!("ldarg{}", short_suffix(rest));
+                }
+                if let Some(rest) = variant.strip_prefix("LdLocA") {
+                    return format!("ldloca{}", short_suffix(rest));
+                }
+                if let Some(rest) = variant.strip_prefix("LdLoc") {
+                    return format!("ldloc{}", short_suffix(rest));
+                }
+                if let Some(rest) = variant.strip_prefix("StArg") {
+                    return format!("starg{}", short_suffix(rest));
+                }
+                if let Some(rest) = variant.strip_prefix("StLoc") {
+                    return format!("stloc{}", short_suffix(rest));
+                }
+                if let Some(rest) = variant.strip_prefix("Ldc") {
+                    return format!("ldc{}", ldc_suffix(rest));
+                }
+                if let Some(rest) = variant.strip_prefix("LdElm") {
+                    return format!("ldelem{}", typed_suffix(rest));
+                }
+                if let Some(rest) = variant.strip_prefix("StElem") {
+                    return format!("stelem{}", typed_suffix(rest));
+                }
+                if let Some(rest) = variant.strip_prefix("LdInd") {
+                    return format!("ldind{}", typed_suffix(rest));
+                }
+                if let Some(rest) = variant.strip_prefix("StInd") {
+                    return format!("stind{}", typed_suffix(rest));
+                }
+                if let Some(rest) = variant.strip_prefix("Conv") {
+                    return format!("conv{}", conversion_suffix(rest));
+                }
+                variant.to_ascii_lowercase()
+            }
+        }
+    }
+
     pub fn operand_size(&self) -> usize {
         match self {
             Self::Ceq => 0,
@@ -485,21 +576,21 @@ impl Mnemonic {
             Self::InitBlk => 0,
             Self::InitObj => 32,
             Self::LdArg => 16,
-            Self::LdArgA => 32,
+            Self::LdArgA => 16,
             Self::LdFtn => 32,
             Self::LdLoc => 16,
             Self::LdLocA => 16,
             Self::LdVirtFtn => 32,
             Self::LocAlloc => 0,
-            Self::No => 0,
-            Self::ReadOnly => 32,
+            Self::No => 8,
+            Self::ReadOnly => 0,
             Self::RefAnyType => 0,
             Self::ReThrow => 0,
             Self::SizeOf => 32,
             Self::StArg => 16,
             Self::Tail => 0,
-            Self::Unaligned => 0,
-            Self::Volatile => 32,
+            Self::Unaligned => 8,
+            Self::Volatile => 0,
             Self::Beq => 32,
             Self::BeqS => 8,
             Self::Bge => 32,
@@ -718,5 +809,83 @@ impl Mnemonic {
             ErrorKind::NotFound,
             "0x{:x}: no matching mnemonic found",
         ))
+    }
+}
+
+fn short_suffix(rest: &str) -> &'static str {
+    match rest {
+        "" => "",
+        "0" => ".0",
+        "1" => ".1",
+        "2" => ".2",
+        "3" => ".3",
+        "S" => ".s",
+        _ => "",
+    }
+}
+
+fn ldc_suffix(rest: &str) -> &'static str {
+    match rest {
+        "I4" => ".i4",
+        "I40" => ".i4.0",
+        "I41" => ".i4.1",
+        "I42" => ".i4.2",
+        "I43" => ".i4.3",
+        "I44" => ".i4.4",
+        "I45" => ".i4.5",
+        "I46" => ".i4.6",
+        "I47" => ".i4.7",
+        "I48" => ".i4.8",
+        "I4M1" => ".i4.m1",
+        "I4S" => ".i4.s",
+        "I8" => ".i8",
+        "R4" => ".r4",
+        "R8" => ".r8",
+        _ => "",
+    }
+}
+
+fn typed_suffix(rest: &str) -> &'static str {
+    match rest {
+        "" => "",
+        "A" => ".a",
+        "I" => ".i",
+        "I1" => ".i1",
+        "I2" => ".i2",
+        "I4" => ".i4",
+        "I8" | "U8" => ".i8",
+        "R4" => ".r4",
+        "R8" => ".r8",
+        "Ref" | "REF" => ".ref",
+        "U1" => ".u1",
+        "U2" => ".u2",
+        "U4" => ".u4",
+        _ => "",
+    }
+}
+
+fn conversion_suffix(rest: &str) -> String {
+    if let Some(rest) = rest.strip_prefix("Ovf") {
+        return format!(".ovf{}", conversion_suffix(rest));
+    }
+    match rest {
+        "I" => ".i".to_string(),
+        "I1" => ".i1".to_string(),
+        "I2" => ".i2".to_string(),
+        "I4" => ".i4".to_string(),
+        "I8" => ".i8".to_string(),
+        "R4" => ".r4".to_string(),
+        "R8" => ".r8".to_string(),
+        "RUn" => ".r.un".to_string(),
+        "U" => ".u".to_string(),
+        "U1" => ".u1".to_string(),
+        "U2" => ".u2".to_string(),
+        "U4" => ".u4".to_string(),
+        "U8" => ".u8".to_string(),
+        value if value.ends_with("Un") => {
+            let base = &value[..value.len() - 2];
+            format!("{}.un", conversion_suffix(base))
+        }
+        _ => String::new(),
     }
 }

@@ -21,8 +21,9 @@
 // SOFTWARE.
 
 use crate::disassemblers::cil::Mnemonic;
+use crate::controlflow::{FloatOperand, ImmediateOperand, Operand, OperandKind};
 use crate::hex;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::Error;
 
 pub struct Instruction<'instruction> {
@@ -80,6 +81,111 @@ impl<'instruction> Instruction<'instruction> {
             result.push(*byte);
         }
         result
+    }
+
+    pub fn mnemonic_text(&self) -> String {
+        self.mnemonic.name()
+    }
+
+    pub fn disassembly_text(&self, metadata_token_addresses: &BTreeMap<u64, u64>) -> String {
+        let mnemonic = self.mnemonic_text();
+        let operands = self.disassembly_operands(metadata_token_addresses);
+        if operands.is_empty() {
+            mnemonic
+        } else {
+            format!("{} {}", mnemonic, operands.join(", "))
+        }
+    }
+
+    pub fn normalized_operands(
+        &self,
+        _metadata_token_addresses: &BTreeMap<u64, u64>,
+    ) -> Vec<Operand> {
+        if let Some(index) = self.argument_index() {
+            return vec![Operand {
+                kind: OperandKind::Immediate(ImmediateOperand {
+                    value: index as i128,
+                }),
+            }];
+        }
+
+        if let Some(index) = self.local_index() {
+            return vec![Operand {
+                kind: OperandKind::Immediate(ImmediateOperand {
+                    value: index as i128,
+                }),
+            }];
+        }
+
+        if let Some(value) = self.inline_i32_constant() {
+            return vec![Operand {
+                kind: OperandKind::Immediate(ImmediateOperand {
+                    value: value as i128,
+                }),
+            }];
+        }
+
+        if let Some(value) = self.inline_i64_constant() {
+            return vec![Operand {
+                kind: OperandKind::Immediate(ImmediateOperand {
+                    value: value as i128,
+                }),
+            }];
+        }
+
+        if let Some(value) = self.inline_f32_constant() {
+            return vec![Operand {
+                kind: OperandKind::Float(FloatOperand {
+                    value: value as f64,
+                }),
+            }];
+        }
+
+        if let Some(value) = self.inline_f64_constant() {
+            return vec![Operand {
+                kind: OperandKind::Float(FloatOperand { value }),
+            }];
+        }
+
+        if self.is_switch() {
+            return self
+                .switch_offsets()
+                .into_iter()
+                .map(|offset| Operand {
+                    kind: OperandKind::Immediate(ImmediateOperand {
+                        value: offset as i128,
+                    }),
+                })
+                .collect();
+        }
+
+        if self.is_jump() {
+            if let Some(offset) = self.raw_branch_offset() {
+                return vec![Operand {
+                    kind: OperandKind::Immediate(ImmediateOperand {
+                        value: offset as i128,
+                    }),
+                }];
+            }
+        }
+
+        if let Some(token) = self.metadata_token() {
+            return vec![Operand {
+                kind: OperandKind::Immediate(ImmediateOperand {
+                    value: token as i128,
+                }),
+            }];
+        }
+
+        if matches!(self.mnemonic, Mnemonic::No | Mnemonic::Unaligned) {
+            return vec![Operand {
+                kind: OperandKind::Immediate(ImmediateOperand {
+                    value: self.operand_u8() as i128,
+                }),
+            }];
+        }
+
+        Vec::new()
     }
 
     pub fn edges(&self) -> usize {
@@ -194,6 +300,280 @@ impl<'instruction> Instruction<'instruction> {
         matches!(self.mnemonic, Mnemonic::Switch)
     }
 
+    fn disassembly_operands(&self, metadata_token_addresses: &BTreeMap<u64, u64>) -> Vec<String> {
+        if self.is_short_argument_or_local_form() {
+            return Vec::new();
+        }
+        if let Some(index) = self.argument_index() {
+            return vec![index.to_string()];
+        }
+        if let Some(index) = self.local_index() {
+            return vec![index.to_string()];
+        }
+        if let Some(value) = self.inline_i32_constant() {
+            return vec![value.to_string()];
+        }
+        if let Some(value) = self.inline_i64_constant() {
+            return vec![value.to_string()];
+        }
+        if let Some(value) = self.inline_f32_constant() {
+            return vec![format!("{value}")];
+        }
+        if let Some(value) = self.inline_f64_constant() {
+            return vec![format!("{value}")];
+        }
+        if self.is_switch() {
+            let targets = self
+                .switch_targets()
+                .into_iter()
+                .map(|target| format!("0x{target:x}"))
+                .collect::<Vec<_>>();
+            return vec![format!("({})", targets.join(", "))];
+        }
+        if self.is_jump() {
+            if let Some(target) = self.branch_target() {
+                return vec![format!("0x{target:x}")];
+            }
+        }
+        if let Some(token) = self.metadata_token() {
+            let mut text = format!("0x{token:08x}");
+            if let Some(address) = metadata_token_addresses.get(&(token as u64)) {
+                text.push_str(&format!(" -> 0x{address:x}"));
+            }
+            return vec![text];
+        }
+        if matches!(self.mnemonic, Mnemonic::No | Mnemonic::Unaligned) {
+            return vec![self.operand_u8().to_string()];
+        }
+        Vec::new()
+    }
+
+    fn inline_i32_constant(&self) -> Option<i32> {
+        match self.mnemonic {
+            Mnemonic::LdcI4M1 => Some(-1),
+            Mnemonic::LdcI40 => Some(0),
+            Mnemonic::LdcI41 => Some(1),
+            Mnemonic::LdcI42 => Some(2),
+            Mnemonic::LdcI43 => Some(3),
+            Mnemonic::LdcI44 => Some(4),
+            Mnemonic::LdcI45 => Some(5),
+            Mnemonic::LdcI46 => Some(6),
+            Mnemonic::LdcI47 => Some(7),
+            Mnemonic::LdcI48 => Some(8),
+            Mnemonic::LdcI4S => Some(self.operand_i8() as i32),
+            Mnemonic::LdcI4 => Some(self.operand_i32()),
+            _ => None,
+        }
+    }
+
+    fn inline_i64_constant(&self) -> Option<i64> {
+        matches!(self.mnemonic, Mnemonic::LdcI8).then(|| self.operand_i64())
+    }
+
+    fn inline_f32_constant(&self) -> Option<f32> {
+        matches!(self.mnemonic, Mnemonic::LdcR4).then(|| self.operand_f32())
+    }
+
+    fn inline_f64_constant(&self) -> Option<f64> {
+        matches!(self.mnemonic, Mnemonic::LdcR8).then(|| self.operand_f64())
+    }
+
+    fn branch_target(&self) -> Option<u64> {
+        self.to().iter().next().copied()
+    }
+
+    fn switch_targets(&self) -> Vec<u64> {
+        self.to().into_iter().collect()
+    }
+
+    fn switch_offsets(&self) -> Vec<i32> {
+        let count = self
+            .bytes
+            .get(self.mnemonic_size()..self.mnemonic_size() + 4)
+            .and_then(|bytes| bytes.try_into().ok())
+            .map(u32::from_le_bytes)
+            .unwrap_or_default() as usize;
+        let mut result = Vec::with_capacity(count);
+        let start = self.mnemonic_size() + 4;
+        for index in 0..count {
+            let offset = start + index * 4;
+            let bytes = self
+                .bytes
+                .get(offset..offset + 4)
+                .and_then(|value| value.try_into().ok())
+                .unwrap_or([0u8; 4]);
+            result.push(i32::from_le_bytes(bytes));
+        }
+        result
+    }
+
+    fn metadata_token(&self) -> Option<u32> {
+        if !matches!(
+            self.mnemonic,
+            Mnemonic::Box
+                | Mnemonic::Call
+                | Mnemonic::CallI
+                | Mnemonic::CallVirt
+                | Mnemonic::CastClass
+                | Mnemonic::Constrained
+                | Mnemonic::Cpobj
+                | Mnemonic::InitObj
+                | Mnemonic::IsInst
+                | Mnemonic::Jmp
+                | Mnemonic::LdElm
+                | Mnemonic::LdElmA
+                | Mnemonic::LdFld
+                | Mnemonic::LdFldA
+                | Mnemonic::LdFtn
+                | Mnemonic::LdObj
+                | Mnemonic::LdSFld
+                | Mnemonic::LdSFldA
+                | Mnemonic::LdStr
+                | Mnemonic::LdToken
+                | Mnemonic::LdVirtFtn
+                | Mnemonic::MkRefAny
+                | Mnemonic::NewArr
+                | Mnemonic::NewObj
+                | Mnemonic::RefAnyVal
+                | Mnemonic::SizeOf
+                | Mnemonic::StElem
+                | Mnemonic::StFld
+                | Mnemonic::StObj
+                | Mnemonic::StSFld
+                | Mnemonic::Unbox
+                | Mnemonic::UnboxAny
+        ) {
+            return None;
+        }
+        let operand = self.operand_bytes();
+        (operand.len() >= 4).then(|| u32::from_le_bytes([operand[0], operand[1], operand[2], operand[3]]))
+    }
+
+    fn argument_index(&self) -> Option<u32> {
+        match self.mnemonic {
+            Mnemonic::LdArg0 => Some(0),
+            Mnemonic::LdArg1 => Some(1),
+            Mnemonic::LdArg2 => Some(2),
+            Mnemonic::LdArg3 => Some(3),
+            Mnemonic::LdArgS | Mnemonic::LdArgAS | Mnemonic::StArgS => Some(self.operand_u8() as u32),
+            Mnemonic::LdArg | Mnemonic::LdArgA | Mnemonic::StArg => Some(self.operand_u16() as u32),
+            _ => None,
+        }
+    }
+
+    fn local_index(&self) -> Option<u32> {
+        match self.mnemonic {
+            Mnemonic::LdLoc0 | Mnemonic::StLoc0 => Some(0),
+            Mnemonic::LdLoc1 | Mnemonic::StLoc1 => Some(1),
+            Mnemonic::LdLoc2 | Mnemonic::StLoc2 => Some(2),
+            Mnemonic::LdLoc3 | Mnemonic::StLoc3 => Some(3),
+            Mnemonic::LdLocS | Mnemonic::LdLocAS | Mnemonic::StLocS => Some(self.operand_u8() as u32),
+            Mnemonic::LdLoc | Mnemonic::LdLocA | Mnemonic::SLoc => Some(self.operand_u16() as u32),
+            _ => None,
+        }
+    }
+
+    fn is_short_argument_or_local_form(&self) -> bool {
+        matches!(
+            self.mnemonic,
+            Mnemonic::LdArg0
+                | Mnemonic::LdArg1
+                | Mnemonic::LdArg2
+                | Mnemonic::LdArg3
+                | Mnemonic::LdLoc0
+                | Mnemonic::LdLoc1
+                | Mnemonic::LdLoc2
+                | Mnemonic::LdLoc3
+                | Mnemonic::StLoc0
+                | Mnemonic::StLoc1
+                | Mnemonic::StLoc2
+                | Mnemonic::StLoc3
+                | Mnemonic::LdcI4M1
+                | Mnemonic::LdcI40
+                | Mnemonic::LdcI41
+                | Mnemonic::LdcI42
+                | Mnemonic::LdcI43
+                | Mnemonic::LdcI44
+                | Mnemonic::LdcI45
+                | Mnemonic::LdcI46
+                | Mnemonic::LdcI47
+                | Mnemonic::LdcI48
+        )
+    }
+
+    fn operand_u8(&self) -> u8 {
+        self.operand_bytes().first().copied().unwrap_or_default()
+    }
+
+    fn operand_i8(&self) -> i8 {
+        i8::from_le_bytes([self.operand_u8()])
+    }
+
+    fn operand_u16(&self) -> u16 {
+        let operand = self.operand_bytes();
+        let bytes = operand.get(..2).and_then(|value| value.try_into().ok()).unwrap_or([0u8; 2]);
+        u16::from_le_bytes(bytes)
+    }
+
+    fn operand_i32(&self) -> i32 {
+        let operand = self.operand_bytes();
+        let bytes = operand.get(..4).and_then(|value| value.try_into().ok()).unwrap_or([0u8; 4]);
+        i32::from_le_bytes(bytes)
+    }
+
+    fn operand_i64(&self) -> i64 {
+        let operand = self.operand_bytes();
+        let bytes = operand.get(..8).and_then(|value| value.try_into().ok()).unwrap_or([0u8; 8]);
+        i64::from_le_bytes(bytes)
+    }
+
+    fn operand_f32(&self) -> f32 {
+        let operand = self.operand_bytes();
+        let bytes = operand.get(..4).and_then(|value| value.try_into().ok()).unwrap_or([0u8; 4]);
+        f32::from_le_bytes(bytes)
+    }
+
+    fn operand_f64(&self) -> f64 {
+        let operand = self.operand_bytes();
+        let bytes = operand.get(..8).and_then(|value| value.try_into().ok()).unwrap_or([0u8; 8]);
+        f64::from_le_bytes(bytes)
+    }
+
+    fn raw_branch_offset(&self) -> Option<i32> {
+        match self.mnemonic {
+            Mnemonic::BrS
+            | Mnemonic::BrFalseS
+            | Mnemonic::BrTrueS
+            | Mnemonic::BneUnS
+            | Mnemonic::BltS
+            | Mnemonic::BltUnS
+            | Mnemonic::BeqS
+            | Mnemonic::BgeS
+            | Mnemonic::BgeUnS
+            | Mnemonic::BgtS
+            | Mnemonic::BgtUnS
+            | Mnemonic::BleS
+            | Mnemonic::BleUnS
+            | Mnemonic::LeaveS => Some(self.operand_i8() as i32),
+            Mnemonic::Br
+            | Mnemonic::BrFalse
+            | Mnemonic::BrTrue
+            | Mnemonic::BneUn
+            | Mnemonic::Blt
+            | Mnemonic::BltUn
+            | Mnemonic::Beq
+            | Mnemonic::Bge
+            | Mnemonic::BgeUn
+            | Mnemonic::Bgt
+            | Mnemonic::BgtUn
+            | Mnemonic::Ble
+            | Mnemonic::BleUn
+            | Mnemonic::Leave
+            | Mnemonic::Jmp => Some(self.operand_i32()),
+            _ => None,
+        }
+    }
+
     pub fn is_metadata_token_wildcard_instruction(&self) -> bool {
         matches!(
             self.mnemonic,
@@ -266,5 +646,71 @@ impl<'instruction> Instruction<'instruction> {
             self.mnemonic,
             Mnemonic::Br | Mnemonic::Jmp | Mnemonic::BrS | Mnemonic::Leave | Mnemonic::LeaveS
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ldarg0_exposes_mnemonic_and_operand() {
+        let instruction = Instruction::new(&[0x02], 0x1000).expect("ldarg.0 should decode");
+        let operands = instruction.normalized_operands(&BTreeMap::new());
+        assert_eq!(instruction.mnemonic_text(), "ldarg.0");
+        assert_eq!(instruction.disassembly_text(&BTreeMap::new()), "ldarg.0");
+        assert_eq!(operands.len(), 1);
+        let OperandKind::Immediate(immediate) = &operands[0].kind else {
+            panic!("expected immediate operand");
+        };
+        assert_eq!(immediate.value, 0);
+    }
+
+    #[test]
+    fn branch_operands_resolve_absolute_target() {
+        let instruction = Instruction::new(&[0x2b, 0x02], 0x1000).expect("br.s should decode");
+        let operands = instruction.normalized_operands(&BTreeMap::new());
+        assert_eq!(instruction.mnemonic_text(), "br.s");
+        assert_eq!(instruction.disassembly_text(&BTreeMap::new()), "br.s 0x1004");
+        let OperandKind::Immediate(immediate) = &operands[0].kind else {
+            panic!("expected immediate operand");
+        };
+        assert_eq!(immediate.value, 2);
+    }
+
+    #[test]
+    fn call_token_operand_tracks_resolution() {
+        let instruction = Instruction::new(&[0x28, 0x01, 0x00, 0x00, 0x06], 0x2000)
+            .expect("call should decode");
+        let mut metadata_token_addresses = BTreeMap::new();
+        metadata_token_addresses.insert(0x06000001, 0x3456);
+        let operands = instruction.normalized_operands(&metadata_token_addresses);
+        assert_eq!(
+            instruction.disassembly_text(&metadata_token_addresses),
+            "call 0x06000001 -> 0x3456"
+        );
+        let OperandKind::Immediate(immediate) = &operands[0].kind else {
+            panic!("expected immediate operand");
+        };
+        assert_eq!(immediate.value, 0x06000001);
+    }
+
+    #[test]
+    fn switch_exposes_one_immediate_per_target() {
+        let instruction = Instruction::new(
+            &[0x45, 0x02, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00],
+            0x3000,
+        )
+        .expect("switch should decode");
+        let operands = instruction.normalized_operands(&BTreeMap::new());
+        assert_eq!(operands.len(), 2);
+        let values = operands
+            .into_iter()
+            .map(|operand| match operand.kind {
+                OperandKind::Immediate(immediate) => immediate.value,
+                _ => panic!("expected immediate operand"),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(values, vec![4, 8]);
     }
 }
