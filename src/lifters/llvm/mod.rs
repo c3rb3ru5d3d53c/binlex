@@ -8,8 +8,18 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(not(target_os = "windows"))]
 use super::vex::VexJson;
+pub use crate::Abi;
 pub use lifter::Lifter;
 pub use optimizers::Optimizers;
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum Mode {
+    #[default]
+    Reconstruct,
+    Intrinsic,
+    Semantic,
+}
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct LlvmJson {

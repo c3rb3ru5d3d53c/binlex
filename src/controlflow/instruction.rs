@@ -23,12 +23,13 @@
 use crate::Architecture;
 use crate::Config;
 use crate::controlflow::Graph;
+use crate::controlflow::Llvm as LlvmView;
 use crate::embeddings::EmbeddingsJson;
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeJson;
 use crate::hex;
 use crate::imaging::Imaging;
-use crate::lifters::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
+use crate::lifters::llvm::{LiftersJson, LlvmJson};
 #[cfg(not(target_os = "windows"))]
 use crate::lifters::vex::{Lifter as VexLifter, VexJson};
 use crate::metadata::Attributes;
@@ -38,6 +39,51 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Value;
 use std::{collections::BTreeMap, collections::BTreeSet, io::Error};
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Operand {
+    pub kind: OperandKind,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum OperandKind {
+    Register(RegisterOperand),
+    Immediate(ImmediateOperand),
+    Memory(MemoryOperand),
+    Float(FloatOperand),
+    Special(SpecialOperand),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RegisterOperand {
+    pub name: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ImmediateOperand {
+    pub value: i128,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct MemoryOperand {
+    pub base: Option<String>,
+    pub index: Option<String>,
+    pub scale: Option<i32>,
+    pub displacement: i64,
+    pub space: Option<String>,
+    pub segment: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct FloatOperand {
+    pub value: f64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct SpecialOperand {
+    pub kind: String,
+    pub fields: BTreeMap<String, Value>,
+}
 
 /// Represents a single instruction in disassembled binary code.
 ///
@@ -81,6 +127,12 @@ pub struct Instruction {
     pub to: BTreeSet<u64>,
     /// The number of edges (connections) for this instruction.
     pub edges: usize,
+    /// Stable decoded mnemonic for scripting and inspection.
+    pub mnemonic: String,
+    /// Canonical decoded disassembly text.
+    pub disassembly: String,
+    /// Normalized decoded operands.
+    pub operands: Vec<Operand>,
     /// Optional canonical instruction semantics for later lifting.
     pub semantics: Option<InstructionSemantics>,
 }
@@ -117,6 +169,15 @@ pub struct InstructionJson {
     pub is_conditional: bool,
     /// The number of edges (connections) for this instruction.
     pub edges: usize,
+    /// Stable decoded mnemonic for scripting and inspection.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub mnemonic: String,
+    /// Canonical decoded disassembly text.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub disassembly: String,
+    /// Normalized decoded operands.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub operands: Vec<Operand>,
     /// The raw bytes of the instruction in hexadecimal format.
     pub bytes: String,
     /// The size of the instruction in bytes.
@@ -181,6 +242,9 @@ impl Instruction {
             to: BTreeSet::<u64>::new(),
             edges: 0,
             is_trap: false,
+            mnemonic: String::new(),
+            disassembly: String::new(),
+            operands: Vec::new(),
             semantics: None,
             architecture,
             config,
@@ -203,6 +267,31 @@ impl Instruction {
     /// Retrieves the address of the instruction.
     pub fn address(&self) -> u64 {
         self.address
+    }
+
+    /// Retrieves the mnemonic of the instruction.
+    pub fn mnemonic(&self) -> String {
+        self.mnemonic.clone()
+    }
+
+    /// Retrieves the raw bytes of the instruction.
+    pub fn bytes(&self) -> Vec<u8> {
+        self.bytes.clone()
+    }
+
+    /// Retrieves the disassembly text of the instruction.
+    pub fn disassembly(&self) -> String {
+        self.disassembly.clone()
+    }
+
+    /// Retrieves the normalized decoded operands of the instruction.
+    pub fn operands(&self) -> Vec<Operand> {
+        self.operands.clone()
+    }
+
+    /// Replaces the canonical semantics attached to this instruction.
+    pub fn set_semantics(&mut self, semantics: InstructionSemantics) {
+        self.semantics = Some(semantics);
     }
 
     /// Retrieves the set of addresses for the blocks this instruction may branch to.
@@ -279,6 +368,9 @@ impl Instruction {
             is_function_start: self.is_function_start,
             is_prologue: self.is_prologue,
             edges: self.edges,
+            mnemonic: self.mnemonic.clone(),
+            disassembly: self.disassembly.clone(),
+            operands: self.operands.clone(),
             functions: self.functions(),
             blocks: self.blocks(),
             to: self.to(),
@@ -323,13 +415,15 @@ impl Instruction {
         self.process().processors.unwrap_or_default()
     }
 
+    /// Return an LLVM builder for this instruction.
+    pub fn llvm(&self) -> LlvmView<'_> {
+        LlvmView::instruction(self)
+    }
+
     fn lifters_json(&self) -> Option<LiftersJson> {
         let llvm = if self.config.instructions.lifters.llvm.enabled {
-            let mut lifter = LlvmLifter::new(self.config.clone());
-            lifter.lift_instruction(self).ok()?;
-
             Some(LlvmJson {
-                text: lifter.text(),
+                text: self.llvm().text().ok()?,
             })
         } else {
             None

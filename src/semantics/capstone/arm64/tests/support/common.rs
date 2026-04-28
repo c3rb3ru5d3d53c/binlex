@@ -1,0 +1,71 @@
+use std::collections::BTreeMap;
+
+use crate::controlflow::{Graph, Instruction};
+use crate::disassemblers::capstone::Disassembler;
+use crate::lifters::llvm::Lifter;
+use crate::semantics::{InstructionSemantics, SemanticStatus};
+use crate::{Architecture, Config};
+
+pub(crate) fn disassemble_arm64_single(name: &str, bytes: &[u8]) -> Instruction {
+    let config = Config::default();
+    let mut ranges = BTreeMap::new();
+    ranges.insert(0, bytes.len() as u64);
+
+    let mut graph = Graph::new(Architecture::ARM64, config.clone());
+    let disassembler =
+        Disassembler::from_bytes(Architecture::ARM64, bytes, ranges, config).expect("disassembler");
+    disassembler
+        .disassemble_instruction(0, &mut graph)
+        .unwrap_or_else(|error| panic!("{name}: instruction should disassemble: {error}"));
+    graph.get_instruction(0).expect("instruction should exist")
+}
+
+pub(crate) fn semantics(name: &str, bytes: &[u8]) -> InstructionSemantics {
+    disassemble_arm64_single(name, bytes)
+        .semantics
+        .expect("instruction should have semantics")
+}
+
+pub(crate) fn assert_semantics_status(
+    name: &str,
+    bytes: &[u8],
+    expected_status: SemanticStatus,
+) -> InstructionSemantics {
+    let semantics = semantics(name, bytes);
+    assert_eq!(
+        semantics.status,
+        expected_status,
+        "{name}: expected {:?} semantics, got {:?} with diagnostics {:?}",
+        expected_status,
+        semantics.status,
+        semantics
+            .diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.message.clone())
+            .collect::<Vec<_>>()
+    );
+    if expected_status == SemanticStatus::Complete {
+        assert!(
+            semantics.diagnostics.is_empty(),
+            "{name}: expected no diagnostics, got {:?}",
+            semantics
+                .diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.message.clone())
+                .collect::<Vec<_>>()
+        );
+    }
+    semantics
+}
+
+pub(crate) fn lift_instruction_to_llvm(name: &str, bytes: &[u8]) -> String {
+    let instruction = disassemble_arm64_single(name, bytes);
+    let mut lifter = Lifter::new(crate::Architecture::ARM64, Config::default());
+    lifter
+        .lift_instruction(&instruction)
+        .unwrap_or_else(|error| panic!("{name}: instruction should lift: {error}"));
+    lifter
+        .verify()
+        .unwrap_or_else(|error| panic!("{name}: llvm module should verify: {error}"));
+    lifter.text()
+}

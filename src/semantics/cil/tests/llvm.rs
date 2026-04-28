@@ -11,6 +11,6 @@ fn cil_semantics_lower_to_llvm() {
     for (name, bytes) in cases {
         let ir = lift_instruction_to_llvm(name, &bytes);
         assert!(ir.contains("define void @instruction_0()"));
-        assert!(ir.contains("call void @binlex_instruction_address(i64 0)"));
+        assert!(ir.contains("ret void"));
     }
 }

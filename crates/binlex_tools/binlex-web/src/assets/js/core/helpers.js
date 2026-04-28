@@ -176,6 +176,10 @@ function getCommentsPopover() {
   return document.getElementById("comments-popover");
 }
 
+function getProjectsPopover() {
+  return document.getElementById("projects-popover");
+}
+
 function getColumnsPopover() {
   return document.getElementById("columns-popover");
 }

@@ -116,6 +116,8 @@ struct WebRemoteIndexConfig {
 struct WebUploadConfig {
     #[serde(default)]
     sample: WebUploadSampleConfig,
+    #[serde(default, rename = "project_files")]
+    project_files: WebUploadProjectFilesConfig,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -126,7 +128,17 @@ struct WebUploadSampleConfig {
     max_bytes: usize,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct WebUploadProjectFilesConfig {
+    #[serde(default = "default_true")]
+    enabled: bool,
+    #[serde(default = "default_project_upload_max_bytes")]
+    max_bytes: usize,
+    #[serde(default = "default_project_upload_allowed_types")]
+    allowed_types: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct WebDownloadSampleConfig {
     #[serde(default = "default_true")]
     enabled: bool,
@@ -142,6 +154,8 @@ struct WebDownloadConfig {
     samples: WebDownloadSamplesConfig,
     #[serde(default)]
     json: WebDownloadJsonConfig,
+    #[serde(default, rename = "project_files")]
+    project_files: WebDownloadProjectFilesConfig,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -162,6 +176,14 @@ struct WebDownloadJsonConfig {
     max_bytes: usize,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct WebDownloadProjectFilesConfig {
+    #[serde(default = "default_true")]
+    enabled: bool,
+    #[serde(default = "default_project_download_max_bytes")]
+    max_bytes: usize,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 struct WebApiConfig {
     #[serde(default)]
@@ -172,6 +194,8 @@ struct WebApiConfig {
     symbols: WebApiSymbolsConfig,
     #[serde(default)]
     comments: WebApiCommentsConfig,
+    #[serde(default)]
+    projects: WebApiProjectsConfig,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -208,6 +232,16 @@ struct WebApiCommentsConfig {
     default_page_size: usize,
     #[serde(default = "default_api_comments_max_page_size")]
     max_page_size: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct WebApiProjectsConfig {
+    #[serde(default = "default_api_projects_default_page_size")]
+    default_page_size: usize,
+    #[serde(default = "default_api_projects_max_page_size")]
+    max_page_size: usize,
+    #[serde(default = "default_api_projects_max_query_length")]
+    max_query_length: usize,
 }
 
 impl Default for WebConfigFile {
@@ -308,6 +342,7 @@ impl Default for WebUploadConfig {
     fn default() -> Self {
         Self {
             sample: WebUploadSampleConfig::default(),
+            project_files: WebUploadProjectFilesConfig::default(),
         }
     }
 }
@@ -321,12 +356,23 @@ impl Default for WebUploadSampleConfig {
     }
 }
 
+impl Default for WebUploadProjectFilesConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_true(),
+            max_bytes: default_project_upload_max_bytes(),
+            allowed_types: default_project_upload_allowed_types(),
+        }
+    }
+}
+
 impl Default for WebDownloadConfig {
     fn default() -> Self {
         Self {
             sample: WebDownloadSampleConfig::default(),
             samples: WebDownloadSamplesConfig::default(),
             json: WebDownloadJsonConfig::default(),
+            project_files: WebDownloadProjectFilesConfig::default(),
         }
     }
 }
@@ -346,6 +392,24 @@ impl Default for WebDownloadJsonConfig {
     fn default() -> Self {
         Self {
             max_bytes: default_download_json_max_bytes(),
+        }
+    }
+}
+
+impl Default for WebDownloadSampleConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_true(),
+            max_bytes: default_sample_download_max_bytes(),
+        }
+    }
+}
+
+impl Default for WebDownloadProjectFilesConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_true(),
+            max_bytes: default_project_download_max_bytes(),
         }
     }
 }
@@ -384,6 +448,16 @@ impl Default for WebApiCommentsConfig {
         Self {
             default_page_size: default_api_comments_default_page_size(),
             max_page_size: default_api_comments_max_page_size(),
+        }
+    }
+}
+
+impl Default for WebApiProjectsConfig {
+    fn default() -> Self {
+        Self {
+            default_page_size: default_api_projects_default_page_size(),
+            max_page_size: default_api_projects_max_page_size(),
+            max_query_length: default_api_projects_max_query_length(),
         }
     }
 }
@@ -472,7 +546,25 @@ fn default_upload_corpora() -> Vec<String> {
     ]
 }
 
+fn default_project_upload_allowed_types() -> Vec<String> {
+    vec![
+        "i64".to_string(),
+        "idb".to_string(),
+        "bndb".to_string(),
+        "gbf".to_string(),
+        "gzf".to_string(),
+    ]
+}
+
 fn default_sample_download_max_bytes() -> usize {
+    200 * 1024 * 1024
+}
+
+fn default_project_upload_max_bytes() -> usize {
+    512 * 1024 * 1024
+}
+
+fn default_project_download_max_bytes() -> usize {
     200 * 1024 * 1024
 }
 
@@ -530,6 +622,18 @@ fn default_api_comments_default_page_size() -> usize {
 
 fn default_api_comments_max_page_size() -> usize {
     50
+}
+
+fn default_api_projects_default_page_size() -> usize {
+    4
+}
+
+fn default_api_projects_max_page_size() -> usize {
+    25
+}
+
+fn default_api_projects_max_query_length() -> usize {
+    64
 }
 
 fn default_compare_limit() -> usize {

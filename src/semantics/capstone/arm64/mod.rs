@@ -73,5 +73,5 @@ pub fn build(
     if let Some(semantics) = vector::build(machine, instruction, operands, condition_code) {
         return semantics;
     }
-    unsupported_fallthrough(instruction, "arm64 mnemonic not implemented")
+    unsupported_fallthrough(machine, instruction, "arm64 mnemonic not implemented")
 }

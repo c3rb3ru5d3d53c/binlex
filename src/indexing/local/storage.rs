@@ -32,4 +32,17 @@ impl LocalIndex {
         Graph::from_snapshot(record.snapshot, self.config.clone())
             .map_err(|error| Error::Graph(error.to_string()))
     }
+
+    pub fn project_put(&self, sha256: &str, data: &[u8]) -> Result<(), Error> {
+        self.store
+            .project_put(sha256, data)
+            .map_err(|error| Error::LocalStore(error.to_string()))
+    }
+
+    pub fn project_get(&self, sha256: &str) -> Result<Vec<u8>, Error> {
+        self.store.project_get(sha256).map_err(|error| match error {
+            localstore::Error::NotFound(_) => Error::NotFound(format!("project {}", sha256)),
+            other => Error::LocalStore(other.to_string()),
+        })
+    }
 }

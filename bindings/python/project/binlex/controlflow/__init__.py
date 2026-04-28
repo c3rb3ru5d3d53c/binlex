@@ -30,6 +30,8 @@ from binlex_bindings.binlex.controlflow import Graph as _GraphBinding
 from binlex_bindings.binlex.controlflow import GraphQueue as _GraphQueueBinding
 from binlex_bindings.binlex.controlflow import Instruction as _InstructionBinding
 from binlex_bindings.binlex.controlflow import InstructionJsonDeserializer as _InstructionJsonDeserializerBinding
+from binlex_bindings.binlex.controlflow.instruction import Operand as Operand
+from binlex_bindings.binlex.controlflow.instruction import OperandKind as OperandKind
 
 from binlex.core.architecture import _coerce_architecture
 from binlex.hashing import MinHash32, SHA256, SSDeep, TLSH
@@ -84,6 +86,22 @@ class Instruction:
         """Return the instruction size in bytes."""
         return self._inner.size()
 
+    def bytes(self):
+        """Return the decoded raw bytes for this instruction."""
+        return self._inner.bytes()
+
+    def mnemonic(self):
+        """Return the decoded mnemonic of the instruction."""
+        return self._inner.mnemonic()
+
+    def disassembly(self):
+        """Return the canonical disassembly text of the instruction."""
+        return self._inner.disassembly()
+
+    def operands(self):
+        """Return normalized decoded operands."""
+        return self._inner.operands()
+
     def imaging(self):
         """Return the imaging pipeline for this instruction."""
         return Imaging._from_binding(self._inner.imaging())
@@ -99,6 +117,12 @@ class Instruction:
     def semantics(self):
         """Return canonical semantics for this instruction, if present."""
         return self._inner.semantics()
+
+    def set_semantics(self, semantics):
+        """Replace the canonical semantics for this instruction inside the graph."""
+        inner = getattr(semantics, "_inner", semantics)
+        self._inner.set_semantics(inner)
+        return self
 
     def to_dict(self):
         """Convert the instruction to a Python dictionary."""
@@ -154,6 +178,18 @@ class InstructionJsonDeserializer:
     def size(self):
         """Return the size of the serialized instruction in bytes."""
         return self._inner.size()
+
+    def mnemonic(self):
+        """Return the decoded mnemonic of the serialized instruction."""
+        return self._inner.mnemonic()
+
+    def disassembly(self):
+        """Return the canonical disassembly text of the serialized instruction."""
+        return self._inner.disassembly()
+
+    def operands(self):
+        """Return normalized decoded operands for the serialized instruction."""
+        return self._inner.operands()
 
     def blocks(self):
         """Return the block addresses containing this instruction."""
@@ -485,12 +521,15 @@ class _Lifters:
         self._owner = owner
 
     def llvm(self):
-        from binlex.lifters.llvm import Lifter
+        return _LLVM(self._owner)
+
+    def vex(self):
+        from binlex.lifters.vex import Lifter
 
         config = getattr(self._owner, "_config", None)
         if config is None:
             raise RuntimeError("controlflow object is missing associated Config")
-        lifter = Lifter(config)
+        lifter = Lifter(self._owner.architecture(), config)
         if isinstance(self._owner, Instruction):
             lifter = lifter.lift_instruction(self._owner)
         elif isinstance(self._owner, Block):
@@ -501,13 +540,61 @@ class _Lifters:
             raise TypeError(f"unsupported lifter owner: {type(self._owner)!r}")
         return lifter
 
-    def vex(self):
-        from binlex.lifters.vex import Lifter
+
+class _LLVM:
+    """Small builder for entity-bound LLVM rendering."""
+
+    def __init__(self, owner, mode=None):
+        self._owner = owner
+        self._mode = mode
+
+    def reconstruct(self):
+        return self.__class__(self._owner, mode="reconstruct")
+
+    def intrinsic(self):
+        return self.__class__(self._owner, mode="intrinsic")
+
+    def semantic(self):
+        return self.__class__(self._owner, mode="semantic")
+
+    def text(self):
+        lifter = self._lift()
+        return lifter.text()
+
+    def print(self):
+        lifter = self._lift()
+        return lifter.print()
+
+    def bitcode(self):
+        lifter = self._lift()
+        return lifter.bitcode()
+
+    def object(self):
+        lifter = self._lift()
+        return lifter.object()
+
+    def normalized(self):
+        lifter = self._lift()
+        return lifter.normalized()
+
+    def optimizers(self):
+        lifter = self._lift()
+        return lifter.optimizers()
+
+    def verify(self):
+        lifter = self._lift()
+        return lifter.verify()
+
+    def _lift(self):
+        from binlex.lifters.llvm import Lifter
 
         config = getattr(self._owner, "_config", None)
         if config is None:
             raise RuntimeError("controlflow object is missing associated Config")
-        lifter = Lifter(config)
+        if self._mode is not None:
+            config = config.clone()
+            config.lifters.llvm.mode = self._mode
+        lifter = Lifter(self._owner.architecture(), config)
         if isinstance(self._owner, Instruction):
             lifter = lifter.lift_instruction(self._owner)
         elif isinstance(self._owner, Block):
@@ -515,7 +602,9 @@ class _Lifters:
         elif isinstance(self._owner, Function):
             lifter = lifter.lift_function(self._owner)
         else:
-            raise TypeError(f"unsupported lifter owner: {type(self._owner)!r}")
+            raise TypeError(f"unsupported llvm owner: {type(self._owner)!r}")
+        if lifter is None:
+            raise RuntimeError("llvm lift failed")
         return lifter
 
 

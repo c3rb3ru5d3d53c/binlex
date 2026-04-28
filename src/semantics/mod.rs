@@ -25,11 +25,11 @@ pub mod cil;
 pub mod ir;
 
 pub use ir::{
-    InstructionSemantics, InstructionSemanticsJson, SemanticAddressSpace, SemanticDiagnostic,
-    SemanticDiagnosticKind, SemanticEffect, SemanticEffectKind, SemanticExpression,
-    SemanticExpressionKind, SemanticFenceKind, SemanticLocation, SemanticLocationKind,
-    SemanticOperation, SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
-    SemanticOperationUnary, SemanticStatus, SemanticTemporary, SemanticTerminator,
-    SemanticTerminatorKind, SemanticTrapKind, normalize_instruction_semantics,
+    InstructionEncoding, InstructionSemantics, InstructionSemanticsJson, SemanticAddressSpace,
+    SemanticDiagnostic, SemanticDiagnosticKind, SemanticEffect, SemanticEffectKind,
+    SemanticExpression, SemanticExpressionKind, SemanticFenceKind, SemanticLocation,
+    SemanticLocationKind, SemanticOperation, SemanticOperationBinary, SemanticOperationCast,
+    SemanticOperationCompare, SemanticOperationUnary, SemanticStatus, SemanticTemporary,
+    SemanticTerminator, SemanticTerminatorKind, SemanticTrapKind, normalize_instruction_semantics,
     validate_instruction_semantics,
 };

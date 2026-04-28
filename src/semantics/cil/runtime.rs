@@ -77,6 +77,8 @@ pub(crate) fn build(instruction: &Instruction<'_>) -> Option<InstructionSemantic
         Mnemonic::End => Some(InstructionSemantics {
             version: 1,
             status: SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
             temporaries: Vec::new(),
             effects: vec![SemanticEffect::Trap {
                 kind: SemanticTrapKind::ArchSpecific {
@@ -98,6 +100,8 @@ pub(crate) fn build(instruction: &Instruction<'_>) -> Option<InstructionSemantic
         Mnemonic::ReThrow => Some(InstructionSemantics {
             version: 1,
             status: SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
             temporaries: Vec::new(),
             effects: vec![SemanticEffect::Trap {
                 kind: SemanticTrapKind::ArchSpecific {

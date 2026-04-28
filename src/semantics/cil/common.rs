@@ -35,6 +35,8 @@ pub(crate) fn partial_intrinsic_fallthrough(
     InstructionSemantics {
         version: 1,
         status: SemanticStatus::Partial,
+        abi: None,
+        encoding: None,
         temporaries: Vec::new(),
         effects: vec![SemanticEffect::Intrinsic {
             name: format!("cil.{:?}", instruction.mnemonic),
@@ -159,6 +161,8 @@ pub(crate) fn complete_with_effects(
     InstructionSemantics {
         version: 1,
         status: SemanticStatus::Complete,
+        abi: None,
+        encoding: None,
         temporaries: Vec::new(),
         effects,
         terminator,

@@ -125,6 +125,18 @@ impl LocalStore {
             .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
     }
 
+    pub fn project_put(&self, sha256: String, data: Vec<u8>) -> PyResult<()> {
+        self.inner
+            .project_put(&sha256, &data)
+            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
+    }
+
+    pub fn project_get(&self, sha256: String) -> PyResult<Vec<u8>> {
+        self.inner
+            .project_get(&sha256)
+            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
+    }
+
     pub fn sample_exists(&self, sha256: String) -> PyResult<bool> {
         self.inner
             .sample_exists(&sha256)

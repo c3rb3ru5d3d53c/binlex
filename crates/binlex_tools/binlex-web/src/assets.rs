@@ -31,6 +31,8 @@ pub(crate) const SCRIPT: &str = concat!(
     "\n",
     include_str!("assets/js/features/results_popovers_comments.js"),
     "\n",
+    include_str!("assets/js/features/results_popovers_projects.js"),
+    "\n",
     include_str!("assets/js/features/upload_modal.js"),
     "\n",
     include_str!("assets/js/features/upload_status.js"),

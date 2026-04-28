@@ -4,7 +4,7 @@ dist/
 target/
 deps/
 Cargo.lock
-samples/
+/samples/
 *.yara
 *.exe
 *.dll
@@ -19,3 +19,4 @@ __pycache__/
 *.pyc
 data/
 .codex
+/references/

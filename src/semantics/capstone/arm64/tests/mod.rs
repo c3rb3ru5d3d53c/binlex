@@ -1,9 +1,4 @@
-mod atomic;
-mod common;
-mod control;
-mod integer;
+mod conformance;
 mod llvm;
-mod memory;
-mod multiply;
-mod system;
-mod vector;
+mod samples;
+mod support;

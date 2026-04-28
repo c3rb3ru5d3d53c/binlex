@@ -82,6 +82,8 @@ pub(super) fn build(instruction: &Insn, operands: &[ArchOperand]) -> Option<Inst
         id if id == Arm64Insn::ARM64_INS_BRK as u32 => Some(InstructionSemantics {
             version: 1,
             status: SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
             temporaries: Vec::new(),
             effects: vec![SemanticEffect::Trap {
                 kind: SemanticTrapKind::Breakpoint,
@@ -120,8 +122,8 @@ pub(super) fn build(instruction: &Insn, operands: &[ArchOperand]) -> Option<Inst
                 lsb: bit_index,
                 bits: 1,
             };
-            let zero = bool_const(id == Arm64Insn::ARM64_INS_TBZ as u32);
-            let condition = compare(SemanticOperationCompare::Eq, bit, zero);
+            let expected_bit = bool_const(id == Arm64Insn::ARM64_INS_TBNZ as u32);
+            let condition = compare(SemanticOperationCompare::Eq, bit, expected_bit);
             Some(complete(
                 SemanticTerminator::Branch {
                     condition,

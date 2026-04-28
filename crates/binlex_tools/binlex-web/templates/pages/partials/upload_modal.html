@@ -1,34 +1,62 @@
 <div id="upload-modal" class="modal-backdrop" hidden>
   <div class="modal-card" role="dialog" aria-modal="true" aria-label="Upload">
+    <div class="upload-metadata-tab-row" data-upload-surface-tabs="1">
+      <button type="button" class="upload-metadata-tab is-active" data-upload-surface-tab="analyze" onclick="toggleUploadSurfaceTab('analyze')">analyze</button>
+      <button type="button" class="upload-metadata-tab" data-upload-surface-tab="store" onclick="toggleUploadSurfaceTab('store')">store</button>
+      <button type="button" class="upload-metadata-tab" data-upload-surface-tab="project" onclick="toggleUploadSurfaceTab('project')">project</button>
+    </div>
     <div class="modal-grid modal-grid-single">
       <div class="modal-field modal-file-field">
         <input id="upload-file-picker" type="file" class="hidden-file">
         <label for="upload-file-picker" id="upload-dropzone" class="upload-dropzone">
-          <strong>Click to Upload or Drag and Drop</strong>
+          <strong id="upload-dropzone-title">Click to Upload or Drag and Drop</strong>
+          <span id="upload-dropzone-subtitle" hidden></span>
           <em id="upload-file-name">No file selected</em>
         </label>
       </div>
-      <div class="modal-select-row">
-        {{ format_select_html|safe }}
-        {{ architecture_select_html|safe }}
+      <div data-upload-surface-panel="analyze">
+        <div class="modal-select-row">
+          {{ format_select_html|safe }}
+          {{ architecture_select_html|safe }}
+        </div>
+        <div class="upload-metadata-tabs" data-upload-metadata-root="1" data-active-tab="{% if has_corpus_picker %}corpora{% else %}tags{% endif %}">
+          <div class="upload-metadata-tab-row">
+            {% if has_corpus_picker %}
+            <button type="button" class="upload-metadata-tab is-active" data-upload-metadata-tab="corpora" onclick="toggleUploadMetadataTab('corpora')">Corpora</button>
+            {% endif %}
+            <button type="button" class="upload-metadata-tab{% if !has_corpus_picker %} is-active{% endif %}" data-upload-metadata-tab="tags" onclick="toggleUploadMetadataTab('tags')">Tags</button>
+          </div>
+          {% match corpus_picker_html %}
+          {% when Some with (corpus_picker) %}
+          <div class="upload-metadata-panel" data-upload-metadata-panel="corpora">
+            {{ corpus_picker|safe }}
+          </div>
+          {% when None %}
+          {% endmatch %}
+          <div class="upload-metadata-panel" data-upload-metadata-panel="tags"{% if has_corpus_picker %} hidden{% endif %}>
+            {{ tag_picker_html|safe }}
+          </div>
+        </div>
       </div>
-      <div class="upload-metadata-tabs" data-upload-metadata-root="1" data-active-tab="{% if has_corpus_picker %}corpora{% else %}tags{% endif %}">
-        <div class="upload-metadata-tab-row">
-          {% if has_corpus_picker %}
-          <button type="button" class="upload-metadata-tab is-active" data-upload-metadata-tab="corpora" onclick="toggleUploadMetadataTab('corpora')">Corpora</button>
-          {% endif %}
-          <button type="button" class="upload-metadata-tab{% if !has_corpus_picker %} is-active{% endif %}" data-upload-metadata-tab="tags" onclick="toggleUploadMetadataTab('tags')">Tags</button>
+      <div data-upload-surface-panel="store" hidden></div>
+      <div data-upload-surface-panel="project" hidden>
+        <div class="symbol-picker-grid" data-upload-project-root="1">
+          <div class="symbol-picker-column">
+            <div class="symbol-picker-header"><div class="symbol-picker-label">Available Samples</div></div>
+            <div class="upload-corpus-search-wrap symbol-picker-search-wrap">
+              <input id="upload-project-available-search" type="search" class="menu-search" placeholder="Search SHA256" oninput="handleUploadProjectAvailableInput()" onkeydown="handleUploadProjectAvailableKeydown(event)">
+            </div>
+            <div id="upload-project-available-list" class="symbol-picker-list"></div>
+          </div>
+          <div class="symbol-picker-column">
+            <div class="symbol-picker-header"><div class="symbol-picker-label">Assigned Samples</div></div>
+            <div class="upload-corpus-search-wrap symbol-picker-search-wrap">
+              <input id="upload-project-selected-search" type="search" class="menu-search" placeholder="Filter assigned" oninput="renderUploadProjectPicker()" onkeydown="handleUploadProjectSelectedKeydown(event)">
+            </div>
+            <div id="upload-project-selected-list" class="symbol-picker-list"></div>
+          </div>
         </div>
-        {% match corpus_picker_html %}
-        {% when Some with (corpus_picker) %}
-        <div class="upload-metadata-panel" data-upload-metadata-panel="corpora">
-          {{ corpus_picker|safe }}
-        </div>
-        {% when None %}
-        {% endmatch %}
-        <div class="upload-metadata-panel" data-upload-metadata-panel="tags"{% if has_corpus_picker %} hidden{% endif %}>
-          {{ tag_picker_html|safe }}
-        </div>
+        <div id="upload-project-prefill" class="profile-key-note"></div>
       </div>
     </div>
     <p id="upload-modal-tip" class="modal-tip"></p>

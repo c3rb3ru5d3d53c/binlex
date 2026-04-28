@@ -556,6 +556,7 @@ fn render_expression(expression: &SemanticExpression) -> String {
 fn render_address_space(space: &SemanticAddressSpace) -> String {
     match space {
         SemanticAddressSpace::Default => "default".to_string(),
+        SemanticAddressSpace::State => "state".to_string(),
         SemanticAddressSpace::Stack => "stack".to_string(),
         SemanticAddressSpace::Heap => "heap".to_string(),
         SemanticAddressSpace::Global => "global".to_string(),
@@ -618,7 +619,9 @@ fn render_cast_op(op: SemanticOperationCast) -> &'static str {
         SemanticOperationCast::Truncate => "Truncate",
         SemanticOperationCast::Bitcast => "Bitcast",
         SemanticOperationCast::IntToFloat => "IntToFloat",
+        SemanticOperationCast::UIntToFloat => "UIntToFloat",
         SemanticOperationCast::FloatToInt => "FloatToInt",
+        SemanticOperationCast::FloatToUInt => "FloatToUInt",
         SemanticOperationCast::FloatExtend => "FloatExtend",
         SemanticOperationCast::FloatTruncate => "FloatTruncate",
     }

@@ -6,6 +6,8 @@ pub fn normalize_instruction_semantics(semantics: &InstructionSemantics) -> Inst
     InstructionSemantics {
         version: semantics.version,
         status: semantics.status,
+        abi: semantics.abi,
+        encoding: semantics.encoding.clone(),
         temporaries: semantics.temporaries.clone(),
         effects: semantics.effects.iter().map(normalize_effect).collect(),
         terminator: normalize_terminator(&semantics.terminator),

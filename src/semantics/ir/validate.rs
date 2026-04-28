@@ -255,6 +255,8 @@ mod tests {
         let semantics = InstructionSemantics {
             version: 1,
             status: SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
             temporaries: Vec::new(),
             effects: vec![SemanticEffect::Store {
                 space: crate::semantics::SemanticAddressSpace::Default,
@@ -274,6 +276,8 @@ mod tests {
         let semantics = InstructionSemantics {
             version: 1,
             status: SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
             temporaries: Vec::new(),
             effects: Vec::new(),
             terminator: SemanticTerminator::FallThrough,
@@ -291,6 +295,8 @@ mod tests {
         let semantics = InstructionSemantics {
             version: 1,
             status: SemanticStatus::Partial,
+            abi: None,
+            encoding: None,
             temporaries: Vec::new(),
             effects: Vec::new(),
             terminator: SemanticTerminator::FallThrough,

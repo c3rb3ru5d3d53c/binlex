@@ -21,6 +21,7 @@ async fn upload(
                 "sample uploads are disabled. Request ID: {}",
                 request_id
             )),
+            stored: None,
         }));
     }
     let mut form = UploadForm::default();
@@ -53,6 +54,12 @@ async fn upload(
                     form.architecture = Some(value);
                 }
             }
+            "mode" => {
+                let value = field.text().await.unwrap_or_default();
+                if !value.trim().is_empty() {
+                    form.mode = Some(value);
+                }
+            }
             "corpus" => form.corpus.push(field.text().await.unwrap_or_default()),
             "tag" => form.tags.push(field.text().await.unwrap_or_default()),
             _ => {}
@@ -66,6 +73,7 @@ async fn upload(
                 "upload exceeds max size of {} bytes. Request ID: {}",
                 state.ui.upload.sample.max_bytes, request_id
             )),
+            stored: None,
         }));
     }
 
@@ -225,6 +233,48 @@ fn ingest_upload(
             ok: false,
             sha256: None,
             error: Some("no data was provided".to_string()),
+            stored: None,
+        };
+    }
+
+    if matches!(form.mode.as_deref(), Some("store")) {
+        let sha256 = match state.index.sample_put(&form.bytes) {
+            Ok(sha256) => sha256,
+            Err(error) => {
+                return UploadResponse {
+                    ok: false,
+                    sha256: None,
+                    error: Some(format!(
+                        "failed to store sample: {} Request ID: {}",
+                        error, request_id
+                    )),
+                    stored: None,
+                };
+            }
+        };
+        if let Err(error) = write_sample_status(
+            state.database.as_ref(),
+            &sha256,
+            username,
+            SampleStatus::Stored,
+            None,
+            Some(request_id),
+        ) {
+            return UploadResponse {
+                ok: false,
+                sha256: Some(sha256),
+                error: Some(format!(
+                    "failed to write stored sample status: {} Request ID: {}",
+                    error, request_id
+                )),
+                stored: None,
+            };
+        }
+        return UploadResponse {
+            ok: true,
+            sha256: Some(sha256),
+            error: None,
+            stored: Some(true),
         };
     }
 
@@ -235,6 +285,7 @@ fn ingest_upload(
                 ok: false,
                 sha256: None,
                 error: Some(format!("{} Request ID: {}", error, request_id)),
+                stored: None,
             };
         }
     };
@@ -245,6 +296,7 @@ fn ingest_upload(
                 ok: false,
                 sha256: None,
                 error: Some(format!("{} Request ID: {}", error, request_id)),
+                stored: None,
             };
         }
     };
@@ -277,6 +329,7 @@ fn ingest_upload(
                 "shellcode format cannot be used for detected {} input. Request ID: {}",
                 detected_magic, request_id
             )),
+            stored: None,
         };
     }
     if matches!(magic_override, Some(Magic::CODE)) && architecture_override.is_none() {
@@ -287,6 +340,7 @@ fn ingest_upload(
                 "shellcode uploads require an architecture value. Request ID: {}",
                 request_id
             )),
+            stored: None,
         };
     }
 
@@ -310,6 +364,7 @@ fn ingest_upload(
                     "failed to store sample: {} Request ID: {}",
                     error, request_id
                 )),
+                stored: None,
             };
         }
     };
@@ -322,6 +377,7 @@ fn ingest_upload(
     if let Err(error) = write_sample_status(
         state.database.as_ref(),
         &sha256,
+        username,
         SampleStatus::Pending,
         None,
         Some(request_id),
@@ -337,6 +393,7 @@ fn ingest_upload(
                 "failed to queue upload analysis status: {} Request ID: {}",
                 error, request_id
             )),
+            stored: None,
         };
     }
 
@@ -359,6 +416,7 @@ fn ingest_upload(
             if let Err(error) = write_sample_status(
                 database.as_ref(),
                 &sha256_for_background,
+                &username_for_background,
                 SampleStatus::Processing,
                 None,
                 Some(&request_id_for_background),
@@ -406,6 +464,7 @@ fn ingest_upload(
                             let _ = write_sample_status(
                                 database.as_ref(),
                                 &sha256_for_background,
+                                &username_for_background,
                                 SampleStatus::Failed,
                                 Some(error_message.clone()),
                                 Some(&request_id_for_background),
@@ -465,6 +524,7 @@ fn ingest_upload(
                         if let Err(status_error) = write_sample_status(
                             database.as_ref(),
                             &sha256_for_background,
+                            &username_for_background,
                             SampleStatus::Failed,
                             Some(error_message.clone()),
                             Some(&request_id_for_background),
@@ -495,6 +555,7 @@ fn ingest_upload(
                             if let Err(status_error) = write_sample_status(
                                 database.as_ref(),
                                 &sha256_for_background,
+                                &username_for_background,
                                 SampleStatus::Failed,
                                 Some(error_message.clone()),
                                 Some(&request_id_for_background),
@@ -519,6 +580,7 @@ fn ingest_upload(
                         if let Err(status_error) = write_sample_status(
                             database.as_ref(),
                             &sha256_for_background,
+                            &username_for_background,
                             SampleStatus::Failed,
                             Some(error_message.clone()),
                             Some(&request_id_for_background),
@@ -553,6 +615,7 @@ fn ingest_upload(
                         if let Err(status_error) = write_sample_status(
                             database.as_ref(),
                             &sha256_for_background,
+                            &username_for_background,
                             SampleStatus::Failed,
                             Some(error_message.clone()),
                             Some(&request_id_for_background),
@@ -624,6 +687,7 @@ fn ingest_upload(
                             let _ = write_sample_status(
                                 database.as_ref(),
                                 &sha256_for_background,
+                                &username_for_background,
                                 SampleStatus::Failed,
                                 Some(error_message.clone()),
                                 Some(&request_id_for_background),
@@ -652,6 +716,7 @@ fn ingest_upload(
                     if let Err(error) = write_sample_status(
                         database.as_ref(),
                         &sha256_for_background,
+                        &username_for_background,
                         SampleStatus::Complete,
                         None,
                         Some(&request_id_for_background),
@@ -680,6 +745,7 @@ fn ingest_upload(
                     if let Err(status_error) = write_sample_status(
                         database.as_ref(),
                         &sha256_for_background,
+                        &username_for_background,
                         SampleStatus::Failed,
                         Some(error.to_string()),
                         Some(&request_id_for_background),
@@ -703,6 +769,7 @@ fn ingest_upload(
                 "failed to queue upload analysis: {} Request ID: {}",
                 error, request_id
             )),
+            stored: None,
         });
 
     if let Err(response) = spawn_result {
@@ -710,6 +777,7 @@ fn ingest_upload(
             let _ = write_sample_status(
                 state.database.as_ref(),
                 sha256,
+                username,
                 SampleStatus::Failed,
                 response.error.clone(),
                 Some(request_id),
@@ -722,18 +790,21 @@ fn ingest_upload(
         ok: true,
         sha256: Some(sha256),
         error: None,
+        stored: None,
     }
 }
 
 fn write_sample_status(
     database: &LocalDB,
     sha256: &str,
+    username: &str,
     status: SampleStatus,
     error_message: Option<String>,
     id: Option<&str>,
 ) -> Result<(), binlex::databases::localdb::Error> {
     database.sample_status_set(&SampleStatusRecord {
         sha256: sha256.to_string(),
+        username: username.to_string(),
         status,
         timestamp: Utc::now().to_rfc3339(),
         error_message,
@@ -749,6 +820,7 @@ impl UploadStatusResponse {
             SampleStatus::Complete => "complete",
             SampleStatus::Failed => "failed",
             SampleStatus::Canceled => "canceled",
+            SampleStatus::Stored => "stored",
         }
     }
 }

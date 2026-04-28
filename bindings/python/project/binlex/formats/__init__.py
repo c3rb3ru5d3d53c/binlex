@@ -27,6 +27,7 @@ from binlex_bindings.binlex.formats import File as _FileBinding
 from binlex_bindings.binlex.formats import Image as _ImageBinding
 from binlex_bindings.binlex.formats import MACHO as _MACHOBinding
 from binlex_bindings.binlex.formats import PE as _PEBinding
+from binlex_bindings.binlex.formats import SymbolKind as _SymbolKindBinding
 
 from binlex.core.architecture import Architecture
 from binlex.hashing import SHA256, TLSH
@@ -76,6 +77,17 @@ class Image:
         """Return the current size of the image in bytes."""
         return self._inner.size()
 
+    def __len__(self):
+        """Return the current size of the image in bytes."""
+        return self.size()
+
+    def __getitem__(self, key):
+        """Access image bytes using standard Python indexing and slicing."""
+        view = self.mmap()
+        if isinstance(key, slice):
+            return bytes(view[key])
+        return view[key]
+
     def mmap(self):
         """Return a read-only memory view over the image bytes."""
         return self._inner.mmap()
@@ -83,6 +95,29 @@ class Image:
     def mmap_mut(self):
         """Return a writable memory view over the image bytes."""
         return self._inner.mmap_mut()
+
+
+class SymbolKind:
+    Function = _SymbolKindBinding.Function
+    Import = _SymbolKindBinding.Import
+    Export = _SymbolKindBinding.Export
+    Unknown = _SymbolKindBinding.Unknown
+
+
+class Symbol:
+    """First-class binary symbol with typed kind classification."""
+
+    def __init__(self, binding):
+        self._inner = binding
+
+    def name(self):
+        return self._inner.name()
+
+    def address(self):
+        return self._inner.address()
+
+    def kind(self):
+        return self._inner.kind()
 
 
 class ELF:
@@ -144,6 +179,10 @@ class ELF:
     def size(self):
         """Return the ELF image size in bytes."""
         return self._inner.size()
+
+    def symbols(self):
+        """Return typed symbols extracted from the ELF image."""
+        return [Symbol(item) for item in self._inner.symbols()]
 
     def export_virtual_addresses(self):
         """Return exported symbol virtual addresses."""
@@ -219,6 +258,10 @@ class PE:
         """Return the imaging pipeline over the mapped PE contents."""
         return Imaging._from_binding(self._inner.imaging())
 
+    def symbols(self):
+        """Return typed symbols extracted from the PE image."""
+        return [Symbol(item) for item in self._inner.symbols()]
+
     def dotnet_metadata_token_to_virtual_address(self, metadata_token):
         """Resolve a .NET metadata token to its method body virtual address."""
         return self._inner.dotnet_metadata_token_to_virtual_address(metadata_token)
@@ -279,6 +322,9 @@ class MACHO:
 
         def architecture(self):
             return Architecture.from_binding(self._inner.architecture())
+
+        def symbols(self):
+            return [Symbol(item) for item in self._inner.symbols()]
 
         def entrypoint_virtual_addresses(self):
             return self._inner.entrypoint_virtual_addresses()
@@ -347,6 +393,10 @@ class MACHO:
         """Return the architecture declared for `slice`."""
         return Architecture.from_binding(self._inner.architecture(slice))
 
+    def symbols(self, slice):
+        """Return typed symbols extracted from `slice`."""
+        return [Symbol(item) for item in self._inner.symbols(slice)]
+
     def entrypoint_virtual_addresses(self, slice):
         """Return all discovered entrypoint virtual addresses for `slice`."""
         return self._inner.entrypoint_virtual_addresses(slice)
@@ -391,4 +441,4 @@ class MACHO:
         """Delegate unknown attributes to the underlying native Mach-O object."""
         return getattr(self._inner, name)
 
-__all__ = ["ELF", "File", "Image", "MACHO", "PE"]
+__all__ = ["ELF", "File", "Image", "MACHO", "PE", "Symbol", "SymbolKind"]

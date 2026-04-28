@@ -72,6 +72,8 @@ fn partial_semantics(message: &str) -> InstructionSemantics {
     InstructionSemantics {
         version: 1,
         status: SemanticStatus::Partial,
+        abi: None,
+        encoding: None,
         temporaries: Vec::new(),
         effects: Vec::new(),
         terminator: SemanticTerminator::FallThrough,
@@ -88,6 +90,8 @@ fn complete_semantics() -> InstructionSemantics {
     InstructionSemantics {
         version: 1,
         status: SemanticStatus::Complete,
+        abi: None,
+        encoding: None,
         temporaries: Vec::new(),
         effects: Vec::new(),
         terminator: SemanticTerminator::FallThrough,
@@ -107,6 +111,9 @@ fn accuracy_gated_semantics_regressions_stay_partial() {
 #[test]
 fn instruction_semantics_survive_snapshot_roundtrip() {
     let instruction = disassemble_single("adc eax, ebx", Architecture::I386, &[0x11, 0xd8]);
+    let original_mnemonic = instruction.mnemonic();
+    let original_disassembly = instruction.disassembly();
+    let original_operands = instruction.operands();
     let original = instruction
         .semantics
         .clone()
@@ -123,6 +130,7 @@ fn instruction_semantics_survive_snapshot_roundtrip() {
         .expect("restored instruction should exist");
     let restored_semantics = restored_instruction
         .semantics
+        .as_ref()
         .expect("restored instruction should keep semantics");
 
     assert_eq!(restored_semantics.status, original.status);
@@ -135,6 +143,9 @@ fn instruction_semantics_survive_snapshot_roundtrip() {
         restored_semantics.diagnostics.len(),
         original.diagnostics.len()
     );
+    assert_eq!(restored_instruction.mnemonic(), original_mnemonic);
+    assert_eq!(restored_instruction.disassembly(), original_disassembly);
+    assert_eq!(restored_instruction.operands(), original_operands);
 }
 
 #[test]
