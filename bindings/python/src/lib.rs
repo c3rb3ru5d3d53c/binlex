@@ -33,7 +33,6 @@ pub mod hashing;
 pub mod hex;
 pub mod imaging;
 pub mod indexing;
-#[cfg(not(target_os = "windows"))]
 pub mod lifters;
 pub mod math;
 pub mod metadata;
@@ -59,7 +58,6 @@ use crate::hashing::hashing_init;
 use crate::hex::hex_init;
 use crate::imaging::imaging_init;
 use crate::indexing::indexing_init;
-#[cfg(not(target_os = "windows"))]
 use crate::lifters::lifters_init;
 use crate::math::{entropy_init, math_init};
 use crate::metadata::metadata_init;
@@ -96,7 +94,6 @@ fn binlex(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pymodule!(indexing_init))?;
     m.add_wrapped(wrap_pymodule!(databases_init))?;
     m.add_wrapped(wrap_pymodule!(semantics_init))?;
-    #[cfg(not(target_os = "windows"))]
     m.add_wrapped(wrap_pymodule!(lifters_init))?;
     m.add_class::<Architecture>()?;
     m.add_class::<Config>()?;
