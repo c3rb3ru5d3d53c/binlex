@@ -397,11 +397,52 @@ impl<'disassembler> Disassembler<'disassembler> {
         Some(Operand { kind })
     }
 
-    fn normalize_instruction_operands(&self, operands: &[ArchOperand]) -> Vec<Operand> {
-        operands
+    fn normalize_instruction_operands(
+        &self,
+        instruction: &Insn,
+        operands: &[ArchOperand],
+    ) -> Vec<Operand> {
+        let mut normalized = operands
             .iter()
             .filter_map(|operand| self.normalize_operand(operand))
-            .collect()
+            .collect::<Vec<_>>();
+        self.rewrite_raw_controlflow_immediates(instruction, &mut normalized);
+        normalized
+    }
+
+    fn rewrite_raw_controlflow_immediates(&self, instruction: &Insn, operands: &mut [Operand]) {
+        let Some(index) = Self::controlflow_immediate_operand_index(instruction) else {
+            return;
+        };
+        let Some(Operand {
+            kind: OperandKind::Immediate(immediate),
+        }) = operands.get_mut(index)
+        else {
+            return;
+        };
+        immediate.value -= instruction.address() as i128;
+    }
+
+    fn controlflow_immediate_operand_index(instruction: &Insn) -> Option<usize> {
+        if instruction.id().0 == Arm64Insn::ARM64_INS_BL as u32
+            || instruction.id().0 == Arm64Insn::ARM64_INS_B as u32
+            || instruction.mnemonic().unwrap_or("").starts_with("b.")
+        {
+            return Some(0);
+        }
+        match instruction.id().0 {
+            id if id == Arm64Insn::ARM64_INS_CBZ as u32
+                || id == Arm64Insn::ARM64_INS_CBNZ as u32 =>
+            {
+                Some(1)
+            }
+            id if id == Arm64Insn::ARM64_INS_TBZ as u32
+                || id == Arm64Insn::ARM64_INS_TBNZ as u32 =>
+            {
+                Some(2)
+            }
+            _ => None,
+        }
     }
 
     fn disassembly_text(&self, instruction: &Insn) -> String {
@@ -824,7 +865,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         blinstruction.operands = if matches!(mnemonic.as_str(), "mrs" | "msr") {
             self.parse_system_register_operands(instruction)
         } else {
-            self.normalize_instruction_operands(&operands)
+            self.normalize_instruction_operands(instruction, &operands)
         };
 
         if let Some(addr) = self.get_conditional_jump_immutable(instruction) {
@@ -1841,5 +1882,34 @@ impl<'disassembler> Disassembler<'disassembler> {
                 .map_err(|e| Error::other(format!("capstone error: {:?}", e))),
             _ => Err(Error::other("unsupported architecture")),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn branch_immediates_stay_raw_in_operands() {
+        let bytes = [0x02, 0x00, 0x00, 0x14];
+        let disassembler = Disassembler::new(
+            Architecture::ARM64,
+            &bytes,
+            BTreeMap::from([(0, bytes.len() as u64)]),
+            Config::default(),
+        )
+        .expect("arm64 disassembler should construct");
+        let instructions = disassembler
+            .disassemble_instructions(0, 1)
+            .expect("instruction should decode");
+        let instruction = instructions.iter().next().expect("one instruction expected");
+        let operands = disassembler
+            .get_instruction_operands(instruction)
+            .expect("operands should decode");
+        let normalized = disassembler.normalize_instruction_operands(instruction, &operands);
+        let OperandKind::Immediate(immediate) = &normalized[0].kind else {
+            panic!("expected immediate operand");
+        };
+        assert_eq!(immediate.value, 8);
     }
 }
