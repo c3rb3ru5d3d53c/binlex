@@ -1235,7 +1235,7 @@ fn llvm_lifter_preserves_unsupported_instruction_fallback() {
     let graph = disassemble_graph(
         Architecture::I386,
         &[
-            0x27, // daa
+            0xCE, // into
             0xC3, // ret
         ],
     );
