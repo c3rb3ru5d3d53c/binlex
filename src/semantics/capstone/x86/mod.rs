@@ -22,61 +22,12 @@
 
 extern crate capstone;
 
-pub mod bit;
+pub(crate) mod builders;
 pub mod common;
-pub mod control;
+mod dispatch;
 pub mod flags;
-pub mod fp;
-pub mod integer;
-pub mod logic;
-pub mod shift;
-pub mod stack;
-pub mod string;
-pub mod system;
-pub mod vector;
-
-use crate::Architecture;
-use crate::semantics::InstructionSemantics;
-use capstone::Insn;
-use capstone::arch::ArchOperand;
 
 #[cfg(test)]
 mod tests;
 
-pub fn build(
-    machine: Architecture,
-    instruction: &Insn,
-    operands: &[ArchOperand],
-) -> InstructionSemantics {
-    if let Some(semantics) = control::build(machine, instruction, operands) {
-        return semantics;
-    }
-    if let Some(semantics) = stack::build(machine, instruction, operands) {
-        return semantics;
-    }
-    if let Some(semantics) = integer::build(machine, instruction, operands) {
-        return semantics;
-    }
-    if let Some(semantics) = logic::build(machine, instruction, operands) {
-        return semantics;
-    }
-    if let Some(semantics) = shift::build(machine, instruction, operands) {
-        return semantics;
-    }
-    if let Some(semantics) = bit::build(machine, instruction, operands) {
-        return semantics;
-    }
-    if let Some(semantics) = string::build(machine, instruction, operands) {
-        return semantics;
-    }
-    if let Some(semantics) = system::build(machine, instruction, operands) {
-        return semantics;
-    }
-    if let Some(semantics) = vector::build(machine, instruction, operands) {
-        return semantics;
-    }
-    if let Some(semantics) = fp::build(machine, instruction, operands) {
-        return semantics;
-    }
-    common::unsupported_fallthrough(instruction, "x86 mnemonic not implemented")
-}
+pub use dispatch::build;

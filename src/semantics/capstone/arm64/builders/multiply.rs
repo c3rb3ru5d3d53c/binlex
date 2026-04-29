@@ -20,13 +20,34 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-extern crate capstone;
+use super::*;
 
-pub(crate) mod builders;
-mod common;
-mod dispatch;
+#[path = "multiply/ops.rs"]
+mod ops;
 
-#[cfg(test)]
-mod tests;
+use ops::*;
 
-pub use dispatch::build;
+pub(crate) fn build(
+    machine: Architecture,
+    instruction: &Insn,
+    operands: &[ArchOperand],
+) -> Option<InstructionSemantics> {
+    match instruction.mnemonic().unwrap_or("") {
+        "madd" => build_madd(machine, operands),
+        "smaddl" => build_smaddl(machine, operands),
+        "smull" => build_smull(machine, operands),
+        "smulh" => build_smulh(machine, operands),
+        "smsubl" => build_smsubl(machine, operands),
+        "msub" => build_msub(machine, operands),
+        "mul" => build_mul(machine, operands),
+        "mneg" => build_mneg(machine, operands),
+        "umulh" => build_umulh(machine, operands),
+        "sdiv" => build_sdiv(machine, operands),
+        "udiv" => build_udiv(machine, operands),
+        "umull" => build_umull(machine, operands),
+        "umaddl" => build_umaddl(machine, operands),
+        "umsubl" => build_umsubl(machine, operands),
+        "umnegl" => build_umnegl(machine, operands),
+        _ => None,
+    }
+}
