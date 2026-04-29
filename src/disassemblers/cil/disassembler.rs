@@ -199,7 +199,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         cfginstruction.to = instruction.to();
         cfginstruction.functions = self.get_instruction_functions(&instruction);
         if cfg.config.semantics.enabled {
-            let semantics = semantics::cil::build(&instruction);
+            let semantics = semantics::disassemblers::cil::build(&instruction);
             self.log_semantics_debug(&semantics, &instruction);
             cfginstruction.semantics = Some(semantics);
         }

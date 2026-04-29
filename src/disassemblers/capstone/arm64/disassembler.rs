@@ -911,7 +911,7 @@ impl<'disassembler> Disassembler<'disassembler> {
                 .get_instruction_condition_code(instruction)
                 .ok()
                 .flatten();
-            let semantics = semantics::capstone::arm64::build(
+            let semantics = semantics::disassemblers::capstone::arm64::build(
                 self.machine,
                 instruction,
                 &operands,

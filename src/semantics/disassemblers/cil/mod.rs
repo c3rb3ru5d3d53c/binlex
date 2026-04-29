@@ -20,16 +20,29 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod architectures;
-pub mod disassemblers;
-pub mod ir;
+use crate::disassemblers::cil::Instruction;
+use crate::semantics::InstructionSemantics;
+use crate::semantics::architectures;
+use crate::semantics::architectures::cil::CilInstructionView;
 
-pub use ir::{
-    InstructionEncoding, InstructionSemantics, InstructionSemanticsJson, SemanticAddressSpace,
-    SemanticDiagnostic, SemanticDiagnosticKind, SemanticEffect, SemanticEffectKind,
-    SemanticExpression, SemanticExpressionKind, SemanticFenceKind, SemanticLocation,
-    SemanticLocationKind, SemanticOperation, SemanticOperationBinary, SemanticOperationCast,
-    SemanticOperationCompare, SemanticOperationUnary, SemanticStatus, SemanticTemporary,
-    SemanticTerminator, SemanticTerminatorKind, SemanticTrapKind, normalize_instruction_semantics,
-    validate_instruction_semantics,
-};
+#[cfg(test)]
+mod tests;
+
+pub fn instruction_view(instruction: &Instruction<'_>) -> CilInstructionView {
+    CilInstructionView::new(
+        instruction.mnemonic.name(),
+        instruction.address,
+        instruction.operand_bytes(),
+        instruction.next(),
+        instruction.to(),
+        instruction.is_call(),
+        instruction.is_return(),
+        instruction.is_jump(),
+        instruction.is_conditional_jump(),
+        instruction.is_switch(),
+    )
+}
+
+pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
+    architectures::cil::build(instruction_view(instruction))
+}

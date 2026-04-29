@@ -20,16 +20,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod architectures;
-pub mod disassemblers;
-pub mod ir;
-
-pub use ir::{
-    InstructionEncoding, InstructionSemantics, InstructionSemanticsJson, SemanticAddressSpace,
-    SemanticDiagnostic, SemanticDiagnosticKind, SemanticEffect, SemanticEffectKind,
-    SemanticExpression, SemanticExpressionKind, SemanticFenceKind, SemanticLocation,
-    SemanticLocationKind, SemanticOperation, SemanticOperationBinary, SemanticOperationCast,
-    SemanticOperationCompare, SemanticOperationUnary, SemanticStatus, SemanticTemporary,
-    SemanticTerminator, SemanticTerminatorKind, SemanticTrapKind, normalize_instruction_semantics,
-    validate_instruction_semantics,
-};
+pub mod arithmetic;
+pub mod control;
+pub mod memory;
+pub mod object;
+pub mod runtime;
+pub mod stack;

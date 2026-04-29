@@ -20,16 +20,36 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod architectures;
-pub mod disassemblers;
-pub mod ir;
+use crate::semantics::InstructionSemantics;
 
-pub use ir::{
-    InstructionEncoding, InstructionSemantics, InstructionSemanticsJson, SemanticAddressSpace,
-    SemanticDiagnostic, SemanticDiagnosticKind, SemanticEffect, SemanticEffectKind,
-    SemanticExpression, SemanticExpressionKind, SemanticFenceKind, SemanticLocation,
-    SemanticLocationKind, SemanticOperation, SemanticOperationBinary, SemanticOperationCast,
-    SemanticOperationCompare, SemanticOperationUnary, SemanticStatus, SemanticTemporary,
-    SemanticTerminator, SemanticTerminatorKind, SemanticTrapKind, normalize_instruction_semantics,
-    validate_instruction_semantics,
-};
+pub mod instruction;
+pub mod builders;
+pub mod helpers;
+
+pub use instruction::CilInstructionView;
+
+pub fn build(view: CilInstructionView) -> InstructionSemantics {
+    if let Some(semantics) = builders::control::build(&view) {
+        return semantics;
+    }
+    if let Some(semantics) = builders::stack::build(&view) {
+        return semantics;
+    }
+    if let Some(semantics) = builders::arithmetic::build(&view) {
+        return semantics;
+    }
+    if let Some(semantics) = builders::memory::build(&view) {
+        return semantics;
+    }
+    if let Some(semantics) = builders::object::build(&view) {
+        return semantics;
+    }
+    if let Some(semantics) = builders::runtime::build(&view) {
+        return semantics;
+    }
+
+    helpers::common::partial_intrinsic_fallthrough(
+        &view,
+        "CIL stack effects currently modeled as intrinsics",
+    )
+}

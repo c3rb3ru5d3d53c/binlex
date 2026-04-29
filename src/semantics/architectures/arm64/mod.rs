@@ -20,16 +20,40 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod architectures;
-pub mod disassemblers;
-pub mod ir;
+use crate::semantics::InstructionSemantics;
 
-pub use ir::{
-    InstructionEncoding, InstructionSemantics, InstructionSemanticsJson, SemanticAddressSpace,
-    SemanticDiagnostic, SemanticDiagnosticKind, SemanticEffect, SemanticEffectKind,
-    SemanticExpression, SemanticExpressionKind, SemanticFenceKind, SemanticLocation,
-    SemanticLocationKind, SemanticOperation, SemanticOperationBinary, SemanticOperationCast,
-    SemanticOperationCompare, SemanticOperationUnary, SemanticStatus, SemanticTemporary,
-    SemanticTerminator, SemanticTerminatorKind, SemanticTrapKind, normalize_instruction_semantics,
-    validate_instruction_semantics,
-};
+pub mod instruction;
+pub mod operand;
+pub mod builders;
+pub mod helpers;
+
+pub use instruction::Arm64InstructionView;
+pub use operand::{Arm64MemoryOperandView, Arm64OperandKind, Arm64OperandView};
+
+pub fn build(view: Arm64InstructionView) -> Option<InstructionSemantics> {
+    if let Some(semantics) = builders::control::build(&view) {
+        return Some(semantics);
+    }
+    if let Some(semantics) = builders::integer::build(&view) {
+        return Some(semantics);
+    }
+    if let Some(semantics) = builders::multiply::build(&view) {
+        return Some(semantics);
+    }
+    if let Some(semantics) = builders::fp::build(&view) {
+        return Some(semantics);
+    }
+    if let Some(semantics) = builders::atomic::build(&view) {
+        return Some(semantics);
+    }
+    if let Some(semantics) = builders::memory::build(&view) {
+        return Some(semantics);
+    }
+    if let Some(semantics) = builders::system::build(&view) {
+        return Some(semantics);
+    }
+    if let Some(semantics) = builders::vector::build(&view) {
+        return Some(semantics);
+    }
+    None
+}
