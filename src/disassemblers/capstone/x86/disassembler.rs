@@ -528,7 +528,8 @@ impl<'disassembler> Disassembler<'disassembler> {
         }
 
         if cfg.config.semantics.enabled {
-            let semantics = semantics::capstone::x86::build(self.machine, instruction, &operands);
+            let semantics =
+                semantics::disassemblers::capstone::x86::build(self.machine, instruction, &operands);
             self.log_semantics_debug(&semantics, instruction);
             blinstruction.semantics = Some(semantics);
         }
