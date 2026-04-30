@@ -134,6 +134,44 @@ impl PyMachoSlice {
             .collect()
     }
 
+    #[pyo3(text_signature = "($self, virtual_address)")]
+    pub fn virtual_address_to_symbol(
+        &self,
+        py: Python<'_>,
+        virtual_address: u64,
+    ) -> PyResult<Option<Py<PySymbol>>> {
+        self.with_slice(|slice: InnerMachoSlice<'_>| slice.virtual_address_to_symbol(virtual_address))
+            .flatten()
+            .map(|symbol| Py::new(py, PySymbol::from_inner(symbol)))
+            .transpose()
+    }
+
+    #[pyo3(text_signature = "($self, relative_virtual_address)")]
+    pub fn relative_virtual_address_to_symbol(
+        &self,
+        py: Python<'_>,
+        relative_virtual_address: u64,
+    ) -> PyResult<Option<Py<PySymbol>>> {
+        self.with_slice(|slice: InnerMachoSlice<'_>| {
+            slice.relative_virtual_address_to_symbol(relative_virtual_address)
+        })
+        .flatten()
+        .map(|symbol| Py::new(py, PySymbol::from_inner(symbol)))
+        .transpose()
+    }
+
+    #[pyo3(text_signature = "($self, offset)")]
+    pub fn offset_to_symbol(
+        &self,
+        py: Python<'_>,
+        offset: u64,
+    ) -> PyResult<Option<Py<PySymbol>>> {
+        self.with_slice(|slice: InnerMachoSlice<'_>| slice.offset_to_symbol(offset))
+            .flatten()
+            .map(|symbol| Py::new(py, PySymbol::from_inner(symbol)))
+            .transpose()
+    }
+
     #[pyo3(text_signature = "($self)")]
     pub fn entrypoint_virtual_addresses(&self) -> BTreeSet<u64> {
         self.with_slice(|slice: InnerMachoSlice<'_>| slice.entrypoint_virtual_addresses())
@@ -287,6 +325,51 @@ impl MACHO {
             .into_values()
             .map(|symbol| Py::new(py, PySymbol::from_inner(symbol)))
             .collect()
+    }
+
+    #[pyo3(text_signature = "($self, virtual_address, slice)")]
+    pub fn virtual_address_to_symbol(
+        &self,
+        py: Python<'_>,
+        virtual_address: u64,
+        slice: usize,
+    ) -> PyResult<Option<Py<PySymbol>>> {
+        self.inner
+            .lock()
+            .unwrap()
+            .virtual_address_to_symbol(virtual_address, slice)
+            .map(|symbol| Py::new(py, PySymbol::from_inner(symbol)))
+            .transpose()
+    }
+
+    #[pyo3(text_signature = "($self, relative_virtual_address, slice)")]
+    pub fn relative_virtual_address_to_symbol(
+        &self,
+        py: Python<'_>,
+        relative_virtual_address: u64,
+        slice: usize,
+    ) -> PyResult<Option<Py<PySymbol>>> {
+        self.inner
+            .lock()
+            .unwrap()
+            .relative_virtual_address_to_symbol(relative_virtual_address, slice)
+            .map(|symbol| Py::new(py, PySymbol::from_inner(symbol)))
+            .transpose()
+    }
+
+    #[pyo3(text_signature = "($self, offset, slice)")]
+    pub fn offset_to_symbol(
+        &self,
+        py: Python<'_>,
+        offset: u64,
+        slice: usize,
+    ) -> PyResult<Option<Py<PySymbol>>> {
+        self.inner
+            .lock()
+            .unwrap()
+            .offset_to_symbol(offset, slice)
+            .map(|symbol| Py::new(py, PySymbol::from_inner(symbol)))
+            .transpose()
     }
 
     #[pyo3(text_signature = "($self, slice)")]

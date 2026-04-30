@@ -35,7 +35,6 @@ class Disassembler:
         self,
         machine,
         image,
-        metadata_token_addresses,
         executable_address_ranges,
         config,
     ):
@@ -45,26 +44,37 @@ class Disassembler:
         self._inner = _DisassemblerBinding(
             _coerce_architecture(machine),
             image,
-            metadata_token_addresses,
             executable_address_ranges,
             config,
         )
 
-    def disassemble_instruction(self, address, cfg):
+    def disassemble_instruction(self, address, cfg, metadata_token_addresses=None):
         """Disassemble a single instruction into the provided graph."""
-        return self._inner.disassemble_instruction(address, cfg._inner)
+        return self._inner.disassemble_instruction(
+            address,
+            cfg._inner,
+            metadata_token_addresses,
+        )
 
-    def disassemble_function(self, address, cfg):
+    def disassemble_function(self, address, cfg, metadata_token_addresses=None):
         """Disassemble the function that starts at `address` into the graph."""
-        return self._inner.disassemble_function(address, cfg._inner)
+        return self._inner.disassemble_function(
+            address,
+            cfg._inner,
+            metadata_token_addresses,
+        )
 
-    def disassemble_block(self, address, cfg):
+    def disassemble_block(self, address, cfg, metadata_token_addresses=None):
         """Disassemble the basic block that starts at `address`."""
-        return self._inner.disassemble_block(address, cfg._inner)
+        return self._inner.disassemble_block(
+            address,
+            cfg._inner,
+            metadata_token_addresses,
+        )
 
-    def disassemble(self, addresses, cfg):
+    def disassemble(self, addresses, cfg, metadata_token_addresses=None):
         """Disassemble a set of entrypoint addresses into the graph."""
-        return self._inner.disassemble(addresses, cfg._inner)
+        return self._inner.disassemble(addresses, cfg._inner, metadata_token_addresses)
 
     def __getattr__(self, name):
         return getattr(self._inner, name)

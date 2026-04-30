@@ -81,7 +81,7 @@ pub struct SymbolJson {
     pub symbol_type: String,
     /// Names associated with the function symbol.
     pub name: String,
-    /// The virtual address of the function symbol.
+    /// The canonical address of the function symbol.
     pub address: u64,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub username: String,
@@ -94,20 +94,44 @@ pub struct SymbolJson {
 pub struct Symbol {
     /// Names associated with the function symbol.
     pub name: String,
-    /// The virtual address of the function symbol.
-    pub address: u64,
+    /// The file offset of the function symbol.
+    pub offset: u64,
+    /// The virtual address of the function symbol, if available.
+    pub virtual_address: Option<u64>,
+    /// The relative virtual address of the function symbol, if available.
+    pub relative_virtual_address: Option<u64>,
     /// The kind of symbol.
     pub kind: SymbolKind,
 }
 
 impl Symbol {
     #[allow(dead_code)]
-    pub fn new(address: u64, kind: SymbolKind, name: String) -> Self {
+    pub fn new(
+        offset: u64,
+        virtual_address: Option<u64>,
+        relative_virtual_address: Option<u64>,
+        kind: SymbolKind,
+        name: String,
+    ) -> Self {
         Self {
             name,
-            address,
+            offset,
+            virtual_address,
+            relative_virtual_address,
             kind,
         }
+    }
+
+    pub fn offset(&self) -> u64 {
+        self.offset
+    }
+
+    pub fn virtual_address(&self) -> Option<u64> {
+        self.virtual_address
+    }
+
+    pub fn relative_virtual_address(&self) -> Option<u64> {
+        self.relative_virtual_address
     }
 
     /// Processes the function signature into its JSON-serializable representation.
@@ -120,7 +144,7 @@ impl Symbol {
             type_: "symbol".to_string(),
             symbol_type: self.kind.to_string(),
             name: self.name.clone(),
-            address: self.address,
+            address: self.virtual_address.unwrap_or(self.offset),
             username: String::new(),
             timestamp: String::new(),
         }

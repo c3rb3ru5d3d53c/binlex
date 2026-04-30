@@ -29,12 +29,21 @@ use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeJson;
 use crate::hex;
 use crate::imaging::Imaging;
+use crate::io::Stderr;
 use crate::lifters::llvm::{LiftersJson, LlvmJson};
 #[cfg(not(target_os = "windows"))]
 use crate::lifters::vex::{Lifter as VexLifter, VexJson};
 use crate::metadata::Attributes;
+use crate::semantics::architectures;
 use crate::semantics::InstructionSemantics;
 use crate::semantics::InstructionSemanticsJson;
+use crate::semantics::{
+    InstructionEncoding, SemanticDiagnostic, SemanticDiagnosticKind, SemanticEffect,
+    SemanticStatus, SemanticTerminator,
+};
+use crate::semantics::architectures::arm64::Arm64InstructionView;
+use crate::semantics::architectures::cil::CilInstructionView;
+use crate::semantics::architectures::x86::X86InstructionView;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Value;
@@ -90,6 +99,41 @@ pub struct SpecialOperand {
 /// This struct encapsulates metadata and properties of an instruction,
 /// such as its address, type, and relationships with other instructions.
 #[derive(Clone)]
+pub enum InstructionSemanticsInput {
+    X86(X86InstructionView),
+    Arm64(Arm64InstructionView),
+    Cil(CilInstructionView),
+}
+
+impl InstructionSemanticsInput {
+    pub fn build(self) -> InstructionSemantics {
+        match self {
+            Self::X86(view) => architectures::x86::build(view.clone()).unwrap_or_else(|| {
+                unsupported_fallthrough(
+                    view.machine.to_string(),
+                    view.address,
+                    view.mnemonic.clone(),
+                    view.operand_text,
+                    view.bytes,
+                    "x86 mnemonic not implemented",
+                )
+            }),
+            Self::Arm64(view) => architectures::arm64::build(view.clone()).unwrap_or_else(|| {
+                unsupported_fallthrough(
+                    view.machine.to_string(),
+                    view.address,
+                    view.mnemonic.clone(),
+                    view.operand_text,
+                    view.bytes,
+                    "arm64 mnemonic not implemented",
+                )
+            }),
+            Self::Cil(view) => architectures::cil::build(view),
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct Instruction {
     // The instruction architecture
     pub architecture: Architecture,
@@ -133,6 +177,8 @@ pub struct Instruction {
     pub disassembly: String,
     /// Normalized decoded operands.
     pub operands: Vec<Operand>,
+    /// Architecture-owned semantics input captured at decode time.
+    pub semantics_input: Option<InstructionSemanticsInput>,
     /// Optional canonical instruction semantics for later lifting.
     pub semantics: Option<InstructionSemantics>,
 }
@@ -245,6 +291,7 @@ impl Instruction {
             mnemonic: String::new(),
             disassembly: String::new(),
             operands: Vec::new(),
+            semantics_input: None,
             semantics: None,
             architecture,
             config,
@@ -292,6 +339,27 @@ impl Instruction {
     /// Replaces the canonical semantics attached to this instruction.
     pub fn set_semantics(&mut self, semantics: InstructionSemantics) {
         self.semantics = Some(semantics);
+    }
+
+    pub fn set_semantics_input(&mut self, input: InstructionSemanticsInput) {
+        self.semantics_input = Some(input);
+    }
+
+    pub fn build_semantics(&self) -> Option<InstructionSemantics> {
+        self.semantics_input.clone().map(InstructionSemanticsInput::build)
+    }
+
+    pub fn build_and_log_semantics(&self) -> Option<InstructionSemantics> {
+        let semantics = self.build_semantics()?;
+        log_semantics_debug(
+            &self.config,
+            self.address,
+            &self.mnemonic,
+            &self.disassembly,
+            &self.bytes,
+            &semantics,
+        );
+        Some(semantics)
     }
 
     /// Retrieves the set of addresses for the blocks this instruction may branch to.
@@ -564,5 +632,120 @@ impl Instruction {
         if let Ok(json) = self.json() {
             println!("{}", json);
         }
+    }
+}
+
+fn log_semantics_debug(
+    config: &Config,
+    address: u64,
+    mnemonic: &str,
+    disassembly: &str,
+    bytes: &[u8],
+    semantics: &InstructionSemantics,
+) {
+    let has_intrinsic_effect = semantics
+        .effects
+        .iter()
+        .any(|effect| matches!(effect, SemanticEffect::Intrinsic { .. }));
+    let intrinsic_effects = semantics
+        .effects
+        .iter()
+        .filter_map(|effect| match effect {
+            SemanticEffect::Intrinsic { name, .. } => Some(name.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    if semantics.status == SemanticStatus::Complete
+        && semantics.diagnostics.is_empty()
+        && !has_intrinsic_effect
+    {
+        return;
+    }
+
+    let bytes = bytes
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<Vec<_>>()
+        .join("");
+
+    let summary = if semantics.diagnostics.is_empty() {
+        format!(
+            "no diagnostics; mnemonic={}; disassembly={}; bytes={}; effects={}; intrinsic_effects={}; terminator={:?}",
+            mnemonic,
+            disassembly,
+            bytes,
+            semantics.effects.len(),
+            if intrinsic_effects.is_empty() {
+                "none".to_string()
+            } else {
+                intrinsic_effects.join(",")
+            },
+            semantics.terminator.kind()
+        )
+    } else {
+        format!(
+            "mnemonic={}; disassembly={}; bytes={}; intrinsic_effects={}; {}",
+            mnemonic,
+            disassembly,
+            bytes,
+            if intrinsic_effects.is_empty() {
+                "none".to_string()
+            } else {
+                intrinsic_effects.join(",")
+            },
+            semantics
+                .diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.message.as_str())
+                .collect::<Vec<_>>()
+                .join("; ")
+        )
+    };
+
+    Stderr::print_debug(
+        config,
+        format!(
+            "0x{:x}: semantics status={:?}, diagnostics={}",
+            address, semantics.status, summary
+        ),
+    );
+}
+
+fn diagnostic(kind: SemanticDiagnosticKind, message: impl Into<String>) -> SemanticDiagnostic {
+    SemanticDiagnostic {
+        kind,
+        message: message.into(),
+    }
+}
+
+fn unsupported_fallthrough(
+    architecture: String,
+    address: u64,
+    mnemonic: String,
+    operand_text: Option<String>,
+    bytes: Vec<u8>,
+    message: &str,
+) -> InstructionSemantics {
+    InstructionSemantics {
+        version: 1,
+        status: SemanticStatus::Partial,
+        abi: None,
+        encoding: Some(InstructionEncoding {
+            architecture,
+            mnemonic: mnemonic.clone(),
+            disassembly: match operand_text {
+                Some(op_str) if !op_str.is_empty() => format!("{} {}", mnemonic, op_str),
+                _ => mnemonic.clone(),
+            },
+            address,
+            bytes,
+        }),
+        temporaries: Vec::new(),
+        effects: Vec::new(),
+        terminator: SemanticTerminator::FallThrough,
+        diagnostics: vec![diagnostic(
+            SemanticDiagnosticKind::UnsupportedInstruction,
+            format!("0x{:x}: {} ({})", address, message, mnemonic),
+        )],
     }
 }

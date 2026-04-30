@@ -269,7 +269,14 @@ fn get_elf_function_symbols(elf: &ELF, read_stdin: bool) -> BTreeMap<u64, Symbol
 
     if json.is_ok() {
         for value in json.unwrap().values() {
+            let offset = value
+                .get("file_offset")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
             let address = value.get("virtual_address").and_then(|v| v.as_u64());
+            let relative_virtual_address = value
+                .get("relative_virtual_address")
+                .and_then(|v| v.as_u64());
             let name = value.get("name").and_then(|v| v.as_str());
             let symbol_type = value.get("symbol_type").and_then(|v| v.as_str());
             if address.is_none() {
@@ -282,7 +289,9 @@ fn get_elf_function_symbols(elf: &ELF, read_stdin: bool) -> BTreeMap<u64, Symbol
                 continue;
             }
             let symbol = Symbol::new(
-                address.unwrap(),
+                offset,
+                Some(address.unwrap()),
+                relative_virtual_address,
                 parse_symbol_kind(symbol_type.unwrap()),
                 name.unwrap().to_string(),
             );
@@ -367,7 +376,14 @@ fn get_macho_function_symbols(macho: &MACHO, read_stdin: bool) -> BTreeMap<u64, 
 
     if json.is_ok() {
         for value in json.unwrap().values() {
+            let offset = value
+                .get("file_offset")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
             let address = value.get("virtual_address").and_then(|v| v.as_u64());
+            let relative_virtual_address = value
+                .get("relative_virtual_address")
+                .and_then(|v| v.as_u64());
             let name = value.get("name").and_then(|v| v.as_str());
             let symbol_type = value.get("symbol_type").and_then(|v| v.as_str());
             if address.is_none() {
@@ -380,7 +396,9 @@ fn get_macho_function_symbols(macho: &MACHO, read_stdin: bool) -> BTreeMap<u64, 
                 continue;
             }
             let symbol = Symbol::new(
-                address.unwrap(),
+                offset,
+                Some(address.unwrap()),
+                relative_virtual_address,
                 parse_symbol_kind(symbol_type.unwrap()),
                 name.unwrap().to_string(),
             );
@@ -451,7 +469,14 @@ fn get_pe_function_symbols(pe: &PE, read_stdin: bool) -> BTreeMap<u64, Symbol> {
 
     if json.is_ok() {
         for value in json.unwrap().values() {
+            let offset = value
+                .get("file_offset")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
             let address = value.get("virtual_address").and_then(|v| v.as_u64());
+            let relative_virtual_address = value
+                .get("relative_virtual_address")
+                .and_then(|v| v.as_u64());
             let name = value.get("name").and_then(|v| v.as_str());
             let symbol_type = value.get("symbol_type").and_then(|v| v.as_str());
             if address.is_none() {
@@ -464,7 +489,9 @@ fn get_pe_function_symbols(pe: &PE, read_stdin: bool) -> BTreeMap<u64, Symbol> {
                 continue;
             }
             let symbol = Symbol::new(
-                address.unwrap(),
+                offset,
+                Some(address.unwrap()),
+                relative_virtual_address,
                 parse_symbol_kind(symbol_type.unwrap()),
                 name.unwrap().to_string(),
             );
@@ -821,7 +848,6 @@ fn process_pe(
         let disassembler = match CILDisassembler::new(
             pe.architecture(),
             image,
-            pe.dotnet_metadata_token_virtual_addresses().clone(),
             executable_address_ranges.clone(),
             runtime_config.clone(),
         ) {
@@ -833,7 +859,11 @@ fn process_pe(
         };
 
         disassembler
-            .disassemble(entrypoints.clone(), &mut cfg)
+            .disassemble(
+                entrypoints.clone(),
+                pe.dotnet_metadata_token_virtual_addresses().clone(),
+                &mut cfg,
+            )
             .unwrap_or_else(|error| {
                 eprintln!("{}", error);
                 process::exit(1);
@@ -998,7 +1028,6 @@ fn process_code(
             let disassembler = match CILDisassembler::new(
                 architecture,
                 &file.data,
-                BTreeMap::<u64, u64>::new(),
                 executable_address_ranges.clone(),
                 runtime_config.clone(),
             ) {
@@ -1010,7 +1039,7 @@ fn process_code(
             };
 
             disassembler
-                .disassemble(entrypoints, &mut cfg)
+                .disassemble(entrypoints, BTreeMap::<u64, u64>::new(), &mut cfg)
                 .unwrap_or_else(|error| {
                     eprintln!("{}", error);
                     process::exit(1);

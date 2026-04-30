@@ -176,6 +176,48 @@ impl ELF {
             .collect()
     }
 
+    #[pyo3(text_signature = "($self, virtual_address)")]
+    pub fn virtual_address_to_symbol(
+        &self,
+        py: Python<'_>,
+        virtual_address: u64,
+    ) -> PyResult<Option<Py<PySymbol>>> {
+        self.inner
+            .lock()
+            .unwrap()
+            .virtual_address_to_symbol(virtual_address)
+            .map(|symbol| Py::new(py, PySymbol::from_inner(symbol)))
+            .transpose()
+    }
+
+    #[pyo3(text_signature = "($self, relative_virtual_address)")]
+    pub fn relative_virtual_address_to_symbol(
+        &self,
+        py: Python<'_>,
+        relative_virtual_address: u64,
+    ) -> PyResult<Option<Py<PySymbol>>> {
+        self.inner
+            .lock()
+            .unwrap()
+            .relative_virtual_address_to_symbol(relative_virtual_address)
+            .map(|symbol| Py::new(py, PySymbol::from_inner(symbol)))
+            .transpose()
+    }
+
+    #[pyo3(text_signature = "($self, offset)")]
+    pub fn offset_to_symbol(
+        &self,
+        py: Python<'_>,
+        offset: u64,
+    ) -> PyResult<Option<Py<PySymbol>>> {
+        self.inner
+            .lock()
+            .unwrap()
+            .offset_to_symbol(offset)
+            .map(|symbol| Py::new(py, PySymbol::from_inner(symbol)))
+            .transpose()
+    }
+
     #[pyo3(text_signature = "($self)")]
     pub fn export_virtual_addresses(&self) -> BTreeSet<u64> {
         self.inner.lock().unwrap().export_virtual_addresses()

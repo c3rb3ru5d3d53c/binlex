@@ -129,9 +129,9 @@ fn read_elf_symbols(input: &str) -> AppResult<Vec<SymbolIoJson>> {
             type_: "symbol".to_string(),
             symbol_type: "function".to_string(),
             name: symbol.name,
-            file_offset: None,
-            relative_virtual_address: None,
-            virtual_address: Some(symbol.address),
+            file_offset: Some(symbol.offset),
+            relative_virtual_address: symbol.relative_virtual_address,
+            virtual_address: symbol.virtual_address,
             slice: None,
         })
         .collect())
@@ -148,9 +148,9 @@ fn read_macho_symbols(input: &str) -> AppResult<Vec<SymbolIoJson>> {
                 type_: "symbol".to_string(),
                 symbol_type: "function".to_string(),
                 name: symbol.name,
-                file_offset: None,
-                relative_virtual_address: None,
-                virtual_address: Some(symbol.address),
+                file_offset: Some(symbol.offset),
+                relative_virtual_address: symbol.relative_virtual_address,
+                virtual_address: symbol.virtual_address,
                 slice: Some(slice.index()),
             });
         }

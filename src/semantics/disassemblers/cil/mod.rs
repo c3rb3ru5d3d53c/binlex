@@ -20,29 +20,5 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::disassemblers::cil::Instruction;
-use crate::semantics::InstructionSemantics;
-use crate::semantics::architectures;
-use crate::semantics::architectures::cil::CilInstructionView;
-
 #[cfg(test)]
 mod tests;
-
-pub fn instruction_view(instruction: &Instruction<'_>) -> CilInstructionView {
-    CilInstructionView::new(
-        instruction.mnemonic.name(),
-        instruction.address,
-        instruction.operand_bytes(),
-        instruction.next(),
-        instruction.to(),
-        instruction.is_call(),
-        instruction.is_return(),
-        instruction.is_jump(),
-        instruction.is_conditional_jump(),
-        instruction.is_switch(),
-    )
-}
-
-pub fn build(instruction: &Instruction<'_>) -> InstructionSemantics {
-    architectures::cil::build(instruction_view(instruction))
-}

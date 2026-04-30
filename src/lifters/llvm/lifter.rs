@@ -4,7 +4,6 @@ use crate::Config;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::io::Stderr;
 use self::helpers::push_unique_location;
-use self::normalize::normalize_ir_text;
 use crate::lifters::llvm::optimizers::Optimizers;
 use crate::lifters::llvm::prepare::prepare_instruction_semantics;
 use crate::lifters::llvm::verify::verify_module;
@@ -38,7 +37,6 @@ mod expr;
 mod helpers;
 mod memory;
 mod native;
-mod normalize;
 mod returns;
 mod state;
 mod support;
@@ -220,26 +218,6 @@ impl Lifter {
             .write_to_memory_buffer(&codegen.module, inkwell::targets::FileType::Object)
             .map_err(|err| Error::other(err.to_string()))?;
         Ok(buffer.as_slice().to_vec())
-    }
-
-    pub fn normalized(&self) -> Result<Self, Error> {
-        let context: &'static Context = Box::leak(Box::new(Context::create()));
-        let normalized = normalize_ir_text(&self.text());
-        let mut bytes = normalized.into_bytes();
-        bytes.push(0);
-        let buffer = MemoryBuffer::create_from_memory_range_copy(&bytes, "binlex-normalized.ll");
-        let module = context
-            .create_module_from_ir(buffer)
-            .map_err(|err| Error::other(err.to_string()))?;
-        let normalized = Self {
-            config: self.config.clone(),
-            context,
-            module,
-            emitted: self.emitted.clone(),
-            architecture: self.architecture,
-        };
-        normalized.verify_if_enabled()?;
-        Ok(normalized)
     }
 
     pub fn optimizers(&self) -> Result<Optimizers, Error> {

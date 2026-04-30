@@ -23,13 +23,12 @@ fn disassemble_single(
             let disassembler = binlex::disassemblers::cil::Disassembler::new(
                 architecture,
                 bytes,
-                BTreeMap::new(),
                 ranges,
                 config,
             )
             .expect("disassembler");
             disassembler
-                .disassemble_instruction(0, &mut graph)
+                .disassemble_instruction(0, &BTreeMap::new(), &mut graph)
                 .unwrap_or_else(|error| panic!("{name}: instruction should disassemble: {error}"));
         }
         _ => {

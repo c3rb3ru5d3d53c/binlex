@@ -39,6 +39,7 @@ pub use instruction::FloatOperand;
 pub use instruction::ImmediateOperand;
 pub use instruction::Instruction;
 pub use instruction::InstructionJson;
+pub use instruction::InstructionSemanticsInput;
 pub use instruction::MemoryOperand;
 pub use instruction::Operand;
 pub use instruction::OperandKind;

@@ -96,6 +96,22 @@ impl<'a> MachoSlice<'a> {
         self.macho.symbols(self.index)
     }
 
+    pub fn virtual_address_to_symbol(&self, virtual_address: u64) -> Option<BlSymbol> {
+        self.macho.virtual_address_to_symbol(virtual_address, self.index)
+    }
+
+    pub fn relative_virtual_address_to_symbol(
+        &self,
+        relative_virtual_address: u64,
+    ) -> Option<BlSymbol> {
+        self.macho
+            .relative_virtual_address_to_symbol(relative_virtual_address, self.index)
+    }
+
+    pub fn offset_to_symbol(&self, offset: u64) -> Option<BlSymbol> {
+        self.macho.offset_to_symbol(offset, self.index)
+    }
+
     pub fn entrypoint_virtual_addresses(&self) -> BTreeSet<u64> {
         self.macho.entrypoint_virtual_addresses(self.index)
     }
@@ -294,6 +310,23 @@ impl MACHO {
         None
     }
 
+    pub fn virtual_address_to_file_offset(
+        &self,
+        virtual_address: u64,
+        slice: usize,
+    ) -> Option<u64> {
+        let binding = self.macho.iter().nth(slice);
+        binding.as_ref()?;
+        for segment in binding.unwrap().segments() {
+            let start = segment.virtual_address();
+            let end = start + segment.virtual_size();
+            if virtual_address >= start && virtual_address < end {
+                return Some(segment.file_offset() + (virtual_address - start));
+            }
+        }
+        None
+    }
+
     /// Returns the number of binaries contained in the MachO binary.
     ///
     /// # Returns
@@ -387,16 +420,41 @@ impl MACHO {
             if !MACHO::is_function_symbol_type(symbol.get_type()) {
                 continue;
             }
+            let virtual_address = symbol.value();
+            let offset = self.virtual_address_to_file_offset(virtual_address, slice).unwrap_or(0);
             symbols.insert(
-                symbol.value(),
+                virtual_address,
                 BlSymbol {
                     name: symbol.name(),
-                    address: symbol.value(),
+                    offset,
+                    virtual_address: Some(virtual_address),
+                    relative_virtual_address: self
+                        .imagebase(slice)
+                        .map(|imagebase| virtual_address - imagebase),
                     kind: SymbolKind::Function,
                 },
             );
         }
         symbols
+    }
+
+    pub fn virtual_address_to_symbol(&self, virtual_address: u64, slice: usize) -> Option<BlSymbol> {
+        self.symbols(slice).get(&virtual_address).cloned()
+    }
+
+    pub fn relative_virtual_address_to_symbol(
+        &self,
+        relative_virtual_address: u64,
+        slice: usize,
+    ) -> Option<BlSymbol> {
+        let virtual_address = self.relative_virtual_address_to_virtual_address(relative_virtual_address, slice)?;
+        self.virtual_address_to_symbol(virtual_address, slice)
+    }
+
+    pub fn offset_to_symbol(&self, offset: u64, slice: usize) -> Option<BlSymbol> {
+        self.symbols(slice)
+            .into_values()
+            .find(|symbol| symbol.offset == offset)
     }
 
     /// Returns a set of function addresses identified in the MachO slice.

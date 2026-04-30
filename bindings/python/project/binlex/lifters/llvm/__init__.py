@@ -72,12 +72,6 @@ class Lifter:
     def object(self):
         return bytes(self._inner.object())
 
-    def normalized(self):
-        inner = self._inner.normalized()
-        if inner is None:
-            return None
-        return self.__class__(self._architecture, self._config, _inner=inner)
-
     def optimizers(self):
         return Optimizers(self)
 
@@ -152,11 +146,6 @@ class Optimizers:
         if self._lifter is None:
             return None
         return self._lifter.object()
-
-    def normalized(self):
-        if self._lifter is None:
-            return None
-        return self._lifter.normalized()
 
     def verify(self):
         if self._lifter is None:

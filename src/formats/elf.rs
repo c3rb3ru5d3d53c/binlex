@@ -133,16 +133,38 @@ impl ELF {
             .chain(self.elf.symtab_symbols())
             .filter(|symbol| symbol.get_type() == ElfSymbolType::FUNC)
             .map(|symbol| {
+                let virtual_address = symbol.value();
+                let offset = self.virtual_address_to_file_offset(virtual_address).unwrap_or(0);
                 (
-                    symbol.value(),
+                    virtual_address,
                     BlSymbol {
                         name: symbol.name(),
-                        address: symbol.value(),
+                        offset,
+                        virtual_address: Some(virtual_address),
+                        relative_virtual_address: Some(virtual_address - self.imagebase()),
                         kind: SymbolKind::Function,
                     },
                 )
             })
             .collect()
+    }
+
+    pub fn virtual_address_to_symbol(&self, virtual_address: u64) -> Option<BlSymbol> {
+        self.symbols().get(&virtual_address).cloned()
+    }
+
+    pub fn relative_virtual_address_to_symbol(
+        &self,
+        relative_virtual_address: u64,
+    ) -> Option<BlSymbol> {
+        let virtual_address = self.relative_virtual_address_to_virtual_address(relative_virtual_address);
+        self.virtual_address_to_symbol(virtual_address)
+    }
+
+    pub fn offset_to_symbol(&self, offset: u64) -> Option<BlSymbol> {
+        self.symbols()
+            .into_values()
+            .find(|symbol| symbol.offset == offset)
     }
 
     pub fn relative_virtual_address_to_virtual_address(
@@ -159,6 +181,17 @@ impl ELF {
             if file_offset >= start && file_offset < end {
                 let segment_virtual_address = segment.virtual_address();
                 return Some(segment_virtual_address + (file_offset - start));
+            }
+        }
+        None
+    }
+
+    pub fn virtual_address_to_file_offset(&self, virtual_address: u64) -> Option<u64> {
+        for segment in self.elf.segments() {
+            let start = segment.virtual_address();
+            let end = start + segment.virtual_size();
+            if virtual_address >= start && virtual_address < end {
+                return Some(segment.file_offset() + (virtual_address - start));
             }
         }
         None

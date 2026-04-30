@@ -125,21 +125,6 @@ impl Lifter {
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn normalized(&self) -> Option<Self> {
-        match self.inner.lock().unwrap().normalized() {
-            Ok(inner) => Some(Self {
-                config: self.config.clone(),
-                architecture: self.architecture,
-                inner: Arc::new(Mutex::new(inner)),
-            }),
-            Err(err) => {
-                Stderr::print_debug(&self.config, format!("llvm normalize failed: {}", err));
-                None
-            }
-        }
-    }
-
-    #[pyo3(text_signature = "($self)")]
     pub fn mem2reg(&self) -> Option<Self> {
         match self.inner.lock().unwrap().mem2reg() {
             Ok(inner) => Some(Self {

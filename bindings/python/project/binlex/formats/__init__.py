@@ -113,8 +113,14 @@ class Symbol:
     def name(self):
         return self._inner.name()
 
-    def address(self):
-        return self._inner.address()
+    def offset(self):
+        return self._inner.offset()
+
+    def virtual_address(self):
+        return self._inner.virtual_address()
+
+    def relative_virtual_address(self):
+        return self._inner.relative_virtual_address()
 
     def kind(self):
         return self._inner.kind()
@@ -183,6 +189,21 @@ class ELF:
     def symbols(self):
         """Return typed symbols extracted from the ELF image."""
         return [Symbol(item) for item in self._inner.symbols()]
+
+    def virtual_address_to_symbol(self, virtual_address):
+        """Return the symbol exactly matching `virtual_address`, if present."""
+        result = self._inner.virtual_address_to_symbol(virtual_address)
+        return None if result is None else Symbol(result)
+
+    def relative_virtual_address_to_symbol(self, relative_virtual_address):
+        """Return the symbol exactly matching `relative_virtual_address`, if present."""
+        result = self._inner.relative_virtual_address_to_symbol(relative_virtual_address)
+        return None if result is None else Symbol(result)
+
+    def offset_to_symbol(self, offset):
+        """Return the symbol exactly matching `offset`, if present."""
+        result = self._inner.offset_to_symbol(offset)
+        return None if result is None else Symbol(result)
 
     def export_virtual_addresses(self):
         """Return exported symbol virtual addresses."""
@@ -262,6 +283,29 @@ class PE:
         """Return typed symbols extracted from the PE image."""
         return [Symbol(item) for item in self._inner.symbols()]
 
+    def native_symbols(self):
+        """Return native PE symbols only."""
+        return [Symbol(item) for item in self._inner.native_symbols()]
+
+    def dotnet_symbols(self):
+        """Return .NET method symbols only."""
+        return [Symbol(item) for item in self._inner.dotnet_symbols()]
+
+    def virtual_address_to_symbol(self, virtual_address):
+        """Return the symbol exactly matching `virtual_address`, if present."""
+        result = self._inner.virtual_address_to_symbol(virtual_address)
+        return None if result is None else Symbol(result)
+
+    def relative_virtual_address_to_symbol(self, relative_virtual_address):
+        """Return the symbol exactly matching `relative_virtual_address`, if present."""
+        result = self._inner.relative_virtual_address_to_symbol(relative_virtual_address)
+        return None if result is None else Symbol(result)
+
+    def offset_to_symbol(self, offset):
+        """Return the symbol exactly matching `offset`, if present."""
+        result = self._inner.offset_to_symbol(offset)
+        return None if result is None else Symbol(result)
+
     def dotnet_metadata_token_to_virtual_address(self, metadata_token):
         """Resolve a .NET metadata token to its method body virtual address."""
         return self._inner.dotnet_metadata_token_to_virtual_address(metadata_token)
@@ -285,6 +329,22 @@ class PE:
     def dotnet_file_offset_to_metadata_token(self, file_offset):
         """Resolve a .NET method body file offset back to its metadata token."""
         return self._inner.dotnet_file_offset_to_metadata_token(file_offset)
+
+    def native_executable_virtual_address_ranges(self):
+        """Return native executable ranges without .NET-specific remapping."""
+        return self._inner.native_executable_virtual_address_ranges()
+
+    def executable_virtual_address_ranges(self):
+        """Return executable ranges, using .NET ranges automatically when applicable."""
+        return self._inner.executable_virtual_address_ranges()
+
+    def native_entrypoint_virtual_addresses(self):
+        """Return native PE entrypoints without .NET-specific remapping."""
+        return self._inner.native_entrypoint_virtual_addresses()
+
+    def entrypoint_virtual_addresses(self):
+        """Return effective entrypoints, using .NET method entrypoints automatically when applicable."""
+        return self._inner.entrypoint_virtual_addresses()
 
     def __getattr__(self, name):
         """Delegate unknown attributes to the underlying native PE object."""
@@ -325,6 +385,20 @@ class MACHO:
 
         def symbols(self):
             return [Symbol(item) for item in self._inner.symbols()]
+
+        def virtual_address_to_symbol(self, virtual_address):
+            result = self._inner.virtual_address_to_symbol(virtual_address)
+            return None if result is None else Symbol(result)
+
+        def relative_virtual_address_to_symbol(self, relative_virtual_address):
+            result = self._inner.relative_virtual_address_to_symbol(
+                relative_virtual_address
+            )
+            return None if result is None else Symbol(result)
+
+        def offset_to_symbol(self, offset):
+            result = self._inner.offset_to_symbol(offset)
+            return None if result is None else Symbol(result)
 
         def entrypoint_virtual_addresses(self):
             return self._inner.entrypoint_virtual_addresses()
@@ -396,6 +470,23 @@ class MACHO:
     def symbols(self, slice):
         """Return typed symbols extracted from `slice`."""
         return [Symbol(item) for item in self._inner.symbols(slice)]
+
+    def virtual_address_to_symbol(self, virtual_address, slice):
+        """Return the symbol exactly matching `virtual_address` in `slice`, if present."""
+        result = self._inner.virtual_address_to_symbol(virtual_address, slice)
+        return None if result is None else Symbol(result)
+
+    def relative_virtual_address_to_symbol(self, relative_virtual_address, slice):
+        """Return the symbol exactly matching `relative_virtual_address` in `slice`, if present."""
+        result = self._inner.relative_virtual_address_to_symbol(
+            relative_virtual_address, slice
+        )
+        return None if result is None else Symbol(result)
+
+    def offset_to_symbol(self, offset, slice):
+        """Return the symbol exactly matching `offset` in `slice`, if present."""
+        result = self._inner.offset_to_symbol(offset, slice)
+        return None if result is None else Symbol(result)
 
     def entrypoint_virtual_addresses(self, slice):
         """Return all discovered entrypoint virtual addresses for `slice`."""

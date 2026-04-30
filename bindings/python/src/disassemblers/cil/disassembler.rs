@@ -42,7 +42,6 @@ pub struct Disassembler {
     bytes: Option<Py<PyBytes>>,
     memory_view: Option<Py<PyMemoryView>>,
     machine: Py<Architecture>,
-    metadata_token_addresses: BTreeMap<u64, u64>,
     executable_address_ranges: BTreeMap<u64, u64>,
     config: Py<Config>,
 }
@@ -60,7 +59,6 @@ impl Disassembler {
             let disassembler = InnerDisassembler::new(
                 machine,
                 bytes.as_bytes(),
-                self.metadata_token_addresses.clone(),
                 self.executable_address_ranges.clone(),
                 config,
             )
@@ -84,7 +82,6 @@ impl Disassembler {
             let disassembler = InnerDisassembler::new(
                 machine,
                 image,
-                self.metadata_token_addresses.clone(),
                 self.executable_address_ranges.clone(),
                 config,
             )
@@ -101,7 +98,6 @@ impl Disassembler {
             let disassembler = InnerDisassembler::new(
                 machine,
                 &mmap[..],
-                self.metadata_token_addresses.clone(),
                 self.executable_address_ranges.clone(),
                 config,
             )
@@ -119,13 +115,12 @@ impl Disassembler {
 impl Disassembler {
     #[new]
     #[pyo3(
-        text_signature = "(machine, image, metadata_token_addresses, executable_address_ranges, config)"
+        text_signature = "(machine, image, executable_address_ranges, config)"
     )]
     pub fn new(
         py: Python,
         machine: Py<Architecture>,
         image: Py<PyAny>,
-        metadata_token_addresses: BTreeMap<u64, u64>,
         executable_address_ranges: BTreeMap<u64, u64>,
         config: Py<Config>,
     ) -> PyResult<Self> {
@@ -135,7 +130,6 @@ impl Disassembler {
                 bytes: None,
                 memory_view: None,
                 machine,
-                metadata_token_addresses,
                 executable_address_ranges,
                 config,
             });
@@ -147,7 +141,6 @@ impl Disassembler {
                 bytes: Some(bytes),
                 memory_view: None,
                 machine,
-                metadata_token_addresses,
                 executable_address_ranges,
                 config,
             });
@@ -159,7 +152,6 @@ impl Disassembler {
                 bytes: None,
                 memory_view: Some(memory_view),
                 machine,
-                metadata_token_addresses,
                 executable_address_ranges,
                 config,
             });
@@ -170,64 +162,88 @@ impl Disassembler {
         ))
     }
 
-    #[pyo3(text_signature = "($self, address, cfg)")]
+    #[pyo3(text_signature = "($self, address, cfg, metadata_token_addresses=None)")]
     pub fn disassemble_instruction(
         &self,
         py: Python,
         address: u64,
         cfg: Py<Graph>,
+        metadata_token_addresses: Option<BTreeMap<u64, u64>>,
     ) -> Result<u64, Error> {
         let cfg_ref = &mut cfg.borrow_mut(py);
+        let metadata_token_addresses = metadata_token_addresses.unwrap_or_default();
         let result = self
             .with_inner_disassembler(py, |disassembler| {
-                disassembler.disassemble_instruction(address, &mut cfg_ref.inner.lock().unwrap())
+                disassembler.disassemble_instruction(
+                    address,
+                    &metadata_token_addresses,
+                    &mut cfg_ref.inner.lock().unwrap(),
+                )
             })
             .map_err(|error| Error::other(error.to_string()))?;
         Ok(result)
     }
 
-    #[pyo3(text_signature = "($self, address, cfg)")]
+    #[pyo3(text_signature = "($self, address, cfg, metadata_token_addresses=None)")]
     pub fn disassemble_function(
         &self,
         py: Python,
         address: u64,
         cfg: Py<Graph>,
+        metadata_token_addresses: Option<BTreeMap<u64, u64>>,
     ) -> Result<u64, Error> {
         let cfg_ref = &mut cfg.borrow_mut(py);
+        let metadata_token_addresses = metadata_token_addresses.unwrap_or_default();
         let result = self
             .with_inner_disassembler(py, |disassembler| {
-                disassembler.disassemble_function(address, &mut cfg_ref.inner.lock().unwrap())
+                disassembler.disassemble_function(
+                    address,
+                    &metadata_token_addresses,
+                    &mut cfg_ref.inner.lock().unwrap(),
+                )
             })
             .map_err(|error| Error::other(error.to_string()))?;
         Ok(result)
     }
 
-    #[pyo3(text_signature = "($self, address, cfg)")]
+    #[pyo3(text_signature = "($self, address, cfg, metadata_token_addresses=None)")]
     pub fn disassemble_block(
         &self,
         py: Python,
         address: u64,
         cfg: Py<Graph>,
+        metadata_token_addresses: Option<BTreeMap<u64, u64>>,
     ) -> Result<u64, Error> {
         let cfg_ref = &mut cfg.borrow_mut(py);
+        let metadata_token_addresses = metadata_token_addresses.unwrap_or_default();
         let result = self
             .with_inner_disassembler(py, |disassembler| {
-                disassembler.disassemble_block(address, &mut cfg_ref.inner.lock().unwrap())
+                disassembler.disassemble_block(
+                    address,
+                    &metadata_token_addresses,
+                    &mut cfg_ref.inner.lock().unwrap(),
+                )
             })
             .map_err(|error| Error::other(error.to_string()))?;
         Ok(result)
     }
 
-    #[pyo3(text_signature = "($self, addresses, cfg)")]
+    #[pyo3(text_signature = "($self, addresses, cfg, metadata_token_addresses=None)")]
     pub fn disassemble(
         &self,
         py: Python,
         addresses: BTreeSet<u64>,
         cfg: Py<Graph>,
+        metadata_token_addresses: Option<BTreeMap<u64, u64>>,
     ) -> Result<(), Error> {
         let cfg_ref = &mut cfg.borrow_mut(py);
+        let metadata_token_addresses = metadata_token_addresses.unwrap_or_default();
         self.with_inner_disassembler(py, |disassembler| {
-            disassembler.disassemble(addresses, &mut cfg_ref.inner.lock().unwrap())
+            disassembler.disassemble(
+                addresses,
+                metadata_token_addresses,
+                &mut cfg_ref.inner.lock().unwrap(),
+            )
         })
         .map_err(|error| Error::other(error.to_string()))?;
         Ok(())

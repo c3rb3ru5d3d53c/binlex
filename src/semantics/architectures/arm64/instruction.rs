@@ -23,7 +23,7 @@
 use crate::Architecture;
 use crate::semantics::architectures::arm64::operand::Arm64OperandView;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Arm64InstructionView {
     pub machine: Architecture,
     pub address: u64,

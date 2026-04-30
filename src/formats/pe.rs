@@ -64,6 +64,48 @@ pub struct PE {
 }
 
 impl PE {
+    fn dotnet_stream_name(header: &StreamHeader) -> String {
+        let bytes = header.name();
+        let end = bytes.iter().position(|byte| *byte == 0).unwrap_or(bytes.len());
+        String::from_utf8_lossy(&bytes[..end]).to_string()
+    }
+
+    fn dotnet_stream_data(&self, stream_name: &str) -> Option<&[u8]> {
+        let (_, storage_signature) = self.dotnet_parse_storage_signature()?;
+        let metadata_rva = self.dotnet_cor20_header()?.meta_data.virtual_address as u64;
+        let metadata_offset = self.relative_virtual_address_to_file_offset(metadata_rva)? as usize;
+        for header in self.dotnet_stream_headers() {
+            if Self::dotnet_stream_name(header) != stream_name {
+                continue;
+            }
+            let start = metadata_offset.checked_add(header.offset as usize)?;
+            let end = start.checked_add(header.size as usize)?;
+            if end > self.file.data.len() {
+                return None;
+            }
+            let _ = storage_signature;
+            return Some(&self.file.data[start..end]);
+        }
+        None
+    }
+
+    fn dotnet_string(&self, index: &crate::formats::cli::StringHeapIndex) -> Option<String> {
+        if index.offset == 0 {
+            return None;
+        }
+        let strings = self.dotnet_stream_data("#Strings")?;
+        let start = index.offset as usize;
+        if start >= strings.len() {
+            return None;
+        }
+        let tail = &strings[start..];
+        let end = tail.iter().position(|byte| *byte == 0).unwrap_or(tail.len());
+        if end == 0 {
+            return None;
+        }
+        Some(String::from_utf8_lossy(&tail[..end]).to_string())
+    }
+
     fn coff_symbol_name(&self, name_bytes: &[u8; 8], string_table: &[u8]) -> Option<String> {
         if name_bytes[..4] == [0, 0, 0, 0] {
             let offset =
@@ -156,11 +198,11 @@ impl PE {
                 if let Some(name) = self.coff_symbol_name(&name_bytes, string_table) {
                     let section_index = (section_number - 1) as usize;
                     if let Some(section) = sections.get(section_index) {
-                        let address = self.imagebase() + section.virtual_address() + value as u64;
-                        symbols.entry(address).or_insert_with(|| BlSymbol {
-                            name,
-                            address,
-                            kind: Self::coff_symbol_kind(symbol_type),
+                        let virtual_address =
+                            self.imagebase() + section.virtual_address() + value as u64;
+                        let kind = Self::coff_symbol_kind(symbol_type);
+                        symbols.entry(virtual_address).or_insert_with(|| {
+                            self.symbol_from_virtual_address(name, virtual_address, kind)
                         });
                     }
                 }
@@ -177,6 +219,23 @@ impl PE {
             raw
         } else {
             self.imagebase() + raw
+        }
+    }
+
+    fn symbol_from_virtual_address(
+        &self,
+        name: String,
+        virtual_address: u64,
+        kind: SymbolKind,
+    ) -> BlSymbol {
+        BlSymbol {
+            name,
+            offset: self.virtual_address_to_file_offset(virtual_address).unwrap_or(0),
+            virtual_address: Some(virtual_address),
+            relative_virtual_address: Some(
+                self.virtual_address_to_relative_virtual_address(virtual_address),
+            ),
+            kind,
         }
     }
 
@@ -971,11 +1030,8 @@ impl PE {
     /// # Returns
     /// A `BTreeMap` where the key is the start address of the executable range and the value is the end address.
     #[allow(dead_code)]
-    pub fn executable_virtual_address_ranges(&self) -> BTreeMap<u64, u64> {
+    pub fn native_executable_virtual_address_ranges(&self) -> BTreeMap<u64, u64> {
         let mut result = BTreeMap::<u64, u64>::new();
-        if self.is_dotnet() {
-            return result;
-        }
         for section in self.pe.sections() {
             if (section.characteristics().bits() & u64::from(Characteristics::MEM_EXECUTE)) == 0 {
                 continue;
@@ -997,6 +1053,14 @@ impl PE {
             );
         }
         result
+    }
+
+    #[allow(dead_code)]
+    pub fn executable_virtual_address_ranges(&self) -> BTreeMap<u64, u64> {
+        if self.is_dotnet() {
+            return self.dotnet_executable_virtual_address_ranges();
+        }
+        self.native_executable_virtual_address_ranges()
     }
 
     /// Returns a map of Pogo (debug) entries found in the PE file, keyed by their start RVA (Relative Virtual Address).
@@ -1072,7 +1136,7 @@ impl PE {
     /// # Returns
     /// A `BTreeSet` of function addresses in the PE file.
     #[allow(dead_code)]
-    pub fn entrypoint_virtual_addresses(&self) -> BTreeSet<u64> {
+    pub fn native_entrypoint_virtual_addresses(&self) -> BTreeSet<u64> {
         let mut addresses = BTreeSet::<u64>::new();
         addresses.insert(self.entrypoint_virtual_address());
         addresses.extend(self.export_virtual_addresses());
@@ -1080,6 +1144,14 @@ impl PE {
         addresses.extend(self.pogo_virtual_addresses().keys().cloned());
         addresses.extend(self.vtable_executable_virtual_addresses());
         addresses
+    }
+
+    #[allow(dead_code)]
+    pub fn entrypoint_virtual_addresses(&self) -> BTreeSet<u64> {
+        if self.is_dotnet() {
+            return self.dotnet_entrypoint_virtual_addresses();
+        }
+        self.native_entrypoint_virtual_addresses()
     }
 
     /// Returns the entry point address of the PE file.
@@ -1329,7 +1401,7 @@ impl PE {
         addresses
     }
 
-    pub fn symbols(&self) -> BTreeMap<u64, BlSymbol> {
+    pub fn native_symbols(&self) -> BTreeMap<u64, BlSymbol> {
         let mut symbols = self.coff_symbols();
 
         if let Some(export) = self.pe.export() {
@@ -1341,11 +1413,7 @@ impl PE {
                 let address = self.imagebase() + entry.address() as u64;
                 symbols.insert(
                     address,
-                    BlSymbol {
-                        name,
-                        address,
-                        kind: SymbolKind::Export,
-                    },
+                    self.symbol_from_virtual_address(name, address, SymbolKind::Export),
                 );
             }
         }
@@ -1358,14 +1426,116 @@ impl PE {
                     continue;
                 }
                 let address = self.normalize_symbol_address(entry.iat_address());
-                symbols.entry(address).or_insert_with(|| BlSymbol {
-                    name: format!("{library}!{name}"),
-                    address,
-                    kind: SymbolKind::Import,
+                symbols.entry(address).or_insert_with(|| {
+                    self.symbol_from_virtual_address(
+                        format!("{library}!{name}"),
+                        address,
+                        SymbolKind::Import,
+                    )
                 });
             }
         }
 
         symbols
+    }
+
+    pub fn dotnet_symbols(&self) -> BTreeMap<u64, BlSymbol> {
+        let mut symbols = BTreeMap::<u64, BlSymbol>::new();
+        if !self.is_dotnet() {
+            return symbols;
+        }
+
+        let entries = match self.dotnet_metadata_table_entries() {
+            Some(entries) => entries,
+            None => return symbols,
+        };
+
+        let mut typedefs = Vec::<TypeDefEntry>::new();
+        let mut methoddefs = Vec::<MethodDefEntry>::new();
+        for entry in entries {
+            match entry {
+                Entry::TypeDef(entry) => typedefs.push(entry),
+                Entry::MethodDef(entry) => methoddefs.push(entry),
+                _ => {}
+            }
+        }
+
+        let mut method_owner_names = vec![None::<String>; methoddefs.len()];
+        for (type_index, typedef) in typedefs.iter().enumerate() {
+            let start = typedef.method_list.offset.saturating_sub(1) as usize;
+            let end = typedefs
+                .get(type_index + 1)
+                .map(|next| next.method_list.offset.saturating_sub(1) as usize)
+                .unwrap_or(methoddefs.len());
+            let type_name = self.dotnet_string(&typedef.name).unwrap_or_default();
+            let type_namespace = self.dotnet_string(&typedef.namespace).unwrap_or_default();
+            let qualified_name = if type_namespace.is_empty() {
+                type_name
+            } else if type_name.is_empty() {
+                type_namespace
+            } else {
+                format!("{type_namespace}.{type_name}")
+            };
+            for owner_slot in method_owner_names
+                .iter_mut()
+                .take(end.min(methoddefs.len()))
+                .skip(start.min(methoddefs.len()))
+            {
+                *owner_slot = Some(qualified_name.clone());
+            }
+        }
+
+        for (index, method) in methoddefs.iter().enumerate() {
+            if method.rva == 0 {
+                continue;
+            }
+            let mut address = self.relative_virtual_address_to_virtual_address(method.rva as u64);
+            let Ok(method_header) = self.dotnet_method_header(address) else {
+                continue;
+            };
+            let Some(size) = method_header.size() else {
+                continue;
+            };
+            address += size as u64;
+
+            let method_name = self
+                .dotnet_string(&method.name)
+                .unwrap_or_else(|| format!("method_{}", index + 1));
+            let qualified_name = match method_owner_names.get(index).and_then(|name| name.as_ref()) {
+                Some(owner) if !owner.is_empty() => format!("{owner}::{method_name}"),
+                _ => method_name,
+            };
+
+            symbols.insert(
+                address,
+                self.symbol_from_virtual_address(qualified_name, address, SymbolKind::Function),
+            );
+        }
+
+        symbols
+    }
+
+    pub fn symbols(&self) -> BTreeMap<u64, BlSymbol> {
+        let mut symbols = self.native_symbols();
+        symbols.extend(self.dotnet_symbols());
+        symbols
+    }
+
+    pub fn virtual_address_to_symbol(&self, virtual_address: u64) -> Option<BlSymbol> {
+        self.symbols().get(&virtual_address).cloned()
+    }
+
+    pub fn relative_virtual_address_to_symbol(
+        &self,
+        relative_virtual_address: u64,
+    ) -> Option<BlSymbol> {
+        let virtual_address = self.relative_virtual_address_to_virtual_address(relative_virtual_address);
+        self.virtual_address_to_symbol(virtual_address)
+    }
+
+    pub fn offset_to_symbol(&self, offset: u64) -> Option<BlSymbol> {
+        self.symbols()
+            .into_values()
+            .find(|symbol| symbol.offset == offset)
     }
 }
