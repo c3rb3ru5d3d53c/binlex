@@ -20,26 +20,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::Architecture;
-use crate::semantics::{
-    InstructionEncoding, InstructionSemantics, SemanticDiagnostic, SemanticDiagnosticKind,
-    SemanticStatus, SemanticTerminator,
-};
-use crate::semantics::architectures;
-use crate::semantics::architectures::x86::{
-    X86InstructionView, X86MemoryOperandView, X86OperandKind, X86OperandView,
-};
-use capstone::Insn;
-use capstone::arch::ArchOperand;
-use capstone::arch::x86::{X86OperandType, X86Reg};
+use capstone::arch::x86::X86Reg;
 
 #[cfg(test)]
 mod tests;
 
-fn leak_register_name(reg_id: u16) -> &'static str {
-    Box::leak(reg_id_name(reg_id).into_boxed_str())
-}
-
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn reg_id_name(reg_id: u16) -> String {
     match reg_id {
         x if x == X86Reg::X86_REG_AL as u16 => "al".to_string(),
@@ -105,128 +91,5 @@ pub(crate) fn reg_id_name(reg_id: u16) -> String {
         x if x == X86Reg::X86_REG_ST6 as u16 => "st6".to_string(),
         x if x == X86Reg::X86_REG_ST7 as u16 => "st7".to_string(),
         _ => format!("reg_{}", reg_id),
-    }
-}
-
-fn map_operand(operand: &ArchOperand) -> X86OperandView {
-    let ArchOperand::X86Operand(op) = operand else {
-        return X86OperandView {
-            kind: X86OperandKind::Unsupported,
-            size_bits: 0,
-            register_name: None,
-            immediate: None,
-            memory: None,
-        };
-    };
-    let size_bits = (op.size as u16).saturating_mul(8);
-    match op.op_type {
-        X86OperandType::Reg(reg) => X86OperandView {
-            kind: X86OperandKind::Register,
-            size_bits,
-            register_name: Some(leak_register_name(reg.0)),
-            immediate: None,
-            memory: None,
-        },
-        X86OperandType::Imm(value) => X86OperandView {
-            kind: X86OperandKind::Immediate,
-            size_bits,
-            register_name: None,
-            immediate: Some(value),
-            memory: None,
-        },
-        X86OperandType::Mem(mem) => X86OperandView {
-            kind: X86OperandKind::Memory,
-            size_bits,
-            register_name: None,
-            immediate: None,
-            memory: Some(X86MemoryOperandView {
-                base_register_name: (mem.base().0 != 0).then(|| leak_register_name(mem.base().0)),
-                index_register_name: (mem.index().0 != 0).then(|| leak_register_name(mem.index().0)),
-                scale: mem.scale(),
-                displacement: mem.disp(),
-                segment_register_name: (mem.segment().0 != 0)
-                    .then(|| leak_register_name(mem.segment().0)),
-            }),
-        },
-        X86OperandType::Invalid => X86OperandView {
-            kind: X86OperandKind::Invalid,
-            size_bits,
-            register_name: None,
-            immediate: None,
-            memory: None,
-        },
-    }
-}
-
-pub(crate) fn instruction_view(
-    machine: Architecture,
-    instruction: &Insn,
-    operands: &[ArchOperand],
-) -> X86InstructionView {
-    X86InstructionView::new(
-        machine,
-        instruction.address(),
-        instruction.mnemonic().unwrap_or(""),
-        instruction.op_str().map(str::to_string),
-        instruction.bytes().to_vec(),
-        operands.iter().map(map_operand).collect(),
-    )
-}
-
-pub fn build(
-    machine: Architecture,
-    instruction: &Insn,
-    operands: &[ArchOperand],
-) -> InstructionSemantics {
-    let view = instruction_view(machine, instruction, operands);
-    architectures::x86::build(view).unwrap_or_else(|| {
-        unsupported_fallthrough(machine, instruction, "x86 mnemonic not implemented")
-    })
-}
-
-fn diagnostic(kind: SemanticDiagnosticKind, message: impl Into<String>) -> SemanticDiagnostic {
-    SemanticDiagnostic {
-        kind,
-        message: message.into(),
-    }
-}
-
-fn instruction_encoding(machine: Architecture, instruction: &Insn) -> InstructionEncoding {
-    let mnemonic = instruction.mnemonic().unwrap_or("unknown").to_string();
-    let disassembly = match instruction.op_str() {
-        Some(op_str) if !op_str.is_empty() => format!("{mnemonic} {op_str}"),
-        _ => mnemonic.clone(),
-    };
-    InstructionEncoding {
-        architecture: machine.to_string(),
-        mnemonic,
-        disassembly,
-        address: instruction.address(),
-        bytes: instruction.bytes().to_vec(),
-    }
-}
-
-fn unsupported_fallthrough(
-    machine: Architecture,
-    instruction: &Insn,
-    message: &str,
-) -> InstructionSemantics {
-    InstructionSemantics {
-        version: 1,
-        status: SemanticStatus::Partial,
-        abi: None,
-        encoding: Some(instruction_encoding(machine, instruction)),
-        temporaries: Vec::new(),
-        effects: Vec::new(),
-        terminator: SemanticTerminator::FallThrough,
-        diagnostics: vec![diagnostic(
-            SemanticDiagnosticKind::UnsupportedInstruction,
-            format!(
-                "0x{:x}: {} ({})",
-                instruction.address(),
-                message,
-                instruction.mnemonic().unwrap_or("unknown")
-            ),
-        )],
     }
 }

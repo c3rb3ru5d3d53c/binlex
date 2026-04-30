@@ -358,13 +358,16 @@ fn analyze_pe(
         let disassembler = CILDisassembler::new(
             architecture,
             image,
-            pe.dotnet_metadata_token_virtual_addresses(),
             executable_address_ranges,
             config.clone(),
         )
         .map_err(|error| ServerError::processor(error.to_string()))?;
         disassembler
-            .disassemble(entrypoints, &mut cfg)
+            .disassemble(
+                entrypoints,
+                pe.dotnet_metadata_token_virtual_addresses(),
+                &mut cfg,
+            )
             .map_err(|error| ServerError::processor(error.to_string()))?;
     } else {
         let disassembler = Disassembler::new(
@@ -550,13 +553,12 @@ fn analyze_code(
             let disassembler = CILDisassembler::new(
                 architecture,
                 &data,
-                BTreeMap::<u64, u64>::new(),
                 executable_address_ranges,
                 config.clone(),
             )
             .map_err(|error| ServerError::processor(error.to_string()))?;
             disassembler
-                .disassemble(entrypoints, &mut cfg)
+                .disassemble(entrypoints, BTreeMap::<u64, u64>::new(), &mut cfg)
                 .map_err(|error| ServerError::processor(error.to_string()))?;
         }
         Architecture::UNKNOWN => {

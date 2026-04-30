@@ -215,12 +215,42 @@ impl PE {
     }
 
     #[pyo3(text_signature = "($self)")]
+    pub fn native_executable_virtual_address_ranges(&self) -> BTreeMap<u64, u64> {
+        self.inner
+            .lock()
+            .unwrap()
+            .native_executable_virtual_address_ranges()
+    }
+
+    #[pyo3(text_signature = "($self)")]
     /// Return the executable virtual address ranges for the image.
     pub fn executable_virtual_address_ranges(&self) -> BTreeMap<u64, u64> {
         self.inner
             .lock()
             .unwrap()
             .executable_virtual_address_ranges()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn native_symbols(&self, py: Python<'_>) -> PyResult<Vec<Py<PySymbol>>> {
+        self.inner
+            .lock()
+            .unwrap()
+            .native_symbols()
+            .into_values()
+            .map(|symbol| Py::new(py, PySymbol::from_inner(symbol)))
+            .collect()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn dotnet_symbols(&self, py: Python<'_>) -> PyResult<Vec<Py<PySymbol>>> {
+        self.inner
+            .lock()
+            .unwrap()
+            .dotnet_symbols()
+            .into_values()
+            .map(|symbol| Py::new(py, PySymbol::from_inner(symbol)))
+            .collect()
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -232,6 +262,48 @@ impl PE {
             .into_values()
             .map(|symbol| Py::new(py, PySymbol::from_inner(symbol)))
             .collect()
+    }
+
+    #[pyo3(text_signature = "($self, virtual_address)")]
+    pub fn virtual_address_to_symbol(
+        &self,
+        py: Python<'_>,
+        virtual_address: u64,
+    ) -> PyResult<Option<Py<PySymbol>>> {
+        self.inner
+            .lock()
+            .unwrap()
+            .virtual_address_to_symbol(virtual_address)
+            .map(|symbol| Py::new(py, PySymbol::from_inner(symbol)))
+            .transpose()
+    }
+
+    #[pyo3(text_signature = "($self, relative_virtual_address)")]
+    pub fn relative_virtual_address_to_symbol(
+        &self,
+        py: Python<'_>,
+        relative_virtual_address: u64,
+    ) -> PyResult<Option<Py<PySymbol>>> {
+        self.inner
+            .lock()
+            .unwrap()
+            .relative_virtual_address_to_symbol(relative_virtual_address)
+            .map(|symbol| Py::new(py, PySymbol::from_inner(symbol)))
+            .transpose()
+    }
+
+    #[pyo3(text_signature = "($self, offset)")]
+    pub fn offset_to_symbol(
+        &self,
+        py: Python<'_>,
+        offset: u64,
+    ) -> PyResult<Option<Py<PySymbol>>> {
+        self.inner
+            .lock()
+            .unwrap()
+            .offset_to_symbol(offset)
+            .map(|symbol| Py::new(py, PySymbol::from_inner(symbol)))
+            .transpose()
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -250,6 +322,14 @@ impl PE {
             .lock()
             .unwrap()
             .dotnet_entrypoint_virtual_addresses()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn native_entrypoint_virtual_addresses(&self) -> BTreeSet<u64> {
+        self.inner
+            .lock()
+            .unwrap()
+            .native_entrypoint_virtual_addresses()
     }
 
     #[pyo3(text_signature = "($self)")]

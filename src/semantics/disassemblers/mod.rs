@@ -20,5 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#[cfg(test)]
 pub mod capstone;
+#[cfg(test)]
 pub mod cil;

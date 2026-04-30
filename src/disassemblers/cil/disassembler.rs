@@ -24,22 +24,24 @@ use crate::Architecture;
 use crate::Config;
 use crate::controlflow::Graph;
 use crate::controlflow::Instruction as CFGInstruction;
+use crate::controlflow::InstructionSemanticsInput;
+use crate::disassemblers::cil::backends::native;
 use crate::disassemblers::cil::Instruction;
 use crate::genetics::Chromosome;
 use crate::io::Stderr;
-use crate::semantics;
-use crate::semantics::InstructionSemantics;
-use crate::semantics::SemanticStatus;
+use crate::semantics::architectures::cil::CilInstructionView;
 use rayon::ThreadPoolBuilder;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::io::Error;
-use std::io::ErrorKind;
+use std::collections::{BTreeMap, BTreeSet};
+use std::io::{Error, ErrorKind};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Backend {
+    Native,
+}
 
 pub struct Disassembler<'disassembler> {
     pub architecture: Architecture,
-    pub metadata_token_addresses: BTreeMap<u64, u64>,
     pub executable_address_ranges: BTreeMap<u64, u64>,
     pub image: &'disassembler [u8],
     config: Config,
@@ -48,69 +50,34 @@ pub struct Disassembler<'disassembler> {
 impl<'disassembler> Disassembler<'disassembler> {
     const FUNCTION_GROUP_SIZE: usize = 4;
 
-    fn has_effectively_partial_semantics(&self, semantics: &InstructionSemantics) -> bool {
-        if semantics.status != SemanticStatus::Complete || !semantics.diagnostics.is_empty() {
-            return true;
-        }
-        false
-    }
-
-    fn log_semantics_debug(&self, semantics: &InstructionSemantics, instruction: &Instruction) {
-        let effectively_partial = self.has_effectively_partial_semantics(semantics);
-        if !effectively_partial {
-            return;
-        }
-
-        let summary = if semantics.diagnostics.is_empty() {
-            format!(
-                "cil_intrinsic_only_semantics, mnemonic={:?}, effects={}, terminator={:?}",
-                instruction.mnemonic,
-                semantics.effects.len(),
-                semantics.terminator.kind()
-            )
-        } else {
-            semantics
-                .diagnostics
-                .iter()
-                .map(|diagnostic| diagnostic.message.as_str())
-                .collect::<Vec<_>>()
-                .join("; ")
-        };
-
-        Stderr::print_debug(
-            &self.config,
-            format!(
-                "0x{:x}: semantics status={:?}, diagnostics={}",
-                instruction.address,
-                if effectively_partial {
-                    SemanticStatus::Partial
-                } else {
-                    semantics.status
-                },
-                summary
-            ),
-        );
-    }
-
     pub fn new(
         architecture: Architecture,
         image: &'disassembler [u8],
-        metadata_token_addresses: BTreeMap<u64, u64>,
         executable_address_ranges: BTreeMap<u64, u64>,
         config: Config,
     ) -> Result<Self, Error> {
-        match architecture {
-            Architecture::CIL => {}
-            _ => {
-                return Err(Error::new(
-                    ErrorKind::Unsupported,
-                    "unsupported architecture",
-                ));
-            }
+        Self::with_backend(
+            Backend::Native,
+            architecture,
+            image,
+            executable_address_ranges,
+            config,
+        )
+    }
+
+    pub fn with_backend(
+        backend: Backend,
+        architecture: Architecture,
+        image: &'disassembler [u8],
+        executable_address_ranges: BTreeMap<u64, u64>,
+        config: Config,
+    ) -> Result<Self, Error> {
+        match backend {
+            Backend::Native => {}
         }
+        native::validate_architecture(architecture)?;
         Ok(Self {
             architecture,
-            metadata_token_addresses,
             executable_address_ranges,
             image,
             config,
@@ -139,15 +106,17 @@ impl<'disassembler> Disassembler<'disassembler> {
         groups
     }
 
-    fn get_instruction_functions(&self, instruction: &Instruction) -> BTreeSet<u64> {
+    fn get_instruction_functions(
+        &self,
+        instruction: &Instruction,
+        metadata_token_addresses: &BTreeMap<u64, u64>,
+    ) -> BTreeSet<u64> {
         let mut result = BTreeSet::<u64>::new();
         let call_metadata_token = instruction.get_call_metadata_token();
         if call_metadata_token.is_none() {
             return result;
         }
-        let call_address = self
-            .metadata_token_addresses
-            .get(&(call_metadata_token.unwrap() as u64));
+        let call_address = metadata_token_addresses.get(&(call_metadata_token.unwrap() as u64));
         if call_address.is_none() {
             return result;
         }
@@ -155,7 +124,12 @@ impl<'disassembler> Disassembler<'disassembler> {
         result
     }
 
-    pub fn disassemble_instruction(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error> {
+    pub fn disassemble_instruction(
+        &self,
+        address: u64,
+        metadata_token_addresses: &BTreeMap<u64, u64>,
+        cfg: &mut Graph,
+    ) -> Result<u64, Error> {
         cfg.instructions.insert_processed(address);
 
         if !self.is_executable_address(address) {
@@ -166,7 +140,8 @@ impl<'disassembler> Disassembler<'disassembler> {
             ));
         }
 
-        let instruction = match Instruction::new(&self.image[address as usize..], address) {
+        let instruction = match native::decode_instruction(&self.image[address as usize..], address)
+        {
             Ok(instruction) => instruction,
             Err(_) => {
                 cfg.instructions.insert_invalid(address);
@@ -176,6 +151,20 @@ impl<'disassembler> Disassembler<'disassembler> {
                 ));
             }
         };
+        let semantic_view = CilInstructionView::new(
+            instruction.mnemonic.name(),
+            instruction.address,
+            instruction.operand_bytes(),
+            instruction.next(),
+            instruction.to(),
+            instruction.is_call(),
+            instruction.is_return(),
+            instruction.is_jump(),
+            instruction.is_conditional_jump(),
+            instruction.is_switch(),
+        );
+        let function_targets =
+            self.get_instruction_functions(&instruction, metadata_token_addresses);
 
         let mut cfginstruction =
             CFGInstruction::create(address, self.architecture, cfg.config.clone());
@@ -193,15 +182,13 @@ impl<'disassembler> Disassembler<'disassembler> {
                 .mask();
         cfginstruction.edges = instruction.edges();
         cfginstruction.mnemonic = instruction.mnemonic_text();
-        cfginstruction.disassembly = instruction.disassembly_text(&self.metadata_token_addresses);
-        cfginstruction.operands =
-            instruction.normalized_operands(&self.metadata_token_addresses);
+        cfginstruction.disassembly = instruction.disassembly_text(metadata_token_addresses);
+        cfginstruction.operands = instruction.normalized_operands(metadata_token_addresses);
         cfginstruction.to = instruction.to();
-        cfginstruction.functions = self.get_instruction_functions(&instruction);
+        cfginstruction.functions = function_targets;
+        cfginstruction.set_semantics_input(InstructionSemanticsInput::Cil(semantic_view));
         if cfg.config.semantics.enabled {
-            let semantics = semantics::disassemblers::cil::build(&instruction);
-            self.log_semantics_debug(&semantics, &instruction);
-            cfginstruction.semantics = Some(semantics);
+            cfginstruction.semantics = cfginstruction.build_and_log_semantics();
         }
 
         Stderr::print_debug(
@@ -227,7 +214,12 @@ impl<'disassembler> Disassembler<'disassembler> {
         Ok(address)
     }
 
-    pub fn disassemble_block(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error> {
+    pub fn disassemble_block(
+        &self,
+        address: u64,
+        metadata_token_addresses: &BTreeMap<u64, u64>,
+        cfg: &mut Graph,
+    ) -> Result<u64, Error> {
         cfg.blocks.insert_processed(address);
 
         if !self.is_executable_address(address) {
@@ -240,7 +232,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         let mut pc = address;
 
         loop {
-            if let Err(error) = self.disassemble_instruction(pc, cfg) {
+            if let Err(error) = self.disassemble_instruction(pc, metadata_token_addresses, cfg) {
                 cfg.blocks.insert_invalid(address);
                 return Err(error);
             }
@@ -276,7 +268,12 @@ impl<'disassembler> Disassembler<'disassembler> {
         Ok(pc)
     }
 
-    pub fn disassemble_function(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error> {
+    pub fn disassemble_function(
+        &self,
+        address: u64,
+        metadata_token_addresses: &BTreeMap<u64, u64>,
+        cfg: &mut Graph,
+    ) -> Result<u64, Error> {
         cfg.functions.insert_processed(address);
 
         if !self.is_executable_address(address) {
@@ -294,7 +291,7 @@ impl<'disassembler> Disassembler<'disassembler> {
             }
 
             let block_end_address = self
-                .disassemble_block(block_start_address, cfg)
+                .disassemble_block(block_start_address, metadata_token_addresses, cfg)
                 .inspect_err(|_| {
                     cfg.functions.insert_invalid(address);
                 })?;
@@ -319,6 +316,7 @@ impl<'disassembler> Disassembler<'disassembler> {
     pub fn disassemble<'a>(
         &'a self,
         addresses: BTreeSet<u64>,
+        metadata_token_addresses: BTreeMap<u64, u64>,
         cfg: &'a mut Graph,
     ) -> Result<(), Error> {
         let pool = ThreadPoolBuilder::new()
@@ -329,13 +327,8 @@ impl<'disassembler> Disassembler<'disassembler> {
         cfg.functions.enqueue_extend(addresses);
 
         let external_image = self.image;
-
         let external_machine = self.architecture;
-
         let external_executable_address_ranges = self.executable_address_ranges.clone();
-
-        let external_metadata_token_addresses = self.metadata_token_addresses.clone();
-
         let external_config = self.config.clone();
         let graph_config = cfg.config.clone();
 
@@ -352,7 +345,6 @@ impl<'disassembler> Disassembler<'disassembler> {
                             Disassembler::new(
                                 external_machine,
                                 external_image,
-                                external_metadata_token_addresses.clone(),
                                 external_executable_address_ranges.clone(),
                                 external_config.clone(),
                             )
@@ -362,7 +354,11 @@ impl<'disassembler> Disassembler<'disassembler> {
                             let mut graph = Graph::new(external_machine, graph_config.clone());
                             if let Some(disasm) = disasm.as_ref() {
                                 for address in addresses {
-                                    let _ = disasm.disassemble_function(*address, &mut graph);
+                                    let _ = disasm.disassemble_function(
+                                        *address,
+                                        &metadata_token_addresses,
+                                        &mut graph,
+                                    );
                                 }
                             }
                             graph

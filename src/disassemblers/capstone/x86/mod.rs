@@ -20,6 +20,4 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod disassembler;
-
-pub use disassembler::Disassembler;
+pub use crate::disassemblers::x86::Disassembler;

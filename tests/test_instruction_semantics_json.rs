@@ -30,6 +30,7 @@ fn instruction_with_semantics(config: Config) -> Instruction {
         mnemonic: String::new(),
         disassembly: String::new(),
         operands: Vec::new(),
+        semantics_input: None,
         semantics: Some(InstructionSemantics {
             version: 1,
             status: SemanticStatus::Complete,

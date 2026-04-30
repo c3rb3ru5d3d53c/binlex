@@ -23,7 +23,7 @@
 use crate::Architecture;
 use crate::semantics::architectures::x86::operand::X86OperandView;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct X86InstructionView {
     pub machine: Architecture,
     pub address: u64,

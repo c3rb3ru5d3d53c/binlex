@@ -151,13 +151,6 @@ fn llvm_lifter_renders_instruction_block_and_function_ir() {
     assert!(instruction_ir.contains("define void @instruction_0()"));
     assert!(instruction_ir.contains("ret void"));
     assert_eq!(&instruction_bc[..4], b"BC\xc0\xde");
-    let instruction_normalized = instruction_lifter
-        .normalized()
-        .expect("normalized instruction module");
-    let instruction_normalized_text = instruction_normalized.text();
-    assert_eq!(&instruction_normalized.bitcode()[..4], b"BC\xc0\xde");
-    assert!(instruction_normalized_text.contains("define void @f0()"));
-
     let mut block_lifter = Lifter::new(block.architecture(), Config::default());
     block_lifter.lift_block(&block).expect("block should lift");
     block_lifter.verify().expect("block module should verify");
@@ -178,12 +171,6 @@ fn llvm_lifter_renders_instruction_block_and_function_ir() {
     assert!(function_ir.contains("block_0:"));
     assert!(function_ir.contains("source_filename = \"binlex\""));
     assert_eq!(&function_bc[..4], b"BC\xc0\xde");
-    let function_normalized = function_lifter
-        .normalized()
-        .expect("normalized function module");
-    let function_normalized_text = function_normalized.text();
-    assert!(function_normalized_text.contains("define void @f0()"));
-    assert!(function_normalized_text.contains("b0:"));
 }
 
 #[test]
@@ -208,13 +195,6 @@ fn llvm_lifter_handles_noncontiguous_functions() {
     assert!(ir.contains("block_2000:"));
     assert!(ir.contains("br label %block_1000"));
     assert!(ir.contains("br label %block_2000"));
-    let normalized = lifter
-        .normalized()
-        .expect("normalized non-contiguous function");
-    let normalized_text = normalized.text();
-    assert!(normalized_text.contains("define void @f0()"));
-    assert!(normalized_text.contains("b0:"));
-    assert!(normalized_text.contains("b1:"));
 }
 
 #[test]
@@ -250,8 +230,6 @@ fn llvm_lifter_optimizers_chain_and_preserve_outputs() {
     assert!(text.contains("define void @function_0()"));
     assert_eq!(&populated.bitcode()[..4], b"BC\xc0\xde");
 
-    let normalized = populated.normalized().expect("normalized optimized module");
-    assert!(normalized.text().contains("define void @f0()"));
 }
 
 #[test]

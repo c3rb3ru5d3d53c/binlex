@@ -42,10 +42,6 @@ impl Optimizers {
         self.lifter.bitcode()
     }
 
-    pub fn normalized(&self) -> Result<Lifter, Error> {
-        self.lifter.normalized()
-    }
-
     pub fn verify(&self) -> Result<(), Error> {
         self.lifter.verify()
     }

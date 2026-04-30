@@ -663,6 +663,9 @@ impl Graph {
         if existing.operands.is_empty() {
             existing.operands = incoming.operands;
         }
+        if existing.semantics_input.is_none() {
+            existing.semantics_input = incoming.semantics_input;
+        }
         existing.semantics =
             Graph::merge_instruction_semantics(existing.semantics, incoming.semantics);
         existing

@@ -73,6 +73,7 @@ fn instruction(address: u64, bytes: &[u8]) -> Instruction {
         mnemonic: String::new(),
         disassembly: String::new(),
         operands: Vec::new(),
+        semantics_input: None,
         semantics: Some(InstructionSemantics {
             version: 1,
             status: SemanticStatus::Complete,

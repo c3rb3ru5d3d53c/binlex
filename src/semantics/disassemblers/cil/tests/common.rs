@@ -12,10 +12,10 @@ pub(super) fn disassemble_cil_single(name: &str, bytes: &[u8]) -> Instruction {
     ranges.insert(0, bytes.len() as u64);
 
     let mut graph = Graph::new(Architecture::CIL, config.clone());
-    let disassembler = Disassembler::new(Architecture::CIL, bytes, BTreeMap::new(), ranges, config)
+    let disassembler = Disassembler::new(Architecture::CIL, bytes, ranges, config)
         .expect("cil disassembler");
     disassembler
-        .disassemble_instruction(0, &mut graph)
+        .disassemble_instruction(0, &BTreeMap::new(), &mut graph)
         .unwrap_or_else(|error| panic!("{name}: instruction should disassemble: {error}"));
     graph.get_instruction(0).expect("instruction should exist")
 }

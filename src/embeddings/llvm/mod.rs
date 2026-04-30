@@ -79,15 +79,14 @@ fn extend_weighted(features: &mut Vec<f32>, values: impl IntoIterator<Item = f32
 }
 
 fn optimize_lifter(lifter: LlvmLifter) -> Result<LlvmLifter, Error> {
-    lifter
+    Ok(lifter
         .optimizers()?
         .mem2reg()?
         .sroa()?
         .gvn()?
         .cfg()?
         .dce()?
-        .into_lifter()
-        .normalized()
+        .into_lifter())
 }
 
 pub(crate) fn canonical_instruction_bitcode(instruction: &Instruction) -> Result<Vec<u8>, Error> {
