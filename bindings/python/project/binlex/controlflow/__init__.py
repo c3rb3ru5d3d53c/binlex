@@ -951,6 +951,20 @@ class Graph:
             return None
         return Instruction._from_binding(result, self._config)
 
+    def get_block(self, address):
+        """Return the block at `address`, if it exists."""
+        result = self._inner.get_block(address)
+        if result is None:
+            return None
+        return Block._from_binding(result, self._config)
+
+    def get_function(self, address):
+        """Return the function at `address`, if it exists."""
+        result = self._inner.get_function(address)
+        if result is None:
+            return None
+        return Function._from_binding(result, self._config)
+
     def __getattr__(self, name):
         """Delegate unknown attributes to the underlying native graph object."""
         return getattr(self._inner, name)

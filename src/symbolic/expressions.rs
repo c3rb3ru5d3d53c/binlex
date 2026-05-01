@@ -3,7 +3,20 @@ use crate::semantics::{
     SemanticOperationCompare, SemanticOperationUnary,
 };
 use crate::symbolic::{Error, Executor, State};
+use std::collections::BTreeSet;
 use z3::ast::{BV, Bool, RoundingMode};
+
+#[derive(Clone)]
+pub(crate) struct EvaluatedValue {
+    pub(crate) value: BV,
+    pub(crate) deps: BTreeSet<u64>,
+}
+
+#[derive(Clone)]
+pub(crate) struct EvaluatedCondition {
+    pub(crate) value: Bool,
+    pub(crate) deps: BTreeSet<u64>,
+}
 
 impl Executor {
     pub(crate) fn eval_expression(
@@ -11,20 +24,41 @@ impl Executor {
         state: &mut State,
         expression: &SemanticExpression,
         expected_float: bool,
-    ) -> Result<BV, Error> {
+    ) -> Result<EvaluatedValue, Error> {
         match expression {
-            SemanticExpression::Const { value, bits } => state.backend().const_bv(*value, *bits),
+            SemanticExpression::Const { value, bits } => Ok(EvaluatedValue {
+                value: state.backend().const_bv(*value, *bits)?,
+                deps: BTreeSet::new(),
+            }),
             SemanticExpression::Read(location) => self.read_location(state, location),
             SemanticExpression::Load { addr, bits, .. } => {
                 let address = self.eval_expression(state, addr, false)?;
-                let address = self.coerce_address(state, &address)?;
-                state.memory().load(state.backend(), &address, *bits)
+                let address_value = self.coerce_address(state, &address.value)?;
+                let (value, mut deps) =
+                    state.memory().load_with_provenance(state.backend(), &address_value, *bits)?;
+                if address_value.as_u64().is_none() {
+                    deps.extend(address.deps);
+                }
+                if deps.is_empty() && address_value.as_u64().is_some() && *bits <= 64 {
+                    if let Some(concrete) =
+                        state.backend().eval_bv_u64(state.solver_constraints(), &value)?
+                    {
+                        return Ok(EvaluatedValue {
+                            value: state.backend().const_bv(concrete as u128, *bits)?,
+                            deps,
+                        });
+                    }
+                }
+                Ok(EvaluatedValue { value, deps })
             }
             SemanticExpression::Unary { op, arg, bits } => {
                 let arg_expression = arg.as_ref();
                 let arg = self.eval_expression(state, arg_expression, expected_float)?;
-                let arg = state.backend().coerce_bv_width(&arg, *bits)?;
-                self.eval_unary(state, *op, arg, arg_expression, *bits, expected_float)
+                let value = state.backend().coerce_bv_width(&arg.value, *bits)?;
+                Ok(EvaluatedValue {
+                    value: self.eval_unary(state, *op, value, arg_expression, *bits, expected_float)?,
+                    deps: arg.deps,
+                })
             }
             SemanticExpression::Binary {
                 op,
@@ -41,9 +75,14 @@ impl Executor {
                 );
                 let left = self.eval_expression(state, left, binary_is_float)?;
                 let right = self.eval_expression(state, right, binary_is_float)?;
-                let left = state.backend().coerce_bv_width(&left, *bits)?;
-                let right = state.backend().coerce_bv_width(&right, *bits)?;
-                self.eval_binary(state, *op, left, right)
+                let lhs = state.backend().coerce_bv_width(&left.value, *bits)?;
+                let rhs = state.backend().coerce_bv_width(&right.value, *bits)?;
+                let mut deps = left.deps;
+                deps.extend(right.deps);
+                Ok(EvaluatedValue {
+                    value: self.eval_binary(state, *op, lhs, rhs)?,
+                    deps,
+                })
             }
             SemanticExpression::Cast { op, arg, bits } => {
                 let cast_arg_is_float = matches!(
@@ -54,7 +93,10 @@ impl Executor {
                         | SemanticOperationCast::FloatTruncate
                 );
                 let arg = self.eval_expression(state, arg, cast_arg_is_float)?;
-                self.eval_cast(state, *op, arg, *bits)
+                Ok(EvaluatedValue {
+                    value: self.eval_cast(state, *op, arg.value, *bits)?,
+                    deps: arg.deps,
+                })
             }
             SemanticExpression::Compare {
                 op,
@@ -81,11 +123,16 @@ impl Executor {
                 );
                 let left = self.eval_expression(state, left, compare_is_float)?;
                 let right = self.eval_expression(state, right, compare_is_float)?;
-                let width = left.get_size().max(right.get_size()) as u16;
-                let left = state.backend().coerce_bv_width(&left, width)?;
-                let right = state.backend().coerce_bv_width(&right, width)?;
-                let value = self.eval_compare(state, *op, left, right)?;
-                state.backend().bool_to_bv(&value, *bits)
+                let width = left.value.get_size().max(right.value.get_size()) as u16;
+                let lhs = state.backend().coerce_bv_width(&left.value, width)?;
+                let rhs = state.backend().coerce_bv_width(&right.value, width)?;
+                let value = self.eval_compare(state, *op, lhs, rhs)?;
+                let mut deps = left.deps;
+                deps.extend(right.deps);
+                Ok(EvaluatedValue {
+                    value: state.backend().bool_to_bv(&value, *bits)?,
+                    deps,
+                })
             }
             SemanticExpression::Select {
                 condition,
@@ -96,13 +143,22 @@ impl Executor {
                 let condition = self.eval_condition(state, condition)?;
                 let when_true = self.eval_expression(state, when_true, expected_float)?;
                 let when_false = self.eval_expression(state, when_false, expected_float)?;
-                let when_true = state.backend().coerce_bv_width(&when_true, *bits)?;
-                let when_false = state.backend().coerce_bv_width(&when_false, *bits)?;
-                Ok(condition.ite(&when_true, &when_false))
+                let when_true_value = state.backend().coerce_bv_width(&when_true.value, *bits)?;
+                let when_false_value = state.backend().coerce_bv_width(&when_false.value, *bits)?;
+                let mut deps = condition.deps;
+                deps.extend(when_true.deps);
+                deps.extend(when_false.deps);
+                Ok(EvaluatedValue {
+                    value: condition.value.ite(&when_true_value, &when_false_value),
+                    deps,
+                })
             }
             SemanticExpression::Extract { arg, lsb, bits } => {
                 let arg = self.eval_expression(state, arg, expected_float)?;
-                Ok(arg.extract((*lsb + *bits - 1) as u32, *lsb as u32))
+                Ok(EvaluatedValue {
+                    value: arg.value.extract((*lsb + *bits - 1) as u32, *lsb as u32),
+                    deps: arg.deps,
+                })
             }
             SemanticExpression::Concat { parts, bits } => {
                 let mut parts = parts.iter();
@@ -112,14 +168,37 @@ impl Executor {
                 let mut value = self.eval_expression(state, first, expected_float)?;
                 for part in parts {
                     let next = self.eval_expression(state, part, expected_float)?;
-                    value = value.concat(&next);
+                    value.value = value.value.concat(&next.value);
+                    value.deps.extend(next.deps);
                 }
-                state.backend().coerce_bv_width(&value, *bits)
+                Ok(EvaluatedValue {
+                    value: state.backend().coerce_bv_width(&value.value, *bits)?,
+                    deps: value.deps,
+                })
             }
-            SemanticExpression::Undefined { bits } => state.fresh_value("undefined", *bits),
-            SemanticExpression::Poison { bits } => state.fresh_value("poison", *bits),
+            SemanticExpression::Undefined { bits } => {
+                let cell = state.fresh_value("undefined", *bits)?;
+                Ok(EvaluatedValue {
+                    value: cell.value,
+                    deps: cell.def_id.into_iter().collect(),
+                })
+            }
+            SemanticExpression::Poison { bits } => {
+                let cell = state.fresh_value("poison", *bits)?;
+                Ok(EvaluatedValue {
+                    value: cell.value,
+                    deps: cell.def_id.into_iter().collect(),
+                })
+            }
             SemanticExpression::Intrinsic { name, args, bits } => {
-                self.eval_intrinsic_expression(state, name, args, *bits)
+                let mut deps = BTreeSet::new();
+                for arg in args {
+                    deps.extend(self.eval_expression(state, arg, false)?.deps);
+                }
+                Ok(EvaluatedValue {
+                    value: self.eval_intrinsic_expression(state, name, args, *bits)?,
+                    deps,
+                })
             }
         }
     }
@@ -128,9 +207,12 @@ impl Executor {
         &self,
         state: &mut State,
         expression: &SemanticExpression,
-    ) -> Result<Bool, Error> {
+    ) -> Result<EvaluatedCondition, Error> {
         let value = self.eval_expression(state, expression, false)?;
-        Ok(state.backend().bv_to_bool(&value))
+        Ok(EvaluatedCondition {
+            value: state.backend().bv_to_bool(&value.value),
+            deps: value.deps,
+        })
     }
 
     fn eval_unary(

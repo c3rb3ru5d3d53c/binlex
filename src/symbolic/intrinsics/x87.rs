@@ -28,8 +28,8 @@ impl Executor {
                 let [left, right] = evaluated.as_slice() else {
                     return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
                 };
-                let left = state.backend().float_from_ieee_bv(left)?;
-                let right = state.backend().float_from_ieee_bv(right)?;
+                let left = state.backend().float_from_ieee_bv(&left.value)?;
+                let right = state.backend().float_from_ieee_bv(&right.value)?;
                 let rounding = RoundingMode::round_nearest_ties_to_even();
                 let result = match op {
                     "add" => left.add_with_rounding_mode(&right, &rounding),
@@ -44,25 +44,25 @@ impl Executor {
                 let [value] = evaluated.as_slice() else {
                     return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
                 };
-                self.eval_fp_abs(state, value.clone())?
+                self.eval_fp_abs(state, value.value.clone())?
             }
             "neg" => {
                 let [value] = evaluated.as_slice() else {
                     return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
                 };
-                self.eval_fp_neg(state, value.clone())?
+                self.eval_fp_neg(state, value.value.clone())?
             }
             "sqrt" => {
                 let [value] = evaluated.as_slice() else {
                     return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
                 };
-                self.eval_fp_sqrt(state, value.clone())?
+                self.eval_fp_sqrt(state, value.value.clone())?
             }
             "rint" => {
                 let [value] = evaluated.as_slice() else {
                     return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
                 };
-                let value = state.backend().float_from_ieee_bv(value)?;
+                let value = state.backend().float_from_ieee_bv(&value.value)?;
                 let rounded = value.round_to_integral_with_rounding_mode(
                     &RoundingMode::round_nearest_ties_to_even(),
                 );
@@ -72,7 +72,7 @@ impl Executor {
                 let [raw] = evaluated.as_slice() else {
                     return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
                 };
-                let value = state.backend().float_from_ieee_bv(raw)?;
+                let value = state.backend().float_from_ieee_bv(&raw.value)?;
                 let value = state.backend().float_cast(&value, bits)?;
                 state.backend().float_to_ieee_bv(&value)
             }
@@ -80,7 +80,7 @@ impl Executor {
                 let [raw] = evaluated.as_slice() else {
                     return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
                 };
-                let value = state.backend().signed_bv_to_float(raw, bits)?;
+                let value = state.backend().signed_bv_to_float(&raw.value, bits)?;
                 state.backend().float_to_ieee_bv(&value)
             }
             "load_bcd" => {
@@ -88,7 +88,7 @@ impl Executor {
                     return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
                 };
                 let raw = self
-                    .concrete_bv_u128(raw)
+                    .concrete_bv_u128(&raw.value)
                     .ok_or(Error::UnsupportedExpression(
                         "x87 intrinsic requires concrete value",
                     ))?;
@@ -101,7 +101,7 @@ impl Executor {
                 let [value] = evaluated.as_slice() else {
                     return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
                 };
-                let value = state.backend().float_from_ieee_bv(value)?;
+                let value = state.backend().float_from_ieee_bv(&value.value)?;
                 let value = state.backend().float_cast(&value, 32)?;
                 state.backend().float_to_ieee_bv(&value)
             }
@@ -109,7 +109,7 @@ impl Executor {
                 let [value] = evaluated.as_slice() else {
                     return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
                 };
-                let value = state.backend().float_from_ieee_bv(value)?;
+                let value = state.backend().float_from_ieee_bv(&value.value)?;
                 let value = state.backend().float_cast(&value, 64)?;
                 state.backend().float_to_ieee_bv(&value)
             }
@@ -117,7 +117,7 @@ impl Executor {
                 let [value] = evaluated.as_slice() else {
                     return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
                 };
-                let value = self.try_concrete_f64_from_fp_bv(state, value).ok_or(
+                let value = self.try_concrete_f64_from_fp_bv(state, &value.value).ok_or(
                     Error::UnsupportedExpression("x87 intrinsic requires concrete value"),
                 )?;
                 if !value.is_finite() || value < i64::MIN as f64 || value > i64::MAX as f64 {
@@ -132,7 +132,7 @@ impl Executor {
                 let [value] = evaluated.as_slice() else {
                     return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
                 };
-                let concrete = self.try_concrete_f64_from_fp_bv(state, value).ok_or(
+                let concrete = self.try_concrete_f64_from_fp_bv(state, &value.value).ok_or(
                     Error::UnsupportedExpression("x87 intrinsic requires concrete value"),
                 )?;
                 let result = match op {
@@ -149,10 +149,10 @@ impl Executor {
                 let [left, right] = evaluated.as_slice() else {
                     return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
                 };
-                let left = self.try_concrete_f64_from_fp_bv(state, left).ok_or(
+                let left = self.try_concrete_f64_from_fp_bv(state, &left.value).ok_or(
                     Error::UnsupportedExpression("x87 intrinsic requires concrete value"),
                 )?;
-                let right = self.try_concrete_f64_from_fp_bv(state, right).ok_or(
+                let right = self.try_concrete_f64_from_fp_bv(state, &right.value).ok_or(
                     Error::UnsupportedExpression("x87 intrinsic requires concrete value"),
                 )?;
                 let result = match op {
@@ -170,7 +170,7 @@ impl Executor {
                     return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
                 };
                 let (target_bits, trunc) = self.parse_x87_store_int_op(op)?;
-                let value = state.backend().float_from_ieee_bv(value)?;
+                let value = state.backend().float_from_ieee_bv(&value.value)?;
                 let rounded = if trunc {
                     value.to_sbv_with_rounding_mode(
                         &RoundingMode::round_towards_zero(),
@@ -272,12 +272,13 @@ impl Executor {
     pub(crate) fn apply_intrinsic_effect(
         &self,
         state: &mut State,
+        instruction: Option<&crate::semantics::InstructionEncoding>,
         name: &str,
         args: &[SemanticExpression],
         outputs: &[SemanticLocation],
     ) -> Result<(), Error> {
         if name == "x86.x87.xam" {
-            return self.apply_x87_xam_effect(state, args, outputs);
+            return self.apply_x87_xam_effect(state, instruction, args, outputs);
         }
         Err(Error::UnsupportedEffect("intrinsic"))
     }
@@ -285,6 +286,7 @@ impl Executor {
     fn apply_x87_xam_effect(
         &self,
         state: &mut State,
+        instruction: Option<&crate::semantics::InstructionEncoding>,
         args: &[SemanticExpression],
         outputs: &[SemanticLocation],
     ) -> Result<(), Error> {
@@ -295,8 +297,8 @@ impl Executor {
             return Err(Error::UnsupportedEffect("x87 xam outputs"));
         }
 
-        let value = self.eval_expression(state, arg, true)?;
-        let value = state.backend().float_from_ieee_bv(&value)?;
+        let evaluated = self.eval_expression(state, arg, true)?;
+        let value = state.backend().float_from_ieee_bv(&evaluated.value)?;
 
         let c0 = Bool::or(&[value.is_nan(), value.is_infinite()]);
         let c1 = value.is_negative();
@@ -306,8 +308,11 @@ impl Executor {
         let flags = [c0, c1, c2, c3];
         for (output, flag) in outputs.iter().zip(flags.into_iter()) {
             let bits = output.bits();
-            let value = state.backend().bool_to_bv(&flag, bits)?;
-            self.write_location(state, output, value)?;
+            let value = crate::symbolic::expressions::EvaluatedValue {
+                value: state.backend().bool_to_bv(&flag, bits)?,
+                deps: evaluated.deps.clone(),
+            };
+            self.write_location(state, instruction, output, value)?;
         }
         Ok(())
     }

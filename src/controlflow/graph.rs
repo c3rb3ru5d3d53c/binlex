@@ -632,6 +632,16 @@ impl Graph {
             .map(|entry| entry.value().clone())
     }
 
+    pub fn get_block(&self, address: u64) -> Option<Block<'_>> {
+        let _ = self.process_blocks();
+        Block::new(address, self).ok()
+    }
+
+    pub fn get_function(&self, address: u64) -> Option<Function<'_>> {
+        let _ = self.process_functions();
+        Function::new(address, self).ok()
+    }
+
     fn merge_instruction(mut existing: Instruction, incoming: Instruction) -> Instruction {
         existing.is_prologue |= incoming.is_prologue;
         existing.is_block_start |= incoming.is_block_start;
