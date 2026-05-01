@@ -52,20 +52,23 @@ jobs:
             asset: linux-x86_64
             archive_ext: tar.gz
           - os: macos-14
-            runner: macos-14
+            runner: macos-15
             container: "null"
             asset: macos-14-arm64
             archive_ext: tar.gz
+            macos_deployment_target: "14.0"
           - os: macos-15-intel
             runner: macos-15-intel
             container: "null"
             asset: macos-15-intel-x86_64
             archive_ext: tar.gz
+            macos_deployment_target: "15.0"
           - os: macos-15
             runner: macos-15
             container: "null"
             asset: macos-15-arm64
             archive_ext: tar.gz
+            macos_deployment_target: "15.0"
           - os: windows-latest
             runner: windows-latest
             container: "null"
@@ -143,6 +146,7 @@ jobs:
         shell: bash
         run: |
           LLVM_PREFIX="$(brew --prefix llvm)"
+          echo "MACOSX_DEPLOYMENT_TARGET=${{ matrix.macos_deployment_target }}" >> "$GITHUB_ENV"
           echo "LLVM_SYS_221_PREFIX=${LLVM_PREFIX}" >> "$GITHUB_ENV"
           echo "${LLVM_PREFIX}/bin" >> "$GITHUB_PATH"
           "${LLVM_PREFIX}/bin/llvm-config" --version
@@ -341,7 +345,7 @@ jobs:
             asset: linux-x86_64
             archive_ext: tar.gz
           - os: macos-14
-            runner: macos-14
+            runner: macos-15
             asset: macos-14-arm64
             archive_ext: tar.gz
             macos_deployment_target: "14.0"
