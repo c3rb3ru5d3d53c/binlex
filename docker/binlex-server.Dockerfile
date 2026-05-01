@@ -3,7 +3,7 @@ FROM ubuntu:24.04 AS builder
 RUN set -eux; \
     for attempt in 1 2 3; do \
         rm -rf /var/lib/apt/lists/*; \
-        apt-get -o Acquire::Retries=5 update && apt-get install -y --no-install-recommends build-essential ca-certificates curl gnupg libprotobuf-dev libssl-dev lsb-release pkg-config protobuf-compiler software-properties-common && break; \
+        apt-get -o Acquire::Retries=5 update && apt-get install -y --no-install-recommends build-essential ca-certificates cmake curl gnupg libprotobuf-dev libssl-dev lsb-release pkg-config protobuf-compiler software-properties-common && break; \
         if [ "$attempt" -eq 3 ]; then exit 1; fi; \
         sleep 15; \
     done \

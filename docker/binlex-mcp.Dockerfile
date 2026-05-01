@@ -8,6 +8,7 @@ RUN set -eux; \
         apt-get -o Acquire::Retries=5 update && apt-get install -y --no-install-recommends \
         build-essential \
         ca-certificates \
+        cmake \
         curl \
         gnupg \
         libprotobuf-dev \
@@ -56,6 +57,7 @@ RUN set -eux; \
         apt-get -o Acquire::Retries=5 update && apt-get install -y --no-install-recommends \
         build-essential \
         ca-certificates \
+        cmake \
         curl \
         gnupg \
         libprotobuf-dev \
