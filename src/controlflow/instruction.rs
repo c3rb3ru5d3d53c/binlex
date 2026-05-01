@@ -108,27 +108,73 @@ pub enum InstructionSemanticsInput {
 impl InstructionSemanticsInput {
     pub fn build(self) -> InstructionSemantics {
         match self {
-            Self::X86(view) => architectures::x86::build(view.clone()).unwrap_or_else(|| {
-                unsupported_fallthrough(
-                    view.machine.to_string(),
-                    view.address,
-                    view.mnemonic.clone(),
-                    view.operand_text,
-                    view.bytes,
-                    "x86 mnemonic not implemented",
-                )
-            }),
-            Self::Arm64(view) => architectures::arm64::build(view.clone()).unwrap_or_else(|| {
-                unsupported_fallthrough(
-                    view.machine.to_string(),
-                    view.address,
-                    view.mnemonic.clone(),
-                    view.operand_text,
-                    view.bytes,
-                    "arm64 mnemonic not implemented",
-                )
-            }),
-            Self::Cil(view) => architectures::cil::build(view),
+            Self::X86(view) => {
+                let mut semantics = architectures::x86::build(view.clone()).unwrap_or_else(|| {
+                    unsupported_fallthrough(
+                        view.machine.to_string(),
+                        view.address,
+                        view.mnemonic.clone(),
+                        view.operand_text.clone(),
+                        view.bytes.clone(),
+                        "x86 mnemonic not implemented",
+                    )
+                });
+                if semantics.encoding.is_none() {
+                    semantics.encoding = Some(InstructionEncoding {
+                        architecture: view.machine.to_string(),
+                        mnemonic: view.mnemonic.clone(),
+                        disassembly: match view.operand_text.clone() {
+                            Some(op_str) if !op_str.is_empty() => {
+                                format!("{} {}", view.mnemonic, op_str)
+                            }
+                            _ => view.mnemonic.clone(),
+                        },
+                        address: view.address,
+                        bytes: view.bytes.clone(),
+                    });
+                }
+                semantics
+            }
+            Self::Arm64(view) => {
+                let mut semantics = architectures::arm64::build(view.clone()).unwrap_or_else(|| {
+                    unsupported_fallthrough(
+                        view.machine.to_string(),
+                        view.address,
+                        view.mnemonic.clone(),
+                        view.operand_text.clone(),
+                        view.bytes.clone(),
+                        "arm64 mnemonic not implemented",
+                    )
+                });
+                if semantics.encoding.is_none() {
+                    semantics.encoding = Some(InstructionEncoding {
+                        architecture: view.machine.to_string(),
+                        mnemonic: view.mnemonic.clone(),
+                        disassembly: match view.operand_text.clone() {
+                            Some(op_str) if !op_str.is_empty() => {
+                                format!("{} {}", view.mnemonic, op_str)
+                            }
+                            _ => view.mnemonic.clone(),
+                        },
+                        address: view.address,
+                        bytes: view.bytes.clone(),
+                    });
+                }
+                semantics
+            }
+            Self::Cil(view) => {
+                let mut semantics = architectures::cil::build(view.clone());
+                if semantics.encoding.is_none() {
+                    semantics.encoding = Some(InstructionEncoding {
+                        architecture: "cil".to_string(),
+                        mnemonic: view.mnemonic.clone(),
+                        disassembly: view.mnemonic.clone(),
+                        address: view.address,
+                        bytes: view.operand_bytes().to_vec(),
+                    });
+                }
+                semantics
+            }
         }
     }
 }

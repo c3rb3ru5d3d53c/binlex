@@ -48,9 +48,9 @@ impl Executor {
         }
         let mut working = state.clone();
         for effect in &semantics.effects {
-            self.apply_effect(&mut working, effect)?;
+            self.apply_effect(&mut working, semantics.encoding.as_ref(), effect)?;
         }
-        self.apply_terminator(working, &semantics.terminator)
+        self.apply_terminator(working, semantics.encoding.as_ref(), &semantics.terminator)
     }
 
     pub fn run<'a, I>(&self, semantics: I, state: &State) -> Result<Vec<State>, Error>
@@ -77,7 +77,8 @@ mod tests {
     use super::Executor;
     use crate::Architecture;
     use crate::semantics::{
-        InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation,
+        InstructionEncoding, InstructionSemantics, SemanticEffect, SemanticExpression,
+        SemanticLocation,
         SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
         SemanticOperationUnary, SemanticStatus, SemanticTerminator,
     };
@@ -398,6 +399,269 @@ mod tests {
                 .expect("concrete pc"),
             0x1000
         );
+    }
+
+    #[test]
+    fn slice_from_register_returns_dependency_chain() {
+        let executor = Executor::new(Architecture::AMD64).expect("executor");
+        let mut state = executor.state();
+        state
+            .symbolize_memory(0x1000, 1, Some("input"))
+            .expect("symbolize memory");
+        state.set_register("rdi", 64, 0x1000).expect("set register");
+
+        let first = InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: Some(InstructionEncoding {
+                architecture: "amd64".to_string(),
+                mnemonic: "movzx".to_string(),
+                disassembly: "movzx eax, byte ptr [rdi]".to_string(),
+                address: 0x40058b,
+                bytes: vec![0x0f, 0xb6, 0x07],
+            }),
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Set {
+                dst: SemanticLocation::Register {
+                    name: "eax".to_string(),
+                    bits: 32,
+                },
+                expression: SemanticExpression::Load {
+                    space: crate::semantics::SemanticAddressSpace::Default,
+                    addr: Box::new(SemanticExpression::Read(Box::new(
+                        SemanticLocation::Register {
+                            name: "rdi".to_string(),
+                            bits: 64,
+                        },
+                    ))),
+                    bits: 8,
+                },
+            }],
+            terminator: SemanticTerminator::FallThrough,
+            diagnostics: Vec::new(),
+        };
+        let second = InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: Some(InstructionEncoding {
+                architecture: "amd64".to_string(),
+                mnemonic: "sub".to_string(),
+                disassembly: "sub eax, 1".to_string(),
+                address: 0x400591,
+                bytes: vec![0x83, 0xe8, 0x01],
+            }),
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Set {
+                dst: SemanticLocation::Register {
+                    name: "eax".to_string(),
+                    bits: 32,
+                },
+                expression: SemanticExpression::Binary {
+                    op: SemanticOperationBinary::Sub,
+                    left: Box::new(SemanticExpression::Read(Box::new(
+                        SemanticLocation::Register {
+                            name: "eax".to_string(),
+                            bits: 32,
+                        },
+                    ))),
+                    right: Box::new(SemanticExpression::Const { value: 1, bits: 32 }),
+                    bits: 32,
+                },
+            }],
+            terminator: SemanticTerminator::FallThrough,
+            diagnostics: Vec::new(),
+        };
+        let third = InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: Some(InstructionEncoding {
+                architecture: "amd64".to_string(),
+                mnemonic: "mov".to_string(),
+                disassembly: "mov ecx, eax".to_string(),
+                address: 0x400597,
+                bytes: vec![0x89, 0xc1],
+            }),
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Set {
+                dst: SemanticLocation::Register {
+                    name: "ecx".to_string(),
+                    bits: 32,
+                },
+                expression: SemanticExpression::Read(Box::new(SemanticLocation::Register {
+                    name: "eax".to_string(),
+                    bits: 32,
+                })),
+            }],
+            terminator: SemanticTerminator::FallThrough,
+            diagnostics: Vec::new(),
+        };
+
+        let states = executor.run([&first, &second, &third], &state).expect("run");
+        let slice = states[0]
+            .slice_from_register("ecx", 32)
+            .expect("slice register");
+        let nodes = slice.nodes();
+        assert_eq!(nodes.len(), 4);
+        assert_eq!(nodes[1].instruction.as_ref().unwrap().mnemonic, "movzx");
+        assert_eq!(nodes[2].instruction.as_ref().unwrap().mnemonic, "sub");
+        assert_eq!(nodes[3].instruction.as_ref().unwrap().mnemonic, "mov");
+        assert_eq!(nodes[3].location, "register:ecx");
+    }
+
+    #[test]
+    fn slice_from_memory_returns_store_dependency() {
+        let executor = Executor::new(Architecture::AMD64).expect("executor");
+        let mut state = executor.state();
+        state
+            .symbolize_register("al", 8, Some("input_al"))
+            .expect("symbolize register");
+
+        let semantics = InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: Some(InstructionEncoding {
+                architecture: "amd64".to_string(),
+                mnemonic: "mov".to_string(),
+                disassembly: "mov byte ptr [0x3000], al".to_string(),
+                address: 0x401000,
+                bytes: vec![0x88, 0x05, 0x00, 0x30, 0x00, 0x00],
+            }),
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Store {
+                space: crate::semantics::SemanticAddressSpace::Default,
+                addr: SemanticExpression::Const {
+                    value: 0x3000,
+                    bits: 64,
+                },
+                expression: SemanticExpression::Read(Box::new(SemanticLocation::Register {
+                    name: "al".to_string(),
+                    bits: 8,
+                })),
+                bits: 8,
+            }],
+            terminator: SemanticTerminator::FallThrough,
+            diagnostics: Vec::new(),
+        };
+
+        let states = executor.step(&semantics, &state).expect("step");
+        let slice = states[0].slice_from_memory(0x3000, 1).expect("slice memory");
+        let nodes = slice.nodes();
+        assert_eq!(nodes.len(), 2);
+        assert_eq!(nodes[1].instruction.as_ref().unwrap().mnemonic, "mov");
+        assert_eq!(nodes[1].location, "memory[0x3000]");
+    }
+
+    #[test]
+    fn slice_from_register_preserves_x86_subregister_dependencies() {
+        let executor = Executor::new(Architecture::AMD64).expect("executor");
+        let mut state = executor.state();
+        state
+            .symbolize_memory(0x1000, 1, Some("input"))
+            .expect("symbolize memory");
+        state.set_register("rdi", 64, 0x1000).expect("set register");
+
+        let first = InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: Some(InstructionEncoding {
+                architecture: "amd64".to_string(),
+                mnemonic: "movzx".to_string(),
+                disassembly: "movzx eax, byte ptr [rdi]".to_string(),
+                address: 0x40058b,
+                bytes: vec![0x0f, 0xb6, 0x07],
+            }),
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Set {
+                dst: SemanticLocation::Register {
+                    name: "eax".to_string(),
+                    bits: 32,
+                },
+                expression: SemanticExpression::Load {
+                    space: crate::semantics::SemanticAddressSpace::Default,
+                    addr: Box::new(SemanticExpression::Read(Box::new(
+                        SemanticLocation::Register {
+                            name: "rdi".to_string(),
+                            bits: 64,
+                        },
+                    ))),
+                    bits: 8,
+                },
+            }],
+            terminator: SemanticTerminator::FallThrough,
+            diagnostics: Vec::new(),
+        };
+        let second = InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: Some(InstructionEncoding {
+                architecture: "amd64".to_string(),
+                mnemonic: "movsx".to_string(),
+                disassembly: "movsx eax, al".to_string(),
+                address: 0x40058e,
+                bytes: vec![0x0f, 0xbe, 0xc0],
+            }),
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Set {
+                dst: SemanticLocation::Register {
+                    name: "eax".to_string(),
+                    bits: 32,
+                },
+                expression: SemanticExpression::Cast {
+                    op: crate::semantics::SemanticOperationCast::SignExtend,
+                    arg: Box::new(SemanticExpression::Read(Box::new(
+                        SemanticLocation::Register {
+                            name: "al".to_string(),
+                            bits: 8,
+                        },
+                    ))),
+                    bits: 32,
+                },
+            }],
+            terminator: SemanticTerminator::FallThrough,
+            diagnostics: Vec::new(),
+        };
+        let third = InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: Some(InstructionEncoding {
+                architecture: "amd64".to_string(),
+                mnemonic: "mov".to_string(),
+                disassembly: "mov ecx, eax".to_string(),
+                address: 0x400597,
+                bytes: vec![0x89, 0xc1],
+            }),
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Set {
+                dst: SemanticLocation::Register {
+                    name: "ecx".to_string(),
+                    bits: 32,
+                },
+                expression: SemanticExpression::Read(Box::new(SemanticLocation::Register {
+                    name: "eax".to_string(),
+                    bits: 32,
+                })),
+            }],
+            terminator: SemanticTerminator::FallThrough,
+            diagnostics: Vec::new(),
+        };
+
+        let states = executor.run([&first, &second, &third], &state).expect("run");
+        let slice = states[0]
+            .slice_from_register("ecx", 32)
+            .expect("slice register");
+        let mnemonics = slice
+            .nodes()
+            .iter()
+            .filter_map(|node| node.instruction.as_ref().map(|instruction| instruction.mnemonic.as_str()))
+            .collect::<Vec<_>>();
+        assert_eq!(mnemonics, vec!["movzx", "movsx", "mov"]);
     }
 
     #[test]

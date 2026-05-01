@@ -1,6 +1,9 @@
 """Rust-backed symbolic execution bindings."""
 
 from binlex_bindings.binlex.symbolic import Executor as _ExecutorBinding
+from binlex_bindings.binlex.symbolic import Slice
+from binlex_bindings.binlex.symbolic import SliceInstruction
+from binlex_bindings.binlex.symbolic import SliceNode
 from binlex_bindings.binlex.symbolic import State
 
 from binlex.core.architecture import _coerce_architecture
@@ -24,5 +27,4 @@ class Executor:
     def __getattr__(self, name):
         return getattr(self._inner, name)
 
-
-__all__ = ["Executor", "State"]
+__all__ = ["Executor", "Slice", "SliceInstruction", "SliceNode", "State"]

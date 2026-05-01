@@ -356,12 +356,43 @@ impl Graph {
     #[pyo3(text_signature = "($self, address)")]
     /// Return the instruction at `address`, if it exists in the graph.
     pub fn get_instruction(&self, py: Python, address: u64) -> Option<Instruction> {
+        if self.inner.lock().unwrap().get_instruction(address).is_none() {
+            return None;
+        }
         let cfg = Graph {
             inner: Arc::clone(&self.inner),
         };
         let pycfg = Py::new(py, cfg).ok();
         pycfg.as_ref()?;
         Instruction::new(address, pycfg.unwrap()).ok()
+    }
+
+    #[pyo3(text_signature = "($self, address)")]
+    /// Return the block at `address`, if it exists in the graph.
+    pub fn get_block(&self, py: Python, address: u64) -> Option<Block> {
+        if self.inner.lock().unwrap().get_block(address).is_none() {
+            return None;
+        }
+        let cfg = Graph {
+            inner: Arc::clone(&self.inner),
+        };
+        let pycfg = Py::new(py, cfg).ok();
+        pycfg.as_ref()?;
+        Block::new(address, pycfg.unwrap()).ok()
+    }
+
+    #[pyo3(text_signature = "($self, address)")]
+    /// Return the function at `address`, if it exists in the graph.
+    pub fn get_function(&self, py: Python, address: u64) -> Option<Function> {
+        if self.inner.lock().unwrap().get_function(address).is_none() {
+            return None;
+        }
+        let cfg = Graph {
+            inner: Arc::clone(&self.inner),
+        };
+        let pycfg = Py::new(py, cfg).ok();
+        pycfg.as_ref()?;
+        Function::new(address, pycfg.unwrap()).ok()
     }
 
     #[pyo3(text_signature = "($self, cfg)")]
