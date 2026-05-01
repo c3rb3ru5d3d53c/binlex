@@ -21,16 +21,16 @@
 // SOFTWARE.
 
 use crate::semantics::architectures::arm64::Arm64InstructionView;
-use crate::semantics::architectures::arm64::helpers::{
-    complete, location_bits, truncate_to_bits, zero_extend_to_bits,
-};
 use crate::semantics::architectures::arm64::builders::memory::{
     build_load_pair, effective_memory_address, operand_expression, register_location,
     writeback_effect,
 };
+use crate::semantics::architectures::arm64::helpers::{
+    complete, location_bits, truncate_to_bits, zero_extend_to_bits,
+};
 use crate::semantics::{
     InstructionSemantics, SemanticAddressSpace, SemanticEffect, SemanticExpression,
-    SemanticLocation, SemanticStatus, SemanticTerminator, SemanticTemporary,
+    SemanticLocation, SemanticStatus, SemanticTemporary, SemanticTerminator,
 };
 
 pub(crate) fn build(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
@@ -45,8 +45,8 @@ pub(crate) fn build(view: &Arm64InstructionView) -> Option<InstructionSemantics>
         "stlr" if view.operand_count >= 2 => build_store(view, None),
         "stlrb" if view.operand_count >= 2 => build_store(view, Some(8)),
         "stlrh" if view.operand_count >= 2 => build_store(view, Some(16)),
-        "cas" | "casa" | "casal" | "casl" | "casab" | "casalb" | "casb" | "caslb"
-        | "casah" | "casalh" | "cash" | "caslh"
+        "cas" | "casa" | "casal" | "casl" | "casab" | "casalb" | "casb" | "caslb" | "casah"
+        | "casalh" | "cash" | "caslh"
             if view.operand_count >= 3 =>
         {
             build_cas(view)
@@ -136,7 +136,10 @@ fn build_exclusive_load(
     ))
 }
 
-fn build_store(view: &Arm64InstructionView, store_bits: Option<u16>) -> Option<InstructionSemantics> {
+fn build_store(
+    view: &Arm64InstructionView,
+    store_bits: Option<u16>,
+) -> Option<InstructionSemantics> {
     let src = operand_expression(view.operand(0)?)?;
     let addr = effective_memory_address(view, view.operand(1)?, view.operand(2))?;
     let expression = match store_bits {

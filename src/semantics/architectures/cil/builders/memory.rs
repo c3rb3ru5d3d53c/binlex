@@ -76,9 +76,7 @@ pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSeman
         "ldind.i8" => direct_load(SemanticAddressSpace::Default, 64, Identity::Zero64),
         "ldind.i" => direct_load(SemanticAddressSpace::Default, 64, Identity::Sign64),
         "ldind.r4" => direct_load(SemanticAddressSpace::Default, 32, Identity::Direct),
-        "ldind.r8" | "ldobj" => {
-            direct_load(SemanticAddressSpace::Default, 64, Identity::Direct)
-        }
+        "ldind.r8" | "ldobj" => direct_load(SemanticAddressSpace::Default, 64, Identity::Direct),
         "ldfld" => {
             let token = operand_value(instruction) as u32;
             let (effects, object) = pop_stack();
@@ -147,9 +145,7 @@ pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSeman
         "stind.r4" => store_default(32, StoreValue::Trunc32),
         "stelem.ref" => store_heap(64, StoreValue::Direct),
         "stelem.i1" => store_heap(8, StoreValue::Trunc8),
-        "stelem.i" | "stelem.i8" | "stelem.r8" | "stelem" => {
-            store_heap(64, StoreValue::Direct)
-        }
+        "stelem.i" | "stelem.i8" | "stelem.r8" | "stelem" => store_heap(64, StoreValue::Direct),
         "stelem.r4" | "stelem.i4" => store_heap(32, StoreValue::Trunc32),
         "stelem.i2" => store_heap(16, StoreValue::Trunc16),
         "cpblk" => Some(effect_runtime_ternary_intrinsic(instruction, "cil.cpblk")),

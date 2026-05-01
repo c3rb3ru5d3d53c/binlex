@@ -22,9 +22,9 @@
 
 use crate::semantics::InstructionSemantics;
 
-pub mod instruction;
 pub mod builders;
 pub mod helpers;
+pub mod instruction;
 
 pub use instruction::CilInstructionView;
 

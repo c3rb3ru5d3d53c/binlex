@@ -21,7 +21,10 @@
 // SOFTWARE.
 
 pub fn is_return_mnemonic(mnemonic: &str) -> bool {
-    matches!(mnemonic, "ret" | "retf" | "retfq" | "iret" | "iretd" | "iretq")
+    matches!(
+        mnemonic,
+        "ret" | "retf" | "retfq" | "iret" | "iretd" | "iretq"
+    )
 }
 
 pub fn is_privilege_mnemonic(mnemonic: &str) -> bool {

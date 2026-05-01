@@ -20,8 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::disassemblers::cil::Mnemonic;
 use crate::controlflow::{FloatOperand, ImmediateOperand, Operand, OperandKind};
+use crate::disassemblers::cil::Mnemonic;
 use crate::hex;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Error;
@@ -446,7 +446,8 @@ impl<'instruction> Instruction<'instruction> {
             return None;
         }
         let operand = self.operand_bytes();
-        (operand.len() >= 4).then(|| u32::from_le_bytes([operand[0], operand[1], operand[2], operand[3]]))
+        (operand.len() >= 4)
+            .then(|| u32::from_le_bytes([operand[0], operand[1], operand[2], operand[3]]))
     }
 
     fn argument_index(&self) -> Option<u32> {
@@ -455,7 +456,9 @@ impl<'instruction> Instruction<'instruction> {
             Mnemonic::LdArg1 => Some(1),
             Mnemonic::LdArg2 => Some(2),
             Mnemonic::LdArg3 => Some(3),
-            Mnemonic::LdArgS | Mnemonic::LdArgAS | Mnemonic::StArgS => Some(self.operand_u8() as u32),
+            Mnemonic::LdArgS | Mnemonic::LdArgAS | Mnemonic::StArgS => {
+                Some(self.operand_u8() as u32)
+            }
             Mnemonic::LdArg | Mnemonic::LdArgA | Mnemonic::StArg => Some(self.operand_u16() as u32),
             _ => None,
         }
@@ -467,7 +470,9 @@ impl<'instruction> Instruction<'instruction> {
             Mnemonic::LdLoc1 | Mnemonic::StLoc1 => Some(1),
             Mnemonic::LdLoc2 | Mnemonic::StLoc2 => Some(2),
             Mnemonic::LdLoc3 | Mnemonic::StLoc3 => Some(3),
-            Mnemonic::LdLocS | Mnemonic::LdLocAS | Mnemonic::StLocS => Some(self.operand_u8() as u32),
+            Mnemonic::LdLocS | Mnemonic::LdLocAS | Mnemonic::StLocS => {
+                Some(self.operand_u8() as u32)
+            }
             Mnemonic::LdLoc | Mnemonic::LdLocA | Mnemonic::SLoc => Some(self.operand_u16() as u32),
             _ => None,
         }
@@ -511,31 +516,46 @@ impl<'instruction> Instruction<'instruction> {
 
     fn operand_u16(&self) -> u16 {
         let operand = self.operand_bytes();
-        let bytes = operand.get(..2).and_then(|value| value.try_into().ok()).unwrap_or([0u8; 2]);
+        let bytes = operand
+            .get(..2)
+            .and_then(|value| value.try_into().ok())
+            .unwrap_or([0u8; 2]);
         u16::from_le_bytes(bytes)
     }
 
     fn operand_i32(&self) -> i32 {
         let operand = self.operand_bytes();
-        let bytes = operand.get(..4).and_then(|value| value.try_into().ok()).unwrap_or([0u8; 4]);
+        let bytes = operand
+            .get(..4)
+            .and_then(|value| value.try_into().ok())
+            .unwrap_or([0u8; 4]);
         i32::from_le_bytes(bytes)
     }
 
     fn operand_i64(&self) -> i64 {
         let operand = self.operand_bytes();
-        let bytes = operand.get(..8).and_then(|value| value.try_into().ok()).unwrap_or([0u8; 8]);
+        let bytes = operand
+            .get(..8)
+            .and_then(|value| value.try_into().ok())
+            .unwrap_or([0u8; 8]);
         i64::from_le_bytes(bytes)
     }
 
     fn operand_f32(&self) -> f32 {
         let operand = self.operand_bytes();
-        let bytes = operand.get(..4).and_then(|value| value.try_into().ok()).unwrap_or([0u8; 4]);
+        let bytes = operand
+            .get(..4)
+            .and_then(|value| value.try_into().ok())
+            .unwrap_or([0u8; 4]);
         f32::from_le_bytes(bytes)
     }
 
     fn operand_f64(&self) -> f64 {
         let operand = self.operand_bytes();
-        let bytes = operand.get(..8).and_then(|value| value.try_into().ok()).unwrap_or([0u8; 8]);
+        let bytes = operand
+            .get(..8)
+            .and_then(|value| value.try_into().ok())
+            .unwrap_or([0u8; 8]);
         f64::from_le_bytes(bytes)
     }
 
@@ -671,7 +691,10 @@ mod tests {
         let instruction = Instruction::new(&[0x2b, 0x02], 0x1000).expect("br.s should decode");
         let operands = instruction.normalized_operands(&BTreeMap::new());
         assert_eq!(instruction.mnemonic_text(), "br.s");
-        assert_eq!(instruction.disassembly_text(&BTreeMap::new()), "br.s 0x1004");
+        assert_eq!(
+            instruction.disassembly_text(&BTreeMap::new()),
+            "br.s 0x1004"
+        );
         let OperandKind::Immediate(immediate) = &operands[0].kind else {
             panic!("expected immediate operand");
         };
@@ -680,8 +703,8 @@ mod tests {
 
     #[test]
     fn call_token_operand_tracks_resolution() {
-        let instruction = Instruction::new(&[0x28, 0x01, 0x00, 0x00, 0x06], 0x2000)
-            .expect("call should decode");
+        let instruction =
+            Instruction::new(&[0x28, 0x01, 0x00, 0x00, 0x06], 0x2000).expect("call should decode");
         let mut metadata_token_addresses = BTreeMap::new();
         metadata_token_addresses.insert(0x06000001, 0x3456);
         let operands = instruction.normalized_operands(&metadata_token_addresses);
@@ -698,7 +721,9 @@ mod tests {
     #[test]
     fn switch_exposes_one_immediate_per_target() {
         let instruction = Instruction::new(
-            &[0x45, 0x02, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00],
+            &[
+                0x45, 0x02, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00,
+            ],
             0x3000,
         )
         .expect("switch should decode");

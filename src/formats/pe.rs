@@ -66,7 +66,10 @@ pub struct PE {
 impl PE {
     fn dotnet_stream_name(header: &StreamHeader) -> String {
         let bytes = header.name();
-        let end = bytes.iter().position(|byte| *byte == 0).unwrap_or(bytes.len());
+        let end = bytes
+            .iter()
+            .position(|byte| *byte == 0)
+            .unwrap_or(bytes.len());
         String::from_utf8_lossy(&bytes[..end]).to_string()
     }
 
@@ -99,7 +102,10 @@ impl PE {
             return None;
         }
         let tail = &strings[start..];
-        let end = tail.iter().position(|byte| *byte == 0).unwrap_or(tail.len());
+        let end = tail
+            .iter()
+            .position(|byte| *byte == 0)
+            .unwrap_or(tail.len());
         if end == 0 {
             return None;
         }
@@ -230,7 +236,9 @@ impl PE {
     ) -> BlSymbol {
         BlSymbol {
             name,
-            offset: self.virtual_address_to_file_offset(virtual_address).unwrap_or(0),
+            offset: self
+                .virtual_address_to_file_offset(virtual_address)
+                .unwrap_or(0),
             virtual_address: Some(virtual_address),
             relative_virtual_address: Some(
                 self.virtual_address_to_relative_virtual_address(virtual_address),
@@ -1501,7 +1509,8 @@ impl PE {
             let method_name = self
                 .dotnet_string(&method.name)
                 .unwrap_or_else(|| format!("method_{}", index + 1));
-            let qualified_name = match method_owner_names.get(index).and_then(|name| name.as_ref()) {
+            let qualified_name = match method_owner_names.get(index).and_then(|name| name.as_ref())
+            {
                 Some(owner) if !owner.is_empty() => format!("{owner}::{method_name}"),
                 _ => method_name,
             };
@@ -1529,7 +1538,8 @@ impl PE {
         &self,
         relative_virtual_address: u64,
     ) -> Option<BlSymbol> {
-        let virtual_address = self.relative_virtual_address_to_virtual_address(relative_virtual_address);
+        let virtual_address =
+            self.relative_virtual_address_to_virtual_address(relative_virtual_address);
         self.virtual_address_to_symbol(virtual_address)
     }
 

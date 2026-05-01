@@ -20,14 +20,21 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use capstone::{Insn, RegId, arch::x86::{X86OpMem, X86Reg::X86_REG_RIP}};
+use capstone::{
+    Insn, RegId,
+    arch::x86::{X86OpMem, X86Reg::X86_REG_RIP},
+};
 
 use crate::Architecture;
 
 use crate::disassemblers::x86::disassembler::Disassembler;
 
 impl<'disassembler> Disassembler<'disassembler> {
-    pub(crate) fn resolve_memory_operand_target(&self, instruction: &Insn, mem: X86OpMem) -> Option<u64> {
+    pub(crate) fn resolve_memory_operand_target(
+        &self,
+        instruction: &Insn,
+        mem: X86OpMem,
+    ) -> Option<u64> {
         let pointer_address = self.resolve_memory_operand_address(instruction, mem)?;
         let target = self.read_pointer(pointer_address)?;
         if !self.is_executable_address(target) {

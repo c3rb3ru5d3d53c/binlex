@@ -94,29 +94,30 @@ pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSeman
         "ldarg.s" | "ldarg" => Some(push_expression(read(cil_argument(
             operand_value(instruction) as u32,
         )))),
-        "ldarga.s" | "ldarga" => Some(push_expression(read(cil_argument_address(
-            operand_value(instruction) as u32,
-        )))),
+        "ldarga.s" | "ldarga" => Some(push_expression(read(cil_argument_address(operand_value(
+            instruction,
+        )
+            as u32)))),
         "ldloc.0" => Some(push_expression(read(cil_local(0)))),
         "ldloc.1" => Some(push_expression(read(cil_local(1)))),
         "ldloc.2" => Some(push_expression(read(cil_local(2)))),
         "ldloc.3" => Some(push_expression(read(cil_local(3)))),
         "ldloc.s" | "ldloc" => Some(push_expression(read(cil_local(
-            operand_value(instruction) as u32,
+            operand_value(instruction) as u32
         )))),
-        "ldloca.s" | "ldloca" => Some(push_expression(read(cil_local_address(
-            operand_value(instruction) as u32,
-        )))),
+        "ldloca.s" | "ldloca" => Some(push_expression(read(cil_local_address(operand_value(
+            instruction,
+        ) as u32)))),
         "stloc.0" => Some(pop_to_location(cil_local(0))),
         "stloc.1" => Some(pop_to_location(cil_local(1))),
         "stloc.2" => Some(pop_to_location(cil_local(2))),
         "stloc.3" => Some(pop_to_location(cil_local(3))),
-        "stloc.s" | "stloc" => Some(pop_to_location(cil_local(operand_value(
-            instruction,
-        ) as u32))),
-        "starg.s" | "starg" => Some(pop_to_location(cil_argument(operand_value(
-            instruction,
-        ) as u32))),
+        "stloc.s" | "stloc" => Some(pop_to_location(
+            cil_local(operand_value(instruction) as u32),
+        )),
+        "starg.s" | "starg" => Some(pop_to_location(cil_argument(
+            operand_value(instruction) as u32
+        ))),
         "ldstr" => Some(push_expression(const_u64(operand_value(instruction), 64))),
         "conv.i4" => {
             let (mut effects, value) = pop_stack();

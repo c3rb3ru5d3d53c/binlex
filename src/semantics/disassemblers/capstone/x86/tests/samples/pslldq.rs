@@ -39,7 +39,10 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
                 (I386Register::Edi, 0x8765_4321),
                 (I386Register::Ebp, 0x2ff0),
                 (I386Register::Esp, 0x2ff0),
-                (I386Register::Xmm0, 0x1234_5678_89ab_cdef_0fed_cba9_7654_3210),
+                (
+                    I386Register::Xmm0,
+                    0x1234_5678_89ab_cdef_0fed_cba9_7654_3210,
+                ),
             ],
             eflags: 0x202,
             memory: &[],

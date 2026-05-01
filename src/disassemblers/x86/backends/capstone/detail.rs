@@ -26,7 +26,8 @@ use std::{
 };
 
 use capstone::{
-    Insn, RegId, arch::ArchOperand,
+    Insn, RegId,
+    arch::ArchOperand,
     arch::x86::{X86OpMem, X86OperandType},
 };
 use serde_json::Value;
@@ -86,7 +87,10 @@ impl<'disassembler> Disassembler<'disassembler> {
         Some(Operand { kind })
     }
 
-    pub(crate) fn decode_history_operand(&self, operand: &ArchOperand) -> Option<X86DecodedOperand> {
+    pub(crate) fn decode_history_operand(
+        &self,
+        operand: &ArchOperand,
+    ) -> Option<X86DecodedOperand> {
         let ArchOperand::X86Operand(op) = operand else {
             return None;
         };

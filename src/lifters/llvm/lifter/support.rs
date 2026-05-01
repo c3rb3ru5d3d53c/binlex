@@ -1,10 +1,10 @@
 use super::LoweringContext;
 use crate::Architecture;
 use crate::semantics::{SemanticExpression, SemanticLocation};
+use inkwell::IntPredicate;
 use inkwell::basic_block::BasicBlock;
 use inkwell::types::{FloatType, IntType};
 use inkwell::values::{FloatValue, IntValue};
-use inkwell::IntPredicate;
 use std::collections::HashMap;
 use std::io::Error;
 use std::num::NonZeroU32;

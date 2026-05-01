@@ -1,5 +1,5 @@
-use super::helpers::{render_location, render_trap_kind};
 use super::LoweringContext;
+use super::helpers::{render_location, render_trap_kind};
 use crate::lifters::llvm::abi::coerce_int_value_width;
 use crate::semantics::{SemanticExpression, SemanticLocation, SemanticTrapKind};
 use crate::{Abi, Architecture};
@@ -637,8 +637,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             "Trap x86.sysenter lowered as native i386 windows syscall",
         );
         let i32_type = self.context.i32_type();
-        let fn_type =
-            i32_type.fn_type(&[i32_type.into(), i32_type.into(), i32_type.into()], false);
+        let fn_type = i32_type.fn_type(&[i32_type.into(), i32_type.into(), i32_type.into()], false);
         let asm = self.context.create_inline_asm(
             fn_type,
             "sysenter".to_string(),
@@ -775,8 +774,8 @@ mod tests {
     use crate::lifters::llvm::Abi;
     use crate::lifters::llvm::Lifter;
     use crate::semantics::{
-        InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation,
-        SemanticStatus, SemanticTerminator, SemanticTrapKind,
+        InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation, SemanticStatus,
+        SemanticTerminator, SemanticTrapKind,
     };
     use crate::{Architecture, Config};
 

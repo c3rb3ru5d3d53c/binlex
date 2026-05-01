@@ -40,8 +40,12 @@ pub(crate) fn build(view: &Arm64InstructionView) -> Option<InstructionSemantics>
         "bsl" if view.operand_count >= 3 => build_bsl(view),
         "bif" if view.operand_count >= 3 => build_bit_insert(view, true),
         "bit" if view.operand_count >= 3 => build_bit_insert(view, false),
-        "cmeq" if view.operand_count >= 3 => build_vector_compare(view, SemanticOperationCompare::Eq),
-        "cmhi" if view.operand_count >= 3 => build_vector_compare(view, SemanticOperationCompare::Ugt),
+        "cmeq" if view.operand_count >= 3 => {
+            build_vector_compare(view, SemanticOperationCompare::Eq)
+        }
+        "cmhi" if view.operand_count >= 3 => {
+            build_vector_compare(view, SemanticOperationCompare::Ugt)
+        }
         "addv" if view.operand_count >= 2 => build_vector_add_reduce(view),
         "uaddlv" if view.operand_count >= 2 => build_vector_add_reduce(view),
         "addp" if view.operand_count >= 3 => build_addp(view),
@@ -64,8 +68,8 @@ pub(crate) fn build(view: &Arm64InstructionView) -> Option<InstructionSemantics>
         "st1" if view.operand_count >= 3 => build_store_pair(view),
         "ld3r" if view.operand_count >= 3 => build_intrinsic_with_outputs(view, 3),
         "ld4r" if view.operand_count >= 4 => build_intrinsic_with_outputs(view, 4),
-        "bfcvt" | "bfcvtn" | "bfcvtn2" | "bfdot" | "bfmlalb"
-        | "umov" | "frintm" | "umlsl2" | "ext"
+        "bfcvt" | "bfcvtn" | "bfcvtn2" | "bfdot" | "bfmlalb" | "umov" | "frintm" | "umlsl2"
+        | "ext"
             if view.operand_count >= 1 =>
         {
             build_intrinsic_with_outputs(view, 1)
@@ -130,7 +134,10 @@ fn build_bsl(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_bit_insert(view: &Arm64InstructionView, invert_mask: bool) -> Option<InstructionSemantics> {
+fn build_bit_insert(
+    view: &Arm64InstructionView,
+    invert_mask: bool,
+) -> Option<InstructionSemantics> {
     let dst = register_location(view.operand(0)?)?;
     let bits = location_bits(&dst);
     let current = SemanticExpression::Read(Box::new(dst.clone()));
@@ -753,10 +760,7 @@ fn build_ld1_lane(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
 }
 
 fn build_ld1_full_register(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
-    let dst = view
-        .operands()
-        .iter()
-        .find_map(register_location)?;
+    let dst = view.operands().iter().find_map(register_location)?;
     let memory_operand = view
         .operands()
         .iter()

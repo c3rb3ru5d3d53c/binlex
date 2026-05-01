@@ -1,13 +1,13 @@
-use super::helpers::{const_int, render_address_space, sanitize_symbol};
 use super::LoweringContext;
+use super::helpers::{const_int, render_address_space, sanitize_symbol};
 use crate::lifters::llvm::abi::coerce_int_value_width;
 use crate::semantics::{
     SemanticExpression, SemanticLocation, SemanticOperationBinary, SemanticOperationCast,
     SemanticOperationCompare, SemanticOperationUnary,
 };
+use inkwell::IntPredicate;
 use inkwell::attributes::AttributeLoc;
 use inkwell::values::{BasicMetadataValueEnum, FunctionValue, IntValue};
-use inkwell::IntPredicate;
 use std::io::Error;
 
 impl<'ctx, 'm> LoweringContext<'ctx, 'm> {

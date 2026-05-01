@@ -1,4 +1,6 @@
-use super::{I386Register, X86FixtureSpec, X86Sample, assert_conformance_cases, assert_sample_statuses};
+use super::{
+    I386Register, X86FixtureSpec, X86Sample, assert_conformance_cases, assert_sample_statuses,
+};
 use crate::{Architecture, semantics::SemanticStatus};
 
 pub(crate) const SAMPLES: &[X86Sample] = &[

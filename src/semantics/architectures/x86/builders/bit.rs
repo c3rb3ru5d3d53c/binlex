@@ -21,18 +21,15 @@
 // SOFTWARE.
 
 use crate::Architecture;
+use crate::semantics::architectures::x86::helpers as common;
 use crate::semantics::architectures::x86::instruction::X86InstructionView;
 use crate::semantics::architectures::x86::operand::{X86OperandKind, X86OperandView};
-use crate::semantics::architectures::x86::helpers as common;
 use crate::semantics::{
     InstructionSemantics, SemanticAddressSpace, SemanticEffect, SemanticExpression,
-    SemanticLocation, SemanticOperationBinary, SemanticOperationCast,
-    SemanticOperationCompare, SemanticOperationUnary, SemanticTerminator,
+    SemanticLocation, SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
+    SemanticOperationUnary, SemanticTerminator,
 };
-pub fn build(
-    machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+pub fn build(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
     match view.mnemonic.as_str() {
         "bt" => bit_test(machine, view, false),
         "btc" => bit_complement(machine, view),

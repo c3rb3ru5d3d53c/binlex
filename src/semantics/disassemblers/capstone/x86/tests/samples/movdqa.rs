@@ -1,5 +1,7 @@
 use super::super::support::{I386Fixture, assert_amd64_instruction_roundtrip_match_unicorn};
-use super::{I386Register, X86FixtureSpec, X86Sample, assert_roundtrip_cases, assert_sample_statuses};
+use super::{
+    I386Register, X86FixtureSpec, X86Sample, assert_roundtrip_cases, assert_sample_statuses,
+};
 use crate::{Architecture, semantics::SemanticStatus};
 
 pub(crate) const SAMPLES: &[X86Sample] = &[
@@ -29,8 +31,14 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
                 (I386Register::Edi, 0x8765_4321),
                 (I386Register::Ebp, 0x2ff0),
                 (I386Register::Esp, 0x2ff0),
-                (I386Register::Xmm0, 0x0011_2233_4455_6677_8899_aabb_ccdd_eeff),
-                (I386Register::Xmm1, 0xffee_ddcc_bbaa_9988_7766_5544_3322_1100),
+                (
+                    I386Register::Xmm0,
+                    0x0011_2233_4455_6677_8899_aabb_ccdd_eeff,
+                ),
+                (
+                    I386Register::Xmm1,
+                    0xffee_ddcc_bbaa_9988_7766_5544_3322_1100,
+                ),
             ],
             eflags: 0x202,
             memory: &[],
@@ -53,14 +61,17 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
                 (I386Register::Edi, 0x8765_4321),
                 (I386Register::Ebp, 0x2ff0),
                 (I386Register::Esp, 0x2ff0),
-                (I386Register::Xmm0, 0x0011_2233_4455_6677_8899_aabb_ccdd_eeff),
+                (
+                    I386Register::Xmm0,
+                    0x0011_2233_4455_6677_8899_aabb_ccdd_eeff,
+                ),
             ],
             eflags: 0x202,
             memory: &[(
                 0x3004,
                 &[
-                    0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb,
-                    0xcc, 0xdd, 0xee, 0xff,
+                    0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc,
+                    0xdd, 0xee, 0xff,
                 ],
             )],
         }),
@@ -82,7 +93,10 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
                 (I386Register::Edi, 0x8765_4321),
                 (I386Register::Ebp, 0x2ff0),
                 (I386Register::Esp, 0x2fc0),
-                (I386Register::Xmm0, 0xffee_ddcc_bbaa_9988_7766_5544_3322_1100),
+                (
+                    I386Register::Xmm0,
+                    0xffee_ddcc_bbaa_9988_7766_5544_3322_1100,
+                ),
             ],
             eflags: 0x202,
             memory: &[(0x3004, &[0; 16])],
@@ -105,7 +119,10 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
                 (I386Register::Edi, 0x8765_4321),
                 (I386Register::Ebp, 0x2ff0),
                 (I386Register::Esp, 0x2fc0),
-                (I386Register::Xmm0, 0x0011_2233_4455_6677_8899_aabb_ccdd_eeff),
+                (
+                    I386Register::Xmm0,
+                    0x0011_2233_4455_6677_8899_aabb_ccdd_eeff,
+                ),
             ],
             eflags: 0x202,
             memory: &[(0x2fe0, &[0; 16])],
@@ -128,14 +145,17 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
                 (I386Register::Edi, 0x8765_4321),
                 (I386Register::Ebp, 0x2ff0),
                 (I386Register::Esp, 0x2fc0),
-                (I386Register::Xmm0, 0x0011_2233_4455_6677_8899_aabb_ccdd_eeff),
+                (
+                    I386Register::Xmm0,
+                    0x0011_2233_4455_6677_8899_aabb_ccdd_eeff,
+                ),
             ],
             eflags: 0x202,
             memory: &[(
                 0x2fe0,
                 &[
-                    0xff, 0xee, 0xdd, 0xcc, 0xbb, 0xaa, 0x99, 0x88, 0x77, 0x66, 0x55, 0x44,
-                    0x33, 0x22, 0x11, 0x00,
+                    0xff, 0xee, 0xdd, 0xcc, 0xbb, 0xaa, 0x99, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33,
+                    0x22, 0x11, 0x00,
                 ],
             )],
         }),
@@ -157,7 +177,10 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
                 (I386Register::Edi, 0x8765_4321),
                 (I386Register::Ebp, 0x2ff0),
                 (I386Register::Esp, 0x2fc0),
-                (I386Register::Xmm0, 0xffee_ddcc_bbaa_9988_7766_5544_3322_1100),
+                (
+                    I386Register::Xmm0,
+                    0xffee_ddcc_bbaa_9988_7766_5544_3322_1100,
+                ),
             ],
             eflags: 0x202,
             memory: &[(0x2fd0, &[0; 16])],
@@ -180,14 +203,17 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
                 (I386Register::Edi, 0x8765_4321),
                 (I386Register::Ebp, 0x2ff0),
                 (I386Register::Esp, 0x2fc0),
-                (I386Register::Xmm0, 0x0011_2233_4455_6677_8899_aabb_ccdd_eeff),
+                (
+                    I386Register::Xmm0,
+                    0x0011_2233_4455_6677_8899_aabb_ccdd_eeff,
+                ),
             ],
             eflags: 0x202,
             memory: &[(
                 0x2fd0,
                 &[
-                    0xff, 0xee, 0xdd, 0xcc, 0xbb, 0xaa, 0x99, 0x88, 0x77, 0x66, 0x55, 0x44,
-                    0x33, 0x22, 0x11, 0x00,
+                    0xff, 0xee, 0xdd, 0xcc, 0xbb, 0xaa, 0x99, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33,
+                    0x22, 0x11, 0x00,
                 ],
             )],
         }),
@@ -209,7 +235,10 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
                 (I386Register::Edi, 0x8765_4321),
                 (I386Register::Ebp, 0x2ff0),
                 (I386Register::Esp, 0x2fc0),
-                (I386Register::Xmm0, 0xffee_ddcc_bbaa_9988_7766_5544_3322_1100),
+                (
+                    I386Register::Xmm0,
+                    0xffee_ddcc_bbaa_9988_7766_5544_3322_1100,
+                ),
             ],
             eflags: 0x202,
             memory: &[(0x3010, &[0; 16])],
@@ -238,14 +267,17 @@ fn movdqa_roundtrip_amd64_rbx_matches_unicorn() {
                 (I386Register::Rbx, 0x3000),
                 (I386Register::Rbp, 0x2ff0),
                 (I386Register::Rsp, 0x2ff0),
-                (I386Register::Xmm0, 0xdead_beef_cafe_babe_0123_4567_89ab_cdef),
+                (
+                    I386Register::Xmm0,
+                    0xdead_beef_cafe_babe_0123_4567_89ab_cdef,
+                ),
             ],
             eflags: 0x202,
             memory: vec![(
                 0x3010,
                 vec![
-                    0x10, 0x32, 0x54, 0x76, 0x98, 0xba, 0xdc, 0xfe, 0xef, 0xcd, 0xab, 0x89,
-                    0x67, 0x45, 0x23, 0x01,
+                    0x10, 0x32, 0x54, 0x76, 0x98, 0xba, 0xdc, 0xfe, 0xef, 0xcd, 0xab, 0x89, 0x67,
+                    0x45, 0x23, 0x01,
                 ],
             )],
         },
@@ -259,7 +291,10 @@ fn movdqa_roundtrip_amd64_rbx_matches_unicorn() {
                 (I386Register::Rbx, 0x3000),
                 (I386Register::Rbp, 0x2ff0),
                 (I386Register::Rsp, 0x2ff0),
-                (I386Register::Xmm0, 0x0123_4567_89ab_cdef_fedc_ba98_7654_3210),
+                (
+                    I386Register::Xmm0,
+                    0x0123_4567_89ab_cdef_fedc_ba98_7654_3210,
+                ),
             ],
             eflags: 0x202,
             memory: vec![(0x3010, vec![0; 16])],
@@ -278,7 +313,10 @@ fn movdqa_roundtrip_amd64_rsp_matches_unicorn() {
                 (I386Register::Rbx, 0x3000),
                 (I386Register::Rbp, 0x2ff0),
                 (I386Register::Rsp, 0x2ff0),
-                (I386Register::Xmm0, 0xdead_beef_cafe_babe_0123_4567_89ab_cdef),
+                (
+                    I386Register::Xmm0,
+                    0xdead_beef_cafe_babe_0123_4567_89ab_cdef,
+                ),
             ],
             eflags: 0x202,
             memory: vec![
@@ -302,7 +340,10 @@ fn movdqa_roundtrip_amd64_rsp_matches_unicorn() {
                 (I386Register::Rbx, 0x3000),
                 (I386Register::Rbp, 0x2ff0),
                 (I386Register::Rsp, 0x2ff0),
-                (I386Register::Xmm0, 0x0123_4567_89ab_cdef_fedc_ba98_7654_3210),
+                (
+                    I386Register::Xmm0,
+                    0x0123_4567_89ab_cdef_fedc_ba98_7654_3210,
+                ),
             ],
             eflags: 0x202,
             memory: vec![(0x3000, vec![0; 16]), (0x3010, vec![0; 16])],
@@ -321,14 +362,17 @@ fn movdqa_roundtrip_amd64_rbp_matches_unicorn() {
                 (I386Register::Rbx, 0x3000),
                 (I386Register::Rbp, 0x3100),
                 (I386Register::Rsp, 0x2ff0),
-                (I386Register::Xmm0, 0xdead_beef_cafe_babe_0123_4567_89ab_cdef),
+                (
+                    I386Register::Xmm0,
+                    0xdead_beef_cafe_babe_0123_4567_89ab_cdef,
+                ),
             ],
             eflags: 0x202,
             memory: vec![(
                 0x30f0,
                 vec![
-                    0x10, 0x32, 0x54, 0x76, 0x98, 0xba, 0xdc, 0xfe, 0xef, 0xcd, 0xab, 0x89,
-                    0x67, 0x45, 0x23, 0x01,
+                    0x10, 0x32, 0x54, 0x76, 0x98, 0xba, 0xdc, 0xfe, 0xef, 0xcd, 0xab, 0x89, 0x67,
+                    0x45, 0x23, 0x01,
                 ],
             )],
         },
@@ -342,7 +386,10 @@ fn movdqa_roundtrip_amd64_rbp_matches_unicorn() {
                 (I386Register::Rbx, 0x3000),
                 (I386Register::Rbp, 0x3100),
                 (I386Register::Rsp, 0x2ff0),
-                (I386Register::Xmm0, 0x0123_4567_89ab_cdef_fedc_ba98_7654_3210),
+                (
+                    I386Register::Xmm0,
+                    0x0123_4567_89ab_cdef_fedc_ba98_7654_3210,
+                ),
             ],
             eflags: 0x202,
             memory: vec![(0x30f0, vec![0; 16])],

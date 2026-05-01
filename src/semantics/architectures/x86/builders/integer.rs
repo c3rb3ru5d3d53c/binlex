@@ -21,17 +21,19 @@
 // SOFTWARE.
 
 use crate::Architecture;
-use crate::semantics::architectures::x86::helpers as common;
 use crate::semantics::architectures::x86::X86InstructionView;
+use crate::semantics::architectures::x86::helpers as common;
 use crate::semantics::architectures::x86::{X86OperandKind, X86OperandView};
 use crate::semantics::{
     InstructionSemantics, SemanticAddressSpace, SemanticEffect, SemanticExpression,
-    SemanticLocation, SemanticOperationBinary, SemanticOperationCast,
-    SemanticOperationCompare, SemanticOperationUnary, SemanticStatus, SemanticTemporary,
-    SemanticTerminator,
+    SemanticLocation, SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
+    SemanticOperationUnary, SemanticStatus, SemanticTemporary, SemanticTerminator,
 };
 
-pub(crate) fn build(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+pub(crate) fn build(
+    machine: Architecture,
+    view: &X86InstructionView,
+) -> Option<InstructionSemantics> {
     match view.mnemonic.as_str() {
         "nop" => Some(common::complete(
             SemanticTerminator::FallThrough,
@@ -59,7 +61,12 @@ pub(crate) fn build(machine: Architecture, view: &X86InstructionView) -> Option<
         "dec" => unary(machine, view.operands(), SemanticOperationBinary::Sub),
         "neg" => unary_op(machine, view.operands(), SemanticOperationUnary::Neg, true),
         "not" => unary_op(machine, view.operands(), SemanticOperationUnary::Not, false),
-        "bswap" => unary_op(machine, view.operands(), SemanticOperationUnary::ByteSwap, false),
+        "bswap" => unary_op(
+            machine,
+            view.operands(),
+            SemanticOperationUnary::ByteSwap,
+            false,
+        ),
         "popcnt" => popcnt(machine, view.operands()),
         "crc32" => crc32(machine, view.operands()),
         "cmp" => cmp_like(machine, view.operands()),
@@ -388,7 +395,10 @@ fn exchange(machine: Architecture, operands: &[X86OperandView]) -> Option<Instru
     ))
 }
 
-fn exchange_add(machine: Architecture, operands: &[X86OperandView]) -> Option<InstructionSemantics> {
+fn exchange_add(
+    machine: Architecture,
+    operands: &[X86OperandView],
+) -> Option<InstructionSemantics> {
     let dst = operand_location(machine, operands.first()?)?;
     let src_dst = operand_location(machine, operands.get(1)?)?;
     let dst_expr = operand_expr(machine, operands.first()?)?;
@@ -447,7 +457,10 @@ fn exchange_add(machine: Architecture, operands: &[X86OperandView]) -> Option<In
     ))
 }
 
-fn compare_exchange(machine: Architecture, operands: &[X86OperandView]) -> Option<InstructionSemantics> {
+fn compare_exchange(
+    machine: Architecture,
+    operands: &[X86OperandView],
+) -> Option<InstructionSemantics> {
     let dst = operand_location(machine, operands.first()?)?;
     let src = operand_expr(machine, operands.get(1)?)?;
     let observed = operand_expr(machine, operands.first()?)?;
@@ -525,7 +538,10 @@ fn compare_exchange(machine: Architecture, operands: &[X86OperandView]) -> Optio
     Some(common::complete(SemanticTerminator::FallThrough, effects))
 }
 
-fn lock_cmpxchg8b(machine: Architecture, operands: &[X86OperandView]) -> Option<InstructionSemantics> {
+fn lock_cmpxchg8b(
+    machine: Architecture,
+    operands: &[X86OperandView],
+) -> Option<InstructionSemantics> {
     let dst = operand_location(machine, operands.first()?)?;
     let addr = match dst {
         SemanticLocation::Memory { addr, .. } => *addr,
@@ -610,7 +626,10 @@ fn lock_cmpxchg8b(machine: Architecture, operands: &[X86OperandView]) -> Option<
     })
 }
 
-fn lock_cmpxchg16b(machine: Architecture, operands: &[X86OperandView]) -> Option<InstructionSemantics> {
+fn lock_cmpxchg16b(
+    machine: Architecture,
+    operands: &[X86OperandView],
+) -> Option<InstructionSemantics> {
     let dst = operand_location(machine, operands.first()?)?;
     let addr = match dst {
         SemanticLocation::Memory { addr, .. } => *addr,
@@ -893,7 +912,10 @@ fn imul(machine: Architecture, operands: &[X86OperandView]) -> Option<Instructio
     }
 }
 
-fn imul_explicit(machine: Architecture, operands: &[X86OperandView]) -> Option<InstructionSemantics> {
+fn imul_explicit(
+    machine: Architecture,
+    operands: &[X86OperandView],
+) -> Option<InstructionSemantics> {
     let dst = operand_location(machine, operands.first()?)?;
     let bits = common::location_bits(&dst);
     let full_bits = bits.saturating_mul(2);
@@ -965,7 +987,10 @@ fn imul_explicit(machine: Architecture, operands: &[X86OperandView]) -> Option<I
     ))
 }
 
-fn imul_implicit(machine: Architecture, operands: &[X86OperandView]) -> Option<InstructionSemantics> {
+fn imul_implicit(
+    machine: Architecture,
+    operands: &[X86OperandView],
+) -> Option<InstructionSemantics> {
     let src = operand_expr(machine, operands.first()?)?;
     let bits = operand_bits(machine, operands.first()?)?;
     let (low_name, high_name, acc_name, result_bits) = implicit_mul_registers(machine, bits)?;
@@ -1080,7 +1105,9 @@ fn mul(machine: Architecture, operands: &[X86OperandView]) -> Option<Instruction
         op: SemanticOperationBinary::Mul,
         left: Box::new(SemanticExpression::Cast {
             op: SemanticOperationCast::ZeroExtend,
-            arg: Box::new(SemanticExpression::Read(Box::new(common::reg(acc_name, bits)))),
+            arg: Box::new(SemanticExpression::Read(Box::new(common::reg(
+                acc_name, bits,
+            )))),
             bits: full_bits,
         }),
         right: Box::new(SemanticExpression::Cast {
@@ -1180,7 +1207,10 @@ fn mulx(machine: Architecture, operands: &[X86OperandView]) -> Option<Instructio
         op: SemanticOperationBinary::Mul,
         left: Box::new(SemanticExpression::Cast {
             op: SemanticOperationCast::ZeroExtend,
-            arg: Box::new(SemanticExpression::Read(Box::new(common::reg(implicit_name, bits)))),
+            arg: Box::new(SemanticExpression::Read(Box::new(common::reg(
+                implicit_name,
+                bits,
+            )))),
             bits: full_bits,
         }),
         right: Box::new(SemanticExpression::Cast {
@@ -1214,14 +1244,21 @@ fn mulx(machine: Architecture, operands: &[X86OperandView]) -> Option<Instructio
     ))
 }
 
-fn div(machine: Architecture, operands: &[X86OperandView], signed: bool) -> Option<InstructionSemantics> {
+fn div(
+    machine: Architecture,
+    operands: &[X86OperandView],
+    signed: bool,
+) -> Option<InstructionSemantics> {
     let divisor = operand_expr(machine, operands.first()?)?;
     let bits = operand_bits(machine, operands.first()?)?;
     let (low_name, high_name, acc_name, result_bits) = implicit_mul_registers(machine, bits)?;
     let dividend = if bits == 8 {
         SemanticExpression::Cast {
             op: SemanticOperationCast::ZeroExtend,
-            arg: Box::new(SemanticExpression::Read(Box::new(common::reg(low_name, result_bits)))),
+            arg: Box::new(SemanticExpression::Read(Box::new(common::reg(
+                low_name,
+                result_bits,
+            )))),
             bits: 16,
         }
     } else {
@@ -1761,7 +1798,10 @@ fn operand_location(machine: Architecture, operand: &X86OperandView) -> Option<S
     }
 }
 
-fn implicit_mul_registers(machine: Architecture, bits: u16) -> Option<(&'static str, &'static str, &'static str, u16)> {
+fn implicit_mul_registers(
+    machine: Architecture,
+    bits: u16,
+) -> Option<(&'static str, &'static str, &'static str, u16)> {
     match bits {
         8 => Some(("ax", "ah", "al", 16)),
         16 => Some(("ax", "dx", "ax", 16)),

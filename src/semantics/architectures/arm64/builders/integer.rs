@@ -21,12 +21,12 @@
 // SOFTWARE.
 
 use crate::semantics::architectures::arm64::Arm64InstructionView;
-use crate::semantics::architectures::arm64::{Arm64OperandKind, Arm64OperandView};
 use crate::semantics::architectures::arm64::helpers::{
     arithmetic_flag_effects, arithmetic_flag_values, binary, bitmask, bool_const, compare,
     complete, condition_from_cc, const_u64, flag, flag_expr, location_bits,
     reverse_bytes_in_chunks, set_flag, sign_bit, truncate_to_bits, zero_extend_to_bits,
 };
+use crate::semantics::architectures::arm64::{Arm64OperandKind, Arm64OperandView};
 use crate::semantics::{
     InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation,
     SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
@@ -792,15 +792,17 @@ fn build_conditional_compare(
         .into_iter()
         .zip(compare_flags)
         .zip(fallback_flags)
-        .map(|((name, compare_value), fallback_value)| SemanticEffect::Set {
-            dst: flag(name),
-            expression: SemanticExpression::Select {
-                condition: Box::new(condition.clone()),
-                when_true: Box::new(compare_value),
-                when_false: Box::new(bool_const(fallback_value)),
-                bits: 1,
+        .map(
+            |((name, compare_value), fallback_value)| SemanticEffect::Set {
+                dst: flag(name),
+                expression: SemanticExpression::Select {
+                    condition: Box::new(condition.clone()),
+                    when_true: Box::new(compare_value),
+                    when_false: Box::new(bool_const(fallback_value)),
+                    bits: 1,
+                },
             },
-        })
+        )
         .collect();
 
     Some(complete(SemanticTerminator::FallThrough, effects))

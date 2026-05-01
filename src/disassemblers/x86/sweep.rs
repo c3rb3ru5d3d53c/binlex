@@ -20,7 +20,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::{collections::{BTreeMap, BTreeSet}, io::Error};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    io::Error,
+};
 
 use crate::{
     Architecture, Config,

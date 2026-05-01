@@ -21,10 +21,10 @@
 // SOFTWARE.
 
 use crate::semantics::architectures::arm64::Arm64InstructionView;
-use crate::semantics::architectures::arm64::{Arm64OperandKind, Arm64OperandView};
 use crate::semantics::architectures::arm64::helpers::{
     compare, complete, condition_from_suffix, const_u64,
 };
+use crate::semantics::architectures::arm64::{Arm64OperandKind, Arm64OperandView};
 use crate::semantics::{
     InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation,
     SemanticOperationCompare, SemanticStatus, SemanticTerminator, SemanticTrapKind,

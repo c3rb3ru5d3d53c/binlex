@@ -21,8 +21,8 @@
 // SOFTWARE.
 
 use crate::Architecture;
-use crate::semantics::architectures::x86::helpers as common;
 use crate::semantics::architectures::x86::X86InstructionView;
+use crate::semantics::architectures::x86::helpers as common;
 use crate::semantics::architectures::x86::{X86OperandKind, X86OperandView};
 use crate::semantics::{
     InstructionSemantics, SemanticAddressSpace, SemanticEffect, SemanticExpression,

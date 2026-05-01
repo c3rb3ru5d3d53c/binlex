@@ -61,12 +61,17 @@ pub fn operand_immutable(op: &ArchOperand) -> Option<u64> {
     None
 }
 
-pub fn jump_immutable(disassembler: &x86_capstone::Disassembler<'_>, instruction: &Insn) -> Option<u64> {
+pub fn jump_immutable(
+    disassembler: &x86_capstone::Disassembler<'_>,
+    instruction: &Insn,
+) -> Option<u64> {
     let operand_index = x86_flow::controlflow_target_operand_index(
         x86_capstone::Disassembler::is_jump_instruction(instruction),
         false,
     )?;
-    let operand = disassembler.get_instruction_operand(instruction, operand_index).ok()?;
+    let operand = disassembler
+        .get_instruction_operand(instruction, operand_index)
+        .ok()?;
     operand_immutable(&operand)
 }
 
@@ -92,7 +97,10 @@ pub fn unconditional_jump_immutable(
     None
 }
 
-pub fn call_immutable(disassembler: &x86_capstone::Disassembler<'_>, instruction: &Insn) -> Option<u64> {
+pub fn call_immutable(
+    disassembler: &x86_capstone::Disassembler<'_>,
+    instruction: &Insn,
+) -> Option<u64> {
     if x86_capstone::Disassembler::is_call_instruction(instruction) {
         let operand = disassembler.get_instruction_operand(instruction, 0).ok()?;
         return operand_immutable(&operand);
@@ -137,7 +145,10 @@ pub fn resolve_jump_table_base(
     mem_base: RegId,
     displacement: i64,
     history: &[crate::disassemblers::x86::decoded::X86DecodedInstruction],
-    resolve_register_value: impl Fn(&str, &[crate::disassemblers::x86::decoded::X86DecodedInstruction]) -> Option<u64>,
+    resolve_register_value: impl Fn(
+        &str,
+        &[crate::disassemblers::x86::decoded::X86DecodedInstruction],
+    ) -> Option<u64>,
 ) -> Option<u64> {
     if mem_base == RegId(0) {
         return Some(displacement as u64);
@@ -148,10 +159,17 @@ pub fn resolve_jump_table_base(
         );
     }
     let register = disassembler.register_name(mem_base)?;
-    resolve_register_value(crate::disassemblers::x86::decoded::canonical_register_name(&register), history)
+    resolve_register_value(
+        crate::disassemblers::x86::decoded::canonical_register_name(&register),
+        history,
+    )
 }
 
-pub fn jump_table_entry_size(machine: crate::Architecture, scale: usize, operand_size: usize) -> usize {
+pub fn jump_table_entry_size(
+    machine: crate::Architecture,
+    scale: usize,
+    operand_size: usize,
+) -> usize {
     let pointer_size = match machine {
         crate::Architecture::AMD64 => 8,
         crate::Architecture::I386 => 4,

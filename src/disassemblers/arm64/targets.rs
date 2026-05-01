@@ -61,7 +61,10 @@ pub fn operand_immutable(op: &ArchOperand) -> Option<u64> {
     None
 }
 
-pub fn call_immutable(disassembler: &arm64_capstone::Disassembler<'_>, instruction: &Insn) -> Option<u64> {
+pub fn call_immutable(
+    disassembler: &arm64_capstone::Disassembler<'_>,
+    instruction: &Insn,
+) -> Option<u64> {
     if arm64_capstone::Disassembler::is_call_instruction(instruction) {
         let operand = disassembler.get_instruction_operand(instruction, 0).ok()?;
         return operand_immutable(&operand);
@@ -77,7 +80,9 @@ pub fn conditional_jump_immutable(
         return None;
     }
     let index = arm64_flow::conditional_target_operand_index(instruction.mnemonic().unwrap_or(""));
-    let operand = disassembler.get_instruction_operand(instruction, index).ok()?;
+    let operand = disassembler
+        .get_instruction_operand(instruction, index)
+        .ok()?;
     operand_immutable(&operand)
 }
 
@@ -88,7 +93,9 @@ pub fn unconditional_jump_immutable(
     let operand_index = arm64_flow::unconditional_target_operand_index(
         arm64_capstone::Disassembler::is_unconditional_jump_instruction(instruction),
     )?;
-    let operand = disassembler.get_instruction_operand(instruction, operand_index).ok()?;
+    let operand = disassembler
+        .get_instruction_operand(instruction, operand_index)
+        .ok()?;
     operand_immutable(&operand)
 }
 
@@ -99,7 +106,9 @@ pub fn instruction_executable_address(
     let operand_index = arm64_flow::load_address_operand_index(
         arm64_capstone::Disassembler::is_load_address_instruction(instruction),
     )?;
-    let operand = disassembler.get_instruction_operand(instruction, operand_index).ok()?;
+    let operand = disassembler
+        .get_instruction_operand(instruction, operand_index)
+        .ok()?;
     let addr = operand_immutable(&operand)?;
     disassembler.is_executable_address(addr).then_some(addr)
 }

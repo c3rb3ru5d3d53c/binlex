@@ -21,11 +21,11 @@
 // SOFTWARE.
 
 use crate::semantics::architectures::arm64::Arm64InstructionView;
-use crate::semantics::architectures::arm64::{Arm64OperandKind, Arm64OperandView};
 use crate::semantics::architectures::arm64::helpers::{
-    binary, complete, location_bits, sign_extend_to_bits, truncate_to_bits, zero_extend_to_bits,
-    const_u64,
+    binary, complete, const_u64, location_bits, sign_extend_to_bits, truncate_to_bits,
+    zero_extend_to_bits,
 };
+use crate::semantics::architectures::arm64::{Arm64OperandKind, Arm64OperandView};
 use crate::semantics::{
     InstructionSemantics, SemanticAddressSpace, SemanticEffect, SemanticExpression,
     SemanticLocation, SemanticOperationBinary, SemanticTerminator,
@@ -60,7 +60,9 @@ pub(crate) fn build(view: &Arm64InstructionView) -> Option<InstructionSemantics>
         "strh" | "sturh" if view.operand_count >= 2 => build_store(view, Some(16)),
         // Base-plus-immediate forms like ldtr/sttr that often surface as
         // register + base + displacement instead of a single memory operand.
-        "ldtr" if view.operand_count >= 2 => build_load_base_immediate(view, LoadKind::FullWidth, None),
+        "ldtr" if view.operand_count >= 2 => {
+            build_load_base_immediate(view, LoadKind::FullWidth, None)
+        }
         "ldtrb" if view.operand_count >= 2 => {
             build_load_base_immediate(view, LoadKind::ZeroExtend, Some(8))
         }
@@ -130,7 +132,10 @@ fn build_load(
     Some(complete(SemanticTerminator::FallThrough, effects))
 }
 
-fn build_store(view: &Arm64InstructionView, store_bits: Option<u16>) -> Option<InstructionSemantics> {
+fn build_store(
+    view: &Arm64InstructionView,
+    store_bits: Option<u16>,
+) -> Option<InstructionSemantics> {
     let src = operand_expression(view.operand(0)?)?;
     let addr = effective_memory_address(view, view.operand(1)?, view.operand(2))?;
     let expression = match store_bits {
@@ -140,11 +145,11 @@ fn build_store(view: &Arm64InstructionView, store_bits: Option<u16>) -> Option<I
     let bits = store_bits.unwrap_or_else(|| expression.bits());
 
     let mut effects = vec![SemanticEffect::Store {
-            space: SemanticAddressSpace::Default,
-            addr,
-            expression,
-            bits,
-        }];
+        space: SemanticAddressSpace::Default,
+        addr,
+        expression,
+        bits,
+    }];
     if let Some(writeback) = writeback_effect(view, view.operand(1)?, view.operand(2)) {
         effects.push(writeback);
     }
@@ -396,10 +401,12 @@ fn memory_address(operand: &Arm64OperandView) -> Option<SemanticExpression> {
 fn base_register_address(operand: &Arm64OperandView) -> Option<SemanticExpression> {
     let mem = operand.memory_operand()?;
     let name = mem.base_register_name.as_ref()?;
-    Some(SemanticExpression::Read(Box::new(SemanticLocation::Register {
-        name: name.clone(),
-        bits: 64,
-    })))
+    Some(SemanticExpression::Read(Box::new(
+        SemanticLocation::Register {
+            name: name.clone(),
+            bits: 64,
+        },
+    )))
 }
 
 pub(super) fn effective_memory_address(
@@ -448,7 +455,9 @@ pub(super) fn writeback_effect(
         .operand_text
         .as_deref()
         .is_some_and(|op_str| op_str.contains("],") || op_str.contains("]!"))
-        && writeback_operand.and_then(Arm64OperandView::immediate_value).is_none()
+        && writeback_operand
+            .and_then(Arm64OperandView::immediate_value)
+            .is_none()
     {
         return None;
     }

@@ -20,13 +20,9 @@ fn disassemble_single(
 
     match architecture {
         Architecture::CIL => {
-            let disassembler = binlex::disassemblers::cil::Disassembler::new(
-                architecture,
-                bytes,
-                ranges,
-                config,
-            )
-            .expect("disassembler");
+            let disassembler =
+                binlex::disassemblers::cil::Disassembler::new(architecture, bytes, ranges, config)
+                    .expect("disassembler");
             disassembler
                 .disassemble_instruction(0, &BTreeMap::new(), &mut graph)
                 .unwrap_or_else(|error| panic!("{name}: instruction should disassemble: {error}"));

@@ -140,10 +140,12 @@ impl PyMachoSlice {
         py: Python<'_>,
         virtual_address: u64,
     ) -> PyResult<Option<Py<PySymbol>>> {
-        self.with_slice(|slice: InnerMachoSlice<'_>| slice.virtual_address_to_symbol(virtual_address))
-            .flatten()
-            .map(|symbol| Py::new(py, PySymbol::from_inner(symbol)))
-            .transpose()
+        self.with_slice(|slice: InnerMachoSlice<'_>| {
+            slice.virtual_address_to_symbol(virtual_address)
+        })
+        .flatten()
+        .map(|symbol| Py::new(py, PySymbol::from_inner(symbol)))
+        .transpose()
     }
 
     #[pyo3(text_signature = "($self, relative_virtual_address)")]
@@ -161,11 +163,7 @@ impl PyMachoSlice {
     }
 
     #[pyo3(text_signature = "($self, offset)")]
-    pub fn offset_to_symbol(
-        &self,
-        py: Python<'_>,
-        offset: u64,
-    ) -> PyResult<Option<Py<PySymbol>>> {
+    pub fn offset_to_symbol(&self, py: Python<'_>, offset: u64) -> PyResult<Option<Py<PySymbol>>> {
         self.with_slice(|slice: InnerMachoSlice<'_>| slice.offset_to_symbol(offset))
             .flatten()
             .map(|symbol| Py::new(py, PySymbol::from_inner(symbol)))

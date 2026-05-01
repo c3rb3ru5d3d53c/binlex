@@ -21,15 +21,18 @@
 // SOFTWARE.
 
 use crate::Architecture;
-use crate::semantics::architectures::x86::helpers as common;
 use crate::semantics::architectures::x86::X86InstructionView;
+use crate::semantics::architectures::x86::helpers as common;
 use crate::semantics::architectures::x86::{X86OperandKind, X86OperandView};
 use crate::semantics::{
     InstructionSemantics, SemanticDiagnosticKind, SemanticEffect, SemanticExpression,
     SemanticLocation, SemanticTerminator,
 };
 
-pub(crate) fn build(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+pub(crate) fn build(
+    machine: Architecture,
+    view: &X86InstructionView,
+) -> Option<InstructionSemantics> {
     if is_return(view) {
         let expression = view
             .operands()
@@ -131,7 +134,10 @@ pub(crate) fn build(machine: Architecture, view: &X86InstructionView) -> Option<
                 SemanticTerminator::FallThrough,
                 vec![common::diagnostic(
                     SemanticDiagnosticKind::PartialFlags,
-                    format!("0x{:x}: cmovcc condition modeled as intrinsic", view.address),
+                    format!(
+                        "0x{:x}: cmovcc condition modeled as intrinsic",
+                        view.address
+                    ),
                 )],
                 vec![SemanticEffect::Set {
                     dst,
@@ -205,7 +211,10 @@ pub(crate) fn build(machine: Architecture, view: &X86InstructionView) -> Option<
             },
             vec![common::diagnostic(
                 SemanticDiagnosticKind::PartialFlags,
-                format!("0x{:x}: branch condition modeled as intrinsic", view.address),
+                format!(
+                    "0x{:x}: branch condition modeled as intrinsic",
+                    view.address
+                ),
             )],
         ));
     }
@@ -359,12 +368,15 @@ fn operand_expr(machine: Architecture, operand: &X86OperandView) -> Option<Seman
         }),
         X86OperandKind::Memory => {
             let mem = operand.memory_operand()?;
-            let base = mem
-                .base_register_name
-                .map(|name| SemanticExpression::Read(Box::new(common::reg(name, common::pointer_bits(machine)))));
+            let base = mem.base_register_name.map(|name| {
+                SemanticExpression::Read(Box::new(common::reg(name, common::pointer_bits(machine))))
+            });
             let index = mem.index_register_name.map(|name| {
                 (
-                    SemanticExpression::Read(Box::new(common::reg(name, common::pointer_bits(machine)))),
+                    SemanticExpression::Read(Box::new(common::reg(
+                        name,
+                        common::pointer_bits(machine),
+                    ))),
                     mem.scale,
                 )
             });
@@ -384,12 +396,15 @@ fn operand_location(machine: Architecture, operand: &X86OperandView) -> Option<S
         X86OperandKind::Register => Some(common::reg(operand.register_name()?, operand.size_bits)),
         X86OperandKind::Memory => {
             let mem = operand.memory_operand()?;
-            let base = mem
-                .base_register_name
-                .map(|name| SemanticExpression::Read(Box::new(common::reg(name, common::pointer_bits(machine)))));
+            let base = mem.base_register_name.map(|name| {
+                SemanticExpression::Read(Box::new(common::reg(name, common::pointer_bits(machine))))
+            });
             let index = mem.index_register_name.map(|name| {
                 (
-                    SemanticExpression::Read(Box::new(common::reg(name, common::pointer_bits(machine)))),
+                    SemanticExpression::Read(Box::new(common::reg(
+                        name,
+                        common::pointer_bits(machine),
+                    ))),
                     mem.scale,
                 )
             });

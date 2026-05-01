@@ -240,10 +240,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
                 (I386Register::Esp, 0x2fc0),
             ],
             eflags: 1 << 1,
-            memory: &[
-                (0x3800, &[0x41, 0x42, 0x43]),
-                (0x3900, &[0x00, 0x00, 0x00]),
-            ],
+            memory: &[(0x3800, &[0x41, 0x42, 0x43]), (0x3900, &[0x00, 0x00, 0x00])],
         }),
     },
     X86Sample {

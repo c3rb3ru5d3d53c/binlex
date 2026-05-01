@@ -28,16 +28,15 @@ use crate::{
     controlflow::graph::Graph,
     disassemblers::x86::{
         backends::capstone as x86_capstone,
-        decoded::{canonical_register_name, X86DecodedInstruction, X86DecodedMemoryOperand, X86DecodedOperand},
-        flow as x86_flow,
-        targets as x86_targets,
+        decoded::{
+            X86DecodedInstruction, X86DecodedMemoryOperand, X86DecodedOperand,
+            canonical_register_name,
+        },
+        flow as x86_flow, targets as x86_targets,
     },
 };
 
-pub fn is_register_jump_table_load(
-    instruction: &X86DecodedInstruction,
-    register: &str,
-) -> bool {
+pub fn is_register_jump_table_load(instruction: &X86DecodedInstruction, register: &str) -> bool {
     if instruction.operands.len() < 2 {
         return false;
     }
@@ -74,10 +73,7 @@ pub fn is_add_same_register(instruction: &X86DecodedInstruction, register: &str)
     )
 }
 
-pub fn get_add_rhs_register(
-    instruction: &X86DecodedInstruction,
-    lhs: &str,
-) -> Option<String> {
+pub fn get_add_rhs_register(instruction: &X86DecodedInstruction, lhs: &str) -> Option<String> {
     if !is_add_same_register(instruction, lhs) {
         return None;
     }
@@ -262,7 +258,11 @@ pub fn indirect_controlflow_targets(
         }
         (X86DecodedOperand::Register(_reg_name), ArchOperand::X86Operand(op)) => {
             if let X86OperandType::Reg(reg) = op.op_type {
-                targets.extend(resolve_register_jump_table_targets(disassembler, reg, &history));
+                targets.extend(resolve_register_jump_table_targets(
+                    disassembler,
+                    reg,
+                    &history,
+                ));
             }
         }
         _ => {}
@@ -299,7 +299,11 @@ fn resolve_jump_table_memory_targets(
         return result;
     };
 
-    let entry_size = x86_targets::jump_table_entry_size(disassembler.machine, mem.scale() as usize, operand_size);
+    let entry_size = x86_targets::jump_table_entry_size(
+        disassembler.machine,
+        mem.scale() as usize,
+        operand_size,
+    );
     if entry_size == 0 {
         return result;
     }
@@ -360,7 +364,11 @@ fn resolve_register_jump_table_targets(
         else {
             return result;
         };
-        let entry_size = x86_targets::jump_table_entry_size(disassembler.machine, mem.scale as usize, operand_size);
+        let entry_size = x86_targets::jump_table_entry_size(
+            disassembler.machine,
+            mem.scale as usize,
+            operand_size,
+        );
         if entry_size == 0 {
             return result;
         }
@@ -383,10 +391,9 @@ fn resolve_register_jump_table_targets(
         return result;
     }
 
-    let Some(add_index) = history
-        .iter()
-        .rposition(|insn| is_add_same_register(insn, &jump_register_name) && insn.address > load.address)
-    else {
+    let Some(add_index) = history.iter().rposition(|insn| {
+        is_add_same_register(insn, &jump_register_name) && insn.address > load.address
+    }) else {
         return result;
     };
 
