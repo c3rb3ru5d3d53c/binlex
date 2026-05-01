@@ -117,8 +117,12 @@ pub(crate) fn instruction_chromosome_mask(
     let instruction_size_bits = bytes.len() * 8;
     let mut wildcarded = vec![false; instruction_size_bits];
 
-    let instruction_trailing_null_size_bits = bytes.iter().rev().take_while(|&&b| b == 0).count() * 8;
-    let total_operand_size_bits = operands.iter().map(|operand| operand.operand_size_bits).sum::<usize>();
+    let instruction_trailing_null_size_bits =
+        bytes.iter().rev().take_while(|&&b| b == 0).count() * 8;
+    let total_operand_size_bits = operands
+        .iter()
+        .map(|operand| operand.operand_size_bits)
+        .sum::<usize>();
 
     if total_operand_size_bits > instruction_size_bits {
         return Ok(vec![0; bytes.len()]);
@@ -143,7 +147,9 @@ pub(crate) fn instruction_chromosome_mask(
             X86PatternOperandKind::MemoryWithIndex | X86PatternOperandKind::Other => false,
         };
 
-        let mut op_size_bits = operand.operand_size_bits.max(operand.displacement_size_bits);
+        let mut op_size_bits = operand
+            .operand_size_bits
+            .max(operand.displacement_size_bits);
         if op_size_bits > instruction_size_bits {
             op_size_bits = operand.operand_size_bits;
         }

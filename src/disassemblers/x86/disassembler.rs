@@ -24,12 +24,14 @@ use crate::Architecture;
 use crate::Config;
 use crate::controlflow::Graph;
 use crate::controlflow::Instruction;
+use crate::disassemblers::x86::classify as x86_classify;
 use crate::disassemblers::x86::pattern::{
     X86PatternOperand, X86PatternOperandKind, displacement_size_bits, instruction_chromosome_mask,
     is_immutable_instruction_to_pattern, is_unsupported_pattern_mnemonic,
 };
-use crate::disassemblers::x86::{classify as x86_classify};
-use crate::disassemblers::x86::{prologue as x86_prologue, sweep as x86_sweep, translate as x86_translate};
+use crate::disassemblers::x86::{
+    prologue as x86_prologue, sweep as x86_sweep, translate as x86_translate,
+};
 use crate::io::Stderr;
 use ::capstone::Insn;
 use ::capstone::Instructions;
@@ -108,11 +110,13 @@ impl<'a> Disassembler<'a> {
             return Err(Error::new(ErrorKind::Other, error));
         }
 
-        let instruction = self.prepare_instruction(self.machine, address, cfg).map_err(|_| {
-            cfg.instructions.insert_invalid(address);
-            let error = format!("0x{:x}: failed to disassemble instruction", address);
-            Error::new(ErrorKind::Other, error)
-        })?;
+        let instruction = self
+            .prepare_instruction(self.machine, address, cfg)
+            .map_err(|_| {
+                cfg.instructions.insert_invalid(address);
+                let error = format!("0x{:x}: failed to disassemble instruction", address);
+                Error::new(ErrorKind::Other, error)
+            })?;
 
         Stderr::print_debug(
             &cfg.config,
@@ -228,7 +232,10 @@ impl<'a> Disassembler<'a> {
             cfg.functions.insert_invalid(address);
             return Err(Error::new(
                 ErrorKind::Other,
-                format!("Function -> 0x{:x}: it is not in executable memory", address),
+                format!(
+                    "Function -> 0x{:x}: it is not in executable memory",
+                    address
+                ),
             ));
         }
 

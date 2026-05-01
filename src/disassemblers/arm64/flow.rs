@@ -50,27 +50,15 @@ pub fn conditional_target_operand_index(mnemonic: &str) -> usize {
 }
 
 pub fn unconditional_target_operand_index(is_unconditional_jump: bool) -> Option<usize> {
-    if is_unconditional_jump {
-        Some(0)
-    } else {
-        None
-    }
+    if is_unconditional_jump { Some(0) } else { None }
 }
 
 pub fn load_address_operand_index(is_load_address: bool) -> Option<usize> {
-    if is_load_address {
-        Some(1)
-    } else {
-        None
-    }
+    if is_load_address { Some(1) } else { None }
 }
 
 pub fn indirect_target_operand_index(has_indirect_target: bool) -> Option<usize> {
-    if has_indirect_target {
-        Some(0)
-    } else {
-        None
-    }
+    if has_indirect_target { Some(0) } else { None }
 }
 
 pub fn should_collect_indirect_targets(has_indirect_target: bool) -> bool {

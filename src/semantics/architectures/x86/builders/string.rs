@@ -21,14 +21,17 @@
 // SOFTWARE.
 
 use crate::Architecture;
-use crate::semantics::architectures::x86::helpers as common;
 use crate::semantics::architectures::x86::X86InstructionView;
+use crate::semantics::architectures::x86::helpers as common;
 use crate::semantics::{
     InstructionSemantics, SemanticAddressSpace, SemanticEffect, SemanticExpression,
     SemanticOperationCompare, SemanticTerminator,
 };
 
-pub(crate) fn build(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+pub(crate) fn build(
+    machine: Architecture,
+    view: &X86InstructionView,
+) -> Option<InstructionSemantics> {
     let mnemonic = view.mnemonic.as_str();
     if matches!(
         mnemonic,

@@ -20,8 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::disassemblers::x86::disassembler::Disassembler;
 use crate::Architecture;
+use crate::disassemblers::x86::disassembler::Disassembler;
 use capstone::arch::ArchOperand;
 use capstone::prelude::*;
 use capstone::{Insn, Instructions};

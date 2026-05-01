@@ -21,13 +21,13 @@
 // SOFTWARE.
 
 use crate::semantics::architectures::arm64::Arm64InstructionView;
-use crate::semantics::architectures::arm64::{Arm64OperandKind, Arm64OperandView};
 use crate::semantics::architectures::arm64::helpers::{
     binary, bool_const, complete, const_u64, flag_expr, set_flag, unary_not,
 };
+use crate::semantics::architectures::arm64::{Arm64OperandKind, Arm64OperandView};
 use crate::semantics::{
-    InstructionSemantics, SemanticEffect, SemanticLocation, SemanticOperationBinary,
-    SemanticExpression, SemanticStatus, SemanticTerminator, SemanticTrapKind,
+    InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation,
+    SemanticOperationBinary, SemanticStatus, SemanticTerminator, SemanticTrapKind,
 };
 
 const TPIDR_EL0_SEMANTIC_NAME: &str = "arm64_sysreg_tpidr_el0";
@@ -87,24 +87,18 @@ pub(crate) fn build(view: &Arm64InstructionView) -> Option<InstructionSemantics>
 }
 
 fn instruction_mentions_tpidr_el0(view: &Arm64InstructionView) -> bool {
-    view.operand_text
-        .as_deref()
-        .is_some_and(|op_str| {
-            let lowered = op_str.to_ascii_lowercase();
-            lowered.contains("tpidr_el0") || lowered.contains("s3_3_c13_c0_2")
-        })
-        || view.bytes.as_slice().ends_with(&[0xd0, 0x3b, 0xd5])
+    view.operand_text.as_deref().is_some_and(|op_str| {
+        let lowered = op_str.to_ascii_lowercase();
+        lowered.contains("tpidr_el0") || lowered.contains("s3_3_c13_c0_2")
+    }) || view.bytes.as_slice().ends_with(&[0xd0, 0x3b, 0xd5])
         || view.bytes.as_slice().ends_with(&[0xd0, 0x1b, 0xd5])
 }
 
 fn instruction_mentions_fpcr(view: &Arm64InstructionView) -> bool {
-    view.operand_text
-        .as_deref()
-        .is_some_and(|op_str| {
-            let lowered = op_str.to_ascii_lowercase();
-            lowered.contains("fpcr") || lowered.contains("s3_3_c4_c4_0")
-        })
-        || view.bytes.as_slice().ends_with(&[0x44, 0x3b, 0xd5])
+    view.operand_text.as_deref().is_some_and(|op_str| {
+        let lowered = op_str.to_ascii_lowercase();
+        lowered.contains("fpcr") || lowered.contains("s3_3_c4_c4_0")
+    }) || view.bytes.as_slice().ends_with(&[0x44, 0x3b, 0xd5])
         || view.bytes.as_slice().ends_with(&[0x44, 0x1b, 0xd5])
 }
 
@@ -139,11 +133,7 @@ fn build_msr(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     } else {
         return None;
     };
-    let src = view
-        .operands()
-        .iter()
-        .rev()
-        .find_map(operand_expression)?;
+    let src = view.operands().iter().rev().find_map(operand_expression)?;
     Some(complete(
         SemanticTerminator::FallThrough,
         vec![SemanticEffect::Set {

@@ -1,13 +1,13 @@
+use super::LoweringContext;
 use super::helpers::{
     render_address_space, render_fence_kind, render_location, render_trap_kind, sanitize_symbol,
 };
-use super::LoweringContext;
+use crate::Abi;
 use crate::lifters::llvm::abi::coerce_int_value_width;
 use crate::semantics::{
     InstructionSemantics, SemanticAddressSpace, SemanticEffect, SemanticExpression,
     SemanticLocation, SemanticTerminator,
 };
-use crate::Abi;
 use std::io::Error;
 
 impl<'ctx, 'm> LoweringContext<'ctx, 'm> {

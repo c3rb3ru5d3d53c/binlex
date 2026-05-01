@@ -20,10 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::{
-    Architecture,
-    disassemblers::x86::decoded::X86DecodedOperand,
-};
+use crate::{Architecture, disassemblers::x86::decoded::X86DecodedOperand};
 
 pub fn is_function_prologue<F>(machine: Architecture, decode_operand: F) -> bool
 where

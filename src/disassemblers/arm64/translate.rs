@@ -24,7 +24,8 @@ use std::collections::BTreeSet;
 use std::io::Error;
 
 use ::capstone::{
-    Insn, RegId, arch::ArchOperand,
+    Insn, RegId,
+    arch::ArchOperand,
     arch::arm64::{Arm64Extender, Arm64OperandType, Arm64Reg, Arm64Shift},
 };
 
@@ -33,14 +34,14 @@ use crate::{
     controlflow::graph::Graph,
     controlflow::{Instruction, InstructionSemanticsInput, Operand, OperandKind},
     disassemblers::arm64::{
-        backends::capstone as arm64_capstone, flow as arm64_flow,
-        indirect as arm64_indirect, targets as arm64_targets,
+        backends::capstone as arm64_capstone, flow as arm64_flow, indirect as arm64_indirect,
+        targets as arm64_targets,
     },
     genetics::Chromosome,
+    semantics::architectures::arm64::operand::Arm64ShiftKind,
     semantics::architectures::arm64::{
         Arm64InstructionView, Arm64MemoryOperandView, Arm64OperandKind, Arm64OperandView,
     },
-    semantics::architectures::arm64::operand::Arm64ShiftKind,
 };
 
 fn semantic_register_bits(reg_id: u16) -> u16 {
@@ -165,7 +166,10 @@ fn semantic_register_from_text(token: &str) -> Option<Arm64OperandView> {
 fn semantic_memory_from_text(token: &str) -> Option<Arm64OperandView> {
     let inner = token.trim().strip_prefix('[')?.strip_suffix(']')?.trim();
     let mut parts = inner.split(',').map(str::trim);
-    let base_register_name = parts.next().and_then(semantic_register_from_text)?.register_name;
+    let base_register_name = parts
+        .next()
+        .and_then(semantic_register_from_text)?
+        .register_name;
     let mut index_register_name = None;
     let mut displacement = 0;
     if let Some(second) = parts.next() {
@@ -284,7 +288,10 @@ fn semantic_operand_view(
     }
 }
 
-fn semantic_normalize_special_operands(instruction: &Insn, operand_views: &mut Vec<Arm64OperandView>) {
+fn semantic_normalize_special_operands(
+    instruction: &Insn,
+    operand_views: &mut Vec<Arm64OperandView>,
+) {
     let mnemonic = instruction.mnemonic().unwrap_or("").to_ascii_lowercase();
     let op_str = instruction.op_str().unwrap_or("");
     match mnemonic.as_str() {
@@ -442,10 +449,12 @@ pub fn build_instruction(
     cfg: &Graph,
 ) -> Result<Instruction, Error> {
     let instruction_container = disassembler.disassemble_instructions(address, 1)?;
-    let instruction = instruction_container
-        .iter()
-        .next()
-        .ok_or_else(|| Error::other(format!("0x{:x}: failed to disassemble instruction", address)))?;
+    let instruction = instruction_container.iter().next().ok_or_else(|| {
+        Error::other(format!(
+            "0x{:x}: failed to disassemble instruction",
+            address
+        ))
+    })?;
 
     let instruction_mask = disassembler.get_instruction_chromosome_mask(instruction)?;
     let pattern = Chromosome::new(
@@ -458,7 +467,9 @@ pub fn build_instruction(
     let operands = if matches!(mnemonic.as_str(), "mrs" | "msr") {
         Vec::new()
     } else {
-        disassembler.get_instruction_operands(instruction).unwrap_or_default()
+        disassembler
+            .get_instruction_operands(instruction)
+            .unwrap_or_default()
     };
     let is_jump = arm64_capstone::Disassembler::is_jump_instruction(instruction);
     let is_call = arm64_capstone::Disassembler::is_call_instruction(instruction);
@@ -503,8 +514,13 @@ pub fn build_instruction(
         .get_instruction_condition_code(instruction)
         .ok()
         .flatten();
-    let semantic_view =
-        semantic_instruction_view(disassembler, machine, instruction, &operands, condition_code);
+    let semantic_view = semantic_instruction_view(
+        disassembler,
+        machine,
+        instruction,
+        &operands,
+        condition_code,
+    );
     let mut blinstruction =
         Instruction::create(instruction.address(), cfg.architecture, cfg.config.clone());
 

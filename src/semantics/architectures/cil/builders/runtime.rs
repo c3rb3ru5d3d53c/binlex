@@ -56,9 +56,10 @@ pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSeman
                 effects,
             ))
         }
-        "volatile." | "constrained." | "cpobj" => Some(
-            complete_with_effects(SemanticTerminator::FallThrough, vec![SemanticEffect::Nop]),
-        ),
+        "volatile." | "constrained." | "cpobj" => Some(complete_with_effects(
+            SemanticTerminator::FallThrough,
+            vec![SemanticEffect::Nop],
+        )),
         "localloc" => {
             let (effects, size) = pop_stack();
             Some(push_with_prefix(
@@ -71,9 +72,10 @@ pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSeman
             ))
         }
         "ckfinite" => Some(push_runtime_unary_intrinsic(instruction, "cil.ckfinite")),
-        "no." | "readonly." | "tail." | "unaligned." => Some(
-            complete_with_effects(SemanticTerminator::FallThrough, vec![SemanticEffect::Nop]),
-        ),
+        "no." | "readonly." | "tail." | "unaligned." => Some(complete_with_effects(
+            SemanticTerminator::FallThrough,
+            vec![SemanticEffect::Nop],
+        )),
         "endfinally" => Some(InstructionSemantics {
             version: 1,
             status: SemanticStatus::Complete,

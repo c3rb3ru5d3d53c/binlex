@@ -15,8 +15,14 @@ pub(crate) const SAMPLES: &[X86Sample] = &[X86Sample {
     expected_status: Some(SemanticStatus::Complete),
     semantics_fixture: Some(X86FixtureSpec {
         registers: &[
-            (I386Register::Xmm0, vec128(0x0000_0000_3f80_0000, 0x1122_3344_5566_7788)),
-            (I386Register::Xmm1, vec128(0x0000_0000_4000_0000, 0x99aa_bbcc_ddee_ff00)),
+            (
+                I386Register::Xmm0,
+                vec128(0x0000_0000_3f80_0000, 0x1122_3344_5566_7788),
+            ),
+            (
+                I386Register::Xmm1,
+                vec128(0x0000_0000_4000_0000, 0x99aa_bbcc_ddee_ff00),
+            ),
         ],
         eflags: 1 << 1,
         memory: &[],

@@ -205,11 +205,7 @@ impl ELF {
     }
 
     #[pyo3(text_signature = "($self, offset)")]
-    pub fn offset_to_symbol(
-        &self,
-        py: Python<'_>,
-        offset: u64,
-    ) -> PyResult<Option<Py<PySymbol>>> {
+    pub fn offset_to_symbol(&self, py: Python<'_>, offset: u64) -> PyResult<Option<Py<PySymbol>>> {
         self.inner
             .lock()
             .unwrap()

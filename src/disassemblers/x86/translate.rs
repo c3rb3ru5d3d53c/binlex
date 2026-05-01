@@ -197,7 +197,9 @@ pub fn build_instruction(
         cfg.config.clone(),
     )?
     .pattern();
-    let operands = disassembler.get_instruction_operands(instruction).unwrap_or_default();
+    let operands = disassembler
+        .get_instruction_operands(instruction)
+        .unwrap_or_default();
     let is_jump = x86_capstone::Disassembler::is_jump_instruction(instruction);
     let is_call = x86_capstone::Disassembler::is_call_instruction(instruction);
     let is_return = x86_capstone::Disassembler::is_return_instruction(instruction);

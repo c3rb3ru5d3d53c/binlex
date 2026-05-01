@@ -29,7 +29,10 @@ pub fn is_trap_mnemonic(mnemonic: &str) -> bool {
 }
 
 pub fn is_call_mnemonic(mnemonic: &str) -> bool {
-    matches!(mnemonic, "bl" | "blr" | "blraa" | "blraaz" | "blrab" | "blrabz")
+    matches!(
+        mnemonic,
+        "bl" | "blr" | "blraa" | "blraaz" | "blrab" | "blrabz"
+    )
 }
 
 pub fn is_unconditional_jump_mnemonic(mnemonic: &str) -> bool {
@@ -71,8 +74,7 @@ pub fn is_direct_call_mnemonic(mnemonic: &str) -> bool {
 pub fn has_indirect_controlflow_target_mnemonic(mnemonic: &str) -> bool {
     matches!(
         mnemonic,
-        "br"
-            | "blr"
+        "br" | "blr"
             | "braa"
             | "braaz"
             | "brab"

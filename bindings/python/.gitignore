@@ -17,3 +17,4 @@ output.s
 *.s
 /experiments/
 /samples/
+.z3-trace

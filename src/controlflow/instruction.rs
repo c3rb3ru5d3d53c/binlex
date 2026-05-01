@@ -34,16 +34,16 @@ use crate::lifters::llvm::{LiftersJson, LlvmJson};
 #[cfg(not(target_os = "windows"))]
 use crate::lifters::vex::{Lifter as VexLifter, VexJson};
 use crate::metadata::Attributes;
-use crate::semantics::architectures;
 use crate::semantics::InstructionSemantics;
 use crate::semantics::InstructionSemanticsJson;
+use crate::semantics::architectures;
+use crate::semantics::architectures::arm64::Arm64InstructionView;
+use crate::semantics::architectures::cil::CilInstructionView;
+use crate::semantics::architectures::x86::X86InstructionView;
 use crate::semantics::{
     InstructionEncoding, SemanticDiagnostic, SemanticDiagnosticKind, SemanticEffect,
     SemanticStatus, SemanticTerminator,
 };
-use crate::semantics::architectures::arm64::Arm64InstructionView;
-use crate::semantics::architectures::cil::CilInstructionView;
-use crate::semantics::architectures::x86::X86InstructionView;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Value;
@@ -346,7 +346,9 @@ impl Instruction {
     }
 
     pub fn build_semantics(&self) -> Option<InstructionSemantics> {
-        self.semantics_input.clone().map(InstructionSemanticsInput::build)
+        self.semantics_input
+            .clone()
+            .map(InstructionSemanticsInput::build)
     }
 
     pub fn build_and_log_semantics(&self) -> Option<InstructionSemantics> {

@@ -1,15 +1,14 @@
+use self::helpers::push_unique_location;
 use crate::Abi;
 use crate::Architecture;
 use crate::Config;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::io::Stderr;
-use self::helpers::push_unique_location;
 use crate::lifters::llvm::optimizers::Optimizers;
 use crate::lifters::llvm::prepare::prepare_instruction_semantics;
 use crate::lifters::llvm::verify::verify_module;
 use crate::semantics::{
-    InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation,
-    SemanticTerminator,
+    InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation, SemanticTerminator,
 };
 use inkwell::OptimizationLevel;
 use inkwell::attributes::AttributeLoc;
@@ -31,8 +30,8 @@ use std::ffi::CStr;
 use std::ffi::c_void;
 use std::io::Error;
 
-mod encoding;
 mod effects;
+mod encoding;
 mod expr;
 mod helpers;
 mod memory;
@@ -992,5 +991,4 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             | SemanticExpression::Poison { .. } => {}
         }
     }
-
 }

@@ -58,11 +58,7 @@ pub fn has_pc_relative_controlflow_immediate(
 }
 
 pub fn controlflow_target_operand_index(is_jump: bool, is_call: bool) -> Option<usize> {
-    if is_jump || is_call {
-        Some(0)
-    } else {
-        None
-    }
+    if is_jump || is_call { Some(0) } else { None }
 }
 
 pub fn load_address_target_from_memory(

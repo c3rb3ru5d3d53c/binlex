@@ -26,13 +26,10 @@ use crate::semantics::architectures::x86::instruction::X86InstructionView;
 use crate::semantics::architectures::x86::operand::{X86OperandKind, X86OperandView};
 use crate::semantics::{
     InstructionSemantics, SemanticAddressSpace, SemanticEffect, SemanticExpression,
-    SemanticLocation, SemanticOperationBinary, SemanticOperationCast,
-    SemanticOperationCompare, SemanticTerminator,
+    SemanticLocation, SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
+    SemanticTerminator,
 };
-pub fn build(
-    machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+pub fn build(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
     if matches!(view.mnemonic.as_str(), "shld") {
         return double_precision_shift(machine, view, true);
     }
@@ -350,10 +347,7 @@ fn rotate_through_carry(
     ))
 }
 
-fn bmi_shift(
-    machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+fn bmi_shift(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
     let op = match view.mnemonic.as_str() {
         "shlx" => SemanticOperationBinary::Shl,
         "shrx" => SemanticOperationBinary::LShr,

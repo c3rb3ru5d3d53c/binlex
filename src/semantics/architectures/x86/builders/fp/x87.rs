@@ -148,7 +148,12 @@ pub(super) fn x87(
     Some(common::complete(SemanticTerminator::FallThrough, effects))
 }
 
-fn x87_binary(machine: Architecture, operands: &[X86OperandView], op: &str, order: BinaryOrder) -> Option<Vec<SemanticEffect>> {
+fn x87_binary(
+    machine: Architecture,
+    operands: &[X86OperandView],
+    op: &str,
+    order: BinaryOrder,
+) -> Option<Vec<SemanticEffect>> {
     let (dst_index, rhs) = if operands.len() >= 2 {
         (
             x87_stack_index(operands.first()?)?,
@@ -162,11 +167,22 @@ fn x87_binary(machine: Architecture, operands: &[X86OperandView], op: &str, orde
         BinaryOrder::Normal => x87_expr_intrinsic(op, vec![lhs, rhs]),
         BinaryOrder::Reverse => x87_expr_intrinsic(op, vec![rhs, lhs]),
     };
-    Some(vec![SemanticEffect::Set { dst: x87_stack_location(dst_index), expression: result }])
+    Some(vec![SemanticEffect::Set {
+        dst: x87_stack_location(dst_index),
+        expression: result,
+    }])
 }
 
-fn x87_binary_pop(operands: &[X86OperandView], op: &str, order: BinaryPopOrder) -> Option<Vec<SemanticEffect>> {
-    let target_index = if operands.is_empty() { 1 } else { x87_stack_index(operands.first()?)? };
+fn x87_binary_pop(
+    operands: &[X86OperandView],
+    op: &str,
+    order: BinaryPopOrder,
+) -> Option<Vec<SemanticEffect>> {
+    let target_index = if operands.is_empty() {
+        1
+    } else {
+        x87_stack_index(operands.first()?)?
+    };
     let target = x87_stack_expr(target_index);
     let st0 = x87_stack_expr(0);
     let result = match order {
@@ -176,17 +192,28 @@ fn x87_binary_pop(operands: &[X86OperandView], op: &str, order: BinaryPopOrder) 
     Some(x87_pop_with_replacement(target_index, result))
 }
 
-fn x87_binary_int(machine: Architecture, operands: &[X86OperandView], op: &str, order: BinaryOrder) -> Option<Vec<SemanticEffect>> {
+fn x87_binary_int(
+    machine: Architecture,
+    operands: &[X86OperandView],
+    op: &str,
+    order: BinaryOrder,
+) -> Option<Vec<SemanticEffect>> {
     let rhs = x87_int_operand(machine, operands.first()?)?;
     let lhs = x87_stack_expr(0);
     let result = match order {
         BinaryOrder::Normal => x87_expr_intrinsic(op, vec![lhs, rhs]),
         BinaryOrder::Reverse => x87_expr_intrinsic(op, vec![rhs, lhs]),
     };
-    Some(vec![SemanticEffect::Set { dst: x87_stack_location(0), expression: result }])
+    Some(vec![SemanticEffect::Set {
+        dst: x87_stack_location(0),
+        expression: result,
+    }])
 }
 
-fn x87_compare_rhs(machine: Architecture, operands: &[X86OperandView]) -> Option<SemanticExpression> {
+fn x87_compare_rhs(
+    machine: Architecture,
+    operands: &[X86OperandView],
+) -> Option<SemanticExpression> {
     if operands.is_empty() {
         return Some(x87_stack_expr(1));
     }
@@ -200,14 +227,30 @@ fn x87_compare_rhs(machine: Architecture, operands: &[X86OperandView]) -> Option
 
 fn x87_compare_effects(rhs: SemanticExpression, pop_count: u8) -> Vec<SemanticEffect> {
     let lhs = x87_stack_expr(0);
-    let unordered = common::compare(SemanticOperationCompare::Unordered, lhs.clone(), rhs.clone());
+    let unordered = common::compare(
+        SemanticOperationCompare::Unordered,
+        lhs.clone(),
+        rhs.clone(),
+    );
     let equal = common::compare(SemanticOperationCompare::Oeq, lhs.clone(), rhs.clone());
     let less = common::compare(SemanticOperationCompare::Olt, lhs, rhs);
     let mut effects = vec![
-        SemanticEffect::Set { dst: x87_flag("c0"), expression: common::or(less, unordered.clone(), 1) },
-        SemanticEffect::Set { dst: x87_flag("c1"), expression: common::bool_const(false) },
-        SemanticEffect::Set { dst: x87_flag("c2"), expression: unordered.clone() },
-        SemanticEffect::Set { dst: x87_flag("c3"), expression: common::or(equal, unordered, 1) },
+        SemanticEffect::Set {
+            dst: x87_flag("c0"),
+            expression: common::or(less, unordered.clone(), 1),
+        },
+        SemanticEffect::Set {
+            dst: x87_flag("c1"),
+            expression: common::bool_const(false),
+        },
+        SemanticEffect::Set {
+            dst: x87_flag("c2"),
+            expression: unordered.clone(),
+        },
+        SemanticEffect::Set {
+            dst: x87_flag("c3"),
+            expression: common::or(equal, unordered, 1),
+        },
     ];
     effects.extend(x87_pop_effects(pop_count));
     effects
@@ -215,26 +258,56 @@ fn x87_compare_effects(rhs: SemanticExpression, pop_count: u8) -> Vec<SemanticEf
 
 fn x87_compare_to_cpu_flags(rhs: SemanticExpression, pop_count: u8) -> Vec<SemanticEffect> {
     let lhs = x87_stack_expr(0);
-    let unordered = common::compare(SemanticOperationCompare::Unordered, lhs.clone(), rhs.clone());
+    let unordered = common::compare(
+        SemanticOperationCompare::Unordered,
+        lhs.clone(),
+        rhs.clone(),
+    );
     let equal = common::compare(SemanticOperationCompare::Oeq, lhs.clone(), rhs.clone());
     let less = common::compare(SemanticOperationCompare::Olt, lhs, rhs);
     let mut effects = vec![
-        SemanticEffect::Set { dst: common::flag("zf"), expression: common::or(equal, unordered.clone(), 1) },
-        SemanticEffect::Set { dst: common::flag("pf"), expression: unordered.clone() },
-        SemanticEffect::Set { dst: common::flag("cf"), expression: common::or(less, unordered, 1) },
-        SemanticEffect::Set { dst: common::flag("of"), expression: common::bool_const(false) },
-        SemanticEffect::Set { dst: common::flag("sf"), expression: common::bool_const(false) },
-        SemanticEffect::Set { dst: common::flag("af"), expression: common::bool_const(false) },
+        SemanticEffect::Set {
+            dst: common::flag("zf"),
+            expression: common::or(equal, unordered.clone(), 1),
+        },
+        SemanticEffect::Set {
+            dst: common::flag("pf"),
+            expression: unordered.clone(),
+        },
+        SemanticEffect::Set {
+            dst: common::flag("cf"),
+            expression: common::or(less, unordered, 1),
+        },
+        SemanticEffect::Set {
+            dst: common::flag("of"),
+            expression: common::bool_const(false),
+        },
+        SemanticEffect::Set {
+            dst: common::flag("sf"),
+            expression: common::bool_const(false),
+        },
+        SemanticEffect::Set {
+            dst: common::flag("af"),
+            expression: common::bool_const(false),
+        },
     ];
     effects.extend(x87_pop_effects(pop_count));
     effects
 }
 
-fn x87_store_only(machine: Architecture, operand: &X86OperandView, value: SemanticExpression) -> Option<Vec<SemanticEffect>> {
+fn x87_store_only(
+    machine: Architecture,
+    operand: &X86OperandView,
+    value: SemanticExpression,
+) -> Option<Vec<SemanticEffect>> {
     Some(vec![x87_store_effect(machine, operand, value)?])
 }
 
-fn x87_store_pop(machine: Architecture, operand: &X86OperandView, value: SemanticExpression) -> Option<Vec<SemanticEffect>> {
+fn x87_store_pop(
+    machine: Architecture,
+    operand: &X86OperandView,
+    value: SemanticExpression,
+) -> Option<Vec<SemanticEffect>> {
     if let Some(index) = x87_stack_index(operand) {
         return Some(x87_pop_with_replacement(index, value));
     }
@@ -243,7 +316,12 @@ fn x87_store_pop(machine: Architecture, operand: &X86OperandView, value: Semanti
     Some(effects)
 }
 
-fn x87_store_int(machine: Architecture, operand: &X86OperandView, pop: bool, trunc: bool) -> Option<Vec<SemanticEffect>> {
+fn x87_store_int(
+    machine: Architecture,
+    operand: &X86OperandView,
+    pop: bool,
+    trunc: bool,
+) -> Option<Vec<SemanticEffect>> {
     if matches!(operand.kind, X86OperandKind::Register) {
         return None;
     }
@@ -267,7 +345,11 @@ fn x87_store_int(machine: Architecture, operand: &X86OperandView, pop: bool, tru
     Some(effects)
 }
 
-fn x87_store_effect(machine: Architecture, operand: &X86OperandView, value: SemanticExpression) -> Option<SemanticEffect> {
+fn x87_store_effect(
+    machine: Architecture,
+    operand: &X86OperandView,
+    value: SemanticExpression,
+) -> Option<SemanticEffect> {
     match operand.kind {
         X86OperandKind::Register => Some(SemanticEffect::Set {
             dst: x87_stack_location(x87_stack_index(operand)?),
@@ -287,10 +369,20 @@ fn x87_store_effect(machine: Architecture, operand: &X86OperandView, value: Sema
 }
 
 fn x87_exchange(operands: &[X86OperandView]) -> Option<Vec<SemanticEffect>> {
-    let index = if operands.is_empty() { 1 } else { x87_stack_index(operands.first()?)? };
+    let index = if operands.is_empty() {
+        1
+    } else {
+        x87_stack_index(operands.first()?)?
+    };
     Some(vec![
-        SemanticEffect::Set { dst: x87_stack_location(0), expression: x87_stack_expr(index) },
-        SemanticEffect::Set { dst: x87_stack_location(index), expression: x87_stack_expr(0) },
+        SemanticEffect::Set {
+            dst: x87_stack_location(0),
+            expression: x87_stack_expr(index),
+        },
+        SemanticEffect::Set {
+            dst: x87_stack_location(index),
+            expression: x87_stack_expr(0),
+        },
     ])
 }
 
@@ -302,7 +394,10 @@ fn x87_push_effects(value: SemanticExpression) -> Vec<SemanticEffect> {
             expression: x87_stack_expr(index - 1),
         });
     }
-    effects.push(SemanticEffect::Set { dst: x87_stack_location(0), expression: value });
+    effects.push(SemanticEffect::Set {
+        dst: x87_stack_location(0),
+        expression: value,
+    });
     effects.push(SemanticEffect::Set {
         dst: x87_top_location(),
         expression: common::sub(x87_top_expr(), common::const_u64(1, 3), 3),
@@ -310,7 +405,10 @@ fn x87_push_effects(value: SemanticExpression) -> Vec<SemanticEffect> {
     effects
 }
 
-fn x87_push_with_replacement(pushed: SemanticExpression, replaced_st0: SemanticExpression) -> Vec<SemanticEffect> {
+fn x87_push_with_replacement(
+    pushed: SemanticExpression,
+    replaced_st0: SemanticExpression,
+) -> Vec<SemanticEffect> {
     let mut effects = Vec::new();
     for index in (2..8).rev() {
         effects.push(SemanticEffect::Set {
@@ -318,8 +416,14 @@ fn x87_push_with_replacement(pushed: SemanticExpression, replaced_st0: SemanticE
             expression: x87_stack_expr(index - 1),
         });
     }
-    effects.push(SemanticEffect::Set { dst: x87_stack_location(1), expression: replaced_st0 });
-    effects.push(SemanticEffect::Set { dst: x87_stack_location(0), expression: pushed });
+    effects.push(SemanticEffect::Set {
+        dst: x87_stack_location(1),
+        expression: replaced_st0,
+    });
+    effects.push(SemanticEffect::Set {
+        dst: x87_stack_location(0),
+        expression: pushed,
+    });
     effects.push(SemanticEffect::Set {
         dst: x87_top_location(),
         expression: common::sub(x87_top_expr(), common::const_u64(1, 3), 3),
@@ -339,7 +443,10 @@ fn x87_pop_effects(count: u8) -> Vec<SemanticEffect> {
         } else {
             SemanticExpression::Undefined { bits: X87_BITS }
         };
-        effects.push(SemanticEffect::Set { dst: x87_stack_location(index as u8), expression });
+        effects.push(SemanticEffect::Set {
+            dst: x87_stack_location(index as u8),
+            expression,
+        });
     }
     effects.push(SemanticEffect::Set {
         dst: x87_top_location(),
@@ -348,7 +455,10 @@ fn x87_pop_effects(count: u8) -> Vec<SemanticEffect> {
     effects
 }
 
-fn x87_pop_with_replacement(target_index: u8, replacement: SemanticExpression) -> Vec<SemanticEffect> {
+fn x87_pop_with_replacement(
+    target_index: u8,
+    replacement: SemanticExpression,
+) -> Vec<SemanticEffect> {
     let mut effects = Vec::new();
     for index in 0..8u8 {
         let expression = match index {
@@ -356,10 +466,17 @@ fn x87_pop_with_replacement(target_index: u8, replacement: SemanticExpression) -
             i if i + 1 == target_index => replacement.clone(),
             i => {
                 let src = i + 1;
-                if src < 8 { x87_stack_expr(src) } else { SemanticExpression::Undefined { bits: X87_BITS } }
+                if src < 8 {
+                    x87_stack_expr(src)
+                } else {
+                    SemanticExpression::Undefined { bits: X87_BITS }
+                }
             }
         };
-        effects.push(SemanticEffect::Set { dst: x87_stack_location(index), expression });
+        effects.push(SemanticEffect::Set {
+            dst: x87_stack_location(index),
+            expression,
+        });
     }
     effects.push(SemanticEffect::Set {
         dst: x87_top_location(),
@@ -371,8 +488,15 @@ fn x87_pop_with_replacement(target_index: u8, replacement: SemanticExpression) -
 fn x87_rotate_top(increment: bool) -> Vec<SemanticEffect> {
     let mut effects = Vec::new();
     for index in 0..8u8 {
-        let source = if increment { (index + 1) % 8 } else { (index + 7) % 8 };
-        effects.push(SemanticEffect::Set { dst: x87_stack_location(index), expression: x87_stack_expr(source) });
+        let source = if increment {
+            (index + 1) % 8
+        } else {
+            (index + 7) % 8
+        };
+        effects.push(SemanticEffect::Set {
+            dst: x87_stack_location(index),
+            expression: x87_stack_expr(source),
+        });
     }
     effects.push(SemanticEffect::Set {
         dst: x87_top_location(),
@@ -385,7 +509,10 @@ fn x87_rotate_top(increment: bool) -> Vec<SemanticEffect> {
     effects
 }
 
-fn x87_float_operand(machine: Architecture, operand: &X86OperandView) -> Option<SemanticExpression> {
+fn x87_float_operand(
+    machine: Architecture,
+    operand: &X86OperandView,
+) -> Option<SemanticExpression> {
     if let Some(index) = x87_stack_index(operand) {
         return Some(x87_stack_expr(index));
     }
@@ -523,22 +650,39 @@ fn x87_init_effects() -> Vec<SemanticEffect> {
             expression: SemanticExpression::Undefined { bits: X87_BITS },
         });
     }
-    effects.push(SemanticEffect::Set { dst: x87_top_location(), expression: common::const_u64(0, 3) });
+    effects.push(SemanticEffect::Set {
+        dst: x87_top_location(),
+        expression: common::const_u64(0, 3),
+    });
     for name in ["c0", "c1", "c2", "c3"] {
-        effects.push(SemanticEffect::Set { dst: x87_flag(name), expression: common::bool_const(false) });
+        effects.push(SemanticEffect::Set {
+            dst: x87_flag(name),
+            expression: common::bool_const(false),
+        });
     }
     effects
 }
 
-fn x87_conditional_move(mnemonic: &str, operands: &[X86OperandView]) -> Option<Vec<SemanticEffect>> {
+fn x87_conditional_move(
+    mnemonic: &str,
+    operands: &[X86OperandView],
+) -> Option<Vec<SemanticEffect>> {
     let suffix = mnemonic.strip_prefix("fcmov")?;
     let condition = match suffix {
         "u" => common::condition_from_mnemonic("cmovp"),
         "nu" => common::condition_from_mnemonic("cmovnp"),
         _ => common::condition_from_mnemonic(&format!("cmov{suffix}")),
     }?;
-    let target_index = if operands.is_empty() { 0 } else { x87_stack_index(operands.first()?)? };
-    let source_index = if operands.len() >= 2 { x87_stack_index(operands.get(1)?)? } else { 1 };
+    let target_index = if operands.is_empty() {
+        0
+    } else {
+        x87_stack_index(operands.first()?)?
+    };
+    let source_index = if operands.len() >= 2 {
+        x87_stack_index(operands.get(1)?)?
+    } else {
+        1
+    };
     Some(vec![SemanticEffect::Set {
         dst: x87_stack_location(target_index),
         expression: SemanticExpression::Select {
@@ -550,7 +694,10 @@ fn x87_conditional_move(mnemonic: &str, operands: &[X86OperandView]) -> Option<V
     }])
 }
 
-fn x87_intrinsic_with_flag_outputs(name: &str, args: Vec<SemanticExpression>) -> Vec<SemanticEffect> {
+fn x87_intrinsic_with_flag_outputs(
+    name: &str,
+    args: Vec<SemanticExpression>,
+) -> Vec<SemanticEffect> {
     vec![SemanticEffect::Intrinsic {
         name: format!("x86.x87.{name}"),
         args,
@@ -568,6 +715,11 @@ fn x87_flag_only_intrinsic(name: &str, args: Vec<SemanticExpression>) -> Vec<Sem
     vec![SemanticEffect::Intrinsic {
         name: format!("x86.x87.{name}"),
         args,
-        outputs: vec![x87_flag("c0"), x87_flag("c1"), x87_flag("c2"), x87_flag("c3")],
+        outputs: vec![
+            x87_flag("c0"),
+            x87_flag("c1"),
+            x87_flag("c2"),
+            x87_flag("c3"),
+        ],
     }]
 }

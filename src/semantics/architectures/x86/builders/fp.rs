@@ -26,8 +26,8 @@ use crate::semantics::architectures::x86::instruction::X86InstructionView;
 use crate::semantics::architectures::x86::operand::{X86OperandKind, X86OperandView};
 use crate::semantics::{
     InstructionSemantics, SemanticAddressSpace, SemanticEffect, SemanticExpression,
-    SemanticLocation, SemanticOperationBinary, SemanticOperationCast,
-    SemanticOperationCompare, SemanticTerminator,
+    SemanticLocation, SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
+    SemanticTerminator,
 };
 
 #[path = "fp/x87.rs"]
@@ -50,15 +50,20 @@ pub(crate) fn build(
         "cvtdq2pd" | "cvtdq2ps" | "cvtpd2dq" | "cvtpd2ps" | "cvtpi2pd" | "cvtpi2ps"
         | "cvtps2dq" | "cvtps2pd" | "cvtsd2ss" | "cvtsi2sd" | "cvtsi2ss" | "cvtss2sd"
         | "cvttpd2dq" | "cvttps2dq" => packed_convert(machine, view),
-        "addsubpd" | "addsubps" | "addpd" | "addps" | "divpd" | "divps" | "haddpd"
-        | "mulpd" | "mulps" | "subpd" | "subps" | "haddps" | "sqrtpd" | "maxps" | "minps"
-        | "shufpd" | "shufps" | "vaddsubpd" | "vaddsubps" | "vhaddpd" | "vhaddps" => {
-            packed_fp(machine, view)
-        }
+        "addsubpd" | "addsubps" | "addpd" | "addps" | "divpd" | "divps" | "haddpd" | "mulpd"
+        | "mulps" | "subpd" | "subps" | "haddps" | "sqrtpd" | "maxps" | "minps" | "shufpd"
+        | "shufps" | "vaddsubpd" | "vaddsubps" | "vhaddpd" | "vhaddps" => packed_fp(machine, view),
         mnemonic
             if matches!(
                 mnemonic,
-                "addss" | "subss" | "divss" | "mulss" | "sqrtss" | "maxss" | "minss" | "cmpss"
+                "addss"
+                    | "subss"
+                    | "divss"
+                    | "mulss"
+                    | "sqrtss"
+                    | "maxss"
+                    | "minss"
+                    | "cmpss"
                     | "vcmpss"
             ) || mnemonic.ends_with("ss")
                 && (mnemonic.starts_with("cmp") || mnemonic.starts_with("vcmp")) =>
@@ -278,7 +283,10 @@ fn pcmpistri(machine: Architecture, view: &X86InstructionView) -> Option<Instruc
     ))
 }
 
-fn scalar_convert(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn scalar_convert(
+    machine: Architecture,
+    view: &X86InstructionView,
+) -> Option<InstructionSemantics> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let bits = common::location_bits(&dst);
     let src = operand_expr(machine, view.operands().get(1)?)?;
@@ -296,7 +304,10 @@ fn scalar_convert(machine: Architecture, view: &X86InstructionView) -> Option<In
     ))
 }
 
-fn packed_convert(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn packed_convert(
+    machine: Architecture,
+    view: &X86InstructionView,
+) -> Option<InstructionSemantics> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let dst_bits = common::location_bits(&dst);
@@ -366,9 +377,7 @@ fn scalar_fp(machine: Architecture, view: &X86InstructionView) -> Option<Instruc
             right: Box::new(low_64(args.get(1)?.clone())),
             bits: 64,
         },
-        "sqrtsd" => {
-            operation_intrinsic(view, 64, vec![low_64(args.get(1)?.clone())])
-        }
+        "sqrtsd" => operation_intrinsic(view, 64, vec![low_64(args.get(1)?.clone())]),
         "minsd" => {
             let left = low_64(args.first()?.clone());
             let right = low_64(args.get(1)?.clone());

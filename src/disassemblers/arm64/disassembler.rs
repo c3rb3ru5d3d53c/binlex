@@ -28,18 +28,20 @@ use crate::disassemblers::arm64::classify as arm64_classify;
 use crate::disassemblers::arm64::decoded::Arm64DecodedInstruction;
 use crate::disassemblers::arm64::metrics::{self as arm64_metrics, DisassemblyMetrics};
 use crate::disassemblers::arm64::pattern::instruction_chromosome_mask;
-use crate::disassemblers::arm64::{prologue as arm64_prologue, sweep as arm64_sweep, translate as arm64_translate};
+use crate::disassemblers::arm64::{
+    prologue as arm64_prologue, sweep as arm64_sweep, translate as arm64_translate,
+};
 use crate::io::Stderr;
 use ::capstone::Insn;
 use ::capstone::prelude::*;
 use rayon::ThreadPoolBuilder;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use std::sync::Arc;
-use std::time::Instant;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::Error;
+use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Backend {
@@ -139,7 +141,9 @@ impl<'a> Disassembler<'a> {
         let instruction_started_at = match self.begin_instruction(address, cfg)? {
             Some(started_at) => started_at,
             None => {
-                let instruction = cfg.get_instruction(address).expect("instruction cached after begin_instruction");
+                let instruction = cfg
+                    .get_instruction(address)
+                    .expect("instruction cached after begin_instruction");
                 return Ok(instruction.address);
             }
         };
@@ -152,11 +156,13 @@ impl<'a> Disassembler<'a> {
             return Ok(instruction.address);
         }
 
-        let instruction = self.prepare_instruction(self.machine, address, cfg).map_err(|_| {
-            finish_invalid(cfg);
-            let error = format!("0x{:x}: failed to disassemble instruction", address);
-            Error::other(error)
-        })?;
+        let instruction = self
+            .prepare_instruction(self.machine, address, cfg)
+            .map_err(|_| {
+                finish_invalid(cfg);
+                let error = format!("0x{:x}: failed to disassemble instruction", address);
+                Error::other(error)
+            })?;
 
         Stderr::print_debug(
             &cfg.config,
@@ -342,8 +348,10 @@ impl<'a> Disassembler<'a> {
 
                     cfg.functions
                         .insert_processed_extend(function_addresses.clone());
-                    let function_groups =
-                        Self::group_function_addresses_for_backend(selected_backend, &function_addresses);
+                    let function_groups = Self::group_function_addresses_for_backend(
+                        selected_backend,
+                        &function_addresses,
+                    );
                     let graphs: Vec<Graph> = function_groups
                         .par_iter()
                         .map_init(
@@ -565,7 +573,12 @@ impl<'a> Disassembler<'a> {
         Ok(Some(block_started_at))
     }
 
-    pub(crate) fn finish_block_valid(&self, address: u64, cfg: &mut Graph, block_started_at: Instant) {
+    pub(crate) fn finish_block_valid(
+        &self,
+        address: u64,
+        cfg: &mut Graph,
+        block_started_at: Instant,
+    ) {
         cfg.blocks.insert_valid(address);
         self.metric_inc(&self.metrics.blocks_valid, 1);
         self.metric_elapsed(&self.metrics.block_time_us, block_started_at);

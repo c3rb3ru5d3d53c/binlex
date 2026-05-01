@@ -46,6 +46,7 @@ pub mod runtime;
 pub mod semantics;
 pub mod server;
 pub mod storage;
+pub mod symbolic;
 pub mod util;
 
 pub use abi::Abi;

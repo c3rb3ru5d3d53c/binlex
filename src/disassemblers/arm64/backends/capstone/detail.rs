@@ -23,7 +23,8 @@
 use std::collections::BTreeMap;
 
 use capstone::{
-    Insn, RegId, arch::ArchOperand,
+    Insn, RegId,
+    arch::ArchOperand,
     arch::arm64::{Arm64Extender, Arm64OperandType, Arm64Shift},
 };
 use serde_json::Value;
@@ -184,14 +185,17 @@ impl<'disassembler> Disassembler<'disassembler> {
         Some(Operand { kind })
     }
 
-    pub(crate) fn decode_history_operand(&self, operand: &ArchOperand) -> Option<Arm64DecodedOperand> {
+    pub(crate) fn decode_history_operand(
+        &self,
+        operand: &ArchOperand,
+    ) -> Option<Arm64DecodedOperand> {
         let ArchOperand::Arm64Operand(op) = operand else {
             return None;
         };
         Some(match op.op_type {
-            Arm64OperandType::Reg(reg) => Arm64DecodedOperand::Register(canonical_register_family(
-                &self.register_name(reg)?,
-            )),
+            Arm64OperandType::Reg(reg) => {
+                Arm64DecodedOperand::Register(canonical_register_family(&self.register_name(reg)?))
+            }
             Arm64OperandType::Imm(value) | Arm64OperandType::Cimm(value) => {
                 Arm64DecodedOperand::Immediate(value)
             }
@@ -245,7 +249,10 @@ impl<'disassembler> Disassembler<'disassembler> {
         }
         matches!(self.decode_instruction_operand(first, 0), Some(Arm64DecodedOperand::Register(dst0)) if dst0 == "x29")
             && matches!(self.decode_instruction_operand(first, 1), Some(Arm64DecodedOperand::Register(dst1)) if dst1 == "x30")
-            && matches!(self.decode_instruction_operand(first, 2), Some(Arm64DecodedOperand::Memory(_)))
+            && matches!(
+                self.decode_instruction_operand(first, 2),
+                Some(Arm64DecodedOperand::Memory(_))
+            )
             && matches!(self.decode_instruction_operand(second, 0), Some(Arm64DecodedOperand::Register(dst)) if dst == "x29")
             && matches!(self.decode_instruction_operand(second, 1), Some(Arm64DecodedOperand::Register(src)) if src == "sp")
     }

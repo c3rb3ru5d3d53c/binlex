@@ -20,14 +20,16 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::{collections::{BTreeMap, BTreeSet}, io::Error, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    io::Error,
+    sync::Arc,
+};
 
 use crate::{
     Architecture, Config,
     controlflow::{Graph, Instruction},
-    disassemblers::arm64::{
-        classify as arm64_classify, metrics::DisassemblyMetrics,
-    },
+    disassemblers::arm64::{classify as arm64_classify, metrics::DisassemblyMetrics},
 };
 
 const SWEEP_CALLER_VALID_RUN: usize = 4;
@@ -52,12 +54,16 @@ where
     let mut candidate_counts = BTreeMap::<u64, u64>::new();
 
     for (range_start, range_end) in executable_address_ranges {
-        metrics.sweep_ranges.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        metrics
+            .sweep_ranges
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let mut pc = *range_start;
         let mut valid_run_len = 0usize;
 
         while pc.checked_add(4).is_some_and(|next| next <= *range_end) {
-            metrics.sweep_pc_steps.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            metrics
+                .sweep_pc_steps
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let prepared = match prepare_instruction(pc, &graph) {
                 Ok(prepared) => prepared,
                 Err(_) => {
@@ -89,22 +95,19 @@ where
                             .sweep_direct_calls
                             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         if !has_sweep_post_run(pc, *range_end, &graph, &mut prepare_instruction) {
-                            metrics.sweep_candidates_validation_rejected.fetch_add(
-                                1,
-                                std::sync::atomic::Ordering::Relaxed,
-                            );
+                            metrics
+                                .sweep_candidates_validation_rejected
+                                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         } else if !is_executable_address(target) {
-                            metrics.sweep_candidates_nonexec.fetch_add(
-                                1,
-                                std::sync::atomic::Ordering::Relaxed,
-                            );
+                            metrics
+                                .sweep_candidates_nonexec
+                                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         } else {
                             let count = candidate_counts.entry(target).or_insert(0);
                             if *count > 0 {
-                                metrics.sweep_candidates_duplicate.fetch_add(
-                                    1,
-                                    std::sync::atomic::Ordering::Relaxed,
-                                );
+                                metrics
+                                    .sweep_candidates_duplicate
+                                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                             }
                             *count += 1;
                         }
@@ -118,10 +121,9 @@ where
 
     for (target, count) in candidate_counts {
         if count < SWEEP_MIN_CALLERS_PER_TARGET {
-            metrics.sweep_candidates_validation_rejected.fetch_add(
-                1,
-                std::sync::atomic::Ordering::Relaxed,
-            );
+            metrics
+                .sweep_candidates_validation_rejected
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             continue;
         }
         if validate_sweep_target(
@@ -135,10 +137,9 @@ where
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             result.insert(target);
         } else {
-            metrics.sweep_candidates_validation_rejected.fetch_add(
-                1,
-                std::sync::atomic::Ordering::Relaxed,
-            );
+            metrics
+                .sweep_candidates_validation_rejected
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
     }
 

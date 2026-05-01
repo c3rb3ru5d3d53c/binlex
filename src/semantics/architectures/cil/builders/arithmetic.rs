@@ -34,22 +34,16 @@ use super::super::helpers::common::{
 pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSemantics> {
     match instruction.mnemonic_text() {
         "add" => simple_binary(SemanticOperationBinary::Add),
-        "add.ovf" | "add.ovf.un" => {
-            Some(push_runtime_binary_intrinsic(instruction, "cil.add.ovf"))
-        }
+        "add.ovf" | "add.ovf.un" => Some(push_runtime_binary_intrinsic(instruction, "cil.add.ovf")),
         "mul" => simple_binary(SemanticOperationBinary::Mul),
-        "mul.ovf" | "mul.ovf.un" => {
-            Some(push_runtime_binary_intrinsic(instruction, "cil.mul.ovf"))
-        }
+        "mul.ovf" | "mul.ovf.un" => Some(push_runtime_binary_intrinsic(instruction, "cil.mul.ovf")),
         "div" => simple_binary(SemanticOperationBinary::SDiv),
         "div.un" => simple_binary(SemanticOperationBinary::UDiv),
         "and" => simple_binary(SemanticOperationBinary::And),
         "or" => simple_binary(SemanticOperationBinary::Or),
         "xor" => simple_binary(SemanticOperationBinary::Xor),
         "sub" => simple_binary(SemanticOperationBinary::Sub),
-        "sub.ovf" | "sub.ovf.un" => {
-            Some(push_runtime_binary_intrinsic(instruction, "cil.sub.ovf"))
-        }
+        "sub.ovf" | "sub.ovf.un" => Some(push_runtime_binary_intrinsic(instruction, "cil.sub.ovf")),
         "rem" => simple_binary(SemanticOperationBinary::SRem),
         "rem.un" => simple_binary(SemanticOperationBinary::URem),
         "shl" => simple_binary(SemanticOperationBinary::Shl),
@@ -64,10 +58,9 @@ pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSeman
         "clt" => compare_to_i64(SemanticOperationCompare::Slt),
         "conv.ovf.i" | "conv.ovf.i.un" | "conv.ovf.i1" | "conv.ovf.i1.un" | "conv.ovf.i2"
         | "conv.ovf.i2.un" | "conv.ovf.i4" | "conv.ovf.i4.un" | "conv.ovf.i8"
-        | "conv.ovf.i8.un" | "conv.ovf.u" | "conv.ovf.u.un" | "conv.ovf.u1"
-        | "conv.ovf.u1.un" | "conv.ovf.u2" | "conv.ovf.u2.un" | "conv.ovf.u4"
-        | "conv.ovf.u4.un" | "conv.ovf.u8" | "conv.ovf.u8.un" | "conv.r.un"
-        | "conv.r4" => Some(push_runtime_unary_intrinsic(
+        | "conv.ovf.i8.un" | "conv.ovf.u" | "conv.ovf.u.un" | "conv.ovf.u1" | "conv.ovf.u1.un"
+        | "conv.ovf.u2" | "conv.ovf.u2.un" | "conv.ovf.u4" | "conv.ovf.u4.un" | "conv.ovf.u8"
+        | "conv.ovf.u8.un" | "conv.r.un" | "conv.r4" => Some(push_runtime_unary_intrinsic(
             instruction,
             &format!("cil.{}", instruction.mnemonic),
         )),

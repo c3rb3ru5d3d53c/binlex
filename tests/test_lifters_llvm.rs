@@ -229,7 +229,6 @@ fn llvm_lifter_optimizers_chain_and_preserve_outputs() {
     let text = populated.text();
     assert!(text.contains("define void @function_0()"));
     assert_eq!(&populated.bitcode()[..4], b"BC\xc0\xde");
-
 }
 
 #[test]

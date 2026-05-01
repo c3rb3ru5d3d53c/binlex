@@ -20,8 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::semantics::architectures::x86::helpers as common;
 use crate::semantics::architectures::x86::X86InstructionView;
+use crate::semantics::architectures::x86::helpers as common;
 use crate::semantics::architectures::x86::{X86OperandKind, X86OperandView};
 use crate::semantics::{
     InstructionSemantics, SemanticEffect, SemanticExpression, SemanticFenceKind,
@@ -30,16 +30,8 @@ use crate::semantics::{
 
 pub(crate) fn build(view: &X86InstructionView) -> Option<InstructionSemantics> {
     match view.mnemonic.as_str() {
-        "pause"
-        | "prefetch"
-        | "prefetchnta"
-        | "prefetcht0"
-        | "prefetcht1"
-        | "prefetcht2"
-        | "prefetchw"
-        | "endbr32"
-        | "endbr64"
-        | "wait" => Some(nop()),
+        "pause" | "prefetch" | "prefetchnta" | "prefetcht0" | "prefetcht1" | "prefetcht2"
+        | "prefetchw" | "endbr32" | "endbr64" | "wait" => Some(nop()),
         "mfence" => Some(fence(SemanticFenceKind::SequentiallyConsistent)),
         "sfence" => Some(fence(SemanticFenceKind::Release)),
         "lfence" => Some(fence(SemanticFenceKind::Acquire)),
@@ -448,10 +440,22 @@ fn fxrstor(view: &X86InstructionView, wide_pointers: bool) -> Option<Instruction
     let pointer_bits = common::pointer_bits(view.machine);
     let fsw = load_default(base.clone(), 2, pointer_bits, 16);
     let mut effects = vec![
-        set_reg("x87_fcw", 16, load_default(base.clone(), 0, pointer_bits, 16)),
+        set_reg(
+            "x87_fcw",
+            16,
+            load_default(base.clone(), 0, pointer_bits, 16),
+        ),
         set_reg("x87_ftw", 8, load_default(base.clone(), 4, pointer_bits, 8)),
-        set_reg("x87_fop", 16, load_default(base.clone(), 6, pointer_bits, 16)),
-        set_reg("mxcsr_mask", 32, load_default(base.clone(), 28, pointer_bits, 32)),
+        set_reg(
+            "x87_fop",
+            16,
+            load_default(base.clone(), 6, pointer_bits, 16),
+        ),
+        set_reg(
+            "mxcsr_mask",
+            32,
+            load_default(base.clone(), 28, pointer_bits, 32),
+        ),
         SemanticEffect::Set {
             dst: mxcsr_location(),
             expression: load_default(base.clone(), 24, pointer_bits, 32),
@@ -894,7 +898,10 @@ fn undefined(bits: u16) -> SemanticExpression {
     SemanticExpression::Undefined { bits }
 }
 
-fn operand_expr(machine: crate::Architecture, operand: &X86OperandView) -> Option<SemanticExpression> {
+fn operand_expr(
+    machine: crate::Architecture,
+    operand: &X86OperandView,
+) -> Option<SemanticExpression> {
     match operand.kind {
         X86OperandKind::Register => Some(SemanticExpression::Read(Box::new(common::reg(
             operand.register_name()?,
@@ -906,12 +913,18 @@ fn operand_expr(machine: crate::Architecture, operand: &X86OperandView) -> Optio
         }),
         X86OperandKind::Memory => {
             let mem = operand.memory_operand()?;
-            let base = mem
-                .base_register_name
-                .map(|name| SemanticExpression::Read(Box::new(common::reg(name, common::pointer_bits(machine)))));
-            let index = mem
-                .index_register_name
-                .map(|name| (SemanticExpression::Read(Box::new(common::reg(name, common::pointer_bits(machine)))), mem.scale));
+            let base = mem.base_register_name.map(|name| {
+                SemanticExpression::Read(Box::new(common::reg(name, common::pointer_bits(machine))))
+            });
+            let index = mem.index_register_name.map(|name| {
+                (
+                    SemanticExpression::Read(Box::new(common::reg(
+                        name,
+                        common::pointer_bits(machine),
+                    ))),
+                    mem.scale,
+                )
+            });
             let addr = common::memory_addr(machine, base, index, mem.displacement);
             Some(SemanticExpression::Load {
                 space: crate::semantics::SemanticAddressSpace::Default,
@@ -931,12 +944,18 @@ fn operand_location(
         X86OperandKind::Register => Some(common::reg(operand.register_name()?, operand.size_bits)),
         X86OperandKind::Memory => {
             let mem = operand.memory_operand()?;
-            let base = mem
-                .base_register_name
-                .map(|name| SemanticExpression::Read(Box::new(common::reg(name, common::pointer_bits(machine)))));
-            let index = mem
-                .index_register_name
-                .map(|name| (SemanticExpression::Read(Box::new(common::reg(name, common::pointer_bits(machine)))), mem.scale));
+            let base = mem.base_register_name.map(|name| {
+                SemanticExpression::Read(Box::new(common::reg(name, common::pointer_bits(machine))))
+            });
+            let index = mem.index_register_name.map(|name| {
+                (
+                    SemanticExpression::Read(Box::new(common::reg(
+                        name,
+                        common::pointer_bits(machine),
+                    ))),
+                    mem.scale,
+                )
+            });
             let addr = common::memory_addr(machine, base, index, mem.displacement);
             Some(crate::semantics::SemanticLocation::Memory {
                 space: crate::semantics::SemanticAddressSpace::Default,

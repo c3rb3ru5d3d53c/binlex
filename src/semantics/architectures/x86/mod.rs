@@ -22,11 +22,11 @@
 
 use crate::semantics::InstructionSemantics;
 
+pub mod builders;
+pub mod flags;
+pub mod helpers;
 pub mod instruction;
 pub mod operand;
-pub mod builders;
-pub mod helpers;
-pub mod flags;
 
 pub use instruction::X86InstructionView;
 pub use operand::{X86MemoryOperandView, X86OperandKind, X86OperandView};

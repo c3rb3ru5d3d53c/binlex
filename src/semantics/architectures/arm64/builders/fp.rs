@@ -97,15 +97,17 @@ fn build_fccmp(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
         .into_iter()
         .zip(compare_flags)
         .zip(fallback_flags)
-        .map(|((name, compare_value), fallback_value)| SemanticEffect::Set {
-            dst: flag_location(name),
-            expression: SemanticExpression::Select {
-                condition: Box::new(condition.clone()),
-                when_true: Box::new(compare_value),
-                when_false: Box::new(bool_const(fallback_value)),
-                bits: 1,
+        .map(
+            |((name, compare_value), fallback_value)| SemanticEffect::Set {
+                dst: flag_location(name),
+                expression: SemanticExpression::Select {
+                    condition: Box::new(condition.clone()),
+                    when_true: Box::new(compare_value),
+                    when_false: Box::new(bool_const(fallback_value)),
+                    bits: 1,
+                },
             },
-        })
+        )
         .collect();
     Some(complete(SemanticTerminator::FallThrough, effects))
 }

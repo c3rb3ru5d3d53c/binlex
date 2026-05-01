@@ -97,7 +97,8 @@ impl<'a> MachoSlice<'a> {
     }
 
     pub fn virtual_address_to_symbol(&self, virtual_address: u64) -> Option<BlSymbol> {
-        self.macho.virtual_address_to_symbol(virtual_address, self.index)
+        self.macho
+            .virtual_address_to_symbol(virtual_address, self.index)
     }
 
     pub fn relative_virtual_address_to_symbol(
@@ -421,7 +422,9 @@ impl MACHO {
                 continue;
             }
             let virtual_address = symbol.value();
-            let offset = self.virtual_address_to_file_offset(virtual_address, slice).unwrap_or(0);
+            let offset = self
+                .virtual_address_to_file_offset(virtual_address, slice)
+                .unwrap_or(0);
             symbols.insert(
                 virtual_address,
                 BlSymbol {
@@ -438,7 +441,11 @@ impl MACHO {
         symbols
     }
 
-    pub fn virtual_address_to_symbol(&self, virtual_address: u64, slice: usize) -> Option<BlSymbol> {
+    pub fn virtual_address_to_symbol(
+        &self,
+        virtual_address: u64,
+        slice: usize,
+    ) -> Option<BlSymbol> {
         self.symbols(slice).get(&virtual_address).cloned()
     }
 
@@ -447,7 +454,8 @@ impl MACHO {
         relative_virtual_address: u64,
         slice: usize,
     ) -> Option<BlSymbol> {
-        let virtual_address = self.relative_virtual_address_to_virtual_address(relative_virtual_address, slice)?;
+        let virtual_address =
+            self.relative_virtual_address_to_virtual_address(relative_virtual_address, slice)?;
         self.virtual_address_to_symbol(virtual_address, slice)
     }
 

@@ -22,9 +22,9 @@
 
 use crate::Architecture;
 use crate::semantics::{
-    InstructionSemantics, SemanticDiagnostic, SemanticEffect, SemanticExpression,
-    SemanticLocation, SemanticOperationBinary, SemanticOperationCompare,
-    SemanticOperationUnary, SemanticStatus, SemanticTerminator,
+    InstructionSemantics, SemanticDiagnostic, SemanticEffect, SemanticExpression, SemanticLocation,
+    SemanticOperationBinary, SemanticOperationCompare, SemanticOperationUnary, SemanticStatus,
+    SemanticTerminator,
 };
 
 pub use crate::semantics::SemanticDiagnosticKind;

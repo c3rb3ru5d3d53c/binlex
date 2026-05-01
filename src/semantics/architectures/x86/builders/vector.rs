@@ -26,8 +26,8 @@ use crate::semantics::architectures::x86::instruction::X86InstructionView;
 use crate::semantics::architectures::x86::operand::{X86OperandKind, X86OperandView};
 use crate::semantics::{
     InstructionSemantics, SemanticAddressSpace, SemanticEffect, SemanticExpression,
-    SemanticLocation, SemanticOperationBinary, SemanticOperationCast,
-    SemanticOperationCompare, SemanticOperationUnary, SemanticTerminator,
+    SemanticLocation, SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
+    SemanticOperationUnary, SemanticTerminator,
 };
 
 pub(crate) fn build(
@@ -35,10 +35,8 @@ pub(crate) fn build(
     view: &X86InstructionView,
 ) -> Option<InstructionSemantics> {
     match view.mnemonic.as_str() {
-        "movups" | "movupd" | "movaps" | "movapd" | "movdqu" | "movdqa" | "lddqu"
-        | "movd" | "movq" | "movntdq" | "movntpd" | "movntps" | "movntq" | "movnti" => {
-            assign(machine, view)
-        }
+        "movups" | "movupd" | "movaps" | "movapd" | "movdqu" | "movdqa" | "lddqu" | "movd"
+        | "movq" | "movntdq" | "movntpd" | "movntps" | "movntq" | "movnti" => assign(machine, view),
         "movdq2q" => movdq2q(machine, view),
         "movq2dq" => movq2dq(machine, view),
         "vmovups" | "vmovaps" | "vmovdqu" | "vmovdqa" | "vmovd" | "vmovq" | "vmovntdq" => {
@@ -67,31 +65,28 @@ pub(crate) fn build(
                 },
             )
         }
-        "vpand" | "vpor" | "vpxor" | "vxorps" => {
-            avx_binary(
-                machine,
-                view,
-                match view.mnemonic.as_str() {
-                    "vpor" => SemanticOperationBinary::Or,
-                    "vpand" => SemanticOperationBinary::And,
-                    _ => SemanticOperationBinary::Xor,
-                },
-            )
-        }
+        "vpand" | "vpor" | "vpxor" | "vxorps" => avx_binary(
+            machine,
+            view,
+            match view.mnemonic.as_str() {
+                "vpor" => SemanticOperationBinary::Or,
+                "vpand" => SemanticOperationBinary::And,
+                _ => SemanticOperationBinary::Xor,
+            },
+        ),
         "pandn" | "andnpd" | "andnps" => pandn(machine, view),
         "vpandn" => avx_pandn(machine, view),
         "packssdw" | "packsswb" | "packuswb" => packed_pack(machine, view),
         "vpackssdw" | "vpacksswb" | "vpackuswb" => avx_packed_pack(machine, view),
         "paddb" | "paddw" | "paddd" | "paddq" | "psubb" | "psubw" | "psubd" | "psubq"
-        | "pmaxsb" | "pmaxsw" | "pmaxsd" | "pmaxub" | "pmaxuw" | "pmaxud"
-        | "pminsb" | "pminsw" | "pminsd" | "pminub" | "pminuw" | "pminud"
-        | "pcmpeqb" | "pcmpeqw" | "pcmpeqd" | "pcmpgtb" | "pcmpgtw" | "pcmpgtd" | "pcmpgtq" => {
-            packed_lane_op(machine, view)
-        }
+        | "pmaxsb" | "pmaxsw" | "pmaxsd" | "pmaxub" | "pmaxuw" | "pmaxud" | "pminsb" | "pminsw"
+        | "pminsd" | "pminub" | "pminuw" | "pminud" | "pcmpeqb" | "pcmpeqw" | "pcmpeqd"
+        | "pcmpgtb" | "pcmpgtw" | "pcmpgtd" | "pcmpgtq" => packed_lane_op(machine, view),
         "vpaddb" | "vpaddw" | "vpaddd" | "vpaddq" | "vpsubb" | "vpsubw" | "vpsubd" | "vpsubq"
-        | "vpcmpeqb" | "vpcmpeqw" | "vpcmpeqd" | "vpcmpeqq"
-        | "vpcmpgtb" | "vpcmpgtw" | "vpcmpgtd" | "vpcmpgtq"
-        | "vpminub" | "vpminuw" | "vpminud" => avx_packed_lane_op(machine, view),
+        | "vpcmpeqb" | "vpcmpeqw" | "vpcmpeqd" | "vpcmpeqq" | "vpcmpgtb" | "vpcmpgtw"
+        | "vpcmpgtd" | "vpcmpgtq" | "vpminub" | "vpminuw" | "vpminud" => {
+            avx_packed_lane_op(machine, view)
+        }
         "paddusb" | "paddusw" => packed_unsigned_saturating_add(machine, view),
         "vpaddusb" | "vpaddusw" => avx_packed_unsigned_saturating_add(machine, view),
         "paddsb" | "paddsw" => packed_signed_saturating_add(machine, view),
@@ -108,16 +103,15 @@ pub(crate) fn build(
         "psadbw" => psadbw(machine, view),
         "pshufb" => pshufb(machine, view),
         "pshufd" | "pshufhw" | "pshuflw" | "pshufw" => shuffle(machine, view),
-        "unpcklpd" | "unpckhpd" | "unpcklps" | "unpckhps"
-        | "punpcklbw" | "punpckhbw" | "punpcklwd" | "punpckhwd"
-        | "punpckldq" | "punpckhdq" | "punpcklqdq" | "punpckhqdq" => unpack(machine, view),
-        "vpshufd" => avx_shuffle(machine, view),
-        "vpunpcklbw" | "vpunpckhbw" | "vpunpcklwd" | "vpunpckhwd"
-        | "vpunpckldq" | "vpunpckhdq" | "vpunpcklqdq" | "vpunpckhqdq" => {
-            avx_unpack(machine, view)
+        "unpcklpd" | "unpckhpd" | "unpcklps" | "unpckhps" | "punpcklbw" | "punpckhbw"
+        | "punpcklwd" | "punpckhwd" | "punpckldq" | "punpckhdq" | "punpcklqdq" | "punpckhqdq" => {
+            unpack(machine, view)
         }
-        "pextrw" | "pextrb" | "pextrd" | "pextrq" | "extractps"
-        | "vpextrb" | "vpextrd" | "vpextrq" | "vpextrw" => packed_extract(machine, view),
+        "vpshufd" => avx_shuffle(machine, view),
+        "vpunpcklbw" | "vpunpckhbw" | "vpunpcklwd" | "vpunpckhwd" | "vpunpckldq" | "vpunpckhdq"
+        | "vpunpcklqdq" | "vpunpckhqdq" => avx_unpack(machine, view),
+        "pextrw" | "pextrb" | "pextrd" | "pextrq" | "extractps" | "vpextrb" | "vpextrd"
+        | "vpextrq" | "vpextrw" => packed_extract(machine, view),
         "pinsrb" | "pinsrd" | "pinsrq" | "pinsrw" | "vpinsrw" => packed_insert(machine, view),
         "vinsertf128" => vinsertf128(machine, view),
         "vextracti128" => vextracti128(machine, view),
@@ -128,9 +122,7 @@ pub(crate) fn build(
         "vpbroadcastb" => vpbroadcastb(machine, view),
         "vpsignw" => vpsignw(machine, view),
         "vzeroupper" => Some(vzeroupper()),
-        "vmaskmovps" | "vmaskmovpd" => {
-            vmaskmov(machine, view)
-        }
+        "vmaskmovps" | "vmaskmovpd" => vmaskmov(machine, view),
         "psllw" | "pslld" | "psllq" | "psrlw" | "psrld" | "psrlq" | "psraw" | "psrad"
         | "pslldq" | "psrldq" => packed_shift(machine, view),
         "vpslldq" | "vpsrldq" | "vpsllq" | "vpsrlq" => avx_packed_shift(machine, view),
@@ -270,7 +262,10 @@ fn packed_widen(machine: Architecture, view: &X86InstructionView) -> Option<Inst
         SemanticTerminator::FallThrough,
         vec![SemanticEffect::Set {
             dst,
-            expression: SemanticExpression::Concat { parts, bits: dst_bits },
+            expression: SemanticExpression::Concat {
+                parts,
+                bits: dst_bits,
+            },
         }],
     ))
 }
@@ -295,18 +290,14 @@ fn partial_lane_move(
             parts: vec![extract_range(&right, 0, 64), extract_range(&left, 0, 64)],
             bits: 128,
         },
-        "movhpd" | "movhps" => {
-            SemanticExpression::Concat {
-                parts: vec![extract_range(&right, 0, 64), extract_range(&left, 0, 64)],
-                bits: 128,
-            }
-        }
-        "movlpd" | "movlps" => {
-            SemanticExpression::Concat {
-                parts: vec![extract_range(&left, 64, 64), extract_range(&right, 0, 64)],
-                bits: 128,
-            }
-        }
+        "movhpd" | "movhps" => SemanticExpression::Concat {
+            parts: vec![extract_range(&right, 0, 64), extract_range(&left, 0, 64)],
+            bits: 128,
+        },
+        "movlpd" | "movlps" => SemanticExpression::Concat {
+            parts: vec![extract_range(&left, 64, 64), extract_range(&right, 0, 64)],
+            bits: 128,
+        },
         _ => return None,
     };
     Some(common::complete(
@@ -315,7 +306,10 @@ fn partial_lane_move(
     ))
 }
 
-fn duplicate_move(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn duplicate_move(
+    machine: Architecture,
+    view: &X86InstructionView,
+) -> Option<InstructionSemantics> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let dst_bits = common::location_bits(&dst);
@@ -499,7 +493,10 @@ fn avx_packed_pack(
         SemanticTerminator::FallThrough,
         vec![SemanticEffect::Set {
             dst,
-            expression: SemanticExpression::Concat { parts: expression, bits },
+            expression: SemanticExpression::Concat {
+                parts: expression,
+                bits,
+            },
         }],
     ))
 }
@@ -641,18 +638,18 @@ fn signed_min_value(src_bits: u16, dst_bits: u16) -> u128 {
     (1u128 << src_bits) - (1u128 << (dst_bits - 1))
 }
 
-fn packed_lane_op(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn packed_lane_op(
+    machine: Architecture,
+    view: &X86InstructionView,
+) -> Option<InstructionSemantics> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
     let bits = common::location_bits(&dst);
     let lane_bits = match view.mnemonic.as_str() {
-        "paddb" | "psubb" | "pmaxsb" | "pmaxub" | "pminsb" | "pminub" | "pcmpeqb"
-        | "pcmpgtb" => 8,
-        "paddw" | "psubw" | "pmaxsw" | "pmaxuw" | "pminsw" | "pminuw" | "pcmpeqw"
-        | "pcmpgtw" => 16,
-        "paddd" | "psubd" | "pmaxsd" | "pmaxud" | "pminsd" | "pminud" | "pcmpeqd"
-        | "pcmpgtd" => 32,
+        "paddb" | "psubb" | "pmaxsb" | "pmaxub" | "pminsb" | "pminub" | "pcmpeqb" | "pcmpgtb" => 8,
+        "paddw" | "psubw" | "pmaxsw" | "pmaxuw" | "pminsw" | "pminuw" | "pcmpeqw" | "pcmpgtw" => 16,
+        "paddd" | "psubd" | "pmaxsd" | "pmaxud" | "pminsd" | "pminud" | "pcmpeqd" | "pcmpgtd" => 32,
         "paddq" | "psubq" | "pcmpgtq" => 64,
         _ => return None,
     };
@@ -662,16 +659,30 @@ fn packed_lane_op(machine: Architecture, view: &X86InstructionView) -> Option<In
         &left,
         &right,
         match view.mnemonic.as_str() {
-            "paddb" | "paddw" | "paddd" | "paddq" => PackedLaneOp::Binary(SemanticOperationBinary::Add),
-            "psubb" | "psubw" | "psubd" | "psubq" => PackedLaneOp::Binary(SemanticOperationBinary::Sub),
-            "pmaxsb" | "pmaxsw" | "pmaxsd" => PackedLaneOp::Binary(SemanticOperationBinary::MaxSigned),
-            "pmaxub" | "pmaxuw" | "pmaxud" => PackedLaneOp::Binary(SemanticOperationBinary::MaxUnsigned),
-            "pminsb" | "pminsw" | "pminsd" => PackedLaneOp::Binary(SemanticOperationBinary::MinSigned),
+            "paddb" | "paddw" | "paddd" | "paddq" => {
+                PackedLaneOp::Binary(SemanticOperationBinary::Add)
+            }
+            "psubb" | "psubw" | "psubd" | "psubq" => {
+                PackedLaneOp::Binary(SemanticOperationBinary::Sub)
+            }
+            "pmaxsb" | "pmaxsw" | "pmaxsd" => {
+                PackedLaneOp::Binary(SemanticOperationBinary::MaxSigned)
+            }
+            "pmaxub" | "pmaxuw" | "pmaxud" => {
+                PackedLaneOp::Binary(SemanticOperationBinary::MaxUnsigned)
+            }
+            "pminsb" | "pminsw" | "pminsd" => {
+                PackedLaneOp::Binary(SemanticOperationBinary::MinSigned)
+            }
             "pminub" | "pminuw" | "pminud" | "vpminub" | "vpminuw" | "vpminud" => {
                 PackedLaneOp::Binary(SemanticOperationBinary::MinUnsigned)
             }
-            "pcmpeqb" | "pcmpeqw" | "pcmpeqd" => PackedLaneOp::Compare(SemanticOperationCompare::Eq),
-            "pcmpgtb" | "pcmpgtw" | "pcmpgtd" | "pcmpgtq" => PackedLaneOp::Compare(SemanticOperationCompare::Sgt),
+            "pcmpeqb" | "pcmpeqw" | "pcmpeqd" => {
+                PackedLaneOp::Compare(SemanticOperationCompare::Eq)
+            }
+            "pcmpgtb" | "pcmpgtw" | "pcmpgtd" | "pcmpgtq" => {
+                PackedLaneOp::Compare(SemanticOperationCompare::Sgt)
+            }
             _ => return None,
         },
     )?;
@@ -702,13 +713,21 @@ fn avx_packed_lane_op(
         &left,
         &right,
         match view.mnemonic.as_str() {
-            "vpaddb" | "vpaddw" | "vpaddd" | "vpaddq" => PackedLaneOp::Binary(SemanticOperationBinary::Add),
-            "vpsubb" | "vpsubw" | "vpsubd" | "vpsubq" => PackedLaneOp::Binary(SemanticOperationBinary::Sub),
+            "vpaddb" | "vpaddw" | "vpaddd" | "vpaddq" => {
+                PackedLaneOp::Binary(SemanticOperationBinary::Add)
+            }
+            "vpsubb" | "vpsubw" | "vpsubd" | "vpsubq" => {
+                PackedLaneOp::Binary(SemanticOperationBinary::Sub)
+            }
             "vpminub" | "vpminuw" | "vpminud" => {
                 PackedLaneOp::Binary(SemanticOperationBinary::MinUnsigned)
             }
-            "vpcmpeqb" | "vpcmpeqw" | "vpcmpeqd" | "vpcmpeqq" => PackedLaneOp::Compare(SemanticOperationCompare::Eq),
-            "vpcmpgtb" | "vpcmpgtw" | "vpcmpgtd" | "vpcmpgtq" => PackedLaneOp::Compare(SemanticOperationCompare::Sgt),
+            "vpcmpeqb" | "vpcmpeqw" | "vpcmpeqd" | "vpcmpeqq" => {
+                PackedLaneOp::Compare(SemanticOperationCompare::Eq)
+            }
+            "vpcmpgtb" | "vpcmpgtw" | "vpcmpgtd" | "vpcmpgtq" => {
+                PackedLaneOp::Compare(SemanticOperationCompare::Sgt)
+            }
             _ => return None,
         },
     )?;
@@ -970,7 +989,10 @@ fn packed_abs(machine: Architecture, view: &X86InstructionView) -> Option<Instru
     ))
 }
 
-fn packed_average(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn packed_average(
+    machine: Architecture,
+    view: &X86InstructionView,
+) -> Option<InstructionSemantics> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
@@ -1056,10 +1078,22 @@ fn packed_horizontal(
     let pair_count = lane_count / 2;
     let mut lanes = Vec::with_capacity(lane_count as usize);
     for pair in 0..pair_count {
-        lanes.push(horizontal_pair_result(&left, lane_bits, pair * 2, op, saturating));
+        lanes.push(horizontal_pair_result(
+            &left,
+            lane_bits,
+            pair * 2,
+            op,
+            saturating,
+        ));
     }
     for pair in 0..pair_count {
-        lanes.push(horizontal_pair_result(&right, lane_bits, pair * 2, op, saturating));
+        lanes.push(horizontal_pair_result(
+            &right,
+            lane_bits,
+            pair * 2,
+            op,
+            saturating,
+        ));
     }
     let parts = lanes.into_iter().rev().collect::<Vec<_>>();
     Some(common::complete(
@@ -1095,10 +1129,22 @@ fn avx_packed_horizontal(
     let pair_count = lane_count / 2;
     let mut lanes = Vec::with_capacity(lane_count as usize);
     for pair in 0..pair_count {
-        lanes.push(horizontal_pair_result(&left, lane_bits, pair * 2, op, saturating));
+        lanes.push(horizontal_pair_result(
+            &left,
+            lane_bits,
+            pair * 2,
+            op,
+            saturating,
+        ));
     }
     for pair in 0..pair_count {
-        lanes.push(horizontal_pair_result(&right, lane_bits, pair * 2, op, saturating));
+        lanes.push(horizontal_pair_result(
+            &right,
+            lane_bits,
+            pair * 2,
+            op,
+            saturating,
+        ));
     }
     let parts = lanes.into_iter().rev().collect::<Vec<_>>();
     Some(common::complete(
@@ -1200,8 +1246,10 @@ fn avx_packed_multiply(
 ) -> Option<InstructionSemantics> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let bits = common::location_bits(&dst);
-    let left = operand_expr(machine, view.operands().get(1)?).map(|expr| cast_to_bits(expr, bits))?;
-    let right = operand_expr(machine, view.operands().get(2)?).map(|expr| cast_to_bits(expr, bits))?;
+    let left =
+        operand_expr(machine, view.operands().get(1)?).map(|expr| cast_to_bits(expr, bits))?;
+    let right =
+        operand_expr(machine, view.operands().get(2)?).map(|expr| cast_to_bits(expr, bits))?;
     let expression = match view.mnemonic.as_str() {
         "vpmulhw" => packed_mul_high(bits, &left, &right),
         "vpmullw" => packed_mul_low(bits, &left, &right, 16),
@@ -1340,9 +1388,7 @@ fn shuffle(machine: Architecture, view: &X86InstructionView) -> Option<Instructi
     let expression = match view.mnemonic.as_str() {
         "pshufd" => shuffle_dwords(bits, &src, imm)?,
         "pshufhw" => shuffle_words_half(bits, &src, imm, true)?,
-        "pshuflw" => {
-            shuffle_words_half(bits, &src, imm, false)?
-        }
+        "pshuflw" => shuffle_words_half(bits, &src, imm, false)?,
         "pshufw" => shuffle_words(bits, &src, imm)?,
         _ => return None,
     };
@@ -1522,7 +1568,10 @@ fn avx_unpack(machine: Architecture, view: &X86InstructionView) -> Option<Instru
     ))
 }
 
-fn packed_extract(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn packed_extract(
+    machine: Architecture,
+    view: &X86InstructionView,
+) -> Option<InstructionSemantics> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let dst_bits = common::location_bits(&dst);
@@ -1918,9 +1967,7 @@ fn avx_packed_shift(
                 shift_bytes(src, count, bits, false)
             }
         }
-        "vpsllq" | "vpsrlq" => {
-            packed_lane_shift(view.mnemonic.as_str(), bits, &src, count)?
-        }
+        "vpsllq" | "vpsrlq" => packed_lane_shift(view.mnemonic.as_str(), bits, &src, count)?,
         _ => return None,
     };
     Some(common::complete(
@@ -2082,10 +2129,22 @@ fn ptest(machine: Architecture, view: &X86InstructionView) -> Option<Instruction
                     common::const_u64(0, bits),
                 ),
             },
-            SemanticEffect::Set { dst: common::flag("of"), expression: common::bool_const(false) },
-            SemanticEffect::Set { dst: common::flag("af"), expression: common::bool_const(false) },
-            SemanticEffect::Set { dst: common::flag("pf"), expression: common::bool_const(false) },
-            SemanticEffect::Set { dst: common::flag("sf"), expression: common::bool_const(false) },
+            SemanticEffect::Set {
+                dst: common::flag("of"),
+                expression: common::bool_const(false),
+            },
+            SemanticEffect::Set {
+                dst: common::flag("af"),
+                expression: common::bool_const(false),
+            },
+            SemanticEffect::Set {
+                dst: common::flag("pf"),
+                expression: common::bool_const(false),
+            },
+            SemanticEffect::Set {
+                dst: common::flag("sf"),
+                expression: common::bool_const(false),
+            },
         ],
     ))
 }
@@ -2117,10 +2176,22 @@ fn avx_ptest(machine: Architecture, view: &X86InstructionView) -> Option<Instruc
                     common::const_u64(0, bits),
                 ),
             },
-            SemanticEffect::Set { dst: common::flag("of"), expression: common::bool_const(false) },
-            SemanticEffect::Set { dst: common::flag("af"), expression: common::bool_const(false) },
-            SemanticEffect::Set { dst: common::flag("pf"), expression: common::bool_const(false) },
-            SemanticEffect::Set { dst: common::flag("sf"), expression: common::bool_const(false) },
+            SemanticEffect::Set {
+                dst: common::flag("of"),
+                expression: common::bool_const(false),
+            },
+            SemanticEffect::Set {
+                dst: common::flag("af"),
+                expression: common::bool_const(false),
+            },
+            SemanticEffect::Set {
+                dst: common::flag("pf"),
+                expression: common::bool_const(false),
+            },
+            SemanticEffect::Set {
+                dst: common::flag("sf"),
+                expression: common::bool_const(false),
+            },
         ],
     ))
 }
@@ -2133,7 +2204,10 @@ fn palignr(machine: Architecture, view: &X86InstructionView) -> Option<Instructi
     let bits = common::location_bits(&dst);
     let wide_bits = bits * 2;
     let combined = SemanticExpression::Concat {
-        parts: vec![cast_to_bits(left, wide_bits), cast_to_bits(right, wide_bits)],
+        parts: vec![
+            cast_to_bits(left, wide_bits),
+            cast_to_bits(right, wide_bits),
+        ],
         bits: wide_bits,
     };
     let count_bits = wide_bits.max(count.bits());
@@ -2192,7 +2266,11 @@ fn truncate_to_bits(expr: SemanticExpression, bits: u16) -> SemanticExpression {
     }
 }
 
-fn extract_lane(vector: &SemanticExpression, lane_bits: u16, lane_index: u16) -> SemanticExpression {
+fn extract_lane(
+    vector: &SemanticExpression,
+    lane_bits: u16,
+    lane_index: u16,
+) -> SemanticExpression {
     SemanticExpression::Extract {
         arg: Box::new(vector.clone()),
         lsb: lane_index * lane_bits,

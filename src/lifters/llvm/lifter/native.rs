@@ -1,5 +1,5 @@
-use super::helpers::render_location;
 use super::LoweringContext;
+use super::helpers::render_location;
 use crate::lifters::llvm::abi::coerce_int_value_width;
 use crate::semantics::SemanticLocation;
 use inkwell::IntPredicate;
@@ -8,7 +8,11 @@ use inkwell::values::IntValue;
 use std::io::Error;
 
 impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
-    pub(super) fn read_native_register(&self, name: &str, bits: u16) -> Result<IntValue<'ctx>, Error> {
+    pub(super) fn read_native_register(
+        &self,
+        name: &str,
+        bits: u16,
+    ) -> Result<IntValue<'ctx>, Error> {
         if let Some(value) = self.read_native_frame_anchored_register(name, bits)? {
             return Ok(value);
         }

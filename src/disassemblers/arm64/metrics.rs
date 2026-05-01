@@ -22,7 +22,10 @@
 
 use std::{
     collections::BTreeSet,
-    sync::{Arc, atomic::{AtomicU64, Ordering}},
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
     time::Instant,
 };
 
@@ -126,8 +129,9 @@ pub fn log_disassembly_metrics(
     let sweep_candidates_accepted = metrics.sweep_candidates_accepted.load(Ordering::Relaxed);
     let sweep_candidates_duplicate = metrics.sweep_candidates_duplicate.load(Ordering::Relaxed);
     let sweep_candidates_nonexec = metrics.sweep_candidates_nonexec.load(Ordering::Relaxed);
-    let sweep_candidates_validation_rejected =
-        metrics.sweep_candidates_validation_rejected.load(Ordering::Relaxed);
+    let sweep_candidates_validation_rejected = metrics
+        .sweep_candidates_validation_rejected
+        .load(Ordering::Relaxed);
     let avg_blocks_per_function = if functions_valid == 0 {
         0.0
     } else {

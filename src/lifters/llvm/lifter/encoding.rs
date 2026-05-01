@@ -1,5 +1,5 @@
-use super::helpers::sanitize_symbol;
 use super::LoweringContext;
+use super::helpers::sanitize_symbol;
 use crate::semantics::InstructionEncoding;
 use inkwell::module::Linkage;
 use inkwell::types::{BasicMetadataTypeEnum, IntType};
@@ -179,10 +179,10 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
 mod tests {
     use crate::Architecture;
     use crate::Config;
-    use crate::lifters::llvm::Abi;
-    use crate::lifters::llvm::Lifter;
     use crate::controlflow::{Function, Graph};
     use crate::disassemblers::capstone::Disassembler;
+    use crate::lifters::llvm::Abi;
+    use crate::lifters::llvm::Lifter;
     use crate::semantics::{
         InstructionEncoding, InstructionSemantics, SemanticDiagnostic, SemanticDiagnosticKind,
         SemanticStatus, SemanticTerminator,
@@ -226,15 +226,9 @@ mod tests {
     #[test]
     fn lifted_function_uses_native_cfg_without_terminator_helpers() {
         let bytes = [
-            0xa2, 0x02, 0x80, 0x52,
-            0x42, 0x54, 0x00, 0x11,
-            0x5f, 0xa8, 0x00, 0x71,
-            0x60, 0x00, 0x00, 0x54,
-            0x60, 0x0c, 0x80, 0x52,
-            0xc0, 0x03, 0x5f, 0xd6,
-            0xa0, 0x00, 0x80, 0x52,
-            0x00, 0x24, 0x00, 0x11,
-            0xc0, 0x03, 0x5f, 0xd6,
+            0xa2, 0x02, 0x80, 0x52, 0x42, 0x54, 0x00, 0x11, 0x5f, 0xa8, 0x00, 0x71, 0x60, 0x00,
+            0x00, 0x54, 0x60, 0x0c, 0x80, 0x52, 0xc0, 0x03, 0x5f, 0xd6, 0xa0, 0x00, 0x80, 0x52,
+            0x00, 0x24, 0x00, 0x11, 0xc0, 0x03, 0x5f, 0xd6,
         ];
 
         let config = Config::default();

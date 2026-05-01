@@ -1,7 +1,7 @@
-use super::helpers::render_location;
 use super::LoweringContext;
-use crate::semantics::SemanticLocation;
+use super::helpers::render_location;
 use crate::Abi;
+use crate::semantics::SemanticLocation;
 use inkwell::values::IntValue;
 use std::io::Error;
 

@@ -134,7 +134,9 @@ impl ELF {
             .filter(|symbol| symbol.get_type() == ElfSymbolType::FUNC)
             .map(|symbol| {
                 let virtual_address = symbol.value();
-                let offset = self.virtual_address_to_file_offset(virtual_address).unwrap_or(0);
+                let offset = self
+                    .virtual_address_to_file_offset(virtual_address)
+                    .unwrap_or(0);
                 (
                     virtual_address,
                     BlSymbol {
@@ -157,7 +159,8 @@ impl ELF {
         &self,
         relative_virtual_address: u64,
     ) -> Option<BlSymbol> {
-        let virtual_address = self.relative_virtual_address_to_virtual_address(relative_virtual_address);
+        let virtual_address =
+            self.relative_virtual_address_to_virtual_address(relative_virtual_address);
         self.virtual_address_to_symbol(virtual_address)
     }
 

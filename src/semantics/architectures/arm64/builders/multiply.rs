@@ -124,7 +124,12 @@ fn build_mneg(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
         SemanticTerminator::FallThrough,
         vec![SemanticEffect::Set {
             dst,
-            expression: binary(SemanticOperationBinary::Sub, const_u64(0, bits), product, bits),
+            expression: binary(
+                SemanticOperationBinary::Sub,
+                const_u64(0, bits),
+                product,
+                bits,
+            ),
         }],
     ))
 }
@@ -271,7 +276,12 @@ fn build_umnegl(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
         SemanticTerminator::FallThrough,
         vec![SemanticEffect::Set {
             dst,
-            expression: binary(SemanticOperationBinary::Sub, const_u64(0, bits), product, bits),
+            expression: binary(
+                SemanticOperationBinary::Sub,
+                const_u64(0, bits),
+                product,
+                bits,
+            ),
         }],
     ))
 }

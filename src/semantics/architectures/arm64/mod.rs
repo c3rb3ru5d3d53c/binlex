@@ -22,10 +22,10 @@
 
 use crate::semantics::InstructionSemantics;
 
-pub mod instruction;
-pub mod operand;
 pub mod builders;
 pub mod helpers;
+pub mod instruction;
+pub mod operand;
 
 pub use instruction::Arm64InstructionView;
 pub use operand::{Arm64MemoryOperandView, Arm64OperandKind, Arm64OperandView};

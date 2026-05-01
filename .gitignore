@@ -20,3 +20,4 @@ __pycache__/
 data/
 .codex
 /references/
+.z3-trace

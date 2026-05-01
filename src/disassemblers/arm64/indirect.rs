@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 use crate::disassemblers::arm64::decoded::{
-    canonical_register_family, Arm64DecodedInstruction, Arm64DecodedOperand,
+    Arm64DecodedInstruction, Arm64DecodedOperand, canonical_register_family,
 };
 use std::collections::{BTreeSet, VecDeque};
 
@@ -29,7 +29,9 @@ use ::capstone::Insn;
 
 use crate::{
     controlflow::graph::Graph,
-    disassemblers::arm64::{backends::capstone as arm64_capstone, classify as arm64_classify, flow as arm64_flow},
+    disassemblers::arm64::{
+        backends::capstone as arm64_capstone, classify as arm64_classify, flow as arm64_flow,
+    },
 };
 
 pub fn resolve_register_value_from_history_by_family(
@@ -108,9 +110,7 @@ pub fn is_register_jump_table_load(
     )
 }
 
-pub fn get_memory_source(
-    instruction: &Arm64DecodedInstruction,
-) -> Option<(String, String, usize)> {
+pub fn get_memory_source(instruction: &Arm64DecodedInstruction) -> Option<(String, String, usize)> {
     if instruction.operands.len() < 2 {
         return None;
     }
@@ -151,10 +151,7 @@ pub fn get_memory_source(
     Some((base, index, final_entry_size))
 }
 
-pub fn is_add_same_register(
-    instruction: &Arm64DecodedInstruction,
-    register_family: &str,
-) -> bool {
+pub fn is_add_same_register(instruction: &Arm64DecodedInstruction, register_family: &str) -> bool {
     if !instruction.mnemonic_is("add") || instruction.operands.len() < 3 {
         return false;
     }
@@ -287,15 +284,25 @@ pub fn indirect_controlflow_targets(
     if let Some(Arm64DecodedOperand::Register(reg_name)) =
         disassembler.decode_instruction_operand(instruction, 0)
     {
-        targets.extend(resolve_register_jump_table_targets(disassembler, &reg_name, &history));
+        targets.extend(resolve_register_jump_table_targets(
+            disassembler,
+            &reg_name,
+            &history,
+        ));
     }
     if targets.is_empty()
         && let Some(target) = indirect_controlflow_target(disassembler, instruction, cfg)
     {
         targets.insert(target);
     }
-    disassembler.metric_inc(&disassembler.metrics.indirect_targets_found, targets.len() as u64);
-    disassembler.metric_elapsed(&disassembler.metrics.indirect_target_time_us, indirect_started_at);
+    disassembler.metric_inc(
+        &disassembler.metrics.indirect_targets_found,
+        targets.len() as u64,
+    );
+    disassembler.metric_elapsed(
+        &disassembler.metrics.indirect_target_time_us,
+        indirect_started_at,
+    );
     targets
 }
 
@@ -323,7 +330,9 @@ fn resolve_register_jump_table_targets(
     let Some(case_count) = find_jump_table_case_count(&index_reg, &history[..=load_index]) else {
         return result;
     };
-    let Some(table_base) = resolve_register_value_from_history_by_family(&base_reg, &history[..=load_index]) else {
+    let Some(table_base) =
+        resolve_register_value_from_history_by_family(&base_reg, &history[..=load_index])
+    else {
         return result;
     };
 

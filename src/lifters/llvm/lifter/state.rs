@@ -1,5 +1,5 @@
-use super::helpers::{render_location, sanitize_symbol};
 use super::LoweringContext;
+use super::helpers::{render_location, sanitize_symbol};
 use crate::lifters::llvm::abi::coerce_int_value_width;
 use crate::semantics::SemanticLocation;
 use inkwell::attributes::Attribute;
