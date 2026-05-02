@@ -404,6 +404,10 @@ impl InstructionJsonDeserializer {
         self.inner.lock().unwrap().has_indirect_target
     }
 
+    pub fn is_conditional(&self) -> bool {
+        self.inner.lock().unwrap().is_conditional
+    }
+
     pub fn functions(&self) -> BTreeSet<u64> {
         self.inner.lock().unwrap().functions.clone()
     }
@@ -585,6 +589,12 @@ impl Instruction {
     /// Return whether this instruction has an indirect branch target.
     pub fn has_indirect_target(&self, py: Python) -> PyResult<bool> {
         self.with_inner_instruction(py, |instruction| Ok(instruction.has_indirect_target()))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return whether this instruction is conditional.
+    pub fn is_conditional(&self, py: Python) -> PyResult<bool> {
+        self.with_inner_instruction(py, |instruction| Ok(instruction.is_conditional()))
     }
 
     #[pyo3(text_signature = "($self)")]

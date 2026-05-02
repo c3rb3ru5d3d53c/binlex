@@ -9,14 +9,18 @@ authors = ["c3rb3ru5d3d53c"]
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3.9", features = ["winnt", "fileapi", "ioapiset", "winioctl"] }
 inkwell = { version = "0.9.0", default-features = false, features = ["llvm22-1-force-static", "target-x86"] }
+llvm-sys = { version = "221.0.1", features = ["disable-alltargets-init"] }
 
 [target.'cfg(not(windows))'.dependencies]
-inkwell = { version = "0.9.0", features = ["llvm22-1-prefer-static"] }
+inkwell = { version = "0.9.0", default-features = false, features = ["llvm22-1-force-static", "target-x86", "target-aarch64"] }
+llvm-sys = { version = "221.0.1", features = ["disable-alltargets-init"] }
 
 [dependencies]
 clap = { version = "4.5.27", features = ["derive"] }
 lief = "0.15.1"
 capstone = "0.12.0"
+object = "0.37.3"
+llvm-asm = { path = "crates/llvm-asm" }
 fast-tlsh = "0.1.6"
 ring = "0.17.8"
 serde = { version = "1.0.217", features = ["derive"] }
@@ -67,6 +71,7 @@ num-traits = "0.2.19"
 [workspace]
 members = [
     "bindings/python/",
+    "crates/llvm-asm",
     "crates/binlex_tools/binlex",
     "crates/binlex_tools/binlex-hash",
     "crates/binlex_tools/binlex-image",
@@ -81,6 +86,9 @@ members = [
 
 [workspace.package]
 version = "2.0.0"
+
+[patch.crates-io]
+llvm-sys = { path = "vendor/llvm-sys" }
 
 [profile.dev]
 debug = 0

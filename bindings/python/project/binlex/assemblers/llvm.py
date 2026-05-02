@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # MIT License
 #
 # Copyright (c) [2025] [c3rb3ru5d3d53c]
@@ -21,19 +20,27 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# Example on Finding common sub sequences
+"""LLVM-backed assembly helpers for native instruction sets."""
 
-import sys
-import json
-from binlex.genetics import Chromosome
 from binlex import Config
+from binlex_bindings.binlex.assemblers._llvm_assembler import (
+    Assembler as _AssemblerBinding,
+)
 
-config = Config()
+from binlex.core.architecture import _coerce_architecture
 
-lhs = Chromosome('deadbeef', config)
-rhs = Chromosome('fedeadbeeffe', config)
 
-print(json.dumps({
-    "lhs": json.loads(lhs.json()),
-    "rhs": json.loads(rhs.json()),
-}))
+class Assembler:
+    def __init__(self, architecture, config):
+        if not isinstance(config, Config):
+            raise TypeError("config must be a binlex.Config")
+        self._inner = _AssemblerBinding(_coerce_architecture(architecture), config)
+
+    def assemble(self, address, text):
+        return self._inner.assemble(address, text)
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+
+__all__ = ["Assembler"]

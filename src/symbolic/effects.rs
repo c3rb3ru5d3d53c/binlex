@@ -9,8 +9,9 @@ impl Executor {
         value: crate::symbolic::expressions::EvaluatedValue,
     ) -> Result<crate::symbolic::expressions::EvaluatedValue, Error> {
         if value.deps.is_empty() && value.value.get_size() <= 64 {
-            if let Some(concrete) =
-                state.backend().eval_bv_u64(state.solver_constraints(), &value.value)?
+            if let Some(concrete) = state
+                .backend()
+                .eval_bv_u64(state.solver_constraints(), &value.value)?
             {
                 return Ok(crate::symbolic::expressions::EvaluatedValue {
                     value: state
@@ -67,9 +68,13 @@ impl Executor {
                     &parents,
                 );
                 let backend = state.backend().clone();
-                state
-                    .memory_mut()
-                    .store_with_provenance(&backend, &address, &value.value, *bits, def_id)
+                state.memory_mut().store_with_provenance(
+                    &backend,
+                    &address,
+                    &value.value,
+                    *bits,
+                    def_id,
+                )
             }
             SemanticEffect::MemorySet {
                 addr,
@@ -144,17 +149,19 @@ impl Executor {
         let base_address_value = self.coerce_address(state, &base_address.value)?;
         let value_eval = self.eval_expression(state, value, false)?;
         let value_eval = self.concretize_if_dependency_free(state, value_eval)?;
-        let value = state.backend().coerce_bv_width(&value_eval.value, element_bits)?;
+        let value = state
+            .backend()
+            .coerce_bv_width(&value_eval.value, element_bits)?;
         let count_eval = self.eval_expression(state, count, false)?;
         let count = self
             .concrete_bv_u64(&count_eval.value)
             .ok_or(Error::UnsupportedEffect("memory_set with symbolic count"))?;
         let decrement_eval = self.eval_condition(state, decrement)?;
-        let decrement = self
-            .concrete_bool(&decrement_eval.value)
-            .ok_or(Error::UnsupportedEffect(
-                "memory_set with symbolic decrement",
-            ))?;
+        let decrement =
+            self.concrete_bool(&decrement_eval.value)
+                .ok_or(Error::UnsupportedEffect(
+                    "memory_set with symbolic decrement",
+                ))?;
         let backend = state.backend().clone();
         let stride = (element_bits / 8) as u64;
         for index in 0..count {
@@ -179,9 +186,13 @@ impl Executor {
                 &value,
                 &parents,
             );
-            state
-                .memory_mut()
-                .store_with_provenance(&backend, &address, &value, element_bits, def_id)?;
+            state.memory_mut().store_with_provenance(
+                &backend,
+                &address,
+                &value,
+                element_bits,
+                def_id,
+            )?;
         }
         Ok(())
     }
@@ -205,11 +216,11 @@ impl Executor {
             .concrete_bv_u64(&count_eval.value)
             .ok_or(Error::UnsupportedEffect("memory_copy with symbolic count"))?;
         let decrement_eval = self.eval_condition(state, decrement)?;
-        let decrement = self
-            .concrete_bool(&decrement_eval.value)
-            .ok_or(Error::UnsupportedEffect(
-                "memory_copy with symbolic decrement",
-            ))?;
+        let decrement =
+            self.concrete_bool(&decrement_eval.value)
+                .ok_or(Error::UnsupportedEffect(
+                    "memory_copy with symbolic decrement",
+                ))?;
         let backend = state.backend().clone();
         let stride = (element_bits / 8) as u64;
         for index in 0..count {
@@ -225,7 +236,9 @@ impl Executor {
                 dst_base_value.bvadd(&offset)
             };
             let (value, mut parents) =
-                state.memory().load_with_provenance(&backend, &src, element_bits)?;
+                state
+                    .memory()
+                    .load_with_provenance(&backend, &src, element_bits)?;
             if src.as_u64().is_none() {
                 parents.extend(src_base.deps.clone());
             }
@@ -240,9 +253,13 @@ impl Executor {
                 &value,
                 &parents,
             );
-            state
-                .memory_mut()
-                .store_with_provenance(&backend, &dst, &value, element_bits, def_id)?;
+            state.memory_mut().store_with_provenance(
+                &backend,
+                &dst,
+                &value,
+                element_bits,
+                def_id,
+            )?;
         }
         Ok(())
     }
@@ -261,7 +278,9 @@ impl Executor {
         let address_value = self.coerce_address(state, &address.value)?;
         let backend = state.backend().clone();
         let (observed_value, observed_parents) =
-            state.memory().load_with_provenance(&backend, &address_value, bits)?;
+            state
+                .memory()
+                .load_with_provenance(&backend, &address_value, bits)?;
         self.write_location(
             state,
             instruction,
@@ -293,9 +312,13 @@ impl Executor {
             &stored,
             &parents,
         );
-        state
-            .memory_mut()
-            .store_with_provenance(&backend, &address_value, &stored, bits, def_id)?;
+        state.memory_mut().store_with_provenance(
+            &backend,
+            &address_value,
+            &stored,
+            bits,
+            def_id,
+        )?;
         Ok(())
     }
 
@@ -337,13 +360,16 @@ impl Executor {
                 let address = self.eval_expression(state, addr, false)?;
                 let address_value = self.coerce_address(state, &address.value)?;
                 let (value, mut deps) =
-                    state.memory().load_with_provenance(state.backend(), &address_value, *bits)?;
+                    state
+                        .memory()
+                        .load_with_provenance(state.backend(), &address_value, *bits)?;
                 if address_value.as_u64().is_none() {
                     deps.extend(address.deps);
                 }
                 if deps.is_empty() && address_value.as_u64().is_some() && *bits <= 64 {
-                    if let Some(concrete) =
-                        state.backend().eval_bv_u64(state.solver_constraints(), &value)?
+                    if let Some(concrete) = state
+                        .backend()
+                        .eval_bv_u64(state.solver_constraints(), &value)?
                     {
                         return Ok(crate::symbolic::expressions::EvaluatedValue {
                             value: state.backend().const_bv(concrete as u128, *bits)?,
@@ -425,9 +451,13 @@ impl Executor {
                     &parents,
                 );
                 let backend = state.backend().clone();
-                state
-                    .memory_mut()
-                    .store_with_provenance(&backend, &address_value, &coerced, *bits, def_id)
+                state.memory_mut().store_with_provenance(
+                    &backend,
+                    &address_value,
+                    &coerced,
+                    *bits,
+                    def_id,
+                )
             }
         }
     }

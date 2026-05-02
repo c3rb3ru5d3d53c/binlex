@@ -549,7 +549,7 @@ impl Graph {
         result
     }
 
-    pub fn listing(&self) -> &SkipMap<u64, Instruction> {
+    pub fn instruction_map(&self) -> &SkipMap<u64, Instruction> {
         &self.listing
     }
 
@@ -701,7 +701,7 @@ impl Graph {
 
     pub fn merge(&mut self, graph: &mut Graph) {
         self.invalidate_processor_state();
-        for entry in graph.listing() {
+        for entry in graph.instruction_map() {
             self.insert_instruction(entry.value().clone());
         }
 

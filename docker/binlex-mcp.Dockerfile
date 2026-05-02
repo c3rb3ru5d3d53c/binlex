@@ -46,6 +46,8 @@ RUN python3 -m pip install --break-system-packages --no-cache-dir maturin[patche
 
 COPY . .
 
+RUN cargo run --manifest-path xtask/Cargo.toml
+
 RUN mkdir -p /tmp/binlex-wheels \
     && python3 -m maturin build --manifest-path bindings/python/Cargo.toml --release --out /tmp/binlex-wheels
 
@@ -88,6 +90,8 @@ ENV PROTOC_INCLUDE=/usr/include
 WORKDIR /app
 
 COPY . .
+
+RUN cargo run --manifest-path xtask/Cargo.toml
 
 RUN set -eux; \
     cargo build --release -p binlex-mcp --bin binlex-mcp; \

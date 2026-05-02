@@ -1,0 +1,12 @@
+[package]
+name = "llvm-asm"
+version.workspace = true
+edition = "2024"
+license = "MIT"
+description = "Static LLVM MC assembler backend for binlex"
+
+[dependencies]
+object = "0.37.3"
+
+[build-dependencies]
+cc = "1.2.16"

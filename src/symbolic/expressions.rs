@@ -35,13 +35,16 @@ impl Executor {
                 let address = self.eval_expression(state, addr, false)?;
                 let address_value = self.coerce_address(state, &address.value)?;
                 let (value, mut deps) =
-                    state.memory().load_with_provenance(state.backend(), &address_value, *bits)?;
+                    state
+                        .memory()
+                        .load_with_provenance(state.backend(), &address_value, *bits)?;
                 if address_value.as_u64().is_none() {
                     deps.extend(address.deps);
                 }
                 if deps.is_empty() && address_value.as_u64().is_some() && *bits <= 64 {
-                    if let Some(concrete) =
-                        state.backend().eval_bv_u64(state.solver_constraints(), &value)?
+                    if let Some(concrete) = state
+                        .backend()
+                        .eval_bv_u64(state.solver_constraints(), &value)?
                     {
                         return Ok(EvaluatedValue {
                             value: state.backend().const_bv(concrete as u128, *bits)?,
@@ -56,7 +59,14 @@ impl Executor {
                 let arg = self.eval_expression(state, arg_expression, expected_float)?;
                 let value = state.backend().coerce_bv_width(&arg.value, *bits)?;
                 Ok(EvaluatedValue {
-                    value: self.eval_unary(state, *op, value, arg_expression, *bits, expected_float)?,
+                    value: self.eval_unary(
+                        state,
+                        *op,
+                        value,
+                        arg_expression,
+                        *bits,
+                        expected_float,
+                    )?,
                     deps: arg.deps,
                 })
             }

@@ -33,6 +33,7 @@ from .config import Config
 from .core import Architecture, Magic
 
 _LAZY_SUBMODULES = {
+    "assemblers",
     "clients",
     "compression",
     "controlflow",
@@ -68,6 +69,7 @@ __all__ = [
     "Magic",
     "Server",
     "Web",
+    "assemblers",
     "clients",
     "compression",
     "controlflow",

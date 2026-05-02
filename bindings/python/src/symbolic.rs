@@ -60,13 +60,16 @@ fn wrap_slice(slice: ::binlex::symbolic::Slice) -> Slice {
         .nodes()
         .iter()
         .map(|node| SliceItemData {
-            instruction: node.instruction.as_ref().map(|instruction| SliceInstructionData {
-                architecture: instruction.architecture.clone(),
-                mnemonic: instruction.mnemonic.clone(),
-                disassembly: instruction.disassembly.clone(),
-                address: instruction.address,
-                bytes: instruction.bytes.clone(),
-            }),
+            instruction: node
+                .instruction
+                .as_ref()
+                .map(|instruction| SliceInstructionData {
+                    architecture: instruction.architecture.clone(),
+                    mnemonic: instruction.mnemonic.clone(),
+                    disassembly: instruction.disassembly.clone(),
+                    address: instruction.address,
+                    bytes: instruction.bytes.clone(),
+                }),
             location: node.location.clone(),
             value: node.value.clone(),
             parents: node

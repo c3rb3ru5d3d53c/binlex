@@ -136,16 +136,17 @@ impl InstructionSemanticsInput {
                 semantics
             }
             Self::Arm64(view) => {
-                let mut semantics = architectures::arm64::build(view.clone()).unwrap_or_else(|| {
-                    unsupported_fallthrough(
-                        view.machine.to_string(),
-                        view.address,
-                        view.mnemonic.clone(),
-                        view.operand_text.clone(),
-                        view.bytes.clone(),
-                        "arm64 mnemonic not implemented",
-                    )
-                });
+                let mut semantics =
+                    architectures::arm64::build(view.clone()).unwrap_or_else(|| {
+                        unsupported_fallthrough(
+                            view.machine.to_string(),
+                            view.address,
+                            view.mnemonic.clone(),
+                            view.operand_text.clone(),
+                            view.bytes.clone(),
+                            "arm64 mnemonic not implemented",
+                        )
+                    });
                 if semantics.encoding.is_none() {
                     semantics.encoding = Some(InstructionEncoding {
                         architecture: view.machine.to_string(),
@@ -629,6 +630,11 @@ impl Instruction {
     /// Indicates whether this instruction uses an indirect control-flow target.
     pub fn has_indirect_target(&self) -> bool {
         self.has_indirect_target
+    }
+
+    /// Indicates whether this instruction is conditional.
+    pub fn is_conditional(&self) -> bool {
+        self.is_conditional
     }
 
     /// Retrieves the set of functions this instruction may belong to.

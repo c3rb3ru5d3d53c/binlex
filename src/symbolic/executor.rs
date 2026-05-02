@@ -78,8 +78,7 @@ mod tests {
     use crate::Architecture;
     use crate::semantics::{
         InstructionEncoding, InstructionSemantics, SemanticEffect, SemanticExpression,
-        SemanticLocation,
-        SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
+        SemanticLocation, SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
         SemanticOperationUnary, SemanticStatus, SemanticTerminator,
     };
 
@@ -499,7 +498,9 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.run([&first, &second, &third], &state).expect("run");
+        let states = executor
+            .run([&first, &second, &third], &state)
+            .expect("run");
         let slice = states[0]
             .slice_from_register("ecx", 32)
             .expect("slice register");
@@ -548,7 +549,9 @@ mod tests {
         };
 
         let states = executor.step(&semantics, &state).expect("step");
-        let slice = states[0].slice_from_memory(0x3000, 1).expect("slice memory");
+        let slice = states[0]
+            .slice_from_memory(0x3000, 1)
+            .expect("slice memory");
         let nodes = slice.nodes();
         assert_eq!(nodes.len(), 2);
         assert_eq!(nodes[1].instruction.as_ref().unwrap().mnemonic, "mov");
@@ -652,14 +655,20 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.run([&first, &second, &third], &state).expect("run");
+        let states = executor
+            .run([&first, &second, &third], &state)
+            .expect("run");
         let slice = states[0]
             .slice_from_register("ecx", 32)
             .expect("slice register");
         let mnemonics = slice
             .nodes()
             .iter()
-            .filter_map(|node| node.instruction.as_ref().map(|instruction| instruction.mnemonic.as_str()))
+            .filter_map(|node| {
+                node.instruction
+                    .as_ref()
+                    .map(|instruction| instruction.mnemonic.as_str())
+            })
             .collect::<Vec<_>>();
         assert_eq!(mnemonics, vec!["movzx", "movsx", "mov"]);
     }

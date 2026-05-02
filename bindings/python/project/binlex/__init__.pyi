@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from . import assemblers
 from .clients import Server, Web
 from binlex.config import Config
 from binlex.core import Architecture
@@ -24,6 +25,7 @@ __all__ = [
     "Magic",
     "Server",
     "Web",
+    "assemblers",
     "clients",
     "compression",
     "controlflow",

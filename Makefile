@@ -2,22 +2,25 @@ OUTPUT_DIRECTORY = target
 BUILD_WORKSPACE = cargo build --release --workspace --exclude binlex-python
 TEST_WORKSPACE = cargo test --workspace --exclude binlex-python
 
-all:
+all: prepare
 	@$(BUILD_WORKSPACE)
+
+prepare:
+	@cargo run --manifest-path xtask/Cargo.toml
 
 deps:
 	@cargo fetch
 
-test:
+test: prepare
 	@$(TEST_WORKSPACE) -- --nocapture
 
-test-vex:
+test-vex: prepare
 	@cargo test --test vex_lifter -- --nocapture
 
-build:
+build: prepare
 	@$(BUILD_WORKSPACE)
 
-zst:
+zst: prepare
 	@$(BUILD_WORKSPACE)
 	@makepkg
 	@mkdir -p $(OUTPUT_DIRECTORY)/zst/
@@ -26,19 +29,19 @@ zst:
 		mv "$$file" $(OUTPUT_DIRECTORY)/zst/; \
 	done
 
-deb:
+deb: prepare
 	@cargo install cargo-deb
 	@$(BUILD_WORKSPACE)
 	@cargo deb -p binlex-cli --no-build
 
-wheel:
+wheel: prepare
 	virtualenv -p python3 venv/
 	. venv/bin/activate && \
 		cd bindings/python/ && \
 		pip install maturin[patchelf] && \
 		maturin build --release
 
-ida-plugin:
+ida-plugin: prepare
 	virtualenv -p python3 venv/
 	. venv/bin/activate && \
 		cd plugins/ida/ && \
