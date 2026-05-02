@@ -48,6 +48,8 @@ fn fetch_llvm_sys_to_registry() {
         .join("target")
         .join("xtask-registry-bootstrap");
     fs::create_dir_all(&bootstrap_dir).expect("create xtask registry bootstrap directory");
+    fs::create_dir_all(bootstrap_dir.join("src"))
+        .expect("create xtask registry bootstrap source directory");
     fs::write(
         bootstrap_dir.join("Cargo.toml"),
         format!(
@@ -55,6 +57,8 @@ fn fetch_llvm_sys_to_registry() {
         ),
     )
     .expect("write xtask registry bootstrap manifest");
+    fs::write(bootstrap_dir.join("src/main.rs"), "fn main() {}\n")
+        .expect("write xtask registry bootstrap source");
 
     run_checked(
         Command::new(env::var_os("CARGO").unwrap_or_else(|| "cargo".into()))
