@@ -26,6 +26,8 @@ WORKDIR /app
 
 COPY . .
 
+RUN cargo run -p xtask
+
 RUN set -eux; \
     cargo build --release -p binlex-server; \
     for manifest in $(find crates/binlex_processors -mindepth 2 -maxdepth 2 -name Cargo.toml | sort); do \

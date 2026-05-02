@@ -1083,6 +1083,13 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Refresh Vendored llvm-sys
+        run: cargo run -p xtask
+
+      - name: Check Vendored llvm-sys
+        shell: bash
+        run: test -f vendor/llvm-sys/build.rs
+
       - name: Set up Protoc
         uses: arduino/setup-protoc@v3
         with:

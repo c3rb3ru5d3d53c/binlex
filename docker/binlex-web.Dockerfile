@@ -26,6 +26,8 @@ WORKDIR /app
 
 COPY . .
 
+RUN cargo run -p xtask
+
 RUN set -eux; \
     cargo build --release -p binlex-web
 
