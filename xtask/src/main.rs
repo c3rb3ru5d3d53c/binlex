@@ -53,7 +53,7 @@ fn fetch_llvm_sys_to_registry() {
     fs::write(
         bootstrap_dir.join("Cargo.toml"),
         format!(
-            "[package]\nname = \"xtask-registry-bootstrap\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n[dependencies]\nllvm-sys = \"={LLVM_SYS_VERSION}\"\n"
+            "[package]\nname = \"xtask-registry-bootstrap\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n[workspace]\n\n[dependencies]\nllvm-sys = \"={LLVM_SYS_VERSION}\"\n"
         ),
     )
     .expect("write xtask registry bootstrap manifest");
