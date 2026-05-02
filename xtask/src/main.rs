@@ -34,18 +34,35 @@ fn ensure_registry_source_dir() -> PathBuf {
         return path;
     }
 
-    run_checked(
-        Command::new(env::var_os("CARGO").unwrap_or_else(|| "cargo".into()))
-            .arg("fetch")
-            .arg("--locked"),
-        "fetch workspace dependencies for xtask",
-    );
+    fetch_llvm_sys_to_registry();
 
     registry_source_dir().unwrap_or_else(|| {
         panic!(
             "llvm-sys-{LLVM_SYS_VERSION} was not found in the local cargo registry after cargo fetch"
         )
     })
+}
+
+fn fetch_llvm_sys_to_registry() {
+    let bootstrap_dir = workspace_root()
+        .join("target")
+        .join("xtask-registry-bootstrap");
+    fs::create_dir_all(&bootstrap_dir).expect("create xtask registry bootstrap directory");
+    fs::write(
+        bootstrap_dir.join("Cargo.toml"),
+        format!(
+            "[package]\nname = \"xtask-registry-bootstrap\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n[dependencies]\nllvm-sys = \"={LLVM_SYS_VERSION}\"\n"
+        ),
+    )
+    .expect("write xtask registry bootstrap manifest");
+
+    run_checked(
+        Command::new(env::var_os("CARGO").unwrap_or_else(|| "cargo".into()))
+            .arg("fetch")
+            .arg("--manifest-path")
+            .arg(bootstrap_dir.join("Cargo.toml")),
+        "fetch llvm-sys for xtask",
+    );
 }
 
 fn workspace_root() -> PathBuf {
