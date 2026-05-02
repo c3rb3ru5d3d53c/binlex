@@ -20,8 +20,12 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 MAX_ENCODING_BYTES
             )));
         }
+        let helper_name = format!(
+            "binlex_encoding_{}",
+            sanitize_symbol(&encoding.mnemonic)
+        );
         let helper = self.declare_void_helper(
-            "binlex_encoding",
+            &helper_name,
             &[self
                 .context
                 .ptr_type(inkwell::AddressSpace::default())
@@ -215,12 +219,40 @@ mod tests {
         lifter.lift_semantics(&semantics).expect("lift semantics");
         let text = lifter.text();
 
-        assert!(text.contains("declare void @binlex_encoding(ptr)"));
+        assert!(text.contains("declare void @binlex_encoding_ld4(ptr)"));
         assert!(text.contains("@binlex_encoding_ld4_4010"));
         assert!(text.contains("c\"arm64\\00\""));
         assert!(text.contains("c\"ld4\\00\""));
         assert!(text.contains("ld4 {v0.16b, v1.16b, v2.16b, v3.16b}, [x3]"));
-        assert!(text.contains("call void @binlex_encoding(ptr @binlex_encoding_ld4_4010)"));
+        assert!(text.contains("call void @binlex_encoding_ld4(ptr @binlex_encoding_ld4_4010)"));
+    }
+
+    #[test]
+    fn omits_instruction_encoding_for_complete_semantics() {
+        let mut lifter = Lifter::new(Architecture::AMD64, Config::default());
+        let semantics = InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: Some(InstructionEncoding {
+                architecture: "amd64".to_string(),
+                mnemonic: "xor".to_string(),
+                disassembly: "xor al, 0x4d".to_string(),
+                address: 0x4010,
+                bytes: vec![0x34, 0x4d],
+            }),
+            temporaries: Vec::new(),
+            effects: Vec::new(),
+            terminator: SemanticTerminator::FallThrough,
+            diagnostics: Vec::new(),
+        };
+
+        lifter.lift_semantics(&semantics).expect("lift semantics");
+        let text = lifter.text();
+
+        assert!(!text.contains("@binlex_encoding_xor("));
+        assert!(!text.contains("@binlex_encoding_xor_4010"));
+        assert!(text.contains("call void asm sideeffect \"nop\""));
     }
 
     #[test]

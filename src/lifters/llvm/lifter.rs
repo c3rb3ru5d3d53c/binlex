@@ -465,6 +465,10 @@ impl Lifter {
     }
 }
 
+fn should_emit_instruction_encoding(semantics: &InstructionSemantics) -> bool {
+    matches!(semantics.status, crate::semantics::SemanticStatus::Partial)
+}
+
 impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     fn record_semantic_lowering(&mut self, kind: &str, detail: impl Into<String>) {
         if !self.debug {
@@ -736,8 +740,14 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             }
             *self.cached_flags_register.borrow_mut() = None;
             let prepared = prepare_instruction_semantics(semantics)?;
-            self.emit_body_marker_if_needed(prepared.encoding.is_none())?;
-            if let Some(encoding) = prepared.encoding.as_ref() {
+            let emit_encoding = should_emit_instruction_encoding(&prepared);
+            self.emit_body_marker_if_needed(!emit_encoding)?;
+            if emit_encoding {
+                let Some(encoding) = prepared.encoding.as_ref() else {
+                    return Err(Error::other(
+                        "partial instruction semantics require encoding for llvm lowering",
+                    ));
+                };
                 self.emit_instruction_encoding(encoding)?;
             }
             let previous_semantics_abi = self.current_semantics_abi;
@@ -778,8 +788,14 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         }
         *self.cached_flags_register.borrow_mut() = None;
         let prepared = prepare_instruction_semantics(semantics)?;
-        self.emit_body_marker_if_needed(prepared.encoding.is_none())?;
-        if let Some(encoding) = prepared.encoding.as_ref() {
+        let emit_encoding = should_emit_instruction_encoding(&prepared);
+        self.emit_body_marker_if_needed(!emit_encoding)?;
+        if emit_encoding {
+            let Some(encoding) = prepared.encoding.as_ref() else {
+                return Err(Error::other(
+                    "partial instruction semantics require encoding for llvm lowering",
+                ));
+            };
             self.emit_instruction_encoding(encoding)?;
         }
         let previous_semantics_abi = self.current_semantics_abi;
