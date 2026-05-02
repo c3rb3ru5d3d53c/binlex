@@ -78,6 +78,10 @@ class Instruction:
         """Return whether this instruction branches to an indirect target."""
         return self._inner.has_indirect_target()
 
+    def is_conditional(self):
+        """Return whether this instruction is conditional."""
+        return self._inner.is_conditional()
+
     def functions(self):
         """Return the function addresses associated with this instruction."""
         return self._inner.functions()
@@ -206,6 +210,10 @@ class InstructionJsonDeserializer:
     def has_indirect_target(self):
         """Return whether this instruction branches to an indirect target."""
         return self._inner.has_indirect_target()
+
+    def is_conditional(self):
+        """Return whether this instruction is conditional."""
+        return self._inner.is_conditional()
 
     def functions(self):
         """Return the function addresses associated with this instruction."""

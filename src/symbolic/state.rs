@@ -40,10 +40,7 @@ pub struct State {
 }
 
 impl State {
-    fn x86_register_alias(
-        &self,
-        name: &str,
-    ) -> Option<(&'static str, u16, u16, u16, bool)> {
+    fn x86_register_alias(&self, name: &str) -> Option<(&'static str, u16, u16, u16, bool)> {
         match self.architecture {
             Architecture::AMD64 => match name {
                 "al" => Some(("rax", 64, 0, 8, false)),
@@ -147,12 +144,7 @@ impl State {
         }
     }
 
-    fn extract_register_alias(
-        &self,
-        value: &BV,
-        alias_bits: u16,
-        lsb: u16,
-    ) -> Result<BV, Error> {
+    fn extract_register_alias(&self, value: &BV, alias_bits: u16, lsb: u16) -> Result<BV, Error> {
         let full_bits = value.get_size() as u16;
         if alias_bits == full_bits && lsb == 0 {
             return Ok(value.clone());
@@ -300,8 +292,11 @@ impl State {
             let byte_name = format!("{prefix}[0x{:x}]", address + offset as u64);
             self.tracked
                 .insert(byte_name.clone(), TrackedAst::BitVector(value.clone()));
-            let def_id =
-                self.create_root_definition(format!("memory[0x{:x}]", address + offset as u64), &value, Some(byte_name));
+            let def_id = self.create_root_definition(
+                format!("memory[0x{:x}]", address + offset as u64),
+                &value,
+                Some(byte_name),
+            );
             self.memory
                 .set_byte_provenance(address + offset as u64, Some(def_id));
         }
@@ -352,9 +347,7 @@ impl State {
     }
 
     pub fn slice_from_memory(&self, address: u64, size: usize) -> Result<Slice, Error> {
-        Ok(self.slice_from_def_ids(
-            self.memory.provenance_for_range(address, size),
-        ))
+        Ok(self.slice_from_def_ids(self.memory.provenance_for_range(address, size)))
     }
 
     pub(crate) fn add_constraint(&mut self, constraint: Bool) {
@@ -390,7 +383,11 @@ impl State {
         self.program_counter = Some(SymbolicCell { value, def_id });
     }
 
-    pub(crate) fn get_or_create_register(&mut self, name: &str, bits: u16) -> Result<SymbolicCell, Error> {
+    pub(crate) fn get_or_create_register(
+        &mut self,
+        name: &str,
+        bits: u16,
+    ) -> Result<SymbolicCell, Error> {
         if let Some((canonical, full_bits, lsb, alias_bits, _)) = self.x86_register_alias(name) {
             let base = if let Some(value) = self.registers.get(canonical) {
                 value.clone()
@@ -399,8 +396,11 @@ impl State {
                 let value = self.backend.fresh_bv(&symbol, full_bits)?;
                 self.tracked
                     .insert(symbol.clone(), TrackedAst::BitVector(value.clone()));
-                let def_id =
-                    self.create_root_definition(format!("register:{canonical}"), &value, Some(symbol));
+                let def_id = self.create_root_definition(
+                    format!("register:{canonical}"),
+                    &value,
+                    Some(symbol),
+                );
                 let cell = SymbolicCell {
                     value: value.clone(),
                     def_id: Some(def_id),
@@ -497,7 +497,11 @@ impl State {
         }))
     }
 
-    pub(crate) fn get_or_create_flag(&mut self, name: &str, bits: u16) -> Result<SymbolicCell, Error> {
+    pub(crate) fn get_or_create_flag(
+        &mut self,
+        name: &str,
+        bits: u16,
+    ) -> Result<SymbolicCell, Error> {
         if let Some(value) = self.flags.get(name) {
             return Ok(SymbolicCell {
                 value: self.backend.coerce_bv_width(&value.value, bits)?,
@@ -522,7 +526,11 @@ impl State {
             .insert(name.to_string(), SymbolicCell { value, def_id });
     }
 
-    pub(crate) fn get_or_create_temporary(&mut self, id: u32, bits: u16) -> Result<SymbolicCell, Error> {
+    pub(crate) fn get_or_create_temporary(
+        &mut self,
+        id: u32,
+        bits: u16,
+    ) -> Result<SymbolicCell, Error> {
         if let Some(value) = self.temporaries.get(&id) {
             return Ok(SymbolicCell {
                 value: self.backend.coerce_bv_width(&value.value, bits)?,
@@ -546,7 +554,10 @@ impl State {
         self.temporaries.insert(id, SymbolicCell { value, def_id });
     }
 
-    pub(crate) fn get_or_create_program_counter(&mut self, bits: u16) -> Result<SymbolicCell, Error> {
+    pub(crate) fn get_or_create_program_counter(
+        &mut self,
+        bits: u16,
+    ) -> Result<SymbolicCell, Error> {
         if let Some(value) = self.program_counter.as_ref() {
             return Ok(SymbolicCell {
                 value: self.backend.coerce_bv_width(&value.value, bits)?,
@@ -567,7 +578,8 @@ impl State {
         let value = self.backend.fresh_bv(&symbol, bits)?;
         self.tracked
             .insert(symbol.clone(), TrackedAst::BitVector(value.clone()));
-        let def_id = self.create_root_definition("program_counter".to_string(), &value, Some(symbol));
+        let def_id =
+            self.create_root_definition("program_counter".to_string(), &value, Some(symbol));
         let cell = SymbolicCell {
             value: value.clone(),
             def_id: Some(def_id),

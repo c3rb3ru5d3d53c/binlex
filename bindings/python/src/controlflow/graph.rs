@@ -356,7 +356,13 @@ impl Graph {
     #[pyo3(text_signature = "($self, address)")]
     /// Return the instruction at `address`, if it exists in the graph.
     pub fn get_instruction(&self, py: Python, address: u64) -> Option<Instruction> {
-        if self.inner.lock().unwrap().get_instruction(address).is_none() {
+        if self
+            .inner
+            .lock()
+            .unwrap()
+            .get_instruction(address)
+            .is_none()
+        {
             return None;
         }
         let cfg = Graph {

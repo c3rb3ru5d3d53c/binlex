@@ -36,7 +36,6 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   PROTOC_VERSION: "33.0"
   LLVM_MAJOR_VERSION: "22"
-  LLVM_WINDOWS_VERSION: "22.1.0"
   WINDOWS_CARGO_EXCLUDES: "--exclude binlex-python --exclude binlex-processor-vex --exclude libvex --exclude libvex-macros --exclude vex-sys"
 
 jobs:
@@ -99,6 +98,13 @@ jobs:
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Refresh Vendored llvm-sys
+        run: cargo run -p xtask
+
+      - name: Check Vendored llvm-sys
+        shell: bash
+        run: test -f vendor/llvm-sys/build.rs
 
       - name: Set up Protoc
         uses: arduino/setup-protoc@v3
@@ -171,49 +177,6 @@ jobs:
         uses: TheMrMilchmann/setup-msvc-dev@v4
         with:
           arch: x64
-
-      - name: Install LLVM (Windows)
-        if: ${{ matrix.os == 'windows-latest' }}
-        shell: pwsh
-        run: |
-          $llvmVersion = "${{ env.LLVM_WINDOWS_VERSION }}"
-          $archiveName = "clang+llvm-$llvmVersion-x86_64-pc-windows-msvc.tar.xz"
-          $archivePath = Join-Path $env:RUNNER_TEMP $archiveName
-          $extractRoot = Join-Path $env:RUNNER_TEMP "llvm"
-          $extractDir = Join-Path $extractRoot ("clang+llvm-" + $llvmVersion + "-x86_64-pc-windows-msvc")
-          curl.exe -L --fail --output $archivePath "https://github.com/llvm/llvm-project/releases/download/llvmorg-$llvmVersion/$archiveName"
-          if (Test-Path $extractRoot) { Remove-Item -Recurse -Force $extractRoot }
-          New-Item -ItemType Directory -Force -Path $extractRoot | Out-Null
-          tar -xf $archivePath -C $extractRoot
-          if (-not (Test-Path $extractDir)) {
-            Write-Error "LLVM archive extracted to unexpected location: $extractDir"
-          }
-          & "C:\vcpkg\vcpkg.exe" install libxml2:x64-windows-static-md
-          $libxmlDir = "C:\vcpkg\installed\x64-windows-static-md\lib"
-          $libxmlStatic = Join-Path $libxmlDir "libxml2.lib"
-          if (-not (Test-Path $libxmlStatic)) {
-            Write-Error "libxml2 static library not found: $libxmlStatic"
-          }
-          Copy-Item $libxmlStatic (Join-Path $extractDir "lib\xml2s.lib") -Force
-          $llvmLibDir = Join-Path $extractDir "lib"
-          $sdkLibRoots = @(
-            (Join-Path $env:WindowsSdkDir ("Lib\" + $env:WindowsSDKLibVersion + "um\x64")),
-            (Join-Path $env:WindowsSdkDir ("Lib\" + $env:WindowsSDKLibVersion + "ucrt\x64"))
-          )
-          foreach ($sdkLibRoot in $sdkLibRoots) {
-            if (-not (Test-Path $sdkLibRoot)) {
-              Write-Error "Windows SDK library directory not found: $sdkLibRoot"
-            }
-            Get-ChildItem -Path $sdkLibRoot -Filter *.lib | ForEach-Object {
-              $destination = Join-Path $llvmLibDir $_.Name
-              if (-not (Test-Path $destination)) {
-                Copy-Item $_.FullName $destination
-              }
-            }
-          }
-          "LLVM_SYS_221_PREFIX=$extractDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "LIBCLANG_PATH=$extractDir\bin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "$extractDir\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
       - name: Configure Rust CRT (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
@@ -388,6 +351,13 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Refresh Vendored llvm-sys
+        run: cargo run -p xtask
+
+      - name: Check Vendored llvm-sys
+        shell: bash
+        run: test -f vendor/llvm-sys/build.rs
+
       - name: Set up Protoc
         uses: arduino/setup-protoc@v3
         with:
@@ -465,72 +435,6 @@ jobs:
         with:
           arch: x64
 
-      - name: Build LLVM (Windows)
-        if: ${{ matrix.os == 'windows-latest' }}
-        shell: pwsh
-        run: |
-          $llvmVersion = "${{ env.LLVM_WINDOWS_VERSION }}"
-          $sourceArchiveName = "llvm-project-$llvmVersion.src.tar.xz"
-          $sourceArchivePath = Join-Path $env:RUNNER_TEMP $sourceArchiveName
-          $sourceRoot = Join-Path $env:RUNNER_TEMP "llvm-wheel-src"
-          $sourceDir = Join-Path $sourceRoot ("llvm-project-" + $llvmVersion + ".src")
-          $buildDir = Join-Path $env:RUNNER_TEMP "llvm-wheel-build"
-          $installDir = Join-Path $env:RUNNER_TEMP "llvm-wheel-install"
-
-          curl.exe -L --fail --output $sourceArchivePath "https://github.com/llvm/llvm-project/releases/download/llvmorg-$llvmVersion/$sourceArchiveName"
-
-          foreach ($path in @($sourceRoot, $buildDir, $installDir)) {
-            if (Test-Path $path) {
-              Remove-Item -Recurse -Force $path
-            }
-          }
-
-          New-Item -ItemType Directory -Force -Path $sourceRoot | Out-Null
-          tar -xf $sourceArchivePath -C $sourceRoot
-
-          if (-not (Test-Path $sourceDir)) {
-            Write-Error "LLVM source archive extracted to unexpected location: $sourceDir"
-          }
-
-          cmake -S (Join-Path $sourceDir "llvm") -B $buildDir -G Ninja `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_INSTALL_PREFIX="$installDir" `
-            -DCMAKE_POLICY_DEFAULT_CMP0091=NEW `
-            -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL `
-            -DBUILD_SHARED_LIBS=OFF `
-            -DLLVM_BUILD_LLVM_DYLIB=OFF `
-            -DLLVM_TARGETS_TO_BUILD=X86 `
-            -DLLVM_INCLUDE_TESTS=OFF `
-            -DLLVM_INCLUDE_BENCHMARKS=OFF `
-            -DLLVM_INCLUDE_EXAMPLES=OFF `
-            -DLLVM_ENABLE_ASSERTIONS=OFF `
-            -DLLVM_ENABLE_LIBXML2=OFF `
-            -DLLVM_ENABLE_ZLIB=OFF `
-            -DLLVM_ENABLE_ZSTD=OFF `
-            -DLLVM_ENABLE_TERMINFO=OFF
-
-          cmake --build $buildDir --config Release --target install --parallel 2
-
-          $llvmLibDir = Join-Path $installDir "lib"
-          $sdkLibRoots = @(
-            (Join-Path $env:WindowsSdkDir ("Lib\" + $env:WindowsSDKLibVersion + "um\x64")),
-            (Join-Path $env:WindowsSdkDir ("Lib\" + $env:WindowsSDKLibVersion + "ucrt\x64"))
-          )
-          foreach ($sdkLibRoot in $sdkLibRoots) {
-            if (-not (Test-Path $sdkLibRoot)) {
-              Write-Error "Windows SDK library directory not found: $sdkLibRoot"
-            }
-            Get-ChildItem -Path $sdkLibRoot -Filter *.lib | ForEach-Object {
-              $destination = Join-Path $llvmLibDir $_.Name
-              if (-not (Test-Path $destination)) {
-                Copy-Item $_.FullName $destination
-              }
-            }
-          }
-          "LLVM_SYS_221_PREFIX=$installDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "$installDir\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
-          & (Join-Path $installDir "bin\llvm-config.exe") --version
-
       - name: Install Python Build Tools
         if: ${{ matrix.os != 'windows-latest' }}
         run: |
@@ -583,8 +487,6 @@ jobs:
             mkdir -p /tmp/protoc &&
             curl -fsSL -o /tmp/protoc/protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip &&
             unzip -oq /tmp/protoc/protoc.zip -d /tmp/protoc
-          CIBW_ENVIRONMENT_WINDOWS: >-
-            LLVM_SYS_221_PREFIX="$LLVM_SYS_221_PREFIX"
         with:
           package-dir: bindings/python
           output-dir: wheelhouse

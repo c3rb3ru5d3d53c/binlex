@@ -21,3 +21,4 @@ data/
 .codex
 /references/
 .z3-trace
+vendor/llvm-sys/

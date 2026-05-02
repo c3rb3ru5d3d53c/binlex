@@ -20,6 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+pub mod assemblers;
 pub mod clients;
 pub mod compression;
 pub mod config;
@@ -46,6 +47,7 @@ pub use config::Config;
 pub use core::Architecture;
 pub use core::Magic;
 
+use crate::assemblers::assemblers_init;
 use crate::clients::clients_init;
 use crate::compression::compression_init;
 use crate::config::config_module_init;
@@ -80,6 +82,7 @@ fn binlex(m: &Bound<'_, PyModule>) -> PyResult<()> {
     )?;
 
     m.add_wrapped(wrap_pymodule!(clients_init))?;
+    m.add_wrapped(wrap_pymodule!(assemblers_init))?;
     m.add_wrapped(wrap_pymodule!(compression_init))?;
     m.add_wrapped(wrap_pymodule!(formats_init))?;
     m.add_wrapped(wrap_pymodule!(controlflow_init))?;

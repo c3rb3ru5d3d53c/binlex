@@ -422,7 +422,12 @@ impl Lifter {
     }
 
     fn target_machine(&self) -> Result<TargetMachine, Error> {
-        Target::initialize_all(&InitializationConfig::default());
+        let config = InitializationConfig::default();
+        match self.architecture {
+            Architecture::I386 | Architecture::AMD64 => Target::initialize_x86(&config),
+            Architecture::ARM64 => Target::initialize_aarch64(&config),
+            _ => Target::initialize_x86(&config),
+        }
         let triple_string = match self.architecture {
             Architecture::I386 => "i386-unknown-unknown",
             Architecture::AMD64 => "x86_64-unknown-unknown",

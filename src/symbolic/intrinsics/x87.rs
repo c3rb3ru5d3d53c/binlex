@@ -117,9 +117,11 @@ impl Executor {
                 let [value] = evaluated.as_slice() else {
                     return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
                 };
-                let value = self.try_concrete_f64_from_fp_bv(state, &value.value).ok_or(
-                    Error::UnsupportedExpression("x87 intrinsic requires concrete value"),
-                )?;
+                let value = self
+                    .try_concrete_f64_from_fp_bv(state, &value.value)
+                    .ok_or(Error::UnsupportedExpression(
+                        "x87 intrinsic requires concrete value",
+                    ))?;
                 if !value.is_finite() || value < i64::MIN as f64 || value > i64::MAX as f64 {
                     return Err(Error::UnsupportedExpression("x87 bcd value out of range"));
                 }
@@ -132,9 +134,11 @@ impl Executor {
                 let [value] = evaluated.as_slice() else {
                     return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
                 };
-                let concrete = self.try_concrete_f64_from_fp_bv(state, &value.value).ok_or(
-                    Error::UnsupportedExpression("x87 intrinsic requires concrete value"),
-                )?;
+                let concrete = self
+                    .try_concrete_f64_from_fp_bv(state, &value.value)
+                    .ok_or(Error::UnsupportedExpression(
+                        "x87 intrinsic requires concrete value",
+                    ))?;
                 let result = match op {
                     "sin" => concrete.sin(),
                     "cos" => concrete.cos(),
@@ -152,9 +156,11 @@ impl Executor {
                 let left = self.try_concrete_f64_from_fp_bv(state, &left.value).ok_or(
                     Error::UnsupportedExpression("x87 intrinsic requires concrete value"),
                 )?;
-                let right = self.try_concrete_f64_from_fp_bv(state, &right.value).ok_or(
-                    Error::UnsupportedExpression("x87 intrinsic requires concrete value"),
-                )?;
+                let right = self
+                    .try_concrete_f64_from_fp_bv(state, &right.value)
+                    .ok_or(Error::UnsupportedExpression(
+                        "x87 intrinsic requires concrete value",
+                    ))?;
                 let result = match op {
                     "atan2" => left.atan2(right),
                     "yl2x" => left * right.log2(),
