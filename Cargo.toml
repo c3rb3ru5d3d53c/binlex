@@ -82,7 +82,6 @@ members = [
     "crates/binlex_tools/binlex-web",
     "crates/binlex_tools/binlex-yara",
     "crates/binlex_processors/example",
-    "xtask",
 ]
 
 [workspace.package]

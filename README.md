@@ -57,7 +57,7 @@ Binlex extracts instructions, basic blocks, and functions from binaries and emit
 ### Rust API & Tooling
 
 ```bash
-cargo run -p xtask
+cargo run --manifest-path xtask/Cargo.toml
 cargo build --release --workspace
 ```
 

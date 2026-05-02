@@ -6,7 +6,7 @@ all: prepare
 	@$(BUILD_WORKSPACE)
 
 prepare:
-	@cargo run -p xtask
+	@cargo run --manifest-path xtask/Cargo.toml
 
 deps:
 	@cargo fetch

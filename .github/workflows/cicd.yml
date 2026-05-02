@@ -100,7 +100,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Refresh Vendored llvm-sys
-        run: cargo run -p xtask
+        run: cargo run --manifest-path xtask/Cargo.toml
 
       - name: Check Vendored llvm-sys
         shell: bash
@@ -352,7 +352,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Refresh Vendored llvm-sys
-        run: cargo run -p xtask
+        run: cargo run --manifest-path xtask/Cargo.toml
 
       - name: Check Vendored llvm-sys
         shell: bash
@@ -1084,7 +1084,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Refresh Vendored llvm-sys
-        run: cargo run -p xtask
+        run: cargo run --manifest-path xtask/Cargo.toml
 
       - name: Check Vendored llvm-sys
         shell: bash
