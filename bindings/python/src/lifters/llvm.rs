@@ -2,7 +2,7 @@ use crate::controlflow::{Block, Function, Instruction};
 use crate::lifters::llvm_abi::llvm_abi_init;
 use crate::semantics::InstructionSemantics as PyInstructionSemantics;
 use crate::Architecture;
-use crate::Config;
+use crate::Configuration;
 use binlex::io::Stderr;
 use binlex::lifters::llvm::Lifter as InnerLifter;
 use pyo3::prelude::*;
@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 
 #[pyclass(unsendable)]
 pub struct Lifter {
-    pub config: binlex::Config,
+    pub config: binlex::Configuration,
     pub architecture: binlex::Architecture,
     pub inner: Arc<Mutex<InnerLifter>>,
 }
@@ -20,7 +20,7 @@ pub struct Lifter {
 impl Lifter {
     #[new]
     #[pyo3(text_signature = "(architecture, config)")]
-    pub fn new(py: Python<'_>, architecture: Py<Architecture>, config: Py<Config>) -> Self {
+    pub fn new(py: Python<'_>, architecture: Py<Architecture>, config: Py<Configuration>) -> Self {
         let inner_architecture = architecture.borrow(py).inner;
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
         let inner = InnerLifter::new(inner_architecture, inner_config.clone());
@@ -111,6 +111,20 @@ impl Lifter {
     #[pyo3(text_signature = "($self)")]
     pub fn bitcode(&self) -> Vec<u8> {
         self.inner.lock().unwrap().bitcode()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn embedding(&self) -> Option<Vec<f32>> {
+        match binlex::lifters::embeddings::embed_llvm_lifter(
+            &self.inner.lock().unwrap(),
+            &self.config,
+        ) {
+            Ok(vector) => Some(vector),
+            Err(err) => {
+                Stderr::print_debug(&self.config, format!("llvm embedding failed: {}", err));
+                None
+            }
+        }
     }
 
     #[pyo3(text_signature = "($self)")]

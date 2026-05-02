@@ -23,7 +23,7 @@
 extern crate capstone;
 
 use crate::Architecture;
-use crate::Config;
+use crate::Configuration;
 use crate::controlflow::Graph;
 use crate::disassemblers::arm64::Disassembler as Arm64Disassembler;
 use crate::disassemblers::x86::Disassembler as X86Disassembler;
@@ -93,7 +93,7 @@ impl<'a> Disassembler<'a> {
         machine: Architecture,
         image: &'a mut Image,
         executable_address_ranges: BTreeMap<u64, u64>,
-        config: Config,
+        config: Configuration,
     ) -> Result<Self, Error> {
         let bytes = image.mmap()?;
         Self::new(machine, bytes, executable_address_ranges, config)
@@ -103,7 +103,7 @@ impl<'a> Disassembler<'a> {
         machine: Architecture,
         bytes: &'a [u8],
         executable_address_ranges: BTreeMap<u64, u64>,
-        config: Config,
+        config: Configuration,
     ) -> Result<Self, Error> {
         Self::new(machine, bytes, executable_address_ranges, config)
     }
@@ -112,7 +112,7 @@ impl<'a> Disassembler<'a> {
         machine: Architecture,
         image: &'a [u8],
         executable_address_ranges: BTreeMap<u64, u64>,
-        config: Config,
+        config: Configuration,
     ) -> Result<Self, Error> {
         let backend = match machine {
             Architecture::ARM64 => {

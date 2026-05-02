@@ -22,7 +22,7 @@
 
 use crate::io::Stdout;
 use std::io::stdin;
-use std::io::{self, BufRead, IsTerminal};
+use std::io::{self, BufRead, IsTerminal, Read};
 use std::process;
 
 /// Represents a wrapper for standard input operations.
@@ -57,5 +57,12 @@ impl Stdin {
                 }
             }
         }
+    }
+
+    #[allow(dead_code)]
+    pub fn bytes() -> io::Result<Vec<u8>> {
+        let mut bytes = Vec::new();
+        io::stdin().read_to_end(&mut bytes)?;
+        Ok(bytes)
     }
 }

@@ -19,7 +19,7 @@ const SERVER_PROCESSORS_PREFIX: &str = "/api/v1/processors/";
 
 #[derive(Clone)]
 pub struct Server {
-    config: crate::Config,
+    config: crate::Configuration,
     url: String,
     verify: bool,
     compression: bool,
@@ -32,7 +32,7 @@ pub struct ServerVersionResponse {
 
 impl Server {
     pub fn new(
-        config: crate::Config,
+        config: crate::Configuration,
         url: Option<String>,
         verify: Option<bool>,
         compression: Option<bool>,
@@ -444,12 +444,12 @@ impl Server {
     }
 }
 
-fn default_url(config: &crate::Config) -> String {
+fn default_url(config: &crate::Configuration) -> String {
     let _ = config;
     "http://127.0.0.1:5000".to_string()
 }
 
-fn config_processors_compression(config: &crate::Config) -> bool {
+fn config_processors_compression(config: &crate::Configuration) -> bool {
     config.processors.compression
 }
 

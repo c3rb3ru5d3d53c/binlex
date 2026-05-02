@@ -27,7 +27,7 @@ use std::{
 };
 
 use crate::{
-    Architecture, Config,
+    Architecture, Configuration,
     controlflow::{Graph, Instruction},
     disassemblers::arm64::{classify as arm64_classify, metrics::DisassemblyMetrics},
 };
@@ -40,7 +40,7 @@ const SWEEP_MIN_CALLERS_PER_TARGET: u64 = 2;
 pub fn disassemble<F>(
     machine: Architecture,
     executable_address_ranges: &BTreeMap<u64, u64>,
-    config: &Config,
+    config: &Configuration,
     metrics: &Arc<DisassemblyMetrics>,
     mut prepare_instruction: F,
     is_executable_address: impl Fn(u64) -> bool,

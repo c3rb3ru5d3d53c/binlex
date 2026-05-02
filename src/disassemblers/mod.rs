@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 use crate::Architecture;
-use crate::Config;
+use crate::Configuration;
 use crate::controlflow::Graph;
 use crate::formats::Image;
 use std::collections::{BTreeMap, BTreeSet};
@@ -54,7 +54,7 @@ impl<'a> Disassembler<'a> {
         architecture: Architecture,
         image: &'a mut Image,
         executable_address_ranges: BTreeMap<u64, u64>,
-        config: Config,
+        config: Configuration,
     ) -> Result<Self, Error> {
         let bytes = image.mmap()?;
         Self::new(architecture, bytes, executable_address_ranges, config)
@@ -64,7 +64,7 @@ impl<'a> Disassembler<'a> {
         architecture: Architecture,
         bytes: &'a [u8],
         executable_address_ranges: BTreeMap<u64, u64>,
-        config: Config,
+        config: Configuration,
     ) -> Result<Self, Error> {
         Self::new(architecture, bytes, executable_address_ranges, config)
     }
@@ -73,7 +73,7 @@ impl<'a> Disassembler<'a> {
         architecture: Architecture,
         image: &'a [u8],
         executable_address_ranges: BTreeMap<u64, u64>,
-        config: Config,
+        config: Configuration,
     ) -> Result<Self, Error> {
         Self::new_with_backend(
             DisassemblerBackend::Default,
@@ -89,7 +89,7 @@ impl<'a> Disassembler<'a> {
         architecture: Architecture,
         image: &'a [u8],
         executable_address_ranges: BTreeMap<u64, u64>,
-        config: Config,
+        config: Configuration,
     ) -> Result<Self, Error> {
         let inner = match (architecture, backend) {
             (Architecture::UNKNOWN, _) => {

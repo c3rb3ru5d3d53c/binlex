@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 use binlex::AUTHOR;
-use binlex::Config;
+use binlex::Configuration;
 use binlex::VERSION;
 use binlex::formats::ELF;
 use binlex::formats::MACHO;
@@ -119,8 +119,9 @@ fn emit_symbols(symbols: &[SymbolIoJson], output: Option<&str>) -> AppResult<()>
 }
 
 fn read_elf_symbols(input: &str) -> AppResult<Vec<SymbolIoJson>> {
-    let config = Config::new();
-    let elf = ELF::new(input.to_string(), config).map_err(|error| error.to_string())?;
+    let config = Configuration::new();
+    let data = std::fs::read(input).map_err(|error| error.to_string())?;
+    let elf = ELF::new(data, config).map_err(|error| error.to_string())?;
 
     Ok(elf
         .symbols()
@@ -138,8 +139,9 @@ fn read_elf_symbols(input: &str) -> AppResult<Vec<SymbolIoJson>> {
 }
 
 fn read_macho_symbols(input: &str) -> AppResult<Vec<SymbolIoJson>> {
-    let config = Config::new();
-    let macho = MACHO::new(input.to_string(), config).map_err(|error| error.to_string())?;
+    let config = Configuration::new();
+    let data = std::fs::read(input).map_err(|error| error.to_string())?;
+    let macho = MACHO::new(data, config).map_err(|error| error.to_string())?;
     let mut symbols = Vec::<SymbolIoJson>::new();
 
     for slice in macho.slices() {

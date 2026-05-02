@@ -1,6 +1,6 @@
 use super::LocalIndex;
 use super::types::{EntityMetrics, Error, IndexEntry, SearchResult};
-use crate::Config;
+use crate::Configuration;
 use crate::controlflow::{Block, Function, Graph, Instruction};
 use crate::databases::localdb::normalize_metadata_name;
 use crate::formats::SymbolJson;
@@ -16,7 +16,7 @@ use ring::digest::{SHA256, digest};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
-pub(super) fn resolve_root(directory: Option<PathBuf>, config: &Config) -> Result<PathBuf, Error> {
+pub(super) fn resolve_root(directory: Option<PathBuf>, config: &Configuration) -> Result<PathBuf, Error> {
     let root = match directory {
         Some(directory) => directory,
         None => PathBuf::from(config.index.local.directory.clone()),

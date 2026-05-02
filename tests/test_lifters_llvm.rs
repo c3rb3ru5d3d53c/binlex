@@ -3,10 +3,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use binlex::controlflow::{Block, Function, Graph, Instruction};
 use binlex::lifters::llvm::Lifter;
 use binlex::semantics::{SemanticDiagnosticKind, SemanticStatus};
-use binlex::{Architecture, Config};
+use binlex::{Architecture, Configuration};
 
 fn disassemble_graph(architecture: Architecture, bytes: &[u8]) -> Graph {
-    let config = Config::default();
+    let config = Configuration::default();
     let mut ranges = BTreeMap::new();
     ranges.insert(0, bytes.len() as u64);
 
@@ -28,7 +28,7 @@ fn disassemble_graph(architecture: Architecture, bytes: &[u8]) -> Graph {
 }
 
 fn build_noncontiguous_function_graph() -> Graph {
-    let config = Config::default();
+    let config = Configuration::default();
     let mut graph = Graph::new(Architecture::I386, config.clone());
 
     let mut jump = Instruction::create(0x1000, Architecture::I386, config.clone());
@@ -60,7 +60,7 @@ fn verify_all_entity_lifts(graph: &Graph) {
     );
 
     for function in functions {
-        let mut function_lifter = Lifter::new(function.architecture(), Config::default());
+        let mut function_lifter = Lifter::new(function.architecture(), Configuration::default());
         function_lifter
             .lift_function(&function)
             .expect("function should lift");
@@ -69,13 +69,13 @@ fn verify_all_entity_lifts(graph: &Graph) {
             .expect("function module should verify");
 
         for block in function.blocks() {
-            let mut block_lifter = Lifter::new(block.architecture(), Config::default());
+            let mut block_lifter = Lifter::new(block.architecture(), Configuration::default());
             block_lifter.lift_block(&block).expect("block should lift");
             block_lifter.verify().expect("block module should verify");
 
             for instruction in block.instructions() {
                 let mut instruction_lifter =
-                    Lifter::new(instruction.architecture, Config::default());
+                    Lifter::new(instruction.architecture, Configuration::default());
                 instruction_lifter
                     .lift_instruction(&instruction)
                     .expect("instruction should lift");
@@ -95,7 +95,7 @@ fn verify_instruction_and_block_lifts(graph: &Graph) {
     );
 
     for instruction in instructions {
-        let mut instruction_lifter = Lifter::new(instruction.architecture, Config::default());
+        let mut instruction_lifter = Lifter::new(instruction.architecture, Configuration::default());
         instruction_lifter
             .lift_instruction(&instruction)
             .expect("instruction should lift");
@@ -106,7 +106,7 @@ fn verify_instruction_and_block_lifts(graph: &Graph) {
 
     let blocks = graph.blocks();
     for block in blocks {
-        let mut block_lifter = Lifter::new(block.architecture(), Config::default());
+        let mut block_lifter = Lifter::new(block.architecture(), Configuration::default());
         block_lifter.lift_block(&block).expect("block should lift");
         block_lifter.verify().expect("block module should verify");
     }
@@ -139,7 +139,7 @@ fn llvm_lifter_renders_instruction_block_and_function_ir() {
     let block = Block::new(0, &graph).expect("block");
     let function = Function::new(0, &graph).expect("function");
 
-    let mut instruction_lifter = Lifter::new(instruction.architecture, Config::default());
+    let mut instruction_lifter = Lifter::new(instruction.architecture, Configuration::default());
     instruction_lifter
         .lift_instruction(&instruction)
         .expect("instruction should lift");
@@ -151,13 +151,13 @@ fn llvm_lifter_renders_instruction_block_and_function_ir() {
     assert!(instruction_ir.contains("define void @instruction_0()"));
     assert!(instruction_ir.contains("ret void"));
     assert_eq!(&instruction_bc[..4], b"BC\xc0\xde");
-    let mut block_lifter = Lifter::new(block.architecture(), Config::default());
+    let mut block_lifter = Lifter::new(block.architecture(), Configuration::default());
     block_lifter.lift_block(&block).expect("block should lift");
     block_lifter.verify().expect("block module should verify");
     let block_ir = block_lifter.text();
     assert!(block_ir.contains("define void @block_0()"));
 
-    let mut function_lifter = Lifter::new(function.architecture(), Config::default());
+    let mut function_lifter = Lifter::new(function.architecture(), Configuration::default());
     function_lifter
         .lift_function(&function)
         .expect("function should lift");
@@ -180,7 +180,7 @@ fn llvm_lifter_handles_noncontiguous_functions() {
 
     assert_eq!(function.block_addresses(), vec![0x1000, 0x2000]);
 
-    let mut lifter = Lifter::new(function.architecture(), Config::default());
+    let mut lifter = Lifter::new(function.architecture(), Configuration::default());
     lifter
         .lift_function(&function)
         .expect("non-contiguous function should lift");
@@ -202,7 +202,7 @@ fn llvm_lifter_optimizers_chain_and_preserve_outputs() {
     let graph = disassemble_graph(Architecture::I386, &[0x31, 0xc0, 0x40, 0xc3]);
     let function = Function::new(0, &graph).expect("function");
 
-    let mut lifter = Lifter::new(function.architecture(), Config::default());
+    let mut lifter = Lifter::new(function.architecture(), Configuration::default());
     lifter
         .lift_function(&function)
         .expect("function should lift before optimization");
@@ -233,7 +233,7 @@ fn llvm_lifter_optimizers_chain_and_preserve_outputs() {
 
 #[test]
 fn llvm_json_output_respects_entity_config_flags() {
-    let mut config = Config::default();
+    let mut config = Configuration::default();
     let graph = {
         let mut ranges = BTreeMap::new();
         let bytes = [0x31, 0xc0, 0x40, 0xc3];
@@ -1230,7 +1230,7 @@ fn llvm_lifter_preserves_unsupported_instruction_fallback() {
             .any(|diagnostic| diagnostic.kind == SemanticDiagnosticKind::UnsupportedInstruction)
     );
 
-    let mut instruction_lifter = Lifter::new(instruction.architecture, Config::default());
+    let mut instruction_lifter = Lifter::new(instruction.architecture, Configuration::default());
     instruction_lifter
         .lift_instruction(&instruction)
         .expect("unsupported instruction should still lift");

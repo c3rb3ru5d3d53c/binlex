@@ -1,9 +1,9 @@
 use binlex::controlflow::{Graph, Instruction};
-use binlex::{Architecture, Config};
+use binlex::{Architecture, Configuration};
 
 #[test]
 fn graph_mutations_track_structural_updates() {
-    let config = Config::default();
+    let config = Configuration::default();
     let mut graph = Graph::new(Architecture::AMD64, config.clone());
 
     assert_eq!(graph.mutations(), 0);

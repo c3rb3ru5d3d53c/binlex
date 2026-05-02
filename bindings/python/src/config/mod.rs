@@ -23,7 +23,7 @@
 pub mod config;
 
 use crate::config::config::register_config;
-pub use config::Config;
+pub use config::Configuration;
 
 use pyo3::prelude::*;
 

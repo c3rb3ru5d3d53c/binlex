@@ -20,11 +20,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use binlex::Config;
+use binlex::Configuration;
 use binlex::genetics::Chromosome;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::new();
+    let config = Configuration::new();
 
     let mut chromosome = Chromosome::from_pattern("488b??c3".to_string(), config)?;
 

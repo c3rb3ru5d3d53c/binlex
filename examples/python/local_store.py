@@ -24,15 +24,16 @@
 import argparse
 from pathlib import Path
 
-from binlex import Config
+from binlex import Configuration
 from binlex.controlflow import Graph
 from binlex.disassemblers.capstone import Disassembler
 from binlex.formats import ELF, MACHO, PE
+from pathlib import Path
 from binlex.indexing import Collection, LocalIndex
 from binlex.metadata import Attribute
 
 
-def configure_embeddings(config: Config, dimensions: int) -> None:
+def configure_embeddings(config: Configuration, dimensions: int) -> None:
     embeddings = config.processors.embeddings
     embeddings.enabled = True
     embeddings.dimensions = dimensions
@@ -41,8 +42,8 @@ def configure_embeddings(config: Config, dimensions: int) -> None:
     embeddings.transport.http.enabled = False
 
 
-def build_pe_graph(path: str, config: Config) -> tuple[Graph, str, Attribute]:
-    pe = PE(path, config)
+def build_pe_graph(path: str, config: Configuration) -> tuple[Graph, str, Attribute]:
+    pe = PE(Path(path).read_bytes(), config)
     image = pe.image()
     disassembler = Disassembler(
         pe.architecture(),
@@ -55,8 +56,8 @@ def build_pe_graph(path: str, config: Config) -> tuple[Graph, str, Attribute]:
     return graph, pe.sha256().hexdigest(), Attribute.from_file(pe.file())
 
 
-def build_elf_graph(path: str, config: Config) -> tuple[Graph, str, Attribute]:
-    elf = ELF(path, config)
+def build_elf_graph(path: str, config: Configuration) -> tuple[Graph, str, Attribute]:
+    elf = ELF(Path(path).read_bytes(), config)
     image = elf.image()
     disassembler = Disassembler(
         elf.architecture(),
@@ -69,8 +70,8 @@ def build_elf_graph(path: str, config: Config) -> tuple[Graph, str, Attribute]:
     return graph, elf.sha256().hexdigest(), Attribute.from_file(elf.file())
 
 
-def build_macho_graph(path: str, config: Config, slice_index: int) -> tuple[Graph, str, Attribute]:
-    macho = MACHO(path, config)
+def build_macho_graph(path: str, config: Configuration, slice_index: int) -> tuple[Graph, str, Attribute]:
+    macho = MACHO(Path(path).read_bytes(), config)
     architecture = macho.architecture(slice_index)
     if architecture is None:
         raise ValueError(f"invalid Mach-O slice index: {slice_index}")
@@ -89,7 +90,7 @@ def build_macho_graph(path: str, config: Config, slice_index: int) -> tuple[Grap
     return graph, macho.sha256().hexdigest(), Attribute.from_file(macho.file())
 
 
-def build_graph(path: str, file_type: str, config: Config, macho_slice: int) -> tuple[Graph, str, Attribute]:
+def build_graph(path: str, file_type: str, config: Configuration, macho_slice: int) -> tuple[Graph, str, Attribute]:
     if file_type == "pe":
         return build_pe_graph(path, config)
     if file_type == "elf":
@@ -151,7 +152,7 @@ def main() -> None:
     if not input_path.is_file():
         raise FileNotFoundError(f"input file not found: {input_path}")
 
-    config = Config()
+    config = Configuration()
     config.general.threads = args.threads
     configure_embeddings(config, args.dimensions)
 

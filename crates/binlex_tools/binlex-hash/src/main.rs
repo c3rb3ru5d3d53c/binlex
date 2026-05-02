@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 use binlex::AUTHOR;
-use binlex::Config;
+use binlex::Configuration;
 use binlex::VERSION;
 use binlex::formats::File;
 use clap::Parser;
@@ -63,7 +63,7 @@ impl fmt::Display for HashType {
 }
 
 fn main() {
-    let mut config = Config::new();
+    let mut config = Configuration::new();
 
     config.formats.file.tlsh.enabled = true;
     config.formats.file.sha256.enabled = true;

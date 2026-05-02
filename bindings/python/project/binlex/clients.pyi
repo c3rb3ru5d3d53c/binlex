@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from binlex.config import Config
+from binlex.config import Configuration
 from binlex.controlflow import (
     Block,
     BlockJsonDeserializer,
@@ -329,7 +329,7 @@ class QueryResult:
 class Server:
     def __init__(
         self,
-        config: Config,
+        config: Configuration,
         url: str | None = None,
         verify: bool | None = None,
         compression: bool | None = None,
@@ -363,7 +363,7 @@ class Server:
 class Web:
     def __init__(
         self,
-        config: Config,
+        config: Configuration,
         url: str | None = None,
         verify: bool | None = None,
         api_key: str | None = None,

@@ -25,14 +25,11 @@ use crate::controlflow::Block;
 use crate::controlflow::Graph;
 use crate::genetics::Chromosome;
 use crate::hashing::{MinHash32, SSDeep, SHA256, TLSH};
-use crate::imaging::Imaging;
 use crate::Architecture;
-use crate::Config;
+use crate::Configuration;
 use binlex::controlflow::Function as InnerFunction;
 use binlex::controlflow::FunctionJsonDeserializer as InnerFunctionJsonDeserializer;
 use binlex::hex;
-use binlex::imaging::Imaging as InnerImaging;
-use binlex::io::Stderr;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::Py;
@@ -55,7 +52,7 @@ impl FunctionJsonDeserializer {
     #[new]
     #[pyo3(text_signature = "(string, config)")]
     /// Create a deserializer from a serialized function JSON string.
-    pub fn new(py: Python, string: String, config: Py<Config>) -> PyResult<Self> {
+    pub fn new(py: Python, string: String, config: Py<Configuration>) -> PyResult<Self> {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
         let inner = InnerFunctionJsonDeserializer::new(string, inner_config.clone())?;
         Ok(Self {
@@ -193,17 +190,6 @@ impl FunctionJsonDeserializer {
             minhash_seed: self.chromosome_minhash_seed,
             tlsh_minimum_byte_size: self.chromosome_tlsh_minimum_byte_size,
         }
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the imaging pipeline for the function bytes, if they are present.
-    pub fn imaging(&self) -> Option<Imaging> {
-        let binding = self.inner.lock().unwrap();
-        let bytes = binding.bytes()?;
-        Some(Imaging::from_inner(InnerImaging::new(
-            bytes,
-            binding.config.clone(),
-        )))
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -368,33 +354,6 @@ impl Function {
                 Ok(None)
             }
         })
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the imaging pipeline for the function bytes, if contiguous.
-    pub fn imaging(&self, py: Python) -> PyResult<Option<Imaging>> {
-        self.with_inner_function(py, |function| {
-            Ok(function.imaging().map(Imaging::from_inner))
-        })
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the LLVM embedding vector for this function, if available.
-    pub fn embedding(&self, py: Python) -> PyResult<Option<Vec<f32>>> {
-        let config = self.cfg.borrow(py).inner.lock().unwrap().config.clone();
-        match self.with_inner_function(py, |function| Ok(function.embeddings().llvm())) {
-            Ok(result) => Ok(result),
-            Err(error) => {
-                Stderr::print_debug(
-                    &config,
-                    format!(
-                        "llvm function embedding skipped address=0x{:x} error={}",
-                        self.address, error
-                    ),
-                );
-                Ok(None)
-            }
-        }
     }
 
     #[pyo3(text_signature = "($self)")]

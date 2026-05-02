@@ -1,8 +1,9 @@
 use binlex::controlflow::{Block, Function, Graph, Instruction};
-use binlex::{Architecture, Config};
+use binlex::imaging::Imaging;
+use binlex::{Architecture, Configuration};
 
 fn sample_graph() -> Graph {
-    let config = Config::default();
+    let config = Configuration::default();
     let mut graph = Graph::new(Architecture::AMD64, config.clone());
 
     let mut instruction = Instruction::create(0x1000, Architecture::AMD64, config);
@@ -22,15 +23,12 @@ fn function_images_expose_existing_hash_accessors() {
     let graph = sample_graph();
     let function = Function::new(0x1000, &graph).expect("function should exist");
 
-    let png = function
-        .imaging()
-        .expect("contiguous function should expose imaging")
+    let bytes = function.bytes().expect("contiguous function should expose bytes");
+    let png = Imaging::new(bytes.clone(), graph.config.clone())
         .linear(None, None)
         .grayscale()
         .png();
-    let svg = function
-        .imaging()
-        .expect("contiguous function should expose imaging")
+    let svg = Imaging::new(bytes, graph.config.clone())
         .linear(None, None)
         .grayscale()
         .svg();
@@ -57,15 +55,12 @@ fn function_imaging_pipeline_materializes_existing_renderers() {
     let graph = sample_graph();
     let function = Function::new(0x1000, &graph).expect("function should exist");
 
-    let png = function
-        .imaging()
-        .expect("contiguous function should expose imaging")
+    let bytes = function.bytes().expect("contiguous function should expose bytes");
+    let png = Imaging::new(bytes.clone(), graph.config.clone())
         .linear(None, None)
         .grayscale()
         .png();
-    let terminal = function
-        .imaging()
-        .expect("contiguous function should expose imaging")
+    let terminal = Imaging::new(bytes, graph.config.clone())
         .linear(None, None)
         .grayscale()
         .terminal();
@@ -82,8 +77,14 @@ fn block_images_expose_existing_hash_accessors() {
     let graph = sample_graph();
     let block = Block::new(0x1000, &graph).expect("block should exist");
 
-    let png = block.imaging().linear(None, None).grayscale().png();
-    let svg = block.imaging().linear(None, None).grayscale().svg();
+    let png = Imaging::new(block.bytes(), graph.config.clone())
+        .linear(None, None)
+        .grayscale()
+        .png();
+    let svg = Imaging::new(block.bytes(), graph.config.clone())
+        .linear(None, None)
+        .grayscale()
+        .svg();
 
     assert!(png.phash().is_some());
     assert!(png.ahash().is_some());
@@ -107,8 +108,14 @@ fn instruction_images_expose_existing_hash_accessors() {
     let graph = sample_graph();
     let instruction = Instruction::new(0x1000, &graph).expect("instruction should exist");
 
-    let png = instruction.imaging().linear(None, None).grayscale().png();
-    let svg = instruction.imaging().linear(None, None).grayscale().svg();
+    let png = Imaging::new(instruction.bytes(), graph.config.clone())
+        .linear(None, None)
+        .grayscale()
+        .png();
+    let svg = Imaging::new(instruction.bytes(), graph.config.clone())
+        .linear(None, None)
+        .grayscale()
+        .svg();
 
     assert!(png.phash().is_some());
     assert!(png.ahash().is_some());

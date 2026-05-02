@@ -20,13 +20,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use binlex::Config;
+use binlex::Configuration;
 use binlex::imaging::{Palette, SVG};
 use std::io::Write;
 
 #[test]
 fn display_renders_metadata_and_cells() {
-    let mut svg = SVG::with_options(&[0x10], Palette::Redblack, 3, 4, Config::default());
+    let mut svg = SVG::with_options(&[0x10], Palette::Redblack, 3, 4, Configuration::default());
     svg.add_metadata("Hash".to_string(), "sha256:test".to_string());
 
     let output = svg.to_string();
@@ -38,7 +38,7 @@ fn display_renders_metadata_and_cells() {
 
 #[test]
 fn svg_string_is_a_document() {
-    let svg = SVG::with_options(&[0x10], Palette::Redblack, 3, 4, Config::default());
+    let svg = SVG::with_options(&[0x10], Palette::Redblack, 3, 4, Configuration::default());
 
     let output = svg.to_string();
 
@@ -55,14 +55,14 @@ fn svg_terminal_output_matches_terminal_renderer() {
         Palette::Grayscale,
         1,
         2,
-        Config::default(),
+        Configuration::default(),
     );
     let terminal = Terminal::with_options(
         &[0x00, 0x7f, 0xff],
         Palette::Grayscale,
         1,
         2,
-        Config::default(),
+        Configuration::default(),
     );
     let mut svg_buffer = Vec::new();
     let mut terminal_buffer = Vec::new();
@@ -75,7 +75,7 @@ fn svg_terminal_output_matches_terminal_renderer() {
 
 #[test]
 fn print_svg_writes_svg_document() {
-    let svg = SVG::with_options(&[0x10], Palette::Redblack, 3, 4, Config::default());
+    let svg = SVG::with_options(&[0x10], Palette::Redblack, 3, 4, Configuration::default());
     let mut buffer = Vec::new();
 
     write!(&mut buffer, "{}", svg).unwrap();

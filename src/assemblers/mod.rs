@@ -23,20 +23,20 @@
 mod backend;
 mod error;
 
-use crate::{Architecture, Config};
+use crate::{Architecture, Configuration};
 pub use backend::AssemblerBackend;
 use backend::ResolvedAssemblerBackend;
 pub use error::AssemblerError;
 
 pub struct Assembler {
-    _config: Config,
+    _config: Configuration,
     inner: ResolvedAssemblerBackend,
 }
 
 impl Assembler {
     pub fn new(
         architecture: Architecture,
-        config: Config,
+        config: Configuration,
         backend: AssemblerBackend,
     ) -> Result<Self, AssemblerError> {
         Ok(Self {
@@ -53,13 +53,13 @@ impl Assembler {
 #[cfg(test)]
 mod tests {
     use super::{Assembler, AssemblerBackend};
-    use crate::{Architecture, Config};
+    use crate::{Architecture, Configuration};
 
     #[test]
     fn default_backend_assembles_amd64() {
         let assembler = Assembler::new(
             Architecture::AMD64,
-            Config::default(),
+            Configuration::default(),
             AssemblerBackend::Default,
         )
         .expect("assembler");

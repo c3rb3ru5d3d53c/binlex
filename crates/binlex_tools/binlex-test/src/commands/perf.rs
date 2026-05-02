@@ -4,7 +4,7 @@ use binlex::controlflow::Graph;
 use binlex::indexing::{Collection, LocalIndex};
 use binlex::server::analyze;
 use binlex::server::dto::AnalyzeRequest;
-use binlex::{Architecture, Config, Magic};
+use binlex::{Architecture, Configuration, Magic};
 use clap::{Parser, Subcommand, ValueEnum};
 use std::error::Error;
 use std::fs;
@@ -142,7 +142,7 @@ struct IndexRoot {
     temp_dir: Option<TempDir>,
 }
 
-pub fn run(config: &Config, args: PerfArgs) -> Result<(), Box<dyn Error>> {
+pub fn run(config: &Configuration, args: PerfArgs) -> Result<(), Box<dyn Error>> {
     match args.command {
         PerfCommand::Analyze(command) => run_analyze(config, &command),
         PerfCommand::IndexLocal(command) => run_index_local(config, &command),
@@ -151,7 +151,7 @@ pub fn run(config: &Config, args: PerfArgs) -> Result<(), Box<dyn Error>> {
     }
 }
 
-fn run_analyze(config: &Config, args: &AnalyzeArgs) -> Result<(), Box<dyn Error>> {
+fn run_analyze(config: &Configuration, args: &AnalyzeArgs) -> Result<(), Box<dyn Error>> {
     let bytes = fs::read(&args.input)?;
     let iterations = normalize_iterations(args.iterations);
     let mut durations = Vec::with_capacity(iterations);
@@ -178,7 +178,7 @@ fn run_analyze(config: &Config, args: &AnalyzeArgs) -> Result<(), Box<dyn Error>
     Ok(())
 }
 
-fn run_index_local(config: &Config, args: &IndexLocalArgs) -> Result<(), Box<dyn Error>> {
+fn run_index_local(config: &Configuration, args: &IndexLocalArgs) -> Result<(), Box<dyn Error>> {
     let bytes = fs::read(&args.input)?;
     let corpora = normalize_corpora(&args.corpora);
     let collections = normalize_collections(&args.collections);
@@ -244,7 +244,7 @@ fn run_index_local(config: &Config, args: &IndexLocalArgs) -> Result<(), Box<dyn
     Ok(())
 }
 
-fn run_pipeline_local(config: &Config, args: &PipelineLocalArgs) -> Result<(), Box<dyn Error>> {
+fn run_pipeline_local(config: &Configuration, args: &PipelineLocalArgs) -> Result<(), Box<dyn Error>> {
     let bytes = fs::read(&args.input)?;
     let corpora = normalize_corpora(&args.corpora);
     let collections = normalize_collections(&args.collections);
@@ -302,7 +302,7 @@ fn run_pipeline_local(config: &Config, args: &PipelineLocalArgs) -> Result<(), B
     Ok(())
 }
 
-fn run_pipeline_remote(config: &Config, args: &PipelineRemoteArgs) -> Result<(), Box<dyn Error>> {
+fn run_pipeline_remote(config: &Configuration, args: &PipelineRemoteArgs) -> Result<(), Box<dyn Error>> {
     let bytes = fs::read(&args.input)?;
     let corpora = normalize_corpora(&args.corpora);
     let collections = normalize_collections(&args.collections);
@@ -375,7 +375,7 @@ fn run_pipeline_remote(config: &Config, args: &PipelineRemoteArgs) -> Result<(),
 }
 
 fn analyze_sample(
-    config: &Config,
+    config: &Configuration,
     bytes: &[u8],
     corpora: &[String],
     magic: Option<&str>,

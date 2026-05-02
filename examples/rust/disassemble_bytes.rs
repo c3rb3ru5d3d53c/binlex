@@ -24,10 +24,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use binlex::controlflow::Graph;
 use binlex::disassemblers::capstone::Disassembler;
-use binlex::{Architecture, Config};
+use binlex::{Architecture, Configuration};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::new();
+    let config = Configuration::new();
 
     // xor rax, rax; ret
     let code: Vec<u8> = vec![0x48, 0x31, 0xc0, 0xc3];

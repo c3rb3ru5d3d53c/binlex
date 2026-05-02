@@ -21,7 +21,7 @@ shellcode = bytes.fromhex(
     "81 34 24 11 11 11 11"
 )
 
-config = binlex.Config()
+config = binlex.Configuration()
 config.instructions.enabled = True
 config.semantics.enabled = True
 

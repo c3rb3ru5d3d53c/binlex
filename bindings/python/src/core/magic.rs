@@ -33,20 +33,11 @@ pub struct Magic {
 
 #[pymethods]
 impl Magic {
-    #[staticmethod]
-    #[pyo3(text_signature = "(path)")]
-    /// Detect the magic/file kind of a file on disk.
-    pub fn from_file(path: String) -> PyResult<Self> {
-        let inner = InnerMagic::from_file(path)
-            .map_err(|err| PyValueError::new_err(format!("failed to detect magic: {}", err)))?;
-        Ok(Magic { inner })
-    }
-
-    #[staticmethod]
+    #[new]
     #[pyo3(text_signature = "(bytes)")]
     /// Detect the magic/file kind of raw bytes in memory.
-    pub fn from_bytes(bytes: Vec<u8>) -> Self {
-        let inner = InnerMagic::from_bytes(&bytes);
+    pub fn new(bytes: Vec<u8>) -> Self {
+        let inner = InnerMagic::new(&bytes);
         Magic { inner }
     }
 

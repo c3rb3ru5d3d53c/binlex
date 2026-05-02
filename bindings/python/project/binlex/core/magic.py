@@ -20,48 +20,76 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""File-type detection enums and helpers for the Python bindings."""
+"""File-type detection helpers for the Python bindings."""
 
-from enum import Enum
+from __future__ import annotations
+
+from typing import ClassVar
 
 from binlex_bindings.binlex.core.magic import Magic as _MagicBinding
 
 
-class Magic(str, Enum):
+class Magic(str):
     """Known file kinds returned by binlex type detection helpers."""
 
-    CODE = "code"
-    PE = "pe"
-    ELF = "elf"
-    MACHO = "macho"
-    PNG = "png"
-    UNKNOWN = "unknown"
+    _VALID_NAMES: ClassVar[frozenset[str]] = frozenset(
+        {"code", "pe", "elf", "macho", "png", "unknown"}
+    )
+
+    CODE: ClassVar["Magic"]
+    PE: ClassVar["Magic"]
+    ELF: ClassVar["Magic"]
+    MACHO: ClassVar["Magic"]
+    PNG: ClassVar["Magic"]
+    UNKNOWN: ClassVar["Magic"]
+
+    def __new__(cls, data: str | bytes | bytearray | memoryview | _MagicBinding) -> "Magic":
+        normalized = cls._normalize(data)
+        return str.__new__(cls, normalized)
+
+    @property
+    def value(self) -> str:
+        """Return the canonical string value for this magic kind."""
+        return str(self)
 
     def to_binding(self) -> _MagicBinding:
-        """Convert the enum value into the underlying native binding enum."""
+        """Convert the value into the underlying native binding enum."""
         return _MagicBinding.from_string(self.value)
 
     @classmethod
     def from_binding(cls, magic: _MagicBinding) -> "Magic":
-        """Convert a native binding enum into the Python `Magic` enum."""
-        return cls(str(magic))
+        """Convert a native binding enum into the Python `Magic` value."""
+        return cls(magic)
 
     @classmethod
-    def from_file(cls, path: str) -> "Magic":
-        """Detect the file kind for the file stored at `path`."""
-        return cls.from_binding(_MagicBinding.from_file(path))
+    def _normalize(cls, data: str | bytes | bytearray | memoryview | _MagicBinding) -> str:
+        if isinstance(data, _MagicBinding):
+            normalized = str(data)
+        elif isinstance(data, (bytes, bytearray, memoryview)):
+            normalized = str(_MagicBinding(bytes(data)))
+        elif isinstance(data, str):
+            normalized = data.lower()
+        else:
+            raise TypeError(f"unsupported magic data: {data!r}")
 
-    @classmethod
-    def from_bytes(cls, bytes: bytes) -> "Magic":
-        """Detect the file kind for an in-memory byte sequence."""
-        return cls.from_binding(_MagicBinding.from_bytes(bytes))
+        if normalized not in cls._VALID_NAMES:
+            raise ValueError(f"invalid magic data: {data!r}")
+        return normalized
+
+
+Magic.CODE = Magic("code")
+Magic.PE = Magic("pe")
+Magic.ELF = Magic("elf")
+Magic.MACHO = Magic("macho")
+Magic.PNG = Magic("png")
+Magic.UNKNOWN = Magic("unknown")
 
 
 def _coerce_magic(magic: Magic | _MagicBinding) -> _MagicBinding:
-    """Normalize Python and native magic enums into the native representation."""
+    """Normalize Python and native magic values into the native representation."""
     if isinstance(magic, Magic):
         return magic.to_binding()
     return magic
 
 
-__all__ = ["Magic"]
+__all__ = ["Magic", "_coerce_magic"]

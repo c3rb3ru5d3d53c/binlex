@@ -27,8 +27,9 @@ from binlex.disassemblers.capstone import Disassembler
 from binlex.controlflow import Graph
 from binlex.controlflow import Function
 from binlex.controlflow import FunctionJsonDeserializer
-from binlex import Config
+from binlex import Configuration
 import argparse
+from pathlib import Path
 
 __version__ = '1.0.0'
 __author__ = 'c3rb3ru5d3d53c'
@@ -56,13 +57,13 @@ parser.add_argument(
 args = parser.parse_args()
 
 # Get Default Configuration
-config = Config()
+config = Configuration()
 
 # Use 16 Threads for Multi-Threaded Operations
 config.general.threads = 16
 
 # Open the LHS PE File
-lhs_pe = PE(args.lhs, config)
+lhs_pe = PE(Path(args.lhs).read_bytes(), config)
 
 # To check if a DotNet PE use ps.is_dotnet()
 
@@ -79,7 +80,7 @@ lhs_cfg = Graph(lhs_pe.architecture(), config)
 lhs_disassembler.disassemble(lhs_pe.entrypoint_virtual_addresses(), lhs_cfg)
 
 # Open the RHS PE File
-rhs_pe = PE(args.rhs, config)
+rhs_pe = PE(Path(args.rhs).read_bytes(), config)
 
 # Get the Image
 rhs_image = rhs_pe.image()

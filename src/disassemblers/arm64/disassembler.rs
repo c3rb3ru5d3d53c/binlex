@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 use crate::Architecture;
-use crate::Config;
+use crate::Configuration;
 use crate::controlflow::Graph;
 use crate::controlflow::Instruction;
 use crate::disassemblers::arm64::classify as arm64_classify;
@@ -53,7 +53,7 @@ pub struct Disassembler<'a> {
     machine: Architecture,
     pub(crate) image: &'a [u8],
     executable_address_ranges: BTreeMap<u64, u64>,
-    config: Config,
+    config: Configuration,
     selected_backend: Backend,
     pub(crate) metrics: Arc<DisassemblyMetrics>,
     decoded_instruction_cache: Mutex<HashMap<u64, Arm64DecodedInstruction>>,
@@ -77,7 +77,7 @@ impl<'a> Disassembler<'a> {
         machine: Architecture,
         image: &'a [u8],
         executable_address_ranges: BTreeMap<u64, u64>,
-        config: Config,
+        config: Configuration,
         metrics: Arc<DisassemblyMetrics>,
         known_instruction_addresses: Arc<BTreeSet<u64>>,
         known_block_addresses: Arc<BTreeSet<u64>>,
@@ -106,7 +106,7 @@ impl<'a> Disassembler<'a> {
         machine: Architecture,
         image: &'a [u8],
         executable_address_ranges: BTreeMap<u64, u64>,
-        config: Config,
+        config: Configuration,
     ) -> Result<Self, Error> {
         Self::with_backend(
             Backend::Capstone,
@@ -122,7 +122,7 @@ impl<'a> Disassembler<'a> {
         machine: Architecture,
         image: &'a [u8],
         executable_address_ranges: BTreeMap<u64, u64>,
-        config: Config,
+        config: Configuration,
     ) -> Result<Self, Error> {
         Self::with_backend_state(
             backend,

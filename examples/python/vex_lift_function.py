@@ -22,8 +22,9 @@
 # SOFTWARE.
 
 import argparse
+from pathlib import Path
 
-from binlex import Config
+from binlex import Configuration
 from binlex.controlflow import Graph
 from binlex.disassemblers.capstone import Disassembler
 from binlex.formats import PE
@@ -41,10 +42,10 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    config = Config()
+    config = Configuration()
     config.general.threads = args.threads
 
-    pe = PE(args.input, config)
+    pe = PE(Path(args.input).read_bytes(), config)
     image = pe.image()
 
     disassembler = Disassembler(

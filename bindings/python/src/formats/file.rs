@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 use crate::hashing::{SSDeep, SHA256, TLSH};
-use crate::Config;
+use crate::Configuration;
 use crate::Magic;
 use binlex::formats::file::File as InnerFile;
 use pyo3::prelude::*;
@@ -31,7 +31,7 @@ use std::io::Error;
 #[pyclass(unsendable)]
 pub struct File {
     pub inner: InnerFile,
-    pub config: Py<Config>,
+    pub config: Py<Configuration>,
 }
 
 #[pymethods]
@@ -39,7 +39,7 @@ impl File {
     #[new]
     #[pyo3(text_signature = "(path, config)")]
     /// Open the file at `path` using the provided configuration.
-    pub fn new(py: Python, path: String, config: Py<Config>) -> PyResult<Self> {
+    pub fn new(py: Python, path: String, config: Py<Configuration>) -> PyResult<Self> {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
         let inner = InnerFile::new(path, inner_config)?;
         Ok(Self { inner, config })

@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::Config;
+use crate::Configuration;
 use std::fmt::Display;
 use std::io::ErrorKind;
 use std::io::{self, Write};
@@ -51,7 +51,7 @@ impl Stderr {
     }
 
     /// Prints a line to standard error if debug configuration is set.
-    pub fn print_debug<T: Display>(config: &Config, line: T) {
+    pub fn print_debug<T: Display>(config: &Configuration, line: T) {
         if config.debug {
             Stderr::print(line);
         }

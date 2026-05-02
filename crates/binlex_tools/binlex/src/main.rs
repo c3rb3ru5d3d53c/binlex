@@ -27,7 +27,7 @@ use binlex::controlflow::Instruction;
 //use binlex::disassemblers::capstone::x86::Disassembler;
 use binlex::AUTHOR;
 use binlex::Architecture;
-use binlex::Config;
+use binlex::Configuration;
 use binlex::Magic;
 use binlex::VERSION;
 use binlex::compression::LZ4String;
@@ -146,7 +146,7 @@ fn validate_args(args: &Args) {
     }
 }
 
-fn apply_cli_overrides(args: &Args, config: &mut Config) {
+fn apply_cli_overrides(args: &Args, config: &mut Configuration) {
     if args.debug {
         config.debug = args.debug;
     }
@@ -199,7 +199,7 @@ fn apply_cli_overrides(args: &Args, config: &mut Config) {
     }
 }
 
-fn print_stage_timing(config: &Config, stage: &str, started_at: Instant) {
+fn print_stage_timing(config: &Configuration, stage: &str, started_at: Instant) {
     if config.debug {
         Stderr::print(format!(
             "[timing] {}: {:.3} ms",
@@ -745,19 +745,30 @@ fn process_output(
 fn process_pe(
     _args: &Args,
     input: String,
-    config: Config,
+    config: Configuration,
     tags: Option<Vec<String>>,
     output: Option<String>,
     read_stdin: bool,
 ) {
     let process_started_at = Instant::now();
     let mut attributes = Attributes::new();
+    let input_bytes = if read_stdin {
+        Stdin::bytes().unwrap_or_else(|error| {
+            eprintln!("failed to read pe bytes from stdin: {}", error);
+            process::exit(1);
+        })
+    } else {
+        std::fs::read(&input).unwrap_or_else(|error| {
+            eprintln!("failed to read pe bytes: {}", error);
+            process::exit(1);
+        })
+    };
 
     let pe_started_at = Instant::now();
-    let pe = match PE::new(input, config.clone()) {
+    let pe = match PE::new(input_bytes, config.clone()) {
         Ok(pe) => pe,
         Err(error) => {
-            eprintln!("failed to read pe file: {}", error);
+            eprintln!("failed to parse pe bytes: {}", error);
             process::exit(1);
         }
     };
@@ -883,16 +894,27 @@ fn process_pe(
 fn process_elf(
     _args: &Args,
     input: String,
-    config: Config,
+    config: Configuration,
     tags: Option<Vec<String>>,
     output: Option<String>,
     read_stdin: bool,
 ) {
     let process_started_at = Instant::now();
     let mut attributes = Attributes::new();
+    let input_bytes = if read_stdin {
+        Stdin::bytes().unwrap_or_else(|error| {
+            eprintln!("failed to read elf bytes from stdin: {}", error);
+            process::exit(1);
+        })
+    } else {
+        std::fs::read(&input).unwrap_or_else(|error| {
+            eprintln!("failed to read elf bytes: {}", error);
+            process::exit(1);
+        })
+    };
 
     let elf_started_at = Instant::now();
-    let elf = ELF::new(input, config.clone()).unwrap_or_else(|error| {
+    let elf = ELF::new(input_bytes, config.clone()).unwrap_or_else(|error| {
         eprintln!("{}", error);
         process::exit(1);
     });
@@ -971,7 +993,7 @@ fn process_elf(
 fn process_code(
     _args: &Args,
     input: String,
-    config: Config,
+    config: Configuration,
     architecture: Architecture,
     output: Option<String>,
 ) {
@@ -1062,16 +1084,27 @@ fn process_code(
 fn process_macho(
     _args: &Args,
     input: String,
-    config: Config,
+    config: Configuration,
     tags: Option<Vec<String>>,
     output: Option<String>,
     read_stdin: bool,
 ) {
     let process_started_at = Instant::now();
     let mut attributes = Attributes::new();
+    let input_bytes = if read_stdin {
+        Stdin::bytes().unwrap_or_else(|error| {
+            eprintln!("failed to read macho bytes from stdin: {}", error);
+            process::exit(1);
+        })
+    } else {
+        std::fs::read(&input).unwrap_or_else(|error| {
+            eprintln!("failed to read macho bytes: {}", error);
+            process::exit(1);
+        })
+    };
 
     let macho_started_at = Instant::now();
-    let macho = MACHO::new(input, config.clone()).unwrap_or_else(|error| {
+    let macho = MACHO::new(input_bytes, config.clone()).unwrap_or_else(|error| {
         eprintln!("{}", error);
         process::exit(1);
     });
@@ -1223,11 +1256,11 @@ fn main() {
 
     validate_args(&args);
 
-    let mut config = Config::new();
+    let mut config = Configuration::new();
 
     let config_started_at = Instant::now();
     if args.config.is_some() {
-        match Config::from_file(&args.config.clone().unwrap().to_string()) {
+        match Configuration::from_file(&args.config.clone().unwrap().to_string()) {
             Ok(result) => {
                 config = result;
             }
@@ -1259,11 +1292,12 @@ fn main() {
 
     if args.architecture.is_none() {
         let magic_started_at = Instant::now();
-        let format = Magic::from_file(args.input.clone()).unwrap_or_else(|error| {
-            eprintln!("{}", error);
+        let input_bytes = std::fs::read(&args.input).unwrap_or_else(|error| {
+            eprintln!("failed to read input bytes for magic detection: {}", error);
             process::exit(1);
         });
-        print_stage_timing(&config, "magic.from_file", magic_started_at);
+        let format = Magic::new(&input_bytes);
+        print_stage_timing(&config, "magic.new", magic_started_at);
         match format {
             Magic::PE => {
                 Stderr::print_debug(&config, "processing pe");
@@ -1331,7 +1365,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::{Args, apply_cli_overrides};
-    use binlex::Config;
+    use binlex::Configuration;
 
     #[test]
     fn cli_processes_overrides_processor_process_count() {
@@ -1352,7 +1386,7 @@ mod tests {
             processors: None,
         };
 
-        let mut config = Config::default();
+        let mut config = Configuration::default();
         config.processors.processes = 2;
 
         apply_cli_overrides(&args, &mut config);

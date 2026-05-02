@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 use crate::Architecture;
-use crate::Config;
+use crate::Configuration;
 use crate::controlflow::Graph;
 use crate::controlflow::Instruction;
 use crate::disassemblers::x86::classify as x86_classify;
@@ -53,7 +53,7 @@ pub struct Disassembler<'a> {
     pub(crate) machine: Architecture,
     pub(crate) image: &'a [u8],
     executable_address_ranges: BTreeMap<u64, u64>,
-    pub(crate) config: Config,
+    pub(crate) config: Configuration,
     selected_backend: Backend,
 }
 
@@ -62,7 +62,7 @@ impl<'a> Disassembler<'a> {
         machine: Architecture,
         image: &'a [u8],
         executable_address_ranges: BTreeMap<u64, u64>,
-        config: Config,
+        config: Configuration,
     ) -> Result<Self, Error> {
         Self::with_backend(
             Backend::Capstone,
@@ -78,7 +78,7 @@ impl<'a> Disassembler<'a> {
         machine: Architecture,
         image: &'a [u8],
         executable_address_ranges: BTreeMap<u64, u64>,
-        config: Config,
+        config: Configuration,
     ) -> Result<Self, Error> {
         let cs = match backend {
             Backend::Capstone => Self::cs_new(machine, true)?,

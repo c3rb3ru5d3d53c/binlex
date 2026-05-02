@@ -1,5 +1,5 @@
 use crate::indexing::local::Collection;
-use crate::Config;
+use crate::Configuration;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
@@ -259,7 +259,7 @@ pub struct LocalDB {
 impl LocalDB {
     #[new]
     #[pyo3(signature = (config, path=None), text_signature = "(config, path=None)")]
-    pub fn new(py: Python, config: Py<Config>, path: Option<String>) -> PyResult<Self> {
+    pub fn new(py: Python, config: Py<Configuration>, path: Option<String>) -> PyResult<Self> {
         let config = config.borrow(py).inner.lock().unwrap().clone();
         let inner = binlex::databases::LocalDB::with_path(&config, path.as_deref())
             .map_err(|error| PyValueError::new_err(error.to_string()))?;

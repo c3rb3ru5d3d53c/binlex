@@ -23,7 +23,7 @@
 use crate::controlflow::Graph;
 use crate::formats::Image;
 use crate::Architecture;
-use crate::Config;
+use crate::Configuration;
 use binlex::disassemblers::cil::Disassembler as InnerDisassembler;
 use pyo3::buffer::PyBuffer;
 use pyo3::exceptions::PyTypeError;
@@ -43,7 +43,7 @@ pub struct Disassembler {
     memory_view: Option<Py<PyMemoryView>>,
     machine: Py<Architecture>,
     executable_address_ranges: BTreeMap<u64, u64>,
-    config: Py<Config>,
+    config: Py<Configuration>,
 }
 
 impl Disassembler {
@@ -120,7 +120,7 @@ impl Disassembler {
         machine: Py<Architecture>,
         image: Py<PyAny>,
         executable_address_ranges: BTreeMap<u64, u64>,
-        config: Py<Config>,
+        config: Py<Configuration>,
     ) -> PyResult<Self> {
         if let Ok(image) = image.extract::<Py<Image>>(py) {
             return Ok(Self {

@@ -35,7 +35,7 @@ This structure is the foundation for:
 It owns:
 
 - the architecture
-- the active `Config`
+- the active `Configuration`
 - the discovered instructions
 - the discovered blocks
 - the discovered functions
@@ -45,13 +45,15 @@ A `Graph` is usually filled by a disassembler.
 ### Python
 
 ```python
-from binlex import Config
+from binlex import Configuration
 from binlex.controlflow import Graph
 from binlex.disassemblers.capstone import Disassembler
 from binlex.formats import PE
 
-config = Config()
-pe = PE("samples/kernel32.dll", config)
+config = Configuration()
+from pathlib import Path
+
+pe = PE(Path("samples/kernel32.dll").read_bytes(), config)
 image = pe.image()
 
 disassembler = Disassembler(
@@ -70,13 +72,13 @@ print(len(graph.functions()))
 ### Rust
 
 ```rust
-use binlex::Config;
+use binlex::Configuration;
 use binlex::controlflow::Graph;
 use binlex::disassemblers::capstone::Disassembler;
 use binlex::formats::PE;
 
-let config = Config::default();
-let pe = PE::new("samples/kernel32.dll", config.clone())?;
+let config = Configuration::default();
+let pe = PE::new(std::fs::read("samples/kernel32.dll")?, config.clone())?;
 let mut image = pe.image()?;
 
 let disassembler = Disassembler::from_image(
@@ -253,7 +255,11 @@ for function in graph.functions():
 ### Lift one function
 
 ```python
-print(function.llvm().text())
+from binlex.lifters import Lifter, LifterBackend
+
+llvm = Lifter(function.architecture(), config, backend=LifterBackend.LLVM)
+llvm.lift_function(function)
+print(llvm.text())
 ```
 
 ## Suggested Next Docs

@@ -20,12 +20,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use super::{Config, DIRECTORY, FILE_NAME};
+use super::{Configuration, DIRECTORY, FILE_NAME};
 use std::fs;
 use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
 
-impl Config {
+impl Configuration {
     #[allow(dead_code)]
     pub fn print(&self) {
         println!("{}", self.to_string().unwrap());
@@ -36,9 +36,9 @@ impl Config {
         toml::to_string_pretty(self).map_err(Error::other)
     }
 
-    pub fn from_file(file_path: &str) -> Result<Config, Error> {
+    pub fn from_file(file_path: &str) -> Result<Configuration, Error> {
         let toml_string = fs::read_to_string(file_path)?;
-        let mut config: Config = toml::from_str(&toml_string).map_err(|error| {
+        let mut config: Configuration = toml::from_str(&toml_string).map_err(|error| {
             Error::new(
                 ErrorKind::InvalidData,
                 format!(
@@ -131,7 +131,7 @@ impl Config {
             let config_file_path: PathBuf =
                 config_directory.join(format!("{}/{}", DIRECTORY, FILE_NAME));
             if config_file_path.exists() {
-                match Config::from_file(config_file_path.to_str().unwrap()) {
+                match Configuration::from_file(config_file_path.to_str().unwrap()) {
                     Ok(config) => {
                         return {
                             *self = config;

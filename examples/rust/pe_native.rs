@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use binlex::Config;
+use binlex::Configuration;
 use binlex::controlflow::Graph;
 use binlex::disassemblers::capstone::Disassembler;
 use binlex::formats::PE;
@@ -36,10 +36,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let mut config = Config::new();
+    let mut config = Configuration::new();
     config.general.threads = 16;
 
-    let pe = PE::new(input, config.clone())?;
+    let pe = PE::new(std::fs::read(&input)?, config.clone())?;
     let mut image = pe.image()?;
 
     let disassembler = Disassembler::from_image(

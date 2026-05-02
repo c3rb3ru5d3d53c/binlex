@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 use binlex::config::ConfigProcessor as InnerConfigProcessor;
-use binlex::Config as InnerConfig;
+use binlex::Configuration as InnerConfig;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use std::sync::{Arc, Mutex};
@@ -1606,12 +1606,12 @@ impl ConfigEmbeddingsLLVM {
 
 /// Top-level mutable configuration object for binlex analysis behavior.
 #[pyclass]
-pub struct Config {
+pub struct Configuration {
     pub inner: Arc<Mutex<InnerConfig>>,
 }
 
 #[pymethods]
-impl Config {
+impl Configuration {
     #[new]
     /// Create a configuration object initialized with built-in defaults.
     pub fn new() -> Self {
@@ -1868,7 +1868,7 @@ impl Config {
     }
 }
 
-impl Default for Config {
+impl Default for Configuration {
     fn default() -> Self {
         Self::new()
     }
@@ -2533,7 +2533,7 @@ impl ConfigProcessors {
 }
 
 pub fn register_config(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<Config>()?;
+    m.add_class::<Configuration>()?;
     m.add_class::<ConfigSemantics>()?;
     m.add_class::<ConfigEntityEmbeddings>()?;
     m.add_class::<ConfigEntityEmbeddingsLLVM>()?;

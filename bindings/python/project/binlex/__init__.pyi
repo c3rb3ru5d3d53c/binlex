@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from . import assemblers
 from .clients import Server, Web
-from binlex.config import Config
+from binlex.config import Configuration
 from binlex.core import Architecture
 from . import clients
 from . import compression
@@ -21,7 +21,7 @@ from . import controlflow, disassemblers, formats, lifters, storage
 
 __all__ = [
     "Architecture",
-    "Config",
+    "Configuration",
     "Magic",
     "Server",
     "Web",

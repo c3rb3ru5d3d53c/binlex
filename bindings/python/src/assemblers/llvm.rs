@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 use crate::Architecture;
-use crate::Config;
+use crate::Configuration;
 use binlex::assemblers::Assembler as InnerAssembler;
 use binlex::assemblers::AssemblerBackend;
 use pyo3::prelude::*;
@@ -39,7 +39,7 @@ impl Assembler {
     pub fn new(
         py: Python<'_>,
         architecture: Py<Architecture>,
-        config: Py<Config>,
+        config: Py<Configuration>,
     ) -> PyResult<Self> {
         let architecture = architecture.borrow(py).inner;
         let config = config.borrow(py).inner.lock().unwrap().clone();

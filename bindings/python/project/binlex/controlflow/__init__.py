@@ -35,7 +35,6 @@ from binlex_bindings.binlex.controlflow.instruction import OperandKind as Operan
 
 from binlex.core.architecture import _coerce_architecture
 from binlex.hashing import MinHash32, SHA256, SSDeep, TLSH
-from binlex.imaging import Imaging
 
 
 class Instruction:
@@ -106,10 +105,6 @@ class Instruction:
         """Return normalized decoded operands."""
         return self._inner.operands()
 
-    def imaging(self):
-        """Return the imaging pipeline for this instruction."""
-        return Imaging._from_binding(self._inner.imaging())
-
     def processors(self):
         """Return all processor outputs attached to this instruction."""
         return self._inner.processors()
@@ -143,14 +138,6 @@ class Instruction:
     def __str__(self):
         """Return the JSON representation when converted to a string."""
         return str(self._inner)
-
-    def lifters(self):
-        """Return convenience accessors for lifting this instruction."""
-        return _Lifters(self)
-
-    def embeddings(self):
-        """Return convenience accessors for embeddings derived from this instruction."""
-        return _Embeddings(self)
 
 
 class InstructionJsonDeserializer:
@@ -223,10 +210,6 @@ class InstructionJsonDeserializer:
         """Return the chromosome derived from this instruction, if available."""
         return self._inner.chromosome()
 
-    def imaging(self):
-        """Return the imaging pipeline for this instruction."""
-        return Imaging._from_binding(self._inner.imaging())
-
     def processors(self):
         """Return all processor outputs attached to this instruction."""
         return self._inner.processors()
@@ -291,10 +274,6 @@ class Block:
     def bytes(self):
         """Return the raw bytes for this block."""
         return self._inner.bytes()
-
-    def imaging(self):
-        """Return the imaging pipeline for this block."""
-        return Imaging._from_binding(self._inner.imaging())
 
     def prologue(self):
         """Return whether this block looks like a function prologue."""
@@ -376,14 +355,6 @@ class Block:
         """Return the JSON representation when converted to a string."""
         return str(self._inner)
 
-    def lifters(self):
-        """Return convenience accessors for lifting this block."""
-        return _Lifters(self)
-
-    def embeddings(self):
-        """Return convenience accessors for embeddings derived from this block."""
-        return _Embeddings(self)
-
 
 class Function:
     """Function wrapper backed by the native control-flow engine."""
@@ -428,11 +399,6 @@ class Function:
     def bytes(self):
         """Return the raw bytes for this function, if available."""
         return self._inner.bytes()
-
-    def imaging(self):
-        """Return the imaging pipeline for this function, if contiguous."""
-        image = self._inner.imaging()
-        return None if image is None else Imaging._from_binding(image)
 
     def prologue(self):
         """Return whether this function starts with a prologue."""
@@ -514,40 +480,6 @@ class Function:
         """Return the JSON representation when converted to a string."""
         return str(self._inner)
 
-    def lifters(self):
-        """Return convenience accessors for lifting this function."""
-        return _Lifters(self)
-
-    def embeddings(self):
-        """Return convenience accessors for embeddings derived from this function."""
-        return _Embeddings(self)
-
-class _Lifters:
-    """Convenience accessor namespace for controlflow-object lifters."""
-
-    def __init__(self, owner):
-        self._owner = owner
-
-    def llvm(self):
-        return _LLVM(self._owner)
-
-    def vex(self):
-        from binlex.lifters.vex import Lifter
-
-        config = getattr(self._owner, "_config", None)
-        if config is None:
-            raise RuntimeError("controlflow object is missing associated Config")
-        lifter = Lifter(self._owner.architecture(), config)
-        if isinstance(self._owner, Instruction):
-            lifter = lifter.lift_instruction(self._owner)
-        elif isinstance(self._owner, Block):
-            lifter = lifter.lift_block(self._owner)
-        elif isinstance(self._owner, Function):
-            lifter = lifter.lift_function(self._owner)
-        else:
-            raise TypeError(f"unsupported lifter owner: {type(self._owner)!r}")
-        return lifter
-
 
 class _LLVM:
     """Small builder for entity-bound LLVM rendering."""
@@ -590,15 +522,15 @@ class _LLVM:
         return lifter.verify()
 
     def _lift(self):
-        from binlex.lifters.llvm import Lifter
+        from binlex.lifters import Lifter, LifterBackend
 
         config = getattr(self._owner, "_config", None)
         if config is None:
-            raise RuntimeError("controlflow object is missing associated Config")
+            raise RuntimeError("controlflow object is missing associated Configuration")
         if self._mode is not None:
             config = config.clone()
             config.lifters.llvm.mode = self._mode
-        lifter = Lifter(self._owner.architecture(), config)
+        lifter = Lifter(self._owner.architecture(), config, backend=LifterBackend.LLVM)
         if isinstance(self._owner, Instruction):
             lifter = lifter.lift_instruction(self._owner)
         elif isinstance(self._owner, Block):
@@ -610,16 +542,6 @@ class _LLVM:
         if lifter is None:
             raise RuntimeError("llvm lift failed")
         return lifter
-
-
-class _Embeddings:
-    """Convenience accessor namespace for controlflow-object embeddings."""
-
-    def __init__(self, owner):
-        self._owner = owner
-
-    def llvm(self):
-        return self._owner._inner.embedding()
 
 
 class BlockJsonDeserializer:
@@ -703,10 +625,6 @@ class BlockJsonDeserializer:
     def chromosome(self):
         """Return the chromosome derived from the serialized block."""
         return self._inner.chromosome()
-
-    def imaging(self):
-        """Return the imaging pipeline for the serialized block bytes."""
-        return Imaging._from_binding(self._inner.imaging())
 
     def to_dict(self):
         """Convert the serialized block payload to a Python dictionary."""
@@ -810,11 +728,6 @@ class FunctionJsonDeserializer:
     def chromosome(self):
         """Return the chromosome derived from the serialized function."""
         return self._inner.chromosome()
-
-    def imaging(self):
-        """Return the imaging pipeline for the serialized function, if present."""
-        image = self._inner.imaging()
-        return None if image is None else Imaging._from_binding(image)
 
     def to_dict(self):
         """Convert the serialized function payload to a Python dictionary."""

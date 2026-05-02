@@ -1,6 +1,6 @@
 #![cfg(not(target_os = "windows"))]
 
-use binlex::Config;
+use binlex::Configuration;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -115,7 +115,7 @@ fn test_function_embeddings_are_emitted_from_config() {
     let config_home = temp_path("config-home-embeddings");
 
     fs::write(&input_path, [0xC3]).expect("input file should be written");
-    let mut config = Config::new();
+    let mut config = Configuration::new();
     config.embeddings.llvm.device = "cpu".to_string();
     config.functions.embeddings.llvm.enabled = true;
     fs::write(

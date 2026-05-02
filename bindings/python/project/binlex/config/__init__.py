@@ -1,5 +1,5 @@
 """Configuration types exposed by the Python bindings."""
 
-from binlex_bindings.binlex.config import Config
+from binlex_bindings.binlex.config import Configuration
 
-__all__ = ["Config"]
+__all__ = ["Configuration"]

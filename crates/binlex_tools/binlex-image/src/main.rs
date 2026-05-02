@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 use binlex::AUTHOR;
-use binlex::Config;
+use binlex::Configuration;
 use binlex::VERSION;
 use binlex::hashing::SHA256;
 use binlex::imaging::PNG;
@@ -119,7 +119,7 @@ fn build_svg(byte_data: &[u8], palette: Palette, cell_size: usize, fixed_width: 
         palette,
         cell_size,
         fixed_width,
-        Config::default(),
+        Configuration::default(),
     )
 }
 
@@ -134,7 +134,7 @@ fn build_terminal(
         palette,
         cell_size,
         fixed_width,
-        Config::default(),
+        Configuration::default(),
     )
 }
 
@@ -144,6 +144,6 @@ fn build_png(byte_data: &[u8], palette: Palette, cell_size: usize, fixed_width: 
         palette,
         cell_size,
         fixed_width,
-        Config::default(),
+        Configuration::default(),
     )
 }

@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use binlex::Config;
+use binlex::Configuration;
 use binlex::controlflow::Graph;
 use binlex::disassemblers::capstone::Disassembler;
 use binlex::formats::MACHO;
@@ -36,10 +36,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let mut config = Config::new();
+    let mut config = Configuration::new();
     config.general.threads = 16;
 
-    let macho = MACHO::new(input, config.clone())?;
+    let macho = MACHO::new(std::fs::read(&input)?, config.clone())?;
 
     for macho_slice in macho.slices() {
         let Some(architecture) = macho_slice.architecture() else {

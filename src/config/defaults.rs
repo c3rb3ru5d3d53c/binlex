@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 use super::{
-    Config, ConfigBlocks, ConfigChromosomes, ConfigData, ConfigDatabaseLocal, ConfigDatabases,
+    Configuration, ConfigBlocks, ConfigChromosomes, ConfigData, ConfigDatabaseLocal, ConfigDatabases,
     ConfigDisassembler, ConfigDisassemblerSweep, ConfigEmbeddings, ConfigEntityEmbeddings,
     ConfigEntityLifters, ConfigFile, ConfigFormats, ConfigFunctions, ConfigHashEnabled,
     ConfigHeuristicEntropy, ConfigHeuristicFeatures, ConfigImaging, ConfigImagingMinhash,
@@ -37,7 +37,7 @@ pub const AUTHOR: &str = "@c3rb3ru5d3d53c";
 pub const DIRECTORY: &str = "binlex";
 pub const FILE_NAME: &str = "binlex.toml";
 
-impl Config {
+impl Configuration {
     pub fn resolved_threads(&self) -> usize {
         match self.threads {
             0 => std::thread::available_parallelism()
@@ -157,7 +157,7 @@ impl Config {
             },
             semantics: ConfigSemantics::default(),
             mmap: ConfigMmap {
-                directory: Config::default_file_mapping_directory(),
+                directory: Configuration::default_file_mapping_directory(),
                 cache: ConfigMmapCache { enabled: false },
             },
             disassembler: ConfigDisassembler {
@@ -288,9 +288,9 @@ impl Config {
     }
 }
 
-impl Default for Config {
+impl Default for Configuration {
     fn default() -> Self {
-        Config::new()
+        Configuration::new()
     }
 }
 
@@ -321,7 +321,7 @@ impl Default for ConfigStorage {
 impl Default for ConfigStorageLocal {
     fn default() -> Self {
         Self {
-            directory: Config::default_local_storage_directory(),
+            directory: Configuration::default_local_storage_directory(),
         }
     }
 }
@@ -329,7 +329,7 @@ impl Default for ConfigStorageLocal {
 impl Default for ConfigDatabaseLocal {
     fn default() -> Self {
         Self {
-            path: Config::default_local_database_path(),
+            path: Configuration::default_local_database_path(),
         }
     }
 }
@@ -337,7 +337,7 @@ impl Default for ConfigDatabaseLocal {
 impl Default for ConfigIndexLocal {
     fn default() -> Self {
         Self {
-            directory: Config::default_local_index_directory(),
+            directory: Configuration::default_local_index_directory(),
             dimensions: Some(64),
         }
     }
@@ -354,17 +354,17 @@ impl Default for ConfigLifters {
 
 #[cfg(test)]
 mod tests {
-    use crate::Config;
+    use crate::Configuration;
 
     #[test]
     fn semantics_enabled_by_default() {
-        let config = Config::default();
+        let config = Configuration::default();
         assert!(config.semantics.enabled);
     }
 
     #[test]
     fn minimal_mode_disables_semantics() {
-        let mut config = Config::default();
+        let mut config = Configuration::default();
         config.enable_minimal();
         assert!(!config.semantics.enabled);
     }

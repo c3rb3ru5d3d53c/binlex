@@ -828,7 +828,7 @@ mod tests {
 
     use super::DATA;
     use binlex::Architecture;
-    use binlex::Config;
+    use binlex::Configuration;
     use binlex::formats::PE;
     use std::collections::BTreeMap;
     use std::collections::BTreeSet;
@@ -836,12 +836,12 @@ mod tests {
 
     #[test]
     fn test_formats_pe() {
-        let config = Config::new();
+        let config = Configuration::new();
         let mut decoder = lz4::Decoder::new(DATA).expect("failed to create lz4 decoder");
         let mut data = Vec::new();
         let result = decoder.read_to_end(&mut data);
         assert!(result.is_ok(), "failed to lz4 decompress pe file");
-        let pe_result = PE::from_bytes(data, config);
+        let pe_result = PE::new(data, config);
         assert!(pe_result.is_ok(), "failed to parse pe file");
         let pe = pe_result.unwrap();
         assert_eq!(

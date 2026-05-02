@@ -1,4 +1,4 @@
-use crate::Config;
+use crate::Configuration;
 use crate::config::ConfigProcessor;
 use crate::processor::{ProcessorTransport, processor_registration_by_name_for_config};
 use crate::runtime::ProcessorError;
@@ -92,7 +92,7 @@ fn decode_http_response(response: reqwest::blocking::Response) -> Result<Value, 
 pub fn execute(
     processor_name: &str,
     data: Value,
-    config: &Config,
+    config: &Configuration,
     processor: &ConfigProcessor,
 ) -> Result<Value, ProcessorError> {
     let url = processor_http_url(processor_name, processor)?;

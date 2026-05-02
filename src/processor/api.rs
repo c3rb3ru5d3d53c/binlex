@@ -1,4 +1,4 @@
-use crate::Config;
+use crate::Configuration;
 use crate::config::{ConfigProcessor, ConfigProcessors};
 use crate::runtime::{Processor, ProcessorError};
 use serde_json::Value;
@@ -11,7 +11,7 @@ pub trait ProcessorContext {
     }
 }
 
-impl ProcessorContext for Config {
+impl ProcessorContext for Configuration {
     fn processors(&self) -> &ConfigProcessors {
         &self.processors
     }

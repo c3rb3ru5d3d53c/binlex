@@ -30,16 +30,18 @@ That means:
 
 ## Common Python Usage
 
-The easiest API is the object-bound convenience form:
+Use the explicit lifter API:
 
 ```python
-function.llvm().print()
-print(function.llvm().text())
-print(function.llvm().reconstruct().text())
-print(function.llvm().intrinsic().text())
-print(function.llvm().semantic().text())
+from binlex.lifters import Lifter, LifterBackend
 
-vex = function.lifters().vex()
+llvm = Lifter(function.architecture(), config, backend=LifterBackend.LLVM)
+llvm.lift_function(function)
+llvm.print()
+print(llvm.text())
+
+vex = Lifter(function.architecture(), config, backend=LifterBackend.VEX)
+vex.lift_function(function)
 vex.print()
 print(vex.text())
 ```
@@ -47,18 +49,17 @@ print(vex.text())
 You can also build the lifter explicitly:
 
 ```python
-from binlex import Config
-from binlex.lifters.llvm import Lifter as LlvmLifter
-from binlex.lifters.vex import Lifter as VexLifter
+from binlex import Configuration
+from binlex.lifters import Lifter, LifterBackend
 
-config = Config()
+config = Configuration()
 
-llvm = LlvmLifter(config)
+llvm = Lifter(function.architecture(), config, backend=LifterBackend.LLVM)
 llvm.lift_function(function)
 llvm.print()
 print(llvm.text())
 
-vex = VexLifter(config)
+vex = Lifter(function.architecture(), config, backend=LifterBackend.VEX)
 vex.lift_function(function)
 vex.print()
 print(vex.text())
@@ -67,26 +68,20 @@ print(vex.text())
 ## Common Rust Usage
 
 ```rust
-use binlex::Config;
-use binlex::lifters::llvm::Lifter as LlvmLifter;
-use binlex::lifters::vex::Lifter as VexLifter;
+use binlex::{Architecture, Configuration};
+use binlex::lifters::{Lifter, LifterBackend};
 
-let config = Config::default();
+let config = Configuration::default();
 
-println!("{}", function.llvm().text()?);
-println!("{}", function.llvm().reconstruct().text()?);
-println!("{}", function.llvm().intrinsic().text()?);
-println!("{}", function.llvm().semantic().text()?);
-
-let mut llvm = LlvmLifter::new(config.clone());
+let mut llvm = Lifter::new(Architecture::AMD64, config.clone(), LifterBackend::Llvm)?;
 llvm.lift_function(&function)?;
 llvm.print();
-println!("{}", llvm.text());
+println!("{}", llvm.text()?);
 
-let mut vex = VexLifter::new(config);
+let mut vex = Lifter::new(Architecture::AMD64, config, LifterBackend::Vex)?;
 vex.lift_function(&function)?;
 vex.print();
-println!("{}", vex.text());
+println!("{}", vex.text()?);
 ```
 
 ## LLVM Lifter
@@ -105,24 +100,30 @@ It supports:
 ### Python
 
 ```python
-function.llvm().print()
-print(function.llvm().text())
-bitcode = function.llvm().bitcode()
+from binlex.lifters import Lifter, LifterBackend
 
-llvm = function.llvm().reconstruct().lifter()
+llvm = Lifter(function.architecture(), config, backend=LifterBackend.LLVM)
+llvm.lift_function(function)
+llvm.print()
+print(llvm.text())
+bitcode = llvm.bitcode()
 normalized_text = llvm.normalized().text()
 ```
 
 ### Rust
 
 ```rust
-let mut llvm = binlex::lifters::llvm::Lifter::new(config.clone());
+let mut llvm = binlex::lifters::Lifter::new(
+    Architecture::AMD64,
+    config.clone(),
+    binlex::lifters::LifterBackend::Llvm,
+)?;
 llvm.lift_function(&function)?;
 
 llvm.print();
-let text = llvm.text();
-let bitcode = llvm.bitcode();
-let normalized = llvm.normalized()?.text();
+let text = llvm.text()?;
+let bitcode = llvm.bitcode()?;
+let normalized = llvm.normalized()?.text()?;
 ```
 
 ### LLVM Optimizers
@@ -132,7 +133,10 @@ LLVM exposes an optimizer namespace so users can choose their own pass chain.
 Python:
 
 ```python
-llvm = function.llvm().reconstruct().lifter()
+from binlex.lifters import Lifter, LifterBackend
+
+llvm = Lifter(function.architecture(), config, backend=LifterBackend.LLVM)
+llvm.lift_function(function)
 
 optimized = (
     llvm
@@ -165,7 +169,10 @@ It is useful when you want:
 Example:
 
 ```python
-llvm = function.llvm().reconstruct().lifter()
+from binlex.lifters import Lifter, LifterBackend
+
+llvm = Lifter(function.architecture(), config, backend=LifterBackend.LLVM)
+llvm.lift_function(function)
 llvm.normalized().print()
 print(llvm.normalized().text())
 ```
@@ -184,7 +191,10 @@ That is the supported surface.
 ### Python
 
 ```python
-vex = function.lifters().vex()
+from binlex.lifters import Lifter, LifterBackend
+
+vex = Lifter(function.architecture(), config, backend=LifterBackend.VEX)
+vex.lift_function(function)
 vex.print()
 print(vex.text())
 ```
@@ -271,7 +281,7 @@ When enabled, JSON includes:
 - `lifters.llvm.normalized.text` when configured
 - `lifters.vex.text`
 
-## Config
+## Configuration
 
 LLVM has a richer top-level lifter config:
 

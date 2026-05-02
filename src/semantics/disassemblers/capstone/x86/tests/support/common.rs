@@ -7,7 +7,7 @@ use crate::semantics::{
     SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
     SemanticOperationUnary, SemanticStatus, SemanticTerminator,
 };
-use crate::{Architecture, Config};
+use crate::{Architecture, Configuration};
 use num_bigint::BigUint;
 use num_traits::{One, ToPrimitive, Zero};
 
@@ -122,7 +122,7 @@ pub(crate) fn disassemble_x86_single(
     architecture: Architecture,
     bytes: &[u8],
 ) -> Instruction {
-    let config = Config::default();
+    let config = Configuration::default();
     let mut ranges = BTreeMap::new();
     ranges.insert(0, bytes.len() as u64);
 

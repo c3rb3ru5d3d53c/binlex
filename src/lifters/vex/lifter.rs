@@ -3,7 +3,7 @@ use std::io::{Error, ErrorKind};
 
 use serde::{Deserialize, Serialize};
 
-use crate::Config;
+use crate::Configuration;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::core::Architecture;
 use crate::semantics::{
@@ -69,13 +69,13 @@ impl ArtifactKind {
 }
 
 pub struct Lifter {
-    _config: Config,
+    _config: Configuration,
     artifacts: BTreeMap<String, Artifact>,
     rendered_override: Option<String>,
 }
 
 impl Lifter {
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: Configuration) -> Self {
         Self {
             _config: config,
             artifacts: BTreeMap::new(),

@@ -5,7 +5,7 @@ instructions = "Use the file-level bindings, call `read()` before accessing cont
 python = """
 import binlex
 
-config = binlex.Config()
+config = binlex.Configuration()
 file = binlex.formats.File(path, config)
 file.read()
 
@@ -39,7 +39,7 @@ instructions = "Return the file SHA-256 digest and basic context. For `binlex.fo
 python = """
 import binlex
 
-config = binlex.Config()
+config = binlex.Configuration()
 config.formats.file.sha256.enabled = True
 file = binlex.formats.File(path, config)
 file.read()
@@ -60,7 +60,7 @@ instructions = "Return the file TLSH digest and any caveats if it is unavailable
 python = """
 import binlex
 
-config = binlex.Config()
+config = binlex.Configuration()
 config.formats.file.tlsh.enabled = True
 file = binlex.formats.File(path, config)
 file.read()
@@ -81,7 +81,7 @@ instructions = "Return file entropy and note whether it looks unusually high. Fo
 python = """
 import binlex
 
-config = binlex.Config()
+config = binlex.Configuration()
 file = binlex.formats.File(path, config)
 file.read()
 

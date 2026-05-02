@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::Config;
+use crate::Configuration;
 use crate::Magic;
 use crate::entropy;
 use crate::hashing::sha256::SHA256;
@@ -76,8 +76,8 @@ pub struct File {
     pub data: Vec<u8>,
     /// The path of the file, if available.
     pub path: Option<String>,
-    /// The configuration `Config`
-    pub config: Config,
+    /// The configuration `Configuration`
+    pub config: Configuration,
     /// Handle to the file
     handle: Box<dyn FileHandle>,
 }
@@ -92,7 +92,7 @@ impl File {
     /// # Returns
     ///
     /// A `File` instance with the given path and empty data.
-    pub fn new(path: String, config: Config) -> Result<Self, Error> {
+    pub fn new(path: String, config: Configuration) -> Result<Self, Error> {
         #[cfg(windows)]
         let handle = Box::new(
             OpenOptions::new()
@@ -121,7 +121,7 @@ impl File {
     ///
     /// A `File` instance with the given byte data and no path.
     #[allow(dead_code)]
-    pub fn from_bytes(bytes: Vec<u8>, config: Config) -> Self {
+    pub fn from_bytes(bytes: Vec<u8>, config: Configuration) -> Self {
         let handle = Box::new(Cursor::new(bytes.clone())) as Box<dyn FileHandle>;
         Self {
             data: bytes,
@@ -195,7 +195,7 @@ impl File {
     /// Identifies the file type from the loaded file bytes.
     #[allow(dead_code)]
     pub fn magic(&self) -> Magic {
-        Magic::from_bytes(&self.data)
+        Magic::new(&self.data)
     }
 
     /// Seeks to a specific offset in the file.

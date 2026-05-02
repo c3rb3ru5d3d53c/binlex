@@ -24,7 +24,7 @@ use crate::controlflow::Block;
 use crate::controlflow::Function;
 use crate::controlflow::Instruction;
 use crate::Architecture;
-use crate::Config;
+use crate::Configuration;
 use binlex::controlflow::Graph as InnerGraph;
 use binlex::controlflow::GraphQueue as InnerGraphQueue;
 use pyo3::exceptions::PyRuntimeError;
@@ -186,7 +186,7 @@ impl Graph {
     #[new]
     #[pyo3(text_signature = "(architecture, config)")]
     /// Create a new graph for the supplied architecture and configuration.
-    pub fn new(py: Python, architecture: Py<Architecture>, config: Py<Config>) -> Self {
+    pub fn new(py: Python, architecture: Py<Architecture>, config: Py<Configuration>) -> Self {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
         let inner = InnerGraph::new(architecture.borrow(py).inner, inner_config);
         Self {

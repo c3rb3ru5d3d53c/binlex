@@ -1,4 +1,4 @@
-use crate::Config;
+use crate::Configuration;
 use crate::clients::{decode_response, normalize_url};
 use crate::controlflow::{Block, Function, Graph, Instruction};
 use crate::indexing::Collection;
@@ -18,7 +18,7 @@ const WEB_GRAPH_PATH: &str = "/api/v1/graph";
 
 #[derive(Clone)]
 pub struct Web {
-    config: Config,
+    config: Configuration,
     client: HttpClient,
     url: String,
     verify: bool,
@@ -839,7 +839,7 @@ struct WebYaraRenderRequest<'a> {
 
 impl Web {
     pub fn new(
-        config: Config,
+        config: Configuration,
         url: Option<String>,
         verify: Option<bool>,
         api_key: Option<String>,

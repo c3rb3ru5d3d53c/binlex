@@ -21,10 +21,10 @@
 // SOFTWARE.
 
 use binlex::controlflow::{Block, Function, Graph, Instruction};
-use binlex::{Architecture, Config};
+use binlex::{Architecture, Configuration};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::new();
+    let config = Configuration::new();
     let mut cfg = Graph::new(Architecture::AMD64, config.clone());
 
     let mut instruction = Instruction::create(0x1000, Architecture::AMD64, config);

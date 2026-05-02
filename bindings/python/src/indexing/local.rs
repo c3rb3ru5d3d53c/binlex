@@ -5,7 +5,7 @@ use crate::databases::localdb::{
 };
 use crate::metadata::Attribute as PyAttribute;
 use crate::Architecture;
-use crate::Config;
+use crate::Configuration;
 use binlex::controlflow::{
     Block as InnerBlock, Function as InnerFunction, Instruction as InnerInstruction,
 };
@@ -238,7 +238,7 @@ impl LocalIndex {
     #[pyo3(signature = (config, directory=None, dimensions=None), text_signature = "(config, directory=None, dimensions=None)")]
     pub fn new(
         py: Python,
-        config: Py<Config>,
+        config: Py<Configuration>,
         directory: Option<String>,
         dimensions: Option<usize>,
     ) -> PyResult<Self> {

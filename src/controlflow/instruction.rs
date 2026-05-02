@@ -21,16 +21,15 @@
 // SOFTWARE.
 
 use crate::Architecture;
-use crate::Config;
+use crate::Configuration;
 use crate::controlflow::Graph;
-use crate::controlflow::Llvm as LlvmView;
-use crate::embeddings::EmbeddingsJson;
+use crate::lifters::embeddings::EmbeddingsJson;
+use crate::lifters::embeddings::llvm as llvm_embeddings;
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeJson;
 use crate::hex;
-use crate::imaging::Imaging;
 use crate::io::Stderr;
-use crate::lifters::llvm::{LiftersJson, LlvmJson};
+use crate::lifters::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
 #[cfg(not(target_os = "windows"))]
 use crate::lifters::vex::{Lifter as VexLifter, VexJson};
 use crate::metadata::Attributes;
@@ -185,7 +184,7 @@ pub struct Instruction {
     // The instruction architecture
     pub architecture: Architecture,
     /// The configuration
-    pub config: Config,
+    pub config: Configuration,
     /// The address of the instruction in memory.
     pub address: u64,
     /// Indicates whether this instruction is part of a function prologue.
@@ -317,7 +316,7 @@ impl Instruction {
     ///
     /// Returns a new `Instruction` with default values for its properties.
     #[allow(dead_code)]
-    pub fn create(address: u64, architecture: Architecture, config: Config) -> Self {
+    pub fn create(address: u64, architecture: Architecture, config: Configuration) -> Self {
         Self {
             address,
             is_prologue: false,
@@ -456,11 +455,6 @@ impl Instruction {
         self.bytes.len()
     }
 
-    /// Returns an imaging pipeline for the instruction bytes.
-    pub fn imaging(&self) -> Imaging {
-        Imaging::new(self.bytes.clone(), self.config.clone())
-    }
-
     /// Converts the `Instruction` into its JSON-serializable representation.
     ///
     /// # Returns
@@ -519,7 +513,7 @@ impl Instruction {
             }
         }
         if self.config.instructions.embeddings.llvm.enabled {
-            if let Some(vector) = self.embeddings().llvm() {
+            if let Ok(vector) = llvm_embeddings::instruction::embed(self) {
                 json.embeddings = Some(EmbeddingsJson::llvm(vector));
             }
         }
@@ -532,15 +526,12 @@ impl Instruction {
         self.process().processors.unwrap_or_default()
     }
 
-    /// Return an LLVM builder for this instruction.
-    pub fn llvm(&self) -> LlvmView<'_> {
-        LlvmView::instruction(self)
-    }
-
     fn lifters_json(&self) -> Option<LiftersJson> {
         let llvm = if self.config.instructions.lifters.llvm.enabled {
+            let mut lifter = LlvmLifter::new(self.architecture, self.config.clone());
+            lifter.lift_instruction(self).ok()?;
             Some(LlvmJson {
-                text: self.llvm().text().ok()?,
+                text: lifter.text(),
             })
         } else {
             None
@@ -690,7 +681,7 @@ impl Instruction {
 }
 
 fn log_semantics_debug(
-    config: &Config,
+    config: &Configuration,
     address: u64,
     mnemonic: &str,
     disassembly: &str,

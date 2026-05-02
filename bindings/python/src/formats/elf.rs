@@ -24,12 +24,10 @@ use crate::formats::File;
 use crate::formats::Image;
 use crate::formats::Symbol as PySymbol;
 use crate::hashing::{SSDeep, SHA256, TLSH};
-use crate::imaging::Imaging;
 use crate::Architecture;
-use crate::Config;
+use crate::Configuration;
 use binlex::formats::ELF as InnerELF;
 use pyo3::prelude::*;
-use pyo3::types::PyType;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::io::Error;
@@ -45,27 +43,11 @@ pub struct ELF {
 #[pymethods]
 impl ELF {
     #[new]
-    #[pyo3(text_signature = "(path, config)")]
-    /// Open an ELF image from `path`.
-    pub fn new(py: Python, path: String, config: Py<Config>) -> Result<Self, Error> {
-        let inner_config = config.borrow(py).inner.lock().unwrap().clone();
-        let inner = InnerELF::new(path, inner_config)?;
-        Ok(Self {
-            inner: Arc::new(Mutex::new(inner)),
-        })
-    }
-
-    #[classmethod]
-    #[pyo3(text_signature = "(bytes, config)")]
+    #[pyo3(text_signature = "(data, config)")]
     /// Parse an ELF image from raw bytes in memory.
-    pub fn from_bytes(
-        _: &Bound<'_, PyType>,
-        py: Python,
-        bytes: Vec<u8>,
-        config: Py<Config>,
-    ) -> PyResult<Self> {
+    pub fn new(py: Python, data: Vec<u8>, config: Py<Configuration>) -> Result<Self, Error> {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
-        let inner = InnerELF::from_bytes(bytes, inner_config)?;
+        let inner = InnerELF::new(data, inner_config)?;
         Ok(Self {
             inner: Arc::new(Mutex::new(inner)),
         })
@@ -125,18 +107,6 @@ impl ELF {
             .image()
             .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         Py::new(py, Image { inner: result })
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the imaging pipeline over the mapped ELF contents.
-    pub fn imaging(&self) -> PyResult<Imaging> {
-        let result = self
-            .inner
-            .lock()
-            .unwrap()
-            .imaging()
-            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        Ok(Imaging::from_inner(result))
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -235,7 +205,7 @@ impl ELF {
                 inner: file,
                 config: Py::new(
                     py,
-                    Config {
+                    Configuration {
                         inner: Arc::new(Mutex::new(config)),
                     },
                 )?,

@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use binlex::Config;
+use binlex::Configuration;
 use binlex::imaging::{Palette, Terminal};
 
 #[test]
@@ -30,7 +30,7 @@ fn terminal_output_uses_rows_and_resets() {
         Palette::Grayscale,
         1,
         2,
-        Config::default(),
+        Configuration::default(),
     );
     let mut buffer = Vec::new();
 
@@ -49,7 +49,7 @@ fn terminal_output_maps_expected_ansi_colors() {
         Palette::Grayscale,
         1,
         16,
-        Config::default(),
+        Configuration::default(),
     );
     let mut buffer = Vec::new();
 

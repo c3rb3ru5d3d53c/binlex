@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from binlex import Config
+from binlex import Configuration
 from binlex.core import Architecture
 
 
@@ -15,7 +15,7 @@ class Assembler:
     def __init__(
         self,
         architecture: Architecture,
-        config: Config,
+        config: Configuration,
         backend: AssemblerBackend = AssemblerBackend.Default,
     ) -> None: ...
     def assemble(self, address: int, text: str) -> bytes: ...

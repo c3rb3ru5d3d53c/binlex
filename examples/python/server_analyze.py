@@ -23,7 +23,8 @@
 
 import argparse
 
-from binlex import Config
+from binlex import Configuration
+from binlex.imaging import Imaging
 from binlex.transports.http import Client
 
 
@@ -46,7 +47,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    config = Config()
+    config = Configuration()
     config.general.threads = args.threads
     config.processors.enabled = True
     config.processors.embeddings.enabled = True
@@ -61,7 +62,12 @@ def main() -> int:
         print("no functions produced")
         return 0
 
-    phash = functions[0].imaging().linear().grayscale().png().phash()
+    function_bytes = functions[0].bytes()
+    if function_bytes is None:
+        print("no contiguous function bytes")
+        return 0
+
+    phash = Imaging(function_bytes, config).linear().grayscale().png().phash()
     print(phash.hexdigest() if phash else "no phash")
     return 0
 

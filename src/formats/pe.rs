@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 use crate::Architecture;
-use crate::Config;
+use crate::Configuration;
 use crate::formats::File;
 use crate::formats::Image;
 use crate::formats::cli::Cor20Header;
@@ -43,7 +43,6 @@ use crate::formats::{Symbol as BlSymbol, symbol::SymbolKind};
 use crate::hashing::SHA256;
 use crate::hashing::SSDeep;
 use crate::hashing::TLSH;
-use crate::imaging::Imaging;
 use lief::Binary;
 use lief::generic::{Section, Symbol};
 use lief::pe::data_directory::Type as DATA_DIRECTORY;
@@ -60,7 +59,7 @@ use std::path::PathBuf;
 pub struct PE {
     pe: lief::pe::Binary,
     pub file: File,
-    pub config: Config,
+    pub config: Configuration,
 }
 
 impl PE {
@@ -257,22 +256,11 @@ impl PE {
         Some(directory)
     }
 
-    /// Creates a new `PE` instance by reading a PE file from the provided path.
-    ///
-    /// # Parameters
-    /// - `path`: The file path to the PE file to be loaded.
-    ///
-    /// # Returns
-    /// A `Result` containing the `PE` object on success or an `Error` on failure.
-    pub fn new(path: String, config: Config) -> Result<Self, Error> {
-        let mut file = File::new(path.clone(), config.clone())?;
-        match file.read() {
-            Ok(_) => (),
-            Err(_) => {
-                return Err(Error::new(ErrorKind::InvalidInput, "failed to read file"));
-            }
-        };
-        if let Some(Binary::PE(pe)) = Binary::parse(&path) {
+    /// Creates a new `PE` instance from a byte vector containing PE file data.
+    pub fn new(bytes: Vec<u8>, config: Configuration) -> Result<Self, Error> {
+        let file = File::from_bytes(bytes, config.clone());
+        let mut cursor = Cursor::new(&file.data);
+        if let Some(Binary::PE(pe)) = Binary::from(&mut cursor) {
             return Ok(Self { pe, file, config });
         }
         Err(Error::new(ErrorKind::InvalidInput, "invalid pe file"))
@@ -877,21 +865,6 @@ impl PE {
 
     /// Creates a new `PE` instance from a byte vector containing PE file data.
     ///
-    /// # Parameters
-    /// - `bytes`: A vector of bytes representing the PE file data.
-    ///
-    /// # Returns
-    /// A `Result` containing the `PE` object on success or an `Error` on failure.
-    #[allow(dead_code)]
-    pub fn from_bytes(bytes: Vec<u8>, config: Config) -> Result<Self, Error> {
-        let file = File::from_bytes(bytes, config.clone());
-        let mut cursor = Cursor::new(&file.data);
-        if let Some(Binary::PE(pe)) = Binary::from(&mut cursor) {
-            return Ok(Self { pe, file, config });
-        }
-        Err(Error::new(ErrorKind::InvalidInput, "invalid pe file"))
-    }
-
     /// Returns the architecture of the PE file based on its machine type.
     ///
     /// # Returns
@@ -1323,10 +1296,6 @@ impl PE {
                 })?;
         }
         Ok(tempmap)
-    }
-
-    pub fn imaging(&self) -> Result<Imaging, Error> {
-        Ok(Imaging::new(self.file.data.clone(), self.config.clone()))
     }
 
     /// Returns the size of the PE file.

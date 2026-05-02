@@ -1,20 +1,20 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use crate::Config;
+use crate::Configuration;
 use crate::config::ConfigProcessors;
 use crate::runtime::ProcessorPool;
 use tracing::{debug, info};
 
 #[derive(Clone)]
 pub struct AppState {
-    pub config: Config,
+    pub config: Configuration,
     pub debug: bool,
     pub processor_pools: BTreeMap<String, Arc<ProcessorPool>>,
 }
 
 impl AppState {
-    pub fn new(config: Config, debug: bool) -> Result<Self, crate::runtime::error::ProcessorError> {
+    pub fn new(config: Configuration, debug: bool) -> Result<Self, crate::runtime::error::ProcessorError> {
         let mut processor_pools = BTreeMap::new();
         if !config.processors.enabled {
             return Ok(Self {

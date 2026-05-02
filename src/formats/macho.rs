@@ -21,14 +21,13 @@
 // SOFTWARE.
 
 use crate::Architecture;
-use crate::Config;
+use crate::Configuration;
 use crate::formats::File;
 use crate::formats::Image;
 use crate::formats::{Symbol as BlSymbol, symbol::SymbolKind};
 use crate::hashing::SHA256;
 use crate::hashing::SSDeep;
 use crate::hashing::TLSH;
-use crate::imaging::Imaging;
 use lief::Binary;
 use lief::generic::{Section, Symbol};
 use lief::macho::commands::{Command, LoadCommandTypes};
@@ -42,15 +41,11 @@ pub const N_STAB: u8 = 0xE0;
 pub const N_TYPE: u8 = 0x0E;
 pub const N_SECT: u8 = 0x0E;
 pub const VM_PROT_EXECUTE: u8 = 0x04;
-const FAT_MAGIC: u32 = 0xCAFEBABE;
-const FAT_CIGAM: u32 = 0xBEBAFECA;
-const FAT_MAGIC_64: u32 = 0xCAFEBABF;
-const FAT_CIGAM_64: u32 = 0xBFBAFECA;
 
 pub struct MACHO {
     macho: lief::macho::FatBinary,
     pub file: File,
-    pub config: Config,
+    pub config: Configuration,
 }
 
 pub struct MachoSlice<'a> {
@@ -129,155 +124,11 @@ impl<'a> MachoSlice<'a> {
         self.macho.image(self.index)
     }
 
-    pub fn imaging(&self) -> Result<Imaging, Error> {
-        Ok(Imaging::new(
-            self.macho.slice_file_bytes(self.index)?,
-            self.macho.config.clone(),
-        ))
-    }
 }
 
 impl MACHO {
-    fn slice_file_bytes(&self, slice: usize) -> Result<Vec<u8>, Error> {
-        if slice >= self.number_of_slices() {
-            return Err(Error::new(ErrorKind::InvalidInput, "invalid Mach-O slice"));
-        }
-
-        let data = &self.file.data;
-        if data.len() < 8 {
-            return Err(Error::new(
-                ErrorKind::InvalidData,
-                "Mach-O file is too small to contain a valid header",
-            ));
-        }
-
-        let magic = u32::from_be_bytes(data[0..4].try_into().expect("magic length checked"));
-        match magic {
-            FAT_MAGIC | FAT_CIGAM => {
-                let count = u32::from_be_bytes(data[4..8].try_into().expect("count length checked"))
-                    as usize;
-                let arch_size = 20usize;
-                let table_size = 8usize
-                    .checked_add(count.checked_mul(arch_size).ok_or_else(|| {
-                        Error::new(ErrorKind::InvalidData, "fat arch table size overflow")
-                    })?)
-                    .ok_or_else(|| {
-                        Error::new(ErrorKind::InvalidData, "fat arch table size overflow")
-                    })?;
-                if data.len() < table_size {
-                    return Err(Error::new(
-                        ErrorKind::InvalidData,
-                        "Mach-O fat header is truncated",
-                    ));
-                }
-                let entry_offset = 8 + slice * arch_size;
-                let offset = u32::from_be_bytes(
-                    data[entry_offset + 8..entry_offset + 12]
-                        .try_into()
-                        .expect("fat offset length checked"),
-                ) as usize;
-                let size = u32::from_be_bytes(
-                    data[entry_offset + 12..entry_offset + 16]
-                        .try_into()
-                        .expect("fat size length checked"),
-                ) as usize;
-                let end = offset.checked_add(size).ok_or_else(|| {
-                    Error::new(ErrorKind::InvalidData, "Mach-O slice range overflow")
-                })?;
-                if end > data.len() {
-                    return Err(Error::new(
-                        ErrorKind::InvalidData,
-                        "Mach-O slice extends beyond file size",
-                    ));
-                }
-                Ok(data[offset..end].to_vec())
-            }
-            FAT_MAGIC_64 | FAT_CIGAM_64 => {
-                let count = u32::from_be_bytes(data[4..8].try_into().expect("count length checked"))
-                    as usize;
-                let arch_size = 32usize;
-                let table_size = 8usize
-                    .checked_add(count.checked_mul(arch_size).ok_or_else(|| {
-                        Error::new(ErrorKind::InvalidData, "fat arch table size overflow")
-                    })?)
-                    .ok_or_else(|| {
-                        Error::new(ErrorKind::InvalidData, "fat arch table size overflow")
-                    })?;
-                if data.len() < table_size {
-                    return Err(Error::new(
-                        ErrorKind::InvalidData,
-                        "Mach-O fat64 header is truncated",
-                    ));
-                }
-                let entry_offset = 8 + slice * arch_size;
-                let offset = u64::from_be_bytes(
-                    data[entry_offset + 8..entry_offset + 16]
-                        .try_into()
-                        .expect("fat64 offset length checked"),
-                ) as usize;
-                let size = u64::from_be_bytes(
-                    data[entry_offset + 16..entry_offset + 24]
-                        .try_into()
-                        .expect("fat64 size length checked"),
-                ) as usize;
-                let end = offset.checked_add(size).ok_or_else(|| {
-                    Error::new(ErrorKind::InvalidData, "Mach-O slice range overflow")
-                })?;
-                if end > data.len() {
-                    return Err(Error::new(
-                        ErrorKind::InvalidData,
-                        "Mach-O slice extends beyond file size",
-                    ));
-                }
-                Ok(data[offset..end].to_vec())
-            }
-            _ => {
-                if slice != 0 {
-                    return Err(Error::new(ErrorKind::InvalidInput, "invalid Mach-O slice"));
-                }
-                Ok(data.clone())
-            }
-        }
-    }
-
-    /// Creates a new `MACHO` instance by reading a ELF file from the provided path.
-    ///
-    /// # Parameters
-    /// - `path`: The file path to the MACHO file to be loaded.
-    ///
-    /// # Returns
-    /// A `Result` containing the `MACHO` object on success or an `Error` on failure.
-    pub fn new(path: String, config: Config) -> Result<Self, Error> {
-        let mut file = File::new(path.clone(), config.clone())?;
-        match file.read() {
-            Ok(_) => (),
-            Err(_) => {
-                return Err(Error::new(
-                    ErrorKind::InvalidInput,
-                    "failed to read macho file",
-                ));
-            }
-        };
-        let binary = Binary::parse(&path);
-        if let Some(Binary::MachO(macho)) = binary {
-            return Ok(Self {
-                macho,
-                file,
-                config,
-            });
-        }
-        Err(Error::new(ErrorKind::InvalidInput, "invalid macho file"))
-    }
-
-    /// Creates a new `MACHO` instance from a byte vector containing MACHO file data.
-    ///
-    /// # Parameters
-    /// - `bytes`: A vector of bytes representing the PE file data.
-    ///
-    /// # Returns
-    /// A `Result` containing the `MACHO` object on success or an `Error` on failure.
-    #[allow(dead_code)]
-    pub fn from_bytes(bytes: Vec<u8>, config: Config) -> Result<Self, Error> {
+    /// Creates a new `MACHO` instance from a byte vector containing Mach-O file data.
+    pub fn new(bytes: Vec<u8>, config: Configuration) -> Result<Self, Error> {
         let file = File::from_bytes(bytes, config.clone());
         let mut cursor = Cursor::new(&file.data);
         if let Some(Binary::MachO(macho)) = Binary::from(&mut cursor) {
@@ -614,10 +465,6 @@ impl MACHO {
         }
 
         Ok(tempmap)
-    }
-
-    pub fn imaging(&self) -> Result<Imaging, Error> {
-        Ok(Imaging::new(self.file.data.clone(), self.config.clone()))
     }
 
     /// Returns the size of the MACHO file.

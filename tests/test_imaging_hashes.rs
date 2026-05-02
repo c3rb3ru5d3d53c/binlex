@@ -20,15 +20,15 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use binlex::Config;
+use binlex::Configuration;
 use binlex::imaging::{PNG, Palette, SVG, Terminal};
 
 #[test]
 fn imaging_hashes_match_across_renderers() {
     let data = [0x00, 0x22, 0x44, 0x88, 0xaa, 0xcc, 0xee, 0xff];
-    let png = PNG::with_options(&data, Palette::Grayscale, 2, 4, Config::default());
-    let svg = SVG::with_options(&data, Palette::Grayscale, 2, 4, Config::default());
-    let terminal = Terminal::with_options(&data, Palette::Grayscale, 2, 4, Config::default());
+    let png = PNG::with_options(&data, Palette::Grayscale, 2, 4, Configuration::default());
+    let svg = SVG::with_options(&data, Palette::Grayscale, 2, 4, Configuration::default());
+    let terminal = Terminal::with_options(&data, Palette::Grayscale, 2, 4, Configuration::default());
 
     assert_eq!(
         png.sha256().and_then(|hash| hash.hexdigest()),
@@ -87,9 +87,9 @@ fn imaging_hashes_match_across_renderers() {
 
 #[test]
 fn imaging_hashes_return_none_for_empty_images() {
-    let png = PNG::new(&[], Palette::Grayscale, Config::default());
-    let svg = SVG::new(&[], Palette::Grayscale, Config::default());
-    let terminal = Terminal::new(&[], Palette::Grayscale, Config::default());
+    let png = PNG::new(&[], Palette::Grayscale, Configuration::default());
+    let svg = SVG::new(&[], Palette::Grayscale, Configuration::default());
+    let terminal = Terminal::new(&[], Palette::Grayscale, Configuration::default());
 
     assert!(png.sha256().is_none());
     assert!(png.tlsh().is_none());
@@ -110,7 +110,7 @@ fn imaging_hashes_return_none_for_empty_images() {
 
 #[test]
 fn imaging_hashes_ignore_config_for_direct_accessors() {
-    let mut config = Config::default();
+    let mut config = Configuration::default();
     config.disable_hashing();
 
     let png = PNG::new(&[0x00, 0x7f, 0xff], Palette::Grayscale, config.clone());

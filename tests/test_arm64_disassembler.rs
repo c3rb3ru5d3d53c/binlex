@@ -2,9 +2,9 @@ use std::collections::BTreeMap;
 
 use binlex::controlflow::Graph;
 use binlex::disassemblers::capstone::Disassembler;
-use binlex::{Architecture, Config};
+use binlex::{Architecture, Configuration};
 
-fn arm64_disassembler(bytes: &[u8], config: Config) -> Disassembler<'_> {
+fn arm64_disassembler(bytes: &[u8], config: Configuration) -> Disassembler<'_> {
     let mut ranges = BTreeMap::new();
     ranges.insert(0u64, bytes.len() as u64);
     Disassembler::new(Architecture::ARM64, bytes, ranges, config).expect("disasm")
@@ -34,7 +34,7 @@ fn test_arm64_absolute_register_jump_table_recovers_all_targets() {
         0x00, 0x00, 0x34, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x38, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0xc0, 0x03, 0x5f, 0xd6, 0xc0, 0x03, 0x5f, 0xd6, 0xc0, 0x03, 0x5f, 0xd6,
     ];
-    let config = Config::new();
+    let config = Configuration::new();
     let disasm = arm64_disassembler(&bytes, config.clone());
     let mut graph = Graph::new(Architecture::ARM64, config);
 
@@ -85,7 +85,7 @@ fn test_arm64_relative_register_jump_table_recovers_all_targets() {
         0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x14, 0x00, 0x00, 0x00, 0xc0, 0x03, 0x5f, 0xd6, 0xc0,
         0x03, 0x5f, 0xd6, 0xc0, 0x03, 0x5f, 0xd6,
     ];
-    let config = Config::new();
+    let config = Configuration::new();
     let disasm = arm64_disassembler(&bytes, config.clone());
     let mut graph = Graph::new(Architecture::ARM64, config);
 
@@ -122,7 +122,7 @@ fn test_arm64_prologue_and_adr_executable_address_requires_target_prologue() {
         0xfd, 0x7b, 0xbf, 0xa9, 0xfd, 0x03, 0x00, 0x91, 0x40, 0x00, 0x00, 0x10, 0xc0, 0x03, 0x5f,
         0xd6, 0xc0, 0x03, 0x5f, 0xd6,
     ];
-    let config = Config::new();
+    let config = Configuration::new();
     let disasm = arm64_disassembler(&bytes, config.clone());
     let mut graph = Graph::new(Architecture::ARM64, config);
 
@@ -159,7 +159,7 @@ fn test_arm64_prologue_and_adr_executable_address_requires_target_prologue() {
 fn test_arm64_memory_instruction_masks_addressing_bits_only() {
     // assembly: ldr x3, [x2, w1, uxtw #3]
     let bytes = vec![0x43, 0x58, 0x61, 0xf8];
-    let config = Config::new();
+    let config = Configuration::new();
     let disasm = arm64_disassembler(&bytes, config.clone());
     let mut graph = Graph::new(Architecture::ARM64, config);
 
@@ -181,7 +181,7 @@ fn test_arm64_memory_instruction_masks_addressing_bits_only() {
 fn test_arm64_pair_memory_instruction_masks_pair_addressing_bits_only() {
     // assembly: stp x29, x30, [sp, #-16]!
     let bytes = vec![0xfd, 0x7b, 0xbf, 0xa9];
-    let config = Config::new();
+    let config = Configuration::new();
     let disasm = arm64_disassembler(&bytes, config.clone());
     let mut graph = Graph::new(Architecture::ARM64, config);
 
@@ -215,7 +215,7 @@ fn test_arm64_register_indirect_jump_resolves_target_through_adr_add() {
         0xd6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc0, 0x03,
         0x5f, 0xd6,
     ];
-    let config = Config::new();
+    let config = Configuration::new();
     let disasm = arm64_disassembler(&bytes, config.clone());
     let mut graph = Graph::new(Architecture::ARM64, config);
 
@@ -252,7 +252,7 @@ fn test_arm64_register_indirect_call_resolves_function_target_through_mov() {
         0x80, 0x00, 0x00, 0x10, 0xf0, 0x03, 0x00, 0xaa, 0x00, 0x02, 0x3f, 0xd6, 0xc0, 0x03, 0x5f,
         0xd6, 0xc0, 0x03, 0x5f, 0xd6,
     ];
-    let config = Config::new();
+    let config = Configuration::new();
     let disasm = arm64_disassembler(&bytes, config.clone());
     let mut graph = Graph::new(Architecture::ARM64, config);
 
@@ -302,7 +302,7 @@ fn test_arm64_conditional_controlflow_instructions_recover_targets_and_edges() {
         0x37, 0xc0, 0x03, 0x5f, 0xd6, 0xc0, 0x03, 0x5f, 0xd6, 0xc0, 0x03, 0x5f, 0xd6, 0xc0, 0x03,
         0x5f, 0xd6, 0xc0, 0x03, 0x5f, 0xd6,
     ];
-    let config = Config::new();
+    let config = Configuration::new();
     let disasm = arm64_disassembler(&bytes, config.clone());
     let mut graph = Graph::new(Architecture::ARM64, config);
 
@@ -339,7 +339,7 @@ fn test_arm64_direct_call_tracks_function_target() {
     let bytes = vec![
         0x02, 0x00, 0x00, 0x94, 0xc0, 0x03, 0x5f, 0xd6, 0xc0, 0x03, 0x5f, 0xd6,
     ];
-    let config = Config::new();
+    let config = Configuration::new();
     let disasm = arm64_disassembler(&bytes, config.clone());
     let mut graph = Graph::new(Architecture::ARM64, config);
 
@@ -373,7 +373,7 @@ fn test_arm64_register_copy_cycle_does_not_overflow_indirect_target_resolution()
     let bytes = vec![
         0xe0, 0x03, 0x01, 0xaa, 0xe1, 0x03, 0x00, 0xaa, 0x00, 0x00, 0x1f, 0xd6,
     ];
-    let config = Config::new();
+    let config = Configuration::new();
     let disasm = arm64_disassembler(&bytes, config.clone());
     let mut graph = Graph::new(Architecture::ARM64, config);
 
@@ -415,7 +415,7 @@ fn test_arm64_sweep_discovers_direct_call_target_after_valid_runs_from_two_calle
         0x07, 0xaa, 0xe8, 0x03, 0x08, 0xaa, 0x02, 0x00, 0x00, 0x94, 0xc0, 0x03, 0x5f, 0xd6, 0xe4,
         0x03, 0x04, 0xaa, 0xc0, 0x03, 0x5f, 0xd6,
     ];
-    let config = Config::new();
+    let config = Configuration::new();
     let disasm = arm64_disassembler(&bytes, config);
 
     assert_eq!(
@@ -437,7 +437,7 @@ fn test_arm64_sweep_rejects_direct_call_without_preceding_valid_run() {
         0x02, 0x00, 0x00, 0x94, 0xc0, 0x03, 0x5f, 0xd6, 0xe4, 0x03, 0x04, 0xaa, 0xc0, 0x03, 0x5f,
         0xd6,
     ];
-    let config = Config::new();
+    let config = Configuration::new();
     let disasm = arm64_disassembler(&bytes, config);
 
     assert!(

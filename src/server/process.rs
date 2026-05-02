@@ -1,4 +1,4 @@
-use crate::Config;
+use crate::Configuration;
 use crate::controlflow::{Graph, GraphSnapshot};
 use crate::processor::ProcessorTarget;
 use crate::server::dto::{ProcessEntityRequest, ProcessGraphRequest, ProcessorHttpRequest};
@@ -7,7 +7,7 @@ use crate::server::state::AppState;
 use serde_json::{Map, Value};
 
 pub fn execute(
-    config: &Config,
+    config: &Configuration,
     request: ProcessGraphRequest,
 ) -> Result<GraphSnapshot, ServerError> {
     let graph = Graph::from_snapshot(request.graph, config.clone())

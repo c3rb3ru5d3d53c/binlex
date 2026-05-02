@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 use crate::Architecture;
-use crate::Config;
+use crate::Configuration;
 use crate::controlflow::Graph;
 use crate::controlflow::Instruction as CFGInstruction;
 use crate::controlflow::InstructionSemanticsInput;
@@ -44,7 +44,7 @@ pub struct Disassembler<'disassembler> {
     pub architecture: Architecture,
     pub executable_address_ranges: BTreeMap<u64, u64>,
     pub image: &'disassembler [u8],
-    config: Config,
+    config: Configuration,
 }
 
 impl<'disassembler> Disassembler<'disassembler> {
@@ -54,7 +54,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         architecture: Architecture,
         image: &'disassembler [u8],
         executable_address_ranges: BTreeMap<u64, u64>,
-        config: Config,
+        config: Configuration,
     ) -> Result<Self, Error> {
         Self::with_backend(
             Backend::Native,
@@ -70,7 +70,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         architecture: Architecture,
         image: &'disassembler [u8],
         executable_address_ranges: BTreeMap<u64, u64>,
-        config: Config,
+        config: Configuration,
     ) -> Result<Self, Error> {
         match backend {
             Backend::Native => {}

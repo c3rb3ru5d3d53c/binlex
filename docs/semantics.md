@@ -360,10 +360,10 @@ Rust:
 use binlex::controlflow::Graph;
 use binlex::disassemblers::capstone::Disassembler;
 use binlex::formats::PE;
-use binlex::Config;
+use binlex::Configuration;
 
-let config = Config::default();
-let pe = PE::new("samples/kernel32.dll", config.clone())?;
+let config = Configuration::default();
+let pe = PE::new(std::fs::read("samples/kernel32.dll")?, config.clone())?;
 let mut image = pe.image()?;
 let disassembler = Disassembler::from_image(
     pe.architecture(),
@@ -395,13 +395,15 @@ for function in graph.functions() {
 Python:
 
 ```python
-from binlex import Config
+from binlex import Configuration
 from binlex.controlflow import Graph
 from binlex.disassemblers.capstone import Disassembler
 from binlex.formats import PE
 
-config = Config()
-pe = PE("samples/kernel32.dll", config)
+config = Configuration()
+from pathlib import Path
+
+pe = PE(Path("samples/kernel32.dll").read_bytes(), config)
 image = pe.image()
 
 disassembler = Disassembler(

@@ -28,6 +28,7 @@ package, but the runtime functionality requires the IDA Python environment.
 
 import os
 import tempfile
+from pathlib import Path
 from typing import Iterator, List
 
 from binlex.controlflow import (
@@ -70,7 +71,7 @@ from binlex_bindings.binlex.formats import Image
 
 from binlex_bindings.binlex import (
 	Architecture,
-	Config,
+	Configuration,
 )
 
 
@@ -377,7 +378,7 @@ class Disassembler():
 	def _validate_input_path(self, path: str):
 		if self._is_database_path(path):
 			return
-		magic = Magic.from_file(path)
+		magic = Magic(Path(path).read_bytes())
 		if magic not in self.SUPPORTED_MAGIC:
 			raise UnsupportedInputFormatError(
 				f"unsupported input format for IDA disassembly: {path} ({magic.value})"
@@ -568,13 +569,13 @@ class Disassembler():
 			mapped_file.write(data)
 		return mapped_file
 
-	def graph(self, config: Config) -> Graph:
+	def graph(self, config: Configuration) -> Graph:
 		architecture = self.architecture()
 		if architecture is None:
 			raise RuntimeError("unsupported IDA processor for Binlex graph creation")
 		return Graph(architecture, config)
 
-	def _graph_disassembler(self, config: Config):
+	def _graph_disassembler(self, config: Configuration):
 		architecture = self.architecture()
 		if architecture is None:
 			raise RuntimeError("unsupported IDA processor for Binlex disassembly")
@@ -585,13 +586,13 @@ class Disassembler():
 			config,
 		)
 
-	def disassemble(self, config: Config, cfg: Graph | None = None) -> Graph:
+	def disassemble(self, config: Configuration, cfg: Graph | None = None) -> Graph:
 		if cfg is None:
 			cfg = self.graph(config)
 		self._graph_disassembler(config).disassemble(cfg)
 		return cfg
 
-	def disassemble_function(self, address: int, config: Config, cfg: Graph | None = None):
+	def disassemble_function(self, address: int, config: Configuration, cfg: Graph | None = None):
 		function = self.function(address)
 		if function is None:
 			return None
@@ -600,7 +601,7 @@ class Disassembler():
 		self._graph_disassembler(config).disassemble_function(function, cfg)
 		return function
 
-	def disassemble_block(self, address: int, config: Config, cfg: Graph | None = None):
+	def disassemble_block(self, address: int, config: Configuration, cfg: Graph | None = None):
 		block = self.block(address)
 		if block is None:
 			return None
@@ -609,7 +610,7 @@ class Disassembler():
 		self._graph_disassembler(config).disassemble_block(block, cfg)
 		return block
 
-	def disassemble_instruction(self, address: int, config: Config, cfg: Graph | None = None):
+	def disassemble_instruction(self, address: int, config: Configuration, cfg: Graph | None = None):
 		instruction = self.instruction(address)
 		if instruction is None:
 			return None
@@ -621,7 +622,7 @@ class Disassembler():
 class _GraphDisassembler():
 	"""Bridge IDA database objects into binlex control-flow structures."""
 
-	def __init__(self, architecture: Architecture, image: Image | bytes, executable_virtual_address_ranges: dict, config: Config):
+	def __init__(self, architecture: Architecture, image: Image | bytes, executable_virtual_address_ranges: dict, config: Configuration):
 		"""Create a disassembler that uses IDA for traversal and Capstone for decode."""
 		_require_ida()
 		self.ida = Disassembler()

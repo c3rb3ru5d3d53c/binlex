@@ -5,14 +5,14 @@ use binlex::semantics::{
     InstructionSemantics, SemanticDiagnostic, SemanticDiagnosticKind, SemanticStatus,
     SemanticTerminator,
 };
-use binlex::{Architecture, Config};
+use binlex::{Architecture, Configuration};
 
 fn disassemble_single(
     name: &str,
     architecture: Architecture,
     bytes: &[u8],
 ) -> binlex::controlflow::Instruction {
-    let config = Config::default();
+    let config = Configuration::default();
     let mut ranges = BTreeMap::new();
     ranges.insert(0, bytes.len() as u64);
 
@@ -114,7 +114,7 @@ fn instruction_semantics_survive_snapshot_roundtrip() {
         .clone()
         .expect("instruction should carry semantics");
 
-    let config = Config::default();
+    let config = Configuration::default();
     let mut graph = Graph::new(Architecture::I386, config.clone());
     graph.insert_instruction(instruction);
 
@@ -145,7 +145,7 @@ fn instruction_semantics_survive_snapshot_roundtrip() {
 
 #[test]
 fn graph_merge_prefers_more_complete_instruction_semantics() {
-    let config = Config::default();
+    let config = Configuration::default();
     let mut base = Graph::new(Architecture::AMD64, config.clone());
     let mut incoming = Graph::new(Architecture::AMD64, config.clone());
 
@@ -175,7 +175,7 @@ fn graph_merge_prefers_more_complete_instruction_semantics() {
 
 #[test]
 fn graph_update_instruction_preserves_attached_semantics() {
-    let config = Config::default();
+    let config = Configuration::default();
     let mut graph = Graph::new(Architecture::I386, config.clone());
     let mut instruction =
         disassemble_single("btc eax, 1", Architecture::I386, &[0x0f, 0xba, 0xf8, 0x01]);

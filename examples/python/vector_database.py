@@ -35,9 +35,9 @@ It has been refactored to allow user-specified dimensions for:
 
 Usage Example:
 --------------
-    from binlex_vector_db import BinlexVectorDB, Config
+    from binlex_vector_db import BinlexVectorDB, Configuration
 
-    config = Config()
+    config = Configuration()
     # Suppose we want to reduce each block feature to 4D with PCA,
     # then produce a 5D vector from the GNN:
     bl = BinlexVectorDB(
@@ -77,7 +77,7 @@ from dataclasses import dataclass
 from pyarrow import schema, field
 from torch.nn import CosineSimilarity
 from torch_pca import PCA
-from binlex import Config
+from binlex import Configuration
 from binlex.controlflow import FunctionJsonDeserializer
 
 @dataclass
@@ -144,7 +144,7 @@ class BinlexVectorDB:
     def __init__(
         self,
         db: str,
-        config: Config,
+        config: Configuration,
         seed: int = 0,
         block_pca_dim: int = 3,
         gnn_hidden_dim: int = 6,
@@ -155,7 +155,7 @@ class BinlexVectorDB:
 
         Args:
             db (str): Path or URI to the LanceDB instance.
-            config (Config): Binlex Config object.
+            config (Configuration): Binlex Configuration object.
             seed (int, optional): Random seed for reproducibility. Defaults to 0.
             block_pca_dim (int, optional): Dimension to reduce each block's feature set via PCA. Defaults to 3.
             gnn_hidden_dim (int, optional): Dimension for the hidden layer of the GNN. Defaults to 4.
@@ -519,7 +519,7 @@ class BinlexVectorDB:
 # ------------------------------------------------------------------------------
 #
 if __name__ == "__main__":
-    config = Config()
+    config = Configuration()
     bl = BinlexVectorDB(
         db='./vecdb',
         config=config,

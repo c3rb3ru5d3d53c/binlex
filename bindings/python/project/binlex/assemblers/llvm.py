@@ -22,7 +22,7 @@
 
 """LLVM-backed assembly helpers for native instruction sets."""
 
-from binlex import Config
+from binlex import Configuration
 from binlex_bindings.binlex.assemblers._llvm_assembler import (
     Assembler as _AssemblerBinding,
 )
@@ -32,8 +32,8 @@ from binlex.core.architecture import _coerce_architecture
 
 class Assembler:
     def __init__(self, architecture, config):
-        if not isinstance(config, Config):
-            raise TypeError("config must be a binlex.Config")
+        if not isinstance(config, Configuration):
+            raise TypeError("config must be a binlex.Configuration")
         self._inner = _AssemblerBinding(_coerce_architecture(architecture), config)
 
     def assemble(self, address, text):

@@ -131,7 +131,7 @@ fn resolve_worker_launches_for_runtime(
         launches.push(WorkerLaunch::Command(command));
     }
 
-    let default_directory = crate::Config::default_processor_directory();
+    let default_directory = crate::Configuration::default_processor_directory();
 
     if let Some(path) = configured_directory.filter(|path| *path != default_directory) {
         if let Some(candidate) = find_in_directory(PathBuf::from(path), filename) {

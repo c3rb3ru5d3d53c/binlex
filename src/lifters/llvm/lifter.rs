@@ -1,7 +1,7 @@
 use self::helpers::push_unique_location;
 use crate::Abi;
 use crate::Architecture;
-use crate::Config;
+use crate::Configuration;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::io::Stderr;
 use crate::lifters::llvm::optimizers::Optimizers;
@@ -42,7 +42,7 @@ mod support;
 mod syscalls;
 
 pub struct Lifter {
-    config: Config,
+    config: Configuration,
     context: &'static Context,
     module: Module<'static>,
     emitted: BTreeSet<String>,
@@ -100,7 +100,7 @@ struct LoweringSummaryEntry {
 }
 
 impl Lifter {
-    pub fn new(architecture: Architecture, config: Config) -> Self {
+    pub fn new(architecture: Architecture, config: Configuration) -> Self {
         let context: &'static Context = Box::leak(Box::new(Context::create()));
         let module = context.create_module(&config.lifters.llvm.module_name);
         let lifter = Self {

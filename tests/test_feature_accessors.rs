@@ -1,13 +1,13 @@
 use binlex::Architecture;
-use binlex::Config;
+use binlex::Configuration;
 use binlex::controlflow::{Function, Graph, Instruction};
 use binlex::formats::file::File;
 use binlex::genetics::Chromosome;
-use binlex::imaging::{PNG, Palette, SVG, Terminal};
+use binlex::imaging::{Imaging, PNG, Palette, SVG, Terminal};
 
 #[test]
 fn file_direct_accessors_ignore_serialization_flags() {
-    let mut config = Config::default();
+    let mut config = Configuration::default();
     config.formats.file.sha256.enabled = false;
     config.formats.file.tlsh.enabled = false;
     config.formats.file.entropy.enabled = false;
@@ -36,7 +36,7 @@ fn file_direct_accessors_ignore_serialization_flags() {
 
 #[test]
 fn chromosome_direct_accessors_ignore_serialization_flags() {
-    let mut config = Config::default();
+    let mut config = Configuration::default();
     config.chromosomes.mask.enabled = false;
     config.chromosomes.masked.enabled = false;
     config.chromosomes.vector.enabled = false;
@@ -44,6 +44,7 @@ fn chromosome_direct_accessors_ignore_serialization_flags() {
     config.chromosomes.tlsh.enabled = false;
     config.chromosomes.minhash.enabled = false;
     config.chromosomes.entropy.enabled = false;
+    let imaging_config = config.clone();
 
     let chromosome = Chromosome::from_pattern(
         "3a7f925ce4a1d84729b31e8d4f6acd729033b6f1d45eaa6413fa389c41b8d0e76f25a9541bc28ef5773dac128a9e6bc75aef".to_string(),
@@ -57,8 +58,14 @@ fn chromosome_direct_accessors_ignore_serialization_flags() {
     assert!(chromosome.minhash().is_some());
     assert!(chromosome.entropy().is_some());
 
-    let png = chromosome.imaging().linear(None, None).grayscale().png();
-    let svg = chromosome.imaging().linear(None, None).grayscale().svg();
+    let png = Imaging::new(chromosome.masked(), imaging_config.clone())
+        .linear(None, None)
+        .grayscale()
+        .png();
+    let svg = Imaging::new(chromosome.masked(), imaging_config)
+        .linear(None, None)
+        .grayscale()
+        .svg();
     assert!(png.phash().is_some());
     assert!(png.ahash().is_some());
     assert!(png.dhash().is_some());
@@ -89,12 +96,15 @@ fn chromosome_direct_accessors_ignore_serialization_flags() {
 
 #[test]
 fn chromosome_imaging_uses_masked_bytes() {
-    let config = Config::default();
+    let config = Configuration::default();
     let chromosome = Chromosome::new(vec![0xAF, 0x12], vec![0x03, 0xF0], config.clone())
         .expect("chromosome should build");
 
-    let direct = PNG::new(&chromosome.masked(), Palette::Grayscale, config);
-    let piped = chromosome.imaging().linear(None, None).grayscale().png();
+    let direct = PNG::new(&chromosome.masked(), Palette::Grayscale, config.clone());
+    let piped = Imaging::new(chromosome.masked(), config)
+        .linear(None, None)
+        .grayscale()
+        .png();
 
     assert_eq!(
         direct.phash().and_then(|hash| hash.hexdigest()),
@@ -108,7 +118,7 @@ fn chromosome_imaging_uses_masked_bytes() {
 
 #[test]
 fn chromosome_bytes_zero_masked_bits_without_compaction() {
-    let config = Config::default();
+    let config = Configuration::default();
     let chromosome = Chromosome::new(vec![0xAF, 0x12], vec![0x03, 0xF0], config)
         .expect("chromosome should build");
 
@@ -121,7 +131,7 @@ fn chromosome_bytes_zero_masked_bits_without_compaction() {
 
 #[test]
 fn chromosome_json_includes_mask_and_masked_when_enabled() {
-    let mut config = Config::default();
+    let mut config = Configuration::default();
     config.chromosomes.mask.enabled = true;
     config.chromosomes.masked.enabled = true;
     config.chromosomes.vector.enabled = false;
@@ -149,7 +159,7 @@ fn chromosome_json_includes_mask_and_masked_when_enabled() {
 
 #[test]
 fn imaging_direct_accessors_ignore_config_flags() {
-    let mut config = Config::default();
+    let mut config = Configuration::default();
     config.disable_hashing();
 
     let data = [0x00, 0x22, 0x44, 0x88, 0xaa, 0xcc, 0xee, 0xff];
@@ -216,7 +226,7 @@ fn imaging_direct_accessors_ignore_config_flags() {
 
 #[test]
 fn function_markov_direct_accessor_ignores_serialization_flag() {
-    let mut config = Config::default();
+    let mut config = Configuration::default();
     config.functions.markov.enabled = false;
 
     let mut graph = Graph::new(Architecture::AMD64, config.clone());
@@ -264,7 +274,7 @@ fn function_markov_direct_accessor_ignores_serialization_flag() {
 
 #[test]
 fn function_markov_serializes_when_enabled() {
-    let config = Config::default();
+    let config = Configuration::default();
     let mut graph = Graph::new(Architecture::AMD64, config.clone());
 
     let mut entry = Instruction::create(0x1000, Architecture::AMD64, config.clone());
@@ -306,7 +316,7 @@ fn function_markov_serializes_when_enabled() {
 
 #[test]
 fn function_number_of_blocks_accessor_matches_default_json() {
-    let config = Config::default();
+    let config = Configuration::default();
     let mut graph = Graph::new(Architecture::AMD64, config.clone());
 
     let mut entry = Instruction::create(0x1000, Architecture::AMD64, config.clone());
