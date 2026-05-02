@@ -89,7 +89,12 @@ impl Lifter {
     #[pyo3(text_signature = "($self, semantics)")]
     pub fn lift_semantics(&self, _py: Python<'_>, semantics: &PyInstructionSemantics) -> bool {
         let semantics = semantics.inner.lock().unwrap().clone();
-        match self.inner.lock().unwrap().lift_semantics(&semantics) {
+        match self
+            .inner
+            .lock()
+            .unwrap()
+            .lift_semantics(std::slice::from_ref(&semantics))
+        {
             Ok(()) => true,
             Err(err) => {
                 Stderr::print_debug(&self.config, format!("llvm lift semantics failed: {}", err));

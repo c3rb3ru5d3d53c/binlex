@@ -4,6 +4,7 @@ use std::fmt::{Display, Formatter};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LifterCapability {
+    LiftSemantics,
     Bitcode,
     Embedding,
     Object,
@@ -20,6 +21,7 @@ pub enum LifterCapability {
 impl Display for LifterCapability {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let name = match self {
+            Self::LiftSemantics => "lift_semantics",
             Self::Bitcode => "bitcode",
             Self::Embedding => "embedding",
             Self::Object => "object",
