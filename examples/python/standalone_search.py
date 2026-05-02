@@ -22,11 +22,12 @@
 # SOFTWARE.
 
 import json, argparse, sys
+from pathlib import Path
 
 from binlex.formats import PE
 from binlex.disassemblers.capstone import Disassembler
 from binlex.controlflow import Graph, Function, FunctionJsonDeserializer
-from binlex import BinlexClient, Config
+from binlex import BinlexClient, Configuration
 
 
 def calculate_size_ratio(len1: int, len2: int) -> float:
@@ -36,10 +37,10 @@ def calculate_size_ratio(len1: int, len2: int) -> float:
 
 def main(args):
 
-    config = Config()
+    config = Configuration()
     config.general.threads = 16
     
-    pe = PE(args.file, config)
+    pe = PE(Path(args.file).read_bytes(), config)
     image = pe.image()
     disasm = Disassembler(pe.architecture(), image, pe.executable_virtual_address_ranges(), config)
     cfg = Graph(pe.architecture(), config)

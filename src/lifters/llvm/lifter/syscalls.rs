@@ -777,7 +777,7 @@ mod tests {
         InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation, SemanticStatus,
         SemanticTerminator, SemanticTrapKind,
     };
-    use crate::{Architecture, Config};
+    use crate::{Architecture, Configuration};
 
     #[test]
     fn arm64_linux_syscall_native_lowering_emits_svc_inline_asm() {
@@ -838,7 +838,7 @@ mod tests {
         };
         semantics.set_abi(Some(Abi::LinuxSyscall));
 
-        let mut lifter = Lifter::new(Architecture::ARM64, Config::default());
+        let mut lifter = Lifter::new(Architecture::ARM64, Configuration::default());
         lifter.lift_semantics(&semantics).expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -875,7 +875,7 @@ mod tests {
         };
         semantics.set_abi(Some(Abi::LinuxSyscall));
 
-        let mut lifter = Lifter::new(Architecture::AMD64, Config::default());
+        let mut lifter = Lifter::new(Architecture::AMD64, Configuration::default());
         lifter.lift_semantics(&semantics).expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -911,7 +911,7 @@ mod tests {
         };
         semantics.set_abi(Some(Abi::WindowsSyscall));
 
-        let mut lifter = Lifter::new(Architecture::AMD64, Config::default());
+        let mut lifter = Lifter::new(Architecture::AMD64, Configuration::default());
         lifter.lift_semantics(&semantics).expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -970,7 +970,7 @@ mod tests {
         };
         semantics.set_abi(Some(Abi::WindowsSyscall));
 
-        let mut lifter = Lifter::new(Architecture::AMD64, Config::default());
+        let mut lifter = Lifter::new(Architecture::AMD64, Configuration::default());
         lifter.lift_semantics(&semantics).expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -1019,7 +1019,7 @@ mod tests {
         };
         semantics.set_abi(Some(Abi::WindowsSyscall));
 
-        let mut lifter = Lifter::new(Architecture::AMD64, Config::default());
+        let mut lifter = Lifter::new(Architecture::AMD64, Configuration::default());
         lifter.lift_semantics(&semantics).expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -1056,7 +1056,7 @@ mod tests {
         };
         semantics.set_abi(Some(Abi::LinuxSyscall));
 
-        let mut lifter = Lifter::new(Architecture::I386, Config::default());
+        let mut lifter = Lifter::new(Architecture::I386, Configuration::default());
         lifter.lift_semantics(&semantics).expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -1096,7 +1096,7 @@ mod tests {
         };
         semantics.set_abi(Some(Abi::WindowsSyscall));
 
-        let mut lifter = Lifter::new(Architecture::I386, Config::default());
+        let mut lifter = Lifter::new(Architecture::I386, Configuration::default());
         lifter.lift_semantics(&semantics).expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -1135,7 +1135,7 @@ mod tests {
         };
         semantics.set_abi(Some(Abi::LinuxSyscall));
 
-        let mut lifter = Lifter::new(Architecture::I386, Config::default());
+        let mut lifter = Lifter::new(Architecture::I386, Configuration::default());
         lifter.lift_semantics(&semantics).expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -1177,7 +1177,7 @@ mod tests {
         };
         semantics.set_abi(Some(Abi::WindowsSyscall));
 
-        let mut lifter = Lifter::new(Architecture::I386, Config::default());
+        let mut lifter = Lifter::new(Architecture::I386, Configuration::default());
         lifter.lift_semantics(&semantics).expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -1224,7 +1224,7 @@ mod tests {
         };
         semantics.set_abi(Some(Abi::WindowsSyscall));
 
-        let mut lifter = Lifter::new(Architecture::ARM64, Config::default());
+        let mut lifter = Lifter::new(Architecture::ARM64, Configuration::default());
         lifter.lift_semantics(&semantics).expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();

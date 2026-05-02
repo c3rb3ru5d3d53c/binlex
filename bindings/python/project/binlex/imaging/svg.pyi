@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from binlex.config import Config
+from binlex.config import Configuration
 from binlex.hashing import AHash, DHash, MinHash32, PHash, SHA256, TLSH
 from .palette import Palette
 
@@ -9,7 +9,7 @@ class SVG:
         self,
         data: bytes,
         palette: Palette,
-        config: Config,
+        config: Configuration,
         cell_size: int = 1,
         fixed_width: int = 16,
     ) -> None: ...

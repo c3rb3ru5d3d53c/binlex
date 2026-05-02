@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from binlex.config import Config
+from binlex.config import Configuration
 from binlex.indexing.local import Collection
 
 
@@ -64,7 +64,7 @@ class CollectionCommentRecord:
 
 
 class LocalDB:
-    def __init__(self, config: Config, path: str | None = None) -> None: ...
+    def __init__(self, config: Configuration, path: str | None = None) -> None: ...
     def sample_status_get(self, sha256: str) -> SampleStatusRecord | None: ...
     def sample_status_set(
         self,

@@ -185,10 +185,11 @@ fn compile_shim(llvm: &LlvmInstall) {
     build.cpp(true);
     build.file("native/assembler.cpp");
     build.include(llvm.includedir.trim());
-    build.flag_if_supported(&format!("-isystem{}", llvm.includedir.trim()));
     if target_env_is("msvc") {
+        build.flag(&format!("/I{}", llvm.includedir.trim()));
         build.flag_if_supported("/std:c++17");
     } else {
+        build.flag_if_supported(&format!("-isystem{}", llvm.includedir.trim()));
         build.flag("-std=c++17");
     }
     build.flag_if_supported("-fno-exceptions");
@@ -197,6 +198,9 @@ fn compile_shim(llvm: &LlvmInstall) {
     build.flag_if_supported("-fvisibility-inlines-hidden");
     build.flag_if_supported("-Wno-unused-parameter");
     for flag in shell_words(&llvm.cxxflags) {
+        if target_env_is("msvc") {
+            continue;
+        }
         if flag.starts_with("-W") {
             continue;
         }

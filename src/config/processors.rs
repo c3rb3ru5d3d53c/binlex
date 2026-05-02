@@ -27,7 +27,7 @@ impl Default for ConfigProcessors {
     fn default() -> Self {
         Self {
             enabled: true,
-            path: Some(crate::Config::default_processor_directory()),
+            path: Some(crate::Configuration::default_processor_directory()),
             processes: 2,
             compression: true,
             restart_on_crash: true,

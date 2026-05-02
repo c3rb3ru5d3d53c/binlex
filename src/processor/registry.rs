@@ -1,4 +1,4 @@
-use crate::Config;
+use crate::Configuration;
 use crate::config::{ConfigProcessor, ConfigProcessors};
 use crate::controlflow::{Block, Function, Graph, Instruction};
 use crate::io::stderr::Stderr;
@@ -71,7 +71,7 @@ impl RegisteredProcessor {
         &self.registration.name
     }
 
-    pub fn configured_transport(&self, config: &Config) -> ProcessorTransport {
+    pub fn configured_transport(&self, config: &Configuration) -> ProcessorTransport {
         configured_graph_transport(&self.registration, config).unwrap_or(ProcessorTransport::Ipc)
     }
 
@@ -328,7 +328,7 @@ pub fn processor_discovery_diagnostics_for_config(
 
 fn processor_binary_candidates(configured_directory: Option<&str>) -> Vec<PathBuf> {
     let mut directories = Vec::new();
-    let default_directory = Config::default_processor_directory();
+    let default_directory = Configuration::default_processor_directory();
     if let Some(directory) =
         configured_directory.filter(|directory| *directory != default_directory)
     {
@@ -486,7 +486,7 @@ pub fn processor_registration_by_name_for_config(
 }
 
 pub fn enabled_processors_for_target(
-    config: &Config,
+    config: &Configuration,
     target: ProcessorTarget,
 ) -> Vec<RegisteredProcessor> {
     registered_processor_registrations_for_config(&config.processors)
@@ -574,7 +574,7 @@ mod tests {
     }
 }
 
-fn report_transport_error(config: &Config, processor_name: &str, error: &ProcessorError) {
+fn report_transport_error(config: &Configuration, processor_name: &str, error: &ProcessorError) {
     if config.debug {
         Stderr::print_debug(
             config,
@@ -583,7 +583,7 @@ fn report_transport_error(config: &Config, processor_name: &str, error: &Process
     }
 }
 
-fn fail_transport(config: &Config, processor_name: &str, error: &ProcessorError) {
+fn fail_transport(config: &Configuration, processor_name: &str, error: &ProcessorError) {
     report_transport_error(config, processor_name, error);
     eprintln!("processor {} transport error: {}", processor_name, error);
 }
@@ -601,7 +601,7 @@ fn should_fail_transport(error: &ProcessorError) -> bool {
 
 fn configured_graph_transport(
     registration: &ProcessorRegistration,
-    config: &Config,
+    config: &Configuration,
 ) -> Result<ProcessorTransport, ProcessorError> {
     let Some(processor) = config.processors.processor(&registration.name) else {
         return Ok(ProcessorTransport::Ipc);
@@ -617,7 +617,7 @@ fn configured_graph_transport(
 fn execute_graph_transport(
     registration: &ProcessorRegistration,
     data: Value,
-    config: &Config,
+    config: &Configuration,
 ) -> Result<Value, ProcessorError> {
     ensure_payload_architecture_supported(registration, &data)?;
     match configured_graph_transport(registration, config)? {

@@ -16,7 +16,7 @@ architecture = binlex.Architecture.I386
 # ret
 shellcode = bytes.fromhex("31c085c075029090c3")
 
-config = binlex.Config()
+config = binlex.Configuration()
 
 graph = Graph(architecture, config)
 disassembler = Disassembler(

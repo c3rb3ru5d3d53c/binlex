@@ -318,7 +318,7 @@ fn ingest_upload(
     } else {
         None
     };
-    let detected_magic = Magic::from_bytes(&form.bytes);
+    let detected_magic = Magic::new(&form.bytes);
     if matches!(magic_override, Some(Magic::CODE))
         && matches!(detected_magic, Magic::PE | Magic::ELF | Magic::MACHO)
     {

@@ -1,4 +1,4 @@
-use crate::Config;
+use crate::Configuration;
 use crate::hashing::SHA256;
 use crate::storage::object_store;
 use serde::{Serialize, de::DeserializeOwned};
@@ -36,7 +36,7 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {}
 
 impl LocalStore {
-    pub fn new(config: Config) -> Result<Self, Error> {
+    pub fn new(config: Configuration) -> Result<Self, Error> {
         Self::with_root(config.storage.local.directory.clone())
     }
 

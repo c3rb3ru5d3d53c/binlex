@@ -4,10 +4,10 @@ use crate::controlflow::{Graph, Instruction};
 use crate::disassemblers::cil::Disassembler;
 use crate::lifters::llvm::Lifter;
 use crate::semantics::{InstructionSemantics, SemanticStatus};
-use crate::{Architecture, Config};
+use crate::{Architecture, Configuration};
 
 pub(super) fn disassemble_cil_single(name: &str, bytes: &[u8]) -> Instruction {
-    let config = Config::default();
+    let config = Configuration::default();
     let mut ranges = BTreeMap::new();
     ranges.insert(0, bytes.len() as u64);
 
@@ -53,7 +53,7 @@ pub(super) fn assert_complete_semantics(name: &str, bytes: &[u8]) -> Instruction
 
 pub(super) fn lift_instruction_to_llvm(name: &str, bytes: &[u8]) -> String {
     let instruction = disassemble_cil_single(name, bytes);
-    let mut lifter = Lifter::new(crate::Architecture::CIL, Config::default());
+    let mut lifter = Lifter::new(crate::Architecture::CIL, Configuration::default());
     lifter
         .lift_instruction(&instruction)
         .unwrap_or_else(|error| panic!("{name}: instruction should lift: {error}"));

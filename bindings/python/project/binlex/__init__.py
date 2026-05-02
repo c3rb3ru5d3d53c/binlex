@@ -29,7 +29,7 @@ and higher-level subpackages that wrap the compiled Rust extension.
 from importlib import import_module
 
 from .clients import Server, Web
-from .config import Config
+from .config import Configuration
 from .core import Architecture, Magic
 
 _LAZY_SUBMODULES = {
@@ -65,7 +65,7 @@ def __getattr__(name):
 
 __all__ = [
     "Architecture",
-    "Config",
+    "Configuration",
     "Magic",
     "Server",
     "Web",

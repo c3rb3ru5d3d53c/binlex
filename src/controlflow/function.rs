@@ -21,13 +21,13 @@
 // SOFTWARE.
 
 use crate::Architecture;
-use crate::Config;
+use crate::Configuration;
 use crate::controlflow::Block;
 use crate::controlflow::Graph;
 use crate::controlflow::GraphQueue;
 use crate::controlflow::Instruction;
-use crate::controlflow::Llvm as LlvmView;
-use crate::embeddings::EmbeddingsJson;
+use crate::lifters::embeddings::EmbeddingsJson;
+use crate::lifters::embeddings::llvm as llvm_embeddings;
 use crate::entropy;
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeJson;
@@ -36,8 +36,7 @@ use crate::hashing::SHA256;
 use crate::hashing::SSDeep;
 use crate::hashing::TLSH;
 use crate::hex;
-use crate::imaging::Imaging;
-use crate::lifters::llvm::{LiftersJson, LlvmJson};
+use crate::lifters::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
 #[cfg(not(target_os = "windows"))]
 use crate::lifters::vex::{Lifter as VexLifter, VexJson};
 use crate::metadata::Attributes;
@@ -119,12 +118,12 @@ pub struct FunctionJson {
 #[derive(Clone)]
 pub struct FunctionJsonDeserializer {
     pub json: FunctionJson,
-    pub config: Config,
+    pub config: Configuration,
 }
 
 impl FunctionJsonDeserializer {
     #[allow(dead_code)]
-    pub fn new(string: String, config: Config) -> Result<Self, Error> {
+    pub fn new(string: String, config: Configuration) -> Result<Self, Error> {
         let json: FunctionJson =
             serde_json::from_str(&string).map_err(|error| Error::other(format!("{}", error)))?;
         if json.type_ != "function" {
@@ -474,7 +473,7 @@ impl<'function> Function<'function> {
             }
         }
         if self.cfg.config.functions.embeddings.llvm.enabled {
-            if let Some(vector) = self.embeddings().llvm() {
+            if let Ok(vector) = llvm_embeddings::function::embed(self) {
                 json.embeddings = Some(EmbeddingsJson::llvm(vector));
             }
         }
@@ -487,15 +486,12 @@ impl<'function> Function<'function> {
         self.process().processors.unwrap_or_default()
     }
 
-    /// Return an LLVM builder for this function.
-    pub fn llvm(&self) -> LlvmView<'_> {
-        LlvmView::function(self)
-    }
-
     fn lifters_json(&self) -> Option<LiftersJson> {
         let llvm = if self.cfg.config.functions.lifters.llvm.enabled {
+            let mut lifter = LlvmLifter::new(self.architecture(), self.cfg.config.clone());
+            lifter.lift_function(self).ok()?;
             Some(LlvmJson {
-                text: self.llvm().text().ok()?,
+                text: lifter.text(),
             })
         } else {
             None
@@ -847,12 +843,6 @@ impl<'function> Function<'function> {
         }
 
         Some(end)
-    }
-
-    /// Returns an imaging pipeline for the function bytes when the function is contiguous.
-    pub fn imaging(&self) -> Option<Imaging> {
-        self.bytes()
-            .map(|bytes| Imaging::new(bytes, self.cfg.config.clone()))
     }
 
     /// Computes the SHA-256 hash of the function's bytes, if contiguous.

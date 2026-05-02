@@ -24,12 +24,10 @@ use crate::formats::File;
 use crate::formats::Image;
 use crate::formats::Symbol as PySymbol;
 use crate::hashing::{SSDeep, SHA256, TLSH};
-use crate::imaging::Imaging;
 use crate::Architecture;
-use crate::Config;
+use crate::Configuration;
 use binlex::formats::pe::PE as InnerPe;
 use pyo3::prelude::*;
-use pyo3::types::PyType;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
@@ -46,27 +44,11 @@ pub struct PE {
 #[pymethods]
 impl PE {
     #[new]
-    #[pyo3(text_signature = "(path, config)")]
-    /// Open a PE image from `path`.
-    pub fn new(py: Python, path: String, config: Py<Config>) -> Result<Self, Error> {
-        let inner_config = config.borrow(py).inner.lock().unwrap().clone();
-        let inner = InnerPe::new(path, inner_config)?;
-        Ok(Self {
-            inner: Arc::new(Mutex::new(inner)),
-        })
-    }
-
-    #[classmethod]
-    #[pyo3(text_signature = "(bytes, config)")]
+    #[pyo3(text_signature = "(data, config)")]
     /// Parse a PE image from raw bytes in memory.
-    pub fn from_bytes(
-        _: &Bound<'_, PyType>,
-        py: Python,
-        bytes: Vec<u8>,
-        config: Py<Config>,
-    ) -> PyResult<Self> {
+    pub fn new(py: Python, data: Vec<u8>, config: Py<Configuration>) -> Result<Self, Error> {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
-        let inner = InnerPe::from_bytes(bytes, inner_config)?;
+        let inner = InnerPe::new(data, inner_config)?;
         Ok(Self {
             inner: Arc::new(Mutex::new(inner)),
         })
@@ -357,18 +339,6 @@ impl PE {
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return the imaging pipeline over the mapped PE contents.
-    pub fn imaging(&self) -> PyResult<Imaging> {
-        let result = self
-            .inner
-            .lock()
-            .unwrap()
-            .imaging()
-            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        Ok(Imaging::from_inner(result))
-    }
-
-    #[pyo3(text_signature = "($self)")]
     /// Return the total size of the image.
     pub fn size(&self) -> u64 {
         self.inner.lock().unwrap().size()
@@ -426,7 +396,7 @@ impl PE {
                 inner: file,
                 config: Py::new(
                     py,
-                    Config {
+                    Configuration {
                         inner: Arc::new(Mutex::new(config)),
                     },
                 )?,

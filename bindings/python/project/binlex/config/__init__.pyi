@@ -293,7 +293,7 @@ class ConfigMmap:
     @property
     def cache(self) -> ConfigMmapCache: ...
 
-class Config:
+class Configuration:
     @property
     def threads(self) -> int: ...
     @threads.setter
@@ -329,4 +329,4 @@ class Config:
     def disable_chromosome_hashing(self) -> None: ...
     def disable_chromosome_heuristics(self) -> None: ...
 
-__all__ = ["Config"]
+__all__ = ["Configuration"]

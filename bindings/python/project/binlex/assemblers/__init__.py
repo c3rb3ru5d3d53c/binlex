@@ -24,7 +24,7 @@
 
 from enum import Enum
 
-from binlex import Config
+from binlex import Configuration
 from binlex.core import Architecture
 from binlex.core.architecture import _coerce_architecture
 
@@ -40,8 +40,8 @@ class Assembler:
     def __init__(self, architecture, config, backend=AssemblerBackend.Default):
         binding_architecture = _coerce_architecture(architecture)
         self.architecture = Architecture.from_binding(binding_architecture)
-        if not isinstance(config, Config):
-            raise TypeError("config must be a binlex.Config")
+        if not isinstance(config, Configuration):
+            raise TypeError("config must be a binlex.Configuration")
         self.config = config
         self.backend = (
             backend

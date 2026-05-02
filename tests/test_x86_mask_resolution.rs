@@ -2,11 +2,11 @@ use std::collections::BTreeMap;
 
 use binlex::controlflow::Graph;
 use binlex::disassemblers::capstone::Disassembler;
-use binlex::{Architecture, Config};
+use binlex::{Architecture, Configuration};
 
 #[test]
 fn x86_immediate_masks_full_operand_bytes_and_normalizes_them() {
-    let config = Config::default();
+    let config = Configuration::default();
     let bytes = vec![0xE8, 0x78, 0x56, 0x34, 0x12]; // call rel32
     let mut ranges = BTreeMap::new();
     ranges.insert(0, bytes.len() as u64);

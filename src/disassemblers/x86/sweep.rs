@@ -26,7 +26,7 @@ use std::{
 };
 
 use crate::{
-    Architecture, Config,
+    Architecture, Configuration,
     controlflow::{Graph, Instruction},
     disassemblers::x86::classify as x86_classify,
 };
@@ -34,7 +34,7 @@ use crate::{
 pub fn disassemble<F>(
     machine: Architecture,
     executable_address_ranges: &BTreeMap<u64, u64>,
-    config: &Config,
+    config: &Configuration,
     mut prepare_instruction: F,
     is_executable_address: impl Fn(u64) -> bool,
 ) -> BTreeSet<u64>

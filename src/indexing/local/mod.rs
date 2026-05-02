@@ -1,4 +1,4 @@
-use crate::Config;
+use crate::Configuration;
 use crate::databases::{LanceDB, LocalDB};
 use crate::storage::localstore;
 use std::path::PathBuf;
@@ -24,7 +24,7 @@ pub use self::types::{
 
 #[derive(Clone)]
 pub struct LocalIndex {
-    config: Config,
+    config: Configuration,
     store: localstore::LocalStore,
     lancedb: LanceDB,
     localdb: Arc<LocalDB>,
@@ -32,12 +32,12 @@ pub struct LocalIndex {
 }
 
 impl LocalIndex {
-    pub fn new(config: Config) -> Result<Self, Error> {
+    pub fn new(config: Configuration) -> Result<Self, Error> {
         Self::with_options(config, None, None)
     }
 
     pub fn with_options(
-        config: Config,
+        config: Configuration,
         directory: Option<PathBuf>,
         dimensions: Option<usize>,
     ) -> Result<Self, Error> {
@@ -66,7 +66,7 @@ impl LocalIndex {
         Ok(index)
     }
 
-    pub fn config(&self) -> &Config {
+    pub fn config(&self) -> &Configuration {
         &self.config
     }
 

@@ -5,7 +5,7 @@ instructions = "Return a SHA-256 digest for the requested input or selected arti
 python = """
 import binlex
 
-config = binlex.Config()
+config = binlex.Configuration()
 config.formats.file.sha256.enabled = True
 file = binlex.formats.File(path, config)
 file.read()
@@ -27,7 +27,7 @@ instructions = "Return a TLSH digest when available and explain if it cannot be 
 python = """
 import binlex
 
-config = binlex.Config()
+config = binlex.Configuration()
 config.formats.file.tlsh.enabled = True
 file = binlex.formats.File(path, config)
 file.read()

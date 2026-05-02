@@ -41,7 +41,7 @@ impl<'de> Deserialize<'de> for McpSamplesConfig {
         #[serde(untagged)]
         enum McpSamplesConfigRepr {
             Path(String),
-            Config {
+            Configuration {
                 #[serde(default)]
                 directory: Option<String>,
                 #[serde(default = "default_max_upload_size_bytes")]
@@ -54,7 +54,7 @@ impl<'de> Deserialize<'de> for McpSamplesConfig {
                 directory: Some(path),
                 max_upload_size_bytes: default_max_upload_size_bytes(),
             },
-            McpSamplesConfigRepr::Config {
+            McpSamplesConfigRepr::Configuration {
                 directory,
                 max_upload_size_bytes,
             } => Self {

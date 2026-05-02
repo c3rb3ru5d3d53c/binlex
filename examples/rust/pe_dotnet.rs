@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use binlex::Config;
+use binlex::Configuration;
 use binlex::controlflow::Graph;
 use binlex::disassemblers::cil::Disassembler;
 use binlex::formats::PE;
@@ -36,10 +36,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let mut config = Config::new();
+    let mut config = Configuration::new();
     config.general.threads = 16;
 
-    let pe = PE::new(input, config.clone())?;
+    let pe = PE::new(std::fs::read(&input)?, config.clone())?;
     if !pe.is_dotnet() {
         return Err("input is not a .NET PE".into());
     }

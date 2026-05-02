@@ -29,7 +29,7 @@ use std::{
     time::Instant,
 };
 
-use crate::{Config, io::Stderr};
+use crate::{Configuration, io::Stderr};
 
 #[derive(Default)]
 pub struct DisassemblyMetrics {
@@ -97,7 +97,7 @@ pub fn record_merge_elapsed_for_metrics(
 }
 
 pub fn log_disassembly_metrics(
-    config: &Config,
+    config: &Configuration,
     metrics: &Arc<DisassemblyMetrics>,
     disassembly_started_at: Instant,
 ) {

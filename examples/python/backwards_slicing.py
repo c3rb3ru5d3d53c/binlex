@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from binlex import Architecture
-from binlex.config import Config
+from binlex.config import Configuration
 from binlex.controlflow import Graph
 from binlex.disassemblers.capstone import Disassembler
 from binlex.symbolic import Executor
@@ -48,7 +48,7 @@ shellcode = bytes.fromhex(
     "c3"
 )
 def main():
-    config = Config()
+    config = Configuration()
     config.semantics.enabled = True
 
     graph = Graph(Architecture.AMD64, config)

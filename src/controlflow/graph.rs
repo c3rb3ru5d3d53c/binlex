@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 use crate::Architecture;
-use crate::Config;
+use crate::Configuration;
 use crate::controlflow::Block;
 use crate::controlflow::Function;
 use crate::controlflow::Instruction;
@@ -359,7 +359,7 @@ pub struct Graph {
     /// Queue for managing instructions within the graph.
     pub instructions: GraphQueue,
     /// Configuration
-    pub config: Config,
+    pub config: Configuration,
     revision: AtomicU64,
     processor_state: Mutex<GraphProcessorState>,
 }
@@ -371,7 +371,7 @@ impl Graph {
     ///
     /// Returns a `Graph` instance with empty instructions, blocks, and functions.
     #[allow(dead_code)]
-    pub fn new(architecture: Architecture, config: Config) -> Self {
+    pub fn new(architecture: Architecture, config: Configuration) -> Self {
         Self {
             architecture,
             listing: SkipMap::<u64, Instruction>::new(),
@@ -426,7 +426,7 @@ impl Graph {
         }
     }
 
-    pub fn from_snapshot(snapshot: GraphSnapshot, config: Config) -> Result<Self, Error> {
+    pub fn from_snapshot(snapshot: GraphSnapshot, config: Configuration) -> Result<Self, Error> {
         let architecture = Architecture::from_string(&snapshot.architecture)?;
         let mut graph = Self::new(architecture, config.clone());
 
@@ -1052,14 +1052,14 @@ mod tests {
     use crate::controlflow::Instruction;
     use crate::controlflow::{Block, Function};
     use crate::processor::ProcessorTarget;
-    use crate::{Architecture, Config};
+    use crate::{Architecture, Configuration};
     use serde_json::json;
     use std::collections::BTreeSet;
     use std::collections::HashMap;
 
     #[test]
     fn snapshot_roundtrip_preserves_processor_outputs() {
-        let config = Config::default();
+        let config = Configuration::default();
         let graph = Graph::new(Architecture::AMD64, config.clone());
         let mut instruction = Instruction::create(0x1000, Architecture::AMD64, config);
         instruction.bytes = vec![0xC3];
@@ -1087,7 +1087,7 @@ mod tests {
         };
 
         let restored =
-            Graph::from_snapshot(snapshot, Config::default()).expect("snapshot should restore");
+            Graph::from_snapshot(snapshot, Configuration::default()).expect("snapshot should restore");
 
         let output = restored
             .processor_output(ProcessorTarget::Instruction, 0x1000, "demo")
@@ -1097,7 +1097,7 @@ mod tests {
 
     #[test]
     fn snapshot_roundtrip_preserves_wildcard_patterns_when_mask_output_disabled() {
-        let config = Config::default();
+        let config = Configuration::default();
         assert!(!config.chromosomes.mask.enabled);
         let mut graph = Graph::new(Architecture::AMD64, config.clone());
 

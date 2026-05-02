@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Set
 
-from binlex import Architecture, Config
+from binlex import Architecture, Configuration
 from binlex.controlflow import Graph
 from binlex.formats import Image
 
@@ -12,7 +12,7 @@ class Disassembler:
         machine: Architecture,
         image: Image | bytes,
         executable_address_ranges: dict[int, int],
-        config: Config,
+        config: Configuration,
     ) -> None: ...
     def disassemble_instruction(self, address: int, cfg: Graph) -> int: ...
     def disassemble_function(self, address: int, cfg: Graph) -> int: ...

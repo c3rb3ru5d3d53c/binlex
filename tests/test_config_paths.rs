@@ -1,8 +1,8 @@
-use binlex::Config;
+use binlex::Configuration;
 
 #[test]
 fn test_config_serializes_flat_hash_paths() {
-    let config = Config::default();
+    let config = Configuration::default();
     let toml = config.to_string().expect("config should serialize");
 
     assert!(!config.blocks.tlsh.enabled);

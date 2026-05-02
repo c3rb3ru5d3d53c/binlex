@@ -43,10 +43,11 @@ impl X86InstructionView {
         bytes: Vec<u8>,
         operand_views: Vec<X86OperandView>,
     ) -> Self {
+        let mnemonic = mnemonic.into().to_ascii_lowercase();
         Self {
             machine,
             address,
-            mnemonic: mnemonic.into(),
+            mnemonic,
             operand_count: operand_views.len(),
             operand_text,
             bytes,

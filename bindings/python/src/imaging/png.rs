@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::config::Config;
+use crate::config::Configuration;
 use crate::hashing::{AHash, DHash, MinHash32, PHash, SHA256, TLSH};
 use crate::imaging::palette::Palette;
 use binlex::imaging::PNG as InnerPNG;
@@ -54,7 +54,7 @@ impl PNG {
         py: Python,
         data: Py<PyBytes>,
         palette: Py<Palette>,
-        config: Py<Config>,
+        config: Py<Configuration>,
         cell_size: usize,
         fixed_width: usize,
     ) -> Self {

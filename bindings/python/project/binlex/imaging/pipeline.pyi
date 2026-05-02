@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from binlex.config import Config
+from binlex.config import Configuration
 from .png import PNG
 from .svg import SVG
 from .terminal import Terminal
@@ -10,7 +10,7 @@ from .terminal import Terminal
 DigraphIntensity = Literal["linear", "log", "sqrt"]
 
 class Imaging:
-    def __init__(self, data: bytes, config: Config) -> None: ...
+    def __init__(self, data: bytes, config: Configuration) -> None: ...
     @classmethod
     def _from_binding(cls, binding: object) -> Imaging: ...
     def linear(

@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::config::{Config, ConfigImaging};
+use crate::config::{Configuration, ConfigImaging};
 use crate::imaging::Palette;
 use crate::imaging::artifact::ImagingArtifact;
 use crate::imaging::render::Render;
@@ -32,7 +32,7 @@ pub struct Terminal {
 }
 
 impl Terminal {
-    pub fn new(data: &[u8], palette: Palette, config: Config) -> Self {
+    pub fn new(data: &[u8], palette: Palette, config: Configuration) -> Self {
         Self::with_options(data, palette, 1, 16, config)
     }
 
@@ -41,7 +41,7 @@ impl Terminal {
         palette: Palette,
         cell_size: usize,
         fixed_width: usize,
-        config: Config,
+        config: Configuration,
     ) -> Self {
         Self::from_render(
             Renderer::linear(Some(cell_size), Some(fixed_width)).render(data, palette),

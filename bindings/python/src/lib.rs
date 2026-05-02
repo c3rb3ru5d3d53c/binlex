@@ -43,7 +43,7 @@ pub mod storage;
 pub mod symbolic;
 pub mod util;
 
-pub use config::Config;
+pub use config::Configuration;
 pub use core::Architecture;
 pub use core::Magic;
 
@@ -102,7 +102,7 @@ fn binlex(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pymodule!(symbolic_init))?;
     m.add_wrapped(wrap_pymodule!(lifters_init))?;
     m.add_class::<Architecture>()?;
-    m.add_class::<Config>()?;
+    m.add_class::<Configuration>()?;
     m.add_class::<Magic>()?;
     m.add_wrapped(wrap_pymodule!(util_init))?;
     m.add_wrapped(wrap_pymodule!(storage_init))?;

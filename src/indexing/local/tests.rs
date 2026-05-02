@@ -5,12 +5,12 @@ use crate::databases::SampleStatus as DbSampleStatus;
 use crate::formats::SymbolJson;
 use crate::indexing::{Collection, Entity};
 use crate::metadata::{Attribute, SymbolType};
-use crate::{Architecture, Config};
+use crate::{Architecture, Configuration};
 use chrono::{TimeZone, Utc};
 use serde_json::json;
 
 fn build_single_return_graph() -> Graph {
-    let mut config = Config::default();
+    let mut config = Configuration::default();
     config.embeddings.llvm.device = "cpu".to_string();
     config.blocks.embeddings.llvm.enabled = true;
     config.functions.embeddings.llvm.enabled = true;
@@ -26,7 +26,7 @@ fn build_single_return_graph() -> Graph {
 }
 
 fn build_plain_single_return_graph() -> Graph {
-    let mut config = Config::default();
+    let mut config = Configuration::default();
     config.processors.enabled = false;
     config.chromosomes.vector.enabled = true;
     for processor in config.processors.processors.values_mut() {
@@ -102,8 +102,8 @@ fn stage_vector_entry(
         .expect("stage vector entry");
 }
 
-fn local_config_with_dimensions(root: &std::path::Path, dimensions: Option<usize>) -> Config {
-    let mut config = Config::default();
+fn local_config_with_dimensions(root: &std::path::Path, dimensions: Option<usize>) -> Configuration {
+    let mut config = Configuration::default();
     config.index.local.directory = root.to_string_lossy().into_owned();
     config.index.local.dimensions = dimensions;
     config
@@ -116,7 +116,7 @@ fn manual_vector_index_round_trip() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
-    let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
+    let client = LocalIndex::with_options(Configuration::default(), Some(root.clone()), None)
         .expect("create local index client");
     let graph = build_plain_single_return_graph();
 
@@ -167,7 +167,7 @@ fn directional_compare_queries_return_compare_pairs() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
-    let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
+    let client = LocalIndex::with_options(Configuration::default(), Some(root.clone()), None)
         .expect("create local index client");
 
     stage_vector_entry(
@@ -215,7 +215,7 @@ fn directional_compare_queries_support_drop_projection() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
-    let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
+    let client = LocalIndex::with_options(Configuration::default(), Some(root.clone()), None)
         .expect("create local index client");
 
     stage_vector_entry(
@@ -263,7 +263,7 @@ fn search_results_include_embedding_id_and_exact_count() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
-    let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
+    let client = LocalIndex::with_options(Configuration::default(), Some(root.clone()), None)
         .expect("create local index client");
     let graph = build_plain_single_return_graph();
     let shared_vector = test_vector(7);
@@ -336,7 +336,7 @@ fn embedding_search_pivots_to_exact_vector_group() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
-    let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
+    let client = LocalIndex::with_options(Configuration::default(), Some(root.clone()), None)
         .expect("create local index client");
     let graph = build_plain_single_return_graph();
     let shared_vector = test_vector(9);
@@ -408,7 +408,7 @@ fn selector_graph_round_trip() {
         let processed = serde_json::to_value(functions[0].process()).expect("serialize function");
         selector_vector(&processed, "embeddings.llvm.vector").expect("function vector")
     };
-    let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
+    let client = LocalIndex::with_options(Configuration::default(), Some(root.clone()), None)
         .expect("create local index client");
 
     client
@@ -447,7 +447,7 @@ fn function_results_persist_and_filter_structural_metrics() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
-    let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
+    let client = LocalIndex::with_options(Configuration::default(), Some(root.clone()), None)
         .expect("create local index client");
     let graph = build_single_return_graph();
     let function = Function::new(0x1000, &graph).expect("build function");
@@ -509,7 +509,7 @@ fn search_merges_multiple_corpora_and_default_entities() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
-    let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
+    let client = LocalIndex::with_options(Configuration::default(), Some(root.clone()), None)
         .expect("create local index client");
 
     stage_vector_entry(
@@ -564,7 +564,7 @@ fn shared_entries_support_multiple_corpora_without_duplicate_objects() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
-    let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
+    let client = LocalIndex::with_options(Configuration::default(), Some(root.clone()), None)
         .expect("create local index client");
     let corpora = vec!["malware".to_string(), "plugx".to_string()];
 
@@ -627,7 +627,7 @@ fn uses_configured_directory_when_override_is_absent() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
-    let mut config = Config::default();
+    let mut config = Configuration::default();
     config.index.local.directory = root.to_string_lossy().into_owned();
 
     let client = LocalIndex::new(config).expect("create local index client");
@@ -645,7 +645,7 @@ fn repeat_graph_indexing_does_not_duplicate_search_results() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
-    let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
+    let client = LocalIndex::with_options(Configuration::default(), Some(root.clone()), None)
         .expect("create local index client");
     let graph = build_single_return_graph();
     let vector = {
@@ -691,7 +691,7 @@ fn search_results_expose_indexed_timestamp() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
-    let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
+    let client = LocalIndex::with_options(Configuration::default(), Some(root.clone()), None)
         .expect("create local index client");
 
     stage_vector_entry(
@@ -728,7 +728,7 @@ fn add_remove_replace_symbol_updates_results() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
-    let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
+    let client = LocalIndex::with_options(Configuration::default(), Some(root.clone()), None)
         .expect("create local index client");
 
     client.sample_put(b"sample-bytes").expect("store sample");
@@ -817,7 +817,7 @@ fn query_supports_pagination() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
-    let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
+    let client = LocalIndex::with_options(Configuration::default(), Some(root.clone()), None)
         .expect("create local index client");
 
     client.sample_put(b"first").expect("store first sample");
@@ -864,7 +864,7 @@ fn query_filters_by_entity_size() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
-    let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
+    let client = LocalIndex::with_options(Configuration::default(), Some(root.clone()), None)
         .expect("create local index client");
     let sha256 = client.sample_put(b"size-sample").expect("store sample");
     let function = single_return_function();
@@ -900,7 +900,7 @@ fn graph_level_corpus_mutations_recompute_inherited_entity_corpora() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
-    let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
+    let client = LocalIndex::with_options(Configuration::default(), Some(root.clone()), None)
         .expect("create local index client");
 
     let sha256 = client.sample_put(b"corpus-sample").expect("store sample");
@@ -951,7 +951,7 @@ fn entity_corpora_are_collection_scoped() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
-    let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
+    let client = LocalIndex::with_options(Configuration::default(), Some(root.clone()), None)
         .expect("create local index client");
 
     let sha256 = client
@@ -1078,7 +1078,7 @@ fn localdb_metadata_round_trips_through_local_index() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
-    let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
+    let client = LocalIndex::with_options(Configuration::default(), Some(root.clone()), None)
         .expect("create local index client");
 
     let sha256 = client.sample_put(b"metadata-sample").expect("store sample");
@@ -1217,7 +1217,7 @@ fn entity_metadata_operations_work_without_stored_sample_bytes() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
-    let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
+    let client = LocalIndex::with_options(Configuration::default(), Some(root.clone()), None)
         .expect("create local index client");
 
     let sha256 = digest_hex(b"plugin-index-only");
@@ -1308,7 +1308,7 @@ fn entity_tags_are_collection_scoped() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
-    let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
+    let client = LocalIndex::with_options(Configuration::default(), Some(root.clone()), None)
         .expect("create local index client");
 
     let sha256 = client.sample_put(b"tagged-graph").expect("store sample");
@@ -1393,7 +1393,7 @@ fn rename_corpus_updates_index_globally() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
-    let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
+    let client = LocalIndex::with_options(Configuration::default(), Some(root.clone()), None)
         .expect("create local index client");
 
     let first = client
@@ -1456,7 +1456,7 @@ fn reindex_updates_result_timestamp() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
-    let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
+    let client = LocalIndex::with_options(Configuration::default(), Some(root.clone()), None)
         .expect("create local index client");
 
     stage_vector_entry(
@@ -1517,7 +1517,7 @@ fn same_corpus_distinct_symbols_expand_flat_results_without_duplicate_objects() 
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
-    let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
+    let client = LocalIndex::with_options(Configuration::default(), Some(root.clone()), None)
         .expect("create local index client");
     let function = single_return_function();
 
@@ -1583,7 +1583,7 @@ fn cross_corpus_symbols_expand_flat_results_per_corpus() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
-    let client = LocalIndex::with_options(Config::default(), Some(root.clone()), None)
+    let client = LocalIndex::with_options(Configuration::default(), Some(root.clone()), None)
         .expect("create local index client");
     let function = single_return_function();
 
@@ -1648,7 +1648,7 @@ fn explicit_directory_overrides_configured_directory() {
     ));
     let _ = std::fs::remove_dir_all(&configured_root);
     let _ = std::fs::remove_dir_all(&override_root);
-    let mut config = Config::default();
+    let mut config = Configuration::default();
     config.index.local.directory = configured_root.to_string_lossy().into_owned();
 
     let client = LocalIndex::with_options(config, Some(override_root.clone()), None)

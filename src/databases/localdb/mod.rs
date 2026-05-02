@@ -1,4 +1,4 @@
-use crate::Config;
+use crate::Configuration;
 use crate::databases::sqlite::{Error as SQLiteError, SQLite, SQLiteValue};
 use crate::indexing::Collection;
 use rand::RngCore;
@@ -803,13 +803,13 @@ mod tests {
         CollectionCommentRecord, CollectionTagRecord, LocalDB, RoleRecord, SampleCommentRecord,
         SampleStatus, SampleStatusRecord,
     };
-    use crate::Config;
+    use crate::Configuration;
     use crate::indexing::Collection;
 
     #[test]
     fn local_db_round_trips_sample_status() {
         let root = tempfile::tempdir().expect("tempdir");
-        let mut config = Config::default();
+        let mut config = Configuration::default();
         config.databases.local.path = root.path().join("local.db").display().to_string();
         let db = LocalDB::new(&config).expect("create local db");
         let record = SampleStatusRecord {
@@ -837,7 +837,7 @@ mod tests {
     #[test]
     fn local_db_uses_override_path_when_provided() {
         let root = tempfile::tempdir().expect("tempdir");
-        let mut config = Config::default();
+        let mut config = Configuration::default();
         config.databases.local.path = root.path().join("configured.db").display().to_string();
         let override_path = root.path().join("override.db");
 
@@ -849,7 +849,7 @@ mod tests {
     #[test]
     fn local_db_round_trips_tags_and_comments_with_paging() {
         let root = tempfile::tempdir().expect("tempdir");
-        let mut config = Config::default();
+        let mut config = Configuration::default();
         config.databases.local.path = root.path().join("local.db").display().to_string();
         let db = LocalDB::new(&config).expect("create local db");
         let sha256 = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5";
@@ -889,7 +889,7 @@ mod tests {
     #[test]
     fn local_db_round_trips_collection_tags_with_paging() {
         let root = tempfile::tempdir().expect("tempdir");
-        let mut config = Config::default();
+        let mut config = Configuration::default();
         config.databases.local.path = root.path().join("local.db").display().to_string();
         let db = LocalDB::new(&config).expect("create local db");
         let sha256 = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5";
@@ -951,7 +951,7 @@ mod tests {
     #[test]
     fn local_db_round_trips_sample_and_collection_comments_with_optional_timestamps() {
         let root = tempfile::tempdir().expect("tempdir");
-        let mut config = Config::default();
+        let mut config = Configuration::default();
         config.databases.local.path = root.path().join("local.db").display().to_string();
         let db = LocalDB::new(&config).expect("create local db");
         let sha256 = "d60f9eaa4f62f0ee84531d9aa633c5bb390ea0056953e58d80b9a62277dbe5c5";
@@ -1043,7 +1043,7 @@ mod tests {
     #[test]
     fn local_db_round_trips_roles_and_users() {
         let root = tempfile::tempdir().expect("tempdir");
-        let mut config = Config::default();
+        let mut config = Configuration::default();
         config.databases.local.path = root.path().join("local.db").display().to_string();
         let db = LocalDB::new(&config).expect("create local db");
 
@@ -1152,7 +1152,7 @@ mod tests {
     #[test]
     fn local_db_normalizes_and_limits_usernames() {
         let root = tempfile::tempdir().expect("tempdir");
-        let mut config = Config::default();
+        let mut config = Configuration::default();
         config.databases.local.path = root.path().join("local.db").display().to_string();
         let db = LocalDB::new(&config).expect("create local db");
 
@@ -1211,7 +1211,7 @@ mod tests {
     #[test]
     fn local_db_seeds_default_corpora() {
         let root = tempfile::tempdir().expect("tempdir");
-        let mut config = Config::default();
+        let mut config = Configuration::default();
         config.databases.local.path = root.path().join("local.db").display().to_string();
         let db = LocalDB::new(&config).expect("create local db");
 
@@ -1223,7 +1223,7 @@ mod tests {
     #[test]
     fn local_db_rejects_metadata_names_with_whitespace() {
         let root = tempfile::tempdir().expect("tempdir");
-        let mut config = Config::default();
+        let mut config = Configuration::default();
         config.databases.local.path = root.path().join("local.db").display().to_string();
         let db = LocalDB::new(&config).expect("create local db");
 
@@ -1258,7 +1258,7 @@ mod tests {
     #[test]
     fn local_db_disabling_user_invalidates_sessions_and_preserves_enabled_admin() {
         let root = tempfile::tempdir().expect("tempdir");
-        let mut config = Config::default();
+        let mut config = Configuration::default();
         config.databases.local.path = root.path().join("local.db").display().to_string();
         let db = LocalDB::new(&config).expect("create local db");
 
@@ -1305,7 +1305,7 @@ mod tests {
     #[test]
     fn local_db_round_trips_tokens() {
         let root = tempfile::tempdir().expect("tempdir");
-        let mut config = Config::default();
+        let mut config = Configuration::default();
         config.databases.local.path = root.path().join("local.db").display().to_string();
         let db = LocalDB::new(&config).expect("create local db");
 
@@ -1320,7 +1320,7 @@ mod tests {
     #[test]
     fn local_db_clears_expired_tokens() {
         let root = tempfile::tempdir().expect("tempdir");
-        let mut config = Config::default();
+        let mut config = Configuration::default();
         config.databases.local.path = root.path().join("local.db").display().to_string();
         let db = LocalDB::new(&config).expect("create local db");
 

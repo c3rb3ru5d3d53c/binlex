@@ -22,8 +22,9 @@
 # SOFTWARE.
 
 import sys
+from pathlib import Path
 
-from binlex import Config
+from binlex import Configuration
 from binlex.controlflow import Graph
 from binlex.disassemblers.capstone import Disassembler
 from binlex.formats import PE
@@ -35,14 +36,14 @@ def main() -> int:
         print(f"usage: {sys.argv[0]} <pe-file> [worker-dir]", file=sys.stderr)
         return 1
 
-    config = Config()
+    config = Configuration()
     
     config.general.threads = 16
 
     if len(sys.argv) >= 3:
         config.processors.path = sys.argv[2]
 
-    pe = PE(sys.argv[1], config)
+    pe = PE(Path(sys.argv[1]).read_bytes(), config)
     image = pe.image()
 
     disassembler = Disassembler(

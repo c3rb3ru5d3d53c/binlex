@@ -1,4 +1,4 @@
-use crate::config::config::Config;
+use crate::config::config::Configuration;
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 
@@ -10,7 +10,7 @@ pub struct LocalStore {
 #[pymethods]
 impl LocalStore {
     #[new]
-    pub fn new(config: PyRef<'_, Config>) -> PyResult<Self> {
+    pub fn new(config: PyRef<'_, Configuration>) -> PyResult<Self> {
         let config = config
             .inner
             .lock()

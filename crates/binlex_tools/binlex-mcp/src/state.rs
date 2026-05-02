@@ -8,7 +8,7 @@ use binlex::config::DIRECTORY;
 use binlex::processor::registered_processor_registrations_for_config;
 use binlex::server::dto::ProcessorHttpRequest;
 use binlex::server::state::AppState;
-use binlex::{Config, VERSION};
+use binlex::{Configuration, VERSION};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tracing::{info, warn};
@@ -60,7 +60,7 @@ impl Default for McpConfig {
 
 #[derive(Clone)]
 pub struct McpState {
-    pub config: Config,
+    pub config: Configuration,
     pub mcp: McpConfig,
     pub processor_state: AppState,
     pub python_command: String,
@@ -68,7 +68,7 @@ pub struct McpState {
 }
 
 impl McpState {
-    pub fn new(config: Config, mcp: McpConfig, python_command: String) -> Result<Self, DynError> {
+    pub fn new(config: Configuration, mcp: McpConfig, python_command: String) -> Result<Self, DynError> {
         let processor_state = AppState::new(config.clone(), config.debug)?;
         let samples_dir = resolve_samples_dir(mcp.samples.directory.as_deref().map(Path::new))?;
         let sample_store = Arc::new(SampleStore::new(
@@ -139,8 +139,8 @@ impl McpState {
     }
 }
 
-pub fn load_binlex_config(path: Option<&Path>) -> Result<Config, DynError> {
-    Ok(Config::load(path)?)
+pub fn load_binlex_config(path: Option<&Path>) -> Result<Configuration, DynError> {
+    Ok(Configuration::load(path)?)
 }
 
 pub fn mcp_default_path() -> Result<PathBuf, DynError> {

@@ -25,14 +25,11 @@ use crate::controlflow::json_value_to_py;
 use crate::controlflow::Instruction;
 use crate::genetics::Chromosome;
 use crate::hashing::{MinHash32, SSDeep, SHA256, TLSH};
-use crate::imaging::Imaging;
 use crate::Architecture;
-use crate::Config;
+use crate::Configuration;
 use binlex::controlflow::Block as InnerBlock;
 use binlex::controlflow::BlockJsonDeserializer as InnerBlockJsonDeserializer;
 use binlex::hex;
-use binlex::imaging::Imaging as InnerImaging;
-use binlex::io::Stderr;
 use binlex::Architecture as InnerArchitecture;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
@@ -56,7 +53,7 @@ impl BlockJsonDeserializer {
     #[new]
     #[pyo3(text_signature = "(string, config)")]
     /// Create a deserializer from a serialized block JSON string.
-    pub fn new(py: Python, string: String, config: Py<Config>) -> PyResult<Self> {
+    pub fn new(py: Python, string: String, config: Py<Configuration>) -> PyResult<Self> {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
         let inner = InnerBlockJsonDeserializer::new(string, inner_config.clone())?;
         Ok(Self {
@@ -179,18 +176,6 @@ impl BlockJsonDeserializer {
             minhash_seed: self.chromosome_minhash_seed,
             tlsh_minimum_byte_size: self.chromosome_tlsh_minimum_byte_size,
         }
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the imaging pipeline for the serialized block bytes.
-    pub fn imaging(&self) -> PyResult<Imaging> {
-        let binding = self.inner.lock().unwrap();
-        let bytes =
-            hex::decode(&binding.json.bytes).map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
-        Ok(Imaging::from_inner(InnerImaging::new(
-            bytes,
-            binding.config.clone(),
-        )))
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -331,31 +316,6 @@ impl Block {
     /// Retrieves the raw bytes of the block.
     pub fn bytes(&self, py: Python) -> PyResult<Py<PyBytes>> {
         self.with_inner_block(py, |block| Ok(PyBytes::new(py, &block.bytes()).unbind()))
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the imaging pipeline for the block bytes.
-    pub fn imaging(&self, py: Python) -> PyResult<Imaging> {
-        self.with_inner_block(py, |block| Ok(Imaging::from_inner(block.imaging())))
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the LLVM embedding vector for this block, if available.
-    pub fn embedding(&self, py: Python) -> PyResult<Option<Vec<f32>>> {
-        let config = self.cfg.borrow(py).inner.lock().unwrap().config.clone();
-        match self.with_inner_block(py, |block| Ok(block.embeddings().llvm())) {
-            Ok(result) => Ok(result),
-            Err(error) => {
-                Stderr::print_debug(
-                    &config,
-                    format!(
-                        "llvm block embedding skipped address=0x{:x} error={}",
-                        self.address, error
-                    ),
-                );
-                Ok(None)
-            }
-        }
     }
 
     #[pyo3(text_signature = "($self)")]

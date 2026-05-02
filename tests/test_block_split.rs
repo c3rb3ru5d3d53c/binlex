@@ -23,7 +23,7 @@
 use binlex::controlflow::{Function, Graph};
 use binlex::disassemblers::capstone::Disassembler;
 use binlex::hex;
-use binlex::{Architecture, Config};
+use binlex::{Architecture, Configuration};
 use std::collections::BTreeMap;
 
 fn pattern_matches_bytes(pattern: &str, bytes: &[u8]) -> bool {
@@ -51,7 +51,7 @@ fn test_block_split_pending() {
     let bytes = vec![0x74, 0x02, 0x90, 0x90, 0xc3];
     let mut ranges = BTreeMap::new();
     ranges.insert(0u64, bytes.len() as u64);
-    let config = Config::new();
+    let config = Configuration::new();
     let disasm = Disassembler::new(Architecture::I386, &bytes, ranges.clone(), config.clone())
         .expect("disasm");
     let mut graph = Graph::new(Architecture::I386, config.clone());
@@ -75,7 +75,7 @@ fn test_full_function_disassembly() {
         .collect();
     let mut ranges = BTreeMap::new();
     ranges.insert(0u64, bytes.len() as u64);
-    let config = Config::new();
+    let config = Configuration::new();
     let disasm = Disassembler::new(Architecture::I386, &bytes, ranges.clone(), config.clone())
         .expect("disasm");
     let mut graph = Graph::new(Architecture::I386, config.clone());
@@ -114,7 +114,7 @@ fn test_direct_call_outside_executable_range_is_not_enqueued_as_function() {
     let bytes = vec![0xe8, 0x05, 0x00, 0x00, 0x00, 0xc3];
     let mut ranges = BTreeMap::new();
     ranges.insert(0u64, bytes.len() as u64);
-    let config = Config::new();
+    let config = Configuration::new();
     let disasm =
         Disassembler::new(Architecture::I386, &bytes, ranges, config.clone()).expect("disasm");
     let mut graph = Graph::new(Architecture::I386, config);
@@ -144,7 +144,7 @@ fn test_direct_jump_inside_executable_range_is_not_enqueued_as_function() {
     let bytes = vec![0xeb, 0x00, 0xc3];
     let mut ranges = BTreeMap::new();
     ranges.insert(0u64, bytes.len() as u64);
-    let config = Config::new();
+    let config = Configuration::new();
     let disasm =
         Disassembler::new(Architecture::I386, &bytes, ranges, config.clone()).expect("disasm");
     let mut graph = Graph::new(Architecture::I386, config);
@@ -182,7 +182,7 @@ fn test_i386_indirect_call_absolute_memory_resolves_function_target() {
     ];
     let mut ranges = BTreeMap::new();
     ranges.insert(0u64, bytes.len() as u64);
-    let config = Config::new();
+    let config = Configuration::new();
     let disasm =
         Disassembler::new(Architecture::I386, &bytes, ranges, config.clone()).expect("disasm");
     let mut graph = Graph::new(Architecture::I386, config);
@@ -221,7 +221,7 @@ fn test_i386_indirect_jump_absolute_memory_resolves_block_target_only() {
     ];
     let mut ranges = BTreeMap::new();
     ranges.insert(0u64, bytes.len() as u64);
-    let config = Config::new();
+    let config = Configuration::new();
     let disasm =
         Disassembler::new(Architecture::I386, &bytes, ranges, config.clone()).expect("disasm");
     let mut graph = Graph::new(Architecture::I386, config);
@@ -273,7 +273,7 @@ fn test_i386_indexed_jump_table_memory_recovers_all_targets() {
     ];
     let mut ranges = BTreeMap::new();
     ranges.insert(0u64, bytes.len() as u64);
-    let config = Config::new();
+    let config = Configuration::new();
     let disasm =
         Disassembler::new(Architecture::I386, &bytes, ranges, config.clone()).expect("disasm");
     let mut graph = Graph::new(Architecture::I386, config);
@@ -322,7 +322,7 @@ fn test_i386_register_jump_table_recovers_all_targets() {
     ];
     let mut ranges = BTreeMap::new();
     ranges.insert(0u64, bytes.len() as u64);
-    let config = Config::new();
+    let config = Configuration::new();
     let disasm =
         Disassembler::new(Architecture::I386, &bytes, ranges, config.clone()).expect("disasm");
     let mut graph = Graph::new(Architecture::I386, config);
@@ -370,7 +370,7 @@ fn test_amd64_relative_register_jump_table_recovers_all_targets() {
     ];
     let mut ranges = BTreeMap::new();
     ranges.insert(0u64, bytes.len() as u64);
-    let config = Config::new();
+    let config = Configuration::new();
     let disasm =
         Disassembler::new(Architecture::AMD64, &bytes, ranges, config.clone()).expect("disasm");
     let mut graph = Graph::new(Architecture::AMD64, config);
@@ -397,7 +397,7 @@ fn test_i386_lea_absolute_memory_resolves_executable_address() {
     let bytes = vec![0x8d, 0x05, 0x06, 0x00, 0x00, 0x00, 0xc3];
     let mut ranges = BTreeMap::new();
     ranges.insert(0u64, bytes.len() as u64);
-    let config = Config::new();
+    let config = Configuration::new();
     let disasm =
         Disassembler::new(Architecture::I386, &bytes, ranges, config.clone()).expect("disasm");
     let mut graph = Graph::new(Architecture::I386, config);
@@ -425,7 +425,7 @@ fn test_block_split_keeps_predecessor_terminator_metadata() {
     let bytes = vec![0x90, 0x90, 0xc3];
     let mut ranges = BTreeMap::new();
     ranges.insert(0u64, bytes.len() as u64);
-    let config = Config::new();
+    let config = Configuration::new();
     let disasm =
         Disassembler::new(Architecture::I386, &bytes, ranges, config.clone()).expect("disasm");
     let mut graph = Graph::new(Architecture::I386, config);
@@ -461,7 +461,7 @@ fn test_executable_address_end_is_exclusive() {
     let bytes = vec![0x90, 0xc3];
     let mut ranges = BTreeMap::new();
     ranges.insert(0u64, bytes.len() as u64);
-    let config = Config::new();
+    let config = Configuration::new();
     let disasm =
         Disassembler::new(Architecture::I386, &bytes, ranges, config.clone()).expect("disasm");
     let mut graph = Graph::new(Architecture::I386, config);
@@ -485,7 +485,7 @@ fn test_return_instruction_has_zero_edges() {
     let bytes = vec![0xc3];
     let mut ranges = BTreeMap::new();
     ranges.insert(0u64, bytes.len() as u64);
-    let config = Config::new();
+    let config = Configuration::new();
     let disasm =
         Disassembler::new(Architecture::I386, &bytes, ranges, config.clone()).expect("disasm");
     let mut graph = Graph::new(Architecture::I386, config);

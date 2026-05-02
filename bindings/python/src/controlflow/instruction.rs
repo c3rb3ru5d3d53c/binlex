@@ -23,18 +23,15 @@
 use crate::controlflow::json_value_to_py;
 use crate::controlflow::Graph;
 use crate::genetics::Chromosome;
-use crate::imaging::Imaging;
 use crate::semantics::InstructionSemantics as PyInstructionSemantics;
 use crate::Architecture;
-use crate::Config;
+use crate::Configuration;
 use binlex::controlflow::Instruction as InnerInstruction;
 use binlex::controlflow::InstructionJson as InnerInstructionJson;
 use binlex::controlflow::Operand as InnerOperand;
 use binlex::controlflow::OperandKind as InnerOperandKind;
 use binlex::genetics::Chromosome as InnerChromosome;
 use binlex::hex;
-use binlex::imaging::Imaging as InnerImaging;
-use binlex::io::Stderr;
 use pyo3::class::basic::CompareOp;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBytes, PyType};
@@ -319,7 +316,7 @@ impl Operand {
 #[pyclass]
 pub struct InstructionJsonDeserializer {
     pub inner: Arc<Mutex<InnerInstructionJson>>,
-    pub config: binlex::Config,
+    pub config: binlex::Configuration,
     chromosome_minhash_num_hashes: usize,
     chromosome_minhash_shingle_size: usize,
     chromosome_minhash_seed: u64,
@@ -330,7 +327,7 @@ pub struct InstructionJsonDeserializer {
 impl InstructionJsonDeserializer {
     #[new]
     #[pyo3(text_signature = "(string, config)")]
-    pub fn new(py: Python<'_>, string: String, config: Py<Config>) -> PyResult<Self> {
+    pub fn new(py: Python<'_>, string: String, config: Py<Configuration>) -> PyResult<Self> {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
         let inner: InnerInstructionJson = serde_json::from_str(&string)
             .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?;
@@ -431,15 +428,6 @@ impl InstructionJsonDeserializer {
             minhash_seed: self.chromosome_minhash_seed,
             tlsh_minimum_byte_size: self.chromosome_tlsh_minimum_byte_size,
         })
-    }
-
-    pub fn imaging(&self) -> PyResult<Imaging> {
-        let bytes = hex::decode(&self.inner.lock().unwrap().bytes)
-            .map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
-        Ok(Imaging::from_inner(InnerImaging::new(
-            bytes,
-            self.config.clone(),
-        )))
     }
 
     pub fn processors(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
@@ -639,33 +627,6 @@ impl Instruction {
                 .map(|operand| Py::new(py, Operand::from_inner(operand)))
                 .collect()
         })
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the imaging pipeline for the instruction bytes.
-    pub fn imaging(&self, py: Python) -> PyResult<Imaging> {
-        self.with_inner_instruction(py, |instruction| {
-            Ok(Imaging::from_inner(instruction.imaging()))
-        })
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the LLVM embedding vector for this instruction, if available.
-    pub fn embedding(&self, py: Python) -> PyResult<Option<Vec<f32>>> {
-        let config = self.cfg.borrow(py).inner.lock().unwrap().config.clone();
-        match self.with_inner_instruction(py, |instruction| Ok(instruction.embeddings().llvm())) {
-            Ok(result) => Ok(result),
-            Err(error) => {
-                Stderr::print_debug(
-                    &config,
-                    format!(
-                        "llvm instruction embedding skipped address=0x{:x} error={}",
-                        self.address, error
-                    ),
-                );
-                Ok(None)
-            }
-        }
     }
 
     #[pyo3(text_signature = "($self)")]

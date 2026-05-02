@@ -31,7 +31,7 @@ impl Default for ServerRuntimeConfig {
         Self {
             bind: "127.0.0.1:5000".to_string(),
             debug: false,
-            binlex_config: binlex::Config::default_path()
+            binlex_config: binlex::Configuration::default_path()
                 .unwrap_or_else(|| PathBuf::from("binlex.toml"))
                 .to_string_lossy()
                 .into_owned(),
@@ -103,7 +103,7 @@ fn load_server_config(
     Ok(config)
 }
 
-fn apply_processor_cli_overrides(config: &mut binlex::Config, args: &Args) {
+fn apply_processor_cli_overrides(config: &mut binlex::Configuration, args: &Args) {
     if let Some(processes) = args.processes {
         config.processors.processes = processes;
     }
@@ -135,7 +135,7 @@ fn apply_processor_cli_overrides(config: &mut binlex::Config, args: &Args) {
 }
 
 fn apply_embedding_cli_overrides(
-    config: &mut binlex::Config,
+    config: &mut binlex::Configuration,
     args: &Args,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let Some(backends) = args.embeddings.as_ref() else {
@@ -178,16 +178,16 @@ fn ensure_config_exists(path: &std::path::Path) -> Result<(), Box<dyn std::error
         std::fs::create_dir_all(parent)?;
     }
     std::fs::write(path, toml::to_string_pretty(&ServerConfigFile::default())?)?;
-    let binlex_config_path = binlex::Config::default_path()
+    let binlex_config_path = binlex::Configuration::default_path()
         .ok_or_else(|| Error::other("unable to resolve default binlex configuration path"))?;
     if !binlex_config_path.exists() {
-        binlex::Config::default().write_to_file(
+        binlex::Configuration::default().write_to_file(
             binlex_config_path
                 .to_str()
                 .ok_or_else(|| Error::other("invalid default binlex configuration path"))?,
         )?;
     }
-    binlex::Config::ensure_default_processor_directory()?;
+    binlex::Configuration::ensure_default_processor_directory()?;
     Ok(())
 }
 
@@ -221,7 +221,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         loaded.server.debug = true;
     }
     let binlex_config_path = resolve_binlex_config_path(&loaded.server.binlex_config);
-    let mut config = binlex::Config::load(Some(binlex_config_path.as_path()))?;
+    let mut config = binlex::Configuration::load(Some(binlex_config_path.as_path()))?;
     apply_processor_cli_overrides(&mut config, &args);
     apply_embedding_cli_overrides(&mut config, &args)?;
     tracing_subscriber::fmt()
@@ -275,7 +275,7 @@ mod tests {
 
     #[test]
     fn shared_binlex_config_is_namespaced() {
-        let toml = toml::to_string_pretty(&binlex::Config::default())
+        let toml = toml::to_string_pretty(&binlex::Configuration::default())
             .expect("shared config should serialize");
         assert!(toml.contains("[binlex]"));
     }
@@ -291,7 +291,7 @@ mod tests {
     #[test]
     fn embeddings_cli_override_enables_function_llvm_embeddings() {
         let args = Args::parse_from(["binlex-server", "--embeddings", "llvm"]);
-        let mut config = binlex::Config::default();
+        let mut config = binlex::Configuration::default();
         config.blocks.embeddings.llvm.enabled = false;
         config.functions.embeddings.llvm.enabled = false;
 
@@ -305,7 +305,7 @@ mod tests {
     #[test]
     fn embeddings_cli_override_none_disables_embeddings() {
         let args = Args::parse_from(["binlex-server", "--embeddings", "none"]);
-        let mut config = binlex::Config::default();
+        let mut config = binlex::Configuration::default();
         config.instructions.embeddings.llvm.enabled = true;
         config.blocks.embeddings.llvm.enabled = true;
         config.functions.embeddings.llvm.enabled = true;

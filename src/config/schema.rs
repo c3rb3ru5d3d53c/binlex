@@ -251,7 +251,7 @@ pub struct ConfigData {
 }
 
 #[derive(Clone)]
-pub struct Config(pub(crate) Arc<ConfigData>);
+pub struct Configuration(pub(crate) Arc<ConfigData>);
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigStorage {
@@ -465,7 +465,7 @@ pub struct ConfigHashEnabled {
     pub enabled: bool,
 }
 
-impl Serialize for Config {
+impl Serialize for Configuration {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -477,7 +477,7 @@ impl Serialize for Config {
     }
 }
 
-impl<'de> Deserialize<'de> for Config {
+impl<'de> Deserialize<'de> for Configuration {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -486,7 +486,7 @@ impl<'de> Deserialize<'de> for Config {
     }
 }
 
-impl Deref for Config {
+impl Deref for Configuration {
     type Target = ConfigData;
 
     fn deref(&self) -> &Self::Target {
@@ -494,7 +494,7 @@ impl Deref for Config {
     }
 }
 
-impl DerefMut for Config {
+impl DerefMut for Configuration {
     fn deref_mut(&mut self) -> &mut Self::Target {
         Arc::make_mut(&mut self.0)
     }

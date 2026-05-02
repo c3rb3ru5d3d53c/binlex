@@ -1,4 +1,4 @@
-fn configure_analysis_embeddings(config: &mut Config, ui: &BinlexWebConfig) {
+fn configure_analysis_embeddings(config: &mut Configuration, ui: &BinlexWebConfig) {
     if ui.index.local.selector != "embeddings.llvm.vector" {
         return;
     }
@@ -45,7 +45,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         config.binlex_web.index.local.lock_corpora
     );
 
-    let mut analysis_config = Config::default();
+    let mut analysis_config = Configuration::default();
     analysis_config.index.local.dimensions = Some(64);
     configure_analysis_embeddings(&mut analysis_config, &config.binlex_web);
     let index_root = PathBuf::from(expand_path(&config.binlex_web.index.local.path));

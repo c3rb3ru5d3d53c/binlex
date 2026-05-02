@@ -3,7 +3,7 @@ struct AppState {
     client: Server,
     index: LocalIndex,
     database: Arc<LocalDB>,
-    analysis_config: Config,
+    analysis_config: Configuration,
     index_root: PathBuf,
     staged_indexes: Arc<Mutex<BTreeMap<String, LocalIndex>>>,
 }

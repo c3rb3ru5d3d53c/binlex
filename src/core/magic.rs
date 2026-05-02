@@ -21,7 +21,6 @@
 // SOFTWARE.
 
 use std::fmt;
-use std::fs;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::str::FromStr;
@@ -44,12 +43,7 @@ pub enum Magic {
 }
 
 impl Magic {
-    pub fn from_file(path: String) -> Result<Magic, Error> {
-        let bytes = fs::read(path)?;
-        Ok(Magic::from_bytes(&bytes))
-    }
-
-    pub fn from_bytes(bytes: &[u8]) -> Magic {
+    pub fn new(bytes: &[u8]) -> Magic {
         if Self::is_pe(bytes) {
             return Magic::PE;
         }
@@ -135,35 +129,35 @@ mod tests {
         bytes[0x3c..0x40].copy_from_slice(&0x40u32.to_le_bytes());
         bytes[0x40..0x44].copy_from_slice(&[0x50, 0x45, 0x00, 0x00]);
 
-        assert_eq!(Magic::from_bytes(&bytes), Magic::PE);
+        assert_eq!(Magic::new(&bytes), Magic::PE);
     }
 
     #[test]
     fn detects_elf_from_bytes() {
         let bytes = [0x7f, 0x45, 0x4c, 0x46];
 
-        assert_eq!(Magic::from_bytes(&bytes), Magic::ELF);
+        assert_eq!(Magic::new(&bytes), Magic::ELF);
     }
 
     #[test]
     fn detects_macho_from_bytes() {
         let bytes = [0xCF, 0xFA, 0xED, 0xFE];
 
-        assert_eq!(Magic::from_bytes(&bytes), Magic::MACHO);
+        assert_eq!(Magic::new(&bytes), Magic::MACHO);
     }
 
     #[test]
     fn detects_png_from_bytes() {
         let bytes = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
-        assert_eq!(Magic::from_bytes(&bytes), Magic::PNG);
+        assert_eq!(Magic::new(&bytes), Magic::PNG);
     }
 
     #[test]
     fn returns_unknown_for_short_or_unrecognized_bytes() {
-        assert_eq!(Magic::from_bytes(&[]), Magic::UNKNOWN);
-        assert_eq!(Magic::from_bytes(&[0x4d, 0x5a]), Magic::UNKNOWN);
-        assert_eq!(Magic::from_bytes(&[0x00, 0x01, 0x02, 0x03]), Magic::UNKNOWN);
+        assert_eq!(Magic::new(&[]), Magic::UNKNOWN);
+        assert_eq!(Magic::new(&[0x4d, 0x5a]), Magic::UNKNOWN);
+        assert_eq!(Magic::new(&[0x00, 0x01, 0x02, 0x03]), Magic::UNKNOWN);
     }
 }
 

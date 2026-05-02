@@ -4,7 +4,7 @@ use super::samples::{Arm64Sample, sample_registry};
 use super::support::{Arm64Fixture, unicorn_arm64_execution};
 use crate::controlflow::Graph;
 use crate::disassemblers::capstone::Disassembler;
-use crate::{Architecture, Config};
+use crate::{Architecture, Configuration};
 
 const ARM64_SPEC_MNEMONICS: &str = r#"
 abs
@@ -1354,7 +1354,7 @@ fn auto_classify_conformance_unsupported(
 }
 
 fn arm64_capstone_supports(bytes: &[u8]) -> bool {
-    let config = Config::default();
+    let config = Configuration::default();
     let mut ranges = BTreeMap::new();
     ranges.insert(0, bytes.len() as u64);
     let mut graph = Graph::new(Architecture::ARM64, config.clone());

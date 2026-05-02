@@ -1,5 +1,5 @@
 use crate::controlflow::{Block, Function, Instruction};
-use crate::Config;
+use crate::Configuration;
 use binlex::io::Stderr;
 use binlex::lifters::vex::Lifter as InnerLifter;
 use pyo3::prelude::*;
@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 
 #[pyclass(unsendable)]
 pub struct Lifter {
-    pub config: binlex::Config,
+    pub config: binlex::Configuration,
     pub inner: Arc<Mutex<InnerLifter>>,
 }
 
@@ -15,7 +15,7 @@ pub struct Lifter {
 impl Lifter {
     #[new]
     #[pyo3(text_signature = "(config)")]
-    pub fn new(py: Python<'_>, config: Py<Config>) -> Self {
+    pub fn new(py: Python<'_>, config: Py<Configuration>) -> Self {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
         let inner = InnerLifter::new(inner_config.clone());
         Self {

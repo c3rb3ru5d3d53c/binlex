@@ -26,9 +26,9 @@
 import sys
 import json
 from binlex.genetics import Chromosome
-from binlex import Config
+from binlex import Configuration
 
-config = Config()
+config = Configuration()
 
 lhs = Chromosome('deadbeef', config)
 rhs = Chromosome('fedeadbeeffe', config)

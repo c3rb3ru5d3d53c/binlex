@@ -1,10 +1,10 @@
 from typing import Any
 
-from binlex import Config
+from binlex import Configuration
 
 
 class LocalStore:
-    def __init__(self, config: Config) -> None: ...
+    def __init__(self, config: Configuration) -> None: ...
     @staticmethod
     def with_root(root: str) -> "LocalStore": ...
     @property

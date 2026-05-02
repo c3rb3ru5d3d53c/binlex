@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::Config;
+use crate::Configuration;
 use crate::entropy;
 use crate::genetics::AllelePair;
 use crate::hashing::MinHash32;
@@ -28,7 +28,6 @@ use crate::hashing::SHA256;
 use crate::hashing::SSDeep;
 use crate::hashing::TLSH;
 use crate::hex;
-use crate::imaging::Imaging;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::io::Error;
@@ -71,12 +70,12 @@ pub struct Chromosome {
     raw_bytes: Vec<u8>,
     wildcard_mask: Vec<u8>,
     number_of_mutations: usize,
-    config: Config,
+    config: Configuration,
 }
 
 impl Chromosome {
     /// Creates a new chromosome from raw bytes and a per-byte wildcard mask.
-    pub fn new(raw_bytes: Vec<u8>, wildcard_mask: Vec<u8>, config: Config) -> Result<Self, Error> {
+    pub fn new(raw_bytes: Vec<u8>, wildcard_mask: Vec<u8>, config: Configuration) -> Result<Self, Error> {
         Self::validate_lengths(&raw_bytes, &wildcard_mask)?;
         Ok(Self {
             raw_bytes,
@@ -87,7 +86,7 @@ impl Chromosome {
     }
 
     /// Creates a chromosome from a YARA-style pattern. This path is inherently lossy.
-    pub fn from_pattern(pattern: String, config: Config) -> Result<Self, Error> {
+    pub fn from_pattern(pattern: String, config: Configuration) -> Result<Self, Error> {
         let (raw_bytes, wildcard_mask) = Self::parse_pattern(pattern)?;
         Self::new(raw_bytes, wildcard_mask, config)
     }
@@ -196,11 +195,6 @@ impl Chromosome {
             .zip(&self.wildcard_mask)
             .map(|(&value, &mask)| value & !mask)
             .collect()
-    }
-
-    /// Returns an imaging pipeline for the masked chromosome bytes.
-    pub fn imaging(&self) -> Imaging {
-        Imaging::new(self.masked(), self.config.clone())
     }
 
     /// Extracts the nibble vector from the masked chromosome bytes.

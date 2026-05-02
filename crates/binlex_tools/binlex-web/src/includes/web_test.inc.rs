@@ -4,7 +4,7 @@ mod tests {
     use binlex::controlflow::{Function, Graph, Instruction};
 
     fn build_test_state(root: &std::path::Path, sha256: &str) -> AppState {
-        let mut analysis_config = Config::default();
+        let mut analysis_config = Configuration::default();
         analysis_config.index.local.dimensions = Some(64);
         let mut graph = Graph::new(Architecture::AMD64, analysis_config.clone());
         let mut instruction =
@@ -37,7 +37,7 @@ mod tests {
         index.commit().expect("commit local index");
 
         let client = Server::new(
-            Config::default(),
+            Configuration::default(),
             Some("http://127.0.0.1:5000".to_string()),
             Some(false),
             Some(true),

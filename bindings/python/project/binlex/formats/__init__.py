@@ -31,7 +31,6 @@ from binlex_bindings.binlex.formats import SymbolKind as _SymbolKindBinding
 
 from binlex.core.architecture import Architecture
 from binlex.hashing import SHA256, TLSH
-from binlex.imaging import Imaging
 from binlex.core.magic import Magic
 
 
@@ -129,16 +128,9 @@ class Symbol:
 class ELF:
     """Executable and Linkable Format wrapper with address translation helpers."""
 
-    def __init__(self, path, config):
-        """Open an ELF image from `path` using the supplied binlex configuration."""
-        self._inner = _ELFBinding(path, config)
-
-    @classmethod
-    def from_bytes(cls, bytes, config):
+    def __init__(self, data, config):
         """Parse an ELF image from an in-memory byte sequence."""
-        result = cls.__new__(cls)
-        result._inner = _ELFBinding.from_bytes(bytes, config)
-        return result
+        self._inner = _ELFBinding(data, config)
 
     def architecture(self):
         """Return the architecture declared by the ELF image."""
@@ -169,10 +161,6 @@ class ELF:
     def image(self):
         """Return an `Image` wrapper over the ELF contents."""
         return Image._from_binding(self._inner.image())
-
-    def imaging(self):
-        """Return the imaging pipeline over the mapped ELF contents."""
-        return Imaging._from_binding(self._inner.imaging())
 
     def tlsh(self):
         """Return the TLSH helper for the image when available."""
@@ -248,16 +236,9 @@ class File:
 class PE:
     """Portable Executable wrapper with address translation helpers."""
 
-    def __init__(self, path, config):
-        """Open a PE image from disk."""
-        self._inner = _PEBinding(path, config)
-
-    @classmethod
-    def from_bytes(cls, bytes, config):
+    def __init__(self, data, config):
         """Construct a PE image from an in-memory byte sequence."""
-        result = cls.__new__(cls)
-        result._inner = _PEBinding.from_bytes(bytes, config)
-        return result
+        self._inner = _PEBinding(data, config)
 
     def architecture(self):
         """Return the architecture declared by the PE image."""
@@ -274,10 +255,6 @@ class PE:
     def file(self):
         """Return the associated `binlex.formats.File` wrapper."""
         return File._from_binding(self._inner.file())
-
-    def imaging(self):
-        """Return the imaging pipeline over the mapped PE contents."""
-        return Imaging._from_binding(self._inner.imaging())
 
     def symbols(self):
         """Return typed symbols extracted from the PE image."""
@@ -412,19 +389,9 @@ class MACHO:
         def image(self):
             return Image._from_binding(self._inner.image())
 
-        def imaging(self):
-            return Imaging._from_binding(self._inner.imaging())
-
-    def __init__(self, path, config):
-        """Open a Mach-O image from disk using the supplied binlex configuration."""
-        self._inner = _MACHOBinding(path, config)
-
-    @classmethod
-    def from_bytes(cls, bytes, config):
+    def __init__(self, data, config):
         """Parse a Mach-O image from an in-memory byte sequence."""
-        result = cls.__new__(cls)
-        result._inner = _MACHOBinding.from_bytes(bytes, config)
-        return result
+        self._inner = _MACHOBinding(data, config)
 
     def relative_virtual_address_to_virtual_address(
         self, relative_virtual_address, slice
@@ -503,10 +470,6 @@ class MACHO:
     def image(self, slice):
         """Return an `Image` wrapper over the contents of `slice`."""
         return Image._from_binding(self._inner.image(slice))
-
-    def imaging(self):
-        """Return the imaging pipeline over the raw Mach-O container bytes."""
-        return Imaging._from_binding(self._inner.imaging())
 
     def size(self):
         """Return the full Mach-O container size in bytes."""

@@ -6,20 +6,20 @@ use crate::indexing::Collection;
 use crate::metadata::Attributes;
 use crate::server::dto::{AnalyzeRequest, AnalyzeResponse, AnalyzeSelectedVectors};
 use crate::server::error::ServerError;
-use crate::{Architecture, Config, Magic};
+use crate::{Architecture, Configuration, Magic};
 use base64::Engine;
 use ring::digest::{SHA256, digest};
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
 use tracing::info;
 
-pub fn execute(config: &Config, request: AnalyzeRequest) -> Result<AnalyzeResponse, ServerError> {
+pub fn execute(config: &Configuration, request: AnalyzeRequest) -> Result<AnalyzeResponse, ServerError> {
     let data = base64::engine::general_purpose::STANDARD
         .decode(&request.data)
         .map_err(|error| ServerError::processor(format!("invalid base64 payload: {}", error)))?;
     let mut analysis_config = config.clone();
 
-    let detected_magic = Magic::from_bytes(&data);
+    let detected_magic = Magic::new(&data);
     let requested_magic = request
         .magic
         .as_deref()
@@ -153,7 +153,7 @@ fn selector_vector(value: &serde_json::Value, selector: &str) -> Option<Vec<f32>
         .collect()
 }
 
-fn selected_vector_selector(config: &Config) -> Option<&'static str> {
+fn selected_vector_selector(config: &Configuration) -> Option<&'static str> {
     if config.instructions.embeddings.llvm.enabled
         || config.blocks.embeddings.llvm.enabled
         || config.functions.embeddings.llvm.enabled
@@ -209,7 +209,7 @@ fn collect_selected_vectors(
 fn collect_attributes(
     bytes: &[u8],
     architecture: Architecture,
-    config: Config,
+    config: Configuration,
     magic: Magic,
 ) -> Attributes {
     let mut attributes = Attributes::new();
@@ -219,14 +219,14 @@ fn collect_attributes(
     }
     match magic {
         Magic::ELF => {
-            if let Ok(elf) = ELF::from_bytes(bytes.to_vec(), config) {
+            if let Ok(elf) = ELF::new(bytes.to_vec(), config) {
                 for symbol in elf.symbols().into_values() {
                     attributes.push(symbol.attribute());
                 }
             }
         }
         Magic::MACHO => {
-            if let Ok(macho) = MACHO::from_bytes(bytes.to_vec(), config) {
+            if let Ok(macho) = MACHO::new(bytes.to_vec(), config) {
                 for (slice_index, _) in macho.slices().enumerate() {
                     if macho.architecture(slice_index) != architecture {
                         continue;
@@ -238,7 +238,7 @@ fn collect_attributes(
             }
         }
         Magic::PE => {
-            let _ = PE::from_bytes(bytes.to_vec(), config);
+            let _ = PE::new(bytes.to_vec(), config);
         }
         _ => {}
     }
@@ -317,14 +317,14 @@ mod tests {
 }
 
 fn analyze_pe(
-    config: &mut Config,
+    config: &mut Configuration,
     requested_architecture: Option<Architecture>,
     data: Vec<u8>,
     magic: Magic,
     corpora: Vec<String>,
     collections: BTreeSet<Collection>,
 ) -> Result<AnalyzeResponse, ServerError> {
-    let pe = PE::from_bytes(data.clone(), config.clone())
+    let pe = PE::new(data.clone(), config.clone())
         .map_err(|error| ServerError::processor(format!("failed to parse pe image: {}", error)))?;
     let architecture = requested_architecture.unwrap_or(pe.architecture());
     if architecture == Architecture::UNKNOWN {
@@ -387,14 +387,14 @@ fn analyze_pe(
 }
 
 fn analyze_elf(
-    config: &mut Config,
+    config: &mut Configuration,
     requested_architecture: Option<Architecture>,
     data: Vec<u8>,
     magic: Magic,
     corpora: Vec<String>,
     collections: BTreeSet<Collection>,
 ) -> Result<AnalyzeResponse, ServerError> {
-    let elf = ELF::from_bytes(data.clone(), config.clone())
+    let elf = ELF::new(data.clone(), config.clone())
         .map_err(|error| ServerError::processor(format!("failed to parse elf image: {}", error)))?;
     let architecture = requested_architecture.unwrap_or(elf.architecture());
     if architecture == Architecture::UNKNOWN {
@@ -427,14 +427,14 @@ fn analyze_elf(
 }
 
 fn analyze_macho(
-    config: &mut Config,
+    config: &mut Configuration,
     requested_architecture: Option<Architecture>,
     data: Vec<u8>,
     magic: Magic,
     corpora: Vec<String>,
     collections: BTreeSet<Collection>,
 ) -> Result<AnalyzeResponse, ServerError> {
-    let macho = MACHO::from_bytes(data.clone(), config.clone()).map_err(|error| {
+    let macho = MACHO::new(data.clone(), config.clone()).map_err(|error| {
         ServerError::processor(format!("failed to parse macho image: {}", error))
     })?;
 
@@ -513,7 +513,7 @@ fn analyze_macho(
 }
 
 fn analyze_code(
-    config: &mut Config,
+    config: &mut Configuration,
     requested_architecture: Option<Architecture>,
     data: Vec<u8>,
     magic: Magic,

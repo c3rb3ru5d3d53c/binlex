@@ -7,12 +7,12 @@ use binlex::semantics::{
     InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation, SemanticStatus,
     SemanticTerminator,
 };
-use binlex::{Architecture, Config};
+use binlex::{Architecture, Configuration};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-fn test_config() -> Config {
-    let mut config = Config::default();
+fn test_config() -> Configuration {
+    let mut config = Configuration::default();
     let processor_dir = std::env::current_exe()
         .expect("test binary should have a path")
         .parent()
@@ -28,7 +28,7 @@ fn test_config() -> Config {
 
 #[test]
 fn vex_config_defaults_match_expected_shape() {
-    let config = Config::default();
+    let config = Configuration::default();
     assert!(config.lifters.vex.enabled);
     assert!(!config.instructions.lifters.vex.enabled);
     assert!(!config.blocks.lifters.vex.enabled);
@@ -37,7 +37,7 @@ fn vex_config_defaults_match_expected_shape() {
 
 #[test]
 fn vex_global_disable_blocks_lifting() {
-    let mut config = Config::default();
+    let mut config = Configuration::default();
     config.lifters.vex.enabled = false;
     let mut lifter = Lifter::new(config);
     let error = lifter
@@ -49,7 +49,7 @@ fn vex_global_disable_blocks_lifting() {
 fn instruction(address: u64, bytes: &[u8]) -> Instruction {
     Instruction {
         architecture: Architecture::AMD64,
-        config: Config::default(),
+        config: Configuration::default(),
         address,
         is_prologue: false,
         is_block_start: false,
@@ -220,7 +220,7 @@ fn cil_function_renders_vex_text() {
 
 #[test]
 fn vex_json_emission_respects_entity_flags() {
-    let mut instruction_config = Config::default();
+    let mut instruction_config = Configuration::default();
     instruction_config.instructions.lifters.vex.enabled = true;
     let lifted_instruction = Instruction {
         config: instruction_config.clone(),
@@ -235,7 +235,7 @@ fn vex_json_emission_respects_entity_flags() {
             .contains("instruction_8000")
     );
 
-    let mut block_config = Config::default();
+    let mut block_config = Configuration::default();
     block_config.blocks.lifters.vex.enabled = true;
     let block_graph = Graph::new(Architecture::AMD64, block_config);
     block_graph
@@ -254,7 +254,7 @@ fn vex_json_emission_respects_entity_flags() {
             .contains("block_8100")
     );
 
-    let mut function_config = Config::default();
+    let mut function_config = Configuration::default();
     function_config.functions.lifters.vex.enabled = true;
     let function_graph = Graph::new(Architecture::AMD64, function_config);
     function_graph

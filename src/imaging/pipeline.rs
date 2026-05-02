@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::config::Config;
+use crate::config::Configuration;
 use crate::imaging::normalize::NormalizeAlgorithm;
 use crate::imaging::renderers::Renderer;
 use crate::imaging::{PNG, Palette, Render, SVG, Terminal};
@@ -28,7 +28,7 @@ use crate::imaging::{PNG, Palette, Render, SVG, Terminal};
 #[derive(Clone)]
 struct ImagingState {
     data: Vec<u8>,
-    config: Config,
+    config: Configuration,
     renderer: Renderer,
     palette: Palette,
 }
@@ -57,11 +57,11 @@ pub struct ImagingPalette {
 #[derive(Clone)]
 pub struct ImagingNormalized {
     render: Render,
-    config: Config,
+    config: Configuration,
 }
 
 impl Imaging {
-    pub fn new(data: Vec<u8>, config: Config) -> Self {
+    pub fn new(data: Vec<u8>, config: Configuration) -> Self {
         Self {
             state: ImagingState {
                 data,
@@ -182,7 +182,7 @@ impl ImagingPalette {
 }
 
 impl ImagingNormalized {
-    fn new(render: Render, config: Config) -> Self {
+    fn new(render: Render, config: Configuration) -> Self {
         Self { render, config }
     }
 

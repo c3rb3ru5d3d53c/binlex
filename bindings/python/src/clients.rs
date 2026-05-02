@@ -2,7 +2,7 @@ use crate::controlflow::{
     BlockJsonDeserializer, FunctionJsonDeserializer, Graph, InstructionJsonDeserializer,
 };
 use crate::indexing::local::Collection;
-use crate::Config;
+use crate::Configuration;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
@@ -42,7 +42,7 @@ pub struct Server {
 #[pyclass(name = "Web")]
 pub struct Web {
     inner: InnerWeb,
-    config: Py<Config>,
+    config: Py<Configuration>,
 }
 
 #[pyclass]
@@ -229,7 +229,7 @@ impl Server {
     #[pyo3(signature = (config, url=None, verify=None, compression=None))]
     pub fn new(
         py: Python<'_>,
-        config: Py<Config>,
+        config: Py<Configuration>,
         url: Option<String>,
         verify: Option<bool>,
         compression: Option<bool>,
@@ -329,7 +329,7 @@ impl Web {
     #[pyo3(signature = (config, url=None, verify=None, api_key=None))]
     pub fn new(
         py: Python<'_>,
-        config: Py<Config>,
+        config: Py<Configuration>,
         url: Option<String>,
         verify: Option<bool>,
         api_key: Option<String>,

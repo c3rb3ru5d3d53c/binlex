@@ -1,11 +1,11 @@
 use super::*;
 
 impl LocalDB {
-    pub fn new(config: &Config) -> Result<Self, Error> {
+    pub fn new(config: &Configuration) -> Result<Self, Error> {
         Self::with_path(config, None::<&Path>)
     }
 
-    pub fn with_path(config: &Config, path: Option<impl AsRef<Path>>) -> Result<Self, Error> {
+    pub fn with_path(config: &Configuration, path: Option<impl AsRef<Path>>) -> Result<Self, Error> {
         let path = path
             .as_ref()
             .map(|value| value.as_ref())

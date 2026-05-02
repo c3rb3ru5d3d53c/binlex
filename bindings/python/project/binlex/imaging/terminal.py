@@ -23,7 +23,7 @@
 """Terminal rendering helpers for ANSI-colored binary output."""
 
 from binlex_bindings.binlex.imaging import Terminal as _TerminalBinding
-from binlex.config import Config
+from binlex.config import Configuration
 from binlex.hashing import AHash, DHash, MinHash32, PHash, SHA256, TLSH
 
 from .palette import Palette
@@ -43,7 +43,7 @@ class Terminal:
         self,
         data: bytes,
         palette: Palette,
-        config: Config,
+        config: Configuration,
         cell_size: int = 1,
         fixed_width: int = 16,
     ) -> None:

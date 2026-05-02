@@ -18,7 +18,7 @@ use binlex::query::{
 };
 use binlex::rules::YARARule as Rule;
 use binlex::server::request_id::RequestId;
-use binlex::{Architecture, Config, Magic};
+use binlex::{Architecture, Configuration, Magic};
 use chrono::Utc;
 use clap::Parser;
 use serde::{Deserialize, Serialize};

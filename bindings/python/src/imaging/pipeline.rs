@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::config::Config;
+use crate::config::Configuration;
 use crate::imaging::{Terminal, PNG, SVG};
 use binlex::imaging::{
     Imaging as InnerImaging, ImagingNormalized as InnerImagingNormalized,
@@ -49,7 +49,7 @@ impl Imaging {
     #[new]
     #[pyo3(text_signature = "(data, config)")]
     /// Create an imaging pipeline for the provided bytes.
-    pub fn new(py: Python, data: Py<PyBytes>, config: Py<Config>) -> Self {
+    pub fn new(py: Python, data: Py<PyBytes>, config: Py<Configuration>) -> Self {
         let inner_data = data.bind(py).as_bytes().to_vec();
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
         Self::from_inner(InnerImaging::new(inner_data, inner_config))

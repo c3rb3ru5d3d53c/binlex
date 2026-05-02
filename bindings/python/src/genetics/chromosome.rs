@@ -22,8 +22,7 @@
 
 use crate::genetics::AllelePair;
 use crate::hashing::{MinHash32, SSDeep, SHA256, TLSH};
-use crate::imaging::Imaging;
-use crate::Config;
+use crate::Configuration;
 use binlex::genetics::Chromosome as InnerChromosome;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
@@ -51,7 +50,7 @@ impl Chromosome {
         py: Python,
         raw_bytes: &Bound<'_, PyBytes>,
         wildcard_mask: &Bound<'_, PyBytes>,
-        config: Py<Config>,
+        config: Py<Configuration>,
     ) -> PyResult<Self> {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
         let inner = InnerChromosome::new(
@@ -176,12 +175,6 @@ impl Chromosome {
     /// Return the masked chromosome bytes.
     pub fn masked(&self, py: Python) -> Py<PyBytes> {
         PyBytes::new(py, &self.inner.lock().unwrap().masked()).unbind()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the imaging pipeline for the masked chromosome bytes.
-    pub fn imaging(&self) -> Imaging {
-        Imaging::from_inner(self.inner.lock().unwrap().imaging())
     }
 
     #[pyo3(text_signature = "($self)")]

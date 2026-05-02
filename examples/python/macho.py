@@ -24,8 +24,9 @@
 from binlex.formats import MACHO
 from binlex.disassemblers.capstone import Disassembler
 from binlex.controlflow import Graph
-from binlex import Config
+from binlex import Configuration
 import argparse
+from pathlib import Path
 
 __version__ = '1.0.0'
 __author__ = 'c3rb3ru5d3d53c'
@@ -46,13 +47,13 @@ parser.add_argument(
 args = parser.parse_args()
 
 # Get Default Configuration
-config = Config()
+config = Configuration()
 
 # Use 16 Threads for Multi-Threaded Operations
 config.general.threads = 16
 
-# Open the ELF File
-macho = MACHO(args.input, config)
+# Parse Mach-O bytes
+macho = MACHO(Path(args.input).read_bytes(), config)
 
 # MachO Fat Binary Can Support Multiple Architectures
 for macho_slice in macho.slices():

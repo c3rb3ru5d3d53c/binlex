@@ -1,17 +1,25 @@
 from __future__ import annotations
 
-from enum import Enum
+from typing import ClassVar, Literal, TypeAlias
 
-class Magic(str, Enum):
-    CODE: Magic
-    PE: Magic
-    ELF: Magic
-    MACHO: Magic
-    PNG: Magic
-    UNKNOWN: Magic
-    @classmethod
-    def from_file(cls, path: str) -> Magic: ...
-    @classmethod
-    def from_bytes(cls, bytes: bytes) -> Magic: ...
+from binlex_bindings.binlex.core.magic import Magic as _MagicBinding
 
-__all__ = ["Magic"]
+MagicValue: TypeAlias = Literal["code", "pe", "elf", "macho", "png", "unknown"]
+
+class Magic(str):
+    CODE: ClassVar[Magic]
+    PE: ClassVar[Magic]
+    ELF: ClassVar[Magic]
+    MACHO: ClassVar[Magic]
+    PNG: ClassVar[Magic]
+    UNKNOWN: ClassVar[Magic]
+    def __new__(cls, data: MagicValue | bytes | bytearray | memoryview | _MagicBinding) -> Magic: ...
+    @property
+    def value(self) -> str: ...
+    def to_binding(self) -> _MagicBinding: ...
+    @classmethod
+    def from_binding(cls, magic: _MagicBinding) -> Magic: ...
+
+def _coerce_magic(magic: Magic | _MagicBinding) -> _MagicBinding: ...
+
+__all__ = ["Magic", "_coerce_magic"]
