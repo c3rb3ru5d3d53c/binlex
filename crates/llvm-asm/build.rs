@@ -269,7 +269,7 @@ fn link_static_llvm(llvm: &LlvmInstall) {
         &llvm.llvm_config,
         &["--system-libs", "--link-static"],
     )) {
-        emit_system_lib(&lib);
+        emit_system_lib(llvm, &lib);
     }
 }
 
@@ -360,8 +360,9 @@ fn normalize_library_name(path_or_flag: &str) -> String {
     name.to_string()
 }
 
-fn emit_system_lib(flag: &str) {
+fn emit_system_lib(llvm: &LlvmInstall, flag: &str) {
     if let Some(name) = flag.strip_prefix("-l") {
+        emit_external_system_search_paths(llvm, name);
         println!("cargo:rustc-link-lib={}", name);
     } else if is_static_library_name(flag) {
         println!(
@@ -372,6 +373,39 @@ fn emit_system_lib(flag: &str) {
         println!("cargo:rustc-link-lib={}", normalize_library_name(flag));
     } else if let Some(path) = flag.strip_prefix("-L") {
         println!("cargo:rustc-link-search=native={}", path);
+    }
+}
+
+fn emit_external_system_search_paths(llvm: &LlvmInstall, name: &str) {
+    let mut search_paths = Vec::new();
+    let llvm_libdir = PathBuf::from(llvm.libdir.trim());
+    if llvm_libdir.exists() {
+        search_paths.push(llvm_libdir.clone());
+    }
+
+    if target_os_is("macos") {
+        if let Some(llvm_prefix) = llvm_libdir.parent() {
+            let sibling_lib = llvm_prefix
+                .parent()
+                .map(|prefix_root| prefix_root.join(name).join("lib"));
+            if let Some(sibling_lib) = sibling_lib.filter(|path| path.exists()) {
+                search_paths.push(sibling_lib);
+            }
+
+            let homebrew_lib = llvm_prefix
+                .parent()
+                .and_then(|prefix_root| prefix_root.parent())
+                .map(|brew_root| brew_root.join("lib"));
+            if let Some(homebrew_lib) = homebrew_lib.filter(|path| path.exists()) {
+                search_paths.push(homebrew_lib);
+            }
+        }
+    }
+
+    search_paths.sort();
+    search_paths.dedup();
+    for path in search_paths {
+        println!("cargo:rustc-link-search=native={}", path.display());
     }
 }
 
