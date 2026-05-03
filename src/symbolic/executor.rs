@@ -1,7 +1,8 @@
 use crate::Architecture;
-use crate::semantics::{InstructionSemantics, SemanticStatus};
+use crate::semantics::{InstructionSemantics, SemanticStatus, SemanticTerminator};
 use crate::symbolic::Error;
 use crate::symbolic::State;
+use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct Executor {
@@ -57,18 +58,100 @@ impl Executor {
     where
         I: IntoIterator<Item = &'a InstructionSemantics>,
     {
-        let mut live_states = vec![state.clone()];
-        for instruction in semantics {
-            let mut next_states = Vec::new();
-            for live in &live_states {
-                next_states.extend(self.step(instruction, live)?);
-            }
-            live_states = next_states;
-            if live_states.is_empty() {
-                break;
+        let semantics = semantics.into_iter().collect::<Vec<_>>();
+        if semantics.is_empty() {
+            return Ok(vec![state.clone()]);
+        }
+
+        let mut address_to_index = HashMap::new();
+        for (index, instruction) in semantics.iter().enumerate() {
+            if let Some(encoding) = instruction.encoding.as_ref() {
+                address_to_index.entry(encoding.address).or_insert(index);
             }
         }
-        Ok(live_states)
+
+        let start_index = state
+            .eval_program_counter_u64()?
+            .and_then(|address| address_to_index.get(&address).copied())
+            .unwrap_or(0);
+        let mut active_states = vec![(start_index, state.clone())];
+        let mut final_states = Vec::new();
+
+        while !active_states.is_empty() {
+            let mut next_states = Vec::new();
+            for (index, live) in active_states {
+                let instruction = semantics[index];
+                let previous_pc = live.eval_program_counter_u64()?;
+                let mut stepped = Vec::new();
+                for candidate in self.step(instruction, &live)? {
+                    if candidate.satisfiable()? {
+                        stepped.push(candidate);
+                    }
+                }
+
+                if stepped.is_empty() {
+                    continue;
+                }
+
+                if stepped.len() > 1 {
+                    final_states.extend(stepped);
+                    continue;
+                }
+
+                let successor = stepped.pop().expect("single satisfiable successor");
+                let next_index = self.resolve_successor_index(
+                    &semantics,
+                    &address_to_index,
+                    index,
+                    previous_pc,
+                    &successor,
+                )?;
+                if let Some(next_index) = next_index {
+                    next_states.push((next_index, successor));
+                } else {
+                    final_states.push(successor);
+                }
+            }
+            active_states = next_states;
+        }
+
+        Ok(final_states)
+    }
+
+    fn resolve_successor_index(
+        &self,
+        semantics: &[&InstructionSemantics],
+        address_to_index: &HashMap<u64, usize>,
+        current_index: usize,
+        previous_pc: Option<u64>,
+        successor: &State,
+    ) -> Result<Option<usize>, Error> {
+        let current = semantics[current_index];
+        let current_pc = successor.eval_program_counter_u64()?;
+        let sequential_next = (current_index + 1 < semantics.len()).then_some(current_index + 1);
+
+        let follow_concrete_target = |address: u64| address_to_index.get(&address).copied();
+
+        match &current.terminator {
+            SemanticTerminator::FallThrough => {
+                if current_pc != previous_pc {
+                    if let Some(address) = current_pc {
+                        return Ok(follow_concrete_target(address));
+                    }
+                }
+                Ok(sequential_next)
+            }
+            SemanticTerminator::Return { expression } => {
+                if expression.is_none() {
+                    return Ok(None);
+                }
+                Ok(current_pc.and_then(follow_concrete_target))
+            }
+            SemanticTerminator::Jump { .. }
+            | SemanticTerminator::Branch { .. }
+            | SemanticTerminator::Call { .. } => Ok(current_pc.and_then(follow_concrete_target)),
+            SemanticTerminator::Trap | SemanticTerminator::Unreachable => Ok(None),
+        }
     }
 }
 
@@ -367,6 +450,239 @@ mod tests {
                 .expect("concrete pc"),
             0x401000
         );
+    }
+
+    #[test]
+    fn symbolic_run_follows_concrete_control_flow() {
+        let executor = Executor::new(Architecture::I386).expect("executor");
+        let state = executor.state();
+        let setup = InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: Some(InstructionEncoding {
+                architecture: "i386".to_string(),
+                mnemonic: "mov".to_string(),
+                disassembly: "mov ecx, 3".to_string(),
+                address: 0x1000,
+                bytes: vec![0xb9, 0x03, 0x00, 0x00, 0x00],
+            }),
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Set {
+                dst: SemanticLocation::Register {
+                    name: "ecx".to_string(),
+                    bits: 32,
+                },
+                expression: SemanticExpression::Const { value: 3, bits: 32 },
+            }],
+            terminator: SemanticTerminator::FallThrough,
+            diagnostics: Vec::new(),
+        };
+        let loop_body = InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: Some(InstructionEncoding {
+                architecture: "i386".to_string(),
+                mnemonic: "dec".to_string(),
+                disassembly: "dec ecx".to_string(),
+                address: 0x1005,
+                bytes: vec![0x49],
+            }),
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Set {
+                dst: SemanticLocation::Register {
+                    name: "ecx".to_string(),
+                    bits: 32,
+                },
+                expression: SemanticExpression::Binary {
+                    op: SemanticOperationBinary::Sub,
+                    left: Box::new(SemanticExpression::Read(Box::new(
+                        SemanticLocation::Register {
+                            name: "ecx".to_string(),
+                            bits: 32,
+                        },
+                    ))),
+                    right: Box::new(SemanticExpression::Const { value: 1, bits: 32 }),
+                    bits: 32,
+                },
+            }],
+            terminator: SemanticTerminator::Branch {
+                condition: SemanticExpression::Compare {
+                    op: SemanticOperationCompare::Eq,
+                    left: Box::new(SemanticExpression::Read(Box::new(
+                        SemanticLocation::Register {
+                            name: "ecx".to_string(),
+                            bits: 32,
+                        },
+                    ))),
+                    right: Box::new(SemanticExpression::Const { value: 0, bits: 32 }),
+                    bits: 1,
+                },
+                true_target: SemanticExpression::Const {
+                    value: 0x1006,
+                    bits: 32,
+                },
+                false_target: SemanticExpression::Const {
+                    value: 0x1005,
+                    bits: 32,
+                },
+            },
+            diagnostics: Vec::new(),
+        };
+        let exit = InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: Some(InstructionEncoding {
+                architecture: "i386".to_string(),
+                mnemonic: "mov".to_string(),
+                disassembly: "mov eax, 0x41".to_string(),
+                address: 0x1006,
+                bytes: vec![0xb8, 0x41, 0x00, 0x00, 0x00],
+            }),
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Set {
+                dst: SemanticLocation::Register {
+                    name: "eax".to_string(),
+                    bits: 32,
+                },
+                expression: SemanticExpression::Const { value: 0x41, bits: 32 },
+            }],
+            terminator: SemanticTerminator::FallThrough,
+            diagnostics: Vec::new(),
+        };
+
+        let states = executor
+            .run([&setup, &loop_body, &exit], &state)
+            .expect("run");
+        assert_eq!(states.len(), 1);
+        assert_eq!(
+            states[0]
+                .evaluate_register("ecx", 32)
+                .expect("eval register")
+                .expect("concrete value"),
+            0
+        );
+        assert_eq!(
+            states[0]
+                .evaluate_register("eax", 32)
+                .expect("eval register")
+                .expect("concrete value"),
+            0x41
+        );
+    }
+
+    #[test]
+    fn symbolic_run_stops_at_non_concrete_control_flow() {
+        let executor = Executor::new(Architecture::I386).expect("executor");
+        let mut state = executor.state();
+        state
+            .symbolize_register("eax", 32, Some("input_eax"))
+            .expect("symbolize register");
+
+        let branch = InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: Some(InstructionEncoding {
+                architecture: "i386".to_string(),
+                mnemonic: "jne".to_string(),
+                disassembly: "jne 0x1005".to_string(),
+                address: 0x1000,
+                bytes: vec![0x75, 0x03],
+            }),
+            temporaries: Vec::new(),
+            effects: Vec::new(),
+            terminator: SemanticTerminator::Branch {
+                condition: SemanticExpression::Compare {
+                    op: SemanticOperationCompare::Eq,
+                    left: Box::new(SemanticExpression::Read(Box::new(
+                        SemanticLocation::Register {
+                            name: "eax".to_string(),
+                            bits: 32,
+                        },
+                    ))),
+                    right: Box::new(SemanticExpression::Const { value: 0, bits: 32 }),
+                    bits: 1,
+                },
+                true_target: SemanticExpression::Const {
+                    value: 0x1002,
+                    bits: 32,
+                },
+                false_target: SemanticExpression::Const {
+                    value: 0x1005,
+                    bits: 32,
+                },
+            },
+            diagnostics: Vec::new(),
+        };
+        let taken = InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: Some(InstructionEncoding {
+                architecture: "i386".to_string(),
+                mnemonic: "mov".to_string(),
+                disassembly: "mov ebx, 1".to_string(),
+                address: 0x1002,
+                bytes: vec![0xbb, 0x01, 0x00, 0x00, 0x00],
+            }),
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Set {
+                dst: SemanticLocation::Register {
+                    name: "ebx".to_string(),
+                    bits: 32,
+                },
+                expression: SemanticExpression::Const { value: 1, bits: 32 },
+            }],
+            terminator: SemanticTerminator::FallThrough,
+            diagnostics: Vec::new(),
+        };
+        let not_taken = InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: Some(InstructionEncoding {
+                architecture: "i386".to_string(),
+                mnemonic: "mov".to_string(),
+                disassembly: "mov ebx, 2".to_string(),
+                address: 0x1005,
+                bytes: vec![0xbb, 0x02, 0x00, 0x00, 0x00],
+            }),
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Set {
+                dst: SemanticLocation::Register {
+                    name: "ebx".to_string(),
+                    bits: 32,
+                },
+                expression: SemanticExpression::Const { value: 2, bits: 32 },
+            }],
+            terminator: SemanticTerminator::FallThrough,
+            diagnostics: Vec::new(),
+        };
+
+        let states = executor
+            .run([&branch, &taken, &not_taken], &state)
+            .expect("run");
+        assert_eq!(states.len(), 2);
+        let targets = states
+            .iter()
+            .map(|state| {
+                state
+                    .eval_program_counter_u64()
+                    .expect("eval program counter")
+                    .expect("concrete pc")
+            })
+            .collect::<Vec<_>>();
+        assert!(targets.contains(&0x1002));
+        assert!(targets.contains(&0x1005));
+        for state in states {
+            assert_eq!(
+                state.evaluate_register("ebx", 32).expect("eval register"),
+                None
+            );
+        }
     }
 
     #[test]

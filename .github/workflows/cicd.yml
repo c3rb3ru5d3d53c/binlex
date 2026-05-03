@@ -142,6 +142,7 @@ jobs:
         if: startsWith(matrix.os, 'macos-')
         run: |
           brew list llvm >/dev/null 2>&1 || brew install llvm
+          brew list zstd >/dev/null 2>&1 || brew install zstd
           brew list openssl@3 >/dev/null 2>&1 || brew install openssl@3
           brew list automake >/dev/null 2>&1 || brew install automake
           brew list autoconf >/dev/null 2>&1 || brew install autoconf
@@ -399,6 +400,7 @@ jobs:
         if: startsWith(matrix.os, 'macos-')
         run: |
           brew list llvm >/dev/null 2>&1 || brew install llvm
+          brew list zstd >/dev/null 2>&1 || brew install zstd
           brew list openssl@3 >/dev/null 2>&1 || brew install openssl@3
           brew list automake >/dev/null 2>&1 || brew install automake
           brew list autoconf >/dev/null 2>&1 || brew install autoconf

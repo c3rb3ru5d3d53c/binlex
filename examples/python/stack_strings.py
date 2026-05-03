@@ -1,74 +1,83 @@
 #!/usr/bin/env python3
 
-import binlex
-from binlex.controlflow import Graph, Instruction
+from binlex import Architecture
+from binlex import Configuration
+from binlex.assemblers import Assembler
+from binlex.controlflow import Graph
 from binlex.disassemblers import Disassembler
 from binlex.symbolic import Executor
 
+assembly = """
+sub esp, 32
+mov dword ptr [esp], 0x737c6862
+mov dword ptr [esp + 4], 0x72787d7e
+mov dword ptr [esp + 8], 0x74697431
+mov dword ptr [esp + 12], 0x78656472
+mov dword ptr [esp + 16], 0x78317f7e
+mov dword ptr [esp + 20], 0x747f3162
+mov dword ptr [esp + 24], 0x3f306570
+mov dword ptr [esp + 28], 0x3f3f3f3f
+mov edi, esp
+lea esi, [esp + 32]
+decrypt_loop:
+xor dword ptr [edi], 0x11111111
+add edi, 4
+cmp edi, esi
+jne decrypt_loop
+nop
+"""
 
-architecture = binlex.Architecture.I386
 stack_base = 0x2000
 stack_size = 0x1000
 
-# push 0x747f7e75        ; encrypted "done"
-# xor dword ptr [esp], 0x11111111
-# push 0x65627465        ; encrypted "test"
-# xor dword ptr [esp], 0x11111111
-shellcode = bytes.fromhex(
-    "68 75 7e 7f 74"
-    "81 34 24 11 11 11 11"
-    "68 65 74 62 65"
-    "81 34 24 11 11 11 11"
-)
+architecture = Architecture.I386
 
-config = binlex.Configuration()
-config.instructions.enabled = True
-config.semantics.enabled = True
+config = Configuration()
+
+assembler = Assembler(architecture, config)
+
+shellcode = assembler.assemble(0, assembly)
 
 graph = Graph(architecture, config)
+
 disassembler = Disassembler(
     architecture,
     shellcode,
     {0: len(shellcode)},
     config,
 )
+disassembler.disassemble_function(0, graph)
 
-pc = 0
-instructions = []
-while pc < len(shellcode):
-    disassembler.disassemble_instruction(pc, graph)
-    instruction = Instruction(pc, graph)
-    instructions.append(instruction)
-    pc += instruction.size()
+function = graph.get_function(0)
+
+assert function, 'failed'
 
 executor = Executor(architecture)
 state = executor.state()
 state.set_register("esp", 32, stack_base)
 state.map_memory(stack_base - stack_size, stack_size)
 
-for instruction in instructions:
-    semantics = instruction.semantics()
-    if semantics is None:
-        continue
+semantics = [
+    semantics
+    for block in function.blocks()
+    for instruction in block.instructions()
+    if (semantics := instruction.semantics()) is not None
+]
 
-    successors = executor.step(semantics, state)
-    live = [successor for successor in successors if successor.satisfiable()]
-    if not live:
-        raise RuntimeError(f"path became infeasible at {instruction.address():#x}")
-    state = live[0]
+states = executor.run(semantics, state)
+
+live = [candidate for candidate in states if candidate.satisfiable()]
+
+assert live, 'state failed'
+
+state = live[0]
 
 esp = state.evaluate_register("esp", 32)
-if esp is None:
-    raise RuntimeError("failed to concretize esp")
 
-value = state.evaluate_memory(esp, 8)
-if value is None:
-    raise RuntimeError("failed to concretize decrypted stack string")
+assert esp, 'failed to evaludate stack register'
 
-plaintext = value.to_bytes(8, "little")
-recovered = plaintext.rstrip(b"\x00")
-while recovered and not recovered.isascii():
-    recovered = recovered[:-1]
-recovered = recovered.decode("ascii")
+plaintext = state.read_memory(esp, 32)
 
-print(f"decrypted stack string: {recovered}")
+assert plaintext, 'failed to read memory'
+
+print(plaintext.rstrip(b'\x00').decode('ascii'))
