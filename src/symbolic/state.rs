@@ -315,7 +315,6 @@ impl State {
         self.constraints.iter().map(ToString::to_string).collect()
     }
 
-    #[cfg(test)]
     pub(crate) fn eval_program_counter_u64(&self) -> Result<Option<u64>, Error> {
         match self.program_counter.as_ref() {
             Some(value) => self.backend.eval_bv_u64(&self.constraints, &value.value),
