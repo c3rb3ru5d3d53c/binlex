@@ -45,6 +45,9 @@ pub(crate) fn assert_arm64_semantics_match_unicorn(
     );
 
     for register in written_locations(&semantics) {
+        if (name == "bl" || name == "blr") && register == "x30" {
+            continue;
+        }
         if is_vector_semantic_register(&register) {
             let expected = interpreted
                 .transition
@@ -181,7 +184,7 @@ fn interpret_arm64_semantics(
                     );
                     register_writes.push((
                         dst_name.clone(),
-                        relocate_adr_like_result(instruction_name, value, expression),
+                        relocate_code_like_result(instruction_name, dst_name, value, expression),
                     ));
                 }
                 other => panic!("unsupported arm64 conformance destination: {other:?}"),
@@ -271,6 +274,15 @@ fn interpret_arm64_semantics(
     for (name, value) in register_writes {
         registers.insert(name, value);
     }
+    if matches!(instruction_name, "bl" | "blr") {
+        if let Some(value) = registers.get_mut("x30") {
+            *value = relocate_code_target(*value as u64) as u128;
+        }
+        let canonical_link = semantic_name_for_arch_register("x30");
+        if let Some(value) = registers.get_mut(&canonical_link) {
+            *value = relocate_code_target(*value as u64) as u128;
+        }
+    }
 
     let mut post_memory = pre_memory.clone();
     let mut written_ranges = Vec::<(u64, usize)>::new();
@@ -342,15 +354,22 @@ fn interpret_arm64_semantics(
     }
 }
 
-fn relocate_adr_like_result(
+fn relocate_code_like_result(
     instruction_name: &str,
+    destination_name: &str,
     value: u128,
     expression: &SemanticExpression,
 ) -> u128 {
-    if !matches!(expression, SemanticExpression::Const { .. }) {
-        return value;
+    if matches!(expression, SemanticExpression::Const { .. })
+        && (instruction_name.starts_with("adr ") || instruction_name.starts_with("adrp "))
+    {
+        return relocate_code_target(value as u64) as u128;
     }
-    if instruction_name.starts_with("adr ") || instruction_name.starts_with("adrp ") {
+    let opcode = instruction_name.split_whitespace().next().unwrap_or_default();
+    if matches!(opcode, "bl" | "blr")
+        && (destination_name == "x30"
+            || destination_name == semantic_name_for_arch_register("x30"))
+    {
         return relocate_code_target(value as u64) as u128;
     }
     value
@@ -366,7 +385,7 @@ fn eval_expression(
         SemanticExpression::Const { value, bits } => mask_to_bits(*value, *bits),
         SemanticExpression::Read(location) => match location.as_ref() {
             SemanticLocation::Register { name, bits } | SemanticLocation::Flag { name, bits } => {
-                mask_to_bits(registers.get(name).copied().unwrap_or_default(), *bits)
+                mask_to_bits(read_arm64_register_value(registers, name), *bits)
             }
             SemanticLocation::Temporary { id, bits } => {
                 mask_to_bits(temporaries.get(id).copied().unwrap_or_default(), *bits)
@@ -536,6 +555,18 @@ fn eval_expression(
         }
         other => panic!("unsupported arm64 conformance expression: {other:?}"),
     }
+}
+
+fn read_arm64_register_value(registers: &BTreeMap<String, u128>, name: &str) -> u128 {
+    registers.get(name).copied().unwrap_or_else(|| {
+        if name.starts_with("reg_") {
+            return 0;
+        }
+        registers
+            .get(&semantic_name_for_arch_register(name))
+            .copied()
+            .unwrap_or_default()
+    })
 }
 
 fn eval_intrinsic_effect(

@@ -1,9 +1,10 @@
 use crate::core::Architecture as PyArchitecture;
 use crate::semantics::InstructionSemantics as PyInstructionSemantics;
+use pyo3::exceptions::PyTypeError;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyModule};
-use std::collections::HashMap;
+use pyo3::types::{PyAny, PyBytes, PyModule};
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
@@ -26,6 +27,7 @@ struct SliceItemData {
 #[pyclass(unsendable)]
 pub struct Executor {
     inner: Arc<Mutex<::binlex::symbolic::Executor>>,
+    hooks: Arc<Mutex<BTreeMap<u64, Py<PyAny>>>>,
 }
 
 #[pyclass(unsendable)]
@@ -93,6 +95,16 @@ fn wrap_state(py: Python<'_>, state: ::binlex::symbolic::State) -> PyResult<Py<S
     )
 }
 
+fn collect_semantics(
+    py: Python<'_>,
+    semantics: Vec<Py<PyInstructionSemantics>>,
+) -> Vec<::binlex::semantics::InstructionSemantics> {
+    semantics
+        .into_iter()
+        .map(|item| item.borrow(py).inner.lock().unwrap().clone())
+        .collect::<Vec<_>>()
+}
+
 #[pymethods]
 impl Executor {
     #[new]
@@ -102,6 +114,7 @@ impl Executor {
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
         Ok(Self {
             inner: Arc::new(Mutex::new(inner)),
+            hooks: Arc::new(Mutex::new(BTreeMap::new())),
         })
     }
 
@@ -133,29 +146,131 @@ impl Executor {
             .collect()
     }
 
-    #[pyo3(text_signature = "($self, semantics, state)")]
+    #[pyo3(text_signature = "($self, semantics, state, steps=None)")]
+    #[pyo3(signature = (semantics, state, steps=None))]
     pub fn run(
         &self,
         py: Python<'_>,
         semantics: Vec<Py<PyInstructionSemantics>>,
         state: PyRef<'_, State>,
+        steps: Option<usize>,
     ) -> PyResult<Vec<Py<State>>> {
-        let owned = semantics
-            .into_iter()
-            .map(|item| item.borrow(py).inner.lock().unwrap().clone())
-            .collect::<Vec<_>>();
+        let owned = collect_semantics(py, semantics);
         let refs = owned.iter().collect::<Vec<_>>();
-        let state_guard = state.inner.lock().unwrap();
-        let states = self
-            .inner
+        let hooks = self
+            .hooks
             .lock()
             .unwrap()
-            .run(refs, &state_guard)
-            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
-        states
-            .into_iter()
-            .map(|state| wrap_state(py, state))
-            .collect()
+            .iter()
+            .map(|(address, hook)| (*address, hook.clone_ref(py)))
+            .collect::<BTreeMap<_, _>>();
+
+        if hooks.is_empty() {
+            let state_guard = state.inner.lock().unwrap();
+            let states = self
+                .inner
+                .lock()
+                .unwrap()
+                .run(refs, &state_guard, steps)
+                .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+            return states
+                .into_iter()
+                .map(|state| wrap_state(py, state))
+                .collect();
+        }
+
+        if steps.is_some() {
+            return Err(PyRuntimeError::new_err(
+                "hooked execution does not support step budgets",
+            ));
+        }
+
+        let mut pending = vec![state.inner.lock().unwrap().clone()];
+        let mut final_states = Vec::<Py<State>>::new();
+
+        while let Some(current) = pending.pop() {
+            let states = self
+                .inner
+                .lock()
+                .unwrap()
+                .run(refs.clone(), &current, None)
+                .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+
+            for candidate in states {
+                let Some(address) = candidate
+                    .program_counter()
+                    .map_err(|error| PyRuntimeError::new_err(error.to_string()))?
+                else {
+                    final_states.push(wrap_state(py, candidate)?);
+                    continue;
+                };
+
+                let Some(hook) = hooks.get(&address) else {
+                    final_states.push(wrap_state(py, candidate)?);
+                    continue;
+                };
+
+                let state = wrap_state(py, candidate)?;
+                let returned = hook.call1(py, (address, state.clone_ref(py)))?;
+                let returned_states = returned.extract::<Vec<Py<State>>>(py).map_err(|_| {
+                    PyTypeError::new_err(
+                        "hook must return a list of symbolic.State objects",
+                    )
+                })?;
+                for returned_state in returned_states {
+                    pending.push(returned_state.borrow(py).inner.lock().unwrap().clone());
+                }
+            }
+        }
+
+        Ok(final_states)
+    }
+
+    #[pyo3(text_signature = "($self, address)")]
+    pub fn set_breakpoint(&self, address: u64) {
+        self.inner.lock().unwrap().set_breakpoint(address);
+    }
+
+    #[pyo3(text_signature = "($self, address)")]
+    pub fn remove_breakpoint(&self, address: u64) {
+        self.inner.lock().unwrap().remove_breakpoint(address);
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn clear_breakpoints(&self) {
+        self.inner.lock().unwrap().clear_breakpoints();
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn breakpoints(&self) -> Vec<u64> {
+        self.inner.lock().unwrap().breakpoints()
+    }
+
+    #[pyo3(text_signature = "($self, address, hook)")]
+    pub fn add_hook(&self, py: Python<'_>, address: u64, hook: Py<PyAny>) -> PyResult<()> {
+        if !hook.bind(py).is_callable() {
+            return Err(PyTypeError::new_err("hook must be callable"));
+        }
+        self.inner.lock().unwrap().add_hook(address);
+        self.hooks.lock().unwrap().insert(address, hook);
+        Ok(())
+    }
+
+    #[pyo3(text_signature = "($self, address)")]
+    pub fn remove_hook(&self, address: u64) {
+        self.inner.lock().unwrap().remove_hook(address);
+        self.hooks.lock().unwrap().remove(&address);
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn clear_hooks(&self) {
+        self.inner.lock().unwrap().clear_hooks();
+        self.hooks.lock().unwrap().clear();
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn hooks(&self) -> Vec<u64> {
+        self.inner.lock().unwrap().hooks()
     }
 }
 
@@ -200,6 +315,15 @@ impl State {
             .lock()
             .unwrap()
             .evaluate_register(&name, bits)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn program_counter(&self) -> PyResult<Option<u64>> {
+        self.inner
+            .lock()
+            .unwrap()
+            .program_counter()
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 

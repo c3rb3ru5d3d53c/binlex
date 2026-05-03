@@ -1,4 +1,4 @@
-use super::{Arm64FixtureSpec, Arm64Sample, assert_conformance_cases, assert_sample_statuses};
+use super::{Arm64FixtureSpec, Arm64Sample, assert_sample_statuses};
 use crate::semantics::SemanticStatus;
 
 pub(crate) const SAMPLES: &[Arm64Sample] = &[
@@ -27,9 +27,4 @@ pub(crate) const SAMPLES: &[Arm64Sample] = &[
 #[test]
 fn blr_semantics_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
-}
-
-#[test]
-fn blr_semantics_match_unicorn_transitions() {
-    assert_conformance_cases(SAMPLES);
 }

@@ -315,11 +315,15 @@ impl State {
         self.constraints.iter().map(ToString::to_string).collect()
     }
 
-    pub(crate) fn eval_program_counter_u64(&self) -> Result<Option<u64>, Error> {
+    pub fn program_counter(&self) -> Result<Option<u64>, Error> {
         match self.program_counter.as_ref() {
             Some(value) => self.backend.eval_bv_u64(&self.constraints, &value.value),
             None => Ok(None),
         }
+    }
+
+    pub(crate) fn eval_program_counter_u64(&self) -> Result<Option<u64>, Error> {
+        self.program_counter()
     }
 
     pub fn evaluate_memory(&self, address: u64, size: usize) -> Result<Option<u64>, Error> {

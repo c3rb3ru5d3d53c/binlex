@@ -34,17 +34,34 @@ pub(crate) fn build(
     view: &X86InstructionView,
 ) -> Option<InstructionSemantics> {
     if is_return(view) {
-        let expression = view
-            .operands()
-            .first()
-            .and_then(|operand| operand_expr(machine, operand));
+        let pointer_bits = common::pointer_bits(machine);
+        let stack_pointer = stack_pointer_location(machine);
+        let stack_adjust = return_stack_adjust(machine, view);
+        let expression = Some(SemanticExpression::Load {
+            space: crate::semantics::SemanticAddressSpace::Default,
+            addr: Box::new(common::sub(
+                SemanticExpression::Read(Box::new(stack_pointer.clone())),
+                common::const_u64(stack_adjust, pointer_bits),
+                pointer_bits,
+            )),
+            bits: pointer_bits,
+        });
         return Some(common::complete(
             SemanticTerminator::Return { expression },
-            Vec::new(),
+            vec![SemanticEffect::Set {
+                dst: stack_pointer,
+                expression: common::add(
+                    SemanticExpression::Read(Box::new(stack_pointer_location(machine))),
+                    common::const_u64(stack_adjust, pointer_bits),
+                    pointer_bits,
+                ),
+            }],
         ));
     }
 
     if is_call(view) {
+        let pointer_bits = common::pointer_bits(machine);
+        let stack_pointer = stack_pointer_location(machine);
         let target = view
             .operands()
             .first()
@@ -52,16 +69,32 @@ pub(crate) fn build(
             .unwrap_or_else(|| SemanticExpression::Undefined {
                 bits: common::pointer_bits(machine),
             });
+        let return_target = common::const_u64(
+            view.address + view.bytes.len() as u64,
+            pointer_bits,
+        );
         return Some(common::complete(
             SemanticTerminator::Call {
                 target,
-                return_target: Some(common::const_u64(
-                    view.address + view.bytes.len() as u64,
-                    common::pointer_bits(machine),
-                )),
+                return_target: Some(return_target.clone()),
                 does_return: Some(true),
             },
-            Vec::new(),
+            vec![
+                SemanticEffect::Set {
+                    dst: stack_pointer.clone(),
+                    expression: common::sub(
+                        SemanticExpression::Read(Box::new(stack_pointer.clone())),
+                        common::const_u64(pointer_bits as u64 / 8, pointer_bits),
+                        pointer_bits,
+                    ),
+                },
+                SemanticEffect::Store {
+                    space: crate::semantics::SemanticAddressSpace::Default,
+                    addr: SemanticExpression::Read(Box::new(stack_pointer)),
+                    expression: return_target,
+                    bits: pointer_bits,
+                },
+            ],
         ));
     }
 
@@ -346,6 +379,24 @@ fn is_call(view: &X86InstructionView) -> bool {
 
 fn is_return(view: &X86InstructionView) -> bool {
     matches!(view.mnemonic.as_str(), "ret" | "retf")
+}
+
+fn stack_pointer_location(machine: Architecture) -> SemanticLocation {
+    match machine {
+        Architecture::AMD64 => common::reg("rsp", 64),
+        Architecture::I386 => common::reg("esp", 32),
+        _ => common::reg("rsp", 64),
+    }
+}
+
+fn return_stack_adjust(machine: Architecture, view: &X86InstructionView) -> u64 {
+    let base = (common::pointer_bits(machine) / 8) as u64;
+    let immediate = view
+        .operands()
+        .first()
+        .and_then(|operand| operand.immediate_value())
+        .unwrap_or(0);
+    base + immediate as i64 as u64
 }
 
 fn is_setcc(view: &X86InstructionView) -> bool {
