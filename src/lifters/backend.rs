@@ -242,6 +242,7 @@ impl Lifter {
         }
     }
 
+    #[cfg(not(target_os = "windows"))]
     fn unsupported(&self, capability: LifterCapability) -> LifterError {
         LifterError::UnsupportedCapability {
             backend: self.backend,
