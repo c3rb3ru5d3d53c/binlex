@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 
-import binlex
+from binlex import Architecture
+from binlex import Configuration
 from binlex.assemblers import Assembler
 
-
-architecture = binlex.Architecture.AMD64
-config = binlex.Configuration()
-assembler = Assembler(architecture, config)
+configuration = Configuration()
+assembler = Assembler(Architecture.AMD64, configuration)
 
 data = assembler.assemble(0x400000, "xor eax, eax; ret")
 

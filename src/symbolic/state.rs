@@ -331,6 +331,21 @@ impl State {
         self.backend.eval_bv_u64(&self.constraints, &value)
     }
 
+    pub fn read_memory(&self, address: u64, size: usize) -> Result<Option<Vec<u8>>, Error> {
+        let mut bytes = Vec::with_capacity(size);
+        for offset in 0..size {
+            let byte_address = self
+                .backend
+                .const_bv((address + offset as u64) as u128, self.address_bits)?;
+            let byte = self.memory.load(&self.backend, &byte_address, 8)?;
+            let Some(value) = self.backend.eval_bv_u64(&self.constraints, &byte)? else {
+                return Ok(None);
+            };
+            bytes.push(value as u8);
+        }
+        Ok(Some(bytes))
+    }
+
     pub fn satisfiable(&self) -> Result<bool, Error> {
         self.backend.is_sat(&self.constraints)
     }

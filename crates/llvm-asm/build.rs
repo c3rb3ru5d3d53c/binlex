@@ -184,12 +184,17 @@ fn compile_shim(llvm: &LlvmInstall) {
     let mut build = cc::Build::new();
     build.cpp(true);
     build.file("native/assembler.cpp");
-    build.include(llvm.includedir.trim());
+    for include_dir in llvm_include_dirs(llvm) {
+        build.include(&include_dir);
+        if target_env_is("msvc") {
+            build.flag(&format!("/I{}", include_dir.display()));
+        } else {
+            build.flag_if_supported(&format!("-isystem{}", include_dir.display()));
+        }
+    }
     if target_env_is("msvc") {
-        build.flag(&format!("/I{}", llvm.includedir.trim()));
         build.flag_if_supported("/std:c++17");
     } else {
-        build.flag_if_supported(&format!("-isystem{}", llvm.includedir.trim()));
         build.flag("-std=c++17");
     }
     build.flag_if_supported("-fno-exceptions");
@@ -210,6 +215,37 @@ fn compile_shim(llvm: &LlvmInstall) {
         build.flag(&flag);
     }
     build.compile("binlex_llvm_assembler");
+}
+
+fn llvm_include_dirs(llvm: &LlvmInstall) -> Vec<PathBuf> {
+    let mut include_dirs = vec![PathBuf::from(llvm.includedir.trim())];
+    let bootstrap_root = target_dir().join("llvm-bootstrap");
+    let source_include = bootstrap_root
+        .join("src")
+        .join("llvm-project")
+        .join("llvm")
+        .join("include");
+    if source_include.exists() {
+        include_dirs.push(source_include);
+    }
+    if let Ok(entries) = std::fs::read_dir(&bootstrap_root) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if !name.starts_with("build-") {
+                continue;
+            }
+            let build_include = path.join("include");
+            if build_include.exists() {
+                include_dirs.push(build_include);
+            }
+        }
+    }
+    include_dirs.sort();
+    include_dirs.dedup();
+    include_dirs
 }
 
 fn link_static_llvm(llvm: &LlvmInstall) {

@@ -193,6 +193,22 @@ mod tests {
     }
 
     #[test]
+    fn symbolic_state_read_memory_returns_concrete_bytes() {
+        let executor = Executor::new(Architecture::AMD64).expect("executor");
+        let mut state = executor.state();
+        state.map_memory(0x5000, 4);
+        state
+            .write_memory(0x5000, &[0x44, 0x33, 0x22, 0x11])
+            .expect("write memory");
+
+        let bytes = state
+            .read_memory(0x5000, 4)
+            .expect("read memory")
+            .expect("concrete bytes");
+        assert_eq!(bytes, vec![0x44, 0x33, 0x22, 0x11]);
+    }
+
+    #[test]
     fn symbolic_unary_popcount_executes() {
         let executor = Executor::new(Architecture::ARM64).expect("executor");
         let state = executor.state();

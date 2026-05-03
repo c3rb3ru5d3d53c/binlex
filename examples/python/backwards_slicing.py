@@ -83,9 +83,14 @@ def main():
     for block in function.blocks():
         for instruction in block.instructions():
             semantics = instruction.semantics()
+
+            if not semantics:
+                continue
+
             pc = instruction.address()
 
             state.set_register("rip", 64, pc)
+
             states = executor.step(semantics, state)
 
             if len(states) == 1:

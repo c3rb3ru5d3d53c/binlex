@@ -22,51 +22,27 @@
 # SOFTWARE.
 
 
+import sys
 from binlex.formats import ELF
-from binlex.disassemblers.capstone import Disassembler
+from binlex.disassemblers import Disassembler
 from binlex.controlflow import Graph
 from binlex import Configuration
-import argparse
 from pathlib import Path
 
-__version__ = '1.0.0'
-__author__ = 'c3rb3ru5d3d53c'
+configuration = Configuration()
 
-parser = argparse.ArgumentParser(
-    prog=f'elf v{__version__}',
-    description='Read ELF Functions',
-    epilog=f'Author: {__author__}'
-)
-parser.add_argument(
-    '--input',
-    type=str,
-    default=None,
-    help='Input ELF File Path',
-    required=True
+elf = ELF(Path(sys.argv[1]).read_bytes(), configuration)
+
+disassembler = Disassembler(
+    elf.architecture(),
+    elf.image(),
+    elf.executable_virtual_address_ranges(),
+    configuration
 )
 
-args = parser.parse_args()
+graph = Graph(elf.architecture(), configuration)
 
-# Get Default Configuration
-config = Configuration()
+disassembler.disassemble(elf.entrypoint_virtual_addresses(), graph)
 
-# Use 16 Threads for Multi-Threaded Operations
-config.general.threads = 16
-
-# Parse ELF bytes
-elf = ELF(Path(args.input).read_bytes(), config)
-
-# Get the Image
-image = elf.image()
-
-# Create Disassembler on Mapped ELF Image and ELF Architecture
-disassembler = Disassembler(elf.architecture(), image, elf.executable_virtual_address_ranges(), config)
-
-# Create the Controlflow Graph
-cfg = Graph(elf.architecture(), config)
-
-# Disassemble the ELF Image Entrypoints Recursively
-disassembler.disassemble(elf.entrypoint_virtual_addresses(), cfg)
-
-for function in cfg.functions():
+for function in graph.functions():
     function.print()
