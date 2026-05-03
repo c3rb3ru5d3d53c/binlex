@@ -55,10 +55,11 @@ class Lifter:
         return None
 
     def lift_semantics(self, semantics):
-        inner = getattr(semantics, "_inner", semantics)
-        if self._inner.lift_semantics(inner):
-            return self
-        return None
+        for semantics_item in semantics:
+            inner = getattr(semantics_item, "_inner", semantics_item)
+            if not self._inner.lift_semantics(inner):
+                return None
+        return self
 
     def text(self):
         return self._inner.text()

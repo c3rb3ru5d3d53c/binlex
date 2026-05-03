@@ -23,15 +23,14 @@
 
 # Example on Finding common sub sequences
 
-import sys
 import json
 from binlex.genetics import Chromosome
 from binlex import Configuration
 
-config = Configuration()
+configuration = Configuration()
 
-lhs = Chromosome('deadbeef', config)
-rhs = Chromosome('fedeadbeeffe', config)
+lhs = Chromosome('deadbeef',configuration)
+rhs = Chromosome('fedeadbeeffe', configuration)
 
 print(json.dumps({
     "lhs": json.loads(lhs.json()),

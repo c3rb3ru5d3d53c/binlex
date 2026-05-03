@@ -21,58 +21,33 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import sys
 from binlex.formats import MACHO
 from binlex.disassemblers.capstone import Disassembler
 from binlex.controlflow import Graph
 from binlex import Configuration
-import argparse
 from pathlib import Path
 
-__version__ = '1.0.0'
-__author__ = 'c3rb3ru5d3d53c'
-
-parser = argparse.ArgumentParser(
-    prog=f'macho v{__version__}',
-    description='Read MACHO Functions',
-    epilog=f'Author: {__author__}'
-)
-parser.add_argument(
-    '--input',
-    type=str,
-    default=None,
-    help='Input MACHO File Path',
-    required=True
-)
-
-args = parser.parse_args()
-
-# Get Default Configuration
 config = Configuration()
 
-# Use 16 Threads for Multi-Threaded Operations
-config.general.threads = 16
+macho = MACHO(Path(sys.argv[1]).read_bytes(), config)
 
-# Parse Mach-O bytes
-macho = MACHO(Path(args.input).read_bytes(), config)
+for slice in macho.slices():
 
-# MachO Fat Binary Can Support Multiple Architectures
-for macho_slice in macho.slices():
+  architecture = slice.architecture()
 
-  architecture = macho_slice.architecture()
-  if architecture is None:
-    continue
+  image = slice.image()
 
-  # Get the Image
-  image = macho_slice.image()
+  disassembler = Disassembler(
+    slice.architecture(),
+    slice.image(),
+    slice.executable_virtual_address_ranges(),
+    config
+  )
 
-  # Create Disassembler on Mapped MACHO Image and MACHO Architecture
-  disassembler = Disassembler(architecture, image, macho_slice.executable_virtual_address_ranges(), config)
+  graph = Graph(architecture, config)
 
-  # Create the Controlflow Graph
-  cfg = Graph(architecture, config)
+  disassembler.disassemble(slice.entrypoint_virtual_addresses(), graph)
 
-  # Disassemble the MACHO Image Entrypoints Recursively
-  disassembler.disassemble(macho_slice.entrypoint_virtual_addresses(), cfg)
-
-  for function in cfg.functions():
+  for function in graph.functions():
     function.print()

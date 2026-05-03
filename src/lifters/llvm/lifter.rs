@@ -181,16 +181,18 @@ impl Lifter {
         Ok(())
     }
 
-    pub fn lift_semantics(&mut self, semantics: &InstructionSemantics) -> Result<(), Error> {
+    pub fn lift_semantics(&mut self, semantics: &[InstructionSemantics]) -> Result<(), Error> {
         self.bind_architecture()?;
-        let name = format!("semantics_{}", self.emitted.len());
-        if !self.emitted.insert(name.clone()) {
-            return Ok(());
+        for semantics in semantics {
+            let name = format!("semantics_{}", self.emitted.len());
+            if !self.emitted.insert(name.clone()) {
+                continue;
+            }
+            let function = self.add_function_for_lift(&name, semantics.abi);
+            let mut lowering = self.lowering_context(function, semantics.abi);
+            lowering.lower_instruction_semantics(semantics)?;
+            lowering.finish()?;
         }
-        let function = self.add_function_for_lift(&name, semantics.abi);
-        let mut lowering = self.lowering_context(function, semantics.abi);
-        lowering.lower_instruction_semantics(semantics)?;
-        lowering.finish()?;
         self.verify_if_enabled()?;
         Ok(())
     }

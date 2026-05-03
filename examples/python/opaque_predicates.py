@@ -8,12 +8,6 @@ from binlex.symbolic import Executor
 
 architecture = binlex.Architecture.I386
 
-# xor eax, eax
-# test eax, eax
-# jne 0x1008
-# nop
-# nop
-# ret
 shellcode = bytes.fromhex("31c085c075029090c3")
 
 config = binlex.Configuration()

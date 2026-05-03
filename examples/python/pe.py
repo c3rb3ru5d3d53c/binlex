@@ -22,53 +22,29 @@
 # SOFTWARE.
 
 
+import sys
 from binlex.formats import PE
-from binlex.disassemblers.cil import Disassembler
+from binlex.disassemblers import Disassembler
 from binlex.controlflow import Graph
 from binlex import Configuration
-import argparse
 from pathlib import Path
 
-__version__ = '1.0.0'
-__author__ = 'c3rb3ru5d3d53c'
-
-parser = argparse.ArgumentParser(
-    prog=f'pe_dotnet v{__version__}',
-    description='Compare to Native PE Files',
-    epilog=f'Author: {__author__}'
-)
-parser.add_argument(
-    '--input',
-    type=str,
-    default=None,
-    help='Input DotNet PE File Path',
-    required=True
-)
-
-args = parser.parse_args()
-
-# Get Default Configuration
 config = Configuration()
 
-# Use 16 Threads for Multi-Threaded Operations
-config.general.threads = 16
+pe = PE(Path(sys.argv[1]).read_bytes(), config)
 
-# Open the PE File
-pe = PE(Path(args.input).read_bytes(), config)
-
-# To check if a DotNet PE use ps.is_dotnet()
-
-# Get the Memory Mapped File
 image = pe.image()
 
-# Create Disassembler on Mapped PE Image and PE Architecture
-disassembler = Disassembler(pe.architecture(), image, pe.dotnet_metadata_token_virtual_addresses(), pe.dotnet_executable_virtual_address_ranges(), config)
+disassembler = Disassembler(
+    pe.architecture(),
+    pe.image(),
+    pe.executable_virtual_address_ranges(),
+    config
+)
 
-# Create the Controlflow Graph
-cfg = Graph(pe.architecture(), config)
+graph = Graph(pe.architecture(), config)
 
-# Disassemble the PE Image Entrypoints Recursively
-disassembler.disassemble(pe.dotnet_entrypoint_virtual_addresses(), cfg)
+disassembler.disassemble(pe.dotnet_entrypoint_virtual_addresses(), graph)
 
-for function in cfg.functions():
+for function in graph.functions():
     function.print()

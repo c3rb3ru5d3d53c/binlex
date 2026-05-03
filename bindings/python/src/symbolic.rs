@@ -2,7 +2,7 @@ use crate::core::Architecture as PyArchitecture;
 use crate::semantics::InstructionSemantics as PyInstructionSemantics;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
-use pyo3::types::PyModule;
+use pyo3::types::{PyBytes, PyModule};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -247,6 +247,16 @@ impl State {
             .lock()
             .unwrap()
             .evaluate_memory(address, size)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    #[pyo3(text_signature = "($self, address, size)")]
+    pub fn read_memory(&self, py: Python<'_>, address: u64, size: usize) -> PyResult<Option<Py<PyBytes>>> {
+        self.inner
+            .lock()
+            .unwrap()
+            .read_memory(address, size)
+            .map(|bytes| bytes.map(|bytes| PyBytes::new(py, &bytes).unbind()))
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 

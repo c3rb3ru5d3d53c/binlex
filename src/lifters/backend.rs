@@ -1,5 +1,6 @@
 use super::error::{LifterCapability, LifterError};
 use crate::controlflow::{Block, Function, Instruction};
+use crate::semantics::InstructionSemantics;
 use crate::{Architecture, Configuration};
 use std::fmt::{Display, Formatter};
 
@@ -113,6 +114,20 @@ impl Lifter {
             ResolvedLifterBackend::Llvm(lifter) => lifter.lift_function(function)?,
             #[cfg(not(target_os = "windows"))]
             ResolvedLifterBackend::Vex(lifter) => lifter.lift_function(function)?,
+        }
+        Ok(())
+    }
+
+    pub fn lift_semantics(
+        &mut self,
+        semantics: &[InstructionSemantics],
+    ) -> Result<(), LifterError> {
+        match &mut self.inner {
+            ResolvedLifterBackend::Llvm(lifter) => lifter.lift_semantics(semantics)?,
+            #[cfg(not(target_os = "windows"))]
+            ResolvedLifterBackend::Vex(_) => {
+                return Err(self.unsupported(LifterCapability::LiftSemantics));
+            }
         }
         Ok(())
     }

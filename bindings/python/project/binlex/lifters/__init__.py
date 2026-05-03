@@ -92,11 +92,9 @@ class Lifter:
             return self
         return None
 
-    def lift_semantics(self, semantics: InstructionSemantics) -> Lifter | None:
+    def lift_semantics(self, semantics: list[InstructionSemantics]) -> Lifter | None:
         self._require_backend(LifterBackend.LLVM, "lift_semantics")
-        if self._inner.lift_semantics(semantics):
-            return self
-        return None
+        return self._inner.lift_semantics(semantics)
 
     def text(self) -> str:
         return self._inner.text()
