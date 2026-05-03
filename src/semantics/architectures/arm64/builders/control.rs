@@ -55,10 +55,13 @@ pub(crate) fn build(view: &Arm64InstructionView) -> Option<InstructionSemantics>
             Some(complete(
                 SemanticTerminator::Call {
                     target,
-                    return_target: Some(next),
+                    return_target: Some(next.clone()),
                     does_return: Some(true),
                 },
-                Vec::new(),
+                vec![SemanticEffect::Set {
+                    dst: link_register(),
+                    expression: next,
+                }],
             ))
         }
         "br" => {
@@ -70,10 +73,13 @@ pub(crate) fn build(view: &Arm64InstructionView) -> Option<InstructionSemantics>
             Some(complete(
                 SemanticTerminator::Call {
                     target,
-                    return_target: Some(next),
+                    return_target: Some(next.clone()),
                     does_return: Some(true),
                 },
-                Vec::new(),
+                vec![SemanticEffect::Set {
+                    dst: link_register(),
+                    expression: next,
+                }],
             ))
         }
         "cbz" => build_compare_branch(
@@ -91,7 +97,12 @@ pub(crate) fn build(view: &Arm64InstructionView) -> Option<InstructionSemantics>
         "tbz" => build_test_bit_branch(view, SemanticOperationCompare::Eq),
         "tbnz" => build_test_bit_branch(view, SemanticOperationCompare::Ne),
         "ret" => {
-            let expression = view.operands().first().and_then(operand_expression);
+            let expression = Some(
+                view.operands()
+                    .first()
+                    .and_then(operand_expression)
+                    .unwrap_or_else(link_register_expr),
+            );
             Some(complete(
                 SemanticTerminator::Return { expression },
                 Vec::new(),
@@ -183,4 +194,15 @@ fn operand_bits(operand: &Arm64OperandView) -> u16 {
     } else {
         operand.size_bits
     }
+}
+
+fn link_register() -> SemanticLocation {
+    SemanticLocation::Register {
+        name: "x30".to_string(),
+        bits: 64,
+    }
+}
+
+fn link_register_expr() -> SemanticExpression {
+    SemanticExpression::Read(Box::new(link_register()))
 }

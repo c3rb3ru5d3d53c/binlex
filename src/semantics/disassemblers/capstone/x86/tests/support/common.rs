@@ -605,22 +605,31 @@ fn interpret_i386_semantics(
     let post_eip = match &semantics.terminator {
         SemanticTerminator::FallThrough => I386_CODE_ADDRESS as u32 + bytes.len() as u32,
         SemanticTerminator::Return { expression } => {
-            let stack_pointer = read_register_value(&registers, stack_register, 32) as u64;
-            let return_target = u32::from_le_bytes(
-                load_le_bytes(&post_memory, stack_pointer, 32)
-                    .try_into()
-                    .expect("return target should be 4 bytes"),
-            );
-            let extra = expression
-                .as_ref()
-                .map(|expr| eval_expression(expr, &registers, &flags, &post_memory, &temporaries))
-                .unwrap_or_default();
-            write_register_value(
-                &mut registers,
-                stack_register,
-                stack_pointer as u128 + 4 + extra,
-            );
-            return_target
+            match expression {
+                Some(expr) if return_expression_encodes_target(expr) => {
+                    eval_expression(expr, &registers, &flags, &post_memory, &temporaries) as u32
+                }
+                _ => {
+                    let stack_pointer = read_register_value(&registers, stack_register, 32) as u64;
+                    let return_target = u32::from_le_bytes(
+                        load_le_bytes(&post_memory, stack_pointer, 32)
+                            .try_into()
+                            .expect("return target should be 4 bytes"),
+                    );
+                    let extra = expression
+                        .as_ref()
+                        .map(|expr| {
+                            eval_expression(expr, &registers, &flags, &post_memory, &temporaries)
+                        })
+                        .unwrap_or_default();
+                    write_register_value(
+                        &mut registers,
+                        stack_register,
+                        stack_pointer as u128 + 4 + extra,
+                    );
+                    return_target
+                }
+            }
         }
         other => panic!("unsupported i386 test terminator: {other:?}"),
     };
@@ -938,6 +947,15 @@ fn eval_expression_wide(
         }
         other => panic!("unsupported wide expression: {other:?}"),
     }
+}
+
+fn return_expression_encodes_target(expression: &SemanticExpression) -> bool {
+    matches!(
+        expression,
+        SemanticExpression::Load { .. }
+            | SemanticExpression::Read(_)
+            | SemanticExpression::Const { .. }
+    )
 }
 
 fn eval_expression(

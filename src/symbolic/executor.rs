@@ -2,12 +2,14 @@ use crate::Architecture;
 use crate::semantics::{InstructionSemantics, SemanticStatus, SemanticTerminator};
 use crate::symbolic::Error;
 use crate::symbolic::State;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 #[derive(Clone)]
 pub struct Executor {
     architecture: Architecture,
     address_bits: u16,
+    breakpoints: BTreeSet<u64>,
+    hooks: BTreeSet<u64>,
 }
 
 impl Executor {
@@ -22,6 +24,8 @@ impl Executor {
         Ok(Self {
             architecture,
             address_bits,
+            breakpoints: BTreeSet::new(),
+            hooks: BTreeSet::new(),
         })
     }
 
@@ -35,6 +39,38 @@ impl Executor {
 
     pub fn state(&self) -> State {
         State::new(self.architecture, self.address_bits)
+    }
+
+    pub fn set_breakpoint(&mut self, address: u64) {
+        self.breakpoints.insert(address);
+    }
+
+    pub fn remove_breakpoint(&mut self, address: u64) {
+        self.breakpoints.remove(&address);
+    }
+
+    pub fn clear_breakpoints(&mut self) {
+        self.breakpoints.clear();
+    }
+
+    pub fn breakpoints(&self) -> Vec<u64> {
+        self.breakpoints.iter().copied().collect()
+    }
+
+    pub fn add_hook(&mut self, address: u64) {
+        self.hooks.insert(address);
+    }
+
+    pub fn remove_hook(&mut self, address: u64) {
+        self.hooks.remove(&address);
+    }
+
+    pub fn clear_hooks(&mut self) {
+        self.hooks.clear();
+    }
+
+    pub fn hooks(&self) -> Vec<u64> {
+        self.hooks.iter().copied().collect()
     }
 
     pub fn step(
@@ -54,7 +90,7 @@ impl Executor {
         self.apply_terminator(working, semantics.encoding.as_ref(), &semantics.terminator)
     }
 
-    pub fn run<'a, I>(&self, semantics: I, state: &State) -> Result<Vec<State>, Error>
+    pub fn run<'a, I>(&self, semantics: I, state: &State, steps: Option<usize>) -> Result<Vec<State>, Error>
     where
         I: IntoIterator<Item = &'a InstructionSemantics>,
     {
@@ -74,13 +110,25 @@ impl Executor {
             .eval_program_counter_u64()?
             .and_then(|address| address_to_index.get(&address).copied())
             .unwrap_or(0);
-        let mut active_states = vec![(start_index, state.clone())];
+        let mut active_states = vec![(start_index, state.clone(), steps)];
         let mut final_states = Vec::new();
 
         while !active_states.is_empty() {
             let mut next_states = Vec::new();
-            for (index, live) in active_states {
+            for (index, live, remaining_steps) in active_states {
                 let instruction = semantics[index];
+                if let Some(address) = instruction.encoding.as_ref().map(|encoding| encoding.address) {
+                    if self.breakpoints.contains(&address) || self.hooks.contains(&address) {
+                        final_states.push(live);
+                        continue;
+                    }
+                }
+
+                if remaining_steps == Some(0) {
+                    final_states.push(live);
+                    continue;
+                }
+
                 let previous_pc = live.eval_program_counter_u64()?;
                 let mut stepped = Vec::new();
                 for candidate in self.step(instruction, &live)? {
@@ -88,6 +136,7 @@ impl Executor {
                         stepped.push(candidate);
                     }
                 }
+                let next_remaining_steps = remaining_steps.map(|value| value.saturating_sub(1));
 
                 if stepped.is_empty() {
                     continue;
@@ -107,7 +156,7 @@ impl Executor {
                     &successor,
                 )?;
                 if let Some(next_index) = next_index {
-                    next_states.push((next_index, successor));
+                    next_states.push((next_index, successor, next_remaining_steps));
                 } else {
                     final_states.push(successor);
                 }
@@ -158,12 +207,40 @@ impl Executor {
 #[cfg(test)]
 mod tests {
     use super::Executor;
+    use crate::assemblers::{Assembler, AssemblerBackend};
+    use crate::controlflow::Graph;
+    use crate::disassemblers::capstone::Disassembler;
     use crate::Architecture;
     use crate::semantics::{
         InstructionEncoding, InstructionSemantics, SemanticEffect, SemanticExpression,
         SemanticLocation, SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
         SemanticOperationUnary, SemanticStatus, SemanticTerminator,
     };
+    use crate::Configuration;
+    use std::collections::{BTreeMap, BTreeSet};
+
+    fn assembled_semantics(architecture: Architecture, assembly: &str) -> Vec<InstructionSemantics> {
+        let config = Configuration::default();
+        let assembler = Assembler::new(architecture, config.clone(), AssemblerBackend::Default)
+            .expect("assembler");
+        let bytes = assembler.assemble(0, assembly).expect("assemble");
+        let mut ranges = BTreeMap::new();
+        ranges.insert(0, bytes.len() as u64);
+        let disassembler =
+            Disassembler::from_bytes(architecture, &bytes, ranges, config.clone()).expect("disassembler");
+        let mut graph = Graph::new(architecture, config);
+        let mut entrypoints = BTreeSet::new();
+        entrypoints.insert(0);
+        disassembler
+            .disassemble(entrypoints, &mut graph)
+            .expect("disassemble");
+        let mut instructions = graph.instructions();
+        instructions.sort_by_key(|instruction| instruction.address);
+        instructions
+            .into_iter()
+            .map(|instruction| instruction.semantics.expect("instruction semantics"))
+            .collect()
+    }
 
     #[test]
     fn symbolic_branch_forks() {
@@ -434,7 +511,7 @@ mod tests {
             },
             diagnostics: Vec::new(),
         };
-        let states = executor.run([&first, &second], &state).expect("run");
+        let states = executor.run([&first, &second], &state, None).expect("run");
         assert_eq!(states.len(), 1);
         assert_eq!(
             states[0]
@@ -554,7 +631,7 @@ mod tests {
         };
 
         let states = executor
-            .run([&setup, &loop_body, &exit], &state)
+            .run([&setup, &loop_body, &exit], &state, None)
             .expect("run");
         assert_eq!(states.len(), 1);
         assert_eq!(
@@ -663,7 +740,7 @@ mod tests {
         };
 
         let states = executor
-            .run([&branch, &taken, &not_taken], &state)
+            .run([&branch, &taken, &not_taken], &state, None)
             .expect("run");
         assert_eq!(states.len(), 2);
         let targets = states
@@ -683,6 +760,313 @@ mod tests {
                 None
             );
         }
+    }
+
+    #[test]
+    fn symbolic_run_honors_step_budget() {
+        let executor = Executor::new(Architecture::AMD64).expect("executor");
+        let state = executor.state();
+        let first = InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: Some(InstructionEncoding {
+                architecture: "amd64".to_string(),
+                mnemonic: "mov".to_string(),
+                disassembly: "mov rax, 7".to_string(),
+                address: 0x401000,
+                bytes: vec![0x48, 0xc7, 0xc0, 0x07, 0x00, 0x00, 0x00],
+            }),
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Set {
+                dst: SemanticLocation::Register {
+                    name: "rax".to_string(),
+                    bits: 64,
+                },
+                expression: SemanticExpression::Const { value: 7, bits: 64 },
+            }],
+            terminator: SemanticTerminator::FallThrough,
+            diagnostics: Vec::new(),
+        };
+        let second = InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: Some(InstructionEncoding {
+                architecture: "amd64".to_string(),
+                mnemonic: "mov".to_string(),
+                disassembly: "mov rbx, 9".to_string(),
+                address: 0x401001,
+                bytes: vec![0x48, 0xc7, 0xc3, 0x09, 0x00, 0x00, 0x00],
+            }),
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Set {
+                dst: SemanticLocation::Register {
+                    name: "rbx".to_string(),
+                    bits: 64,
+                },
+                expression: SemanticExpression::Const { value: 9, bits: 64 },
+            }],
+            terminator: SemanticTerminator::FallThrough,
+            diagnostics: Vec::new(),
+        };
+
+        let states = executor
+            .run([&first, &second], &state, Some(1))
+            .expect("run");
+        assert_eq!(states.len(), 1);
+        assert_eq!(
+            states[0]
+                .evaluate_register("rax", 64)
+                .expect("eval register")
+                .expect("concrete value"),
+            7
+        );
+        assert_eq!(states[0].evaluate_register("rbx", 64).expect("eval register"), None);
+    }
+
+    #[test]
+    fn symbolic_run_stops_at_breakpoint_before_execution() {
+        let mut executor = Executor::new(Architecture::AMD64).expect("executor");
+        executor.set_breakpoint(0x401001);
+        let state = executor.state();
+        let first = InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: Some(InstructionEncoding {
+                architecture: "amd64".to_string(),
+                mnemonic: "mov".to_string(),
+                disassembly: "mov rax, 7".to_string(),
+                address: 0x401000,
+                bytes: vec![0x48, 0xc7, 0xc0, 0x07, 0x00, 0x00, 0x00],
+            }),
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Set {
+                dst: SemanticLocation::Register {
+                    name: "rax".to_string(),
+                    bits: 64,
+                },
+                expression: SemanticExpression::Const { value: 7, bits: 64 },
+            }],
+            terminator: SemanticTerminator::FallThrough,
+            diagnostics: Vec::new(),
+        };
+        let second = InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: Some(InstructionEncoding {
+                architecture: "amd64".to_string(),
+                mnemonic: "mov".to_string(),
+                disassembly: "mov rbx, 9".to_string(),
+                address: 0x401001,
+                bytes: vec![0x48, 0xc7, 0xc3, 0x09, 0x00, 0x00, 0x00],
+            }),
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Set {
+                dst: SemanticLocation::Register {
+                    name: "rbx".to_string(),
+                    bits: 64,
+                },
+                expression: SemanticExpression::Const { value: 9, bits: 64 },
+            }],
+            terminator: SemanticTerminator::FallThrough,
+            diagnostics: Vec::new(),
+        };
+
+        let states = executor
+            .run([&first, &second], &state, None)
+            .expect("run");
+        assert_eq!(states.len(), 1);
+        assert_eq!(executor.breakpoints(), vec![0x401001]);
+        assert_eq!(
+            states[0]
+                .evaluate_register("rax", 64)
+                .expect("eval register")
+                .expect("concrete value"),
+            7
+        );
+        assert_eq!(states[0].evaluate_register("rbx", 64).expect("eval register"), None);
+
+        executor.remove_breakpoint(0x401001);
+        assert!(executor.breakpoints().is_empty());
+        executor.set_breakpoint(0x401002);
+        executor.clear_breakpoints();
+        assert!(executor.breakpoints().is_empty());
+    }
+
+    #[test]
+    fn symbolic_run_stops_at_hook_before_execution() {
+        let mut executor = Executor::new(Architecture::AMD64).expect("executor");
+        executor.add_hook(0x401001);
+        let state = executor.state();
+        let first = InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: Some(InstructionEncoding {
+                architecture: "amd64".to_string(),
+                mnemonic: "mov".to_string(),
+                disassembly: "mov rax, 7".to_string(),
+                address: 0x401000,
+                bytes: vec![0x48, 0xc7, 0xc0, 0x07, 0x00, 0x00, 0x00],
+            }),
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Set {
+                dst: SemanticLocation::Register {
+                    name: "rax".to_string(),
+                    bits: 64,
+                },
+                expression: SemanticExpression::Const { value: 7, bits: 64 },
+            }],
+            terminator: SemanticTerminator::FallThrough,
+            diagnostics: Vec::new(),
+        };
+        let second = InstructionSemantics {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: Some(InstructionEncoding {
+                architecture: "amd64".to_string(),
+                mnemonic: "mov".to_string(),
+                disassembly: "mov rbx, 9".to_string(),
+                address: 0x401001,
+                bytes: vec![0x48, 0xc7, 0xc3, 0x09, 0x00, 0x00, 0x00],
+            }),
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Set {
+                dst: SemanticLocation::Register {
+                    name: "rbx".to_string(),
+                    bits: 64,
+                },
+                expression: SemanticExpression::Const { value: 9, bits: 64 },
+            }],
+            terminator: SemanticTerminator::FallThrough,
+            diagnostics: Vec::new(),
+        };
+
+        let states = executor.run([&first, &second], &state, None).expect("run");
+        assert_eq!(states.len(), 1);
+        assert_eq!(executor.hooks(), vec![0x401001]);
+        assert_eq!(
+            states[0]
+                .evaluate_register("rax", 64)
+                .expect("eval register")
+                .expect("concrete value"),
+            7
+        );
+        assert_eq!(states[0].evaluate_register("rbx", 64).expect("eval register"), None);
+
+        executor.remove_hook(0x401001);
+        assert!(executor.hooks().is_empty());
+        executor.add_hook(0x401002);
+        executor.clear_hooks();
+        assert!(executor.hooks().is_empty());
+    }
+
+    #[test]
+    fn symbolic_run_follows_i386_call_and_return() {
+        let semantics = assembled_semantics(
+            Architecture::I386,
+            "
+            call callee
+            mov eax, 1
+            ret
+        callee:
+            mov ebx, 2
+            ret
+            ",
+        );
+        let executor = Executor::new(Architecture::I386).expect("executor");
+        let mut state = executor.state();
+        state.set_register("esp", 32, 0x3000).expect("set register");
+        state.map_memory(0x2000, 0x2000);
+        state
+            .write_memory(0x3000, &0x9000u32.to_le_bytes())
+            .expect("write memory");
+        let states = executor.run(semantics.iter(), &state, None).expect("run");
+        assert_eq!(states.len(), 1);
+        assert_eq!(
+            states[0]
+                .evaluate_register("eax", 32)
+                .expect("eval register")
+                .expect("concrete value"),
+            1
+        );
+        assert_eq!(
+            states[0]
+                .evaluate_register("ebx", 32)
+                .expect("eval register")
+                .expect("concrete value"),
+            2
+        );
+    }
+
+    #[test]
+    fn symbolic_run_follows_amd64_call_and_return() {
+        let semantics = assembled_semantics(
+            Architecture::AMD64,
+            "
+            call callee
+            mov eax, 1
+            ret
+        callee:
+            mov ebx, 2
+            ret
+            ",
+        );
+        let executor = Executor::new(Architecture::AMD64).expect("executor");
+        let mut state = executor.state();
+        state.set_register("rsp", 64, 0x3000).expect("set register");
+        state.map_memory(0x2000, 0x2000);
+        state
+            .write_memory(0x3000, &0x9000u64.to_le_bytes())
+            .expect("write memory");
+        let states = executor.run(semantics.iter(), &state, None).expect("run");
+        assert_eq!(states.len(), 1);
+        assert_eq!(
+            states[0]
+                .evaluate_register("eax", 32)
+                .expect("eval register")
+                .expect("concrete value"),
+            1
+        );
+        assert_eq!(
+            states[0]
+                .evaluate_register("ebx", 32)
+                .expect("eval register")
+                .expect("concrete value"),
+            2
+        );
+    }
+
+    #[test]
+    fn symbolic_run_follows_arm64_call_and_return() {
+        let semantics = assembled_semantics(
+            Architecture::ARM64,
+            "
+            bl callee
+            mov w0, #1
+            ret
+        callee:
+            mov w1, #2
+            ret
+            ",
+        );
+        let mut executor = Executor::new(Architecture::ARM64).expect("executor");
+        executor.set_breakpoint(0x4);
+        let state = executor.state();
+        let states = executor.run(semantics.iter(), &state, None).expect("run");
+        assert_eq!(states.len(), 1);
+        assert_eq!(
+            states[0]
+                .eval_program_counter_u64()
+                .expect("eval program counter")
+                .expect("concrete pc"),
+            0x4
+        );
+        assert_eq!(states[0].evaluate_register("x0", 64).expect("eval register"), None);
     }
 
     #[test]
@@ -831,7 +1215,7 @@ mod tests {
         };
 
         let states = executor
-            .run([&first, &second, &third], &state)
+            .run([&first, &second, &third], &state, None)
             .expect("run");
         let slice = states[0]
             .slice_from_register("ecx", 32)
@@ -988,7 +1372,7 @@ mod tests {
         };
 
         let states = executor
-            .run([&first, &second, &third], &state)
+            .run([&first, &second, &third], &state, None)
             .expect("run");
         let slice = states[0]
             .slice_from_register("ecx", 32)
@@ -1115,7 +1499,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.run([&to_float, &from_float], &state).expect("run");
+        let states = executor.run([&to_float, &from_float], &state, None).expect("run");
         assert_eq!(
             states[0]
                 .evaluate_register("d0", 64)
@@ -1448,7 +1832,7 @@ mod tests {
         };
 
         let states = executor
-            .run([&to_fp80_left, &to_fp80_right, &compare], &state)
+            .run([&to_fp80_left, &to_fp80_right, &compare], &state, None)
             .expect("run");
         assert_eq!(
             states[0]
@@ -1517,7 +1901,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.run([&to_fp80, &truncate], &state).expect("run");
+        let states = executor.run([&to_fp80, &truncate], &state, None).expect("run");
         assert_eq!(
             states[0]
                 .evaluate_register("xmm0", 64)
@@ -1643,7 +2027,7 @@ mod tests {
         };
 
         let states = executor
-            .run([&lhs, &rhs, &add, &store], &state)
+            .run([&lhs, &rhs, &add, &store], &state, None)
             .expect("run");
         assert_eq!(
             states[0]
@@ -1716,7 +2100,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.run([&load, &store], &state).expect("run");
+        let states = executor.run([&load, &store], &state, None).expect("run");
         assert_eq!(
             states[0]
                 .evaluate_register("xmm0", 64)
@@ -1784,7 +2168,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.run([&load, &store], &state).expect("run");
+        let states = executor.run([&load, &store], &state, None).expect("run");
         assert_eq!(
             states[0]
                 .evaluate_memory(0xA000, 4)
@@ -1908,7 +2292,7 @@ mod tests {
         };
 
         let states = executor
-            .run([&to_fp80, &divide, &store], &state)
+            .run([&to_fp80, &divide, &store], &state, None)
             .expect("run");
         assert_eq!(
             states[0]
@@ -1990,7 +2374,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.run([&load, &semantics], &state).expect("run");
+        let states = executor.run([&load, &semantics], &state, None).expect("run");
         assert_eq!(
             states[0]
                 .evaluate_register("c0", 1)
@@ -2092,7 +2476,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.run([&load, &semantics], &state).expect("run");
+        let states = executor.run([&load, &semantics], &state, None).expect("run");
         assert_eq!(
             states[0]
                 .evaluate_register("c0", 1)
@@ -2209,7 +2593,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.run([&load, &sin, &store], &state).expect("run");
+        let states = executor.run([&load, &sin, &store], &state, None).expect("run");
         let value = states[0]
             .evaluate_register("xmm1", 64)
             .expect("eval")
@@ -2303,7 +2687,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.run([&load, &cos, &store], &state).expect("run");
+        let states = executor.run([&load, &cos, &store], &state, None).expect("run");
         assert_eq!(
             states[0]
                 .evaluate_register("xmm1", 64)
@@ -2419,7 +2803,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.run([&lhs, &atan2, &store], &state).expect("run");
+        let states = executor.run([&lhs, &atan2, &store], &state, None).expect("run");
         assert_eq!(
             states[0]
                 .evaluate_register("xmm1", 64)
@@ -2536,7 +2920,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.run([&load, &scale, &store], &state).expect("run");
+        let states = executor.run([&load, &scale, &store], &state, None).expect("run");
         assert_eq!(
             states[0]
                 .evaluate_register("xmm1", 64)
@@ -2630,7 +3014,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.run([&load, &op, &store], &state).expect("run");
+        let states = executor.run([&load, &op, &store], &state, None).expect("run");
         assert_eq!(
             states[0]
                 .evaluate_register("xmm1", 64)
@@ -2695,7 +3079,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.run([&load, &store], &state).expect("run");
+        let states = executor.run([&load, &store], &state, None).expect("run");
         assert_eq!(
             states[0]
                 .evaluate_register("xmm1", 64)
@@ -2765,7 +3149,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.run([&load, &store], &state).expect("run");
+        let states = executor.run([&load, &store], &state, None).expect("run");
         assert_eq!(
             states[0]
                 .evaluate_memory(0xA200, 8)
