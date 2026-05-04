@@ -198,6 +198,11 @@ fn expected_llvm_config_path(install_prefix: &Path) -> PathBuf {
     })
 }
 
+fn llvm_install_ready(install_prefix: &Path) -> bool {
+    expected_llvm_config_path(install_prefix).exists()
+        && install_prefix.join("include").join("llvm-c").join("Target.h").exists()
+}
+
 fn target_dir() -> PathBuf {
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
     out_dir
@@ -208,8 +213,7 @@ fn target_dir() -> PathBuf {
 }
 
 fn bootstrap_shared_llvm(install_prefix: &Path) {
-    let llvm_config_path = expected_llvm_config_path(install_prefix);
-    if llvm_config_path.exists() {
+    if llvm_install_ready(install_prefix) {
         return;
     }
 
@@ -221,7 +225,7 @@ fn bootstrap_shared_llvm(install_prefix: &Path) {
         match std::fs::create_dir(&lock_dir) {
             Ok(()) => break,
             Err(error) if error.kind() == ErrorKind::AlreadyExists => {
-                if llvm_config_path.exists() {
+                if llvm_install_ready(install_prefix) {
                     return;
                 }
                 thread::sleep(Duration::from_secs(1));
@@ -231,7 +235,7 @@ fn bootstrap_shared_llvm(install_prefix: &Path) {
     }
 
     let result = (|| {
-        if llvm_config_path.exists() {
+        if llvm_install_ready(install_prefix) {
             return;
         }
 
@@ -296,6 +300,11 @@ fn bootstrap_shared_llvm(install_prefix: &Path) {
 
         let mut build = cmake_build_command(&build_dir);
         run_checked(&mut build, "build shared llvm bootstrap");
+        assert!(
+            llvm_install_ready(install_prefix),
+            "shared llvm bootstrap completed without installing llvm-c headers into {}",
+            install_prefix.display()
+        );
     })();
 
     let _ = std::fs::remove_dir(&lock_dir);

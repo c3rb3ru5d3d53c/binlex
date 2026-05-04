@@ -59,7 +59,7 @@ fn ensure_static_llvm() -> LlvmInstall {
 
     let install_prefix = shared_llvm_install_prefix();
     let llvm_config_path = expected_llvm_config_path(&install_prefix);
-    if !llvm_config_path.exists() {
+    if !llvm_install_ready(&install_prefix) {
         bootstrap_shared_llvm(&install_prefix);
     }
     if !supports_static(&llvm_config_path) {
@@ -77,8 +77,7 @@ fn load_shared_llvm() -> LlvmInstall {
 }
 
 fn bootstrap_shared_llvm(install_prefix: &Path) {
-    let llvm_config_path = expected_llvm_config_path(install_prefix);
-    if llvm_config_path.exists() {
+    if llvm_install_ready(install_prefix) {
         return;
     }
 
@@ -90,7 +89,7 @@ fn bootstrap_shared_llvm(install_prefix: &Path) {
         match std::fs::create_dir(&lock_dir) {
             Ok(()) => break,
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-                if llvm_config_path.exists() {
+                if llvm_install_ready(install_prefix) {
                     return;
                 }
                 thread::sleep(Duration::from_secs(1));
@@ -100,7 +99,7 @@ fn bootstrap_shared_llvm(install_prefix: &Path) {
     }
 
     let result = (|| {
-        if llvm_config_path.exists() {
+        if llvm_install_ready(install_prefix) {
             return;
         }
 
@@ -164,6 +163,11 @@ fn bootstrap_shared_llvm(install_prefix: &Path) {
         run_checked(&mut configure, "configure shared llvm bootstrap");
         let mut build = cmake_build_command(&build_dir);
         run_checked(&mut build, "build shared llvm bootstrap");
+        assert!(
+            llvm_install_ready(install_prefix),
+            "shared llvm bootstrap completed without installing llvm-c headers into {}",
+            install_prefix.display()
+        );
     })();
 
     let _ = std::fs::remove_dir(&lock_dir);
@@ -327,6 +331,15 @@ fn expected_llvm_config_path(install_prefix: &Path) -> PathBuf {
     } else {
         "llvm-config"
     })
+}
+
+fn llvm_install_ready(install_prefix: &Path) -> bool {
+    expected_llvm_config_path(install_prefix).exists()
+        && install_prefix
+            .join("include")
+            .join("llvm-c")
+            .join("Target.h")
+            .exists()
 }
 
 fn env_llvm_config_path() -> Option<PathBuf> {
