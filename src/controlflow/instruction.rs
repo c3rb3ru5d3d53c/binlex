@@ -22,13 +22,16 @@
 
 use crate::Architecture;
 use crate::Configuration;
+use crate::controlflow::Block;
+use crate::controlflow::Function;
 use crate::controlflow::Graph;
-use crate::lifters::embeddings::EmbeddingsJson;
-use crate::lifters::embeddings::llvm as llvm_embeddings;
+use crate::controlflow::Reference;
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeJson;
 use crate::hex;
 use crate::io::Stderr;
+use crate::lifters::embeddings::EmbeddingsJson;
+use crate::lifters::embeddings::llvm as llvm_embeddings;
 use crate::lifters::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
 #[cfg(not(target_os = "windows"))]
 use crate::lifters::vex::{Lifter as VexLifter, VexJson};
@@ -46,6 +49,7 @@ use crate::semantics::{
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Value;
+use std::ops::{Deref, DerefMut};
 use std::{collections::BTreeMap, collections::BTreeSet, io::Error};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -180,7 +184,7 @@ impl InstructionSemanticsInput {
 }
 
 #[derive(Clone)]
-pub struct Instruction {
+pub struct InstructionRecord {
     // The instruction architecture
     pub architecture: Architecture,
     /// The configuration
@@ -203,7 +207,7 @@ pub struct Instruction {
     pub is_return: bool,
     /// Indicates whether this instruction is a call instruction.
     pub is_call: bool,
-    /// A set of functions that this instruction may belong to.
+    /// A set of callee function addresses for this instruction.
     pub functions: BTreeSet<u64>,
     /// Indicates whether this instruction is a jump instruction.
     pub is_jump: bool,
@@ -276,18 +280,18 @@ pub struct InstructionJson {
     pub size: usize,
     /// The chromosome
     pub chromosome: ChromosomeJson,
-    /// A set of functions that this instruction may belong to.
+    /// The direct outgoing call references from this instruction.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub callee_references: Vec<Reference>,
+    /// The outgoing successor block references from this instruction.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub successor_block_references: Vec<Reference>,
+    /// A set of explicit branch target addresses for this instruction.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
-    pub functions: BTreeSet<u64>,
-    /// A set of addresses for the blocks this instruction may branch to.
-    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
-    pub blocks: BTreeSet<u64>,
-    /// A set of addresses this instruction may jump or branch to.
-    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
-    pub to: BTreeSet<u64>,
-    /// The address of the next sequential instruction, if any.
+    pub branches: BTreeSet<u64>,
+    /// The sequential fallthrough address of this instruction, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub next: Option<u64>,
+    pub fallthrough: Option<u64>,
     /// Optional processor outputs attached by post-processing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub processors: Option<BTreeMap<String, Value>>,
@@ -305,8 +309,8 @@ pub struct InstructionJson {
     pub lifters: Option<LiftersJson>,
 }
 
-impl Instruction {
-    /// Creates a new `Instruction` with the specified address.
+impl InstructionRecord {
+    /// Creates a new instruction record with the specified address.
     ///
     /// # Arguments
     ///
@@ -314,7 +318,7 @@ impl Instruction {
     ///
     /// # Returns
     ///
-    /// Returns a new `Instruction` with default values for its properties.
+    /// Returns a new instruction record with default values for its properties.
     #[allow(dead_code)]
     pub fn create(address: u64, architecture: Architecture, config: Configuration) -> Self {
         Self {
@@ -342,19 +346,6 @@ impl Instruction {
             architecture,
             config,
         }
-    }
-
-    /// Retrieves an `Instruction` from the control flow graph if available.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `Result<Instruction, Error>` containing the `Instruction`.
-    pub fn new(address: u64, cfg: &Graph) -> Result<Instruction, Error> {
-        let instruction = cfg.get_instruction(address);
-        if instruction.is_none() {
-            return Err(Error::other("instruction does not exist"));
-        }
-        Ok(instruction.unwrap())
     }
 
     /// Retrieves the address of the instruction.
@@ -410,29 +401,13 @@ impl Instruction {
         Some(semantics)
     }
 
-    /// Retrieves the set of addresses for the blocks this instruction may branch to.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `BTreeSet<u64>` containing the block addresses.
-    pub fn blocks(&self) -> BTreeSet<u64> {
-        let mut result = BTreeSet::new();
-        if !self.is_jump && self.to.is_empty() {
-            return result;
-        }
-        for item in self.to.iter().copied().chain(self.next()) {
-            result.insert(item);
-        }
-        result
-    }
-
     /// Retrieves the address of the next sequential instruction.
     ///
     /// # Returns
     ///
     /// Returns `Some(u64)` containing the address of the next instruction, or `None`
     /// if the current instruction is a return or trap instruction.
-    pub fn next(&self) -> Option<u64> {
+    pub fn fallthrough(&self) -> Option<u64> {
         if self.is_jump && !self.is_conditional {
             return None;
         }
@@ -445,6 +420,30 @@ impl Instruction {
         Some(self.address + self.size() as u64)
     }
 
+    /// Retrieves the set of explicit branch target addresses for this instruction.
+    pub fn branches(&self) -> BTreeSet<u64> {
+        self.to.clone()
+    }
+
+    /// Retrieves the full set of outgoing CFG successor addresses for this instruction.
+    pub fn successors(&self) -> BTreeSet<u64> {
+        let mut result = self.branches();
+        if let Some(fallthrough) = self.fallthrough() {
+            result.insert(fallthrough);
+        }
+        result
+    }
+
+    /// Retrieves the outgoing successor block references from this instruction.
+    pub fn successor_block_references(&self) -> Vec<Reference> {
+        let mut result = Vec::<Reference>::new();
+        for block_address in self.successors() {
+            result.push(Reference::new(self.address, block_address));
+        }
+        result.sort();
+        result
+    }
+
     /// Computes the size of the instruction in bytes.
     ///
     /// # Returns
@@ -455,12 +454,7 @@ impl Instruction {
         self.bytes.len()
     }
 
-    /// Converts the `Instruction` into its JSON-serializable representation.
-    ///
-    /// # Returns
-    ///
-    /// Returns an `InstructionJson` struct containing the properties of the instruction.
-    #[allow(dead_code)]
+    /// Converts the instruction record into its JSON-serializable representation.
     pub fn process_base(&self) -> InstructionJson {
         InstructionJson {
             type_: "instruction".to_string(),
@@ -482,10 +476,10 @@ impl Instruction {
             mnemonic: self.mnemonic.clone(),
             disassembly: self.disassembly.clone(),
             operands: self.operands.clone(),
-            functions: self.functions(),
-            blocks: self.blocks(),
-            to: self.to(),
-            next: self.next(),
+            callee_references: self.callee_references(),
+            successor_block_references: self.successor_block_references(),
+            branches: self.branches(),
+            fallthrough: self.fallthrough(),
             processors: None,
             embeddings: None,
             semantics: if self.config.instructions.semantics.enabled {
@@ -494,8 +488,140 @@ impl Instruction {
                 None
             },
             attributes: None,
-            lifters: self.lifters_json(),
+            lifters: None,
         }
+    }
+
+    pub fn pattern(&self) -> String {
+        self.pattern.clone()
+    }
+
+    /// Retrieves the chromosome representing the instruction.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Chromosome` represnting the instruction.
+    pub fn chromosome(&self) -> Chromosome {
+        let mask = if self.chromosome_mask.len() == self.bytes.len() {
+            self.chromosome_mask.clone()
+        } else {
+            vec![0; self.bytes.len()]
+        };
+        Chromosome::new(self.bytes.clone(), mask, self.config.clone())
+            .expect("failed to build instruction chromosome")
+    }
+
+    /// Retrieves the chromosome representing the instruction.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `ChromosomeJson` representing the instruction.
+    pub fn chromosome_json(&self) -> ChromosomeJson {
+        let mask = if self.chromosome_mask.len() == self.bytes.len() {
+            self.chromosome_mask.clone()
+        } else {
+            vec![0; self.bytes.len()]
+        };
+        Chromosome::new(self.bytes.clone(), mask, self.config.clone())
+            .expect("failed to build instruction chromosome")
+            .process()
+    }
+
+    /// Retrieves the set of addresses this instruction may jump or branch to.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `BTreeSet<u64>` containing the target addresses.
+    /// Indicates whether this instruction uses an indirect control-flow target.
+    pub fn has_indirect_target(&self) -> bool {
+        self.has_indirect_target
+    }
+
+    /// Indicates whether this instruction is conditional.
+    pub fn is_conditional(&self) -> bool {
+        self.is_conditional
+    }
+
+    /// Retrieves the direct outgoing call references from this instruction.
+    pub fn callee_references(&self) -> Vec<Reference> {
+        let mut result = Vec::<Reference>::new();
+        for function_address in &self.functions {
+            result.push(Reference::new(self.address, *function_address));
+        }
+        result.sort();
+        result
+    }
+
+    /// Retrieves the direct callee function addresses from this instruction.
+    pub fn callees(&self) -> BTreeSet<u64> {
+        self.functions.clone()
+    }
+}
+
+#[derive(Clone)]
+pub struct Instruction<'instruction> {
+    pub cfg: &'instruction Graph,
+    pub inner: InstructionRecord,
+}
+
+impl<'instruction> Deref for Instruction<'instruction> {
+    type Target = InstructionRecord;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl DerefMut for Instruction<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+impl<'instruction> From<Instruction<'instruction>> for InstructionRecord {
+    fn from(value: Instruction<'instruction>) -> Self {
+        value.inner
+    }
+}
+
+impl<'instruction> Instruction<'instruction> {
+    pub fn create(
+        address: u64,
+        architecture: Architecture,
+        config: Configuration,
+    ) -> InstructionRecord {
+        InstructionRecord::create(address, architecture, config)
+    }
+
+    pub fn new(address: u64, cfg: &'instruction Graph) -> Result<Self, Error> {
+        let inner = cfg
+            .get_instruction_record(address)
+            .ok_or_else(|| Error::other("instruction does not exist"))?;
+        Ok(Self { cfg, inner })
+    }
+
+    pub fn into_record(self) -> InstructionRecord {
+        self.inner
+    }
+
+    pub fn callees(&self) -> Vec<Function<'instruction>> {
+        let mut result = Vec::<Function<'instruction>>::new();
+        for reference in self.callee_references() {
+            if let Ok(function) = Function::new(reference.address, self.cfg) {
+                result.push(function);
+            }
+        }
+        result
+    }
+
+    pub fn successor_blocks(&self) -> Vec<Block<'instruction>> {
+        let mut result = Vec::<Block<'instruction>>::new();
+        for reference in self.successor_block_references() {
+            if let Ok(block) = Block::new(reference.address, self.cfg) {
+                result.push(block);
+            }
+        }
+        result
     }
 
     pub fn process(&self) -> InstructionJson {
@@ -517,11 +643,11 @@ impl Instruction {
                 json.embeddings = Some(EmbeddingsJson::llvm(vector));
             }
         }
+        json.lifters = self.lifters_json();
 
         json
     }
 
-    /// Return all processor outputs attached to this instruction.
     pub fn processors(&self) -> BTreeMap<String, Value> {
         self.process().processors.unwrap_or_default()
     }
@@ -566,7 +692,6 @@ impl Instruction {
         })
     }
 
-    /// Return a single processor output by name or an empty object when absent.
     pub fn processor(&self, name: &str) -> Value {
         self.processors()
             .get(name)
@@ -574,105 +699,24 @@ impl Instruction {
             .unwrap_or_else(|| Value::Object(Default::default()))
     }
 
-    pub fn pattern(&self) -> String {
-        self.pattern.clone()
-    }
-
-    /// Retrieves the chromosome representing the instruction.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `Chromosome` represnting the instruction.
-    pub fn chromosome(&self) -> Chromosome {
-        let mask = if self.chromosome_mask.len() == self.bytes.len() {
-            self.chromosome_mask.clone()
-        } else {
-            vec![0; self.bytes.len()]
-        };
-        Chromosome::new(self.bytes.clone(), mask, self.config.clone())
-            .expect("failed to build instruction chromosome")
-    }
-
-    /// Retrieves the chromosome representing the instruction.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `ChromosomeJson` representing the instruction.
-    pub fn chromosome_json(&self) -> ChromosomeJson {
-        let mask = if self.chromosome_mask.len() == self.bytes.len() {
-            self.chromosome_mask.clone()
-        } else {
-            vec![0; self.bytes.len()]
-        };
-        Chromosome::new(self.bytes.clone(), mask, self.config.clone())
-            .expect("failed to build instruction chromosome")
-            .process()
-    }
-
-    /// Retrieves the set of addresses this instruction may jump or branch to.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `BTreeSet<u64>` containing the target addresses.
-    pub fn to(&self) -> BTreeSet<u64> {
-        self.to.clone()
-    }
-
-    /// Indicates whether this instruction uses an indirect control-flow target.
-    pub fn has_indirect_target(&self) -> bool {
-        self.has_indirect_target
-    }
-
-    /// Indicates whether this instruction is conditional.
-    pub fn is_conditional(&self) -> bool {
-        self.is_conditional
-    }
-
-    /// Retrieves the set of functions this instruction may belong to.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `BTreeSet<u64>` containing the function addresses.
-    pub fn functions(&self) -> BTreeSet<u64> {
-        self.functions.clone()
-    }
-
-    /// Converts the instruction into a JSON string representation including `Attributes`.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(String)` containing the JSON representation, or an `Err` if serialization fails.
-    pub fn json_with_attributes(&self, attributes: Attributes) -> Result<String, Error> {
-        let raw = self.process_with_attributes(attributes);
-        let result = serde_json::to_string(&raw)?;
-        Ok(result)
-    }
-
-    /// Processes the instruction into its JSON-serializable representation including `Attributes`.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `BlockJson` instance containing the block's metadata and `Attributes`.
     pub fn process_with_attributes(&self, attributes: Attributes) -> InstructionJson {
         let mut result = self.process();
         result.attributes = Some(attributes.process());
         result
     }
 
-    /// Converts the `Instruction` into a JSON string representation.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(String)` containing the JSON representation, or an `Err(Error)` if serialization fails.
-    #[allow(dead_code)]
+    pub fn json_with_attributes(&self, attributes: Attributes) -> Result<String, Error> {
+        let raw = self.process_with_attributes(attributes);
+        let result = serde_json::to_string(&raw)?;
+        Ok(result)
+    }
+
     pub fn json(&self) -> Result<String, Error> {
         let raw = self.process();
         let result = serde_json::to_string(&raw)?;
         Ok(result)
     }
 
-    /// Prints the JSON representation of the `Instruction` to standard output.
-    #[allow(dead_code)]
     pub fn print(&self) {
         if let Ok(json) = self.json() {
             println!("{}", json);

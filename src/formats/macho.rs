@@ -123,7 +123,6 @@ impl<'a> MachoSlice<'a> {
     pub fn image(&self) -> Result<Image, Error> {
         self.macho.image(self.index)
     }
-
 }
 
 impl MACHO {

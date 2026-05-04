@@ -20,10 +20,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 MAX_ENCODING_BYTES
             )));
         }
-        let helper_name = format!(
-            "binlex_encoding_{}",
-            sanitize_symbol(&encoding.mnemonic)
-        );
+        let helper_name = format!("binlex_encoding_{}", sanitize_symbol(&encoding.mnemonic));
         let helper = self.declare_void_helper(
             &helper_name,
             &[self
@@ -216,7 +213,9 @@ mod tests {
             }],
         };
 
-        lifter.lift_semantics(std::slice::from_ref(&semantics)).expect("lift semantics");
+        lifter
+            .lift_semantics(std::slice::from_ref(&semantics))
+            .expect("lift semantics");
         let text = lifter.text();
 
         assert!(text.contains("declare void @binlex_encoding_ld4(ptr)"));
@@ -247,7 +246,9 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        lifter.lift_semantics(std::slice::from_ref(&semantics)).expect("lift semantics");
+        lifter
+            .lift_semantics(std::slice::from_ref(&semantics))
+            .expect("lift semantics");
         let text = lifter.text();
 
         assert!(!text.contains("@binlex_encoding_xor("));
@@ -302,7 +303,9 @@ mod tests {
         semantics.set_abi(Some(Abi::SysV));
 
         let mut lifter = Lifter::new(Architecture::ARM64, config);
-        lifter.lift_semantics(std::slice::from_ref(&semantics)).expect("lift semantics");
+        lifter
+            .lift_semantics(std::slice::from_ref(&semantics))
+            .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
@@ -328,7 +331,9 @@ mod tests {
         semantics.set_abi(Some(Abi::Windows64));
 
         let mut lifter = Lifter::new(Architecture::AMD64, config);
-        lifter.lift_semantics(std::slice::from_ref(&semantics)).expect("lift semantics");
+        lifter
+            .lift_semantics(std::slice::from_ref(&semantics))
+            .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
 

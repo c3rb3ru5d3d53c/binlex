@@ -237,14 +237,14 @@ impl<'instruction> Instruction<'instruction> {
         self.is_conditional_jump() || self.is_unconditional_jump()
     }
 
-    pub fn next(&self) -> Option<u64> {
+    pub fn fallthrough(&self) -> Option<u64> {
         if self.is_unconditional_jump() || self.is_return() || self.is_switch() {
             return None;
         }
         Some(self.address + self.size() as u64)
     }
 
-    pub fn to(&self) -> BTreeSet<u64> {
+    pub fn branches(&self) -> BTreeSet<u64> {
         let mut result = BTreeSet::<u64>::new();
 
         if self.is_switch() {
@@ -379,11 +379,11 @@ impl<'instruction> Instruction<'instruction> {
     }
 
     fn branch_target(&self) -> Option<u64> {
-        self.to().iter().next().copied()
+        self.branches().iter().next().copied()
     }
 
     fn switch_targets(&self) -> Vec<u64> {
-        self.to().into_iter().collect()
+        self.branches().into_iter().collect()
     }
 
     fn switch_offsets(&self) -> Vec<i32> {

@@ -193,7 +193,6 @@ impl PyMachoSlice {
             .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         Py::new(py, Image { inner: result })
     }
-
 }
 
 #[pymethods]

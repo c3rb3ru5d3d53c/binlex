@@ -22,7 +22,9 @@
 
 use crate::controlflow::graph::Graph;
 use crate::controlflow::json_value_to_py;
+use crate::controlflow::Function;
 use crate::controlflow::Instruction;
+use crate::controlflow::Reference;
 use crate::genetics::Chromosome;
 use crate::hashing::{MinHash32, SSDeep, SHA256, TLSH};
 use crate::Architecture;
@@ -34,7 +36,7 @@ use binlex::Architecture as InnerArchitecture;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::Py;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -66,9 +68,15 @@ impl BlockJsonDeserializer {
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return the referenced function addresses contained in the block payload.
-    pub fn functions(&self) -> BTreeMap<u64, u64> {
-        self.inner.lock().unwrap().functions()
+    /// Return the direct outgoing call references contained in the block payload.
+    pub fn callee_references(&self) -> Vec<Reference> {
+        self.inner
+            .lock()
+            .unwrap()
+            .callee_references()
+            .into_iter()
+            .map(|reference| Reference { inner: reference })
+            .collect()
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -124,15 +132,33 @@ impl BlockJsonDeserializer {
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return the set of related block addresses referenced by this block.
-    pub fn blocks(&self) -> BTreeSet<u64> {
-        self.inner.lock().unwrap().blocks()
+    /// Return the direct outgoing control-flow references in the payload.
+    pub fn successor_references(&self) -> Vec<Reference> {
+        self.inner
+            .lock()
+            .unwrap()
+            .successor_references()
+            .into_iter()
+            .map(|reference| Reference { inner: reference })
+            .collect()
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return the successor addresses targeted by this block.
-    pub fn to(&self) -> BTreeSet<u64> {
-        self.inner.lock().unwrap().to()
+    /// Return the direct incoming control-flow references in the payload.
+    pub fn predecessor_references(&self) -> Vec<Reference> {
+        self.inner
+            .lock()
+            .unwrap()
+            .predecessor_references()
+            .into_iter()
+            .map(|reference| Reference { inner: reference })
+            .collect()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the explicit branch target addresses targeted by this block.
+    pub fn branches(&self) -> BTreeSet<u64> {
+        self.inner.lock().unwrap().branches()
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -148,9 +174,9 @@ impl BlockJsonDeserializer {
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return the next linear address after the block, if available.
-    pub fn next(&self) -> Option<u64> {
-        self.inner.lock().unwrap().next()
+    /// Return the sequential fallthrough address after the block, if available.
+    pub fn fallthrough(&self) -> Option<u64> {
+        self.inner.lock().unwrap().fallthrough()
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -331,15 +357,15 @@ impl Block {
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Retrieves the next address in the block.
-    pub fn next(&self, py: Python) -> PyResult<Option<u64>> {
-        self.with_inner_block(py, |block| Ok(block.next()))
+    /// Retrieves the sequential fallthrough address in the block.
+    pub fn fallthrough(&self, py: Python) -> PyResult<Option<u64>> {
+        self.with_inner_block(py, |block| Ok(block.fallthrough()))
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Retrieves the set of addresses the block points to.
-    pub fn to(&self, py: Python) -> PyResult<BTreeSet<u64>> {
-        self.with_inner_block(py, |block| Ok(block.to()))
+    /// Retrieves the set of explicit branch target addresses for this block.
+    pub fn branches(&self, py: Python) -> PyResult<BTreeSet<u64>> {
+        self.with_inner_block(py, |block| Ok(block.branches()))
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -353,9 +379,57 @@ impl Block {
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Retrieves the set of addresses of blocks referenced by this block.
-    pub fn blocks(&self, py: Python) -> PyResult<BTreeSet<u64>> {
-        self.with_inner_block(py, |block| Ok(block.blocks()))
+    /// Return the direct successor blocks.
+    pub fn successors(&self, py: Python) -> PyResult<Vec<Block>> {
+        self.with_inner_block(py, |block| {
+            Ok(block
+                .successors()
+                .into_iter()
+                .map(|successor| {
+                    Block::new(successor.address(), self.cfg.clone_ref(py))
+                        .expect("failed to get successor")
+                })
+                .collect())
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the direct predecessor blocks.
+    pub fn predecessors(&self, py: Python) -> PyResult<Vec<Block>> {
+        self.with_inner_block(py, |block| {
+            Ok(block
+                .predecessors()
+                .into_iter()
+                .map(|predecessor| {
+                    Block::new(predecessor.address(), self.cfg.clone_ref(py))
+                        .expect("failed to get predecessor")
+                })
+                .collect())
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the direct outgoing control-flow references.
+    pub fn successor_references(&self, py: Python) -> PyResult<Vec<Reference>> {
+        self.with_inner_block(py, |block| {
+            Ok(block
+                .successor_references()
+                .into_iter()
+                .map(|reference| Reference { inner: reference })
+                .collect())
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the direct incoming control-flow references.
+    pub fn predecessor_references(&self, py: Python) -> PyResult<Vec<Reference>> {
+        self.with_inner_block(py, |block| {
+            Ok(block
+                .predecessor_references()
+                .into_iter()
+                .map(|reference| Reference { inner: reference })
+                .collect())
+        })
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -365,9 +439,30 @@ impl Block {
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Retrieves the functions referenced in the block as a map.
-    pub fn functions(&self, py: Python) -> PyResult<BTreeMap<u64, u64>> {
-        self.with_inner_block(py, |block| Ok(block.functions()))
+    /// Return the directly called functions.
+    pub fn callees(&self, py: Python) -> PyResult<Vec<Function>> {
+        self.with_inner_block(py, |block| {
+            Ok(block
+                .callees()
+                .into_iter()
+                .map(|callee| {
+                    Function::new(callee.address(), self.cfg.clone_ref(py))
+                        .expect("failed to get callee")
+                })
+                .collect())
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the direct outgoing call references.
+    pub fn callee_references(&self, py: Python) -> PyResult<Vec<Reference>> {
+        self.with_inner_block(py, |block| {
+            Ok(block
+                .callee_references()
+                .into_iter()
+                .map(|reference| Reference { inner: reference })
+                .collect())
+        })
     }
 
     #[pyo3(text_signature = "($self)")]

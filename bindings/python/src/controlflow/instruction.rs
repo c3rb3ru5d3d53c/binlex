@@ -21,12 +21,15 @@
 // SOFTWARE.
 
 use crate::controlflow::json_value_to_py;
+use crate::controlflow::Block;
+use crate::controlflow::Function;
 use crate::controlflow::Graph;
+use crate::controlflow::Reference;
 use crate::genetics::Chromosome;
 use crate::semantics::InstructionSemantics as PyInstructionSemantics;
 use crate::Architecture;
 use crate::Configuration;
-use binlex::controlflow::Instruction as InnerInstruction;
+use binlex::controlflow::Instruction as RawInnerInstruction;
 use binlex::controlflow::InstructionJson as InnerInstructionJson;
 use binlex::controlflow::Operand as InnerOperand;
 use binlex::controlflow::OperandKind as InnerOperandKind;
@@ -40,6 +43,8 @@ use std::collections::BTreeSet;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::sync::Mutex;
+
+type InnerInstruction = RawInnerInstruction<'static>;
 
 fn hash_value<T: Hash>(value: &T) -> isize {
     let mut hasher = DefaultHasher::new();
@@ -385,16 +390,32 @@ impl InstructionJsonDeserializer {
             .collect()
     }
 
-    pub fn blocks(&self) -> BTreeSet<u64> {
-        self.inner.lock().unwrap().blocks.clone()
+    pub fn successor_block_references(&self) -> Vec<Reference> {
+        self.inner
+            .lock()
+            .unwrap()
+            .successor_block_references
+            .iter()
+            .cloned()
+            .map(|reference| Reference { inner: reference })
+            .collect()
     }
 
-    pub fn next(&self) -> Option<u64> {
-        self.inner.lock().unwrap().next
+    pub fn fallthrough(&self) -> Option<u64> {
+        self.inner.lock().unwrap().fallthrough
     }
 
-    pub fn to(&self) -> BTreeSet<u64> {
-        self.inner.lock().unwrap().to.clone()
+    pub fn branches(&self) -> BTreeSet<u64> {
+        self.inner.lock().unwrap().branches.clone()
+    }
+
+    pub fn successors(&self) -> BTreeSet<u64> {
+        let binding = self.inner.lock().unwrap();
+        let mut result = binding.branches.clone();
+        if let Some(fallthrough) = binding.fallthrough {
+            result.insert(fallthrough);
+        }
+        result
     }
 
     pub fn has_indirect_target(&self) -> bool {
@@ -405,8 +426,25 @@ impl InstructionJsonDeserializer {
         self.inner.lock().unwrap().is_conditional
     }
 
-    pub fn functions(&self) -> BTreeSet<u64> {
-        self.inner.lock().unwrap().functions.clone()
+    pub fn callee_references(&self) -> Vec<Reference> {
+        self.inner
+            .lock()
+            .unwrap()
+            .callee_references
+            .iter()
+            .cloned()
+            .map(|reference| Reference { inner: reference })
+            .collect()
+    }
+
+    pub fn callees(&self) -> BTreeSet<u64> {
+        self.inner
+            .lock()
+            .unwrap()
+            .callee_references
+            .iter()
+            .map(|reference| reference.address)
+            .collect()
     }
 
     pub fn chromosome(&self) -> PyResult<Chromosome> {
@@ -556,21 +594,48 @@ impl Instruction {
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return the block addresses containing this instruction.
-    pub fn blocks(&self, py: Python) -> PyResult<BTreeSet<u64>> {
-        self.with_inner_instruction(py, |instruction| Ok(instruction.blocks()))
+    /// Return the successor blocks reached by this instruction.
+    pub fn successor_blocks(&self, py: Python) -> PyResult<Vec<Block>> {
+        self.with_inner_instruction(py, |instruction| {
+            Ok(instruction
+                .successor_blocks()
+                .into_iter()
+                .map(|block| {
+                    Block::new(block.address(), self.cfg.clone_ref(py))
+                        .expect("failed to get successor block")
+                })
+                .collect())
+        })
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return the next linear instruction address, if known.
-    pub fn next(&self, py: Python) -> PyResult<Option<u64>> {
-        self.with_inner_instruction(py, |instruction| Ok(instruction.next()))
+    /// Return the outgoing successor block references.
+    pub fn successor_block_references(&self, py: Python) -> PyResult<Vec<Reference>> {
+        self.with_inner_instruction(py, |instruction| {
+            Ok(instruction
+                .successor_block_references()
+                .into_iter()
+                .map(|reference| Reference { inner: reference })
+                .collect())
+        })
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return the successor addresses targeted by this instruction.
-    pub fn to(&self, py: Python) -> PyResult<BTreeSet<u64>> {
-        self.with_inner_instruction(py, |instruction| Ok(instruction.to()))
+    /// Return the sequential fallthrough instruction address, if known.
+    pub fn fallthrough(&self, py: Python) -> PyResult<Option<u64>> {
+        self.with_inner_instruction(py, |instruction| Ok(instruction.fallthrough()))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the explicit branch target addresses of this instruction.
+    pub fn branches(&self, py: Python) -> PyResult<BTreeSet<u64>> {
+        self.with_inner_instruction(py, |instruction| Ok(instruction.branches()))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return all outgoing CFG successor addresses for this instruction.
+    pub fn successors(&self, py: Python) -> PyResult<BTreeSet<u64>> {
+        self.with_inner_instruction(py, |instruction| Ok(instruction.successors()))
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -586,9 +651,30 @@ impl Instruction {
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return the function addresses associated with this instruction.
-    pub fn functions(&self, py: Python) -> PyResult<BTreeSet<u64>> {
-        self.with_inner_instruction(py, |instruction| Ok(instruction.functions()))
+    /// Return the directly called functions.
+    pub fn callees(&self, py: Python) -> PyResult<Vec<Function>> {
+        self.with_inner_instruction(py, |instruction| {
+            Ok(instruction
+                .callees()
+                .into_iter()
+                .map(|callee| {
+                    Function::new(callee.address(), self.cfg.clone_ref(py))
+                        .expect("failed to get callee")
+                })
+                .collect())
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the direct outgoing call references.
+    pub fn callee_references(&self, py: Python) -> PyResult<Vec<Reference>> {
+        self.with_inner_instruction(py, |instruction| {
+            Ok(instruction
+                .callee_references()
+                .into_iter()
+                .map(|reference| Reference { inner: reference })
+                .collect())
+        })
     }
 
     #[pyo3(text_signature = "($self)")]

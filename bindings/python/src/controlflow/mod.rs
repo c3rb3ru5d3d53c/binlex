@@ -24,6 +24,7 @@ pub mod block;
 pub mod function;
 pub mod graph;
 pub mod instruction;
+pub mod reference;
 
 pub use crate::controlflow::block::Block;
 pub use crate::controlflow::block::BlockJsonDeserializer;
@@ -33,11 +34,13 @@ pub use crate::controlflow::graph::Graph;
 pub use crate::controlflow::graph::GraphQueue;
 pub use crate::controlflow::instruction::Instruction;
 pub use crate::controlflow::instruction::InstructionJsonDeserializer;
+pub use crate::controlflow::reference::Reference;
 
 use crate::controlflow::block::block_init;
 use crate::controlflow::function::function_init;
 use crate::controlflow::graph::graph_init;
 use crate::controlflow::instruction::instruction_init;
+use crate::controlflow::reference::Reference as PyReference;
 
 use pyo3::{prelude::*, wrap_pymodule};
 use serde_json::Value;
@@ -60,6 +63,7 @@ pub fn controlflow_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<GraphQueue>()?;
     m.add_class::<Instruction>()?;
     m.add_class::<InstructionJsonDeserializer>()?;
+    m.add_class::<PyReference>()?;
     m.add_class::<Block>()?;
     m.add_class::<BlockJsonDeserializer>()?;
     m.add_class::<Function>()?;

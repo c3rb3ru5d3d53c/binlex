@@ -28,7 +28,9 @@ use ::capstone::{Insn, arch::ArchOperand, arch::x86::X86OperandType};
 use crate::{
     Architecture,
     controlflow::graph::Graph,
-    controlflow::{Instruction, InstructionSemanticsInput, Operand, OperandKind},
+    controlflow::{
+        Instruction, InstructionRecord, InstructionSemanticsInput, Operand, OperandKind,
+    },
     disassemblers::x86::{
         backends::capstone as x86_capstone, flow as x86_flow, indirect as x86_indirect,
         targets as x86_targets,
@@ -181,7 +183,7 @@ pub fn build_instruction(
     machine: Architecture,
     address: u64,
     cfg: &Graph,
-) -> Result<Instruction, Error> {
+) -> Result<InstructionRecord, Error> {
     let instruction_container = disassembler.disassemble_instructions(address, 1)?;
     let instruction = instruction_container.iter().next().ok_or_else(|| {
         Error::new(
@@ -264,7 +266,7 @@ pub fn build_instruction(
     blinstruction.functions.extend(function_targets.clone());
 
     if blinstruction.is_jump || blinstruction.is_return || blinstruction.is_trap {
-        blinstruction.edges = blinstruction.blocks().len();
+        blinstruction.edges = blinstruction.successors().len();
     }
 
     if cfg.config.semantics.enabled {

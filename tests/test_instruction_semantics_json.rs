@@ -1,4 +1,4 @@
-use binlex::controlflow::Instruction;
+use binlex::controlflow::InstructionRecord;
 use binlex::semantics::{
     InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation, SemanticStatus,
     SemanticTerminator,
@@ -7,8 +7,8 @@ use binlex::{Architecture, Configuration};
 use serde_json::to_value;
 use std::collections::BTreeSet;
 
-fn instruction_with_semantics(config: Configuration) -> Instruction {
-    Instruction {
+fn instruction_with_semantics(config: Configuration) -> InstructionRecord {
+    InstructionRecord {
         architecture: Architecture::AMD64,
         config,
         address: 0x1000,
@@ -53,7 +53,7 @@ fn instruction_with_semantics(config: Configuration) -> Instruction {
 #[test]
 fn instruction_json_includes_semantics_by_default() {
     let instruction = instruction_with_semantics(Configuration::default());
-    let value = to_value(instruction.process()).expect("serialize instruction");
+    let value = to_value(instruction.process_base()).expect("serialize instruction");
     assert!(value.get("semantics").is_some());
 }
 
@@ -62,6 +62,6 @@ fn instruction_json_omits_semantics_when_disabled_for_instruction_json() {
     let mut config = Configuration::default();
     config.instructions.semantics.enabled = false;
     let instruction = instruction_with_semantics(config);
-    let value = to_value(instruction.process()).expect("serialize instruction");
+    let value = to_value(instruction.process_base()).expect("serialize instruction");
     assert!(value.get("semantics").is_none());
 }

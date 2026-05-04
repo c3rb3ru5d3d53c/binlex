@@ -1,7 +1,7 @@
 use crate::core::Architecture as PyArchitecture;
 use crate::semantics::InstructionSemantics as PyInstructionSemantics;
-use pyo3::exceptions::PyTypeError;
 use pyo3::exceptions::PyRuntimeError;
+use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBytes, PyModule};
 use std::collections::{BTreeMap, HashMap};
@@ -213,9 +213,7 @@ impl Executor {
                 let state = wrap_state(py, candidate)?;
                 let returned = hook.call1(py, (address, state.clone_ref(py)))?;
                 let returned_states = returned.extract::<Vec<Py<State>>>(py).map_err(|_| {
-                    PyTypeError::new_err(
-                        "hook must return a list of symbolic.State objects",
-                    )
+                    PyTypeError::new_err("hook must return a list of symbolic.State objects")
                 })?;
                 for returned_state in returned_states {
                     pending.push(returned_state.borrow(py).inner.lock().unwrap().clone());
@@ -375,7 +373,12 @@ impl State {
     }
 
     #[pyo3(text_signature = "($self, address, size)")]
-    pub fn read_memory(&self, py: Python<'_>, address: u64, size: usize) -> PyResult<Option<Py<PyBytes>>> {
+    pub fn read_memory(
+        &self,
+        py: Python<'_>,
+        address: u64,
+        size: usize,
+    ) -> PyResult<Option<Py<PyBytes>>> {
         self.inner
             .lock()
             .unwrap()

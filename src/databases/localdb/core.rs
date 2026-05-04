@@ -5,7 +5,10 @@ impl LocalDB {
         Self::with_path(config, None::<&Path>)
     }
 
-    pub fn with_path(config: &Configuration, path: Option<impl AsRef<Path>>) -> Result<Self, Error> {
+    pub fn with_path(
+        config: &Configuration,
+        path: Option<impl AsRef<Path>>,
+    ) -> Result<Self, Error> {
         let path = path
             .as_ref()
             .map(|value| value.as_ref())

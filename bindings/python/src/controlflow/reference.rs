@@ -20,30 +20,46 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod block;
-pub mod function;
-pub mod graph;
-pub mod instruction;
-pub mod reference;
-pub use block::Block;
-pub use block::BlockJson;
-pub use block::BlockJsonDeserializer;
-pub use function::Function;
-pub use function::FunctionJson;
-pub use function::FunctionJsonDeserializer;
-pub use graph::Graph;
-pub use graph::GraphQueue;
-pub use graph::GraphQueueSnapshot;
-pub use graph::GraphSnapshot;
-pub use instruction::FloatOperand;
-pub use instruction::ImmediateOperand;
-pub use instruction::Instruction;
-pub use instruction::InstructionJson;
-pub use instruction::InstructionRecord;
-pub use instruction::InstructionSemanticsInput;
-pub use instruction::MemoryOperand;
-pub use instruction::Operand;
-pub use instruction::OperandKind;
-pub use instruction::RegisterOperand;
-pub use instruction::SpecialOperand;
-pub use reference::Reference;
+use binlex::controlflow::Reference as InnerReference;
+use pyo3::prelude::*;
+
+#[pyclass(skip_from_py_object)]
+#[derive(Clone)]
+pub struct Reference {
+    pub inner: InnerReference,
+}
+
+#[pymethods]
+impl Reference {
+    #[new]
+    #[pyo3(text_signature = "(location, address)")]
+    pub fn new(location: u64, address: u64) -> Self {
+        Self {
+            inner: InnerReference::new(location, address),
+        }
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn location(&self) -> u64 {
+        self.inner.location
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn address(&self) -> u64 {
+        self.inner.address
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn to_dict(&self, py: Python) -> PyResult<Py<PyAny>> {
+        let dict = pyo3::types::PyDict::new(py);
+        dict.set_item("location", self.location())?;
+        dict.set_item("address", self.address())?;
+        Ok(dict.into())
+    }
+
+    pub fn __str__(&self, py: Python) -> PyResult<String> {
+        let json = py.import("json")?;
+        let value = self.to_dict(py)?;
+        json.call_method1("dumps", (value,))?.extract()
+    }
+}

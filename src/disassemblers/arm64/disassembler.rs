@@ -23,7 +23,7 @@
 use crate::Architecture;
 use crate::Configuration;
 use crate::controlflow::Graph;
-use crate::controlflow::Instruction;
+use crate::controlflow::InstructionRecord;
 use crate::disassemblers::arm64::classify as arm64_classify;
 use crate::disassemblers::arm64::decoded::Arm64DecodedInstruction;
 use crate::disassemblers::arm64::metrics::{self as arm64_metrics, DisassemblyMetrics};
@@ -167,11 +167,11 @@ impl<'a> Disassembler<'a> {
         Stderr::print_debug(
             &cfg.config,
             format!(
-                "0x{:x}: mnemonic: {:?}, next: {:?}, to: {:?}, is_conditional: {:?}, is_jump: {:?}",
+                "0x{:x}: mnemonic: {:?}, fallthrough: {:?}, branches: {:?}, is_conditional: {:?}, is_jump: {:?}",
                 instruction.address,
                 instruction.mnemonic,
-                instruction.next(),
-                instruction.to(),
+                instruction.fallthrough(),
+                instruction.branches(),
                 instruction.is_conditional,
                 instruction.is_jump,
             ),
@@ -213,7 +213,7 @@ impl<'a> Disassembler<'a> {
         let mut split_successor: Option<u64> = None;
 
         while self.disassemble_instruction(pc, cfg).is_ok() {
-            let mut instruction = match cfg.get_instruction(pc) {
+            let mut instruction = match cfg.get_instruction_record(pc) {
                 Some(instr) => instr,
                 None => {
                     self.finish_block_invalid(address, cfg, block_started_at);
@@ -291,14 +291,14 @@ impl<'a> Disassembler<'a> {
                 })?;
 
             if block_start_address == address {
-                if let Some(mut instruction) = cfg.get_instruction(block_start_address) {
+                if let Some(mut instruction) = cfg.get_instruction_record(block_start_address) {
                     instruction.is_function_start = true;
                     cfg.update_instruction(instruction);
                 }
             }
 
             if let Some(instruction) = cfg.get_instruction(block_end_address) {
-                cfg.blocks.enqueue_extend(instruction.blocks());
+                cfg.blocks.enqueue_extend(instruction.successors());
             }
         }
 
@@ -437,7 +437,7 @@ impl<'a> Disassembler<'a> {
         machine: Architecture,
         address: u64,
         cfg: &Graph,
-    ) -> Result<Instruction, Error> {
+    ) -> Result<InstructionRecord, Error> {
         arm64_translate::build_instruction(self, machine, address, cfg)
     }
 

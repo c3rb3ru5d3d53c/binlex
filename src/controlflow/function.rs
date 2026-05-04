@@ -26,8 +26,6 @@ use crate::controlflow::Block;
 use crate::controlflow::Graph;
 use crate::controlflow::GraphQueue;
 use crate::controlflow::Instruction;
-use crate::lifters::embeddings::EmbeddingsJson;
-use crate::lifters::embeddings::llvm as llvm_embeddings;
 use crate::entropy;
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeJson;
@@ -36,6 +34,8 @@ use crate::hashing::SHA256;
 use crate::hashing::SSDeep;
 use crate::hashing::TLSH;
 use crate::hex;
+use crate::lifters::embeddings::EmbeddingsJson;
+use crate::lifters::embeddings::llvm as llvm_embeddings;
 use crate::lifters::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
 #[cfg(not(target_os = "windows"))]
 use crate::lifters::vex::{Lifter as VexLifter, VexJson};
@@ -43,7 +43,7 @@ use crate::metadata::Attributes;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::Error;
 
 /// Represents a JSON-serializable structure containing metadata about a function.
@@ -66,9 +66,12 @@ pub struct FunctionJson {
     /// The raw bytes of the function in hexadecimal format, if available.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bytes: Option<String>,
-    /// A map of functions associated with the function.
+    /// A map of callsite addresses to directly called function addresses.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub functions: BTreeMap<u64, u64>,
+    pub callee_references: BTreeMap<u64, u64>,
+    /// A map of callsite addresses to caller function addresses.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub caller_references: BTreeMap<u64, u64>,
     /// The set of block addresses contained within the function.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub blocks: Vec<u64>,
@@ -166,8 +169,13 @@ impl FunctionJsonDeserializer {
     }
 
     #[allow(dead_code)]
-    pub fn functions(&self) -> BTreeMap<u64, u64> {
-        self.json.functions.clone()
+    pub fn callee_references(&self) -> BTreeMap<u64, u64> {
+        self.json.callee_references.clone()
+    }
+
+    #[allow(dead_code)]
+    pub fn caller_references(&self) -> BTreeMap<u64, u64> {
+        self.json.caller_references.clone()
     }
 
     #[allow(dead_code)]
@@ -303,7 +311,13 @@ impl<'function> Function<'function> {
                 )));
             }
             if let Ok(block) = Block::new(block_address, cfg) {
-                queue.enqueue_extend(block.blocks());
+                queue.enqueue_extend(
+                    block
+                        .successors()
+                        .into_iter()
+                        .map(|successor| successor.address())
+                        .collect(),
+                );
                 blocks.insert(block_address, block);
             }
         }
@@ -408,7 +422,8 @@ impl<'function> Function<'function> {
             chromosome,
             bytes: bytes_hex,
             size,
-            functions: self.functions(),
+            callee_references: self.callee_references(),
+            caller_references: self.caller_references(),
             blocks: self.block_addresses(),
             number_of_blocks: self.number_of_blocks(),
             number_of_instructions: self.number_of_instructions(),
@@ -705,7 +720,7 @@ impl<'function> Function<'function> {
 
     /// Retrieves all instructions that fall within the contiguous reconstruction
     /// region, whether or not they were promoted to CFG block starts.
-    pub fn reconstruction_instructions(&self) -> Vec<Instruction> {
+    pub fn reconstruction_instructions(&self) -> Vec<Instruction<'_>> {
         let Some(end) = self.effective_end() else {
             return Vec::new();
         };
@@ -799,7 +814,7 @@ impl<'function> Function<'function> {
             .max()
             .unwrap_or(self.address);
 
-        let mut queue: Vec<u64> = self.functions().values().copied().collect();
+        let mut queue: Vec<u64> = self.callee_references().values().copied().collect();
         let mut visited = std::collections::BTreeSet::<u64>::new();
 
         while let Some(callee_address) = queue.pop() {
@@ -826,7 +841,7 @@ impl<'function> Function<'function> {
                 end = callee_end;
             }
 
-            queue.extend(callee.functions().values().copied());
+            queue.extend(callee.callee_references().values().copied());
         }
 
         if self
@@ -926,16 +941,83 @@ impl<'function> Function<'function> {
         None
     }
 
-    /// Retrieves the functions associated with this function.
+    /// Retrieves the direct callsites within this function.
     ///
     /// # Returns
     ///
-    /// Returns a `BTreeMap<u64, u64>` containing function addresses.
-    pub fn functions(&self) -> BTreeMap<u64, u64> {
+    /// Returns a `BTreeMap<u64, u64>` containing `callsite -> callee` pairs.
+    pub fn callee_references(&self) -> BTreeMap<u64, u64> {
         self.blocks
             .values()
-            .flat_map(|block| block.functions())
+            .flat_map(|block| {
+                block
+                    .callee_references()
+                    .into_iter()
+                    .map(|reference| (reference.location, reference.address))
+                    .collect::<Vec<_>>()
+            })
             .collect()
+    }
+
+    /// Retrieves the direct incoming callsites targeting this function.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `BTreeMap<u64, u64>` containing `callsite -> caller` pairs.
+    pub fn caller_references(&self) -> BTreeMap<u64, u64> {
+        let mut result = BTreeMap::<u64, u64>::new();
+
+        for function_address in self.cfg.functions.valid_addresses() {
+            if function_address == self.address {
+                continue;
+            }
+
+            let Ok(function) = Function::new(function_address, self.cfg) else {
+                continue;
+            };
+
+            for (callsite, callee) in function.callee_references() {
+                if callee == self.address {
+                    result.insert(callsite, function_address);
+                }
+            }
+        }
+
+        result
+    }
+
+    /// Retrieves the directly called functions.
+    pub fn callees(&self) -> Vec<Function<'function>> {
+        let mut seen = BTreeSet::<u64>::new();
+        let mut result = Vec::<Function<'function>>::new();
+
+        for callee_address in self.callee_references().values().copied() {
+            if !seen.insert(callee_address) {
+                continue;
+            }
+            if let Ok(function) = Function::new(callee_address, self.cfg) {
+                result.push(function);
+            }
+        }
+
+        result
+    }
+
+    /// Retrieves the direct caller functions.
+    pub fn callers(&self) -> Vec<Function<'function>> {
+        let mut seen = BTreeSet::<u64>::new();
+        let mut result = Vec::<Function<'function>>::new();
+
+        for caller_address in self.caller_references().values().copied() {
+            if !seen.insert(caller_address) {
+                continue;
+            }
+            if let Ok(function) = Function::new(caller_address, self.cfg) {
+                result.push(function);
+            }
+        }
+
+        result
     }
 
     /// Computes normalized Markov-derived importance scores for blocks in the function.
@@ -962,8 +1044,9 @@ impl<'function> Function<'function> {
             .iter()
             .map(|(&address, block)| {
                 let targets = block
-                    .blocks()
+                    .successors()
                     .into_iter()
+                    .map(|target| target.address())
                     .filter(|target| block_set.contains(target))
                     .collect::<Vec<_>>();
                 (address, targets)

@@ -36,7 +36,7 @@ fn build_noncontiguous_function_graph() -> Graph {
     jump.pattern = "e9fb0f0000".to_string();
     jump.is_jump = true;
     jump.to.insert(0x2000);
-    jump.edges = jump.blocks().len();
+    jump.edges = jump.successors().len();
     graph.insert_instruction(jump);
 
     let mut ret = Instruction::create(0x2000, Architecture::I386, config);
@@ -95,7 +95,8 @@ fn verify_instruction_and_block_lifts(graph: &Graph) {
     );
 
     for instruction in instructions {
-        let mut instruction_lifter = Lifter::new(instruction.architecture, Configuration::default());
+        let mut instruction_lifter =
+            Lifter::new(instruction.architecture, Configuration::default());
         instruction_lifter
             .lift_instruction(&instruction)
             .expect("instruction should lift");

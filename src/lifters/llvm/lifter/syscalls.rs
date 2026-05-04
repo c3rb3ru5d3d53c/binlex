@@ -839,7 +839,9 @@ mod tests {
         semantics.set_abi(Some(Abi::LinuxSyscall));
 
         let mut lifter = Lifter::new(Architecture::ARM64, Configuration::default());
-        lifter.lift_semantics(std::slice::from_ref(&semantics)).expect("lift semantics");
+        lifter
+            .lift_semantics(std::slice::from_ref(&semantics))
+            .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
@@ -876,7 +878,9 @@ mod tests {
         semantics.set_abi(Some(Abi::LinuxSyscall));
 
         let mut lifter = Lifter::new(Architecture::AMD64, Configuration::default());
-        lifter.lift_semantics(std::slice::from_ref(&semantics)).expect("lift semantics");
+        lifter
+            .lift_semantics(std::slice::from_ref(&semantics))
+            .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
@@ -912,7 +916,9 @@ mod tests {
         semantics.set_abi(Some(Abi::WindowsSyscall));
 
         let mut lifter = Lifter::new(Architecture::AMD64, Configuration::default());
-        lifter.lift_semantics(std::slice::from_ref(&semantics)).expect("lift semantics");
+        lifter
+            .lift_semantics(std::slice::from_ref(&semantics))
+            .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
@@ -971,7 +977,9 @@ mod tests {
         semantics.set_abi(Some(Abi::WindowsSyscall));
 
         let mut lifter = Lifter::new(Architecture::AMD64, Configuration::default());
-        lifter.lift_semantics(std::slice::from_ref(&semantics)).expect("lift semantics");
+        lifter
+            .lift_semantics(std::slice::from_ref(&semantics))
+            .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
@@ -1020,7 +1028,9 @@ mod tests {
         semantics.set_abi(Some(Abi::WindowsSyscall));
 
         let mut lifter = Lifter::new(Architecture::AMD64, Configuration::default());
-        lifter.lift_semantics(std::slice::from_ref(&semantics)).expect("lift semantics");
+        lifter
+            .lift_semantics(std::slice::from_ref(&semantics))
+            .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
@@ -1057,7 +1067,9 @@ mod tests {
         semantics.set_abi(Some(Abi::LinuxSyscall));
 
         let mut lifter = Lifter::new(Architecture::I386, Configuration::default());
-        lifter.lift_semantics(std::slice::from_ref(&semantics)).expect("lift semantics");
+        lifter
+            .lift_semantics(std::slice::from_ref(&semantics))
+            .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
@@ -1097,7 +1109,9 @@ mod tests {
         semantics.set_abi(Some(Abi::WindowsSyscall));
 
         let mut lifter = Lifter::new(Architecture::I386, Configuration::default());
-        lifter.lift_semantics(std::slice::from_ref(&semantics)).expect("lift semantics");
+        lifter
+            .lift_semantics(std::slice::from_ref(&semantics))
+            .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
@@ -1136,7 +1150,9 @@ mod tests {
         semantics.set_abi(Some(Abi::LinuxSyscall));
 
         let mut lifter = Lifter::new(Architecture::I386, Configuration::default());
-        lifter.lift_semantics(std::slice::from_ref(&semantics)).expect("lift semantics");
+        lifter
+            .lift_semantics(std::slice::from_ref(&semantics))
+            .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
@@ -1178,7 +1194,9 @@ mod tests {
         semantics.set_abi(Some(Abi::WindowsSyscall));
 
         let mut lifter = Lifter::new(Architecture::I386, Configuration::default());
-        lifter.lift_semantics(std::slice::from_ref(&semantics)).expect("lift semantics");
+        lifter
+            .lift_semantics(std::slice::from_ref(&semantics))
+            .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
@@ -1225,7 +1243,9 @@ mod tests {
         semantics.set_abi(Some(Abi::WindowsSyscall));
 
         let mut lifter = Lifter::new(Architecture::ARM64, Configuration::default());
-        lifter.lift_semantics(std::slice::from_ref(&semantics)).expect("lift semantics");
+        lifter
+            .lift_semantics(std::slice::from_ref(&semantics))
+            .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
 

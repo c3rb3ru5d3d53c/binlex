@@ -88,7 +88,7 @@ fn test_full_function_disassembly() {
     let mut collected = Vec::<u8>::new();
     for addr in graph.instruction_addresses().iter().copied() {
         let instr = graph.get_instruction(addr).unwrap();
-        collected.extend(instr.bytes);
+        collected.extend(instr.bytes());
     }
     assert_eq!(hex::encode(&collected), hex, "listing bytes mismatch");
 
@@ -453,7 +453,14 @@ fn test_block_split_keeps_predecessor_terminator_metadata() {
         1,
         "split block should have one outgoing edge"
     );
-    assert_eq!(first.blocks(), [1u64].into_iter().collect());
+    assert_eq!(
+        first
+            .successors()
+            .into_iter()
+            .map(|block| block.address())
+            .collect::<std::collections::BTreeSet<_>>(),
+        [1u64].into_iter().collect()
+    );
 }
 
 #[test]
@@ -504,7 +511,7 @@ fn test_return_instruction_has_zero_edges() {
         "return should not report outgoing edges"
     );
     assert_eq!(
-        instruction.next(),
+        instruction.fallthrough(),
         None,
         "return should not have fallthrough"
     );

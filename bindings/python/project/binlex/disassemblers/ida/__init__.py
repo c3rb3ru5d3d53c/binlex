@@ -136,20 +136,29 @@ class IDAInstruction(IDACommon):
 	def chromosome(self):
 		return self._graph_instruction().chromosome()
 
-	def blocks(self):
-		return self._graph_instruction().blocks()
+	def successor_blocks(self):
+		return self._graph_instruction().successor_blocks()
 
-	def next(self):
-		return self._graph_instruction().next()
+	def successor_block_references(self):
+		return self._graph_instruction().successor_block_references()
 
-	def to(self):
-		return self._graph_instruction().to()
+	def fallthrough(self):
+		return self._graph_instruction().fallthrough()
+
+	def branches(self):
+		return self._graph_instruction().branches()
+
+	def successors(self):
+		return self._graph_instruction().successors()
 
 	def has_indirect_target(self):
 		return self._graph_instruction().has_indirect_target()
 
-	def functions(self):
-		return self._graph_instruction().functions()
+	def callees(self):
+		return self._graph_instruction().callees()
+
+	def callee_references(self):
+		return self._graph_instruction().callee_references()
 
 	def processors(self):
 		return self._graph_instruction().processors()
@@ -190,7 +199,7 @@ class IDABlock(IDACommon):
 	def instructions(self) -> List[IDAInstruction]:
 		return list(self.instructions_iter())
 
-	def to(self) -> set:
+	def branches(self) -> set:
 		return {bb.start_ea for bb in self.block.succs()}
 
 	def bind(self, cfg):
@@ -219,20 +228,35 @@ class IDABlock(IDACommon):
 	def edges(self):
 		return self._graph_block().edges()
 
-	def next(self):
-		return self._graph_block().next()
+	def fallthrough(self):
+		return self._graph_block().fallthrough()
+
+	def branches(self):
+		return self._graph_block().branches()
 
 	def entropy(self):
 		return self._graph_block().entropy()
 
-	def blocks(self):
-		return self._graph_block().blocks()
+	def successors(self):
+		return self._graph_block().successors()
+
+	def predecessors(self):
+		return self._graph_block().predecessors()
+
+	def successor_references(self):
+		return self._graph_block().successor_references()
+
+	def predecessor_references(self):
+		return self._graph_block().predecessor_references()
 
 	def number_of_instructions(self):
 		return self._graph_block().number_of_instructions()
 
-	def functions(self):
-		return self._graph_block().functions()
+	def callees(self):
+		return self._graph_block().callees()
+
+	def callee_references(self):
+		return self._graph_block().callee_references()
 
 	def processors(self):
 		return self._graph_block().processors()
@@ -656,7 +680,7 @@ class _GraphDisassembler():
 				cfg.set_block(instruction.address())
 			last_instruction_address = instruction.address()
 		if last_instruction_address is not None:
-			cfg.extend_instruction_edges(last_instruction_address, block.to())
+			cfg.extend_instruction_edges(last_instruction_address, block.branches())
 
 	def disassemble_function(self, function: IDAFunction, cfg: Graph):
 		"""Disassemble every block in an IDA function."""

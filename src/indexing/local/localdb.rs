@@ -722,11 +722,13 @@ fn normalize_graph_for_read(mut graph: Graph) -> Graph {
         graph.instructions.insert_processed(address);
         graph.instructions.insert_valid(address);
         if let Some(instruction) = graph.get_instruction(address) {
-            if instruction.is_block_start {
+            let is_block_start = instruction.is_block_start;
+            let is_function_start = instruction.is_function_start;
+            if is_block_start {
                 graph.blocks.insert_processed(address);
                 graph.blocks.insert_valid(address);
             }
-            if instruction.is_function_start {
+            if is_function_start {
                 graph.functions.insert_processed(address);
                 graph.functions.insert_valid(address);
             }

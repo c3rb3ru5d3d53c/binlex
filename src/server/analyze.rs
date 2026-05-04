@@ -13,7 +13,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
 use tracing::info;
 
-pub fn execute(config: &Configuration, request: AnalyzeRequest) -> Result<AnalyzeResponse, ServerError> {
+pub fn execute(
+    config: &Configuration,
+    request: AnalyzeRequest,
+) -> Result<AnalyzeResponse, ServerError> {
     let data = base64::engine::general_purpose::STANDARD
         .decode(&request.data)
         .map_err(|error| ServerError::processor(format!("invalid base64 payload: {}", error)))?;

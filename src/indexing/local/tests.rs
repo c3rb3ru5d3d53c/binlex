@@ -102,7 +102,10 @@ fn stage_vector_entry(
         .expect("stage vector entry");
 }
 
-fn local_config_with_dimensions(root: &std::path::Path, dimensions: Option<usize>) -> Configuration {
+fn local_config_with_dimensions(
+    root: &std::path::Path,
+    dimensions: Option<usize>,
+) -> Configuration {
     let mut config = Configuration::default();
     config.index.local.directory = root.to_string_lossy().into_owned();
     config.index.local.dimensions = dimensions;

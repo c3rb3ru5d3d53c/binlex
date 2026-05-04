@@ -1,17 +1,13 @@
 use std::collections::BTreeMap;
 
-use binlex::controlflow::{Graph, Instruction};
+use binlex::controlflow::{Graph, InstructionRecord};
 use binlex::semantics::{
     InstructionSemantics, SemanticDiagnostic, SemanticDiagnosticKind, SemanticStatus,
     SemanticTerminator,
 };
 use binlex::{Architecture, Configuration};
 
-fn disassemble_single(
-    name: &str,
-    architecture: Architecture,
-    bytes: &[u8],
-) -> binlex::controlflow::Instruction {
+fn disassemble_single(name: &str, architecture: Architecture, bytes: &[u8]) -> InstructionRecord {
     let config = Configuration::default();
     let mut ranges = BTreeMap::new();
     ranges.insert(0, bytes.len() as u64);
@@ -41,7 +37,10 @@ fn disassemble_single(
         }
     }
 
-    graph.get_instruction(0).expect("instruction should exist")
+    graph
+        .get_instruction(0)
+        .expect("instruction should exist")
+        .into_record()
 }
 
 fn assert_partial_semantics(name: &str, architecture: Architecture, bytes: &[u8]) {
@@ -149,13 +148,14 @@ fn graph_merge_prefers_more_complete_instruction_semantics() {
     let mut base = Graph::new(Architecture::AMD64, config.clone());
     let mut incoming = Graph::new(Architecture::AMD64, config.clone());
 
-    let mut partial_instruction = Instruction::create(0x1000, Architecture::AMD64, config.clone());
+    let mut partial_instruction =
+        InstructionRecord::create(0x1000, Architecture::AMD64, config.clone());
     partial_instruction.bytes = vec![0x90];
     partial_instruction.pattern = "90".to_string();
     partial_instruction.semantics = Some(partial_semantics("partial semantics"));
     base.insert_instruction(partial_instruction);
 
-    let mut complete_instruction = Instruction::create(0x1000, Architecture::AMD64, config);
+    let mut complete_instruction = InstructionRecord::create(0x1000, Architecture::AMD64, config);
     complete_instruction.bytes = vec![0x90];
     complete_instruction.pattern = "90".to_string();
     complete_instruction.semantics = Some(complete_semantics());
@@ -167,6 +167,7 @@ fn graph_merge_prefers_more_complete_instruction_semantics() {
         .get_instruction(0x1000)
         .expect("merged instruction should exist")
         .semantics
+        .clone()
         .expect("merged instruction should keep semantics");
 
     assert_eq!(merged.status, SemanticStatus::Complete);
@@ -192,6 +193,7 @@ fn graph_update_instruction_preserves_attached_semantics() {
         .get_instruction(0)
         .expect("updated instruction should exist")
         .semantics
+        .clone()
         .expect("updated instruction should retain semantics");
 
     assert_eq!(updated.status, original.status);

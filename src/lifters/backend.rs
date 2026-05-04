@@ -158,10 +158,9 @@ impl Lifter {
 
     pub fn embedding(&self) -> Result<Vec<f32>, LifterError> {
         match &self.inner {
-            ResolvedLifterBackend::Llvm(lifter) => Ok(super::embeddings::embed_llvm_lifter(
-                lifter,
-                &self.config,
-            )?),
+            ResolvedLifterBackend::Llvm(lifter) => {
+                Ok(super::embeddings::embed_llvm_lifter(lifter, &self.config)?)
+            }
             #[cfg(not(target_os = "windows"))]
             ResolvedLifterBackend::Vex(_) => Err(self.unsupported(LifterCapability::Embedding)),
         }

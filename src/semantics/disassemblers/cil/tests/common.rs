@@ -1,12 +1,12 @@
 use std::collections::BTreeMap;
 
-use crate::controlflow::{Graph, Instruction};
+use crate::controlflow::{Graph, InstructionRecord};
 use crate::disassemblers::cil::Disassembler;
 use crate::lifters::llvm::Lifter;
 use crate::semantics::{InstructionSemantics, SemanticStatus};
 use crate::{Architecture, Configuration};
 
-pub(super) fn disassemble_cil_single(name: &str, bytes: &[u8]) -> Instruction {
+pub(super) fn disassemble_cil_single(name: &str, bytes: &[u8]) -> InstructionRecord {
     let config = Configuration::default();
     let mut ranges = BTreeMap::new();
     ranges.insert(0, bytes.len() as u64);
@@ -17,7 +17,9 @@ pub(super) fn disassemble_cil_single(name: &str, bytes: &[u8]) -> Instruction {
     disassembler
         .disassemble_instruction(0, &BTreeMap::new(), &mut graph)
         .unwrap_or_else(|error| panic!("{name}: instruction should disassemble: {error}"));
-    graph.get_instruction(0).expect("instruction should exist")
+    graph
+        .get_instruction_record(0)
+        .expect("instruction should exist")
 }
 
 pub(super) fn semantics(name: &str, bytes: &[u8]) -> InstructionSemantics {
@@ -53,6 +55,9 @@ pub(super) fn assert_complete_semantics(name: &str, bytes: &[u8]) -> Instruction
 
 pub(super) fn lift_instruction_to_llvm(name: &str, bytes: &[u8]) -> String {
     let instruction = disassemble_cil_single(name, bytes);
+    let mut graph = Graph::new(Architecture::CIL, Configuration::default());
+    graph.insert_instruction(instruction);
+    let instruction = graph.get_instruction(0).expect("instruction should exist");
     let mut lifter = Lifter::new(crate::Architecture::CIL, Configuration::default());
     lifter
         .lift_instruction(&instruction)

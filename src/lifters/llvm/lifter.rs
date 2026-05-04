@@ -608,7 +608,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 ));
             } else if block.terminator.is_jump {
                 let fallback_jump_target = block
-                    .to()
+                    .branches()
                     .iter()
                     .next()
                     .and_then(|address| block_map.get(address).copied())
@@ -618,7 +618,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .map_err(|err| Error::other(err.to_string()))?;
             } else {
                 let fallback_fallthrough_target = block
-                    .next()
+                    .fallthrough()
                     .and_then(|address| block_map.get(&address).copied())
                     .unwrap_or_else(|| self.ensure_exit_block(exit_block));
                 self.builder
@@ -631,7 +631,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         match &semantics.terminator {
             SemanticTerminator::FallThrough => {
                 let fallback_fallthrough_target = block
-                    .next()
+                    .fallthrough()
                     .and_then(|address| block_map.get(&address).copied())
                     .unwrap_or_else(|| self.ensure_exit_block(exit_block));
                 self.builder
@@ -640,7 +640,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             }
             SemanticTerminator::Jump { target } => {
                 let fallback_jump_target = block
-                    .to()
+                    .branches()
                     .iter()
                     .next()
                     .and_then(|address| block_map.get(address).copied())
@@ -658,13 +658,13 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 false_target,
             } => {
                 let fallback_jump_target = block
-                    .to()
+                    .branches()
                     .iter()
                     .next()
                     .and_then(|address| block_map.get(address).copied())
                     .unwrap_or_else(|| self.ensure_exit_block(exit_block));
                 let fallback_fallthrough_target = block
-                    .next()
+                    .fallthrough()
                     .and_then(|address| block_map.get(&address).copied())
                     .unwrap_or_else(|| self.ensure_exit_block(exit_block));
                 let condition = self.lower_expression(condition)?;
@@ -682,7 +682,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             SemanticTerminator::Call { does_return, .. } => {
                 if does_return.unwrap_or(true) {
                     let target = block
-                        .next()
+                        .fallthrough()
                         .and_then(|address| block_map.get(&address).copied())
                         .unwrap_or_else(|| self.ensure_exit_block(exit_block));
                     self.builder

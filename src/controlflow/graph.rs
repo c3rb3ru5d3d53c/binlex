@@ -25,6 +25,7 @@ use crate::Configuration;
 use crate::controlflow::Block;
 use crate::controlflow::Function;
 use crate::controlflow::Instruction;
+use crate::controlflow::InstructionRecord;
 use crate::processor::{ProcessorOutputs, ProcessorTarget};
 use crate::semantics::InstructionSemantics;
 use crossbeam::queue::SegQueue;
@@ -351,7 +352,7 @@ pub struct Graph {
     /// The Instruction Architecture
     pub architecture: Architecture,
     /// A map of instruction addresses to `Instruction` instances.
-    pub listing: SkipMap<u64, Instruction>,
+    pub listing: SkipMap<u64, InstructionRecord>,
     /// Queue for managing basic blocks within the graph.
     pub blocks: GraphQueue,
     /// Queue for managing functions within the graph.
@@ -374,7 +375,7 @@ impl Graph {
     pub fn new(architecture: Architecture, config: Configuration) -> Self {
         Self {
             architecture,
-            listing: SkipMap::<u64, Instruction>::new(),
+            listing: SkipMap::<u64, InstructionRecord>::new(),
             blocks: GraphQueue::new(),
             functions: GraphQueue::new(),
             instructions: GraphQueue::new(),
@@ -389,7 +390,8 @@ impl Graph {
             .listing
             .iter()
             .map(|entry| {
-                let instruction = entry.value();
+                let instruction =
+                    Instruction::new(*entry.key(), self).expect("instruction should exist");
                 let mut json = instruction.process();
                 json.chromosome.mask = crate::hex::encode(&instruction.chromosome_mask);
                 json
@@ -462,8 +464,12 @@ impl Graph {
                     .map_err(|error| Error::other(error.to_string()))?
             };
             instruction.pattern = json.chromosome.pattern;
-            instruction.functions = json.functions;
-            instruction.to = json.to;
+            instruction.functions = json
+                .callee_references
+                .iter()
+                .map(|reference| reference.address)
+                .collect();
+            instruction.to = json.branches;
             instruction.semantics = json.semantics.map(|semantics| semantics.into_semantics());
             graph.listing.insert(instruction.address, instruction);
         }
@@ -503,8 +509,8 @@ impl Graph {
         Ok(graph)
     }
 
-    pub fn instructions(&self) -> Vec<Instruction> {
-        let mut result = Vec::<Instruction>::new();
+    pub fn instructions(&self) -> Vec<Instruction<'_>> {
+        let mut result = Vec::<Instruction<'_>>::new();
         for address in self.instructions.valid_addresses() {
             let instruction = Instruction::new(address, self).ok();
             if instruction.is_none() {
@@ -549,7 +555,7 @@ impl Graph {
         result
     }
 
-    pub fn instruction_map(&self) -> &SkipMap<u64, Instruction> {
+    pub fn instruction_map(&self) -> &SkipMap<u64, InstructionRecord> {
         &self.listing
     }
 
@@ -558,7 +564,7 @@ impl Graph {
     }
 
     pub fn set_function(&mut self, address: u64) -> bool {
-        let mut instruction = match self.get_instruction(address) {
+        let mut instruction = match self.get_instruction_record(address) {
             Some(instruction) => instruction,
             None => {
                 return false;
@@ -574,7 +580,7 @@ impl Graph {
     }
 
     pub fn set_block(&mut self, address: u64) -> bool {
-        let mut instruction = match self.get_instruction(address) {
+        let mut instruction = match self.get_instruction_record(address) {
             Some(instruction) => instruction,
             None => {
                 return false;
@@ -589,22 +595,23 @@ impl Graph {
     }
 
     pub fn extend_instruction_edges(&mut self, address: u64, addresses: BTreeSet<u64>) -> bool {
-        let mut instruction = match self.get_instruction(address) {
+        let mut instruction = match self.get_instruction_record(address) {
             Some(instruction) => instruction,
             None => {
                 return false;
             }
         };
         instruction.to.extend(addresses);
-        instruction.edges = instruction.blocks().len();
+        instruction.edges = instruction.successors().len();
         self.update_instruction(instruction);
         self.invalidate_processor_state();
         true
     }
 
-    pub fn insert_instruction(&mut self, instruction: Instruction) {
+    pub fn insert_instruction<T: Into<InstructionRecord>>(&mut self, instruction: T) {
+        let instruction = instruction.into();
         self.invalidate_processor_state();
-        if let Some(existing) = self.get_instruction(instruction.address) {
+        if let Some(existing) = self.get_instruction_record(instruction.address) {
             self.listing.insert(
                 instruction.address,
                 Graph::merge_instruction(existing, instruction),
@@ -614,7 +621,8 @@ impl Graph {
         self.listing.insert(instruction.address, instruction);
     }
 
-    pub fn update_instruction(&mut self, instruction: Instruction) {
+    pub fn update_instruction<T: Into<InstructionRecord>>(&mut self, instruction: T) {
+        let instruction = instruction.into();
         self.invalidate_processor_state();
         if !self.is_instruction_address(instruction.address) {
             return;
@@ -626,10 +634,14 @@ impl Graph {
         self.listing.contains_key(&address)
     }
 
-    pub fn get_instruction(&self, address: u64) -> Option<Instruction> {
+    pub(crate) fn get_instruction_record(&self, address: u64) -> Option<InstructionRecord> {
         self.listing
             .get(&address)
             .map(|entry| entry.value().clone())
+    }
+
+    pub fn get_instruction(&self, address: u64) -> Option<Instruction<'_>> {
+        Instruction::new(address, self).ok()
     }
 
     pub fn get_block(&self, address: u64) -> Option<Block<'_>> {
@@ -642,7 +654,10 @@ impl Graph {
         Function::new(address, self).ok()
     }
 
-    fn merge_instruction(mut existing: Instruction, incoming: Instruction) -> Instruction {
+    fn merge_instruction(
+        mut existing: InstructionRecord,
+        incoming: InstructionRecord,
+    ) -> InstructionRecord {
         existing.is_prologue |= incoming.is_prologue;
         existing.is_block_start |= incoming.is_block_start;
         existing.is_function_start |= incoming.is_function_start;
@@ -1086,8 +1101,8 @@ mod tests {
             },
         };
 
-        let restored =
-            Graph::from_snapshot(snapshot, Configuration::default()).expect("snapshot should restore");
+        let restored = Graph::from_snapshot(snapshot, Configuration::default())
+            .expect("snapshot should restore");
 
         let output = restored
             .processor_output(ProcessorTarget::Instruction, 0x1000, "demo")

@@ -71,9 +71,15 @@ impl FunctionJsonDeserializer {
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return the referenced function addresses contained in the payload.
-    pub fn functions(&self) -> BTreeMap<u64, u64> {
-        self.inner.lock().unwrap().functions()
+    /// Return the direct `callsite -> callee` references contained in the payload.
+    pub fn callee_references(&self) -> BTreeMap<u64, u64> {
+        self.inner.lock().unwrap().callee_references()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the direct `callsite -> caller` references contained in the payload.
+    pub fn caller_references(&self) -> BTreeMap<u64, u64> {
+        self.inner.lock().unwrap().caller_references()
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -402,12 +408,51 @@ impl Function {
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Returns a mapping of function calls within the current function.
+    /// Return the directly called functions.
     ///
     /// # Returns
-    /// - `BTreeMap<u64, u64>`: A map of called functions' addresses and counts.
-    pub fn functions(&self, py: Python) -> PyResult<BTreeMap<u64, u64>> {
-        self.with_inner_function(py, |function| Ok(function.functions()))
+    /// - `Vec<Function>`: The directly called functions.
+    pub fn callees(&self, py: Python) -> PyResult<Vec<Function>> {
+        self.with_inner_function(py, |function| {
+            Ok(function
+                .callees()
+                .into_iter()
+                .map(|callee| {
+                    Function::new(callee.address(), self.cfg.clone_ref(py))
+                        .expect("failed to get callee")
+                })
+                .collect())
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the direct caller functions.
+    ///
+    /// # Returns
+    /// - `Vec<Function>`: The direct caller functions.
+    pub fn callers(&self, py: Python) -> PyResult<Vec<Function>> {
+        self.with_inner_function(py, |function| {
+            Ok(function
+                .callers()
+                .into_iter()
+                .map(|caller| {
+                    Function::new(caller.address(), self.cfg.clone_ref(py))
+                        .expect("failed to get caller")
+                })
+                .collect())
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the direct `callsite -> callee` reference map.
+    pub fn callee_references(&self, py: Python) -> PyResult<BTreeMap<u64, u64>> {
+        self.with_inner_function(py, |function| Ok(function.callee_references()))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the direct `callsite -> caller` reference map.
+    pub fn caller_references(&self, py: Python) -> PyResult<BTreeMap<u64, u64>> {
+        self.with_inner_function(py, |function| Ok(function.caller_references()))
     }
 
     #[pyo3(text_signature = "($self)")]

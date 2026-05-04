@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::controlflow::{Graph, Instruction};
+use crate::controlflow::{Graph, InstructionRecord};
 use crate::disassemblers::capstone::Disassembler;
 use crate::semantics::{
     InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation,
@@ -121,7 +121,7 @@ pub(crate) fn disassemble_x86_single(
     name: &str,
     architecture: Architecture,
     bytes: &[u8],
-) -> Instruction {
+) -> InstructionRecord {
     let config = Configuration::default();
     let mut ranges = BTreeMap::new();
     ranges.insert(0, bytes.len() as u64);
@@ -132,7 +132,9 @@ pub(crate) fn disassemble_x86_single(
     disassembler
         .disassemble_instruction(0, &mut graph)
         .unwrap_or_else(|error| panic!("{name}: instruction should disassemble: {error}"));
-    graph.get_instruction(0).expect("instruction should exist")
+    graph
+        .get_instruction_record(0)
+        .expect("instruction should exist")
 }
 
 pub(crate) fn semantics(
@@ -604,33 +606,31 @@ fn interpret_i386_semantics(
     };
     let post_eip = match &semantics.terminator {
         SemanticTerminator::FallThrough => I386_CODE_ADDRESS as u32 + bytes.len() as u32,
-        SemanticTerminator::Return { expression } => {
-            match expression {
-                Some(expr) if return_expression_encodes_target(expr) => {
-                    eval_expression(expr, &registers, &flags, &post_memory, &temporaries) as u32
-                }
-                _ => {
-                    let stack_pointer = read_register_value(&registers, stack_register, 32) as u64;
-                    let return_target = u32::from_le_bytes(
-                        load_le_bytes(&post_memory, stack_pointer, 32)
-                            .try_into()
-                            .expect("return target should be 4 bytes"),
-                    );
-                    let extra = expression
-                        .as_ref()
-                        .map(|expr| {
-                            eval_expression(expr, &registers, &flags, &post_memory, &temporaries)
-                        })
-                        .unwrap_or_default();
-                    write_register_value(
-                        &mut registers,
-                        stack_register,
-                        stack_pointer as u128 + 4 + extra,
-                    );
-                    return_target
-                }
+        SemanticTerminator::Return { expression } => match expression {
+            Some(expr) if return_expression_encodes_target(expr) => {
+                eval_expression(expr, &registers, &flags, &post_memory, &temporaries) as u32
             }
-        }
+            _ => {
+                let stack_pointer = read_register_value(&registers, stack_register, 32) as u64;
+                let return_target = u32::from_le_bytes(
+                    load_le_bytes(&post_memory, stack_pointer, 32)
+                        .try_into()
+                        .expect("return target should be 4 bytes"),
+                );
+                let extra = expression
+                    .as_ref()
+                    .map(|expr| {
+                        eval_expression(expr, &registers, &flags, &post_memory, &temporaries)
+                    })
+                    .unwrap_or_default();
+                write_register_value(
+                    &mut registers,
+                    stack_register,
+                    stack_pointer as u128 + 4 + extra,
+                );
+                return_target
+            }
+        },
         other => panic!("unsupported i386 test terminator: {other:?}"),
     };
     let post = I386CpuState {
