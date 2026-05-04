@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::config::{Configuration, ConfigImaging};
+use crate::config::{ConfigImaging, Configuration};
 use crate::imaging::Palette;
 use crate::imaging::artifact::ImagingArtifact;
 use crate::imaging::render::Render;

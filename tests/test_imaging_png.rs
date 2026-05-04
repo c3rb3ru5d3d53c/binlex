@@ -25,7 +25,13 @@ use binlex::imaging::{PNG, Palette};
 
 #[test]
 fn png_output_has_png_signature() {
-    let png = PNG::with_options(&[0x00, 0xff], Palette::Grayscale, 2, 2, Configuration::default());
+    let png = PNG::with_options(
+        &[0x00, 0xff],
+        Palette::Grayscale,
+        2,
+        2,
+        Configuration::default(),
+    );
     let bytes = png.bytes().unwrap();
 
     assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n");

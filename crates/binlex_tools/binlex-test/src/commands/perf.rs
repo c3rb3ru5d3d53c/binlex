@@ -244,7 +244,10 @@ fn run_index_local(config: &Configuration, args: &IndexLocalArgs) -> Result<(), 
     Ok(())
 }
 
-fn run_pipeline_local(config: &Configuration, args: &PipelineLocalArgs) -> Result<(), Box<dyn Error>> {
+fn run_pipeline_local(
+    config: &Configuration,
+    args: &PipelineLocalArgs,
+) -> Result<(), Box<dyn Error>> {
     let bytes = fs::read(&args.input)?;
     let corpora = normalize_corpora(&args.corpora);
     let collections = normalize_collections(&args.collections);
@@ -302,7 +305,10 @@ fn run_pipeline_local(config: &Configuration, args: &PipelineLocalArgs) -> Resul
     Ok(())
 }
 
-fn run_pipeline_remote(config: &Configuration, args: &PipelineRemoteArgs) -> Result<(), Box<dyn Error>> {
+fn run_pipeline_remote(
+    config: &Configuration,
+    args: &PipelineRemoteArgs,
+) -> Result<(), Box<dyn Error>> {
     let bytes = fs::read(&args.input)?;
     let corpora = normalize_corpora(&args.corpora);
     let collections = normalize_collections(&args.collections);

@@ -769,9 +769,16 @@ fn function_message(function: &Function<'_>) -> Result<Value, serde_json::Error>
                 "is_return": block.terminator.is_return,
                 "is_trap": block.terminator.is_trap,
                 "contiguous": block.contiguous(),
-                "next": block.next(),
-                "to": block.to().into_iter().collect::<Vec<_>>(),
-                "blocks": block.blocks().into_iter().collect::<Vec<_>>(),
+                "fallthrough": block.fallthrough(),
+                "branches": block.branches().into_iter().collect::<Vec<_>>(),
+                "successor_references": block
+                    .successor_references()
+                    .into_iter()
+                    .map(|reference| serde_json::json!({
+                        "location": reference.location,
+                        "address": reference.address,
+                    }))
+                    .collect::<Vec<_>>(),
             })
         })
         .collect::<Vec<_>>();

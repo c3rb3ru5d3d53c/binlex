@@ -67,10 +67,12 @@ pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSeman
                     args: operand_args(instruction),
                     bits: 64,
                 },
-                return_target: instruction.next().map(|next| SemanticExpression::Const {
-                    value: next as u128,
-                    bits: 64,
-                }),
+                return_target: instruction
+                    .fallthrough()
+                    .map(|next| SemanticExpression::Const {
+                        value: next as u128,
+                        bits: 64,
+                    }),
                 does_return: Some(true),
             },
             diagnostics: Vec::new(),
@@ -78,14 +80,22 @@ pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSeman
     }
 
     if instruction.is_conditional_jump() {
-        let true_target = instruction.to().iter().next().copied().unwrap_or_default();
+        let true_target = instruction
+            .branches()
+            .iter()
+            .next()
+            .copied()
+            .unwrap_or_default();
         if matches!(mnemonic, "brtrue" | "brtrue.s") {
             let (effects, value) = pop_stack();
             return Some(complete_with_effects(
                 SemanticTerminator::Branch {
                     condition: compare(SemanticOperationCompare::Ne, value, const_u64(0, 64)),
                     true_target: const_u64(true_target, 64),
-                    false_target: const_u64(instruction.next().unwrap_or(instruction.address), 64),
+                    false_target: const_u64(
+                        instruction.fallthrough().unwrap_or(instruction.address),
+                        64,
+                    ),
                 },
                 effects,
             ));
@@ -96,7 +106,10 @@ pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSeman
                 SemanticTerminator::Branch {
                     condition: compare(SemanticOperationCompare::Eq, value, const_u64(0, 64)),
                     true_target: const_u64(true_target, 64),
-                    false_target: const_u64(instruction.next().unwrap_or(instruction.address), 64),
+                    false_target: const_u64(
+                        instruction.fallthrough().unwrap_or(instruction.address),
+                        64,
+                    ),
                 },
                 effects,
             ));
@@ -109,7 +122,10 @@ pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSeman
                 SemanticTerminator::Branch {
                     condition: compare(SemanticOperationCompare::Eq, left, right),
                     true_target: const_u64(true_target, 64),
-                    false_target: const_u64(instruction.next().unwrap_or(instruction.address), 64),
+                    false_target: const_u64(
+                        instruction.fallthrough().unwrap_or(instruction.address),
+                        64,
+                    ),
                 },
                 effects,
             ));
@@ -122,7 +138,10 @@ pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSeman
                 SemanticTerminator::Branch {
                     condition: compare(SemanticOperationCompare::Ne, left, right),
                     true_target: const_u64(true_target, 64),
-                    false_target: const_u64(instruction.next().unwrap_or(instruction.address), 64),
+                    false_target: const_u64(
+                        instruction.fallthrough().unwrap_or(instruction.address),
+                        64,
+                    ),
                 },
                 effects,
             ));
@@ -135,7 +154,10 @@ pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSeman
                 SemanticTerminator::Branch {
                     condition: compare(SemanticOperationCompare::Slt, left, right),
                     true_target: const_u64(true_target, 64),
-                    false_target: const_u64(instruction.next().unwrap_or(instruction.address), 64),
+                    false_target: const_u64(
+                        instruction.fallthrough().unwrap_or(instruction.address),
+                        64,
+                    ),
                 },
                 effects,
             ));
@@ -148,7 +170,10 @@ pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSeman
                 SemanticTerminator::Branch {
                     condition: compare(SemanticOperationCompare::Ult, left, right),
                     true_target: const_u64(true_target, 64),
-                    false_target: const_u64(instruction.next().unwrap_or(instruction.address), 64),
+                    false_target: const_u64(
+                        instruction.fallthrough().unwrap_or(instruction.address),
+                        64,
+                    ),
                 },
                 effects,
             ));
@@ -161,7 +186,10 @@ pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSeman
                 SemanticTerminator::Branch {
                     condition: compare(SemanticOperationCompare::Sgt, left, right),
                     true_target: const_u64(true_target, 64),
-                    false_target: const_u64(instruction.next().unwrap_or(instruction.address), 64),
+                    false_target: const_u64(
+                        instruction.fallthrough().unwrap_or(instruction.address),
+                        64,
+                    ),
                 },
                 effects,
             ));
@@ -174,7 +202,10 @@ pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSeman
                 SemanticTerminator::Branch {
                     condition: compare(SemanticOperationCompare::Uge, left, right),
                     true_target: const_u64(true_target, 64),
-                    false_target: const_u64(instruction.next().unwrap_or(instruction.address), 64),
+                    false_target: const_u64(
+                        instruction.fallthrough().unwrap_or(instruction.address),
+                        64,
+                    ),
                 },
                 effects,
             ));
@@ -187,7 +218,10 @@ pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSeman
                 SemanticTerminator::Branch {
                     condition: compare(SemanticOperationCompare::Ugt, left, right),
                     true_target: const_u64(true_target, 64),
-                    false_target: const_u64(instruction.next().unwrap_or(instruction.address), 64),
+                    false_target: const_u64(
+                        instruction.fallthrough().unwrap_or(instruction.address),
+                        64,
+                    ),
                 },
                 effects,
             ));
@@ -200,7 +234,10 @@ pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSeman
                 SemanticTerminator::Branch {
                     condition: compare(SemanticOperationCompare::Sle, left, right),
                     true_target: const_u64(true_target, 64),
-                    false_target: const_u64(instruction.next().unwrap_or(instruction.address), 64),
+                    false_target: const_u64(
+                        instruction.fallthrough().unwrap_or(instruction.address),
+                        64,
+                    ),
                 },
                 effects,
             ));
@@ -213,7 +250,10 @@ pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSeman
                 SemanticTerminator::Branch {
                     condition: compare(SemanticOperationCompare::Ule, left, right),
                     true_target: const_u64(true_target, 64),
-                    false_target: const_u64(instruction.next().unwrap_or(instruction.address), 64),
+                    false_target: const_u64(
+                        instruction.fallthrough().unwrap_or(instruction.address),
+                        64,
+                    ),
                 },
                 effects,
             ));
@@ -226,7 +266,10 @@ pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSeman
                 SemanticTerminator::Branch {
                     condition: compare(SemanticOperationCompare::Sge, left, right),
                     true_target: const_u64(true_target, 64),
-                    false_target: const_u64(instruction.next().unwrap_or(instruction.address), 64),
+                    false_target: const_u64(
+                        instruction.fallthrough().unwrap_or(instruction.address),
+                        64,
+                    ),
                 },
                 effects,
             ));
@@ -253,7 +296,7 @@ pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSeman
                     bits: 64,
                 },
                 false_target: SemanticExpression::Const {
-                    value: instruction.next().unwrap_or(instruction.address) as u128,
+                    value: instruction.fallthrough().unwrap_or(instruction.address) as u128,
                     bits: 64,
                 },
             },
@@ -262,7 +305,12 @@ pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSeman
     }
 
     if instruction.is_jump() || instruction.is_switch() {
-        let target = instruction.to().iter().next().copied().unwrap_or_default();
+        let target = instruction
+            .branches()
+            .iter()
+            .next()
+            .copied()
+            .unwrap_or_default();
         return Some(InstructionSemantics {
             version: 1,
             status: SemanticStatus::Complete,

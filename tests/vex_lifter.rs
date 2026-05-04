@@ -1,7 +1,7 @@
 #![cfg(not(target_os = "windows"))]
 
 use binlex::controlflow::graph::Graph;
-use binlex::controlflow::{Block, Function, Instruction};
+use binlex::controlflow::{Block, Function, InstructionRecord};
 use binlex::lifters::vex::Lifter;
 use binlex::semantics::{
     InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation, SemanticStatus,
@@ -40,14 +40,19 @@ fn vex_global_disable_blocks_lifting() {
     let mut config = Configuration::default();
     config.lifters.vex.enabled = false;
     let mut lifter = Lifter::new(config);
+    let mut graph = Graph::new(Architecture::AMD64, Configuration::default());
+    graph.insert_instruction(instruction(0x1800, &[0xC3]));
+    let instruction = graph
+        .get_instruction(0x1800)
+        .expect("instruction should exist");
     let error = lifter
-        .lift_instruction(&instruction(0x1800, &[0xC3]))
+        .lift_instruction(&instruction)
         .expect_err("disabled vex lifter should fail");
     assert!(error.to_string().contains("disabled"));
 }
 
-fn instruction(address: u64, bytes: &[u8]) -> Instruction {
-    Instruction {
+fn instruction(address: u64, bytes: &[u8]) -> InstructionRecord {
+    InstructionRecord {
         architecture: Architecture::AMD64,
         config: Configuration::default(),
         address,
@@ -93,22 +98,30 @@ fn instruction(address: u64, bytes: &[u8]) -> Instruction {
     }
 }
 
-fn instruction_for_arch(architecture: Architecture, address: u64, bytes: &[u8]) -> Instruction {
+fn instruction_for_arch(
+    architecture: Architecture,
+    address: u64,
+    bytes: &[u8],
+) -> InstructionRecord {
     let mut instruction = instruction(address, bytes);
     instruction.architecture = architecture;
     instruction
 }
 
 fn single_block_graph(address: u64, bytes: &[u8]) -> Graph {
-    let graph = Graph::new(Architecture::AMD64, test_config());
-    graph.listing.insert(address, instruction(address, bytes));
+    let mut graph = Graph::new(Architecture::AMD64, test_config());
+    graph.insert_instruction(instruction(address, bytes));
     graph
 }
 
 #[test]
 fn lift_instruction_renders_vex_text() {
     let mut lifter = Lifter::new(test_config());
-    let instruction = instruction(0x1000, &[0xC3]);
+    let mut graph = Graph::new(Architecture::AMD64, test_config());
+    graph.insert_instruction(instruction(0x1000, &[0xC3]));
+    let instruction = graph
+        .get_instruction(0x1000)
+        .expect("instruction should exist");
     lifter
         .lift_instruction(&instruction)
         .expect("instruction lift should succeed");
@@ -120,10 +133,13 @@ fn lift_instruction_renders_vex_text() {
 #[test]
 fn lift_block_renders_vex_text() {
     let graph = single_block_graph(0x2000, &[0xC3]);
+    let terminator = graph
+        .get_instruction(0x2000)
+        .expect("instruction should exist");
     let block = Block {
         address: 0x2000,
         cfg: &graph,
-        terminator: instruction(0x2000, &[0xC3]),
+        terminator,
     };
     let mut lifter = Lifter::new(test_config());
     lifter
@@ -137,10 +153,13 @@ fn lift_block_renders_vex_text() {
 #[test]
 fn lift_function_renders_vex_text() {
     let graph = single_block_graph(0x3000, &[0xC3]);
+    let terminator = graph
+        .get_instruction(0x3000)
+        .expect("instruction should exist");
     let block = Block {
         address: 0x3000,
         cfg: &graph,
-        terminator: instruction(0x3000, &[0xC3]),
+        terminator,
     };
     let function = Function {
         address: 0x3000,
@@ -160,21 +179,25 @@ fn lift_function_renders_vex_text() {
 
 #[test]
 fn non_contiguous_function_is_supported() {
-    let graph = Graph::new(Architecture::AMD64, test_config());
-    graph
-        .listing
-        .insert(0x4000, instruction(0x4000, &[0x90, 0xC3]));
-    graph.listing.insert(0x5000, instruction(0x5000, &[0xC3]));
+    let mut graph = Graph::new(Architecture::AMD64, test_config());
+    graph.insert_instruction(instruction(0x4000, &[0x90, 0xC3]));
+    graph.insert_instruction(instruction(0x5000, &[0xC3]));
 
+    let first_terminator = graph
+        .get_instruction(0x4000)
+        .expect("instruction should exist");
     let first = Block {
         address: 0x4000,
         cfg: &graph,
-        terminator: instruction(0x4000, &[0x90, 0xC3]),
+        terminator: first_terminator,
     };
+    let second_terminator = graph
+        .get_instruction(0x5000)
+        .expect("instruction should exist");
     let second = Block {
         address: 0x5000,
         cfg: &graph,
-        terminator: instruction(0x5000, &[0xC3]),
+        terminator: second_terminator,
     };
     let function = Function {
         address: 0x4000,
@@ -193,15 +216,15 @@ fn non_contiguous_function_is_supported() {
 
 #[test]
 fn cil_function_renders_vex_text() {
-    let graph = Graph::new(Architecture::CIL, test_config());
-    graph.listing.insert(
-        0x7000,
-        instruction_for_arch(Architecture::CIL, 0x7000, &[0x02]),
-    );
+    let mut graph = Graph::new(Architecture::CIL, test_config());
+    graph.insert_instruction(instruction_for_arch(Architecture::CIL, 0x7000, &[0x02]));
+    let terminator = graph
+        .get_instruction(0x7000)
+        .expect("instruction should exist");
     let block = Block {
         address: 0x7000,
         cfg: &graph,
-        terminator: instruction_for_arch(Architecture::CIL, 0x7000, &[0x02]),
+        terminator,
     };
     let function = Function {
         address: 0x7000,
@@ -222,12 +245,17 @@ fn cil_function_renders_vex_text() {
 fn vex_json_emission_respects_entity_flags() {
     let mut instruction_config = Configuration::default();
     instruction_config.instructions.lifters.vex.enabled = true;
-    let lifted_instruction = Instruction {
-        config: instruction_config.clone(),
-        ..instruction(0x8000, &[0xC3])
-    };
-    let instruction_json =
-        serde_json::to_value(lifted_instruction.process()).expect("serialize instruction");
+    let mut instruction_graph = Graph::new(Architecture::AMD64, instruction_config.clone());
+    let mut lifted_instruction = instruction(0x8000, &[0xC3]);
+    lifted_instruction.config = instruction_config.clone();
+    instruction_graph.insert_instruction(lifted_instruction);
+    let instruction_json = serde_json::to_value(
+        instruction_graph
+            .get_instruction(0x8000)
+            .expect("instruction should exist")
+            .process(),
+    )
+    .expect("serialize instruction");
     assert!(
         instruction_json["lifters"]["vex"]["text"]
             .as_str()
@@ -237,14 +265,15 @@ fn vex_json_emission_respects_entity_flags() {
 
     let mut block_config = Configuration::default();
     block_config.blocks.lifters.vex.enabled = true;
-    let block_graph = Graph::new(Architecture::AMD64, block_config);
-    block_graph
-        .listing
-        .insert(0x8100, instruction(0x8100, &[0xC3]));
+    let mut block_graph = Graph::new(Architecture::AMD64, block_config);
+    block_graph.insert_instruction(instruction(0x8100, &[0xC3]));
+    let block_terminator = block_graph
+        .get_instruction(0x8100)
+        .expect("instruction should exist");
     let block = Block {
         address: 0x8100,
         cfg: &block_graph,
-        terminator: instruction(0x8100, &[0xC3]),
+        terminator: block_terminator,
     };
     let block_json = serde_json::to_value(block.process()).expect("serialize block");
     assert!(
@@ -256,14 +285,15 @@ fn vex_json_emission_respects_entity_flags() {
 
     let mut function_config = Configuration::default();
     function_config.functions.lifters.vex.enabled = true;
-    let function_graph = Graph::new(Architecture::AMD64, function_config);
-    function_graph
-        .listing
-        .insert(0x8200, instruction(0x8200, &[0xC3]));
+    let mut function_graph = Graph::new(Architecture::AMD64, function_config);
+    function_graph.insert_instruction(instruction(0x8200, &[0xC3]));
+    let function_terminator = function_graph
+        .get_instruction(0x8200)
+        .expect("instruction should exist");
     let function_block = Block {
         address: 0x8200,
         cfg: &function_graph,
-        terminator: instruction(0x8200, &[0xC3]),
+        terminator: function_terminator,
     };
     let function = Function {
         address: 0x8200,

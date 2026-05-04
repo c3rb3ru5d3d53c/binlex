@@ -27,7 +27,7 @@ use std::{
 
 use crate::{
     Architecture, Configuration,
-    controlflow::{Graph, Instruction},
+    controlflow::{Graph, InstructionRecord},
     disassemblers::x86::classify as x86_classify,
 };
 
@@ -39,7 +39,7 @@ pub fn disassemble<F>(
     is_executable_address: impl Fn(u64) -> bool,
 ) -> BTreeSet<u64>
 where
-    F: FnMut(u64, &Graph) -> Result<Instruction, Error>,
+    F: FnMut(u64, &Graph) -> Result<InstructionRecord, Error>,
 {
     let valid_jump_threshold: usize = 2;
     let valid_instruction_threshold: usize = 4;

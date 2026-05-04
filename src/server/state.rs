@@ -14,7 +14,10 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(config: Configuration, debug: bool) -> Result<Self, crate::runtime::error::ProcessorError> {
+    pub fn new(
+        config: Configuration,
+        debug: bool,
+    ) -> Result<Self, crate::runtime::error::ProcessorError> {
         let mut processor_pools = BTreeMap::new();
         if !config.processors.enabled {
             return Ok(Self {

@@ -28,7 +28,8 @@ fn imaging_hashes_match_across_renderers() {
     let data = [0x00, 0x22, 0x44, 0x88, 0xaa, 0xcc, 0xee, 0xff];
     let png = PNG::with_options(&data, Palette::Grayscale, 2, 4, Configuration::default());
     let svg = SVG::with_options(&data, Palette::Grayscale, 2, 4, Configuration::default());
-    let terminal = Terminal::with_options(&data, Palette::Grayscale, 2, 4, Configuration::default());
+    let terminal =
+        Terminal::with_options(&data, Palette::Grayscale, 2, 4, Configuration::default());
 
     assert_eq!(
         png.sha256().and_then(|hash| hash.hexdigest()),

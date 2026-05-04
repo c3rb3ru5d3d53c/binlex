@@ -30,6 +30,7 @@ from binlex_bindings.binlex.controlflow import Graph as _GraphBinding
 from binlex_bindings.binlex.controlflow import GraphQueue as _GraphQueueBinding
 from binlex_bindings.binlex.controlflow import Instruction as _InstructionBinding
 from binlex_bindings.binlex.controlflow import InstructionJsonDeserializer as _InstructionJsonDeserializerBinding
+from binlex_bindings.binlex.controlflow import Reference as _ReferenceBinding
 from binlex_bindings.binlex.controlflow.instruction import Operand as Operand
 from binlex_bindings.binlex.controlflow.instruction import OperandKind as OperandKind
 
@@ -61,17 +62,25 @@ class Instruction:
         """Return the chromosome derived from this instruction, if available."""
         return self._inner.chromosome()
 
-    def blocks(self):
-        """Return the block addresses containing this instruction."""
-        return self._inner.blocks()
+    def successor_blocks(self):
+        """Return the successor blocks reached by this instruction."""
+        return [Block._from_binding(item, self._config) for item in self._inner.successor_blocks()]
 
-    def next(self):
-        """Return the next linear instruction address, if known."""
-        return self._inner.next()
+    def successor_block_references(self):
+        """Return the outgoing successor block references."""
+        return [Reference._from_binding(item) for item in self._inner.successor_block_references()]
 
-    def to(self):
-        """Return the control-flow successor addresses for this instruction."""
-        return self._inner.to()
+    def fallthrough(self):
+        """Return the sequential fallthrough instruction address, if known."""
+        return self._inner.fallthrough()
+
+    def branches(self):
+        """Return the explicit branch target addresses for this instruction."""
+        return self._inner.branches()
+
+    def successors(self):
+        """Return all outgoing CFG successor addresses for this instruction."""
+        return self._inner.successors()
 
     def has_indirect_target(self):
         """Return whether this instruction branches to an indirect target."""
@@ -81,9 +90,13 @@ class Instruction:
         """Return whether this instruction is conditional."""
         return self._inner.is_conditional()
 
-    def functions(self):
-        """Return the function addresses associated with this instruction."""
-        return self._inner.functions()
+    def callees(self):
+        """Return the direct callee addresses."""
+        return self._inner.callees()
+
+    def callee_references(self):
+        """Return the direct outgoing call references."""
+        return [Reference._from_binding(item) for item in self._inner.callee_references()]
 
     def size(self):
         """Return the instruction size in bytes."""
@@ -182,17 +195,21 @@ class InstructionJsonDeserializer:
         """Return normalized decoded operands for the serialized instruction."""
         return self._inner.operands()
 
-    def blocks(self):
-        """Return the block addresses containing this instruction."""
-        return self._inner.blocks()
+    def successor_block_references(self):
+        """Return the outgoing successor block references."""
+        return [Reference._from_binding(item) for item in self._inner.successor_block_references()]
 
-    def next(self):
-        """Return the next linear instruction address, if known."""
-        return self._inner.next()
+    def fallthrough(self):
+        """Return the sequential fallthrough instruction address, if known."""
+        return self._inner.fallthrough()
 
-    def to(self):
-        """Return the control-flow successor addresses for this instruction."""
-        return self._inner.to()
+    def branches(self):
+        """Return the explicit branch target addresses for this instruction."""
+        return self._inner.branches()
+
+    def successors(self):
+        """Return all outgoing CFG successor addresses for this instruction."""
+        return self._inner.successors()
 
     def has_indirect_target(self):
         """Return whether this instruction branches to an indirect target."""
@@ -202,9 +219,13 @@ class InstructionJsonDeserializer:
         """Return whether this instruction is conditional."""
         return self._inner.is_conditional()
 
-    def functions(self):
-        """Return the function addresses associated with this instruction."""
-        return self._inner.functions()
+    def callees(self):
+        """Return the directly called functions."""
+        return [Function._from_binding(item, self._config) for item in self._inner.callees()]
+
+    def callee_references(self):
+        """Return the direct outgoing call references."""
+        return [Reference._from_binding(item) for item in self._inner.callee_references()]
 
     def chromosome(self):
         """Return the chromosome derived from this instruction, if available."""
@@ -283,29 +304,45 @@ class Block:
         """Return the number of outgoing edges from this block."""
         return self._inner.edges()
 
-    def next(self):
-        """Return the next linear address after this block, if available."""
-        return self._inner.next()
+    def fallthrough(self):
+        """Return the sequential fallthrough address after this block, if available."""
+        return self._inner.fallthrough()
 
-    def to(self):
-        """Return the successor addresses targeted by this block."""
-        return self._inner.to()
+    def branches(self):
+        """Return the explicit branch target addresses targeted by this block."""
+        return self._inner.branches()
 
     def entropy(self):
         """Return the entropy of this block, if available."""
         return self._inner.entropy()
 
-    def blocks(self):
-        """Return the related block addresses referenced by this block."""
-        return self._inner.blocks()
+    def successors(self):
+        """Return the blocks directly reached from this block."""
+        return [Block._from_binding(item, self._config) for item in self._inner.successors()]
+
+    def predecessors(self):
+        """Return the blocks that directly reach this block."""
+        return [Block._from_binding(item, self._config) for item in self._inner.predecessors()]
+
+    def successor_references(self):
+        """Return direct outgoing control-flow references for this block."""
+        return [Reference._from_binding(item) for item in self._inner.successor_references()]
+
+    def predecessor_references(self):
+        """Return direct incoming control-flow references for this block."""
+        return [Reference._from_binding(item) for item in self._inner.predecessor_references()]
 
     def number_of_instructions(self):
         """Return the number of instructions contained in this block."""
         return self._inner.number_of_instructions()
 
-    def functions(self):
-        """Return a mapping of referenced function addresses and counts."""
-        return self._inner.functions()
+    def callees(self):
+        """Return the functions directly called from this block."""
+        return [Function._from_binding(item, self._config) for item in self._inner.callees()]
+
+    def callee_references(self):
+        """Return direct outgoing call references for this block."""
+        return [Reference._from_binding(item) for item in self._inner.callee_references()]
 
     def processors(self):
         """Return all processor outputs attached to this block."""
@@ -420,9 +457,21 @@ class Function:
         """Return the number of basic blocks in this function."""
         return self._inner.number_of_blocks()
 
-    def functions(self):
-        """Return a mapping of referenced function addresses and counts."""
-        return self._inner.functions()
+    def callees(self):
+        """Return the functions directly called by this function."""
+        return [Function._from_binding(item, self._config) for item in self._inner.callees()]
+
+    def callers(self):
+        """Return the functions that directly call this function."""
+        return [Function._from_binding(item, self._config) for item in self._inner.callers()]
+
+    def callee_references(self):
+        """Return a mapping of callsite addresses to callee function addresses."""
+        return self._inner.callee_references()
+
+    def caller_references(self):
+        """Return a mapping of callsite addresses to caller function addresses."""
+        return self._inner.caller_references()
 
     def processors(self):
         """Return all processor outputs attached to this function."""
@@ -558,9 +607,9 @@ class BlockJsonDeserializer:
         result._inner = binding
         return result
 
-    def functions(self):
-        """Return referenced function addresses contained in the block payload."""
-        return self._inner.functions()
+    def callee_references(self):
+        """Return direct outgoing call references contained in the block payload."""
+        return [Reference._from_binding(item) for item in self._inner.callee_references()]
 
     def architecture(self):
         """Return the architecture encoded in the serialized block."""
@@ -594,13 +643,17 @@ class BlockJsonDeserializer:
         """Return the number of outgoing control-flow edges."""
         return self._inner.edges()
 
-    def blocks(self):
-        """Return related block addresses referenced by the payload."""
-        return self._inner.blocks()
+    def successor_references(self):
+        """Return direct outgoing control-flow references in the payload."""
+        return [Reference._from_binding(item) for item in self._inner.successor_references()]
 
-    def to(self):
-        """Return the successor addresses targeted by the block."""
-        return self._inner.to()
+    def predecessor_references(self):
+        """Return direct incoming control-flow references in the payload."""
+        return [Reference._from_binding(item) for item in self._inner.predecessor_references()]
+
+    def branches(self):
+        """Return the explicit branch target addresses targeted by the block."""
+        return self._inner.branches()
 
     def conditional(self):
         """Return whether the block ends with a conditional transfer of control."""
@@ -610,9 +663,9 @@ class BlockJsonDeserializer:
         """Return the block entropy, if available."""
         return self._inner.entropy()
 
-    def next(self):
-        """Return the next linear address after the block, if available."""
-        return self._inner.next()
+    def fallthrough(self):
+        """Return the sequential fallthrough address after the block, if available."""
+        return self._inner.fallthrough()
 
     def size(self):
         """Return the block size in bytes."""
@@ -661,9 +714,13 @@ class FunctionJsonDeserializer:
         """Return the block addresses contained in the function payload."""
         return self._inner.blocks()
 
-    def functions(self):
-        """Return referenced function addresses contained in the payload."""
-        return self._inner.functions()
+    def callee_references(self):
+        """Return direct callsite-to-callee references contained in the payload."""
+        return self._inner.callee_references()
+
+    def caller_references(self):
+        """Return direct callsite-to-caller references contained in the payload."""
+        return self._inner.caller_references()
 
     def size(self):
         """Return the total size of the function in bytes."""
@@ -743,6 +800,31 @@ class FunctionJsonDeserializer:
 
     def __str__(self):
         """Return the JSON representation when converted to a string."""
+        return str(self._inner)
+
+
+class Reference:
+    """Lightweight relationship from a source location to a target address."""
+
+    def __init__(self, location, address):
+        self._inner = _ReferenceBinding(location, address)
+
+    @classmethod
+    def _from_binding(cls, binding):
+        result = cls.__new__(cls)
+        result._inner = binding
+        return result
+
+    def location(self):
+        return self._inner.location()
+
+    def address(self):
+        return self._inner.address()
+
+    def to_dict(self):
+        return self._inner.to_dict()
+
+    def __str__(self):
         return str(self._inner)
 
 

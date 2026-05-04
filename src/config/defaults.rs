@@ -21,14 +21,14 @@
 // SOFTWARE.
 
 use super::{
-    Configuration, ConfigBlocks, ConfigChromosomes, ConfigData, ConfigDatabaseLocal, ConfigDatabases,
+    ConfigBlocks, ConfigChromosomes, ConfigData, ConfigDatabaseLocal, ConfigDatabases,
     ConfigDisassembler, ConfigDisassemblerSweep, ConfigEmbeddings, ConfigEntityEmbeddings,
     ConfigEntityLifters, ConfigFile, ConfigFormats, ConfigFunctions, ConfigHashEnabled,
     ConfigHeuristicEntropy, ConfigHeuristicFeatures, ConfigImaging, ConfigImagingMinhash,
     ConfigImagingTLSH, ConfigIndex, ConfigIndexLocal, ConfigInstructions,
     ConfigInstructionsSemantics, ConfigLifters, ConfigLiftersLLVM, ConfigLiftersVex, ConfigMarkov,
     ConfigMinhash, ConfigMmap, ConfigMmapCache, ConfigProcessors, ConfigSemantics, ConfigStorage,
-    ConfigStorageLocal, ConfigTLSH,
+    ConfigStorageLocal, ConfigTLSH, Configuration,
 };
 use std::env;
 

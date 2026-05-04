@@ -69,10 +69,7 @@ pub(crate) fn build(
             .unwrap_or_else(|| SemanticExpression::Undefined {
                 bits: common::pointer_bits(machine),
             });
-        let return_target = common::const_u64(
-            view.address + view.bytes.len() as u64,
-            pointer_bits,
-        );
+        let return_target = common::const_u64(view.address + view.bytes.len() as u64, pointer_bits);
         return Some(common::complete(
             SemanticTerminator::Call {
                 target,

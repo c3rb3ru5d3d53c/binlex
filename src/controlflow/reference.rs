@@ -20,30 +20,19 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod block;
-pub mod function;
-pub mod graph;
-pub mod instruction;
-pub mod reference;
-pub use block::Block;
-pub use block::BlockJson;
-pub use block::BlockJsonDeserializer;
-pub use function::Function;
-pub use function::FunctionJson;
-pub use function::FunctionJsonDeserializer;
-pub use graph::Graph;
-pub use graph::GraphQueue;
-pub use graph::GraphQueueSnapshot;
-pub use graph::GraphSnapshot;
-pub use instruction::FloatOperand;
-pub use instruction::ImmediateOperand;
-pub use instruction::Instruction;
-pub use instruction::InstructionJson;
-pub use instruction::InstructionRecord;
-pub use instruction::InstructionSemanticsInput;
-pub use instruction::MemoryOperand;
-pub use instruction::Operand;
-pub use instruction::OperandKind;
-pub use instruction::RegisterOperand;
-pub use instruction::SpecialOperand;
-pub use reference::Reference;
+use serde::{Deserialize, Serialize};
+
+/// A lightweight relationship record between a source location and a target address.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Reference {
+    /// The source location where the relationship originates.
+    pub location: u64,
+    /// The target address of the relationship.
+    pub address: u64,
+}
+
+impl Reference {
+    pub fn new(location: u64, address: u64) -> Self {
+        Self { location, address }
+    }
+}

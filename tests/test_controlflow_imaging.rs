@@ -23,7 +23,9 @@ fn function_images_expose_existing_hash_accessors() {
     let graph = sample_graph();
     let function = Function::new(0x1000, &graph).expect("function should exist");
 
-    let bytes = function.bytes().expect("contiguous function should expose bytes");
+    let bytes = function
+        .bytes()
+        .expect("contiguous function should expose bytes");
     let png = Imaging::new(bytes.clone(), graph.config.clone())
         .linear(None, None)
         .grayscale()
@@ -55,7 +57,9 @@ fn function_imaging_pipeline_materializes_existing_renderers() {
     let graph = sample_graph();
     let function = Function::new(0x1000, &graph).expect("function should exist");
 
-    let bytes = function.bytes().expect("contiguous function should expose bytes");
+    let bytes = function
+        .bytes()
+        .expect("contiguous function should expose bytes");
     let png = Imaging::new(bytes.clone(), graph.config.clone())
         .linear(None, None)
         .grayscale()

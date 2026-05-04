@@ -365,10 +365,12 @@ fn relocate_code_like_result(
     {
         return relocate_code_target(value as u64) as u128;
     }
-    let opcode = instruction_name.split_whitespace().next().unwrap_or_default();
+    let opcode = instruction_name
+        .split_whitespace()
+        .next()
+        .unwrap_or_default();
     if matches!(opcode, "bl" | "blr")
-        && (destination_name == "x30"
-            || destination_name == semantic_name_for_arch_register("x30"))
+        && (destination_name == "x30" || destination_name == semantic_name_for_arch_register("x30"))
     {
         return relocate_code_target(value as u64) as u128;
     }

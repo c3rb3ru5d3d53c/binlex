@@ -75,7 +75,11 @@ pub struct Chromosome {
 
 impl Chromosome {
     /// Creates a new chromosome from raw bytes and a per-byte wildcard mask.
-    pub fn new(raw_bytes: Vec<u8>, wildcard_mask: Vec<u8>, config: Configuration) -> Result<Self, Error> {
+    pub fn new(
+        raw_bytes: Vec<u8>,
+        wildcard_mask: Vec<u8>,
+        config: Configuration,
+    ) -> Result<Self, Error> {
         Self::validate_lengths(&raw_bytes, &wildcard_mask)?;
         Ok(Self {
             raw_bytes,

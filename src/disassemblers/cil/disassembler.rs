@@ -155,8 +155,8 @@ impl<'disassembler> Disassembler<'disassembler> {
             instruction.mnemonic.name(),
             instruction.address,
             instruction.operand_bytes(),
-            instruction.next(),
-            instruction.to(),
+            instruction.fallthrough(),
+            instruction.branches(),
             instruction.is_call(),
             instruction.is_return(),
             instruction.is_jump(),
@@ -184,7 +184,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         cfginstruction.mnemonic = instruction.mnemonic_text();
         cfginstruction.disassembly = instruction.disassembly_text(metadata_token_addresses);
         cfginstruction.operands = instruction.normalized_operands(metadata_token_addresses);
-        cfginstruction.to = instruction.to();
+        cfginstruction.to = instruction.branches();
         cfginstruction.functions = function_targets;
         cfginstruction.set_semantics_input(InstructionSemanticsInput::Cil(semantic_view));
         if cfg.config.semantics.enabled {
@@ -194,16 +194,16 @@ impl<'disassembler> Disassembler<'disassembler> {
         Stderr::print_debug(
             &cfg.config,
             format!(
-                "0x{:x}: mnemonic: {:?}, mnemonic_size: {}, operand_size: {}, operand_bytes: {:?}, bytes: {:?}, next: {:?}, to: {:?}, blocks: {:?}",
+                "0x{:x}: mnemonic: {:?}, mnemonic_size: {}, operand_size: {}, operand_bytes: {:?}, bytes: {:?}, fallthrough: {:?}, branches: {:?}, successor_blocks: {:?}",
                 instruction.address,
                 instruction.mnemonic,
                 instruction.mnemonic_size(),
                 instruction.operand_size(),
                 instruction.operand_bytes(),
                 instruction.bytes(),
-                instruction.next(),
-                instruction.to(),
-                cfginstruction.blocks(),
+                instruction.fallthrough(),
+                instruction.branches(),
+                cfginstruction.successor_block_references(),
             ),
         );
 
@@ -237,7 +237,7 @@ impl<'disassembler> Disassembler<'disassembler> {
                 return Err(error);
             }
 
-            let mut instruction = match cfg.get_instruction(pc) {
+            let mut instruction = match cfg.get_instruction_record(pc) {
                 Some(instruction) => instruction,
                 None => {
                     cfg.blocks.insert_invalid(address);
@@ -297,14 +297,14 @@ impl<'disassembler> Disassembler<'disassembler> {
                 })?;
 
             if block_start_address == address {
-                if let Some(mut instruction) = cfg.get_instruction(block_start_address) {
+                if let Some(mut instruction) = cfg.get_instruction_record(block_start_address) {
                     instruction.is_function_start = true;
                     cfg.update_instruction(instruction);
                 }
             }
 
             if let Some(instruction) = cfg.get_instruction(block_end_address) {
-                cfg.blocks.enqueue_extend(instruction.blocks());
+                cfg.blocks.enqueue_extend(instruction.successors());
             }
         }
 

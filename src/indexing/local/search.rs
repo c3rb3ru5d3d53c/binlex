@@ -699,7 +699,8 @@ impl LocalIndex {
                         block
                             .instructions()
                             .into_iter()
-                            .map(|instruction| instruction.address)
+                            .map(|instruction| instruction.address())
+                            .collect::<Vec<_>>()
                     })
                     .collect::<Vec<_>>()
             }
@@ -709,7 +710,7 @@ impl LocalIndex {
                 block
                     .instructions()
                     .into_iter()
-                    .map(|instruction| instruction.address)
+                    .map(|instruction| instruction.address())
                     .collect::<Vec<_>>()
             }
             _ => Vec::new(),

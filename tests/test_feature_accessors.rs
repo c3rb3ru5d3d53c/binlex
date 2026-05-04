@@ -1,6 +1,6 @@
 use binlex::Architecture;
 use binlex::Configuration;
-use binlex::controlflow::{Function, Graph, Instruction};
+use binlex::controlflow::{Block, Function, Graph, Instruction, Reference};
 use binlex::formats::file::File;
 use binlex::genetics::Chromosome;
 use binlex::imaging::{Imaging, PNG, Palette, SVG, Terminal};
@@ -356,4 +356,246 @@ fn function_number_of_blocks_accessor_matches_default_json() {
             .and_then(|value| value.as_u64()),
         Some(number_of_blocks as u64)
     );
+}
+
+#[test]
+fn function_call_relationship_accessors_and_json_are_consistent() {
+    let config = Configuration::default();
+    let mut graph = Graph::new(Architecture::AMD64, config.clone());
+
+    let mut caller_a_call = Instruction::create(0x1000, Architecture::AMD64, config.clone());
+    caller_a_call.bytes = vec![0xE8, 0x00, 0x00, 0x00, 0x00];
+    caller_a_call.pattern = "e800000000".to_string();
+    caller_a_call.is_call = true;
+    caller_a_call.functions.insert(0x3000);
+    graph.insert_instruction(caller_a_call);
+
+    let mut caller_a_ret = Instruction::create(0x1005, Architecture::AMD64, config.clone());
+    caller_a_ret.bytes = vec![0xC3];
+    caller_a_ret.pattern = "c3".to_string();
+    caller_a_ret.is_return = true;
+    graph.insert_instruction(caller_a_ret);
+
+    let mut caller_b_call = Instruction::create(0x2000, Architecture::AMD64, config.clone());
+    caller_b_call.bytes = vec![0xE8, 0x00, 0x00, 0x00, 0x00];
+    caller_b_call.pattern = "e800000000".to_string();
+    caller_b_call.is_call = true;
+    caller_b_call.functions.insert(0x3000);
+    graph.insert_instruction(caller_b_call);
+
+    let mut caller_b_ret = Instruction::create(0x2005, Architecture::AMD64, config.clone());
+    caller_b_ret.bytes = vec![0xC3];
+    caller_b_ret.pattern = "c3".to_string();
+    caller_b_ret.is_return = true;
+    graph.insert_instruction(caller_b_ret);
+
+    let mut callee_ret = Instruction::create(0x3000, Architecture::AMD64, config);
+    callee_ret.bytes = vec![0xC3];
+    callee_ret.pattern = "c3".to_string();
+    callee_ret.is_return = true;
+    graph.insert_instruction(callee_ret);
+
+    assert!(graph.set_block(0x1000));
+    assert!(graph.set_block(0x2000));
+    assert!(graph.set_block(0x3000));
+    assert!(graph.set_function(0x1000));
+    assert!(graph.set_function(0x2000));
+    assert!(graph.set_function(0x3000));
+
+    let caller_a = Function::new(0x1000, &graph).expect("caller A should exist");
+    let callee = Function::new(0x3000, &graph).expect("callee should exist");
+    let caller_a_block = Block::new(0x1000, &graph).expect("caller A block should exist");
+    let caller_a_instruction =
+        Instruction::new(0x1000, &graph).expect("caller A instruction should exist");
+
+    assert_eq!(caller_a.callee_references().get(&0x1000), Some(&0x3000));
+    assert_eq!(caller_a.callees().len(), 1);
+    assert_eq!(caller_a.callees()[0].address(), 0x3000);
+    assert_eq!(caller_a_instruction.callees().len(), 1);
+    assert_eq!(caller_a_instruction.callees()[0].address(), 0x3000);
+    assert_eq!(
+        caller_a_instruction.callee_references(),
+        vec![Reference::new(0x1000, 0x3000)]
+    );
+    assert_eq!(caller_a_block.callees().len(), 1);
+    assert_eq!(caller_a_block.callees()[0].address(), 0x3000);
+    assert_eq!(
+        caller_a_block.callee_references(),
+        vec![Reference::new(0x1000, 0x3000)]
+    );
+
+    let caller_addresses: std::collections::BTreeSet<u64> = callee
+        .callers()
+        .into_iter()
+        .map(|function| function.address())
+        .collect();
+    assert_eq!(
+        caller_addresses,
+        [0x1000_u64, 0x2000_u64].into_iter().collect()
+    );
+    assert_eq!(callee.caller_references().get(&0x1000), Some(&0x1000));
+    assert_eq!(callee.caller_references().get(&0x2000), Some(&0x2000));
+
+    let value: serde_json::Value = serde_json::from_str(
+        &caller_a_instruction
+            .json()
+            .expect("instruction json should serialize"),
+    )
+    .expect("instruction json should parse");
+    assert!(value.get("functions").is_none());
+    let callees = value
+        .get("callee_references")
+        .and_then(|value| value.as_array())
+        .expect("instruction callee references should be serialized");
+    assert_eq!(callees.len(), 1);
+    assert_eq!(
+        callees[0].get("location").and_then(|value| value.as_u64()),
+        Some(0x1000)
+    );
+    assert_eq!(
+        callees[0].get("address").and_then(|value| value.as_u64()),
+        Some(0x3000)
+    );
+
+    let value: serde_json::Value =
+        serde_json::from_str(&caller_a_block.json().expect("block json should serialize"))
+            .expect("block json should parse");
+    assert!(value.get("functions").is_none());
+    let callees = value
+        .get("callee_references")
+        .and_then(|value| value.as_array())
+        .expect("block callee references should be serialized");
+    assert_eq!(callees.len(), 1);
+    assert_eq!(
+        callees[0].get("location").and_then(|value| value.as_u64()),
+        Some(0x1000)
+    );
+    assert_eq!(
+        callees[0].get("address").and_then(|value| value.as_u64()),
+        Some(0x3000)
+    );
+
+    let value: serde_json::Value =
+        serde_json::from_str(&callee.json().expect("function json should serialize"))
+            .expect("function json should parse");
+    assert_eq!(
+        value
+            .get("caller_references")
+            .and_then(|value| value.as_object())
+            .and_then(|value| value.get("4096"))
+            .and_then(|value| value.as_u64()),
+        Some(0x1000)
+    );
+    assert_eq!(
+        value
+            .get("caller_references")
+            .and_then(|value| value.as_object())
+            .and_then(|value| value.get("8192"))
+            .and_then(|value| value.as_u64()),
+        Some(0x2000)
+    );
+}
+
+#[test]
+fn block_relationship_accessors_and_json_are_consistent() {
+    let config = Configuration::default();
+    let mut graph = Graph::new(Architecture::AMD64, config.clone());
+
+    let mut branch = Instruction::create(0x1000, Architecture::AMD64, config.clone());
+    branch.bytes = vec![0x75, 0x03];
+    branch.pattern = "7503".to_string();
+    branch.is_jump = true;
+    branch.is_conditional = true;
+    branch.to = [0x1005].into_iter().collect();
+    branch.edges = 2;
+    graph.insert_instruction(branch);
+
+    let mut fallthrough_ret = Instruction::create(0x1002, Architecture::AMD64, config.clone());
+    fallthrough_ret.bytes = vec![0xC3];
+    fallthrough_ret.pattern = "c3".to_string();
+    fallthrough_ret.is_return = true;
+    graph.insert_instruction(fallthrough_ret);
+
+    let mut target_ret = Instruction::create(0x1005, Architecture::AMD64, config);
+    target_ret.bytes = vec![0xC3];
+    target_ret.pattern = "c3".to_string();
+    target_ret.is_return = true;
+    graph.insert_instruction(target_ret);
+
+    assert!(graph.set_block(0x1000));
+    assert!(graph.set_block(0x1002));
+    assert!(graph.set_block(0x1005));
+
+    let branch_instruction =
+        Instruction::new(0x1000, &graph).expect("branch instruction should exist");
+    let entry = Block::new(0x1000, &graph).expect("entry block should exist");
+    let target = Block::new(0x1005, &graph).expect("target block should exist");
+
+    let instruction_successor_addresses: std::collections::BTreeSet<u64> = branch_instruction
+        .successor_blocks()
+        .into_iter()
+        .map(|block| block.address())
+        .collect();
+    assert_eq!(
+        instruction_successor_addresses,
+        [0x1002_u64, 0x1005_u64].into_iter().collect()
+    );
+    assert_eq!(
+        branch_instruction.successor_block_references(),
+        vec![
+            Reference::new(0x1000, 0x1002),
+            Reference::new(0x1000, 0x1005)
+        ]
+    );
+
+    let successor_addresses: std::collections::BTreeSet<u64> = entry
+        .successors()
+        .into_iter()
+        .map(|block| block.address())
+        .collect();
+    assert_eq!(
+        successor_addresses,
+        [0x1002_u64, 0x1005_u64].into_iter().collect()
+    );
+    assert_eq!(
+        entry.successor_references(),
+        vec![
+            Reference::new(0x1000, 0x1002),
+            Reference::new(0x1000, 0x1005)
+        ]
+    );
+
+    let predecessor_addresses: std::collections::BTreeSet<u64> = target
+        .predecessors()
+        .into_iter()
+        .map(|block| block.address())
+        .collect();
+    assert_eq!(predecessor_addresses, [0x1000_u64].into_iter().collect());
+    assert_eq!(
+        target.predecessor_references(),
+        vec![Reference::new(0x1000, 0x1005)]
+    );
+
+    let value: serde_json::Value = serde_json::from_str(
+        &branch_instruction
+            .json()
+            .expect("instruction json should serialize"),
+    )
+    .expect("instruction json should parse");
+    assert!(value.get("blocks").is_none());
+    let successors = value
+        .get("successor_block_references")
+        .and_then(|value| value.as_array())
+        .expect("instruction successor block references should be serialized");
+    assert_eq!(successors.len(), 2);
+
+    let value: serde_json::Value =
+        serde_json::from_str(&entry.json().expect("block json should serialize"))
+            .expect("block json should parse");
+    assert!(value.get("blocks").is_none());
+    let successors = value
+        .get("successor_references")
+        .and_then(|value| value.as_array())
+        .expect("successor references should be serialized");
+    assert_eq!(successors.len(), 2);
 }

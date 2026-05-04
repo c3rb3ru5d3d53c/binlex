@@ -16,7 +16,10 @@ use ring::digest::{SHA256, digest};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
-pub(super) fn resolve_root(directory: Option<PathBuf>, config: &Configuration) -> Result<PathBuf, Error> {
+pub(super) fn resolve_root(
+    directory: Option<PathBuf>,
+    config: &Configuration,
+) -> Result<PathBuf, Error> {
     let root = match directory {
         Some(directory) => directory,
         None => PathBuf::from(config.index.local.directory.clone()),

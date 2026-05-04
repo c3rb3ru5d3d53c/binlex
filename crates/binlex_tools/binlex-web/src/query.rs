@@ -1005,13 +1005,15 @@ mod tests {
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&root);
-        let index = LocalIndex::with_options(Configuration::default(), Some(PathBuf::from(&root)), None)
-            .expect("create local index");
+        let index =
+            LocalIndex::with_options(Configuration::default(), Some(PathBuf::from(&root)), None)
+                .expect("create local index");
         let sha256 = index
             .sample_put(b"web-corpus-sample")
             .expect("store sample");
         let graph = {
-            let mut graph = binlex::controlflow::Graph::new(Architecture::AMD64, Configuration::default());
+            let mut graph =
+                binlex::controlflow::Graph::new(Architecture::AMD64, Configuration::default());
             let mut instruction = binlex::controlflow::Instruction::create(
                 0x1000,
                 Architecture::AMD64,
@@ -1074,8 +1076,9 @@ mod tests {
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&root);
-        let index = LocalIndex::with_options(Configuration::default(), Some(PathBuf::from(&root)), None)
-            .expect("create local index");
+        let index =
+            LocalIndex::with_options(Configuration::default(), Some(PathBuf::from(&root)), None)
+                .expect("create local index");
         let plan = build_query_plan(
             &index,
             "default",
@@ -1099,8 +1102,9 @@ mod tests {
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&root);
-        let index = LocalIndex::with_options(Configuration::default(), Some(PathBuf::from(&root)), None)
-            .expect("create local index");
+        let index =
+            LocalIndex::with_options(Configuration::default(), Some(PathBuf::from(&root)), None)
+                .expect("create local index");
         let plan = build_query_plan(
             &index,
             "default",
@@ -1122,8 +1126,9 @@ mod tests {
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&root);
-        let index = LocalIndex::with_options(Configuration::default(), Some(PathBuf::from(&root)), None)
-            .expect("create local index");
+        let index =
+            LocalIndex::with_options(Configuration::default(), Some(PathBuf::from(&root)), None)
+                .expect("create local index");
         let plan = build_query_plan(
             &index,
             "default",
@@ -1147,8 +1152,9 @@ mod tests {
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&root);
-        let index = LocalIndex::with_options(Configuration::default(), Some(PathBuf::from(&root)), None)
-            .expect("create local index");
+        let index =
+            LocalIndex::with_options(Configuration::default(), Some(PathBuf::from(&root)), None)
+                .expect("create local index");
         let error = build_query_plan(
             &index,
             "default",
@@ -1167,8 +1173,9 @@ mod tests {
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&root);
-        let index = LocalIndex::with_options(Configuration::default(), Some(PathBuf::from(&root)), None)
-            .expect("create local index");
+        let index =
+            LocalIndex::with_options(Configuration::default(), Some(PathBuf::from(&root)), None)
+                .expect("create local index");
         let plan = build_query_plan(
             &index,
             "default",
@@ -1187,8 +1194,9 @@ mod tests {
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&root);
-        let index = LocalIndex::with_options(Configuration::default(), Some(PathBuf::from(&root)), None)
-            .expect("create local index");
+        let index =
+            LocalIndex::with_options(Configuration::default(), Some(PathBuf::from(&root)), None)
+                .expect("create local index");
         let plan = build_query_plan(
             &index,
             "default",
@@ -1214,8 +1222,9 @@ mod tests {
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&root);
-        let index = LocalIndex::with_options(Configuration::default(), Some(PathBuf::from(&root)), None)
-            .expect("create local index");
+        let index =
+            LocalIndex::with_options(Configuration::default(), Some(PathBuf::from(&root)), None)
+                .expect("create local index");
         let error = build_query_plan(
             &index,
             "default",
@@ -1235,8 +1244,9 @@ mod tests {
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&root);
-        let index = LocalIndex::with_options(Configuration::default(), Some(PathBuf::from(&root)), None)
-            .expect("create local index");
+        let index =
+            LocalIndex::with_options(Configuration::default(), Some(PathBuf::from(&root)), None)
+                .expect("create local index");
         let error = build_query_plan(
             &index,
             "default",
@@ -1256,8 +1266,9 @@ mod tests {
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&root);
-        let index = LocalIndex::with_options(Configuration::default(), Some(PathBuf::from(&root)), None)
-            .expect("create local index");
+        let index =
+            LocalIndex::with_options(Configuration::default(), Some(PathBuf::from(&root)), None)
+                .expect("create local index");
         let plan = build_query_plan(
             &index,
             "default",
@@ -1285,8 +1296,9 @@ mod tests {
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&root);
-        let index = LocalIndex::with_options(Configuration::default(), Some(PathBuf::from(&root)), None)
-            .expect("create local index");
+        let index =
+            LocalIndex::with_options(Configuration::default(), Some(PathBuf::from(&root)), None)
+                .expect("create local index");
         let plan = build_query_plan(
             &index,
             "default",
@@ -1312,8 +1324,9 @@ mod tests {
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&root);
-        let index = LocalIndex::with_options(Configuration::default(), Some(PathBuf::from(&root)), None)
-            .expect("create local index");
+        let index =
+            LocalIndex::with_options(Configuration::default(), Some(PathBuf::from(&root)), None)
+                .expect("create local index");
         let plan = build_query_plan(
             &index,
             "default",
@@ -1345,8 +1358,9 @@ mod tests {
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&root);
-        let index = LocalIndex::with_options(Configuration::default(), Some(PathBuf::from(&root)), None)
-            .expect("create local index");
+        let index =
+            LocalIndex::with_options(Configuration::default(), Some(PathBuf::from(&root)), None)
+                .expect("create local index");
         let plan = build_query_plan(
             &index,
             "default",

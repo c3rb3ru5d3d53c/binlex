@@ -27,7 +27,7 @@ pub struct CilInstructionView {
     pub mnemonic: String,
     pub address: u64,
     operand_bytes: Vec<u8>,
-    next: Option<u64>,
+    fallthrough: Option<u64>,
     targets: BTreeSet<u64>,
     is_call: bool,
     is_return: bool,
@@ -42,7 +42,7 @@ impl CilInstructionView {
         mnemonic: String,
         address: u64,
         operand_bytes: Vec<u8>,
-        next: Option<u64>,
+        fallthrough: Option<u64>,
         targets: BTreeSet<u64>,
         is_call: bool,
         is_return: bool,
@@ -54,7 +54,7 @@ impl CilInstructionView {
             mnemonic,
             address,
             operand_bytes,
-            next,
+            fallthrough,
             targets,
             is_call,
             is_return,
@@ -76,11 +76,11 @@ impl CilInstructionView {
         &self.operand_bytes
     }
 
-    pub fn next(&self) -> Option<u64> {
-        self.next
+    pub fn fallthrough(&self) -> Option<u64> {
+        self.fallthrough
     }
 
-    pub fn to(&self) -> &BTreeSet<u64> {
+    pub fn branches(&self) -> &BTreeSet<u64> {
         &self.targets
     }
 

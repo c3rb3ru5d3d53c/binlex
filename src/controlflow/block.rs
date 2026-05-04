@@ -22,10 +22,10 @@
 
 use crate::Architecture;
 use crate::Configuration;
+use crate::controlflow::Function;
 use crate::controlflow::Instruction;
+use crate::controlflow::Reference;
 use crate::controlflow::graph::Graph;
-use crate::lifters::embeddings::EmbeddingsJson;
-use crate::lifters::embeddings::llvm as llvm_embeddings;
 use crate::entropy;
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeJson;
@@ -34,6 +34,8 @@ use crate::hashing::SHA256;
 use crate::hashing::SSDeep;
 use crate::hashing::TLSH;
 use crate::hex;
+use crate::lifters::embeddings::EmbeddingsJson;
+use crate::lifters::embeddings::llvm as llvm_embeddings;
 use crate::lifters::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
 #[cfg(not(target_os = "windows"))]
 use crate::lifters::vex::{Lifter as VexLifter, VexJson};
@@ -56,12 +58,12 @@ pub struct BlockJson {
     pub architecture: String,
     /// The starting address of the block.
     pub address: u64,
-    /// The address of the next sequential block, if any.
+    /// The sequential fallthrough block address, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub next: Option<u64>,
-    /// A set of addresses this block may branch or jump to.
+    pub fallthrough: Option<u64>,
+    /// A set of explicit branch target block addresses.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
-    pub to: BTreeSet<u64>,
+    pub branches: BTreeSet<u64>,
     /// The number of edges (connections) this block has.
     pub edges: usize,
     /// Indicates whether this block contains a conditional instruction.
@@ -72,12 +74,15 @@ pub struct BlockJson {
     pub size: usize,
     /// The raw bytes of the block in hexadecimal format.
     pub bytes: String,
-    /// A map of function addresses related to this block.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub functions: BTreeMap<u64, u64>,
-    // Blocks this blocks has as children.
-    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
-    pub blocks: BTreeSet<u64>,
+    /// Direct outgoing call relationships from instructions in this block.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub callee_references: Vec<Reference>,
+    /// Direct outgoing control-flow relationships from this block.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub successor_references: Vec<Reference>,
+    /// Direct incoming control-flow relationships into this block.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub predecessor_references: Vec<Reference>,
     /// The number of instructions in this block.
     pub number_of_instructions: usize,
     /// Instruction addresses associated with this block.
@@ -147,8 +152,13 @@ impl BlockJsonDeserializer {
     }
 
     #[allow(dead_code)]
-    pub fn blocks(&self) -> BTreeSet<u64> {
-        self.json.blocks.clone()
+    pub fn successor_references(&self) -> Vec<Reference> {
+        self.json.successor_references.clone()
+    }
+
+    #[allow(dead_code)]
+    pub fn predecessor_references(&self) -> Vec<Reference> {
+        self.json.predecessor_references.clone()
     }
 
     #[allow(dead_code)]
@@ -167,8 +177,8 @@ impl BlockJsonDeserializer {
     }
 
     #[allow(dead_code)]
-    pub fn functions(&self) -> BTreeMap<u64, u64> {
-        self.json.functions.clone()
+    pub fn callee_references(&self) -> Vec<Reference> {
+        self.json.callee_references.clone()
     }
 
     #[allow(dead_code)]
@@ -195,13 +205,13 @@ impl BlockJsonDeserializer {
     }
 
     #[allow(dead_code)]
-    pub fn next(&self) -> Option<u64> {
-        self.json.next
+    pub fn fallthrough(&self) -> Option<u64> {
+        self.json.fallthrough
     }
 
     #[allow(dead_code)]
-    pub fn to(&self) -> BTreeSet<u64> {
-        self.json.to.clone()
+    pub fn branches(&self) -> BTreeSet<u64> {
+        self.json.branches.clone()
     }
 
     #[allow(dead_code)]
@@ -255,7 +265,7 @@ pub struct Block<'block> {
     /// The control flow graph this block belongs to.
     pub cfg: &'block Graph,
     /// The terminating instruction of the block.
-    pub terminator: Instruction,
+    pub terminator: Instruction<'block>,
 }
 
 impl<'block> Block<'block> {
@@ -278,12 +288,14 @@ impl<'block> Block<'block> {
             )));
         }
 
-        let mut terminator: Option<Instruction> = None;
+        let mut terminator: Option<Instruction<'block>> = None;
 
         let mut previous_address: Option<u64> = None;
-        let mut previous_instruction: Option<Instruction> = None;
+        let mut previous_instruction: Option<Instruction<'block>> = None;
         for entry in cfg.listing.range(address..) {
-            let instruction = entry.value();
+            let record = entry.value();
+            let instruction =
+                Instruction::new(record.address, cfg).expect("failed to retrieve instruction");
             if let Some(prev_addr) = previous_address {
                 if instruction.address != prev_addr {
                     return Err(Error::other(format!(
@@ -369,8 +381,9 @@ impl<'block> Block<'block> {
         let chromosome = self.chromosome();
         let size = bytes.len();
         let instructions = self.instruction_addresses();
-        let functions = self.functions();
-        let blocks = self.blocks();
+        let callee_references = self.callee_references();
+        let successor_references = self.successor_references();
+        let predecessor_references = self.predecessor_references();
         let entropy = if self.cfg.config.blocks.entropy.enabled {
             self.entropy()
         } else {
@@ -401,8 +414,8 @@ impl<'block> Block<'block> {
             type_: "block".to_string(),
             address: self.address,
             architecture: self.architecture().to_string(),
-            next: self.next(),
-            to: self.terminator.to(),
+            fallthrough: self.fallthrough(),
+            branches: self.branches(),
             edges: self.edges(),
             chromosome: chromosome.process(),
             conditional: self.terminator.is_conditional,
@@ -410,8 +423,9 @@ impl<'block> Block<'block> {
             bytes: hex::encode(&bytes),
             number_of_instructions: self.number_of_instructions(),
             instructions,
-            functions,
-            blocks,
+            callee_references,
+            successor_references,
+            predecessor_references,
             entropy,
             sha256,
             ssdeep,
@@ -540,8 +554,8 @@ impl<'block> Block<'block> {
     /// # Returns
     ///
     /// Returns a `Vec<Instruction>` representing the instructions associated with a block.
-    pub fn instructions(&self) -> Vec<Instruction> {
-        let mut result = Vec::<Instruction>::new();
+    pub fn instructions(&self) -> Vec<Instruction<'_>> {
+        let mut result = Vec::<Instruction<'_>>::new();
         for entry in self.cfg.listing.range(self.address..) {
             let address = *entry.key();
             let instruction =
@@ -609,7 +623,7 @@ impl<'block> Block<'block> {
     ///
     /// Returns `Some(u64)` containing the address of the next block if it is
     /// conditional or has specific ending conditions. Returns `None` otherwise.
-    pub fn next(&self) -> Option<u64> {
+    pub fn fallthrough(&self) -> Option<u64> {
         if self.terminator.is_return {
             return None;
         }
@@ -622,24 +636,66 @@ impl<'block> Block<'block> {
         if self.terminator.is_block_start && self.address != self.terminator.address {
             return Some(self.terminator.address);
         }
-        self.terminator.next()
+        self.terminator.fallthrough()
     }
 
-    /// Retrieves the set of addresses this block may jump or branch to.
+    /// Retrieves the set of explicit branch target addresses for this block.
     ///
     /// # Returns
     ///
     /// Returns a `BTreeSet<u64>` containing the target addresses.
-    pub fn to(&self) -> BTreeSet<u64> {
-        self.terminator.to()
+    pub fn branches(&self) -> BTreeSet<u64> {
+        self.terminator.branches()
     }
 
-    pub fn blocks(&self) -> BTreeSet<u64> {
+    fn successor_addresses(&self) -> BTreeSet<u64> {
         let mut result = BTreeSet::new();
-        for item in self.to().iter().copied().chain(self.next()) {
+        for item in self.branches().iter().copied().chain(self.fallthrough()) {
             result.insert(item);
         }
         result
+    }
+
+    /// Retrieves the direct outgoing control-flow references from this block.
+    pub fn successor_references(&self) -> Vec<Reference> {
+        self.successor_addresses()
+            .into_iter()
+            .map(|address| Reference::new(self.address, address))
+            .collect()
+    }
+
+    /// Retrieves the direct incoming control-flow references into this block.
+    pub fn predecessor_references(&self) -> Vec<Reference> {
+        let mut result = Vec::<Reference>::new();
+        for block_address in self.cfg.blocks.valid_addresses() {
+            if block_address == self.address {
+                continue;
+            }
+            let Ok(block) = Block::new(block_address, self.cfg) else {
+                continue;
+            };
+            if block.successor_addresses().contains(&self.address) {
+                result.push(Reference::new(block_address, self.address));
+            }
+        }
+        result.sort();
+        result
+    }
+
+    /// Retrieves the direct successor blocks.
+    pub fn successors(&self) -> Vec<Block<'block>> {
+        self.successor_addresses()
+            .into_iter()
+            .filter_map(|address| Block::new(address, self.cfg).ok())
+            .collect()
+    }
+
+    /// Retrieves the direct predecessor blocks.
+    pub fn predecessors(&self) -> Vec<Block<'block>> {
+        self.predecessor_references()
+            .into_iter()
+            .filter_map(|reference| Block::new(reference.location, self.cfg).ok())
+            .collect()
     }
 
     /// Retrieves a chromosome representing this block.
@@ -694,18 +750,29 @@ impl<'block> Block<'block> {
         result
     }
 
-    /// Retrieves the function addresses associated with this block.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `BTreeMap<u64, u64>` where each key is an instruction address
-    /// and each value is the address of the function containing that instruction.
-    pub fn functions(&self) -> BTreeMap<u64, u64> {
-        let mut result = BTreeMap::<u64, u64>::new();
+    /// Retrieves the direct outgoing call references from this block.
+    pub fn callee_references(&self) -> Vec<Reference> {
+        let mut result = Vec::<Reference>::new();
         for entry in self.cfg.listing.range(self.address..self.end()) {
             let instruction = entry.value();
             for function_address in instruction.functions.clone() {
-                result.insert(instruction.address, function_address);
+                result.push(Reference::new(instruction.address, function_address));
+            }
+        }
+        result.sort();
+        result
+    }
+
+    /// Retrieves the directly called functions.
+    pub fn callees(&self) -> Vec<Function<'block>> {
+        let mut seen = BTreeSet::<u64>::new();
+        let mut result = Vec::<Function<'block>>::new();
+        for reference in self.callee_references() {
+            if !seen.insert(reference.address) {
+                continue;
+            }
+            if let Ok(function) = Function::new(reference.address, self.cfg) {
+                result.push(function);
             }
         }
         result
@@ -825,7 +892,7 @@ impl<'block> Block<'block> {
         if self.terminator.is_return {
             return self.terminator.address + self.terminator.size() as u64;
         }
-        if let Some(next) = self.next() {
+        if let Some(next) = self.fallthrough() {
             return next;
         }
         self.terminator.address

@@ -28,7 +28,7 @@ use std::{
 
 use crate::{
     Architecture, Configuration,
-    controlflow::{Graph, Instruction},
+    controlflow::{Graph, InstructionRecord},
     disassemblers::arm64::{classify as arm64_classify, metrics::DisassemblyMetrics},
 };
 
@@ -46,7 +46,7 @@ pub fn disassemble<F>(
     is_executable_address: impl Fn(u64) -> bool,
 ) -> BTreeSet<u64>
 where
-    F: FnMut(u64, &Graph) -> Result<Instruction, Error>,
+    F: FnMut(u64, &Graph) -> Result<InstructionRecord, Error>,
 {
     let sweep_started_at = std::time::Instant::now();
     let graph = Graph::new(machine, config.clone());
@@ -157,7 +157,7 @@ fn validate_sweep_target<F>(
     is_executable_address: &impl Fn(u64) -> bool,
 ) -> bool
 where
-    F: FnMut(u64, &Graph) -> Result<Instruction, Error>,
+    F: FnMut(u64, &Graph) -> Result<InstructionRecord, Error>,
 {
     if !is_executable_address(address) {
         return false;
@@ -189,7 +189,7 @@ fn has_sweep_post_run<F>(
     prepare_instruction: &mut F,
 ) -> bool
 where
-    F: FnMut(u64, &Graph) -> Result<Instruction, Error>,
+    F: FnMut(u64, &Graph) -> Result<InstructionRecord, Error>,
 {
     let mut pc = call_address.saturating_add(4);
     let mut valid_count = 0usize;

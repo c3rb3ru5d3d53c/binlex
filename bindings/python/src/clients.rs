@@ -474,15 +474,13 @@ impl Web {
         py: Python<'_>,
     ) -> PyResult<bool> {
         let corpora = corpora.unwrap_or_else(|| vec!["default".to_string()]);
-        Ok(self
-            .inner
-            .index_instruction(
-                &sha256,
-                &instruction.with_inner_instruction(py, |inner| Ok(inner.clone()))?,
-                &corpora,
-            )
-            .map_err(map_web_error)?
-            .ok)
+        instruction.with_inner_instruction(py, |inner| {
+            Ok(self
+                .inner
+                .index_instruction(&sha256, inner, &corpora)
+                .map_err(map_web_error)?
+                .ok)
+        })
     }
 
     pub fn commit_index(&self) -> PyResult<bool> {
