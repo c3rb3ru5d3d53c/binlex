@@ -126,6 +126,30 @@ class Instruction:
         """Return a single processor output attached to this instruction."""
         return self._inner.processor(name)
 
+    def embedding(self, backend=None, dimensions=None):
+        """Return an embedding vector for this instruction, if available."""
+        from binlex.embeddings import Embedding, EmbeddingBackend
+
+        if self._config is None:
+            return None
+        backend = EmbeddingBackend.DEFAULT if backend is None else backend
+        dimensions = 64 if dimensions is None else dimensions
+        return Embedding(
+            self.architecture(),
+            self._config,
+            backend=backend,
+            dimensions=dimensions,
+        ).embed_instruction(self)
+
+    def lift(self, backend=None):
+        """Return a lifter artifact for this instruction, if available."""
+        from binlex.lifters import Lifter, LifterBackend
+
+        if self._config is None:
+            return None
+        backend = LifterBackend.DEFAULT if backend is None else backend
+        return Lifter(self.architecture(), self._config, backend=backend).lift_instruction(self)
+
     def semantics(self):
         """Return canonical semantics for this instruction, if present."""
         return self._inner.semantics()
@@ -352,6 +376,30 @@ class Block:
         """Return a single processor output attached to this block."""
         return self._inner.processor(name)
 
+    def embedding(self, backend=None, dimensions=None):
+        """Return an embedding vector for this block, if available."""
+        from binlex.embeddings import Embedding, EmbeddingBackend
+
+        if self._config is None:
+            return None
+        backend = EmbeddingBackend.DEFAULT if backend is None else backend
+        dimensions = 64 if dimensions is None else dimensions
+        return Embedding(
+            self.architecture(),
+            self._config,
+            backend=backend,
+            dimensions=dimensions,
+        ).embed_block(self)
+
+    def lift(self, backend=None):
+        """Return a lifter artifact for this block, if available."""
+        from binlex.lifters import Lifter, LifterBackend
+
+        if self._config is None:
+            return None
+        backend = LifterBackend.DEFAULT if backend is None else backend
+        return Lifter(self.architecture(), self._config, backend=backend).lift_block(self)
+
     def tlsh(self):
         """Return the TLSH object for this block, if available."""
         return self._inner.tlsh()
@@ -480,6 +528,30 @@ class Function:
     def processor(self, name):
         """Return a single processor output attached to this function."""
         return self._inner.processor(name)
+
+    def embedding(self, backend=None, dimensions=None):
+        """Return an embedding vector for this function, if available."""
+        from binlex.embeddings import Embedding, EmbeddingBackend
+
+        if self._config is None:
+            return None
+        backend = EmbeddingBackend.DEFAULT if backend is None else backend
+        dimensions = 64 if dimensions is None else dimensions
+        return Embedding(
+            self.architecture(),
+            self._config,
+            backend=backend,
+            dimensions=dimensions,
+        ).embed_function(self)
+
+    def lift(self, backend=None):
+        """Return a lifter artifact for this function, if available."""
+        from binlex.lifters import Lifter, LifterBackend
+
+        if self._config is None:
+            return None
+        backend = LifterBackend.DEFAULT if backend is None else backend
+        return Lifter(self.architecture(), self._config, backend=backend).lift_function(self)
 
     def tlsh(self):
         """Return the TLSH object for this function, if available."""

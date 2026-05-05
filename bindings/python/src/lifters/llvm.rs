@@ -119,20 +119,6 @@ impl Lifter {
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn embedding(&self) -> Option<Vec<f32>> {
-        match binlex::lifters::embeddings::embed_llvm_lifter(
-            &self.inner.lock().unwrap(),
-            &self.config,
-        ) {
-            Ok(vector) => Some(vector),
-            Err(err) => {
-                Stderr::print_debug(&self.config, format!("llvm embedding failed: {}", err));
-                None
-            }
-        }
-    }
-
-    #[pyo3(text_signature = "($self)")]
     pub fn object(&self) -> Option<Vec<u8>> {
         match self.inner.lock().unwrap().object() {
             Ok(bytes) => Some(bytes),

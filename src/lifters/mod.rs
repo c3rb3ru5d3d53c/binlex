@@ -1,7 +1,6 @@
 mod backend;
 mod error;
 
-pub mod embeddings;
 pub mod llvm;
 
 #[cfg(not(target_os = "windows"))]

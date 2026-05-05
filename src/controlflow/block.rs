@@ -26,6 +26,7 @@ use crate::controlflow::Function;
 use crate::controlflow::Instruction;
 use crate::controlflow::Reference;
 use crate::controlflow::graph::Graph;
+use crate::embeddings::{Embedding, EmbeddingBackend, EmbeddingsJson};
 use crate::entropy;
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeJson;
@@ -34,11 +35,10 @@ use crate::hashing::SHA256;
 use crate::hashing::SSDeep;
 use crate::hashing::TLSH;
 use crate::hex;
-use crate::lifters::embeddings::EmbeddingsJson;
-use crate::lifters::embeddings::llvm as llvm_embeddings;
 use crate::lifters::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
 #[cfg(not(target_os = "windows"))]
 use crate::lifters::vex::{Lifter as VexLifter, VexJson};
+use crate::lifters::{Lifter, LifterBackend, LifterError};
 use crate::metadata::Attributes;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -483,7 +483,7 @@ impl<'block> Block<'block> {
             }
         }
         if self.cfg.config.blocks.embeddings.llvm.enabled {
-            if let Ok(vector) = llvm_embeddings::block::embed(self) {
+            if let Some(vector) = self.embedding() {
                 json.embeddings = Some(EmbeddingsJson::llvm(vector));
             }
         }
@@ -494,6 +494,42 @@ impl<'block> Block<'block> {
     /// Return all processor outputs attached to this block.
     pub fn processors(&self) -> BTreeMap<String, Value> {
         self.process().processors.unwrap_or_default()
+    }
+
+    /// Return an embedding vector for this block using the default backend and dimensions.
+    pub fn embedding(&self) -> Option<Vec<f32>> {
+        self.embedding_with_options(None, None)
+    }
+
+    /// Return an embedding vector for this block using optional backend and dimension overrides.
+    pub fn embedding_with_options(
+        &self,
+        backend: Option<EmbeddingBackend>,
+        dimensions: Option<usize>,
+    ) -> Option<Vec<f32>> {
+        Embedding::new(
+            self.architecture(),
+            self.cfg.config.clone(),
+            backend,
+            dimensions,
+        )
+        .embed_block(self)
+    }
+
+    /// Return a lifter artifact for this block using the default backend.
+    pub fn lift(&self) -> Result<Lifter, LifterError> {
+        self.lift_with_options(None)
+    }
+
+    /// Return a lifter artifact for this block using an optional backend override.
+    pub fn lift_with_options(&self, backend: Option<LifterBackend>) -> Result<Lifter, LifterError> {
+        let mut lifter = Lifter::new(
+            self.architecture(),
+            self.cfg.config.clone(),
+            backend.unwrap_or_default(),
+        )?;
+        lifter.lift_block(self)?;
+        Ok(lifter)
     }
 
     fn lifters_json(&self) -> Option<LiftersJson> {

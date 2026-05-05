@@ -6,6 +6,7 @@ from binlex.config import Configuration
 from binlex.core import Architecture
 from . import clients
 from . import compression
+from . import embeddings
 from . import genetics
 from . import hashing
 from . import hex, math
@@ -30,6 +31,7 @@ __all__ = [
     "compression",
     "controlflow",
     "disassemblers",
+    "embeddings",
     "formats",
     "genetics",
     "hashing",

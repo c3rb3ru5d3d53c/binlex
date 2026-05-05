@@ -24,6 +24,8 @@
 
 from binlex_bindings.binlex.disassemblers.capstone import Disassembler as _DisassemblerBinding
 
+from binlex import Architecture, Configuration
+from binlex.controlflow import Graph
 from binlex.core.architecture import _coerce_architecture
 from binlex.formats import Image
 
@@ -31,7 +33,13 @@ from binlex.formats import Image
 class Disassembler:
     """Disassemble native executable regions into a control-flow graph."""
 
-    def __init__(self, machine, image, executable_address_ranges, config):
+    def __init__(
+        self,
+        machine: Architecture,
+        image: Image | bytes,
+        executable_address_ranges: dict[int, int],
+        configuration: Configuration,
+    ) -> None:
         """Create a disassembler for the given architecture and image source."""
         if isinstance(image, Image):
             image = image._inner
@@ -39,26 +47,26 @@ class Disassembler:
             _coerce_architecture(machine),
             image,
             executable_address_ranges,
-            config,
+            configuration,
         )
 
-    def disassemble_instruction(self, address, cfg):
+    def disassemble_instruction(self, address: int, graph: Graph) -> int:
         """Disassemble a single instruction into the provided graph."""
-        return self._inner.disassemble_instruction(address, cfg._inner)
+        return self._inner.disassemble_instruction(address, graph._inner)
 
-    def disassemble_function(self, address, cfg):
+    def disassemble_function(self, address: int, graph: Graph) -> int:
         """Disassemble the function that starts at `address` into the graph."""
-        return self._inner.disassemble_function(address, cfg._inner)
+        return self._inner.disassemble_function(address, graph._inner)
 
-    def disassemble_block(self, address, cfg):
+    def disassemble_block(self, address: int, graph: Graph) -> int:
         """Disassemble the basic block that starts at `address`."""
-        return self._inner.disassemble_block(address, cfg._inner)
+        return self._inner.disassemble_block(address, graph._inner)
 
-    def disassemble(self, addresses, cfg):
+    def disassemble(self, addresses: set[int], graph: Graph) -> None:
         """Disassemble a set of entrypoint addresses into the graph."""
-        return self._inner.disassemble(addresses, cfg._inner)
+        return self._inner.disassemble(addresses, graph._inner)
 
-    def disassemble_sweep(self):
+    def disassemble_sweep(self) -> set[int]:
         """Return candidate addresses discovered during a linear sweep."""
         return self._inner.disassemble_sweep()
 

@@ -26,15 +26,15 @@ use crate::controlflow::Block;
 use crate::controlflow::Function;
 use crate::controlflow::Graph;
 use crate::controlflow::Reference;
+use crate::embeddings::{Embedding, EmbeddingBackend, EmbeddingsJson};
 use crate::genetics::Chromosome;
 use crate::genetics::ChromosomeJson;
 use crate::hex;
 use crate::io::Stderr;
-use crate::lifters::embeddings::EmbeddingsJson;
-use crate::lifters::embeddings::llvm as llvm_embeddings;
 use crate::lifters::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
 #[cfg(not(target_os = "windows"))]
 use crate::lifters::vex::{Lifter as VexLifter, VexJson};
+use crate::lifters::{Lifter, LifterBackend, LifterError};
 use crate::metadata::Attributes;
 use crate::semantics::InstructionSemantics;
 use crate::semantics::InstructionSemanticsJson;
@@ -639,7 +639,7 @@ impl<'instruction> Instruction<'instruction> {
             }
         }
         if self.config.instructions.embeddings.llvm.enabled {
-            if let Ok(vector) = llvm_embeddings::instruction::embed(self) {
+            if let Some(vector) = self.embedding() {
                 json.embeddings = Some(EmbeddingsJson::llvm(vector));
             }
         }
@@ -650,6 +650,37 @@ impl<'instruction> Instruction<'instruction> {
 
     pub fn processors(&self) -> BTreeMap<String, Value> {
         self.process().processors.unwrap_or_default()
+    }
+
+    /// Return an embedding vector for this instruction using the default backend and dimensions.
+    pub fn embedding(&self) -> Option<Vec<f32>> {
+        self.embedding_with_options(None, None)
+    }
+
+    /// Return an embedding vector for this instruction using optional backend and dimension overrides.
+    pub fn embedding_with_options(
+        &self,
+        backend: Option<EmbeddingBackend>,
+        dimensions: Option<usize>,
+    ) -> Option<Vec<f32>> {
+        Embedding::new(self.architecture, self.config.clone(), backend, dimensions)
+            .embed_instruction(self)
+    }
+
+    /// Return a lifter artifact for this instruction using the default backend.
+    pub fn lift(&self) -> Result<Lifter, LifterError> {
+        self.lift_with_options(None)
+    }
+
+    /// Return a lifter artifact for this instruction using an optional backend override.
+    pub fn lift_with_options(&self, backend: Option<LifterBackend>) -> Result<Lifter, LifterError> {
+        let mut lifter = Lifter::new(
+            self.architecture,
+            self.config.clone(),
+            backend.unwrap_or_default(),
+        )?;
+        lifter.lift_instruction(self)?;
+        Ok(lifter)
     }
 
     fn lifters_json(&self) -> Option<LiftersJson> {

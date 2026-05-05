@@ -23,8 +23,11 @@
 
 from enum import Enum
 
+from binlex.config import Configuration
+from binlex.controlflow import Graph
 from binlex.core import Architecture
 from binlex.core.architecture import _coerce_architecture
+from binlex.formats import Image
 
 from .capstone import Disassembler as _CapstoneDisassembler
 from .cil import Disassembler as _CilDisassembler
@@ -39,12 +42,12 @@ class DisassemblerBackend(str, Enum):
 class Disassembler:
     def __init__(
         self,
-        architecture,
-        image,
-        executable_address_ranges,
-        config,
-        backend=DisassemblerBackend.Default,
-    ):
+        architecture: Architecture,
+        image: Image | bytes | memoryview,
+        executable_address_ranges: dict[int, int],
+        configuration: Configuration,
+        backend: DisassemblerBackend = DisassemblerBackend.Default,
+    ) -> None:
         binding_architecture = _coerce_architecture(architecture)
         self.architecture = Architecture.from_binding(binding_architecture)
         self.backend = (
@@ -68,7 +71,7 @@ class Disassembler:
                 binding_architecture,
                 image,
                 executable_address_ranges,
-                config,
+                configuration,
             )
         else:
             if resolved_backend != DisassemblerBackend.Capstone:
@@ -79,46 +82,42 @@ class Disassembler:
                 binding_architecture,
                 image,
                 executable_address_ranges,
-                config,
+                configuration,
             )
 
-    def disassemble_instruction(self, address, cfg, metadata_token_addresses=None):
+    def disassemble_instruction(self, address: int, graph: Graph) -> int:
         if self.architecture == Architecture.CIL:
             return self._inner.disassemble_instruction(
                 address,
-                cfg,
-                metadata_token_addresses,
+                graph,
             )
-        return self._inner.disassemble_instruction(address, cfg)
+        return self._inner.disassemble_instruction(address, graph)
 
-    def disassemble_function(self, address, cfg, metadata_token_addresses=None):
+    def disassemble_function(self, address: int, graph: Graph) -> int:
         if self.architecture == Architecture.CIL:
             return self._inner.disassemble_function(
                 address,
-                cfg,
-                metadata_token_addresses,
+                graph,
             )
-        return self._inner.disassemble_function(address, cfg)
+        return self._inner.disassemble_function(address, graph)
 
-    def disassemble_block(self, address, cfg, metadata_token_addresses=None):
+    def disassemble_block(self, address: int, graph: Graph) -> int:
         if self.architecture == Architecture.CIL:
             return self._inner.disassemble_block(
                 address,
-                cfg,
-                metadata_token_addresses,
+                graph,
             )
-        return self._inner.disassemble_block(address, cfg)
+        return self._inner.disassemble_block(address, graph)
 
-    def disassemble(self, addresses, cfg, metadata_token_addresses=None):
+    def disassemble(self, addresses: set[int], graph: Graph) -> None:
         if self.architecture == Architecture.CIL:
             return self._inner.disassemble(
                 addresses,
-                cfg,
-                metadata_token_addresses,
+                graph,
             )
-        return self._inner.disassemble(addresses, cfg)
+        return self._inner.disassemble(addresses, graph)
 
-    def disassemble_sweep(self):
+    def disassemble_sweep(self) -> set[int]:
         return self._inner.disassemble_sweep()
 
     def __getattr__(self, name):

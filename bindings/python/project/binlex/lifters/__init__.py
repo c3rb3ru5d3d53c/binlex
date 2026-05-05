@@ -24,14 +24,10 @@ class LifterBackend(str, Enum):
     VEX = "vex"
 
 
-def _resolve_backend(backend: LifterBackend | str | None) -> LifterBackend:
-    if isinstance(backend, LifterBackend):
-        return backend
-    if backend is None:
-        return LifterBackend.DEFAULT
-    if isinstance(backend, str):
-        return LifterBackend(backend.lower())
-    raise TypeError(f"unsupported lifter backend: {backend!r}")
+def _resolve_backend(backend: LifterBackend) -> LifterBackend:
+    if not isinstance(backend, LifterBackend):
+        raise TypeError("backend must be a LifterBackend")
+    return backend
 
 
 class Lifter:
@@ -105,10 +101,6 @@ class Lifter:
     def bitcode(self) -> bytes:
         self._require_backend(LifterBackend.LLVM, "bitcode")
         return self._inner.bitcode()
-
-    def embedding(self) -> list[float] | None:
-        self._require_backend(LifterBackend.LLVM, "embedding")
-        return self._inner.embedding()
 
     def object(self) -> bytes:
         self._require_backend(LifterBackend.LLVM, "object")

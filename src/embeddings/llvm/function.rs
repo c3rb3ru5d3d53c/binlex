@@ -4,12 +4,13 @@ use super::{
     parse_module_from_bitcode, primary_defined_function, semantic_features_from_module,
     sequence_features_from_tokens,
 };
+use crate::Configuration;
 use crate::controlflow::Function;
 use inkwell::context::Context;
 use std::io::Error;
 
-pub fn embed(function: &Function<'_>) -> Result<Vec<f32>, Error> {
-    let bitcode = canonical_function_bitcode(function)?;
+pub fn embed(function: &Function<'_>, config: &Configuration) -> Result<Vec<f32>, Error> {
+    let bitcode = canonical_function_bitcode(function, config)?;
     let context = Context::create();
     let module = parse_module_from_bitcode(&context, &bitcode)?;
     let llvm_function =
@@ -27,7 +28,7 @@ pub fn embed(function: &Function<'_>) -> Result<Vec<f32>, Error> {
     };
     Ok(embed_families_with_runtime_config(
         families,
-        &configured_model(&function.cfg.config),
-        Some(&function.cfg.config),
+        &configured_model(config),
+        Some(config),
     ))
 }

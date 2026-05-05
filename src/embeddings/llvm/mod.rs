@@ -89,29 +89,34 @@ fn optimize_lifter(lifter: LlvmLifter) -> Result<LlvmLifter, Error> {
         .into_lifter())
 }
 
-pub(crate) fn canonical_instruction_bitcode(instruction: &Instruction) -> Result<Vec<u8>, Error> {
-    let mut lifter = LlvmLifter::new(instruction.architecture, instruction.config.clone());
+pub(crate) fn canonical_instruction_bitcode(
+    instruction: &Instruction,
+    config: &Configuration,
+) -> Result<Vec<u8>, Error> {
+    let mut lifter = LlvmLifter::new(instruction.architecture, config.clone());
     lifter.lift_instruction(instruction)?;
     let optimized = optimize_lifter(lifter)?;
     Ok(optimized.bitcode())
 }
 
-pub(crate) fn canonical_block_bitcode(block: &Block<'_>) -> Result<Vec<u8>, Error> {
-    let mut lifter = LlvmLifter::new(block.architecture(), block.cfg.config.clone());
+pub(crate) fn canonical_block_bitcode(
+    block: &Block<'_>,
+    config: &Configuration,
+) -> Result<Vec<u8>, Error> {
+    let mut lifter = LlvmLifter::new(block.architecture(), config.clone());
     lifter.lift_block(block)?;
     let optimized = optimize_lifter(lifter)?;
     Ok(optimized.bitcode())
 }
 
-pub(crate) fn canonical_function_bitcode(function: &Function<'_>) -> Result<Vec<u8>, Error> {
-    let mut lifter = LlvmLifter::new(function.architecture(), function.cfg.config.clone());
+pub(crate) fn canonical_function_bitcode(
+    function: &Function<'_>,
+    config: &Configuration,
+) -> Result<Vec<u8>, Error> {
+    let mut lifter = LlvmLifter::new(function.architecture(), config.clone());
     lifter.lift_function(function)?;
     let optimized = optimize_lifter(lifter)?;
     Ok(optimized.bitcode())
-}
-
-pub(crate) fn canonical_lifter_bitcode(lifter: &LlvmLifter) -> Vec<u8> {
-    lifter.bitcode()
 }
 
 pub(crate) fn parse_module_from_bitcode<'ctx>(
@@ -664,44 +669,4 @@ fn smooth_vector(vector: &mut [f32]) {
     for value in vector.iter_mut() {
         *value = value.signum() * value.abs().sqrt();
     }
-}
-
-pub fn embed_lifter(lifter: &LlvmLifter, config: &Configuration) -> Result<Vec<f32>, Error> {
-    let bitcode = canonical_lifter_bitcode(lifter);
-    let context = Context::create();
-    let module = parse_module_from_bitcode(&context, &bitcode)?;
-    let llvm_function =
-        primary_defined_function(&module).ok_or_else(|| Error::other("missing lifted artifact"))?;
-    let (semantic, opcodes, helpers) = semantic_features_from_module(llvm_function);
-    let block_count = llvm_function.count_basic_blocks();
-    let (control_flow, semantic_weight, control_flow_weight, sequence_weight) = if block_count <= 1
-    {
-        (
-            control_flow_features_for_block_module(llvm_function),
-            0.60,
-            0.15,
-            0.25,
-        )
-    } else {
-        (
-            control_flow_features_for_function_module(llvm_function),
-            0.50,
-            0.30,
-            0.20,
-        )
-    };
-    let sequence = sequence_features_from_tokens(&opcodes, &helpers);
-    let families = FeatureFamilies {
-        semantic,
-        control_flow,
-        sequence,
-        semantic_weight,
-        control_flow_weight,
-        sequence_weight,
-    };
-    Ok(embed_families_with_runtime_config(
-        families,
-        &configured_model(config),
-        Some(config),
-    ))
 }

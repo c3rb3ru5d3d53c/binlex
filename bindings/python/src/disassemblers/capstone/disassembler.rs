@@ -84,13 +84,13 @@ impl Disassembler {
 #[pymethods]
 impl Disassembler {
     #[new]
-    #[pyo3(text_signature = "(machine, image, executable_address_ranges, config)")]
+    #[pyo3(text_signature = "(machine, image, executable_address_ranges, configuration)")]
     pub fn new(
         py: Python,
         machine: Py<Architecture>,
         image: Py<PyAny>,
         executable_address_ranges: BTreeMap<u64, u64>,
-        config: Py<Configuration>,
+        configuration: Py<Configuration>,
     ) -> PyResult<Self> {
         if let Ok(image) = image.extract::<Py<Image>>(py) {
             return Ok(Self {
@@ -98,7 +98,7 @@ impl Disassembler {
                 bytes: None,
                 machine,
                 executable_address_ranges,
-                config,
+                config: configuration,
             });
         }
         if let Ok(bytes) = image.extract::<Py<PyBytes>>(py) {
@@ -107,7 +107,7 @@ impl Disassembler {
                 bytes: Some(bytes),
                 machine,
                 executable_address_ranges,
-                config,
+                config: configuration,
             });
         }
         Err(PyTypeError::new_err(
@@ -115,64 +115,64 @@ impl Disassembler {
         ))
     }
 
-    #[pyo3(text_signature = "($self, address, cfg)")]
+    #[pyo3(text_signature = "($self, address, graph)")]
     pub fn disassemble_instruction(
         &self,
         py: Python,
         address: u64,
-        cfg: Py<Graph>,
+        graph: Py<Graph>,
     ) -> Result<u64, Error> {
-        let cfg_ref = &mut cfg.borrow_mut(py);
+        let graph_ref = &mut graph.borrow_mut(py);
         let result = self
             .with_inner_disassembler(py, |disassembler| {
-                disassembler.disassemble_instruction(address, &mut cfg_ref.inner.lock().unwrap())
+                disassembler.disassemble_instruction(address, &mut graph_ref.inner.lock().unwrap())
             })
             .map_err(|error| Error::other(error.to_string()))?;
         Ok(result)
     }
 
-    #[pyo3(text_signature = "($self, address, cfg)")]
+    #[pyo3(text_signature = "($self, address, graph)")]
     pub fn disassemble_function(
         &self,
         py: Python,
         address: u64,
-        cfg: Py<Graph>,
+        graph: Py<Graph>,
     ) -> Result<u64, Error> {
-        let cfg_ref = &mut cfg.borrow_mut(py);
+        let graph_ref = &mut graph.borrow_mut(py);
         let result = self
             .with_inner_disassembler(py, |disassembler| {
-                disassembler.disassemble_function(address, &mut cfg_ref.inner.lock().unwrap())
+                disassembler.disassemble_function(address, &mut graph_ref.inner.lock().unwrap())
             })
             .map_err(|error| Error::other(error.to_string()))?;
         Ok(result)
     }
 
-    #[pyo3(text_signature = "($self, address, cfg)")]
+    #[pyo3(text_signature = "($self, address, graph)")]
     pub fn disassemble_block(
         &self,
         py: Python,
         address: u64,
-        cfg: Py<Graph>,
+        graph: Py<Graph>,
     ) -> Result<u64, Error> {
-        let cfg_ref = &mut cfg.borrow_mut(py);
+        let graph_ref = &mut graph.borrow_mut(py);
         let result = self
             .with_inner_disassembler(py, |disassembler| {
-                disassembler.disassemble_block(address, &mut cfg_ref.inner.lock().unwrap())
+                disassembler.disassemble_block(address, &mut graph_ref.inner.lock().unwrap())
             })
             .map_err(|error| Error::other(error.to_string()))?;
         Ok(result)
     }
 
-    #[pyo3(text_signature = "($self, addresses, cfg)")]
+    #[pyo3(text_signature = "($self, addresses, graph)")]
     pub fn disassemble(
         &self,
         py: Python,
         addresses: BTreeSet<u64>,
-        cfg: Py<Graph>,
+        graph: Py<Graph>,
     ) -> Result<(), Error> {
-        let cfg_ref = &mut cfg.borrow_mut(py);
+        let graph_ref = &mut graph.borrow_mut(py);
         self.with_inner_disassembler(py, |disassembler| {
-            disassembler.disassemble(addresses, &mut cfg_ref.inner.lock().unwrap())
+            disassembler.disassemble(addresses, &mut graph_ref.inner.lock().unwrap())
         })
         .map_err(|error| Error::other(error.to_string()))?;
         Ok(())

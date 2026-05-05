@@ -70,9 +70,6 @@ class Lifter:
     def bitcode(self):
         return bytes(self._inner.bitcode())
 
-    def embedding(self):
-        return self._inner.embedding()
-
     def object(self):
         return bytes(self._inner.object())
 

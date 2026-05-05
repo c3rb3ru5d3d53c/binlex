@@ -114,13 +114,13 @@ impl Disassembler {
 #[pymethods]
 impl Disassembler {
     #[new]
-    #[pyo3(text_signature = "(machine, image, executable_address_ranges, config)")]
+    #[pyo3(text_signature = "(machine, image, executable_address_ranges, configuration)")]
     pub fn new(
         py: Python,
         machine: Py<Architecture>,
         image: Py<PyAny>,
         executable_address_ranges: BTreeMap<u64, u64>,
-        config: Py<Configuration>,
+        configuration: Py<Configuration>,
     ) -> PyResult<Self> {
         if let Ok(image) = image.extract::<Py<Image>>(py) {
             return Ok(Self {
@@ -129,7 +129,7 @@ impl Disassembler {
                 memory_view: None,
                 machine,
                 executable_address_ranges,
-                config,
+                config: configuration,
             });
         }
 
@@ -140,7 +140,7 @@ impl Disassembler {
                 memory_view: None,
                 machine,
                 executable_address_ranges,
-                config,
+                config: configuration,
             });
         }
 
@@ -151,7 +151,7 @@ impl Disassembler {
                 memory_view: Some(memory_view),
                 machine,
                 executable_address_ranges,
-                config,
+                config: configuration,
             });
         }
 
@@ -160,87 +160,83 @@ impl Disassembler {
         ))
     }
 
-    #[pyo3(text_signature = "($self, address, cfg, metadata_token_addresses=None)")]
+    #[pyo3(text_signature = "($self, address, graph)")]
     pub fn disassemble_instruction(
         &self,
         py: Python,
         address: u64,
-        cfg: Py<Graph>,
-        metadata_token_addresses: Option<BTreeMap<u64, u64>>,
+        graph: Py<Graph>,
     ) -> Result<u64, Error> {
-        let cfg_ref = &mut cfg.borrow_mut(py);
-        let metadata_token_addresses = metadata_token_addresses.unwrap_or_default();
+        let graph_ref = &mut graph.borrow_mut(py);
+        let metadata_token_addresses = BTreeMap::new();
         let result = self
             .with_inner_disassembler(py, |disassembler| {
                 disassembler.disassemble_instruction(
                     address,
                     &metadata_token_addresses,
-                    &mut cfg_ref.inner.lock().unwrap(),
+                    &mut graph_ref.inner.lock().unwrap(),
                 )
             })
             .map_err(|error| Error::other(error.to_string()))?;
         Ok(result)
     }
 
-    #[pyo3(text_signature = "($self, address, cfg, metadata_token_addresses=None)")]
+    #[pyo3(text_signature = "($self, address, graph)")]
     pub fn disassemble_function(
         &self,
         py: Python,
         address: u64,
-        cfg: Py<Graph>,
-        metadata_token_addresses: Option<BTreeMap<u64, u64>>,
+        graph: Py<Graph>,
     ) -> Result<u64, Error> {
-        let cfg_ref = &mut cfg.borrow_mut(py);
-        let metadata_token_addresses = metadata_token_addresses.unwrap_or_default();
+        let graph_ref = &mut graph.borrow_mut(py);
+        let metadata_token_addresses = BTreeMap::new();
         let result = self
             .with_inner_disassembler(py, |disassembler| {
                 disassembler.disassemble_function(
                     address,
                     &metadata_token_addresses,
-                    &mut cfg_ref.inner.lock().unwrap(),
+                    &mut graph_ref.inner.lock().unwrap(),
                 )
             })
             .map_err(|error| Error::other(error.to_string()))?;
         Ok(result)
     }
 
-    #[pyo3(text_signature = "($self, address, cfg, metadata_token_addresses=None)")]
+    #[pyo3(text_signature = "($self, address, graph)")]
     pub fn disassemble_block(
         &self,
         py: Python,
         address: u64,
-        cfg: Py<Graph>,
-        metadata_token_addresses: Option<BTreeMap<u64, u64>>,
+        graph: Py<Graph>,
     ) -> Result<u64, Error> {
-        let cfg_ref = &mut cfg.borrow_mut(py);
-        let metadata_token_addresses = metadata_token_addresses.unwrap_or_default();
+        let graph_ref = &mut graph.borrow_mut(py);
+        let metadata_token_addresses = BTreeMap::new();
         let result = self
             .with_inner_disassembler(py, |disassembler| {
                 disassembler.disassemble_block(
                     address,
                     &metadata_token_addresses,
-                    &mut cfg_ref.inner.lock().unwrap(),
+                    &mut graph_ref.inner.lock().unwrap(),
                 )
             })
             .map_err(|error| Error::other(error.to_string()))?;
         Ok(result)
     }
 
-    #[pyo3(text_signature = "($self, addresses, cfg, metadata_token_addresses=None)")]
+    #[pyo3(text_signature = "($self, addresses, graph)")]
     pub fn disassemble(
         &self,
         py: Python,
         addresses: BTreeSet<u64>,
-        cfg: Py<Graph>,
-        metadata_token_addresses: Option<BTreeMap<u64, u64>>,
+        graph: Py<Graph>,
     ) -> Result<(), Error> {
-        let cfg_ref = &mut cfg.borrow_mut(py);
-        let metadata_token_addresses = metadata_token_addresses.unwrap_or_default();
+        let graph_ref = &mut graph.borrow_mut(py);
+        let metadata_token_addresses = BTreeMap::new();
         self.with_inner_disassembler(py, |disassembler| {
             disassembler.disassemble(
                 addresses,
                 metadata_token_addresses,
-                &mut cfg_ref.inner.lock().unwrap(),
+                &mut graph_ref.inner.lock().unwrap(),
             )
         })
         .map_err(|error| Error::other(error.to_string()))?;

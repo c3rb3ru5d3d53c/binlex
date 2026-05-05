@@ -6,7 +6,6 @@ use std::fmt::{Display, Formatter};
 pub enum LifterCapability {
     LiftSemantics,
     Bitcode,
-    Embedding,
     Object,
     Verify,
     Optimizers,
@@ -23,7 +22,6 @@ impl Display for LifterCapability {
         let name = match self {
             Self::LiftSemantics => "lift_semantics",
             Self::Bitcode => "bitcode",
-            Self::Embedding => "embedding",
             Self::Object => "object",
             Self::Verify => "verify",
             Self::Optimizers => "optimizers",
