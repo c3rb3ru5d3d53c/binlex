@@ -20,20 +20,20 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::semantics::architectures::arm64::Arm64InstructionView;
+use crate::semantics::architectures::arm64::InstructionDetailArm64;
 use crate::semantics::architectures::arm64::helpers::{
     binary, bool_const, complete, const_u64, flag_expr, set_flag, unary_not,
 };
 use crate::semantics::architectures::arm64::{Arm64OperandKind, Arm64OperandView};
 use crate::semantics::{
-    InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation,
-    SemanticOperationBinary, SemanticStatus, SemanticTerminator, SemanticTrapKind,
+    Semantic, SemanticEffect, SemanticExpression, SemanticLocation, SemanticOperationBinary,
+    SemanticStatus, SemanticTerminator, SemanticTrapKind,
 };
 
 const TPIDR_EL0_SEMANTIC_NAME: &str = "arm64_sysreg_tpidr_el0";
 const FPCR_SEMANTIC_NAME: &str = "arm64_sysreg_fpcr";
 
-pub(crate) fn build(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+pub(crate) fn build(view: &InstructionDetailArm64) -> Option<Semantic> {
     match view.mnemonic.as_str() {
         "axflag" => Some(complete(
             SemanticTerminator::FallThrough,
@@ -68,7 +68,7 @@ pub(crate) fn build(view: &Arm64InstructionView) -> Option<InstructionSemantics>
             SemanticTerminator::FallThrough,
             vec![SemanticEffect::Nop],
         )),
-        "svc" => Some(InstructionSemantics {
+        "svc" => Some(Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -86,7 +86,7 @@ pub(crate) fn build(view: &Arm64InstructionView) -> Option<InstructionSemantics>
     }
 }
 
-fn instruction_mentions_tpidr_el0(view: &Arm64InstructionView) -> bool {
+fn instruction_mentions_tpidr_el0(view: &InstructionDetailArm64) -> bool {
     view.operand_text.as_deref().is_some_and(|op_str| {
         let lowered = op_str.to_ascii_lowercase();
         lowered.contains("tpidr_el0") || lowered.contains("s3_3_c13_c0_2")
@@ -94,7 +94,7 @@ fn instruction_mentions_tpidr_el0(view: &Arm64InstructionView) -> bool {
         || view.bytes.as_slice().ends_with(&[0xd0, 0x1b, 0xd5])
 }
 
-fn instruction_mentions_fpcr(view: &Arm64InstructionView) -> bool {
+fn instruction_mentions_fpcr(view: &InstructionDetailArm64) -> bool {
     view.operand_text.as_deref().is_some_and(|op_str| {
         let lowered = op_str.to_ascii_lowercase();
         lowered.contains("fpcr") || lowered.contains("s3_3_c4_c4_0")
@@ -102,7 +102,7 @@ fn instruction_mentions_fpcr(view: &Arm64InstructionView) -> bool {
         || view.bytes.as_slice().ends_with(&[0x44, 0x1b, 0xd5])
 }
 
-fn build_mrs(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_mrs(view: &InstructionDetailArm64) -> Option<Semantic> {
     let semantic_name = if instruction_mentions_tpidr_el0(view) {
         TPIDR_EL0_SEMANTIC_NAME
     } else if instruction_mentions_fpcr(view) {
@@ -125,7 +125,7 @@ fn build_mrs(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_msr(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_msr(view: &InstructionDetailArm64) -> Option<Semantic> {
     let semantic_name = if instruction_mentions_tpidr_el0(view) {
         TPIDR_EL0_SEMANTIC_NAME
     } else if instruction_mentions_fpcr(view) {

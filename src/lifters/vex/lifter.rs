@@ -7,16 +7,16 @@ use crate::Configuration;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::core::Architecture;
 use crate::semantics::{
-    InstructionSemanticsJson, SemanticAddressSpace, SemanticDiagnostic, SemanticEffect,
-    SemanticExpression, SemanticLocation, SemanticOperationBinary, SemanticOperationCast,
-    SemanticOperationCompare, SemanticOperationUnary, SemanticTerminator,
+    SemanticAddressSpace, SemanticDiagnostic, SemanticEffect, SemanticExpression, SemanticJson,
+    SemanticLocation, SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
+    SemanticOperationUnary, SemanticTerminator,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct InstructionRequest {
     address: u64,
     bytes: Vec<u8>,
-    semantics: InstructionSemanticsJson,
+    semantics: SemanticJson,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -379,6 +379,36 @@ fn render_effect(effect: &SemanticEffect) -> String {
             render_expression(expected),
             render_expression(desired)
         ),
+        SemanticEffect::WriteProperty {
+            reference,
+            name,
+            expression,
+            bits,
+        } => format!(
+            "WRITE_PROPERTY{}({}, {}, {})",
+            bits,
+            render_expression(reference),
+            name,
+            render_expression(expression)
+        ),
+        SemanticEffect::WriteElement {
+            reference,
+            index,
+            expression,
+            bits,
+        } => format!(
+            "WRITE_ELEMENT{}({}, {}, {})",
+            bits,
+            render_expression(reference),
+            render_expression(index),
+            render_expression(expression)
+        ),
+        SemanticEffect::Push { stack, expression } => {
+            format!("PUSH({}, {})", stack, render_expression(expression))
+        }
+        SemanticEffect::Pop { stack, dst } => {
+            format!("{} = POP({})", render_location_write(dst), stack)
+        }
         SemanticEffect::Fence { kind } => format!("DIRTY fence({kind:?})"),
         SemanticEffect::Trap { kind } => format!("DIRTY trap({kind:?})"),
         SemanticEffect::Intrinsic {
@@ -465,6 +495,12 @@ fn render_location_read(location: &SemanticLocation) -> String {
             render_address_space(space),
             render_expression(addr)
         ),
+        SemanticLocation::IndexedMemory { name, index, bits } => {
+            format!("LDIDX{}({}, {})", bits, name, render_expression(index))
+        }
+        SemanticLocation::StackMemory { name, offset, bits } => {
+            format!("LDSTK{}({}, {})", bits, name, offset)
+        }
     }
 }
 
@@ -480,6 +516,12 @@ fn render_location_write(location: &SemanticLocation) -> String {
             render_address_space(space),
             render_expression(addr)
         ),
+        SemanticLocation::IndexedMemory { name, index, bits } => {
+            format!("STIDX{}({}, {})", bits, name, render_expression(index))
+        }
+        SemanticLocation::StackMemory { name, offset, bits } => {
+            format!("STSTK{}({}, {})", bits, name, offset)
+        }
     }
 }
 
@@ -542,6 +584,28 @@ fn render_expression(expression: &SemanticExpression) -> String {
         ),
         SemanticExpression::Undefined { bits } => format!("Undefined({bits})"),
         SemanticExpression::Poison { bits } => format!("Poison({bits})"),
+        SemanticExpression::Null { bits } => format!("Null({bits})"),
+        SemanticExpression::Allocate { kind, bits } => format!("Allocate({kind}, {bits})"),
+        SemanticExpression::ReadProperty {
+            reference,
+            name,
+            bits,
+        } => format!(
+            "ReadProperty{}({}, {})",
+            bits,
+            render_expression(reference),
+            name
+        ),
+        SemanticExpression::ReadElement {
+            reference,
+            index,
+            bits,
+        } => format!(
+            "ReadElement{}({}, {})",
+            bits,
+            render_expression(reference),
+            render_expression(index)
+        ),
         SemanticExpression::Intrinsic { name, args, .. } => format!(
             "{}({})",
             name,
@@ -561,6 +625,7 @@ fn render_address_space(space: &SemanticAddressSpace) -> String {
         SemanticAddressSpace::Heap => "heap".to_string(),
         SemanticAddressSpace::Global => "global".to_string(),
         SemanticAddressSpace::Io => "io".to_string(),
+        SemanticAddressSpace::CpuMemory { name } => format!("cpu:{name}"),
         SemanticAddressSpace::Segment { name } => format!("segment:{name}"),
         SemanticAddressSpace::ArchSpecific { name } => format!("arch:{name}"),
     }

@@ -22,14 +22,14 @@
 
 use crate::Architecture;
 use crate::semantics::architectures::x86::helpers as common;
-use crate::semantics::architectures::x86::instruction::X86InstructionView;
+use crate::semantics::architectures::x86::instruction::InstructionDetailX86;
 use crate::semantics::architectures::x86::operand::{X86OperandKind, X86OperandView};
 use crate::semantics::{
-    InstructionSemantics, SemanticAddressSpace, SemanticEffect, SemanticExpression,
-    SemanticLocation, SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
+    Semantic, SemanticAddressSpace, SemanticEffect, SemanticExpression, SemanticLocation,
+    SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
     SemanticOperationUnary, SemanticTerminator,
 };
-pub fn build(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+pub fn build(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     match view.mnemonic.as_str() {
         "bt" => bit_test(machine, view, false),
         "btc" => bit_complement(machine, view),
@@ -59,9 +59,9 @@ enum BlsKind {
 
 fn bit_test(
     machine: Architecture,
-    view: &X86InstructionView,
+    view: &InstructionDetailX86,
     update_base: bool,
-) -> Option<InstructionSemantics> {
+) -> Option<Semantic> {
     let base = operand_expr(machine, view.operands().first()?)?;
     let index = operand_expr(machine, view.operands().get(1)?)?;
     let dst = operand_location(machine, view.operands().first()?)?;
@@ -109,7 +109,7 @@ fn bit_test(
     Some(common::complete(SemanticTerminator::FallThrough, effects))
 }
 
-fn bit_reset(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn bit_reset(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let base = operand_expr(machine, view.operands().first()?)?;
     let index = operand_expr(machine, view.operands().get(1)?)?;
     let dst = operand_location(machine, view.operands().first()?)?;
@@ -167,10 +167,7 @@ fn bit_reset(machine: Architecture, view: &X86InstructionView) -> Option<Instruc
     ))
 }
 
-fn bit_complement(
-    machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+fn bit_complement(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let base = operand_expr(machine, view.operands().first()?)?;
     let index = operand_expr(machine, view.operands().get(1)?)?;
     let dst = operand_location(machine, view.operands().first()?)?;
@@ -224,11 +221,7 @@ fn bit_complement(
     ))
 }
 
-fn bit_scan(
-    machine: Architecture,
-    view: &X86InstructionView,
-    reverse: bool,
-) -> Option<InstructionSemantics> {
+fn bit_scan(machine: Architecture, view: &InstructionDetailX86, reverse: bool) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let dst_expr = SemanticExpression::Read(Box::new(dst.clone()));
     let src = operand_expr(machine, view.operands().get(1)?)?;
@@ -297,9 +290,9 @@ fn bit_scan(
 
 fn count_zeros(
     machine: Architecture,
-    view: &X86InstructionView,
+    view: &InstructionDetailX86,
     leading: bool,
-) -> Option<InstructionSemantics> {
+) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let bits = common::location_bits(&dst);
@@ -362,11 +355,7 @@ fn count_zeros(
     ))
 }
 
-fn bls(
-    machine: Architecture,
-    view: &X86InstructionView,
-    kind: BlsKind,
-) -> Option<InstructionSemantics> {
+fn bls(machine: Architecture, view: &InstructionDetailX86, kind: BlsKind) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let bits = common::location_bits(&dst);
@@ -428,7 +417,7 @@ fn bls(
     ))
 }
 
-fn bextr(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn bextr(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let control = operand_expr(machine, view.operands().get(2)?)?;
@@ -542,7 +531,7 @@ fn bextr(machine: Architecture, view: &X86InstructionView) -> Option<Instruction
     ))
 }
 
-fn bzhi(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn bzhi(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let index = operand_expr(machine, view.operands().get(2)?)?;
@@ -618,9 +607,9 @@ fn bzhi(machine: Architecture, view: &X86InstructionView) -> Option<InstructionS
 
 fn pdep_pext(
     machine: Architecture,
-    view: &X86InstructionView,
+    view: &InstructionDetailX86,
     deposit: bool,
-) -> Option<InstructionSemantics> {
+) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let mask = operand_expr(machine, view.operands().get(2)?)?;

@@ -1,11 +1,11 @@
 use crate::semantics::{SemanticExpression, SemanticLocation};
-use crate::symbolic::{Error, Executor, State};
+use crate::symbolic::{Error, SymbolicCpuState, SymbolicExecutor};
 use z3::ast::{Ast, BV, Bool, RoundingMode};
 
-impl Executor {
+impl SymbolicExecutor {
     pub(crate) fn eval_x87_intrinsic_expression(
         &self,
-        state: &mut State,
+        state: &mut SymbolicCpuState,
         name: &str,
         args: &[SemanticExpression],
         bits: u16,
@@ -196,7 +196,12 @@ impl Executor {
         Ok(Some(state.backend().coerce_bv_width(&value, bits)?))
     }
 
-    fn eval_x87_constant(&self, state: &State, name: &str, bits: u16) -> Result<BV, Error> {
+    fn eval_x87_constant(
+        &self,
+        state: &SymbolicCpuState,
+        name: &str,
+        bits: u16,
+    ) -> Result<BV, Error> {
         let value = match name {
             "one" => 1.0,
             "zero" => 0.0,
@@ -211,7 +216,7 @@ impl Executor {
         Ok(state.backend().float_to_ieee_bv(&value))
     }
 
-    fn try_concrete_f64_from_fp_bv(&self, state: &State, value: &BV) -> Option<f64> {
+    fn try_concrete_f64_from_fp_bv(&self, state: &SymbolicCpuState, value: &BV) -> Option<f64> {
         let value = state.backend().float_from_ieee_bv(value).ok()?;
         let value = state.backend().float_cast(&value, 64).ok()?;
         let bits = state.backend().float_to_ieee_bv(&value).simplify();
@@ -277,8 +282,8 @@ impl Executor {
 
     pub(crate) fn apply_intrinsic_effect(
         &self,
-        state: &mut State,
-        instruction: Option<&crate::semantics::InstructionEncoding>,
+        state: &mut SymbolicCpuState,
+        instruction: Option<&crate::semantics::SemanticEncoding>,
         name: &str,
         args: &[SemanticExpression],
         outputs: &[SemanticLocation],
@@ -291,8 +296,8 @@ impl Executor {
 
     fn apply_x87_xam_effect(
         &self,
-        state: &mut State,
-        instruction: Option<&crate::semantics::InstructionEncoding>,
+        state: &mut SymbolicCpuState,
+        instruction: Option<&crate::semantics::SemanticEncoding>,
         args: &[SemanticExpression],
         outputs: &[SemanticLocation],
     ) -> Result<(), Error> {

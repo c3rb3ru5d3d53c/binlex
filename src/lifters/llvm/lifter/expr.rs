@@ -137,6 +137,57 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             SemanticExpression::Undefined { bits } | SemanticExpression::Poison { bits } => {
                 Ok(self.int_type(*bits).const_zero())
             }
+            SemanticExpression::Null { bits } => Ok(self.int_type(*bits).const_zero()),
+            SemanticExpression::Allocate { kind, bits } => {
+                let helper_name = format!("binlex_ref_alloc_{}_{}", sanitize_symbol(kind), bits);
+                let helper =
+                    self.declare_value_helper(&helper_name, self.int_type(*bits), &[], true);
+                self.record_semantic_lowering(
+                    "reference_helper",
+                    format!(
+                        "Allocate kind={} bits={} helper={}",
+                        kind, bits, helper_name
+                    ),
+                );
+                self.call_value(helper, &[], "refalloc")
+            }
+            SemanticExpression::ReadProperty {
+                reference,
+                name,
+                bits,
+            } => {
+                let helper_name = format!("binlex_ref_property_{}_{}", sanitize_symbol(name), bits);
+                let helper = self.declare_value_helper(
+                    &helper_name,
+                    self.int_type(*bits),
+                    &[self.context.i64_type().into()],
+                    true,
+                );
+                let reference = self.lower_expression(reference)?;
+                let reference = self.to_i64(reference);
+                self.call_value(helper, &[reference.into()], "refprop")
+            }
+            SemanticExpression::ReadElement {
+                reference,
+                index,
+                bits,
+            } => {
+                let helper_name = format!("binlex_ref_element_{}", bits);
+                let helper = self.declare_value_helper(
+                    &helper_name,
+                    self.int_type(*bits),
+                    &[
+                        self.context.i64_type().into(),
+                        self.context.i64_type().into(),
+                    ],
+                    true,
+                );
+                let reference = self.lower_expression(reference)?;
+                let reference = self.to_i64(reference);
+                let index = self.lower_expression(index)?;
+                let index = self.to_i64(index);
+                self.call_value(helper, &[reference.into(), index.into()], "refelem")
+            }
             SemanticExpression::Intrinsic { name, args, bits } => {
                 let helper_name = format!("binlex_expr_{}", sanitize_symbol(name));
                 let helper =

@@ -14,10 +14,7 @@ enum BinaryPopOrder {
     St0OpTarget,
 }
 
-pub(super) fn x87(
-    machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+pub(super) fn x87(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let mnemonic = view.mnemonic.as_str();
     let operands = view.operands();
     let effects = match mnemonic {

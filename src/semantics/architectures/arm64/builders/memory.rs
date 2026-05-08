@@ -20,18 +20,18 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::semantics::architectures::arm64::Arm64InstructionView;
+use crate::semantics::architectures::arm64::InstructionDetailArm64;
 use crate::semantics::architectures::arm64::helpers::{
     binary, complete, const_u64, location_bits, sign_extend_to_bits, truncate_to_bits,
     zero_extend_to_bits,
 };
 use crate::semantics::architectures::arm64::{Arm64OperandKind, Arm64OperandView};
 use crate::semantics::{
-    InstructionSemantics, SemanticAddressSpace, SemanticEffect, SemanticExpression,
-    SemanticLocation, SemanticOperationBinary, SemanticTerminator,
+    Semantic, SemanticAddressSpace, SemanticEffect, SemanticExpression, SemanticLocation,
+    SemanticOperationBinary, SemanticTerminator,
 };
 
-pub(crate) fn build(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+pub(crate) fn build(view: &InstructionDetailArm64) -> Option<Semantic> {
     match view.mnemonic.as_str() {
         // Single-transfer forms now use the normalized memory operand plus the
         // optional writeback operand so pre/post-indexed addressing can stay in
@@ -93,10 +93,10 @@ enum LoadKind {
 }
 
 fn build_load(
-    view: &Arm64InstructionView,
+    view: &InstructionDetailArm64,
     kind: LoadKind,
     load_bits: Option<u16>,
-) -> Option<InstructionSemantics> {
+) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let addr = effective_memory_address(view, view.operand(1)?, view.operand(2))?;
     let dst_bits = location_bits(&dst);
@@ -132,10 +132,7 @@ fn build_load(
     Some(complete(SemanticTerminator::FallThrough, effects))
 }
 
-fn build_store(
-    view: &Arm64InstructionView,
-    store_bits: Option<u16>,
-) -> Option<InstructionSemantics> {
+fn build_store(view: &InstructionDetailArm64, store_bits: Option<u16>) -> Option<Semantic> {
     let src = operand_expression(view.operand(0)?)?;
     let addr = effective_memory_address(view, view.operand(1)?, view.operand(2))?;
     let expression = match store_bits {
@@ -157,7 +154,7 @@ fn build_store(
     Some(complete(SemanticTerminator::FallThrough, effects))
 }
 
-pub(super) fn build_load_pair(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+pub(super) fn build_load_pair(view: &InstructionDetailArm64) -> Option<Semantic> {
     let first_dst = register_location(view.operand(0)?)?;
     let second_dst = register_location(view.operand(1)?)?;
     let base_addr = effective_memory_address(view, view.operand(2)?, view.operand(3))?;
@@ -195,7 +192,7 @@ pub(super) fn build_load_pair(view: &Arm64InstructionView) -> Option<Instruction
     Some(complete(SemanticTerminator::FallThrough, effects))
 }
 
-fn build_load_pair_signed_word(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_load_pair_signed_word(view: &InstructionDetailArm64) -> Option<Semantic> {
     let first_dst = register_location(view.operand(0)?)?;
     let second_dst = register_location(view.operand(1)?)?;
     let base_addr = effective_memory_address(view, view.operand(2)?, view.operand(3))?;
@@ -238,7 +235,7 @@ fn build_load_pair_signed_word(view: &Arm64InstructionView) -> Option<Instructio
     Some(complete(SemanticTerminator::FallThrough, effects))
 }
 
-pub(super) fn build_store_pair(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+pub(super) fn build_store_pair(view: &InstructionDetailArm64) -> Option<Semantic> {
     let first_src = operand_expression(view.operand(0)?)?;
     let second_src = operand_expression(view.operand(1)?)?;
     let base_addr = effective_memory_address(view, view.operand(2)?, view.operand(3))?;
@@ -273,10 +270,10 @@ pub(super) fn build_store_pair(view: &Arm64InstructionView) -> Option<Instructio
 }
 
 fn build_load_base_immediate(
-    view: &Arm64InstructionView,
+    view: &InstructionDetailArm64,
     kind: LoadKind,
     load_bits: Option<u16>,
-) -> Option<InstructionSemantics> {
+) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let addr = base_immediate_address(view.operand(1)?, view.operand(2))?;
     let dst_bits = location_bits(&dst);
@@ -311,9 +308,9 @@ fn build_load_base_immediate(
 }
 
 fn build_store_base_immediate(
-    view: &Arm64InstructionView,
+    view: &InstructionDetailArm64,
     store_bits: Option<u16>,
-) -> Option<InstructionSemantics> {
+) -> Option<Semantic> {
     let src = operand_expression(view.operand(0)?)?;
     let addr = base_immediate_address(view.operand(1)?, view.operand(2))?;
     let expression = match store_bits {
@@ -410,7 +407,7 @@ fn base_register_address(operand: &Arm64OperandView) -> Option<SemanticExpressio
 }
 
 pub(super) fn effective_memory_address(
-    view: &Arm64InstructionView,
+    view: &InstructionDetailArm64,
     mem_operand: &Arm64OperandView,
     writeback_operand: Option<&Arm64OperandView>,
 ) -> Option<SemanticExpression> {
@@ -445,7 +442,7 @@ fn base_immediate_address(
 }
 
 pub(super) fn writeback_effect(
-    view: &Arm64InstructionView,
+    view: &InstructionDetailArm64,
     mem_operand: &Arm64OperandView,
     writeback_operand: Option<&Arm64OperandView>,
 ) -> Option<SemanticEffect> {
@@ -483,7 +480,7 @@ pub(super) fn writeback_effect(
 }
 
 fn is_post_indexed(
-    view: &Arm64InstructionView,
+    view: &InstructionDetailArm64,
     writeback_operand: Option<&Arm64OperandView>,
 ) -> bool {
     writeback_operand.is_some()

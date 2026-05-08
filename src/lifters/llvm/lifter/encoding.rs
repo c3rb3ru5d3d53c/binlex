@@ -1,6 +1,6 @@
 use super::LoweringContext;
 use super::helpers::sanitize_symbol;
-use crate::semantics::InstructionEncoding;
+use crate::semantics::SemanticEncoding;
 use inkwell::module::Linkage;
 use inkwell::types::{BasicMetadataTypeEnum, IntType};
 use inkwell::values::{FunctionValue, PointerValue};
@@ -11,7 +11,7 @@ pub(super) const MAX_ENCODING_BYTES: usize = 16;
 impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     pub(super) fn emit_instruction_encoding(
         &self,
-        encoding: &InstructionEncoding,
+        encoding: &SemanticEncoding,
     ) -> Result<(), Error> {
         if encoding.bytes.len() > MAX_ENCODING_BYTES {
             return Err(Error::other(format!(
@@ -38,7 +38,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
 
     fn encoding_payload_global(
         &self,
-        encoding: &InstructionEncoding,
+        encoding: &SemanticEncoding,
     ) -> Result<PointerValue<'ctx>, Error> {
         let ptr_ty = self.context.ptr_type(inkwell::AddressSpace::default());
         let byte_array_ty = self.context.i8_type().array_type(MAX_ENCODING_BYTES as u32);
@@ -185,19 +185,19 @@ mod tests {
     use crate::lifters::llvm::Abi;
     use crate::lifters::llvm::Lifter;
     use crate::semantics::{
-        InstructionEncoding, InstructionSemantics, SemanticDiagnostic, SemanticDiagnosticKind,
-        SemanticStatus, SemanticTerminator,
+        Semantic, SemanticDiagnostic, SemanticDiagnosticKind, SemanticEncoding, SemanticStatus,
+        SemanticTerminator,
     };
     use std::collections::BTreeMap;
 
     #[test]
     fn lowers_instruction_encoding_payload_into_llvm_ir() {
         let mut lifter = Lifter::new(Architecture::ARM64, Configuration::default());
-        let semantics = InstructionSemantics {
+        let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Partial,
             abi: None,
-            encoding: Some(InstructionEncoding {
+            encoding: Some(SemanticEncoding {
                 architecture: "arm64".to_string(),
                 mnemonic: "ld4".to_string(),
                 disassembly: "ld4 {v0.16b, v1.16b, v2.16b, v3.16b}, [x3]".to_string(),
@@ -229,11 +229,11 @@ mod tests {
     #[test]
     fn omits_instruction_encoding_for_complete_semantics() {
         let mut lifter = Lifter::new(Architecture::AMD64, Configuration::default());
-        let semantics = InstructionSemantics {
+        let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
-            encoding: Some(InstructionEncoding {
+            encoding: Some(SemanticEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "xor".to_string(),
                 disassembly: "xor al, 0x4d".to_string(),
@@ -290,7 +290,7 @@ mod tests {
     #[test]
     fn arm64_sysv_abi_lifted_function_returns_i64() {
         let config = Configuration::default();
-        let mut semantics = InstructionSemantics {
+        let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -318,7 +318,7 @@ mod tests {
     #[test]
     fn amd64_windows64_abi_lifted_function_returns_i64() {
         let config = Configuration::default();
-        let mut semantics = InstructionSemantics {
+        let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,

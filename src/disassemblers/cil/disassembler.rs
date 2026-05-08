@@ -24,12 +24,12 @@ use crate::Architecture;
 use crate::Configuration;
 use crate::controlflow::Graph;
 use crate::controlflow::Instruction as CFGInstruction;
-use crate::controlflow::InstructionSemanticsInput;
+use crate::controlflow::InstructionDetail;
 use crate::disassemblers::cil::Instruction;
 use crate::disassemblers::cil::backends::native;
 use crate::genetics::Chromosome;
 use crate::io::Stderr;
-use crate::semantics::architectures::cil::CilInstructionView;
+use crate::semantics::architectures::cil::InstructionDetailCil;
 use rayon::ThreadPoolBuilder;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::{BTreeMap, BTreeSet};
@@ -151,7 +151,7 @@ impl<'disassembler> Disassembler<'disassembler> {
                 ));
             }
         };
-        let semantic_view = CilInstructionView::new(
+        let semantic_view = InstructionDetailCil::new(
             instruction.mnemonic.name(),
             instruction.address,
             instruction.operand_bytes(),
@@ -186,7 +186,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         cfginstruction.operands = instruction.normalized_operands(metadata_token_addresses);
         cfginstruction.to = instruction.branches();
         cfginstruction.functions = function_targets;
-        cfginstruction.set_semantics_input(InstructionSemanticsInput::Cil(semantic_view));
+        cfginstruction.set_instruction_detail(InstructionDetail::cil(semantic_view));
         if cfg.config.semantics.enabled {
             cfginstruction.semantics = cfginstruction.build_and_log_semantics();
         }

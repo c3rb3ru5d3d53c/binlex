@@ -1,13 +1,13 @@
 use crate::semantics::SemanticTerminator;
-use crate::symbolic::{Error, Executor, State};
+use crate::symbolic::{Error, SymbolicCpuState, SymbolicExecutor};
 
-impl Executor {
+impl SymbolicExecutor {
     pub(crate) fn apply_terminator(
         &self,
-        mut state: State,
-        instruction: Option<&crate::semantics::InstructionEncoding>,
+        mut state: SymbolicCpuState,
+        instruction: Option<&crate::semantics::SemanticEncoding>,
         terminator: &SemanticTerminator,
-    ) -> Result<Vec<State>, Error> {
+    ) -> Result<Vec<SymbolicCpuState>, Error> {
         match terminator {
             SemanticTerminator::FallThrough => Ok(vec![state]),
             SemanticTerminator::Jump { target } => {

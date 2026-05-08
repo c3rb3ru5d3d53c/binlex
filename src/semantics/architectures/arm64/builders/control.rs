@@ -20,17 +20,17 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::semantics::architectures::arm64::Arm64InstructionView;
+use crate::semantics::architectures::arm64::InstructionDetailArm64;
 use crate::semantics::architectures::arm64::helpers::{
     compare, complete, condition_from_suffix, const_u64,
 };
 use crate::semantics::architectures::arm64::{Arm64OperandKind, Arm64OperandView};
 use crate::semantics::{
-    InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation,
-    SemanticOperationCompare, SemanticStatus, SemanticTerminator, SemanticTrapKind,
+    Semantic, SemanticEffect, SemanticExpression, SemanticLocation, SemanticOperationCompare,
+    SemanticStatus, SemanticTerminator, SemanticTrapKind,
 };
 
-pub(crate) fn build(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+pub(crate) fn build(view: &InstructionDetailArm64) -> Option<Semantic> {
     let bits = 64;
     let next = const_u64(view.address + view.bytes.len() as u64, bits);
     match view.mnemonic.as_str() {
@@ -108,7 +108,7 @@ pub(crate) fn build(view: &Arm64InstructionView) -> Option<InstructionSemantics>
                 Vec::new(),
             ))
         }
-        "brk" => Some(InstructionSemantics {
+        "brk" => Some(Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -125,11 +125,11 @@ pub(crate) fn build(view: &Arm64InstructionView) -> Option<InstructionSemantics>
 }
 
 fn build_compare_branch(
-    view: &Arm64InstructionView,
+    view: &InstructionDetailArm64,
     compare_op: SemanticOperationCompare,
     lhs_operand: &Arm64OperandView,
     target_operand: &Arm64OperandView,
-) -> Option<InstructionSemantics> {
+) -> Option<Semantic> {
     let bits = operand_bits(lhs_operand);
     let condition = compare(
         compare_op,
@@ -149,9 +149,9 @@ fn build_compare_branch(
 }
 
 fn build_test_bit_branch(
-    view: &Arm64InstructionView,
+    view: &InstructionDetailArm64,
     compare_op: SemanticOperationCompare,
-) -> Option<InstructionSemantics> {
+) -> Option<Semantic> {
     let value = operand_expression(view.operands().first()?)?;
     let bit = view.operand(1)?.immediate_value()? as u16;
     let target = operand_expression(view.operand(2)?)?;

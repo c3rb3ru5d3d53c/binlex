@@ -150,9 +150,9 @@ class Instruction:
         backend = LifterBackend.DEFAULT if backend is None else backend
         return Lifter(self.architecture(), self._config, backend=backend).lift_instruction(self)
 
-    def semantics(self):
+    def semantic(self):
         """Return canonical semantics for this instruction, if present."""
-        return self._inner.semantics()
+        return self._inner.semantic()
 
     def set_semantics(self, semantics):
         """Replace the canonical semantics for this instruction inside the graph."""
@@ -263,9 +263,9 @@ class InstructionJsonDeserializer:
         """Return a single processor output attached to this instruction."""
         return self._inner.processor(name)
 
-    def semantics(self):
+    def semantic(self):
         """Return canonical semantics for this serialized instruction, if present."""
-        return self._inner.semantics()
+        return self._inner.semantic()
 
     def to_dict(self):
         """Convert the instruction to a Python dictionary."""

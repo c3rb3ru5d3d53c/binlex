@@ -21,18 +21,15 @@
 // SOFTWARE.
 
 use crate::Architecture;
-use crate::semantics::architectures::x86::X86InstructionView;
+use crate::semantics::architectures::x86::InstructionDetailX86;
 use crate::semantics::architectures::x86::helpers as common;
 use crate::semantics::architectures::x86::{X86OperandKind, X86OperandView};
 use crate::semantics::{
-    InstructionSemantics, SemanticDiagnosticKind, SemanticEffect, SemanticExpression,
-    SemanticLocation, SemanticTerminator,
+    Semantic, SemanticDiagnosticKind, SemanticEffect, SemanticExpression, SemanticLocation,
+    SemanticTerminator,
 };
 
-pub(crate) fn build(
-    machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     if is_return(view) {
         let pointer_bits = common::pointer_bits(machine);
         let stack_pointer = stack_pointer_location(machine);
@@ -316,11 +313,11 @@ pub(crate) fn build(
     None
 }
 
-fn is_jump(view: &X86InstructionView) -> bool {
+fn is_jump(view: &InstructionDetailX86) -> bool {
     matches!(view.mnemonic.as_str(), "jmp" | "ljmp")
 }
 
-fn is_conditional_jump(view: &X86InstructionView) -> bool {
+fn is_conditional_jump(view: &InstructionDetailX86) -> bool {
     matches!(
         view.mnemonic.as_str(),
         "jae"
@@ -345,15 +342,18 @@ fn is_conditional_jump(view: &X86InstructionView) -> bool {
     )
 }
 
-fn is_loop_family(view: &X86InstructionView) -> bool {
+fn is_loop_family(view: &InstructionDetailX86) -> bool {
     matches!(view.mnemonic.as_str(), "loop" | "loope" | "loopne")
 }
 
-fn is_count_zero_jump(view: &X86InstructionView) -> bool {
+fn is_count_zero_jump(view: &InstructionDetailX86) -> bool {
     matches!(view.mnemonic.as_str(), "jcxz" | "jecxz" | "jrcxz")
 }
 
-fn count_zero_jump_location(view: &X86InstructionView, machine: Architecture) -> SemanticLocation {
+fn count_zero_jump_location(
+    view: &InstructionDetailX86,
+    machine: Architecture,
+) -> SemanticLocation {
     match view.mnemonic.as_str() {
         "jcxz" => common::reg("cx".to_string(), 16),
         "jecxz" => common::reg("ecx".to_string(), 32),
@@ -370,11 +370,11 @@ fn loop_counter_location(machine: Architecture) -> SemanticLocation {
     }
 }
 
-fn is_call(view: &X86InstructionView) -> bool {
+fn is_call(view: &InstructionDetailX86) -> bool {
     matches!(view.mnemonic.as_str(), "call" | "lcall")
 }
 
-fn is_return(view: &X86InstructionView) -> bool {
+fn is_return(view: &InstructionDetailX86) -> bool {
     matches!(view.mnemonic.as_str(), "ret" | "retf")
 }
 
@@ -386,7 +386,7 @@ fn stack_pointer_location(machine: Architecture) -> SemanticLocation {
     }
 }
 
-fn return_stack_adjust(machine: Architecture, view: &X86InstructionView) -> u64 {
+fn return_stack_adjust(machine: Architecture, view: &InstructionDetailX86) -> u64 {
     let base = (common::pointer_bits(machine) / 8) as u64;
     let immediate = view
         .operands()
@@ -396,11 +396,11 @@ fn return_stack_adjust(machine: Architecture, view: &X86InstructionView) -> u64 
     base + immediate as i64 as u64
 }
 
-fn is_setcc(view: &X86InstructionView) -> bool {
+fn is_setcc(view: &InstructionDetailX86) -> bool {
     view.mnemonic.starts_with("set")
 }
 
-fn is_cmovcc(view: &X86InstructionView) -> bool {
+fn is_cmovcc(view: &InstructionDetailX86) -> bool {
     view.mnemonic.starts_with("cmov")
 }
 
@@ -476,11 +476,11 @@ fn condition_intrinsic(mnemonic: &str) -> SemanticExpression {
 }
 
 fn unsupported_with_kind_from_view(
-    view: &X86InstructionView,
+    view: &InstructionDetailX86,
     kind: SemanticDiagnosticKind,
     message: &str,
     terminator: SemanticTerminator,
-) -> InstructionSemantics {
+) -> Semantic {
     common::partial(
         terminator,
         vec![common::diagnostic(

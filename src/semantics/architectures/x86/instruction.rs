@@ -24,7 +24,7 @@ use crate::Architecture;
 use crate::semantics::architectures::x86::operand::X86OperandView;
 
 #[derive(Clone, Debug)]
-pub struct X86InstructionView {
+pub struct InstructionDetailX86 {
     pub machine: Architecture,
     pub address: u64,
     pub mnemonic: String,
@@ -34,7 +34,7 @@ pub struct X86InstructionView {
     pub operand_views: Vec<X86OperandView>,
 }
 
-impl X86InstructionView {
+impl InstructionDetailX86 {
     pub fn new(
         machine: Architecture,
         address: u64,

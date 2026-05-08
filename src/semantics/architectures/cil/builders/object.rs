@@ -20,10 +20,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::semantics::architectures::cil::CilInstructionView;
+use crate::semantics::architectures::cil::InstructionDetailCil;
 use crate::semantics::{
-    InstructionSemantics, SemanticAddressSpace, SemanticEffect, SemanticExpression,
-    SemanticTerminator,
+    Semantic, SemanticAddressSpace, SemanticEffect, SemanticExpression, SemanticTerminator,
 };
 
 use super::super::helpers::common::{
@@ -31,7 +30,7 @@ use super::super::helpers::common::{
     push_with_prefix,
 };
 
-pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSemantics> {
+pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<Semantic> {
     match instruction.mnemonic_text() {
         "newarr" => {
             let token = operand_value(instruction) as u32;

@@ -15,7 +15,7 @@ The important idea is:
 
 ```text
 bytes / decoder / your own source
-  -> InstructionSemantics
+  -> Semantic
   -> lifters or your own consumers
 ```
 
@@ -31,7 +31,7 @@ Semantics are not tied to one architecture backend. They describe:
 
 ## Model
 
-The top-level type is `InstructionSemantics`.
+The top-level type is `Semantic`.
 
 It contains:
 
@@ -104,7 +104,7 @@ Import the semantics types from `binlex::semantics`:
 
 ```rust
 use binlex::semantics::{
-    InstructionSemantics,
+    Semantic,
     SemanticEffect,
     SemanticExpression,
     SemanticLocation,
@@ -118,7 +118,7 @@ use binlex::semantics::{
 
 ```rust
 use binlex::semantics::{
-    InstructionSemantics,
+    Semantic,
     SemanticEffect,
     SemanticExpression,
     SemanticLocation,
@@ -127,7 +127,7 @@ use binlex::semantics::{
     SemanticTerminator,
 };
 
-let semantics = InstructionSemantics {
+let semantics = Semantic {
     version: 1,
     status: SemanticStatus::Complete,
     temporaries: Vec::new(),
@@ -162,7 +162,7 @@ let semantics = InstructionSemantics {
 
 ```rust
 use binlex::semantics::{
-    InstructionSemantics,
+    Semantic,
     SemanticAddressSpace,
     SemanticEffect,
     SemanticExpression,
@@ -171,7 +171,7 @@ use binlex::semantics::{
     SemanticTerminator,
 };
 
-let semantics = InstructionSemantics {
+let semantics = Semantic {
     version: 1,
     status: SemanticStatus::Complete,
     temporaries: Vec::new(),
@@ -198,14 +198,14 @@ let semantics = InstructionSemantics {
 
 ```rust
 use binlex::semantics::{
-    InstructionSemantics,
+    Semantic,
     SemanticDiagnostic,
     SemanticDiagnosticKind,
     SemanticStatus,
     SemanticTerminator,
 };
 
-let semantics = InstructionSemantics {
+let semantics = Semantic {
     version: 1,
     status: SemanticStatus::Partial,
     temporaries: Vec::new(),
@@ -238,7 +238,7 @@ The Python bindings expose the same model through `binlex.semantics`.
 
 ```python
 from binlex.semantics import (
-    InstructionSemantics,
+    Semantic,
     SemanticDiagnostic,
     SemanticDiagnosticKind,
     SemanticEffect,
@@ -254,7 +254,7 @@ from binlex.semantics import (
 
 ```python
 from binlex.semantics import (
-    InstructionSemantics,
+    Semantic,
     SemanticEffect,
     SemanticExpression,
     SemanticLocation,
@@ -272,7 +272,7 @@ expr = SemanticExpression.binary(
     32,
 )
 
-semantics = InstructionSemantics(
+semantics = Semantic(
     1,
     SemanticStatus.Complete,
     effects=[
@@ -286,14 +286,14 @@ semantics = InstructionSemantics(
 
 ```python
 from binlex.semantics import (
-    InstructionSemantics,
+    Semantic,
     SemanticDiagnostic,
     SemanticDiagnosticKind,
     SemanticStatus,
     SemanticTerminator,
 )
 
-semantics = InstructionSemantics(
+semantics = Semantic(
     1,
     SemanticStatus.Partial,
     diagnostics=[
@@ -312,7 +312,7 @@ semantics = InstructionSemantics(
 print(semantics.json())
 
 data = semantics.to_dict()
-round_tripped = InstructionSemantics.from_dict(data)
+round_tripped = Semantic.from_dict(data)
 ```
 
 The Python bindings also expose constructors for the lower-level pieces:
@@ -419,7 +419,7 @@ disassembler.disassemble(pe.entrypoint_virtual_addresses(), graph)
 for function in graph.functions():
     for block in function.blocks():
         for instruction in block.instructions():
-            semantics = instruction.semantics()
+            semantics = instruction.semantic()
             if semantics is None:
                 continue
             print(
@@ -439,7 +439,7 @@ enabled = false
 
 or by using `--minimal` in the CLI.
 
-If you want semantics to remain available through `instruction.semantics()` but omit them from
+If you want semantics to remain available through `instruction.semantic()` but omit them from
 serialized instruction JSON:
 
 ```toml
@@ -451,7 +451,7 @@ enabled = false
 
 If you are building on top of Binlex semantics:
 
-- treat `InstructionSemantics` as your canonical source IR
+- treat `Semantic` as your canonical source IR
 - use `Partial` plus diagnostics when you cannot model everything
 - keep architecture-specific details in intrinsics or diagnostics instead of forcing them into
   inaccurate generic forms

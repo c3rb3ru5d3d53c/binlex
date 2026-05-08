@@ -27,7 +27,7 @@ use crate::controlflow::Function;
 use crate::controlflow::Instruction;
 use crate::controlflow::InstructionRecord;
 use crate::processor::{ProcessorOutputs, ProcessorTarget};
-use crate::semantics::InstructionSemantics;
+use crate::semantics::Semantic;
 use crossbeam::queue::SegQueue;
 use crossbeam_skiplist::SkipMap;
 use crossbeam_skiplist::SkipSet;
@@ -688,8 +688,8 @@ impl Graph {
         if existing.operands.is_empty() {
             existing.operands = incoming.operands;
         }
-        if existing.semantics_input.is_none() {
-            existing.semantics_input = incoming.semantics_input;
+        if existing.instruction_detail.is_none() {
+            existing.instruction_detail = incoming.instruction_detail;
         }
         existing.semantics =
             Graph::merge_instruction_semantics(existing.semantics, incoming.semantics);
@@ -697,9 +697,9 @@ impl Graph {
     }
 
     fn merge_instruction_semantics(
-        existing: Option<InstructionSemantics>,
-        incoming: Option<InstructionSemantics>,
-    ) -> Option<InstructionSemantics> {
+        existing: Option<Semantic>,
+        incoming: Option<Semantic>,
+    ) -> Option<Semantic> {
         match (existing, incoming) {
             (None, None) => None,
             (Some(semantics), None) => Some(semantics),

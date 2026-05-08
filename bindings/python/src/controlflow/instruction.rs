@@ -26,7 +26,7 @@ use crate::controlflow::Function;
 use crate::controlflow::Graph;
 use crate::controlflow::Reference;
 use crate::genetics::Chromosome;
-use crate::semantics::InstructionSemantics as PyInstructionSemantics;
+use crate::semantics::Semantic as PySemantic;
 use crate::Architecture;
 use crate::Configuration;
 use binlex::controlflow::Instruction as RawInnerInstruction;
@@ -494,14 +494,14 @@ impl InstructionJsonDeserializer {
         Ok(py_dict.into())
     }
 
-    pub fn semantics(&self, py: Python<'_>) -> PyResult<Option<Py<PyInstructionSemantics>>> {
+    pub fn semantic(&self, py: Python<'_>) -> PyResult<Option<Py<PySemantic>>> {
         let binding = self.inner.lock().unwrap();
         let Some(semantics) = binding.semantics.as_ref() else {
             return Ok(None);
         };
         Ok(Some(Py::new(
             py,
-            PyInstructionSemantics::from_inner(semantics.clone().into_semantics()),
+            PySemantic::from_inner(semantics.clone().into_semantics()),
         )?))
     }
 
@@ -736,25 +736,21 @@ impl Instruction {
 
     #[pyo3(text_signature = "($self)")]
     /// Return the canonical semantics attached to this instruction, if present.
-    pub fn semantics(&self, py: Python) -> PyResult<Option<Py<PyInstructionSemantics>>> {
+    pub fn semantic(&self, py: Python) -> PyResult<Option<Py<PySemantic>>> {
         self.with_inner_instruction(py, |instruction| {
             let Some(semantics) = instruction.semantics.as_ref() else {
                 return Ok(None);
             };
             Ok(Some(Py::new(
                 py,
-                PyInstructionSemantics::from_inner(semantics.clone()),
+                PySemantic::from_inner(semantics.clone()),
             )?))
         })
     }
 
     #[pyo3(text_signature = "($self, semantics)")]
     /// Replace the canonical semantics attached to this instruction and persist it in the CFG.
-    pub fn set_semantics(
-        &self,
-        py: Python<'_>,
-        semantics: Py<PyInstructionSemantics>,
-    ) -> PyResult<()> {
+    pub fn set_semantics(&self, py: Python<'_>, semantics: Py<PySemantic>) -> PyResult<()> {
         let replacement = semantics.borrow(py).inner.lock().unwrap().clone();
         let mut updated = self.with_inner_instruction(py, |instruction| Ok(instruction.clone()))?;
         updated.set_semantics(replacement);

@@ -4,6 +4,8 @@ use std::fmt;
 pub enum Error {
     InvalidBits(u16),
     UnsupportedArchitecture(String),
+    UnsupportedCpu(String),
+    InvalidCpu(String),
     UnsupportedExpression(&'static str),
     UnsupportedEffect(&'static str),
     UnsupportedTerminator(&'static str),
@@ -31,6 +33,8 @@ impl fmt::Display for Error {
             Self::UnsupportedArchitecture(name) => {
                 write!(f, "unsupported symbolic architecture: {name}")
             }
+            Self::UnsupportedCpu(name) => write!(f, "unsupported semantic CPU: {name}"),
+            Self::InvalidCpu(message) => write!(f, "invalid semantic CPU: {message}"),
             Self::UnsupportedExpression(kind) => {
                 write!(f, "unsupported symbolic expression: {kind}")
             }

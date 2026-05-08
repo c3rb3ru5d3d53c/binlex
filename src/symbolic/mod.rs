@@ -10,6 +10,6 @@ mod state;
 mod terminators;
 
 pub use error::Error;
-pub use executor::Executor;
+pub use executor::SymbolicExecutor;
 pub use slice::{Slice, SliceInstruction, SliceNode};
-pub use state::State;
+pub use state::SymbolicCpuState;

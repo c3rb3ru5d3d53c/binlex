@@ -105,13 +105,19 @@ pub fn expression_bits(expression: &SemanticExpression) -> u16 {
         | SemanticExpression::Concat { bits, .. }
         | SemanticExpression::Undefined { bits }
         | SemanticExpression::Poison { bits }
-        | SemanticExpression::Intrinsic { bits, .. } => *bits,
+        | SemanticExpression::Intrinsic { bits, .. }
+        | SemanticExpression::Null { bits }
+        | SemanticExpression::Allocate { bits, .. }
+        | SemanticExpression::ReadProperty { bits, .. }
+        | SemanticExpression::ReadElement { bits, .. } => *bits,
         SemanticExpression::Read(location) => match location.as_ref() {
             crate::semantics::SemanticLocation::Register { bits, .. }
             | crate::semantics::SemanticLocation::Flag { bits, .. }
             | crate::semantics::SemanticLocation::ProgramCounter { bits }
             | crate::semantics::SemanticLocation::Temporary { bits, .. }
-            | crate::semantics::SemanticLocation::Memory { bits, .. } => *bits,
+            | crate::semantics::SemanticLocation::Memory { bits, .. }
+            | crate::semantics::SemanticLocation::IndexedMemory { bits, .. }
+            | crate::semantics::SemanticLocation::StackMemory { bits, .. } => *bits,
         },
     }
 }

@@ -20,19 +20,18 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::semantics::architectures::cil::CilInstructionView;
+use crate::semantics::architectures::cil::InstructionDetailCil;
 use crate::semantics::{
-    InstructionSemantics, SemanticAddressSpace, SemanticDiagnostic, SemanticDiagnosticKind,
-    SemanticEffect, SemanticExpression, SemanticLocation, SemanticOperationBinary,
-    SemanticOperationCast, SemanticOperationCompare, SemanticOperationUnary, SemanticStatus,
-    SemanticTerminator,
+    Semantic, SemanticAddressSpace, SemanticDiagnostic, SemanticDiagnosticKind, SemanticEffect,
+    SemanticExpression, SemanticLocation, SemanticOperationBinary, SemanticOperationCast,
+    SemanticOperationCompare, SemanticOperationUnary, SemanticStatus, SemanticTerminator,
 };
 
 pub(crate) fn partial_intrinsic_fallthrough(
-    instruction: &CilInstructionView,
+    instruction: &InstructionDetailCil,
     message: &str,
-) -> InstructionSemantics {
-    InstructionSemantics {
+) -> Semantic {
+    Semantic {
         version: 1,
         status: SemanticStatus::Partial,
         abi: None,
@@ -54,9 +53,9 @@ pub(crate) fn partial_intrinsic_fallthrough(
 }
 
 pub(crate) fn push_runtime_unary_intrinsic(
-    instruction: &CilInstructionView,
+    instruction: &InstructionDetailCil,
     name: &str,
-) -> InstructionSemantics {
+) -> Semantic {
     let (effects, value) = pop_stack();
     let mut args = vec![value];
     args.extend(operand_args(instruction));
@@ -71,9 +70,9 @@ pub(crate) fn push_runtime_unary_intrinsic(
 }
 
 pub(crate) fn push_runtime_binary_intrinsic(
-    instruction: &CilInstructionView,
+    instruction: &InstructionDetailCil,
     name: &str,
-) -> InstructionSemantics {
+) -> Semantic {
     let (mut effects, right) = pop_stack();
     let (mut more_effects, left) = pop_stack();
     effects.append(&mut more_effects);
@@ -90,9 +89,9 @@ pub(crate) fn push_runtime_binary_intrinsic(
 }
 
 pub(crate) fn effect_runtime_ternary_intrinsic(
-    instruction: &CilInstructionView,
+    instruction: &InstructionDetailCil,
     name: &str,
-) -> InstructionSemantics {
+) -> Semantic {
     let (mut effects, third) = pop_stack();
     let (mut more_effects, second) = pop_stack();
     let (mut first_effects, first) = pop_stack();
@@ -108,19 +107,19 @@ pub(crate) fn effect_runtime_ternary_intrinsic(
     complete_with_effects(SemanticTerminator::FallThrough, effects)
 }
 
-pub(crate) fn push_expression(expression: SemanticExpression) -> InstructionSemantics {
+pub(crate) fn push_expression(expression: SemanticExpression) -> Semantic {
     complete_with_effects(SemanticTerminator::FallThrough, push_effects(expression))
 }
 
 pub(crate) fn push_with_prefix(
     mut effects: Vec<SemanticEffect>,
     expression: SemanticExpression,
-) -> InstructionSemantics {
+) -> Semantic {
     effects.extend(push_effects(expression));
     complete_with_effects(SemanticTerminator::FallThrough, effects)
 }
 
-pub(crate) fn pop_to_location(dst: SemanticLocation) -> InstructionSemantics {
+pub(crate) fn pop_to_location(dst: SemanticLocation) -> Semantic {
     let (mut effects, value) = pop_stack();
     effects.push(SemanticEffect::Set {
         dst,
@@ -129,7 +128,7 @@ pub(crate) fn pop_to_location(dst: SemanticLocation) -> InstructionSemantics {
     complete_with_effects(SemanticTerminator::FallThrough, effects)
 }
 
-pub(crate) fn operand_args(instruction: &CilInstructionView) -> Vec<SemanticExpression> {
+pub(crate) fn operand_args(instruction: &InstructionDetailCil) -> Vec<SemanticExpression> {
     if instruction.operand_size() == 0 {
         return Vec::new();
     }
@@ -139,7 +138,7 @@ pub(crate) fn operand_args(instruction: &CilInstructionView) -> Vec<SemanticExpr
     }]
 }
 
-pub(crate) fn operand_value(instruction: &CilInstructionView) -> u64 {
+pub(crate) fn operand_value(instruction: &InstructionDetailCil) -> u64 {
     let mut bytes = [0u8; 8];
     let operand = instruction.operand_bytes();
     let len = operand.len().min(bytes.len());
@@ -157,8 +156,8 @@ pub(crate) fn diagnostic(kind: SemanticDiagnosticKind, message: &str) -> Semanti
 pub(crate) fn complete_with_effects(
     terminator: SemanticTerminator,
     effects: Vec<SemanticEffect>,
-) -> InstructionSemantics {
-    InstructionSemantics {
+) -> Semantic {
+    Semantic {
         version: 1,
         status: SemanticStatus::Complete,
         abi: None,

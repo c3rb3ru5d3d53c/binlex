@@ -20,9 +20,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::semantics::architectures::cil::CilInstructionView;
+use crate::semantics::architectures::cil::InstructionDetailCil;
 use crate::semantics::{
-    InstructionSemantics, SemanticEffect, SemanticExpression, SemanticStatus, SemanticTerminator,
+    Semantic, SemanticEffect, SemanticExpression, SemanticStatus, SemanticTerminator,
     SemanticTrapKind,
 };
 
@@ -31,7 +31,7 @@ use super::super::helpers::common::{
     push_runtime_unary_intrinsic, push_with_prefix,
 };
 
-pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSemantics> {
+pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<Semantic> {
     match instruction.mnemonic_text() {
         "arglist" => Some(push_expression(SemanticExpression::Intrinsic {
             name: "cil.arglist".to_string(),
@@ -76,7 +76,7 @@ pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSeman
             SemanticTerminator::FallThrough,
             vec![SemanticEffect::Nop],
         )),
-        "endfinally" => Some(InstructionSemantics {
+        "endfinally" => Some(Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -99,7 +99,7 @@ pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSeman
             });
             Some(complete_with_effects(SemanticTerminator::Trap, effects))
         }
-        "rethrow" => Some(InstructionSemantics {
+        "rethrow" => Some(Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,

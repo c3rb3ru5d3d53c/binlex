@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::semantics::architectures::arm64::Arm64InstructionView;
+use crate::semantics::architectures::arm64::InstructionDetailArm64;
 use crate::semantics::architectures::arm64::helpers::{
     arithmetic_flag_effects, arithmetic_flag_values, binary, bitmask, bool_const, compare,
     complete, condition_from_cc, const_u64, flag, flag_expr, location_bits,
@@ -28,12 +28,11 @@ use crate::semantics::architectures::arm64::helpers::{
 };
 use crate::semantics::architectures::arm64::{Arm64OperandKind, Arm64OperandView};
 use crate::semantics::{
-    InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation,
-    SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
-    SemanticOperationUnary, SemanticTerminator,
+    Semantic, SemanticEffect, SemanticExpression, SemanticLocation, SemanticOperationBinary,
+    SemanticOperationCast, SemanticOperationCompare, SemanticOperationUnary, SemanticTerminator,
 };
 
-pub(crate) fn build(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+pub(crate) fn build(view: &InstructionDetailArm64) -> Option<Semantic> {
     match view.mnemonic.as_str() {
         "mov" | "adr" | "adrp" => build_move(view),
         "movk" => build_movk(view),
@@ -95,7 +94,7 @@ pub(crate) fn build(view: &Arm64InstructionView) -> Option<InstructionSemantics>
     }
 }
 
-fn build_move(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_move(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     Some(complete(
@@ -107,7 +106,7 @@ fn build_move(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_movk(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_movk(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let bits = location_bits(&dst);
     let current = SemanticExpression::Read(Box::new(dst.clone()));
@@ -138,7 +137,7 @@ fn build_movk(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_movz(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_movz(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let bits = location_bits(&dst);
     let (immediate, shift) = parse_move_wide_immediate(view, bits)?;
@@ -154,7 +153,7 @@ fn build_movz(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_movn(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_movn(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let bits = location_bits(&dst);
     let (immediate, shift) = parse_move_wide_immediate(view, bits)?;
@@ -177,10 +176,10 @@ fn build_movn(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
 }
 
 fn build_binary_assign(
-    view: &Arm64InstructionView,
+    view: &InstructionDetailArm64,
     op: SemanticOperationBinary,
     update_flags: bool,
-) -> Option<InstructionSemantics> {
+) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = operand_expression(view.operand(1)?)?;
     let right = operand_expression(view.operand(2)?)?;
@@ -199,7 +198,7 @@ fn build_binary_assign(
     Some(complete(SemanticTerminator::FallThrough, effects))
 }
 
-fn build_adc(view: &Arm64InstructionView, update_flags: bool) -> Option<InstructionSemantics> {
+fn build_adc(view: &InstructionDetailArm64, update_flags: bool) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = operand_expression(view.operand(1)?)?;
     let right = operand_expression(view.operand(2)?)?;
@@ -230,7 +229,7 @@ fn build_adc(view: &Arm64InstructionView, update_flags: bool) -> Option<Instruct
     Some(complete(SemanticTerminator::FallThrough, effects))
 }
 
-fn build_sbc(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_sbc(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = operand_expression(view.operand(1)?)?;
     let right = operand_expression(view.operand(2)?)?;
@@ -255,9 +254,9 @@ fn build_sbc(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
 }
 
 fn build_shift_assign(
-    view: &Arm64InstructionView,
+    view: &InstructionDetailArm64,
     op: SemanticOperationBinary,
-) -> Option<InstructionSemantics> {
+) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let amount = operand_expression(view.operand(2)?)?;
@@ -272,7 +271,7 @@ fn build_shift_assign(
     ))
 }
 
-fn build_compare_flags(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_compare_flags(view: &InstructionDetailArm64) -> Option<Semantic> {
     let left = operand_expression(view.operand(0)?)?;
     let right = operand_expression(view.operand(1)?)?;
     let result = binary(
@@ -288,7 +287,7 @@ fn build_compare_flags(view: &Arm64InstructionView) -> Option<InstructionSemanti
     ))
 }
 
-fn build_compare_add_flags(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_compare_add_flags(view: &InstructionDetailArm64) -> Option<Semantic> {
     let left = operand_expression(view.operand(0)?)?;
     let right = operand_expression(view.operand(1)?)?;
     let result = binary(
@@ -304,7 +303,7 @@ fn build_compare_add_flags(view: &Arm64InstructionView) -> Option<InstructionSem
     ))
 }
 
-fn build_test_flags(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_test_flags(view: &InstructionDetailArm64) -> Option<Semantic> {
     let left = operand_expression(view.operand(0)?)?;
     let right = operand_expression(view.operand(1)?)?;
     let bits = left.bits();
@@ -324,7 +323,7 @@ fn build_test_flags(view: &Arm64InstructionView) -> Option<InstructionSemantics>
     ))
 }
 
-fn build_abs(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_abs(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -350,7 +349,7 @@ fn build_abs(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_clz(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_clz(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -368,7 +367,7 @@ fn build_clz(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_eon(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_eon(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = operand_expression(view.operand(1)?)?;
     let right = operand_expression(view.operand(2)?)?;
@@ -393,7 +392,7 @@ fn build_eon(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_orn(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_orn(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = operand_expression(view.operand(1)?)?;
     let right = operand_expression(view.operand(2)?)?;
@@ -413,7 +412,7 @@ fn build_orn(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_bic(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_bic(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = operand_expression(view.operand(1)?)?;
     let right = operand_expression(view.operand(2)?)?;
@@ -433,7 +432,7 @@ fn build_bic(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_bics(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_bics(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = operand_expression(view.operand(1)?)?;
     let right = operand_expression(view.operand(2)?)?;
@@ -463,7 +462,7 @@ fn build_bics(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_mvn(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_mvn(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -481,7 +480,7 @@ fn build_mvn(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_neg(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_neg(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -495,7 +494,7 @@ fn build_neg(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_rbit(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_rbit(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -513,7 +512,7 @@ fn build_rbit(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_rev(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_rev(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -531,7 +530,7 @@ fn build_rev(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_rev16(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_rev16(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -543,7 +542,7 @@ fn build_rev16(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_rev32(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_rev32(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -555,7 +554,7 @@ fn build_rev32(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_conditional_select(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_conditional_select(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let when_true = operand_expression(view.operand(1)?)?;
     let when_false = operand_expression(view.operand(2)?)?;
@@ -576,7 +575,7 @@ fn build_conditional_select(view: &Arm64InstructionView) -> Option<InstructionSe
     ))
 }
 
-fn build_cset(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_cset(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let bits = location_bits(&dst);
     let condition = condition_operand(view, 1)?;
@@ -595,7 +594,7 @@ fn build_cset(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_csetm(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_csetm(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let bits = location_bits(&dst);
     let condition = condition_operand(view, 1)?;
@@ -614,7 +613,7 @@ fn build_csetm(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_conditional_select_increment(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_conditional_select_increment(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let when_true = operand_expression(view.operand(1)?)?;
     let base_false = operand_expression(view.operand(2)?)?;
@@ -641,7 +640,7 @@ fn build_conditional_select_increment(view: &Arm64InstructionView) -> Option<Ins
     ))
 }
 
-fn build_conditional_increment(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_conditional_increment(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let base = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -667,7 +666,7 @@ fn build_conditional_increment(view: &Arm64InstructionView) -> Option<Instructio
     ))
 }
 
-fn build_conditional_invert(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_conditional_invert(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let base = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -692,7 +691,7 @@ fn build_conditional_invert(view: &Arm64InstructionView) -> Option<InstructionSe
     ))
 }
 
-fn build_conditional_select_invert(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_conditional_select_invert(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let when_true = operand_expression(view.operand(1)?)?;
     let false_src = operand_expression(view.operand(2)?)?;
@@ -718,7 +717,7 @@ fn build_conditional_select_invert(view: &Arm64InstructionView) -> Option<Instru
     ))
 }
 
-fn build_conditional_negate(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_conditional_negate(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -744,7 +743,7 @@ fn build_conditional_negate(view: &Arm64InstructionView) -> Option<InstructionSe
     ))
 }
 
-fn build_conditional_select_negate(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_conditional_select_negate(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let when_true = operand_expression(view.operand(1)?)?;
     let false_src = operand_expression(view.operand(2)?)?;
@@ -772,9 +771,9 @@ fn build_conditional_select_negate(view: &Arm64InstructionView) -> Option<Instru
 }
 
 fn build_conditional_compare(
-    view: &Arm64InstructionView,
+    view: &InstructionDetailArm64,
     op: SemanticOperationBinary,
-) -> Option<InstructionSemantics> {
+) -> Option<Semantic> {
     let left = operand_expression(view.operand(0)?)?;
     let right = operand_expression(view.operand(1)?)?;
     let fallback_nzcv = view.operand(2)?.immediate_value()? as u64;
@@ -808,7 +807,7 @@ fn build_conditional_compare(
     Some(complete(SemanticTerminator::FallThrough, effects))
 }
 
-fn build_unsigned_bitfield_extract(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_unsigned_bitfield_extract(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let lsb = view.operand(2)?.immediate_value()? as u16;
@@ -832,7 +831,7 @@ fn build_unsigned_bitfield_extract(view: &Arm64InstructionView) -> Option<Instru
     ))
 }
 
-fn build_signed_bitfield_extract(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_signed_bitfield_extract(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let lsb = view.operand(2)?.immediate_value()? as u16;
@@ -856,7 +855,7 @@ fn build_signed_bitfield_extract(view: &Arm64InstructionView) -> Option<Instruct
     ))
 }
 
-fn build_unsigned_bitfield_insert(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_unsigned_bitfield_insert(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let lsb = view.operand(2)?.immediate_value()? as u16;
@@ -887,7 +886,7 @@ fn build_unsigned_bitfield_insert(view: &Arm64InstructionView) -> Option<Instruc
     ))
 }
 
-fn build_signed_bitfield_insert(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_signed_bitfield_insert(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let lsb = view.operand(2)?.immediate_value()? as u16;
@@ -918,7 +917,7 @@ fn build_signed_bitfield_insert(view: &Arm64InstructionView) -> Option<Instructi
     ))
 }
 
-fn build_bitfield_insert(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_bitfield_insert(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let current = SemanticExpression::Read(Box::new(dst.clone()));
     let src = operand_expression(view.operand(1)?)?;
@@ -960,7 +959,7 @@ fn build_bitfield_insert(view: &Arm64InstructionView) -> Option<InstructionSeman
     ))
 }
 
-fn build_bitfield_insert_low(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_bitfield_insert_low(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let current = SemanticExpression::Read(Box::new(dst.clone()));
     let src = operand_expression(view.operand(1)?)?;
@@ -1004,7 +1003,7 @@ fn build_bitfield_insert_low(view: &Arm64InstructionView) -> Option<InstructionS
     ))
 }
 
-fn build_sign_extend_word(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_sign_extend_word(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -1022,7 +1021,7 @@ fn build_sign_extend_word(view: &Arm64InstructionView) -> Option<InstructionSema
     ))
 }
 
-fn build_sign_extend_byte(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_sign_extend_byte(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -1040,7 +1039,7 @@ fn build_sign_extend_byte(view: &Arm64InstructionView) -> Option<InstructionSema
     ))
 }
 
-fn build_sign_extend_halfword(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_sign_extend_halfword(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -1058,7 +1057,7 @@ fn build_sign_extend_halfword(view: &Arm64InstructionView) -> Option<Instruction
     ))
 }
 
-fn build_zero_extend_byte(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_zero_extend_byte(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -1072,7 +1071,7 @@ fn build_zero_extend_byte(view: &Arm64InstructionView) -> Option<InstructionSema
     ))
 }
 
-fn build_zero_extend_halfword(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_zero_extend_halfword(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -1120,7 +1119,7 @@ fn operand_bits(operand: &Arm64OperandView) -> u16 {
     }
 }
 
-fn parse_move_wide_immediate(view: &Arm64InstructionView, bits: u16) -> Option<(u64, u16)> {
+fn parse_move_wide_immediate(view: &InstructionDetailArm64, bits: u16) -> Option<(u64, u16)> {
     let mut immediate = None;
     let mut shift = 0u16;
 
@@ -1142,7 +1141,7 @@ fn parse_move_wide_immediate(view: &Arm64InstructionView, bits: u16) -> Option<(
     Some((immediate? & bitmask(bits), shift))
 }
 
-fn condition_operand(view: &Arm64InstructionView, index: usize) -> Option<SemanticExpression> {
+fn condition_operand(view: &InstructionDetailArm64, index: usize) -> Option<SemanticExpression> {
     let cc = view
         .operand(index)
         .and_then(Arm64OperandView::immediate_value)

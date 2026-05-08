@@ -20,18 +20,16 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::semantics::architectures::arm64::Arm64InstructionView;
+use crate::semantics::architectures::arm64::InstructionDetailArm64;
 use crate::semantics::architectures::arm64::builders::memory::{
     operand_expression, register_location,
 };
 use crate::semantics::architectures::arm64::helpers::{
     binary, complete, const_u64, location_bits, sign_extend_to_bits, zero_extend_to_bits,
 };
-use crate::semantics::{
-    InstructionSemantics, SemanticEffect, SemanticOperationBinary, SemanticTerminator,
-};
+use crate::semantics::{Semantic, SemanticEffect, SemanticOperationBinary, SemanticTerminator};
 
-pub(crate) fn build(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+pub(crate) fn build(view: &InstructionDetailArm64) -> Option<Semantic> {
     match view.mnemonic.as_str() {
         "madd" => build_madd(view),
         "smaddl" => build_smaddl(view),
@@ -52,7 +50,7 @@ pub(crate) fn build(view: &Arm64InstructionView) -> Option<InstructionSemantics>
     }
 }
 
-fn build_madd(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_madd(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = operand_expression(view.operand(1)?)?;
     let right = operand_expression(view.operand(2)?)?;
@@ -68,7 +66,7 @@ fn build_madd(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_smaddl(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_smaddl(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = sign_extend_to_bits(operand_expression(view.operand(1)?)?, 64);
     let right = sign_extend_to_bits(operand_expression(view.operand(2)?)?, 64);
@@ -84,7 +82,7 @@ fn build_smaddl(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_umaddl(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_umaddl(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = zero_extend_to_bits(operand_expression(view.operand(1)?)?, 64);
     let right = zero_extend_to_bits(operand_expression(view.operand(2)?)?, 64);
@@ -100,7 +98,7 @@ fn build_umaddl(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_mul(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_mul(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = operand_expression(view.operand(1)?)?;
     let right = operand_expression(view.operand(2)?)?;
@@ -114,7 +112,7 @@ fn build_mul(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_mneg(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_mneg(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = operand_expression(view.operand(1)?)?;
     let right = operand_expression(view.operand(2)?)?;
@@ -134,7 +132,7 @@ fn build_mneg(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_umulh(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_umulh(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = operand_expression(view.operand(1)?)?;
     let right = operand_expression(view.operand(2)?)?;
@@ -148,7 +146,7 @@ fn build_umulh(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_smulh(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_smulh(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = operand_expression(view.operand(1)?)?;
     let right = operand_expression(view.operand(2)?)?;
@@ -162,7 +160,7 @@ fn build_smulh(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_sdiv(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_sdiv(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = operand_expression(view.operand(1)?)?;
     let right = operand_expression(view.operand(2)?)?;
@@ -176,7 +174,7 @@ fn build_sdiv(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_udiv(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_udiv(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = operand_expression(view.operand(1)?)?;
     let right = operand_expression(view.operand(2)?)?;
@@ -190,7 +188,7 @@ fn build_udiv(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_msub(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_msub(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = operand_expression(view.operand(1)?)?;
     let right = operand_expression(view.operand(2)?)?;
@@ -206,7 +204,7 @@ fn build_msub(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_smsubl(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_smsubl(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = sign_extend_to_bits(operand_expression(view.operand(1)?)?, 64);
     let right = sign_extend_to_bits(operand_expression(view.operand(2)?)?, 64);
@@ -222,7 +220,7 @@ fn build_smsubl(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_umull(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_umull(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = zero_extend_to_bits(operand_expression(view.operand(1)?)?, 64);
     let right = zero_extend_to_bits(operand_expression(view.operand(2)?)?, 64);
@@ -236,7 +234,7 @@ fn build_umull(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_umsubl(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_umsubl(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = zero_extend_to_bits(operand_expression(view.operand(1)?)?, 64);
     let right = zero_extend_to_bits(operand_expression(view.operand(2)?)?, 64);
@@ -252,7 +250,7 @@ fn build_umsubl(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_smull(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_smull(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = sign_extend_to_bits(operand_expression(view.operand(1)?)?, 64);
     let right = sign_extend_to_bits(operand_expression(view.operand(2)?)?, 64);
@@ -266,7 +264,7 @@ fn build_smull(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_umnegl(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_umnegl(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = zero_extend_to_bits(operand_expression(view.operand(1)?)?, 64);
     let right = zero_extend_to_bits(operand_expression(view.operand(2)?)?, 64);

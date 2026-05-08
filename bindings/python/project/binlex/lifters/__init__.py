@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from binlex import Architecture, Configuration
     from binlex.controlflow import Block, Function, Instruction
-    from binlex.semantics import InstructionSemantics
+    from binlex.semantics import Semantic
 
 _LAZY_SUBMODULES = {"llvm", "vex"}
 
@@ -88,7 +88,7 @@ class Lifter:
             return self
         return None
 
-    def lift_semantics(self, semantics: list[InstructionSemantics]) -> Lifter | None:
+    def lift_semantics(self, semantics: list[Semantic]) -> Lifter | None:
         self._require_backend(LifterBackend.LLVM, "lift_semantics")
         return self._inner.lift_semantics(semantics)
 

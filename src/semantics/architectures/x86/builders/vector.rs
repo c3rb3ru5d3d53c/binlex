@@ -22,18 +22,15 @@
 
 use crate::Architecture;
 use crate::semantics::architectures::x86::helpers as common;
-use crate::semantics::architectures::x86::instruction::X86InstructionView;
+use crate::semantics::architectures::x86::instruction::InstructionDetailX86;
 use crate::semantics::architectures::x86::operand::{X86OperandKind, X86OperandView};
 use crate::semantics::{
-    InstructionSemantics, SemanticAddressSpace, SemanticEffect, SemanticExpression,
-    SemanticLocation, SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
+    Semantic, SemanticAddressSpace, SemanticEffect, SemanticExpression, SemanticLocation,
+    SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
     SemanticOperationUnary, SemanticTerminator,
 };
 
-pub(crate) fn build(
-    machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     match view.mnemonic.as_str() {
         "movups" | "movupd" | "movaps" | "movapd" | "movdqu" | "movdqa" | "lddqu" | "movd"
         | "movq" | "movntdq" | "movntpd" | "movntps" | "movntq" | "movnti" => assign(machine, view),
@@ -133,7 +130,7 @@ pub(crate) fn build(
     }
 }
 
-fn assign(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn assign(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let expression = operand_expr(machine, view.operands().get(1)?)?;
     Some(common::complete(
@@ -142,7 +139,7 @@ fn assign(machine: Architecture, view: &X86InstructionView) -> Option<Instructio
     ))
 }
 
-fn movdq2q(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn movdq2q(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let bits = common::location_bits(&dst);
@@ -155,7 +152,7 @@ fn movdq2q(machine: Architecture, view: &X86InstructionView) -> Option<Instructi
     ))
 }
 
-fn movq2dq(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn movq2dq(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let bits = common::location_bits(&dst);
@@ -180,7 +177,7 @@ fn movq2dq(machine: Architecture, view: &X86InstructionView) -> Option<Instructi
     ))
 }
 
-fn avx_assign(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn avx_assign(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let expression = operand_expr(machine, view.operands().get(1)?)?;
     Some(common::complete(
@@ -189,10 +186,7 @@ fn avx_assign(machine: Architecture, view: &X86InstructionView) -> Option<Instru
     ))
 }
 
-fn scalar_single_move(
-    machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+fn scalar_single_move(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let dst_bits = common::location_bits(&dst);
     let src = operand_expr(machine, view.operands().get(1)?)?;
@@ -230,7 +224,7 @@ fn scalar_single_move(
     ))
 }
 
-fn packed_widen(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn packed_widen(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let dst_bits = common::location_bits(&dst);
@@ -270,10 +264,7 @@ fn packed_widen(machine: Architecture, view: &X86InstructionView) -> Option<Inst
     ))
 }
 
-fn partial_lane_move(
-    machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+fn partial_lane_move(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let dst_bits = common::location_bits(&dst);
     if dst_bits < 128 {
@@ -306,10 +297,7 @@ fn partial_lane_move(
     ))
 }
 
-fn duplicate_move(
-    machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+fn duplicate_move(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let dst_bits = common::location_bits(&dst);
@@ -351,9 +339,9 @@ fn duplicate_move(
 
 fn binary(
     machine: Architecture,
-    view: &X86InstructionView,
+    view: &InstructionDetailX86,
     operation: SemanticOperationBinary,
-) -> Option<InstructionSemantics> {
+) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
@@ -374,9 +362,9 @@ fn binary(
 
 fn avx_binary(
     machine: Architecture,
-    view: &X86InstructionView,
+    view: &InstructionDetailX86,
     operation: SemanticOperationBinary,
-) -> Option<InstructionSemantics> {
+) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let bits = common::location_bits(&dst);
     let left = operand_expr(machine, view.operands().get(1)?)?;
@@ -397,7 +385,7 @@ fn avx_binary(
     ))
 }
 
-fn pandn(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn pandn(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
@@ -411,7 +399,7 @@ fn pandn(machine: Architecture, view: &X86InstructionView) -> Option<Instruction
     ))
 }
 
-fn avx_pandn(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn avx_pandn(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let bits = common::location_bits(&dst);
     let left = cast_to_bits(operand_expr(machine, view.operands().get(1)?)?, bits);
@@ -425,10 +413,7 @@ fn avx_pandn(machine: Architecture, view: &X86InstructionView) -> Option<Instruc
     ))
 }
 
-fn avx_packed_pack(
-    machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+fn avx_packed_pack(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().get(1)?)?;
     let right = operand_expr(machine, view.operands().get(2)?)?;
@@ -501,7 +486,7 @@ fn avx_packed_pack(
     ))
 }
 
-fn packed_pack(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn packed_pack(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
@@ -638,10 +623,7 @@ fn signed_min_value(src_bits: u16, dst_bits: u16) -> u128 {
     (1u128 << src_bits) - (1u128 << (dst_bits - 1))
 }
 
-fn packed_lane_op(
-    machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+fn packed_lane_op(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
@@ -692,10 +674,7 @@ fn packed_lane_op(
     ))
 }
 
-fn avx_packed_lane_op(
-    machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+fn avx_packed_lane_op(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let bits = common::location_bits(&dst);
     let left = cast_to_bits(operand_expr(machine, view.operands().get(1)?)?, bits);
@@ -739,8 +718,8 @@ fn avx_packed_lane_op(
 
 fn packed_unsigned_saturating_add(
     machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+    view: &InstructionDetailX86,
+) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
@@ -798,8 +777,8 @@ fn packed_unsigned_saturating_add(
 
 fn packed_signed_saturating_add(
     machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+    view: &InstructionDetailX86,
+) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
@@ -846,8 +825,8 @@ fn packed_signed_saturating_add(
 
 fn avx_packed_unsigned_saturating_add(
     machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+    view: &InstructionDetailX86,
+) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().get(1)?)?;
     let right = operand_expr(machine, view.operands().get(2)?)?;
@@ -905,8 +884,8 @@ fn avx_packed_unsigned_saturating_add(
 
 fn avx_packed_signed_saturating_add(
     machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+    view: &InstructionDetailX86,
+) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().get(1)?)?;
     let right = operand_expr(machine, view.operands().get(2)?)?;
@@ -951,7 +930,7 @@ fn avx_packed_signed_saturating_add(
     ))
 }
 
-fn packed_abs(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn packed_abs(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let bits = common::location_bits(&dst);
@@ -989,10 +968,7 @@ fn packed_abs(machine: Architecture, view: &X86InstructionView) -> Option<Instru
     ))
 }
 
-fn packed_average(
-    machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+fn packed_average(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
@@ -1051,10 +1027,7 @@ fn packed_average(
     ))
 }
 
-fn packed_horizontal(
-    machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+fn packed_horizontal(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
@@ -1105,10 +1078,7 @@ fn packed_horizontal(
     ))
 }
 
-fn avx_packed_horizontal(
-    machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+fn avx_packed_horizontal(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().get(1)?)?;
     let right = operand_expr(machine, view.operands().get(2)?)?;
@@ -1156,7 +1126,7 @@ fn avx_packed_horizontal(
     ))
 }
 
-fn packed_sign(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn packed_sign(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
@@ -1207,10 +1177,7 @@ fn packed_sign(machine: Architecture, view: &X86InstructionView) -> Option<Instr
     ))
 }
 
-fn packed_multiply(
-    machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+fn packed_multiply(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
@@ -1240,10 +1207,7 @@ fn packed_multiply(
     ))
 }
 
-fn avx_packed_multiply(
-    machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+fn avx_packed_multiply(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let bits = common::location_bits(&dst);
     let left =
@@ -1262,7 +1226,7 @@ fn avx_packed_multiply(
     ))
 }
 
-fn psadbw(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn psadbw(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
@@ -1282,8 +1246,8 @@ fn psadbw(machine: Architecture, view: &X86InstructionView) -> Option<Instructio
 
 fn packed_unsigned_saturating_sub(
     machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+    view: &InstructionDetailX86,
+) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
@@ -1380,7 +1344,7 @@ fn packed_lanes(
     Some(SemanticExpression::Concat { parts, bits })
 }
 
-fn shuffle(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn shuffle(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let imm = view.operands().get(2)?.immediate_value()? as u8;
@@ -1398,7 +1362,7 @@ fn shuffle(machine: Architecture, view: &X86InstructionView) -> Option<Instructi
     ))
 }
 
-fn avx_shuffle(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn avx_shuffle(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let imm = view.operands().get(2)?.immediate_value()? as u8;
@@ -1425,7 +1389,7 @@ fn avx_shuffle(machine: Architecture, view: &X86InstructionView) -> Option<Instr
     ))
 }
 
-fn pshufb(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn pshufb(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().first()?)?;
     let mask = operand_expr(machine, view.operands().get(1)?)?;
@@ -1474,7 +1438,7 @@ fn pshufb(machine: Architecture, view: &X86InstructionView) -> Option<Instructio
     ))
 }
 
-fn unpack(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn unpack(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
@@ -1523,7 +1487,7 @@ fn unpack(machine: Architecture, view: &X86InstructionView) -> Option<Instructio
     ))
 }
 
-fn avx_unpack(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn avx_unpack(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().get(1)?)?;
     let right = operand_expr(machine, view.operands().get(2)?)?;
@@ -1568,10 +1532,7 @@ fn avx_unpack(machine: Architecture, view: &X86InstructionView) -> Option<Instru
     ))
 }
 
-fn packed_extract(
-    machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+fn packed_extract(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let dst_bits = common::location_bits(&dst);
@@ -1611,7 +1572,7 @@ fn packed_extract(
     ))
 }
 
-fn packed_insert(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn packed_insert(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src_vec = operand_expr(machine, view.operands().first()?)?;
     let inserted = operand_expr(machine, view.operands().get(1)?)?;
@@ -1669,7 +1630,7 @@ fn packed_insert(machine: Architecture, view: &X86InstructionView) -> Option<Ins
     ))
 }
 
-fn vextracti128(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn vextracti128(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let lane = (view.operands().get(2)?.immediate_value()? as u8 & 0x1) as u16;
@@ -1688,7 +1649,7 @@ fn vextracti128(machine: Architecture, view: &X86InstructionView) -> Option<Inst
     ))
 }
 
-fn vinsertf128(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn vinsertf128(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let base = operand_expr(machine, view.operands().get(1)?)?;
     let inserted = operand_expr(machine, view.operands().get(2)?)?;
@@ -1712,7 +1673,7 @@ fn vinsertf128(machine: Architecture, view: &X86InstructionView) -> Option<Instr
     ))
 }
 
-fn movemask(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn movemask(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let src_bits = view.operands().get(1)?.size_bits;
@@ -1752,7 +1713,7 @@ fn movemask(machine: Architecture, view: &X86InstructionView) -> Option<Instruct
     ))
 }
 
-fn maskmovq(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn maskmovq(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let mask = operand_expr(machine, view.operands().first()?)?;
     let data = operand_expr(machine, view.operands().get(1)?)?;
     Some(common::complete(
@@ -1765,7 +1726,7 @@ fn maskmovq(machine: Architecture, view: &X86InstructionView) -> Option<Instruct
     ))
 }
 
-fn vperm2i128(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn vperm2i128(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().get(1)?)?;
     let right = operand_expr(machine, view.operands().get(2)?)?;
@@ -1798,7 +1759,7 @@ fn vperm2i128(machine: Architecture, view: &X86InstructionView) -> Option<Instru
     ))
 }
 
-fn vpermq(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn vpermq(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let imm = view.operands().get(2)?.immediate_value()? as u8;
@@ -1816,7 +1777,7 @@ fn vpermq(machine: Architecture, view: &X86InstructionView) -> Option<Instructio
     ))
 }
 
-fn vpbroadcastb(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn vpbroadcastb(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let bits = common::location_bits(&dst);
@@ -1831,7 +1792,7 @@ fn vpbroadcastb(machine: Architecture, view: &X86InstructionView) -> Option<Inst
     ))
 }
 
-fn vpsignw(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn vpsignw(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().get(1)?)?;
     let right = operand_expr(machine, view.operands().get(2)?)?;
@@ -1871,7 +1832,7 @@ fn vpsignw(machine: Architecture, view: &X86InstructionView) -> Option<Instructi
     ))
 }
 
-fn vmaskmov(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn vmaskmov(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let mnemonic = view.mnemonic.as_str();
     let dst = operand_location(machine, view.operands().first()?)?;
     let bits = common::location_bits(&dst);
@@ -1902,7 +1863,7 @@ fn vmaskmov(machine: Architecture, view: &X86InstructionView) -> Option<Instruct
     ))
 }
 
-fn vzeroupper() -> InstructionSemantics {
+fn vzeroupper() -> Semantic {
     common::complete(
         SemanticTerminator::FallThrough,
         vec![SemanticEffect::Intrinsic {
@@ -1913,7 +1874,7 @@ fn vzeroupper() -> InstructionSemantics {
     )
 }
 
-fn packed_shift(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn packed_shift(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().first()?)?;
     let count = operand_expr(machine, view.operands().get(1)?)?;
@@ -1932,10 +1893,7 @@ fn packed_shift(machine: Architecture, view: &X86InstructionView) -> Option<Inst
     ))
 }
 
-fn avx_packed_shift(
-    machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+fn avx_packed_shift(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let count = operand_expr(machine, view.operands().get(2)?)?;
@@ -2102,7 +2060,7 @@ fn cast_count(count: SemanticExpression, bits: u16) -> SemanticExpression {
     }
 }
 
-fn ptest(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn ptest(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
     let bits = left.bits().max(right.bits());
@@ -2149,7 +2107,7 @@ fn ptest(machine: Architecture, view: &X86InstructionView) -> Option<Instruction
     ))
 }
 
-fn avx_ptest(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn avx_ptest(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
     let bits = left.bits().max(right.bits());
@@ -2196,7 +2154,7 @@ fn avx_ptest(machine: Architecture, view: &X86InstructionView) -> Option<Instruc
     ))
 }
 
-fn palignr(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn palignr(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;

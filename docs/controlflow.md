@@ -247,7 +247,7 @@ for function in graph.functions():
 for function in graph.functions():
     for block in function.blocks():
         for instruction in block.instructions():
-            semantics = instruction.semantics()
+            semantics = instruction.semantic()
             if semantics is not None:
                 print(hex(instruction.address()), semantics.status())
 ```

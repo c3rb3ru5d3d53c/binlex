@@ -20,17 +20,17 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::semantics::InstructionSemantics;
+use crate::semantics::Semantic;
 
 pub mod builders;
 pub mod helpers;
 pub mod instruction;
 pub mod operand;
 
-pub use instruction::Arm64InstructionView;
+pub use instruction::InstructionDetailArm64;
 pub use operand::{Arm64MemoryOperandView, Arm64OperandKind, Arm64OperandView};
 
-pub fn build(view: Arm64InstructionView) -> Option<InstructionSemantics> {
+pub fn build(view: InstructionDetailArm64) -> Option<Semantic> {
     if let Some(semantics) = builders::control::build(&view) {
         return Some(semantics);
     }

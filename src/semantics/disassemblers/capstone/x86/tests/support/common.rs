@@ -3,9 +3,9 @@ use std::collections::BTreeMap;
 use crate::controlflow::{Graph, InstructionRecord};
 use crate::disassemblers::capstone::Disassembler;
 use crate::semantics::{
-    InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation,
-    SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
-    SemanticOperationUnary, SemanticStatus, SemanticTerminator,
+    Semantic, SemanticEffect, SemanticExpression, SemanticLocation, SemanticOperationBinary,
+    SemanticOperationCast, SemanticOperationCompare, SemanticOperationUnary, SemanticStatus,
+    SemanticTerminator,
 };
 use crate::{Architecture, Configuration};
 use num_bigint::BigUint;
@@ -137,11 +137,7 @@ pub(crate) fn disassemble_x86_single(
         .expect("instruction should exist")
 }
 
-pub(crate) fn semantics(
-    name: &str,
-    architecture: Architecture,
-    bytes: &[u8],
-) -> InstructionSemantics {
+pub(crate) fn semantics(name: &str, architecture: Architecture, bytes: &[u8]) -> Semantic {
     disassemble_x86_single(name, architecture, bytes)
         .semantics
         .expect("instruction should have semantics")
@@ -423,7 +419,7 @@ fn tracked_registers_for_wide_fixture(
 fn interpret_i386_semantics(
     architecture: Architecture,
     bytes: &[u8],
-    semantics: &InstructionSemantics,
+    semantics: &Semantic,
     fixture: I386Fixture,
 ) -> I386Execution {
     let mut registers = I386Register::all_for_arch(architecture)
@@ -649,7 +645,7 @@ fn interpret_i386_semantics(
 
 fn interpret_amd64_semantics_wide(
     bytes: &[u8],
-    semantics: &InstructionSemantics,
+    semantics: &Semantic,
     fixture: &WideI386Fixture,
     tracked_registers: &[I386Register],
 ) -> I386ExecutionWide {
@@ -1239,7 +1235,11 @@ fn arg_bits(expression: &SemanticExpression) -> u16 {
         | SemanticExpression::Concat { bits, .. }
         | SemanticExpression::Undefined { bits }
         | SemanticExpression::Poison { bits }
-        | SemanticExpression::Intrinsic { bits, .. } => *bits,
+        | SemanticExpression::Intrinsic { bits, .. }
+        | SemanticExpression::Null { bits }
+        | SemanticExpression::Allocate { bits, .. }
+        | SemanticExpression::ReadProperty { bits, .. }
+        | SemanticExpression::ReadElement { bits, .. } => *bits,
         SemanticExpression::Read(location) => location.bits(),
     }
 }
@@ -1360,7 +1360,7 @@ fn byte_swap(value: u128, bits: u16) -> u128 {
     swapped
 }
 
-fn written_state(semantics: &InstructionSemantics) -> (Vec<String>, Vec<String>) {
+fn written_state(semantics: &Semantic) -> (Vec<String>, Vec<String>) {
     let mut registers = Vec::new();
     let mut flags = Vec::new();
     for effect in &semantics.effects {

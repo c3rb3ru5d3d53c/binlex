@@ -5,16 +5,13 @@ use super::helpers::{
 use crate::Abi;
 use crate::lifters::llvm::abi::coerce_int_value_width;
 use crate::semantics::{
-    InstructionSemantics, SemanticAddressSpace, SemanticEffect, SemanticExpression,
-    SemanticLocation, SemanticTerminator,
+    Semantic, SemanticAddressSpace, SemanticEffect, SemanticExpression, SemanticLocation,
+    SemanticTerminator,
 };
 use std::io::Error;
 
 impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
-    pub(super) fn lower_semantics(
-        &mut self,
-        semantics: &InstructionSemantics,
-    ) -> Result<(), Error> {
+    pub(super) fn lower_semantics(&mut self, semantics: &Semantic) -> Result<(), Error> {
         for effect in &semantics.effects {
             self.lower_effect(effect)?;
         }
@@ -220,6 +217,96 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 let slot = self.slot_for_location(observed)?;
                 self.builder
                     .build_store(slot, observed_value)
+                    .map_err(|err| Error::other(err.to_string()))?;
+            }
+            SemanticEffect::WriteProperty {
+                reference,
+                name,
+                expression,
+                bits,
+            } => {
+                let helper_name = format!(
+                    "binlex_ref_write_property_{}_{}",
+                    sanitize_symbol(name),
+                    bits
+                );
+                let helper = self.declare_void_helper(
+                    &helper_name,
+                    &[self.context.i64_type().into(), self.int_type(*bits).into()],
+                    true,
+                );
+                let reference = self.lower_expression(reference)?;
+                let reference = self.to_i64(reference);
+                let value = self.lower_expression(expression)?;
+                let value = coerce_int_value_width(
+                    &self.builder,
+                    value,
+                    self.int_type(*bits),
+                    "write_property_zext",
+                    "write_property_trunc",
+                )?;
+                self.builder
+                    .build_call(helper, &[reference.into(), value.into()], "")
+                    .map_err(|err| Error::other(err.to_string()))?;
+            }
+            SemanticEffect::WriteElement {
+                reference,
+                index,
+                expression,
+                bits,
+            } => {
+                let helper_name = format!("binlex_ref_write_element_{}", bits);
+                let helper = self.declare_void_helper(
+                    &helper_name,
+                    &[
+                        self.context.i64_type().into(),
+                        self.context.i64_type().into(),
+                        self.int_type(*bits).into(),
+                    ],
+                    true,
+                );
+                let reference = self.lower_expression(reference)?;
+                let reference = self.to_i64(reference);
+                let index = self.lower_expression(index)?;
+                let index = self.to_i64(index);
+                let value = self.lower_expression(expression)?;
+                let value = coerce_int_value_width(
+                    &self.builder,
+                    value,
+                    self.int_type(*bits),
+                    "write_element_zext",
+                    "write_element_trunc",
+                )?;
+                self.builder
+                    .build_call(helper, &[reference.into(), index.into(), value.into()], "")
+                    .map_err(|err| Error::other(err.to_string()))?;
+            }
+            SemanticEffect::Push { stack, expression } => {
+                let helper_name = format!("binlex_effect_push_{}", sanitize_symbol(stack));
+                self.record_semantic_lowering(
+                    "effect_helper",
+                    format!("Push stack={} helper={}", stack, helper_name),
+                );
+                let value = self.lower_expression(expression)?;
+                let helper =
+                    self.declare_void_helper(&helper_name, &[value.get_type().into()], true);
+                self.builder
+                    .build_call(helper, &[value.into()], "")
+                    .map_err(|err| Error::other(err.to_string()))?;
+            }
+            SemanticEffect::Pop { stack, dst } => {
+                let bits = dst.bits();
+                let helper_name = format!("binlex_effect_pop_{}_{}", sanitize_symbol(stack), bits);
+                self.record_semantic_lowering(
+                    "effect_helper",
+                    format!("Pop stack={} bits={} helper={}", stack, bits, helper_name),
+                );
+                let helper =
+                    self.declare_value_helper(&helper_name, self.int_type(bits), &[], true);
+                let value = self.call_value(helper, &[], "pop_value")?;
+                let slot = self.slot_for_location(dst)?;
+                self.builder
+                    .build_store(slot, value)
                     .map_err(|err| Error::other(err.to_string()))?;
             }
             SemanticEffect::Fence { kind } => {

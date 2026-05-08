@@ -2,7 +2,7 @@ use crate::semantics::{
     SemanticExpression, SemanticLocation, SemanticOperationBinary, SemanticOperationCast,
     SemanticOperationCompare, SemanticOperationUnary,
 };
-use crate::symbolic::{Error, Executor, State};
+use crate::symbolic::{Error, SymbolicCpuState, SymbolicExecutor};
 use std::collections::BTreeSet;
 use z3::ast::{BV, Bool, RoundingMode};
 
@@ -18,10 +18,10 @@ pub(crate) struct EvaluatedCondition {
     pub(crate) deps: BTreeSet<u64>,
 }
 
-impl Executor {
+impl SymbolicExecutor {
     pub(crate) fn eval_expression(
         &self,
-        state: &mut State,
+        state: &mut SymbolicCpuState,
         expression: &SemanticExpression,
         expected_float: bool,
     ) -> Result<EvaluatedValue, Error> {
@@ -53,6 +53,57 @@ impl Executor {
                     }
                 }
                 Ok(EvaluatedValue { value, deps })
+            }
+            SemanticExpression::Null { bits } => Ok(EvaluatedValue {
+                value: state.backend().const_bv(0, *bits)?,
+                deps: BTreeSet::new(),
+            }),
+            SemanticExpression::Allocate { kind, bits } => {
+                let cell = state.allocate_reference(kind, *bits)?;
+                Ok(EvaluatedValue {
+                    value: cell.value,
+                    deps: cell.def_id.into_iter().collect(),
+                })
+            }
+            SemanticExpression::ReadProperty {
+                reference,
+                name,
+                bits,
+            } => {
+                let reference = self.eval_expression(state, reference, false)?;
+                let reference_key = self.symbolic_key(&reference.value);
+                let cell = state.get_or_create_reference_property(&reference_key, name, *bits)?;
+                let mut deps = cell.def_id.into_iter().collect::<BTreeSet<_>>();
+                if reference.value.as_u64().is_none() {
+                    deps.extend(reference.deps);
+                }
+                Ok(EvaluatedValue {
+                    value: cell.value,
+                    deps,
+                })
+            }
+            SemanticExpression::ReadElement {
+                reference,
+                index,
+                bits,
+            } => {
+                let reference = self.eval_expression(state, reference, false)?;
+                let reference_key = self.symbolic_key(&reference.value);
+                let index = self.eval_expression(state, index, false)?;
+                let index_key = self.symbolic_key(&index.value);
+                let cell =
+                    state.get_or_create_reference_element(&reference_key, &index_key, *bits)?;
+                let mut deps = cell.def_id.into_iter().collect::<BTreeSet<_>>();
+                if reference.value.as_u64().is_none() {
+                    deps.extend(reference.deps);
+                }
+                if index.value.as_u64().is_none() {
+                    deps.extend(index.deps);
+                }
+                Ok(EvaluatedValue {
+                    value: cell.value,
+                    deps,
+                })
             }
             SemanticExpression::Unary { op, arg, bits } => {
                 let arg_expression = arg.as_ref();
@@ -215,7 +266,7 @@ impl Executor {
 
     pub(crate) fn eval_condition(
         &self,
-        state: &mut State,
+        state: &mut SymbolicCpuState,
         expression: &SemanticExpression,
     ) -> Result<EvaluatedCondition, Error> {
         let value = self.eval_expression(state, expression, false)?;
@@ -227,7 +278,7 @@ impl Executor {
 
     fn eval_unary(
         &self,
-        state: &mut State,
+        state: &mut SymbolicCpuState,
         op: SemanticOperationUnary,
         arg: BV,
         arg_expression: &SemanticExpression,
@@ -267,7 +318,7 @@ impl Executor {
 
     fn eval_binary(
         &self,
-        state: &State,
+        state: &SymbolicCpuState,
         op: SemanticOperationBinary,
         left: BV,
         right: BV,
@@ -305,7 +356,7 @@ impl Executor {
 
     fn eval_cast(
         &self,
-        state: &mut State,
+        state: &mut SymbolicCpuState,
         op: SemanticOperationCast,
         arg: BV,
         bits: u16,
@@ -355,7 +406,7 @@ impl Executor {
 
     fn eval_compare(
         &self,
-        state: &State,
+        state: &SymbolicCpuState,
         op: SemanticOperationCompare,
         left: BV,
         right: BV,
@@ -388,8 +439,12 @@ impl Executor {
         }
     }
 
-    pub(crate) fn coerce_address(&self, state: &mut State, value: &BV) -> Result<BV, Error> {
-        state.backend().coerce_bv_width(value, self.address_bits())
+    pub(crate) fn coerce_address(
+        &self,
+        state: &mut SymbolicCpuState,
+        value: &BV,
+    ) -> Result<BV, Error> {
+        state.backend().coerce_bv_width(value, state.address_bits())
     }
 
     fn unsigned_mul_high(&self, left: &BV, right: &BV) -> Result<BV, Error> {
@@ -410,7 +465,7 @@ impl Executor {
         Ok(product.extract((extended_bits - 1) as u32, bits as u32))
     }
 
-    fn byte_swap(&self, state: &mut State, arg: &BV, bits: u16) -> Result<BV, Error> {
+    fn byte_swap(&self, state: &mut SymbolicCpuState, arg: &BV, bits: u16) -> Result<BV, Error> {
         if !bits.is_multiple_of(8) {
             return Err(Error::UnsupportedExpression(
                 "byte swap requires a byte-aligned width",
@@ -426,14 +481,14 @@ impl Executor {
         self.concat_parts(state, &bytes)
     }
 
-    fn bit_reverse(&self, state: &mut State, arg: &BV, bits: u16) -> Result<BV, Error> {
+    fn bit_reverse(&self, state: &mut SymbolicCpuState, arg: &BV, bits: u16) -> Result<BV, Error> {
         let parts = (0..bits)
             .map(|index| arg.extract(index as u32, index as u32))
             .collect::<Vec<_>>();
         self.concat_parts(state, &parts)
     }
 
-    fn popcount(&self, state: &mut State, arg: &BV, bits: u16) -> Result<BV, Error> {
+    fn popcount(&self, state: &mut SymbolicCpuState, arg: &BV, bits: u16) -> Result<BV, Error> {
         let mut total = state.backend().zero_bv(bits)?;
         for index in 0..bits {
             let bit = arg.extract(index as u32, index as u32);
@@ -443,7 +498,12 @@ impl Executor {
         Ok(total)
     }
 
-    fn count_leading_zeros(&self, state: &mut State, arg: &BV, bits: u16) -> Result<BV, Error> {
+    fn count_leading_zeros(
+        &self,
+        state: &mut SymbolicCpuState,
+        arg: &BV,
+        bits: u16,
+    ) -> Result<BV, Error> {
         let mut total = state.backend().zero_bv(bits)?;
         let one = state.backend().one_bv(bits)?;
         let mut still_zero = Bool::from_bool(true);
@@ -456,7 +516,12 @@ impl Executor {
         Ok(total)
     }
 
-    fn count_trailing_zeros(&self, state: &mut State, arg: &BV, bits: u16) -> Result<BV, Error> {
+    fn count_trailing_zeros(
+        &self,
+        state: &mut SymbolicCpuState,
+        arg: &BV,
+        bits: u16,
+    ) -> Result<BV, Error> {
         let mut total = state.backend().zero_bv(bits)?;
         let one = state.backend().one_bv(bits)?;
         let mut still_zero = Bool::from_bool(true);
@@ -469,7 +534,7 @@ impl Executor {
         Ok(total)
     }
 
-    fn concat_parts(&self, state: &mut State, parts: &[BV]) -> Result<BV, Error> {
+    fn concat_parts(&self, state: &mut SymbolicCpuState, parts: &[BV]) -> Result<BV, Error> {
         let mut parts = parts.iter();
         let first = parts
             .next()
@@ -484,17 +549,17 @@ impl Executor {
             .coerce_bv_width(&value, value.get_size() as u16)
     }
 
-    pub(crate) fn eval_fp_abs(&self, state: &State, value: BV) -> Result<BV, Error> {
+    pub(crate) fn eval_fp_abs(&self, state: &SymbolicCpuState, value: BV) -> Result<BV, Error> {
         let value = state.backend().float_from_ieee_bv(&value)?;
         Ok(state.backend().float_to_ieee_bv(&value.unary_abs()))
     }
 
-    pub(crate) fn eval_fp_neg(&self, state: &State, value: BV) -> Result<BV, Error> {
+    pub(crate) fn eval_fp_neg(&self, state: &SymbolicCpuState, value: BV) -> Result<BV, Error> {
         let value = state.backend().float_from_ieee_bv(&value)?;
         Ok(state.backend().float_to_ieee_bv(&value.unary_neg()))
     }
 
-    pub(crate) fn eval_fp_sqrt(&self, state: &State, value: BV) -> Result<BV, Error> {
+    pub(crate) fn eval_fp_sqrt(&self, state: &SymbolicCpuState, value: BV) -> Result<BV, Error> {
         let value = state.backend().float_from_ieee_bv(&value)?;
         Ok(state.backend().float_to_ieee_bv(&value.sqrt()))
     }
@@ -554,7 +619,11 @@ impl Executor {
                 .any(|part| self.expression_is_probably_float(part)),
             SemanticExpression::Undefined { .. }
             | SemanticExpression::Poison { .. }
-            | SemanticExpression::Intrinsic { .. } => false,
+            | SemanticExpression::Intrinsic { .. }
+            | SemanticExpression::Null { .. }
+            | SemanticExpression::Allocate { .. }
+            | SemanticExpression::ReadProperty { .. }
+            | SemanticExpression::ReadElement { .. } => false,
         }
     }
 
@@ -572,7 +641,9 @@ impl Executor {
                     || lowered.starts_with("x87_st")
                     || lowered.starts_with("st(")
             }
-            SemanticLocation::Memory { .. } => false,
+            SemanticLocation::Memory { .. }
+            | SemanticLocation::IndexedMemory { .. }
+            | SemanticLocation::StackMemory { .. } => false,
             _ => false,
         }
     }
@@ -595,7 +666,7 @@ impl Executor {
 
     fn eval_fp_binary(
         &self,
-        state: &State,
+        state: &SymbolicCpuState,
         op: SemanticOperationBinary,
         left: BV,
         right: BV,
@@ -615,7 +686,7 @@ impl Executor {
 
     fn eval_fp_compare(
         &self,
-        state: &State,
+        state: &SymbolicCpuState,
         op: SemanticOperationCompare,
         left: BV,
         right: BV,
@@ -650,7 +721,7 @@ impl Executor {
 
     pub(crate) fn eval_intrinsic_expression(
         &self,
-        state: &mut State,
+        state: &mut SymbolicCpuState,
         name: &str,
         args: &[SemanticExpression],
         bits: u16,

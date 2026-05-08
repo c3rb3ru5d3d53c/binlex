@@ -21,17 +21,14 @@
 // SOFTWARE.
 
 use crate::Architecture;
-use crate::semantics::architectures::x86::X86InstructionView;
+use crate::semantics::architectures::x86::InstructionDetailX86;
 use crate::semantics::architectures::x86::helpers as common;
 use crate::semantics::{
-    InstructionSemantics, SemanticAddressSpace, SemanticEffect, SemanticExpression,
-    SemanticOperationCompare, SemanticTerminator,
+    Semantic, SemanticAddressSpace, SemanticEffect, SemanticExpression, SemanticOperationCompare,
+    SemanticTerminator,
 };
 
-pub(crate) fn build(
-    machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let mnemonic = view.mnemonic.as_str();
     if matches!(
         mnemonic,
@@ -73,7 +70,7 @@ pub(crate) fn build(
     }
 }
 
-fn rep_stos(machine: Architecture, bits: u16) -> Option<InstructionSemantics> {
+fn rep_stos(machine: Architecture, bits: u16) -> Option<Semantic> {
     let di = index_reg(machine, true);
     let cx = counter_reg(machine);
     let count = SemanticExpression::Read(Box::new(cx.clone()));
@@ -100,11 +97,11 @@ fn rep_stos(machine: Architecture, bits: u16) -> Option<InstructionSemantics> {
     ))
 }
 
-fn rep_movsb(machine: Architecture) -> Option<InstructionSemantics> {
+fn rep_movsb(machine: Architecture) -> Option<Semantic> {
     rep_movs(machine, 8)
 }
 
-fn rep_movs(machine: Architecture, bits: u16) -> Option<InstructionSemantics> {
+fn rep_movs(machine: Architecture, bits: u16) -> Option<Semantic> {
     let si = index_reg(machine, false);
     let di = index_reg(machine, true);
     let cx = counter_reg(machine);
@@ -137,7 +134,7 @@ fn rep_movs(machine: Architecture, bits: u16) -> Option<InstructionSemantics> {
     ))
 }
 
-fn stos(machine: Architecture, bits: u16) -> Option<InstructionSemantics> {
+fn stos(machine: Architecture, bits: u16) -> Option<Semantic> {
     let di = index_reg(machine, true);
     let acc = accumulator_reg(machine, bits)?;
     let addr = SemanticExpression::Read(Box::new(di.clone()));
@@ -159,7 +156,7 @@ fn stos(machine: Architecture, bits: u16) -> Option<InstructionSemantics> {
     ))
 }
 
-fn movs(machine: Architecture, bits: u16) -> Option<InstructionSemantics> {
+fn movs(machine: Architecture, bits: u16) -> Option<Semantic> {
     let si = index_reg(machine, false);
     let di = index_reg(machine, true);
     let src_addr = SemanticExpression::Read(Box::new(si.clone()));
@@ -189,7 +186,7 @@ fn movs(machine: Architecture, bits: u16) -> Option<InstructionSemantics> {
     ))
 }
 
-fn lods(machine: Architecture, bits: u16) -> Option<InstructionSemantics> {
+fn lods(machine: Architecture, bits: u16) -> Option<Semantic> {
     let si = index_reg(machine, false);
     let acc = accumulator_reg(machine, bits)?;
     Some(common::complete(
@@ -211,7 +208,7 @@ fn lods(machine: Architecture, bits: u16) -> Option<InstructionSemantics> {
     ))
 }
 
-fn scas(machine: Architecture, bits: u16) -> Option<InstructionSemantics> {
+fn scas(machine: Architecture, bits: u16) -> Option<Semantic> {
     let di = index_reg(machine, true);
     let acc = accumulator_reg(machine, bits)?;
     let mem = SemanticExpression::Load {
@@ -264,7 +261,7 @@ fn scas(machine: Architecture, bits: u16) -> Option<InstructionSemantics> {
     ))
 }
 
-fn cmps(machine: Architecture, bits: u16) -> Option<InstructionSemantics> {
+fn cmps(machine: Architecture, bits: u16) -> Option<Semantic> {
     let si = index_reg(machine, false);
     let di = index_reg(machine, true);
     let lhs = SemanticExpression::Load {

@@ -32,9 +32,7 @@ use ::capstone::{
 use crate::{
     Architecture,
     controlflow::graph::Graph,
-    controlflow::{
-        Instruction, InstructionRecord, InstructionSemanticsInput, Operand, OperandKind,
-    },
+    controlflow::{Instruction, InstructionDetail, InstructionRecord, Operand, OperandKind},
     disassemblers::arm64::{
         backends::capstone as arm64_capstone, flow as arm64_flow, indirect as arm64_indirect,
         targets as arm64_targets,
@@ -42,7 +40,7 @@ use crate::{
     genetics::Chromosome,
     semantics::architectures::arm64::operand::Arm64ShiftKind,
     semantics::architectures::arm64::{
-        Arm64InstructionView, Arm64MemoryOperandView, Arm64OperandKind, Arm64OperandView,
+        Arm64MemoryOperandView, Arm64OperandKind, Arm64OperandView, InstructionDetailArm64,
     },
 };
 
@@ -380,13 +378,13 @@ fn semantic_instruction_view(
     instruction: &Insn,
     operands: &[ArchOperand],
     condition_code: Option<u64>,
-) -> Arm64InstructionView {
+) -> InstructionDetailArm64 {
     let mut operand_views = operands
         .iter()
         .map(|operand| semantic_operand_view(disassembler, operand))
         .collect::<Vec<_>>();
     semantic_normalize_special_operands(instruction, &mut operand_views);
-    Arm64InstructionView::new(
+    InstructionDetailArm64::new(
         machine,
         instruction.address(),
         instruction.mnemonic().unwrap_or(""),
@@ -539,7 +537,7 @@ pub fn build_instruction(
     blinstruction.disassembly = disassembly;
     blinstruction.has_indirect_target = has_indirect_target;
     blinstruction.operands = normalized_operands;
-    blinstruction.set_semantics_input(InstructionSemanticsInput::Arm64(semantic_view));
+    blinstruction.set_instruction_detail(InstructionDetail::arm64(semantic_view));
 
     if let Some(addr) = conditional_target {
         blinstruction.to.insert(addr);

@@ -22,7 +22,7 @@
 
 use crate::Architecture;
 use crate::semantics::{
-    InstructionSemantics, SemanticDiagnostic, SemanticEffect, SemanticExpression, SemanticLocation,
+    Semantic, SemanticDiagnostic, SemanticEffect, SemanticExpression, SemanticLocation,
     SemanticOperationBinary, SemanticOperationCompare, SemanticOperationUnary, SemanticStatus,
     SemanticTerminator,
 };
@@ -63,7 +63,9 @@ pub fn location_bits(location: &SemanticLocation) -> u16 {
         SemanticLocation::Flag { bits, .. } => *bits,
         SemanticLocation::ProgramCounter { bits } => *bits,
         SemanticLocation::Temporary { bits, .. } => *bits,
-        SemanticLocation::Memory { bits, .. } => *bits,
+        SemanticLocation::Memory { bits, .. }
+        | SemanticLocation::IndexedMemory { bits, .. }
+        | SemanticLocation::StackMemory { bits, .. } => *bits,
     }
 }
 
@@ -315,11 +317,8 @@ pub fn condition_from_mnemonic(mnemonic: &str) -> Option<SemanticExpression> {
     }
 }
 
-pub fn partial(
-    terminator: SemanticTerminator,
-    diagnostics: Vec<SemanticDiagnostic>,
-) -> InstructionSemantics {
-    InstructionSemantics {
+pub fn partial(terminator: SemanticTerminator, diagnostics: Vec<SemanticDiagnostic>) -> Semantic {
+    Semantic {
         version: 1,
         status: SemanticStatus::Partial,
         abi: None,
@@ -331,11 +330,8 @@ pub fn partial(
     }
 }
 
-pub fn complete(
-    terminator: SemanticTerminator,
-    effects: Vec<SemanticEffect>,
-) -> InstructionSemantics {
-    InstructionSemantics {
+pub fn complete(terminator: SemanticTerminator, effects: Vec<SemanticEffect>) -> Semantic {
+    Semantic {
         version: 1,
         status: SemanticStatus::Complete,
         abi: None,
@@ -351,8 +347,8 @@ pub fn partial_with_effects(
     terminator: SemanticTerminator,
     diagnostics: Vec<SemanticDiagnostic>,
     effects: Vec<SemanticEffect>,
-) -> InstructionSemantics {
-    InstructionSemantics {
+) -> Semantic {
+    Semantic {
         version: 1,
         status: SemanticStatus::Partial,
         abi: None,

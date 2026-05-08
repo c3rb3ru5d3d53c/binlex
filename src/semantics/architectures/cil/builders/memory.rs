@@ -20,10 +20,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::semantics::architectures::cil::CilInstructionView;
+use crate::semantics::architectures::cil::InstructionDetailCil;
 use crate::semantics::{
-    InstructionSemantics, SemanticAddressSpace, SemanticEffect, SemanticExpression,
-    SemanticTerminator,
+    Semantic, SemanticAddressSpace, SemanticEffect, SemanticExpression, SemanticTerminator,
 };
 
 use super::super::helpers::common::{
@@ -33,7 +32,7 @@ use super::super::helpers::common::{
     truncate_i32, zero_extend_i8, zero_extend_i16, zero_extend_i32, zero_extend_i64,
 };
 
-pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSemantics> {
+pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<Semantic> {
     match instruction.mnemonic_text() {
         "ldlen" => {
             let (effects, array) = pop_stack();
@@ -173,7 +172,7 @@ enum StoreValue {
     Trunc32,
 }
 
-fn heap_load(bits: u16, identity: Identity) -> Option<InstructionSemantics> {
+fn heap_load(bits: u16, identity: Identity) -> Option<Semantic> {
     let (mut effects, index) = pop_stack();
     let (mut more_effects, array) = pop_stack();
     effects.append(&mut more_effects);
@@ -185,11 +184,7 @@ fn heap_load(bits: u16, identity: Identity) -> Option<InstructionSemantics> {
     Some(push_with_prefix(effects, apply_identity(load, identity)))
 }
 
-fn direct_load(
-    space: SemanticAddressSpace,
-    bits: u16,
-    identity: Identity,
-) -> Option<InstructionSemantics> {
+fn direct_load(space: SemanticAddressSpace, bits: u16, identity: Identity) -> Option<Semantic> {
     let (effects, address) = pop_stack();
     let load = SemanticExpression::Load {
         space,
@@ -199,7 +194,7 @@ fn direct_load(
     Some(push_with_prefix(effects, apply_identity(load, identity)))
 }
 
-fn store_default(bits: u16, value_kind: StoreValue) -> Option<InstructionSemantics> {
+fn store_default(bits: u16, value_kind: StoreValue) -> Option<Semantic> {
     let (mut effects, value) = pop_stack();
     let (mut more_effects, address) = pop_stack();
     effects.append(&mut more_effects);
@@ -215,7 +210,7 @@ fn store_default(bits: u16, value_kind: StoreValue) -> Option<InstructionSemanti
     ))
 }
 
-fn store_heap(bits: u16, value_kind: StoreValue) -> Option<InstructionSemantics> {
+fn store_heap(bits: u16, value_kind: StoreValue) -> Option<Semantic> {
     let (mut effects, value) = pop_stack();
     let (mut more_effects, index) = pop_stack();
     let (mut array_effects, array) = pop_stack();

@@ -8,7 +8,7 @@ use crate::lifters::llvm::optimizers::Optimizers;
 use crate::lifters::llvm::prepare::prepare_instruction_semantics;
 use crate::lifters::llvm::verify::verify_module;
 use crate::semantics::{
-    InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation, SemanticTerminator,
+    Semantic, SemanticEffect, SemanticExpression, SemanticLocation, SemanticTerminator,
 };
 use inkwell::OptimizationLevel;
 use inkwell::attributes::AttributeLoc;
@@ -181,7 +181,7 @@ impl Lifter {
         Ok(())
     }
 
-    pub fn lift_semantics(&mut self, semantics: &[InstructionSemantics]) -> Result<(), Error> {
+    pub fn lift_semantics(&mut self, semantics: &[Semantic]) -> Result<(), Error> {
         self.bind_architecture()?;
         for semantics in semantics {
             let name = format!("semantics_{}", self.emitted.len());
@@ -467,7 +467,7 @@ impl Lifter {
     }
 }
 
-fn should_emit_instruction_encoding(semantics: &InstructionSemantics) -> bool {
+fn should_emit_instruction_encoding(semantics: &Semantic) -> bool {
     matches!(semantics.status, crate::semantics::SemanticStatus::Partial)
 }
 
@@ -766,10 +766,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         Ok(())
     }
 
-    fn lower_instruction_semantics(
-        &mut self,
-        semantics: &InstructionSemantics,
-    ) -> Result<(), Error> {
+    fn lower_instruction_semantics(&mut self, semantics: &Semantic) -> Result<(), Error> {
         if self.debug
             && (matches!(semantics.status, crate::semantics::SemanticStatus::Partial)
                 || !semantics.diagnostics.is_empty())
@@ -812,7 +809,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         Ok(())
     }
 
-    fn seed_instruction_inputs(&mut self, semantics: &InstructionSemantics) -> Result<(), Error> {
+    fn seed_instruction_inputs(&mut self, semantics: &Semantic) -> Result<(), Error> {
         let mut registers = Vec::<SemanticLocation>::new();
         let mut program_counters = Vec::<SemanticLocation>::new();
         let mut flags = Vec::<SemanticLocation>::new();
@@ -898,6 +895,28 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 self.collect_expression_reads(expected, registers, program_counters, flags);
                 self.collect_expression_reads(desired, registers, program_counters, flags);
             }
+            SemanticEffect::WriteProperty {
+                reference,
+                expression,
+                ..
+            } => {
+                self.collect_expression_reads(reference, registers, program_counters, flags);
+                self.collect_expression_reads(expression, registers, program_counters, flags);
+            }
+            SemanticEffect::WriteElement {
+                reference,
+                index,
+                expression,
+                ..
+            } => {
+                self.collect_expression_reads(reference, registers, program_counters, flags);
+                self.collect_expression_reads(index, registers, program_counters, flags);
+                self.collect_expression_reads(expression, registers, program_counters, flags);
+            }
+            SemanticEffect::Push { expression, .. } => {
+                self.collect_expression_reads(expression, registers, program_counters, flags);
+            }
+            SemanticEffect::Pop { .. } => {}
             SemanticEffect::Intrinsic { args, .. } => {
                 for arg in args {
                     self.collect_expression_reads(arg, registers, program_counters, flags);
@@ -974,10 +993,23 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 SemanticLocation::Memory { addr, .. } => {
                     self.collect_expression_reads(addr, registers, program_counters, flags);
                 }
+                SemanticLocation::IndexedMemory { index, .. } => {
+                    self.collect_expression_reads(index, registers, program_counters, flags);
+                }
+                SemanticLocation::StackMemory { .. } => {}
                 SemanticLocation::Temporary { .. } => {}
             },
             SemanticExpression::Load { addr, .. } => {
                 self.collect_expression_reads(addr, registers, program_counters, flags);
+            }
+            SemanticExpression::ReadProperty { reference, .. } => {
+                self.collect_expression_reads(reference, registers, program_counters, flags);
+            }
+            SemanticExpression::ReadElement {
+                reference, index, ..
+            } => {
+                self.collect_expression_reads(reference, registers, program_counters, flags);
+                self.collect_expression_reads(index, registers, program_counters, flags);
             }
             SemanticExpression::Unary { arg, .. }
             | SemanticExpression::Cast { arg, .. }
@@ -1011,7 +1043,9 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             }
             SemanticExpression::Const { .. }
             | SemanticExpression::Undefined { .. }
-            | SemanticExpression::Poison { .. } => {}
+            | SemanticExpression::Poison { .. }
+            | SemanticExpression::Null { .. }
+            | SemanticExpression::Allocate { .. } => {}
         }
     }
 }

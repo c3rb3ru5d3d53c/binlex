@@ -1,44 +1,20 @@
-use crate::Architecture;
-use crate::semantics::{InstructionSemantics, SemanticStatus, SemanticTerminator};
+use crate::semantics::{Semantic, SemanticStatus, SemanticTerminator};
 use crate::symbolic::Error;
-use crate::symbolic::State;
+use crate::symbolic::SymbolicCpuState;
 use std::collections::{BTreeSet, HashMap};
 
 #[derive(Clone)]
-pub struct Executor {
-    architecture: Architecture,
-    address_bits: u16,
+pub struct SymbolicExecutor {
     breakpoints: BTreeSet<u64>,
     hooks: BTreeSet<u64>,
 }
 
-impl Executor {
-    pub fn new(architecture: Architecture) -> Result<Self, Error> {
-        let address_bits = match architecture {
-            Architecture::AMD64 | Architecture::ARM64 | Architecture::CIL => 64,
-            Architecture::I386 => 32,
-            Architecture::UNKNOWN => {
-                return Err(Error::UnsupportedArchitecture("unknown".to_string()));
-            }
-        };
-        Ok(Self {
-            architecture,
-            address_bits,
+impl SymbolicExecutor {
+    pub fn new() -> Self {
+        Self {
             breakpoints: BTreeSet::new(),
             hooks: BTreeSet::new(),
-        })
-    }
-
-    pub fn architecture(&self) -> Architecture {
-        self.architecture
-    }
-
-    pub(crate) fn address_bits(&self) -> u16 {
-        self.address_bits
-    }
-
-    pub fn state(&self) -> State {
-        State::new(self.architecture, self.address_bits)
+        }
     }
 
     pub fn set_breakpoint(&mut self, address: u64) {
@@ -75,9 +51,9 @@ impl Executor {
 
     pub fn step(
         &self,
-        semantics: &InstructionSemantics,
-        state: &State,
-    ) -> Result<Vec<State>, Error> {
+        semantics: &Semantic,
+        state: &SymbolicCpuState,
+    ) -> Result<Vec<SymbolicCpuState>, Error> {
         if !matches!(semantics.status, SemanticStatus::Complete) {
             return Err(Error::UnsupportedExpression(
                 "partial instruction semantics are not executable",
@@ -93,11 +69,11 @@ impl Executor {
     pub fn run<'a, I>(
         &self,
         semantics: I,
-        state: &State,
+        state: &SymbolicCpuState,
         steps: Option<usize>,
-    ) -> Result<Vec<State>, Error>
+    ) -> Result<Vec<SymbolicCpuState>, Error>
     where
-        I: IntoIterator<Item = &'a InstructionSemantics>,
+        I: IntoIterator<Item = &'a Semantic>,
     {
         let semantics = semantics.into_iter().collect::<Vec<_>>();
         if semantics.is_empty() {
@@ -178,11 +154,11 @@ impl Executor {
 
     fn resolve_successor_index(
         &self,
-        semantics: &[&InstructionSemantics],
+        semantics: &[&Semantic],
         address_to_index: &HashMap<u64, usize>,
         current_index: usize,
         previous_pc: Option<u64>,
-        successor: &State,
+        successor: &SymbolicCpuState,
     ) -> Result<Option<usize>, Error> {
         let current = semantics[current_index];
         let current_pc = successor.eval_program_counter_u64()?;
@@ -215,23 +191,21 @@ impl Executor {
 
 #[cfg(test)]
 mod tests {
-    use super::Executor;
+    use super::SymbolicCpuState;
+    use super::SymbolicExecutor;
     use crate::Architecture;
     use crate::Configuration;
     use crate::assemblers::{Assembler, AssemblerBackend};
     use crate::controlflow::Graph;
     use crate::disassemblers::capstone::Disassembler;
     use crate::semantics::{
-        InstructionEncoding, InstructionSemantics, SemanticEffect, SemanticExpression,
+        Semantic, SemanticCpu, SemanticEffect, SemanticEncoding, SemanticExpression,
         SemanticLocation, SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
         SemanticOperationUnary, SemanticStatus, SemanticTerminator,
     };
     use std::collections::{BTreeMap, BTreeSet};
 
-    fn assembled_semantics(
-        architecture: Architecture,
-        assembly: &str,
-    ) -> Vec<InstructionSemantics> {
+    fn assembled_semantics(architecture: Architecture, assembly: &str) -> Vec<Semantic> {
         let config = Configuration::default();
         let assembler = Assembler::new(architecture, config.clone(), AssemblerBackend::Default)
             .expect("assembler");
@@ -261,13 +235,15 @@ mod tests {
 
     #[test]
     fn symbolic_branch_forks() {
-        let executor = Executor::new(Architecture::ARM64).expect("executor");
-        let mut state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let mut state = SymbolicCpuState::new(
+            SemanticCpu::from_architecture(Architecture::ARM64).expect("cpu"),
+        );
         state
             .symbolize_register("x0", 64, Some("input_x0"))
             .expect("symbolize register");
 
-        let semantics = InstructionSemantics {
+        let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -320,10 +296,12 @@ mod tests {
 
     #[test]
     fn symbolic_memory_store_then_load() {
-        let executor = Executor::new(Architecture::AMD64).expect("executor");
-        let state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let state = SymbolicCpuState::new(
+            SemanticCpu::from_architecture(Architecture::AMD64).expect("cpu"),
+        );
 
-        let semantics = InstructionSemantics {
+        let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -370,9 +348,275 @@ mod tests {
     }
 
     #[test]
+    fn symbolic_indexed_memory_store_then_read() {
+        let executor = SymbolicExecutor::new();
+        let state =
+            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
+
+        let location = SemanticLocation::IndexedMemory {
+            name: "locals".to_string(),
+            index: Box::new(SemanticExpression::Const { value: 2, bits: 32 }),
+            bits: 32,
+        };
+        let semantics = Semantic {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
+            temporaries: Vec::new(),
+            effects: vec![
+                SemanticEffect::Set {
+                    dst: location.clone(),
+                    expression: SemanticExpression::Const {
+                        value: 0x41424344,
+                        bits: 32,
+                    },
+                },
+                SemanticEffect::Set {
+                    dst: SemanticLocation::Register {
+                        name: "eax".to_string(),
+                        bits: 32,
+                    },
+                    expression: SemanticExpression::Read(Box::new(location)),
+                },
+            ],
+            terminator: SemanticTerminator::FallThrough,
+            diagnostics: Vec::new(),
+        };
+
+        let states = executor.step(&semantics, &state).expect("step");
+        let value = states[0]
+            .evaluate_register("eax", 32)
+            .expect("evaluate register")
+            .expect("concrete register");
+        assert_eq!(value, 0x41424344);
+    }
+
+    #[test]
+    fn symbolic_stack_memory_store_then_read() {
+        let executor = SymbolicExecutor::new();
+        let state =
+            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
+
+        let location = SemanticLocation::StackMemory {
+            name: "value_stack".to_string(),
+            offset: 0,
+            bits: 32,
+        };
+        let semantics = Semantic {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
+            temporaries: Vec::new(),
+            effects: vec![
+                SemanticEffect::Set {
+                    dst: location.clone(),
+                    expression: SemanticExpression::Const {
+                        value: 0x11223344,
+                        bits: 32,
+                    },
+                },
+                SemanticEffect::Set {
+                    dst: SemanticLocation::Register {
+                        name: "eax".to_string(),
+                        bits: 32,
+                    },
+                    expression: SemanticExpression::Read(Box::new(location)),
+                },
+            ],
+            terminator: SemanticTerminator::FallThrough,
+            diagnostics: Vec::new(),
+        };
+
+        let states = executor.step(&semantics, &state).expect("step");
+        let value = states[0]
+            .evaluate_register("eax", 32)
+            .expect("evaluate register")
+            .expect("concrete register");
+        assert_eq!(value, 0x11223344);
+    }
+
+    #[test]
+    fn symbolic_stack_push_and_pop_execute() {
+        let executor = SymbolicExecutor::new();
+        let state =
+            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
+
+        let semantics = Semantic {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
+            temporaries: Vec::new(),
+            effects: vec![
+                SemanticEffect::Push {
+                    stack: "value_stack".to_string(),
+                    expression: SemanticExpression::Const { value: 1, bits: 32 },
+                },
+                SemanticEffect::Push {
+                    stack: "value_stack".to_string(),
+                    expression: SemanticExpression::Const { value: 2, bits: 32 },
+                },
+                SemanticEffect::Pop {
+                    stack: "value_stack".to_string(),
+                    dst: SemanticLocation::Register {
+                        name: "eax".to_string(),
+                        bits: 32,
+                    },
+                },
+                SemanticEffect::Pop {
+                    stack: "value_stack".to_string(),
+                    dst: SemanticLocation::Register {
+                        name: "ebx".to_string(),
+                        bits: 32,
+                    },
+                },
+            ],
+            terminator: SemanticTerminator::FallThrough,
+            diagnostics: Vec::new(),
+        };
+
+        let states = executor.step(&semantics, &state).expect("step");
+        assert_eq!(
+            states[0]
+                .evaluate_register("eax", 32)
+                .expect("evaluate eax")
+                .expect("concrete eax"),
+            2
+        );
+        assert_eq!(
+            states[0]
+                .evaluate_register("ebx", 32)
+                .expect("evaluate ebx")
+                .expect("concrete ebx"),
+            1
+        );
+    }
+
+    #[test]
+    fn symbolic_reference_property_write_then_read() {
+        let executor = SymbolicExecutor::new();
+        let state =
+            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::CIL).expect("cpu"));
+
+        let object = SemanticExpression::Allocate {
+            kind: "object".to_string(),
+            bits: 64,
+        };
+        let semantics = Semantic {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
+            temporaries: Vec::new(),
+            effects: vec![
+                SemanticEffect::Set {
+                    dst: SemanticLocation::Temporary { id: 0, bits: 64 },
+                    expression: object,
+                },
+                SemanticEffect::WriteProperty {
+                    reference: SemanticExpression::Read(Box::new(SemanticLocation::Temporary {
+                        id: 0,
+                        bits: 64,
+                    })),
+                    name: "length".to_string(),
+                    expression: SemanticExpression::Const { value: 7, bits: 32 },
+                    bits: 32,
+                },
+                SemanticEffect::Set {
+                    dst: SemanticLocation::Register {
+                        name: "pc".to_string(),
+                        bits: 32,
+                    },
+                    expression: SemanticExpression::ReadProperty {
+                        reference: Box::new(SemanticExpression::Read(Box::new(
+                            SemanticLocation::Temporary { id: 0, bits: 64 },
+                        ))),
+                        name: "length".to_string(),
+                        bits: 32,
+                    },
+                },
+            ],
+            terminator: SemanticTerminator::FallThrough,
+            diagnostics: Vec::new(),
+        };
+
+        let states = executor.step(&semantics, &state).expect("step");
+        assert_eq!(
+            states[0]
+                .evaluate_register("pc", 32)
+                .expect("evaluate pc")
+                .expect("concrete pc"),
+            7
+        );
+    }
+
+    #[test]
+    fn symbolic_reference_element_write_then_read() {
+        let executor = SymbolicExecutor::new();
+        let state =
+            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::CIL).expect("cpu"));
+
+        let semantics = Semantic {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
+            temporaries: Vec::new(),
+            effects: vec![
+                SemanticEffect::Set {
+                    dst: SemanticLocation::Temporary { id: 0, bits: 64 },
+                    expression: SemanticExpression::Allocate {
+                        kind: "array".to_string(),
+                        bits: 64,
+                    },
+                },
+                SemanticEffect::WriteElement {
+                    reference: SemanticExpression::Read(Box::new(SemanticLocation::Temporary {
+                        id: 0,
+                        bits: 64,
+                    })),
+                    index: SemanticExpression::Const { value: 3, bits: 32 },
+                    expression: SemanticExpression::Const {
+                        value: 0x55,
+                        bits: 8,
+                    },
+                    bits: 8,
+                },
+                SemanticEffect::Set {
+                    dst: SemanticLocation::Register {
+                        name: "pc".to_string(),
+                        bits: 8,
+                    },
+                    expression: SemanticExpression::ReadElement {
+                        reference: Box::new(SemanticExpression::Read(Box::new(
+                            SemanticLocation::Temporary { id: 0, bits: 64 },
+                        ))),
+                        index: Box::new(SemanticExpression::Const { value: 3, bits: 32 }),
+                        bits: 8,
+                    },
+                },
+            ],
+            terminator: SemanticTerminator::FallThrough,
+            diagnostics: Vec::new(),
+        };
+
+        let states = executor.step(&semantics, &state).expect("step");
+        assert_eq!(
+            states[0]
+                .evaluate_register("pc", 8)
+                .expect("evaluate pc")
+                .expect("concrete pc"),
+            0x55
+        );
+    }
+
+    #[test]
     fn symbolic_state_read_memory_returns_concrete_bytes() {
-        let executor = Executor::new(Architecture::AMD64).expect("executor");
-        let mut state = executor.state();
+        let mut state = SymbolicCpuState::new(
+            SemanticCpu::from_architecture(Architecture::AMD64).expect("cpu"),
+        );
         state.map_memory(0x5000, 4);
         state
             .write_memory(0x5000, &[0x44, 0x33, 0x22, 0x11])
@@ -387,9 +631,11 @@ mod tests {
 
     #[test]
     fn symbolic_unary_popcount_executes() {
-        let executor = Executor::new(Architecture::ARM64).expect("executor");
-        let state = executor.state();
-        let semantics = InstructionSemantics {
+        let executor = SymbolicExecutor::new();
+        let state = SymbolicCpuState::new(
+            SemanticCpu::from_architecture(Architecture::ARM64).expect("cpu"),
+        );
+        let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -424,9 +670,11 @@ mod tests {
 
     #[test]
     fn symbolic_mul_high_executes() {
-        let executor = Executor::new(Architecture::ARM64).expect("executor");
-        let state = executor.state();
-        let semantics = InstructionSemantics {
+        let executor = SymbolicExecutor::new();
+        let state = SymbolicCpuState::new(
+            SemanticCpu::from_architecture(Architecture::ARM64).expect("cpu"),
+        );
+        let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -462,9 +710,11 @@ mod tests {
 
     #[test]
     fn partial_semantics_are_rejected() {
-        let executor = Executor::new(Architecture::AMD64).expect("executor");
-        let state = executor.state();
-        let semantics = InstructionSemantics {
+        let executor = SymbolicExecutor::new();
+        let state = SymbolicCpuState::new(
+            SemanticCpu::from_architecture(Architecture::AMD64).expect("cpu"),
+        );
+        let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Partial,
             abi: None,
@@ -479,9 +729,11 @@ mod tests {
 
     #[test]
     fn symbolic_trace_run_executes() {
-        let executor = Executor::new(Architecture::AMD64).expect("executor");
-        let state = executor.state();
-        let first = InstructionSemantics {
+        let executor = SymbolicExecutor::new();
+        let state = SymbolicCpuState::new(
+            SemanticCpu::from_architecture(Architecture::AMD64).expect("cpu"),
+        );
+        let first = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -497,7 +749,7 @@ mod tests {
             terminator: SemanticTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        let second = InstructionSemantics {
+        let second = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -548,13 +800,14 @@ mod tests {
 
     #[test]
     fn symbolic_run_follows_concrete_control_flow() {
-        let executor = Executor::new(Architecture::I386).expect("executor");
-        let state = executor.state();
-        let setup = InstructionSemantics {
+        let executor = SymbolicExecutor::new();
+        let state =
+            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
+        let setup = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
-            encoding: Some(InstructionEncoding {
+            encoding: Some(SemanticEncoding {
                 architecture: "i386".to_string(),
                 mnemonic: "mov".to_string(),
                 disassembly: "mov ecx, 3".to_string(),
@@ -572,11 +825,11 @@ mod tests {
             terminator: SemanticTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        let loop_body = InstructionSemantics {
+        let loop_body = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
-            encoding: Some(InstructionEncoding {
+            encoding: Some(SemanticEncoding {
                 architecture: "i386".to_string(),
                 mnemonic: "dec".to_string(),
                 disassembly: "dec ecx".to_string(),
@@ -624,11 +877,11 @@ mod tests {
             },
             diagnostics: Vec::new(),
         };
-        let exit = InstructionSemantics {
+        let exit = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
-            encoding: Some(InstructionEncoding {
+            encoding: Some(SemanticEncoding {
                 architecture: "i386".to_string(),
                 mnemonic: "mov".to_string(),
                 disassembly: "mov eax, 0x41".to_string(),
@@ -672,17 +925,18 @@ mod tests {
 
     #[test]
     fn symbolic_run_stops_at_non_concrete_control_flow() {
-        let executor = Executor::new(Architecture::I386).expect("executor");
-        let mut state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let mut state =
+            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
         state
             .symbolize_register("eax", 32, Some("input_eax"))
             .expect("symbolize register");
 
-        let branch = InstructionSemantics {
+        let branch = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
-            encoding: Some(InstructionEncoding {
+            encoding: Some(SemanticEncoding {
                 architecture: "i386".to_string(),
                 mnemonic: "jne".to_string(),
                 disassembly: "jne 0x1005".to_string(),
@@ -714,11 +968,11 @@ mod tests {
             },
             diagnostics: Vec::new(),
         };
-        let taken = InstructionSemantics {
+        let taken = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
-            encoding: Some(InstructionEncoding {
+            encoding: Some(SemanticEncoding {
                 architecture: "i386".to_string(),
                 mnemonic: "mov".to_string(),
                 disassembly: "mov ebx, 1".to_string(),
@@ -736,11 +990,11 @@ mod tests {
             terminator: SemanticTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        let not_taken = InstructionSemantics {
+        let not_taken = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
-            encoding: Some(InstructionEncoding {
+            encoding: Some(SemanticEncoding {
                 architecture: "i386".to_string(),
                 mnemonic: "mov".to_string(),
                 disassembly: "mov ebx, 2".to_string(),
@@ -784,13 +1038,15 @@ mod tests {
 
     #[test]
     fn symbolic_run_honors_step_budget() {
-        let executor = Executor::new(Architecture::AMD64).expect("executor");
-        let state = executor.state();
-        let first = InstructionSemantics {
+        let executor = SymbolicExecutor::new();
+        let state = SymbolicCpuState::new(
+            SemanticCpu::from_architecture(Architecture::AMD64).expect("cpu"),
+        );
+        let first = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
-            encoding: Some(InstructionEncoding {
+            encoding: Some(SemanticEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "mov".to_string(),
                 disassembly: "mov rax, 7".to_string(),
@@ -808,11 +1064,11 @@ mod tests {
             terminator: SemanticTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        let second = InstructionSemantics {
+        let second = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
-            encoding: Some(InstructionEncoding {
+            encoding: Some(SemanticEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "mov".to_string(),
                 disassembly: "mov rbx, 9".to_string(),
@@ -852,14 +1108,16 @@ mod tests {
 
     #[test]
     fn symbolic_run_stops_at_breakpoint_before_execution() {
-        let mut executor = Executor::new(Architecture::AMD64).expect("executor");
+        let mut executor = SymbolicExecutor::new();
         executor.set_breakpoint(0x401001);
-        let state = executor.state();
-        let first = InstructionSemantics {
+        let state = SymbolicCpuState::new(
+            SemanticCpu::from_architecture(Architecture::AMD64).expect("cpu"),
+        );
+        let first = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
-            encoding: Some(InstructionEncoding {
+            encoding: Some(SemanticEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "mov".to_string(),
                 disassembly: "mov rax, 7".to_string(),
@@ -877,11 +1135,11 @@ mod tests {
             terminator: SemanticTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        let second = InstructionSemantics {
+        let second = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
-            encoding: Some(InstructionEncoding {
+            encoding: Some(SemanticEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "mov".to_string(),
                 disassembly: "mov rbx, 9".to_string(),
@@ -926,14 +1184,16 @@ mod tests {
 
     #[test]
     fn symbolic_run_stops_at_hook_before_execution() {
-        let mut executor = Executor::new(Architecture::AMD64).expect("executor");
+        let mut executor = SymbolicExecutor::new();
         executor.add_hook(0x401001);
-        let state = executor.state();
-        let first = InstructionSemantics {
+        let state = SymbolicCpuState::new(
+            SemanticCpu::from_architecture(Architecture::AMD64).expect("cpu"),
+        );
+        let first = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
-            encoding: Some(InstructionEncoding {
+            encoding: Some(SemanticEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "mov".to_string(),
                 disassembly: "mov rax, 7".to_string(),
@@ -951,11 +1211,11 @@ mod tests {
             terminator: SemanticTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        let second = InstructionSemantics {
+        let second = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
-            encoding: Some(InstructionEncoding {
+            encoding: Some(SemanticEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "mov".to_string(),
                 disassembly: "mov rbx, 9".to_string(),
@@ -1011,8 +1271,9 @@ mod tests {
             ret
             ",
         );
-        let executor = Executor::new(Architecture::I386).expect("executor");
-        let mut state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let mut state =
+            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("esp", 32, 0x3000).expect("set register");
         state.map_memory(0x2000, 0x2000);
         state
@@ -1049,8 +1310,10 @@ mod tests {
             ret
             ",
         );
-        let executor = Executor::new(Architecture::AMD64).expect("executor");
-        let mut state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let mut state = SymbolicCpuState::new(
+            SemanticCpu::from_architecture(Architecture::AMD64).expect("cpu"),
+        );
         state.set_register("rsp", 64, 0x3000).expect("set register");
         state.map_memory(0x2000, 0x2000);
         state
@@ -1087,9 +1350,11 @@ mod tests {
             ret
             ",
         );
-        let mut executor = Executor::new(Architecture::ARM64).expect("executor");
+        let mut executor = SymbolicExecutor::new();
         executor.set_breakpoint(0x4);
-        let state = executor.state();
+        let state = SymbolicCpuState::new(
+            SemanticCpu::from_architecture(Architecture::ARM64).expect("cpu"),
+        );
         let states = executor.run(semantics.iter(), &state, None).expect("run");
         assert_eq!(states.len(), 1);
         assert_eq!(
@@ -1109,8 +1374,9 @@ mod tests {
 
     #[test]
     fn symbolic_memory_u64_eval_executes() {
-        let executor = Executor::new(Architecture::AMD64).expect("executor");
-        let mut state = executor.state();
+        let mut state = SymbolicCpuState::new(
+            SemanticCpu::from_architecture(Architecture::AMD64).expect("cpu"),
+        );
         state
             .write_memory(0x5000, &[0x44, 0x33, 0x22, 0x11])
             .expect("write memory");
@@ -1125,9 +1391,11 @@ mod tests {
 
     #[test]
     fn symbolic_call_sets_program_counter() {
-        let executor = Executor::new(Architecture::ARM64).expect("executor");
-        let state = executor.state();
-        let semantics = InstructionSemantics {
+        let executor = SymbolicExecutor::new();
+        let state = SymbolicCpuState::new(
+            SemanticCpu::from_architecture(Architecture::ARM64).expect("cpu"),
+        );
+        let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -1156,18 +1424,20 @@ mod tests {
 
     #[test]
     fn slice_from_register_returns_dependency_chain() {
-        let executor = Executor::new(Architecture::AMD64).expect("executor");
-        let mut state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let mut state = SymbolicCpuState::new(
+            SemanticCpu::from_architecture(Architecture::AMD64).expect("cpu"),
+        );
         state
             .symbolize_memory(0x1000, 1, Some("input"))
             .expect("symbolize memory");
         state.set_register("rdi", 64, 0x1000).expect("set register");
 
-        let first = InstructionSemantics {
+        let first = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
-            encoding: Some(InstructionEncoding {
+            encoding: Some(SemanticEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "movzx".to_string(),
                 disassembly: "movzx eax, byte ptr [rdi]".to_string(),
@@ -1194,11 +1464,11 @@ mod tests {
             terminator: SemanticTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        let second = InstructionSemantics {
+        let second = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
-            encoding: Some(InstructionEncoding {
+            encoding: Some(SemanticEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "sub".to_string(),
                 disassembly: "sub eax, 1".to_string(),
@@ -1226,11 +1496,11 @@ mod tests {
             terminator: SemanticTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        let third = InstructionSemantics {
+        let third = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
-            encoding: Some(InstructionEncoding {
+            encoding: Some(SemanticEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "mov".to_string(),
                 disassembly: "mov ecx, eax".to_string(),
@@ -1268,17 +1538,19 @@ mod tests {
 
     #[test]
     fn slice_from_memory_returns_store_dependency() {
-        let executor = Executor::new(Architecture::AMD64).expect("executor");
-        let mut state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let mut state = SymbolicCpuState::new(
+            SemanticCpu::from_architecture(Architecture::AMD64).expect("cpu"),
+        );
         state
             .symbolize_register("al", 8, Some("input_al"))
             .expect("symbolize register");
 
-        let semantics = InstructionSemantics {
+        let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
-            encoding: Some(InstructionEncoding {
+            encoding: Some(SemanticEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "mov".to_string(),
                 disassembly: "mov byte ptr [0x3000], al".to_string(),
@@ -1314,18 +1586,20 @@ mod tests {
 
     #[test]
     fn slice_from_register_preserves_x86_subregister_dependencies() {
-        let executor = Executor::new(Architecture::AMD64).expect("executor");
-        let mut state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let mut state = SymbolicCpuState::new(
+            SemanticCpu::from_architecture(Architecture::AMD64).expect("cpu"),
+        );
         state
             .symbolize_memory(0x1000, 1, Some("input"))
             .expect("symbolize memory");
         state.set_register("rdi", 64, 0x1000).expect("set register");
 
-        let first = InstructionSemantics {
+        let first = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
-            encoding: Some(InstructionEncoding {
+            encoding: Some(SemanticEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "movzx".to_string(),
                 disassembly: "movzx eax, byte ptr [rdi]".to_string(),
@@ -1352,11 +1626,11 @@ mod tests {
             terminator: SemanticTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        let second = InstructionSemantics {
+        let second = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
-            encoding: Some(InstructionEncoding {
+            encoding: Some(SemanticEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "movsx".to_string(),
                 disassembly: "movsx eax, al".to_string(),
@@ -1383,11 +1657,11 @@ mod tests {
             terminator: SemanticTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        let third = InstructionSemantics {
+        let third = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
-            encoding: Some(InstructionEncoding {
+            encoding: Some(SemanticEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "mov".to_string(),
                 disassembly: "mov ecx, eax".to_string(),
@@ -1429,8 +1703,10 @@ mod tests {
 
     #[test]
     fn symbolic_fp_add32_executes() {
-        let executor = Executor::new(Architecture::ARM64).expect("executor");
-        let mut state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let mut state = SymbolicCpuState::new(
+            SemanticCpu::from_architecture(Architecture::ARM64).expect("cpu"),
+        );
         state
             .set_register("s0", 32, 1.5f32.to_bits() as u64)
             .expect("set register");
@@ -1438,7 +1714,7 @@ mod tests {
             .set_register("s1", 32, 2.25f32.to_bits() as u64)
             .expect("set register");
 
-        let semantics = InstructionSemantics {
+        let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -1482,11 +1758,13 @@ mod tests {
 
     #[test]
     fn symbolic_fp_casts_execute() {
-        let executor = Executor::new(Architecture::ARM64).expect("executor");
-        let mut state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let mut state = SymbolicCpuState::new(
+            SemanticCpu::from_architecture(Architecture::ARM64).expect("cpu"),
+        );
         state.set_register("x0", 64, 42).expect("set register");
 
-        let to_float = InstructionSemantics {
+        let to_float = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -1511,7 +1789,7 @@ mod tests {
             terminator: SemanticTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        let from_float = InstructionSemantics {
+        let from_float = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -1558,8 +1836,10 @@ mod tests {
 
     #[test]
     fn symbolic_fp_unordered_compare_executes() {
-        let executor = Executor::new(Architecture::ARM64).expect("executor");
-        let mut state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let mut state = SymbolicCpuState::new(
+            SemanticCpu::from_architecture(Architecture::ARM64).expect("cpu"),
+        );
         state
             .set_register("d0", 64, f64::NAN.to_bits())
             .expect("set register");
@@ -1567,7 +1847,7 @@ mod tests {
             .set_register("d1", 64, 1.0f64.to_bits())
             .expect("set register");
 
-        let semantics = InstructionSemantics {
+        let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -1611,13 +1891,15 @@ mod tests {
 
     #[test]
     fn symbolic_fp_neg_executes() {
-        let executor = Executor::new(Architecture::ARM64).expect("executor");
-        let mut state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let mut state = SymbolicCpuState::new(
+            SemanticCpu::from_architecture(Architecture::ARM64).expect("cpu"),
+        );
         state
             .set_register("d0", 64, 3.5f64.to_bits())
             .expect("set register");
 
-        let semantics = InstructionSemantics {
+        let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -1655,10 +1937,12 @@ mod tests {
 
     #[test]
     fn symbolic_fp_neg_of_const_executes() {
-        let executor = Executor::new(Architecture::ARM64).expect("executor");
-        let state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let state = SymbolicCpuState::new(
+            SemanticCpu::from_architecture(Architecture::ARM64).expect("cpu"),
+        );
 
-        let semantics = InstructionSemantics {
+        let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -1694,13 +1978,15 @@ mod tests {
 
     #[test]
     fn symbolic_fp_neg_of_memory_load_executes() {
-        let executor = Executor::new(Architecture::ARM64).expect("executor");
-        let mut state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let mut state = SymbolicCpuState::new(
+            SemanticCpu::from_architecture(Architecture::ARM64).expect("cpu"),
+        );
         state
             .write_memory(0x8000, &3.5f64.to_bits().to_le_bytes())
             .expect("write memory");
 
-        let semantics = InstructionSemantics {
+        let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -1740,11 +2026,13 @@ mod tests {
 
     #[test]
     fn symbolic_integer_neg_still_executes() {
-        let executor = Executor::new(Architecture::ARM64).expect("executor");
-        let mut state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let mut state = SymbolicCpuState::new(
+            SemanticCpu::from_architecture(Architecture::ARM64).expect("cpu"),
+        );
         state.set_register("x0", 64, 7).expect("set register");
 
-        let semantics = InstructionSemantics {
+        let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -1782,12 +2070,13 @@ mod tests {
 
     #[test]
     fn symbolic_float80_compare_executes() {
-        let executor = Executor::new(Architecture::I386).expect("executor");
-        let mut state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let mut state =
+            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 1).expect("set register");
         state.set_register("ebx", 32, 2).expect("set register");
 
-        let to_fp80_left = InstructionSemantics {
+        let to_fp80_left = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -1813,7 +2102,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let to_fp80_right = InstructionSemantics {
+        let to_fp80_right = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -1839,7 +2128,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let compare = InstructionSemantics {
+        let compare = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -1885,11 +2174,12 @@ mod tests {
 
     #[test]
     fn symbolic_float80_truncate_to_f64_executes() {
-        let executor = Executor::new(Architecture::I386).expect("executor");
-        let mut state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let mut state =
+            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 42).expect("set register");
 
-        let to_fp80 = InstructionSemantics {
+        let to_fp80 = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -1915,7 +2205,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let truncate = InstructionSemantics {
+        let truncate = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -1955,12 +2245,13 @@ mod tests {
 
     #[test]
     fn symbolic_x87_const_add_store_executes() {
-        let executor = Executor::new(Architecture::I386).expect("executor");
-        let mut state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let mut state =
+            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 7).expect("set register");
         state.set_register("ebx", 32, 2).expect("set register");
 
-        let lhs = InstructionSemantics {
+        let lhs = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -1986,7 +2277,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let rhs = InstructionSemantics {
+        let rhs = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -2012,7 +2303,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let add = InstructionSemantics {
+        let add = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -2042,7 +2333,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let store = InstructionSemantics {
+        let store = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -2082,13 +2373,14 @@ mod tests {
 
     #[test]
     fn symbolic_x87_load_f32_executes() {
-        let executor = Executor::new(Architecture::I386).expect("executor");
-        let mut state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let mut state =
+            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
         state
             .write_memory(0x9000, &3.25f32.to_bits().to_le_bytes())
             .expect("write memory");
 
-        let load = InstructionSemantics {
+        let load = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -2116,7 +2408,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let store = InstructionSemantics {
+        let store = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -2154,10 +2446,11 @@ mod tests {
 
     #[test]
     fn symbolic_x87_store_i32_executes() {
-        let executor = Executor::new(Architecture::I386).expect("executor");
-        let state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let state =
+            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
 
-        let load = InstructionSemantics {
+        let load = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -2178,7 +2471,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let store = InstructionSemantics {
+        let store = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -2222,12 +2515,13 @@ mod tests {
 
     #[test]
     fn symbolic_x87_store_i32_trunc_executes() {
-        let executor = Executor::new(Architecture::I386).expect("executor");
-        let mut state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let mut state =
+            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 7).expect("set register");
         state.set_register("ebx", 32, 2).expect("set register");
 
-        let to_fp80 = InstructionSemantics {
+        let to_fp80 = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -2253,7 +2547,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let divide = InstructionSemantics {
+        let divide = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -2301,7 +2595,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let store = InstructionSemantics {
+        let store = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -2347,13 +2641,14 @@ mod tests {
 
     #[test]
     fn symbolic_x87_xam_negative_zero_executes() {
-        let executor = Executor::new(Architecture::I386).expect("executor");
-        let mut state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let mut state =
+            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
         state
             .set_register("xmm0", 64, (-0.0f64).to_bits())
             .expect("set register");
 
-        let load = InstructionSemantics {
+        let load = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -2379,7 +2674,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let semantics = InstructionSemantics {
+        let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -2451,13 +2746,14 @@ mod tests {
 
     #[test]
     fn symbolic_x87_xam_infinity_executes() {
-        let executor = Executor::new(Architecture::I386).expect("executor");
-        let mut state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let mut state =
+            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
         state
             .set_register("xmm0", 64, f64::INFINITY.to_bits())
             .expect("set register");
 
-        let load = InstructionSemantics {
+        let load = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -2483,7 +2779,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let semantics = InstructionSemantics {
+        let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -2555,13 +2851,14 @@ mod tests {
 
     #[test]
     fn symbolic_x87_sin_executes() {
-        let executor = Executor::new(Architecture::I386).expect("executor");
-        let mut state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let mut state =
+            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
         state
             .set_register("xmm0", 64, 0.0f64.to_bits())
             .expect("set register");
 
-        let load = InstructionSemantics {
+        let load = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -2587,7 +2884,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let sin = InstructionSemantics {
+        let sin = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -2613,7 +2910,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let store = InstructionSemantics {
+        let store = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -2651,13 +2948,14 @@ mod tests {
 
     #[test]
     fn symbolic_x87_cos_executes() {
-        let executor = Executor::new(Architecture::I386).expect("executor");
-        let mut state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let mut state =
+            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
         state
             .set_register("xmm0", 64, 0.0f64.to_bits())
             .expect("set register");
 
-        let load = InstructionSemantics {
+        let load = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -2683,7 +2981,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let cos = InstructionSemantics {
+        let cos = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -2709,7 +3007,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let store = InstructionSemantics {
+        let store = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -2749,11 +3047,12 @@ mod tests {
 
     #[test]
     fn symbolic_x87_atan2_executes() {
-        let executor = Executor::new(Architecture::I386).expect("executor");
-        let mut state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let mut state =
+            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 1).expect("set register");
 
-        let lhs = InstructionSemantics {
+        let lhs = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -2797,7 +3096,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let atan2 = InstructionSemantics {
+        let atan2 = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -2827,7 +3126,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let store = InstructionSemantics {
+        let store = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -2867,12 +3166,13 @@ mod tests {
 
     #[test]
     fn symbolic_x87_scale_executes() {
-        let executor = Executor::new(Architecture::I386).expect("executor");
-        let mut state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let mut state =
+            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 3).expect("set register");
         state.set_register("ebx", 32, 2).expect("set register");
 
-        let load = InstructionSemantics {
+        let load = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -2916,7 +3216,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let scale = InstructionSemantics {
+        let scale = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -2946,7 +3246,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let store = InstructionSemantics {
+        let store = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -2986,11 +3286,12 @@ mod tests {
 
     #[test]
     fn symbolic_x87_f2xm1_executes() {
-        let executor = Executor::new(Architecture::I386).expect("executor");
-        let mut state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let mut state =
+            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 1).expect("set register");
 
-        let load = InstructionSemantics {
+        let load = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -3016,7 +3317,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let op = InstructionSemantics {
+        let op = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -3042,7 +3343,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let store = InstructionSemantics {
+        let store = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -3082,10 +3383,11 @@ mod tests {
 
     #[test]
     fn symbolic_x87_load_bcd_executes() {
-        let executor = Executor::new(Architecture::I386).expect("executor");
-        let state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let state =
+            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
 
-        let load = InstructionSemantics {
+        let load = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -3109,7 +3411,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let store = InstructionSemantics {
+        let store = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -3147,11 +3449,12 @@ mod tests {
 
     #[test]
     fn symbolic_x87_store_bcd_executes() {
-        let executor = Executor::new(Architecture::I386).expect("executor");
-        let mut state = executor.state();
+        let executor = SymbolicExecutor::new();
+        let mut state =
+            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 42).expect("set register");
 
-        let load = InstructionSemantics {
+        let load = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -3177,7 +3480,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let store = InstructionSemantics {
+        let store = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,

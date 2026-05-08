@@ -1,10 +1,10 @@
 use crate::semantics::{
-    InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation, SemanticStatus,
+    Semantic, SemanticEffect, SemanticExpression, SemanticLocation, SemanticStatus,
     SemanticTerminator,
 };
 use std::io::Error;
 
-pub fn validate_instruction_semantics(semantics: &InstructionSemantics) -> Result<(), Error> {
+pub fn validate_instruction_semantics(semantics: &Semantic) -> Result<(), Error> {
     match semantics.status {
         SemanticStatus::Complete if !semantics.diagnostics.is_empty() => {
             return Err(Error::other(
@@ -104,6 +104,46 @@ fn validate_effect(effect: &SemanticEffect) -> Result<(), Error> {
             validate_expression(desired)?;
             validate_location(observed)?;
         }
+        SemanticEffect::WriteProperty {
+            reference,
+            name,
+            expression,
+            bits,
+        } => {
+            if *bits == 0 {
+                return Err(Error::other("semantic property write has zero width"));
+            }
+            if name.trim().is_empty() {
+                return Err(Error::other("semantic property write has empty name"));
+            }
+            validate_expression(reference)?;
+            validate_expression(expression)?;
+        }
+        SemanticEffect::WriteElement {
+            reference,
+            index,
+            expression,
+            bits,
+        } => {
+            if *bits == 0 {
+                return Err(Error::other("semantic element write has zero width"));
+            }
+            validate_expression(reference)?;
+            validate_expression(index)?;
+            validate_expression(expression)?;
+        }
+        SemanticEffect::Push { stack, expression } => {
+            if stack.trim().is_empty() {
+                return Err(Error::other("semantic push has empty stack name"));
+            }
+            validate_expression(expression)?;
+        }
+        SemanticEffect::Pop { stack, dst } => {
+            if stack.trim().is_empty() {
+                return Err(Error::other("semantic pop has empty stack name"));
+            }
+            validate_location(dst)?;
+        }
         SemanticEffect::Fence { .. } | SemanticEffect::Trap { .. } | SemanticEffect::Nop => {}
         SemanticEffect::Intrinsic { outputs, args, .. } => {
             for output in outputs {
@@ -158,7 +198,8 @@ fn validate_location(location: &SemanticLocation) -> Result<(), Error> {
         SemanticLocation::Register { bits, .. }
         | SemanticLocation::Flag { bits, .. }
         | SemanticLocation::ProgramCounter { bits }
-        | SemanticLocation::Temporary { bits, .. } => {
+        | SemanticLocation::Temporary { bits, .. }
+        | SemanticLocation::StackMemory { bits, .. } => {
             if *bits == 0 {
                 return Err(Error::other("semantic location has zero width"));
             }
@@ -168,6 +209,14 @@ fn validate_location(location: &SemanticLocation) -> Result<(), Error> {
                 return Err(Error::other("semantic memory location has zero width"));
             }
             validate_expression(addr)?;
+        }
+        SemanticLocation::IndexedMemory { index, bits, .. } => {
+            if *bits == 0 {
+                return Err(Error::other(
+                    "semantic indexed memory location has zero width",
+                ));
+            }
+            validate_expression(index)?;
         }
     }
 
@@ -185,7 +234,9 @@ fn validate_expression(expression: &SemanticExpression) -> Result<(), Error> {
     match expression {
         SemanticExpression::Const { .. }
         | SemanticExpression::Undefined { .. }
-        | SemanticExpression::Poison { .. } => {}
+        | SemanticExpression::Poison { .. }
+        | SemanticExpression::Null { .. }
+        | SemanticExpression::Allocate { .. } => {}
         SemanticExpression::Read(location) => validate_location(location)?,
         SemanticExpression::Load { addr, .. } => validate_expression(addr)?,
         SemanticExpression::Unary { arg, .. } => validate_expression(arg)?,
@@ -213,6 +264,20 @@ fn validate_expression(expression: &SemanticExpression) -> Result<(), Error> {
                 validate_expression(part)?;
             }
         }
+        SemanticExpression::ReadProperty {
+            reference, name, ..
+        } => {
+            if name.trim().is_empty() {
+                return Err(Error::other("semantic property read has empty name"));
+            }
+            validate_expression(reference)?;
+        }
+        SemanticExpression::ReadElement {
+            reference, index, ..
+        } => {
+            validate_expression(reference)?;
+            validate_expression(index)?;
+        }
     }
 
     Ok(())
@@ -231,13 +296,19 @@ fn expression_bits(expression: &SemanticExpression) -> u16 {
         | SemanticExpression::Concat { bits, .. }
         | SemanticExpression::Undefined { bits }
         | SemanticExpression::Poison { bits }
-        | SemanticExpression::Intrinsic { bits, .. } => *bits,
+        | SemanticExpression::Intrinsic { bits, .. }
+        | SemanticExpression::Null { bits }
+        | SemanticExpression::Allocate { bits, .. }
+        | SemanticExpression::ReadProperty { bits, .. }
+        | SemanticExpression::ReadElement { bits, .. } => *bits,
         SemanticExpression::Read(location) => match location.as_ref() {
             SemanticLocation::Register { bits, .. }
             | SemanticLocation::Flag { bits, .. }
             | SemanticLocation::ProgramCounter { bits }
             | SemanticLocation::Temporary { bits, .. }
-            | SemanticLocation::Memory { bits, .. } => *bits,
+            | SemanticLocation::Memory { bits, .. }
+            | SemanticLocation::IndexedMemory { bits, .. }
+            | SemanticLocation::StackMemory { bits, .. } => *bits,
         },
     }
 }
@@ -246,13 +317,13 @@ fn expression_bits(expression: &SemanticExpression) -> u16 {
 mod tests {
     use super::validate_instruction_semantics;
     use crate::semantics::{
-        InstructionSemantics, SemanticDiagnostic, SemanticDiagnosticKind, SemanticEffect,
-        SemanticExpression, SemanticStatus, SemanticTerminator,
+        Semantic, SemanticDiagnostic, SemanticDiagnosticKind, SemanticEffect, SemanticExpression,
+        SemanticStatus, SemanticTerminator,
     };
 
     #[test]
     fn rejects_zero_width_store() {
-        let semantics = InstructionSemantics {
+        let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -273,7 +344,7 @@ mod tests {
 
     #[test]
     fn rejects_complete_semantics_with_diagnostics() {
-        let semantics = InstructionSemantics {
+        let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -292,7 +363,7 @@ mod tests {
 
     #[test]
     fn rejects_partial_semantics_without_diagnostics() {
-        let semantics = InstructionSemantics {
+        let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Partial,
             abi: None,

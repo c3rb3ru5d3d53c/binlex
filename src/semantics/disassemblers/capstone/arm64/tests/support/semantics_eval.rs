@@ -1,9 +1,8 @@
 use std::collections::BTreeMap;
 
 use crate::semantics::{
-    InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation,
-    SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
-    SemanticOperationUnary, SemanticTerminator,
+    Semantic, SemanticEffect, SemanticExpression, SemanticLocation, SemanticOperationBinary,
+    SemanticOperationCast, SemanticOperationCompare, SemanticOperationUnary, SemanticTerminator,
 };
 
 use super::common::semantics;
@@ -126,7 +125,7 @@ pub(crate) fn assert_arm64_semantics_match_unicorn(
 fn interpret_arm64_semantics(
     instruction_name: &str,
     bytes: &[u8],
-    semantics: &InstructionSemantics,
+    semantics: &Semantic,
     fixture: &Arm64Fixture,
     tracked_registers: &[String],
 ) -> Arm64Execution {
@@ -687,7 +686,7 @@ fn ext_vec_16b(left: u128, right: u128, immediate: usize) -> u128 {
     u128::from_le_bytes(result)
 }
 
-fn tracked_registers(semantics: &InstructionSemantics, fixture: &Arm64Fixture) -> Vec<String> {
+fn tracked_registers(semantics: &Semantic, fixture: &Arm64Fixture) -> Vec<String> {
     let mut tracked = fixture
         .registers
         .iter()
@@ -703,7 +702,7 @@ fn tracked_registers(semantics: &InstructionSemantics, fixture: &Arm64Fixture) -
     tracked
 }
 
-fn written_locations(semantics: &InstructionSemantics) -> Vec<String> {
+fn written_locations(semantics: &Semantic) -> Vec<String> {
     let mut registers = Vec::new();
     for effect in &semantics.effects {
         match effect {

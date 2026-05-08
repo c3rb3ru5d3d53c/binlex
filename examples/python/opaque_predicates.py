@@ -3,7 +3,8 @@
 import binlex
 from binlex.controlflow import Graph
 from binlex.disassemblers import Disassembler
-from binlex.symbolic import Executor
+from binlex.semantics import SemanticCpu
+from binlex.symbolic import SymbolicCpuState, SymbolicExecutor
 
 
 architecture = binlex.Architecture.I386
@@ -26,14 +27,15 @@ function = graph.get_function(0x00)
 
 assert function, 'failed to disassemble function'
 
-executor = Executor(architecture)
-state = executor.state()
+cpu = SemanticCpu(architecture)
+executor = SymbolicExecutor()
+state = SymbolicCpuState(cpu)
 
 for block in function.blocks():
     for instruction in block.instructions():
         print(f"{hex(instruction.address())}: {instruction.disassembly()}")
 
-        semantics = instruction.semantics()
+        semantics = instruction.semantic()
 
         if semantics is None:
             continue

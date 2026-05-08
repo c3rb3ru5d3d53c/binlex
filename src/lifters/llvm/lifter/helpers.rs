@@ -36,6 +36,12 @@ pub(super) fn render_location(location: &SemanticLocation) -> String {
         SemanticLocation::Memory { space, bits, .. } => {
             format!("mem_{}_{}", render_address_space(space), bits)
         }
+        SemanticLocation::IndexedMemory { name, bits, .. } => {
+            format!("idxmem_{}_{}", sanitize_symbol(name), bits)
+        }
+        SemanticLocation::StackMemory { name, offset, bits } => {
+            format!("stackmem_{}_{}_{}", sanitize_symbol(name), offset, bits)
+        }
     }
 }
 
@@ -47,6 +53,7 @@ pub(super) fn render_address_space(space: &SemanticAddressSpace) -> String {
         SemanticAddressSpace::Heap => "heap".to_string(),
         SemanticAddressSpace::Global => "global".to_string(),
         SemanticAddressSpace::Io => "io".to_string(),
+        SemanticAddressSpace::CpuMemory { name } => format!("cpu_{}", sanitize_symbol(name)),
         SemanticAddressSpace::Segment { name } => format!("segment_{}", sanitize_symbol(name)),
         SemanticAddressSpace::ArchSpecific { name } => {
             format!("arch_{}", sanitize_symbol(name))

@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::semantics::architectures::arm64::Arm64InstructionView;
+use crate::semantics::architectures::arm64::InstructionDetailArm64;
 use crate::semantics::architectures::arm64::builders::memory::{
     build_load_pair, effective_memory_address, operand_expression, register_location,
     writeback_effect,
@@ -29,11 +29,11 @@ use crate::semantics::architectures::arm64::helpers::{
     complete, location_bits, truncate_to_bits, zero_extend_to_bits,
 };
 use crate::semantics::{
-    InstructionSemantics, SemanticAddressSpace, SemanticEffect, SemanticExpression,
-    SemanticLocation, SemanticStatus, SemanticTemporary, SemanticTerminator,
+    Semantic, SemanticAddressSpace, SemanticEffect, SemanticExpression, SemanticLocation,
+    SemanticStatus, SemanticTemporary, SemanticTerminator,
 };
 
-pub(crate) fn build(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+pub(crate) fn build(view: &InstructionDetailArm64) -> Option<Semantic> {
     match view.mnemonic.as_str() {
         "ldaxp" | "ldxp" if view.operand_count >= 3 => build_load_pair(view),
         "ldar" | "ldapr" if view.operand_count >= 2 => build_full_width_load(view),
@@ -62,7 +62,7 @@ pub(crate) fn build(view: &Arm64InstructionView) -> Option<InstructionSemantics>
     }
 }
 
-fn build_full_width_load(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_full_width_load(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let addr = effective_memory_address(view, view.operand(1)?, view.operand(2))?;
     let mut effects = vec![SemanticEffect::Set {
@@ -79,10 +79,7 @@ fn build_full_width_load(view: &Arm64InstructionView) -> Option<InstructionSeman
     Some(complete(SemanticTerminator::FallThrough, effects))
 }
 
-fn build_zero_extend_load(
-    view: &Arm64InstructionView,
-    load_bits: u16,
-) -> Option<InstructionSemantics> {
+fn build_zero_extend_load(view: &InstructionDetailArm64, load_bits: u16) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let addr = effective_memory_address(view, view.operand(1)?, view.operand(2))?;
     let mut effects = vec![SemanticEffect::Set {
@@ -102,10 +99,7 @@ fn build_zero_extend_load(
     Some(complete(SemanticTerminator::FallThrough, effects))
 }
 
-fn build_exclusive_load(
-    view: &Arm64InstructionView,
-    load_bits: Option<u16>,
-) -> Option<InstructionSemantics> {
+fn build_exclusive_load(view: &InstructionDetailArm64, load_bits: Option<u16>) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let addr = effective_memory_address(view, view.operand(1)?, view.operand(2))?;
     let expression = match load_bits {
@@ -136,10 +130,7 @@ fn build_exclusive_load(
     ))
 }
 
-fn build_store(
-    view: &Arm64InstructionView,
-    store_bits: Option<u16>,
-) -> Option<InstructionSemantics> {
+fn build_store(view: &InstructionDetailArm64, store_bits: Option<u16>) -> Option<Semantic> {
     let src = operand_expression(view.operand(0)?)?;
     let addr = effective_memory_address(view, view.operand(1)?, view.operand(2))?;
     let expression = match store_bits {
@@ -160,7 +151,7 @@ fn build_store(
     Some(complete(SemanticTerminator::FallThrough, effects))
 }
 
-fn build_effect_intrinsic(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_effect_intrinsic(view: &InstructionDetailArm64) -> Option<Semantic> {
     let outputs = view
         .operand(0)
         .and_then(register_location)
@@ -182,7 +173,7 @@ fn build_effect_intrinsic(view: &Arm64InstructionView) -> Option<InstructionSema
     ))
 }
 
-fn build_intrinsic_fallthrough(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_intrinsic_fallthrough(view: &InstructionDetailArm64) -> Option<Semantic> {
     let outputs = view
         .operand(0)
         .and_then(register_location)
@@ -202,7 +193,7 @@ fn build_intrinsic_fallthrough(view: &Arm64InstructionView) -> Option<Instructio
     ))
 }
 
-fn build_cas(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_cas(view: &InstructionDetailArm64) -> Option<Semantic> {
     let observed = register_location(view.operand(0)?)?;
     let expected = operand_expression(view.operand(0)?)?;
     let desired = operand_expression(view.operand(1)?)?;
@@ -225,7 +216,7 @@ fn build_cas(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_casp(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_casp(view: &InstructionDetailArm64) -> Option<Semantic> {
     let observed_low = register_location(view.operand(0)?)?;
     let observed_high = register_location(view.operand(1)?)?;
     let expected_low = operand_expression(view.operand(0)?)?;
@@ -241,7 +232,7 @@ fn build_casp(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
         bits: total_bits,
     };
     let temp_expr = SemanticExpression::Read(Box::new(temp_location.clone()));
-    Some(InstructionSemantics {
+    Some(Semantic {
         version: 1,
         status: SemanticStatus::Complete,
         abi: None,

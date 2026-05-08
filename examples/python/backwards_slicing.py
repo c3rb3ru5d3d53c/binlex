@@ -4,7 +4,8 @@ from binlex import Architecture
 from binlex.config import Configuration
 from binlex.controlflow import Graph
 from binlex.disassemblers.capstone import Disassembler
-from binlex.symbolic import Executor
+from binlex.semantics import SemanticCpu
+from binlex.symbolic import SymbolicCpuState, SymbolicExecutor
 
 
 function_address = 0x40056D
@@ -61,8 +62,9 @@ def main():
     disassembler.disassemble_function(0, graph)
     function = graph.functions()[0]
 
-    executor = Executor(Architecture.AMD64)
-    state = executor.state()
+    cpu = SemanticCpu(Architecture.AMD64)
+    executor = SymbolicExecutor()
+    state = SymbolicCpuState(cpu)
 
     state.map_memory(input_address, 5)
     state.symbolize_memory(input_address, 5, "input")
@@ -82,7 +84,7 @@ def main():
     done = False
     for block in function.blocks():
         for instruction in block.instructions():
-            semantics = instruction.semantics()
+            semantics = instruction.semantic()
 
             if not semantics:
                 continue

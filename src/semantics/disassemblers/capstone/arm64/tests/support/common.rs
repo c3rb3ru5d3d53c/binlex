@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use crate::controlflow::{Graph, InstructionRecord};
 use crate::disassemblers::capstone::Disassembler;
 use crate::lifters::llvm::Lifter;
-use crate::semantics::{InstructionSemantics, SemanticStatus};
+use crate::semantics::{Semantic, SemanticStatus};
 use crate::{Architecture, Configuration};
 
 pub(crate) fn disassemble_arm64_single(name: &str, bytes: &[u8]) -> InstructionRecord {
@@ -22,7 +22,7 @@ pub(crate) fn disassemble_arm64_single(name: &str, bytes: &[u8]) -> InstructionR
         .expect("instruction should exist")
 }
 
-pub(crate) fn semantics(name: &str, bytes: &[u8]) -> InstructionSemantics {
+pub(crate) fn semantics(name: &str, bytes: &[u8]) -> Semantic {
     disassemble_arm64_single(name, bytes)
         .semantics
         .expect("instruction should have semantics")
@@ -32,7 +32,7 @@ pub(crate) fn assert_semantics_status(
     name: &str,
     bytes: &[u8],
     expected_status: SemanticStatus,
-) -> InstructionSemantics {
+) -> Semantic {
     let semantics = semantics(name, bytes);
     assert_eq!(
         semantics.status,

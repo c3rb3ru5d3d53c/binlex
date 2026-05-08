@@ -774,14 +774,14 @@ mod tests {
     use crate::lifters::llvm::Abi;
     use crate::lifters::llvm::Lifter;
     use crate::semantics::{
-        InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation, SemanticStatus,
+        Semantic, SemanticEffect, SemanticExpression, SemanticLocation, SemanticStatus,
         SemanticTerminator, SemanticTrapKind,
     };
     use crate::{Architecture, Configuration};
 
     #[test]
     fn arm64_linux_syscall_native_lowering_emits_svc_inline_asm() {
-        let mut semantics = InstructionSemantics {
+        let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: Some(Abi::LinuxSyscall),
@@ -852,7 +852,7 @@ mod tests {
 
     #[test]
     fn amd64_linux_syscall_native_lowering_emits_syscall_inline_asm() {
-        let mut semantics = InstructionSemantics {
+        let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: Some(Abi::LinuxSyscall),
@@ -891,7 +891,7 @@ mod tests {
 
     #[test]
     fn amd64_windows_syscall_native_lowering_emits_syscall_inline_asm() {
-        let mut semantics = InstructionSemantics {
+        let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: Some(Abi::WindowsSyscall),
@@ -929,7 +929,7 @@ mod tests {
 
     #[test]
     fn amd64_windows_syscall_preserves_r10_from_rcx_prep_semantics() {
-        let mut semantics = InstructionSemantics {
+        let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: Some(Abi::WindowsSyscall),
@@ -992,7 +992,7 @@ mod tests {
 
     #[test]
     fn amd64_windows_syscall_uses_rcx_for_r10_when_prep_is_missing() {
-        let mut semantics = InstructionSemantics {
+        let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: Some(Abi::WindowsSyscall),
@@ -1041,7 +1041,7 @@ mod tests {
 
     #[test]
     fn i386_linux_syscall_native_lowering_emits_int_0x80_inline_asm() {
-        let mut semantics = InstructionSemantics {
+        let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: Some(Abi::LinuxSyscall),
@@ -1080,7 +1080,7 @@ mod tests {
 
     #[test]
     fn i386_windows_syscall_native_lowering_emits_int_0x2e_inline_asm() {
-        let mut semantics = InstructionSemantics {
+        let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: Some(Abi::WindowsSyscall),
@@ -1122,7 +1122,7 @@ mod tests {
 
     #[test]
     fn i386_linux_sysenter_native_lowering_emits_sysenter_inline_asm() {
-        let mut semantics = InstructionSemantics {
+        let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: Some(Abi::LinuxSyscall),
@@ -1163,7 +1163,7 @@ mod tests {
 
     #[test]
     fn i386_windows_sysenter_native_lowering_emits_sysenter_inline_asm() {
-        let mut semantics = InstructionSemantics {
+        let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: Some(Abi::WindowsSyscall),
@@ -1207,7 +1207,7 @@ mod tests {
 
     #[test]
     fn arm64_windows_syscall_native_lowering_emits_svc_inline_asm() {
-        let mut semantics = InstructionSemantics {
+        let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: Some(Abi::WindowsSyscall),

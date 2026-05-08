@@ -1,23 +1,30 @@
+use crate::core::Architecture as PyArchitecture;
 use crate::lifters::llvm_abi::Abi as PyAbi;
 use binlex::semantics::{
-    InstructionEncoding as InnerInstructionEncoding,
-    InstructionSemantics as InnerInstructionSemantics, SemanticAddressSpace as InnerAddressSpace,
-    SemanticDiagnostic as InnerSemanticDiagnostic,
+    Semantic as InnerSemantic, SemanticAddressSpace as InnerAddressSpace,
+    SemanticCpu as InnerSemanticCpu, SemanticCpuAlias as InnerSemanticCpuAlias,
+    SemanticCpuAliasWritePolicy as InnerSemanticCpuAliasWritePolicy,
+    SemanticCpuEndian as InnerSemanticCpuEndian,
+    SemanticCpuProgramCounter as InnerSemanticCpuProgramCounter,
+    SemanticCpuRegister as InnerSemanticCpuRegister, SemanticDiagnostic as InnerSemanticDiagnostic,
     SemanticDiagnosticKind as InnerSemanticDiagnosticKind, SemanticEffect as InnerSemanticEffect,
-    SemanticEffectKind as InnerSemanticEffectKind, SemanticExpression as InnerSemanticExpr,
-    SemanticExpressionKind as InnerSemanticExprKind, SemanticFenceKind as InnerFenceKind,
-    SemanticLocation as InnerSemanticLocation, SemanticLocationKind as InnerSemanticLocationKind,
-    SemanticOperation as InnerSemanticOperation, SemanticOperationBinary as InnerSemanticBinaryOp,
-    SemanticOperationCast as InnerSemanticCastOp,
+    SemanticEffectKind as InnerSemanticEffectKind, SemanticEncoding as InnerSemanticEncoding,
+    SemanticExpression as InnerSemanticExpr, SemanticExpressionKind as InnerSemanticExprKind,
+    SemanticFenceKind as InnerFenceKind, SemanticLocation as InnerSemanticLocation,
+    SemanticLocationKind as InnerSemanticLocationKind, SemanticMemory as InnerSemanticMemory,
+    SemanticMemoryAddressed as InnerSemanticMemoryAddressed,
+    SemanticMemoryIndexed as InnerSemanticMemoryIndexed,
+    SemanticMemoryStack as InnerSemanticMemoryStack, SemanticOperation as InnerSemanticOperation,
+    SemanticOperationBinary as InnerSemanticBinaryOp, SemanticOperationCast as InnerSemanticCastOp,
     SemanticOperationCompare as InnerSemanticCompareOp,
     SemanticOperationUnary as InnerSemanticUnaryOp, SemanticStatus as InnerSemanticStatus,
     SemanticTemporary as InnerSemanticTemporary, SemanticTerminator as InnerSemanticTerminator,
     SemanticTerminatorKind as InnerSemanticTerminatorKind, SemanticTrapKind as InnerTrapKind,
 };
 use pyo3::class::basic::CompareOp;
-use pyo3::exceptions::{PyRuntimeError, PyValueError};
+use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyAny, PyModule, PyType};
+use pyo3::types::{PyAny, PyBytes, PyModule, PyType};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
@@ -96,7 +103,21 @@ simple_enum_binding!(
 simple_enum_binding!(
     SemanticEffectKind,
     InnerSemanticEffectKind,
-    { Set, Store, Fence, Trap, Intrinsic, Nop }
+    {
+        Set,
+        Store,
+        MemorySet,
+        MemoryCopy,
+        AtomicCmpXchg,
+        WriteProperty,
+        WriteElement,
+        Push,
+        Pop,
+        Fence,
+        Trap,
+        Intrinsic,
+        Nop
+    }
 );
 simple_enum_binding!(
     SemanticExpressionKind,
@@ -114,7 +135,11 @@ simple_enum_binding!(
         Concat,
         Undefined,
         Poison,
-        Intrinsic
+        Intrinsic,
+        Null,
+        Allocate,
+        ReadProperty,
+        ReadElement
     }
 );
 simple_enum_binding!(
@@ -257,6 +282,13 @@ impl SemanticAddressSpace {
     };
 
     #[staticmethod]
+    pub fn cpu_memory(name: String) -> Self {
+        Self {
+            inner: InnerAddressSpace::CpuMemory { name },
+        }
+    }
+
+    #[staticmethod]
     pub fn segment(name: String) -> Self {
         Self {
             inner: InnerAddressSpace::Segment { name },
@@ -278,6 +310,7 @@ impl SemanticAddressSpace {
             InnerAddressSpace::Heap => "Heap".to_string(),
             InnerAddressSpace::Global => "Global".to_string(),
             InnerAddressSpace::Io => "Io".to_string(),
+            InnerAddressSpace::CpuMemory { name } => format!("CpuMemory({})", name),
             InnerAddressSpace::Segment { name } => format!("Segment({})", name),
             InnerAddressSpace::ArchSpecific { name } => format!("ArchSpecific({})", name),
         }
@@ -565,6 +598,337 @@ impl SemanticDiagnosticKind {
     }
 }
 
+#[pyclass(skip_from_py_object)]
+#[derive(Clone)]
+pub struct SemanticCpu {
+    pub inner: InnerSemanticCpu,
+}
+
+#[pyclass(skip_from_py_object)]
+#[derive(Clone)]
+pub struct SemanticCpuRegister {
+    pub inner: InnerSemanticCpuRegister,
+}
+
+#[pyclass(skip_from_py_object)]
+#[derive(Clone)]
+pub struct SemanticCpuAlias {
+    pub inner: InnerSemanticCpuAlias,
+}
+
+#[pyclass(skip_from_py_object)]
+#[derive(Clone)]
+pub struct SemanticCpuProgramCounter {
+    pub inner: InnerSemanticCpuProgramCounter,
+}
+
+#[pyclass(skip_from_py_object)]
+#[derive(Clone)]
+pub struct SemanticMemoryIndexed {
+    pub inner: InnerSemanticMemoryIndexed,
+}
+
+#[pyclass(skip_from_py_object)]
+#[derive(Clone)]
+pub struct SemanticMemoryStack {
+    pub inner: InnerSemanticMemoryStack,
+}
+
+#[pyclass(skip_from_py_object)]
+#[derive(Clone)]
+pub struct SemanticMemoryAddressed {
+    pub inner: InnerSemanticMemoryAddressed,
+}
+
+#[pyclass(eq, eq_int, from_py_object)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum SemanticCpuEndian {
+    Little,
+    Big,
+}
+
+impl From<SemanticCpuEndian> for InnerSemanticCpuEndian {
+    fn from(value: SemanticCpuEndian) -> Self {
+        match value {
+            SemanticCpuEndian::Little => Self::Little,
+            SemanticCpuEndian::Big => Self::Big,
+        }
+    }
+}
+
+#[pymethods]
+impl SemanticCpuRegister {
+    #[new]
+    #[pyo3(text_signature = "(name, bits)")]
+    pub fn new(name: String, bits: u16) -> Self {
+        Self {
+            inner: InnerSemanticCpuRegister::new(name, bits),
+        }
+    }
+
+    pub fn name(&self) -> String {
+        self.inner.name.clone()
+    }
+
+    pub fn bits(&self) -> u16 {
+        self.inner.bits
+    }
+}
+
+#[pymethods]
+impl SemanticCpuAlias {
+    #[new]
+    #[pyo3(signature = (name, parent, offset, bits, write_policy=None), text_signature = "(name, parent, offset, bits, write_policy=None)")]
+    pub fn new(
+        name: String,
+        parent: String,
+        offset: u16,
+        bits: u16,
+        write_policy: Option<String>,
+    ) -> PyResult<Self> {
+        let inner = match write_policy.as_deref().unwrap_or("preserve") {
+            "preserve" => InnerSemanticCpuAlias::new(name, parent, offset, bits),
+            "zero_extend" => InnerSemanticCpuAlias::zero_extend(name, parent, offset, bits),
+            value => {
+                return Err(PyValueError::new_err(format!(
+                    "invalid semantic CPU alias write policy: {value}"
+                )));
+            }
+        };
+        Ok(Self { inner })
+    }
+
+    pub fn name(&self) -> String {
+        self.inner.name.clone()
+    }
+
+    pub fn parent(&self) -> String {
+        self.inner.parent.clone()
+    }
+
+    pub fn offset(&self) -> u16 {
+        self.inner.offset
+    }
+
+    pub fn bits(&self) -> u16 {
+        self.inner.bits
+    }
+
+    pub fn write_policy(&self) -> String {
+        match self.inner.write_policy {
+            InnerSemanticCpuAliasWritePolicy::Preserve => "preserve",
+            InnerSemanticCpuAliasWritePolicy::ZeroExtend => "zero_extend",
+        }
+        .to_string()
+    }
+}
+
+#[pymethods]
+impl SemanticCpuProgramCounter {
+    #[new]
+    #[pyo3(text_signature = "(name, bits)")]
+    pub fn new(name: String, bits: u16) -> Self {
+        Self {
+            inner: InnerSemanticCpuProgramCounter::new(name, bits),
+        }
+    }
+
+    pub fn name(&self) -> String {
+        self.inner.name.clone()
+    }
+
+    pub fn bits(&self) -> u16 {
+        self.inner.bits
+    }
+}
+
+#[pymethods]
+impl SemanticMemoryIndexed {
+    #[new]
+    #[pyo3(text_signature = "(name)")]
+    pub fn new(name: String) -> Self {
+        Self {
+            inner: InnerSemanticMemoryIndexed::new(name),
+        }
+    }
+
+    pub fn name(&self) -> String {
+        self.inner.name.clone()
+    }
+}
+
+#[pymethods]
+impl SemanticMemoryStack {
+    #[new]
+    #[pyo3(text_signature = "(name)")]
+    pub fn new(name: String) -> Self {
+        Self {
+            inner: InnerSemanticMemoryStack::new(name),
+        }
+    }
+
+    pub fn name(&self) -> String {
+        self.inner.name.clone()
+    }
+}
+
+#[pymethods]
+impl SemanticMemoryAddressed {
+    #[new]
+    #[pyo3(text_signature = "(name, address_bits, endian)")]
+    pub fn new(name: String, address_bits: u16, endian: SemanticCpuEndian) -> Self {
+        Self {
+            inner: InnerSemanticMemoryAddressed::new(name, address_bits, endian.into()),
+        }
+    }
+
+    pub fn name(&self) -> String {
+        self.inner.name.clone()
+    }
+
+    pub fn address_bits(&self) -> u16 {
+        self.inner.address_bits
+    }
+
+    pub fn endian(&self) -> SemanticCpuEndian {
+        match self.inner.endian {
+            InnerSemanticCpuEndian::Little => SemanticCpuEndian::Little,
+            InnerSemanticCpuEndian::Big => SemanticCpuEndian::Big,
+        }
+    }
+}
+
+#[pymethods]
+impl SemanticCpu {
+    #[new]
+    #[pyo3(signature = (source=None, *, name=None, address_bits=None, endian=None, registers=None, aliases=None, program_counter=None, memory=None))]
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        py: Python<'_>,
+        source: Option<Py<PyAny>>,
+        name: Option<String>,
+        address_bits: Option<u16>,
+        endian: Option<SemanticCpuEndian>,
+        registers: Option<Vec<Py<SemanticCpuRegister>>>,
+        aliases: Option<Vec<Py<SemanticCpuAlias>>>,
+        program_counter: Option<Py<SemanticCpuProgramCounter>>,
+        memory: Option<Vec<Py<PyAny>>>,
+    ) -> PyResult<Self> {
+        if let Some(source) = source {
+            if name.is_some()
+                || address_bits.is_some()
+                || endian.is_some()
+                || registers.is_some()
+                || aliases.is_some()
+                || program_counter.is_some()
+                || memory.is_some()
+            {
+                return Err(PyTypeError::new_err(
+                    "SemanticCpu accepts either a built-in Architecture or a custom CPU definition, not both",
+                ));
+            }
+            let architecture = source
+                .bind(py)
+                .extract::<PyRef<'_, PyArchitecture>>()
+                .map_err(|_| PyTypeError::new_err("SemanticCpu source must be an Architecture"))?;
+            let inner = InnerSemanticCpu::from_architecture(architecture.inner)
+                .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+            return Ok(Self { inner });
+        }
+
+        let name = name.ok_or_else(|| PyTypeError::new_err("custom SemanticCpu requires name"))?;
+        let address_bits = address_bits
+            .ok_or_else(|| PyTypeError::new_err("custom SemanticCpu requires address_bits"))?;
+        let endian = endian
+            .ok_or_else(|| PyTypeError::new_err("custom SemanticCpu requires endian"))?
+            .into();
+        let registers = registers
+            .unwrap_or_default()
+            .into_iter()
+            .map(|register| register.borrow(py).inner.clone())
+            .collect::<Vec<_>>();
+        let aliases = aliases
+            .unwrap_or_default()
+            .into_iter()
+            .map(|alias| alias.borrow(py).inner.clone())
+            .collect::<Vec<_>>();
+        let program_counter = program_counter.map(|value| value.borrow(py).inner.clone());
+        let memory = memory
+            .unwrap_or_default()
+            .into_iter()
+            .map(|item| {
+                let bound = item.bind(py);
+                if let Ok(memory) = bound.extract::<PyRef<'_, SemanticMemoryIndexed>>() {
+                    return Ok(InnerSemanticMemory::Indexed(memory.inner.clone()));
+                }
+                if let Ok(memory) = bound.extract::<PyRef<'_, SemanticMemoryStack>>() {
+                    return Ok(InnerSemanticMemory::Stack(memory.inner.clone()));
+                }
+                if let Ok(memory) = bound.extract::<PyRef<'_, SemanticMemoryAddressed>>() {
+                    return Ok(InnerSemanticMemory::Addressed(memory.inner.clone()));
+                }
+                Err(PyTypeError::new_err(
+                    "memory items must be SemanticMemoryIndexed, SemanticMemoryStack, or SemanticMemoryAddressed",
+                ))
+            })
+            .collect::<PyResult<Vec<_>>>()?;
+        let inner = InnerSemanticCpu::new(
+            name,
+            address_bits,
+            endian,
+            registers,
+            aliases,
+            program_counter,
+            memory,
+        )
+        .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(Self { inner })
+    }
+
+    #[staticmethod]
+    pub fn i386() -> PyResult<Self> {
+        InnerSemanticCpu::i386()
+            .map(|inner| Self { inner })
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    #[staticmethod]
+    pub fn amd64() -> PyResult<Self> {
+        InnerSemanticCpu::amd64()
+            .map(|inner| Self { inner })
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    #[staticmethod]
+    pub fn arm64() -> PyResult<Self> {
+        InnerSemanticCpu::arm64()
+            .map(|inner| Self { inner })
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    #[staticmethod]
+    pub fn cil() -> PyResult<Self> {
+        InnerSemanticCpu::cil()
+            .map(|inner| Self { inner })
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    pub fn name(&self) -> String {
+        self.inner.name().to_string()
+    }
+
+    pub fn address_bits(&self) -> u16 {
+        self.inner.address_bits()
+    }
+
+    pub fn endian(&self) -> SemanticCpuEndian {
+        match self.inner.endian() {
+            InnerSemanticCpuEndian::Little => SemanticCpuEndian::Little,
+            InnerSemanticCpuEndian::Big => SemanticCpuEndian::Big,
+        }
+    }
+}
+
 macro_rules! value_wrapper {
     ($name:ident, $inner:ty) => {
         #[pyclass]
@@ -592,12 +956,12 @@ macro_rules! value_wrapper {
 
 value_wrapper!(SemanticTemporary, InnerSemanticTemporary);
 value_wrapper!(SemanticDiagnostic, InnerSemanticDiagnostic);
-value_wrapper!(InstructionEncoding, InnerInstructionEncoding);
+value_wrapper!(SemanticEncoding, InnerSemanticEncoding);
 value_wrapper!(SemanticLocation, InnerSemanticLocation);
 value_wrapper!(SemanticExpression, InnerSemanticExpr);
 value_wrapper!(SemanticEffect, InnerSemanticEffect);
 value_wrapper!(SemanticTerminator, InnerSemanticTerminator);
-value_wrapper!(InstructionSemantics, InnerInstructionSemantics);
+value_wrapper!(Semantic, InnerSemantic);
 
 #[pymethods]
 impl SemanticTemporary {
@@ -723,7 +1087,7 @@ impl SemanticDiagnostic {
 }
 
 #[pymethods]
-impl InstructionEncoding {
+impl SemanticEncoding {
     #[new]
     #[pyo3(signature = (architecture, mnemonic, disassembly, address, bytes=None))]
     pub fn new(
@@ -731,14 +1095,16 @@ impl InstructionEncoding {
         mnemonic: String,
         disassembly: String,
         address: u64,
-        bytes: Option<Vec<u8>>,
+        bytes: Option<&Bound<'_, PyBytes>>,
     ) -> Self {
-        Self::from_inner(InnerInstructionEncoding {
+        Self::from_inner(InnerSemanticEncoding {
             architecture,
             mnemonic,
             disassembly,
             address,
-            bytes: bytes.unwrap_or_default(),
+            bytes: bytes
+                .map(|bytes| bytes.as_bytes().to_vec())
+                .unwrap_or_default(),
         })
     }
     #[classmethod]
@@ -760,8 +1126,8 @@ impl InstructionEncoding {
     pub fn address(&self) -> u64 {
         self.inner.lock().unwrap().address
     }
-    pub fn bytes(&self) -> Vec<u8> {
-        self.inner.lock().unwrap().bytes.clone()
+    pub fn bytes(&self, py: Python<'_>) -> Py<PyBytes> {
+        PyBytes::new(py, &self.inner.lock().unwrap().bytes).unbind()
     }
     pub fn set_architecture(&mut self, architecture: String) {
         self.inner.lock().unwrap().architecture = architecture;
@@ -775,8 +1141,8 @@ impl InstructionEncoding {
     pub fn set_address(&mut self, address: u64) {
         self.inner.lock().unwrap().address = address;
     }
-    pub fn set_bytes(&mut self, bytes: Vec<u8>) {
-        self.inner.lock().unwrap().bytes = bytes;
+    pub fn set_bytes(&mut self, bytes: &Bound<'_, PyBytes>) {
+        self.inner.lock().unwrap().bytes = bytes.as_bytes().to_vec();
     }
     pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         json_value_to_py(
@@ -846,6 +1212,24 @@ impl SemanticLocation {
             bits,
         })
     }
+    #[classmethod]
+    pub fn indexed_memory(
+        _cls: &Bound<'_, PyType>,
+        py: Python<'_>,
+        name: String,
+        index: Py<SemanticExpression>,
+        bits: u16,
+    ) -> Self {
+        Self::from_inner(InnerSemanticLocation::IndexedMemory {
+            name,
+            index: Box::new(index.borrow(py).inner.lock().unwrap().clone()),
+            bits,
+        })
+    }
+    #[classmethod]
+    pub fn stack_memory(_cls: &Bound<'_, PyType>, name: String, offset: u32, bits: u16) -> Self {
+        Self::from_inner(InnerSemanticLocation::StackMemory { name, offset, bits })
+    }
     pub fn kind(&self) -> SemanticLocationKind {
         SemanticLocationKind::from_inner(self.inner.lock().unwrap().kind())
     }
@@ -855,7 +1239,9 @@ impl SemanticLocation {
     pub fn name(&self) -> Option<String> {
         match &*self.inner.lock().unwrap() {
             InnerSemanticLocation::Register { name, .. }
-            | InnerSemanticLocation::Flag { name, .. } => Some(name.clone()),
+            | InnerSemanticLocation::Flag { name, .. }
+            | InnerSemanticLocation::IndexedMemory { name, .. }
+            | InnerSemanticLocation::StackMemory { name, .. } => Some(name.clone()),
             _ => None,
         }
     }
@@ -1059,6 +1445,42 @@ impl SemanticExpression {
             .map(|arg| arg.borrow(py).inner.lock().unwrap().clone())
             .collect();
         Self::from_inner(InnerSemanticExpr::Intrinsic { name, args, bits })
+    }
+    #[classmethod]
+    pub fn null(_cls: &Bound<'_, PyType>, bits: u16) -> Self {
+        Self::from_inner(InnerSemanticExpr::Null { bits })
+    }
+    #[classmethod]
+    pub fn allocate(_cls: &Bound<'_, PyType>, kind: String, bits: u16) -> Self {
+        Self::from_inner(InnerSemanticExpr::Allocate { kind, bits })
+    }
+    #[classmethod]
+    pub fn read_property(
+        _cls: &Bound<'_, PyType>,
+        py: Python<'_>,
+        reference: Py<SemanticExpression>,
+        name: String,
+        bits: u16,
+    ) -> Self {
+        Self::from_inner(InnerSemanticExpr::ReadProperty {
+            reference: Box::new(reference.borrow(py).inner.lock().unwrap().clone()),
+            name,
+            bits,
+        })
+    }
+    #[classmethod]
+    pub fn read_element(
+        _cls: &Bound<'_, PyType>,
+        py: Python<'_>,
+        reference: Py<SemanticExpression>,
+        index: Py<SemanticExpression>,
+        bits: u16,
+    ) -> Self {
+        Self::from_inner(InnerSemanticExpr::ReadElement {
+            reference: Box::new(reference.borrow(py).inner.lock().unwrap().clone()),
+            index: Box::new(index.borrow(py).inner.lock().unwrap().clone()),
+            bits,
+        })
     }
     pub fn kind(&self) -> SemanticExpressionKind {
         SemanticExpressionKind::from_inner(self.inner.lock().unwrap().kind())
@@ -1455,6 +1877,62 @@ impl SemanticEffect {
         })
     }
     #[classmethod]
+    pub fn write_property(
+        _cls: &Bound<'_, PyType>,
+        py: Python<'_>,
+        reference: Py<SemanticExpression>,
+        name: String,
+        expression: Py<SemanticExpression>,
+        bits: u16,
+    ) -> Self {
+        Self::from_inner(InnerSemanticEffect::WriteProperty {
+            reference: reference.borrow(py).inner.lock().unwrap().clone(),
+            name,
+            expression: expression.borrow(py).inner.lock().unwrap().clone(),
+            bits,
+        })
+    }
+    #[classmethod]
+    pub fn write_element(
+        _cls: &Bound<'_, PyType>,
+        py: Python<'_>,
+        reference: Py<SemanticExpression>,
+        index: Py<SemanticExpression>,
+        expression: Py<SemanticExpression>,
+        bits: u16,
+    ) -> Self {
+        Self::from_inner(InnerSemanticEffect::WriteElement {
+            reference: reference.borrow(py).inner.lock().unwrap().clone(),
+            index: index.borrow(py).inner.lock().unwrap().clone(),
+            expression: expression.borrow(py).inner.lock().unwrap().clone(),
+            bits,
+        })
+    }
+    #[classmethod]
+    pub fn push(
+        _cls: &Bound<'_, PyType>,
+        py: Python<'_>,
+        stack: String,
+        expression: Py<SemanticExpression>,
+    ) -> Self {
+        Self::from_inner(InnerSemanticEffect::Push {
+            stack,
+            expression: expression.borrow(py).inner.lock().unwrap().clone(),
+        })
+    }
+    #[classmethod]
+    pub fn pop(
+        _cls: &Bound<'_, PyType>,
+        py: Python<'_>,
+        stack: String,
+        dst: Py<SemanticLocation>,
+    ) -> Self {
+        Self::from_inner(InnerSemanticEffect::Pop {
+            stack,
+            dst: dst.borrow(py).inner.lock().unwrap().clone(),
+        })
+    }
+    #[classmethod]
     pub fn fence(_cls: &Bound<'_, PyType>, py: Python<'_>, kind: Py<SemanticFenceKind>) -> Self {
         Self::from_inner(InnerSemanticEffect::Fence {
             kind: kind.borrow(py).inner.clone(),
@@ -1505,6 +1983,7 @@ impl SemanticEffect {
         let location = match &*self.inner.lock().unwrap() {
             InnerSemanticEffect::Set { dst, .. } => Some(dst.clone()),
             InnerSemanticEffect::AtomicCmpXchg { observed, .. } => Some(observed.clone()),
+            InnerSemanticEffect::Pop { dst, .. } => Some(dst.clone()),
             _ => None,
         };
         location
@@ -1778,7 +2257,7 @@ impl SemanticTerminator {
 }
 
 #[pymethods]
-impl InstructionSemantics {
+impl Semantic {
     #[new]
     #[pyo3(signature = (version, status, abi=None, encoding=None, temporaries=None, effects=None, terminator=None, diagnostics=None))]
     pub fn new(
@@ -1786,7 +2265,7 @@ impl InstructionSemantics {
         version: u32,
         status: Py<SemanticStatus>,
         abi: Option<Py<PyAbi>>,
-        encoding: Option<Py<InstructionEncoding>>,
+        encoding: Option<Py<SemanticEncoding>>,
         temporaries: Option<Vec<Py<SemanticTemporary>>>,
         effects: Option<Vec<Py<SemanticEffect>>>,
         terminator: Option<Py<SemanticTerminator>>,
@@ -1812,7 +2291,7 @@ impl InstructionSemantics {
             .into_iter()
             .map(|item| item.borrow(py).inner.lock().unwrap().clone())
             .collect();
-        Self::from_inner(InnerInstructionSemantics {
+        Self::from_inner(InnerSemantic {
             version,
             status: status.borrow(py).inner,
             abi,
@@ -1843,13 +2322,13 @@ impl InstructionSemantics {
             .abi
             .map(|item| PyAbi { inner: item })
     }
-    pub fn encoding(&self, py: Python<'_>) -> PyResult<Option<Py<InstructionEncoding>>> {
+    pub fn encoding(&self, py: Python<'_>) -> PyResult<Option<Py<SemanticEncoding>>> {
         self.inner
             .lock()
             .unwrap()
             .encoding
             .clone()
-            .map(|item| Py::new(py, InstructionEncoding::from_inner(item)))
+            .map(|item| Py::new(py, SemanticEncoding::from_inner(item)))
             .transpose()
     }
     pub fn temporaries(&self, py: Python<'_>) -> PyResult<Vec<Py<SemanticTemporary>>> {
@@ -1901,7 +2380,7 @@ impl InstructionSemantics {
         let abi = abi.map(|item| item.borrow(py).inner);
         self.inner.lock().unwrap().set_abi(abi);
     }
-    pub fn set_encoding(&mut self, py: Python<'_>, encoding: Option<Py<InstructionEncoding>>) {
+    pub fn set_encoding(&mut self, py: Python<'_>, encoding: Option<Py<SemanticEncoding>>) {
         let encoding = encoding.map(|item| item.borrow(py).inner.lock().unwrap().clone());
         self.inner.lock().unwrap().set_encoding(encoding);
     }
@@ -1980,14 +2459,22 @@ pub fn semantics_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<SemanticOperationCast>()?;
     m.add_class::<SemanticOperationCompare>()?;
     m.add_class::<SemanticDiagnosticKind>()?;
+    m.add_class::<SemanticCpu>()?;
+    m.add_class::<SemanticCpuRegister>()?;
+    m.add_class::<SemanticCpuAlias>()?;
+    m.add_class::<SemanticCpuProgramCounter>()?;
+    m.add_class::<SemanticMemoryIndexed>()?;
+    m.add_class::<SemanticMemoryStack>()?;
+    m.add_class::<SemanticMemoryAddressed>()?;
+    m.add_class::<SemanticCpuEndian>()?;
     m.add_class::<SemanticTemporary>()?;
     m.add_class::<SemanticDiagnostic>()?;
-    m.add_class::<InstructionEncoding>()?;
+    m.add_class::<SemanticEncoding>()?;
     m.add_class::<SemanticLocation>()?;
     m.add_class::<SemanticExpression>()?;
     m.add_class::<SemanticEffect>()?;
     m.add_class::<SemanticTerminator>()?;
-    m.add_class::<InstructionSemantics>()?;
+    m.add_class::<Semantic>()?;
     py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.semantics", m)?;

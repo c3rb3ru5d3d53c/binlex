@@ -20,15 +20,15 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::semantics::InstructionSemantics;
+use crate::semantics::Semantic;
 
 pub mod builders;
 pub mod helpers;
 pub mod instruction;
 
-pub use instruction::CilInstructionView;
+pub use instruction::InstructionDetailCil;
 
-pub fn build(view: CilInstructionView) -> InstructionSemantics {
+pub fn build(view: InstructionDetailCil) -> Semantic {
     if let Some(semantics) = builders::control::build(&view) {
         return semantics;
     }

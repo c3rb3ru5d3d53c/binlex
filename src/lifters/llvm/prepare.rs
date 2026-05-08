@@ -1,19 +1,17 @@
 use crate::lifters::llvm::abi::{coerce_expression_width, normalize_binary, normalize_compare};
 use crate::semantics::{
-    InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation, SemanticTemporary,
+    Semantic, SemanticEffect, SemanticExpression, SemanticLocation, SemanticTemporary,
     SemanticTerminator, normalize_instruction_semantics, validate_instruction_semantics,
 };
 use std::collections::{HashMap, HashSet};
 use std::io::Error;
 
-pub fn prepare_instruction_semantics(
-    semantics: &InstructionSemantics,
-) -> Result<InstructionSemantics, Error> {
+pub fn prepare_instruction_semantics(semantics: &Semantic) -> Result<Semantic, Error> {
     validate_instruction_semantics(semantics)?;
     let normalized = normalize_instruction_semantics(semantics);
     let (temporaries, snapshot_effects, effects, snapshots, load_snapshots) =
         snapshot_written_locations(&normalized);
-    Ok(InstructionSemantics {
+    Ok(Semantic {
         version: normalized.version,
         status: normalized.status,
         abi: normalized.abi,
@@ -34,7 +32,7 @@ pub fn prepare_instruction_semantics(
 }
 
 fn snapshot_written_locations(
-    semantics: &InstructionSemantics,
+    semantics: &Semantic,
 ) -> (
     Vec<SemanticTemporary>,
     Vec<SemanticEffect>,
@@ -118,7 +116,7 @@ fn snapshot_written_locations(
     )
 }
 
-fn collect_read_locations(semantics: &InstructionSemantics) -> HashSet<SemanticLocation> {
+fn collect_read_locations(semantics: &Semantic) -> HashSet<SemanticLocation> {
     let mut reads = HashSet::new();
     for effect in &semantics.effects {
         collect_effect_reads(effect, &mut reads);
@@ -127,7 +125,7 @@ fn collect_read_locations(semantics: &InstructionSemantics) -> HashSet<SemanticL
     reads
 }
 
-fn collect_read_loads(semantics: &InstructionSemantics) -> HashSet<SemanticExpression> {
+fn collect_read_loads(semantics: &Semantic) -> HashSet<SemanticExpression> {
     let mut reads = HashSet::new();
     for effect in &semantics.effects {
         collect_effect_loads(effect, &mut reads);
@@ -136,7 +134,7 @@ fn collect_read_loads(semantics: &InstructionSemantics) -> HashSet<SemanticExpre
     reads
 }
 
-fn collect_written_loads(semantics: &InstructionSemantics) -> HashSet<SemanticExpression> {
+fn collect_written_loads(semantics: &Semantic) -> HashSet<SemanticExpression> {
     let mut writes = HashSet::new();
     for effect in &semantics.effects {
         match effect {
@@ -167,6 +165,7 @@ fn collect_written_loads(semantics: &InstructionSemantics) -> HashSet<SemanticEx
                     bits: *bits,
                 });
             }
+            SemanticEffect::Push { .. } | SemanticEffect::Pop { .. } => {}
             _ => {}
         }
     }
@@ -216,6 +215,26 @@ fn collect_effect_reads(effect: &SemanticEffect, reads: &mut HashSet<SemanticLoc
             collect_expression_reads(expected, reads);
             collect_expression_reads(desired, reads);
         }
+        SemanticEffect::WriteProperty {
+            reference,
+            expression,
+            ..
+        } => {
+            collect_expression_reads(reference, reads);
+            collect_expression_reads(expression, reads);
+        }
+        SemanticEffect::WriteElement {
+            reference,
+            index,
+            expression,
+            ..
+        } => {
+            collect_expression_reads(reference, reads);
+            collect_expression_reads(index, reads);
+            collect_expression_reads(expression, reads);
+        }
+        SemanticEffect::Push { expression, .. } => collect_expression_reads(expression, reads),
+        SemanticEffect::Pop { .. } => {}
         SemanticEffect::Intrinsic { args, .. } => {
             for arg in args {
                 collect_expression_reads(arg, reads);
@@ -268,6 +287,26 @@ fn collect_effect_loads(effect: &SemanticEffect, reads: &mut HashSet<SemanticExp
             collect_expression_loads(expected, reads);
             collect_expression_loads(desired, reads);
         }
+        SemanticEffect::WriteProperty {
+            reference,
+            expression,
+            ..
+        } => {
+            collect_expression_loads(reference, reads);
+            collect_expression_loads(expression, reads);
+        }
+        SemanticEffect::WriteElement {
+            reference,
+            index,
+            expression,
+            ..
+        } => {
+            collect_expression_loads(reference, reads);
+            collect_expression_loads(index, reads);
+            collect_expression_loads(expression, reads);
+        }
+        SemanticEffect::Push { expression, .. } => collect_expression_loads(expression, reads),
+        SemanticEffect::Pop { .. } => {}
         SemanticEffect::Intrinsic { args, .. } => {
             for arg in args {
                 collect_expression_loads(arg, reads);
@@ -380,6 +419,15 @@ fn collect_expression_reads(
         SemanticExpression::Cast { arg, .. } | SemanticExpression::Extract { arg, .. } => {
             collect_expression_reads(arg, reads)
         }
+        SemanticExpression::ReadProperty { reference, .. } => {
+            collect_expression_reads(reference, reads)
+        }
+        SemanticExpression::ReadElement {
+            reference, index, ..
+        } => {
+            collect_expression_reads(reference, reads);
+            collect_expression_reads(index, reads);
+        }
         SemanticExpression::Concat { parts, .. } => {
             for part in parts {
                 collect_expression_reads(part, reads);
@@ -392,7 +440,9 @@ fn collect_expression_reads(
         }
         SemanticExpression::Const { .. }
         | SemanticExpression::Undefined { .. }
-        | SemanticExpression::Poison { .. } => {}
+        | SemanticExpression::Poison { .. }
+        | SemanticExpression::Null { .. }
+        | SemanticExpression::Allocate { .. } => {}
     }
 }
 
@@ -413,6 +463,15 @@ fn collect_expression_loads(
         SemanticExpression::Unary { arg, .. }
         | SemanticExpression::Cast { arg, .. }
         | SemanticExpression::Extract { arg, .. } => collect_expression_loads(arg, reads),
+        SemanticExpression::ReadProperty { reference, .. } => {
+            collect_expression_loads(reference, reads)
+        }
+        SemanticExpression::ReadElement {
+            reference, index, ..
+        } => {
+            collect_expression_loads(reference, reads);
+            collect_expression_loads(index, reads);
+        }
         SemanticExpression::Binary { left, right, .. }
         | SemanticExpression::Compare { left, right, .. } => {
             collect_expression_loads(left, reads);
@@ -440,7 +499,9 @@ fn collect_expression_loads(
         }
         SemanticExpression::Const { .. }
         | SemanticExpression::Undefined { .. }
-        | SemanticExpression::Poison { .. } => {}
+        | SemanticExpression::Poison { .. }
+        | SemanticExpression::Null { .. }
+        | SemanticExpression::Allocate { .. } => {}
     }
 }
 
@@ -537,6 +598,44 @@ fn prepare_effect(
             ),
             bits: *bits,
             observed: observed.clone(),
+        },
+        SemanticEffect::WriteProperty {
+            reference,
+            name,
+            expression,
+            bits,
+        } => SemanticEffect::WriteProperty {
+            reference: prepare_expression(reference, snapshots, load_snapshots),
+            name: name.clone(),
+            expression: prepare_expression(
+                &coerce_expression_width(expression.clone(), *bits),
+                snapshots,
+                load_snapshots,
+            ),
+            bits: *bits,
+        },
+        SemanticEffect::WriteElement {
+            reference,
+            index,
+            expression,
+            bits,
+        } => SemanticEffect::WriteElement {
+            reference: prepare_expression(reference, snapshots, load_snapshots),
+            index: prepare_expression(index, snapshots, load_snapshots),
+            expression: prepare_expression(
+                &coerce_expression_width(expression.clone(), *bits),
+                snapshots,
+                load_snapshots,
+            ),
+            bits: *bits,
+        },
+        SemanticEffect::Push { stack, expression } => SemanticEffect::Push {
+            stack: stack.clone(),
+            expression: prepare_expression(expression, snapshots, load_snapshots),
+        },
+        SemanticEffect::Pop { stack, dst } => SemanticEffect::Pop {
+            stack: stack.clone(),
+            dst: dst.clone(),
         },
         SemanticEffect::Fence { kind } => SemanticEffect::Fence { kind: kind.clone() },
         SemanticEffect::Trap { kind } => SemanticEffect::Trap { kind: kind.clone() },
@@ -699,6 +798,29 @@ fn prepare_expression(
                 .collect(),
             bits: *bits,
         },
+        SemanticExpression::Null { bits } => SemanticExpression::Null { bits: *bits },
+        SemanticExpression::Allocate { kind, bits } => SemanticExpression::Allocate {
+            kind: kind.clone(),
+            bits: *bits,
+        },
+        SemanticExpression::ReadProperty {
+            reference,
+            name,
+            bits,
+        } => SemanticExpression::ReadProperty {
+            reference: Box::new(prepare_expression(reference, snapshots, load_snapshots)),
+            name: name.clone(),
+            bits: *bits,
+        },
+        SemanticExpression::ReadElement {
+            reference,
+            index,
+            bits,
+        } => SemanticExpression::ReadElement {
+            reference: Box::new(prepare_expression(reference, snapshots, load_snapshots)),
+            index: Box::new(prepare_expression(index, snapshots, load_snapshots)),
+            bits: *bits,
+        },
     }
 }
 
@@ -706,13 +828,13 @@ fn prepare_expression(
 mod tests {
     use super::prepare_instruction_semantics;
     use crate::semantics::{
-        InstructionSemantics, SemanticAddressSpace, SemanticEffect, SemanticExpression,
-        SemanticLocation, SemanticOperationBinary, SemanticStatus, SemanticTerminator,
+        Semantic, SemanticAddressSpace, SemanticEffect, SemanticExpression, SemanticLocation,
+        SemanticOperationBinary, SemanticStatus, SemanticTerminator,
     };
 
     #[test]
     fn coerces_store_expression_to_destination_width() {
-        let semantics = InstructionSemantics {
+        let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -743,7 +865,7 @@ mod tests {
 
     #[test]
     fn widens_shift_amount_to_operation_width() {
-        let semantics = InstructionSemantics {
+        let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -780,7 +902,7 @@ mod tests {
 
     #[test]
     fn truncates_mismatched_binary_operand_to_expression_width() {
-        let semantics = InstructionSemantics {
+        let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -817,7 +939,7 @@ mod tests {
 
     #[test]
     fn truncates_mismatched_compare_constant_to_operand_width() {
-        let semantics = InstructionSemantics {
+        let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,

@@ -23,7 +23,7 @@
 use std::collections::BTreeSet;
 
 #[derive(Clone, Debug)]
-pub struct CilInstructionView {
+pub struct InstructionDetailCil {
     pub mnemonic: String,
     pub address: u64,
     operand_bytes: Vec<u8>,
@@ -36,7 +36,7 @@ pub struct CilInstructionView {
     is_switch: bool,
 }
 
-impl CilInstructionView {
+impl InstructionDetailCil {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         mnemonic: String,

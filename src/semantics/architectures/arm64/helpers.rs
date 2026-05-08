@@ -21,9 +21,9 @@
 // SOFTWARE.
 
 use crate::semantics::{
-    InstructionSemantics, SemanticDiagnostic, SemanticDiagnosticKind, SemanticEffect,
-    SemanticExpression, SemanticLocation, SemanticOperationBinary, SemanticOperationCast,
-    SemanticOperationCompare, SemanticOperationUnary, SemanticStatus, SemanticTerminator,
+    Semantic, SemanticDiagnostic, SemanticDiagnosticKind, SemanticEffect, SemanticExpression,
+    SemanticLocation, SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
+    SemanticOperationUnary, SemanticStatus, SemanticTerminator,
 };
 
 pub(crate) fn zero_extend_to_bits(expression: SemanticExpression, bits: u16) -> SemanticExpression {
@@ -92,7 +92,9 @@ pub(crate) fn location_bits(location: &SemanticLocation) -> u16 {
         | SemanticLocation::Flag { bits, .. }
         | SemanticLocation::ProgramCounter { bits }
         | SemanticLocation::Temporary { bits, .. }
-        | SemanticLocation::Memory { bits, .. } => *bits,
+        | SemanticLocation::Memory { bits, .. }
+        | SemanticLocation::IndexedMemory { bits, .. }
+        | SemanticLocation::StackMemory { bits, .. } => *bits,
     }
 }
 
@@ -399,11 +401,8 @@ pub(crate) fn condition_from_cc(cc: u64) -> Option<SemanticExpression> {
     condition_from_suffix(suffix)
 }
 
-pub(crate) fn complete(
-    terminator: SemanticTerminator,
-    effects: Vec<SemanticEffect>,
-) -> InstructionSemantics {
-    InstructionSemantics {
+pub(crate) fn complete(terminator: SemanticTerminator, effects: Vec<SemanticEffect>) -> Semantic {
+    Semantic {
         version: 1,
         status: SemanticStatus::Complete,
         abi: None,

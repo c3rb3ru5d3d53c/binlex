@@ -4,7 +4,7 @@ use binlex::controlflow::graph::Graph;
 use binlex::controlflow::{Block, Function, InstructionRecord};
 use binlex::lifters::vex::Lifter;
 use binlex::semantics::{
-    InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation, SemanticStatus,
+    Semantic, SemanticEffect, SemanticExpression, SemanticLocation, SemanticStatus,
     SemanticTerminator,
 };
 use binlex::{Architecture, Configuration};
@@ -78,8 +78,8 @@ fn instruction(address: u64, bytes: &[u8]) -> InstructionRecord {
         mnemonic: String::new(),
         disassembly: String::new(),
         operands: Vec::new(),
-        semantics_input: None,
-        semantics: Some(InstructionSemantics {
+        instruction_detail: None,
+        semantics: Some(Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,

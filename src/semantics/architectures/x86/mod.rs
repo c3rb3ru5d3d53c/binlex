@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::semantics::InstructionSemantics;
+use crate::semantics::Semantic;
 
 pub mod builders;
 pub mod flags;
@@ -28,10 +28,10 @@ pub mod helpers;
 pub mod instruction;
 pub mod operand;
 
-pub use instruction::X86InstructionView;
+pub use instruction::InstructionDetailX86;
 pub use operand::{X86MemoryOperandView, X86OperandKind, X86OperandView};
 
-pub fn build(view: X86InstructionView) -> Option<InstructionSemantics> {
+pub fn build(view: InstructionDetailX86) -> Option<Semantic> {
     if let Some(semantics) = builders::control::build(view.machine, &view) {
         return Some(semantics);
     }

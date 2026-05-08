@@ -1,9 +1,9 @@
 use crate::semantics::{
-    InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation, SemanticTerminator,
+    Semantic, SemanticEffect, SemanticExpression, SemanticLocation, SemanticTerminator,
 };
 
-pub fn normalize_instruction_semantics(semantics: &InstructionSemantics) -> InstructionSemantics {
-    InstructionSemantics {
+pub fn normalize_instruction_semantics(semantics: &Semantic) -> Semantic {
+    Semantic {
         version: semantics.version,
         status: semantics.status,
         abi: semantics.abi,
@@ -79,6 +79,36 @@ fn normalize_effect(effect: &SemanticEffect) -> SemanticEffect {
             bits: *bits,
             observed: normalize_location(observed),
         },
+        SemanticEffect::WriteProperty {
+            reference,
+            name,
+            expression,
+            bits,
+        } => SemanticEffect::WriteProperty {
+            reference: normalize_expression(reference),
+            name: name.clone(),
+            expression: normalize_expression(expression),
+            bits: *bits,
+        },
+        SemanticEffect::WriteElement {
+            reference,
+            index,
+            expression,
+            bits,
+        } => SemanticEffect::WriteElement {
+            reference: normalize_expression(reference),
+            index: normalize_expression(index),
+            expression: normalize_expression(expression),
+            bits: *bits,
+        },
+        SemanticEffect::Push { stack, expression } => SemanticEffect::Push {
+            stack: stack.clone(),
+            expression: normalize_expression(expression),
+        },
+        SemanticEffect::Pop { stack, dst } => SemanticEffect::Pop {
+            stack: stack.clone(),
+            dst: normalize_location(dst),
+        },
         SemanticEffect::Fence { kind } => SemanticEffect::Fence { kind: kind.clone() },
         SemanticEffect::Trap { kind } => SemanticEffect::Trap { kind: kind.clone() },
         SemanticEffect::Intrinsic {
@@ -146,6 +176,16 @@ fn normalize_location(location: &SemanticLocation) -> SemanticLocation {
         SemanticLocation::Memory { space, addr, bits } => SemanticLocation::Memory {
             space: space.clone(),
             addr: Box::new(normalize_expression(addr)),
+            bits: *bits,
+        },
+        SemanticLocation::IndexedMemory { name, index, bits } => SemanticLocation::IndexedMemory {
+            name: name.clone(),
+            index: Box::new(normalize_expression(index)),
+            bits: *bits,
+        },
+        SemanticLocation::StackMemory { name, offset, bits } => SemanticLocation::StackMemory {
+            name: name.clone(),
+            offset: *offset,
             bits: *bits,
         },
     }
@@ -222,6 +262,29 @@ fn normalize_expression(expression: &SemanticExpression) -> SemanticExpression {
         SemanticExpression::Intrinsic { name, args, bits } => SemanticExpression::Intrinsic {
             name: name.clone(),
             args: args.iter().map(normalize_expression).collect(),
+            bits: *bits,
+        },
+        SemanticExpression::Null { bits } => SemanticExpression::Null { bits: *bits },
+        SemanticExpression::Allocate { kind, bits } => SemanticExpression::Allocate {
+            kind: kind.clone(),
+            bits: *bits,
+        },
+        SemanticExpression::ReadProperty {
+            reference,
+            name,
+            bits,
+        } => SemanticExpression::ReadProperty {
+            reference: Box::new(normalize_expression(reference)),
+            name: name.clone(),
+            bits: *bits,
+        },
+        SemanticExpression::ReadElement {
+            reference,
+            index,
+            bits,
+        } => SemanticExpression::ReadElement {
+            reference: Box::new(normalize_expression(reference)),
+            index: Box::new(normalize_expression(index)),
             bits: *bits,
         },
     }

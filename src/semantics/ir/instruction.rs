@@ -54,13 +54,13 @@ mod semantic_const_value_serde {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct InstructionSemantics {
+pub struct Semantic {
     pub version: u32,
     pub status: SemanticStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub abi: Option<Abi>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub encoding: Option<InstructionEncoding>,
+    pub encoding: Option<SemanticEncoding>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub temporaries: Vec<SemanticTemporary>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -71,13 +71,13 @@ pub struct InstructionSemantics {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct InstructionSemanticsJson {
+pub struct SemanticJson {
     pub version: u32,
     pub status: SemanticStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub abi: Option<Abi>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub encoding: Option<InstructionEncoding>,
+    pub encoding: Option<SemanticEncoding>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub temporaries: Vec<SemanticTemporary>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -88,7 +88,7 @@ pub struct InstructionSemanticsJson {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct InstructionEncoding {
+pub struct SemanticEncoding {
     pub architecture: String,
     pub mnemonic: String,
     pub disassembly: String,
@@ -142,6 +142,16 @@ pub enum SemanticLocation {
         addr: Box<SemanticExpression>,
         bits: u16,
     },
+    IndexedMemory {
+        name: String,
+        index: Box<SemanticExpression>,
+        bits: u16,
+    },
+    StackMemory {
+        name: String,
+        offset: u32,
+        bits: u16,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -152,6 +162,7 @@ pub enum SemanticAddressSpace {
     Heap,
     Global,
     Io,
+    CpuMemory { name: String },
     Segment { name: String },
     ArchSpecific { name: String },
 }
@@ -193,6 +204,26 @@ pub enum SemanticEffect {
         bits: u16,
         observed: SemanticLocation,
     },
+    WriteProperty {
+        reference: SemanticExpression,
+        name: String,
+        expression: SemanticExpression,
+        bits: u16,
+    },
+    WriteElement {
+        reference: SemanticExpression,
+        index: SemanticExpression,
+        expression: SemanticExpression,
+        bits: u16,
+    },
+    Push {
+        stack: String,
+        expression: SemanticExpression,
+    },
+    Pop {
+        stack: String,
+        dst: SemanticLocation,
+    },
     Fence {
         kind: SemanticFenceKind,
     },
@@ -214,6 +245,10 @@ pub enum SemanticEffectKind {
     MemorySet,
     MemoryCopy,
     AtomicCmpXchg,
+    WriteProperty,
+    WriteElement,
+    Push,
+    Pop,
     Fence,
     Trap,
     Intrinsic,
@@ -341,6 +376,23 @@ pub enum SemanticExpression {
         args: Vec<SemanticExpression>,
         bits: u16,
     },
+    Null {
+        bits: u16,
+    },
+    Allocate {
+        kind: String,
+        bits: u16,
+    },
+    ReadProperty {
+        reference: Box<SemanticExpression>,
+        name: String,
+        bits: u16,
+    },
+    ReadElement {
+        reference: Box<SemanticExpression>,
+        index: Box<SemanticExpression>,
+        bits: u16,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -358,6 +410,10 @@ pub enum SemanticExpressionKind {
     Undefined,
     Poison,
     Intrinsic,
+    Null,
+    Allocate,
+    ReadProperty,
+    ReadElement,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -474,9 +530,9 @@ pub enum SemanticDiagnosticKind {
     ArchSpecific { name: String },
 }
 
-impl InstructionSemantics {
-    pub fn process(&self) -> InstructionSemanticsJson {
-        InstructionSemanticsJson {
+impl Semantic {
+    pub fn process(&self) -> SemanticJson {
+        SemanticJson {
             version: self.version,
             status: self.status,
             abi: self.abi,
@@ -496,7 +552,7 @@ impl InstructionSemantics {
         self.status = status;
     }
 
-    pub fn set_encoding(&mut self, encoding: Option<InstructionEncoding>) {
+    pub fn set_encoding(&mut self, encoding: Option<SemanticEncoding>) {
         self.encoding = encoding;
     }
 
@@ -528,7 +584,9 @@ impl SemanticLocation {
             Self::Flag { .. } => SemanticLocationKind::Flag,
             Self::ProgramCounter { .. } => SemanticLocationKind::ProgramCounter,
             Self::Temporary { .. } => SemanticLocationKind::Temporary,
-            Self::Memory { .. } => SemanticLocationKind::Memory,
+            Self::Memory { .. } | Self::IndexedMemory { .. } | Self::StackMemory { .. } => {
+                SemanticLocationKind::Memory
+            }
         }
     }
 
@@ -538,13 +596,18 @@ impl SemanticLocation {
             Self::Flag { bits, .. } => *bits,
             Self::ProgramCounter { bits } => *bits,
             Self::Temporary { bits, .. } => *bits,
-            Self::Memory { bits, .. } => *bits,
+            Self::Memory { bits, .. }
+            | Self::IndexedMemory { bits, .. }
+            | Self::StackMemory { bits, .. } => *bits,
         }
     }
 
     pub fn name(&self) -> Option<&str> {
         match self {
-            Self::Register { name, .. } | Self::Flag { name, .. } => Some(name.as_str()),
+            Self::Register { name, .. }
+            | Self::Flag { name, .. }
+            | Self::IndexedMemory { name, .. }
+            | Self::StackMemory { name, .. } => Some(name.as_str()),
             _ => None,
         }
     }
@@ -560,17 +623,22 @@ impl SemanticLocation {
             | Self::Flag { bits: current, .. }
             | Self::ProgramCounter { bits: current }
             | Self::Temporary { bits: current, .. }
-            | Self::Memory { bits: current, .. } => *current = bits,
+            | Self::Memory { bits: current, .. }
+            | Self::IndexedMemory { bits: current, .. }
+            | Self::StackMemory { bits: current, .. } => *current = bits,
         }
     }
 
     pub fn set_name(&mut self, name: impl Into<String>) -> Result<(), &'static str> {
         match self {
-            Self::Register { name: current, .. } | Self::Flag { name: current, .. } => {
+            Self::Register { name: current, .. }
+            | Self::Flag { name: current, .. }
+            | Self::IndexedMemory { name: current, .. }
+            | Self::StackMemory { name: current, .. } => {
                 *current = name.into();
                 Ok(())
             }
-            _ => Err("location name is only valid for register and flag locations"),
+            _ => Err("location name is not valid for this location kind"),
         }
     }
 }
@@ -583,6 +651,10 @@ impl SemanticEffect {
             Self::MemorySet { .. } => SemanticEffectKind::MemorySet,
             Self::MemoryCopy { .. } => SemanticEffectKind::MemoryCopy,
             Self::AtomicCmpXchg { .. } => SemanticEffectKind::AtomicCmpXchg,
+            Self::WriteProperty { .. } => SemanticEffectKind::WriteProperty,
+            Self::WriteElement { .. } => SemanticEffectKind::WriteElement,
+            Self::Push { .. } => SemanticEffectKind::Push,
+            Self::Pop { .. } => SemanticEffectKind::Pop,
             Self::Fence { .. } => SemanticEffectKind::Fence,
             Self::Trap { .. } => SemanticEffectKind::Trap,
             Self::Intrinsic { .. } => SemanticEffectKind::Intrinsic,
@@ -596,6 +668,10 @@ impl SemanticEffect {
             Self::Store { expression, .. } => Some(expression),
             Self::MemorySet { value, .. } => Some(value),
             Self::AtomicCmpXchg { desired, .. } => Some(desired),
+            Self::WriteProperty { expression, .. } | Self::WriteElement { expression, .. } => {
+                Some(expression)
+            }
+            Self::Push { expression, .. } => Some(expression),
             _ => None,
         }
     }
@@ -604,6 +680,7 @@ impl SemanticEffect {
         match self {
             Self::Set { dst, .. } => Some(dst),
             Self::AtomicCmpXchg { observed, .. } => Some(observed),
+            Self::Pop { dst, .. } => Some(dst),
             _ => None,
         }
     }
@@ -625,6 +702,18 @@ impl SemanticEffect {
             | Self::MemorySet { value: current, .. }
             | Self::AtomicCmpXchg {
                 desired: current, ..
+            }
+            | Self::WriteProperty {
+                expression: current,
+                ..
+            }
+            | Self::WriteElement {
+                expression: current,
+                ..
+            }
+            | Self::Push {
+                expression: current,
+                ..
             } => {
                 *current = expression;
                 Ok(())
@@ -641,6 +730,10 @@ impl SemanticEffect {
             }
             Self::AtomicCmpXchg { observed, .. } => {
                 *observed = location;
+                Ok(())
+            }
+            Self::Pop { dst, .. } => {
+                *dst = location;
                 Ok(())
             }
             _ => Err("effect location is not valid for this effect kind"),
@@ -826,6 +919,10 @@ impl SemanticExpression {
             Self::Undefined { .. } => SemanticExpressionKind::Undefined,
             Self::Poison { .. } => SemanticExpressionKind::Poison,
             Self::Intrinsic { .. } => SemanticExpressionKind::Intrinsic,
+            Self::Null { .. } => SemanticExpressionKind::Null,
+            Self::Allocate { .. } => SemanticExpressionKind::Allocate,
+            Self::ReadProperty { .. } => SemanticExpressionKind::ReadProperty,
+            Self::ReadElement { .. } => SemanticExpressionKind::ReadElement,
         }
     }
 
@@ -854,6 +951,10 @@ impl SemanticExpression {
             Self::Undefined { bits } => *bits,
             Self::Poison { bits } => *bits,
             Self::Intrinsic { bits, .. } => *bits,
+            Self::Null { bits } => *bits,
+            Self::Allocate { bits, .. } => *bits,
+            Self::ReadProperty { bits, .. } => *bits,
+            Self::ReadElement { bits, .. } => *bits,
         }
     }
 
@@ -873,9 +974,10 @@ impl SemanticExpression {
 
     pub fn argument(&self) -> Option<&SemanticExpression> {
         match self {
-            Self::Unary { arg, .. } | Self::Cast { arg, .. } | Self::Extract { arg, .. } => {
-                Some(arg)
-            }
+            Self::Unary { arg, .. }
+            | Self::Cast { arg, .. }
+            | Self::Extract { arg, .. }
+            | Self::ReadProperty { reference: arg, .. } => Some(arg),
             _ => None,
         }
     }
@@ -938,7 +1040,9 @@ impl SemanticExpression {
 
     pub fn name(&self) -> Option<&str> {
         match self {
-            Self::Intrinsic { name, .. } => Some(name.as_str()),
+            Self::Intrinsic { name, .. }
+            | Self::Allocate { kind: name, .. }
+            | Self::ReadProperty { name, .. } => Some(name.as_str()),
             _ => None,
         }
     }
@@ -985,7 +1089,11 @@ impl SemanticExpression {
             | Self::Concat { bits: current, .. }
             | Self::Undefined { bits: current }
             | Self::Poison { bits: current }
-            | Self::Intrinsic { bits: current, .. } => *current = bits,
+            | Self::Intrinsic { bits: current, .. }
+            | Self::Null { bits: current }
+            | Self::Allocate { bits: current, .. }
+            | Self::ReadProperty { bits: current, .. }
+            | Self::ReadElement { bits: current, .. } => *current = bits,
             Self::Read(location) => location.set_bits(bits),
         }
     }
@@ -1012,7 +1120,10 @@ impl SemanticExpression {
 
     pub fn set_argument(&mut self, expression: SemanticExpression) -> Result<(), &'static str> {
         match self {
-            Self::Unary { arg, .. } | Self::Cast { arg, .. } | Self::Extract { arg, .. } => {
+            Self::Unary { arg, .. }
+            | Self::Cast { arg, .. }
+            | Self::Extract { arg, .. }
+            | Self::ReadProperty { reference: arg, .. } => {
                 *arg = Box::new(expression);
                 Ok(())
             }
@@ -1244,6 +1355,21 @@ fn default_expression_for_kind(kind: SemanticExpressionKind, bits: u16) -> Seman
             args: Vec::new(),
             bits,
         },
+        SemanticExpressionKind::Null => SemanticExpression::Null { bits },
+        SemanticExpressionKind::Allocate => SemanticExpression::Allocate {
+            kind: "object".to_string(),
+            bits,
+        },
+        SemanticExpressionKind::ReadProperty => SemanticExpression::ReadProperty {
+            reference: Box::new(SemanticExpression::Null { bits }),
+            name: "property".to_string(),
+            bits,
+        },
+        SemanticExpressionKind::ReadElement => SemanticExpression::ReadElement {
+            reference: Box::new(SemanticExpression::Null { bits }),
+            index: Box::new(default_const(bits)),
+            bits,
+        },
     }
 }
 
@@ -1284,6 +1410,26 @@ fn default_effect_for_kind(kind: SemanticEffectKind) -> SemanticEffect {
             bits: 8,
             observed: default_location_for_kind(SemanticLocationKind::Temporary, 8),
         },
+        SemanticEffectKind::WriteProperty => SemanticEffect::WriteProperty {
+            reference: SemanticExpression::Null { bits: 64 },
+            name: "property".to_string(),
+            expression: default_const(64),
+            bits: 64,
+        },
+        SemanticEffectKind::WriteElement => SemanticEffect::WriteElement {
+            reference: SemanticExpression::Null { bits: 64 },
+            index: default_const(64),
+            expression: default_const(64),
+            bits: 64,
+        },
+        SemanticEffectKind::Push => SemanticEffect::Push {
+            stack: "stack".to_string(),
+            expression: default_const(64),
+        },
+        SemanticEffectKind::Pop => SemanticEffect::Pop {
+            stack: "stack".to_string(),
+            dst: default_location_for_kind(SemanticLocationKind::Temporary, 64),
+        },
         SemanticEffectKind::Fence => SemanticEffect::Fence {
             kind: SemanticFenceKind::SequentiallyConsistent,
         },
@@ -1321,9 +1467,9 @@ fn default_terminator_for_kind(kind: SemanticTerminatorKind) -> SemanticTerminat
     }
 }
 
-impl InstructionSemanticsJson {
-    pub fn into_semantics(self) -> InstructionSemantics {
-        InstructionSemantics {
+impl SemanticJson {
+    pub fn into_semantics(self) -> Semantic {
+        Semantic {
             version: self.version,
             status: self.status,
             abi: self.abi,
@@ -1339,18 +1485,17 @@ impl InstructionSemanticsJson {
 #[cfg(test)]
 mod tests {
     use super::{
-        InstructionEncoding, InstructionSemantics, SemanticExpression, SemanticStatus,
-        SemanticTerminator,
+        Semantic, SemanticEncoding, SemanticExpression, SemanticStatus, SemanticTerminator,
     };
     use crate::Abi;
 
     #[test]
     fn semantic_const_json_serializes_u128_as_string() {
-        let semantics = InstructionSemantics {
+        let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: Some(Abi::SysV),
-            encoding: Some(InstructionEncoding {
+            encoding: Some(SemanticEncoding {
                 architecture: "arm64".to_string(),
                 mnemonic: "ld4".to_string(),
                 disassembly: "ld4 {v0.16b, v1.16b}, [x3]".to_string(),
@@ -1409,7 +1554,7 @@ mod tests {
             "diagnostics": []
         });
 
-        let json: super::InstructionSemanticsJson =
+        let json: super::SemanticJson =
             serde_json::from_value(payload).expect("deserialize semantics json");
         let semantics = json.into_semantics();
 
@@ -1424,7 +1569,7 @@ mod tests {
         }
         assert_eq!(
             semantics.encoding,
-            Some(InstructionEncoding {
+            Some(SemanticEncoding {
                 architecture: "arm64".to_string(),
                 mnemonic: "ld4".to_string(),
                 disassembly: "ld4 {v0.16b, v1.16b}, [x3]".to_string(),

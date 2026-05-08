@@ -20,8 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::semantics::architectures::arm64::Arm64InstructionView;
 use crate::semantics::architectures::arm64::Arm64OperandKind;
+use crate::semantics::architectures::arm64::InstructionDetailArm64;
 use crate::semantics::architectures::arm64::builders::memory::{
     build_store_pair, effective_memory_address, operand_expression, register_location,
     writeback_effect,
@@ -30,11 +30,11 @@ use crate::semantics::architectures::arm64::helpers::{
     binary, bitmask, complete, const_u64, location_bits,
 };
 use crate::semantics::{
-    InstructionSemantics, SemanticEffect, SemanticExpression, SemanticOperationBinary,
-    SemanticOperationCast, SemanticOperationCompare, SemanticOperationUnary, SemanticTerminator,
+    Semantic, SemanticEffect, SemanticExpression, SemanticOperationBinary, SemanticOperationCast,
+    SemanticOperationCompare, SemanticOperationUnary, SemanticTerminator,
 };
 
-pub(crate) fn build(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+pub(crate) fn build(view: &InstructionDetailArm64) -> Option<Semantic> {
     match view.mnemonic.as_str() {
         "bcax" if view.operand_count >= 4 => build_bcax(view),
         "bsl" if view.operand_count >= 3 => build_bsl(view),
@@ -78,7 +78,7 @@ pub(crate) fn build(view: &Arm64InstructionView) -> Option<InstructionSemantics>
     }
 }
 
-fn build_bcax(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_bcax(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let bits = location_bits(&dst);
     let vn = operand_expression(view.operand(1)?)?;
@@ -104,7 +104,7 @@ fn build_bcax(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_bsl(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_bsl(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let bits = location_bits(&dst);
     let mask = SemanticExpression::Read(Box::new(dst.clone()));
@@ -134,10 +134,7 @@ fn build_bsl(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_bit_insert(
-    view: &Arm64InstructionView,
-    invert_mask: bool,
-) -> Option<InstructionSemantics> {
+fn build_bit_insert(view: &InstructionDetailArm64, invert_mask: bool) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let bits = location_bits(&dst);
     let current = SemanticExpression::Read(Box::new(dst.clone()));
@@ -173,9 +170,9 @@ fn build_bit_insert(
 }
 
 fn build_vector_compare(
-    view: &Arm64InstructionView,
+    view: &InstructionDetailArm64,
     compare: SemanticOperationCompare,
-) -> Option<InstructionSemantics> {
+) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let dst_bits = location_bits(&dst);
     let left = operand_expression(view.operand(1)?)?;
@@ -229,7 +226,7 @@ fn build_vector_compare(
     ))
 }
 
-fn build_vector_add_reduce(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_vector_add_reduce(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let dst_bits = location_bits(&dst);
     let src = operand_expression(view.operand(1)?)?;
@@ -259,7 +256,7 @@ fn build_vector_add_reduce(view: &Arm64InstructionView) -> Option<InstructionSem
     ))
 }
 
-fn build_addp(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_addp(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = operand_expression(view.operand(1)?)?;
     let right = operand_expression(view.operand(2)?)?;
@@ -317,7 +314,7 @@ fn build_addp(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_addhn(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_addhn(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = operand_expression(view.operand(1)?)?;
     let right = operand_expression(view.operand(2)?)?;
@@ -366,7 +363,7 @@ fn build_addhn(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_addhn2(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_addhn2(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let current_dst = operand_expression(view.operand(0)?)?;
     let left = operand_expression(view.operand(1)?)?;
@@ -425,7 +422,7 @@ fn build_addhn2(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_uzp1(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_uzp1(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let dst_bits = location_bits(&dst);
     let left = operand_expression(view.operand(1)?)?;
@@ -467,7 +464,7 @@ fn build_uzp1(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_rev64(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_rev64(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let dst_bits = location_bits(&dst);
     let src = operand_expression(view.operand(1)?)?;
@@ -505,7 +502,7 @@ fn build_rev64(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_cnt(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_cnt(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let dst_bits = location_bits(&dst);
     let src = operand_expression(view.operand(1)?)?;
@@ -540,7 +537,7 @@ fn build_cnt(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_movi(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_movi(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let bits = location_bits(&dst) as usize;
     let imm = view.operand(1)?.immediate_value()?;
@@ -580,7 +577,7 @@ fn build_movi(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_fmov(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_fmov(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let bits = location_bits(&dst);
     let src = match view.operand(1)? {
@@ -609,7 +606,7 @@ fn build_fmov(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_dup(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_dup(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let dst_bits = location_bits(&dst);
     let src = operand_expression(view.operand(1)?)?;
@@ -635,7 +632,7 @@ fn build_dup(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_extr(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_extr(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = operand_expression(view.operand(1)?)?;
     let right = operand_expression(view.operand(2)?)?;
@@ -664,7 +661,7 @@ fn build_extr(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_sshll(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_sshll(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let shift = view
@@ -706,13 +703,13 @@ fn build_sshll(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_ld1(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_ld1(view: &InstructionDetailArm64) -> Option<Semantic> {
     build_ld1_lane(view)
         .or_else(|| build_ld1_full_register(view))
         .or_else(|| build_intrinsic_with_outputs(view, 1))
 }
 
-fn build_ld1_lane(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_ld1_lane(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst_operand = view
         .operands()
         .iter()
@@ -759,7 +756,7 @@ fn build_ld1_lane(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_ld1_full_register(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_ld1_full_register(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = view.operands().iter().find_map(register_location)?;
     let memory_operand = view
         .operands()
@@ -794,7 +791,7 @@ fn build_ld1_full_register(view: &Arm64InstructionView) -> Option<InstructionSem
     Some(complete(SemanticTerminator::FallThrough, effects))
 }
 
-fn build_aes_round(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_aes_round(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let round_key = operand_expression(view.operand(1)?)?;
     Some(complete(
@@ -807,7 +804,7 @@ fn build_aes_round(view: &Arm64InstructionView) -> Option<InstructionSemantics> 
     ))
 }
 
-fn build_aes_mix_columns(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_aes_mix_columns(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     Some(complete(
@@ -820,10 +817,7 @@ fn build_aes_mix_columns(view: &Arm64InstructionView) -> Option<InstructionSeman
     ))
 }
 
-fn build_structured_load(
-    view: &Arm64InstructionView,
-    register_count: usize,
-) -> Option<InstructionSemantics> {
+fn build_structured_load(view: &InstructionDetailArm64, register_count: usize) -> Option<Semantic> {
     let destinations = view
         .operands()
         .iter()
@@ -879,9 +873,9 @@ fn build_structured_load(
 }
 
 fn build_intrinsic_with_outputs(
-    view: &Arm64InstructionView,
+    view: &InstructionDetailArm64,
     output_count: usize,
-) -> Option<InstructionSemantics> {
+) -> Option<Semantic> {
     let outputs = view
         .operands()
         .iter()

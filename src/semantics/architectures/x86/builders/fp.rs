@@ -22,22 +22,18 @@
 
 use crate::Architecture;
 use crate::semantics::architectures::x86::helpers as common;
-use crate::semantics::architectures::x86::instruction::X86InstructionView;
+use crate::semantics::architectures::x86::instruction::InstructionDetailX86;
 use crate::semantics::architectures::x86::operand::{X86OperandKind, X86OperandView};
 use crate::semantics::{
-    InstructionSemantics, SemanticAddressSpace, SemanticEffect, SemanticExpression,
-    SemanticLocation, SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
-    SemanticTerminator,
+    Semantic, SemanticAddressSpace, SemanticEffect, SemanticExpression, SemanticLocation,
+    SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare, SemanticTerminator,
 };
 
 #[path = "fp/x87.rs"]
 mod x87_helpers;
 
 use x87_helpers::x87;
-pub(crate) fn build(
-    machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     match view.mnemonic.as_str() {
         "movsd" => movsd(machine, view),
         "vmovsd" => vmovsd(machine, view),
@@ -155,7 +151,7 @@ pub(crate) fn build(
     }
 }
 
-fn movsd(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn movsd(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let dst_bits = common::location_bits(&dst);
     let src = operand_expr(machine, view.operands().get(1)?)?;
@@ -189,7 +185,7 @@ fn movsd(machine: Architecture, view: &X86InstructionView) -> Option<Instruction
     ))
 }
 
-fn vmovsd(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn vmovsd(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     if view.operands().len() == 2 {
         return movsd(machine, view);
     }
@@ -226,7 +222,7 @@ fn vmovsd(machine: Architecture, view: &X86InstructionView) -> Option<Instructio
     ))
 }
 
-fn compare_fp(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn compare_fp(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
     let (left, right) = match view.mnemonic.as_str() {
@@ -259,7 +255,7 @@ fn compare_fp(machine: Architecture, view: &X86InstructionView) -> Option<Instru
     ))
 }
 
-fn pcmpistri(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn pcmpistri(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let args = view
         .operands()
         .iter()
@@ -283,10 +279,7 @@ fn pcmpistri(machine: Architecture, view: &X86InstructionView) -> Option<Instruc
     ))
 }
 
-fn scalar_convert(
-    machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+fn scalar_convert(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let bits = common::location_bits(&dst);
     let src = operand_expr(machine, view.operands().get(1)?)?;
@@ -304,10 +297,7 @@ fn scalar_convert(
     ))
 }
 
-fn packed_convert(
-    machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+fn packed_convert(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let dst_bits = common::location_bits(&dst);
@@ -344,7 +334,7 @@ fn packed_convert(
     ))
 }
 
-fn scalar_fp(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn scalar_fp(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let args = view
         .operands()
@@ -428,7 +418,7 @@ fn scalar_fp(machine: Architecture, view: &X86InstructionView) -> Option<Instruc
     ))
 }
 
-fn packed_fp(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn packed_fp(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let dst_bits = common::location_bits(&dst);
     let args = view
@@ -445,7 +435,7 @@ fn packed_fp(machine: Architecture, view: &X86InstructionView) -> Option<Instruc
     ))
 }
 
-fn scalar_ss(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn scalar_ss(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let dst_bits = common::location_bits(&dst);
     let args = view
@@ -501,7 +491,7 @@ fn scalar_ss(machine: Architecture, view: &X86InstructionView) -> Option<Instruc
     ))
 }
 
-fn scalar_vfma(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn scalar_vfma(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let dst_bits = common::location_bits(&dst);
     let src1 = operand_expr(machine, view.operands().get(1)?)?;
@@ -548,7 +538,7 @@ fn low_32(expression: SemanticExpression) -> SemanticExpression {
 }
 
 fn operation_intrinsic(
-    view: &X86InstructionView,
+    view: &InstructionDetailX86,
     bits: u16,
     args: Vec<SemanticExpression>,
 ) -> SemanticExpression {

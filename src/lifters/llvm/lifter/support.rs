@@ -73,7 +73,9 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             SemanticLocation::Flag { bits, .. } => *bits,
             SemanticLocation::ProgramCounter { bits } => *bits,
             SemanticLocation::Temporary { bits, .. } => *bits,
-            SemanticLocation::Memory { bits, .. } => *bits,
+            SemanticLocation::Memory { bits, .. }
+            | SemanticLocation::IndexedMemory { bits, .. }
+            | SemanticLocation::StackMemory { bits, .. } => *bits,
         })
     }
 

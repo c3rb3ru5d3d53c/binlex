@@ -21,18 +21,15 @@
 // SOFTWARE.
 
 use crate::Architecture;
-use crate::semantics::architectures::x86::X86InstructionView;
+use crate::semantics::architectures::x86::InstructionDetailX86;
 use crate::semantics::architectures::x86::helpers as common;
 use crate::semantics::architectures::x86::{X86OperandKind, X86OperandView};
 use crate::semantics::{
-    InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation,
-    SemanticOperationBinary, SemanticOperationCompare, SemanticTerminator,
+    Semantic, SemanticEffect, SemanticExpression, SemanticLocation, SemanticOperationBinary,
+    SemanticOperationCompare, SemanticTerminator,
 };
 
-pub(crate) fn build(
-    machine: Architecture,
-    view: &X86InstructionView,
-) -> Option<InstructionSemantics> {
+pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     match view.mnemonic.as_str() {
         "andn" => andn(machine, view.operands()),
         "test" => test(machine, view.operands()),
@@ -43,7 +40,7 @@ pub(crate) fn build(
     }
 }
 
-fn andn(machine: Architecture, operands: &[X86OperandView]) -> Option<InstructionSemantics> {
+fn andn(machine: Architecture, operands: &[X86OperandView]) -> Option<Semantic> {
     let dst = operand_location(machine, operands.first()?)?;
     let src1 = operand_expr(machine, operands.get(1)?)?;
     let src2 = operand_expr(machine, operands.get(2)?)?;
@@ -55,7 +52,7 @@ fn andn(machine: Architecture, operands: &[X86OperandView]) -> Option<Instructio
     ))
 }
 
-fn test(machine: Architecture, operands: &[X86OperandView]) -> Option<InstructionSemantics> {
+fn test(machine: Architecture, operands: &[X86OperandView]) -> Option<Semantic> {
     let left = operand_expr(machine, operands.first()?)?;
     let right = operand_expr(machine, operands.get(1)?)?;
     let bits = operands
@@ -74,7 +71,7 @@ fn binary(
     machine: Architecture,
     operands: &[X86OperandView],
     op: SemanticOperationBinary,
-) -> Option<InstructionSemantics> {
+) -> Option<Semantic> {
     let dst = operand_location(machine, operands.first()?)?;
     let left = operand_expr(machine, operands.first()?)?;
     let right = operand_expr(machine, operands.get(1)?)?;

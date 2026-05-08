@@ -1,5 +1,4 @@
-use crate::core::Architecture as PyArchitecture;
-use crate::semantics::InstructionSemantics as PyInstructionSemantics;
+use crate::semantics::{Semantic as PySemantic, SemanticCpu as PySemanticCpu};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
@@ -25,14 +24,14 @@ struct SliceItemData {
 }
 
 #[pyclass(unsendable)]
-pub struct Executor {
-    inner: Arc<Mutex<::binlex::symbolic::Executor>>,
+pub struct SymbolicExecutor {
+    inner: Arc<Mutex<::binlex::symbolic::SymbolicExecutor>>,
     hooks: Arc<Mutex<BTreeMap<u64, Py<PyAny>>>>,
 }
 
 #[pyclass(unsendable)]
-pub struct State {
-    inner: Arc<Mutex<::binlex::symbolic::State>>,
+pub struct SymbolicCpuState {
+    inner: Arc<Mutex<::binlex::symbolic::SymbolicCpuState>>,
 }
 
 #[pyclass(unsendable)]
@@ -86,10 +85,13 @@ fn wrap_slice(slice: ::binlex::symbolic::Slice) -> Slice {
     }
 }
 
-fn wrap_state(py: Python<'_>, state: ::binlex::symbolic::State) -> PyResult<Py<State>> {
+fn wrap_state(
+    py: Python<'_>,
+    state: ::binlex::symbolic::SymbolicCpuState,
+) -> PyResult<Py<SymbolicCpuState>> {
     Py::new(
         py,
-        State {
+        SymbolicCpuState {
             inner: Arc::new(Mutex::new(state)),
         },
     )
@@ -97,8 +99,8 @@ fn wrap_state(py: Python<'_>, state: ::binlex::symbolic::State) -> PyResult<Py<S
 
 fn collect_semantics(
     py: Python<'_>,
-    semantics: Vec<Py<PyInstructionSemantics>>,
-) -> Vec<::binlex::semantics::InstructionSemantics> {
+    semantics: Vec<Py<PySemantic>>,
+) -> Vec<::binlex::semantics::Semantic> {
     semantics
         .into_iter()
         .map(|item| item.borrow(py).inner.lock().unwrap().clone())
@@ -106,22 +108,13 @@ fn collect_semantics(
 }
 
 #[pymethods]
-impl Executor {
+impl SymbolicExecutor {
     #[new]
-    #[pyo3(text_signature = "(architecture)")]
-    pub fn new(architecture: PyRef<'_, PyArchitecture>) -> PyResult<Self> {
-        let inner = ::binlex::symbolic::Executor::new(architecture.inner)
-            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
-        Ok(Self {
-            inner: Arc::new(Mutex::new(inner)),
+    #[pyo3(text_signature = "()")]
+    pub fn new() -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(::binlex::symbolic::SymbolicExecutor::new())),
             hooks: Arc::new(Mutex::new(BTreeMap::new())),
-        })
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    pub fn state(&self) -> State {
-        State {
-            inner: Arc::new(Mutex::new(self.inner.lock().unwrap().state())),
         }
     }
 
@@ -129,9 +122,9 @@ impl Executor {
     pub fn step(
         &self,
         py: Python<'_>,
-        semantics: PyRef<'_, PyInstructionSemantics>,
-        state: PyRef<'_, State>,
-    ) -> PyResult<Vec<Py<State>>> {
+        semantics: PyRef<'_, PySemantic>,
+        state: PyRef<'_, SymbolicCpuState>,
+    ) -> PyResult<Vec<Py<SymbolicCpuState>>> {
         let semantics = semantics.inner.lock().unwrap().clone();
         let state_guard = state.inner.lock().unwrap();
         let states = self
@@ -151,10 +144,10 @@ impl Executor {
     pub fn run(
         &self,
         py: Python<'_>,
-        semantics: Vec<Py<PyInstructionSemantics>>,
-        state: PyRef<'_, State>,
+        semantics: Vec<Py<PySemantic>>,
+        state: PyRef<'_, SymbolicCpuState>,
         steps: Option<usize>,
-    ) -> PyResult<Vec<Py<State>>> {
+    ) -> PyResult<Vec<Py<SymbolicCpuState>>> {
         let owned = collect_semantics(py, semantics);
         let refs = owned.iter().collect::<Vec<_>>();
         let hooks = self
@@ -186,7 +179,7 @@ impl Executor {
         }
 
         let mut pending = vec![state.inner.lock().unwrap().clone()];
-        let mut final_states = Vec::<Py<State>>::new();
+        let mut final_states = Vec::<Py<SymbolicCpuState>>::new();
 
         while let Some(current) = pending.pop() {
             let states = self
@@ -212,9 +205,14 @@ impl Executor {
 
                 let state = wrap_state(py, candidate)?;
                 let returned = hook.call1(py, (address, state.clone_ref(py)))?;
-                let returned_states = returned.extract::<Vec<Py<State>>>(py).map_err(|_| {
-                    PyTypeError::new_err("hook must return a list of symbolic.State objects")
-                })?;
+                let returned_states =
+                    returned
+                        .extract::<Vec<Py<SymbolicCpuState>>>(py)
+                        .map_err(|_| {
+                            PyTypeError::new_err(
+                                "hook must return a list of symbolic.SymbolicCpuState objects",
+                            )
+                        })?;
                 for returned_state in returned_states {
                     pending.push(returned_state.borrow(py).inner.lock().unwrap().clone());
                 }
@@ -273,7 +271,17 @@ impl Executor {
 }
 
 #[pymethods]
-impl State {
+impl SymbolicCpuState {
+    #[new]
+    #[pyo3(text_signature = "(cpu)")]
+    pub fn new(cpu: PyRef<'_, PySemanticCpu>) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(::binlex::symbolic::SymbolicCpuState::new(
+                cpu.inner.clone(),
+            ))),
+        }
+    }
+
     #[pyo3(text_signature = "($self, name, bits, symbol=None)")]
     #[pyo3(signature = (name, bits, symbol=None))]
     pub fn symbolize_register(
@@ -518,8 +526,8 @@ impl Slice {
 #[pymodule]
 #[pyo3(name = "symbolic")]
 pub fn symbolic_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<Executor>()?;
-    m.add_class::<State>()?;
+    m.add_class::<SymbolicExecutor>()?;
+    m.add_class::<SymbolicCpuState>()?;
     m.add_class::<SliceInstruction>()?;
     m.add_class::<SliceNode>()?;
     m.add_class::<Slice>()?;

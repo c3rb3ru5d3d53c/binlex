@@ -20,15 +20,15 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::semantics::architectures::x86::X86InstructionView;
+use crate::semantics::architectures::x86::InstructionDetailX86;
 use crate::semantics::architectures::x86::helpers as common;
 use crate::semantics::architectures::x86::{X86OperandKind, X86OperandView};
 use crate::semantics::{
-    InstructionSemantics, SemanticEffect, SemanticExpression, SemanticFenceKind,
-    SemanticOperationBinary, SemanticTerminator, SemanticTrapKind,
+    Semantic, SemanticEffect, SemanticExpression, SemanticFenceKind, SemanticOperationBinary,
+    SemanticTerminator, SemanticTrapKind,
 };
 
-pub(crate) fn build(view: &X86InstructionView) -> Option<InstructionSemantics> {
+pub(crate) fn build(view: &InstructionDetailX86) -> Option<Semantic> {
     match view.mnemonic.as_str() {
         "pause" | "prefetch" | "prefetchnta" | "prefetcht0" | "prefetcht1" | "prefetcht2"
         | "prefetchw" | "endbr32" | "endbr64" | "wait" => Some(nop()),
@@ -98,18 +98,18 @@ pub(crate) fn build(view: &X86InstructionView) -> Option<InstructionSemantics> {
     }
 }
 
-fn nop() -> InstructionSemantics {
+fn nop() -> Semantic {
     common::complete(SemanticTerminator::FallThrough, vec![SemanticEffect::Nop])
 }
 
-fn fence(kind: SemanticFenceKind) -> InstructionSemantics {
+fn fence(kind: SemanticFenceKind) -> Semantic {
     common::complete(
         SemanticTerminator::FallThrough,
         vec![SemanticEffect::Fence { kind }],
     )
 }
 
-fn set_flag(name: &str, value: bool) -> InstructionSemantics {
+fn set_flag(name: &str, value: bool) -> Semantic {
     common::complete(
         SemanticTerminator::FallThrough,
         vec![SemanticEffect::Set {
@@ -119,7 +119,7 @@ fn set_flag(name: &str, value: bool) -> InstructionSemantics {
     )
 }
 
-fn intrinsic_no_outputs(name: &str) -> InstructionSemantics {
+fn intrinsic_no_outputs(name: &str) -> Semantic {
     common::complete(
         SemanticTerminator::FallThrough,
         vec![SemanticEffect::Intrinsic {
@@ -130,7 +130,7 @@ fn intrinsic_no_outputs(name: &str) -> InstructionSemantics {
     )
 }
 
-fn cpuid() -> InstructionSemantics {
+fn cpuid() -> Semantic {
     let leaf = SemanticExpression::Read(Box::new(common::reg("eax".to_string(), 32)));
     let subleaf = SemanticExpression::Read(Box::new(common::reg("ecx".to_string(), 32)));
     common::complete(
@@ -148,7 +148,7 @@ fn cpuid() -> InstructionSemantics {
     )
 }
 
-fn xgetbv() -> InstructionSemantics {
+fn xgetbv() -> Semantic {
     common::complete(
         SemanticTerminator::FallThrough,
         vec![SemanticEffect::Intrinsic {
@@ -162,7 +162,7 @@ fn xgetbv() -> InstructionSemantics {
     )
 }
 
-fn rdtsc() -> InstructionSemantics {
+fn rdtsc() -> Semantic {
     common::complete(
         SemanticTerminator::FallThrough,
         vec![SemanticEffect::Intrinsic {
@@ -176,7 +176,7 @@ fn rdtsc() -> InstructionSemantics {
     )
 }
 
-fn rdtscp() -> InstructionSemantics {
+fn rdtscp() -> Semantic {
     common::complete(
         SemanticTerminator::FallThrough,
         vec![SemanticEffect::Intrinsic {
@@ -191,14 +191,14 @@ fn rdtscp() -> InstructionSemantics {
     )
 }
 
-fn trap(kind: SemanticTrapKind) -> InstructionSemantics {
+fn trap(kind: SemanticTrapKind) -> Semantic {
     common::complete(
         SemanticTerminator::Trap,
         vec![SemanticEffect::Trap { kind }],
     )
 }
 
-fn selector_check(view: &X86InstructionView, name: &str) -> Option<InstructionSemantics> {
+fn selector_check(view: &InstructionDetailX86, name: &str) -> Option<Semantic> {
     let selector = operand_expr(view.machine, view.operands().first()?)?;
     Some(common::complete(
         SemanticTerminator::FallThrough,
@@ -210,7 +210,7 @@ fn selector_check(view: &X86InstructionView, name: &str) -> Option<InstructionSe
     ))
 }
 
-fn random_value(view: &X86InstructionView, name: &str) -> Option<InstructionSemantics> {
+fn random_value(view: &InstructionDetailX86, name: &str) -> Option<Semantic> {
     let dst = operand_location(view.machine, view.operands().first()?)?;
     Some(common::complete(
         SemanticTerminator::FallThrough,
@@ -244,7 +244,7 @@ fn random_value(view: &X86InstructionView, name: &str) -> Option<InstructionSema
     ))
 }
 
-fn lahf() -> InstructionSemantics {
+fn lahf() -> Semantic {
     common::complete(
         SemanticTerminator::FallThrough,
         vec![SemanticEffect::Set {
@@ -254,7 +254,7 @@ fn lahf() -> InstructionSemantics {
     )
 }
 
-fn ldmxcsr(view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn ldmxcsr(view: &InstructionDetailX86) -> Option<Semantic> {
     let src = operand_expr(view.machine, view.operands().first()?)?;
     Some(common::complete(
         SemanticTerminator::FallThrough,
@@ -265,7 +265,7 @@ fn ldmxcsr(view: &X86InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn stmxcsr(view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn stmxcsr(view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(view.machine, view.operands().first()?)?;
     Some(common::complete(
         SemanticTerminator::FallThrough,
@@ -276,7 +276,7 @@ fn stmxcsr(view: &X86InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn invlpg(view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn invlpg(view: &InstructionDetailX86) -> Option<Semantic> {
     let addr = operand_expr(view.machine, view.operands().first()?)?;
     Some(common::complete(
         SemanticTerminator::FallThrough,
@@ -288,7 +288,7 @@ fn invlpg(view: &X86InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn lar(view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn lar(view: &InstructionDetailX86) -> Option<Semantic> {
     let dst = operand_location(view.machine, view.operands().first()?)?;
     let src = operand_expr(view.machine, view.operands().get(1)?)?;
     Some(common::complete(
@@ -301,7 +301,7 @@ fn lar(view: &X86InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn fxsave(view: &X86InstructionView, wide_pointers: bool) -> Option<InstructionSemantics> {
+fn fxsave(view: &InstructionDetailX86, wide_pointers: bool) -> Option<Semantic> {
     let base = memory_operand_addr(view.machine, view.operands().first()?)?;
     let pointer_bits = common::pointer_bits(view.machine);
     let mut effects = vec![
@@ -435,7 +435,7 @@ fn fxsave(view: &X86InstructionView, wide_pointers: bool) -> Option<InstructionS
     Some(common::complete(SemanticTerminator::FallThrough, effects))
 }
 
-fn fxrstor(view: &X86InstructionView, wide_pointers: bool) -> Option<InstructionSemantics> {
+fn fxrstor(view: &InstructionDetailX86, wide_pointers: bool) -> Option<Semantic> {
     let base = memory_operand_addr(view.machine, view.operands().first()?)?;
     let pointer_bits = common::pointer_bits(view.machine);
     let fsw = load_default(base.clone(), 2, pointer_bits, 16);
@@ -540,7 +540,7 @@ fn fxrstor(view: &X86InstructionView, wide_pointers: bool) -> Option<Instruction
     Some(common::complete(SemanticTerminator::FallThrough, effects))
 }
 
-fn insd(machine: crate::Architecture) -> InstructionSemantics {
+fn insd(machine: crate::Architecture) -> Semantic {
     let di = string_index_location(machine, true);
     let port = io_port_location();
     let addr = SemanticExpression::Read(Box::new(di.clone()));
@@ -566,7 +566,7 @@ fn insd(machine: crate::Architecture) -> InstructionSemantics {
     )
 }
 
-fn outsd(machine: crate::Architecture) -> InstructionSemantics {
+fn outsd(machine: crate::Architecture) -> Semantic {
     let si = string_index_location(machine, false);
     let port = io_port_location();
     let addr = SemanticExpression::Read(Box::new(si.clone()));
@@ -592,7 +592,7 @@ fn outsd(machine: crate::Architecture) -> InstructionSemantics {
     )
 }
 
-fn sahf() -> InstructionSemantics {
+fn sahf() -> Semantic {
     let ah = SemanticExpression::Read(Box::new(common::reg("ah".to_string(), 8)));
     common::complete(
         SemanticTerminator::FallThrough,
@@ -606,7 +606,7 @@ fn sahf() -> InstructionSemantics {
     )
 }
 
-fn pushf(machine: crate::Architecture, bits: u16) -> Option<InstructionSemantics> {
+fn pushf(machine: crate::Architecture, bits: u16) -> Option<Semantic> {
     let stack_pointer = stack_pointer_location(machine);
     let pointer_bits = common::pointer_bits(machine);
     let slot_bytes = (bits / 8) as u64;
@@ -634,7 +634,7 @@ fn pushf(machine: crate::Architecture, bits: u16) -> Option<InstructionSemantics
     ))
 }
 
-fn popf(machine: crate::Architecture, bits: u16) -> Option<InstructionSemantics> {
+fn popf(machine: crate::Architecture, bits: u16) -> Option<Semantic> {
     let stack_pointer = stack_pointer_location(machine);
     let pointer_bits = common::pointer_bits(machine);
     let slot_bytes = (bits / 8) as u64;

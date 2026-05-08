@@ -21,15 +21,15 @@
 // SOFTWARE.
 
 use crate::Architecture;
-use crate::semantics::architectures::x86::X86InstructionView;
+use crate::semantics::architectures::x86::InstructionDetailX86;
 use crate::semantics::architectures::x86::helpers as common;
 use crate::semantics::architectures::x86::{X86OperandKind, X86OperandView};
 use crate::semantics::{
-    InstructionSemantics, SemanticAddressSpace, SemanticEffect, SemanticExpression,
-    SemanticLocation, SemanticStatus, SemanticTemporary, SemanticTerminator,
+    Semantic, SemanticAddressSpace, SemanticEffect, SemanticExpression, SemanticLocation,
+    SemanticStatus, SemanticTemporary, SemanticTerminator,
 };
 
-pub(crate) fn build(view: &X86InstructionView) -> Option<InstructionSemantics> {
+pub(crate) fn build(view: &InstructionDetailX86) -> Option<Semantic> {
     match view.mnemonic.as_str() {
         "push" => push(view.machine, view.operands()),
         "pop" => pop(view.machine, view.operands()),
@@ -41,7 +41,7 @@ pub(crate) fn build(view: &X86InstructionView) -> Option<InstructionSemantics> {
     }
 }
 
-fn pushal(machine: Architecture) -> Option<InstructionSemantics> {
+fn pushal(machine: Architecture) -> Option<Semantic> {
     if !matches!(machine, Architecture::I386) {
         return None;
     }
@@ -77,7 +77,7 @@ fn pushal(machine: Architecture) -> Option<InstructionSemantics> {
     Some(common::complete(SemanticTerminator::FallThrough, effects))
 }
 
-fn popal(machine: Architecture) -> Option<InstructionSemantics> {
+fn popal(machine: Architecture) -> Option<Semantic> {
     if !matches!(machine, Architecture::I386) {
         return None;
     }
@@ -131,7 +131,7 @@ fn popal(machine: Architecture) -> Option<InstructionSemantics> {
     ))
 }
 
-fn enter(machine: Architecture, operands: &[X86OperandView]) -> Option<InstructionSemantics> {
+fn enter(machine: Architecture, operands: &[X86OperandView]) -> Option<Semantic> {
     let frame_size = operands.first()?.immediate_value()?;
     let nesting_level = operands.get(1)?.immediate_value()?;
 
@@ -203,7 +203,7 @@ fn enter(machine: Architecture, operands: &[X86OperandView]) -> Option<Instructi
     Some(common::complete(SemanticTerminator::FallThrough, effects))
 }
 
-fn push(machine: Architecture, operands: &[X86OperandView]) -> Option<InstructionSemantics> {
+fn push(machine: Architecture, operands: &[X86OperandView]) -> Option<Semantic> {
     let expression = operand_expr(machine, operands.first()?)?;
     let stack_pointer = stack_pointer_location(machine);
     let pointer_bits = common::pointer_bits(machine);
@@ -230,7 +230,7 @@ fn push(machine: Architecture, operands: &[X86OperandView]) -> Option<Instructio
     ))
 }
 
-fn pop(machine: Architecture, operands: &[X86OperandView]) -> Option<InstructionSemantics> {
+fn pop(machine: Architecture, operands: &[X86OperandView]) -> Option<Semantic> {
     let dst = operand_location(machine, operands.first()?)?;
     let stack_pointer = stack_pointer_location(machine);
     let pointer_bits = common::pointer_bits(machine);
@@ -259,7 +259,7 @@ fn pop(machine: Architecture, operands: &[X86OperandView]) -> Option<Instruction
     ))
 }
 
-fn leave(machine: Architecture) -> Option<InstructionSemantics> {
+fn leave(machine: Architecture) -> Option<Semantic> {
     let pointer_bits = common::pointer_bits(machine);
     let slot_bytes = (pointer_bits / 8) as u64;
     let base_pointer = base_pointer_location(machine);
@@ -268,7 +268,7 @@ fn leave(machine: Architecture) -> Option<InstructionSemantics> {
         id: 0,
         bits: pointer_bits,
     };
-    Some(InstructionSemantics {
+    Some(Semantic {
         version: 1,
         status: SemanticStatus::Complete,
         abi: None,

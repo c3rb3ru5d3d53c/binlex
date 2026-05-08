@@ -24,7 +24,7 @@ use crate::Architecture;
 use crate::semantics::architectures::arm64::operand::Arm64OperandView;
 
 #[derive(Clone, Debug)]
-pub struct Arm64InstructionView {
+pub struct InstructionDetailArm64 {
     pub machine: Architecture,
     pub address: u64,
     pub mnemonic: String,
@@ -35,7 +35,7 @@ pub struct Arm64InstructionView {
     pub condition_code: Option<u64>,
 }
 
-impl Arm64InstructionView {
+impl InstructionDetailArm64 {
     pub fn new(
         machine: Architecture,
         address: u64,

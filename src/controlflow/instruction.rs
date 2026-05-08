@@ -36,15 +36,15 @@ use crate::lifters::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
 use crate::lifters::vex::{Lifter as VexLifter, VexJson};
 use crate::lifters::{Lifter, LifterBackend, LifterError};
 use crate::metadata::Attributes;
-use crate::semantics::InstructionSemantics;
-use crate::semantics::InstructionSemanticsJson;
+use crate::semantics::Semantic;
+use crate::semantics::SemanticJson;
 use crate::semantics::architectures;
-use crate::semantics::architectures::arm64::Arm64InstructionView;
-use crate::semantics::architectures::cil::CilInstructionView;
-use crate::semantics::architectures::x86::X86InstructionView;
+use crate::semantics::architectures::arm64::InstructionDetailArm64;
+use crate::semantics::architectures::cil::InstructionDetailCil;
+use crate::semantics::architectures::x86::InstructionDetailX86;
 use crate::semantics::{
-    InstructionEncoding, SemanticDiagnostic, SemanticDiagnosticKind, SemanticEffect,
-    SemanticStatus, SemanticTerminator,
+    SemanticDiagnostic, SemanticDiagnosticKind, SemanticEffect, SemanticEncoding, SemanticStatus,
+    SemanticTerminator,
 };
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -97,21 +97,40 @@ pub struct SpecialOperand {
     pub fields: BTreeMap<String, Value>,
 }
 
-/// Represents a single instruction in disassembled binary code.
-///
-/// This struct encapsulates metadata and properties of an instruction,
-/// such as its address, type, and relationships with other instructions.
 #[derive(Clone)]
-pub enum InstructionSemanticsInput {
-    X86(X86InstructionView),
-    Arm64(Arm64InstructionView),
-    Cil(CilInstructionView),
+pub struct InstructionDetail {
+    pub kind: InstructionDetailKind,
 }
 
-impl InstructionSemanticsInput {
-    pub fn build(self) -> InstructionSemantics {
-        match self {
-            Self::X86(view) => {
+#[derive(Clone)]
+pub enum InstructionDetailKind {
+    X86(InstructionDetailX86),
+    Arm64(InstructionDetailArm64),
+    Cil(InstructionDetailCil),
+}
+
+impl InstructionDetail {
+    pub fn x86(detail: InstructionDetailX86) -> Self {
+        Self {
+            kind: InstructionDetailKind::X86(detail),
+        }
+    }
+
+    pub fn arm64(detail: InstructionDetailArm64) -> Self {
+        Self {
+            kind: InstructionDetailKind::Arm64(detail),
+        }
+    }
+
+    pub fn cil(detail: InstructionDetailCil) -> Self {
+        Self {
+            kind: InstructionDetailKind::Cil(detail),
+        }
+    }
+
+    pub fn build_semantic(self) -> Semantic {
+        match self.kind {
+            InstructionDetailKind::X86(view) => {
                 let mut semantics = architectures::x86::build(view.clone()).unwrap_or_else(|| {
                     unsupported_fallthrough(
                         view.machine.to_string(),
@@ -123,7 +142,7 @@ impl InstructionSemanticsInput {
                     )
                 });
                 if semantics.encoding.is_none() {
-                    semantics.encoding = Some(InstructionEncoding {
+                    semantics.encoding = Some(SemanticEncoding {
                         architecture: view.machine.to_string(),
                         mnemonic: view.mnemonic.clone(),
                         disassembly: match view.operand_text.clone() {
@@ -138,7 +157,7 @@ impl InstructionSemanticsInput {
                 }
                 semantics
             }
-            Self::Arm64(view) => {
+            InstructionDetailKind::Arm64(view) => {
                 let mut semantics =
                     architectures::arm64::build(view.clone()).unwrap_or_else(|| {
                         unsupported_fallthrough(
@@ -151,7 +170,7 @@ impl InstructionSemanticsInput {
                         )
                     });
                 if semantics.encoding.is_none() {
-                    semantics.encoding = Some(InstructionEncoding {
+                    semantics.encoding = Some(SemanticEncoding {
                         architecture: view.machine.to_string(),
                         mnemonic: view.mnemonic.clone(),
                         disassembly: match view.operand_text.clone() {
@@ -166,10 +185,10 @@ impl InstructionSemanticsInput {
                 }
                 semantics
             }
-            Self::Cil(view) => {
+            InstructionDetailKind::Cil(view) => {
                 let mut semantics = architectures::cil::build(view.clone());
                 if semantics.encoding.is_none() {
-                    semantics.encoding = Some(InstructionEncoding {
+                    semantics.encoding = Some(SemanticEncoding {
                         architecture: "cil".to_string(),
                         mnemonic: view.mnemonic.clone(),
                         disassembly: view.mnemonic.clone(),
@@ -227,10 +246,10 @@ pub struct InstructionRecord {
     pub disassembly: String,
     /// Normalized decoded operands.
     pub operands: Vec<Operand>,
-    /// Architecture-owned semantics input captured at decode time.
-    pub semantics_input: Option<InstructionSemanticsInput>,
+    /// Decoded instruction detail captured for semantic lowering.
+    pub instruction_detail: Option<InstructionDetail>,
     /// Optional canonical instruction semantics for later lifting.
-    pub semantics: Option<InstructionSemantics>,
+    pub semantics: Option<Semantic>,
 }
 
 /// Represents a JSON-serializable view of an `Instruction`.
@@ -300,7 +319,7 @@ pub struct InstructionJson {
     pub embeddings: Option<EmbeddingsJson>,
     /// Optional canonical semantics for later lifting.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub semantics: Option<InstructionSemanticsJson>,
+    pub semantics: Option<SemanticJson>,
     /// Attributes
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attributes: Option<Value>,
@@ -341,7 +360,7 @@ impl InstructionRecord {
             mnemonic: String::new(),
             disassembly: String::new(),
             operands: Vec::new(),
-            semantics_input: None,
+            instruction_detail: None,
             semantics: None,
             architecture,
             config,
@@ -374,21 +393,21 @@ impl InstructionRecord {
     }
 
     /// Replaces the canonical semantics attached to this instruction.
-    pub fn set_semantics(&mut self, semantics: InstructionSemantics) {
+    pub fn set_semantics(&mut self, semantics: Semantic) {
         self.semantics = Some(semantics);
     }
 
-    pub fn set_semantics_input(&mut self, input: InstructionSemanticsInput) {
-        self.semantics_input = Some(input);
+    pub fn set_instruction_detail(&mut self, detail: InstructionDetail) {
+        self.instruction_detail = Some(detail);
     }
 
-    pub fn build_semantics(&self) -> Option<InstructionSemantics> {
-        self.semantics_input
+    pub fn build_semantics(&self) -> Option<Semantic> {
+        self.instruction_detail
             .clone()
-            .map(InstructionSemanticsInput::build)
+            .map(InstructionDetail::build_semantic)
     }
 
-    pub fn build_and_log_semantics(&self) -> Option<InstructionSemantics> {
+    pub fn build_and_log_semantics(&self) -> Option<Semantic> {
         let semantics = self.build_semantics()?;
         log_semantics_debug(
             &self.config,
@@ -761,7 +780,7 @@ fn log_semantics_debug(
     mnemonic: &str,
     disassembly: &str,
     bytes: &[u8],
-    semantics: &InstructionSemantics,
+    semantics: &Semantic,
 ) {
     let has_intrinsic_effect = semantics
         .effects
@@ -845,12 +864,12 @@ fn unsupported_fallthrough(
     operand_text: Option<String>,
     bytes: Vec<u8>,
     message: &str,
-) -> InstructionSemantics {
-    InstructionSemantics {
+) -> Semantic {
+    Semantic {
         version: 1,
         status: SemanticStatus::Partial,
         abi: None,
-        encoding: Some(InstructionEncoding {
+        encoding: Some(SemanticEncoding {
             architecture,
             mnemonic: mnemonic.clone(),
             disassembly: match operand_text {

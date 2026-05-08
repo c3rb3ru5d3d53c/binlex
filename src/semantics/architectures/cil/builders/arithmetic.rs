@@ -20,9 +20,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::semantics::architectures::cil::CilInstructionView;
+use crate::semantics::architectures::cil::InstructionDetailCil;
 use crate::semantics::{
-    InstructionSemantics, SemanticExpression, SemanticOperationBinary, SemanticOperationCast,
+    Semantic, SemanticExpression, SemanticOperationBinary, SemanticOperationCast,
     SemanticOperationCompare, SemanticOperationUnary, SemanticTerminator,
 };
 
@@ -31,7 +31,7 @@ use super::super::helpers::common::{
     push_runtime_binary_intrinsic, push_runtime_unary_intrinsic, unary,
 };
 
-pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSemantics> {
+pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<Semantic> {
     match instruction.mnemonic_text() {
         "add" => simple_binary(SemanticOperationBinary::Add),
         "add.ovf" | "add.ovf.un" => Some(push_runtime_binary_intrinsic(instruction, "cil.add.ovf")),
@@ -80,7 +80,7 @@ pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSeman
     }
 }
 
-fn simple_binary(op: SemanticOperationBinary) -> Option<InstructionSemantics> {
+fn simple_binary(op: SemanticOperationBinary) -> Option<Semantic> {
     let (mut effects, right) = pop_stack();
     let (mut more_effects, left) = pop_stack();
     effects.append(&mut more_effects);
@@ -91,7 +91,7 @@ fn simple_binary(op: SemanticOperationBinary) -> Option<InstructionSemantics> {
     ))
 }
 
-fn simple_unary(op: SemanticOperationUnary) -> Option<InstructionSemantics> {
+fn simple_unary(op: SemanticOperationUnary) -> Option<Semantic> {
     let (mut effects, value) = pop_stack();
     effects.extend(push_effects(unary(op, value, 64)));
     Some(complete_with_effects(
@@ -100,7 +100,7 @@ fn simple_unary(op: SemanticOperationUnary) -> Option<InstructionSemantics> {
     ))
 }
 
-fn compare_to_i64(op: SemanticOperationCompare) -> Option<InstructionSemantics> {
+fn compare_to_i64(op: SemanticOperationCompare) -> Option<Semantic> {
     let (mut effects, right) = pop_stack();
     let (mut more_effects, left) = pop_stack();
     effects.append(&mut more_effects);

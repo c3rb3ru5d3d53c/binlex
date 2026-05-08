@@ -1,6 +1,6 @@
 use crate::controlflow::{Block, Function, Instruction};
 use crate::lifters::llvm_abi::llvm_abi_init;
-use crate::semantics::InstructionSemantics as PyInstructionSemantics;
+use crate::semantics::Semantic as PySemantic;
 use crate::Architecture;
 use crate::Configuration;
 use binlex::io::Stderr;
@@ -87,7 +87,7 @@ impl Lifter {
     }
 
     #[pyo3(text_signature = "($self, semantics)")]
-    pub fn lift_semantics(&self, _py: Python<'_>, semantics: &PyInstructionSemantics) -> bool {
+    pub fn lift_semantics(&self, _py: Python<'_>, semantics: &PySemantic) -> bool {
         let semantics = semantics.inner.lock().unwrap().clone();
         match self
             .inner

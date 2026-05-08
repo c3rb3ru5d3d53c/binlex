@@ -21,15 +21,21 @@
 // SOFTWARE.
 
 pub mod architectures;
+pub mod cpu;
 pub mod disassemblers;
 pub mod ir;
 
+pub use cpu::{
+    SemanticCpu, SemanticCpuAlias, SemanticCpuAliasWritePolicy, SemanticCpuEndian,
+    SemanticCpuProgramCounter, SemanticCpuRegister, SemanticMemory, SemanticMemoryAddressed,
+    SemanticMemoryIndexed, SemanticMemoryStack,
+};
 pub use ir::{
-    InstructionEncoding, InstructionSemantics, InstructionSemanticsJson, SemanticAddressSpace,
-    SemanticDiagnostic, SemanticDiagnosticKind, SemanticEffect, SemanticEffectKind,
-    SemanticExpression, SemanticExpressionKind, SemanticFenceKind, SemanticLocation,
-    SemanticLocationKind, SemanticOperation, SemanticOperationBinary, SemanticOperationCast,
-    SemanticOperationCompare, SemanticOperationUnary, SemanticStatus, SemanticTemporary,
-    SemanticTerminator, SemanticTerminatorKind, SemanticTrapKind, normalize_instruction_semantics,
+    Semantic, SemanticAddressSpace, SemanticDiagnostic, SemanticDiagnosticKind, SemanticEffect,
+    SemanticEffectKind, SemanticEncoding, SemanticExpression, SemanticExpressionKind,
+    SemanticFenceKind, SemanticJson, SemanticLocation, SemanticLocationKind, SemanticOperation,
+    SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
+    SemanticOperationUnary, SemanticStatus, SemanticTemporary, SemanticTerminator,
+    SemanticTerminatorKind, SemanticTrapKind, normalize_instruction_semantics,
     validate_instruction_semantics,
 };

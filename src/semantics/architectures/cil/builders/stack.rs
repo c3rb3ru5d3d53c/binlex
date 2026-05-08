@@ -20,10 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::semantics::architectures::cil::CilInstructionView;
-use crate::semantics::{
-    InstructionSemantics, SemanticEffect, SemanticTerminator, SemanticTrapKind,
-};
+use crate::semantics::architectures::cil::InstructionDetailCil;
+use crate::semantics::{Semantic, SemanticEffect, SemanticTerminator, SemanticTrapKind};
 
 use super::super::helpers::common::{
     cil_argument, cil_argument_address, cil_local, cil_local_address, complete_with_effects,
@@ -32,13 +30,13 @@ use super::super::helpers::common::{
     sign_extend_i64, zero_extend_i8, zero_extend_i16, zero_extend_i32, zero_extend_i64,
 };
 
-pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSemantics> {
+pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<Semantic> {
     match instruction.mnemonic_text() {
         "nop" => Some(complete_with_effects(
             SemanticTerminator::FallThrough,
             vec![SemanticEffect::Nop],
         )),
-        "break" => Some(InstructionSemantics {
+        "break" => Some(Semantic {
             version: 1,
             status: crate::semantics::SemanticStatus::Complete,
             abi: None,

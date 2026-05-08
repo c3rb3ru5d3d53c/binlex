@@ -5,7 +5,8 @@ from binlex import Configuration
 from binlex.assemblers import Assembler
 from binlex.controlflow import Graph
 from binlex.disassemblers import Disassembler
-from binlex.symbolic import Executor
+from binlex.semantics import SemanticCpu
+from binlex.symbolic import SymbolicCpuState, SymbolicExecutor
 
 assembly = """
 sub esp, 32
@@ -24,7 +25,7 @@ xor dword ptr [edi], 0x11111111
 add edi, 4
 cmp edi, esi
 jne decrypt_loop
-nop
+ret
 """
 
 stack_base = 0x2000
@@ -50,10 +51,11 @@ disassembler.disassemble_function(0, graph)
 
 function = graph.get_function(0)
 
-assert function, 'failed'
+assert function, "failed"
 
-executor = Executor(architecture)
-state = executor.state()
+cpu = SemanticCpu(architecture)
+executor = SymbolicExecutor()
+state = SymbolicCpuState(cpu)
 state.set_register("esp", 32, stack_base)
 state.map_memory(stack_base - stack_size, stack_size)
 
@@ -61,23 +63,23 @@ semantics = [
     semantics
     for block in function.blocks()
     for instruction in block.instructions()
-    if (semantics := instruction.semantics()) is not None
+    if (semantics := instruction.semantic()) is not None
 ]
 
 states = executor.run(semantics, state)
 
 live = [candidate for candidate in states if candidate.satisfiable()]
 
-assert live, 'state failed'
+assert live, "state failed"
 
 state = live[0]
 
 esp = state.evaluate_register("esp", 32)
 
-assert esp, 'failed to evaludate stack register'
+assert esp, "failed to evaludate stack register"
 
-plaintext = state.read_memory(esp, 32)
+plaintext = state.read_memory(esp - 4, 32)
 
-assert plaintext, 'failed to read memory'
+assert plaintext, "failed to read memory"
 
-print(plaintext.rstrip(b'\x00').decode('ascii'))
+print(plaintext.rstrip(b"\x00").decode("ascii"))

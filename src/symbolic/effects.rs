@@ -1,11 +1,11 @@
 use crate::semantics::{SemanticEffect, SemanticExpression, SemanticLocation};
-use crate::symbolic::{Error, Executor, State};
+use crate::symbolic::{Error, SymbolicCpuState, SymbolicExecutor};
 use z3::ast::{Ast, BV, Bool};
 
-impl Executor {
+impl SymbolicExecutor {
     pub(crate) fn concretize_if_dependency_free(
         &self,
-        state: &State,
+        state: &SymbolicCpuState,
         value: crate::symbolic::expressions::EvaluatedValue,
     ) -> Result<crate::symbolic::expressions::EvaluatedValue, Error> {
         if value.deps.is_empty() && value.value.get_size() <= 64 {
@@ -32,10 +32,32 @@ impl Executor {
         }
     }
 
+    fn format_indexed_memory_location(&self, name: &str, index: &str) -> String {
+        format!("indexed_memory:{name}[{index}]")
+    }
+
+    fn format_stack_memory_location(&self, name: &str, offset: u32) -> String {
+        format!("stack_memory:{name}[{offset}]")
+    }
+
+    fn indexed_memory_key(&self, index: &BV) -> String {
+        if let Some(index) = index.as_u64() {
+            return index.to_string();
+        }
+        index.simplify().to_string()
+    }
+
+    pub(crate) fn symbolic_key(&self, value: &BV) -> String {
+        if let Some(value) = value.as_u64() {
+            return value.to_string();
+        }
+        value.simplify().to_string()
+    }
+
     pub(crate) fn apply_effect(
         &self,
-        state: &mut State,
-        instruction: Option<&crate::semantics::InstructionEncoding>,
+        state: &mut SymbolicCpuState,
+        instruction: Option<&crate::semantics::SemanticEncoding>,
         effect: &SemanticEffect,
     ) -> Result<(), Error> {
         match effect {
@@ -124,6 +146,88 @@ impl Executor {
                 *bits,
                 observed,
             ),
+            SemanticEffect::WriteProperty {
+                reference,
+                name,
+                expression,
+                bits,
+            } => {
+                let reference = self.eval_expression(state, reference, false)?;
+                let reference_key = self.symbolic_key(&reference.value);
+                let value = self.eval_expression(state, expression, false)?;
+                let value = self.concretize_if_dependency_free(state, value)?;
+                let coerced = state.backend().coerce_bv_width(&value.value, *bits)?;
+                let mut parents = if reference.value.as_u64().is_none() {
+                    reference.deps
+                } else {
+                    std::collections::BTreeSet::new()
+                };
+                parents.extend(value.deps);
+                let def_id = state.define_location(
+                    instruction,
+                    format!("reference:{reference_key}.{name}"),
+                    &coerced,
+                    &parents,
+                );
+                state.set_reference_property_value(reference_key, name.clone(), coerced, def_id);
+                Ok(())
+            }
+            SemanticEffect::WriteElement {
+                reference,
+                index,
+                expression,
+                bits,
+            } => {
+                let reference = self.eval_expression(state, reference, false)?;
+                let reference_key = self.symbolic_key(&reference.value);
+                let index = self.eval_expression(state, index, false)?;
+                let index_key = self.symbolic_key(&index.value);
+                let value = self.eval_expression(state, expression, false)?;
+                let value = self.concretize_if_dependency_free(state, value)?;
+                let coerced = state.backend().coerce_bv_width(&value.value, *bits)?;
+                let mut parents = if reference.value.as_u64().is_none() {
+                    reference.deps
+                } else {
+                    std::collections::BTreeSet::new()
+                };
+                if index.value.as_u64().is_none() {
+                    parents.extend(index.deps);
+                }
+                parents.extend(value.deps);
+                let def_id = state.define_location(
+                    instruction,
+                    format!("reference:{reference_key}[{index_key}]"),
+                    &coerced,
+                    &parents,
+                );
+                state.set_reference_element_value(reference_key, index_key, coerced, def_id);
+                Ok(())
+            }
+            SemanticEffect::Push { stack, expression } => {
+                let value = self.eval_expression(state, expression, false)?;
+                let value = self.concretize_if_dependency_free(state, value)?;
+                let def_id = state.define_location(
+                    instruction,
+                    self.format_stack_memory_location(stack, 0),
+                    &value.value,
+                    &value.deps,
+                );
+                state.push_stack_memory_value(stack, value.value, def_id);
+                Ok(())
+            }
+            SemanticEffect::Pop { stack, dst } => {
+                let bits = dst.bits();
+                let cell = state.pop_stack_memory_value(stack, bits)?;
+                self.write_location(
+                    state,
+                    instruction,
+                    dst,
+                    crate::symbolic::expressions::EvaluatedValue {
+                        value: cell.value,
+                        deps: cell.def_id.into_iter().collect(),
+                    },
+                )
+            }
             SemanticEffect::Nop => Ok(()),
             SemanticEffect::Fence { .. } => Err(Error::UnsupportedEffect("fence")),
             SemanticEffect::Trap { .. } => Err(Error::UnsupportedEffect("trap")),
@@ -137,8 +241,8 @@ impl Executor {
 
     fn apply_memory_set(
         &self,
-        state: &mut State,
-        instruction: Option<&crate::semantics::InstructionEncoding>,
+        state: &mut SymbolicCpuState,
+        instruction: Option<&crate::semantics::SemanticEncoding>,
         addr: &SemanticExpression,
         value: &SemanticExpression,
         count: &SemanticExpression,
@@ -166,7 +270,7 @@ impl Executor {
         let stride = (element_bits / 8) as u64;
         for index in 0..count {
             let offset = index * stride;
-            let offset = backend.const_bv(offset as u128, self.address_bits())?;
+            let offset = backend.const_bv(offset as u128, state.address_bits())?;
             let address = if decrement {
                 base_address_value.bvsub(&offset)
             } else {
@@ -199,8 +303,8 @@ impl Executor {
 
     fn apply_memory_copy(
         &self,
-        state: &mut State,
-        instruction: Option<&crate::semantics::InstructionEncoding>,
+        state: &mut SymbolicCpuState,
+        instruction: Option<&crate::semantics::SemanticEncoding>,
         src_addr: &SemanticExpression,
         dst_addr: &SemanticExpression,
         count: &SemanticExpression,
@@ -224,7 +328,7 @@ impl Executor {
         let backend = state.backend().clone();
         let stride = (element_bits / 8) as u64;
         for index in 0..count {
-            let offset = backend.const_bv((index * stride) as u128, self.address_bits())?;
+            let offset = backend.const_bv((index * stride) as u128, state.address_bits())?;
             let src = if decrement {
                 src_base_value.bvsub(&offset)
             } else {
@@ -266,8 +370,8 @@ impl Executor {
 
     fn apply_atomic_cmpxchg(
         &self,
-        state: &mut State,
-        instruction: Option<&crate::semantics::InstructionEncoding>,
+        state: &mut SymbolicCpuState,
+        instruction: Option<&crate::semantics::SemanticEncoding>,
         addr: &SemanticExpression,
         expected: &SemanticExpression,
         desired: &SemanticExpression,
@@ -324,7 +428,7 @@ impl Executor {
 
     pub(crate) fn read_location(
         &self,
-        state: &mut State,
+        state: &mut SymbolicCpuState,
         location: &SemanticLocation,
     ) -> Result<crate::symbolic::expressions::EvaluatedValue, Error> {
         match location {
@@ -379,13 +483,36 @@ impl Executor {
                 }
                 Ok(crate::symbolic::expressions::EvaluatedValue { value, deps })
             }
+            SemanticLocation::IndexedMemory { name, index, bits } => {
+                let index = self.eval_expression(state, index, false)?;
+                let key = self.indexed_memory_key(&index.value);
+                let cell = state.get_or_create_indexed_memory(name, &key, *bits)?;
+                let mut deps = cell
+                    .def_id
+                    .into_iter()
+                    .collect::<std::collections::BTreeSet<_>>();
+                if index.value.as_u64().is_none() {
+                    deps.extend(index.deps);
+                }
+                Ok(crate::symbolic::expressions::EvaluatedValue {
+                    value: cell.value,
+                    deps,
+                })
+            }
+            SemanticLocation::StackMemory { name, offset, bits } => {
+                let cell = state.get_or_create_stack_memory(name, *offset, *bits)?;
+                Ok(crate::symbolic::expressions::EvaluatedValue {
+                    value: cell.value,
+                    deps: cell.def_id.into_iter().collect(),
+                })
+            }
         }
     }
 
     pub(crate) fn write_location(
         &self,
-        state: &mut State,
-        instruction: Option<&crate::semantics::InstructionEncoding>,
+        state: &mut SymbolicCpuState,
+        instruction: Option<&crate::semantics::SemanticEncoding>,
         location: &SemanticLocation,
         value: crate::symbolic::expressions::EvaluatedValue,
     ) -> Result<(), Error> {
@@ -458,6 +585,36 @@ impl Executor {
                     *bits,
                     def_id,
                 )
+            }
+            SemanticLocation::IndexedMemory { name, index, bits } => {
+                let index = self.eval_expression(state, index, false)?;
+                let key = self.indexed_memory_key(&index.value);
+                let coerced = state.backend().coerce_bv_width(&value.value, *bits)?;
+                let mut parents = if index.value.as_u64().is_none() {
+                    index.deps
+                } else {
+                    std::collections::BTreeSet::new()
+                };
+                parents.extend(value.deps);
+                let def_id = state.define_location(
+                    instruction,
+                    self.format_indexed_memory_location(name, &key),
+                    &coerced,
+                    &parents,
+                );
+                state.set_indexed_memory_value(name, key, coerced, def_id);
+                Ok(())
+            }
+            SemanticLocation::StackMemory { name, offset, bits } => {
+                let coerced = state.backend().coerce_bv_width(&value.value, *bits)?;
+                let def_id = state.define_location(
+                    instruction,
+                    self.format_stack_memory_location(name, *offset),
+                    &coerced,
+                    &value.deps,
+                );
+                state.set_stack_memory_value(name, *offset, coerced, def_id);
+                Ok(())
             }
         }
     }

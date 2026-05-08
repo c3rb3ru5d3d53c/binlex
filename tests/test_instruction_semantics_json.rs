@@ -1,6 +1,6 @@
 use binlex::controlflow::InstructionRecord;
 use binlex::semantics::{
-    InstructionSemantics, SemanticEffect, SemanticExpression, SemanticLocation, SemanticStatus,
+    Semantic, SemanticEffect, SemanticExpression, SemanticLocation, SemanticStatus,
     SemanticTerminator,
 };
 use binlex::{Architecture, Configuration};
@@ -30,8 +30,8 @@ fn instruction_with_semantics(config: Configuration) -> InstructionRecord {
         mnemonic: String::new(),
         disassembly: String::new(),
         operands: Vec::new(),
-        semantics_input: None,
-        semantics: Some(InstructionSemantics {
+        instruction_detail: None,
+        semantics: Some(Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,

@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::semantics::architectures::arm64::Arm64InstructionView;
+use crate::semantics::architectures::arm64::InstructionDetailArm64;
 use crate::semantics::architectures::arm64::builders::memory::{
     operand_expression, register_location,
 };
@@ -28,11 +28,11 @@ use crate::semantics::architectures::arm64::helpers::{
     bool_const, complete, condition_from_cc, const_u64, fp_compare_flag_values, location_bits,
 };
 use crate::semantics::{
-    InstructionSemantics, SemanticEffect, SemanticExpression, SemanticOperationBinary,
-    SemanticOperationCast, SemanticOperationCompare, SemanticOperationUnary, SemanticTerminator,
+    Semantic, SemanticEffect, SemanticExpression, SemanticOperationBinary, SemanticOperationCast,
+    SemanticOperationCompare, SemanticOperationUnary, SemanticTerminator,
 };
 
-pub(crate) fn build(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+pub(crate) fn build(view: &InstructionDetailArm64) -> Option<Semantic> {
     match view.mnemonic.as_str() {
         "fabs" => build_fabs(view),
         "fneg" => build_fneg(view),
@@ -55,7 +55,7 @@ pub(crate) fn build(view: &Arm64InstructionView) -> Option<InstructionSemantics>
     }
 }
 
-fn build_fcmp(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_fcmp(view: &InstructionDetailArm64) -> Option<Semantic> {
     let left = fp_operand_expression(view, 0)?;
     let right = match view.operand(1) {
         Some(_) => fp_operand_expression(view, 1)?,
@@ -76,7 +76,7 @@ fn build_fcmp(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_fccmp(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_fccmp(view: &InstructionDetailArm64) -> Option<Semantic> {
     let left = fp_operand_expression(view, 0)?;
     let right = fp_operand_expression(view, 1)?;
     let fallback_nzcv = view.operand(2)?.immediate_value()?;
@@ -112,10 +112,7 @@ fn build_fccmp(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     Some(complete(SemanticTerminator::FallThrough, effects))
 }
 
-fn build_fp_binary(
-    view: &Arm64InstructionView,
-    op: SemanticOperationBinary,
-) -> Option<InstructionSemantics> {
+fn build_fp_binary(view: &InstructionDetailArm64, op: SemanticOperationBinary) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = fp_operand_expression(view, 1)?;
     let right = fp_operand_expression(view, 2)?;
@@ -135,9 +132,9 @@ fn build_fp_binary(
 }
 
 fn build_fp_minmax(
-    view: &Arm64InstructionView,
+    view: &InstructionDetailArm64,
     compare_op: SemanticOperationCompare,
-) -> Option<InstructionSemantics> {
+) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = fp_operand_expression(view, 1)?;
     let right = fp_operand_expression(view, 2)?;
@@ -161,7 +158,7 @@ fn build_fp_minmax(
     ))
 }
 
-fn build_fnmul(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_fnmul(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = fp_operand_expression(view, 1)?;
     let right = fp_operand_expression(view, 2)?;
@@ -191,7 +188,7 @@ fn build_fnmul(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_fmadd(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_fmadd(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = fp_operand_expression(view, 1)?;
     let right = fp_operand_expression(view, 2)?;
@@ -217,7 +214,7 @@ fn build_fmadd(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_fmsub(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_fmsub(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let left = fp_operand_expression(view, 1)?;
     let right = fp_operand_expression(view, 2)?;
@@ -243,7 +240,7 @@ fn build_fmsub(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_scvtf(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_scvtf(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -260,7 +257,7 @@ fn build_scvtf(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_ucvtf(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_ucvtf(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -277,7 +274,7 @@ fn build_ucvtf(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_fcvtzs(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_fcvtzs(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = fp_operand_expression(view, 1)?;
     let bits = location_bits(&dst);
@@ -294,7 +291,7 @@ fn build_fcvtzs(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_fcvtzu(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_fcvtzu(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = fp_operand_expression(view, 1)?;
     let bits = location_bits(&dst);
@@ -311,7 +308,7 @@ fn build_fcvtzu(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_fabs(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_fabs(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = fp_operand_expression(view, 1)?;
     let bits = location_bits(&dst);
@@ -328,7 +325,7 @@ fn build_fabs(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn build_fneg(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
+fn build_fneg(view: &InstructionDetailArm64) -> Option<Semantic> {
     let dst = register_location(view.operand(0)?)?;
     let src = fp_operand_expression(view, 1)?;
     let bits = location_bits(&dst);
@@ -345,7 +342,10 @@ fn build_fneg(view: &Arm64InstructionView) -> Option<InstructionSemantics> {
     ))
 }
 
-fn fp_operand_expression(view: &Arm64InstructionView, index: usize) -> Option<SemanticExpression> {
+fn fp_operand_expression(
+    view: &InstructionDetailArm64,
+    index: usize,
+) -> Option<SemanticExpression> {
     let operand = view.operand(index)?;
     if let Some(value) = operand.float {
         let bits = operand.size_bits.max(32);

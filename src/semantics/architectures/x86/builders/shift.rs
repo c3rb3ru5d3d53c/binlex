@@ -22,14 +22,13 @@
 
 use crate::Architecture;
 use crate::semantics::architectures::x86::helpers as common;
-use crate::semantics::architectures::x86::instruction::X86InstructionView;
+use crate::semantics::architectures::x86::instruction::InstructionDetailX86;
 use crate::semantics::architectures::x86::operand::{X86OperandKind, X86OperandView};
 use crate::semantics::{
-    InstructionSemantics, SemanticAddressSpace, SemanticEffect, SemanticExpression,
-    SemanticLocation, SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
-    SemanticTerminator,
+    Semantic, SemanticAddressSpace, SemanticEffect, SemanticExpression, SemanticLocation,
+    SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare, SemanticTerminator,
 };
-pub fn build(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+pub fn build(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     if matches!(view.mnemonic.as_str(), "shld") {
         return double_precision_shift(machine, view, true);
     }
@@ -234,9 +233,9 @@ pub fn build(machine: Architecture, view: &X86InstructionView) -> Option<Instruc
 
 fn rotate_through_carry(
     machine: Architecture,
-    view: &X86InstructionView,
+    view: &InstructionDetailX86,
     left: bool,
-) -> Option<InstructionSemantics> {
+) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let value = operand_expr(machine, view.operands().first()?)?;
     let raw_count = view
@@ -347,7 +346,7 @@ fn rotate_through_carry(
     ))
 }
 
-fn bmi_shift(machine: Architecture, view: &X86InstructionView) -> Option<InstructionSemantics> {
+fn bmi_shift(machine: Architecture, view: &InstructionDetailX86) -> Option<Semantic> {
     let op = match view.mnemonic.as_str() {
         "shlx" => SemanticOperationBinary::Shl,
         "shrx" => SemanticOperationBinary::LShr,
@@ -402,9 +401,9 @@ fn bmi_shift(machine: Architecture, view: &X86InstructionView) -> Option<Instruc
 
 fn double_precision_shift(
     machine: Architecture,
-    view: &X86InstructionView,
+    view: &InstructionDetailX86,
     left_shift: bool,
-) -> Option<InstructionSemantics> {
+) -> Option<Semantic> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let dst_expr = operand_expr(machine, view.operands().first()?)?;
     let src_expr = operand_expr(machine, view.operands().get(1)?)?;

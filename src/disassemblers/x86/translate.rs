@@ -28,16 +28,14 @@ use ::capstone::{Insn, arch::ArchOperand, arch::x86::X86OperandType};
 use crate::{
     Architecture,
     controlflow::graph::Graph,
-    controlflow::{
-        Instruction, InstructionRecord, InstructionSemanticsInput, Operand, OperandKind,
-    },
+    controlflow::{Instruction, InstructionDetail, InstructionRecord, Operand, OperandKind},
     disassemblers::x86::{
         backends::capstone as x86_capstone, flow as x86_flow, indirect as x86_indirect,
         targets as x86_targets,
     },
     genetics::Chromosome,
     semantics::architectures::x86::{
-        X86InstructionView, X86MemoryOperandView, X86OperandKind, X86OperandView,
+        InstructionDetailX86, X86MemoryOperandView, X86OperandKind, X86OperandView,
     },
 };
 
@@ -124,8 +122,8 @@ fn semantic_instruction_view(
     machine: Architecture,
     instruction: &Insn,
     operands: &[ArchOperand],
-) -> X86InstructionView {
-    X86InstructionView::new(
+) -> InstructionDetailX86 {
+    InstructionDetailX86::new(
         machine,
         instruction.address(),
         instruction.mnemonic().unwrap_or(""),
@@ -252,7 +250,7 @@ pub fn build_instruction(
     blinstruction.disassembly = disassembly;
     blinstruction.has_indirect_target = has_indirect_target;
     blinstruction.operands = normalized_operands;
-    blinstruction.set_semantics_input(InstructionSemanticsInput::X86(semantic_view));
+    blinstruction.set_instruction_detail(InstructionDetail::x86(semantic_view));
 
     if let Some(addr) = conditional_target {
         blinstruction.to.insert(addr);

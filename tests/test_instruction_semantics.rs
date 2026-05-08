@@ -2,8 +2,7 @@ use std::collections::BTreeMap;
 
 use binlex::controlflow::{Graph, InstructionRecord};
 use binlex::semantics::{
-    InstructionSemantics, SemanticDiagnostic, SemanticDiagnosticKind, SemanticStatus,
-    SemanticTerminator,
+    Semantic, SemanticDiagnostic, SemanticDiagnosticKind, SemanticStatus, SemanticTerminator,
 };
 use binlex::{Architecture, Configuration};
 
@@ -62,8 +61,8 @@ fn assert_partial_semantics(name: &str, architecture: Architecture, bytes: &[u8]
     );
 }
 
-fn partial_semantics(message: &str) -> InstructionSemantics {
-    InstructionSemantics {
+fn partial_semantics(message: &str) -> Semantic {
+    Semantic {
         version: 1,
         status: SemanticStatus::Partial,
         abi: None,
@@ -80,8 +79,8 @@ fn partial_semantics(message: &str) -> InstructionSemantics {
     }
 }
 
-fn complete_semantics() -> InstructionSemantics {
-    InstructionSemantics {
+fn complete_semantics() -> Semantic {
+    Semantic {
         version: 1,
         status: SemanticStatus::Complete,
         abi: None,

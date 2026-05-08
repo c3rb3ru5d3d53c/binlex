@@ -20,20 +20,20 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::semantics::architectures::cil::CilInstructionView;
+use crate::semantics::architectures::cil::InstructionDetailCil;
 use crate::semantics::{
-    InstructionSemantics, SemanticEffect, SemanticExpression, SemanticOperationCompare,
-    SemanticStatus, SemanticTerminator,
+    Semantic, SemanticEffect, SemanticExpression, SemanticOperationCompare, SemanticStatus,
+    SemanticTerminator,
 };
 
 use super::super::helpers::common::{
     compare, complete_with_effects, const_u64, operand_args, pop_stack,
 };
 
-pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSemantics> {
+pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<Semantic> {
     let mnemonic = instruction.mnemonic_text();
     if instruction.is_return() {
-        return Some(InstructionSemantics {
+        return Some(Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -50,7 +50,7 @@ pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSeman
     }
 
     if instruction.is_call() {
-        return Some(InstructionSemantics {
+        return Some(Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -274,7 +274,7 @@ pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSeman
                 effects,
             ));
         }
-        return Some(InstructionSemantics {
+        return Some(Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -311,7 +311,7 @@ pub(crate) fn build(instruction: &CilInstructionView) -> Option<InstructionSeman
             .next()
             .copied()
             .unwrap_or_default();
-        return Some(InstructionSemantics {
+        return Some(Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
