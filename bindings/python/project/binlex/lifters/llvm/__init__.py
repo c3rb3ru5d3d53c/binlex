@@ -22,6 +22,9 @@
 
 """LLVM lifter wrappers backed by the Rust core implementation."""
 
+import ctypes
+
+from binlex_bindings.binlex.lifters.llvm import JittedFunction as _JittedFunctionBinding
 from binlex_bindings.binlex.lifters.llvm import Lifter as _LifterBinding
 from binlex_bindings.binlex.lifters.llvm import LiftedBlock as _LiftedBlockBinding
 from binlex_bindings.binlex.lifters.llvm import LiftedFunction as _LiftedFunctionBinding
@@ -137,7 +140,7 @@ class Lifter:
         return self.ir()
 
 
-__all__ = ["Lifter", "LiftedFunction", "LiftedBlock"]
+__all__ = ["Lifter", "LiftedFunction", "LiftedBlock", "NativeFunction"]
 
 
 class LiftedFunction:
@@ -222,6 +225,12 @@ class LiftedFunction:
         data = self._inner.object()
         return None if data is None else bytes(data)
 
+    def jit(self, restype=None, argtypes=None):
+        handle = self._inner.jit()
+        if handle is None:
+            return None
+        return NativeFunction(handle, restype=restype, argtypes=argtypes)
+
 
 class LiftedBlock:
     def __init__(self, function, inner):
@@ -236,3 +245,23 @@ class LiftedBlock:
 
     def print(self):
         return self._inner.print()
+
+
+class NativeFunction:
+    def __init__(self, handle, restype=None, argtypes=None):
+        if not isinstance(handle, _JittedFunctionBinding):
+            raise TypeError("handle must be a binlex llvm jitted function")
+        self._handle = handle
+        self._restype = ctypes.c_int if restype is None else restype
+        self._argtypes = list(argtypes or [])
+        self._functype = ctypes.CFUNCTYPE(self._restype, *self._argtypes)
+        self._callable = self._functype(handle.address())
+
+    def name(self):
+        return self._handle.name()
+
+    def address(self):
+        return self._handle.address()
+
+    def __call__(self, *args):
+        return self._callable(*args)

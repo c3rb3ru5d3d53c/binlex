@@ -7,7 +7,7 @@ use binlex::controlflow::{
 };
 use binlex::core::Architecture;
 use binlex::io::Stderr;
-use binlex::lifters::llvm::Lifter as InnerLifter;
+use binlex::lifters::llvm::{JittedFunction as InnerJittedFunction, Lifter as InnerLifter};
 use binlex::semantics::{Semantic, SemanticAbi, SemanticCpuKind, SemanticTerminator};
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
@@ -394,6 +394,11 @@ pub struct LiftedBlock {
     state: Arc<Mutex<BuildState>>,
     function_index: usize,
     block_index: usize,
+}
+
+#[pyclass(unsendable, skip_from_py_object)]
+pub struct JittedFunction {
+    inner: InnerJittedFunction,
 }
 
 #[pymethods]
@@ -1128,6 +1133,30 @@ impl LiftedFunction {
             }
         }
     }
+
+    pub fn jit(&self) -> Option<JittedFunction> {
+        let state = self.state.lock().unwrap();
+        let name = match state.items.get(self.index) {
+            Some(ModuleItemDef::CreatedFunction { function }) => function.name.clone(),
+            _ => return None,
+        };
+        drop(state);
+        match function_preview_lifter(&self.state, self.index) {
+            Ok(lifter) => match lifter.jit_function(&name) {
+                Ok(inner) => Some(JittedFunction { inner }),
+                Err(err) => {
+                    let state = self.state.lock().unwrap();
+                    Stderr::print_debug(&state.config, format!("llvm function jit failed: {}", err));
+                    None
+                }
+            },
+            Err(err) => {
+                let state = self.state.lock().unwrap();
+                Stderr::print_debug(&state.config, format!("llvm function jit failed: {}", err));
+                None
+            }
+        }
+    }
 }
 
 #[pymethods]
@@ -1166,6 +1195,17 @@ impl LiftedBlock {
             }
             None => false,
         }
+    }
+}
+
+#[pymethods]
+impl JittedFunction {
+    pub fn name(&self) -> String {
+        self.inner.name().to_string()
+    }
+
+    pub fn address(&self) -> u64 {
+        self.inner.address() as u64
     }
 }
 
@@ -1261,6 +1301,7 @@ pub fn llvm_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Lifter>()?;
     m.add_class::<LiftedFunction>()?;
     m.add_class::<LiftedBlock>()?;
+    m.add_class::<JittedFunction>()?;
     py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.lifters.llvm", m)?;

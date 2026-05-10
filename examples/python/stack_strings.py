@@ -6,7 +6,7 @@ from binlex.assemblers import Assembler
 from binlex.controlflow import Graph
 from binlex.disassemblers import Disassembler
 from binlex.semantics import SemanticCpu
-from binlex.symbolic import SymbolicCpuState, SymbolicExecutor
+from binlex.symbolic import CpuState, Executor
 
 assembly = """
 sub esp, 32
@@ -53,9 +53,9 @@ function = graph.get_function(0)
 
 assert function, "failed"
 
-cpu = SemanticCpu(architecture)
-executor = SymbolicExecutor()
-state = SymbolicCpuState(cpu)
+cpu = SemanticCpu.i386()
+executor = Executor()
+state = CpuState(cpu)
 state.set_register("esp", 32, stack_base)
 state.map_memory(stack_base - stack_size, stack_size)
 

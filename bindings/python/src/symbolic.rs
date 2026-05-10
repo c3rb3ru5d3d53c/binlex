@@ -23,13 +23,13 @@ struct SliceItemData {
     parents: Vec<usize>,
 }
 
-#[pyclass(unsendable)]
+#[pyclass(name = "Executor", unsendable)]
 pub struct SymbolicExecutor {
     inner: Arc<Mutex<::binlex::symbolic::SymbolicExecutor>>,
     hooks: Arc<Mutex<BTreeMap<u64, Py<PyAny>>>>,
 }
 
-#[pyclass(unsendable)]
+#[pyclass(name = "CpuState", unsendable)]
 pub struct SymbolicCpuState {
     inner: Arc<Mutex<::binlex::symbolic::SymbolicCpuState>>,
 }
@@ -210,7 +210,7 @@ impl SymbolicExecutor {
                         .extract::<Vec<Py<SymbolicCpuState>>>(py)
                         .map_err(|_| {
                             PyTypeError::new_err(
-                                "hook must return a list of symbolic.SymbolicCpuState objects",
+                                "hook must return a list of symbolic.CpuState objects",
                             )
                         })?;
                 for returned_state in returned_states {

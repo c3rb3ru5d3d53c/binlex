@@ -10,6 +10,7 @@ use crate::semantics::{
     Semantic, SemanticAbi, SemanticCpu, SemanticCpuKind, SemanticEffect, SemanticExpression, SemanticLocation,
     SemanticTerminator,
 };
+use inkwell::execution_engine::ExecutionEngine;
 use inkwell::OptimizationLevel;
 use inkwell::attributes::AttributeLoc;
 use inkwell::basic_block::BasicBlock;
@@ -51,6 +52,12 @@ pub struct Lifter {
     cpu: SemanticCpu,
     architecture: Architecture,
     triple: String,
+}
+
+pub struct JittedFunction {
+    engine: ExecutionEngine<'static>,
+    address: usize,
+    name: String,
 }
 
 #[derive(Default)]
@@ -385,6 +392,33 @@ impl Lifter {
             .write_to_memory_buffer(&codegen.module, inkwell::targets::FileType::Object)
             .map_err(|err| Error::other(err.to_string()))?;
         Ok(buffer.as_slice().to_vec())
+    }
+
+    pub fn jit_function(self, function_name: &str) -> Result<JittedFunction, Error> {
+        self.ensure_native_jit_supported()?;
+        let function = self
+            .module
+            .get_function(function_name)
+            .ok_or_else(|| Error::other(format!("llvm function {function_name} does not exist")))?;
+        if function.get_first_basic_block().is_none() {
+            return Err(Error::other(format!(
+                "llvm function {function_name} has no body"
+            )));
+        }
+        Target::initialize_native(&InitializationConfig::default())
+            .map_err(|err| Error::other(err.to_string()))?;
+        let engine = self
+            .module
+            .create_jit_execution_engine(OptimizationLevel::Default)
+            .map_err(|err| Error::other(err.to_string()))?;
+        let address = engine
+            .get_function_address(function_name)
+            .map_err(|err| Error::other(err.to_string()))?;
+        Ok(JittedFunction {
+            engine,
+            address,
+            name: function_name.to_string(),
+        })
     }
 
     pub fn optimizers(&self) -> Result<Optimizers, Error> {
@@ -730,6 +764,50 @@ impl Lifter {
         }
     }
 
+    fn ensure_native_jit_supported(&self) -> Result<(), Error> {
+        match self.architecture {
+            Architecture::I386 => {
+                #[cfg(target_arch = "x86")]
+                {
+                    Ok(())
+                }
+                #[cfg(not(target_arch = "x86"))]
+                {
+                    Err(Error::other(
+                        "native llvm jit for i386 requires an x86 host process",
+                    ))
+                }
+            }
+            Architecture::AMD64 => {
+                #[cfg(target_arch = "x86_64")]
+                {
+                    Ok(())
+                }
+                #[cfg(not(target_arch = "x86_64"))]
+                {
+                    Err(Error::other(
+                        "native llvm jit for amd64 requires an x86_64 host process",
+                    ))
+                }
+            }
+            Architecture::ARM64 => {
+                #[cfg(target_arch = "aarch64")]
+                {
+                    Ok(())
+                }
+                #[cfg(not(target_arch = "aarch64"))]
+                {
+                    Err(Error::other(
+                        "native llvm jit for arm64 requires an aarch64 host process",
+                    ))
+                }
+            }
+            _ => Err(Error::other(
+                "native llvm jit is unsupported for this architecture",
+            )),
+        }
+    }
+
     fn active_function_arguments_for_semantics(
         &self,
         semantics: &[Semantic],
@@ -982,6 +1060,90 @@ impl Lifter {
             self.module.set_data_layout(&data_layout);
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod jit_tests {
+    use super::Lifter;
+    use crate::semantics::{
+        Semantic, SemanticAbi, SemanticCpu, SemanticEffect, SemanticExpression, SemanticLocation,
+        SemanticOperationBinary, SemanticStatus, SemanticTerminator,
+    };
+    use crate::Configuration;
+
+    #[cfg(all(target_arch = "x86_64", not(target_os = "windows")))]
+    #[test]
+    fn jit_function_executes_amd64_add_two() {
+        let cpu = SemanticCpu::amd64().expect("cpu");
+        let abi = SemanticAbi::sysv(&cpu).expect("sysv abi");
+        let mut lifter = Lifter::new(cpu, Configuration::default(), None).expect("lifter");
+
+        let semantics = [Semantic {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Set {
+                dst: SemanticLocation::Register {
+                    name: "rax".to_string(),
+                    bits: 64,
+                },
+                expression: SemanticExpression::Binary {
+                    op: SemanticOperationBinary::Add,
+                    left: Box::new(SemanticExpression::Read(Box::new(
+                        SemanticLocation::Register {
+                            name: "rdi".to_string(),
+                            bits: 64,
+                        },
+                    ))),
+                    right: Box::new(SemanticExpression::Read(Box::new(
+                        SemanticLocation::Register {
+                            name: "rsi".to_string(),
+                            bits: 64,
+                        },
+                    ))),
+                    bits: 64,
+                },
+            }],
+            terminator: SemanticTerminator::Return { expression: None },
+            diagnostics: Vec::new(),
+        }];
+
+        lifter
+            .lift_function_semantics_named(&semantics, Some(&abi), "add_two")
+            .expect("function lift");
+        lifter.optimize_mem2reg().expect("mem2reg");
+        lifter.optimize_sroa().expect("sroa");
+        lifter.optimize_instcombine().expect("instcombine");
+        lifter.optimize_gvn().expect("gvn");
+        lifter.optimize_dce().expect("dce");
+
+        let jitted = lifter
+            .duplicate_function_view("add_two")
+            .expect("function view")
+            .jit_function("add_two")
+            .expect("jit function");
+
+        let function: extern "C" fn(u64, u64) -> u64 =
+            unsafe { std::mem::transmute(jitted.address()) };
+        assert_eq!(function(1, 1), 2);
+        assert_eq!(jitted.name(), "add_two");
+    }
+}
+
+impl JittedFunction {
+    pub fn address(&self) -> usize {
+        self.address
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn keepalive_token(&self) -> usize {
+        (&self.engine as *const ExecutionEngine<'static>) as usize
     }
 }
 

@@ -7,10 +7,10 @@ from binlex.assemblers import Assembler, AssemblerBackend
 from binlex.controlflow import Graph
 from binlex.disassemblers.capstone import Disassembler
 from binlex.semantics import Semantic, SemanticCpu
-from binlex.symbolic import SymbolicExecutor, SymbolicCpuState
+from binlex.symbolic import Executor, CpuState
 
 
-def hook_code(_: int, state: SymbolicCpuState):
+def hook_code(_: int, state: CpuState):
     esp = state.evaluate_register("esp", 32)
     assert esp is not None
     return_address = state.evaluate_memory(esp, 4)
@@ -72,9 +72,9 @@ semantics = cast(list[Semantic], raw_semantics)
 
 host_print_address = instructions[-1].address()
 
-cpu = SemanticCpu(Architecture.I386)
-state = SymbolicCpuState(cpu)
-executor = SymbolicExecutor()
+cpu = SemanticCpu.i386()
+state = CpuState(cpu)
+executor = Executor()
 state.map_memory(stack_address, stack_size)
 state.map_memory(message_address, 0x1000)
 state.write_memory(message_address, message)

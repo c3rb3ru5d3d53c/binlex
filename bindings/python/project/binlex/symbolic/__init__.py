@@ -1,21 +1,21 @@
 """Rust-backed symbolic execution bindings."""
 
-from binlex_bindings.binlex.symbolic import SymbolicExecutor as _SymbolicExecutorBinding
+from binlex_bindings.binlex.symbolic import CpuState as _CpuStateBinding
+from binlex_bindings.binlex.symbolic import Executor as _ExecutorBinding
 from binlex_bindings.binlex.symbolic import Slice
 from binlex_bindings.binlex.symbolic import SliceInstruction
 from binlex_bindings.binlex.symbolic import SliceNode
-from binlex_bindings.binlex.symbolic import SymbolicCpuState as _SymbolicCpuStateBinding
 
 from binlex.semantics import SemanticCpu
 
 
-class SymbolicCpuState:
+class CpuState:
     """Symbolic state for a specific semantic CPU model."""
 
     def __init__(self, cpu):
         if isinstance(cpu, SemanticCpu):
             cpu = cpu._inner
-        self._inner = _SymbolicCpuStateBinding(cpu)
+        self._inner = _CpuStateBinding(cpu)
 
     @classmethod
     def _from_inner(cls, inner):
@@ -27,23 +27,25 @@ class SymbolicCpuState:
         return getattr(self._inner, name)
 
 
-class SymbolicExecutor:
+class Executor:
     """Execute Binlex semantics symbolically."""
 
     def __init__(self):
-        self._inner = _SymbolicExecutorBinding()
+        self._inner = _ExecutorBinding()
 
     def step(self, semantics, state):
+        semantics = getattr(semantics, "_inner", semantics)
         states = self._inner.step(semantics, state._inner)
-        return [SymbolicCpuState._from_inner(state) for state in states]
+        return [CpuState._from_inner(state) for state in states]
 
     def run(self, semantics, state, steps=None):
+        semantics = [getattr(item, "_inner", item) for item in semantics]
         states = self._inner.run(semantics, state._inner, steps)
-        return [SymbolicCpuState._from_inner(state) for state in states]
+        return [CpuState._from_inner(state) for state in states]
 
     def add_hook(self, address, hook):
         def native_hook(hook_address, native_state):
-            state = SymbolicCpuState._from_inner(native_state)
+            state = CpuState._from_inner(native_state)
             return [returned._inner for returned in hook(hook_address, state)]
 
         return self._inner.add_hook(address, native_hook)
@@ -61,9 +63,9 @@ class SymbolicExecutor:
         return getattr(self._inner, name)
 
 __all__ = [
-    "SymbolicExecutor",
+    "Executor",
     "Slice",
     "SliceInstruction",
     "SliceNode",
-    "SymbolicCpuState",
+    "CpuState",
 ]
