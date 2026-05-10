@@ -127,7 +127,7 @@ impl Configuration {
                 },
                 entropy: ConfigHeuristicEntropy { enabled: true },
                 markov: ConfigMarkov {
-                    enabled: true,
+                    enabled: false,
                     damping: 0.85,
                     tolerance: 1e-9,
                     max_iterations: 100,

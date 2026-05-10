@@ -24,6 +24,7 @@
 
 from binlex_bindings.binlex.controlflow import Block as _BlockBinding
 from binlex_bindings.binlex.controlflow import BlockJsonDeserializer as _BlockJsonDeserializerBinding
+from binlex_bindings.binlex.controlflow import EntityKind as _EntityKindBinding
 from binlex_bindings.binlex.controlflow import Function as _FunctionBinding
 from binlex_bindings.binlex.controlflow import FunctionJsonDeserializer as _FunctionJsonDeserializerBinding
 from binlex_bindings.binlex.controlflow import Graph as _GraphBinding
@@ -37,6 +38,8 @@ from binlex_bindings.binlex.controlflow.instruction import OperandKind as Operan
 from binlex.core.architecture import _coerce_architecture
 from binlex.hashing import MinHash32, SHA256, SSDeep, TLSH
 from binlex.semantics import SemanticCpu, _cpu_kind_from_architecture
+
+EntityKind = _EntityKindBinding
 
 
 def _cpu_for_architecture(architecture):
@@ -62,6 +65,10 @@ class Instruction:
     def address(self):
         """Return the instruction address."""
         return self._inner.address()
+
+    def kind(self):
+        """Return the controlflow entity kind for this instruction."""
+        return self._inner.kind()
 
     def chromosome(self):
         """Return the chromosome derived from this instruction, if available."""
@@ -94,10 +101,6 @@ class Instruction:
     def is_conditional(self):
         """Return whether this instruction is conditional."""
         return self._inner.is_conditional()
-
-    def is_opaque_predicate(self):
-        """Return whether this instruction was resolved as a single-block opaque predicate."""
-        return self._inner.is_opaque_predicate()
 
     def callees(self):
         """Return the directly called functions."""
@@ -211,6 +214,10 @@ class InstructionJsonDeserializer:
         """Return the architecture encoded in the serialized instruction."""
         return self._inner.architecture()
 
+    def kind(self):
+        """Return the controlflow entity kind encoded in the serialized instruction."""
+        return self._inner.kind()
+
     def address(self):
         """Return the address of the serialized instruction."""
         return self._inner.address()
@@ -258,10 +265,6 @@ class InstructionJsonDeserializer:
     def is_conditional(self):
         """Return whether this instruction is conditional."""
         return self._inner.is_conditional()
-
-    def is_opaque_predicate(self):
-        """Return whether this instruction was resolved as a single-block opaque predicate."""
-        return self._inner.is_opaque_predicate()
 
     def callees(self):
         """Return the directly called functions."""
@@ -323,6 +326,10 @@ class Block:
     def address(self):
         """Return the starting address of the block."""
         return self._inner.address()
+
+    def kind(self):
+        """Return the controlflow entity kind for this block."""
+        return self._inner.kind()
 
     def architecture(self):
         """Return the architecture associated with this block."""
@@ -485,6 +492,10 @@ class Function:
     def address(self):
         """Return the starting address of the function."""
         return self._inner.address()
+
+    def kind(self):
+        """Return the controlflow entity kind for this function."""
+        return self._inner.kind()
 
     def architecture(self):
         """Return the architecture associated with this function."""
@@ -737,6 +748,10 @@ class BlockJsonDeserializer:
         """Return the architecture encoded in the serialized block."""
         return self._inner.architecture()
 
+    def kind(self):
+        """Return the controlflow entity kind encoded in the serialized block."""
+        return self._inner.kind()
+
     def bytes(self):
         """Return the decoded raw bytes for the serialized block."""
         return self._inner.bytes()
@@ -777,13 +792,9 @@ class BlockJsonDeserializer:
         """Return the explicit branch target addresses targeted by the block."""
         return self._inner.branches()
 
-    def conditional(self):
+    def is_conditional(self):
         """Return whether the block ends with a conditional transfer of control."""
-        return self._inner.conditional()
-
-    def opaque_predicate(self):
-        """Return whether the block terminates in a resolved opaque predicate."""
-        return self._inner.opaque_predicate()
+        return self._inner.is_conditional()
 
     def entropy(self):
         """Return the block entropy, if available."""
@@ -839,6 +850,10 @@ class FunctionJsonDeserializer:
     def blocks(self):
         """Return the block addresses contained in the function payload."""
         return self._inner.blocks()
+
+    def kind(self):
+        """Return the controlflow entity kind encoded in the serialized function."""
+        return self._inner.kind()
 
     def callee_references(self):
         """Return direct callsite-to-callee references contained in the payload."""

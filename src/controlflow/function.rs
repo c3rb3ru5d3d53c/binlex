@@ -23,6 +23,7 @@
 use crate::Architecture;
 use crate::Configuration;
 use crate::controlflow::Block;
+use crate::controlflow::EntityKind;
 use crate::controlflow::Graph;
 use crate::controlflow::GraphQueue;
 use crate::controlflow::Instruction;
@@ -50,9 +51,8 @@ use std::io::Error;
 /// Represents a JSON-serializable structure containing metadata about a function.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct FunctionJson {
-    /// The type of this entity, typically `"function"`.
-    #[serde(rename = "type")]
-    pub type_: String,
+    /// The kind of this entity, typically `"function"`.
+    pub kind: EntityKind,
     /// The architecture of the function.
     pub architecture: String,
     /// The starting address of the function.
@@ -130,8 +130,8 @@ impl FunctionJsonDeserializer {
     pub fn new(string: String, config: Configuration) -> Result<Self, Error> {
         let json: FunctionJson =
             serde_json::from_str(&string).map_err(|error| Error::other(format!("{}", error)))?;
-        if json.type_ != "function" {
-            return Err(Error::other("feserialized json is not a function type"));
+        if json.kind != EntityKind::Function {
+            return Err(Error::other("deserialized JSON is not a function kind"));
         }
         Ok(Self {
             json,
@@ -142,6 +142,11 @@ impl FunctionJsonDeserializer {
     #[allow(dead_code)]
     pub fn address(&self) -> u64 {
         self.json.address
+    }
+
+    #[allow(dead_code)]
+    pub fn kind(&self) -> EntityKind {
+        self.json.kind
     }
 
     pub fn blocks(&self) -> Vec<u64> {
@@ -418,7 +423,7 @@ impl<'function> Function<'function> {
 
         FunctionJson {
             address: self.address,
-            type_: "function".to_string(),
+            kind: EntityKind::Function,
             edges: self.edges(),
             chromosome,
             bytes: bytes_hex,
@@ -627,6 +632,10 @@ impl<'function> Function<'function> {
         let raw = self.process();
         let result = serde_json::to_string(&raw)?;
         Ok(result)
+    }
+
+    pub fn kind(&self) -> EntityKind {
+        EntityKind::Function
     }
 
     /// Converts the function metadata into a JSON string representation including `Attributes`.
@@ -986,7 +995,7 @@ impl<'function> Function<'function> {
     /// # Returns
     ///
     /// Returns a `BTreeMap<u64, u64>` containing `callsite -> callee` pairs.
-    pub fn callee_references(&self) -> BTreeMap<u64, u64> {
+    pub(crate) fn compute_callee_references(&self) -> BTreeMap<u64, u64> {
         self.blocks
             .values()
             .flat_map(|block| {
@@ -999,31 +1008,22 @@ impl<'function> Function<'function> {
             .collect()
     }
 
+    /// Retrieves the direct callsites within this function.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `BTreeMap<u64, u64>` containing `callsite -> callee` pairs.
+    pub fn callee_references(&self) -> BTreeMap<u64, u64> {
+        self.cfg.function_callee_references(self.address)
+    }
+
     /// Retrieves the direct incoming callsites targeting this function.
     ///
     /// # Returns
     ///
     /// Returns a `BTreeMap<u64, u64>` containing `callsite -> caller` pairs.
     pub fn caller_references(&self) -> BTreeMap<u64, u64> {
-        let mut result = BTreeMap::<u64, u64>::new();
-
-        for function_address in self.cfg.functions.valid_addresses() {
-            if function_address == self.address {
-                continue;
-            }
-
-            let Ok(function) = Function::new(function_address, self.cfg) else {
-                continue;
-            };
-
-            for (callsite, callee) in function.callee_references() {
-                if callee == self.address {
-                    result.insert(callsite, function_address);
-                }
-            }
-        }
-
-        result
+        self.cfg.function_caller_references(self.address)
     }
 
     /// Retrieves the directly called functions.

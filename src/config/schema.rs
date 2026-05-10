@@ -345,7 +345,7 @@ pub struct ConfigMarkov {
 impl Default for ConfigMarkov {
     fn default() -> Self {
         Self {
-            enabled: true,
+            enabled: false,
             damping: 0.85,
             tolerance: 1e-9,
             max_iterations: 100,

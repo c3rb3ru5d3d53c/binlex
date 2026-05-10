@@ -22,6 +22,7 @@
 
 use crate::Architecture;
 use crate::Configuration;
+use crate::controlflow::EntityKind;
 use crate::controlflow::Function;
 use crate::controlflow::Instruction;
 use crate::controlflow::Reference;
@@ -52,9 +53,8 @@ use std::io::ErrorKind;
 /// Represents the JSON-serializable structure of a control flow block.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct BlockJson {
-    /// The type of this entity, always `"block"`.
-    #[serde(rename = "type")]
-    pub type_: String,
+    /// The kind of this entity, always `"block"`.
+    pub kind: EntityKind,
     /// The architecture of the block.
     pub architecture: String,
     /// The starting address of the block.
@@ -69,9 +69,6 @@ pub struct BlockJson {
     pub edges: usize,
     /// Indicates whether this block contains a conditional instruction.
     pub conditional: bool,
-    /// Indicates whether this block terminates in a resolved opaque predicate.
-    #[serde(default)]
-    pub opaque_predicate: bool,
     /// The chromosome of the block in JSON format.
     pub chromosome: ChromosomeJson,
     /// The size of the block in bytes.
@@ -135,8 +132,8 @@ impl BlockJsonDeserializer {
     pub fn new(string: String, config: Configuration) -> Result<Self, Error> {
         let json: BlockJson =
             serde_json::from_str(&string).map_err(|error| Error::other(format!("{}", error)))?;
-        if json.type_ != "block" {
-            return Err(Error::other("deserialized JSON is not a function type"));
+        if json.kind != EntityKind::Block {
+            return Err(Error::other("deserialized JSON is not a block kind"));
         }
         Ok(Self {
             json,
@@ -199,6 +196,11 @@ impl BlockJsonDeserializer {
     }
 
     #[allow(dead_code)]
+    pub fn kind(&self) -> EntityKind {
+        self.json.kind
+    }
+
+    #[allow(dead_code)]
     pub fn address(&self) -> u64 {
         self.json.address
     }
@@ -243,13 +245,8 @@ impl BlockJsonDeserializer {
     }
 
     #[allow(dead_code)]
-    pub fn conditional(&self) -> bool {
+    pub fn is_conditional(&self) -> bool {
         self.json.conditional
-    }
-
-    #[allow(dead_code)]
-    pub fn opaque_predicate(&self) -> bool {
-        self.json.opaque_predicate
     }
 
     #[allow(dead_code)]
@@ -420,7 +417,7 @@ impl<'block> Block<'block> {
         };
 
         BlockJson {
-            type_: "block".to_string(),
+            kind: EntityKind::Block,
             address: self.address,
             architecture: self.architecture().to_string(),
             fallthrough: self.fallthrough(),
@@ -428,7 +425,6 @@ impl<'block> Block<'block> {
             edges: self.edges(),
             chromosome: chromosome.process(),
             conditional: self.terminator.is_conditional,
-            opaque_predicate: self.terminator.is_opaque_predicate,
             size,
             bytes: hex::encode(&bytes),
             number_of_instructions: self.number_of_instructions(),
@@ -679,13 +675,6 @@ impl<'block> Block<'block> {
         if self.terminator.is_trap {
             return None;
         }
-        if self.terminator.is_opaque_predicate
-            && self.terminator.is_jump
-            && !self.terminator.is_conditional
-            && self.terminator.to.is_empty()
-        {
-            return self.terminator.fallthrough();
-        }
         if self.terminator.is_jump && !self.terminator.is_conditional {
             return None;
         }
@@ -700,17 +689,16 @@ impl<'block> Block<'block> {
     /// # Returns
     ///
     /// Returns a `BTreeSet<u64>` containing the target addresses.
-    pub fn conditional(&self) -> bool {
+    pub fn is_conditional(&self) -> bool {
         self.terminator.is_conditional
+    }
+
+    pub fn kind(&self) -> EntityKind {
+        EntityKind::Block
     }
 
     pub fn branches(&self) -> BTreeSet<u64> {
         self.terminator.branches()
-    }
-
-    /// Indicates whether this block terminates in a resolved opaque predicate.
-    pub fn opaque_predicate(&self) -> bool {
-        self.terminator.is_opaque_predicate
     }
 
     fn successor_addresses(&self) -> BTreeSet<u64> {

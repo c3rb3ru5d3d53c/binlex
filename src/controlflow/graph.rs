@@ -33,7 +33,7 @@ use crossbeam_skiplist::SkipMap;
 use crossbeam_skiplist::SkipSet;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::Error;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -348,6 +348,13 @@ struct GraphProcessorState {
     outputs: HashMap<ProcessorTarget, HashMap<u64, ProcessorOutputs>>,
 }
 
+#[derive(Default)]
+struct GraphCallgraphState {
+    revision: Option<u64>,
+    callee_references: BTreeMap<u64, BTreeMap<u64, u64>>,
+    caller_references: BTreeMap<u64, BTreeMap<u64, u64>>,
+}
+
 pub struct Graph {
     /// The Instruction Architecture
     pub architecture: Architecture,
@@ -363,6 +370,7 @@ pub struct Graph {
     pub config: Configuration,
     revision: AtomicU64,
     processor_state: Mutex<GraphProcessorState>,
+    callgraph_state: Mutex<GraphCallgraphState>,
 }
 
 impl Graph {
@@ -382,6 +390,7 @@ impl Graph {
             config,
             revision: AtomicU64::new(0),
             processor_state: Mutex::new(GraphProcessorState::default()),
+            callgraph_state: Mutex::new(GraphCallgraphState::default()),
         }
     }
 
@@ -665,7 +674,6 @@ impl Graph {
         existing.is_call |= incoming.is_call;
         existing.is_jump |= incoming.is_jump;
         existing.is_conditional |= incoming.is_conditional;
-        existing.is_opaque_predicate |= incoming.is_opaque_predicate;
         existing.is_trap |= incoming.is_trap;
         existing.has_indirect_target |= incoming.has_indirect_target;
         existing.edges = existing.edges.max(incoming.edges);
@@ -824,6 +832,62 @@ impl Graph {
             .iter()
             .find(|(name, _)| *name == processor_name)
             .map(|(_, output)| output.clone())
+    }
+
+    fn ensure_callgraph(&self) {
+        let revision = self.revision.load(Ordering::SeqCst);
+        {
+            let callgraph_state = self.callgraph_state.lock().unwrap();
+            if callgraph_state.revision == Some(revision) {
+                return;
+            }
+        }
+
+        let mut callee_references = BTreeMap::<u64, BTreeMap<u64, u64>>::new();
+        let mut caller_references = BTreeMap::<u64, BTreeMap<u64, u64>>::new();
+
+        for function_address in self.functions.valid_addresses() {
+            let Ok(function) = Function::new(function_address, self) else {
+                continue;
+            };
+            let function_callees = function.compute_callee_references();
+            for (callsite, callee) in &function_callees {
+                caller_references
+                    .entry(*callee)
+                    .or_default()
+                    .insert(*callsite, function_address);
+            }
+            callee_references.insert(function_address, function_callees);
+        }
+
+        let mut callgraph_state = self.callgraph_state.lock().unwrap();
+        if self.revision.load(Ordering::SeqCst) == revision {
+            callgraph_state.callee_references = callee_references;
+            callgraph_state.caller_references = caller_references;
+            callgraph_state.revision = Some(revision);
+        }
+    }
+
+    pub(crate) fn function_callee_references(&self, address: u64) -> BTreeMap<u64, u64> {
+        self.ensure_callgraph();
+        self.callgraph_state
+            .lock()
+            .unwrap()
+            .callee_references
+            .get(&address)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn function_caller_references(&self, address: u64) -> BTreeMap<u64, u64> {
+        self.ensure_callgraph();
+        self.callgraph_state
+            .lock()
+            .unwrap()
+            .caller_references
+            .get(&address)
+            .cloned()
+            .unwrap_or_default()
     }
 
     fn process_target(&self, target: ProcessorTarget) -> Result<(), Error> {
@@ -1018,6 +1082,10 @@ impl Graph {
         let mut processor_state = self.processor_state.lock().unwrap();
         processor_state.revisions.clear();
         processor_state.outputs.clear();
+        let mut callgraph_state = self.callgraph_state.lock().unwrap();
+        callgraph_state.revision = None;
+        callgraph_state.callee_references.clear();
+        callgraph_state.caller_references.clear();
     }
 
     fn snapshot_queue(queue: &GraphQueue) -> GraphQueueSnapshot {

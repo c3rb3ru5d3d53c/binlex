@@ -22,6 +22,7 @@
 
 use crate::controlflow::graph::Graph;
 use crate::controlflow::json_value_to_py;
+use crate::controlflow::EntityKind;
 use crate::controlflow::Function;
 use crate::controlflow::Instruction;
 use crate::controlflow::Reference;
@@ -29,6 +30,7 @@ use crate::genetics::Chromosome;
 use crate::hashing::{MinHash32, SSDeep, SHA256, TLSH};
 use crate::Architecture;
 use crate::Configuration;
+use binlex::controlflow::EntityKind as InnerEntityKind;
 use binlex::controlflow::Block as InnerBlock;
 use binlex::controlflow::BlockJsonDeserializer as InnerBlockJsonDeserializer;
 use binlex::hex;
@@ -85,6 +87,13 @@ impl BlockJsonDeserializer {
         let inner = InnerArchitecture::from_string(&self.inner.lock().unwrap().json.architecture)
             .map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
         Ok(Architecture { inner })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the entity kind encoded in the serialized block.
+    pub fn kind(&self) -> EntityKind {
+        let binding = self.inner.lock().unwrap();
+        EntityKind::from_inner(binding.json.kind)
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -163,14 +172,8 @@ impl BlockJsonDeserializer {
 
     #[pyo3(text_signature = "($self)")]
     /// Return whether the block ends in a conditional transfer of control.
-    pub fn conditional(&self) -> bool {
-        self.inner.lock().unwrap().conditional()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return whether this block terminates in a resolved opaque predicate.
-    pub fn opaque_predicate(&self) -> bool {
-        self.inner.lock().unwrap().opaque_predicate()
+    pub fn is_conditional(&self) -> bool {
+        self.inner.lock().unwrap().is_conditional()
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -298,6 +301,12 @@ impl Block {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the entity kind for this block.
+    pub fn kind(&self) -> EntityKind {
+        EntityKind::from_inner(InnerEntityKind::Block)
+    }
+
+    #[pyo3(text_signature = "($self)")]
     /// Return the block architecture.
     pub fn architecture(&self, py: Python) -> PyResult<Architecture> {
         self.with_inner_block(py, |block| {
@@ -375,9 +384,9 @@ impl Block {
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return whether this block terminates in a resolved opaque predicate.
-    pub fn opaque_predicate(&self, py: Python) -> PyResult<bool> {
-        self.with_inner_block(py, |block| Ok(block.opaque_predicate()))
+    /// Return whether the block ends in a conditional transfer of control.
+    pub fn is_conditional(&self, py: Python) -> PyResult<bool> {
+        self.with_inner_block(py, |block| Ok(block.is_conditional()))
     }
 
     #[pyo3(text_signature = "($self)")]

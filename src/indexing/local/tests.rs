@@ -1866,7 +1866,7 @@ fn result_detail_uses_persisted_entity_json_without_graph() {
         .expect("load persisted detail");
 
     let json = result.json().expect("detail json should be present");
-    assert_eq!(json["type"], "function");
+    assert_eq!(json["kind"], "function");
     assert_eq!(json["address"], 0x1000);
 
     let _ = std::fs::remove_dir_all(&root);
@@ -2035,7 +2035,7 @@ fn result_detail_uses_persisted_graph_indexed_entity_json() {
         .expect("load graph-indexed function detail");
 
     let json = result.json().expect("detail json should be present");
-    assert_eq!(json["type"], "function");
+    assert_eq!(json["kind"], "function");
     assert_eq!(json["address"], 0x1000);
 
     let _ = std::fs::remove_dir_all(&root);

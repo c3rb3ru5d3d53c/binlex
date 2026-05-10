@@ -274,7 +274,8 @@ fn function_markov_direct_accessor_ignores_serialization_flag() {
 
 #[test]
 fn function_markov_serializes_when_enabled() {
-    let config = Configuration::default();
+    let mut config = Configuration::default();
+    config.functions.markov.enabled = true;
     let mut graph = Graph::new(Architecture::AMD64, config.clone());
 
     let mut entry = Instruction::create(0x1000, Architecture::AMD64, config.clone());

@@ -80,7 +80,7 @@ fn test_block_instructions_are_emitted_as_addresses() {
     let block = output
         .lines()
         .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("line should be json"))
-        .find(|value| value.get("type").and_then(|value| value.as_str()) == Some("block"))
+        .find(|value| value.get("kind").and_then(|value| value.as_str()) == Some("block"))
         .expect("block output should exist");
 
     assert_eq!(
@@ -92,7 +92,7 @@ fn test_block_instructions_are_emitted_as_addresses() {
     let function = output
         .lines()
         .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("line should be json"))
-        .find(|value| value.get("type").and_then(|value| value.as_str()) == Some("function"))
+        .find(|value| value.get("kind").and_then(|value| value.as_str()) == Some("function"))
         .expect("function output should exist");
 
     assert_eq!(
@@ -145,7 +145,7 @@ fn test_function_embeddings_are_emitted_from_config() {
     let function = output
         .lines()
         .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("line should be json"))
-        .find(|value| value.get("type").and_then(|value| value.as_str()) == Some("function"))
+        .find(|value| value.get("kind").and_then(|value| value.as_str()) == Some("function"))
         .expect("function output should exist");
 
     let vector = function

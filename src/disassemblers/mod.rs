@@ -31,7 +31,6 @@ use std::io::{Error, ErrorKind};
 pub mod arm64;
 pub mod capstone;
 pub mod cil;
-mod opaque;
 pub mod x86;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

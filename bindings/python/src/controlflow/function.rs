@@ -22,11 +22,13 @@
 
 use crate::controlflow::json_value_to_py;
 use crate::controlflow::Block;
+use crate::controlflow::EntityKind;
 use crate::controlflow::Graph;
 use crate::genetics::Chromosome;
 use crate::hashing::{MinHash32, SSDeep, SHA256, TLSH};
 use crate::Architecture;
 use crate::Configuration;
+use binlex::controlflow::EntityKind as InnerEntityKind;
 use binlex::controlflow::Function as InnerFunction;
 use binlex::controlflow::FunctionJsonDeserializer as InnerFunctionJsonDeserializer;
 use binlex::hex;
@@ -68,6 +70,13 @@ impl FunctionJsonDeserializer {
     /// Return the block addresses contained in the serialized function.
     pub fn blocks(&self) -> Vec<u64> {
         self.inner.lock().unwrap().blocks()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the entity kind encoded in the serialized function.
+    pub fn kind(&self) -> EntityKind {
+        let binding = self.inner.lock().unwrap();
+        EntityKind::from_inner(binding.json.kind)
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -283,6 +292,12 @@ impl Function {
     /// Return the starting address of the function.
     pub fn address(&self) -> u64 {
         self.address
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the entity kind for this function.
+    pub fn kind(&self) -> EntityKind {
+        EntityKind::from_inner(InnerEntityKind::Function)
     }
 
     #[pyo3(text_signature = "($self)")]

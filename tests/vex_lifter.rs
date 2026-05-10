@@ -70,7 +70,6 @@ fn instruction(address: u64, bytes: &[u8]) -> InstructionRecord {
         is_call: false,
         is_jump: false,
         is_conditional: false,
-        is_opaque_predicate: false,
         is_trap: false,
         has_indirect_target: false,
         functions: BTreeSet::new(),

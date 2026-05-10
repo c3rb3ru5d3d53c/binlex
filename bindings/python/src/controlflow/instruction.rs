@@ -22,6 +22,7 @@
 
 use crate::controlflow::json_value_to_py;
 use crate::controlflow::Block;
+use crate::controlflow::EntityKind;
 use crate::controlflow::Function;
 use crate::controlflow::Graph;
 use crate::controlflow::Reference;
@@ -29,6 +30,7 @@ use crate::genetics::Chromosome;
 use crate::semantics::Semantic as PySemantic;
 use crate::Architecture;
 use crate::Configuration;
+use binlex::controlflow::EntityKind as InnerEntityKind;
 use binlex::controlflow::Instruction as RawInnerInstruction;
 use binlex::controlflow::InstructionJson as InnerInstructionJson;
 use binlex::controlflow::Operand as InnerOperand;
@@ -336,9 +338,9 @@ impl InstructionJsonDeserializer {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
         let inner: InnerInstructionJson = serde_json::from_str(&string)
             .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?;
-        if inner.type_ != "instruction" {
+        if inner.kind != InnerEntityKind::Instruction {
             return Err(pyo3::exceptions::PyValueError::new_err(
-                "serialized payload is not an instruction",
+                "serialized payload is not an instruction kind",
             ));
         }
         Ok(Self {
@@ -355,6 +357,11 @@ impl InstructionJsonDeserializer {
         let inner = binlex::Architecture::from_string(&self.inner.lock().unwrap().architecture)
             .map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
         Ok(Architecture { inner })
+    }
+
+    pub fn kind(&self) -> EntityKind {
+        let binding = self.inner.lock().unwrap();
+        EntityKind::from_inner(binding.kind)
     }
 
     pub fn address(&self) -> u64 {
@@ -424,10 +431,6 @@ impl InstructionJsonDeserializer {
 
     pub fn is_conditional(&self) -> bool {
         self.inner.lock().unwrap().is_conditional
-    }
-
-    pub fn is_opaque_predicate(&self) -> bool {
-        self.inner.lock().unwrap().is_opaque_predicate
     }
 
     pub fn callee_references(&self) -> Vec<Reference> {
@@ -578,6 +581,12 @@ impl Instruction {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the entity kind for this instruction.
+    pub fn kind(&self) -> EntityKind {
+        EntityKind::from_inner(InnerEntityKind::Instruction)
+    }
+
+    #[pyo3(text_signature = "($self)")]
     /// Returns the chromosome associated with this instruction.
     ///
     /// # Returns
@@ -652,12 +661,6 @@ impl Instruction {
     /// Return whether this instruction is conditional.
     pub fn is_conditional(&self, py: Python) -> PyResult<bool> {
         self.with_inner_instruction(py, |instruction| Ok(instruction.is_conditional()))
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return whether this instruction was resolved as a single-block opaque predicate.
-    pub fn is_opaque_predicate(&self, py: Python) -> PyResult<bool> {
-        self.with_inner_instruction(py, |instruction| Ok(instruction.is_opaque_predicate()))
     }
 
     #[pyo3(text_signature = "($self)")]
